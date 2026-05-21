@@ -40,8 +40,49 @@ class ApiClient {
   /// production code path.
   final SupabaseClient? _overrideClient;
 
+  /// Whether Supabase is initialized and reachable. The default
+  /// [ApiClient] constructor refuses to build while this is `false`
+  /// because `Supabase.instance.client` is backed by a `late` field
+  /// inside the SDK — reading it before `Supabase.initialize` resolves
+  /// throws `LateInitializationError` from deep inside the call stack
+  /// and surfaces as a cryptic save / sync failure at the UI layer.
+  /// Bootstrappers should gate construction on this flag and leave
+  /// `ApiClient`-shaped state null when Supabase init fails. See
+  /// [main.dart] for the canonical wiring.
+  ///
+  /// The flag is set by [initialize] but also probes
+  /// `Supabase.instance.client` lazily so that tests which call
+  /// `Supabase.initialize` directly (instead of routing through
+  /// [ApiClient.initialize]) still see the correct state. The probe
+  /// is the canonical check — if it throws, Supabase is not ready,
+  /// regardless of which init path the caller used.
+  static bool _initialized = false;
+  static bool get isInitialized {
+    if (_initialized) return true;
+    try {
+      // Reading `.client` triggers the SDK's `late` field. If init
+      // hasn't resolved, this throws and the catch-all returns false.
+      // ignore: unnecessary_statements
+      Supabase.instance.client;
+      _initialized = true;
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Default constructor — uses the global `Supabase.instance.client`.
   /// Every production callsite uses this form.
+  ///
+  /// The constructor deliberately does **not** guard on
+  /// [isInitialized] because `HomeScreen` falls back to a default
+  /// `ApiClient()` via `widget.apiClient ?? ApiClient()` when
+  /// Supabase init failed silently, and the [userId] / [userEmail]
+  /// getters already wrap `_client` access in try/catch so callers
+  /// can degrade to "signed out" semantics. The real defence is the
+  /// [_client] getter further down, which throws a typed [StateError]
+  /// instead of letting `Supabase.instance.client` surface its private
+  /// `LateInitializationError`.
   ApiClient() : _overrideClient = null;
 
   /// Test-only constructor. Inject a fake `SupabaseClient` so wire-
@@ -51,14 +92,37 @@ class ApiClient {
   @visibleForTesting
   ApiClient.withClient(SupabaseClient client) : _overrideClient = client;
 
-  SupabaseClient get _client => _overrideClient ?? Supabase.instance.client;
+  SupabaseClient get _client {
+    final override = _overrideClient;
+    if (override != null) return override;
+    // Same probe semantics as the constructor — see [isInitialized].
+    if (!isInitialized) {
+      throw StateError(
+        'ApiClient method called before Supabase.initialize() resolved — '
+        'this is a bootstrap bug. Construct ApiClient only when '
+        'ApiClient.isInitialized is true.',
+      );
+    }
+    return Supabase.instance.client;
+  }
 
-  /// Initialize Supabase. Call once at app startup.
+  /// Initialize Supabase and flip [isInitialized] on success. Call
+  /// once at app startup. If Supabase init throws, [isInitialized]
+  /// stays `false` and the caller should leave [ApiClient]-shaped
+  /// state null so the app falls through to offline mode.
   static Future<void> initialize({
     required String url,
     required String anonKey,
   }) async {
     await Supabase.initialize(url: url, anonKey: anonKey);
+    _initialized = true;
+  }
+
+  /// Reset the static [_initialized] flag. Test-only — production
+  /// code never wants Supabase to "uninitialize" mid-session.
+  @visibleForTesting
+  static void debugResetInitialized() {
+    _initialized = false;
   }
 
   /// Sign in with email/password. Returns the user ID.

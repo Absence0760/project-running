@@ -202,12 +202,16 @@ void main() async {
   final audioCues = AudioCues();
 
   // ApiClient is created synchronously if Supabase initialised. The
-  // awaited `Supabase.initialize` above guarantees the global client is
-  // wired; all downstream calls just need the config — they don't need
-  // to wait for the network.
+  // awaited `Supabase.initialize` above sets `ApiClient.isInitialized`
+  // to `true` on success; on silent failure (the `.catchError` branch
+  // above) the flag stays `false` and we leave `api` null so the rest
+  // of the app behaves like the no-env-vars path. Without this gate, a
+  // failed init produces `ApiClient` instances whose first method call
+  // explodes with `LateInitializationError` deep inside the Supabase
+  // SDK — see decisions.md for the bug history.
   ApiClient? api;
   SettingsSyncService? settingsSync;
-  if (hasSupabase) {
+  if (hasSupabase && ApiClient.isInitialized) {
     try {
       api = ApiClient();
       settingsSync = SettingsSyncService(preferences: prefs);

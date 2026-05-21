@@ -10,7 +10,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider_platform_interface/path_provider_platform_interface.dart';
 import 'package:plugin_platform_interface/plugin_platform_interface.dart';
-import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'
+    show PostgrestException, Supabase;
 
 import '../lib/local_route_store.dart';
 import '../lib/route_overlap.dart';
@@ -96,11 +98,30 @@ Future<Position> _stubLocate() async {
   );
 }
 
+// One-time Supabase bootstrap shared across this test file. Mirrors
+// the pattern in coach_screen_test.dart / feed_screen_test.dart —
+// initialise the SDK with placeholder URL + anon key so `ApiClient()`
+// construction passes its `isInitialized` probe. The widget tree never
+// makes a real network call (it uses `saveRouteFn` injection), so the
+// loopback URL is fine.
+bool _supabaseReady = false;
+Future<void> _ensureSupabase() async {
+  if (_supabaseReady) return;
+  TestWidgetsFlutterBinding.ensureInitialized();
+  SharedPreferences.setMockInitialValues({});
+  await Supabase.initialize(
+    url: 'http://127.0.0.1:54321',
+    anonKey: 'eyJ.local.test',
+  );
+  _supabaseReady = true;
+}
+
 void main() {
   late Directory tmpDir;
 
-  setUpAll(() {
+  setUpAll(() async {
     dotenv.loadFromString(isOptional: true);
+    await _ensureSupabase();
   });
 
   setUp(() {
@@ -127,6 +148,10 @@ void main() {
           width: 400,
           height: 800,
           child: RouteBuilderScreen(
+            // The widget tree doesn't call any ApiClient methods —
+            // the save path is intercepted by injecting `saveRouteFn`.
+            // `_ensureSupabase` (setUpAll) has booted the SDK so the
+            // `ApiClient.isInitialized` probe passes.
             apiClient: ApiClient(),
             routeStore: store,
             osrmFetcher: _stubOsrm,
@@ -232,6 +257,66 @@ void main() {
       expect(msg, contains('Save failed:'));
       expect(msg, contains('some other trigger said no'));
       expect(msg, isNot(contains('too quickly')));
+    });
+
+    test(
+        'LateInitializationError → friendly "can\'t reach the server" '
+        'message (defence against the Supabase SDK\'s late client field)',
+        () {
+      // Reproduces the exact symptom of the reported bug:
+      //   "Save Failed: LateInitializationError: Field 'client' has
+      //    not been initialized"
+      // The defence is `formatSaveRouteError`; the primary fix is the
+      // `ApiClient.isInitialized` gate in main.dart that stops us
+      // reaching this catch branch at all. We test the defence here
+      // so a future regression that bypasses the main.dart gate still
+      // gives the user actionable copy.
+      //
+      // `LateInitializationError` is not a public type in `dart:core`
+      // — the SDK throws a private `Error` subclass whose toString()
+      // begins with the literal `"LateInitializationError:"`. We
+      // provoke a real one via an instance field (analyzer can't
+      // prove "definitely unassigned" on field access) so the test
+      // exercises the actual SDK code path rather than a synthetic.
+      final box = _LateBox();
+      Object? captured;
+      try {
+        box.value.length;
+      } catch (e) {
+        captured = e;
+      }
+      expect(captured, isA<Error>());
+      expect(captured.toString(), startsWith('LateInitializationError'));
+      final msg = formatSaveRouteError(captured!);
+      expect(msg, contains("Can't reach the server"));
+      expect(msg, contains('Sign in'));
+      expect(msg, isNot(contains('LateInitializationError')));
+    });
+
+    test(
+        'StateError from the ApiClient bootstrap guard → friendly message',
+        () {
+      // Mirrors the exception thrown by ApiClient._client when called
+      // before Supabase.initialize resolves. The string match in
+      // formatSaveRouteError keys off "Supabase.initialize" so a
+      // future rename has to land in lockstep on both sides.
+      final msg = formatSaveRouteError(StateError(
+        'ApiClient method called before Supabase.initialize() resolved.',
+      ));
+      expect(msg, contains("Can't reach the server"));
+      expect(msg, isNot(contains('StateError')));
+    });
+
+    test(
+        'unrelated StateError still surfaces verbatim — only the bootstrap '
+        'signature is translated, so debugging info isn\'t hidden', () {
+      // Make sure we don't over-translate: a StateError unrelated to
+      // the Supabase bootstrap (e.g. someone calling a method on a
+      // closed stream) should still hit the debug-friendly fallback.
+      final msg =
+          formatSaveRouteError(StateError('Bad state: stream is closed'));
+      expect(msg, contains('Save failed:'));
+      expect(msg, isNot(contains("Can't reach the server")));
     });
   });
 
@@ -505,4 +590,14 @@ void main() {
       expect(result, isNull);
     });
   });
+}
+
+/// Helper used by the LateInitializationError defence test. The
+/// analyzer can prove a local `late` variable is definitely
+/// unassigned (and rejects the read at compile time); a `late` field
+/// on an instance is opaque to that analysis, so accessing it at
+/// runtime is the only way to provoke a real LateInitializationError
+/// from the Dart runtime.
+class _LateBox {
+  late String value;
 }

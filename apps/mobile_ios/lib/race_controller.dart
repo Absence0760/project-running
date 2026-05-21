@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -40,7 +41,14 @@ class RaceController extends ChangeNotifier {
   RaceController(this._social);
 
   final SocialService _social;
-  SupabaseClient get _c => Supabase.instance.client;
+  SupabaseClient get _c {
+    if (!ApiClient.isInitialized) {
+      throw StateError(
+        'RaceController called before Supabase.initialize() resolved.',
+      );
+    }
+    return Supabase.instance.client;
+  }
 
   RealtimeChannel? _channel;
   Timer? _pollTimer;

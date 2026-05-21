@@ -1,6 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'api_client.dart';
+
 /// Registered key names for the `user_settings` / `user_device_settings` bags.
 ///
 /// Keep in sync with [docs/settings.md](../../../docs/settings.md). Using
@@ -53,7 +55,14 @@ class SettingsService {
         _platform = platform,
         _label = label;
 
-  static SupabaseClient get _client => Supabase.instance.client;
+  static SupabaseClient get _client {
+    if (!ApiClient.isInitialized) {
+      throw StateError(
+        'SettingsService called before Supabase.initialize() resolved.',
+      );
+    }
+    return Supabase.instance.client;
+  }
 
   final String _deviceId;
   final String _platform;

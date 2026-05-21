@@ -1,3 +1,4 @@
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -177,7 +178,16 @@ class SocialService extends ChangeNotifier {
   @visibleForTesting
   SocialService.withClient(SupabaseClient client) : _override = client;
 
-  SupabaseClient get _c => _override ?? Supabase.instance.client;
+  SupabaseClient get _c {
+    final override = _override;
+    if (override != null) return override;
+    if (!ApiClient.isInitialized) {
+      throw StateError(
+        'SocialService called before Supabase.initialize() resolved.',
+      );
+    }
+    return Supabase.instance.client;
+  }
 
   String? get _uid => _c.auth.currentUser?.id;
 

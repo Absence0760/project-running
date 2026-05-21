@@ -1672,4 +1672,111 @@ void main() {
       );
     });
   });
+
+  group('Supabase bootstrap guard — defends the "Field client has not '
+      'been initialized" class of bug', () {
+    // Reported as: "Save Failed: LateInitializationError: Field
+    // 'client' has not been initialized" when Supabase.initialize
+    // failed silently (the `.catchError` in main.dart) but downstream
+    // code constructed an ApiClient and tried to call saveRoute.
+    // These guards pin the multi-part fix in place so a future
+    // refactor doesn't quietly undo it.
+
+    test('main.dart gates ApiClient construction on ApiClient.isInitialized',
+        () {
+      // Without this gate, a silent Supabase init failure leaves the
+      // SDK's `late client` field unset and the first call into
+      // ApiClient explodes with LateInitializationError.
+      final src = File('lib/main.dart').readAsStringSync();
+      expect(
+        src,
+        contains('ApiClient.isInitialized'),
+        reason: 'main.dart must gate `api = ApiClient()` on the static '
+            '`ApiClient.isInitialized` flag — otherwise a silent '
+            'Supabase.initialize failure produces ApiClient instances '
+            'whose first method call throws LateInitializationError.',
+      );
+    });
+
+    test('_client getter has a non-bypassable initialized check', () {
+      // The override branch lets tests inject a fake; the non-override
+      // branch must check the static `isInitialized` probe before
+      // falling through to `Supabase.instance.client`.
+      final src = File('../../packages/api_client/lib/src/api_client.dart')
+          .readAsStringSync();
+      expect(
+        src,
+        matches(
+            RegExp(r'SupabaseClient\s+get\s+_client\s*\{[^}]*isInitialized')),
+        reason: 'The `_client` getter must inspect `isInitialized` (after '
+            'falling through the test override). Returning '
+            '`Supabase.instance.client` unconditionally re-introduces '
+            'the LateInitializationError surface.',
+      );
+    });
+
+    test('formatSaveRouteError translates the bootstrap signature into '
+        'user-friendly copy', () {
+      // The defence is what users see when the gate above fails. Pin
+      // both the error-type matcher and the friendly copy so the two
+      // sides can't drift apart.
+      final src =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        src,
+        contains('LateInitializationError'),
+        reason: 'formatSaveRouteError must explicitly match '
+            'LateInitializationError so the SDK\'s late-field error '
+            'surfaces a friendly "Can\'t reach the server" message '
+            'instead of leaking the SDK\'s internal field name.',
+      );
+      expect(
+        src,
+        contains("Can't reach the server"),
+        reason: 'The friendly translation must be the literal copy '
+            'shown to the user. Tests in route_builder_screen_test.dart '
+            'assert the same phrase.',
+      );
+    });
+
+    test('TrainingService / SocialService / RaceController each guard '
+        'their _c getter on ApiClient.isInitialized', () {
+      // These services bypass ApiClient and read Supabase.instance.client
+      // directly via their own getter. Before the guard, each of them
+      // had the same latent LateInitializationError surface as
+      // ApiClient.saveRoute. Apply the same pattern here so the
+      // Plans / Clubs / Race screens fail with a typed error instead
+      // of the SDK\'s opaque late-field crash.
+      for (final path in const [
+        'lib/training_service.dart',
+        'lib/social_service.dart',
+        'lib/race_controller.dart',
+      ]) {
+        final src = File(path).readAsStringSync();
+        expect(
+          src,
+          contains('ApiClient.isInitialized'),
+          reason: '$path must guard its _c getter on '
+              'ApiClient.isInitialized — same bug class as the '
+              'original ApiClient.saveRoute report.',
+        );
+      }
+    });
+
+    test('SettingsService guards on ApiClient.isInitialized too', () {
+      // Lives in the api_client package alongside ApiClient itself —
+      // imports ApiClient by relative path.
+      final src = File(
+        '../../packages/api_client/lib/src/settings_service.dart',
+      ).readAsStringSync();
+      expect(
+        src,
+        contains('ApiClient.isInitialized'),
+        reason: 'SettingsService.dart must guard its static _client '
+            'getter on ApiClient.isInitialized. Without the guard, '
+            'reading any setting from a half-initialized session '
+            'reproduces the original LateInitializationError surface.',
+      );
+    });
+  });
 }

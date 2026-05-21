@@ -693,6 +693,13 @@ String _modeLabel(RouteBuilderMode m) => switch (m) {
 ///   - PostgrestException with the rate-limit signature (P0001 +
 ///     migration 20260907_001 message) becomes the friendly "wait
 ///     N minutes" wording from `rate_limit_errors.dart`.
+///   - LateInitializationError (Supabase SDK's `late client` field
+///     read before init) or a StateError carrying the "bootstrap"
+///     signature from [ApiClient] surface as the offline-mode
+///     message. This catches the case where Supabase init failed
+///     silently in `main.dart` and a call slipped past the null-guard
+///     on `apiClient` (defence in depth — the primary fix is to
+///     leave `api == null` so the user can't reach this path at all).
 ///   - Anything else falls through to `Save failed: <toString>` so
 ///     debugging information (RLS denials, FK violations, network
 ///     errors) isn't hidden by an over-eager translation.
@@ -700,6 +707,17 @@ String formatSaveRouteError(Object e) {
   if (e is PostgrestException) {
     final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
     if (friendly != null) return friendly;
+  }
+  // `LateInitializationError` is not a public type in dart:core — the
+  // SDK throws a private subclass of `Error` whose `toString()` begins
+  // with the literal `"LateInitializationError:"`. Match on the string
+  // signature rather than `is`. Pair with the StateError signature
+  // from `ApiClient`'s bootstrap guard so both error sites surface the
+  // same friendly copy.
+  if ((e is Error && e.toString().startsWith('LateInitializationError')) ||
+      (e is StateError &&
+          e.message.contains('Supabase.initialize'))) {
+    return "Can't reach the server. Sign in or check your connection and try again.";
   }
   return 'Save failed: $e';
 }
