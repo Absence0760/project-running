@@ -153,6 +153,15 @@
 			await unsubscribeFromPush();
 			await refreshPushState();
 			showToast('Notifications disabled on this device.', 'success');
+		} catch (e) {
+			// Symmetrical to handleEnablePush above — surface failures
+			// rather than letting them propagate uncaught. Pre-fix, a
+			// network drop / Service Worker hiccup on disable left the
+			// user looking at a non-changing toggle with no feedback.
+			showToast(
+				`Could not disable notifications: ${(e as Error).message}`,
+				'error',
+			);
 		} finally {
 			pushBusy = false;
 		}

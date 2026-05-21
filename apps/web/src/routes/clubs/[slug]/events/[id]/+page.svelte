@@ -292,6 +292,13 @@
 			});
 			showResultPicker = false;
 			await reloadInstance();
+		} catch (e) {
+			// Match the surrounding pattern: surface failures via the
+			// page-level `error` banner rather than letting them
+			// propagate uncaught. Pre-fix, a network drop on DNF / DNS
+			// left the picker open with no feedback and the user
+			// guessing whether their non-finish was recorded.
+			error = e instanceof Error ? e.message : 'Result submit failed';
 		} finally {
 			submitting = false;
 		}

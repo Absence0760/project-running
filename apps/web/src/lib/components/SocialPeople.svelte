@@ -52,6 +52,13 @@
 			const next = await searchPeople(term, 20);
 			if (gen !== searchGen) return;
 			results = next;
+		} catch (e) {
+			// Without this catch, a network error during search left
+			// the user looking at an empty results list with no
+			// feedback. Surface the failure so they know to retry.
+			if (gen === searchGen) {
+				showToast(`Search failed: ${e}`, 'error');
+			}
 		} finally {
 			if (gen === searchGen) searching = false;
 		}

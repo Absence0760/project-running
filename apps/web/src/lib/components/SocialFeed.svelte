@@ -95,6 +95,12 @@
 			const merged = new Map(engagement);
 			for (const [k, v] of moreEng) merged.set(k, v);
 			engagement = merged;
+		} catch (e) {
+			// Without this catch, a network error on the explicit "load
+			// more" scroll trigger left the user scrolling forever
+			// waiting for entries that never arrived. Surface so they
+			// know to retry.
+			showToast(`Could not load more: ${e}`, 'error');
 		} finally {
 			loadingMore = false;
 		}

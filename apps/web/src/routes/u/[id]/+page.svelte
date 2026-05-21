@@ -171,6 +171,11 @@
 			const merged = new Map(feedEngagement);
 			for (const [k, v] of moreEng) merged.set(k, v);
 			feedEngagement = merged;
+		} catch (e) {
+			// Without this catch the explicit "load more" scroll
+			// trigger silently swallowed network errors and the user
+			// scrolled forever waiting for entries that never arrived.
+			showToast(`Could not load more: ${e}`, 'error');
 		} finally {
 			feedLoadingMore = false;
 		}
