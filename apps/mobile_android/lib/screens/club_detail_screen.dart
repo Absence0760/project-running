@@ -211,16 +211,27 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     final ctrl = _replyCtrls[postId];
     final body = ctrl?.text.trim();
     if (body == null || body.isEmpty) return;
-    await widget.social.createPost(
-      clubId: c.row.id,
-      parentPostId: postId,
-      body: body,
-    );
-    ctrl?.clear();
-    final replies = await widget.social.fetchPostReplies(postId);
-    if (!mounted) return;
-    setState(() => _threads[postId] = replies);
-    _load();
+    try {
+      await widget.social.createPost(
+        clubId: c.row.id,
+        parentPostId: postId,
+        body: body,
+      );
+      ctrl?.clear();
+      final replies = await widget.social.fetchPostReplies(postId);
+      if (!mounted) return;
+      setState(() => _threads[postId] = replies);
+      _load();
+    } catch (e) {
+      // Without this catch, a network error / RLS rejection on
+      // reply post would propagate as an uncaught Future error —
+      // Flutter logs it to console but the user sees no feedback
+      // and the reply text just sits in the box. Surface a banner
+      // so the user knows to retry; the controller text stays
+      // because the `ctrl?.clear()` above only fires on success.
+      if (!mounted) return;
+      showTopBanner(context, 'Could not post reply: $e');
+    }
   }
 
   void _onRealtimeChange() {

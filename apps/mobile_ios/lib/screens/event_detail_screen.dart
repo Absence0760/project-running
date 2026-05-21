@@ -689,6 +689,15 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
     try {
       await widget.onSubmit(body);
       _ctrl.clear();
+    } catch (e) {
+      // Without the explicit catch this was `try/finally` — the
+      // onSubmit failure propagated up as an uncaught Future error,
+      // logged silently by Flutter, and the user saw no banner. The
+      // composer text stays in `_ctrl` because the `_ctrl.clear()`
+      // above only fires on success.
+      if (mounted) {
+        showTopBanner(context, 'Could not post update: $e');
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
