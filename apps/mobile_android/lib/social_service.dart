@@ -882,9 +882,23 @@ class SocialService extends ChangeNotifier {
     String eventId,
     DateTime instance,
   ) async {
+    // Read from `event_results_redacted` (migration 20260805_001), not
+    // the base `event_results` table. The view nulls `run_id` for
+    // non-owner rows so the public leaderboard can't bridge to a
+    // participant's private run, and the explicit column projection
+    // omits the admin-operational `organiser_approved_by` /
+    // `organiser_approved_at` (only the boolean `organiser_approved`
+    // is needed by the leaderboard UI). Mobile previously read the
+    // base table with `select()`, leaking those fields to non-owner
+    // viewers — the same data-leak the audit-pass-3 fix closed on
+    // web's `fetchEventResults`. See apps/web/src/lib/data.ts.
     final rows = await _c
-        .from('event_results')
-        .select()
+        .from('event_results_redacted')
+        .select(
+          'user_id, run_id, duration_s, distance_m, rank, '
+          'finisher_status, age_grade_pct, note, created_at, '
+          'organiser_approved',
+        )
         .eq('event_id', eventId)
         .eq('instance_start', instance.toIso8601String())
         .order('rank', ascending: true, nullsFirst: false)
@@ -1142,12 +1156,20 @@ class SocialService extends ChangeNotifier {
     return _enrichPosts(rows as List);
   }
 
-  Future<List<ClubPostView>> fetchPostReplies(String parentId) async {
+  /// Replies to [parentId], oldest-first. Capped at [limit] (default
+  /// 200) to match `apps/web/src/lib/data.ts:fetchPostReplies` — a
+  /// popular thread that accumulates thousands of replies otherwise
+  /// pulls them all down on every open.
+  Future<List<ClubPostView>> fetchPostReplies(
+    String parentId, {
+    int limit = 200,
+  }) async {
     final rows = await _c
         .from('club_posts')
         .select()
         .eq('parent_post_id', parentId)
-        .order('created_at', ascending: true);
+        .order('created_at', ascending: true)
+        .limit(limit);
     return _enrichPosts(rows as List);
   }
 
