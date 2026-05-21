@@ -809,7 +809,13 @@ export async function searchPublicRoutes(options?: {
 		p_query: query && query.trim() ? query.trim() : null,
 		p_min_distance_m: minDistanceM ?? null,
 		p_max_distance_m: maxDistanceM ?? null,
-		p_surface: surface ?? null,
+		// Treat empty-string surface the same as null (no filter) —
+		// matches mobile's `ApiClient.searchPublicRoutes`, which gates
+		// on `surface.isNotEmpty`. Previously web passed `''` straight
+		// through to the RPC, where `surface = ''` matches no rows
+		// and the user saw an empty result list rather than the full
+		// catalogue.
+		p_surface: surface && surface.length > 0 ? surface : null,
 		p_tags: tags && tags.length > 0 ? tags : null,
 		p_featured_only: featuredOnly ?? false,
 		p_sort: sort,
@@ -821,28 +827,23 @@ export async function searchPublicRoutes(options?: {
 }
 
 /// The set of tags currently used across any public route, ordered by
-/// most-used. Powers the filter chip row on /explore. Aggregation is
-/// client-side because a single SELECT returns a small array per row
-/// and the route count is modest; when the library grows past a few
-/// thousand public routes, replace this with a DB-side materialised
-/// view.
+/// most-used. Powers the filter chip row on /explore.
+///
+/// Goes through the `popular_route_tags` RPC (migration 20260502_001;
+/// rewritten in 20260703_001 to read from the `public_routes` view).
+/// The RPC aggregates server-side with `count(*)` + `order by count desc,
+/// tag asc`, so the result is stable, cap-free, and matches mobile's
+/// `ApiClient.fetchPopularRouteTags` byte-for-byte.
+///
+/// The previous client-side aggregation was capped at 500 rows (a
+/// known limitation noted in the original comment); past that the
+/// chip row would silently mis-represent the popular-tag tail.
 export async function fetchPopularRouteTags(limit = 20): Promise<string[]> {
-	const { data } = await supabase
-		.from('routes')
-		.select('tags')
-		.eq('is_public', true)
-		.limit(500);
-	if (!data) return [];
-	const counts = new Map<string, number>();
-	for (const row of data as { tags: string[] | null }[]) {
-		for (const t of row.tags ?? []) {
-			counts.set(t, (counts.get(t) ?? 0) + 1);
-		}
-	}
-	return [...counts.entries()]
-		.sort((a, b) => b[1] - a[1])
-		.slice(0, limit)
-		.map(([t]) => t);
+	const { data } = await supabase.rpc('popular_route_tags', {
+		tag_limit: limit,
+	});
+	if (!Array.isArray(data)) return [];
+	return (data as Array<{ tag: string }>).map((r) => r.tag);
 }
 
 export async function updateRouteTags(routeId: string, tags: string[]): Promise<void> {
