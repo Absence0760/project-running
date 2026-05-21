@@ -353,6 +353,7 @@
 		}
 		await load();
 		subscribeRealtime();
+		startRaceSessionHeartbeat();
 	});
 
 	onDestroy(() => {
@@ -360,12 +361,45 @@
 			clearTimeout(pingRetryTimer);
 			pingRetryTimer = null;
 		}
+		if (raceHeartbeat) {
+			clearInterval(raceHeartbeat);
+			raceHeartbeat = null;
+		}
 		if (channel) {
 			supabase.removeChannel(channel);
 			channel = null;
 		}
 		realtimeReady = false;
 	});
+
+	/**
+	 * 5-second heartbeat that re-fetches just the race session row.
+	 * Realtime is best-effort: a dropped broadcast (CI load, transient
+	 * WS hiccup) leaves the page stale and the spectator has no way
+	 * to know. This is the cheap belt-and-suspenders — single small
+	 * row, only assigned when the status string actually differs from
+	 * the current value (so Svelte doesn't rerender on every tick).
+	 * Stops once the race is in a terminal state (finished / cancelled)
+	 * so a long-lived page on a finished event doesn't keep polling.
+	 */
+	let raceHeartbeat: ReturnType<typeof setInterval> | null = null;
+	function startRaceSessionHeartbeat() {
+		if (raceHeartbeat) return;
+		raceHeartbeat = setInterval(async () => {
+			if (!event || !activeInstance) return;
+			if (raceSession?.status === 'finished' || raceSession?.status === 'cancelled') {
+				if (raceHeartbeat) {
+					clearInterval(raceHeartbeat);
+					raceHeartbeat = null;
+				}
+				return;
+			}
+			const fresh = await fetchRaceSession(event.id, activeInstance);
+			if ((fresh?.status ?? null) !== (raceSession?.status ?? null)) {
+				raceSession = fresh;
+			}
+		}, 5000);
+	}
 
 	/**
 	 * Event page realtime: watch attendee rows for this event so the "going"
