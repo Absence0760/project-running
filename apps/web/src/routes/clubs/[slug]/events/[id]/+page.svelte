@@ -395,9 +395,11 @@
 				return;
 			}
 			const fresh = await fetchRaceSession(event.id, activeInstance);
-			if ((fresh?.status ?? null) !== (raceSession?.status ?? null)) {
-				raceSession = fresh;
-			}
+			// Always reassign — Svelte 5's $state proxy occasionally
+			// misses transitions in CI when the previous and next
+			// values shallow-compare equal but the page hasn't
+			// reconciled. Cheap (one row), harmless if no change.
+			raceSession = fresh;
 		}, 5000);
 	}
 
@@ -647,7 +649,13 @@
 		</div>
 	</div>
 {:else}
-	<div class="page" class:realtime-ready={realtimeReady}>
+	<div
+		class="page"
+		class:realtime-ready={realtimeReady}
+		data-debug-race-status={raceSession?.status ?? 'null'}
+		data-debug-race-keys={raceSession ? Object.keys(raceSession).sort().join(',') : 'none'}
+		data-debug-is-race-director={String(isRaceDirector)}
+	>
 		<a class="back" href="/clubs/{slug}" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			Back to {club.name}
