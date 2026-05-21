@@ -3038,7 +3038,13 @@ class ApiClient {
       if (id == null) return null;
       final body = commentBodyById[id];
       if (body == null || body.isEmpty) return null;
-      return body.length > 140 ? '${body.substring(0, 140)}…' : body;
+      // Cap at 120 visible characters (117 + the ellipsis) to match
+      // web's notification-row excerpt
+      // (apps/web/src/lib/data.ts:fetchNotifications). Mobile
+      // previously capped at 141 — close-enough but visibly longer
+      // bubbles in the inbox compared to the same notification
+      // viewed on web.
+      return body.length > 120 ? '${body.substring(0, 117)}…' : body;
     }
 
     return rows.map((row) {
