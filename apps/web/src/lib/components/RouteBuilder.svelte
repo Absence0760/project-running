@@ -121,11 +121,25 @@
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
-	const MAP_STYLES: Record<string, string> = {
-		streets: `https://api.maptiler.com/maps/${prefersDark ? 'streets-v2-dark' : 'streets-v2'}/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-		satellite: `https://api.maptiler.com/maps/hybrid/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-		terrain: `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
-	};
+	// Style URLs honour the PUBLIC_TILE_STYLE_URL override the same
+	// way the other map components do (see `decisions.md § 68`). On a
+	// local Protomaps dev stack we don't have separate satellite /
+	// terrain styles — all three fall back to the single self-hosted
+	// style so the style-switcher buttons in the route-builder UI
+	// still work (they just don't visually differ). On the MapTiler
+	// production path the three distinct slugs are used.
+	const TILE_STYLE_OVERRIDE = (env.PUBLIC_TILE_STYLE_URL ?? '').trim();
+	const MAP_STYLES: Record<string, string> = TILE_STYLE_OVERRIDE.length > 0
+		? {
+			streets: TILE_STYLE_OVERRIDE,
+			satellite: TILE_STYLE_OVERRIDE,
+			terrain: TILE_STYLE_OVERRIDE,
+		}
+		: {
+			streets: `https://api.maptiler.com/maps/${prefersDark ? 'streets-v2-dark' : 'streets-v2'}/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+			satellite: `https://api.maptiler.com/maps/hybrid/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+			terrain: `https://api.maptiler.com/maps/outdoor-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+		};
 
 	const SNAP_DISTANCE_PX = 25;
 	const METRES_PER_MILE = 1609.344;

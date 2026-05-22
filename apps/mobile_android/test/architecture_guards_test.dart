@@ -2165,6 +2165,63 @@ void main() {
       );
     });
 
+    test('Web — no map style URL bypasses the override path', () {
+      // Reason: a contributor adding a new map surface (style picker,
+      // route builder, share-card preview, etc.) might be tempted to
+      // construct the MapTiler URL inline rather than threading
+      // through `mapStyleUrlFromEnv`. That breaks the
+      // PUBLIC_TILE_STYLE_URL override silently — the new surface
+      // hits MapTiler with whatever key happens to be set (or 403s
+      // with an empty one). Caught on the heatmap/RouteBuilder
+      // session: RouteBuilder.svelte had a hardcoded MAP_STYLES dict
+      // that bypassed the helper entirely.
+      //
+      // Pin that every hardcoded `api.maptiler.com/maps/...` URL in
+      // a .svelte file goes through the override gate (TILE_STYLE_OVERRIDE
+      // ternary). Tests + the canonical builder in `map-style-url.ts`
+      // are excluded — those are the override-aware definitions.
+      final dir = Directory('../web/src/lib/components');
+      if (!dir.existsSync()) return;
+      final allowedFiles = <String>{
+        // The canonical builder itself.
+        'map-style-url.ts',
+        // The static-PNG preview helper (returns null when no key).
+        'static_map.ts',
+        // The geocoding fetch URL is a different MapTiler endpoint;
+        // already gated on key presence.
+        'geocoding.ts',
+        'geocoding_math.ts',
+      };
+      final offenders = <String>[];
+      for (final f in dir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.svelte'))) {
+        final body = f.readAsStringSync();
+        if (!body.contains('api.maptiler.com/maps/')) continue;
+        // This file has a hardcoded URL. Confirm it ALSO contains
+        // either `TILE_STYLE_OVERRIDE` (the in-file ternary) OR
+        // `mapStyleUrlFromEnv` (the canonical helper).
+        final gated = body.contains('TILE_STYLE_OVERRIDE') ||
+            body.contains('mapStyleUrlFromEnv') ||
+            body.contains('mapStyleUrl(');
+        if (!gated &&
+            !allowedFiles.contains(f.path.split('/').last)) {
+          offenders.add(f.path);
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'these web map surfaces hardcode the MapTiler URL '
+            'without an override gate — they will bypass '
+            'PUBLIC_TILE_STYLE_URL silently:\n  '
+            "${offenders.join('\n  ')}\n"
+            'either use `mapStyleUrlFromEnv` (preferred) or branch '
+            'on a `TILE_STYLE_OVERRIDE` env-read like RouteBuilder.svelte.',
+      );
+    });
+
     test('Protomaps lifecycle is exposed via root npm scripts', () {
       // Reason: every other dev-time Docker sidecar (Supabase via
       // `dev:db:up` / `down` / `status` / `logs`) is wrapped in
