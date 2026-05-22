@@ -31,7 +31,11 @@ The Android app already covers a surprising amount of ground for an in-developme
 | Personal Bests (longest, fastest pace, fastest 5k) | ✓ | ✓ | ✓ | ✓ | — | ✓ |
 | Map tile cache (disk-backed) | ✓ | ✓ | — | ✓ | ✓ | ✓ |
 | **Fully offline mode — works with no account** | ✓ | — | — | — | — | — |
-| **JSON backup of all runs** | ✓ | CSV (Premium) | — | TCX export | GPX | — |
+| **Full backup ZIP (lossless) — runs + routes + tracks + profile** | ✓ | CSV (Premium) | — | TCX export | GPX | — |
+| **Backup restore on a freshly installed phone with no account** | ✓ | — | — | — | — | — |
+| **CSV summary re-import (round-trips the Settings CSV export)** | ✓ | — | — | — | — | — |
+| **Save individual routes for offline use (per-route pin)** | ✓ | — | — | Garmin device only | Region packs (paid) | — |
+| **Phone → watch route sync without watch internet (DataLayer)** | ✓ Wear OS | — | — | — | — | — |
 | Auto-sync on wifi reconnect | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Conflict resolution (newer-wins) | ✓ | ✓ | ✓ | ✓ | ? | ✓ |
 | Edit run title and notes | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -47,29 +51,35 @@ Most of what this section used to gate has shipped — OAuth (Google + Apple sig
 - **Push notifications (FCM / APNs)** — `device_tokens` table is shipped; the sender + client-side token registration are blocked on user-supplied Firebase / APNs credentials.
 - **Garmin Connect OAuth** — hard-blocked on the multi-day Garmin Developer Program application.
 - **Live spectator transport upgrade** — the Realtime fallback is live and shipping; the Go WebSocket hub at `apps/job_worker/internal/livehub/` is code-complete and awaits a Fly deploy.
-- **Offline tile packs + turn-by-turn voice nav** — disk-backed tile cache is shipped for normal browsing, but pre-downloading a region pack before a no-signal trail run isn't.
+- **Offline tile packs + turn-by-turn voice nav** — partial. Per-route "Save for offline" pin shipped (decisions.md § 64) — flags individual routes to keep on the phone — and the disk-backed tile cache is shipped for normal browsing. **Still pending:** pre-downloading a region's raster tiles before a no-signal trail run, plus turn-by-turn voice cues against a loaded route. The pin reserves the route data side; tile packs + cues are the remaining work.
 - **Audio-coached / guided runs** — NRC-style curated coached workouts (separate from the existing TTS audio-cue layer).
 - **Race calendar + results** — needs a RunSignUp API key; otherwise patterned after the existing parkrun import.
 - **Phase 4: gym + nutrition modules** — see the [multi-modal section below](#multi-modal-competitive-landscape-phase-4--run--lift--meal) and [roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition).
 
 ### Migration paths shipped today
 
-Bringing your existing run history with you is the single biggest barrier to switching apps. The Android app now ships with two paths:
+Bringing your existing run history with you is the single biggest barrier to switching apps. The Android app now ships with four paths on the Import screen, alongside the lossless Backup ZIP round-trip:
 
 - **Strava ZIP import** — every Strava user can request a full data export from Settings → My Account → Download or Delete Your Account. The exporter unzips it, parses `activities.csv`, walks each `.gpx`/`.tcx`/`.gpx.gz` track file, and bulk-creates runs in the local store. Pushes to the cloud automatically if signed in. FIT files are skipped (re-export from Strava as GPX).
 - **Health Connect import** — on Android 14+, every fitness app syncs into Health Connect: Google Fit, Samsung Health, Garmin Connect, Fitbit, Runna, even Nike Run Club via the Strava bridge. The importer reads workout summaries from the last year. The trade-off is that Health Connect doesn't expose GPS routes for workouts written by other apps, so imported runs from this path don't have a map trace.
+- **CSV summary re-import** — accepts both the 5-column mobile/web Settings CSV export and the 17-column backend GDPR export from `/v1/export?format=csv`. Each row becomes a manual-entry run (no GPS); idempotent on re-import via a stable `external_id`. The card copy says "won't have a route line" so the user isn't surprised by trackless rows. See `decisions.md § 65`.
+- **Full Backup ZIP restore** — the lossless round-trip. Manifest + `runs.json` + `routes.json` + `profile.json` + per-run gzipped tracks. **Works without signing in** — runs hydrate into `LocalRunStore` + `LocalRouteStore` and ride the next `SyncService` cycle to Supabase. Surfaces on the Import screen alongside the other three paths AND on Settings → "Restore from backup". See `decisions.md § 66`.
 
-Together these cover the realistic migration cases. A user migrating from Strava gets full GPS tracks; a user migrating from any other app gets workout summaries with no map. Either way, they walk in with their full history on day one.
+Together these cover the realistic migration cases. A user migrating from Strava gets full GPS tracks; a user migrating from any other app gets workout summaries with no map; a user moving between this app's own devices gets the lossless Backup ZIP path. Either way, they walk in with their full history on day one.
 
 Storage was redesigned in the same release: GPS tracks now live as gzipped JSON files in Supabase Storage instead of inline `jsonb` columns. A 5-year power-user import (≈600 MB raw) compresses to ~75 MB and costs cents per user per year instead of dollars. **Bulk import would have been economically unviable on the old schema.**
 
+Backup at scale was rebuilt in May 2026 to stream to disk via `ZipFileEncoder` (mobile) / `@zip.js/zip.js` `BlobWriter` (web), with bounded-concurrency track downloads (6× in flight). Peak heap drops from ~300 MB to ~5 MB at 5 000 runs — the OOM ceiling that bricks every other client-side ZIP builder at scale is gone. For typical sub-5 000-run users, mobile prefers the Go service's `POST /v1/export?format=backup` path (server does the fan-out, mobile streams the signed URL straight to disk); falls back to the local writer on any failure or library size beyond the server cap. See `decisions.md § 66`.
+
 ### Lines worth defending
 
-Three differentiators are already real on Android and are the strongest pitches:
+Five differentiators are already real on Android and are the strongest pitches:
 
 1. **Free GPX/KML import** — Strava paywalls this. Most runners who plan routes outside their app hit this wall.
 2. **Fully offline mode without an account** — every other major app forces sign-in before you can record. Run app records to local JSON, syncs later if you ever sign in.
 3. **Activity types that actually differ** — picking "Cycle" swaps pace for speed, switches calorie multipliers, uses 5km splits, and adapts the GPS jitter filter. Most apps treat activity type as a label only.
+4. **Lossless round-trip backup that works offline** — every other client-side ZIP builder OOMs the device at thousands of runs; ours streams to disk and handles 10 000+ without breaking a sweat. **Restore works on a freshly installed phone with no account** — rows queue locally and ride the next sync cycle once the user signs in. No other major app's backup story does both.
+5. **Phone → watch route sync via DataLayer without watch internet** — star a route on the phone, it lands on the paired Wear OS watch the moment the phone has wifi, with no watch-side LTE required at run-start. NRC has no Wear OS at all; Strava's Wear OS app doesn't proactively push the user's starred set; Garmin requires a Garmin watch. A clean hardware-agnostic gap.
 
 ---
 
@@ -264,6 +274,11 @@ The running app market is dominated by a small number of well-funded incumbents.
 | VDOT + training load + recovery analytics | ✓ (web, Android) | ✓ (premium) | ✓ | — | — | — | ✓ |
 | Clubs + events | ✓ (web, Android) | ✓ | Limited | ✓ | — | — | — |
 | Notifications inbox (kudos / comments / RSVPs) | ✓ (web, Android) | ✓ | ✓ | ✓ | — | — | ✓ |
+| Lossless full backup ZIP (round-trip restore) | ✓ (web, Android — streaming + scales to 10 000+ runs) | Export-only (GDPR archive — no in-app re-import) | Export-only (TCX-per-run) | — | Export-only (GPX-per-run) | Export-only (GPX) | — |
+| Backup restore on a freshly installed device, no account | ✓ (Android — offline-first) | — | — | — | — | — | — |
+| CSV summary re-import | ✓ (Android — round-trips Settings export) | — | — | — | — | — | — |
+| Per-route "Save for offline" pin | ✓ (Android) | — | — | Course push to Garmin watch | Region tile packs (paid) | — | — |
+| Phone → Wear OS route sync without watch internet | ✓ (Wear OS — DataLayer push) | — | — | Garmin watch only | — | — | — |
 
 Backlog items are tracked in `docs/roadmap.md § Competitor-parity backlog` with rough sizing and open decisions. No ordering implied — the user still owes three prioritisation decisions before any of these start.
 
@@ -350,6 +365,9 @@ NRC dropping Wear OS support leaves a gap. Android users with a Pixel Watch or G
 
 ### Free route builder
 "Free Strava route builder alternative" is a high-intent search that converts well. Users who've hit the Strava paywall are actively looking for alternatives.
+
+### Friction-free migration off existing apps
+"Move my Strava data to another app", "Export Garmin runs to another app", and similar queries are high-intent and underserved. With the four-path import surface (Strava ZIP, Health Connect / Apple Health, CSV summary, Backup ZIP) plus an offline-first restore that doesn't even need an account, the migration message — "bring your full history on day one, no sign-in required" — is unmatched. NRC has no import path; Strava's import is limited to single GPX files; Runna only takes Strava feed. The friction at the *front door* of every competitor is real, and the migration story is now first-class on our Import screen.
 
 ---
 
