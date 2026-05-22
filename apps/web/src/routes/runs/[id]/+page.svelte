@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
+	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
+	import { interpolateAlongRoute } from '$lib/route_geometry';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
@@ -722,6 +724,24 @@
 	/// 1:1 from baseTrack above.
 	let chartHoverIdx = $state<number | null>(null);
 
+	/// Route-direction scrubber state — mirrors the route-detail
+	/// surface (and the mobile twin's `_RoutePreviewScrubber`). The
+	/// user drags a 0..1 fraction across the run's polyline; while
+	/// `scrubbing` is true, the map mounts a pulsing preview marker
+	/// at the interpolated position so the runner can replay where
+	/// they were along the track. May 2026 parity pass — mobile
+	/// route-detail already had it; web's run-detail was missing.
+	let scrubFraction = $state(0);
+	let scrubbing = $state(false);
+	let scrubPreviewLngLat = $derived.by<[number, number] | null>(() => {
+		if (!scrubbing || !hasMapTrack) return null;
+		const pt = interpolateAlongRoute(
+			baseTrack.map((p) => ({ lat: p.lat, lng: p.lng })),
+			scrubFraction,
+		);
+		return pt ? [pt.lng, pt.lat] : null;
+	});
+
 	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
 </script>
 
@@ -771,6 +791,19 @@
 				activity={paceHeatmapActivity}
 				onSegmentSelect={(seg) => (selectedSegment = seg)}
 				hoverIdx={chartHoverIdx}
+				previewLngLat={scrubPreviewLngLat}
+			/>
+			<!-- Scrubber: drag to preview a position along the run.
+				 Mirrors mobile's `_RoutePreviewScrubber` on
+				 route_detail_screen (now also present on web's
+				 /routes/[id]). The pulsing marker on the map fades
+				 in while `scrubbing` is true via the `previewLngLat`
+				 prop above. -->
+			<RoutePreviewScrubber
+				totalDistanceM={run.distance_m}
+				fraction={scrubFraction}
+				onchange={(f) => (scrubFraction = f)}
+				onscrubbing={(active) => (scrubbing = active)}
 			/>
 		{:else}
 			<div class="map-empty">
