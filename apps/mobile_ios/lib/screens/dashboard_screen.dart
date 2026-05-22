@@ -121,6 +121,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         builder: (_) => ImportScreen(
           apiClient: widget.apiClient,
           runStore: widget.runStore,
+          routeStore: widget.routeStore,
         ),
       ),
     );

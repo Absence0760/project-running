@@ -5,19 +5,32 @@ import 'package:core_models/core_models.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../backup.dart';
+import '../csv_run_importer.dart';
 import '../health_connect_importer.dart';
+import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../strava_importer.dart';
 
-/// Bulk import screen — Strava ZIP today, more sources to follow.
+/// Bulk import screen — Strava ZIP, Health Connect / Apple Health,
+/// CSV summary, and full-backup ZIP. CSV and Backup-ZIP both work
+/// **offline-first** so a user can restore on a freshly-installed
+/// device before signing in; `SyncService` pushes to Supabase the
+/// next time the user signs in.
 class ImportScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
+  /// Optional. When supplied, the Backup-ZIP path also restores routes;
+  /// without it the path silently skips them. Callers that don't have a
+  /// LocalRouteStore handy (smoke tests, share-target entry points) can
+  /// still drive runs-only restore.
+  final LocalRouteStore? routeStore;
 
   const ImportScreen({
     super.key,
     this.apiClient,
     required this.runStore,
+    this.routeStore,
   });
 
   @override
@@ -123,6 +136,80 @@ class _ImportScreenState extends State<ImportScreen> {
           ? 'Imported ${savedRuns.length} runs from $label'
           : 'Imported ${savedRuns.length} runs (${localErrors.length} failed)';
     });
+  }
+
+  Future<void> _importCsv() async {
+    final result = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['csv'],
+    );
+    if (result == null || result.files.isEmpty) return;
+    final path = result.files.first.path;
+    if (path == null) return;
+
+    setState(() {
+      _busy = true;
+      _status = 'Reading CSV...';
+      _imported = 0;
+      _total = 0;
+      _errors = [];
+    });
+
+    try {
+      final content = await File(path).readAsString();
+      final parsed = CsvRunImporter.parse(content);
+      final preErrors =
+          parsed.errors.map((e) => e.toString()).toList();
+      await _saveImportedRuns(parsed.runs, label: 'CSV');
+      if (mounted && preErrors.isNotEmpty) {
+        setState(() => _errors = [...preErrors, ..._errors]);
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = 'CSV import failed: $e';
+      });
+    }
+  }
+
+  Future<void> _importBackupZip() async {
+    final picked = await FilePicker.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final path = picked.files.first.path;
+    if (path == null) return;
+
+    setState(() {
+      _busy = true;
+      _status = 'Restoring backup...';
+      _imported = 0;
+      _total = 0;
+      _errors = [];
+    });
+
+    try {
+      final res = await BackupService(api: widget.apiClient).restore(
+        zipFile: File(path),
+        runStore: widget.runStore,
+        routeStore: widget.routeStore,
+      );
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = 'Restored ${res.runsImported} runs · '
+            '${res.tracksUploaded} tracks · ${res.routesImported} routes';
+        _errors = res.warnings;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _busy = false;
+        _status = 'Backup restore failed: $e';
+      });
+    }
   }
 
   Future<void> _importStrava() async {
@@ -285,6 +372,125 @@ class _ImportScreenState extends State<ImportScreen> {
                       onPressed: _busy ? null : _importHealthConnect,
                       icon: const Icon(Icons.health_and_safety),
                       label: Text('Import from $_healthLabel'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.tertiary.withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Icon(Icons.table_chart_outlined,
+                            color: theme.colorScheme.tertiary, size: 28),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('CSV', style: theme.textTheme.titleMedium),
+                            Text(
+                              'Re-import a CSV exported from Settings — runs only, no GPS',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Each CSV row becomes a manual run (date, distance, '
+                    'duration, source). The map trace is not in the CSV, '
+                    'so imported runs won\'t have a route line.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : _importCsv,
+                      icon: const Icon(Icons.upload_file),
+                      label: const Text('Import CSV'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF22C55E).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(Icons.unarchive_outlined,
+                            color: Color(0xFF22C55E), size: 28),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Full backup ZIP',
+                                style: theme.textTheme.titleMedium),
+                            Text(
+                              'Restore runs, routes, and GPS traces from a backup file',
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.outline,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'Loss-less round-trip. Works without signing in — '
+                    'restored runs sync to your account the next time you '
+                    'do. Make a backup from Settings → Full backup.',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                      height: 1.5,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    child: FilledButton.icon(
+                      onPressed: _busy ? null : _importBackupZip,
+                      icon: const Icon(Icons.folder_zip_outlined),
+                      label: const Text('Restore backup ZIP'),
                     ),
                   ),
                 ],

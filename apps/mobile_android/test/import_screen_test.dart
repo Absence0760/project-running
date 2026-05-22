@@ -15,6 +15,12 @@ Future<LocalRunStore> _makeStore() async {
 }
 
 Future<void> _pump(WidgetTester tester, LocalRunStore runStore) async {
+  // Stretch the surface vertically so every Card in the ListView is
+  // built + laid out — the default 800x600 viewport puts the lower
+  // cards (CSV / Backup-ZIP) just past the offstage cliff so
+  // `skipOffstage: false` alone isn't enough for ancestor finders.
+  await tester.binding.setSurfaceSize(const Size(800, 2400));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
       home: ImportScreen(
@@ -80,6 +86,58 @@ void main() {
       // non-empty — neither holds on initial paint.
       expect(find.byIcon(Icons.check_circle), findsNothing);
       expect(find.byType(LinearProgressIndicator), findsNothing);
+    });
+
+    testWidgets('shows CSV import card with the no-GPS caveat',
+        (tester) async {
+      final store = await _makeStore();
+      await _pump(tester, store);
+      // CSV + backup-ZIP cards sit below the fold in the default
+      // 800x600 test viewport — `skipOffstage: false` reaches into
+      // the ListView's off-screen children which are built eagerly
+      // (the `children:` constructor, not `.builder`).
+      expect(find.text('CSV', skipOffstage: false), findsOneWidget);
+      // The body copy must explicitly tell the user CSV is trackless —
+      // a CSV that silently produces empty maps would surprise the
+      // user the moment they tap a row.
+      expect(
+        find.textContaining("won't have a route line", skipOffstage: false),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Import CSV button is present and enabled', (tester) async {
+      final store = await _makeStore();
+      await _pump(tester, store);
+      final btn = find.widgetWithText(FilledButton, 'Import CSV',
+          skipOffstage: false);
+      expect(btn, findsOneWidget);
+      expect(tester.widget<FilledButton>(btn).onPressed, isNotNull);
+    });
+
+    testWidgets('shows Full backup ZIP card with offline-first language',
+        (tester) async {
+      final store = await _makeStore();
+      await _pump(tester, store);
+      expect(find.text('Full backup ZIP', skipOffstage: false),
+          findsOneWidget);
+      // The card must call out that the path works signed-out — the
+      // whole reason to surface it on the import screen rather than
+      // leave it buried in Settings.
+      expect(
+        find.textContaining('without signing in', skipOffstage: false),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('Restore backup ZIP button is present and enabled',
+        (tester) async {
+      final store = await _makeStore();
+      await _pump(tester, store);
+      final btn = find.widgetWithText(FilledButton, 'Restore backup ZIP',
+          skipOffstage: false);
+      expect(btn, findsOneWidget);
+      expect(tester.widget<FilledButton>(btn).onPressed, isNotNull);
     });
   });
 

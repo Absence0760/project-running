@@ -14,6 +14,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../backup.dart';
 import '../ble_heart_rate.dart';
 import '../goals.dart';
+import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../main.dart' show themeModeNotifier;
 import '../preferences.dart';
@@ -34,6 +35,7 @@ class SettingsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final Preferences preferences;
   final LocalRunStore? runStore;
+  final LocalRouteStore? routeStore;
   final BleHeartRate heartRate;
   final SettingsSyncService? settingsSync;
 
@@ -43,6 +45,7 @@ class SettingsScreen extends StatefulWidget {
     required this.preferences,
     required this.heartRate,
     this.runStore,
+    this.routeStore,
     this.settingsSync,
   });
 
@@ -340,6 +343,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final res = await BackupService(api: api).restore(
         zipFile: File(path),
         runStore: store,
+        routeStore: widget.routeStore,
       );
       if (!mounted) return;
       showTopBanner(
@@ -1649,6 +1653,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     builder: (_) => ImportScreen(
                       apiClient: widget.apiClient,
                       runStore: widget.runStore!,
+                      routeStore: widget.routeStore,
                     ),
                   ),
                 );
