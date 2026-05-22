@@ -2197,6 +2197,32 @@ void main() {
       );
     });
 
+    test('Protomaps bootstrap script — readiness probe uses /health', () {
+      // Reason: tileserver-gl v5 exposes /health (returns "OK" +
+      // 200). The May 2026 audit-2 round had a fallback chain
+      // (/styles.json OR /) because the upstream docs didn't
+      // confirm /health. Live-boot proved it works — Docker's
+      // own healthcheck inside the image hits it. Pin the
+      // simpler single-curl probe so a future refactor doesn't
+      // restore the noisier fallback.
+      final body = File('../../bin/protomaps-dev.sh').readAsStringSync();
+      expect(
+        body,
+        contains(RegExp(r'curl\s+-fs\s+"http://localhost:\$\{PROTOMAPS_PORT\}/health"')),
+        reason: 'wait-loop must use /health as the probe — the live boot '
+            'confirmed it exists despite the earlier audit doubting it',
+      );
+      // The previous fallback path (`||` of /styles.json + /) must
+      // not coexist with the /health probe — we picked the simpler
+      // path on purpose.
+      expect(
+        body,
+        isNot(contains(RegExp(r'/styles\.json[^"]*"\s*>/dev/null[\s\S]{0,40}\\\s*$', multiLine: true))),
+        reason: 'the /styles.json fallback was redundant after /health '
+            'was confirmed — keep the probe to one curl per iteration',
+      );
+    });
+
     test('Protomaps bootstrap script — container has --restart '
         'unless-stopped policy', () {
       // Without this flag, a docker daemon reload mid-dev-session

@@ -318,12 +318,12 @@ EOF
 	ok "container started"
 
 	step "Waiting for the server to come up"
-	# tileserver-gl doesn't expose /health. The root path returns
-	# the landing page once it's up; /styles.json returns the
-	# styles list. Try either — the first that responds 200 wins.
+	# tileserver-gl v5 DOES expose /health (returns "OK" plus a
+	# 200) — Docker's own healthcheck inside the image hits it.
+	# An earlier audit pass said it might not exist; live boot
+	# proved otherwise. One curl per iteration is enough.
 	for i in {1..30}; do
-		if curl -fs "http://localhost:${PROTOMAPS_PORT}/styles.json" >/dev/null 2>&1 \
-			|| curl -fs "http://localhost:${PROTOMAPS_PORT}/" >/dev/null 2>&1; then
+		if curl -fs "http://localhost:${PROTOMAPS_PORT}/health" >/dev/null 2>&1; then
 			ok "ready at http://localhost:${PROTOMAPS_PORT}"
 			break
 		fi
