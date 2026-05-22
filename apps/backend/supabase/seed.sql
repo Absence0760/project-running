@@ -378,16 +378,81 @@ VALUES
    false, 'invite',
    'c3fr13nd50fj4r3dc1ubtoken000000');
 
--- Drop `location_point` pins on the two public clubs at Virginia
--- coordinates so the heatmap-tab discoverable-pin layer
--- (clubs_in_bbox + discoverable_routes_in_bbox, migration
--- 20260911_001) has something to render. `location_label` stays
--- 'Sydney, AU' for the original copy; in a real-world flow the
--- club editor would set both together.
-UPDATE clubs SET location_point = ST_GeogFromText('SRID=4326;POINT(-77.4360 37.5407)')
+-- Rename + relocate the two public clubs from "Sydney" to Virginia
+-- so the heatmap-tab discoverable-pin layer (clubs_in_bbox +
+-- discoverable_routes_in_bbox, migration 20260911_001) reads
+-- consistently with the Virginia route seeds + the Protomaps
+-- Virginia tile extract. In a real-world flow the club editor
+-- would set name + location_label + location_point together.
+UPDATE clubs
+   SET name = 'Richmond Run Club',
+       description = 'Weekly long runs from Belle Isle. All paces, all welcome.',
+       location_label = 'Richmond, VA',
+       location_point = ST_GeogFromText('SRID=4326;POINT(-77.4360 37.5407)')
   WHERE id = 'c1111111-0000-0000-0000-000000000001'::uuid;
-UPDATE clubs SET location_point = ST_GeogFromText('SRID=4326;POINT(-78.4767 38.0293)')
+UPDATE clubs
+   SET name = 'UVA Tempo Tuesday',
+       description = 'Weekly threshold session in Charlottesville. Request to join — group around 15.',
+       location_label = 'Charlottesville, VA',
+       location_point = ST_GeogFromText('SRID=4326;POINT(-78.4767 38.0293)')
   WHERE id = 'c2222222-0000-0000-0000-000000000002'::uuid;
+
+-- Six more public clubs across Virginia so the heatmap shows a
+-- realistic spread + the "popular routes" + "clubs nearby" UX
+-- has something to discover at city/region zoom. Each is owned
+-- by the seed user (the `enroll_club_owner` trigger auto-inserts
+-- the owner row in club_members; no manual member seed needed).
+INSERT INTO clubs (id, owner_id, name, slug, description, location_label, location_point, is_public, join_policy, invite_token)
+VALUES
+  ('c4444444-0000-0000-0000-000000000004',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'NoVA Trail Crew',
+   'nova-trail-crew',
+   'Weekend trail runs along the Mount Vernon Trail + W&OD. We meet at the Memorial Bridge.',
+   'Arlington, VA',
+   ST_GeogFromText('SRID=4326;POINT(-77.0560 38.8870)'),
+   true, 'open', null),
+  ('c5555555-0000-0000-0000-000000000005',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'Norfolk Botanical Runners',
+   'norfolk-botanical-runners',
+   'Quiet morning loops through Norfolk Botanical Garden. Beginners + walk-run welcome.',
+   'Norfolk, VA',
+   ST_GeogFromText('SRID=4326;POINT(-76.2030 36.8983)'),
+   true, 'open', null),
+  ('c6666666-0000-0000-0000-000000000006',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'VA Beach Boardwalk Striders',
+   'va-beach-boardwalk-striders',
+   'Sunrise runs on the Boardwalk year-round. 5K + 10K paces; weekend long runs in the summer.',
+   'Virginia Beach, VA',
+   ST_GeogFromText('SRID=4326;POINT(-75.9772 36.8385)'),
+   true, 'open', null),
+  ('c7777777-0000-0000-0000-000000000007',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'Mill Mountain Hill Climbers',
+   'mill-mountain-hill-climbers',
+   'Tuesday hill repeats on the Mill Mountain Star greenway. If you like climbing, this is the group.',
+   'Roanoke, VA',
+   ST_GeogFromText('SRID=4326;POINT(-79.9416 37.2710)'),
+   true, 'request', null),
+  ('c8888888-0000-0000-0000-000000000008',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'Richmond Marathon Trainers',
+   'richmond-marathon-trainers',
+   'Fall marathon training group out of Belle Isle. 16-week plan, Saturday long runs, Wednesday workouts.',
+   'Richmond, VA',
+   ST_GeogFromText('SRID=4326;POINT(-77.4500 37.5300)'),
+   true, 'open', null),
+  ('c9999999-0000-0000-0000-000000000009',
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'Blue Ridge Trail Society',
+   'blue-ridge-trail-society',
+   'Trail running, Skyline Drive day trips, Massanutten + Shenandoah event recon. Vans depart from UVA.',
+   'Charlottesville, VA',
+   ST_GeogFromText('SRID=4326;POINT(-78.5067 38.0356)'),
+   true, 'request', null)
+ON CONFLICT (id) DO NOTHING;
 
 -- Flag three of the Virginia routes as `featured = true` so the
 -- discoverable_routes_in_bbox RPC surfaces them at city-zoom on
@@ -399,6 +464,17 @@ UPDATE routes SET featured = true, featured_at = now()
     'UVA Rotunda Loop (Charlottesville)',
     'Mount Vernon Trail North (Arlington)'
   );
+
+-- Bump `run_count` on the three non-featured Virginia routes so
+-- the "popular routes" path of discoverable_routes_in_bbox
+-- (`featured = true OR run_count > 0`) lights up alongside the
+-- featured ones. The trigger `routes_run_count_trigger` would
+-- normally increment this when a run is matched to the route via
+-- the run_match_pipeline; we set it directly in the seed to avoid
+-- needing matched runs for the demo.
+UPDATE routes SET run_count = 8 WHERE name = 'VA Beach Boardwalk Out & Back';
+UPDATE routes SET run_count = 5 WHERE name = 'Norfolk Botanical Garden Loop';
+UPDATE routes SET run_count = 3 WHERE name = 'Mill Mountain Star Climb (Roanoke)';
 
 -- Post a mock pending request from a second auth user so the admin panel
 -- has something to show. The user is created lightly (minimum columns) and
