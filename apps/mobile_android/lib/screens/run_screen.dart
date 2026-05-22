@@ -26,6 +26,7 @@ import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
 import '../race_controller.dart';
 import '../route_match.dart';
+import 'route_picker_screen.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
@@ -542,28 +543,11 @@ class _RunScreenState extends State<RunScreen> {
       return;
     }
     final unit = widget.preferences.unit;
-    final picked = await showModalBottomSheet<cm.Route?>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.close),
-              title: const Text('No route'),
-              onTap: () => Navigator.pop(ctx, null),
-            ),
-            const Divider(),
-            ...routes.map((r) => ListTile(
-                  leading: const Icon(Icons.route),
-                  title: Text(r.name),
-                  subtitle: Text(UnitFormat.distance(r.distanceMetres, unit)),
-                  onTap: () => Navigator.pop(ctx, r),
-                )),
-          ],
-        ),
-      ),
-    );
+    // Full-screen page (was a modal bottom sheet). Surfaces a
+    // search field at the top + sorts starred routes first per
+    // user feedback. See `route_picker_screen.dart`.
+    final picked = await pickRoute(context, routes: routes, unit: unit);
+    if (!mounted) return;
     setState(() => _selectedRoute = picked);
   }
 
