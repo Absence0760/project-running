@@ -134,7 +134,15 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   // Place search.
   final TextEditingController _searchCtl = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
   List<PlaceResult> _searchResults = const [];
+
+  /// True while the search TextField is focused — the keyboard is
+  /// up. We hide the bottom mode toggle in this state so it doesn't
+  /// overlap the search-results dropdown, and condense the AppBar
+  /// actions into an overflow menu so the search field gets the
+  /// full title width.
+  bool _searchFocused = false;
   Timer? _searchDebounce;
   bool _searchOpen = false;
 
@@ -148,6 +156,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   void initState() {
     super.initState();
     _loadClubs();
+    _searchFocus.addListener(() {
+      if (!mounted) return;
+      setState(() => _searchFocused = _searchFocus.hasFocus);
+    });
   }
 
   Future<void> _loadClubs() async {
@@ -182,6 +194,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   void dispose() {
     _searchDebounce?.cancel();
     _searchCtl.dispose();
+    _searchFocus.dispose();
     _map.dispose();
     super.dispose();
   }
@@ -653,10 +666,24 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         : const <List<LatLng>>[];
     final center = widget.initialCenter ?? _kDefaultCenter;
 
+    // AppBar actions: when the search field is focused (keyboard
+    // up + actively typing), condense everything except Save into
+    // a single overflow (`⋮`) menu so the search TextField gets
+    // the full title width. Pre-polish the 4 visible action icons
+    // ate ~half the AppBar — the user reported "the search bar is
+    // super tiny and only shows 1 letter when I'm typing." When
+    // the search isn't focused, all 4 affordances stay visible
+    // (most actions get used while building, not while searching).
+    final canUndo = _waypoints.isNotEmpty && !_routing && !_saving;
+    final canClear = _waypoints.isNotEmpty && !_routing && !_saving;
+    final canGenerate = !_routing && !_saving;
+    final canSave = _polyline.length >= 2 && !_routing && !_saving;
+    final compactActions = _searchFocused;
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _searchCtl,
+          focusNode: _searchFocus,
           onChanged: _onSearchChanged,
           decoration: const InputDecoration(
             hintText: 'Search places…',
@@ -665,39 +692,82 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
           ),
           style: theme.textTheme.bodyLarge,
         ),
-        actions: [
-          IconButton(
-            tooltip: 'Generate loop',
-            onPressed: _routing || _saving ? null : _generateLoop,
-            // Was Icons.refresh_outlined — looked like a retry /
-            // reload button per user feedback. Icons.all_inclusive
-            // is the infinity-loop glyph, semantically a closed
-            // loop — distinct from any other affordance on this
-            // screen + reads as "build a circular route" at a
-            // glance.
-            icon: const Icon(Icons.all_inclusive),
-          ),
-          IconButton(
-            tooltip: 'Undo',
-            onPressed: _waypoints.isEmpty || _routing || _saving
-                ? null
-                : _undo,
-            icon: const Icon(Icons.undo),
-          ),
-          IconButton(
-            tooltip: 'Clear',
-            onPressed: _waypoints.isEmpty || _routing || _saving
-                ? null
-                : _clear,
-            icon: const Icon(Icons.delete_outline),
-          ),
-          TextButton(
-            onPressed: _polyline.length < 2 || _routing || _saving
-                ? null
-                : _save,
-            child: Text(_saving ? 'Saving…' : 'Save'),
-          ),
-        ],
+        actions: compactActions
+            ? [
+                // Compact mode while searching: just Save +
+                // overflow. The search field claims everything
+                // else.
+                TextButton(
+                  onPressed: canSave ? _save : null,
+                  child: Text(_saving ? 'Saving…' : 'Save'),
+                ),
+                PopupMenuButton<String>(
+                  tooltip: 'More',
+                  onSelected: (a) {
+                    switch (a) {
+                      case 'loop':
+                        if (canGenerate) _generateLoop();
+                      case 'undo':
+                        if (canUndo) _undo();
+                      case 'clear':
+                        if (canClear) _clear();
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'loop',
+                      enabled: canGenerate,
+                      child: const ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.all_inclusive),
+                        title: Text('Generate loop'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'undo',
+                      enabled: canUndo,
+                      child: const ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.undo),
+                        title: Text('Undo'),
+                      ),
+                    ),
+                    PopupMenuItem(
+                      value: 'clear',
+                      enabled: canClear,
+                      child: const ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('Clear'),
+                      ),
+                    ),
+                  ],
+                ),
+              ]
+            : [
+                IconButton(
+                  tooltip: 'Generate loop',
+                  onPressed: canGenerate ? _generateLoop : null,
+                  // Was Icons.refresh_outlined — looked like a retry
+                  // / reload button. Icons.all_inclusive reads as
+                  // "build a circular route" at a glance.
+                  icon: const Icon(Icons.all_inclusive),
+                ),
+                IconButton(
+                  tooltip: 'Undo',
+                  onPressed: canUndo ? _undo : null,
+                  icon: const Icon(Icons.undo),
+                ),
+                IconButton(
+                  tooltip: 'Clear',
+                  onPressed: canClear ? _clear : null,
+                  icon: const Icon(Icons.delete_outline),
+                ),
+                TextButton(
+                  onPressed: canSave ? _save : null,
+                  child: Text(_saving ? 'Saving…' : 'Save'),
+                ),
+              ],
       ),
       body: Stack(
         children: [
@@ -841,30 +911,33 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
             ),
           // Bottom mode toggle. Right edge clears the FAB column so
           // taps on the Straight segment land on the toggle rather
-          // than the Locate FAB — the FAB is in the Scaffold's
-          // floatingActionButton slot (always on top of body Stack
-          // children) and previously overlapped the rightmost
-          // segment's hit area.
-          Positioned(
-            bottom: 88,
-            left: 16,
-            right: 16 + 56 + 12,
-            child: _ModeToggle(
-              mode: _mode,
-              onChanged: _routing || _saving
-                  ? null
-                  : (m) {
-                      setState(() => _mode = m);
-                      // Re-route through existing waypoints when the
-                      // mode changes — the polyline shape depends on
-                      // the OSRM profile.
-                      if (_waypoints.length >= 2) {
-                        unawaited(
-                            _rerouteThrough(List.of(_waypoints)));
-                      }
-                    },
+          // than the Locate FAB. **Hidden while the search field is
+          // focused** — when the keyboard is up + the search-
+          // results dropdown is open below the AppBar, the toggle
+          // was overlapping the bottom of the dropdown.
+          // The user reported "Trail, Road and Straight buttons
+          // cover some of the dropdowns for the search results."
+          if (!_searchFocused)
+            Positioned(
+              bottom: 88,
+              left: 16,
+              right: 16 + 56 + 12,
+              child: _ModeToggle(
+                mode: _mode,
+                onChanged: _routing || _saving
+                    ? null
+                    : (m) {
+                        setState(() => _mode = m);
+                        // Re-route through existing waypoints when
+                        // the mode changes — the polyline shape
+                        // depends on the OSRM profile.
+                        if (_waypoints.length >= 2) {
+                          unawaited(
+                              _rerouteThrough(List.of(_waypoints)));
+                        }
+                      },
+              ),
             ),
-          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
