@@ -3546,6 +3546,7 @@ export interface ClubPin {
 	name: string;
 	slug: string | null;
 	avatar_url: string | null;
+	location_label: string | null;
 	member_count: number;
 	lng: number;
 	lat: number;
@@ -3582,6 +3583,7 @@ export interface DiscoverableRoutePin {
 	slug: string | null;
 	featured: boolean;
 	distance_m: number;
+	elevation_m: number | null;
 	surface: string;
 	run_count: number;
 	lng: number;

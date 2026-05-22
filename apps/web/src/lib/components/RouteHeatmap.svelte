@@ -220,15 +220,11 @@
 				const id = f.properties?.id as string | undefined;
 				const name = (f.properties?.name as string) ?? 'Club';
 				const memberCount = (f.properties?.member_count as number) ?? 0;
+				const locationLabel = (f.properties?.location_label as string) ?? '';
+				const avatarUrl = (f.properties?.avatar_url as string) ?? '';
 				const href = slug ? `/clubs/${slug}` : id ? `/clubs/${id}` : '#';
 				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-				openPinPopup(coords, {
-					title: name,
-					subtitle: `${memberCount} member${memberCount === 1 ? '' : 's'}`,
-					href,
-					actionLabel: 'View club',
-					accentClass: 'pin-popup-club',
-				});
+				openClubPopup(coords, { name, memberCount, locationLabel, avatarUrl, href });
 			});
 			map.on('mouseenter', CLUB_PINS_LAYER, (e) => {
 				if (!map) return;
@@ -279,28 +275,15 @@
 				if (!f || !map) return;
 				const id = f.properties?.id as string | undefined;
 				if (!id) return;
-				const name = (f.properties?.name as string) ?? 'Route';
-				const featured = !!f.properties?.featured;
-				const distance = (f.properties?.distance_m as number) ?? 0;
-				const surface = (f.properties?.surface as string) ?? '';
-				const runCount = (f.properties?.run_count as number) ?? 0;
-				const subtitleBits = [
-					formatDistance(distance),
-					surface,
-					runCount > 0
-						? `run ${runCount} time${runCount === 1 ? '' : 's'}`
-						: '',
-				].filter(Boolean);
 				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-				openPinPopup(coords, {
-					title: name,
-					subtitle: subtitleBits.join(' · '),
-					href: `/routes/${id}`,
-					actionLabel: 'View route',
-					accentClass: featured
-						? 'pin-popup-route pin-popup-featured'
-						: 'pin-popup-route',
-					featured,
+				openRoutePopup(coords, {
+					id,
+					name: (f.properties?.name as string) ?? 'Route',
+					featured: !!f.properties?.featured,
+					distance_m: (f.properties?.distance_m as number) ?? 0,
+					elevation_m: (f.properties?.elevation_m as number) ?? null,
+					surface: (f.properties?.surface as string) ?? '',
+					run_count: (f.properties?.run_count as number) ?? 0,
 				});
 			});
 			map.on('mouseenter', ROUTE_PINS_LAYER, (e) => {
@@ -413,15 +396,6 @@
 	let currentPopup: maplibregl.Popup | null = null;
 	let hoverPopup: maplibregl.Popup | null = null;
 
-	interface PinPopupOpts {
-		title: string;
-		subtitle: string;
-		href: string;
-		actionLabel: string;
-		accentClass: string;
-		featured?: boolean;
-	}
-
 	function escapeHtml(s: string): string {
 		return s
 			.replace(/&/g, '&amp;')
@@ -431,36 +405,120 @@
 			.replace(/'/g, '&#39;');
 	}
 
-	function openPinPopup(coords: [number, number], opts: PinPopupOpts) {
+	/// Two initials from a name, e.g. "Richmond Run Club" → "RR".
+	/// Falls back to the first letter for single-word names.
+	function initialsOf(name: string): string {
+		const parts = name.trim().split(/\s+/).slice(0, 2);
+		if (parts.length === 0) return '?';
+		if (parts.length === 1) return parts[0].charAt(0).toUpperCase();
+		return (parts[0].charAt(0) + parts[1].charAt(0)).toUpperCase();
+	}
+
+	function openPopupRaw(coords: [number, number], html: string) {
 		if (!map) return;
 		closeHoverTip();
 		currentPopup?.remove();
-		const star = opts.featured
-			? '<span class="pin-popup-star" title="Featured">★</span>'
-			: '';
-		const html = `
-			<div class="pin-popup ${opts.accentClass}">
-				<div class="pin-popup-head">
-					${star}
-					<span class="pin-popup-title">${escapeHtml(opts.title)}</span>
-				</div>
-				<div class="pin-popup-subtitle">${escapeHtml(opts.subtitle)}</div>
-				<a class="pin-popup-action" href="${escapeHtml(opts.href)}"
-					data-sveltekit-preload-data="hover">
-					${escapeHtml(opts.actionLabel)} &rarr;
-				</a>
-			</div>
-		`;
+		// Force a resize sync before MapLibre projects the lat/lng.
+		// User report from May 2026: the popup landed way below the
+		// rendered tiles. Stale-transform symptom — the map's
+		// internal transform can drift after a container resize if
+		// the ResizeObserver hasn't caught up. Belt-and-suspenders.
+		map.resize();
 		currentPopup = new maplibregl.Popup({
 			closeButton: true,
 			closeOnClick: false,
 			offset: 14,
-			maxWidth: '220px',
+			maxWidth: '260px',
 			className: 'heatmap-pin-popup',
 		})
 			.setLngLat(coords)
 			.setHTML(html)
 			.addTo(map);
+	}
+
+	interface ClubPopupData {
+		name: string;
+		memberCount: number;
+		locationLabel: string;
+		avatarUrl: string;
+		href: string;
+	}
+	function openClubPopup(coords: [number, number], d: ClubPopupData) {
+		const avatar = d.avatarUrl
+			? `<img class="pin-avatar" src="${escapeHtml(d.avatarUrl)}" alt="" />`
+			: `<span class="pin-avatar pin-avatar-initials">${escapeHtml(initialsOf(d.name))}</span>`;
+		const memberLine = `${d.memberCount} member${d.memberCount === 1 ? '' : 's'}`;
+		const subtitle = d.locationLabel
+			? `<span class="pin-popup-location">📍 ${escapeHtml(d.locationLabel)}</span>`
+			: '';
+		const html = `
+			<div class="pin-popup pin-popup-club">
+				<div class="pin-popup-head">
+					${avatar}
+					<div class="pin-popup-titleblock">
+						<span class="pin-popup-title">${escapeHtml(d.name)}</span>
+						<span class="pin-popup-meta">${memberLine}</span>
+					</div>
+				</div>
+				${subtitle}
+				<a class="pin-popup-action" href="${escapeHtml(d.href)}"
+					data-sveltekit-preload-data="hover">
+					View club &rarr;
+				</a>
+			</div>
+		`;
+		openPopupRaw(coords, html);
+	}
+
+	interface RoutePopupData {
+		id: string;
+		name: string;
+		featured: boolean;
+		distance_m: number;
+		elevation_m: number | null;
+		surface: string;
+		run_count: number;
+	}
+	function openRoutePopup(coords: [number, number], d: RoutePopupData) {
+		const stats: string[] = [];
+		stats.push(
+			`<span class="pin-stat"><span class="pin-stat-icon">📏</span>${escapeHtml(formatDistance(d.distance_m))}</span>`,
+		);
+		if (d.elevation_m != null && d.elevation_m > 0) {
+			stats.push(
+				`<span class="pin-stat"><span class="pin-stat-icon">⛰</span>${Math.round(d.elevation_m)} m</span>`,
+			);
+		}
+		if (d.surface) {
+			stats.push(
+				`<span class="pin-stat"><span class="pin-stat-icon">🛣</span>${escapeHtml(d.surface)}</span>`,
+			);
+		}
+		if (d.run_count > 0) {
+			stats.push(
+				`<span class="pin-stat"><span class="pin-stat-icon">🏃</span>${d.run_count} run${d.run_count === 1 ? '' : 's'}</span>`,
+			);
+		}
+		const star = d.featured
+			? '<span class="pin-popup-star" title="Featured">★</span>'
+			: '';
+		const html = `
+			<div class="pin-popup pin-popup-route ${d.featured ? 'pin-popup-featured' : ''}">
+				<div class="pin-popup-head">
+					${star}
+					<div class="pin-popup-titleblock">
+						<span class="pin-popup-title">${escapeHtml(d.name)}</span>
+						${d.featured ? '<span class="pin-popup-badge">Featured route</span>' : ''}
+					</div>
+				</div>
+				<div class="pin-popup-stats">${stats.join('')}</div>
+				<a class="pin-popup-action" href="/routes/${escapeHtml(d.id)}"
+					data-sveltekit-preload-data="hover">
+					View route &rarr;
+				</a>
+			</div>
+		`;
+		openPopupRaw(coords, html);
 	}
 
 	function openHoverTip(coords: [number, number], name: string) {
@@ -999,7 +1057,7 @@
 	 *   - .heatmap-hover-tip — small name-only badge on hover.
 	 */
 	:global(.maplibregl-popup.heatmap-pin-popup) {
-		max-width: 220px;
+		max-width: 260px;
 	}
 	:global(.heatmap-pin-popup .maplibregl-popup-content) {
 		background: var(--color-surface);
@@ -1007,7 +1065,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		box-shadow: var(--shadow-lg);
-		padding: var(--space-sm) var(--space-md) var(--space-md);
+		padding: 0.6rem 0.8rem 0.7rem;
 	}
 	:global(.heatmap-pin-popup .maplibregl-popup-tip) {
 		border-top-color: var(--color-border);
@@ -1018,37 +1076,102 @@
 		color: var(--color-text-secondary);
 		padding: 0 0.4rem;
 	}
+	/* Head row — avatar/star + title block side by side. */
 	:global(.heatmap-pin-popup .pin-popup-head) {
 		display: flex;
 		align-items: center;
-		gap: 0.4rem;
-		margin-bottom: 0.25rem;
+		gap: 0.55rem;
+		margin-bottom: 0.4rem;
+	}
+	:global(.heatmap-pin-popup .pin-popup-titleblock) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		min-width: 0;
+		flex: 1;
 	}
 	:global(.heatmap-pin-popup .pin-popup-title) {
 		font-weight: 700;
 		font-size: 0.95rem;
 		line-height: 1.2;
+		color: var(--color-text);
+	}
+	:global(.heatmap-pin-popup .pin-popup-meta) {
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
 	}
 	:global(.heatmap-pin-popup .pin-popup-star) {
 		color: #facc15;
-		font-size: 1rem;
+		font-size: 1.2rem;
 		line-height: 1;
+		flex-shrink: 0;
 	}
-	:global(.heatmap-pin-popup .pin-popup-subtitle) {
+	:global(.heatmap-pin-popup .pin-popup-badge) {
+		display: inline-block;
+		font-size: 0.65rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: #facc15;
+		background: rgba(250, 204, 21, 0.12);
+		padding: 0.05rem 0.4rem;
+		border-radius: 999px;
+		align-self: flex-start;
+	}
+	/* Avatar — circle 32px. Image OR initials fallback. */
+	:global(.heatmap-pin-popup .pin-avatar) {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 32px;
+		height: 32px;
+		border-radius: 50%;
+		background: var(--color-primary-light);
+		color: var(--color-primary);
+		font-weight: 700;
+		font-size: 0.75rem;
+		flex-shrink: 0;
+		object-fit: cover;
+	}
+	:global(.heatmap-pin-popup .pin-popup-location) {
+		display: block;
+		font-size: 0.75rem;
 		color: var(--color-text-secondary);
-		font-size: 0.78rem;
+		margin-bottom: 0.5rem;
+	}
+	/* Route stats — icon + value chips on one row. */
+	:global(.heatmap-pin-popup .pin-popup-stats) {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.4rem 0.8rem;
 		margin-bottom: 0.6rem;
 	}
+	:global(.heatmap-pin-popup .pin-stat) {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+	:global(.heatmap-pin-popup .pin-stat-icon) {
+		font-size: 0.85rem;
+		opacity: 0.7;
+	}
 	:global(.heatmap-pin-popup .pin-popup-action) {
-		display: inline-block;
-		font-size: 0.8rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-primary);
 		text-decoration: none;
-		padding: 0.25rem 0.5rem;
+		padding: 0.4rem 0.7rem;
 		border: 1px solid var(--color-primary);
 		border-radius: var(--radius-sm);
 		transition: background var(--transition-fast);
+		background: transparent;
 	}
 	:global(.heatmap-pin-popup .pin-popup-action:hover) {
 		background: var(--color-primary-light);

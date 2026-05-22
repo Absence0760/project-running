@@ -2225,6 +2225,7 @@ export type Database = {
           id: string
           lat: number
           lng: number
+          location_label: string
           member_count: number
           name: string
           slug: string
@@ -2245,6 +2246,7 @@ export type Database = {
         }
         Returns: {
           distance_m: number
+          elevation_m: number
           featured: boolean
           id: string
           lat: number
