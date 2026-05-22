@@ -1304,6 +1304,33 @@ Phased delivery tracked in [roadmap.md § Phase 4](roadmap.md#phase-4--multi-mod
 
 ---
 
+## 64. Offline-pin is a separate local-only flag from star; phone pushes starred routes to Wear OS via DataLayer
+
+**Decided:** May 2026
+
+Two related but distinct knobs landed in the same pass:
+
+- **Mobile** route detail gains a "Save for offline" pin — a local-only flag persisted to a sidecar file (`offline_pinned_route_ids.json`) alongside the existing `synced_route_ids.json`. Toggling it never touches Supabase: pin is a per-device cache-management decision, not a per-route property.
+- **Wear OS** gains a `RoutesBridge` listener at the Wearable Data Layer path `/saved_routes`. The paired phone subscribes to its `LocalRouteStore` and pushes the user's **starred** subset on every change via a new `WearRoutesBridge` (Dart → Kotlin → DataClient.putDataItem). The watch overwrites its DataStore-backed `LocalRouteStore` and the live picker in `RunViewModel`, so a watch out of network range stays current the moment the phone has wifi or cellular.
+
+**Why two flags:** *star* gates **what shows on the watch**; *offline-pin* gates **what stays on this phone**. A user might pin a 30-mile training route they want available without service but not want it cluttering their watch picker; conversely, a starred urban run is what they pick on the watch but doesn't need offline persistence on the phone. Collapsing them into a single "favourite" flag forced the watch picker and the phone cache to share a knob neither one fully owns.
+
+**Why DataLayer push, not "watch fetches more aggressively":** before this change, the watch's only path to starred routes was a Supabase fetch on every pre-run screen open. A watch with no LTE and a paired phone that *did* have wifi still saw stale routes, because the fetch failed and the cache was last loaded from the previous time the watch itself had connectivity. DataLayer push routes around the watch's connectivity entirely — the phone is the source of truth, and the watch caches what the phone tells it. Supabase fetch in `refreshRoutes()` stays the canonical refresh path when the watch has its own network.
+
+**Trade-offs accepted:**
+
+- Pin is local-only — a phone restore from backup loses pins, since the sidecar isn't in the Supabase row. Acceptable: pins are device-scoped by intent, and "I'd like this route offline" is a one-tap re-assertion on the new device.
+- The watch now has two inbound route sources (phone push + Supabase fetch); they can disagree for the few seconds between a star toggle on the phone and the next Supabase refresh on the watch. Phone push wins for the cache write, Supabase fetch wins for the next picker open — they converge within one fetch cycle.
+- Apple Watch is unaffected (the SwiftUI `RouteNavigator` is still stubbed per [apps/watch_ios/CLAUDE.md](../apps/watch_ios/CLAUDE.md)). When that lands, the same DataLayer-equivalent (`WCSession`) handoff is the obvious shape.
+
+**Don't re-litigate** by:
+
+- Persisting `offline_pinned` to Supabase — it's per-device on purpose.
+- Pushing pinned-but-unstarred routes to the watch — the watch picker is intentionally curated by `is_starred`, and pin is a phone-cache concern, not a watch concern.
+- Adding a "Pin all routes" bulk affordance — routes are small JSON files, every cached route is already on disk; the affordance the user actually asked for is a per-route opt-in indicator.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

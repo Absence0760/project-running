@@ -68,6 +68,7 @@ apps/watch_wear/
             │   ├── SavedRoute.kt            # in-memory + persisted route shape
             │   ├── WatchRunMetadata.kt      # `buildRunMetadata` + queued-run encoder
             │   ├── SessionBridge.kt         # Wearable Data Layer listener for phone-handed session
+            │   ├── RoutesBridge.kt          # Wearable Data Layer listener for phone-pushed starred routes
             │   ├── SessionStore.kt          # DataStore cache of the auth session
             │   ├── RaceSessionClient.kt     # live race-mode ping client (`race_pings`)
             │   ├── ui/RunWatchApp.kt        # Compose-for-Wear screens
@@ -368,6 +369,15 @@ What the UI exposes during a recording, for quick reference when reading
   `/routes/[id]` header) or mobile (`routes_screen.dart` trailing
   star, `route_detail_screen` AppBar star) — the watch is read-only
   on this flag. See `docs/decisions.md § 44`.
+  `RoutesBridge.kt` adds a second inbound source: the paired phone's
+  `WearRoutesBridge` pushes the user's starred subset to
+  `/saved_routes` on the Wearable Data Layer whenever the phone's
+  `LocalRouteStore` changes. `RunViewModel.observeRoutesBridge()`
+  overwrites the watch's DataStore cache + live picker on every
+  push — run-start works without watch connectivity as long as the
+  phone has wifi/LTE. Supabase `fetchRoutes` stays the canonical
+  refresh when the watch *does* have its own network. See
+  `docs/decisions.md § 64`.
   Selected waypoints flow via `ACTION_START` extras into
   `RunRecordingService.parseRouteWaypoints`, which calls
   `RouteMath.offRouteDistanceM` + `routeRemainingM` per GPS sample.

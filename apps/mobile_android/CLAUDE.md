@@ -88,9 +88,10 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `workout_detail_screen.dart` — Structured-interval breakdown + per-kind advice
 
 **Top-level (`lib/`):**
-- `main.dart` — app entry, Supabase init, service wiring; calls `WearAuthBridge().attach(...)` so the paired Wear OS watch inherits the Supabase session
+- `main.dart` — app entry, Supabase init, service wiring; calls `WearAuthBridge().attach(...)` so the paired Wear OS watch inherits the Supabase session, plus `WearRoutesBridge().attach(routeStore)` so the watch's route picker reflects the user's starred subset without needing its own network
 - `sync_service.dart` — bulk-sync button, auto-sync on connectivity/foreground, conflict resolution
 - `wear_auth_bridge.dart` — forwards Supabase session changes to the paired Wear OS watch via a `run_app/wear_auth` method channel (native `WearAuthBridge.kt` under `android/app/src/main/kotlin/com/threkir/app/` writes to the Wearable Data Layer)
+- `wear_routes_bridge.dart` — sibling of `wear_auth_bridge.dart`. Subscribes to `LocalRouteStore`; on every change pushes the user's **starred** subset (id + name + distance + waypoints) to the watch at `/saved_routes` via the `run_app/wear_routes` method channel. Native `WearRoutesBridge.kt` writes the DataItem. Watch-side `RoutesBridge.kt` listens at the same path and updates its DataStore-backed `LocalRouteStore`. Local-only "Save for offline" pin (separate from star) is gated on `LocalRouteStore.pinOffline` / `unpinOffline` / `isOfflinePinned`. See [decisions.md § 64](../../docs/decisions.md#64-offline-pin-is-a-separate-local-only-flag-from-star-phone-pushes-starred-routes-to-wear-os-via-datalayer)
 - `run_notification_bridge.dart` — replaces geolocator's "Run in progress" foreground-service notification with live time/distance/pace (native `RunNotificationBridge.kt` reposts on the same channel id so the lock-screen row is live instead of static)
 - `background_sync.dart` — WorkManager periodic background sync (hourly, network-connected)
 - `local_run_store.dart` / `local_route_store.dart` — `ChangeNotifier`-style on-disk stores
