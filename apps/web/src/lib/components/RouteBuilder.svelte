@@ -176,8 +176,27 @@
 		implicated = false,
 		hidden = false,
 	): maplibregl.Marker {
+		// Custom DOM element so the marker can carry the 1-based
+		// waypoint number as a label — matches the mobile twin where
+		// each pin shows its index. Helps users count waypoints + tell
+		// which pin to drag when a route has many. Falls back to a
+		// plain circle (no number) when generation marks the pin as
+		// `hidden` — scaffolding pins shouldn't show a count.
+		const el = document.createElement('div');
+		el.className = 'waypoint-marker';
+		const color = getMarkerColor(index, implicated);
+		const dot = document.createElement('div');
+		dot.className = 'waypoint-marker-dot';
+		dot.style.backgroundColor = color;
+		if (!hidden) {
+			const label = document.createElement('span');
+			label.className = 'waypoint-marker-label';
+			label.textContent = String(index + 1);
+			dot.appendChild(label);
+		}
+		el.appendChild(dot);
 		const marker = new maplibregl.Marker({
-			color: getMarkerColor(index, implicated),
+			element: el,
 			draggable: true,
 		})
 			.setLngLat([lngLat.lng, lngLat.lat])
@@ -1783,6 +1802,36 @@
 	.map-container {
 		width: 100%;
 		height: 100%;
+	}
+
+	/* Numbered waypoint markers — parity with the mobile twin. The
+	   1-based label sits inside the coloured dot so users can count
+	   waypoints + tell which pin to drag when a route has many.
+	   Hidden scaffolding pins from generate-loop iterations skip
+	   the label (the dot is still here but `display:none` on the
+	   parent .maplibregl-marker hides the whole element). */
+	:global(.waypoint-marker) {
+		cursor: pointer;
+	}
+	:global(.waypoint-marker-dot) {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		border-radius: 50%;
+		border: 2px solid #fff;
+		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+	}
+	:global(.waypoint-marker-label) {
+		color: #fff;
+		font-size: 11px;
+		font-weight: 700;
+		line-height: 1;
+		font-family:
+			system-ui,
+			-apple-system,
+			sans-serif;
 	}
 
 	/* Search */
