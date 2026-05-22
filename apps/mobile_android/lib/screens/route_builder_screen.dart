@@ -437,16 +437,26 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     await _rerouteThrough(next);
   }
 
-  /// Generate a loop by target distance. Mirrors web `/routes/new`
-  /// "Generate loop" CTA — opens a sheet asking for a target km/mi
-  /// value, then uses `generateLoopWaypoints` to produce radial
-  /// scaffolding around the current map centre and hands it off to
-  /// the existing OSRM rerouting pipe via `_rerouteThrough`.
+  /// Generate a loop by target distance. Ports web's iterative
+  /// bisection approach (`apps/web/src/lib/components/
+  /// RouteBuilder.svelte:generateLoop`) — the previous mobile
+  /// implementation was a single-shot generate-and-hope, which
+  /// often produced routes 20-40 % off-target. The user reported
+  /// "the generate loop logic is not good, can you copy what the
+  /// web app does."
   ///
-  /// Single-shot for v1 (no bisect-and-retry loop yet — that's a
-  /// follow-up). The result is usually within ±15% of the target
-  /// thanks to `kDefaultScaleFactor`'s empirical tuning; users can
-  /// nudge the radius via undo + retry if they want it tighter.
+  /// Algorithm (mirrors web exactly):
+  ///   1. Generate radial scaffolding from `centre` with the
+  ///      default scale factor + a deterministic per-call radial
+  ///      seed.
+  ///   2. Route through; measure actual distance.
+  ///   3. If within ±15 % of target → done.
+  ///   4. Otherwise bisect the scale range and try again. Up to
+  ///      4 attempts total.
+  ///   5. Track the BEST attempt (closest to target) and keep
+  ///      whichever ended closest — OSRM's response is non-
+  ///      monotonic in twisty grids and the final attempt isn't
+  ///      always the best.
   Future<void> _generateLoop() async {
     if (_routing || _saving) return;
     final centre = _map.camera.center;
@@ -457,17 +467,83 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       showTopBanner(context, 'Enter a target distance up to 1000 km.');
       return;
     }
-    final waypoints = generateLoopWaypoints(
-      start: centre,
-      targetDistanceMetres: picked,
-      // Random seed so consecutive Generate taps emit different
-      // candidate loops — gives the user a free re-roll.
-      radialSeedRad: DateTime.now().millisecondsSinceEpoch / 1000 % 6.28,
-    );
-    final next = waypoints
-        .map((p) => cm.Waypoint(lat: p.latitude, lng: p.longitude))
-        .toList();
-    await _rerouteThrough(next);
+
+    // Per-call deterministic radial seed so subsequent iterations
+    // all share the same starting orientation — bisecting scale
+    // with a re-randomised pattern would chase noise.
+    final radialSeed =
+        DateTime.now().millisecondsSinceEpoch / 1000 % 6.28;
+    var scaleFactor = kDefaultScaleFactor;
+    var scaleRange = initScaleRange();
+    const maxAttempts = 4;
+
+    // Track best attempt across iterations.
+    List<cm.Waypoint>? bestWaypoints;
+    List<cm.Waypoint>? bestPolyline;
+    var bestDistance = double.infinity;
+    var bestDelta = double.infinity;
+
+    for (var attempt = 0; attempt < maxAttempts; attempt++) {
+      final seeds = generateLoopWaypoints(
+        start: centre,
+        targetDistanceMetres: picked,
+        scaleFactor: scaleFactor,
+        radialSeedRad: radialSeed,
+      );
+      final next = seeds
+          .map((p) => cm.Waypoint(lat: p.latitude, lng: p.longitude))
+          .toList();
+      // Route through the scaffolding. _rerouteThrough cancels any
+      // in-flight previous attempt via the generation counter so
+      // concurrent attempts are safe.
+      await _rerouteThrough(next);
+      if (!mounted) return;
+      // Measure actual distance from the resulting polyline.
+      final actual = _distanceM;
+      if (actual <= 0) break;
+      final delta = (picked - actual).abs();
+      if (delta < bestDelta) {
+        bestDelta = delta;
+        bestDistance = actual;
+        bestWaypoints = List.of(_waypoints);
+        bestPolyline = List.of(_polyline);
+      }
+      if (isWithinAcceptBand(
+        targetDistanceMetres: picked,
+        actualDistanceMetres: actual,
+      )) {
+        break;
+      }
+      final advised = bisectScale(
+        range: scaleRange,
+        currentScale: scaleFactor,
+        targetDistanceMetres: picked,
+        actualDistanceMetres: actual,
+      );
+      scaleFactor = advised.scale;
+      scaleRange = advised.range;
+    }
+
+    // If the final attempt drifted away from the best one,
+    // restore the best. Mirrors web's post-loop fallback. Local
+    // copies so flow analysis can narrow the nullables inside
+    // the setState closure.
+    final bw = bestWaypoints;
+    final bp = bestPolyline;
+    if (bw != null && bp != null) {
+      final currentDelta = (picked - _distanceM).abs();
+      if (bestDelta < currentDelta) {
+        setState(() {
+          _waypoints
+            ..clear()
+            ..addAll(bw);
+          _polyline = bp;
+          _distanceM = bestDistance;
+          _overlapSpans = detectOverlapSpans(bp);
+        });
+        unawaited(_refreshElevation());
+      }
+    }
   }
 
   /// Prompt the user for a target distance. Returns metres, or null
