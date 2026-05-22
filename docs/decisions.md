@@ -1361,6 +1361,42 @@ Mobile gained a CSV import path on the Import screen (`csv_run_importer.dart`) s
 
 ---
 
+## 66. Backup ZIP writes stream to disk and download tracks in bounded batches
+
+**Decided:** May 2026
+
+`BackupService.createBackup` used to buffer the entire archive in memory before encoding: `Archive` accumulated every `runs.json` + `routes.json` + per-track gzipped blob, then `_encodeArchiveInIsolate` copied entries to a worker isolate and produced one `Uint8List` of the encoded ZIP. For a power user at 5 000 runs (≈ 50 KB gzipped tracks each), peak heap brushed 300 MB+ on the worker side, OOMing mid-tier Android phones. Sequential per-track downloads pushed wall-clock past 8 minutes. Restore had the symmetric problem: `zipFile.readAsBytes()` pulled the full archive into RAM before the decoder ran.
+
+The new shape:
+
+- **Write side** — `writeBackupZipStreaming` opens a `ZipFileEncoder` writing incrementally to the output file. Metadata JSON entries land first. Track downloads run in bounded-concurrency batches (`_kTrackDownloadConcurrency = 6`); each batch's bytes are written to the encoder + dropped before the next batch fires. Peak heap is `O(concurrency × avg-track-size)` — roughly 5 MB regardless of total run count.
+- **Read side** — `restore` opens `InputFileStream(path)` and feeds it to `ZipDecoder().decodeStream`. The decoder reads chunks on demand and lazy-loads per-file content; peak heap is the largest single track, not the whole archive.
+
+**Why not push backup to the Go service via `/v1/export`:** the server-side data-export path (`apps/job_worker/internal/dataexport/server.go`) caps a single call at `MaxRunsPerExport = 5000`, and supports `csv` + `gpx` formats today. Adding a `format=backup` mode is a real possibility, but the cap means the server-side path is *less* scalable than the new local one for power users, while still requiring online + rate-limit headroom. The cap exists because the server is fronted by a 150-s function timeout and bounded memory; raising it needs a streaming-Storage response. Tracked in [roadmap.md](roadmap.md) as a follow-up. The local streaming path stays the primary mechanism either way — restore must work offline, so the writer + reader on the device are the load-bearing pieces.
+
+**Sanity numbers** (avg 50 KB gzipped per track, 100 ms RTT, 6× concurrent downloads):
+
+| Runs | Wall-clock | Peak heap |
+|---|---|---|
+| 100 | ~2 s | ~5 MB |
+| 1 000 | ~17 s | ~5 MB |
+| 5 000 | ~85 s | ~5 MB |
+| 10 000 | ~170 s | ~5 MB |
+
+**Trade-offs accepted:**
+
+- Per-file ZIP writes happen on the main isolate. Each write is < 100 ms; the network-await between batches lets the UI service paint events. No `compute()` indirection — the file-handle ownership doesn't cross isolate boundaries cleanly.
+- A failed individual track download is swallowed (`debugPrint` only); the run row still ships in `runs.json` without a `tracks/{id}.json.gz` entry. Restore handles this gracefully — the run lands with an empty track. Same partial-success contract the old code had.
+- ZIP encoding is not parallelisable on the device side; the bottleneck is now strictly network. Power users on slow links still wait minutes — but they don't OOM.
+
+**Don't re-litigate** by:
+
+- Reintroducing the in-memory `Archive` + `_encodeArchiveInIsolate` shape. The `ZipFileEncoder` + `InputFileStream` arch guard in `architecture_guards_test.dart` pins this; loosening it means OOMs on phones.
+- Bumping `_kTrackDownloadConcurrency` past ~12. Storage will start to throttle, and per-phone connection-pool exhaustion shows up as flaky "track download failed" entries. Six is the empirical sweet spot.
+- Switching backup to the Go `/v1/export` path without first lifting the 5 000-run cap there — for the power users this work targets, the server path is currently a *downgrade*.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

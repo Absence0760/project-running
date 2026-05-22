@@ -519,4 +519,259 @@ void main() {
       expect(out.existsSync(), isFalse);
     });
   });
+
+  // ---- writeBackupZipStreaming: the streaming + parallel writer ----
+  //
+  // Exercises the testable seam extracted from `createBackup` (which
+  // requires a live ApiClient + Supabase). The writer is responsible
+  // for: opening a ZipFileEncoder on disk, downloading tracks in
+  // bounded-concurrency batches, dropping each track's bytes after
+  // it's written, and finalising the archive. The downstream restore
+  // path is the existing contract — these tests round-trip end-to-
+  // end through restore to prove the on-disk format hasn't drifted.
+  group('writeBackupZipStreaming', () {
+    /// Test fetcher that hands back deterministic gzipped bytes per
+    /// `track_url` and records concurrent + total invocations so the
+    /// concurrency contract is observable from the outside.
+    final Map<String, Uint8List> trackBlobs = {};
+    int inFlight = 0;
+    int peakInFlight = 0;
+    int totalCalls = 0;
+    Future<Uint8List> fetcher(String path) async {
+      totalCalls++;
+      inFlight++;
+      if (inFlight > peakInFlight) peakInFlight = inFlight;
+      // Yield so concurrent calls observably overlap rather than
+      // round-tripping synchronously and resetting peakInFlight to 1.
+      await Future<void>.delayed(const Duration(milliseconds: 5));
+      inFlight--;
+      final bytes = trackBlobs[path];
+      if (bytes == null) {
+        throw StateError('test fetcher: no blob for $path');
+      }
+      return bytes;
+    }
+
+    setUp(() {
+      trackBlobs.clear();
+      inFlight = 0;
+      peakInFlight = 0;
+      totalCalls = 0;
+    });
+
+    Uint8List gzipOf(List<Map<String, dynamic>> waypoints) {
+      final body = utf8.encode(jsonEncode(waypoints));
+      return Uint8List.fromList(GZipEncoder().encode(body));
+    }
+
+    test('writes a valid backup that restores cleanly via the existing decoder',
+        () async {
+      const trackUrl = 'uid/r-1.json.gz';
+      trackBlobs[trackUrl] = gzipOf(const [
+        {'lat': 47.37, 'lng': 8.54},
+        {'lat': 47.371, 'lng': 8.541},
+      ]);
+
+      final out = File('${tempDir.path}/streamed.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'r-1', trackUrl: trackUrl)],
+        routesOut: [routeRow(id: 'rt-1', name: 'My route')],
+        profile: const {'username': 'tester'},
+        settingsPrefs: const {'unit': 'km'},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: [runRow(id: 'r-1', trackUrl: trackUrl)],
+        fetchTrackBytes: fetcher,
+      );
+
+      expect(out.existsSync(), isTrue);
+      // Round-trip through the existing restore decoder — proves the
+      // on-disk format hasn't drifted.
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(
+        zipFile: out,
+        runStore: runStore,
+        routeStore: routeStore,
+      );
+      expect(res.runsImported, 1);
+      expect(res.routesImported, 1);
+      expect(res.tracksUploaded, 1);
+      // Track lat/lng survived the round-trip.
+      final restored = runStore.runs.single;
+      expect(restored.track.first.lat, 47.37);
+      expect(restored.track.last.lng, 8.541);
+    });
+
+    test('emits stage + tracks progress callbacks in order', () async {
+      const trackUrl = 'uid/r-1.json.gz';
+      trackBlobs[trackUrl] = gzipOf(const [
+        {'lat': 0.0, 'lng': 0.0},
+        {'lat': 0.0, 'lng': 0.001},
+      ]);
+
+      final stages = <String>[];
+      final out = File('${tempDir.path}/staged.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'r-1', trackUrl: trackUrl)],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: [runRow(id: 'r-1', trackUrl: trackUrl)],
+        fetchTrackBytes: fetcher,
+        onProgress: (p) => stages.add(p.stage),
+      );
+      // Tracks stage fires (initial 0/1 + post-batch 1/1) and the
+      // final write+done events land at the end.
+      expect(stages, contains('tracks'));
+      expect(stages.last, 'done');
+      expect(stages, contains('writing'));
+    });
+
+    test('downloads tracks in bounded-concurrency batches', () async {
+      // 20 runs each with a unique track. Concurrency 4 means peak
+      // in-flight should never exceed 4. Total calls should equal 20.
+      for (var i = 0; i < 20; i++) {
+        final url = 'uid/r-$i.json.gz';
+        trackBlobs[url] = gzipOf(const [
+          {'lat': 0.0, 'lng': 0.0},
+          {'lat': 0.0, 'lng': 0.001},
+        ]);
+      }
+      final runsWithTracks = [
+        for (var i = 0; i < 20; i++)
+          runRow(id: 'r-$i', trackUrl: 'uid/r-$i.json.gz'),
+      ];
+
+      final out = File('${tempDir.path}/bounded.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: runsWithTracks,
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: runsWithTracks,
+        fetchTrackBytes: fetcher,
+        concurrency: 4,
+      );
+
+      expect(totalCalls, 20);
+      expect(peakInFlight, lessThanOrEqualTo(4),
+          reason: 'concurrency: 4 must cap simultaneous downloads at 4');
+      // With concurrency 4 and 20 tasks the peak should also reach
+      // ≥2 (it would be 1 if the writer were secretly sequential).
+      expect(peakInFlight, greaterThanOrEqualTo(2),
+          reason:
+              'with 20 tasks + 5ms-each fetcher we should observe parallelism');
+    });
+
+    test('a single download failure does not sink the rest of the backup',
+        () async {
+      // First track URL has no blob → fetcher throws. The writer
+      // should swallow that one and still archive the other run.
+      trackBlobs['uid/r-2.json.gz'] = gzipOf(const [
+        {'lat': 0.0, 'lng': 0.0},
+        {'lat': 0.0, 'lng': 0.001},
+      ]);
+      final runs = [
+        runRow(id: 'r-1', trackUrl: 'uid/missing.json.gz'),
+        runRow(id: 'r-2', trackUrl: 'uid/r-2.json.gz'),
+      ];
+
+      final out = File('${tempDir.path}/partial.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: runs,
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: runs,
+        fetchTrackBytes: fetcher,
+        concurrency: 4,
+      );
+
+      // The healthy run's track is in the archive; the bad one is
+      // simply absent (offline-restore would see no track for r-1
+      // and produce a Run with an empty track list).
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(
+        zipFile: out,
+        runStore: runStore,
+      );
+      expect(res.runsImported, 2);
+      expect(res.tracksUploaded, 1);
+    });
+
+    test('runsWithTracks=[] produces a valid manifest-only backup',
+        () async {
+      final out = File('${tempDir.path}/no-tracks.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        fetchTrackBytes: fetcher,
+      );
+
+      // No download calls should fire.
+      expect(totalCalls, 0);
+      // Manifest is still readable.
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(zipFile: out, runStore: runStore);
+      expect(res.runsImported, 0);
+    });
+
+    test('overwrites an existing output file rather than appending',
+        () async {
+      final out = File('${tempDir.path}/twice.zip');
+      // Pre-seed the output with junk so the test fails if the writer
+      // appends to it rather than truncating.
+      await out.writeAsBytes(List<int>.filled(1024, 0xff));
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        fetchTrackBytes: fetcher,
+      );
+      // The result must be a valid ZIP — junk bytes would break the
+      // ZIP central directory at the end of file.
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(zipFile: out, runStore: runStore);
+      expect(res.runsImported, 0);
+    });
+
+    test('rejects concurrency < 1', () async {
+      await expectLater(
+        () => BackupService.writeBackupZipStreaming(
+          outputFile: File('${tempDir.path}/x.zip'),
+          runsOut: const [],
+          routesOut: const [],
+          profile: null,
+          settingsPrefs: const {},
+          userId: 'uid',
+          exportedFrom: 'test',
+          runsWithTracks: const [],
+          fetchTrackBytes: fetcher,
+          concurrency: 0,
+        ),
+        throwsA(isA<ArgumentError>()),
+      );
+    });
+  });
 }

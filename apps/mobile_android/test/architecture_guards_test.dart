@@ -625,25 +625,41 @@ void main() {
       );
     });
 
-    test('BackupService zip encode runs in a background isolate', () {
-      // Reason: ZipEncoder().encode(archive) on a multi-MB backup
-      // (thousands of runs + tracks) blocks the UI for seconds. The
-      // _encodeArchiveInIsolate helper extracts entries on the main
-      // isolate and pushes the encoder into compute().
+    test('BackupService streams encode + decode to / from disk', () {
+      // Reason: pre-May-2026 backup built the entire `Archive`
+      // in-memory then `ZipEncoder().encode(archive)`'d it in one
+      // shot (offloaded to compute() to avoid UI freeze). For a
+      // backup at scale (5 000 runs × ~50 KB gzipped tracks ≈
+      // 250 MB), that path OOMs on mid-tier Android phones — the
+      // background isolate held the entire ZIP plus a duplicated
+      // `[name, bytes]` copy.
+      //
+      // The new design uses `ZipFileEncoder` (writes incrementally
+      // to disk as each track lands) on the write side, and
+      // `InputFileStream` + `ZipDecoder().decodeStream` on the
+      // read side (lazy per-file reads). Peak heap is now
+      // O(concurrency × avg-track-size), regardless of total run
+      // count. See [decisions.md § 66] for the rationale.
       final src = File('lib/backup.dart').readAsStringSync();
       expect(
         src,
-        contains('_encodeArchiveInIsolate'),
-        reason: 'backup.dart must keep the _encodeArchiveInIsolate helper '
-            '— inlining ZipEncoder().encode(archive) on the main isolate '
-            'reintroduces a multi-second UI freeze on a large backup.',
+        contains('ZipFileEncoder'),
+        reason: 'backup.dart must keep the ZipFileEncoder streaming '
+            'writer — buffering an in-memory Archive instead OOMs on '
+            'phones at ~2000 runs (decisions.md § 66).',
       );
       expect(
         src,
-        contains('_decodeArchiveInIsolate'),
-        reason: 'backup.dart must keep the _decodeArchiveInIsolate helper '
-            '— inlining ZipDecoder().decodeBytes(bytes) on the main isolate '
-            'reintroduces a multi-second UI freeze when restoring.',
+        contains('InputFileStream'),
+        reason: 'backup.dart restore must read via InputFileStream — '
+            'zipFile.readAsBytes() pulls the whole archive into RAM '
+            '(decisions.md § 66).',
+      );
+      expect(
+        src,
+        contains('decodeStream'),
+        reason: 'backup.dart restore must use ZipDecoder.decodeStream — '
+            'decodeBytes pulls all entries into RAM at once.',
       );
     });
 

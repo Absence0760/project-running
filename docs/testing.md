@@ -158,6 +158,12 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/backup_test.dart` — 31 tests
+
+Round-trip + invariant coverage for `BackupService.createBackup` + `restore`. 24 existing manifest / offline-restore / progress / api:null tests, plus a new **writeBackupZipStreaming group** (7 tests) added with the streaming + parallel writer refactor in May 2026 — see `decisions.md § 66`.
+
+The new group exercises the testable seam extracted from `createBackup`: writes a valid backup that round-trips through the existing restore decoder; emits stage + tracks progress callbacks in order; downloads tracks in bounded-concurrency batches (peak `inFlight` counter ≤ supplied `concurrency`, observable parallelism with 20 tasks); a single download failure doesn't sink the rest of the backup; `runsWithTracks=[]` produces a valid manifest-only ZIP; overwrites an existing output file rather than appending junk; rejects `concurrency < 1`. The fake fetcher records peak + total invocations so the concurrency contract is observable from outside without booting an `ApiClient`.
+
 ### `apps/mobile_android/test/csv_run_importer_test.dart` — 18 tests
 
 Pure-Dart coverage of `CsvRunImporter.parse` — the lossy summary path that round-trips Settings → "Export runs as CSV". Two header shapes are exercised: the 5-column mobile/web Settings export and the 17-column backend `/export-data` GDPR shape. The parser is offline-first by design (no API, no Supabase) and idempotent on re-import via a stable `external_id`. See `decisions.md § 65`.

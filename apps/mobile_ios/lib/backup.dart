@@ -49,11 +49,26 @@ class BackupService {
   static const _format = 'run-app-backup';
   static const _version = 1;
 
+  /// Bounded concurrency for parallel track downloads. Six is empirical:
+  /// enough to amortize per-request latency on cellular, low enough that
+  /// peak in-flight memory is small (6 × ~50 KB gzipped tracks ≈ 300 KB)
+  /// and a typical phone's connection pool isn't saturated.
+  static const _kTrackDownloadConcurrency = 6;
+
   /// Build a `.zip` and write it to [outputFile]. Returns the file.
   ///
   /// Tracks are archived in their raw gzipped form — the same bytes
   /// that live in the `runs` Storage bucket — so restore can upload
   /// them verbatim without re-encoding.
+  ///
+  /// **Streaming + parallel:** rather than buffering the whole archive
+  /// in memory before encoding (which OOMs on phones at ~2 000 runs),
+  /// this opens a `ZipFileEncoder` writing incrementally to disk and
+  /// downloads tracks in bounded-concurrency batches. Each track is
+  /// added to the encoder as soon as it lands and its in-memory copy
+  /// is dropped. Peak heap is roughly
+  /// `_kTrackDownloadConcurrency × average-track-size`, regardless of
+  /// total run count. See [decisions.md § 66](../../../docs/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
   Future<File> createBackup({
     required File outputFile,
     void Function(BackupProgress)? onProgress,
@@ -86,62 +101,140 @@ class BackupService {
         .eq('user_id', userId)
         .maybeSingle();
 
-    final archive = Archive();
-
-    // Runs — strip user_id so the archive is re-homeable.
+    // Strip user_id so the archive is re-homeable (restore stamps the
+    // new owner's uid).
     final runsOut = runs.map((r) {
       final copy = Map<String, dynamic>.from(r);
       copy.remove('user_id');
       return copy;
     }).toList();
-    _addJson(archive, 'runs.json', runsOut);
-
     final routesOut = routes.map((r) {
       final copy = Map<String, dynamic>.from(r);
       copy.remove('user_id');
       return copy;
     }).toList();
-    _addJson(archive, 'routes.json', routesOut);
 
-    _addJson(archive, 'profile.json', {
-      'profile': profile == null ? null : _withoutKey(profile, 'id'),
-      'settings_prefs': userSettings == null ? <String, dynamic>{} : (userSettings['prefs'] ?? {}),
-    });
-
-    // Tracks — raw gzipped bytes from Storage.
     final runsWithTracks = runs
-        .where((r) => r['track_url'] is String && (r['track_url'] as String).isNotEmpty)
+        .where((r) =>
+            r['track_url'] is String &&
+            (r['track_url'] as String).isNotEmpty)
         .toList();
-    var i = 0;
-    for (final r in runsWithTracks) {
-      onProgress?.call(BackupProgress.tracks(i, runsWithTracks.length));
-      try {
-        final bytes = await api.downloadTrackBytes(r['track_url'] as String);
-        archive.addFile(ArchiveFile('tracks/${r['id']}.json.gz', bytes.length, bytes));
-      } catch (e) {
-        debugPrint('track download failed ${r['id']}: $e');
-      }
-      i++;
+
+    final prefsRow = userSettings;
+    final settingsPrefs =
+        (prefsRow != null && prefsRow['prefs'] is Map)
+            ? Map<String, dynamic>.from(prefsRow['prefs'] as Map)
+            : const <String, dynamic>{};
+    return writeBackupZipStreaming(
+      outputFile: outputFile,
+      runsOut: runsOut,
+      routesOut: routesOut,
+      profile: profile is Map ? Map<String, dynamic>.from(profile) : null,
+      settingsPrefs: settingsPrefs,
+      userId: userId,
+      exportedFrom: 'mobile_android',
+      runsWithTracks: runsWithTracks,
+      fetchTrackBytes: (path) => api.downloadTrackBytes(path),
+      concurrency: _kTrackDownloadConcurrency,
+      onProgress: onProgress,
+    );
+  }
+
+  /// Pure(-ish) writer extracted from [createBackup] so the streaming
+  /// + parallel-download contract is testable without booting an
+  /// `ApiClient` / Supabase. The caller hands us already-fetched run
+  /// + route + profile data and a `fetchTrackBytes` callback that
+  /// returns the gzipped bytes for a given storage path. The writer
+  /// owns the `ZipFileEncoder` lifecycle, the bounded-concurrency
+  /// download loop, and the manifest.
+  @visibleForTesting
+  static Future<File> writeBackupZipStreaming({
+    required File outputFile,
+    required List<Map<String, dynamic>> runsOut,
+    required List<Map<String, dynamic>> routesOut,
+    required Map<String, dynamic>? profile,
+    required Map<String, dynamic> settingsPrefs,
+    required String userId,
+    required String exportedFrom,
+    required List<Map<String, dynamic>> runsWithTracks,
+    required Future<Uint8List> Function(String path) fetchTrackBytes,
+    int concurrency = _kTrackDownloadConcurrency,
+    void Function(BackupProgress)? onProgress,
+  }) async {
+    if (concurrency < 1) {
+      throw ArgumentError.value(
+          concurrency, 'concurrency', 'must be >= 1');
     }
-    onProgress?.call(BackupProgress.tracks(runsWithTracks.length, runsWithTracks.length));
+    if (outputFile.existsSync()) outputFile.deleteSync();
 
-    _addJson(archive, 'manifest.json', {
-      'format': _format,
-      'version': _version,
-      'exported_at': DateTime.now().toUtc().toIso8601String(),
-      'exported_by_user_id': userId,
-      'exported_from': 'mobile_android',
-      'counts': {
-        'runs': runs.length,
-        'routes': routes.length,
-        'goals': 0,
-        'tracks': runsWithTracks.length,
-      },
-    });
+    final encoder = ZipFileEncoder();
+    encoder.create(outputFile.path);
+    var tracksAdded = 0;
+    try {
+      // JSON metadata first — small + cheap.
+      _writeJsonEntry(encoder, 'runs.json', runsOut);
+      _writeJsonEntry(encoder, 'routes.json', routesOut);
+      _writeJsonEntry(encoder, 'profile.json', {
+        'profile': profile == null ? null : _withoutKeyMap(profile, 'id'),
+        'settings_prefs': settingsPrefs,
+      });
 
-    onProgress?.call(const BackupProgress.stage('writing'));
-    final encoded = await _encodeArchiveInIsolate(archive);
-    await outputFile.writeAsBytes(encoded, flush: true);
+      onProgress?.call(BackupProgress.tracks(0, runsWithTracks.length));
+      // Parallel download in bounded batches. Each batch's bytes are
+      // written to the encoder + dropped before the next batch fires,
+      // so peak heap is O(concurrency × avg-track-size) regardless of
+      // total run count.
+      for (var i = 0; i < runsWithTracks.length; i += concurrency) {
+        final batch = runsWithTracks
+            .skip(i)
+            .take(concurrency)
+            .toList(growable: false);
+        final pulls = await Future.wait(
+          batch.map((r) async {
+            final url = r['track_url'] as String;
+            final id = r['id'] as String;
+            try {
+              final bytes = await fetchTrackBytes(url);
+              return (id, bytes);
+            } catch (e) {
+              debugPrint('track download failed $id: $e');
+              return null;
+            }
+          }),
+          eagerError: false,
+        );
+        for (final result in pulls) {
+          if (result == null) continue;
+          final (id, bytes) = result;
+          encoder.addArchiveFile(
+            ArchiveFile.bytes('tracks/$id.json.gz', bytes),
+          );
+          tracksAdded++;
+        }
+        onProgress?.call(BackupProgress.tracks(
+          (i + batch.length).clamp(0, runsWithTracks.length),
+          runsWithTracks.length,
+        ));
+      }
+
+      _writeJsonEntry(encoder, 'manifest.json', {
+        'format': _format,
+        'version': _version,
+        'exported_at': DateTime.now().toUtc().toIso8601String(),
+        'exported_by_user_id': userId,
+        'exported_from': exportedFrom,
+        'counts': {
+          'runs': runsOut.length,
+          'routes': routesOut.length,
+          'goals': 0,
+          'tracks': tracksAdded,
+        },
+      });
+
+      onProgress?.call(const BackupProgress.stage('writing'));
+    } finally {
+      await encoder.close();
+    }
     onProgress?.call(const BackupProgress.done());
     return outputFile;
   }
@@ -182,8 +275,20 @@ class BackupService {
     }
 
     onProgress?.call(const RestoreProgress.stage('reading'));
-    final bytes = await zipFile.readAsBytes();
-    final archive = await _decodeArchiveInIsolate(bytes);
+    // Stream-decode from disk rather than `zipFile.readAsBytes()`. For
+    // a multi-hundred-megabyte backup, the old path held the entire
+    // ZIP in RAM (and then again as `[name, bytes]` pairs in the
+    // worker isolate during decode). `InputFileStream` reads chunks
+    // on demand and lazy-loads per-file contents — peak heap is
+    // bounded by the largest single track, not the whole archive.
+    final fileStream = InputFileStream(zipFile.path);
+    final Archive archive;
+    try {
+      archive = ZipDecoder().decodeStream(fileStream);
+    } catch (e) {
+      await fileStream.close();
+      rethrow;
+    }
 
     final manifest = _readJson(archive, 'manifest.json');
     if (manifest == null || manifest['format'] != _format) {
@@ -196,8 +301,9 @@ class BackupService {
       );
     }
 
+    try {
     if (offline) {
-      return _restoreOffline(
+      return await _restoreOffline(
         archive: archive,
         runStore: runStore,
         routeStore: routeStore,
@@ -343,6 +449,9 @@ class BackupService {
 
     onProgress?.call(const RestoreProgress.done());
     return result;
+    } finally {
+      await fileStream.close();
+    }
   }
 
   /// Offline-first restore. Hydrates local stores and leaves the
@@ -506,38 +615,26 @@ class BackupService {
 
   // ----- helpers -----
 
-  /// Run `ZipEncoder().encode(archive)` in a background isolate so a large
-  /// backup (multi-MB tracks + thousands of runs) can't lock the foreground.
-  /// `Archive` itself isn't transferable across isolate boundaries, so we
-  /// extract `(path, bytes)` pairs on the main isolate and rebuild the
-  /// archive inside the worker before encoding.
-  static Future<Uint8List> _encodeArchiveInIsolate(Archive archive) async {
-    final entries = <List<Object>>[
-      for (final f in archive.files)
-        [f.name, Uint8List.fromList(f.content as List<int>)],
-    ];
-    return compute(_encodeZipFromEntries, entries);
-  }
-
-  /// Run `ZipDecoder().decodeBytes(bytes)` in a background isolate, then
-  /// rebuild a thin `Archive` on the main isolate from the decoded entries.
-  /// Heavy decompression happens off the UI thread; the cheap rebuild
-  /// (allocate `ArchiveFile` objects) stays on-thread so `findFile` /
-  /// `_readJson` continue to work without further changes.
-  static Future<Archive> _decodeArchiveInIsolate(Uint8List bytes) async {
-    final entries = await compute(_decodeZipToEntries, bytes);
-    final archive = Archive();
-    for (final entry in entries) {
-      final name = entry[0] as String;
-      final body = entry[1] as Uint8List;
-      archive.addFile(ArchiveFile(name, body.length, body));
-    }
-    return archive;
-  }
-
-  void _addJson(Archive archive, String path, Object body) {
+  /// Serialise [body] to JSON and write it as an `ArchiveFile.bytes`
+  /// entry to the open [encoder]. Used by the streaming
+  /// `writeBackupZipStreaming` writer for the manifest + runs/routes/
+  /// profile metadata; the on-the-fly write avoids buffering the
+  /// whole encoded payload in RAM.
+  static void _writeJsonEntry(
+      ZipFileEncoder encoder, String path, Object body) {
     final bytes = utf8.encode(jsonEncode(body));
-    archive.addFile(ArchiveFile(path, bytes.length, bytes));
+    encoder.addArchiveFile(ArchiveFile.bytes(path, bytes));
+  }
+
+  /// Return a shallow copy of [m] without [key]. Static — `_withoutKey`
+  /// below is an instance method retained for the older online-restore
+  /// path; this duplicates the shape so the new static writer doesn't
+  /// need an instance.
+  static Map<String, dynamic> _withoutKeyMap(
+      Map<String, dynamic> m, String key) {
+    final copy = Map<String, dynamic>.from(m);
+    copy.remove(key);
+    return copy;
   }
 
   dynamic _readJson(Archive archive, String path) {
@@ -547,35 +644,7 @@ class BackupService {
     return jsonDecode(body);
   }
 
-  Map<String, dynamic> _withoutKey(Map<String, dynamic> m, String key) {
-    final copy = Map<String, dynamic>.from(m);
-    copy.remove(key);
-    return copy;
-  }
-
   String _randomUuid() => const Uuid().v4();
-}
-
-/// Top-level so it can run inside [compute]. Rebuilds the archive from
-/// `(path, bytes)` pairs and returns the encoded ZIP bytes.
-Uint8List _encodeZipFromEntries(List<List<Object>> entries) {
-  final archive = Archive();
-  for (final entry in entries) {
-    final name = entry[0] as String;
-    final body = entry[1] as Uint8List;
-    archive.addFile(ArchiveFile(name, body.length, body));
-  }
-  return Uint8List.fromList(ZipEncoder().encode(archive));
-}
-
-/// Top-level for [compute]. Decodes the ZIP off the UI thread and returns
-/// `[name, bytes]` pairs the caller can rebuild into an [Archive].
-List<List<Object>> _decodeZipToEntries(Uint8List bytes) {
-  final archive = ZipDecoder().decodeBytes(bytes);
-  return [
-    for (final f in archive.files)
-      [f.name, Uint8List.fromList(f.content as List<int>)],
-  ];
 }
 
 class BackupProgress {
