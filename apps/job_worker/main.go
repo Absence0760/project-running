@@ -93,6 +93,37 @@ func (b *dataexportBackend) DownloadTrackBytes(ctx context.Context, path string)
 	return out, nil
 }
 
+func (b *dataexportBackend) FetchExportRoutes(ctx context.Context, userID string) ([]dataexport.ExportRoute, error) {
+	rows, err := b.client.FetchExportRoutes(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]dataexport.ExportRoute, len(rows))
+	for i, r := range rows {
+		out[i] = dataexport.ExportRoute{
+			ID: r.ID, Name: r.Name, Waypoints: r.Waypoints,
+			DistanceM: r.DistanceM, ElevationM: r.ElevationM,
+			Surface: r.Surface, IsPublic: r.IsPublic, Slug: r.Slug,
+			Tags: r.Tags, Featured: r.Featured, RunCount: r.RunCount,
+			IsStarred: r.IsStarred, Description: r.Description,
+			ClubID: r.ClubID, CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
+		}
+	}
+	return out, nil
+}
+
+func (b *dataexportBackend) FetchExportProfile(ctx context.Context, userID string) (map[string]interface{}, error) {
+	return b.client.FetchExportProfile(ctx, userID)
+}
+
+func (b *dataexportBackend) FetchUserSettingsPrefs(ctx context.Context, userID string) (map[string]interface{}, error) {
+	return b.client.FetchUserSettingsPrefs(ctx, userID)
+}
+
+func (b *dataexportBackend) DownloadRawTrackBytes(ctx context.Context, path string) ([]byte, error) {
+	return b.client.DownloadRawTrackBytes(ctx, path)
+}
+
 func (b *dataexportBackend) UploadExportArtifact(ctx context.Context, path, contentType string, body []byte) error {
 	return b.client.UploadExportArtifact(ctx, path, contentType, body)
 }

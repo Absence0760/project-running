@@ -30,6 +30,15 @@ type fakeBackend struct {
 	uploadErr     error
 	signedURL     string
 	signURLErr    error
+	// Backup-format extras (format=backup only).
+	routes        []ExportRoute
+	routesErr     error
+	profile       map[string]interface{}
+	profileErr    error
+	prefs         map[string]interface{}
+	prefsErr      error
+	rawTrackBytes map[string][]byte
+	rawTrackErr   map[string]error
 }
 
 type uploadCall struct {
@@ -66,6 +75,27 @@ func (f *fakeBackend) CreateSignedURL(_ context.Context, _ string, _ int) (strin
 		return "https://signed.example/runs/exports/abc?token=fake", nil
 	}
 	return f.signedURL, nil
+}
+
+func (f *fakeBackend) FetchExportRoutes(_ context.Context, _ string) ([]ExportRoute, error) {
+	return f.routes, f.routesErr
+}
+
+func (f *fakeBackend) FetchExportProfile(_ context.Context, _ string) (map[string]interface{}, error) {
+	return f.profile, f.profileErr
+}
+
+func (f *fakeBackend) FetchUserSettingsPrefs(_ context.Context, _ string) (map[string]interface{}, error) {
+	return f.prefs, f.prefsErr
+}
+
+func (f *fakeBackend) DownloadRawTrackBytes(_ context.Context, path string) ([]byte, error) {
+	if f.rawTrackErr != nil {
+		if err, ok := f.rawTrackErr[path]; ok {
+			return nil, err
+		}
+	}
+	return f.rawTrackBytes[path], nil
 }
 
 func signTestToken(t *testing.T, sub string, expDelta int) string {
@@ -413,6 +443,347 @@ func TestBuildGpx_XmlEscapesTitle(t *testing.T) {
 	if !strings.Contains(out, "Quirky &lt;run&gt; &amp; stuff") {
 		t.Errorf("escaped title not found: %s", out)
 	}
+}
+
+// ---- format=backup ---------------------------------------------------
+
+func TestServer_RejectsUnknownFormat(t *testing.T) {
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"made-up"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 400 {
+		t.Fatalf("status=%d, want 400", resp.StatusCode)
+	}
+}
+
+func TestServer_BackupFormatHappyPath(t *testing.T) {
+	trackURL := "user-A/run-1.json.gz"
+	trueVal := true
+	floatVal := 5000.0
+	be := &fakeBackend{
+		runs: []ExportRun{
+			{
+				ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z",
+				DurationS: 1500, DistanceM: 5000, Source: "app",
+				TrackURL: &trackURL,
+				Metadata: map[string]interface{}{"activity_type": "run", "title": "Morning"},
+			},
+		},
+		routes: []ExportRoute{
+			{
+				ID:        "rt-1",
+				Name:      "Park loop",
+				Waypoints: []map[string]interface{}{{"lat": 47.37, "lng": 8.54}, {"lat": 47.371, "lng": 8.541}},
+				DistanceM: &floatVal,
+				IsPublic:  &trueVal,
+				Tags:      []string{"easy", "morning"},
+			},
+		},
+		profile: map[string]interface{}{
+			"id":             "user-A",
+			"display_name":   "Jared",
+			"preferred_unit": "km",
+		},
+		prefs: map[string]interface{}{
+			"unit":        "km",
+			"split_audio": true,
+		},
+		rawTrackBytes: map[string][]byte{
+			// Use real gzip bytes so the writer's STORE path
+			// passes through actual gzipped content end-to-end.
+			trackURL: gzipString(t, `[{"lat":51.5,"lng":-0.1},{"lat":51.6,"lng":-0.2}]`),
+		},
+	}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export", strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
+	}
+	var got map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&got); err != nil {
+		t.Fatal(err)
+	}
+	if got["format"] != "backup" {
+		t.Errorf("format=%v, want backup", got["format"])
+	}
+	if got["count"] != float64(1) {
+		t.Errorf("count=%v, want 1", got["count"])
+	}
+	if len(be.uploads) != 1 {
+		t.Fatalf("expected 1 upload; got %d", len(be.uploads))
+	}
+	up := be.uploads[0]
+	if up.ContentType != "application/zip" {
+		t.Errorf("content-type=%q", up.ContentType)
+	}
+	if !strings.HasPrefix(up.Path, "user-A/exports/") || !strings.HasSuffix(up.Path, ".zip") {
+		t.Errorf("path=%q", up.Path)
+	}
+}
+
+func TestBuildBackupZip_ProducesValidArchive(t *testing.T) {
+	trackURL := "uid/run-1.json.gz"
+	rawTrack := gzipString(t, `[{"lat":1.0,"lng":2.0},{"lat":3.0,"lng":4.0}]`)
+	runs := []ExportRun{{
+		ID: "run-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
+		DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &trackURL,
+		Metadata: map[string]interface{}{"activity_type": "run"},
+	}}
+	floatVal := 5000.0
+	routes := []ExportRoute{{
+		ID: "rt-1", Name: "Park loop",
+		Waypoints: []map[string]interface{}{{"lat": 47.37, "lng": 8.54}, {"lat": 47.371, "lng": 8.541}},
+		DistanceM: &floatVal,
+	}}
+	profile := map[string]interface{}{"id": "uid-original", "display_name": "Tester"}
+	prefs := map[string]interface{}{"unit": "km"}
+
+	fetcher := func(_ context.Context, path string) ([]byte, error) {
+		if path == trackURL {
+			return rawTrack, nil
+		}
+		return nil, nil
+	}
+
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, Routes: routes, Profile: profile, SettingsPrefs: prefs,
+		UserID: "uid", ExportedFrom: "test",
+	}, fetcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Parse the produced ZIP and verify each expected entry.
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatalf("zip parse failed: %v", err)
+	}
+	files := map[string][]byte{}
+	for _, f := range zr.File {
+		rc, err := f.Open()
+		if err != nil {
+			t.Fatalf("open %s: %v", f.Name, err)
+		}
+		buf, err := io.ReadAll(rc)
+		rc.Close()
+		if err != nil {
+			t.Fatalf("read %s: %v", f.Name, err)
+		}
+		files[f.Name] = buf
+	}
+
+	// Manifest shape.
+	var manifest map[string]any
+	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
+		t.Fatalf("manifest parse: %v", err)
+	}
+	if manifest["format"] != BackupFormatName {
+		t.Errorf("format=%v, want %s", manifest["format"], BackupFormatName)
+	}
+	if manifest["version"] != float64(BackupFormatVersion) {
+		t.Errorf("version=%v", manifest["version"])
+	}
+	if manifest["exported_by_user_id"] != "uid" {
+		t.Errorf("user_id=%v", manifest["exported_by_user_id"])
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["runs"] != float64(1) || counts["routes"] != float64(1) || counts["tracks"] != float64(1) {
+		t.Errorf("counts=%v", counts)
+	}
+
+	// runs.json — one row with the expected id, user_id stripped.
+	var runsOut []map[string]any
+	if err := json.Unmarshal(files["runs.json"], &runsOut); err != nil {
+		t.Fatalf("runs.json parse: %v", err)
+	}
+	if len(runsOut) != 1 || runsOut[0]["id"] != "run-1" {
+		t.Errorf("runs out=%v", runsOut)
+	}
+
+	// routes.json — one row with the name + waypoints.
+	var routesOut []map[string]any
+	if err := json.Unmarshal(files["routes.json"], &routesOut); err != nil {
+		t.Fatalf("routes.json parse: %v", err)
+	}
+	if len(routesOut) != 1 || routesOut[0]["name"] != "Park loop" {
+		t.Errorf("routes out=%v", routesOut)
+	}
+
+	// profile.json — id field stripped, display_name preserved.
+	var profileOut map[string]any
+	if err := json.Unmarshal(files["profile.json"], &profileOut); err != nil {
+		t.Fatalf("profile.json parse: %v", err)
+	}
+	p := profileOut["profile"].(map[string]any)
+	if _, hasID := p["id"]; hasID {
+		t.Errorf("profile.id should be stripped: %v", p)
+	}
+	if p["display_name"] != "Tester" {
+		t.Errorf("display_name lost: %v", p)
+	}
+	if profileOut["settings_prefs"].(map[string]any)["unit"] != "km" {
+		t.Errorf("prefs lost: %v", profileOut["settings_prefs"])
+	}
+
+	// Track entry — raw gzipped bytes round-trip byte-for-byte.
+	track := files["tracks/run-1.json.gz"]
+	if !bytes.Equal(track, rawTrack) {
+		t.Errorf("track bytes not preserved verbatim (got %d bytes, want %d)", len(track), len(rawTrack))
+	}
+}
+
+func TestBuildBackupZip_PartialTrackFailureDoesNotSinkArchive(t *testing.T) {
+	good := "uid/run-good.json.gz"
+	bad := "uid/run-bad.json.gz"
+	rawTrack := gzipString(t, `[{"lat":1.0,"lng":2.0},{"lat":3.0,"lng":4.0}]`)
+	runs := []ExportRun{
+		{ID: "run-good", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z", DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &good},
+		{ID: "run-bad", UserID: "uid", StartedAt: "2026-05-11T11:00:00Z", DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &bad},
+	}
+	fetcher := func(_ context.Context, path string) ([]byte, error) {
+		if path == good {
+			return rawTrack, nil
+		}
+		return nil, errors.New("synthetic download failure")
+	}
+
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	}, fetcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	names := map[string]bool{}
+	for _, f := range zr.File {
+		names[f.Name] = true
+	}
+	if !names["tracks/run-good.json.gz"] {
+		t.Errorf("good track missing")
+	}
+	if names["tracks/run-bad.json.gz"] {
+		t.Errorf("bad track should be absent")
+	}
+	// Manifest counts must reflect only what made it in.
+	var manifest map[string]any
+	for _, f := range zr.File {
+		if f.Name == "manifest.json" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			_ = json.Unmarshal(b, &manifest)
+		}
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["runs"] != float64(2) || counts["tracks"] != float64(1) {
+		t.Errorf("counts=%v (want 2 runs, 1 track)", counts)
+	}
+}
+
+func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
+	// Path-shape assertion: a malformed track_url (legacy / corrupt
+	// row) must not feed an unconstrained string into the
+	// service-role downloader.
+	bogus := "../../../etc/passwd"
+	runs := []ExportRun{
+		{ID: "run-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z", DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &bogus},
+	}
+	called := 0
+	fetcher := func(_ context.Context, _ string) ([]byte, error) {
+		called++
+		return nil, errors.New("must not be called")
+	}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	}, fetcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if called != 0 {
+		t.Errorf("malformed track_url should skip the fetcher (called %d times)", called)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	for _, f := range zr.File {
+		if strings.HasPrefix(f.Name, "tracks/") {
+			t.Errorf("no tracks/ entry should land for a malformed track_url; got %s", f.Name)
+		}
+	}
+}
+
+func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T) {
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test",
+	}, func(_ context.Context, _ string) ([]byte, error) {
+		return nil, errors.New("must not be called")
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if len(zr.File) < 4 {
+		t.Fatalf("expected at least manifest + runs + routes + profile entries; got %d", len(zr.File))
+	}
+}
+
+func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test", Profile: nil,
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	for _, f := range zr.File {
+		if f.Name == "profile.json" {
+			rc, _ := f.Open()
+			b, _ := io.ReadAll(rc)
+			rc.Close()
+			var pp map[string]any
+			_ = json.Unmarshal(b, &pp)
+			if pp["profile"] != nil {
+				t.Errorf("profile should be null, got %v", pp["profile"])
+			}
+			if _, ok := pp["settings_prefs"]; !ok {
+				t.Errorf("settings_prefs key must be present (even when empty)")
+			}
+			return
+		}
+	}
+	t.Fatal("profile.json not found in archive")
+}
+
+// gzipString returns a gzipped representation of s, useful for the
+// backup-format tests that feed raw track bytes through the writer.
+func gzipString(t *testing.T, s string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := gzip.NewWriter(&buf)
+	if _, err := zw.Write([]byte(s)); err != nil {
+		t.Fatal(err)
+	}
+	if err := zw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
 }
 
 func TestDecodeTrackBytes_GzippedJSON(t *testing.T) {

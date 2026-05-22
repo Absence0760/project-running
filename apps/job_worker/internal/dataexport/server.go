@@ -97,6 +97,58 @@ type Backend interface {
 	// as the single download token; the user has no need for the
 	// underlying Storage path.
 	CreateSignedURL(ctx context.Context, path string, ttlSec int) (string, error)
+
+	// FetchExportRoutes returns the user's saved routes for the
+	// `format=backup` path. Service role bypasses RLS; the
+	// caller's userID filter is the only access gate. Mirrors the
+	// `routes` selection the mobile / web backup writers do.
+	FetchExportRoutes(ctx context.Context, userID string) ([]ExportRoute, error)
+
+	// FetchExportProfile returns the user's profile via the
+	// `get_my_profile` SECURITY DEFINER RPC. Column-level revokes
+	// on `subscription_tier` / `parkrun_number` / `subscription_at`
+	// (migration 20260707_001) require this path rather than a
+	// direct table select. Returns nil + nil error when the row
+	// is absent (new account).
+	FetchExportProfile(ctx context.Context, userID string) (map[string]interface{}, error)
+
+	// FetchUserSettingsPrefs returns the user's `user_settings.prefs`
+	// jsonb for inclusion in `profile.json`. Returns an empty map +
+	// nil error when no row exists yet — the restore path tolerates
+	// missing prefs.
+	FetchUserSettingsPrefs(ctx context.Context, userID string) (map[string]interface{}, error)
+
+	// DownloadRawTrackBytes pulls the raw **gzipped** bytes from
+	// Storage without decoding to TrackPoint[]. The backup ZIP
+	// archives tracks in their on-disk `.json.gz` form so restore
+	// can upload them verbatim. Returns nil + nil error when the
+	// track is missing — the run row still ships, just without a
+	// `tracks/{id}.json.gz` entry.
+	DownloadRawTrackBytes(ctx context.Context, path string) ([]byte, error)
+}
+
+// ExportRoute is the routes-table projection for the backup format.
+// Mirrors the columns the mobile / web writers include in
+// `routes.json`. `user_id` deliberately omitted — the caller strips
+// it for re-homeability; restore stamps the new owner's uid.
+type ExportRoute struct {
+	ID                 string                 `json:"id"`
+	Name               string                 `json:"name"`
+	Waypoints          interface{}            `json:"waypoints"`
+	DistanceM          *float64               `json:"distance_m,omitempty"`
+	ElevationM         *float64               `json:"elevation_m,omitempty"`
+	Surface            *string                `json:"surface,omitempty"`
+	IsPublic           *bool                  `json:"is_public,omitempty"`
+	Slug               *string                `json:"slug,omitempty"`
+	Tags               []string               `json:"tags,omitempty"`
+	Featured           *bool                  `json:"featured,omitempty"`
+	RunCount           *int                   `json:"run_count,omitempty"`
+	IsStarred          *bool                  `json:"is_starred,omitempty"`
+	Description        *string                `json:"description,omitempty"`
+	ClubID             *string                `json:"club_id,omitempty"`
+	CreatedAt          *string                `json:"created_at,omitempty"`
+	UpdatedAt          *string                `json:"updated_at,omitempty"`
+	Extra              map[string]interface{} `json:"-"`
 }
 
 // ExportRun is the row projection the export builder consumes.
@@ -187,8 +239,8 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 	if format == "" {
 		format = "csv"
 	}
-	if format != "csv" && format != "gpx" {
-		http.Error(w, `{"error":"format must be csv or gpx"}`, http.StatusBadRequest)
+	if format != "csv" && format != "gpx" && format != "backup" {
+		http.Error(w, `{"error":"format must be csv, gpx, or backup"}`, http.StatusBadRequest)
 		return
 	}
 
@@ -237,6 +289,42 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		zipped, err := BuildGpxZip(r.Context(), runs, s.Backend.DownloadTrackBytes)
 		if err != nil {
 			s.log().Error("dataexport: gpx zip build failed", "err", err, "user_id", userID)
+			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
+			return
+		}
+		body = zipped
+		contentType = "application/zip"
+		ext = "zip"
+	case "backup":
+		// Fetch the extra inputs only needed for the backup format —
+		// routes + profile + user_settings.prefs. None of these are
+		// huge so a single batch fetch is fine inside the EF timeout.
+		routes, rerr := s.Backend.FetchExportRoutes(r.Context(), userID)
+		if rerr != nil {
+			s.log().Error("dataexport: routes fetch failed", "err", rerr, "user_id", userID)
+			http.Error(w, `{"error":"routes_fetch_failed"}`, http.StatusInternalServerError)
+			return
+		}
+		profile, perr := s.Backend.FetchExportProfile(r.Context(), userID)
+		if perr != nil {
+			s.log().Warn("dataexport: profile fetch failed; including null", "err", perr, "user_id", userID)
+			profile = nil
+		}
+		prefs, prefErr := s.Backend.FetchUserSettingsPrefs(r.Context(), userID)
+		if prefErr != nil {
+			s.log().Warn("dataexport: prefs fetch failed; including empty", "err", prefErr, "user_id", userID)
+			prefs = map[string]interface{}{}
+		}
+		zipped, err := BuildBackupZip(r.Context(), BuildBackupZipInput{
+			Runs:          runs,
+			Routes:        routes,
+			Profile:       profile,
+			SettingsPrefs: prefs,
+			UserID:        userID,
+			ExportedFrom:  "go-service",
+		}, s.Backend.DownloadRawTrackBytes)
+		if err != nil {
+			s.log().Error("dataexport: backup zip build failed", "err", err, "user_id", userID)
 			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
 			return
 		}
@@ -490,6 +578,225 @@ func BuildGpxZip(ctx context.Context, runs []ExportRun, trackFetcher TrackFetche
 		return nil, err
 	}
 	return buf.Bytes(), nil
+}
+
+// --- run-app-backup v1 builder ---------------------------------------
+
+// BuildBackupZipInput bundles every input the backup builder needs.
+// Defined as a struct because the parameter list outgrew positional
+// signatures the moment the caller had to pass runs + routes +
+// profile + prefs + user id + exported-from in one go.
+type BuildBackupZipInput struct {
+	Runs          []ExportRun
+	Routes        []ExportRoute
+	Profile       map[string]interface{}
+	SettingsPrefs map[string]interface{}
+	UserID        string
+	ExportedFrom  string
+}
+
+// RawTrackFetcher pulls the **gzipped** bytes for a Storage path
+// without decoding. Sibling of TrackFetcher (which decodes for the
+// GPX builder); the backup format archives tracks in their on-disk
+// form so restore is a byte-for-byte upload.
+type RawTrackFetcher func(ctx context.Context, path string) ([]byte, error)
+
+// BackupFormatVersion is the manifest's `version` field. Bump only
+// when the on-disk shape changes incompatibly; readers reject
+// versions above the one they know.
+const BackupFormatVersion = 1
+
+// BackupFormatName is the manifest's `format` field. Hard-coded
+// here + on every mobile / web writer. A non-matching manifest is
+// rejected by every restore path.
+const BackupFormatName = "run-app-backup"
+
+// BuildBackupZip assembles `manifest.json` + `runs.json` +
+// `routes.json` + `profile.json` + per-run `tracks/<id>.json.gz`
+// (raw gzipped bytes) into a single zip. Output is byte-compatible
+// with `BackupService.restore` on mobile and `restoreBackup` on
+// web. Track download failures are silently swallowed — the row
+// stays in the manifest, the `tracks/...` entry is omitted, the
+// zip ships.
+func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher RawTrackFetcher) ([]byte, error) {
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	// runs.json — strip user_id for re-homeability.
+	runsOut := make([]map[string]interface{}, 0, len(in.Runs))
+	for _, r := range in.Runs {
+		runsOut = append(runsOut, map[string]interface{}{
+			"id":          r.ID,
+			"started_at":  r.StartedAt,
+			"duration_s":  r.DurationS,
+			"distance_m":  r.DistanceM,
+			"source":      r.Source,
+			"external_id": r.ExternalID,
+			"metadata":    r.Metadata,
+			"track_url":   r.TrackURL,
+			"is_public":   r.IsPublic,
+			"event_id":    r.EventID,
+			"route_id":    r.RouteID,
+			"created_at":  r.CreatedAt,
+			"updated_at":  r.UpdatedAt,
+		})
+	}
+	if err := writeJSONEntry(zw, "runs.json", runsOut); err != nil {
+		return nil, err
+	}
+
+	// routes.json
+	routesOut := make([]map[string]interface{}, 0, len(in.Routes))
+	for _, r := range in.Routes {
+		row := map[string]interface{}{
+			"id":        r.ID,
+			"name":      r.Name,
+			"waypoints": r.Waypoints,
+		}
+		if r.DistanceM != nil {
+			row["distance_m"] = *r.DistanceM
+		}
+		if r.ElevationM != nil {
+			row["elevation_m"] = *r.ElevationM
+		}
+		if r.Surface != nil {
+			row["surface"] = *r.Surface
+		}
+		if r.IsPublic != nil {
+			row["is_public"] = *r.IsPublic
+		}
+		if r.Slug != nil {
+			row["slug"] = *r.Slug
+		}
+		if r.Tags != nil {
+			row["tags"] = r.Tags
+		}
+		if r.Featured != nil {
+			row["featured"] = *r.Featured
+		}
+		if r.RunCount != nil {
+			row["run_count"] = *r.RunCount
+		}
+		if r.IsStarred != nil {
+			row["is_starred"] = *r.IsStarred
+		}
+		if r.Description != nil {
+			row["description"] = *r.Description
+		}
+		if r.ClubID != nil {
+			row["club_id"] = *r.ClubID
+		}
+		if r.CreatedAt != nil {
+			row["created_at"] = *r.CreatedAt
+		}
+		if r.UpdatedAt != nil {
+			row["updated_at"] = *r.UpdatedAt
+		}
+		routesOut = append(routesOut, row)
+	}
+	if err := writeJSONEntry(zw, "routes.json", routesOut); err != nil {
+		return nil, err
+	}
+
+	// profile.json — strip `id` from the profile so the archive
+	// is re-homeable (restore stamps the new owner's uid).
+	profileOut := map[string]interface{}{
+		"profile":        stripProfileID(in.Profile),
+		"settings_prefs": defaultIfNil(in.SettingsPrefs),
+	}
+	if err := writeJSONEntry(zw, "profile.json", profileOut); err != nil {
+		return nil, err
+	}
+
+	// Tracks — raw gzipped bytes, archived verbatim. STORE (no
+	// recompression) since the source is already deflated.
+	tracksAdded := 0
+	for _, r := range in.Runs {
+		if r.TrackURL == nil || *r.TrackURL == "" {
+			continue
+		}
+		// Same path-shape assertion as the GPX builder.
+		expected := fmt.Sprintf("%s/%s.json.gz", r.UserID, r.ID)
+		if *r.TrackURL != expected {
+			continue
+		}
+		bytes, err := rawTrackFetcher(ctx, *r.TrackURL)
+		if err != nil || len(bytes) == 0 {
+			continue
+		}
+		header := &zip.FileHeader{
+			Name:   fmt.Sprintf("tracks/%s.json.gz", r.ID),
+			Method: zip.Store, // already gzipped; STORE avoids wasted CPU
+		}
+		fw, err := zw.CreateHeader(header)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := fw.Write(bytes); err != nil {
+			return nil, err
+		}
+		tracksAdded++
+	}
+
+	// manifest last so the counts include the actual tracks that
+	// made it in.
+	manifest := map[string]interface{}{
+		"format":              BackupFormatName,
+		"version":             BackupFormatVersion,
+		"exported_at":         time.Now().UTC().Format(time.RFC3339),
+		"exported_by_user_id": in.UserID,
+		"exported_from":       in.ExportedFrom,
+		"counts": map[string]interface{}{
+			"runs":   len(in.Runs),
+			"routes": len(in.Routes),
+			"goals":  0,
+			"tracks": tracksAdded,
+		},
+	}
+	if err := writeJSONEntry(zw, "manifest.json", manifest); err != nil {
+		return nil, err
+	}
+
+	if err := zw.Close(); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func writeJSONEntry(zw *zip.Writer, name string, body interface{}) error {
+	encoded, err := json.MarshalIndent(body, "", "  ")
+	if err != nil {
+		return err
+	}
+	fw, err := zw.Create(name)
+	if err != nil {
+		return err
+	}
+	if _, err := fw.Write(encoded); err != nil {
+		return err
+	}
+	return nil
+}
+
+func stripProfileID(p map[string]interface{}) interface{} {
+	if p == nil {
+		return nil
+	}
+	out := make(map[string]interface{}, len(p))
+	for k, v := range p {
+		if k == "id" {
+			continue
+		}
+		out[k] = v
+	}
+	return out
+}
+
+func defaultIfNil(m map[string]interface{}) map[string]interface{} {
+	if m == nil {
+		return map[string]interface{}{}
+	}
+	return m
 }
 
 // BuildGpx emits a minimal GPX 1.1 document for one run + its

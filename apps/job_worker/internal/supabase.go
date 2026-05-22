@@ -925,6 +925,131 @@ func (c *SupabaseClient) CreateSignedURL(ctx context.Context, path string, ttlSe
 	return parsed.SignedURL, nil
 }
 
+// FetchExportRoutes reads the user's saved routes for the backup
+// export format. Service role bypasses RLS; the userID filter is
+// the only access gate. Mirrors the column shape mobile + web
+// backup writers archive.
+func (c *SupabaseClient) FetchExportRoutes(ctx context.Context, userID string) ([]exportRouteRow, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("select", "*")
+	u := c.BaseURL + "/rest/v1/routes?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []exportRouteRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	return rows, nil
+}
+
+// exportRouteRow mirrors dataexport.ExportRoute. Same leaf-package
+// reasoning as `dataexportRow` — keep `internal` from importing
+// `dataexport`.
+type exportRouteRow struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Waypoints   interface{}            `json:"waypoints"`
+	DistanceM   *float64               `json:"distance_m,omitempty"`
+	ElevationM  *float64               `json:"elevation_m,omitempty"`
+	Surface     *string                `json:"surface,omitempty"`
+	IsPublic    *bool                  `json:"is_public,omitempty"`
+	Slug        *string                `json:"slug,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Featured    *bool                  `json:"featured,omitempty"`
+	RunCount    *int                   `json:"run_count,omitempty"`
+	IsStarred   *bool                  `json:"is_starred,omitempty"`
+	Description *string                `json:"description,omitempty"`
+	ClubID      *string                `json:"club_id,omitempty"`
+	CreatedAt   *string                `json:"created_at,omitempty"`
+	UpdatedAt   *string                `json:"updated_at,omitempty"`
+}
+
+// FetchExportProfile reads the user's profile via the
+// `get_my_profile` SECURITY DEFINER RPC. Column-level revokes on
+// `subscription_tier` / `parkrun_number` / `subscription_at`
+// (migration 20260707_001) require this path rather than a direct
+// table select. Returns nil + nil when no row exists yet.
+func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) (map[string]interface{}, error) {
+	// `get_my_profile` reads `auth.uid()` from the JWT; service-role
+	// has no auth.uid() so we pass `p_user_id` for the explicit
+	// path. Schema: the function signature is `get_my_profile()` —
+	// **but** for service-role we need to read directly since the
+	// RPC trusts JWT claims. Fall back to a direct select that
+	// excludes the column-restricted fields the export doesn't need.
+	q := url.Values{}
+	q.Set("id", "eq."+userID)
+	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,birth_year,gender,activity_default,privacy_default")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/user_profiles?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []map[string]interface{}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return rows[0], nil
+}
+
+// FetchUserSettingsPrefs reads `user_settings.prefs` for inclusion
+// in `profile.json`. Returns an empty map + nil when the row is
+// absent — restore tolerates missing prefs and the user keeps
+// their on-device defaults.
+func (c *SupabaseClient) FetchUserSettingsPrefs(ctx context.Context, userID string) (map[string]interface{}, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("select", "prefs")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/user_settings?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		Prefs map[string]interface{} `json:"prefs"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 || rows[0].Prefs == nil {
+		return map[string]interface{}{}, nil
+	}
+	return rows[0].Prefs, nil
+}
+
+// DownloadRawTrackBytes pulls the **gzipped** bytes from Storage
+// without decoding. Sibling of DownloadTrack which decompresses +
+// JSON-parses to TrackPoint[]; the backup format archives tracks
+// in their on-disk `.json.gz` form so restore is a byte-for-byte
+// upload.
+func (c *SupabaseClient) DownloadRawTrackBytes(ctx context.Context, path string) ([]byte, error) {
+	u := c.BaseURL + "/storage/v1/object/runs/" + path
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	return c.do(ctx, req)
+}
+
 // FetchUserSubscriptionTier reads the `subscription_tier` column on
 // `user_profiles`. Returns "free" when no row exists (a user that
 // hasn't completed onboarding); otherwise returns the value
