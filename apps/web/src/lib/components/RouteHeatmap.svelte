@@ -12,6 +12,7 @@
 		fetchClubsInBbox,
 		fetchDiscoverableRoutesInBbox,
 	} from '$lib/data';
+	import { formatDistance } from '$lib/units.svelte';
 	import { searchPlaces, type PlaceSearchResult } from '$lib/geocoding';
 	import type { Route } from '$lib/types';
 
@@ -214,16 +215,33 @@
 			});
 			map.on('click', CLUB_PINS_LAYER, (e) => {
 				const f = e.features?.[0];
-				const slug = f?.properties?.slug as string | undefined;
-				const id = f?.properties?.id as string | undefined;
-				if (slug) void goto(`/clubs/${slug}`);
-				else if (id) void goto(`/clubs/${id}`);
+				if (!f || !map) return;
+				const slug = f.properties?.slug as string | undefined;
+				const id = f.properties?.id as string | undefined;
+				const name = (f.properties?.name as string) ?? 'Club';
+				const memberCount = (f.properties?.member_count as number) ?? 0;
+				const href = slug ? `/clubs/${slug}` : id ? `/clubs/${id}` : '#';
+				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
+				openPinPopup(coords, {
+					title: name,
+					subtitle: `${memberCount} member${memberCount === 1 ? '' : 's'}`,
+					href,
+					actionLabel: 'View club',
+					accentClass: 'pin-popup-club',
+				});
 			});
-			map.on('mouseenter', CLUB_PINS_LAYER, () => {
-				if (map) map.getCanvas().style.cursor = 'pointer';
+			map.on('mouseenter', CLUB_PINS_LAYER, (e) => {
+				if (!map) return;
+				map.getCanvas().style.cursor = 'pointer';
+				const f = e.features?.[0];
+				if (!f) return;
+				const name = (f.properties?.name as string) ?? '';
+				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
+				openHoverTip(coords, name);
 			});
 			map.on('mouseleave', CLUB_PINS_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';
+				closeHoverTip();
 			});
 
 			map.addSource(ROUTE_PINS_SOURCE, {
@@ -258,14 +276,45 @@
 			});
 			map.on('click', ROUTE_PINS_LAYER, (e) => {
 				const f = e.features?.[0];
-				const id = f?.properties?.id as string | undefined;
-				if (id) void goto(`/routes/${id}`);
+				if (!f || !map) return;
+				const id = f.properties?.id as string | undefined;
+				if (!id) return;
+				const name = (f.properties?.name as string) ?? 'Route';
+				const featured = !!f.properties?.featured;
+				const distance = (f.properties?.distance_m as number) ?? 0;
+				const surface = (f.properties?.surface as string) ?? '';
+				const runCount = (f.properties?.run_count as number) ?? 0;
+				const subtitleBits = [
+					formatDistance(distance),
+					surface,
+					runCount > 0
+						? `run ${runCount} time${runCount === 1 ? '' : 's'}`
+						: '',
+				].filter(Boolean);
+				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
+				openPinPopup(coords, {
+					title: name,
+					subtitle: subtitleBits.join(' · '),
+					href: `/routes/${id}`,
+					actionLabel: 'View route',
+					accentClass: featured
+						? 'pin-popup-route pin-popup-featured'
+						: 'pin-popup-route',
+					featured,
+				});
 			});
-			map.on('mouseenter', ROUTE_PINS_LAYER, () => {
-				if (map) map.getCanvas().style.cursor = 'pointer';
+			map.on('mouseenter', ROUTE_PINS_LAYER, (e) => {
+				if (!map) return;
+				map.getCanvas().style.cursor = 'pointer';
+				const f = e.features?.[0];
+				if (!f) return;
+				const name = (f.properties?.name as string) ?? '';
+				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
+				openHoverTip(coords, name);
 			});
 			map.on('mouseleave', ROUTE_PINS_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';
+				closeHoverTip();
 			});
 
 			// Standard MapLibre heatmap paint — interpolated by intensity
@@ -338,6 +387,10 @@
 
 	onDestroy(() => {
 		stopResizeWatch?.();
+		currentPopup?.remove();
+		currentPopup = null;
+		hoverPopup?.remove();
+		hoverPopup = null;
 		map?.remove();
 		map = null;
 		if (pendingFetch) clearTimeout(pendingFetch);
@@ -345,6 +398,90 @@
 		if (pendingPinsFetch) clearTimeout(pendingPinsFetch);
 		if (searchTimeout) clearTimeout(searchTimeout);
 	});
+
+	// ─────────────── Pin popups + hover tooltips ───────────────
+	//
+	// Click → popup card with name + summary + a "View …" button that
+	// navigates. The user found the old "click teleports you away"
+	// flow disorienting — this gives them a chance to inspect first.
+	// Hover → smaller tooltip that just shows the name (so you can
+	// glance over a cluster of pins without clicking each one).
+	//
+	// Both use MapLibre's `Popup` API. Only one popup of each kind
+	// is open at a time; we re-use the handle.
+
+	let currentPopup: maplibregl.Popup | null = null;
+	let hoverPopup: maplibregl.Popup | null = null;
+
+	interface PinPopupOpts {
+		title: string;
+		subtitle: string;
+		href: string;
+		actionLabel: string;
+		accentClass: string;
+		featured?: boolean;
+	}
+
+	function escapeHtml(s: string): string {
+		return s
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#39;');
+	}
+
+	function openPinPopup(coords: [number, number], opts: PinPopupOpts) {
+		if (!map) return;
+		closeHoverTip();
+		currentPopup?.remove();
+		const star = opts.featured
+			? '<span class="pin-popup-star" title="Featured">★</span>'
+			: '';
+		const html = `
+			<div class="pin-popup ${opts.accentClass}">
+				<div class="pin-popup-head">
+					${star}
+					<span class="pin-popup-title">${escapeHtml(opts.title)}</span>
+				</div>
+				<div class="pin-popup-subtitle">${escapeHtml(opts.subtitle)}</div>
+				<a class="pin-popup-action" href="${escapeHtml(opts.href)}"
+					data-sveltekit-preload-data="hover">
+					${escapeHtml(opts.actionLabel)} &rarr;
+				</a>
+			</div>
+		`;
+		currentPopup = new maplibregl.Popup({
+			closeButton: true,
+			closeOnClick: false,
+			offset: 14,
+			maxWidth: '220px',
+			className: 'heatmap-pin-popup',
+		})
+			.setLngLat(coords)
+			.setHTML(html)
+			.addTo(map);
+	}
+
+	function openHoverTip(coords: [number, number], name: string) {
+		if (!map || !name) return;
+		hoverPopup?.remove();
+		hoverPopup = new maplibregl.Popup({
+			closeButton: false,
+			closeOnClick: false,
+			offset: 12,
+			anchor: 'bottom',
+			className: 'heatmap-hover-tip',
+		})
+			.setLngLat(coords)
+			.setHTML(`<span>${escapeHtml(name)}</span>`)
+			.addTo(map);
+	}
+
+	function closeHoverTip() {
+		hoverPopup?.remove();
+		hoverPopup = null;
+	}
 
 	/// Fetch + paint the club + discoverable-route pin layers for
 	/// the current viewport. Runs in parallel with the heatmap and
@@ -850,5 +987,91 @@
 		border-radius: 999px;
 		min-width: 1.5rem;
 		text-align: center;
+	}
+
+	/*
+	 * MapLibre popups live OUTSIDE the Svelte component's DOM tree
+	 * (they're attached to map._container directly), so component-
+	 * scoped styles don't reach them. `:global(...)` is required.
+	 * Two popup classes:
+	 *   - .heatmap-pin-popup — click-anchored card with title +
+	 *     subtitle + a "View …" action link.
+	 *   - .heatmap-hover-tip — small name-only badge on hover.
+	 */
+	:global(.maplibregl-popup.heatmap-pin-popup) {
+		max-width: 220px;
+	}
+	:global(.heatmap-pin-popup .maplibregl-popup-content) {
+		background: var(--color-surface);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-lg);
+		padding: var(--space-sm) var(--space-md) var(--space-md);
+	}
+	:global(.heatmap-pin-popup .maplibregl-popup-tip) {
+		border-top-color: var(--color-border);
+		border-bottom-color: var(--color-border);
+	}
+	:global(.heatmap-pin-popup .maplibregl-popup-close-button) {
+		font-size: 1.2rem;
+		color: var(--color-text-secondary);
+		padding: 0 0.4rem;
+	}
+	:global(.heatmap-pin-popup .pin-popup-head) {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		margin-bottom: 0.25rem;
+	}
+	:global(.heatmap-pin-popup .pin-popup-title) {
+		font-weight: 700;
+		font-size: 0.95rem;
+		line-height: 1.2;
+	}
+	:global(.heatmap-pin-popup .pin-popup-star) {
+		color: #facc15;
+		font-size: 1rem;
+		line-height: 1;
+	}
+	:global(.heatmap-pin-popup .pin-popup-subtitle) {
+		color: var(--color-text-secondary);
+		font-size: 0.78rem;
+		margin-bottom: 0.6rem;
+	}
+	:global(.heatmap-pin-popup .pin-popup-action) {
+		display: inline-block;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-primary);
+		text-decoration: none;
+		padding: 0.25rem 0.5rem;
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-sm);
+		transition: background var(--transition-fast);
+	}
+	:global(.heatmap-pin-popup .pin-popup-action:hover) {
+		background: var(--color-primary-light);
+	}
+
+	/* Hover tooltip — small, no border, no close button. Closes on
+	 * mouseleave via JS. */
+	:global(.maplibregl-popup.heatmap-hover-tip) {
+		max-width: 240px;
+		pointer-events: none;
+	}
+	:global(.heatmap-hover-tip .maplibregl-popup-content) {
+		background: var(--color-surface);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		box-shadow: var(--shadow-md);
+		padding: 0.3rem 0.6rem;
+		font-size: 0.78rem;
+		font-weight: 500;
+	}
+	:global(.heatmap-hover-tip .maplibregl-popup-tip) {
+		border-top-color: var(--color-border);
+		border-bottom-color: var(--color-border);
 	}
 </style>
