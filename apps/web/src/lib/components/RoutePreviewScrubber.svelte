@@ -56,6 +56,8 @@
 		ontouchstart={() => onscrubbing(true)}
 		ontouchend={() => onscrubbing(false)}
 		ontouchcancel={() => onscrubbing(false)}
+		onfocus={() => onscrubbing(true)}
+		onblur={() => onscrubbing(false)}
 	/>
 	<div class="ends">
 		<span>Start</span>

@@ -227,6 +227,21 @@
 			return;
 		}
 		const p = track[idx];
+		// Defensive (same reasoning as renderPreviewMarker): if the
+		// track row carries non-finite or missing lat/lng, MapLibre's
+		// `translate3d` projector silently collapses to (0,0) and the
+		// marker sticks to the map div's top-left corner. Bail before
+		// `setLngLat` so the marker is cleanly absent rather than
+		// stuck in the corner.
+		if (
+			!p ||
+			!Number.isFinite(p.lng) ||
+			!Number.isFinite(p.lat)
+		) {
+			hoverMarker?.remove();
+			hoverMarker = undefined;
+			return;
+		}
 		const at: [number, number] = [p.lng, p.lat];
 		if (!hoverMarker) {
 			const el = document.createElement('div');
