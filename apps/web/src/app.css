@@ -205,6 +205,52 @@ html {
 	scrollbar-gutter: stable;
 }
 
+/*
+ * Themed scrollbars. The browser default chrome (silver-gray in light
+ * mode, mid-gray in dark mode) clashes with the cream/dark surfaces
+ * the site uses for scrollable side panels — most visible on the
+ * `/routes/new` route builder, which has an always-overflowing
+ * sidebar pinned to the left edge.
+ *
+ * Two layers cover both engine families:
+ *   1. Standard `scrollbar-color` + `scrollbar-width` for Firefox +
+ *      Chromium 121+.
+ *   2. `::-webkit-scrollbar` pseudo-elements for older WebKit/Chromium
+ *      (still the default in many production browsers).
+ *
+ * Both use the same design tokens — `--color-border` for the track,
+ * `--color-text-tertiary` for the thumb — so light + dark themes each
+ * pick up the right palette via the `:root` overrides further down.
+ */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--color-text-tertiary) transparent;
+}
+*::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+}
+*::-webkit-scrollbar-track {
+	background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+	background-color: var(--color-text-tertiary);
+	border-radius: 5px;
+	/* Inner padding so the thumb floats inside the gutter rather than
+	 * touching the edges — matches macOS / iOS overlay scrollbar
+	 * feel. The 2px transparent border on a background-clip:
+	 * padding-box trick is the standard recipe. */
+	border: 2px solid transparent;
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-thumb:hover {
+	background-color: var(--color-text-secondary);
+	background-clip: padding-box;
+}
+*::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
 body {
 	background: var(--color-bg-secondary);
 	color: var(--color-text);
