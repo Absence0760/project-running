@@ -43,11 +43,13 @@ The script downloads everything else on first run.
 
 ## The bootstrap script
 
-`bin/protomaps-dev.sh` exposes five subcommands:
+`bin/protomaps-dev.sh` exposes seven subcommands:
 
 | Command | What it does |
 |---|---|
-| `start` | Downloads the PMTiles + style (one-time), boots the container, prints the env-var snippets to paste into each app's `.env.local`. |
+| `fetch` | Downloads a 1MB US-states sample PMTiles into `$PROTOMAPS_HOME` — enough to smoke-test the wire end-to-end, not enough to render real run locations. |
+| `start` | Generates config + style files, boots the container with `--restart unless-stopped`, waits for readiness, prints the env-var snippets to paste into each app's `.env.local`. Fails loudly if the PMTiles file isn't found or lives outside `PROTOMAPS_HOME`. On wait-timeout, auto-tails the last 30 lines of container output. |
+| `restart` | Stop + start. Use when swapping a PMTiles file or after editing the config. |
 | `stop` | Kills + removes the container. PMTiles file stays cached for next time. |
 | `status` | Reports whether the container is running and where. |
 | `logs` | Tails the container logs (`docker logs -f`). |

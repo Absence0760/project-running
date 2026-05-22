@@ -1839,9 +1839,14 @@ void main() {
 
     test('Phone-side WearRoutesBridge.kt mirrors the Dart channel + path',
         () {
-      final src = File(
-              'android/app/src/main/kotlin/com/threkir/app/WearRoutesBridge.kt')
-          .readAsStringSync();
+      final file = File(
+          'android/app/src/main/kotlin/com/threkir/app/WearRoutesBridge.kt');
+      // The Dart `lib/` + `test/` directories are byte-identical
+      // between mobile_android and mobile_ios per the twin
+      // invariant, but each app has its own native sub-tree.
+      // Skip on the iOS twin where there's no `android/` folder.
+      if (!file.existsSync()) return;
+      final src = file.readAsStringSync();
       expect(src, contains('"run_app/wear_routes"'),
           reason: 'Kotlin channel name must match the Dart writer');
       expect(src, contains('"/saved_routes"'),
@@ -1866,9 +1871,10 @@ void main() {
       // from the Dart side throws MissingPluginException (which
       // the Dart bridge swallows — the user sees no error, but
       // the watch never gets updates).
-      final src = File(
-              'android/app/src/main/kotlin/com/threkir/app/MainActivity.kt')
-          .readAsStringSync();
+      final file = File(
+          'android/app/src/main/kotlin/com/threkir/app/MainActivity.kt');
+      if (!file.existsSync()) return;
+      final src = file.readAsStringSync();
       expect(src, contains('WearRoutesBridge('),
           reason: 'MainActivity must construct WearRoutesBridge inside '
               'configureFlutterEngine; dropping the registration means '
@@ -2059,7 +2065,7 @@ void main() {
       final body = script.readAsStringSync();
       // Subcommand dispatch must include every documented command.
       // A future rewrite that drops one silently breaks the docs.
-      for (final cmd in const ['fetch', 'start', 'stop', 'status',
+      for (final cmd in const ['fetch', 'start', 'restart', 'stop', 'status',
         'logs', 'env']) {
         expect(body, contains('cmd_$cmd'),
             reason: 'subcommand `$cmd` must be implemented + dispatched');
@@ -2092,6 +2098,85 @@ void main() {
         reason: 'lines starting with `//` (C-style comments) will fail '
             'as bash commands — use `#` for shell comments',
       );
+    });
+
+    test('Protomaps bootstrap script — bash syntax is clean (bash -n)', () {
+      // Run `bash -n` against the script as a CI-friendly syntax
+      // check. Catches typos that the existing arch_guards can't
+      // (e.g. mismatched quotes, malformed heredocs, unclosed `if`).
+      final result = Process.runSync(
+        'bash',
+        ['-n', 'bin/protomaps-dev.sh'],
+        workingDirectory: '../..',
+      );
+      expect(result.exitCode, 0,
+          reason: 'bash -n must pass — stderr was:\n${result.stderr}');
+    });
+
+    test('Protomaps bootstrap script — meaningful Docker daemon errors '
+        '+ wait-loop log auto-tail', () {
+      // The previous version had `docker info >/dev/null 2>&1` which
+      // collapsed "daemon down" + "permission denied" + "docker
+      // missing" into one "daemon is not running" message. The May
+      // 2026 audit round extracted `check_docker_daemon` that
+      // distinguishes the cases — pin that helper stays in place.
+      //
+      // The wait-loop must also call `tail_container_logs` on
+      // timeout — otherwise the user gets a useless "check the logs"
+      // hint and has to dig through the container manually.
+      final body = File('../../bin/protomaps-dev.sh').readAsStringSync();
+      expect(body, contains('check_docker_daemon'),
+          reason: 'extracted helper must exist + be called from cmd_start');
+      expect(body, contains('tail_container_logs'),
+          reason: 'auto-tail helper must exist');
+      // Specifically, it must fire on wait-loop timeout (i == 30).
+      expect(
+        body,
+        contains(RegExp(
+          r'i == 30[\s\S]{0,300}?tail_container_logs',
+        )),
+        reason: 'wait-loop timeout path must call tail_container_logs '
+            'so the user sees real container output, not a generic '
+            '"check the logs" hint',
+      );
+    });
+
+    test('Protomaps bootstrap script — guards against PMTILES_FILE '
+        'outside PROTOMAPS_HOME (mount-mismatch footgun)', () {
+      // If PMTILES_FILE lives outside PROTOMAPS_HOME, the container
+      // can't see the file (only PROTOMAPS_HOME is mounted), and
+      // tileserver-gl fails with a confusing "data source not
+      // found" error. The May 2026 audit round added a pre-flight
+      // check; pin that it stays in place.
+      final body = File('../../bin/protomaps-dev.sh').readAsStringSync();
+      expect(body, contains('PMTILES_FILE lives outside PROTOMAPS_HOME'),
+          reason: 'the mount-mismatch guard must exist — without it, '
+              'users with a custom PMTiles path hit an opaque '
+              "container-side error");
+      // Confirm the guard ACTUALLY compares the two paths.
+      expect(
+        body,
+        contains(RegExp(
+          r'pmtiles_dir.*=.*dirname.*PMTILES_FILE',
+          dotAll: true,
+        )),
+        reason: 'guard must compute dirname(PMTILES_FILE) to compare '
+            'against PROTOMAPS_HOME',
+      );
+    });
+
+    test('Protomaps bootstrap script — container has --restart '
+        'unless-stopped policy', () {
+      // Without this flag, a docker daemon reload mid-dev-session
+      // silently kills the local tile server. The user keeps
+      // hitting the dev URL and gets connection-refused with no
+      // visible cause. unless-stopped is the right policy for a
+      // dev sidecar — bring it up on demand, keep it up through
+      // daemon restarts, but obey explicit `stop`.
+      final body = File('../../bin/protomaps-dev.sh').readAsStringSync();
+      expect(body, contains('--restart unless-stopped'),
+          reason: 'docker run must carry --restart unless-stopped so the '
+              'container survives docker daemon reloads');
     });
 
     test('LocalRunStore owner-tag stamping (offline-record contract)', () {

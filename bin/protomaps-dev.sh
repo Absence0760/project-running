@@ -17,6 +17,7 @@
 # Usage:
 #   bin/protomaps-dev.sh fetch              # downloads a PMTiles file
 #   bin/protomaps-dev.sh start              # boots the container
+#   bin/protomaps-dev.sh restart            # stop + start (pick up new PMTiles)
 #   bin/protomaps-dev.sh stop               # kills it
 #   bin/protomaps-dev.sh status             # is it running?
 #   bin/protomaps-dev.sh logs               # tail the container logs
@@ -79,6 +80,47 @@ require_safe_value() {
 require_safe_value PROTOMAPS_PORT "$PROTOMAPS_PORT"
 require_safe_value DOCKER_IMAGE "$DOCKER_IMAGE"
 
+# Surface a meaningful error when `docker info` fails — distinguish
+# the three real cases (daemon down vs not in docker group vs CLI
+# missing). The previous "daemon is not running" catch-all was
+# misleading when the user was just missing group membership.
+check_docker_daemon() {
+	# Capture stderr so we can pattern-match the failure mode.
+	local stderr
+	if stderr="$(docker info 2>&1 >/dev/null)"; then
+		return 0
+	fi
+	if echo "$stderr" | grep -qiE "permission denied|cannot connect to the Docker"; then
+		# Could be EITHER no perms OR no daemon — the Docker CLI
+		# error string varies by version. Surface both fixes so
+		# the user picks the one that applies.
+		err "docker info failed: $stderr"
+		log ""
+		log "If the daemon isn't running:"
+		log "    sudo systemctl start docker"
+		log ""
+		log "If you're not in the docker group:"
+		log "    sudo usermod -aG docker \$USER && newgrp docker"
+		exit 1
+	fi
+	err "docker info failed: $stderr"
+	exit 1
+}
+
+# Tail the last [n] lines of the container's stderr on a wait-loop
+# failure. Without this, the user is left guessing why tileserver-gl
+# didn't bind — usually a malformed PMTiles file or a config schema
+# mismatch, both of which show up in the container logs in seconds.
+tail_container_logs() {
+	local n="${1:-20}"
+	if docker ps -a --format '{{.Names}}' | grep -q "^${CONTAINER_NAME}\$"; then
+		log ""
+		log "${C_DIM}--- last $n lines from $CONTAINER_NAME ---${C_RESET}"
+		docker logs --tail "$n" "$CONTAINER_NAME" 2>&1 | sed 's/^/    /'
+		log "${C_DIM}--- end of logs ---${C_RESET}"
+	fi
+}
+
 # ---- subcommands ----------------------------------------------------------
 
 cmd_fetch() {
@@ -118,9 +160,7 @@ cmd_start() {
 	step "Checking prerequisites"
 	need_cmd docker
 	need_cmd curl
-	if ! docker info >/dev/null 2>&1; then
-		fatal "docker daemon is not running. Start it with: sudo systemctl start docker"
-	fi
+	check_docker_daemon
 	ok "docker is up"
 
 	step "Looking for PMTiles file ${C_DIM}${PMTILES_FILE}${C_RESET}"
@@ -144,6 +184,41 @@ cmd_start() {
 		exit 1
 	fi
 	ok "found ($(du -h "$PMTILES_FILE" | cut -f1))"
+
+	# The container mounts a single host directory at /data. If the
+	# user pointed PMTILES_FILE at a path outside PROTOMAPS_HOME
+	# (e.g. they have a big .pmtiles somewhere else and don't want
+	# to copy it), the basename ends up in config.json but the file
+	# isn't visible inside the container — tileserver-gl fails on
+	# "data source not found". Detect this BEFORE Docker spins up
+	# and offer a clear fix.
+	local pmtiles_dir
+	pmtiles_dir="$(cd "$(dirname "$PMTILES_FILE")" && pwd)"
+	local home_resolved
+	home_resolved="$(cd "$PROTOMAPS_HOME" && pwd)"
+	if [[ "$pmtiles_dir" != "$home_resolved" ]]; then
+		err "PMTILES_FILE lives outside PROTOMAPS_HOME:"
+		log "    PMTILES_FILE:   $PMTILES_FILE"
+		log "    PROTOMAPS_HOME: $PROTOMAPS_HOME"
+		log ""
+		log "The container only mounts PROTOMAPS_HOME at /data, so the"
+		log "PMTiles file must live inside that directory. Fix one of:"
+		log ""
+		log "  ${C_BOLD}A. Symlink it in${C_RESET} (cheap, no copy):"
+		log "       ln -sf \"$PMTILES_FILE\" \\"
+		log "         \"$PROTOMAPS_HOME/$(basename "$PMTILES_FILE")\""
+		log "       PMTILES_FILE=\"$PROTOMAPS_HOME/$(basename "$PMTILES_FILE")\" \\"
+		log "         bin/protomaps-dev.sh start"
+		log ""
+		log "  ${C_BOLD}B. Point PROTOMAPS_HOME at the file's directory${C_RESET}:"
+		log "       PROTOMAPS_HOME=\"$pmtiles_dir\" \\"
+		log "         PMTILES_FILE=\"$PMTILES_FILE\" \\"
+		log "         bin/protomaps-dev.sh start"
+		log ""
+		log "  ${C_BOLD}C. Move the file${C_RESET}:"
+		log "       mv \"$PMTILES_FILE\" \"$PROTOMAPS_HOME/\""
+		exit 1
+	fi
 
 	step "Writing tileserver-gl config"
 	# tileserver-gl reads the PMTiles file via the `data` block; the
@@ -234,6 +309,7 @@ EOF
 
 	docker run -d \
 		--name "$CONTAINER_NAME" \
+		--restart unless-stopped \
 		-p "${PROTOMAPS_PORT}:8080" \
 		-v "${PROTOMAPS_HOME}:/data:ro" \
 		"$DOCKER_IMAGE" \
@@ -254,13 +330,25 @@ EOF
 		sleep 1
 		if (( i == 30 )); then
 			err "server failed to come up within 30s"
-			log "check the logs with: bin/protomaps-dev.sh logs"
 			log "common causes: invalid PMTiles file, port collision, malformed config"
+			# Auto-tail logs rather than telling the user to do it
+			# manually — they already have to dig through a wall of
+			# tileserver-gl output.
+			tail_container_logs 30
 			exit 1
 		fi
 	done
 
 	cmd_env
+}
+
+cmd_restart() {
+	# Common iteration: swap a PMTiles file, regenerate a style,
+	# pick up a new config — the script's `start` rebuilds the
+	# config + style files but won't restart an already-running
+	# container. `restart` makes that one-liner.
+	cmd_stop
+	cmd_start
 }
 
 cmd_stop() {
@@ -317,21 +405,23 @@ EOF
 # ---- dispatch -------------------------------------------------------------
 
 cmd="${1:-}"
+USAGE="usage: bin/protomaps-dev.sh {fetch|start|restart|stop|status|logs|env}"
 case "$cmd" in
-	fetch)  cmd_fetch ;;
-	start)  cmd_start ;;
-	stop)   cmd_stop ;;
-	status) cmd_status ;;
-	logs)   cmd_logs ;;
-	env)    cmd_env ;;
+	fetch)    cmd_fetch ;;
+	start)    cmd_start ;;
+	restart)  cmd_restart ;;
+	stop)     cmd_stop ;;
+	status)   cmd_status ;;
+	logs)     cmd_logs ;;
+	env)      cmd_env ;;
 	"")
 		err "missing subcommand"
-		log "usage: bin/protomaps-dev.sh {fetch|start|stop|status|logs|env}"
+		log "$USAGE"
 		exit 1
 		;;
 	*)
 		err "unknown subcommand: $cmd"
-		log "usage: bin/protomaps-dev.sh {fetch|start|stop|status|logs|env}"
+		log "$USAGE"
 		exit 1
 		;;
 esac
