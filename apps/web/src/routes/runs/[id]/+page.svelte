@@ -554,6 +554,25 @@
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
 
+	/// Visible key-stats count + parity. The grid's `auto-fit` columns
+	/// look broken when the cell count is odd (one empty trailing slot
+	/// at 2-col layouts is the most common shape). Counts the
+	/// conditionals below + flips a flag the template uses to render
+	/// an Activity-type filler when the total would otherwise be odd.
+	///
+	/// Always-rendered stats: Distance, Time, Pace, Speed, Elevation,
+	/// Calories (Calories uses the body-weight fallback so it never
+	/// hides) = 6.
+	/// Conditional: Moving, Steps, Cadence, AvgBpm.
+	let keyStatsCount = $derived(
+		6 +
+			(run && movingSeconds > 0 && movingSeconds !== run.duration_s ? 1 : 0) +
+			(totalSteps != null ? 1 : 0) +
+			(avgCadence != null ? 1 : 0) +
+			(avgBpm != null ? 1 : 0),
+	);
+	let showActivityFiller = $derived(keyStatsCount % 2 === 1 && activity !== null);
+
 	/// Real HR zone breakdown. Requires per-point `bpm` on the track —
 	/// which watch and phone recorders will start writing alongside GPS
 	/// over the course of the next few recording passes. When the
@@ -1049,6 +1068,22 @@
 				<div class="key-stat">
 					<span class="key-stat-value">{avgBpm}</span>
 					<span class="key-stat-label">Avg HR bpm</span>
+				</div>
+			{/if}
+			<!-- Parity filler. The auto-fit key-stats grid looks broken
+				 with an odd cell count (one empty slot trailing at the
+				 most common 2-col layout). When the conditional stats
+				 above leave us with an odd total, render the Activity
+				 Type as the last cell — it's universally available
+				 (every run carries metadata.activity_type) + adds
+				 genuine info rather than visual padding. -->
+			{#if showActivityFiller && activity}
+				<div class="key-stat key-stat-activity">
+					<span class="key-stat-value">
+						<span class="material-symbols">{activity.icon}</span>
+						{activity.label}
+					</span>
+					<span class="key-stat-label">Activity</span>
 				</div>
 			{/if}
 		</div>
@@ -1850,6 +1885,20 @@
 		min-width: 0;
 		padding: var(--space-md) var(--space-lg);
 		background: var(--color-bg-secondary);
+	}
+
+	/* The Activity-type filler tile pairs an icon with the label
+	 * text — needs a flex container at the value level so they
+	 * line up cleanly. The rest of the key-stat-value rule below
+	 * still applies (font-size, weight, tabular nums). */
+	.key-stat-activity .key-stat-value {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.key-stat-activity .key-stat-value .material-symbols {
+		font-size: 1.25rem;
+		color: var(--color-text-secondary);
 	}
 
 	.key-stat-value {
