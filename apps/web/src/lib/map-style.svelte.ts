@@ -7,7 +7,8 @@
 /// when saving, and the root layout calls it once on mount with the
 /// effective value from the settings bag.
 
-export type MapStyle = 'streets' | 'satellite' | 'outdoors' | 'dark';
+import { buildMapStyleUrl, type MapStyle } from './map-style-url';
+export type { MapStyle };
 
 const style = $state<{ value: MapStyle | null }>({ value: null });
 
@@ -23,23 +24,36 @@ export function setMapStyle(s: MapStyle | null | undefined): void {
 	}
 }
 
-/// Resolve the user's chosen style into a MapTiler style URL. Falls back
+/// Resolve the user's chosen style into a MapLibre style URL. Falls back
 /// to streets (or streets-dark, if the OS is dark) when no preference is
 /// set yet — matches the legacy hardcoded behaviour of `RunMap`.
-export function mapStyleUrl(key: string, prefersDark: boolean): string {
+///
+/// When [overrideUrl] is non-empty (typically `PUBLIC_TILE_STYLE_URL` from
+/// `.env.local` pointing at a local Protomaps tileserver), the override
+/// wins outright and the user's style preference is ignored — local
+/// dev mode runs the whole app against a single self-hosted style. See
+/// `docs/protomaps_local_setup.md` + `decisions.md § 68` for why.
+///
+/// Tests pass `overrideUrl` directly; production reads from
+/// `import.meta.env.PUBLIC_TILE_STYLE_URL` at the call site (see
+/// `mapStyleUrlFromEnv`).
+export function mapStyleUrl(
+	key: string,
+	prefersDark: boolean,
+	overrideUrl: string | undefined = undefined,
+): string {
 	const chosen = style.value ?? (prefersDark ? 'dark' : 'streets');
-	const slug = (() => {
-		switch (chosen) {
-			case 'satellite':
-				return 'satellite';
-			case 'outdoors':
-				return 'outdoor-v2';
-			case 'dark':
-				return 'streets-v2-dark';
-			case 'streets':
-			default:
-				return prefersDark ? 'streets-v2-dark' : 'streets-v2';
-		}
-	})();
-	return `https://api.maptiler.com/maps/${slug}/style.json?key=${key}`;
+	return buildMapStyleUrl(chosen, key, prefersDark, overrideUrl);
+}
+
+/// Convenience used by every map-rendering component: reads the dev
+/// override from `import.meta.env.PUBLIC_TILE_STYLE_URL` and threads
+/// it through [mapStyleUrl]. Always returns a usable URL — falls
+/// back to MapTiler when the override is missing.
+export function mapStyleUrlFromEnv(
+	key: string,
+	prefersDark: boolean,
+): string {
+	const override = (import.meta.env.PUBLIC_TILE_STYLE_URL ?? '') as string;
+	return mapStyleUrl(key, prefersDark, override);
 }

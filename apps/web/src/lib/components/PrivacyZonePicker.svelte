@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
-	import { mapStyleUrl } from '$lib/map-style.svelte';
+	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import type { PrivacyZone } from '$lib/privacy';
 
 	interface Props {

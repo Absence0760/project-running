@@ -4,7 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
 	import { getUnit } from '$lib/units.svelte';
-	import { getMapStyle, mapStyleUrl } from '$lib/map-style.svelte';
+	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import type { TrackPoint } from '$lib/types';
 	import {
 		buildPaceSegments,

@@ -87,6 +87,17 @@ android {
             "String", "PUBLIC_MAPTILER_KEY",
             "\"${envString("PUBLIC_MAPTILER_KEY")}\"",
         )
+        // Optional override that points the tile fetcher at a
+        // different raster-tile URL template — typically a local
+        // Protomaps tileserver-gl during dev so the watch doesn't
+        // burn MapTiler quota on tile requests it'll never see in
+        // production. Empty string ⇒ MapTiler path with the key
+        // above. See `docs/protomaps_local_setup.md` and
+        // `decisions.md § 68`. Set in `.env.local`.
+        buildConfigField(
+            "String", "PUBLIC_TILE_URL_TEMPLATE",
+            "\"${envString("PUBLIC_TILE_URL_TEMPLATE")}\"",
+        )
         // Sentry crash reporting. Empty DSN ⇒ Sentry is a no-op
         // (matches the dotenv-gated behaviour in the mobile_android +
         // mobile_ios twin: production builds with a DSN report; dev

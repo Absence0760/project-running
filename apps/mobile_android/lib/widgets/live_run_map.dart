@@ -41,6 +41,23 @@ List<LatLng> smoothTrack(List<LatLng> points) {
 /// Live map shown during a run, displaying the GPS track and current position.
 ///
 /// Inspired by Nike Run Club: dark map, bright route line, pulsing blue dot.
+/// Build the raster-tile URL template. Honours the
+/// `TILE_URL_TEMPLATE` override (used by the local Protomaps
+/// tileserver-gl dev setup — see `docs/protomaps_local_setup.md`)
+/// and falls back to the MapTiler URL keyed by `MAPTILER_KEY`.
+///
+/// File-level pure helper so the env-resolution contract is
+/// unit-testable without booting the widget. Reads only the keys it
+/// needs from the supplied env map so tests can pass a tiny
+/// `Map<String, String>` rather than poking dotenv.
+@visibleForTesting
+String resolveTileUrl(Map<String, String> env) {
+  final override = env['TILE_URL_TEMPLATE'] ?? '';
+  if (override.isNotEmpty) return override;
+  final key = env['MAPTILER_KEY'] ?? '';
+  return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
+}
+
 class LiveRunMap extends StatefulWidget {
   /// The GPS track recorded so far.
   final List<Waypoint> track;
@@ -191,10 +208,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
   List<Polyline>? _cachedHaloPolylines;
   int _cachedHaloForLength = -1;
 
-  String get _tileUrl {
-    final key = dotenv.env['MAPTILER_KEY'] ?? '';
-    return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
-  }
+  String get _tileUrl => resolveTileUrl(dotenv.env);
 
   @override
   void initState() {

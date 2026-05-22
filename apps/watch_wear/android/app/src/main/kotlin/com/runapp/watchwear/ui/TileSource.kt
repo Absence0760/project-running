@@ -45,7 +45,17 @@ class TileSource private constructor(context: Context) {
 
     /// Whether tile rendering is configured at all. Cheap caller check
     /// so the tile layer can be omitted entirely when there's no key.
-    val enabled: Boolean = BuildConfig.PUBLIC_MAPTILER_KEY.isNotBlank()
+    // Tile rendering lights up when EITHER:
+    //
+    //  * `PUBLIC_TILE_URL_TEMPLATE` is set (local Protomaps dev
+    //    path — see `docs/protomaps_local_setup.md`), OR
+    //  * `PUBLIC_MAPTILER_KEY` is set (production path).
+    //
+    // Neither set ⇒ the mini-map falls back to polyline + position
+    // dot on the midnight background, exactly as before tiles
+    // shipped.
+    val enabled: Boolean = BuildConfig.PUBLIC_TILE_URL_TEMPLATE.isNotBlank() ||
+        BuildConfig.PUBLIC_MAPTILER_KEY.isNotBlank()
 
     /// MapTiler dark-style raster endpoint. Hard-coded to
     /// `streets-v2-dark` because the watch UI is always dark — the
@@ -92,9 +102,14 @@ class TileSource private constructor(context: Context) {
         memoryCache.get(key)?.let { return it }
         return withContext(Dispatchers.IO) {
             try {
-                val url = "https://api.maptiler.com/maps/$styleSlug/" +
-                    "${tile.z}/${tile.x}/${tile.y}.png" +
-                    "?key=${BuildConfig.PUBLIC_MAPTILER_KEY}"
+                val url = buildTileUrl(
+                    z = tile.z,
+                    x = tile.x,
+                    y = tile.y,
+                    template = BuildConfig.PUBLIC_TILE_URL_TEMPLATE,
+                    maptilerKey = BuildConfig.PUBLIC_MAPTILER_KEY,
+                    styleSlug = styleSlug,
+                )
                 val req = Request.Builder().url(url).build()
                 client.newCall(req).execute().use { resp ->
                     if (!resp.isSuccessful) return@withContext null
@@ -169,4 +184,36 @@ class TileSource private constructor(context: Context) {
             }
         }
     }
+}
+
+/// Build the raster-tile URL for a given (z, x, y). Honours the
+/// `PUBLIC_TILE_URL_TEMPLATE` BuildConfig override (used by the
+/// local Protomaps tileserver-gl dev setup — see
+/// `docs/protomaps_local_setup.md` + `decisions.md § 68`) and falls
+/// back to the MapTiler URL keyed by [maptilerKey].
+///
+/// The template's `{z}`, `{x}`, `{y}` placeholders are substituted
+/// literally. A template with no placeholders is returned as-is
+/// (operator responsibility; tileserver-gl with a hardcoded
+/// `?z=0&x=0&y=0` would silently produce identical tiles for every
+/// grid cell, but malforming the override that way is the operator's
+/// problem, not the library's).
+///
+/// File-level `internal` so the unit-test source set can call it
+/// without instantiating `TileSource` (which needs a `Context`).
+internal fun buildTileUrl(
+    z: Int,
+    x: Int,
+    y: Int,
+    template: String,
+    maptilerKey: String,
+    styleSlug: String = "streets-v2-dark",
+): String {
+    if (template.isNotBlank()) {
+        return template
+            .replace("{z}", z.toString())
+            .replace("{x}", x.toString())
+            .replace("{y}", y.toString())
+    }
+    return "https://api.maptiler.com/maps/$styleSlug/$z/$x/$y.png?key=$maptilerKey"
 }

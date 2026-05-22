@@ -1429,6 +1429,41 @@ The fix is a `metadata.created_by_user_id` tag stamped at save time, plus a filt
 
 ---
 
+## 68. Tile rendering honours an env override so local dev can use self-hosted Protomaps without touching prod code paths
+
+**Decided:** May 2026
+
+The risks section of `competitors.md` flags map tile costs at scale: MapTiler has a generous free tier, but the per-request meter becomes a real cost line as DAU grows, and a demo build with a MapTiler key baked into the binary is a leak waiting to happen. The medium-term answer is self-hosted Protomaps on S3/CloudFront with PMTiles served via HTTP Range requests — a future project. The short-term answer is letting dev/demo/integration sessions point at a **local Protomaps tileserver-gl** so the production quota isn't burnt during development.
+
+Three env vars opt into the local path. When unset, every code path falls back to MapTiler — production is unaffected.
+
+- **Web** — `PUBLIC_TILE_STYLE_URL` (MapLibre style.json URL). Implemented in `apps/web/src/lib/map-style-url.ts` (pure `buildMapStyleUrl`) + `map-style.svelte.ts` (`mapStyleUrlFromEnv` reads `import.meta.env`). Every map component imports the env-aware variant.
+- **Mobile (Android + iOS twin)** — `TILE_URL_TEMPLATE` (`{z}/{x}/{y}` template). Implemented as the file-level `resolveTileUrl(env)` in `apps/mobile_android/lib/widgets/live_run_map.dart`.
+- **Wear OS** — `PUBLIC_TILE_URL_TEMPLATE` BuildConfig field (BuildConfig because the value is baked at compile time, not loaded at runtime). Implemented as file-level `buildTileUrl(z, x, y, template, maptilerKey, styleSlug)` in `apps/watch_wear/.../ui/TileSource.kt`. The `TileSource.enabled` flag now lights up when EITHER the dev override OR the MapTiler key is set, so a dev session without a MapTiler key still gets tiles.
+
+**Why three separate env vars instead of one:** each platform has its own dotenv-style convention and the wire format differs (web needs a style.json URL, mobile/Wear need a tile-URL template). A single unified name would still need per-app shape handling at the call sites — three narrow names is the cleaner shape.
+
+**Why an env override rather than a feature flag:** flags imply runtime decisions and a UI affordance. This is a build-time configuration that one operator (the developer) flips once per machine. Env vars stay scoped to that audience without surfacing complexity to users.
+
+**Why not migrate production at the same time:** production migration involves picking a hosting strategy (S3 + CloudFront vs Cloudflare R2 vs reusing the existing `infra/modules/web-stack` infra), tile-pipeline build cadence (daily extract from OSM? continuous?), style hosting (alongside the PMTiles or a separate static bucket?), fallback strategy (MapTiler for the long tail of un-prebuilt regions?), and a real cost projection. Each of those is a meaningful judgement call deferred to a separate ADR when the cost line crosses our pain threshold.
+
+**Trade-offs accepted:**
+
+- Three env-var names instead of one keeps the convention boundary clean but means three places to remember when bootstrapping a new dev machine. The bootstrap script (`bin/protomaps-dev.sh env`) prints all three.
+- The Wear OS override requires a Gradle rebuild (`./gradlew installDebug -PPUBLIC_TILE_URL_TEMPLATE=…`) because BuildConfig is compile-time. Mobile + web pick up the override on next `flutter run` / `npm run dev` without recompiling.
+- The dev style.json is intentionally minimal — earth + water + road lines, no labels or place names. A future fully-featured dev style is straightforward (drop a real basemap into `$PROTOMAPS_HOME/style.json`) but not necessary for the wire test.
+
+**Don't re-litigate** by:
+
+- Renaming the three env vars to a single one — wire formats differ, callers would still need to know which is which.
+- Making the local path the default — production code paths must not depend on a Docker daemon being available on every developer machine, and demos at conferences shouldn't require a tileserver to boot before the booth opens.
+- Adding a runtime UI toggle for the override — env-var-only is on purpose; users shouldn't be able to flip this.
+- Wiring the production migration through this ADR — it's intentionally scoped to dev. The production decision is a separate ADR when the cost line forces it.
+
+See [`docs/protomaps_local_setup.md`](protomaps_local_setup.md) for the recipe.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

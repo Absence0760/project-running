@@ -4,7 +4,7 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
-	import { mapStyleUrl, getMapStyle } from '$lib/map-style.svelte';
+	import { mapStyleUrlFromEnv as mapStyleUrl, getMapStyle } from '$lib/map-style.svelte';
 	import { supabase } from '$lib/supabase';
 	import {
 		fetchRecentRacePings,

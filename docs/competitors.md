@@ -379,7 +379,7 @@ NRC dropping Wear OS support leaves a gap. Android users with a Pixel Watch or G
 
 **Nike Run Club could add Wear OS.** NRC is free and well-resourced. If they add Wear OS support, the Android watch gap closes. The response is to be deeper on route planning and data sync — areas NRC will never prioritise.
 
-**Map tile costs at scale.** MapTiler has a generous free tier. At scale, migrate to Protomaps (self-hosted PMTiles on S3/R2) to eliminate per-request tile costs entirely.
+**Map tile costs at scale.** MapTiler has a generous free tier. At scale, migrate to Protomaps (self-hosted PMTiles on S3/R2) to eliminate per-request tile costs entirely. The dev wire is already in place — `bin/protomaps-dev.sh` boots a local tileserver-gl and every map component honours an env override (`PUBLIC_TILE_STYLE_URL` / `TILE_URL_TEMPLATE` / `PUBLIC_TILE_URL_TEMPLATE`) that bypasses MapTiler. The production hosting decision (S3+CloudFront vs Cloudflare R2 vs reusing the existing web stack) stays deferred until the cost line forces it — see [decisions.md § 68](decisions.md#68-tile-rendering-honours-an-env-override-so-local-dev-can-use-self-hosted-protomaps-without-touching-prod-code-paths) and [docs/protomaps_local_setup.md](protomaps_local_setup.md).
 
 **Strava API rate limits at scale.** The default Strava API quota is 2,000 requests per day across all users. With many connected users this gets tight quickly. Apply for a quota increase early — Strava reviews these individually.
 

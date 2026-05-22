@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import maplibregl from 'maplibre-gl';
 	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
-	import { mapStyleUrl } from '$lib/map-style.svelte';
+	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import { fetchHeatmapPoints, nearbyPublicRoutes } from '$lib/data';
 	import type { Route } from '$lib/types';
 
