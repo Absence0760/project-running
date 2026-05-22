@@ -1331,6 +1331,36 @@ Two related but distinct knobs landed in the same pass:
 
 ---
 
+## 65. CSV import is a summary path, not a replacement for the Backup ZIP
+
+**Decided:** May 2026
+
+Mobile gained a CSV import path on the Import screen (`csv_run_importer.dart`) so users who clicked Settings → "Export runs as CSV" can re-import that file on a fresh install. Two shapes are accepted: the 5-column mobile/web Settings export (`date, distance_m, duration_s, pace_s_per_km, source`) and the 17-column backend `/export-data` GDPR export.
+
+**Lossy by design.** CSV is a summary format — no GPS waypoints, no per-point HR, no laps. The Import screen says so plainly ("won't have a route line"). The full round-trip path is the **Backup ZIP** (`BackupService`), which surfaces alongside CSV on the Import screen and on Settings → "Restore from backup".
+
+**Why surface Backup ZIP on the Import screen (not only in Settings):** users who hit the Import screen with "I have a file, where do I put it?" should see every accepted file type. Burying lossless restore in Settings while showing only Strava + Health on Import drives users to the lossy CSV when they had a better option in their pocket.
+
+**Why CSV import is offline-first:** the parser is pure-Dart, writes to `LocalRunStore` directly, and `_saveImportedRuns` only attempts a Supabase batch push when `api.userId != null`. A user with no internet and no account can re-hydrate from CSV; the runs are queued for sync via the existing `SyncService` drain on next sign-in. Same is true for Backup ZIP — `BackupService.restore` already had an `_restoreOffline` branch (see ADR §44-ish era), and the Settings + Import screen wrappers now thread `routeStore` through so routes hydrate too (was previously a silent skip).
+
+**Idempotency.** Re-importing the same CSV doesn't create duplicates: every row gets a stable `external_id` (`csv:<iso>-<distance>-<duration>` for the 5-column form, original `external_id` column when present in the 17-column form). The `runs.external_id` unique index dedupes server-side; `LocalRunStore.save` replaces by `id` locally.
+
+**Provenance.** Imported rows stamp `metadata.imported_from = 'csv'` + `metadata.imported_at = <ISO 8601>`, joining the existing `strava` / `health_connect` / `garmin` values in the registry (`docs/metadata.md`).
+
+**Trade-offs accepted:**
+
+- CSV-imported runs have empty tracks — the run-detail map will show "no GPS trace" copy rather than a polyline. The Import screen card explicitly warns the user before they click.
+- The synthetic external_id collides if two users genuinely run the same distance in the same duration starting in the same UTC second. The collision space is small enough that the unique-index rejection at the DB is the correct failure mode (the second user gets a "row already exists" warning rather than the importer silently merging records).
+- A user editing the CSV by hand before re-importing can cause arbitrary rows. That's the cost of a text-based import; the CHECK constraint on `activity_type` + the parser's tolerant-error-collection design keep the worst case bounded.
+
+**Don't re-litigate** by:
+
+- Adding a CSV *track* column. CSV is intentionally a summary; if you want tracks, the Backup ZIP is one tap away.
+- Adding any third file format that overlaps with CSV or Backup-ZIP (e.g., an XLSX importer). The two existing summary + lossless paths together cover every legitimate user intent.
+- Removing the lossy warning copy ("won't have a route line"). It's the only thing standing between "I imported and the runs have no map" surprise and the user knowing what they're getting.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

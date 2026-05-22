@@ -62,6 +62,8 @@ See [features § GPX / KML import](features.md#gpx--kml-import).
 | GeoJSON import | ✓ | ✗ | ✓ | N/A | N/A | |
 | TCX import | ✓ | ✗ | ✓ | N/A | N/A | Web: `parseTcx` added to `lib/import.ts`; the import drop-zone accepts `.tcx` alongside GPX/KML/KMZ/GeoJSON. Preserves per-point elevation + timestamp. |
 | Strava ZIP bulk import | ✓ | ✗ | ✓ | N/A | N/A | Shipped on web: `/settings/integrations` → "Bulk import from a Strava export" — parses `activities.csv` + per-activity GPX/TCX files, dedupes against already-imported Strava IDs, reports live progress. iOS still pending. |
+| CSV summary re-import | ✓ | ✓ | ✗ | N/A | N/A | Mobile-only counterpart to Settings → "Export runs as CSV". Surfaced as a card on the Import screen; accepts both the 5-column Settings export and the 17-column backend `/export-data` GDPR shape. Offline-first — works signed-out (rows queue in `LocalRunStore` for the next `SyncService` drain). Idempotent on re-import via a stable `external_id` (`csv:<iso>-<dist>-<dur>` or the original column). **Lossy** — no GPS track; the card copy warns explicitly. See `decisions.md § 65`. |
+| Backup ZIP restore (lossless) | ✓ | ✓ | ✓ | N/A | N/A | `BackupService.restore` on mobile / `lib/backup.ts` on web — runs + routes + per-run tracks + profile/prefs. Surfaced on the mobile Import screen alongside Strava + Health + CSV, and on Settings → "Restore from backup". Works **offline-first** on mobile — rows land in `LocalRunStore` + `LocalRouteStore` and ride the next `SyncService` cycle to Supabase. The Settings + Import wrappers thread `routeStore` through to the offline branch (previously a silent skip, fixed when CSV-import landed in May 2026). See `decisions.md § 65`. |
 
 ### Builder and library
 

@@ -158,6 +158,18 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/csv_run_importer_test.dart` — 18 tests
+
+Pure-Dart coverage of `CsvRunImporter.parse` — the lossy summary path that round-trips Settings → "Export runs as CSV". Two header shapes are exercised: the 5-column mobile/web Settings export and the 17-column backend `/export-data` GDPR shape. The parser is offline-first by design (no API, no Supabase) and idempotent on re-import via a stable `external_id`. See `decisions.md § 65`.
+
+**5-column form (6 tests):** single-row round-trip stamps `metadata.imported_from='csv'` + `imported_at` + default `activity_type='run'` + synthetic `external_id` prefix; preserves multi-row order; unknown `source` cell falls back to `RunSource.app`; the synthetic `external_id` is deterministic, differs by start time, and matches across two parses of the same input.
+
+**17-column backend form (3 tests):** preserves the original `id`, `external_id` (e.g. `strava:1234567890`), and the full `metadata` JSON column; tolerates quoted commas + escaped quotes inside the metadata cell; malformed metadata JSON is dropped without sinking the row (the importer surfaces a warning, the `activity_type='run'` default still lands).
+
+**Error handling (7 tests):** missing required columns surfaces a single header-level error; invalid date row is skipped + reported (1-based row number); invalid distance/duration row is skipped + reported; empty input + header-only input both return empty results; blank lines between data rows are skipped; rows shorter than the header are reported, not parsed.
+
+**Header tolerance (2 tests):** `started_at` is accepted as an alias for `date`; column names are case-insensitive.
+
 ### `apps/mobile_android/test/strava_importer_zip_test.dart` — 21 tests
 
 Comprehensive coverage for `StravaImporter.importFromZip`. Complements the smaller `importer_external_id_test.dart` (which only pinned the `external_id` prefix). Each test builds an in-memory zip with the `activities.csv` + a track file, then asserts on the resulting `Run`.
