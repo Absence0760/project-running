@@ -65,9 +65,16 @@ class _FeedScreenState extends State<FeedScreen> {
           authorId: _authorFilter == 'all' ? null : _authorFilter,
           activityType: _activityFilter,
         ),
+        // Following list — drives the author-filter dropdown.
+        // Capped at 200 to keep payload small (was 500 — overkill
+        // for the dropdown UI). Users following more than 200
+        // accounts can still filter via search; if a power-user
+        // case emerges we'll add a "load more authors" affordance
+        // rather than always pulling the long-tail of inactive
+        // follows.
         api.userId == null
             ? Future.value(const <UserProfileRow>[])
-            : api.fetchFollowing(api.userId!, limit: 500),
+            : api.fetchFollowing(api.userId!, limit: 200),
       ]);
       final entries = results[0] as List<FeedEntry>;
       final followees = results[1] as List<UserProfileRow>;
