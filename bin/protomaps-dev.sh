@@ -62,7 +62,7 @@ STYLE_FILE="${PROTOMAPS_HOME}/style.json"
 # sample PMTiles in their public R2 bucket. The US-states file is
 # the smallest one that's still useful as a smoke test (renders a
 # real polygon, not just a 2-pixel test fixture).
-DEFAULT_SAMPLE_URL="${DEFAULT_SAMPLE_URL:-https://r2-public.protomaps.com/protomaps-sample-datasets/cb_2018_us_state_20m.pmtiles}"
+DEFAULT_SAMPLE_URL="${DEFAULT_SAMPLE_URL:-https://r2-public.protomaps.com/protomaps-sample-datasets/cb_2018_us_zcta510_500k.pmtiles}"
 
 # ---- helpers --------------------------------------------------------------
 
