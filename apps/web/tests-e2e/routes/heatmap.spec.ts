@@ -66,6 +66,67 @@ test.describe('/routes — Heatmap tab', () => {
 		await expect(mapContainer).toBeVisible({ timeout: 15_000 });
 	});
 
+	test('Heatmap shows a search box + locate-me button', async ({ page }) => {
+		// May 2026: the heatmap shipped without nav affordances. A user
+		// who landed on /routes?tab=heatmap could only see a blank map
+		// when the default centre (London) was outside the tile data
+		// they had on disk. Both controls were added in the same pass:
+		//
+		//   - Search box (top-center, always rendered — uses MapTiler
+		//     when its key is set, falls back to Nominatim for the
+		//     local Protomaps dev stack).
+		//   - MapLibre's built-in GeolocateControl (top-right, no
+		//     MapTiler dep — always available).
+		//
+		// Pin both as rendered DOM. The actual geocoding round-trip is
+		// covered by node-tests on `searchPlacesWithKey` (the env-free
+		// dispatcher) — this test is the wire-into-the-component check.
+		await page.goto('/routes?tab=heatmap');
+		await expect(page.locator('.maplibregl-map'))
+			.toBeVisible({ timeout: 15_000 });
+
+		// Search box: testid-tagged + the input's aria-label is stable.
+		const search = page.getByTestId('heatmap-search');
+		await expect(search).toBeVisible();
+		await expect(
+			search.getByRole('textbox', { name: /search for a place/i }),
+		).toBeVisible();
+
+		// Locate-me: MapLibre's GeolocateControl renders a button with
+		// class `.maplibregl-ctrl-geolocate`. Stable across MapLibre
+		// versions; the upstream test suite uses the same selector.
+		await expect(page.locator('.maplibregl-ctrl-geolocate'))
+			.toBeVisible({ timeout: 15_000 });
+	});
+
+	test('typing in the heatmap search box does not throw', async ({ page }) => {
+		// Smoke: the search input wires through to searchPlaces. When
+		// MapTiler is unconfigured (dev with the local Protomaps
+		// stack), the Nominatim fallback fires. We don't assert on
+		// the result list (rate-limited public endpoint, flaky in
+		// CI) — just that typing doesn't throw an uncaught exception
+		// and the input retains the typed value.
+		const errors: string[] = [];
+		page.on('pageerror', (e) => errors.push(e.message));
+
+		await page.goto('/routes?tab=heatmap');
+		await expect(page.locator('.maplibregl-map'))
+			.toBeVisible({ timeout: 15_000 });
+
+		const input = page
+			.getByTestId('heatmap-search')
+			.getByRole('textbox');
+		await input.fill('Richmond');
+		await expect(input).toHaveValue('Richmond');
+
+		// Wait past the 300ms debounce so the fetch has a chance to fire.
+		await page.waitForTimeout(500);
+		expect(
+			errors,
+			`page errors during search-input flow: ${errors.join(' | ')}`,
+		).toHaveLength(0);
+	});
+
 	test('heatmap_points_in_bbox RPC returns a 2xx for a sane bbox', async ({ page }) => {
 		// Direct PostGIS-RPC smoke: the migration's
 		// `set search_path = public, extensions` fix (this session's

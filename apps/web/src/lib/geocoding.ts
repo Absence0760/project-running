@@ -21,6 +21,28 @@ export interface GeocodedPlace {
 	placeType: string | null;
 }
 
+// Re-export the env-free result shape + the dispatcher's testable
+// counterpart so callers have one import surface. The thin wrapper
+// below injects PUBLIC_MAPTILER_KEY so production sites don't have
+// to repeat the env read.
+export type { PlaceSearchResult } from './geocoding_math';
+import { searchPlacesWithKey } from './geocoding_math';
+
+/// Search free-text places, return up to [limit] hits suitable for a
+/// search-box dropdown. Returns an empty array — never throws — when
+/// the query is too short or all providers fail.
+///
+/// Thin env-binding wrapper around `searchPlacesWithKey` in
+/// `geocoding_math.ts`. See that helper for provider priority +
+/// trade-offs.
+export function searchPlaces(
+	query: string,
+	limit = 5,
+	signal?: AbortSignal,
+) {
+	return searchPlacesWithKey(PUBLIC_MAPTILER_KEY, query, limit, signal);
+}
+
 /// Geocodes a free-text place query via MapTiler. Returns null when
 /// the query is too short, MapTiler returns no features, or the key
 /// isn't configured. Callers should treat null as "fall back to the

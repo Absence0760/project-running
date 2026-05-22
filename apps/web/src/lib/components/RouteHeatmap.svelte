@@ -6,6 +6,7 @@
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import { fetchHeatmapPoints, nearbyPublicRoutes } from '$lib/data';
+	import { searchPlaces, type PlaceSearchResult } from '$lib/geocoding';
 	import type { Route } from '$lib/types';
 
 	let mapEl: HTMLDivElement;
@@ -17,6 +18,36 @@
 	/// True while the cursor is over the map. The legend fades out so
 	/// it doesn't obstruct the area the user is inspecting.
 	let pointerOnMap = $state(false);
+
+	// --- Search ---
+	// Uses `$lib/geocoding.searchPlaces`, which transparently picks
+	// MapTiler when its key is set and falls back to Nominatim
+	// (OSM's free geocoder) otherwise. Either path lets the user
+	// pan the map to a named place — works whether or not we have
+	// a MapTiler subscription, which matters on the local Protomaps
+	// dev setup. See `decisions.md § 68` for the override design.
+	let searchInput: HTMLInputElement | undefined = $state();
+	let searchQuery = $state('');
+	let searchResults = $state<PlaceSearchResult[]>([]);
+	let showResults = $state(false);
+	let searchTimeout: ReturnType<typeof setTimeout> | null = null;
+
+	function onSearchInput() {
+		if (searchTimeout) clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(async () => {
+			searchResults = await searchPlaces(searchQuery);
+			showResults = searchResults.length > 0;
+		}, 300);
+	}
+
+	function selectSearchResult(r: PlaceSearchResult) {
+		if (!map) return;
+		map.flyTo({ center: [r.lng, r.lat], zoom: 13 });
+		searchQuery = '';
+		searchResults = [];
+		showResults = false;
+		searchInput?.blur();
+	}
 
 	// Debounce key for moveend → fetch. We don't want to fire a new
 	// PostGIS query on every pixel of a drag.
@@ -51,6 +82,19 @@
 		});
 
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
+		// "Locate me" button. Built-in MapLibre primitive — no
+		// MapTiler key needed, so this is the always-available
+		// navigation affordance even on a Protomaps-only dev setup
+		// where the search box is dormant.
+		map.addControl(
+			new maplibregl.GeolocateControl({
+				positionOptions: { enableHighAccuracy: true, timeout: 5000 },
+				trackUserLocation: false,
+				showAccuracyCircle: true,
+				showUserLocation: true,
+			}),
+			'top-right',
+		);
 
 		map.on('load', () => {
 			if (!map) return;
@@ -166,6 +210,7 @@
 		map = null;
 		if (pendingFetch) clearTimeout(pendingFetch);
 		if (pendingRoutesFetch) clearTimeout(pendingRoutesFetch);
+		if (searchTimeout) clearTimeout(searchTimeout);
 	});
 
 	/// Fetch + render clickable public-route polylines for the current
@@ -273,6 +318,33 @@
 	onpointerleave={() => (pointerOnMap = false)}
 >
 	<div bind:this={mapEl} class="map"></div>
+
+	<div class="search-box" data-testid="heatmap-search">
+		<input
+			bind:this={searchInput}
+			bind:value={searchQuery}
+			oninput={onSearchInput}
+			onfocusout={() => setTimeout(() => (showResults = false), 200)}
+			onfocusin={() => {
+				if (searchResults.length > 0) showResults = true;
+			}}
+			type="text"
+			placeholder="Search for a place…"
+			aria-label="Search for a place to centre the heatmap on"
+		/>
+		{#if showResults}
+			<ul class="search-results">
+				{#each searchResults as result (result.lat + ':' + result.lng)}
+					<li>
+						<button onmousedown={() => selectSearchResult(result)}>
+							{result.name}
+						</button>
+					</li>
+				{/each}
+			</ul>
+		{/if}
+	</div>
+
 	<aside class="legend" class:dimmed={pointerOnMap} data-testid="heatmap-legend">
 		<strong>Where people run</strong>
 		<p>
@@ -308,6 +380,56 @@
 	.map {
 		position: absolute;
 		inset: 0;
+	}
+	.search-box {
+		position: absolute;
+		top: var(--space-md);
+		/* Top-center: legend is top-left, MapLibre controls are
+		 * top-right. The search box gets the empty middle slot so
+		 * it doesn't fight either. */
+		left: 50%;
+		transform: translateX(-50%);
+		width: min(22rem, calc(100% - 16rem));
+		z-index: 2;
+	}
+	.search-box input {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		font-size: 0.9rem;
+		color: var(--color-text);
+	}
+	.search-box input:focus {
+		outline: 2px solid var(--color-accent);
+		outline-offset: 1px;
+	}
+	.search-results {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		margin-top: 0.25rem;
+		max-height: 16rem;
+		overflow-y: auto;
+	}
+	.search-results li button {
+		width: 100%;
+		text-align: left;
+		padding: 0.5rem 0.75rem;
+		background: transparent;
+		border: 0;
+		font-size: 0.85rem;
+		color: var(--color-text);
+		cursor: pointer;
+	}
+	.search-results li button:hover {
+		background: var(--color-surface-hover);
 	}
 	.legend {
 		position: absolute;
