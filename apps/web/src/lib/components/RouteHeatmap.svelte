@@ -110,6 +110,16 @@
 			zoom: 2,
 		});
 		stopResizeWatch = watchMapResize(mapEl, map);
+
+		// Dev-only e2e hook. Lets Playwright drive the map (flyTo,
+		// queryRenderedFeatures, fire click events at projected lng/lat)
+		// the same way `/routes/new` exposes `__routeBuilder`. Pinned
+		// in CI by the `tests-e2e/routes/heatmap-pins.spec.ts` suite.
+		// Production builds (`adapter-static` with DEV=false) never
+		// reach this branch, so there's no leak.
+		if (import.meta.env.DEV && typeof window !== 'undefined') {
+			(window as unknown as { __heatmapMap?: unknown }).__heatmapMap = map;
+		}
 		// Background-fetch the user's location + recentre. Browsers
 		// prompt for permission on the first call; deny / unavailable
 		// just leaves the world view, which is the right "no idea
@@ -369,6 +379,9 @@
 	});
 
 	onDestroy(() => {
+		if (import.meta.env.DEV && typeof window !== 'undefined') {
+			(window as unknown as { __heatmapMap?: unknown }).__heatmapMap = undefined;
+		}
 		stopResizeWatch?.();
 		currentPopup?.remove();
 		currentPopup = null;
