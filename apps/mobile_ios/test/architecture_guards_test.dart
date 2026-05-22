@@ -1959,6 +1959,71 @@ void main() {
       );
     });
 
+    test('LocalRunStore owner-tag stamping (offline-record contract)', () {
+      // Reason: the headline "record without an account, sync
+      // later" feature lives on a shared device too. Without the
+      // owner tag, User A's runs would silently sync under User
+      // B's account after a sign-out/sign-in. Three load-bearing
+      // wires must stay intact:
+      //
+      //   1. `LocalRunStore` exposes a `currentUserIdProvider`
+      //      setter so production can wire `() => api?.userId`.
+      //   2. `save()` calls the provider + stamps the metadata
+      //      when the userId is non-null + non-empty.
+      //   3. `main.dart` wires the provider after the ApiClient
+      //      lands.
+      //   4. `SyncService._trySync` consults
+      //      `filterRunsForCurrentUser` before pushing.
+      //
+      // See `docs/decisions.md § 67`.
+      final storeSrc =
+          File('lib/local_run_store.dart').readAsStringSync();
+      expect(
+        storeSrc,
+        contains('String? Function()? currentUserIdProvider'),
+        reason: 'LocalRunStore must expose currentUserIdProvider — '
+            'without it, save() has no way to know who owns the run',
+      );
+      expect(
+        storeSrc,
+        contains(RegExp(r'currentUserIdProvider\?\.call\(\)')),
+        reason: 'save() must invoke the provider on EACH save '
+            '(not memoise) — otherwise sign-out + sign-in mid-session '
+            'still stamps the stale userId',
+      );
+      expect(
+        storeSrc,
+        contains('_withCreatedByUserId'),
+        reason: 'the stamping helper must exist so save() can produce '
+            'a fresh Run with the owner tag without mutating input',
+      );
+      expect(
+        storeSrc,
+        contains('static Run withCreatedByUserId'),
+        reason: 'public static for the SyncService to adopt untagged '
+            'runs onto the current user (legacy / signed-out-at-save)',
+      );
+
+      final mainSrc = File('lib/main.dart').readAsStringSync();
+      expect(
+        mainSrc,
+        contains('store.currentUserIdProvider = () => api?.userId'),
+        reason: 'main.dart must wire the provider — without this, '
+            'production saved runs never carry the tag and the '
+            "filter can't differentiate User A's runs from User B's",
+      );
+
+      final syncSrc =
+          File('lib/sync_service.dart').readAsStringSync();
+      expect(
+        syncSrc,
+        contains('filterRunsForCurrentUser'),
+        reason: 'SyncService must call the filter before invoking '
+            'saveRunsBatch — otherwise the queue pushes foreign runs '
+            'under the current user',
+      );
+    });
+
     test('payload-diff cache is wired in _push + reset on detach', () {
       // Reason: every LocalRouteStore.save() fires the listener,
       // including for mutations that don't affect the wire payload

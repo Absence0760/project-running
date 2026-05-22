@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:api_client/api_client.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 
@@ -143,7 +144,23 @@ class SyncService with WidgetsBindingObserver {
     }
     final api = apiClient;
     if (api == null || api.userId == null) return;
-    final unsynced = runStore.unsyncedRuns;
+    final allUnsynced = runStore.unsyncedRuns;
+    // Owner-tag filter: skip runs whose `metadata.created_by_user_id`
+    // names a different user. Without this, on a shared device where
+    // User A records a run, signs out, and User B signs in, User B's
+    // sync would try to push A's runs under B's account — RLS would
+    // reject every row, the queue would never drain, and B's "X
+    // unsynced" badge would be stuck forever. Runs without the tag
+    // (legacy, or saved when no provider was wired) adopt to the
+    // current user. See `docs/decisions.md § 67`.
+    final unsynced = filterRunsForCurrentUser(allUnsynced, api.userId);
+    final skippedForeignOwner = allUnsynced.length - unsynced.length;
+    if (skippedForeignOwner > 0) {
+      debugPrint(
+        'SyncService: skipping $skippedForeignOwner runs owned by a '
+        'different user (signed in as ${api.userId})',
+      );
+    }
     final hasPendingDeletes = runStore.pendingRemoteDeleteIds.isNotEmpty;
     final unsyncedRoutes = routeStore?.unsyncedRoutes ?? const [];
     if (unsynced.isEmpty &&
@@ -272,4 +289,32 @@ class SyncService with WidgetsBindingObserver {
     );
     return failed == 0;
   }
+}
+
+/// Filter [runs] to those the currently-signed-in [userId] can push.
+/// Used by [SyncService._trySync] to avoid pushing User A's runs
+/// under User B's account on a shared device.
+///
+/// A run is pushable when:
+///
+///  * `metadata.created_by_user_id` is **null** or absent — the run
+///    was either saved before owner-tagging shipped (legacy) or
+///    saved while signed-out. The first signed-in user adopts it.
+///  * `metadata.created_by_user_id` **equals** [userId] — the run
+///    belongs to this user, push it.
+///
+/// A run with a `created_by_user_id` that names a different user is
+/// dropped from the push set — its rightful owner will see it on
+/// the queue when they sign back in. See `docs/decisions.md § 67`.
+///
+/// Pure helper — extracted from the trySync body so tests can drive
+/// the filter without booting an `ApiClient` or `LocalRunStore`.
+@visibleForTesting
+List<Run> filterRunsForCurrentUser(List<Run> runs, String? userId) {
+  if (userId == null) return const [];
+  return runs.where((r) {
+    final owner = r.metadata?['created_by_user_id'];
+    if (owner is! String || owner.isEmpty) return true;
+    return owner == userId;
+  }).toList();
 }

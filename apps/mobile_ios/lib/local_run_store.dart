@@ -24,6 +24,20 @@ class LocalRunStore extends ChangeNotifier {
   // its own sidecar so a crash mid-retry doesn't lose the work item.
   final Set<String> _pendingRemoteDeleteIds = {};
 
+  /// Returns the currently-signed-in user id (or `null` for the
+  /// "offline / not signed in" case). Set once at app bootstrap so
+  /// every locally-saved run stamps `metadata.created_by_user_id` —
+  /// the owner tag the SyncService consults during drain to keep
+  /// User A's runs from accidentally syncing under User B's account
+  /// on a shared device.
+  ///
+  /// Null by default — tests don't set it, so saved runs land
+  /// without the stamp (treated as untagged / adoptable). Production
+  /// wires `() => apiClient?.userId` in `main.dart`.
+  ///
+  /// See `docs/decisions.md § 67` for the owner-tag design.
+  String? Function()? currentUserIdProvider;
+
   static const _inProgressFilename = 'in_progress.json';
   // Sidecar file listing the ids of runs that have synced to the cloud.
   // The per-run JSON used to carry a `synced` boolean and `markSynced`
@@ -92,7 +106,16 @@ class LocalRunStore extends ChangeNotifier {
   /// Save a freshly-recorded run locally. Stamps `last_modified_at` and marks
   /// it as unsynced.
   Future<void> save(Run run) async {
-    final stamped = _withLastModified(run, DateTime.now());
+    Run stamped = _withLastModified(run, DateTime.now());
+    // Owner-tag the run with the userId that was signed in at save
+    // time. Prevents the cross-user contamination bug on a shared
+    // device — when User A records a run, signs out, and User B
+    // signs in, the run still carries A's tag and the SyncService
+    // skips it during B's drain. See `docs/decisions.md § 67`.
+    final ownerId = currentUserIdProvider?.call();
+    if (ownerId != null && ownerId.isNotEmpty) {
+      stamped = _withCreatedByUserId(stamped, ownerId);
+    }
     final file = File('${_dir.path}/${stamped.id}.json');
     final data = {
       'run': stamped.toJson(),
@@ -102,6 +125,29 @@ class LocalRunStore extends ChangeNotifier {
     _runs.removeWhere((r) => r.id == stamped.id);
     _runs.insert(0, stamped);
     notifyListeners();
+  }
+
+  /// Return a copy of [run] with `metadata.created_by_user_id`
+  /// stamped. Public so the SyncService can adopt previously-
+  /// untagged runs onto a freshly-signed-in user.
+  static Run withCreatedByUserId(Run run, String userId) =>
+      _withCreatedByUserId(run, userId);
+
+  static Run _withCreatedByUserId(Run run, String userId) {
+    final metadata = Map<String, dynamic>.from(run.metadata ?? {});
+    metadata['created_by_user_id'] = userId;
+    return Run(
+      id: run.id,
+      startedAt: run.startedAt,
+      duration: run.duration,
+      distanceMetres: run.distanceMetres,
+      track: run.track,
+      routeId: run.routeId,
+      source: run.source,
+      externalId: run.externalId,
+      metadata: metadata,
+      createdAt: run.createdAt,
+    );
   }
 
   /// Save a run that came from the backend. Marks it as already synced.

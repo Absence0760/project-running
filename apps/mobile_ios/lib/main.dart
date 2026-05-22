@@ -221,6 +221,18 @@ void main() async {
     }
   }
 
+  // Wire the owner-tag provider so every locally-saved run carries
+  // `metadata.created_by_user_id`. Without this, on a shared device
+  // User A's runs would silently sync under User B's account after
+  // a sign-out/sign-in. The SyncService filters by this tag during
+  // drain; see `docs/decisions.md § 67`.
+  //
+  // The provider reads `api?.userId` on each save — captures the
+  // session at write time. When signed out, returns null (legitimate
+  // for the "record without an account" flow; the first signed-in
+  // user adopts those runs).
+  store.currentUserIdProvider = () => api?.userId;
+
   final syncService = SyncService(
     apiClient: api,
     runStore: store,

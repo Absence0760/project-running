@@ -158,6 +158,20 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/offline_mode_workflow_test.dart` — 14 tests
+
+End-to-end workflows that pin the "Fully offline mode — record without an account, sync later if you ever sign in" headline feature. Composes `LocalRunStore` + `SyncService` over realistic user journeys. See `decisions.md § 67` for the owner-tag design.
+
+**Record without account → sign in later (4 tests):** saving while signed out leaves the `created_by_user_id` tag null; signing in + draining adopts every untagged run to the new user; partial-failure on first drain only marks the succeeded subset; record-offline → sign-in → record-more produces a mix of adopted + tagged runs that all push together.
+
+**Shared-device cross-user contamination guard (5 tests):** user A records → signs out → user B drains → ZERO foreign pushes (the load-bearing assertion); user A returns + drains → A's runs finally push; mixed queue (A-tagged + B-tagged + untagged) signed in as B → only B + untagged push, A stays queued; foreign-only drain is success, not failure (no backoff); sign-out preserves the queue (we don't wipe).
+
+**Cold start (2 tests):** signed-out save → process restart → cold start preserves queue + unsynced count; classic returning-user flow (record day 1 offline → kill app → cold start day 2 → sign in → drain).
+
+**Edit-while-offline (1 test):** an edit before signing in propagates the edited title through the eventual drain.
+
+**SyncService gate clauses (2 tests):** no api configured → no drain attempt; signed-out api → no drain attempt.
+
 ### `apps/mobile_android/test/backup_format_compat_test.dart` — 12 tests
 
 Cross-language wire-format compatibility test. The Go service at `apps/job_worker/internal/dataexport/server.go` produces `run-app-backup` v1 archives via `BuildBackupZip`; the mobile `BackupService.restore` reads them. These two implementations live in different languages and can drift on JSON shape, ZIP entry encoding, or manifest fields. This file hand-crafts an archive that mirrors what the Go writer produces — `json.MarshalIndent` 2-space encoding, `zip.Store` for raw gzipped tracks, manifest emitted last — and runs the Dart reader against it.

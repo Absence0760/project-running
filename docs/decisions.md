@@ -1397,6 +1397,38 @@ The new shape:
 
 ---
 
+## 67. Offline-saved runs carry a `created_by_user_id` owner tag — defends shared-device sign-out / sign-in
+
+**Decided:** May 2026
+
+The competitive line "Fully offline mode without an account — record locally, sync later if you ever sign in" works for the happy path (record offline, sign up later, runs adopt to the new user). But on a shared device, a second-order bug had been lurking: **if User A signs in, records runs, signs out, then User B signs in, the previously unsynced runs would attempt to push under User B's account.** Supabase RLS rejects every row (`auth.uid()` mismatch), the queue never drains, and User B sees a permanently-stuck "X unsynced" badge for runs that aren't theirs.
+
+The fix is a `metadata.created_by_user_id` tag stamped at save time, plus a filter in `SyncService` that excludes foreign-owner runs from the batch push.
+
+- **`LocalRunStore` exposes `currentUserIdProvider: String? Function()?`** — production wires `() => api?.userId` in `main.dart`. Each `save()` calls it; non-null/non-empty userIds stamp the metadata, null/empty leaves the tag absent (the signed-out case).
+- **`SyncService` consults `filterRunsForCurrentUser(runs, userId)` before invoking `saveRunsBatch`.** Untagged runs (legacy, or saved while signed out) adopt to the current user. Runs tagged with the current userId push normally. Runs tagged with a different userId are silently skipped + logged — they wait in the queue for their rightful owner to sign back in.
+- **`update()` does NOT re-stamp.** The owner is whoever recorded the run, not whoever's signed in when the edit happens — important on a shared device where B might edit one of A's run titles.
+- **`saveFromRemote()` does NOT stamp.** Cloud-sourced rows carry their own `user_id` column; the local tag is only for run-was-created-here ownership.
+
+**Why a metadata key, not a Run.userId field:** schema-free path. Adding `userId` to the `Run` domain model would propagate through `core_models`, `db_rows.dart` codegen, every JSON test fixture, and trigger a migration to add a `created_by_user_id` column. Using `metadata.jsonb` (already a free-form bag — see `docs/metadata.md`) is one field, zero codegen, zero migration. The cloud-side `runs.user_id` column remains authoritative for server-side ownership; the metadata key is the *device-side* ownership marker.
+
+**Why not wipe the queue on sign-out:** data loss. A user who signs out while they have unsynced runs almost always wants to sign back in and push — wiping would silently lose recorded GPS data. The owner tag is the safer path: keep the queue, just skip foreign rows during drain.
+
+**Trade-offs accepted:**
+
+- A user who genuinely wants to "claim" their previous account's runs (e.g. forgot which email they used) has no in-app affordance today. The runs are stuck in the queue until they sign back in with the right account. A future "adopt these runs to me" UI prompt is the natural follow-up; the wire is in place via `LocalRunStore.withCreatedByUserId`.
+- The skipped-foreign-runs warning is `debugPrint` only. No UX surface yet. Listed in `roadmap.md` as a follow-up.
+- A user who signs out + uninstalls + reinstalls + signs in as someone else loses the queue entirely — the unsynced runs were on the local disk and the uninstall wiped them. This is the "uninstall = lost runs" trade-off documented in `parity.md`, unchanged by this work.
+
+**Don't re-litigate** by:
+
+- Adding a `Run.userId` field — the metadata key is intentional; codegen churn isn't worth it for a device-side ownership marker.
+- Wiping the queue on sign-out — data loss, see above.
+- Stamping the tag during `saveFromRemote` — would mask cross-user contamination on the read path (a row from A's cloud account being pulled while signed in as B should be flagged, not silently re-stamped).
+- Stamping during `update()` — would mean edits transfer ownership; B editing A's title would steal the run.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

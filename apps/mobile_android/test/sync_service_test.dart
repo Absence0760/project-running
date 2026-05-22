@@ -57,14 +57,31 @@ class _FakeApiClient extends ApiClient {
   }
 }
 
-Run makeRun(String id) => Run(
+Run makeRun(String id, {Map<String, dynamic>? metadata}) => Run(
       id: id,
       startedAt: DateTime(2026, 4, 10, 8),
       duration: const Duration(minutes: 25),
       distanceMetres: 5000,
       track: const [],
       source: RunSource.app,
+      metadata: metadata,
     );
+
+/// Convenience for the owner-tag tests: build a run with the tag
+/// pre-stamped (simulating what `LocalRunStore.save` produces).
+Run makeOwnedRun(String id, String? ownerUserId) {
+  return Run(
+    id: id,
+    startedAt: DateTime(2026, 4, 10, 8),
+    duration: const Duration(minutes: 25),
+    distanceMetres: 5000,
+    track: const [],
+    source: RunSource.app,
+    metadata: ownerUserId == null
+        ? null
+        : {'created_by_user_id': ownerUserId},
+  );
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -550,4 +567,252 @@ void main() {
       expect(s.lastFailureAt, isNull);
     });
   });
+
+  // ────────────────────────────────────────────────────────────────
+  // Owner-tag filter — the load-bearing guard for the
+  // record-without-an-account + sign-in-later flow on a shared
+  // device. See `docs/decisions.md § 67`.
+  group('filterRunsForCurrentUser (pure helper)', () {
+    test('null current userId returns empty list', () {
+      // SyncService doesn't call this path (it guards on
+      // api.userId != null before drain) but pin the contract
+      // — a null user can't own any run.
+      final filtered = filterRunsForCurrentUser(
+        [makeOwnedRun('r-1', 'user-a'), makeOwnedRun('r-2', null)],
+        null,
+      );
+      expect(filtered, isEmpty);
+    });
+
+    test('runs with no created_by_user_id tag are adopted to current user',
+        () {
+      // Legacy runs (recorded before owner-tagging shipped) OR
+      // runs recorded while signed-out adopt to whoever signs
+      // in next. This is the "record offline → sign up → push"
+      // headline flow.
+      final filtered = filterRunsForCurrentUser(
+        [makeOwnedRun('r-1', null), makeOwnedRun('r-2', null)],
+        'user-a',
+      );
+      expect(filtered.map((r) => r.id), ['r-1', 'r-2']);
+    });
+
+    test('runs tagged with the current user pass through', () {
+      final filtered = filterRunsForCurrentUser(
+        [makeOwnedRun('r-1', 'user-a'), makeOwnedRun('r-2', 'user-a')],
+        'user-a',
+      );
+      expect(filtered.map((r) => r.id), ['r-1', 'r-2']);
+    });
+
+    test('runs tagged with a DIFFERENT user are filtered OUT', () {
+      // The cross-user contamination case. User A's runs stay in
+      // the queue when User B is signed in — they don't sync.
+      final filtered = filterRunsForCurrentUser(
+        [makeOwnedRun('r-1', 'user-a')],
+        'user-b',
+      );
+      expect(filtered, isEmpty);
+    });
+
+    test('mixed input: tagged-mine + tagged-different + untagged → only '
+        'mine + untagged pass', () {
+      final filtered = filterRunsForCurrentUser(
+        [
+          makeOwnedRun('r-mine-1', 'user-b'),
+          makeOwnedRun('r-foreign', 'user-a'),
+          makeOwnedRun('r-untagged', null),
+          makeOwnedRun('r-mine-2', 'user-b'),
+          makeOwnedRun('r-foreign-2', 'user-c'),
+        ],
+        'user-b',
+      );
+      expect(filtered.map((r) => r.id),
+          ['r-mine-1', 'r-untagged', 'r-mine-2']);
+    });
+
+    test('empty-string tag is treated as untagged (defensive)', () {
+      final filtered = filterRunsForCurrentUser(
+        [
+          // metadata is non-null but the value is empty.
+          makeRun('r-1', metadata: {'created_by_user_id': ''}),
+        ],
+        'user-a',
+      );
+      // Empty string falls through the type check; treated as
+      // adoptable rather than rejected.
+      expect(filtered.map((r) => r.id), ['r-1']);
+    });
+
+    test('non-string tag (corrupt) is treated as untagged', () {
+      final filtered = filterRunsForCurrentUser(
+        [
+          makeRun('r-1', metadata: {'created_by_user_id': 42}),
+        ],
+        'user-a',
+      );
+      // The `owner is! String` check makes the run adoptable
+      // rather than crashing — a corrupt metadata key shouldn't
+      // block sync.
+      expect(filtered.map((r) => r.id), ['r-1']);
+    });
+
+    test('preserves order of incoming runs', () {
+      // The SyncService relies on input order for newest-first
+      // pushes; the filter must not re-order.
+      final inputs = [
+        for (var i = 0; i < 10; i++) makeOwnedRun('r-$i', 'user-a'),
+      ];
+      final filtered = filterRunsForCurrentUser(inputs, 'user-a');
+      expect(filtered.map((r) => r.id),
+          ['r-0', 'r-1', 'r-2', 'r-3', 'r-4', 'r-5', 'r-6', 'r-7', 'r-8', 'r-9']);
+    });
+
+    test('100 mixed-owner runs: only the current user\'s 33 pass', () {
+      final inputs = [
+        for (var i = 0; i < 100; i++)
+          makeOwnedRun('r-$i',
+              i % 3 == 0 ? 'user-a' : (i % 3 == 1 ? 'user-b' : 'user-c')),
+      ];
+      final filtered = filterRunsForCurrentUser(inputs, 'user-b');
+      // i % 3 == 1 → indices 1, 4, 7, …, 97 = 33 entries.
+      expect(filtered, hasLength(33));
+      for (final r in filtered) {
+        expect(r.metadata!['created_by_user_id'], 'user-b');
+      }
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // End-to-end: the owner-tag filter actually gates what gets
+  // pushed via saveRunsBatch.
+  group('SyncService — owner-tag drain integration', () {
+    test('signed in as user-b, store has runs owned by user-a → batch '
+        'push is NOT called', () async {
+      // Pre-seed the store with user-a's runs.
+      await store.save(_runForOwner('r-a-1', 'user-a'));
+      await store.save(_runForOwner('r-a-2', 'user-a'));
+
+      final api = _FakeApiClient()..fakeUserId = 'user-b';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 0,
+          reason: 'all unsynced runs are owned by user-a; user-b drain '
+              'must SKIP — never invoke saveRunsBatch with foreign runs');
+      // Runs stay in the unsynced queue.
+      expect(store.unsyncedCount, 2);
+    });
+
+    test('signed in as user-a, mix of user-a + user-b runs → only '
+        'user-a runs are pushed', () async {
+      await store.save(_runForOwner('r-a-1', 'user-a'));
+      await store.save(_runForOwner('r-b-1', 'user-b'));
+      await store.save(_runForOwner('r-a-2', 'user-a'));
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 1);
+      // The batch carries only the user-a runs.
+      expect(api.savedBatchIds.single.toSet(), {'r-a-1', 'r-a-2'});
+      // After success: user-a runs synced; user-b's stays unsynced.
+      expect(store.unsyncedRuns.map((r) => r.id).toSet(), {'r-b-1'});
+    });
+
+    test('signed in as user-a, ALL runs untagged → all push (legacy '
+        'adoption)', () async {
+      // Legacy runs in the queue (recorded before owner-tagging
+      // shipped, or recorded signed-out) adopt to the current
+      // user.
+      await store.save(makeRun('r-1'));
+      await store.save(makeRun('r-2'));
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.saveBatchCallCount, 1);
+      expect(api.savedBatchIds.single.toSet(), {'r-1', 'r-2'});
+    });
+
+    test('signed in as user-a, all foreign runs → still drains pending '
+        'deletes (the queues are independent)', () async {
+      await store.save(_runForOwner('r-foreign', 'user-b'));
+      // Also queue a pending delete (e.g. user-a deleted r-deleted
+      // while offline).
+      await store.markPendingRemoteDelete('r-deleted');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      // Foreign runs skipped — no batch push.
+      expect(api.saveBatchCallCount, 0);
+      // BUT pending deletes still drain — they're independent.
+      expect(api.deleteCallCount, 1);
+      expect(api.deletedIds, ['r-deleted']);
+    });
+
+    test('signed in offline-saved runs adopt + push successfully',
+        () async {
+      // The "record without an account → sign in → push" headline
+      // flow. The store records the run with no provider (signed
+      // out at the time), the user signs in, SyncService picks
+      // up the queue and adopts the untagged runs to the current
+      // user.
+      await store.save(makeRun('r-offline-1'));
+      await store.save(makeRun('r-offline-2'));
+      expect(store.unsyncedCount, 2);
+
+      // User signs in.
+      final api = _FakeApiClient()..fakeUserId = 'user-fresh';
+      final svc = SyncService(apiClient: api, runStore: store);
+      await svc.debugTrySync('test');
+
+      // Both adopt + push.
+      expect(api.saveBatchCallCount, 1);
+      expect(api.savedBatchIds.single.toSet(),
+          {'r-offline-1', 'r-offline-2'});
+      expect(store.unsyncedCount, 0);
+    });
+
+    test('signed in as user-b, single user-a run → no push AND no failure '
+        '(queue stays put, no backoff)', () async {
+      // Skipping foreign runs is NOT a failure — the backoff
+      // counter should NOT increment.
+      await store.save(_runForOwner('r-a-1', 'user-a'));
+      final api = _FakeApiClient()..fakeUserId = 'user-b';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      final beforeFailures = svc.debugBackoffState().failures;
+      await svc.debugTrySync('test');
+      final afterFailures = svc.debugBackoffState().failures;
+
+      expect(afterFailures, beforeFailures,
+          reason: 'skipping foreign runs is a no-op, not a failure — '
+              "must not trigger exponential backoff that would slow "
+              "down legitimate retries");
+    });
+  });
 }
+
+/// Build a run with a specific owner tag, used by integration tests
+/// in this file. (The store's own save() stamps via the provider —
+/// these tests bypass the store's save() to construct runs directly.)
+Run _runForOwner(String id, String? ownerUserId) => Run(
+      id: id,
+      startedAt: DateTime(2026, 4, 10, 8),
+      duration: const Duration(minutes: 25),
+      distanceMetres: 5000,
+      track: const [],
+      source: RunSource.app,
+      metadata: ownerUserId == null
+          ? null
+          : {'created_by_user_id': ownerUserId},
+    );

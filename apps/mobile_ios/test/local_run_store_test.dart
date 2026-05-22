@@ -21,6 +21,7 @@ void main() {
     double distance = 5000,
     Duration duration = const Duration(minutes: 25),
     List<Waypoint>? track,
+    Map<String, dynamic>? metadata,
   }) {
     return Run(
       id: id,
@@ -29,6 +30,7 @@ void main() {
       distanceMetres: distance,
       track: track ?? const [],
       source: RunSource.app,
+      metadata: metadata,
     );
   }
 
@@ -391,6 +393,135 @@ void main() {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
       expect(store.runs.map((r) => r.id).toList(), ['new', 'old']);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // Owner-tag stamping for the offline-record-then-sync flow.
+  //
+  // The competitive line we make is "record without an account, sync
+  // later if you ever sign in". The hardening: every locally-saved
+  // run is stamped with `metadata.created_by_user_id` at save time.
+  // The SyncService consults this tag during drain so User A's runs
+  // can't accidentally sync under User B's account on a shared
+  // device. See `docs/decisions.md § 67`.
+  group('owner-tag stamping (created_by_user_id)', () {
+    test('no provider set → run saved without the tag', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'r-1'));
+      expect(store.runs.single.metadata?['created_by_user_id'], isNull,
+          reason: 'with no provider configured, the stamp is absent — '
+              'tests and offline-only builds stay unaffected');
+    });
+
+    test('provider returns null (signed-out) → tag absent', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => null;
+      await store.save(makeRun(id: 'r-1'));
+      expect(store.runs.single.metadata?['created_by_user_id'], isNull,
+          reason: 'signed-out save → tag stays null so the first '
+              'signed-in user can adopt the run during sync');
+    });
+
+    test('provider returns empty string → tag absent (defensive)', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => '';
+      await store.save(makeRun(id: 'r-1'));
+      expect(store.runs.single.metadata?['created_by_user_id'], isNull);
+    });
+
+    test('provider returns userId → tag stamped on save', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRun(id: 'r-1'));
+      expect(store.runs.single.metadata?['created_by_user_id'], 'user-a');
+    });
+
+    test('tag persists across cold start', () async {
+      var store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRun(id: 'r-1'));
+
+      // Cold start.
+      store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.runs.single.metadata?['created_by_user_id'], 'user-a');
+    });
+
+    test('tag is also stamped when other metadata is present', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRun(id: 'r-1', metadata: {
+        'activity_type': 'run',
+        'title': 'Morning loop',
+      }));
+      final md = store.runs.single.metadata!;
+      expect(md['activity_type'], 'run');
+      expect(md['title'], 'Morning loop');
+      expect(md['created_by_user_id'], 'user-a',
+          reason: 'tag must not clobber other metadata keys');
+    });
+
+    test('provider is invoked on EACH save (not memoised at attach time)',
+        () async {
+      String? currentUser;
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => currentUser;
+
+      // Signed out — no tag.
+      await store.save(makeRun(id: 'r-signed-out'));
+      // Need a fresh id each time because save replaces same-id entries.
+      currentUser = 'user-a';
+      await store.save(makeRun(id: 'r-signed-in'));
+      currentUser = 'user-b';
+      await store.save(makeRun(id: 'r-user-b'));
+
+      final byId = {for (final r in store.runs) r.id: r};
+      expect(byId['r-signed-out']?.metadata?['created_by_user_id'], isNull);
+      expect(byId['r-signed-in']?.metadata?['created_by_user_id'], 'user-a');
+      expect(byId['r-user-b']?.metadata?['created_by_user_id'], 'user-b');
+    });
+
+    test('an existing metadata.created_by_user_id is OVERWRITTEN by save',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.save(makeRun(id: 'r-1', metadata: {
+        'created_by_user_id': 'someone-else',
+      }));
+      expect(store.runs.single.metadata?['created_by_user_id'], 'user-a',
+          reason: 'save() always stamps the current user, never honours '
+              'a pre-existing stale tag');
+    });
+
+    test('withCreatedByUserId helper produces a fresh Run', () async {
+      final input = makeRun(id: 'r-1', metadata: {'title': 'X'});
+      final stamped = LocalRunStore.withCreatedByUserId(input, 'user-a');
+      // Original untouched.
+      expect(input.metadata?['created_by_user_id'], isNull);
+      expect(input.metadata!['title'], 'X');
+      // Stamped copy.
+      expect(stamped.metadata!['created_by_user_id'], 'user-a');
+      expect(stamped.metadata!['title'], 'X');
+    });
+
+    test('saveFromRemote (cloud→local) does NOT stamp the local tag',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      store.currentUserIdProvider = () => 'user-a';
+      await store.saveFromRemote(makeRun(id: 'r-cloud'));
+      expect(store.runs.single.metadata?['created_by_user_id'], isNull,
+          reason: 'cloud-sourced rows must not be tagged with the local '
+              'currentUserId — the cloud row carries its own user_id');
     });
   });
 }
