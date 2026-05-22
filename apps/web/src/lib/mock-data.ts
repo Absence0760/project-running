@@ -105,7 +105,7 @@ export function formatDuration(seconds: number): string {
 // Formatters were moved to `lib/units.svelte.ts` so they can honor the
 // user's `preferred_unit` setting reactively. Re-exported here to avoid
 // breaking the many existing importers from `$lib/mock-data`.
-export { formatPace, formatDistance, formatPaceNoSuffix } from './units.svelte';
+export { formatPace, formatSpeed, formatDistance, formatPaceNoSuffix } from './units.svelte';
 
 export function formatDate(iso: string): string {
 	return new Date(iso).toLocaleDateString('en-GB', {

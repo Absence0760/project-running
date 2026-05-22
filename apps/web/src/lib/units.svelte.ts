@@ -72,6 +72,23 @@ export function distanceInPreferred(metres: number): { value: number; unit: 'km'
 	return { value: metres / 1000, unit: 'km' };
 }
 
+/// Average speed label paired with the user's preferred-unit suffix
+/// ("km/h" or "mph"). Companion to `formatPace` — same underlying
+/// data, different orientation. Some runners think in pace, some in
+/// speed; surfacing both makes the key-stats grid serve everyone +
+/// guarantees the cell is non-empty (no metadata or settings
+/// required beyond what every run already carries).
+export function formatSpeed(seconds: number, metres: number): string {
+	if (seconds === 0 || metres === 0) return '--';
+	const mPerSec = metres / seconds;
+	if (unit.value === 'mi') {
+		const mph = mPerSec * 2.23694;
+		return `${mph.toFixed(1)} mph`;
+	}
+	const kmh = mPerSec * 3.6;
+	return `${kmh.toFixed(1)} km/h`;
+}
+
 /// Compact distance — `XX.X km` / `XX.X mi`. Used by training plan
 /// surfaces (week grid, calendar, today card) where we want a fixed
 /// digit count rather than the more flexible `formatDistance`.
