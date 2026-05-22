@@ -8,7 +8,7 @@
   "scripts": {
     "dev:db:up": "cd apps/backend && supabase start",
     "dev:db:down": "cd apps/backend && supabase stop",
-    "dev:db:reset": "cd apps/backend && supabase db reset",
+    "dev:db:reset": "cd apps/backend && supabase db reset && cd ../.. && node scripts/seed-run-tracks.mjs",
     "dev:db:status": "cd apps/backend && supabase status",
     "dev:db:studio": "xdg-open http://127.0.0.1:54323",
     "dev:db:mailpit": "xdg-open http://127.0.0.1:54324",

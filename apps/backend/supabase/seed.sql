@@ -1108,7 +1108,16 @@ DECLARE
   test_user uuid := 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
   test_run_id uuid;
 BEGIN
-  SELECT id INTO test_run_id FROM runs WHERE user_id = test_user LIMIT 1;
+  -- Pick the OLDEST run by started_at so the test always lands on
+  -- one of the original London/Melbourne seed rows and never on one
+  -- of the newer Virginia seed rows (a1000001-…) which carry real
+  -- gzipped track files uploaded by `npm run dev:db:seed-tracks`.
+  -- Without ORDER BY, the LIMIT 1 picked an unspecified row — which
+  -- landed on a Virginia run and the line ~1147 `UPDATE … SET
+  -- track_url = NULL` below stripped its track_url, leaving the
+  -- run-detail map blank.
+  SELECT id INTO test_run_id FROM runs
+    WHERE user_id = test_user ORDER BY started_at LIMIT 1;
 
   -- Canonical shape — must succeed.
   UPDATE runs SET track_url = test_user::text || '/' || test_run_id::text || '.json.gz'
@@ -1157,7 +1166,16 @@ DECLARE
   test_run_id uuid;
   test_photo_id uuid;
 BEGIN
-  SELECT id INTO test_run_id FROM runs WHERE user_id = test_user LIMIT 1;
+  -- Pick the OLDEST run by started_at so the test always lands on
+  -- one of the original London/Melbourne seed rows and never on one
+  -- of the newer Virginia seed rows (a1000001-…) which carry real
+  -- gzipped track files uploaded by `npm run dev:db:seed-tracks`.
+  -- Without ORDER BY, the LIMIT 1 picked an unspecified row — which
+  -- landed on a Virginia run and the line ~1147 `UPDATE … SET
+  -- track_url = NULL` below stripped its track_url, leaving the
+  -- run-detail map blank.
+  SELECT id INTO test_run_id FROM runs
+    WHERE user_id = test_user ORDER BY started_at LIMIT 1;
   test_photo_id := gen_random_uuid();
 
   -- Insert with the transient empty-string placeholder used by the
@@ -1221,7 +1239,16 @@ BEGIN
     )
     WHERE user_id = test_user;
 
-  SELECT id INTO test_run_id FROM runs WHERE user_id = test_user LIMIT 1;
+  -- Pick the OLDEST run by started_at so the test always lands on
+  -- one of the original London/Melbourne seed rows and never on one
+  -- of the newer Virginia seed rows (a1000001-…) which carry real
+  -- gzipped track files uploaded by `npm run dev:db:seed-tracks`.
+  -- Without ORDER BY, the LIMIT 1 picked an unspecified row — which
+  -- landed on a Virginia run and the line ~1147 `UPDATE … SET
+  -- track_url = NULL` below stripped its track_url, leaving the
+  -- run-detail map blank.
+  SELECT id INTO test_run_id FROM runs
+    WHERE user_id = test_user ORDER BY started_at LIMIT 1;
   DELETE FROM live_run_pings WHERE run_id = test_run_id;
 
   SELECT count(*) INTO v_count_before FROM live_run_pings WHERE run_id = test_run_id;
