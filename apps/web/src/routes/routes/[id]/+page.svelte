@@ -414,6 +414,22 @@
 			     a non-zero gain. Per-waypoint min/max/loss are derived
 			     from the elevations array; routes without per-point
 			     elevation data fall back to the stored gain only. -->
+			<!-- Preview scrubber — drag the thumb to see a pulsing
+				 dot move along the route polyline on the map. Lives
+				 in the info panel (not below the map) so it's always
+				 above the page fold. -->
+			{#if displayWaypoints.length > 1}
+				<section class="section preview-section">
+					<h2>Preview</h2>
+					<RoutePreviewScrubber
+						totalDistanceM={route.distance_m}
+						fraction={scrubFraction}
+						onchange={(f) => (scrubFraction = f)}
+						onscrubbing={(active) => (scrubbing = active)}
+					/>
+				</section>
+			{/if}
+
 			{#if route.elevation_m != null && route.elevation_m > 0}
 				<section class="section">
 					<h2>Elevation</h2>
@@ -545,12 +561,6 @@
 						totalDistanceM={route.distance_m}
 						hoverIdx={chartHoverIdx}
 						{previewLngLat}
-					/>
-					<RoutePreviewScrubber
-						totalDistanceM={route.distance_m}
-						fraction={scrubFraction}
-						onchange={(f) => (scrubFraction = f)}
-						onscrubbing={(active) => (scrubbing = active)}
 					/>
 				{:else}
 					<div class="map-placeholder">

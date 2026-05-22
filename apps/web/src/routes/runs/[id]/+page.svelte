@@ -793,18 +793,6 @@
 				hoverIdx={chartHoverIdx}
 				previewLngLat={scrubPreviewLngLat}
 			/>
-			<!-- Scrubber: drag to preview a position along the run.
-				 Mirrors mobile's `_RoutePreviewScrubber` on
-				 route_detail_screen (now also present on web's
-				 /routes/[id]). The pulsing marker on the map fades
-				 in while `scrubbing` is true via the `previewLngLat`
-				 prop above. -->
-			<RoutePreviewScrubber
-				totalDistanceM={run.distance_m}
-				fraction={scrubFraction}
-				onchange={(f) => (scrubFraction = f)}
-				onscrubbing={(active) => (scrubbing = active)}
-			/>
 		{:else}
 			<div class="map-empty">
 				<span class="material-symbols">map</span>
@@ -1120,6 +1108,24 @@
 				</div>
 			{/if}
 		</div>
+
+		<!-- Scrubber section. Lives in the info panel (not below the
+			 map) so it's always visible above the page fold + the
+			 marker on the map is anchored to a control the user can
+			 actually see. Drag the thumb 0..1 across the polyline;
+			 a pulsing dot on the map fades in while `scrubbing` is
+			 true (via the `previewLngLat` prop on RunMap above). -->
+		{#if hasMapTrack}
+			<section class="section preview-section">
+				<h2>Preview</h2>
+				<RoutePreviewScrubber
+					totalDistanceM={run.distance_m}
+					fraction={scrubFraction}
+					onchange={(f) => (scrubFraction = f)}
+					onscrubbing={(active) => (scrubbing = active)}
+				/>
+			</section>
+		{/if}
 
 		<!-- Elevation Profile — only render when we have real elevation
 		     samples. Without a track every point is 0 and the chart
