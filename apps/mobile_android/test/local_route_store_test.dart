@@ -258,6 +258,122 @@ void main() {
     });
   });
 
+  group('offline pin', () {
+    test('isOfflinePinned defaults to false for any id', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.isOfflinePinned('any'), isFalse);
+      expect(store.offlinePinnedIds, isEmpty);
+      expect(store.offlinePinnedRoutes, isEmpty);
+    });
+
+    test('pinOffline flips the flag and notifies once', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      var calls = 0;
+      store.addListener(() => calls++);
+
+      await store.pinOffline('r-1');
+
+      expect(store.isOfflinePinned('r-1'), isTrue);
+      expect(store.offlinePinnedIds, {'r-1'});
+      expect(calls, 1);
+    });
+
+    test('pinOffline is idempotent — re-pinning is a no-op', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      var calls = 0;
+      store.addListener(() => calls++);
+
+      await store.pinOffline('r-1');
+      await store.pinOffline('r-1');
+      await store.pinOffline('r-1');
+
+      expect(calls, 1);
+      expect(store.offlinePinnedIds, {'r-1'});
+    });
+
+    test('unpinOffline only fires when the id was pinned', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      var calls = 0;
+      store.addListener(() => calls++);
+
+      // Unknown id — no-op.
+      await store.unpinOffline('never-pinned');
+      expect(calls, 0);
+
+      await store.pinOffline('r-1');
+      expect(calls, 1);
+
+      await store.unpinOffline('r-1');
+      expect(calls, 2);
+      expect(store.isOfflinePinned('r-1'), isFalse);
+    });
+
+    test('pin state round-trips through a fresh store', () async {
+      final s1 = LocalRouteStore();
+      await s1.init(overrideDirectory: tempDir);
+      await s1.save(makeRoute(id: 'r-1'));
+      await s1.save(makeRoute(id: 'r-2'));
+      await s1.pinOffline('r-1');
+
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: tempDir);
+
+      expect(s2.isOfflinePinned('r-1'), isTrue);
+      expect(s2.isOfflinePinned('r-2'), isFalse);
+      expect(s2.offlinePinnedRoutes.single.id, 'r-1');
+    });
+
+    test('deleting a pinned route also clears the pin', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'r-1'));
+      await store.pinOffline('r-1');
+      expect(store.isOfflinePinned('r-1'), isTrue);
+
+      await store.delete('r-1');
+
+      expect(store.isOfflinePinned('r-1'), isFalse);
+      // Sidecar reflects the removal across a cold start.
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: tempDir);
+      expect(s2.offlinePinnedIds, isEmpty);
+    });
+
+    test('offlinePinnedIds is unmodifiable', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.pinOffline('r-1');
+      expect(() => store.offlinePinnedIds.add('sneak'),
+          throwsUnsupportedError);
+    });
+
+    test('offlinePinnedRoutes is unmodifiable', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'r-1'));
+      await store.pinOffline('r-1');
+      expect(() => store.offlinePinnedRoutes.add(makeRoute(id: 'sneak')),
+          throwsUnsupportedError);
+    });
+
+    test('pin is independent of save/markSynced — local-only flag', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      // Pin a route that doesn't exist yet — flag stands, route absent.
+      await store.pinOffline('r-future');
+      expect(store.isOfflinePinned('r-future'), isTrue);
+      expect(store.offlinePinnedRoutes, isEmpty);
+
+      // Add the route — it now shows up in offlinePinnedRoutes.
+      await store.save(makeRoute(id: 'r-future'));
+      expect(store.offlinePinnedRoutes.single.id, 'r-future');
+    });
+  });
+
   group('lazy init resilience — _ensureDir', () {
     // Reason: an earlier version held `_dir` as a `late Directory`; a
     // save that raced ahead of `init()` (or hit an environment where

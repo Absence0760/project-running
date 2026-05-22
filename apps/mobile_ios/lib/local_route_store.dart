@@ -24,6 +24,18 @@ class LocalRouteStore extends ChangeNotifier {
   static const _syncedIdsFilename = 'synced_route_ids.json';
   File get _syncedIdsFile => File('${_dir!.path}/$_syncedIdsFilename');
 
+  /// Per-device "save for offline" pins. A pinned route is one the
+  /// user has explicitly marked to keep on this phone — surfaces a
+  /// download_done badge in the routes list, and (forward-looking)
+  /// would survive any future LRU eviction the route cache grows.
+  /// Local-only: not synced to Supabase. A starred route gates what
+  /// shows up on the watch picker; an offline-pinned route gates
+  /// what stays on this device.
+  final Set<String> _offlinePinnedIds = {};
+  static const _offlinePinnedIdsFilename = 'offline_pinned_route_ids.json';
+  File get _offlinePinnedIdsFile =>
+      File('${_dir!.path}/$_offlinePinnedIdsFilename');
+
   List<Route> get routes => List.unmodifiable(_routes);
 
   /// Routes that need to be pushed to the cloud on the next sync
@@ -32,6 +44,16 @@ class LocalRouteStore extends ChangeNotifier {
       _routes.where((r) => !_syncedIds.contains(r.id)).toList();
 
   int get unsyncedCount => unsyncedRoutes.length;
+
+  /// Unmodifiable snapshot of every route the user has pinned for
+  /// offline access. Order matches `_routes` (newest-first).
+  List<Route> get offlinePinnedRoutes => List.unmodifiable(
+        _routes.where((r) => _offlinePinnedIds.contains(r.id)),
+      );
+
+  bool isOfflinePinned(String routeId) => _offlinePinnedIds.contains(routeId);
+
+  Set<String> get offlinePinnedIds => Set.unmodifiable(_offlinePinnedIds);
 
   /// Test-only seed that populates the in-memory list directly,
   /// bypassing `init()` + `_loadAll()`. Mirrors `LocalRunStore.debugSeed`
@@ -63,6 +85,7 @@ class LocalRouteStore extends ChangeNotifier {
     _dir = dir;
     await _loadAll();
     await _loadSyncedIds();
+    await _loadOfflinePinnedIds();
   }
 
   /// Recover from a missed / failed init() by lazily creating the
@@ -170,6 +193,23 @@ class LocalRouteStore extends ChangeNotifier {
     if (_syncedIds.remove(routeId)) {
       await _persistSyncedIds();
     }
+    if (_offlinePinnedIds.remove(routeId)) {
+      await _persistOfflinePinnedIds();
+    }
+    notifyListeners();
+  }
+
+  /// Mark a route as kept-on-device. The pin is local-only — never
+  /// pushed to Supabase. Idempotent (re-pinning is a no-op).
+  Future<void> pinOffline(String routeId) async {
+    if (!_offlinePinnedIds.add(routeId)) return;
+    await _persistOfflinePinnedIds();
+    notifyListeners();
+  }
+
+  Future<void> unpinOffline(String routeId) async {
+    if (!_offlinePinnedIds.remove(routeId)) return;
+    await _persistOfflinePinnedIds();
     notifyListeners();
   }
 
@@ -246,6 +286,35 @@ class LocalRouteStore extends ChangeNotifier {
       // Not fatal — the in-memory set is still correct for this
       // session; the next sync attempt will write it again.
       debugPrint('Failed to persist synced route ids sidecar: $e');
+    }
+  }
+
+  Future<void> _loadOfflinePinnedIds() async {
+    final dir = _dir;
+    if (dir == null) return;
+    _offlinePinnedIds.clear();
+    final file = _offlinePinnedIdsFile;
+    if (!file.existsSync()) return;
+    try {
+      final raw = await file.readAsString();
+      final data = jsonDecode(raw);
+      if (data is Map && data['ids'] is List) {
+        for (final id in data['ids'] as List) {
+          if (id is String) _offlinePinnedIds.add(id);
+        }
+      }
+    } catch (e) {
+      debugPrint('Failed to load offline pinned route ids sidecar: $e');
+    }
+  }
+
+  Future<void> _persistOfflinePinnedIds() async {
+    try {
+      await _offlinePinnedIdsFile.writeAsString(jsonEncode({
+        'ids': _offlinePinnedIds.toList(),
+      }));
+    } catch (e) {
+      debugPrint('Failed to persist offline pinned route ids sidecar: $e');
     }
   }
 }

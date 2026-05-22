@@ -62,6 +62,8 @@ class RouteDetailScreen extends StatefulWidget {
 class _RouteDetailScreenState extends State<RouteDetailScreen> {
   late bool _isPublic = widget.route.isPublic;
   late bool _isStarred = widget.route.isStarred;
+  late bool _isOfflinePinned =
+      widget.routeStore.isOfflinePinned(widget.route.id);
   late List<String> _tags = List.from(widget.route.tags);
   // Mirrors widget.route.clubId initially so the transfer/detach button
   // can show the current ownership state and `_transferToClub` can
@@ -270,6 +272,28 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
   }
 
+  Future<void> _toggleOfflinePin() async {
+    final id = widget.route.id;
+    final next = !_isOfflinePinned;
+    setState(() => _isOfflinePinned = next);
+    if (next) {
+      // Make sure the JSON file is actually on disk — for a non-owner
+      // viewer who only ever saw the route via the Explore tab, the
+      // detail row may not yet be persisted locally. Mark synced so
+      // the SyncService doesn't try to push someone else's route up.
+      await widget.routeStore.save(widget.route, markSynced: true);
+      await widget.routeStore.pinOffline(id);
+    } else {
+      await widget.routeStore.unpinOffline(id);
+    }
+    if (mounted) {
+      showTopBanner(
+        context,
+        next ? 'Saved for offline use.' : 'Removed from offline saves.',
+      );
+    }
+  }
+
   Future<void> _toggleStar() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
@@ -428,6 +452,22 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               PopupMenuItem(value: 'gpx', child: Text('Share as GPX')),
               PopupMenuItem(value: 'kml', child: Text('Share as KML')),
             ],
+          ),
+          // Offline-pin affordance — local-only flag (never synced).
+          // Surfaces an inline tile below for discoverability and the
+          // AppBar icon here so it sits next to the star (which gates
+          // watch sync) — the two together read as "what stays where".
+          IconButton(
+            icon: Icon(
+              _isOfflinePinned ? Icons.download_done : Icons.download_outlined,
+              color: _isOfflinePinned
+                  ? const Color(0xFF22C55E)
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+            tooltip: _isOfflinePinned
+                ? 'Remove offline save'
+                : 'Save for offline use',
+            onPressed: _toggleOfflinePin,
           ),
           if (_isOwner)
             IconButton(
@@ -610,6 +650,40 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   onChanged: (_) => _togglePublic(),
                 ),
               ),
+
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+              child: SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Row(
+                  children: [
+                    Icon(
+                      _isOfflinePinned
+                          ? Icons.download_done
+                          : Icons.download_outlined,
+                      size: 20,
+                      color: _isOfflinePinned
+                          ? const Color(0xFF22C55E)
+                          : Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(_isOfflinePinned
+                        ? 'Saved for offline'
+                        : 'Save for offline'),
+                  ],
+                ),
+                subtitle: Text(
+                  _isOfflinePinned
+                      ? 'Route stays on this phone so you can run it without a connection.'
+                      : 'Keep this route on your phone for use without a network.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
+                value: _isOfflinePinned,
+                onChanged: (_) => _toggleOfflinePin(),
+              ),
+            ),
 
             if (route.description != null && route.description!.isNotEmpty)
               Padding(

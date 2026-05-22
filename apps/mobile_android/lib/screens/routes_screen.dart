@@ -675,6 +675,8 @@ class RoutesScreenState extends State<RoutesScreen> {
                 // be unsynced — bookmarked rows are server-pulled.
                 final isUnsynced = isOwned &&
                     !ownedIds.intersection(_syncedOwnedIds()).contains(route.id);
+                final isOfflinePinned =
+                    widget.routeStore.isOfflinePinned(route.id);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
@@ -781,6 +783,17 @@ class RoutesScreenState extends State<RoutesScreen> {
                               Icons.cloud_upload_outlined,
                               size: 16,
                               color: theme.colorScheme.tertiary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        if (isOfflinePinned) ...[
+                          const Tooltip(
+                            message: 'Saved for offline',
+                            child: Icon(
+                              Icons.download_done,
+                              size: 16,
+                              color: Color(0xFF22C55E),
                             ),
                           ),
                           const SizedBox(width: 4),
