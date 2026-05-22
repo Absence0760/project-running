@@ -11,7 +11,10 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 import '../backup.dart';
+import '../backup_server_client.dart';
 import '../ble_heart_rate.dart';
 import '../goals.dart';
 import '../local_route_store.dart';
@@ -281,7 +284,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final tmp = await getTemporaryDirectory();
       final ts = DateTime.now().toIso8601String().replaceAll(RegExp(r'[:.]'), '-');
       final file = File('${tmp.path}/run-app-backup-$ts.zip');
-      await BackupService(api: api).createBackup(outputFile: file);
+      final serviceBase = dotenv.env['LIVE_HUB_URL']?.trim() ?? '';
+      await BackupService(
+        api: api,
+        serverClient: serviceBase.isEmpty
+            ? null
+            : BackupServerClient(baseUrl: serviceBase),
+      ).createBackup(outputFile: file);
       await Share.shareXFiles(
         [XFile(file.path)],
         text: 'Run app backup',

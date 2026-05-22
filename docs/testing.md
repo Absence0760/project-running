@@ -158,6 +158,10 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/backup_server_client_test.dart` — 13 tests
+
+Pluggable-fetcher coverage for `BackupServerClient.fetchBackupToFile`, the HTTP client that drives the Go service's `POST /v1/export?format=backup` path. Tests inject canned request + download fetchers so the round-trip is observable without sockets. Covers: isConfigured edges (empty vs non-empty baseUrl); preconditions (unconfigured / empty token throw `BackupServerError`); round-trip (POSTs `{format: 'backup'}` with the bearer token at the right URL, then downloads the signed URL to the supplied File; trims trailing slash on baseUrl); failure modes (non-200 export response, missing signed URL, empty-string signed URL, downloadFetcher exception propagation); and count extraction across int / num / missing JSON shapes. Backs the server-first → local-fallback dance in `BackupService.createBackup`.
+
 ### `apps/mobile_android/test/backup_test.dart` — 31 tests
 
 Round-trip + invariant coverage for `BackupService.createBackup` + `restore`. 24 existing manifest / offline-restore / progress / api:null tests, plus a new **writeBackupZipStreaming group** (7 tests) added with the streaming + parallel writer refactor in May 2026 — see `decisions.md § 66`.

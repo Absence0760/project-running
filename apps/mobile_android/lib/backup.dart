@@ -10,6 +10,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import 'backup_server_client.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 
@@ -27,8 +28,9 @@ import 'local_run_store.dart';
 /// (`settings_screen._restoreBackup`) only requires `runStore` for the
 /// offline branch; it picks `api`-less mode when `api` is null.
 class BackupService {
-  BackupService({this.api})
-      : _client = api == null ? null : _maybeClient();
+  BackupService({this.api, BackupServerClient? serverClient})
+      : _client = api == null ? null : _maybeClient(),
+        _serverClient = serverClient;
 
   /// Try to grab `Supabase.instance.client` without throwing when
   /// Supabase wasn't initialized. Release builds without
@@ -45,6 +47,11 @@ class BackupService {
 
   final ApiClient? api;
   final SupabaseClient? _client;
+  /// Optional injection for the Go-service backup path. When null
+  /// or unconfigured (no LIVE_HUB_URL), createBackup goes straight
+  /// to the local writer. Tests pass a fake to assert the
+  /// server-first → local-fallback dance.
+  final BackupServerClient? _serverClient;
 
   static const _format = 'run-app-backup';
   static const _version = 1;
@@ -80,6 +87,40 @@ class BackupService {
     }
     final userId = api.userId;
     if (userId == null) throw Exception('Not authenticated');
+
+    // Server-first: when the Go service is configured + the user has
+    // a session, ask the server to build the archive and stream the
+    // signed-URL response straight to disk. Cheaper for the device
+    // (no fan-out downloads, no zip encode) and uses less cellular.
+    // Any failure (HTTP non-200, IO error, server cap-overflow) falls
+    // through to the local writer — never blocks the user from
+    // getting a backup because the server hiccuped. See
+    // [decisions.md § 66] for the trade-off (server caps at 5000
+    // runs; the local writer covers the rest of the long tail).
+    final server = _serverClient;
+    if (server != null && server.isConfigured) {
+      final token = client.auth.currentSession?.accessToken;
+      if (token != null && token.isNotEmpty) {
+        try {
+          onProgress?.call(const BackupProgress.stage('server'));
+          await server.fetchBackupToFile(
+            accessToken: token,
+            outputFile: outputFile,
+          );
+          onProgress?.call(const BackupProgress.done());
+          return outputFile;
+        } catch (e) {
+          debugPrint(
+            '[backup] server path failed, falling back to local: $e',
+          );
+          // Clean up any partial download so the local writer
+          // doesn't see a half-written file.
+          if (outputFile.existsSync()) {
+            try { outputFile.deleteSync(); } catch (_) {}
+          }
+        }
+      }
+    }
 
     onProgress?.call(const BackupProgress.stage('runs'));
     final runs = await api.fetchRunRowsRaw();

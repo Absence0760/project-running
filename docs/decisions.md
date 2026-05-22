@@ -1372,7 +1372,7 @@ The new shape:
 - **Write side** — `writeBackupZipStreaming` opens a `ZipFileEncoder` writing incrementally to the output file. Metadata JSON entries land first. Track downloads run in bounded-concurrency batches (`_kTrackDownloadConcurrency = 6`); each batch's bytes are written to the encoder + dropped before the next batch fires. Peak heap is `O(concurrency × avg-track-size)` — roughly 5 MB regardless of total run count.
 - **Read side** — `restore` opens `InputFileStream(path)` and feeds it to `ZipDecoder().decodeStream`. The decoder reads chunks on demand and lazy-loads per-file content; peak heap is the largest single track, not the whole archive.
 
-**Why not push backup to the Go service via `/v1/export`:** the server-side data-export path (`apps/job_worker/internal/dataexport/server.go`) caps a single call at `MaxRunsPerExport = 5000`, and supports `csv` + `gpx` formats today. Adding a `format=backup` mode is a real possibility, but the cap means the server-side path is *less* scalable than the new local one for power users, while still requiring online + rate-limit headroom. The cap exists because the server is fronted by a 150-s function timeout and bounded memory; raising it needs a streaming-Storage response. Tracked in [roadmap.md](roadmap.md) as a follow-up. The local streaming path stays the primary mechanism either way — restore must work offline, so the writer + reader on the device are the load-bearing pieces.
+**Server-side `format=backup` (shipped May 2026, follow-up to the original deferral):** the Go data-export service (`apps/job_worker/internal/dataexport/server.go`) gained a `format=backup` mode that emits the same `run-app-backup` v1 shape `BackupService.restore` reads. Mobile `BackupService.createBackup` tries the server first when `LIVE_HUB_URL` is configured + the user is signed in; **falls through to the local streaming writer on any failure** — non-200 response, IO error, missing access token, server cap-overflow, anything. The cap stays at `MaxRunsPerExport = 5000`. Power users beyond that automatically land on the local writer (which scales past 10 000 runs); typical users get the bandwidth + battery savings of letting the server do the fan-out track downloads. Lifting the cap further needs paginated runs select + streaming Storage upload, both bigger changes than the load-bearing local fix called for. Web has no server-side path because the web app is desktop-shaped — local browser memory handles the writer fine once it switches to per-entry streaming.
 
 **Sanity numbers** (avg 50 KB gzipped per track, 100 ms RTT, 6× concurrent downloads):
 
@@ -1393,7 +1393,7 @@ The new shape:
 
 - Reintroducing the in-memory `Archive` + `_encodeArchiveInIsolate` shape. The `ZipFileEncoder` + `InputFileStream` arch guard in `architecture_guards_test.dart` pins this; loosening it means OOMs on phones.
 - Bumping `_kTrackDownloadConcurrency` past ~12. Storage will start to throttle, and per-phone connection-pool exhaustion shows up as flaky "track download failed" entries. Six is the empirical sweet spot.
-- Switching backup to the Go `/v1/export` path without first lifting the 5 000-run cap there — for the power users this work targets, the server path is currently a *downgrade*.
+- Making the server-side `/v1/export?format=backup` path the only one. The local writer is the safety net for power users (> 5 000 runs), for offline / no-LIVE_HUB_URL builds, and for any IO blip on the Go service.
 
 ---
 
