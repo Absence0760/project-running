@@ -158,6 +158,62 @@ Persistence round-trips against a real temporary filesystem directory. Tests inj
 - Corrupt `.json` file in the directory is tolerated during init (skipped)
 - Multi-run init sorts newest-first by `startedAt`
 
+### `apps/mobile_android/test/backup_format_compat_test.dart` — 12 tests
+
+Cross-language wire-format compatibility test. The Go service at `apps/job_worker/internal/dataexport/server.go` produces `run-app-backup` v1 archives via `BuildBackupZip`; the mobile `BackupService.restore` reads them. These two implementations live in different languages and can drift on JSON shape, ZIP entry encoding, or manifest fields. This file hand-crafts an archive that mirrors what the Go writer produces — `json.MarshalIndent` 2-space encoding, `zip.Store` for raw gzipped tracks, manifest emitted last — and runs the Dart reader against it.
+
+**Manifest (2 tests):** every manifest field Go emits parses cleanly; `exported_from = "go-service"` is accepted without warning.
+
+**Optional pointer fields (3 tests):** Go's `ExportRun` + `ExportRoute` structs serialise nil pointers as `null`/omitted; Dart restore must tolerate both. Tests pin: runs with all fields populated round-trip intact (including `external_id`, `is_public`, `title`, `avg_bpm`); routes with every optional pointer set round-trip (waypoints, distance, elevation, surface, slug, tags, featured, run_count, is_starred, description, club_id, created_at, updated_at); routes with NO optional fields restore with model defaults (no crashes).
+
+**Track entries (4 tests):** the load-bearing case — raw gzipped JSON bytes archived with `zip.Store` (no deflate) decode to waypoints on the Dart side; per-point `bpm` in a track survives byte-for-byte (today the Dart `Waypoint` model drops it — the test pins that contract, ready to flip when restore extends to read `bpm`); 100-point dense track round-trips without truncation; a run with no `track_url` still imports as an empty-track row.
+
+**Profile (2 tests):** Go's `stripProfileID` runs before serialise — the archive must not carry `profile.id`; empty `settings_prefs` object encodes + parses cleanly.
+
+**Regression (1 test):** end-to-end mixed-source backup — 3 runs (2 with tracks), 2 routes, profile + prefs — restores fully. Caught the bug where offline restore was silently dropping `is_starred` / `description` / `club_id` from route rows; fixed in `apps/mobile_android/lib/backup.dart` by plumbing the missing keys through.
+
+### `apps/mobile_android/test/wear_routes_bridge_test.dart` — 17 tests
+
+Pin the listener-attach / push-on-change / starred-only filter contract on the phone-side `WearRoutesBridge`. Uses `TestDefaultBinaryMessengerBinding.setMockMethodCallHandler` to intercept the `run_app/wear_routes` `MethodChannel` — no DI seam needed.
+
+**attach (6 tests):** immediately pushes the current starred subset; pushes on every `save()` to the store; payload contains `id` + `name` + `distance_m` + `waypoints[{lat,lng}]`; only starred routes land in the payload (plain routes filtered out); empty starred list still pushes (lets the watch clear its cache); `updated_at_ms` stamps roughly current epoch millis.
+
+**detach (3 tests):** removes the listener so subsequent store changes don't push; detach-without-attach is a no-op; double-detach is a no-op.
+
+**re-attach (2 tests):** second `attach` replaces the first listener — no leak (verifies a single save fires ONE push, not two); attach-after-detach is also clean.
+
+**platform error handling (3 tests):** `MissingPluginException` is silently swallowed (iOS / unregistered plugin); `PlatformException` is silently swallowed (Data Layer unavailable); a swallowed exception does NOT detach the listener (subsequent saves still push).
+
+**integration with LocalRouteStore (3 tests):** `saveBatch` triggers exactly one push (single listener notification); `delete` of a starred route triggers a fresh push without the deleted id; starring an existing route triggers a push that includes it.
+
+### `apps/job_worker/internal/supabase_dataexport_test.go` — 21 tests
+
+HTTP-level coverage for the four `SupabaseClient` methods added in the May 2026 backup work: `FetchExportRoutes`, `FetchExportProfile`, `FetchUserSettingsPrefs`, `DownloadRawTrackBytes`. Uses `httptest.NewServer` to mimic the Supabase REST + Storage surface; asserts that requests are shaped correctly (path, query params, headers) AND decoded responses match the wire contract.
+
+**FetchExportRoutes (5 tests):** happy path with two-row response (path, select param, auth + apikey headers correct); empty result returns non-nil empty slice; 5xx returns `*HTTPError`; malformed JSON returns error; user_id is URL-encoded (legacy non-uuid case with `+`).
+
+**FetchExportProfile (4 tests):** happy path returns parsed map (display_name + preferred_unit); not-present row returns (nil, nil) so the export builder can include null without ceremony; column-restricted fields (`subscription_tier`, `subscription_at`, `parkrun_number`) are absent from the SELECT query; pass-through `*HTTPError` on 403.
+
+**FetchUserSettingsPrefs (3 tests):** happy path returns the parsed prefs map (incl. hr_zones array round-trip); no-row response returns non-nil empty map (degrade-to-empty); null prefs column also returns empty map.
+
+**DownloadRawTrackBytes (4 tests):** bytes round-trip verbatim (no decode, matches the contract); 404 returns `*HTTPError`; auth headers present (apikey + Authorization); 1MB body round-trips without truncation.
+
+**Cross-cutting (5 tests):** `FetchExportRoutes` with every optional pointer field set decodes to non-nil pointers (DistanceM, ElevationM, Surface, IsPublic, Slug, Featured, RunCount, IsStarred, Description, ClubID, CreatedAt, UpdatedAt); context cancellation propagates; all 4 new methods carry both apikey + Authorization headers via the shared `do()` helper (defensive guard against a future refactor that bypasses it).
+
+### `apps/web/src/lib/restore_orchestrator.test.ts` — 25 tests
+
+Pure-logic coverage of the restore orchestrator extracted from `backup.ts`. The Supabase upserts live behind a small `RestoreBackend` interface; tests substitute a counter-tracking fake so the loop is observable without booting supabase-js. Production wires a thin supabase-js adapter (`supabaseRestoreBackend()` in `backup.ts`); tests wire the fake (`makeFakeBackend()`).
+
+**profile + settings (5 tests):** profile present → `upsertProfile` fires with stripped fields + user id; null profile → no call; `upsertProfile` error becomes a warning, downstream stages still process; non-empty `settingsPrefs` triggers `upsertSettings`; empty prefs is a no-op; settings error → warning + downstream continues.
+
+**runs + tracks (10 tests):** happy-path single run uploads track BEFORE upserting row (order pin); run with no track in archive still upserts the row with `track_url=null`; uploadTrack failure → warning, row still upserts; upsertRun failure → warning, other rows continue (partial-success contract); `generateNewIds` replaces every run id; with `generateNewIds`, the track upload path uses the NEW id even though the archive is keyed by ORIGINAL id; event_id resolution — unknown ids nulled, known ids preserved; `fetchValidEventIds` is only called when ids are present; resolver error bubbles (current contract pinned); `coalesceActivityType` inserts `'run'` when metadata missing the key, and preserves explicit values.
+
+**routes (3 tests):** happy-path upserts with new user_id stamped; `generateNewIds` replaces route ids; failure on one route doesn't sink the others.
+
+**progress events (2 tests):** stages emit in order (profile → runs → routes → done); running totals report 0 → 1 → 2 for a 3-run input.
+
+**edge cases (3 tests):** empty parsed backup is a no-op (zero backend calls); 100-run backup processes all rows in order without dropping + finishes well under 2 s; `coalesceActivityType` clones the metadata input rather than mutating it.
+
 ### `apps/mobile_android/test/backup_server_client_test.dart` — 13 tests
 
 Pluggable-fetcher coverage for `BackupServerClient.fetchBackupToFile`, the HTTP client that drives the Go service's `POST /v1/export?format=backup` path. Tests inject canned request + download fetchers so the round-trip is observable without sockets. Covers: isConfigured edges (empty vs non-empty baseUrl); preconditions (unconfigured / empty token throw `BackupServerError`); round-trip (POSTs `{format: 'backup'}` with the bearer token at the right URL, then downloads the signed URL to the supplied File; trims trailing slash on baseUrl); failure modes (non-200 export response, missing signed URL, empty-string signed URL, downloadFetcher exception propagation); and count extraction across int / num / missing JSON shapes. Backs the server-first → local-fallback dance in `BackupService.createBackup`.

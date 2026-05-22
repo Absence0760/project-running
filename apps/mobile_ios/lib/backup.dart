@@ -642,6 +642,16 @@ class BackupService {
               tags: (r['tags'] as List?)?.cast<String>() ?? const [],
               featured: r['featured'] == true,
               runCount: (r['run_count'] as num?)?.toInt() ?? 0,
+              // Bug caught by `backup_format_compat_test.dart` in
+              // May 2026 — the offline restore was dropping
+              // is_starred / description / club_id from the
+              // archived route row. A Go-built backup (which
+              // includes these) restored as an unstarred, descriptionless,
+              // detached route. Plumb them through so the round-trip
+              // matches what Go writes.
+              isStarred: r['is_starred'] == true,
+              description: r['description'] as String?,
+              clubId: r['club_id'] as String?,
               createdAt: r['created_at'] != null
                   ? DateTime.tryParse(r['created_at'] as String)
                   : null,

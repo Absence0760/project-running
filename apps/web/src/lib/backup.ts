@@ -2,12 +2,13 @@ import { supabase } from './supabase';
 import { auth } from './stores/auth.svelte';
 import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
 import type { BackupProgress } from './backup_writer';
+import { parseBackupArchive } from './backup_reader';
 import {
-	parseBackupArchive,
-	stripServerManagedProfileFields,
-	coalesceActivityType,
-	extractEventIds
-} from './backup_reader';
+	restoreOrchestrate,
+	type RestoreBackend,
+	type RestoreProgress,
+	type RestoreResult
+} from './restore_orchestrator';
 
 /**
  * Backup + restore for a user's runs, routes, and profile. See
@@ -29,11 +30,7 @@ import {
 export { BACKUP_FORMAT, BACKUP_VERSION };
 export type { BackupProgress };
 
-export interface RestoreProgress {
-	stage: 'reading' | 'profile' | 'tracks' | 'runs' | 'routes' | 'done';
-	current: number;
-	total: number;
-}
+export type { RestoreProgress, RestoreResult } from './restore_orchestrator';
 
 export async function createBackup(
 	onProgress?: (p: BackupProgress) => void
@@ -114,14 +111,6 @@ async function defaultTrackFetcher(trackUrl: string): Promise<Uint8Array> {
 export { buildBackupZip } from './backup_writer';
 export type { BuildBackupZipOptions } from './backup_writer';
 
-export interface RestoreResult {
-	runsImported: number;
-	routesImported: number;
-	tracksUploaded: number;
-	profileRestored: boolean;
-	warnings: string[];
-}
-
 export async function restoreBackup(
 	file: File | Blob,
 	opts: { generateNewIds?: boolean; onProgress?: (p: RestoreProgress) => void } = {}
@@ -133,137 +122,54 @@ export async function restoreBackup(
 	onProgress?.({ stage: 'reading', current: 0, total: 1 });
 	const parsed = await parseBackupArchive(file);
 
-	const result: RestoreResult = {
-		runsImported: 0,
-		routesImported: 0,
-		tracksUploaded: 0,
-		profileRestored: false,
-		warnings: [],
-	};
-
-	// Profile + settings first — later rows may reference preferences.
-	if (parsed.profile) {
-		onProgress?.({ stage: 'profile', current: 0, total: 1 });
-		try {
-			const portableProfile = stripServerManagedProfileFields(parsed.profile);
-			await supabase.from('user_profiles').upsert({
-				...portableProfile,
-				id: userId
-			});
-			result.profileRestored = true;
-		} catch (e) {
-			result.warnings.push(`profile: ${(e as Error).message}`);
-		}
-	}
-	if (Object.keys(parsed.settingsPrefs).length > 0) {
-		try {
-			await supabase.from('user_settings').upsert({
-				user_id: userId,
-				prefs: parsed.settingsPrefs,
-				updated_at: new Date().toISOString()
-			});
-		} catch (e) {
-			result.warnings.push(`settings_prefs: ${(e as Error).message}`);
-		}
-	}
-
-	// Runs + tracks. We upload the track first, then insert the row with
-	// a track_url pointing at the freshly-uploaded file. If the track is
-	// missing in the archive we still insert the row without it.
-	if (parsed.runs.length > 0) {
-		const runs = parsed.runs;
-
-		// Resolve valid event ids up front — we null any `event_id` that
-		// doesn't resolve, so a cross-account import doesn't FK-fail.
-		const incomingEventIds = extractEventIds(runs);
-		const validEventIds = new Set<string>();
-		if (incomingEventIds.length > 0) {
-			const { data } = await supabase
-				.from('events')
-				.select('id')
-				.in('id', incomingEventIds);
-			for (const e of data ?? []) validEventIds.add(e.id);
-		}
-
-		let i = 0;
-		for (const r of runs) {
-			onProgress?.({ stage: 'runs', current: i, total: runs.length });
-			const origId = r.id as string;
-			const newId = opts.generateNewIds ? crypto.randomUUID() : origId;
-
-			// Track upload.
-			let trackUrl: string | null = null;
-			const trackBytes = await parsed.getTrackBytes(origId);
-			if (trackBytes) {
-				try {
-					const path = `${userId}/${newId}.json.gz`;
-					const { error } = await supabase.storage
-						.from('runs')
-						.upload(path, trackBytes, {
-							contentType: 'application/gzip',
-							upsert: true,
-							cacheControl: '0'
-						});
-					if (error) throw error;
-					trackUrl = path;
-					result.tracksUploaded++;
-				} catch (e) {
-					result.warnings.push(`track ${origId}: ${(e as Error).message}`);
-				}
-			}
-
-			const eventId =
-				typeof r.event_id === 'string' && validEventIds.has(r.event_id)
-					? r.event_id
-					: null;
-
-			const row = {
-				...r,
-				id: newId,
-				user_id: userId,
-				event_id: eventId,
-				track_url: trackUrl,
-				metadata: coalesceActivityType(r.metadata)
-			};
-
-			try {
-				const { error } = await supabase
-					.from('runs')
-					.upsert(row, { onConflict: 'id' });
-				if (error) throw error;
-				result.runsImported++;
-			} catch (e) {
-				result.warnings.push(`run ${origId}: ${(e as Error).message}`);
-			}
-			i++;
-		}
-	}
-
-	// Routes — simpler, no Storage dependency.
-	if (parsed.routes.length > 0) {
-		const routes = parsed.routes;
-		let i = 0;
-		for (const r of routes) {
-			onProgress?.({ stage: 'routes', current: i, total: routes.length });
-			const newId = opts.generateNewIds ? crypto.randomUUID() : (r.id as string);
-			try {
-				const { error } = await supabase
-					.from('routes')
-					.upsert({ ...r, id: newId, user_id: userId }, { onConflict: 'id' });
-				if (error) throw error;
-				result.routesImported++;
-			} catch (e) {
-				result.warnings.push(`route ${r.id}: ${(e as Error).message}`);
-			}
-			i++;
-		}
-	}
-
-	onProgress?.({ stage: 'done', current: 1, total: 1 });
-	return result;
+	return restoreOrchestrate(parsed, userId, supabaseRestoreBackend(), {
+		generateNewIds: opts.generateNewIds,
+		onProgress
+	});
 }
 
-function stripId(row: Record<string, unknown>): Record<string, unknown> {
-	const { id: _id, ...rest } = row;
-	return rest;
+/**
+ * Production [RestoreBackend] adapter — thin wrappers around the
+ * existing supabase-js calls. Tests substitute a counter-tracking
+ * fake; see `restore_orchestrator.test.ts`.
+ */
+function supabaseRestoreBackend(): RestoreBackend {
+	return {
+		async upsertProfile(row) {
+			const { error } = await supabase.from('user_profiles').upsert(row);
+			if (error) throw error;
+		},
+		async upsertSettings(prefs) {
+			const userId = auth.user?.id;
+			if (!userId) throw new Error('Not authenticated');
+			const { error } = await supabase.from('user_settings').upsert({
+				user_id: userId,
+				prefs,
+				updated_at: new Date().toISOString()
+			});
+			if (error) throw error;
+		},
+		async uploadTrack(path, bytes) {
+			const { error } = await supabase.storage.from('runs').upload(path, bytes, {
+				contentType: 'application/gzip',
+				upsert: true,
+				cacheControl: '0'
+			});
+			if (error) throw error;
+		},
+		async upsertRun(row) {
+			const { error } = await supabase.from('runs').upsert(row, { onConflict: 'id' });
+			if (error) throw error;
+		},
+		async upsertRoute(row) {
+			const { error } = await supabase.from('routes').upsert(row, { onConflict: 'id' });
+			if (error) throw error;
+		},
+		async fetchValidEventIds(ids) {
+			const { data } = await supabase.from('events').select('id').in('id', ids);
+			const valid = new Set<string>();
+			for (const e of data ?? []) valid.add(e.id);
+			return valid;
+		}
+	};
 }
