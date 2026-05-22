@@ -2,7 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
+	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { getUnit } from '$lib/units.svelte';
 	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import type { TrackPoint } from '$lib/types';

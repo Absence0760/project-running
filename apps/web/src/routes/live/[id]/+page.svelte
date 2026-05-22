@@ -2,7 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
+	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
 	import { supabase } from '$lib/supabase';
 	import {

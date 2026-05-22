@@ -2,7 +2,8 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import maplibregl from 'maplibre-gl';
-	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
+	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import { fetchHeatmapPoints, nearbyPublicRoutes } from '$lib/data';
 	import type { Route } from '$lib/types';

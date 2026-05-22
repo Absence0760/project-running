@@ -20,7 +20,8 @@
 	import TrackPreview from './TrackPreview.svelte';
 	import { fetchClippedRouteForViewer } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { PUBLIC_MAPTILER_KEY } from '$env/static/public';
+	import { env } from '$env/dynamic/public';
+	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { buildStaticMapUrl } from '$lib/static_map';
 
 	let {
