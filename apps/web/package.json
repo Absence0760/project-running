@@ -40,6 +40,7 @@
 		"@sentry/sveltekit": "^10.53.1",
 		"@supabase/ssr": "^0.10.3",
 		"@supabase/supabase-js": "^2.106.0",
+		"@zip.js/zip.js": "^2.7.45",
 		"fit-file-parser": "^3.0.0",
 		"html-to-image": "^1.11.13",
 		"isomorphic-dompurify": "^3.14.0",

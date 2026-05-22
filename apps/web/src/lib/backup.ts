@@ -1,6 +1,8 @@
 import JSZip from 'jszip';
 import { supabase } from './supabase';
 import { auth } from './stores/auth.svelte';
+import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
+import type { BackupProgress } from './backup_writer';
 
 /**
  * Backup + restore for a user's runs, routes, and profile. See
@@ -8,16 +10,19 @@ import { auth } from './stores/auth.svelte';
  *
  * The archive keeps GPS tracks pre-gzipped so restore can upload them
  * straight into the `runs` Storage bucket without a re-encode step.
+ *
+ * **Streaming construction (May 2026):** the write side delegates to
+ * `buildBackupZip` in `./backup_writer.ts`, which uses
+ * `@zip.js/zip.js`'s `ZipWriter` + `BlobWriter`. Each entry's bytes
+ * flush to the underlying Blob and the JS-side copy drops. Restore
+ * still uses JSZip — the read path needs random access by name
+ * (`zip.file('runs.json')`), which JSZip supports out of the box;
+ * the write path was the heap hot-spot. Mirrors the mobile fix in
+ * [decisions.md § 66](../../../docs/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
  */
 
-export const BACKUP_FORMAT = 'run-app-backup';
-export const BACKUP_VERSION = 1;
-
-export interface BackupProgress {
-	stage: 'runs' | 'tracks' | 'routes' | 'profile' | 'writing' | 'done';
-	current: number;
-	total: number;
-}
+export { BACKUP_FORMAT, BACKUP_VERSION };
+export type { BackupProgress };
 
 export interface RestoreProgress {
 	stage: 'reading' | 'profile' | 'tracks' | 'runs' | 'routes' | 'done';
@@ -57,79 +62,52 @@ export async function createBackup(
 		.eq('user_id', userId)
 		.maybeSingle();
 
-	const zip = new JSZip();
-
 	// Strip user_id from rows so the archive is re-homeable.
 	const runsOut = runRows.map((r) => {
 		const { user_id: _uid, ...rest } = r as Record<string, unknown>;
 		return rest;
 	});
-	zip.file('runs.json', JSON.stringify(runsOut, null, 2));
-
 	const routesOut = (routes ?? []).map((r) => {
 		const { user_id: _uid, ...rest } = r as Record<string, unknown>;
 		return rest;
 	});
-	zip.file('routes.json', JSON.stringify(routesOut, null, 2));
 
-	zip.file(
-		'profile.json',
-		JSON.stringify(
-			{
-				profile: profile ? stripId(profile) : null,
-				settings_prefs: userSettings?.prefs ?? {},
-			},
-			null,
-			2
-		)
+	const runsWithTracks = runRows.filter(
+		(r): r is typeof r & { track_url: string } =>
+			typeof r.track_url === 'string' && r.track_url.length > 0
 	);
 
-	// Tracks — download each one as the raw gzipped blob and drop it
-	// into the archive verbatim. We deliberately keep the .json.gz form
-	// so restore is a byte-for-byte upload.
-	const tracksFolder = zip.folder('tracks');
-	let fetched = 0;
-	const runsWithTracks = runRows.filter((r) => typeof r.track_url === 'string' && r.track_url);
-	for (const r of runsWithTracks) {
-		onProgress?.({ stage: 'tracks', current: fetched, total: runsWithTracks.length });
-		try {
-			const { data, error } = await supabase.storage
-				.from('runs')
-				.download(r.track_url as string);
-			if (error || !data) {
-				console.warn('track download failed', r.id, error);
-				fetched++;
-				continue;
-			}
-			const buf = new Uint8Array(await data.arrayBuffer());
-			tracksFolder!.file(`${r.id}.json.gz`, buf);
-		} catch (e) {
-			console.warn('track download threw', r.id, e);
-		}
-		fetched++;
-	}
-	onProgress?.({ stage: 'tracks', current: runsWithTracks.length, total: runsWithTracks.length });
-
-	const manifest = {
-		format: BACKUP_FORMAT,
-		version: BACKUP_VERSION,
-		exported_at: new Date().toISOString(),
-		exported_by_user_id: userId,
-		exported_from: 'web',
-		counts: {
-			runs: runRows.length,
-			routes: (routes ?? []).length,
-			goals: 0,
-			tracks: runsWithTracks.length,
-		},
-	};
-	zip.file('manifest.json', JSON.stringify(manifest, null, 2));
-
-	onProgress?.({ stage: 'writing', current: 0, total: 1 });
-	const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
-	onProgress?.({ stage: 'done', current: 1, total: 1 });
-	return blob;
+	return buildBackupZip({
+		runsOut,
+		routesOut,
+		profile: profile ?? null,
+		settingsPrefs: userSettings?.prefs ?? {},
+		userId,
+		exportedFrom: 'web',
+		runsWithTracks,
+		fetchTrackBytes: defaultTrackFetcher,
+		onProgress,
+	});
 }
+
+/**
+ * Default Storage-backed track fetcher. Pulled out as a function so
+ * tests can substitute a deterministic in-memory fake without booting
+ * supabase-js.
+ */
+async function defaultTrackFetcher(trackUrl: string): Promise<Uint8Array> {
+	const { data, error } = await supabase.storage.from('runs').download(trackUrl);
+	if (error || !data) {
+		throw error ?? new Error('track download returned no body');
+	}
+	return new Uint8Array(await data.arrayBuffer());
+}
+
+// `buildBackupZip` lives in `./backup_writer.ts` so the streaming +
+// parallel-download contract is unit-testable without supabase-js.
+// Re-exported here for callers that still import from `./backup`.
+export { buildBackupZip } from './backup_writer';
+export type { BuildBackupZipOptions } from './backup_writer';
 
 export interface RestoreResult {
 	runsImported: number;
