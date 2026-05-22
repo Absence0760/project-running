@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -769,6 +770,396 @@ func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
 		}
 	}
 	t.Fatal("profile.json not found in archive")
+}
+
+// ---- format=backup edge cases ----------------------------------------
+
+func TestServer_BackupFormatMissingBearerIs401(t *testing.T) {
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 401 {
+		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	}
+}
+
+func TestServer_BackupFormatExpiredTokenIs401(t *testing.T) {
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: &fakeBackend{}}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	// expDelta = -60 means the token expired 60 seconds ago.
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", -60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 401 {
+		t.Fatalf("status=%d, want 401", resp.StatusCode)
+	}
+}
+
+func TestServer_BackupFormatRateLimitedReturns429(t *testing.T) {
+	be := &fakeBackend{denied: true, retryAfter: 1800}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 429 {
+		t.Fatalf("status=%d, want 429", resp.StatusCode)
+	}
+	if resp.Header.Get("Retry-After") != "1800" {
+		t.Errorf("Retry-After=%q, want 1800", resp.Header.Get("Retry-After"))
+	}
+}
+
+func TestServer_BackupFormatRateLimitRpcErrorFailsClosed(t *testing.T) {
+	be := &fakeBackend{rateErr: errors.New("db down")}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 429 {
+		t.Fatalf("status=%d, want 429 (fail-closed)", resp.StatusCode)
+	}
+}
+
+func TestServer_BackupFormatRoutesFetchErrorReturns500(t *testing.T) {
+	be := &fakeBackend{
+		runs:      []ExportRun{},
+		routesErr: errors.New("routes table on fire"),
+	}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 500 {
+		t.Fatalf("status=%d, want 500", resp.StatusCode)
+	}
+	body, _ := io.ReadAll(resp.Body)
+	if !strings.Contains(string(body), "routes_fetch_failed") {
+		t.Errorf("error body=%s", body)
+	}
+}
+
+func TestServer_BackupFormatProfileFetchErrorDegradesGracefully(t *testing.T) {
+	// A profile fetch failure must NOT sink the whole backup —
+	// runs + routes still get archived, profile.profile is null.
+	be := &fakeBackend{
+		runs:       []ExportRun{},
+		routes:     []ExportRoute{},
+		profileErr: errors.New("rpc unavailable"),
+		prefs:      map[string]interface{}{"unit": "km"},
+	}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
+	}
+	if len(be.uploads) != 1 {
+		t.Fatalf("expected 1 upload; got %d", len(be.uploads))
+	}
+}
+
+func TestServer_BackupFormatPrefsFetchErrorDegradesGracefully(t *testing.T) {
+	be := &fakeBackend{
+		runs:     []ExportRun{},
+		routes:   []ExportRoute{},
+		profile:  map[string]interface{}{"display_name": "Test"},
+		prefsErr: errors.New("user_settings unavailable"),
+	}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		t.Fatalf("status=%d, body=%s", resp.StatusCode, body)
+	}
+}
+
+func TestServer_BackupFormatRunsFetchErrorReturns500(t *testing.T) {
+	be := &fakeBackend{runsErr: errors.New("runs table down")}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	base, teardown := newTestServer(t, srv)
+	defer teardown()
+	req, _ := http.NewRequest(http.MethodPost, base+"/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 60))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 500 {
+		t.Fatalf("status=%d, want 500", resp.StatusCode)
+	}
+}
+
+func TestBuildBackupZip_PathTraversalAttemptIsBlocked(t *testing.T) {
+	// Variations that the path-shape assertion must reject. Each
+	// of these would feed an unconstrained string into the
+	// service-role Storage downloader if the guard regressed.
+	traversalAttempts := []string{
+		"../../../etc/passwd",
+		"/etc/passwd",
+		"other-user/run-1.json.gz",       // wrong owner prefix
+		"uid/../other-user/r-1.json.gz",  // dot-dot mid-string
+		"uid/run-1.json",                  // wrong suffix
+		"uid//run-1.json.gz",              // double slash
+		"uid/r-1.json.gz/extra",           // suffix-after-suffix
+	}
+	for _, attempt := range traversalAttempts {
+		t.Run(attempt, func(t *testing.T) {
+			tu := attempt
+			runs := []ExportRun{{
+				ID: "r-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
+				DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &tu,
+			}}
+			called := 0
+			fetcher := func(_ context.Context, _ string) ([]byte, error) {
+				called++
+				return []byte("payload"), nil
+			}
+			body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+				Runs: runs, UserID: "uid", ExportedFrom: "test",
+			}, fetcher)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if called != 0 {
+				t.Errorf("fetcher called %d times for malformed track_url %q; want 0",
+					called, attempt)
+			}
+			zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+			for _, f := range zr.File {
+				if strings.HasPrefix(f.Name, "tracks/") {
+					t.Errorf("track entry should not land for %q; got %s", attempt, f.Name)
+				}
+			}
+		})
+	}
+}
+
+func TestBuildBackupZip_ManyRoutesAndTracksScale(t *testing.T) {
+	// Smoke check that a "realistic" sized backup builds and
+	// produces a valid archive — 100 runs + 50 routes + 100
+	// track files. Catches O(n²) regressions in the writer's
+	// hot loop.
+	const numRuns = 100
+	const numRoutes = 50
+	runs := make([]ExportRun, numRuns)
+	rawBytes := make(map[string][]byte, numRuns)
+	for i := 0; i < numRuns; i++ {
+		id := fmt.Sprintf("run-%03d", i)
+		path := fmt.Sprintf("uid/%s.json.gz", id)
+		runs[i] = ExportRun{
+			ID: id, UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
+			DurationS: 1500, DistanceM: 5000, Source: "app",
+			TrackURL: &path,
+		}
+		rawBytes[path] = gzipString(t, fmt.Sprintf(`[{"lat":1.0,"lng":2.0,"i":%d}]`, i))
+	}
+	routes := make([]ExportRoute, numRoutes)
+	for i := 0; i < numRoutes; i++ {
+		routes[i] = ExportRoute{
+			ID:        fmt.Sprintf("rt-%03d", i),
+			Name:      fmt.Sprintf("Route %d", i),
+			Waypoints: []map[string]interface{}{{"lat": 0.0, "lng": 0.0}, {"lat": 1.0, "lng": 1.0}},
+		}
+	}
+	fetcher := func(_ context.Context, path string) ([]byte, error) {
+		return rawBytes[path], nil
+	}
+	start := time.Now()
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, Routes: routes, UserID: "uid", ExportedFrom: "test",
+	}, fetcher)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("100-run / 50-route backup took %v (regression?)", elapsed)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	trackCount, hasRuns, hasRoutes, hasManifest := 0, false, false, false
+	for _, f := range zr.File {
+		switch {
+		case f.Name == "runs.json":
+			hasRuns = true
+		case f.Name == "routes.json":
+			hasRoutes = true
+		case f.Name == "manifest.json":
+			hasManifest = true
+		case strings.HasPrefix(f.Name, "tracks/"):
+			trackCount++
+		}
+	}
+	if !hasRuns || !hasRoutes || !hasManifest {
+		t.Errorf("missing metadata: runs=%v routes=%v manifest=%v",
+			hasRuns, hasRoutes, hasManifest)
+	}
+	if trackCount != numRuns {
+		t.Errorf("track count=%d, want %d", trackCount, numRuns)
+	}
+}
+
+func TestBuildBackupZip_RouteWithNilPointerFieldsRoundTrips(t *testing.T) {
+	// A route row with all the optional pointer fields nil must
+	// still serialise cleanly — the writer's "only include if
+	// non-nil" branch covers each.
+	routes := []ExportRoute{{
+		ID:        "rt-1",
+		Name:      "Minimal route",
+		Waypoints: []map[string]interface{}{{"lat": 0.0, "lng": 0.0}, {"lat": 1.0, "lng": 1.0}},
+		// Every other field nil.
+	}}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Routes: routes, UserID: "uid", ExportedFrom: "test",
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	for _, f := range zr.File {
+		if f.Name == "routes.json" {
+			rc, _ := f.Open()
+			raw, _ := io.ReadAll(rc)
+			rc.Close()
+			var parsed []map[string]any
+			if err := json.Unmarshal(raw, &parsed); err != nil {
+				t.Fatalf("routes.json parse: %v", err)
+			}
+			if len(parsed) != 1 {
+				t.Fatalf("expected 1 route; got %d", len(parsed))
+			}
+			row := parsed[0]
+			if row["name"] != "Minimal route" {
+				t.Errorf("name=%v", row["name"])
+			}
+			// Optional fields must be absent from the output (the
+			// writer's "if non-nil" branches).
+			for _, optKey := range []string{"distance_m", "elevation_m", "surface", "tags",
+				"featured", "run_count", "is_starred", "description", "club_id"} {
+				if _, ok := row[optKey]; ok {
+					t.Errorf("optional field %q should be absent on a minimal route; got %v",
+						optKey, row[optKey])
+				}
+			}
+			return
+		}
+	}
+	t.Fatal("routes.json not found")
+}
+
+func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
+	// runs.json must not carry user_id (re-homeability invariant —
+	// restore stamps the new owner's uid on every row).
+	runs := []ExportRun{
+		{ID: "run-1", UserID: "old-uid", StartedAt: "2026-05-11T10:00:00Z",
+			DurationS: 1500, DistanceM: 5000, Source: "app"},
+	}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, UserID: "new-uid", ExportedFrom: "test",
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	for _, f := range zr.File {
+		if f.Name == "runs.json" {
+			rc, _ := f.Open()
+			raw, _ := io.ReadAll(rc)
+			rc.Close()
+			var parsed []map[string]any
+			_ = json.Unmarshal(raw, &parsed)
+			if _, hasUID := parsed[0]["user_id"]; hasUID {
+				t.Errorf("runs.json must not carry user_id; got %v", parsed[0])
+			}
+			return
+		}
+	}
+	t.Fatal("runs.json not found")
+}
+
+func TestBuildBackupZip_ManifestExportedFromIsPreserved(t *testing.T) {
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "go-service-test",
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	for _, f := range zr.File {
+		if f.Name == "manifest.json" {
+			rc, _ := f.Open()
+			raw, _ := io.ReadAll(rc)
+			rc.Close()
+			var manifest map[string]any
+			_ = json.Unmarshal(raw, &manifest)
+			if manifest["exported_from"] != "go-service-test" {
+				t.Errorf("exported_from=%v", manifest["exported_from"])
+			}
+			return
+		}
+	}
+	t.Fatal("manifest.json not found")
 }
 
 // gzipString returns a gzipped representation of s, useful for the

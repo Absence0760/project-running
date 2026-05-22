@@ -1,8 +1,13 @@
-import JSZip from 'jszip';
 import { supabase } from './supabase';
 import { auth } from './stores/auth.svelte';
 import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
 import type { BackupProgress } from './backup_writer';
+import {
+	parseBackupArchive,
+	stripServerManagedProfileFields,
+	coalesceActivityType,
+	extractEventIds
+} from './backup_reader';
 
 /**
  * Backup + restore for a user's runs, routes, and profile. See
@@ -126,19 +131,7 @@ export async function restoreBackup(
 	const onProgress = opts.onProgress;
 
 	onProgress?.({ stage: 'reading', current: 0, total: 1 });
-	const zip = await JSZip.loadAsync(file);
-
-	const manifestFile = zip.file('manifest.json');
-	if (!manifestFile) throw new Error('Not a valid backup — missing manifest.json');
-	const manifest = JSON.parse(await manifestFile.async('string'));
-	if (manifest.format !== BACKUP_FORMAT) {
-		throw new Error(`Unexpected format: ${manifest.format}`);
-	}
-	if (manifest.version > BACKUP_VERSION) {
-		throw new Error(
-			`Backup is from a newer version (${manifest.version}). Update the app before restoring.`
-		);
-	}
+	const parsed = await parseBackupArchive(file);
 
 	const result: RestoreResult = {
 		runsImported: 0,
@@ -149,63 +142,40 @@ export async function restoreBackup(
 	};
 
 	// Profile + settings first — later rows may reference preferences.
-	const profileFile = zip.file('profile.json');
-	if (profileFile) {
+	if (parsed.profile) {
 		onProgress?.({ stage: 'profile', current: 0, total: 1 });
 		try {
-			const parsed = JSON.parse(await profileFile.async('string'));
-			if (parsed.profile) {
-				// Strip server-managed fields before the upsert. These
-				// are derived from the user's actual subscription /
-				// linked-account state on the server and must not
-				// round-trip through a client-controlled archive — the
-				// 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
-				// trigger reject these for non-service-role callers
-				// anyway, but stripping here means the rest of the
-				// profile (display_name, avatar_url, preferred_unit,
-				// etc.) restores cleanly instead of failing the upsert.
-				const {
-					subscription_tier: _ignoreTier,
-					subscription_at: _ignoreSubAt,
-					parkrun_number: _ignoreParkrun,
-					...portableProfile
-				} = parsed.profile as Record<string, unknown>;
-				void _ignoreTier; void _ignoreSubAt; void _ignoreParkrun;
-				await supabase.from('user_profiles').upsert({
-					...portableProfile,
-					id: userId,
-				});
-				result.profileRestored = true;
-			}
-			if (parsed.settings_prefs && Object.keys(parsed.settings_prefs).length > 0) {
-				await supabase.from('user_settings').upsert({
-					user_id: userId,
-					prefs: parsed.settings_prefs,
-					updated_at: new Date().toISOString(),
-				});
-			}
+			const portableProfile = stripServerManagedProfileFields(parsed.profile);
+			await supabase.from('user_profiles').upsert({
+				...portableProfile,
+				id: userId
+			});
+			result.profileRestored = true;
 		} catch (e) {
 			result.warnings.push(`profile: ${(e as Error).message}`);
+		}
+	}
+	if (Object.keys(parsed.settingsPrefs).length > 0) {
+		try {
+			await supabase.from('user_settings').upsert({
+				user_id: userId,
+				prefs: parsed.settingsPrefs,
+				updated_at: new Date().toISOString()
+			});
+		} catch (e) {
+			result.warnings.push(`settings_prefs: ${(e as Error).message}`);
 		}
 	}
 
 	// Runs + tracks. We upload the track first, then insert the row with
 	// a track_url pointing at the freshly-uploaded file. If the track is
 	// missing in the archive we still insert the row without it.
-	const runsFile = zip.file('runs.json');
-	if (runsFile) {
-		const runs = JSON.parse(await runsFile.async('string')) as Record<string, unknown>[];
-		const idMap = new Map<string, string>();
+	if (parsed.runs.length > 0) {
+		const runs = parsed.runs;
 
 		// Resolve valid event ids up front — we null any `event_id` that
 		// doesn't resolve, so a cross-account import doesn't FK-fail.
-		const incomingEventIds = [
-			...new Set(
-				runs
-					.map((r) => r.event_id)
-					.filter((v): v is string => typeof v === 'string' && v.length > 0)
-			),
-		];
+		const incomingEventIds = extractEventIds(runs);
 		const validEventIds = new Set<string>();
 		if (incomingEventIds.length > 0) {
 			const { data } = await supabase
@@ -220,21 +190,19 @@ export async function restoreBackup(
 			onProgress?.({ stage: 'runs', current: i, total: runs.length });
 			const origId = r.id as string;
 			const newId = opts.generateNewIds ? crypto.randomUUID() : origId;
-			idMap.set(origId, newId);
 
 			// Track upload.
 			let trackUrl: string | null = null;
-			const trackEntry = zip.file(`tracks/${origId}.json.gz`);
-			if (trackEntry) {
+			const trackBytes = await parsed.getTrackBytes(origId);
+			if (trackBytes) {
 				try {
-					const bytes = await trackEntry.async('uint8array');
 					const path = `${userId}/${newId}.json.gz`;
 					const { error } = await supabase.storage
 						.from('runs')
-						.upload(path, bytes, {
+						.upload(path, trackBytes, {
 							contentType: 'application/gzip',
 							upsert: true,
-							cacheControl: '0',
+							cacheControl: '0'
 						});
 					if (error) throw error;
 					trackUrl = path;
@@ -249,23 +217,13 @@ export async function restoreBackup(
 					? r.event_id
 					: null;
 
-			// Older backups (pre-Apr 2026) may lack metadata.activity_type.
-			// The DB CHECK trigger requires it on insert, so coalesce to
-			// 'run' on restore. The user can still edit it afterwards.
-			const restoredMeta = (r.metadata && typeof r.metadata === 'object'
-				? { ...(r.metadata as Record<string, unknown>) }
-				: {}) as Record<string, unknown>;
-			if (typeof restoredMeta.activity_type !== 'string') {
-				restoredMeta.activity_type = 'run';
-			}
-
 			const row = {
 				...r,
 				id: newId,
 				user_id: userId,
 				event_id: eventId,
 				track_url: trackUrl,
-				metadata: restoredMeta,
+				metadata: coalesceActivityType(r.metadata)
 			};
 
 			try {
@@ -282,9 +240,8 @@ export async function restoreBackup(
 	}
 
 	// Routes — simpler, no Storage dependency.
-	const routesFile = zip.file('routes.json');
-	if (routesFile) {
-		const routes = JSON.parse(await routesFile.async('string')) as Record<string, unknown>[];
+	if (parsed.routes.length > 0) {
+		const routes = parsed.routes;
 		let i = 0;
 		for (const r of routes) {
 			onProgress?.({ stage: 'routes', current: i, total: routes.length });

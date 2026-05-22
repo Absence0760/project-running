@@ -97,30 +97,13 @@ class BackupService {
     // getting a backup because the server hiccuped. See
     // [decisions.md § 66] for the trade-off (server caps at 5000
     // runs; the local writer covers the rest of the long tail).
-    final server = _serverClient;
-    if (server != null && server.isConfigured) {
-      final token = client.auth.currentSession?.accessToken;
-      if (token != null && token.isNotEmpty) {
-        try {
-          onProgress?.call(const BackupProgress.stage('server'));
-          await server.fetchBackupToFile(
-            accessToken: token,
-            outputFile: outputFile,
-          );
-          onProgress?.call(const BackupProgress.done());
-          return outputFile;
-        } catch (e) {
-          debugPrint(
-            '[backup] server path failed, falling back to local: $e',
-          );
-          // Clean up any partial download so the local writer
-          // doesn't see a half-written file.
-          if (outputFile.existsSync()) {
-            try { outputFile.deleteSync(); } catch (_) {}
-          }
-        }
-      }
-    }
+    final didServer = await tryServerBackup(
+      serverClient: _serverClient,
+      accessToken: client.auth.currentSession?.accessToken,
+      outputFile: outputFile,
+      onProgress: onProgress,
+    );
+    if (didServer) return outputFile;
 
     onProgress?.call(const BackupProgress.stage('runs'));
     final runs = await api.fetchRunRowsRaw();
@@ -179,6 +162,55 @@ class BackupService {
       concurrency: _kTrackDownloadConcurrency,
       onProgress: onProgress,
     );
+  }
+
+  /// Server-first attempt + partial-file cleanup, pulled out as a
+  /// static helper so the orchestration is unit-testable without a
+  /// live Supabase session.
+  ///
+  /// Returns `true` when the server path was attempted **and**
+  /// succeeded — the caller treats the [outputFile] as a finished
+  /// backup. Returns `false` when:
+  ///
+  /// * the server is unconfigured (null client or empty baseUrl),
+  /// * the access token is null or empty,
+  /// * the server attempt failed (HTTP non-200, IO error, etc.) —
+  ///   any partial [outputFile] is deleted before falling through
+  ///   so the local writer doesn't see a half-written file.
+  ///
+  /// Never throws. The local writer always gets a clean attempt
+  /// either way, so a transient server hiccup can't block a
+  /// power-user backup.
+  @visibleForTesting
+  static Future<bool> tryServerBackup({
+    required BackupServerClient? serverClient,
+    required String? accessToken,
+    required File outputFile,
+    void Function(BackupProgress)? onProgress,
+  }) async {
+    if (serverClient == null || !serverClient.isConfigured) return false;
+    if (accessToken == null || accessToken.isEmpty) return false;
+    onProgress?.call(const BackupProgress.stage('server'));
+    try {
+      await serverClient.fetchBackupToFile(
+        accessToken: accessToken,
+        outputFile: outputFile,
+      );
+      onProgress?.call(const BackupProgress.done());
+      return true;
+    } catch (e) {
+      debugPrint('[backup] server path failed, falling back to local: $e');
+      // Clean up any partial download so the local writer doesn't
+      // see a half-written file. Safe to ignore the inner delete
+      // exception — the local writer will overwrite anyway, this
+      // is belt-and-braces.
+      if (outputFile.existsSync()) {
+        try {
+          outputFile.deleteSync();
+        } catch (_) {}
+      }
+      return false;
+    }
   }
 
   /// Pure(-ish) writer extracted from [createBackup] so the streaming

@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/backup.dart';
+import '../lib/backup_server_client.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 
@@ -772,6 +773,227 @@ void main() {
         ),
         throwsA(isA<ArgumentError>()),
       );
+    });
+  });
+
+  // ---- tryServerBackup orchestration ----------------------------------
+  //
+  // The extracted helper that decides whether to attempt the Go
+  // service's /v1/export?format=backup path. Drives all the
+  // server-first branches createBackup composes — without needing
+  // a live Supabase session or a real network. Production failure
+  // returns false + cleans up any partial file so the local writer
+  // sees a clean slate.
+  group('tryServerBackup', () {
+    test('returns false when serverClient is null', () async {
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: null,
+        accessToken: 'tok',
+        outputFile: file,
+      );
+      expect(result, isFalse);
+      expect(file.existsSync(), isFalse);
+    });
+
+    test('returns false when serverClient has empty baseUrl', () async {
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: BackupServerClient(baseUrl: ''),
+        accessToken: 'tok',
+        outputFile: file,
+      );
+      expect(result, isFalse);
+    });
+
+    test('returns false when accessToken is null', () async {
+      var called = false;
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async {
+          called = true;
+          return (statusCode: 200, body: {'url': 'https://x/y', 'count': 0});
+        },
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: null,
+        outputFile: file,
+      );
+      expect(result, isFalse);
+      expect(called, isFalse,
+          reason: 'request fetcher must not fire when token is null');
+    });
+
+    test('returns false when accessToken is empty string', () async {
+      var called = false;
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async {
+          called = true;
+          return (statusCode: 200, body: {'url': 'https://x/y', 'count': 0});
+        },
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: '',
+        outputFile: file,
+      );
+      expect(result, isFalse);
+      expect(called, isFalse);
+    });
+
+    test('returns true + writes file on server success', () async {
+      var requestCount = 0;
+      var downloadCount = 0;
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async {
+          requestCount++;
+          return (
+            statusCode: 200,
+            body: <String, dynamic>{'url': 'https://signed/x', 'count': 12},
+          );
+        },
+        downloadFetcher: (_, f) async {
+          downloadCount++;
+          await f.writeAsBytes([0x50, 0x4B, 0x05, 0x06]); // empty-zip marker
+          return 4;
+        },
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: 'tok-abc',
+        outputFile: file,
+      );
+      expect(result, isTrue);
+      expect(requestCount, 1);
+      expect(downloadCount, 1);
+      expect(file.existsSync(), isTrue);
+    });
+
+    test('returns false + deletes partial file when fetchBackupToFile throws',
+        () async {
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async => (
+          statusCode: 200,
+          body: <String, dynamic>{'url': 'https://signed/x', 'count': 1},
+        ),
+        downloadFetcher: (_, f) async {
+          // Write a partial body then throw — emulates a mid-stream
+          // disconnect.
+          await f.writeAsBytes(List<int>.filled(128, 0xff));
+          throw const HttpException('connection reset');
+        },
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: 'tok-abc',
+        outputFile: file,
+      );
+      expect(result, isFalse,
+          reason: 'failure should not be reported as a successful server run');
+      expect(file.existsSync(), isFalse,
+          reason: 'partial file must be cleaned up so the local '
+              'writer sees a clean slate');
+    });
+
+    test('returns false on non-200 server response (no partial file)', () async {
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async => (
+          statusCode: 429,
+          body: <String, dynamic>{'error': 'rate_limited'},
+        ),
+        downloadFetcher: (_, __) async => 0,
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final result = await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: 'tok-abc',
+        outputFile: file,
+      );
+      expect(result, isFalse);
+      expect(file.existsSync(), isFalse);
+    });
+
+    test('emits server stage + done progress events on success', () async {
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async => (
+          statusCode: 200,
+          body: <String, dynamic>{'url': 'https://signed/x', 'count': 5},
+        ),
+        downloadFetcher: (_, f) async {
+          await f.writeAsBytes([0]);
+          return 1;
+        },
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final stages = <String>[];
+      await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: 'tok',
+        outputFile: file,
+        onProgress: (p) => stages.add(p.stage),
+      );
+      expect(stages, contains('server'));
+      expect(stages.last, 'done');
+    });
+
+    test('does not emit done after a failed attempt', () async {
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async => (
+          statusCode: 500,
+          body: <String, dynamic>{'error': 'oops'},
+        ),
+        downloadFetcher: (_, __) async => 0,
+      );
+      final file = File('${tempDir.path}/backup.zip');
+      final stages = <String>[];
+      await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: 'tok',
+        outputFile: file,
+        onProgress: (p) => stages.add(p.stage),
+      );
+      // The `server` stage marker fires, but `done` does NOT —
+      // caller will fall through to local and either land that
+      // path's `done` or surface an error.
+      expect(stages, contains('server'));
+      expect(stages, isNot(contains('done')));
+    });
+
+    test('cleanup is best-effort: deleteSync exception is swallowed',
+        () async {
+      // Simulate a download that doesn't actually write the file —
+      // the cleanup path then has nothing to delete and must not
+      // throw. (The `outputFile.existsSync() == false` branch.)
+      final stub = BackupServerClient(
+        baseUrl: 'https://example/',
+        requestFetcher: (_, __, ___) async => (
+          statusCode: 200,
+          body: <String, dynamic>{'url': 'https://signed/x', 'count': 0},
+        ),
+        downloadFetcher: (_, __) async {
+          throw const SocketException('refused');
+        },
+      );
+      final file = File('${tempDir.path}/never-written.zip');
+      // Should complete without throwing despite the no-file case.
+      final result = await BackupService.tryServerBackup(
+        serverClient: stub,
+        accessToken: 'tok',
+        outputFile: file,
+      );
+      expect(result, isFalse);
+      expect(file.existsSync(), isFalse);
     });
   });
 }

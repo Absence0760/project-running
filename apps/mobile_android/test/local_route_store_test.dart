@@ -372,6 +372,111 @@ void main() {
       await store.save(makeRoute(id: 'r-future'));
       expect(store.offlinePinnedRoutes.single.id, 'r-future');
     });
+
+    test('pin survives saveBatch overwrite of the same id', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'r-1', name: 'v1'));
+      await store.pinOffline('r-1');
+
+      // Fresh server pull overwrites the same id with a newer name.
+      // The pin must survive — it's per-device, not per-row-version.
+      await store.saveBatch([makeRoute(id: 'r-1', name: 'v2')]);
+
+      expect(store.isOfflinePinned('r-1'), isTrue);
+      expect(store.routes.single.name, 'v2');
+      expect(store.offlinePinnedRoutes.single.name, 'v2');
+    });
+
+    test('concurrent pinOffline + unpinOffline serialise correctly', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      var notifyCount = 0;
+      store.addListener(() => notifyCount++);
+
+      // Fire 10 pin/unpin pairs concurrently for the same id. The
+      // sidecar persist runs through writeAsString awaits — these
+      // calls must serialise without one clobbering the other or
+      // double-notifying for a no-op.
+      final futures = <Future<void>>[];
+      for (var i = 0; i < 10; i++) {
+        futures.add(store.pinOffline('r-x'));
+        futures.add(store.unpinOffline('r-x'));
+      }
+      await Future.wait(futures);
+
+      // Exactly one of the final states wins; either is fine. The
+      // contract is that the on-disk sidecar matches in-memory.
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: tempDir);
+      expect(s2.isOfflinePinned('r-x'), store.isOfflinePinned('r-x'),
+          reason: 'sidecar must match the final in-memory state');
+
+      // Notifications fired — at minimum a couple, at most one per
+      // state transition (10 each way could collapse into ~10 net
+      // events depending on interleaving). Asserting "at least one"
+      // is the durable contract; the upper bound is observability.
+      expect(notifyCount, greaterThanOrEqualTo(1));
+    });
+
+    test('pin tolerates a corrupt sidecar on cold start', () async {
+      // Hand-write a broken sidecar then init() — the loader
+      // logs + skips it, leaving pinned ids empty rather than
+      // crashing the app launch.
+      File('${tempDir.path}/offline_pinned_route_ids.json')
+          .writeAsStringSync('{this is not json');
+
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(store.offlinePinnedIds, isEmpty);
+      // And the store is still operable — a fresh pin lands.
+      await store.pinOffline('r-1');
+      expect(store.isOfflinePinned('r-1'), isTrue);
+    });
+
+    test('pin tolerates a sidecar with wrong shape', () async {
+      // Valid JSON but the wrong shape — `ids` is not a list. The
+      // loader skips the bad entries; no exception.
+      File('${tempDir.path}/offline_pinned_route_ids.json')
+          .writeAsStringSync('{"ids": "not-a-list"}');
+
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(store.offlinePinnedIds, isEmpty);
+    });
+
+    test('pin tolerates entries that aren\'t strings', () async {
+      // A sidecar that mixed strings + numbers (corruption from a
+      // future-format write) shouldn't crash — the loader's `if
+      // (id is String)` guard picks just the strings.
+      File('${tempDir.path}/offline_pinned_route_ids.json')
+          .writeAsStringSync('{"ids": ["r-good", 42, null, "r-also-good"]}');
+
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(store.offlinePinnedIds, {'r-good', 'r-also-good'});
+    });
+
+    test('100 pinned ids round-trip without performance pathology', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      final sw = Stopwatch()..start();
+      for (var i = 0; i < 100; i++) {
+        await store.pinOffline('r-$i');
+      }
+      sw.stop();
+      expect(store.offlinePinnedIds, hasLength(100));
+      expect(sw.elapsedMilliseconds, lessThan(2000),
+          reason: '100 sequential pin writes took ${sw.elapsedMilliseconds}ms');
+
+      // Survives cold start with the full set intact.
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: tempDir);
+      expect(s2.offlinePinnedIds, hasLength(100));
+    });
   });
 
   group('lazy init resilience — _ensureDir', () {

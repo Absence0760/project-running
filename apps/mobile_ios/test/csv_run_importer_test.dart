@@ -302,6 +302,119 @@ void main() {
     });
   });
 
+  group('large + Unicode + adversarial input', () {
+    test('1000-row CSV parses in well under a second', () {
+      // Regression guard against O(n²) parser. Each row is the
+      // exact shape Settings → CSV export produces.
+      final buf = StringBuffer('date,distance_m,duration_s,pace_s_per_km,source\n');
+      for (var i = 0; i < 1000; i++) {
+        buf.writeln(
+          '2026-05-${(i % 28 + 1).toString().padLeft(2, '0')}T08:00:00Z,'
+          '${5000 + i},${1500 + i},300,app',
+        );
+      }
+      final sw = Stopwatch()..start();
+      final result = CsvRunImporter.parse(buf.toString());
+      sw.stop();
+      expect(result.runs, hasLength(1000));
+      expect(result.errors, isEmpty);
+      expect(sw.elapsedMilliseconds, lessThan(1000),
+          reason: '1000-row parse took ${sw.elapsedMilliseconds}ms — '
+              'check for an O(n²) regression in the parser');
+    });
+
+    test('Unicode in source / activity / title cells round-trips intact', () {
+      final csv = 'started_at,distance_m,duration_s,source,activity_type,title\n'
+          // The title cell embeds CJK + an emoji + a German umlaut to
+          // catch any UTF-8 truncation in the row splitter.
+          '"2026-05-20T08:00:00Z","5000","1500","app","run","早朝ラン 🏃‍♂️ Müller"\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.errors, isEmpty);
+      final r = result.runs.single;
+      expect(r.metadata!['title'], '早朝ラン 🏃‍♂️ Müller');
+    });
+
+    test('quoted cells survive embedded commas + escaped quotes', () {
+      final csv = 'started_at,distance_m,duration_s,source,title\n'
+          '"2026-05-20T08:00:00Z","5000","1500","app","Run, then ""sprint""!"\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.errors, isEmpty);
+      expect(result.runs.single.metadata!['title'], 'Run, then "sprint"!');
+    });
+
+    test('mixed valid + invalid rows produce a partial result, not all-or-nothing',
+        () {
+      final csv = 'date,distance_m,duration_s,pace_s_per_km,source\n'
+          '2026-05-20T08:00:00Z,5000,1500,300,app\n'
+          'BROKEN-DATE,5000,1500,300,app\n'
+          '2026-05-21T08:00:00Z,not-a-number,1500,300,app\n'
+          '2026-05-22T08:00:00Z,10000,3000,300,strava\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.runs, hasLength(2));
+      expect(result.runs.first.distanceMetres, 5000);
+      expect(result.runs.last.distanceMetres, 10000);
+      expect(result.errors, hasLength(2));
+      expect(result.errors.first.row, 3);
+      expect(result.errors.last.row, 4);
+    });
+
+    test('CRLF line endings are accepted', () {
+      // Excel + many Windows tools save with CRLF. The parser
+      // splits via LineSplitter which handles both '\n' and '\r\n'.
+      final csv =
+          'date,distance_m,duration_s,pace_s_per_km,source\r\n'
+          '2026-05-20T08:00:00Z,5000,1500,300,app\r\n'
+          '2026-05-21T08:00:00Z,7500,2250,300,app\r\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.runs, hasLength(2));
+      expect(result.errors, isEmpty);
+    });
+
+    test('negative distance / duration are still parsed (DB rejects on upsert)',
+        () {
+      // Defensive: don't try to validate semantics inside the
+      // parser. The DB CHECK (distance_m >= 0, duration_s >= 0)
+      // is the source of truth; the parser passes through and the
+      // upsert fails noisily on bogus rows. Pinning this so a
+      // future "let's validate in the parser too" PR isn't a
+      // silent behaviour change.
+      final csv = 'date,distance_m,duration_s,pace_s_per_km,source\n'
+          '2026-05-20T08:00:00Z,-100,-50,300,app\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.runs, hasLength(1));
+      expect(result.runs.single.distanceMetres, -100);
+      expect(result.runs.single.duration.inSeconds, -50);
+    });
+
+    test('row with trailing whitespace + extra commas parses leniently', () {
+      // Dart's int.tryParse/double.tryParse both tolerate trailing
+      // whitespace + tabs, so a CSV with stray padding still hands
+      // back a valid row. The DB CHECK constraints (distance_m >= 0,
+      // duration_s >= 0, runs_metadata_activity_type_check) are the
+      // source of truth on row validity — the parser stays
+      // permissive on whitespace so a hand-edited CSV that survived
+      // a spreadsheet round-trip still imports.
+      final csv = 'date,distance_m,duration_s,pace_s_per_km,source\n'
+          '2026-05-20T08:00:00Z,5000,1500   ,300,app\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.runs, hasLength(1));
+      expect(result.runs.single.duration.inSeconds, 1500);
+      expect(result.errors, isEmpty);
+    });
+
+    test('17-column metadata with deeply-nested objects round-trips', () {
+      final nested = '{"activity_type":"run","laps":[{"index":1,"distance_m":1000,"duration_s":300,"start_offset_s":0},{"index":2,"distance_m":1000,"duration_s":290,"start_offset_s":300}]}';
+      final csv = 'id,started_at,distance_m,duration_s,source,metadata\n'
+          'r-1,2026-05-20T08:00:00Z,5000,1500,app,"${nested.replaceAll('"', '""')}"\n';
+      final result = CsvRunImporter.parse(csv);
+      expect(result.errors, isEmpty);
+      final laps = result.runs.single.metadata!['laps'] as List;
+      expect(laps, hasLength(2));
+      expect((laps.first as Map)['index'], 1);
+      expect((laps.last as Map)['duration_s'], 290);
+    });
+  });
+
   group('header tolerance', () {
     test('accepts started_at as an alias for date', () {
       final csv = 'started_at,distance_m,duration_s\n'
