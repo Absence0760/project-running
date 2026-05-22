@@ -249,7 +249,16 @@
 
 	function renderPreviewMarker(lngLat: [number, number] | null): void {
 		if (!map) return;
-		if (lngLat == null) {
+		// Filter NaN / non-finite coordinates defensively. MapLibre's
+		// translate3d projector silently collapses non-finite values to
+		// the marker container's origin (top-left of the map div) —
+		// caught when the scrubber appeared to "place the marker at
+		// the top-left of the map". Treat invalid as "no marker".
+		if (
+			lngLat == null ||
+			!Number.isFinite(lngLat[0]) ||
+			!Number.isFinite(lngLat[1])
+		) {
 			previewMarker?.remove();
 			previewMarker = undefined;
 			return;
