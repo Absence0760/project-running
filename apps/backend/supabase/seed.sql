@@ -378,6 +378,28 @@ VALUES
    false, 'invite',
    'c3fr13nd50fj4r3dc1ubtoken000000');
 
+-- Drop `location_point` pins on the two public clubs at Virginia
+-- coordinates so the heatmap-tab discoverable-pin layer
+-- (clubs_in_bbox + discoverable_routes_in_bbox, migration
+-- 20260911_001) has something to render. `location_label` stays
+-- 'Sydney, AU' for the original copy; in a real-world flow the
+-- club editor would set both together.
+UPDATE clubs SET location_point = ST_GeogFromText('SRID=4326;POINT(-77.4360 37.5407)')
+  WHERE id = 'c1111111-0000-0000-0000-000000000001'::uuid;
+UPDATE clubs SET location_point = ST_GeogFromText('SRID=4326;POINT(-78.4767 38.0293)')
+  WHERE id = 'c2222222-0000-0000-0000-000000000002'::uuid;
+
+-- Flag three of the Virginia routes as `featured = true` so the
+-- discoverable_routes_in_bbox RPC surfaces them at city-zoom on
+-- the heatmap. Belle Isle + UVA + Mount Vernon are the three the
+-- watch picker already stars by default — same visual shortlist.
+UPDATE routes SET featured = true, featured_at = now()
+  WHERE name IN (
+    'Belle Isle + Pipeline Loop (Richmond)',
+    'UVA Rotunda Loop (Charlottesville)',
+    'Mount Vernon Trail North (Arlington)'
+  );
+
 -- Post a mock pending request from a second auth user so the admin panel
 -- has something to show. The user is created lightly (minimum columns) and
 -- enrolled as `status='pending'` on the Tempo Tuesday club.

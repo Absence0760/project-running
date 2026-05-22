@@ -3535,6 +3535,80 @@ export async function fetchHeatmapPoints(bbox: {
 	}));
 }
 
+/// Public clubs with a `location_point` inside the viewport bbox.
+/// Backed by the SECURITY DEFINER RPC `clubs_in_bbox` (migration
+/// 20260911_001). Used by the /routes?tab=heatmap discoverable-
+/// pins layer so club locations show alongside the density
+/// heatmap. The RPC is `is_public = true` gated server-side; this
+/// caller does NOT see private clubs even if the row is in range.
+export interface ClubPin {
+	id: string;
+	name: string;
+	slug: string | null;
+	avatar_url: string | null;
+	member_count: number;
+	lng: number;
+	lat: number;
+}
+
+export async function fetchClubsInBbox(bbox: {
+	minLng: number;
+	minLat: number;
+	maxLng: number;
+	maxLat: number;
+	limit?: number;
+}): Promise<ClubPin[]> {
+	const { data, error } = await supabase.rpc('clubs_in_bbox', {
+		p_min_lng: bbox.minLng,
+		p_min_lat: bbox.minLat,
+		p_max_lng: bbox.maxLng,
+		p_max_lat: bbox.maxLat,
+		p_limit: bbox.limit ?? 100,
+	});
+	if (error || !data) {
+		console.warn('fetchClubsInBbox failed', error);
+		return [];
+	}
+	return data as ClubPin[];
+}
+
+/// Discoverable public routes inside the viewport bbox. "Discoverable"
+/// = featured OR has run_count > 0 (someone has actually run this
+/// route at least once). Returns the start_point for each route so
+/// the heatmap can drop a pin there.
+export interface DiscoverableRoutePin {
+	id: string;
+	name: string;
+	slug: string | null;
+	featured: boolean;
+	distance_m: number;
+	surface: string;
+	run_count: number;
+	lng: number;
+	lat: number;
+}
+
+export async function fetchDiscoverableRoutesInBbox(bbox: {
+	minLng: number;
+	minLat: number;
+	maxLng: number;
+	maxLat: number;
+	limit?: number;
+}): Promise<DiscoverableRoutePin[]> {
+	const { data, error } = await supabase.rpc('discoverable_routes_in_bbox', {
+		p_min_lng: bbox.minLng,
+		p_min_lat: bbox.minLat,
+		p_max_lng: bbox.maxLng,
+		p_max_lat: bbox.maxLat,
+		p_limit: bbox.limit ?? 100,
+	});
+	if (error || !data) {
+		console.warn('fetchDiscoverableRoutesInBbox failed', error);
+		return [];
+	}
+	return data as DiscoverableRoutePin[];
+}
+
 // --- Gear tracking (decisions backlog item #7) ---
 
 export type GearKind = 'shoe' | 'bike';

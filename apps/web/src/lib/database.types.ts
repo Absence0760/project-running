@@ -2212,10 +2212,48 @@ export type Database = {
         Args: { new_start_date: string; template_id: string }
         Returns: string
       }
+      clubs_in_bbox: {
+        Args: {
+          p_limit?: number
+          p_max_lat: number
+          p_max_lng: number
+          p_min_lat: number
+          p_min_lng: number
+        }
+        Returns: {
+          avatar_url: string
+          id: string
+          lat: number
+          lng: number
+          member_count: number
+          name: string
+          slug: string
+        }[]
+      }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
       defer_job: {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: undefined
+      }
+      discoverable_routes_in_bbox: {
+        Args: {
+          p_limit?: number
+          p_max_lat: number
+          p_max_lng: number
+          p_min_lat: number
+          p_min_lng: number
+        }
+        Returns: {
+          distance_m: number
+          featured: boolean
+          id: string
+          lat: number
+          lng: number
+          name: string
+          run_count: number
+          slug: string
+          surface: string
+        }[]
       }
       enforce_create_rate_limit: {
         Args: {

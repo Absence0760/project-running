@@ -6,7 +6,12 @@
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
 	import { watchMapResize } from '$lib/map_resize';
-	import { fetchHeatmapPoints, nearbyPublicRoutes } from '$lib/data';
+	import {
+		fetchHeatmapPoints,
+		nearbyPublicRoutes,
+		fetchClubsInBbox,
+		fetchDiscoverableRoutesInBbox,
+	} from '$lib/data';
 	import { searchPlaces, type PlaceSearchResult } from '$lib/geocoding';
 	import type { Route } from '$lib/types';
 
@@ -61,17 +66,30 @@
 	// PostGIS query on every pixel of a drag.
 	let pendingFetch: ReturnType<typeof setTimeout> | null = null;
 	let pendingRoutesFetch: ReturnType<typeof setTimeout> | null = null;
+	let pendingPinsFetch: ReturnType<typeof setTimeout> | null = null;
 
 	const HEATMAP_SOURCE = 'heatmap-pts';
 	const HEATMAP_LAYER = 'heatmap-layer';
 	const ROUTES_SOURCE = 'heatmap-routes';
 	const ROUTES_LAYER_CASING = 'heatmap-routes-casing';
 	const ROUTES_LAYER = 'heatmap-routes-line';
+	const CLUB_PINS_SOURCE = 'heatmap-clubs';
+	const CLUB_PINS_LAYER = 'heatmap-clubs-layer';
+	const ROUTE_PINS_SOURCE = 'heatmap-route-pins';
+	const ROUTE_PINS_LAYER = 'heatmap-route-pins-layer';
 	/// Minimum zoom at which we overlay individual public routes as
 	/// clickable polylines. Below this the heatmap density is the
 	/// honest signal — too many routes drawn over a large viewport
 	/// is visual noise + pulls way more polylines than necessary.
 	const ROUTES_OVERLAY_MIN_ZOOM = 12;
+
+	// Discoverable-pin layer toggles. Both default-on; the user can
+	// hide either via the legend popover.
+	let showClubPins = $state(true);
+	let showRoutePins = $state(true);
+	let showHeatmapLayer = $state(true);
+	let clubPinsCount = $state(0);
+	let routePinsCount = $state(0);
 
 	onMount(() => {
 		const prefersDark =
@@ -173,6 +191,83 @@
 			map.on('mouseleave', ROUTES_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';
 			});
+			// Discoverable-pin layers (clubs + featured/popular routes).
+			// Both default-on; toggleable via the legend popover. Each
+			// is its own circle layer with a click handler that
+			// navigates to the entity's detail page. Sources start
+			// empty + populate on the first `refreshPins()` call below.
+			map.addSource(CLUB_PINS_SOURCE, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: CLUB_PINS_LAYER,
+				type: 'circle',
+				source: CLUB_PINS_SOURCE,
+				paint: {
+					'circle-color': '#7FB3C2',
+					'circle-radius': 9,
+					'circle-stroke-color': '#0f172a',
+					'circle-stroke-width': 2,
+					'circle-opacity': 0.9,
+				},
+			});
+			map.on('click', CLUB_PINS_LAYER, (e) => {
+				const f = e.features?.[0];
+				const slug = f?.properties?.slug as string | undefined;
+				const id = f?.properties?.id as string | undefined;
+				if (slug) void goto(`/clubs/${slug}`);
+				else if (id) void goto(`/clubs/${id}`);
+			});
+			map.on('mouseenter', CLUB_PINS_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = 'pointer';
+			});
+			map.on('mouseleave', CLUB_PINS_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = '';
+			});
+
+			map.addSource(ROUTE_PINS_SOURCE, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: ROUTE_PINS_LAYER,
+				type: 'circle',
+				source: ROUTE_PINS_SOURCE,
+				paint: {
+					// Brand orange — same as the route-list thumbnails so
+					// the colour reads as "this is a route" across the
+					// whole product. Featured routes get a thicker gold
+					// halo via the `case` expression below.
+					'circle-color': '#F2A07B',
+					'circle-radius': 8,
+					'circle-stroke-color': [
+						'case',
+						['get', 'featured'],
+						'#FACC15',
+						'#0f172a',
+					],
+					'circle-stroke-width': [
+						'case',
+						['get', 'featured'],
+						3,
+						2,
+					],
+					'circle-opacity': 0.95,
+				},
+			});
+			map.on('click', ROUTE_PINS_LAYER, (e) => {
+				const f = e.features?.[0];
+				const id = f?.properties?.id as string | undefined;
+				if (id) void goto(`/routes/${id}`);
+			});
+			map.on('mouseenter', ROUTE_PINS_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = 'pointer';
+			});
+			map.on('mouseleave', ROUTE_PINS_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = '';
+			});
+
 			// Standard MapLibre heatmap paint — interpolated by intensity
 			// (the density of sampled points). Higher zooms taper the
 			// blur radius so individual routes stay legible when the
@@ -221,6 +316,7 @@
 			// the constructor's centre/zoom and the first painted frame.
 			refresh();
 			refreshRoutes();
+			refreshPins();
 		});
 
 		map.on('moveend', () => {
@@ -228,6 +324,8 @@
 			pendingFetch = setTimeout(refresh, 350);
 			if (pendingRoutesFetch) clearTimeout(pendingRoutesFetch);
 			pendingRoutesFetch = setTimeout(refreshRoutes, 350);
+			if (pendingPinsFetch) clearTimeout(pendingPinsFetch);
+			pendingPinsFetch = setTimeout(refreshPins, 350);
 		});
 
 		// Kick off the first fetch immediately. The HTTP RPC doesn't
@@ -235,6 +333,7 @@
 		// the legend's status from the basemap means the user gets an
 		// "Updated …" stamp even on a keyless deploy.
 		refresh();
+		refreshPins();
 	});
 
 	onDestroy(() => {
@@ -243,7 +342,94 @@
 		map = null;
 		if (pendingFetch) clearTimeout(pendingFetch);
 		if (pendingRoutesFetch) clearTimeout(pendingRoutesFetch);
+		if (pendingPinsFetch) clearTimeout(pendingPinsFetch);
 		if (searchTimeout) clearTimeout(searchTimeout);
+	});
+
+	/// Fetch + paint the club + discoverable-route pin layers for
+	/// the current viewport. Runs in parallel with the heatmap and
+	/// route-polyline refreshes — small RPCs, capped at 100 results
+	/// each, so the wire size is negligible compared to the heatmap
+	/// densification. Each layer updates independently; a failure
+	/// in one doesn't cancel the other.
+	async function refreshPins() {
+		if (!map || !mapLoaded) return;
+		const b = map.getBounds();
+		const bbox = {
+			minLng: b.getWest(),
+			minLat: b.getSouth(),
+			maxLng: b.getEast(),
+			maxLat: b.getNorth(),
+		};
+		const [clubs, routes] = await Promise.all([
+			fetchClubsInBbox(bbox),
+			fetchDiscoverableRoutesInBbox(bbox),
+		]);
+		clubPinsCount = clubs.length;
+		routePinsCount = routes.length;
+		const clubSrc = map.getSource(CLUB_PINS_SOURCE) as
+			| maplibregl.GeoJSONSource
+			| undefined;
+		clubSrc?.setData({
+			type: 'FeatureCollection',
+			features: clubs.map((c) => ({
+				type: 'Feature',
+				properties: {
+					id: c.id,
+					name: c.name,
+					slug: c.slug,
+					member_count: c.member_count,
+				},
+				geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+			})),
+		});
+		const routeSrc = map.getSource(ROUTE_PINS_SOURCE) as
+			| maplibregl.GeoJSONSource
+			| undefined;
+		routeSrc?.setData({
+			type: 'FeatureCollection',
+			features: routes.map((r) => ({
+				type: 'Feature',
+				properties: {
+					id: r.id,
+					name: r.name,
+					featured: r.featured,
+					distance_m: r.distance_m,
+					surface: r.surface,
+					run_count: r.run_count,
+				},
+				geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+			})),
+		});
+	}
+
+	// Layer-visibility toggles. MapLibre's `setLayoutProperty(...,
+	// 'visibility', 'visible'|'none')` is the cheap way to flip a
+	// layer — no source-data mutation needed. Wired to the legend
+	// checkboxes below via a reactive $effect.
+	$effect(() => {
+		if (!map || !mapLoaded) return;
+		map.setLayoutProperty(
+			CLUB_PINS_LAYER,
+			'visibility',
+			showClubPins ? 'visible' : 'none',
+		);
+	});
+	$effect(() => {
+		if (!map || !mapLoaded) return;
+		map.setLayoutProperty(
+			ROUTE_PINS_LAYER,
+			'visibility',
+			showRoutePins ? 'visible' : 'none',
+		);
+	});
+	$effect(() => {
+		if (!map || !mapLoaded) return;
+		map.setLayoutProperty(
+			HEATMAP_LAYER,
+			'visibility',
+			showHeatmapLayer ? 'visible' : 'none',
+		);
 	});
 
 	/// Fetch + render clickable public-route polylines for the current
@@ -401,10 +587,36 @@
 				<strong>Where people run</strong>
 				<p>
 					Warmer cells = more public routes pass through here. Pan to
-					explore; the layer refreshes after each move. Only routes
-					flipped public are counted. Zoom in to see individual routes
-					— click any line to open it.
+					explore; the layer refreshes after each move. Zoom in to see
+					individual routes — click any line to open it.
 				</p>
+
+				<!-- Layer toggles. Each independently flips the matching
+					 MapLibre layer's `visibility` via a $effect above.
+					 The count chip after each label surfaces "how much
+					 stuff is in your current viewport" — useful signal
+					 when panning a region with no clubs or no popular
+					 routes. -->
+				<div class="legend-toggles" role="group" aria-label="Map layers">
+					<label class="legend-row">
+						<input type="checkbox" bind:checked={showHeatmapLayer} />
+						<span class="legend-swatch legend-swatch-heat" aria-hidden="true"></span>
+						<span>Heatmap density</span>
+					</label>
+					<label class="legend-row">
+						<input type="checkbox" bind:checked={showRoutePins} />
+						<span class="legend-swatch legend-swatch-route" aria-hidden="true"></span>
+						<span>Popular &amp; featured routes</span>
+						<span class="legend-count">{routePinsCount}</span>
+					</label>
+					<label class="legend-row">
+						<input type="checkbox" bind:checked={showClubPins} />
+						<span class="legend-swatch legend-swatch-club" aria-hidden="true"></span>
+						<span>Clubs</span>
+						<span class="legend-count">{clubPinsCount}</span>
+					</label>
+				</div>
+
 				{#if loading}
 					<p class="muted"><em>Updating…</em></p>
 				{:else if lastUpdated}
@@ -576,5 +788,67 @@
 	}
 	.muted {
 		color: var(--color-text-tertiary) !important;
+	}
+
+	/*
+	 * Layer toggle rows. Each is a label wrapping a checkbox + a
+	 * coloured swatch + a name + an optional count chip. The swatch
+	 * mirrors the actual layer colour (heatmap warm-red, route
+	 * orange, club teal) so the legend doubles as a colour key.
+	 */
+	.legend-toggles {
+		display: flex;
+		flex-direction: column;
+		gap: 0.4rem;
+		margin: var(--space-sm) 0;
+		padding: var(--space-sm) 0;
+		border-top: 1px solid var(--color-border);
+		border-bottom: 1px solid var(--color-border);
+	}
+	.legend-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8rem;
+		color: var(--color-text);
+		cursor: pointer;
+		user-select: none;
+	}
+	.legend-row input[type='checkbox'] {
+		margin: 0;
+		accent-color: var(--color-primary);
+	}
+	.legend-swatch {
+		display: inline-block;
+		width: 14px;
+		height: 14px;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+	.legend-swatch-heat {
+		background: radial-gradient(
+			circle,
+			rgba(178, 24, 43, 0.9) 0%,
+			rgba(178, 24, 43, 0.3) 100%
+		);
+	}
+	.legend-swatch-route {
+		background: #f2a07b;
+		border: 2px solid #facc15;
+	}
+	.legend-swatch-club {
+		background: #7fb3c2;
+		border: 2px solid #0f172a;
+	}
+	.legend-count {
+		margin-left: auto;
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+		background: var(--color-bg-secondary);
+		padding: 0.05rem 0.4rem;
+		border-radius: 999px;
+		min-width: 1.5rem;
+		text-align: center;
 	}
 </style>
