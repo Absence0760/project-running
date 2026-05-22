@@ -196,14 +196,18 @@ export const QUALITY_THRESHOLDS = {
 /// Per-waypoint OSRM snap radius (metres). OSRM's `radiuses=` query
 /// caps how far it will reach to find a road when matching each
 /// coordinate. Default in OSRM is "unlimited" — that's how a click
-/// near a stream ends up snapping to a road 800m away. 250m is the
-/// honest compromise: tight enough to reject absurd 800m+ snaps,
-/// loose enough that rural / sparsely-mapped regions (where the
-/// MapTiler base layer shows roads OSM's foot graph doesn't tag as
-/// pedestrian-routable) still route. Failed segments fall back to
-/// straight-line drawing rather than being dropped — see the route
-/// builder's stitch loop.
-export const OSRM_SNAP_RADIUS_M = 250;
+/// near a stream ends up snapping to a road 800m away. Bumped from
+/// 250 → 500 m per user feedback that the tighter cap was too
+/// restrictive in rural / sparsely-mapped regions where the OSM
+/// foot graph can be 300+ m from a deliberate click (and the user
+/// reported the visible pin failing to snap to a nearby road in
+/// Trail mode). 500 m still rejects the absurd cases (>1 km detour)
+/// while keeping the click-snaps-to-road contract the user expects.
+/// Failed segments fall back to straight-line drawing rather than
+/// being dropped — see the route builder's stitch loop. Kept in
+/// lockstep with `apps/mobile_android/lib/routing.dart:
+/// kOsrmSnapRadiusM`.
+export const OSRM_SNAP_RADIUS_M = 500;
 
 /// Identifies which user-clicked waypoints failed to snap. A
 /// waypoint is "implicated" when every segment it's an endpoint of

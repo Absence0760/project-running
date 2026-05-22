@@ -99,10 +99,11 @@ void main() {
       expect(stub.lastUrl!.queryParameters['number'], '1',
           reason: 'number=1 requests only the single nearest match — '
               'matches web `RouteBuilder.svelte` call shape.');
-      expect(stub.lastUrl!.queryParameters['radiuses'], '250',
-          reason: 'radiuses=250 caps OSRM snap distance — without '
-              'this, an absurd 800m+ snap silently distorts the '
-              'route.');
+      expect(stub.lastUrl!.queryParameters['radiuses'], '500',
+          reason: 'radiuses=500 caps OSRM snap distance — bumped '
+              'from 250 m per user feedback that the tighter cap '
+              'was too restrictive in rural / sparsely-mapped '
+              'regions. 500 m still rejects absurd >1 km snaps.');
     });
 
     test('falls back to the input point when the fetcher exceeds '
@@ -214,9 +215,10 @@ void main() {
       // The new accuracy-fix parameter:
       expect(
         stub.lastUrl!.queryParameters['radiuses'],
-        '250;250',
-        reason: 'radiuses=250;250 caps how far OSRM can reach to '
-            'find a road — the parity fix vs the web call shape.',
+        '500;500',
+        reason: 'radiuses=500;500 caps how far OSRM can reach to '
+            'find a road — bumped from 250 m per user feedback. '
+            'Kept in lockstep with web `OSRM_SNAP_RADIUS_M`.',
       );
     });
 

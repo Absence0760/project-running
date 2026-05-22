@@ -31,14 +31,15 @@ const Duration kOsrmRouteTimeout = Duration(seconds: 8);
 /// caps how far the router will reach to find a road for each
 /// coordinate. **Default in OSRM is unbounded** — that's how a tap
 /// near a stream / parking lot / private driveway ends up snapping
-/// to a road 800m+ away and the route detours through an unrelated
-/// neighbourhood. 250m is the same compromise web uses
-/// (`apps/web/src/lib/routing_quality.ts:OSRM_SNAP_RADIUS_M`):
-/// tight enough to reject the absurd cases, loose enough that
-/// rural / sparsely-mapped regions still route. Failed segments
-/// fall through to straight-line drawing (see
-/// [fetchRouteThrough]'s per-segment fallback).
-const int kOsrmSnapRadiusM = 250;
+/// to a road 800m+ away. Bumped from 250 → 500 m per user feedback
+/// "shouldn't the waypoints stick to the road given Trail is
+/// selected?" — the 250 m cap was too tight in rural / sparsely-
+/// mapped regions where the nearest OSM foot edge can be 300+ m
+/// from a tap. 500 m still rejects the absurd cases (>1 km detour)
+/// while keeping the visible-pin-snaps-to-road contract the user
+/// expects. Kept in lockstep with
+/// `apps/web/src/lib/routing_quality.ts:OSRM_SNAP_RADIUS_M`.
+const int kOsrmSnapRadiusM = 500;
 
 /// Per-segment retry count for transient OSRM failures (5xx,
 /// network blip, AbortError on timeout). Web's `fetchSegment` uses

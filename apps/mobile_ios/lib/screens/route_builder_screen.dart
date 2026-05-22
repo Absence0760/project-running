@@ -461,59 +461,18 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// if cancelled. The unit picker renders in the user's preferred
   /// unit (km / mi) and converts to metres on confirm.
   Future<double?> _pickLoopDistance(DistanceUnit unit) async {
-    final ctl = TextEditingController(
-      text: unit == DistanceUnit.mi ? '3' : '5',
-    );
-    final label = unit == DistanceUnit.mi ? 'mi' : 'km';
-    final result = await showDialog<double>(
+    // Delegated to a StatefulWidget so the TextEditingController is
+    // owned by a state object — its lifecycle is framework-managed
+    // (init in initState, freed in dispose). Pre-fix the controller
+    // was constructed inline in the dialog builder and disposed
+    // manually AFTER `await showDialog` returned; that ordering
+    // tripped Flutter's `_dependents.isEmpty` assertion when the
+    // user tapped Generate (the controller still had a dangling
+    // listener from the popped TextField's deferred disposal).
+    return showDialog<double>(
       context: context,
-      builder: (ctx) {
-        return AlertDialog(
-          title: const Text('Generate loop'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Target distance — we\'ll build a radial loop around '
-                'the current map centre.',
-                style: Theme.of(ctx).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: ctl,
-                autofocus: true,
-                keyboardType:
-                    const TextInputType.numberWithOptions(decimal: true),
-                decoration: InputDecoration(suffixText: label),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                final v = double.tryParse(ctl.text.trim());
-                if (v == null || v <= 0) {
-                  Navigator.pop(ctx);
-                  return;
-                }
-                // Convert unit value → metres.
-                final metres = unit == DistanceUnit.mi
-                    ? v * 1609.344
-                    : v * 1000;
-                Navigator.pop(ctx, metres);
-              },
-              child: const Text('Generate'),
-            ),
-          ],
-        );
-      },
+      builder: (ctx) => _GenerateLoopDialog(unit: unit),
     );
-    ctl.dispose();
-    return result;
   }
 
   void _clear() {
@@ -710,7 +669,13 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
           IconButton(
             tooltip: 'Generate loop',
             onPressed: _routing || _saving ? null : _generateLoop,
-            icon: const Icon(Icons.refresh_outlined),
+            // Was Icons.refresh_outlined — looked like a retry /
+            // reload button per user feedback. Icons.all_inclusive
+            // is the infinity-loop glyph, semantically a closed
+            // loop — distinct from any other affordance on this
+            // screen + reads as "build a circular route" at a
+            // glance.
+            icon: const Icon(Icons.all_inclusive),
           ),
           IconButton(
             tooltip: 'Undo',
@@ -1095,6 +1060,80 @@ class _StatusPill extends StatelessWidget {
   }
 }
 
+/// Generate-Loop dialog. Owns its own TextEditingController via a
+/// proper State object so the controller's lifecycle is bound to
+/// the dialog widget tree — `dispose()` runs when the dialog
+/// unmounts (after the pop animation completes), which is what
+/// Flutter's ChangeNotifier disposal contract expects.
+class _GenerateLoopDialog extends StatefulWidget {
+  final DistanceUnit unit;
+  const _GenerateLoopDialog({required this.unit});
+
+  @override
+  State<_GenerateLoopDialog> createState() => _GenerateLoopDialogState();
+}
+
+class _GenerateLoopDialogState extends State<_GenerateLoopDialog> {
+  late final TextEditingController _ctl = TextEditingController(
+    text: widget.unit == DistanceUnit.mi ? '3' : '5',
+  );
+
+  @override
+  void dispose() {
+    _ctl.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final v = double.tryParse(_ctl.text.trim());
+    if (v == null || v <= 0) {
+      Navigator.pop(context);
+      return;
+    }
+    final metres = widget.unit == DistanceUnit.mi
+        ? v * 1609.344
+        : v * 1000;
+    Navigator.pop(context, metres);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final label = widget.unit == DistanceUnit.mi ? 'mi' : 'km';
+    return AlertDialog(
+      title: const Text('Generate loop'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Target distance — we\'ll build a radial loop around '
+            'the current map centre.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ctl,
+            autofocus: true,
+            keyboardType:
+                const TextInputType.numberWithOptions(decimal: true),
+            decoration: InputDecoration(suffixText: label),
+            onSubmitted: (_) => _submit(),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _submit,
+          child: const Text('Generate'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ModeToggle extends StatelessWidget {
   final RouteBuilderMode mode;
   final ValueChanged<RouteBuilderMode>? onChanged;
@@ -1112,20 +1151,42 @@ class _ModeToggle extends StatelessWidget {
         border: Border.all(color: theme.dividerColor),
       ),
       child: SegmentedButton<RouteBuilderMode>(
+        // User reported "the text wraps to the next line for Road
+        // and Straight items." Default SegmentedButton labels can
+        // wrap when the segment width is constrained by the FAB
+        // column / map. Pin maxLines=1 + softWrap=false so the
+        // labels stay on a single line; the icon stays inline,
+        // so a really cramped viewport still reads "🏔 Trail",
+        // "🚗 Road", "📏 Straight" each as one chip.
         segments: const [
           ButtonSegment(
             value: RouteBuilderMode.trail,
-            label: Text('Trail'),
+            label: Text(
+              'Trail',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
             icon: Icon(Icons.terrain),
           ),
           ButtonSegment(
             value: RouteBuilderMode.road,
-            label: Text('Road'),
+            label: Text(
+              'Road',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
             icon: Icon(Icons.directions_car),
           ),
           ButtonSegment(
             value: RouteBuilderMode.straight,
-            label: Text('Straight'),
+            label: Text(
+              'Straight',
+              maxLines: 1,
+              softWrap: false,
+              overflow: TextOverflow.fade,
+            ),
             icon: Icon(Icons.straighten),
           ),
         ],
