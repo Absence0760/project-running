@@ -16,7 +16,7 @@ export type MapStyle = 'streets' | 'satellite' | 'outdoors' | 'dark';
 ///
 /// The getter is a callback rather than a direct env read so the
 /// test surface doesn't need `import.meta.env`. Production passes
-/// `() => import.meta.env.PUBLIC_TILE_STYLE_URL as string | undefined`.
+/// `() => env.PUBLIC_TILE_STYLE_URL` from `$env/dynamic/public`.
 ///
 /// Whitespace-only values are treated as absent — a stray space
 /// after `PUBLIC_TILE_STYLE_URL=` in `.env.local` shouldn't silently

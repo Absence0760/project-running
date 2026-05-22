@@ -7,6 +7,7 @@
 /// when saving, and the root layout calls it once on mount with the
 /// effective value from the settings bag.
 
+import { env } from '$env/dynamic/public';
 import {
 	buildMapStyleUrl,
 	resolveStyleOverride,
@@ -51,20 +52,26 @@ export function mapStyleUrl(
 }
 
 /// Convenience used by every map-rendering component: reads the dev
-/// override from `import.meta.env.PUBLIC_TILE_STYLE_URL` and threads
-/// it through [mapStyleUrl]. Always returns a usable URL — falls
-/// back to MapTiler when the override is missing.
+/// override from `$env/dynamic/public` (the SvelteKit-canonical way
+/// to access PUBLIC_* env vars at runtime) and threads it through
+/// [mapStyleUrl]. Always returns a usable URL — falls back to
+/// MapTiler when the override is missing.
+///
+/// **Important:** the original implementation used
+/// `import.meta.env.PUBLIC_TILE_STYLE_URL` which DOESN'T resolve
+/// at runtime in dev (vite's transform doesn't rewrite that access
+/// pattern in `.svelte.ts` files; SvelteKit handles env via its
+/// own `$env/*` modules). The override silently came back
+/// `undefined`, the resolver returned `''`, and every map fell
+/// through to the empty-key MapTiler 403. Caught by the May 2026
+/// audit pass.
 ///
 /// The [envGetter] parameter exists for test injection — production
 /// callers omit it, tests pass a stub that returns a known value.
-/// `import.meta.env` isn't available outside Vite, so Node test
-/// runners would otherwise have to set up the Vite plugin chain
-/// just to exercise this two-liner.
 export function mapStyleUrlFromEnv(
 	key: string,
 	prefersDark: boolean,
-	envGetter: () => string | undefined = () =>
-		import.meta.env.PUBLIC_TILE_STYLE_URL as string | undefined,
+	envGetter: () => string | undefined = () => env.PUBLIC_TILE_STYLE_URL,
 ): string {
 	return mapStyleUrl(key, prefersDark, resolveStyleOverride(envGetter));
 }

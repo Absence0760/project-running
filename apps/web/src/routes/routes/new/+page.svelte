@@ -9,6 +9,17 @@
 	import { pickSavePolyline } from '$lib/route_save_polyline';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { distanceInPreferred, getUnit } from '$lib/units.svelte';
+	import { env } from '$env/dynamic/public';
+
+	// True when the local Protomaps tile-style override is set —
+	// in that mode all three map-style buttons (streets/satellite/
+	// terrain) collapse to the same self-hosted style and become
+	// visually identical, which confuses the user into thinking the
+	// buttons are broken. Hide the satellite + terrain buttons when
+	// the override is on so only the "Streets" affordance shows.
+	// See decisions.md § 68 + the May 2026 audit pass.
+	const tileOverrideActive =
+		(env.PUBLIC_TILE_STYLE_URL ?? '').trim().length > 0;
 
 	const METRES_PER_MILE = 1609.344;
 
@@ -396,8 +407,10 @@
 				<legend class="section-label">Map style</legend>
 				<div class="style-toggle">
 					<button class="style-btn" class:active={currentMapStyle === 'streets'} onclick={() => handleMapStyle('streets')}>Streets</button>
-					<button class="style-btn" class:active={currentMapStyle === 'satellite'} onclick={() => handleMapStyle('satellite')}>Satellite</button>
-					<button class="style-btn" class:active={currentMapStyle === 'terrain'} onclick={() => handleMapStyle('terrain')}>Terrain</button>
+					{#if !tileOverrideActive}
+						<button class="style-btn" class:active={currentMapStyle === 'satellite'} onclick={() => handleMapStyle('satellite')}>Satellite</button>
+						<button class="style-btn" class:active={currentMapStyle === 'terrain'} onclick={() => handleMapStyle('terrain')}>Terrain</button>
+					{/if}
 				</div>
 			</fieldset>
 

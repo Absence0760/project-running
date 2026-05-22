@@ -162,11 +162,149 @@ test('searchPlaces URL-encodes the query (handles spaces + ampersands)',
 		}) as typeof fetch;
 		try {
 			await searchPlaces('Richmond, VA & nearby');
-			assert.ok(
-				capturedUrl.includes(encodeURIComponent('Richmond, VA & nearby')),
-				`expected URL-encoded query in URL, got: ${capturedUrl}`,
-			);
+			// URLSearchParams uses `+` for spaces (form-urlencoded);
+			// encodeURIComponent uses `%20`. Both are valid + Nominatim
+			// accepts either. The load-bearing assertion is that the
+			// raw `&` (which would break the query string) is encoded.
+			const parsed = new URL(capturedUrl);
+			const q = parsed.searchParams.get('q');
+			assert.equal(q, 'Richmond, VA & nearby',
+				`q param should decode back to the original: got ${q}`);
 		} finally {
 			globalThis.fetch = originalFetch;
 		}
 	});
+
+test('searchPlaces (Nominatim path) includes the `email` contact-channel '
+	+ 'param required by their usage policy', async () => {
+	// Public Nominatim's usage policy
+	// (https://operations.osmfoundation.org/policies/nominatim/)
+	// asks for a meaningful contact channel. Browsers won't let us
+	// set a custom User-Agent from JS, so the next-best signal is
+	// the `email` query param. The May 2026 audit pass surfaced
+	// this — without the param, sustained traffic was at risk of
+	// silent IP bans.
+	let capturedUrl = '';
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async (url: string | URL | Request) => {
+		capturedUrl = url.toString();
+		return new Response('[]', { status: 200 });
+	}) as typeof fetch;
+	try {
+		await searchPlaces('Richmond');
+		const parsed = new URL(capturedUrl);
+		assert.equal(parsed.host, 'nominatim.openstreetmap.org',
+			'should be on the Nominatim path (no MapTiler key set)');
+		assert.ok(parsed.searchParams.get('email'),
+			"Nominatim policy requires an `email` contact param");
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+// ---- geocodePlace (Nominatim fallback added in the May 2026 audit) ----
+
+import { geocodePlaceWithKey } from './geocoding_math';
+// Test the env-free dispatcher directly so we don't need Vite's
+// `$env/dynamic/public` runtime.
+const geocodePlace = (q: string, signal?: AbortSignal) =>
+	geocodePlaceWithKey('', q, signal);
+
+test('geocodePlace returns null for short queries (no provider call)',
+	async () => {
+		let fetchCalls = 0;
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => {
+			fetchCalls++;
+			return new Response('[]', { status: 200 });
+		}) as typeof fetch;
+		try {
+			const out = await geocodePlace('');
+			assert.equal(out, null);
+			const out2 = await geocodePlace('a');
+			assert.equal(out2, null);
+			assert.equal(fetchCalls, 0, 'no network call for short queries');
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+test('geocodePlace falls back to Nominatim when no MapTiler key, '
+	+ 'parses bbox into bbox-derived radius', async () => {
+	// Nominatim's boundingbox shape is
+	// `[minLat, maxLat, minLng, maxLng]` (strings, lat-first) —
+	// different from MapTiler's `[w, s, e, n]` floats. The fallback
+	// converts; pin that the conversion math actually produces a
+	// reasonable radius.
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () =>
+		new Response(
+			JSON.stringify([
+				{
+					display_name: 'Virginia, United States',
+					lat: '37.4315',
+					lon: '-78.6569',
+					boundingbox: ['36.5407', '39.4660', '-83.6754', '-75.2422'],
+					class: 'boundary',
+					type: 'administrative',
+				},
+			]),
+			{ status: 200 },
+		)) as typeof fetch;
+	try {
+		const out = await geocodePlace('Virginia');
+		assert.ok(out, 'should return a geocoded place');
+		assert.equal(out!.name, 'Virginia, United States');
+		assert.ok(Math.abs(out!.center.lat - 37.4315) < 1e-6);
+		assert.ok(Math.abs(out!.center.lng - -78.6569) < 1e-6);
+		// Virginia centroid → corner is ~400-500km. Pin the right band.
+		assert.ok(out!.radiusM > 350_000,
+			`expected > 350km radius, got ${out!.radiusM}`);
+		assert.ok(out!.radiusM < 550_000,
+			`expected < 550km radius, got ${out!.radiusM}`);
+		// class=boundary + type=administrative → 'region'.
+		assert.equal(out!.placeType, 'region');
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test('geocodePlace Nominatim path: no bbox → default 5km radius', async () => {
+	// An address-level POI may come back without a boundingbox.
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () =>
+		new Response(
+			JSON.stringify([{ display_name: 'Some address', lat: '37.5', lon: '-77.4' }]),
+			{ status: 200 },
+		)) as typeof fetch;
+	try {
+		const out = await geocodePlace('123 Main St');
+		assert.ok(out);
+		assert.equal(out!.radiusM, 5000);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test('geocodePlace returns null when Nominatim returns []', async () => {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = (async () =>
+		new Response('[]', { status: 200 })) as typeof fetch;
+	try {
+		assert.equal(await geocodePlace('not-a-real-place-anywhere'), null);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});
+
+test('geocodePlace returns null when fetch throws', async () => {
+	const originalFetch = globalThis.fetch;
+	globalThis.fetch = async () => {
+		throw new Error('network down');
+	};
+	try {
+		assert.equal(await geocodePlace('Virginia'), null);
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
+});

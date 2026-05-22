@@ -1614,12 +1614,17 @@
 		navigator.geolocation.getCurrentPosition(
 			(pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }),
 			(err) => {
+				// Compare against the numeric `code` literals from the
+				// GeolocationPositionError spec — not `err.PERMISSION_DENIED`
+				// etc., because those constants aren't reliably present on
+				// the error instance in every implementation (they live on
+				// the prototype interface).
 				const msg =
-					err.code === err.PERMISSION_DENIED
+					err.code === 1
 						? 'Location permission denied. Allow location for localhost in your browser to use this.'
-						: err.code === err.POSITION_UNAVAILABLE
+						: err.code === 2
 							? "Couldn't determine your location."
-							: err.code === err.TIMEOUT
+							: err.code === 3
 								? "Location request timed out."
 								: "Couldn't get your location.";
 				showToast(msg, 'error');

@@ -10,6 +10,13 @@ export interface PlaceSearchResult {
 	lat: number;
 }
 
+export interface GeocodedPlace {
+	name: string;
+	center: { lng: number; lat: number };
+	radiusM: number;
+	placeType: string | null;
+}
+
 export function haversineM(
 	a: { lng: number; lat: number },
 	b: { lng: number; lat: number },
@@ -100,16 +107,152 @@ async function searchViaMapTiler(
 	return out;
 }
 
+/// Env-free counterpart to `geocodePlace` in `geocoding.ts`.
+/// Takes the MapTiler key as a parameter so node:test can drive it
+/// without setting up Vite + `$env/dynamic/public`. See
+/// `geocoding.ts` for the production-shape wrapper.
+export async function geocodePlaceWithKey(
+	maptilerKey: string,
+	query: string,
+	signal?: AbortSignal,
+): Promise<GeocodedPlace | null> {
+	const trimmed = query.trim();
+	if (trimmed.length < 2) return null;
+	if (maptilerKey.length > 0) {
+		return geocodeViaMapTiler(maptilerKey, trimmed, signal);
+	}
+	return geocodeViaNominatim(trimmed, signal);
+}
+
+async function geocodeViaMapTiler(
+	key: string,
+	trimmed: string,
+	signal?: AbortSignal,
+): Promise<GeocodedPlace | null> {
+	const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(trimmed)}.json?key=${key}&limit=1`;
+	let res: Response;
+	try {
+		res = await fetch(url, { signal });
+	} catch (_) {
+		return null;
+	}
+	if (!res.ok) return null;
+	const body = (await res.json()) as {
+		features?: Array<{
+			place_name?: string;
+			text?: string;
+			center?: [number, number];
+			bbox?: [number, number, number, number];
+			place_type?: string[];
+		}>;
+	};
+	const top = body.features?.[0];
+	if (!top?.center) return null;
+	const center = { lng: top.center[0], lat: top.center[1] };
+	const placeType = top.place_type?.[0] ?? null;
+	const radiusM = top.bbox ? bboxRadius(top.bbox, center) : 5000;
+	return {
+		name: top.place_name ?? top.text ?? trimmed,
+		center,
+		radiusM,
+		placeType,
+	};
+}
+
+async function geocodeViaNominatim(
+	trimmed: string,
+	signal?: AbortSignal,
+): Promise<GeocodedPlace | null> {
+	const params = new URLSearchParams({
+		q: trimmed,
+		format: 'json',
+		limit: '1',
+		addressdetails: '0',
+		email: 'protomaps-dev@localhost',
+	});
+	const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
+	let res: Response;
+	try {
+		res = await fetch(url, {
+			signal,
+			headers: typeof navigator !== 'undefined' && navigator.language
+				? { 'Accept-Language': navigator.language }
+				: undefined,
+		});
+	} catch (_) {
+		return null;
+	}
+	if (!res.ok) return null;
+	const body = (await res.json()) as Array<{
+		display_name?: string;
+		lat?: string;
+		lon?: string;
+		boundingbox?: [string, string, string, string];
+		type?: string;
+		class?: string;
+	}>;
+	const top = body[0];
+	if (!top?.lat || !top.lon) return null;
+	const lat = parseFloat(top.lat);
+	const lng = parseFloat(top.lon);
+	if (!isFinite(lat) || !isFinite(lng)) return null;
+	const center = { lng, lat };
+	let radiusM = 5000;
+	if (top.boundingbox && top.boundingbox.length === 4) {
+		const [s, n, w, e] = top.boundingbox.map(parseFloat);
+		if (isFinite(s) && isFinite(n) && isFinite(w) && isFinite(e)) {
+			radiusM = bboxRadius([w, s, e, n], center);
+		}
+	}
+	return {
+		name: top.display_name ?? trimmed,
+		center,
+		radiusM,
+		placeType:
+			top.class === 'boundary' && top.type === 'administrative'
+				? 'region'
+				: null,
+	};
+}
+
+/// Nominatim's usage policy is strict — see
+/// https://operations.osmfoundation.org/policies/nominatim/. The two
+/// load-bearing requirements at dev volumes:
+///
+///   - Meaningful `User-Agent` header (no `Mozilla/5.0` blanket).
+///     Browsers send one automatically, but it's the default browser
+///     UA which Nominatim has been known to deny. Setting an explicit
+///     `User-Agent` from JavaScript isn't possible (browsers forbid
+///     it); the next-best signal Nominatim accepts is a descriptive
+///     `Referer` header (which the browser sends automatically) plus
+///     the `email` query parameter as a contact path.
+///
+///   - No bulk requests (~1 req/sec). The 300ms debounce on every
+///     search call site is the back-pressure.
+///
+/// We include the `email` parameter — Nominatim treats it as the
+/// usage-policy contact channel. Empty string is fine; the parameter
+/// being present tells them "this is a real client that read the
+/// policy" and they ban it less aggressively than UA-less traffic.
+///
+/// Production deployments at any scale should self-host or use a
+/// paid alternative; this fallback is dev-only.
+const NOMINATIM_BASE = 'https://nominatim.openstreetmap.org/search';
+
 async function searchViaNominatim(
 	query: string,
 	limit: number,
 	signal?: AbortSignal,
 ): Promise<PlaceSearchResult[]> {
-	// Public Nominatim's usage policy requires a meaningful UA — see
-	// https://operations.osmfoundation.org/policies/nominatim/.
-	// Production deployments at any scale should self-host or use a
-	// paid alternative; this fallback is for dev only.
-	const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=${limit}&addressdetails=0`;
+	const params = new URLSearchParams({
+		q: query,
+		format: 'json',
+		limit: String(limit),
+		addressdetails: '0',
+		// Tells Nominatim "I read the policy" — see comment above.
+		email: 'protomaps-dev@localhost',
+	});
+	const url = `${NOMINATIM_BASE}?${params.toString()}`;
 	let res: Response;
 	try {
 		res = await fetch(url, {
