@@ -298,10 +298,6 @@
 	</div>
 {:else}
 <div class="route-detail">
-	<a href={backHref} class="back-link page-back">
-		<span class="material-symbols">arrow_back</span>
-		{backLabel}
-	</a>
 	<div class="route-detail-body">
 	<!-- Panels-on-left convention (May 2026 UX pass): info pane on the
 		 left, map dominant on the right. The fraction is the LEFT
@@ -310,6 +306,10 @@
 		{#snippet left()}
 		{#if route}
 		<aside class="stats-panel">
+			<a href={backHref} class="back-link panel-back">
+				<span class="material-symbols">arrow_back</span>
+				{backLabel}
+			</a>
 			<header class="detail-header">
 				<div>
 					<div class="title-row">
@@ -599,6 +599,25 @@
 	.page-back .material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.1rem;
+	}
+
+	/* In-panel back link — see the matching pattern in /runs/[id]. */
+	.panel-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--color-text-tertiary);
+		margin-bottom: var(--space-md);
+		transition: color var(--transition-fast);
+	}
+	.panel-back:hover {
+		color: var(--color-primary);
+	}
+	.panel-back .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1rem;
 	}
 
 	.map-panel {

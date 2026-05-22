@@ -692,7 +692,6 @@
 
 {#if loading}
 	<div class="run-detail">
-		<div class="page-back back-link-skeleton" aria-hidden="true"></div>
 		<div class="loading-grid" aria-busy="true" aria-label="Loading run">
 			<div class="loading-map skeleton-shimmer"></div>
 			<div class="loading-stats">
@@ -722,9 +721,6 @@
 	</div>
 {:else}
 <div class="run-detail">
-	<a href="/runs" class="back-link page-back" onclick={handleBack}>
-		<span class="material-symbols">arrow_back</span> All runs
-	</a>
 	<div class="run-detail-body">
 	<!-- Panels-on-left convention (May 2026 UX pass): info pane on the
 		 left, map dominant on the right. The fraction is the LEFT
@@ -845,6 +841,10 @@
 		{#snippet left()}
 		{#if run}
 	<aside class="stats-panel">
+		<a href="/runs" class="back-link panel-back" onclick={handleBack}>
+			<span class="material-symbols">arrow_back</span>
+			All runs
+		</a>
 		<header class="detail-header">
 			<div class="detail-header-top">
 				<div class="detail-title-block">
@@ -1359,27 +1359,49 @@
 		min-height: 0;
 	}
 
-	/* Stack map above stats on narrow viewports — overrides SplitPane's
-	   horizontal layout without forking the primitive. */
+	/* Narrow viewports: stack vertically with INFO on top + MAP
+	 * below. The May 2026 panel-flip moved info into the left
+	 * snippet; on a stacked layout that means info takes its
+	 * natural height in document flow + the map gets a fixed
+	 * pane below. The old rules pre-flip sized .split-left as
+	 * if it were the map (45vh fixed) — that left the info pane
+	 * cramped into a 320 px scroll area on phones.
+	 *
+	 * Now: .split-left (info) is auto-height + grows with
+	 * content; .split-right (map) is a fixed 50vh pane below.
+	 * Stats scroll with the page rather than inside the panel,
+	 * which matches how every other detail page feels on phones.
+	 */
 	@media (max-width: 900px) {
+		/* The desktop layout pins height: 100vh on `.run-detail`
+		 * so the SplitPane has a fixed container to size into.
+		 * On a stacked mobile view we want the document to scroll
+		 * naturally — release the height pin below. */
+		.run-detail {
+			height: auto;
+			min-height: 100vh;
+		}
 		.run-detail-body :global(.split-pane) {
 			flex-direction: column;
+			height: auto;
 		}
 		.run-detail-body :global(.split-left) {
 			width: 100% !important;
-			height: 45vh;
-			min-height: 320px;
+			height: auto;
+			flex: 0 0 auto;
 		}
 		.run-detail-body :global(.split-right) {
 			width: 100%;
-			height: auto;
-			flex: 1;
+			height: 50vh;
+			min-height: 320px;
+			flex: 0 0 50vh;
 		}
 		.run-detail-body :global(.split-divider) {
 			display: none;
 		}
 		.stats-panel {
 			padding: var(--space-lg);
+			overflow-y: visible;
 		}
 	}
 
@@ -1408,6 +1430,31 @@
 	.page-back .material-symbols {
 		font-family: 'Material Symbols Outlined';
 		font-size: 1.1rem;
+	}
+
+	/*
+	 * Compact in-panel back link. Lives at the top of the stats
+	 * panel rather than as a full-width strip above the SplitPane —
+	 * reclaims the ~42px vertical strip the standalone bar used to
+	 * cost. Visual hierarchy: muted-text color so it doesn't compete
+	 * with the H1; gains primary color on hover for the affordance.
+	 */
+	.panel-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.8rem;
+		font-weight: 500;
+		color: var(--color-text-tertiary);
+		margin-bottom: var(--space-md);
+		transition: color var(--transition-fast);
+	}
+	.panel-back:hover {
+		color: var(--color-primary);
+	}
+	.panel-back .material-symbols {
+		font-family: 'Material Symbols Outlined';
+		font-size: 1rem;
 	}
 
 	.map-panel {
