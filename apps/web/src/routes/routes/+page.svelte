@@ -501,18 +501,21 @@
 		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
-	/* Heatmap tab takes the rest of the viewport. The container fills
-	 * the layout column (which the app shell already constrains to
-	 * full height under the top chrome), and the RouteHeatmap inside
-	 * absolutely positions its map + legend. Padding around the
-	 * heatmap shrinks to a slim gutter so the map gets all the real
-	 * estate it needs — fixes the "wasted real estate" feedback. */
+	/* Heatmap tab takes the FULL viewport (full-bleed). Drops the
+	 * page-padding gutters entirely + zeroes the page-header
+	 * margin so the map sits flush against the layout column.
+	 * The legend overlay inside RouteHeatmap is positioned
+	 * absolutely so it survives the edge-to-edge canvas. May 2026
+	 * UX pass — heatmap real-estate optimization. */
 	.page-heatmap {
 		display: flex;
 		flex-direction: column;
 		height: 100vh;
-		padding: var(--page-padding-y) var(--page-padding-x)
-			calc(var(--page-padding-y) / 3);
+		padding: 0;
+	}
+	.page-heatmap :global(.page-header) {
+		padding: var(--space-md) var(--space-lg) 0;
+		margin-bottom: var(--space-sm);
 	}
 	.page-heatmap > :global(:last-child) {
 		flex: 1 1 0;

@@ -21,6 +21,7 @@
 	import { formatDistance, getUnit } from '$lib/units.svelte';
 	import { searchPlaces } from '$lib/geocoding';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { watchMapResize } from '$lib/map_resize';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
 		closestPointDistanceM,
@@ -120,6 +121,7 @@
 	let searchTimeout: ReturnType<typeof setTimeout>;
 	let keyHandler: (e: KeyboardEvent) => void;
 	let geoWatchId: number | null = null;
+	let stopResizeWatch: (() => void) | null = null;
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -1682,6 +1684,11 @@
 
 	function setupMap() {
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+		// Auto-resize on any container dimension change. Catches the
+		// initial-mount mismeasurement (flex children don't always
+		// have their final rect at mount) AND any later SplitPane
+		// drag. See `$lib/map_resize` for the why.
+		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		// Single load handler for all map setup
 		let locationMarker: maplibregl.Marker | null = null;
@@ -1773,6 +1780,7 @@
 	onDestroy(() => {
 		clearTimeout(searchTimeout);
 		if (geoWatchId !== null) navigator.geolocation.clearWatch(geoWatchId);
+		stopResizeWatch?.();
 		markers.forEach((m) => m.remove());
 		distanceMarkers.forEach((m) => m.remove());
 		map?.remove();

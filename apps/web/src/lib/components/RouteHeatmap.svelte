@@ -5,12 +5,20 @@
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
+	import { watchMapResize } from '$lib/map_resize';
 	import { fetchHeatmapPoints, nearbyPublicRoutes } from '$lib/data';
 	import { searchPlaces, type PlaceSearchResult } from '$lib/geocoding';
 	import type { Route } from '$lib/types';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	let stopResizeWatch: (() => void) | null = null;
+	/// The "Where people run" legend defaults to compact (info icon
+	/// only) so it doesn't eat real estate. Click to expand. The
+	/// May 2026 real-estate pass surfaced that the 18rem-wide
+	/// card-style legend was the second-biggest waste of canvas
+	/// after the page padding.
+	let legendExpanded = $state(false);
 	let loading = $state(false);
 	let lastUpdated = $state<Date | null>(null);
 	let mapLoaded = false;
@@ -73,13 +81,37 @@
 		map = new maplibregl.Map({
 			container: mapEl,
 			style: mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark),
-			// Centre on London by default — the user can pan anywhere
-			// from there. A more clever default would geo-locate but
-			// browsers prompt for that and we'd rather not on an
-			// already-busy first paint.
-			center: [-0.1276, 51.5074],
-			zoom: 11,
+			// World view by default. We try to geolocate immediately
+			// after mount; if the user grants permission, flyTo the
+			// real position. If they deny / aren't asked yet / the
+			// API isn't available, the global view shows the spread
+			// of points across the dataset — strictly better than the
+			// previous "everyone starts in London" default.
+			center: [0, 30],
+			zoom: 2,
 		});
+		stopResizeWatch = watchMapResize(mapEl, map);
+		// Background-fetch the user's location + recentre. Browsers
+		// prompt for permission on the first call; deny / unavailable
+		// just leaves the world view, which is the right "no idea
+		// where you are" baseline. The 5 s timeout is the same we
+		// use elsewhere — long enough for a real GPS lock on a
+		// laptop, short enough that the page doesn't feel stuck.
+		if (typeof navigator !== 'undefined' && navigator.geolocation) {
+			navigator.geolocation.getCurrentPosition(
+				(pos) => {
+					map?.flyTo({
+						center: [pos.coords.longitude, pos.coords.latitude],
+						zoom: 12,
+						essential: true,
+					});
+				},
+				() => {
+					// Silent: world view is the fallback by design.
+				},
+				{ timeout: 5000 },
+			);
+		}
 
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 		// "Locate me" button. Built-in MapLibre primitive — no
@@ -206,6 +238,7 @@
 	});
 
 	onDestroy(() => {
+		stopResizeWatch?.();
 		map?.remove();
 		map = null;
 		if (pendingFetch) clearTimeout(pendingFetch);
@@ -345,22 +378,44 @@
 		{/if}
 	</div>
 
-	<aside class="legend" class:dimmed={pointerOnMap} data-testid="heatmap-legend">
-		<strong>Where people run</strong>
-		<p>
-			Warmer cells = more public routes pass through here. Pan to explore;
-			the layer refreshes after each move. Only routes flipped public are
-			counted. Zoom in to see individual routes — click any line to open it.
-		</p>
-		{#if loading}
-			<p class="muted"><em>Updating…</em></p>
-		{:else if lastUpdated}
-			<p class="muted">
-				Updated {lastUpdated.toLocaleTimeString([], {
-					hour: '2-digit',
-					minute: '2-digit',
-				})}
-			</p>
+	<aside
+		class="legend"
+		class:expanded={legendExpanded}
+		class:dimmed={pointerOnMap && !legendExpanded}
+		data-testid="heatmap-legend"
+	>
+		<button
+			type="button"
+			class="legend-toggle"
+			onclick={() => (legendExpanded = !legendExpanded)}
+			aria-expanded={legendExpanded}
+			aria-label={legendExpanded ? 'Collapse legend' : 'Show legend'}
+		>
+			<span class="material-symbols">{legendExpanded ? 'close' : 'info'}</span>
+			{#if loading && !legendExpanded}
+				<span class="legend-pulse" aria-hidden="true"></span>
+			{/if}
+		</button>
+		{#if legendExpanded}
+			<div class="legend-body">
+				<strong>Where people run</strong>
+				<p>
+					Warmer cells = more public routes pass through here. Pan to
+					explore; the layer refreshes after each move. Only routes
+					flipped public are counted. Zoom in to see individual routes
+					— click any line to open it.
+				</p>
+				{#if loading}
+					<p class="muted"><em>Updating…</em></p>
+				{:else if lastUpdated}
+					<p class="muted">
+						Updated {lastUpdated.toLocaleTimeString([], {
+							hour: '2-digit',
+							minute: '2-digit',
+						})}
+					</p>
+				{/if}
+			</div>
 		{/if}
 	</aside>
 </div>
@@ -431,11 +486,78 @@
 	.search-results li button:hover {
 		background: var(--color-surface-hover);
 	}
+	/*
+	 * Legend is a single info-icon button when collapsed — same
+	 * footprint as MapLibre's controls. Click expands to a 16rem
+	 * description card. The collapsed state keeps real estate
+	 * available for the heatmap canvas; users opt in when they
+	 * want context.
+	 */
 	.legend {
 		position: absolute;
 		top: var(--space-md);
 		left: var(--space-md);
-		max-width: 18rem;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+		transition: opacity 180ms ease;
+		/* Pointer events: the button needs them; in dimmed mode the
+		 * outer .legend is set to `none` so map clicks pass through.
+		 * The button re-enables them on the button itself via the
+		 * default browser style — when dimmed the button is
+		 * non-interactive too, restored on hover (see :hover below). */
+	}
+	.legend.dimmed {
+		opacity: 0.35;
+		pointer-events: none;
+	}
+	.legend.dimmed:hover {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.legend-toggle {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 36px;
+		height: 36px;
+		padding: 0;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+		transition: color var(--transition-fast),
+			border-color var(--transition-fast);
+	}
+	.legend-toggle:hover {
+		color: var(--color-text);
+		border-color: var(--color-primary);
+	}
+	.legend-toggle .material-symbols {
+		font-size: 1.25rem;
+	}
+	/* Pulsing dot while the heatmap is fetching new points — same
+	 * "I'm working" signal the legend used to communicate in its
+	 * full state, now bound to the collapsed icon. */
+	.legend-pulse {
+		position: absolute;
+		top: 4px;
+		right: 4px;
+		width: 8px;
+		height: 8px;
+		background: var(--color-primary);
+		border-radius: 50%;
+		animation: pulse 1.4s ease-in-out infinite;
+	}
+	@keyframes pulse {
+		0%, 100% { opacity: 0.4; transform: scale(0.85); }
+		50% { opacity: 1; transform: scale(1.1); }
+	}
+	.legend-body {
+		max-width: 16rem;
 		padding: var(--space-md) var(--space-lg);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
@@ -443,27 +565,12 @@
 		box-shadow: var(--shadow-md);
 		font-size: 0.85rem;
 		color: var(--color-text);
-		transition: opacity 180ms ease;
 	}
-	/* Fade out (and disable pointer events) when the cursor is over
-	 * the map so the legend doesn't obstruct what the user is trying
-	 * to inspect. They can still glance at the warm/cool colours
-	 * underneath. Reappears the moment they leave the map. */
-	.legend.dimmed {
-		opacity: 0.15;
-		pointer-events: none;
-	}
-	.legend.dimmed:hover {
-		/* Allow the user to bring it back by hovering directly on it
-		 * (i.e. the legend itself, not just the rest of the map). */
-		opacity: 1;
-		pointer-events: auto;
-	}
-	.legend strong {
+	.legend-body strong {
 		display: block;
 		margin-bottom: 0.4rem;
 	}
-	.legend p {
+	.legend-body p {
 		margin: 0 0 0.3rem 0;
 		color: var(--color-text-secondary);
 	}

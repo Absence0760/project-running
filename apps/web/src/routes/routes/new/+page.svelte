@@ -4,6 +4,7 @@
 	import RouteBuilder from '$lib/components/RouteBuilder.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import SplitPane from '$lib/components/SplitPane.svelte';
 	import { toGpx, toKml, downloadFile } from '$lib/gpx';
 	import { saveRoute } from '$lib/data';
 	import { pickSavePolyline } from '$lib/route_save_polyline';
@@ -366,6 +367,8 @@
 </svelte:head>
 
 <div class="builder-layout">
+	<SplitPane storageKey="route-builder-split" min={280} initialFraction={0.28}>
+		{#snippet left()}
 	<aside class="sidebar">
 		<a href="/routes" class="back-link" onclick={handleBack}>
 			<span class="material-symbols">arrow_back</span>
@@ -638,7 +641,9 @@
 			</ul>
 		</details>
 	</aside>
+		{/snippet}
 
+		{#snippet right()}
 	<main class="map-area">
 		<RouteBuilder
 			bind:this={builder}
@@ -677,6 +682,8 @@
 			</div>
 		{/if}
 	</main>
+		{/snippet}
+	</SplitPane>
 </div>
 
 <Modal open={showSaveModal} title="Save route" onclose={() => (showSaveModal = false)}>
@@ -763,7 +770,12 @@
 	}
 
 	.sidebar {
-		width: 22rem;
+		/* Width comes from SplitPane (resizable). The sidebar fills
+		 * the left pane and scrolls internally when content
+		 * overflows. Border-right is the visual edge between panel
+		 * and map; the SplitPane divider sits on top of it. */
+		width: 100%;
+		height: 100%;
 		flex-shrink: 0;
 		border-right: 1px solid var(--color-border);
 		padding: var(--space-lg) var(--space-lg) var(--space-xl);

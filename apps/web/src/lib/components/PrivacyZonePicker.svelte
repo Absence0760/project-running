@@ -4,6 +4,7 @@
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
+	import { watchMapResize } from '$lib/map_resize';
 	import type { PrivacyZone } from '$lib/privacy';
 
 	interface Props {
@@ -15,6 +16,7 @@
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let marker: maplibregl.Marker | null = null;
+	let stopResizeWatch: (() => void) | null = null;
 
 	let lat = $state<number | null>(null);
 	let lng = $state<number | null>(null);
@@ -34,6 +36,8 @@
 			zoom: 13,
 		});
 
+		stopResizeWatch = watchMapResize(mapEl, map);
+
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
 		map.on('click', (e) => {
@@ -46,6 +50,7 @@
 	});
 
 	onDestroy(() => {
+		stopResizeWatch?.();
 		map?.remove();
 		map = null;
 	});

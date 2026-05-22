@@ -726,8 +726,11 @@
 		<span class="material-symbols">arrow_back</span> All runs
 	</a>
 	<div class="run-detail-body">
-	<SplitPane storageKey="run-detail-split" min={300} initialFraction={0.6}>
-		{#snippet left()}
+	<!-- Panels-on-left convention (May 2026 UX pass): info pane on the
+		 left, map dominant on the right. The fraction is the LEFT
+		 pane width, so 0.35 is "info ≈ 35% of viewport, map ≈ 65%". -->
+	<SplitPane storageKey="run-detail-split" min={300} initialFraction={0.35}>
+		{#snippet right()}
 		{#if run}
 	<main class="map-panel">
 		{#if hasMapTrack}
@@ -839,7 +842,7 @@
 		{/if}
 		{/snippet}
 
-		{#snippet right()}
+		{#snippet left()}
 		{#if run}
 	<aside class="stats-panel">
 		<header class="detail-header">

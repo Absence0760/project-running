@@ -42,8 +42,15 @@ test.describe('/routes?tab=heatmap — interaction', () => {
 	}) => {
 		await page.goto('/routes?tab=heatmap');
 
+		// May 2026 real-estate pass: legend collapsed to an info-icon
+		// button by default. The info text + timestamp surface inside
+		// the expanded body, which appears after clicking the toggle.
 		const legend = page.locator('.heatmap-wrap .legend');
 		await expect(legend).toBeVisible({ timeout: 10_000 });
+		const toggle = legend.getByRole('button', { name: /show legend/i });
+		await expect(toggle).toBeVisible();
+		await toggle.click();
+		// Now the expanded body is visible.
 		await expect(legend.getByText('Where people run')).toBeVisible();
 		await expect(
 			legend.getByText(/Warmer cells = more public routes/)
@@ -70,6 +77,10 @@ test.describe('/routes?tab=heatmap — interaction', () => {
 		await page.goto('/routes?tab=heatmap');
 
 		const legend = page.locator('.heatmap-wrap .legend');
+		// Expand the legend so the "Updated …" timestamp is visible —
+		// it lives inside the expandable body since the May 2026
+		// real-estate pass.
+		await legend.getByRole('button', { name: /show legend/i }).click();
 		await expect(legend.getByText(/^Updated /)).toBeVisible({
 			timeout: 15_000
 		});

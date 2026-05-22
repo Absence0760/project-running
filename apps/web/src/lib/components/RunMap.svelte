@@ -6,6 +6,7 @@
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { getUnit } from '$lib/units.svelte';
 	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
+	import { watchMapResize } from '$lib/map_resize';
 	import type { TrackPoint } from '$lib/types';
 	import {
 		buildPaceSegments,
@@ -149,6 +150,7 @@
 
 	let mapContainer: HTMLDivElement;
 	let map: maplibregl.Map;
+	let stopResizeWatch: (() => void) | null = null;
 	let animating = $state(false);
 	let animationFrame: number;
 	let animationMarker: maplibregl.Marker;
@@ -581,6 +583,10 @@
 			center: trackCoords.length > 0 ? trackCoords[Math.floor(trackCoords.length / 2)] : [0, 20],
 			zoom: 13
 		});
+		// Resize-on-container-change wiring — catches the
+		// flex-mismeasure-at-mount + SplitPane-drag bugs. See
+		// `$lib/map_resize`.
+		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
@@ -627,6 +633,7 @@
 
 	onDestroy(() => {
 		cancelAnimationFrame(animationFrame);
+		stopResizeWatch?.();
 		map?.remove();
 	});
 </script>

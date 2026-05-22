@@ -6,6 +6,7 @@
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl, getMapStyle } from '$lib/map-style.svelte';
+	import { watchMapResize } from '$lib/map_resize';
 	import { supabase } from '$lib/supabase';
 	import {
 		fetchRecentRacePings,
@@ -166,6 +167,7 @@
 
 	onDestroy(() => {
 		if (channel) supabase.removeChannel(channel);
+		stopResizeWatch?.();
 		map?.remove();
 	});
 
@@ -244,6 +246,7 @@
 	// --- Map ---
 
 	let mapContainer: HTMLDivElement | undefined = $state();
+	let stopResizeWatch: (() => void) | null = null;
 	let map: maplibregl.Map | null = null;
 	let mapReady = $state(false);
 	let didFitBounds = false;
@@ -368,6 +371,7 @@
 			zoom: 13
 		});
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+		if (mapContainer) stopResizeWatch = watchMapResize(mapContainer, map);
 		map.on('load', () => {
 			mapReady = true;
 			addOverlays();

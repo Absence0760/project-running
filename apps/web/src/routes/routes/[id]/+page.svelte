@@ -303,34 +303,11 @@
 		{backLabel}
 	</a>
 	<div class="route-detail-body">
-	<SplitPane storageKey="route-detail-split" min={300} initialFraction={0.6}>
+	<!-- Panels-on-left convention (May 2026 UX pass): info pane on the
+		 left, map dominant on the right. The fraction is the LEFT
+		 pane width, so 0.35 is "info ≈ 35% of viewport, map ≈ 65%". -->
+	<SplitPane storageKey="route-detail-split" min={300} initialFraction={0.35}>
 		{#snippet left()}
-			{#if route}
-			<main class="map-panel">
-				{#if displayWaypoints.length > 0}
-					<RunMap
-						track={displayWaypoints}
-						totalDistanceM={route.distance_m}
-						hoverIdx={chartHoverIdx}
-						{previewLngLat}
-					/>
-					<RoutePreviewScrubber
-						totalDistanceM={route.distance_m}
-						fraction={scrubFraction}
-						onchange={(f) => (scrubFraction = f)}
-						onscrubbing={(active) => (scrubbing = active)}
-					/>
-				{:else}
-					<div class="map-placeholder">
-						<span class="material-symbols">map</span>
-						<p>No waypoint data available</p>
-					</div>
-				{/if}
-			</main>
-			{/if}
-		{/snippet}
-
-		{#snippet right()}
 		{#if route}
 		<aside class="stats-panel">
 			<header class="detail-header">
@@ -557,6 +534,32 @@
 			</section>
 		</aside>
 		{/if}
+		{/snippet}
+
+		{#snippet right()}
+			{#if route}
+			<main class="map-panel">
+				{#if displayWaypoints.length > 0}
+					<RunMap
+						track={displayWaypoints}
+						totalDistanceM={route.distance_m}
+						hoverIdx={chartHoverIdx}
+						{previewLngLat}
+					/>
+					<RoutePreviewScrubber
+						totalDistanceM={route.distance_m}
+						fraction={scrubFraction}
+						onchange={(f) => (scrubFraction = f)}
+						onscrubbing={(active) => (scrubbing = active)}
+					/>
+				{:else}
+					<div class="map-placeholder">
+						<span class="material-symbols">map</span>
+						<p>No waypoint data available</p>
+					</div>
+				{/if}
+			</main>
+			{/if}
 		{/snippet}
 	</SplitPane>
 	</div>

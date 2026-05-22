@@ -5,6 +5,7 @@
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv } from '$lib/map-style.svelte';
+	import { watchMapResize } from '$lib/map_resize';
 	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
 	import { supabase } from '$lib/supabase';
 	import {
@@ -19,6 +20,7 @@
 	let mapContainer: HTMLDivElement;
 	let map: maplibregl.Map;
 	let runnerMarker: maplibregl.Marker;
+	let stopResizeWatch: (() => void) | null = null;
 	let elapsed = $state(0);
 	let distance = $state(0);
 	let currentPace = $state('--:--');
@@ -293,6 +295,7 @@
 			zoom: 15,
 		});
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
+		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		map.on('load', () => {
 			map.addSource('live-trace', {
@@ -323,6 +326,7 @@
 		if (demoTicker) clearInterval(demoTicker);
 		if (realtimeChannel) supabase.removeChannel(realtimeChannel);
 		liveHubHandle?.close();
+		stopResizeWatch?.();
 		map?.remove();
 	});
 </script>
