@@ -95,14 +95,62 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
   '[{"lat":-37.8180,"lng":144.9550,"ele":10},{"lat":-37.8170,"lng":144.9575,"ele":14},{"lat":-37.8160,"lng":144.9600,"ele":20},{"lat":-37.8150,"lng":144.9620,"ele":27},{"lat":-37.8140,"lng":144.9640,"ele":35},{"lat":-37.8130,"lng":144.9655,"ele":40},{"lat":-37.8125,"lng":144.9665,"ele":38},{"lat":-37.8118,"lng":144.9675,"ele":42},{"lat":-37.8112,"lng":144.9685,"ele":45},{"lat":-37.8108,"lng":144.9692,"ele":42},{"lat":-37.8105,"lng":144.9697,"ele":40},{"lat":-37.8100,"lng":144.9700,"ele":38}]',
   6400, 35, 'road', false);
 
+-- Virginia routes for the local Protomaps tile-extract dev setup
+-- (`bin/protomaps-dev.sh` defaults to Virginia, decisions.md § 68).
+-- All routes are `is_public = true` so they also surface in the
+-- heatmap RPC + Explore tab. Coordinates are hand-picked from real
+-- Virginia running landmarks so the map looks recognisable when the
+-- operator boots the local stack + opens the route detail page.
+INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
+-- Richmond's signature urban-park loop — Belle Isle bridge to the
+-- Floodwall + back along the Pipeline Walk + Lehigh Trail.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Belle Isle + Pipeline Loop (Richmond)',
+  '[{"lat":37.5311,"lng":-77.4520,"ele":58},{"lat":37.5318,"lng":-77.4500,"ele":54},{"lat":37.5325,"lng":-77.4480,"ele":50},{"lat":37.5331,"lng":-77.4460,"ele":47},{"lat":37.5335,"lng":-77.4438,"ele":45},{"lat":37.5340,"lng":-77.4418,"ele":43},{"lat":37.5346,"lng":-77.4398,"ele":41},{"lat":37.5352,"lng":-77.4378,"ele":40},{"lat":37.5358,"lng":-77.4360,"ele":42},{"lat":37.5362,"lng":-77.4345,"ele":45},{"lat":37.5365,"lng":-77.4330,"ele":48},{"lat":37.5360,"lng":-77.4348,"ele":50},{"lat":37.5354,"lng":-77.4368,"ele":48},{"lat":37.5348,"lng":-77.4388,"ele":46},{"lat":37.5342,"lng":-77.4408,"ele":44},{"lat":37.5337,"lng":-77.4428,"ele":42},{"lat":37.5333,"lng":-77.4448,"ele":44},{"lat":37.5328,"lng":-77.4468,"ele":48},{"lat":37.5322,"lng":-77.4488,"ele":52},{"lat":37.5315,"lng":-77.4508,"ele":56},{"lat":37.5311,"lng":-77.4520,"ele":58}]',
+  6500, 70, 'mixed', true),
+-- UVA loop in Charlottesville: Rotunda → Madison Hall → Mad Bowl →
+-- Beta Bridge → Corner → back. A real campus tempo run.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'UVA Rotunda Loop (Charlottesville)',
+  '[{"lat":38.0356,"lng":-78.5067,"ele":150},{"lat":38.0362,"lng":-78.5070,"ele":152},{"lat":38.0368,"lng":-78.5075,"ele":155},{"lat":38.0373,"lng":-78.5082,"ele":160},{"lat":38.0378,"lng":-78.5090,"ele":165},{"lat":38.0382,"lng":-78.5100,"ele":168},{"lat":38.0384,"lng":-78.5110,"ele":170},{"lat":38.0385,"lng":-78.5120,"ele":168},{"lat":38.0382,"lng":-78.5128,"ele":166},{"lat":38.0376,"lng":-78.5132,"ele":164},{"lat":38.0368,"lng":-78.5130,"ele":162},{"lat":38.0360,"lng":-78.5125,"ele":160},{"lat":38.0355,"lng":-78.5115,"ele":158},{"lat":38.0352,"lng":-78.5102,"ele":155},{"lat":38.0350,"lng":-78.5090,"ele":153},{"lat":38.0351,"lng":-78.5078,"ele":151},{"lat":38.0356,"lng":-78.5067,"ele":150}]',
+  4200, 45, 'road', true),
+-- Mount Vernon Trail (Arlington/Alexandria) — a classic out-and-back
+-- north along the Potomac. ~10 km from Memorial Bridge to Belle Haven.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Mount Vernon Trail North (Arlington)',
+  '[{"lat":38.8870,"lng":-77.0560,"ele":10},{"lat":38.8845,"lng":-77.0540,"ele":11},{"lat":38.8810,"lng":-77.0518,"ele":12},{"lat":38.8770,"lng":-77.0498,"ele":13},{"lat":38.8730,"lng":-77.0480,"ele":14},{"lat":38.8690,"lng":-77.0468,"ele":15},{"lat":38.8645,"lng":-77.0455,"ele":16},{"lat":38.8595,"lng":-77.0445,"ele":17},{"lat":38.8540,"lng":-77.0438,"ele":18},{"lat":38.8485,"lng":-77.0432,"ele":18},{"lat":38.8430,"lng":-77.0428,"ele":19},{"lat":38.8485,"lng":-77.0432,"ele":18},{"lat":38.8540,"lng":-77.0438,"ele":18},{"lat":38.8595,"lng":-77.0445,"ele":17},{"lat":38.8645,"lng":-77.0455,"ele":16},{"lat":38.8690,"lng":-77.0468,"ele":15},{"lat":38.8730,"lng":-77.0480,"ele":14},{"lat":38.8770,"lng":-77.0498,"ele":13},{"lat":38.8810,"lng":-77.0518,"ele":12},{"lat":38.8845,"lng":-77.0540,"ele":11},{"lat":38.8870,"lng":-77.0560,"ele":10}]',
+  10200, 25, 'trail', true),
+-- Norfolk Botanical Garden — small but pretty 3-mile loop on
+-- gravel + paved paths.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Norfolk Botanical Garden Loop',
+  '[{"lat":36.8983,"lng":-76.2030,"ele":3},{"lat":36.8990,"lng":-76.2015,"ele":4},{"lat":36.8998,"lng":-76.2000,"ele":5},{"lat":36.9005,"lng":-76.1985,"ele":6},{"lat":36.9008,"lng":-76.1968,"ele":7},{"lat":36.9006,"lng":-76.1952,"ele":7},{"lat":36.9000,"lng":-76.1942,"ele":7},{"lat":36.8990,"lng":-76.1948,"ele":6},{"lat":36.8980,"lng":-76.1960,"ele":5},{"lat":36.8972,"lng":-76.1978,"ele":4},{"lat":36.8970,"lng":-76.1998,"ele":3},{"lat":36.8975,"lng":-76.2015,"ele":3},{"lat":36.8983,"lng":-76.2030,"ele":3}]',
+  4800, 20, 'mixed', true),
+-- Virginia Beach Boardwalk — pancake-flat out-and-back along the
+-- ocean from 1st St up to ~38th.
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'VA Beach Boardwalk Out & Back',
+  '[{"lat":36.8385,"lng":-75.9772,"ele":3},{"lat":36.8420,"lng":-75.9770,"ele":3},{"lat":36.8460,"lng":-75.9768,"ele":3},{"lat":36.8500,"lng":-75.9766,"ele":3},{"lat":36.8540,"lng":-75.9764,"ele":3},{"lat":36.8580,"lng":-75.9762,"ele":3},{"lat":36.8620,"lng":-75.9760,"ele":3},{"lat":36.8660,"lng":-75.9758,"ele":3},{"lat":36.8620,"lng":-75.9760,"ele":3},{"lat":36.8580,"lng":-75.9762,"ele":3},{"lat":36.8540,"lng":-75.9764,"ele":3},{"lat":36.8500,"lng":-75.9766,"ele":3},{"lat":36.8460,"lng":-75.9768,"ele":3},{"lat":36.8420,"lng":-75.9770,"ele":3},{"lat":36.8385,"lng":-75.9772,"ele":3}]',
+  6300, 5, 'road', true),
+-- Roanoke Mill Mountain Greenway — climbs Mill Mountain to the
+-- star, then back down. The Virginia "hill-rep classic".
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Mill Mountain Star Climb (Roanoke)',
+  '[{"lat":37.2710,"lng":-79.9416,"ele":280},{"lat":37.2700,"lng":-79.9400,"ele":300},{"lat":37.2688,"lng":-79.9385,"ele":330},{"lat":37.2675,"lng":-79.9370,"ele":365},{"lat":37.2660,"lng":-79.9355,"ele":405},{"lat":37.2645,"lng":-79.9345,"ele":445},{"lat":37.2630,"lng":-79.9338,"ele":485},{"lat":37.2615,"lng":-79.9335,"ele":520},{"lat":37.2602,"lng":-79.9332,"ele":555},{"lat":37.2592,"lng":-79.9330,"ele":580},{"lat":37.2602,"lng":-79.9332,"ele":555},{"lat":37.2615,"lng":-79.9335,"ele":520},{"lat":37.2630,"lng":-79.9338,"ele":485},{"lat":37.2645,"lng":-79.9345,"ele":445},{"lat":37.2660,"lng":-79.9355,"ele":405},{"lat":37.2675,"lng":-79.9370,"ele":365},{"lat":37.2688,"lng":-79.9385,"ele":330},{"lat":37.2700,"lng":-79.9400,"ele":300},{"lat":37.2710,"lng":-79.9416,"ele":280}]',
+  7200, 300, 'trail', true);
+
 -- Star three of the seeded routes so the watch picker shows a
 -- realistic "what I run weekly" rotation out of the box. Without
 -- this, the watch's starred-only fetch returns empty and a fresh
 -- dev install looks broken until the user manually stars something.
+-- Pick Virginia routes alongside the existing London ones so the
+-- watch shows both regions — but the Belle Isle loop is the
+-- "default" if the operator is testing the Protomaps tile extract.
 UPDATE routes
 SET is_starred = true
 WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
-  AND name IN ('Richmond Park Loop', 'Thames Path 5K', 'Sunday Long Run');
+  AND name IN (
+    'Richmond Park Loop',
+    'Thames Path 5K',
+    'Sunday Long Run',
+    'Belle Isle + Pipeline Loop (Richmond)',
+    'UVA Rotunda Loop (Charlottesville)',
+    'Mount Vernon Trail North (Arlington)'
+  );
 
 -- 3b. Gear. Two pairs of shoes — one current (default), one rotation.
 -- Inserted BEFORE the runs table so the auto-tag trigger

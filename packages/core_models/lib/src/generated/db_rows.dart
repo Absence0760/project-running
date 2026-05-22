@@ -115,13 +115,13 @@ class ClubRow {
   static const String colAvatarUrl = 'avatar_url';
   static const String colLocationLabel = 'location_label';
   static const String colIsPublic = 'is_public';
-  static const String colIsVerified = 'is_verified';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
   static const String colJoinPolicy = 'join_policy';
   static const String colInviteToken = 'invite_token';
   static const String colLocationPoint = 'location_point';
   static const String colMemberCount = 'member_count';
+  static const String colIsVerified = 'is_verified';
 
   final String id;
   final String ownerId;
@@ -131,13 +131,13 @@ class ClubRow {
   final String? avatarUrl;
   final String? locationLabel;
   final bool? isPublic;
-  final bool isVerified;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String joinPolicy;
   final String? inviteToken;
   final dynamic locationPoint;
   final int memberCount;
+  final bool isVerified;
 
   const ClubRow({
     required this.id,
@@ -148,13 +148,13 @@ class ClubRow {
     this.avatarUrl,
     this.locationLabel,
     this.isPublic,
-    this.isVerified = false,
     this.createdAt,
     this.updatedAt,
     required this.joinPolicy,
     this.inviteToken,
     this.locationPoint,
     required this.memberCount,
+    required this.isVerified,
   });
 
   factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
@@ -166,13 +166,13 @@ class ClubRow {
     avatarUrl: json['avatar_url'] as String?,
     locationLabel: json['location_label'] as String?,
     isPublic: json['is_public'] as bool?,
-    isVerified: (json['is_verified'] as bool?) ?? false,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     joinPolicy: json['join_policy'] as String,
     inviteToken: json['invite_token'] as String?,
     locationPoint: json['location_point'],
     memberCount: (json['member_count'] as num).toInt(),
+    isVerified: json['is_verified'] as bool,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -184,13 +184,13 @@ class ClubRow {
     colAvatarUrl: avatarUrl,
     colLocationLabel: locationLabel,
     colIsPublic: isPublic,
-    colIsVerified: isVerified,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
     colJoinPolicy: joinPolicy,
     colInviteToken: inviteToken,
     colLocationPoint: locationPoint,
     colMemberCount: memberCount,
+    colIsVerified: isVerified,
   };
 }
 

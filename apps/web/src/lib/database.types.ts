@@ -2449,6 +2449,7 @@ export type Database = {
           id: string
           invite_token: string | null
           is_public: boolean | null
+          is_verified: boolean
           join_policy: string
           location_label: string | null
           location_point: unknown
