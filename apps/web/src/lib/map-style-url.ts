@@ -10,6 +10,26 @@
 
 export type MapStyle = 'streets' | 'satellite' | 'outdoors' | 'dark';
 
+/// Pure env-override resolver. Returns the trimmed value of
+/// [getter] when non-blank; the empty string otherwise (treated by
+/// [buildMapStyleUrl] as "no override → fall back to MapTiler").
+///
+/// The getter is a callback rather than a direct env read so the
+/// test surface doesn't need `import.meta.env`. Production passes
+/// `() => import.meta.env.PUBLIC_TILE_STYLE_URL as string | undefined`.
+///
+/// Whitespace-only values are treated as absent — a stray space
+/// after `PUBLIC_TILE_STYLE_URL=` in `.env.local` shouldn't silently
+/// disable MapTiler.
+export function resolveStyleOverride(
+	getter: () => string | undefined,
+): string {
+	const raw = getter();
+	if (raw == null) return '';
+	const trimmed = raw.trim();
+	return trimmed;
+}
+
 export function buildMapStyleUrl(
 	chosen: MapStyle,
 	key: string,
@@ -20,7 +40,13 @@ export function buildMapStyleUrl(
 	// pointing at a local Protomaps tileserver-gl), the override
 	// wins outright — local dev mode runs against a single
 	// self-hosted style and the user's preference is ignored.
-	if (overrideUrl && overrideUrl.length > 0) return overrideUrl;
+	//
+	// Whitespace-only values are treated as absent — a stray space
+	// after `PUBLIC_TILE_STYLE_URL=` in `.env.local` shouldn't
+	// silently break the production fallback. Matches the
+	// `isNotBlank` semantics on the mobile + Wear OS sides.
+	const trimmed = overrideUrl?.trim() ?? '';
+	if (trimmed.length > 0) return trimmed;
 
 	const slug = (() => {
 		switch (chosen) {

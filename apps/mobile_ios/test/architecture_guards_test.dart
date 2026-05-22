@@ -1959,6 +1959,141 @@ void main() {
       );
     });
 
+    test('Protomaps tile-URL override: all three platforms agree on the '
+        'same semantics', () {
+      // Reason: web, mobile, and Wear OS each have their own
+      // builder (`buildMapStyleUrl`, `resolveTileUrl`, `buildTileUrl`)
+      // for choosing between the local-dev override and the
+      // MapTiler fallback. The contract MUST be identical across
+      // the three so a stray space in one platform's .env.local
+      // doesn't behave differently from another. See
+      // `decisions.md § 68`.
+
+      // Web (TypeScript): map-style-url.ts uses `.trim()` +
+      // length check.
+      final webSrc =
+          File('../web/src/lib/map-style-url.ts').readAsStringSync();
+      expect(webSrc, contains('.trim()'),
+          reason: 'web builder must trim the override before length-checking — '
+              'otherwise whitespace in .env.local silently disables MapTiler');
+
+      // Mobile (Dart): live_run_map.dart uses `.trim()` +
+      // isNotEmpty.
+      final mobileSrc =
+          File('lib/widgets/live_run_map.dart').readAsStringSync();
+      expect(mobileSrc, contains("env['TILE_URL_TEMPLATE']"),
+          reason: 'mobile builder must read the canonical env var name');
+      expect(mobileSrc, contains('.trim()'),
+          reason: 'mobile builder must trim the override (May 2026 audit)');
+      expect(mobileSrc, contains('isNotEmpty'));
+
+      // Wear OS (Kotlin): TileSource.kt uses `.isNotBlank()`
+      // (Kotlin's equivalent of trim-then-check-empty).
+      final wearSrc = File(
+              '../watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/ui/TileSource.kt')
+          .readAsStringSync();
+      expect(wearSrc, contains('template.isNotBlank()'),
+          reason: 'Wear OS builder must use isNotBlank — equivalent '
+              'of Dart trim-then-isNotEmpty');
+      expect(wearSrc, contains('tileSourceEnabled('),
+          reason: 'enabled-flag must be extracted as a testable helper, '
+              'not inlined as a BuildConfig OR-chain');
+    });
+
+    test('Protomaps env-var documentation is consistent across '
+        '.env.example files', () {
+      // Reason: each app declares its own override env var with a
+      // different name per `decisions.md § 68`. The names differ on
+      // purpose, but every .env.example must document its variant
+      // so a new contributor doesn't miss any.
+      final webEnv = File('../web/.env.example').readAsStringSync();
+      expect(webEnv, contains('PUBLIC_TILE_STYLE_URL='),
+          reason: 'web .env.example must document the override');
+
+      final mobileEnv = File('.env.example').readAsStringSync();
+      expect(mobileEnv, contains('TILE_URL_TEMPLATE='),
+          reason: 'mobile .env.example must document the override');
+
+      final wearEnv = File(
+        '../watch_wear/android/.env.example',
+      ).readAsStringSync();
+      expect(wearEnv, contains('PUBLIC_TILE_URL_TEMPLATE='),
+          reason: 'Wear .env.example must document the override');
+
+      // Cross-reference doc: each must point at the canonical
+      // setup guide or the ADR. A future cleanup pass that loses
+      // the link would orphan the env vars from their explanation.
+      for (final entry in {
+        'web': webEnv,
+        'mobile': mobileEnv,
+        'wear': wearEnv,
+      }.entries) {
+        expect(
+          entry.value,
+          anyOf(
+            contains('protomaps_local_setup.md'),
+            contains('decisions.md § 68'),
+            contains('decisions.md#68'),
+          ),
+          reason: '${entry.key} .env.example must link to the setup '
+              "guide or the ADR — otherwise the var sits unexplained",
+        );
+      }
+    });
+
+    test('Protomaps bootstrap script exists + is executable + has clean '
+        'bash syntax + only real config', () {
+      final script = File('../../bin/protomaps-dev.sh');
+      expect(script.existsSync(), isTrue,
+          reason: 'bin/protomaps-dev.sh must exist as the documented '
+              'entry point in docs/protomaps_local_setup.md');
+
+      // Permission bit — owner-exec is what makes
+      // `bin/protomaps-dev.sh start` work without an explicit bash
+      // prefix.
+      final mode = script.statSync().modeString();
+      expect(mode.contains('x'), isTrue,
+          reason: 'script must be executable (`chmod +x`) — '
+              "else `bin/protomaps-dev.sh start` errors with permission denied");
+
+      final body = script.readAsStringSync();
+      // Subcommand dispatch must include every documented command.
+      // A future rewrite that drops one silently breaks the docs.
+      for (final cmd in const ['fetch', 'start', 'stop', 'status',
+        'logs', 'env']) {
+        expect(body, contains('cmd_$cmd'),
+            reason: 'subcommand `$cmd` must be implemented + dispatched');
+      }
+
+      // Pin the Docker image is a real tag (not the made-up v5.0.0
+      // the May 2026 audit caught). `latest` is also forbidden —
+      // a moving tag would silently break the schema below it.
+      expect(body, contains('maptiler/tileserver-gl:v5.'),
+          reason: 'Docker tag must be a real v5.x pin, not `latest` '
+              "and not the audit's bogus v5.0.0");
+
+      // Pin the bogus `build.protomaps.com/<region>.pmtiles` URL
+      // doesn't sneak back. (It was wrong — Protomaps publishes
+      // daily world builds, not per-region pre-builds.)
+      expect(
+        body,
+        isNot(contains(RegExp(r'build\.protomaps\.com/[a-z-]+\.pmtiles'))),
+        reason: 'Protomaps does not publish per-region .pmtiles '
+            "pre-builds — the May 2026 audit removed the fake URL; "
+            "use `pmtiles extract` from the world build instead",
+      );
+
+      // No accidental C-style comments — bash would try to execute
+      // a leading `//` as a command. Caught twice during the May 2026
+      // pass.
+      expect(
+        body,
+        isNot(contains(RegExp(r'^\s*//', multiLine: true))),
+        reason: 'lines starting with `//` (C-style comments) will fail '
+            'as bash commands — use `#` for shell comments',
+      );
+    });
+
     test('LocalRunStore owner-tag stamping (offline-record contract)', () {
       // Reason: the headline "record without an account, sync
       // later" feature lives on a shared device too. Without the

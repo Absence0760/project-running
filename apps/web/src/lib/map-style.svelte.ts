@@ -7,7 +7,11 @@
 /// when saving, and the root layout calls it once on mount with the
 /// effective value from the settings bag.
 
-import { buildMapStyleUrl, type MapStyle } from './map-style-url';
+import {
+	buildMapStyleUrl,
+	resolveStyleOverride,
+	type MapStyle,
+} from './map-style-url';
 export type { MapStyle };
 
 const style = $state<{ value: MapStyle | null }>({ value: null });
@@ -50,10 +54,17 @@ export function mapStyleUrl(
 /// override from `import.meta.env.PUBLIC_TILE_STYLE_URL` and threads
 /// it through [mapStyleUrl]. Always returns a usable URL — falls
 /// back to MapTiler when the override is missing.
+///
+/// The [envGetter] parameter exists for test injection — production
+/// callers omit it, tests pass a stub that returns a known value.
+/// `import.meta.env` isn't available outside Vite, so Node test
+/// runners would otherwise have to set up the Vite plugin chain
+/// just to exercise this two-liner.
 export function mapStyleUrlFromEnv(
 	key: string,
 	prefersDark: boolean,
+	envGetter: () => string | undefined = () =>
+		import.meta.env.PUBLIC_TILE_STYLE_URL as string | undefined,
 ): string {
-	const override = (import.meta.env.PUBLIC_TILE_STYLE_URL ?? '') as string;
-	return mapStyleUrl(key, prefersDark, override);
+	return mapStyleUrl(key, prefersDark, resolveStyleOverride(envGetter));
 }

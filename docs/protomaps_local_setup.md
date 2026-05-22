@@ -8,7 +8,8 @@ The production migration is a separate decision (see [decisions.md § 68](decisi
 
 ```bash
 # One-time: needs Docker installed + running.
-bin/protomaps-dev.sh start
+bin/protomaps-dev.sh fetch    # grabs a ~1MB US-states sample
+bin/protomaps-dev.sh start    # boots tileserver-gl in Docker
 
 # Copy the printed env vars into each app's .env.local, then run:
 #   apps/web:        npm run dev --workspace=apps/web
@@ -18,6 +19,8 @@ bin/protomaps-dev.sh start
 # When you're done:
 bin/protomaps-dev.sh stop
 ```
+
+The fetched sample only contains US-state polygons — enough to verify the wire end-to-end, not enough to render real run locations. For dev sessions in your actual area, generate a regional extract from the daily Protomaps world build (see "Getting a real PMTiles file" below).
 
 ## What it does
 
@@ -54,10 +57,35 @@ The script downloads everything else on first run.
 
 | Env var | Default | Effect |
 |---|---|---|
-| `PMTILES_REGION` | `monaco` | Slug for the regional PMTiles extract (any value at `https://build.protomaps.com/<region>.pmtiles`). Monaco is the default because it's ~10 MB — fast first run + lets the smoke test fit in CI cache budgets. Pick a larger region (`bay-area`, `london`, etc.) once you've validated the wire. |
-| `PMTILES_URL` | derived | Direct URL to a `.pmtiles` file. Overrides `PMTILES_REGION` entirely — useful if you have an offline-built file or a custom continent extract. |
+| `PMTILES_FILE` | `$PROTOMAPS_HOME/world.pmtiles` | Path to the `.pmtiles` file tileserver-gl will serve. Point at any PMTiles you have on disk. |
+| `DEFAULT_SAMPLE_URL` | Protomaps R2 US-states sample (~1MB) | URL the `fetch` subcommand pulls from. Override with any direct `.pmtiles` URL — e.g. a fresh daily world build (~80GB) from `https://build.protomaps.com/$(date +%Y%m%d).pmtiles`. |
 | `PROTOMAPS_PORT` | `8080` | Host port. Bind to something else if 8080 is taken. |
 | `PROTOMAPS_HOME` | `$XDG_CACHE_HOME/protomaps-dev` | Cache dir for the PMTiles file + the generated config + style. Surviving across runs means the second `start` is instant. |
+| `DOCKER_IMAGE` | `maptiler/tileserver-gl:v5.6.0` | Pinned to a known-good release — `:latest` is deliberately avoided so a tag drift doesn't silently break our config. Bump manually when verified. |
+
+### Getting a real PMTiles file
+
+The script's `fetch` subcommand pulls a ~1MB US-states sample — enough to verify the wire end-to-end, but it doesn't contain road or place data, and obviously doesn't cover anywhere outside the US. For real dev sessions:
+
+1. **Regional extract** (your area, MB to GB depending on size). Install the `pmtiles` Go CLI once:
+   ```bash
+   go install github.com/protomaps/go-pmtiles@latest    # or: brew install pmtiles
+   ```
+   Then slice a bbox out of the daily world build:
+   ```bash
+   pmtiles extract https://build.protomaps.com/$(date +%Y%m%d).pmtiles \
+     ~/.cache/protomaps-dev/world.pmtiles --bbox=MIN_LON,MIN_LAT,MAX_LON,MAX_LAT
+   ```
+
+2. **Full world build** (~80GB):
+   ```bash
+   curl -L -o ~/.cache/protomaps-dev/world.pmtiles \
+     https://build.protomaps.com/$(date +%Y%m%d).pmtiles
+   ```
+
+3. **Your own file** — point `PMTILES_FILE=/path/to/file.pmtiles` and re-run `start`.
+
+Re-run `bin/protomaps-dev.sh start` after dropping a new file in; the container hot-mounts `$PROTOMAPS_HOME` so a fresh PMTiles is picked up on next restart.
 
 ## Env overrides — per app
 

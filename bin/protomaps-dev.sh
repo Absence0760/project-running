@@ -12,29 +12,30 @@
 #
 # This is the dev path. The production migration to self-hosted
 # Protomaps (S3 + PMTiles via Range requests) is a separate decision —
-# see docs/decisions.md § 68 + the followups doc.
+# see docs/decisions.md § 68 + docs/protomaps_local_setup.md.
 #
 # Usage:
+#   bin/protomaps-dev.sh fetch              # downloads a PMTiles file
 #   bin/protomaps-dev.sh start              # boots the container
 #   bin/protomaps-dev.sh stop               # kills it
 #   bin/protomaps-dev.sh status             # is it running?
 #   bin/protomaps-dev.sh logs               # tail the container logs
 #   bin/protomaps-dev.sh env                # print the .env.local overrides
 #
-# First-run downloads (one-time):
-#   • A regional .pmtiles extract — default is "monaco" (~10 MB) so
-#     the smoke test runs fast. Override with PMTILES_REGION (any slug
-#     from https://maps.protomaps.com/extracts), or PMTILES_URL for a
-#     direct override.
-#   • A Protomaps basemap style JSON.
+# Important: this script does NOT auto-download a PMTiles file.
+# Protomaps publishes daily WORLD builds (~80GB) — not per-region
+# pre-builds — at https://build.protomaps.com/<YYYYMMDD>.pmtiles.
+# For dev you either:
 #
-# Configuration:
-#   PMTILES_REGION   Region slug for the PMTiles file (default: monaco).
-#   PMTILES_URL      Full URL to a .pmtiles file (overrides region).
-#   PROTOMAPS_PORT   Local port (default: 8080).
-#   PROTOMAPS_HOME   Cache dir for the .pmtiles + style + config
-#                    (default: $XDG_CACHE_HOME/protomaps-dev or
-#                    ~/.cache/protomaps-dev).
+#   (a) Run `bin/protomaps-dev.sh fetch` which downloads a small
+#       sample (US states, ~1MB) — enough to verify the wire end
+#       to end, not enough to render real run locations.
+#   (b) Generate a regional extract from the daily world build
+#       using the `pmtiles` Go CLI:
+#         pmtiles extract https://build.protomaps.com/$(date +%Y%m%d).pmtiles \
+#           ~/.cache/protomaps-dev/world.pmtiles --bbox=...
+#   (c) Provide your own .pmtiles file at $PROTOMAPS_HOME/world.pmtiles
+#       and point PMTILES_FILE at it.
 #
 # Read more in docs/protomaps_local_setup.md.
 
@@ -45,21 +46,73 @@ set -euo pipefail
 # ---- configuration --------------------------------------------------------
 
 PROTOMAPS_PORT="${PROTOMAPS_PORT:-8080}"
-PMTILES_REGION="${PMTILES_REGION:-monaco}"
 PROTOMAPS_HOME="${PROTOMAPS_HOME:-${XDG_CACHE_HOME:-$HOME/.cache}/protomaps-dev}"
+PMTILES_FILE="${PMTILES_FILE:-${PROTOMAPS_HOME}/world.pmtiles}"
 
+# Docker image tag — pinned to a known-good release so a tag drift
+# doesn't silently break our config. `latest` would track upstream
+# changes that could break the schema below. Bump deliberately.
+DOCKER_IMAGE="${DOCKER_IMAGE:-maptiler/tileserver-gl:v5.6.0}"
 CONTAINER_NAME="run-protomaps-dev"
-DOCKER_IMAGE="maptiler/tileserver-gl:v5.0.0"
-PMTILES_FILE="${PROTOMAPS_HOME}/${PMTILES_REGION}.pmtiles"
-STYLE_FILE="${PROTOMAPS_HOME}/style.json"
 CONFIG_FILE="${PROTOMAPS_HOME}/config.json"
+STYLE_FILE="${PROTOMAPS_HOME}/style.json"
 
-# Default PMTiles source — Protomaps' build server publishes daily
-# extracts at this URL pattern. Override with PMTILES_URL for any
-# custom extract (e.g. a continent-scale file you keep elsewhere).
-PMTILES_URL="${PMTILES_URL:-https://build.protomaps.com/${PMTILES_REGION}.pmtiles}"
+# Default sample source for `fetch`. Protomaps publishes small
+# sample PMTiles in their public R2 bucket. The US-states file is
+# the smallest one that's still useful as a smoke test (renders a
+# real polygon, not just a 2-pixel test fixture).
+DEFAULT_SAMPLE_URL="${DEFAULT_SAMPLE_URL:-https://r2-public.protomaps.com/protomaps-sample-datasets/cb_2018_us_state_20m.pmtiles}"
+
+# ---- helpers --------------------------------------------------------------
+
+# Strip trailing slashes + validate input is shell-safe before
+# letting it through to docker / curl. `bash -n` won't catch a
+# value like `:; rm -rf` here — we trust the operator's .env but
+# guard against accidental garbage from a copy/paste.
+require_safe_value() {
+	local name="$1" value="$2"
+	if [[ "$value" =~ [^A-Za-z0-9_./:@?=,+-] ]]; then
+		fatal "$name contains shell-unsafe characters: '$value'"
+	fi
+}
+
+require_safe_value PROTOMAPS_PORT "$PROTOMAPS_PORT"
+require_safe_value DOCKER_IMAGE "$DOCKER_IMAGE"
 
 # ---- subcommands ----------------------------------------------------------
+
+cmd_fetch() {
+	step "Fetching sample PMTiles into ${C_DIM}${PMTILES_FILE}${C_RESET}"
+	need_cmd curl
+	mkdir -p "$PROTOMAPS_HOME"
+
+	if [[ -f "$PMTILES_FILE" ]]; then
+		warn "file already exists ($(du -h "$PMTILES_FILE" | cut -f1))"
+		log "remove or rename it first if you want a fresh download"
+		return 0
+	fi
+
+	# Clean up the partial file if the user Ctrl-Cs mid-download —
+	# otherwise the next run would refuse to start because a stale
+	# `.partial` lingers. The trap is per-subshell so it doesn't
+	# leak into the other subcommands.
+	local partial="${PMTILES_FILE}.partial"
+	trap 'rm -f "$partial"' EXIT INT TERM
+
+	log "downloading from $DEFAULT_SAMPLE_URL"
+	log "(this is a ~1MB US-states sample — enough to smoke-test the wire,"
+	log " NOT enough to render real run locations. See the doc header"
+	log " for how to get a regional extract or the full world build.)"
+	if ! curl -fL --progress-bar -o "$partial" "$DEFAULT_SAMPLE_URL"; then
+		fatal "PMTiles download failed."
+	fi
+	mv "$partial" "$PMTILES_FILE"
+	# Clear the trap now that the move succeeded — otherwise EXIT
+	# would still fire and rm a file that no longer exists at the
+	# .partial path. (No real harm, but cleaner.)
+	trap - EXIT INT TERM
+	ok "downloaded ($(du -h "$PMTILES_FILE" | cut -f1))"
+}
 
 cmd_start() {
 	step "Checking prerequisites"
@@ -70,36 +123,41 @@ cmd_start() {
 	fi
 	ok "docker is up"
 
-	step "Ensuring cache dir ${C_DIM}${PROTOMAPS_HOME}${C_RESET}"
-	mkdir -p "$PROTOMAPS_HOME"
-	ok "cache dir ready"
-
-	step "Fetching PMTiles file ${C_DIM}${PMTILES_REGION}${C_RESET}"
-	if [[ -f "$PMTILES_FILE" ]]; then
-		ok "already cached ($(du -h "$PMTILES_FILE" | cut -f1))"
-	else
-		log "downloading from $PMTILES_URL"
-		if ! curl -fL --progress-bar -o "${PMTILES_FILE}.partial" "$PMTILES_URL"; then
-			rm -f "${PMTILES_FILE}.partial"
-			fatal "PMTiles download failed. Check the region slug or set PMTILES_URL to a known-good extract."
-		fi
-		mv "${PMTILES_FILE}.partial" "$PMTILES_FILE"
-		ok "downloaded ($(du -h "$PMTILES_FILE" | cut -f1))"
+	step "Looking for PMTiles file ${C_DIM}${PMTILES_FILE}${C_RESET}"
+	if [[ ! -f "$PMTILES_FILE" ]]; then
+		err "PMTiles file not found"
+		log ""
+		log "Options:"
+		log "  ${C_BOLD}1. Quick smoke test${C_RESET} (US states, ~1MB):"
+		log "       bin/protomaps-dev.sh fetch"
+		log ""
+		log "  ${C_BOLD}2. Regional extract${C_RESET} (your area, MB to GB):"
+		log "       # Install once: brew install pmtiles  OR  go install github.com/protomaps/go-pmtiles@latest"
+		log "       pmtiles extract https://build.protomaps.com/\$(date +%Y%m%d).pmtiles \\"
+		log "         \"$PMTILES_FILE\" --bbox=MIN_LON,MIN_LAT,MAX_LON,MAX_LAT"
+		log ""
+		log "  ${C_BOLD}3. Full world build${C_RESET} (~80GB):"
+		log "       curl -L -o \"$PMTILES_FILE\" https://build.protomaps.com/\$(date +%Y%m%d).pmtiles"
+		log ""
+		log "  ${C_BOLD}4. Use your own .pmtiles file${C_RESET}:"
+		log "       PMTILES_FILE=/path/to/file.pmtiles bin/protomaps-dev.sh start"
+		exit 1
 	fi
+	ok "found ($(du -h "$PMTILES_FILE" | cut -f1))"
 
 	step "Writing tileserver-gl config"
-	# A protomaps basemap style would normally be downloaded here, but
-	# tileserver-gl auto-generates a usable style.json from any PMTiles
-	# file via its /styles/{id}/style.json endpoint when configured
-	# with a `data.source` block. We write the minimal config that
-	# wires the PMTiles file as the v3 source the basemap expects.
+	# tileserver-gl reads the PMTiles file via the `data` block; the
+	# style.json references the source by id. The basename of the
+	# PMTiles file (relative to /data) is what tileserver-gl uses.
+	local pmtiles_basename
+	pmtiles_basename="$(basename "$PMTILES_FILE")"
 	cat > "$CONFIG_FILE" <<EOF
 {
 	"options": {
 		"paths": {
 			"root": "/data",
-			"pmtiles": "",
-			"mbtiles": ""
+			"styles": "",
+			"pmtiles": ""
 		},
 		"serveStaticMaps": true
 	},
@@ -110,24 +168,26 @@ cmd_start() {
 	},
 	"data": {
 		"v3": {
-			"pmtiles": "${PMTILES_REGION}.pmtiles"
+			"pmtiles": "${pmtiles_basename}"
 		}
 	}
 }
 EOF
-	# Minimal Protomaps-compatible vector style. tileserver-gl
-	# substitutes `{pmtiles_path}` at request time with the URL of
-	# the source it served from the config. A real production style
-	# would have road labels, place names, etc. — the dev style
-	# stays tiny so the file is readable.
+
+	# Minimal MapLibre style. The "v3" source id matches the
+	# `data.v3` entry in config.json above; tileserver-gl rewrites
+	# the source URL at request time so the browser fetches tiles
+	# from the same origin as the style.json. A real production
+	# style would include road labels, place names, contour lines —
+	# the dev style stays minimal so the file is legible.
 	cat > "$STYLE_FILE" <<'EOF'
 {
 	"version": 8,
-	"name": "Protomaps Basic",
+	"name": "Protomaps Basic (dev)",
 	"sources": {
-		"protomaps": {
+		"v3": {
 			"type": "vector",
-			"url": "pmtiles://{pmtiles_path}"
+			"url": "mbtiles://v3"
 		}
 	},
 	"layers": [
@@ -139,21 +199,21 @@ EOF
 		{
 			"id": "earth",
 			"type": "fill",
-			"source": "protomaps",
+			"source": "v3",
 			"source-layer": "earth",
 			"paint": { "fill-color": "#222" }
 		},
 		{
 			"id": "water",
 			"type": "fill",
-			"source": "protomaps",
+			"source": "v3",
 			"source-layer": "water",
 			"paint": { "fill-color": "#15233a" }
 		},
 		{
 			"id": "roads",
 			"type": "line",
-			"source": "protomaps",
+			"source": "v3",
 			"source-layer": "roads",
 			"paint": { "line-color": "#666", "line-width": 1 }
 		}
@@ -174,7 +234,6 @@ EOF
 
 	docker run -d \
 		--name "$CONTAINER_NAME" \
-		--restart unless-stopped \
 		-p "${PROTOMAPS_PORT}:8080" \
 		-v "${PROTOMAPS_HOME}:/data:ro" \
 		"$DOCKER_IMAGE" \
@@ -183,8 +242,12 @@ EOF
 	ok "container started"
 
 	step "Waiting for the server to come up"
+	# tileserver-gl doesn't expose /health. The root path returns
+	# the landing page once it's up; /styles.json returns the
+	# styles list. Try either — the first that responds 200 wins.
 	for i in {1..30}; do
-		if curl -fs "http://localhost:${PROTOMAPS_PORT}/health" >/dev/null 2>&1; then
+		if curl -fs "http://localhost:${PROTOMAPS_PORT}/styles.json" >/dev/null 2>&1 \
+			|| curl -fs "http://localhost:${PROTOMAPS_PORT}/" >/dev/null 2>&1; then
 			ok "ready at http://localhost:${PROTOMAPS_PORT}"
 			break
 		fi
@@ -192,6 +255,7 @@ EOF
 		if (( i == 30 )); then
 			err "server failed to come up within 30s"
 			log "check the logs with: bin/protomaps-dev.sh logs"
+			log "common causes: invalid PMTiles file, port collision, malformed config"
 			exit 1
 		fi
 	done
@@ -214,6 +278,7 @@ cmd_status() {
 		ok "running at http://localhost:${PROTOMAPS_PORT}"
 		log "    PMTiles: $PMTILES_FILE"
 		log "    cache:   $PROTOMAPS_HOME"
+		log "    image:   $DOCKER_IMAGE"
 	else
 		warn "not running"
 		log "start with: bin/protomaps-dev.sh start"
@@ -253,6 +318,7 @@ EOF
 
 cmd="${1:-}"
 case "$cmd" in
+	fetch)  cmd_fetch ;;
 	start)  cmd_start ;;
 	stop)   cmd_stop ;;
 	status) cmd_status ;;
@@ -260,12 +326,12 @@ case "$cmd" in
 	env)    cmd_env ;;
 	"")
 		err "missing subcommand"
-		log "usage: bin/protomaps-dev.sh {start|stop|status|logs|env}"
+		log "usage: bin/protomaps-dev.sh {fetch|start|stop|status|logs|env}"
 		exit 1
 		;;
 	*)
 		err "unknown subcommand: $cmd"
-		log "usage: bin/protomaps-dev.sh {start|stop|status|logs|env}"
+		log "usage: bin/protomaps-dev.sh {fetch|start|stop|status|logs|env}"
 		exit 1
 		;;
 esac

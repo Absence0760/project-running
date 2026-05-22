@@ -8,7 +8,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildMapStyleUrl } from './map-style-url';
+import { buildMapStyleUrl, resolveStyleOverride } from './map-style-url';
 
 test('no override + light mode → MapTiler streets-v2', () => {
 	const url = buildMapStyleUrl('streets', 'KEY', false);
@@ -60,6 +60,31 @@ test('undefined override falls back to MapTiler', () => {
 	assert.ok(url.includes('api.maptiler.com'));
 });
 
+test('whitespace-only override falls back to MapTiler (no silent breakage)',
+	() => {
+		// A stray space after `PUBLIC_TILE_STYLE_URL=` in .env.local
+		// is a really common copy/paste mistake. Treating it as a
+		// valid override would silently break MapTiler at runtime.
+		// Pin the trim-then-check behaviour.
+		for (const ws of [' ', '   ', '\t', '\n', ' \t\n ']) {
+			const url = buildMapStyleUrl('streets', 'KEY', false, ws);
+			assert.ok(
+				url.includes('api.maptiler.com'),
+				`whitespace value ${JSON.stringify(ws)} must fall through`,
+			);
+		}
+	});
+
+test('override with surrounding whitespace is trimmed', () => {
+	const url = buildMapStyleUrl(
+		'streets',
+		'KEY',
+		false,
+		'  http://localhost:8080/styles/basic/style.json\n',
+	);
+	assert.equal(url, 'http://localhost:8080/styles/basic/style.json');
+});
+
 test('non-empty override wins outright — local dev path', () => {
 	const url = buildMapStyleUrl(
 		'streets',
@@ -103,3 +128,69 @@ test('IPv6 override URL round-trips intact', () => {
 	);
 	assert.equal(url, 'http://[::1]:8080/styles/basic/style.json');
 });
+
+test('override with query params round-trips intact', () => {
+	const url = buildMapStyleUrl(
+		'streets',
+		'KEY',
+		false,
+		'http://localhost:8080/styles/basic/style.json?token=abc',
+	);
+	assert.equal(url,
+		'http://localhost:8080/styles/basic/style.json?token=abc');
+});
+
+// ---- resolveStyleOverride (env-reading test seam) -----------------------
+
+test('resolveStyleOverride: getter returning undefined → empty string', () => {
+	assert.equal(resolveStyleOverride(() => undefined), '');
+});
+
+test('resolveStyleOverride: getter returning null is handled (typed undefined-only but defensive)',
+	() => {
+		// The signature is `() => string | undefined` but a real
+		// `import.meta.env.X` value can be `null` at runtime in
+		// some edge configurations. Make sure the helper handles
+		// it without throwing.
+		assert.equal(
+			resolveStyleOverride(() => null as unknown as undefined),
+			'',
+		);
+	});
+
+test('resolveStyleOverride: empty string → empty string', () => {
+	assert.equal(resolveStyleOverride(() => ''), '');
+});
+
+test('resolveStyleOverride: whitespace-only → empty string', () => {
+	for (const ws of [' ', '   ', '\t', '\n', ' \t\n ']) {
+		assert.equal(resolveStyleOverride(() => ws), '',
+			`whitespace ${JSON.stringify(ws)} must resolve to empty`);
+	}
+});
+
+test('resolveStyleOverride: non-empty value passes through trimmed', () => {
+	assert.equal(
+		resolveStyleOverride(() => 'http://localhost:8080/style.json'),
+		'http://localhost:8080/style.json',
+	);
+});
+
+test('resolveStyleOverride: surrounding whitespace is trimmed', () => {
+	assert.equal(
+		resolveStyleOverride(() => '  http://localhost:8080/style.json\n'),
+		'http://localhost:8080/style.json',
+	);
+});
+
+test('resolveStyleOverride: getter is invoked at call time (not memoised)',
+	() => {
+		// Sanity check: a different value across calls produces a
+		// different return. Defends against a future refactor that
+		// caches the getter result.
+		let nextValue = 'http://first.local/s';
+		const getter = () => nextValue;
+		assert.equal(resolveStyleOverride(getter), 'http://first.local/s');
+		nextValue = 'http://second.local/s';
+		assert.equal(resolveStyleOverride(getter), 'http://second.local/s');
+	});

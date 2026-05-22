@@ -50,9 +50,14 @@ List<LatLng> smoothTrack(List<LatLng> points) {
 /// unit-testable without booting the widget. Reads only the keys it
 /// needs from the supplied env map so tests can pass a tiny
 /// `Map<String, String>` rather than poking dotenv.
+///
+/// Whitespace-only overrides are treated as absent — a stray space
+/// after `TILE_URL_TEMPLATE=` in `.env.local` shouldn't silently
+/// disable MapTiler. Matches the Kotlin `buildTileUrl` `isNotBlank`
+/// semantics on the Wear OS side; see `decisions.md § 68`.
 @visibleForTesting
 String resolveTileUrl(Map<String, String> env) {
-  final override = env['TILE_URL_TEMPLATE'] ?? '';
+  final override = (env['TILE_URL_TEMPLATE'] ?? '').trim();
   if (override.isNotEmpty) return override;
   final key = env['MAPTILER_KEY'] ?? '';
   return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';

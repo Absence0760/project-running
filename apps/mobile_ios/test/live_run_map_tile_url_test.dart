@@ -91,17 +91,59 @@ void main() {
       expect(url.contains('{y}'), isTrue);
     });
 
-    test('whitespace-only override is treated as set (caller responsibility)',
+    test('whitespace-only override falls back to MapTiler (no silent breakage)',
         () {
-      // The helper only checks `isNotEmpty` — a value like " " is
-      // technically non-empty. flutter_map would fail on the
-      // malformed URL anyway; we don't try to second-guess the
-      // operator's config here.
+      // A stray space after `TILE_URL_TEMPLATE=` in .env.local is
+      // a really common copy/paste mistake. Treating it as a valid
+      // override would silently disable MapTiler + send tile
+      // requests to ` ` (literal space) which flutter_map fails
+      // on opaquely. The May 2026 audit pass moved the resolver
+      // to `trim().isNotEmpty` — matches the Wear OS `isNotBlank`
+      // semantics.
+      for (final whitespace in const [' ', '   ', '\t', '\n', ' \t \n ']) {
+        final url = resolveTileUrl({
+          'TILE_URL_TEMPLATE': whitespace,
+          'MAPTILER_KEY': 'real-key',
+        });
+        expect(url.contains('maptiler.com'), isTrue,
+            reason: 'whitespace override (${whitespace.codeUnits}) must '
+                'fall through to MapTiler');
+        expect(url.contains('real-key'), isTrue);
+      }
+    });
+
+    test('override with surrounding whitespace is trimmed', () {
+      // A trailing newline from an editor that auto-appends one is
+      // ALSO common. Trim + use the real value rather than reject.
       final url = resolveTileUrl(const {
-        'TILE_URL_TEMPLATE': ' ',
+        'TILE_URL_TEMPLATE':
+            '  http://localhost:8080/styles/basic/{z}/{x}/{y}.png\n',
       });
-      expect(url, ' ',
-          reason: 'override resolution is by-string not by-validity');
+      expect(url,
+          'http://localhost:8080/styles/basic/{z}/{x}/{y}.png');
+    });
+
+    test('override containing query params round-trips intact', () {
+      // A custom local server might require an auth token query
+      // param. The resolver doesn't strip, encode, or otherwise
+      // touch the URL beyond trimming.
+      final url = resolveTileUrl(const {
+        'TILE_URL_TEMPLATE':
+            'http://localhost:8080/t/{z}/{x}/{y}.png?token=abc&debug=1',
+      });
+      expect(url,
+          'http://localhost:8080/t/{z}/{x}/{y}.png?token=abc&debug=1');
+    });
+
+    test('https override round-trips intact (production-shape override)',
+        () {
+      // Forward-compat: a future cloud-hosted Protomaps URL.
+      final url = resolveTileUrl(const {
+        'TILE_URL_TEMPLATE':
+            'https://tiles.example.com/styles/basic/{z}/{x}/{y}.png',
+      });
+      expect(url,
+          'https://tiles.example.com/styles/basic/{z}/{x}/{y}.png');
     });
   });
 }

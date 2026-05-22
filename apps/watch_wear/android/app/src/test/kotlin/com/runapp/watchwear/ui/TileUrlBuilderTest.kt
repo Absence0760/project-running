@@ -183,4 +183,97 @@ class TileUrlBuilderTest {
         )
         assertEquals("http://h/20/1048575/1048575.png", url)
     }
+
+    // ---- URL edge cases -------------------------------------------------
+
+    @Test
+    fun `template with query params round-trips intact`() {
+        // A custom local server might require an auth-token query
+        // param. buildTileUrl doesn't strip, encode, or otherwise
+        // mangle the URL beyond substituting placeholders.
+        val url = buildTileUrl(
+            z = 5, x = 1, y = 2,
+            template = "http://h/t/{z}/{x}/{y}.png?token=abc&debug=1",
+            maptilerKey = "",
+        )
+        assertEquals(
+            "http://h/t/5/1/2.png?token=abc&debug=1",
+            url,
+        )
+    }
+
+    @Test
+    fun `IPv6 bracketed-host template round-trips intact`() {
+        val url = buildTileUrl(
+            z = 5, x = 1, y = 2,
+            template = "http://[::1]:8080/t/{z}/{x}/{y}.png",
+            maptilerKey = "",
+        )
+        assertEquals("http://[::1]:8080/t/5/1/2.png", url)
+    }
+
+    @Test
+    fun `https template round-trips intact (production-shape override)`() {
+        val url = buildTileUrl(
+            z = 5, x = 1, y = 2,
+            template = "https://tiles.example.com/styles/basic/{z}/{x}/{y}.png",
+            maptilerKey = "",
+        )
+        assertEquals(
+            "https://tiles.example.com/styles/basic/5/1/2.png",
+            url,
+        )
+    }
+}
+
+/// Tests for the file-level [tileSourceEnabled] helper — the
+/// load-bearing OR-of-blank-checks that controls whether the
+/// mini-map even attempts to render tiles.
+class TileSourceEnabledTest {
+
+    @Test
+    fun `both empty → disabled (no key, no override)`() {
+        assertFalse(tileSourceEnabled(template = "", maptilerKey = ""))
+    }
+
+    @Test
+    fun `both blank (whitespace) → disabled (stray env-file spaces)`() {
+        assertFalse(tileSourceEnabled(template = " ", maptilerKey = "\t\n"))
+    }
+
+    @Test
+    fun `key-only → enabled (production path)`() {
+        assertTrue(tileSourceEnabled(template = "", maptilerKey = "abc"))
+    }
+
+    @Test
+    fun `template-only → enabled (local Protomaps dev path)`() {
+        assertTrue(tileSourceEnabled(
+            template = "http://localhost:8080/{z}/{x}/{y}.png",
+            maptilerKey = "",
+        ))
+    }
+
+    @Test
+    fun `both set → enabled (override wins inside buildTileUrl)`() {
+        // Belt-and-braces: the dev path keeps the production key in
+        // .env.local so a single rebuild can flip back. Pin that
+        // having both is a valid configuration.
+        assertTrue(tileSourceEnabled(
+            template = "http://localhost:8080/{z}/{x}/{y}.png",
+            maptilerKey = "abc",
+        ))
+    }
+
+    @Test
+    fun `key with stray trailing newline → enabled (isNotBlank trims)`() {
+        // Operator pastes a key with a trailing newline from a
+        // password manager. Kotlin's `isNotBlank` treats that
+        // as non-blank (newlines are whitespace, but the content
+        // before the newline is real). Pin the behavior.
+        assertTrue(tileSourceEnabled(
+            template = "",
+            maptilerKey = "abc\n",
+        ))
+    }
 }

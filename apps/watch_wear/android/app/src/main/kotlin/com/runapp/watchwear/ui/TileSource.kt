@@ -45,17 +45,16 @@ class TileSource private constructor(context: Context) {
 
     /// Whether tile rendering is configured at all. Cheap caller check
     /// so the tile layer can be omitted entirely when there's no key.
-    // Tile rendering lights up when EITHER:
-    //
-    //  * `PUBLIC_TILE_URL_TEMPLATE` is set (local Protomaps dev
-    //    path — see `docs/protomaps_local_setup.md`), OR
-    //  * `PUBLIC_MAPTILER_KEY` is set (production path).
-    //
-    // Neither set ⇒ the mini-map falls back to polyline + position
-    // dot on the midnight background, exactly as before tiles
-    // shipped.
-    val enabled: Boolean = BuildConfig.PUBLIC_TILE_URL_TEMPLATE.isNotBlank() ||
-        BuildConfig.PUBLIC_MAPTILER_KEY.isNotBlank()
+    // Tile rendering lights up when EITHER `PUBLIC_TILE_URL_TEMPLATE`
+    // is set (local Protomaps dev path — see
+    // `docs/protomaps_local_setup.md`) OR `PUBLIC_MAPTILER_KEY` is
+    // set (production path). Logic extracted as the file-level
+    // [tileSourceEnabled] helper so the OR / blank-check semantics
+    // is unit-testable independent of BuildConfig.
+    val enabled: Boolean = tileSourceEnabled(
+        template = BuildConfig.PUBLIC_TILE_URL_TEMPLATE,
+        maptilerKey = BuildConfig.PUBLIC_MAPTILER_KEY,
+    )
 
     /// MapTiler dark-style raster endpoint. Hard-coded to
     /// `streets-v2-dark` because the watch UI is always dark — the
@@ -184,6 +183,20 @@ class TileSource private constructor(context: Context) {
             }
         }
     }
+}
+
+/// Decide whether [TileSource] should fetch tiles at all. Returns
+/// true iff either the dev override [template] OR the production
+/// [maptilerKey] is non-blank. Pure helper extracted so the OR /
+/// blank-check semantics can be exercised without booting
+/// `BuildConfig`.
+///
+/// Whitespace counts as absent on both sides — a stray space in
+/// `.env.local` (very common copy/paste mistake) shouldn't silently
+/// enable the network code path with a `?key=  ` request that
+/// MapTiler 401s.
+internal fun tileSourceEnabled(template: String, maptilerKey: String): Boolean {
+    return template.isNotBlank() || maptilerKey.isNotBlank()
 }
 
 /// Build the raster-tile URL for a given (z, x, y). Honours the
