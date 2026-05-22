@@ -74,4 +74,12 @@ dependencies {
     // NotificationCompat / NotificationManagerCompat used by
     // RunNotificationBridge live under androidx.core:core, which geolocator
     // already pulls in transitively at 1.16.0 — no explicit dep needed.
+
+    // JUnit for pure-JVM unit tests on the native Kotlin bridges
+    // (WearRoutesBridge / WearAuthBridge / RunNotificationBridge).
+    // The bridges' platform-channel + Wearable Data Layer surfaces
+    // can't run on a host JVM, but the arg-parsing + DataMap-field
+    // construction logic is extracted into pure helpers that we
+    // test here. Mirrors the watch_wear test surface convention.
+    testImplementation("junit:junit:4.13.2")
 }

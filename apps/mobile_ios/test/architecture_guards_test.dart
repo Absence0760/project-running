@@ -1914,6 +1914,51 @@ void main() {
           reason: 'extracted helper for the wire-format encoding');
     });
 
+    test('debounce window + Timer wiring stays intact', () {
+      // Reason: a 250ms coalescing window catches star-storm + bulk
+      // import bursts. Without it, every individual save() fires
+      // a separate DataLayer push, wasting bandwidth + watch
+      // battery. Three load-bearing pieces:
+      //
+      //   1. The static `kPushDebounceWindow` constant — settable
+      //      via @visibleForTesting so tests can run with zero
+      //      delay.
+      //   2. A `_pendingPush: Timer?` field that the listener
+      //      restarts on each notification.
+      //   3. detach() cancelling the timer so an in-flight
+      //      debounce doesn't fire AFTER the bridge stops.
+      //
+      // The first push from attach() is INTENTIONALLY not
+      // debounced — a newly-paired watch sees data immediately.
+      final src =
+          File('lib/wear_routes_bridge.dart').readAsStringSync();
+      expect(src, contains('static Duration kPushDebounceWindow'),
+          reason: 'debounce window constant must exist as a static '
+              'so tests + future ops tuning can override it');
+      expect(src, contains('Timer? _pendingPush'),
+          reason: 'pending debounce Timer must exist; without it '
+              "the bridge can't coalesce rapid bursts");
+      expect(src, contains('_pendingPush?.cancel()'),
+          reason: 'detach() must cancel the pending timer or a '
+              'fire-after-detach race produces ghost pushes');
+      expect(src, contains('_scheduleDebouncedPush'),
+          reason: 'the listener must route through the debounce '
+              'scheduler — calling _push directly would skip '
+              'coalescing entirely');
+      // The initial push from attach() goes through _push directly,
+      // NOT through the scheduler — a fresh watch should see data
+      // immediately, not 250ms late.
+      expect(
+        src,
+        contains(RegExp(
+          r'store\.addListener\(_listener!\);\s*_push\(store\)',
+        )),
+        reason: 'attach must call _push directly for the initial '
+            'sync (not _scheduleDebouncedPush) so a freshly '
+            'paired watch sees state without delay',
+      );
+    });
+
     test('payload-diff cache is wired in _push + reset on detach', () {
       // Reason: every LocalRouteStore.save() fires the listener,
       // including for mutations that don't affect the wire payload

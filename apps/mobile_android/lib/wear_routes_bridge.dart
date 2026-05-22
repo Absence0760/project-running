@@ -37,8 +37,28 @@ class WearRoutesBridge {
   @visibleForTesting
   static const kMaxRoutesPerPush = 50;
 
+  /// How long the bridge waits after a [LocalRouteStore] notification
+  /// before actually firing the push. Coalesces rapid bursts — when
+  /// the user stars 10 routes in a row, this turns 10 individual
+  /// pushes into 1. The diff cache catches identical re-payloads
+  /// inside the window too.
+  ///
+  /// 250 ms is empirical: fast enough to feel real-time on the
+  /// watch (a star tap → routes update in a quarter-second feels
+  /// instant), slow enough to coalesce a tap storm or a bulk
+  /// import landing routes one at a time.
+  ///
+  /// Set to zero for tests that need immediate-fire semantics.
+  @visibleForTesting
+  static Duration kPushDebounceWindow = const Duration(milliseconds: 250);
+
   LocalRouteStore? _store;
   VoidCallback? _listener;
+
+  /// Pending debounced push. Cancelled on each new notification so
+  /// the timer restarts; cancelled on [detach] so an in-flight push
+  /// doesn't fire after the bridge stops.
+  Timer? _pendingPush;
 
   /// Last encoded `routes_json` payload that the channel actually
   /// shipped. Used by the diff gate in [_push]: if the next
@@ -60,10 +80,15 @@ class WearRoutesBridge {
   /// Subscribe to the local route store and push the starred subset on
   /// every change. Idempotent — a second `attach` (e.g. after a hot
   /// restart) replaces the prior subscription rather than leaking it.
+  ///
+  /// The first push fires IMMEDIATELY (no debounce) so a freshly
+  /// attached watch picker sees the current state without a
+  /// quarter-second delay. Subsequent pushes go through the
+  /// debounce window — see [kPushDebounceWindow].
   void attach(LocalRouteStore store) {
     detach();
     _store = store;
-    _listener = () => _push(store);
+    _listener = () => _scheduleDebouncedPush(store);
     store.addListener(_listener!);
     _push(store);
   }
@@ -74,12 +99,36 @@ class WearRoutesBridge {
     if (s != null && l != null) s.removeListener(l);
     _store = null;
     _listener = null;
+    // Cancel any pending debounced push so the bridge stops firing
+    // immediately. Without this, a detach + immediate re-attach
+    // could double-push (the old debounce fires AFTER the new
+    // attach's initial push lands).
+    _pendingPush?.cancel();
+    _pendingPush = null;
     // Drop the diff cache so a fresh `attach` always pushes once,
     // even when the new subscription's starred set happens to
     // match what the previous one shipped. The bridge has no idea
     // whether the watch's view is still in sync after the detach
     // (e.g., a process restart could've happened on either side).
     _lastPushedRoutesJson = null;
+  }
+
+  /// Cancel any pending debounced push and schedule a fresh one
+  /// [kPushDebounceWindow] from now. Each new notification restarts
+  /// the timer, so rapid bursts (10 saves in 100 ms) coalesce into
+  /// one push. When the window is `Duration.zero` (tests / future
+  /// configuration), fires inline.
+  void _scheduleDebouncedPush(LocalRouteStore store) {
+    _pendingPush?.cancel();
+    if (kPushDebounceWindow == Duration.zero) {
+      // Test-only path — fires synchronously.
+      _push(store);
+      return;
+    }
+    _pendingPush = Timer(kPushDebounceWindow, () {
+      _pendingPush = null;
+      _push(store);
+    });
   }
 
   Future<void> _push(LocalRouteStore store) async {

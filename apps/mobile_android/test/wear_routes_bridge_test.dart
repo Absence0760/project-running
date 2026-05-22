@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -79,10 +80,17 @@ void main() {
     store = LocalRouteStore();
     await store.init(overrideDirectory: tempDir);
     channel = _MockChannel()..install();
+    // Default to immediate-fire for the existing test suite — the
+    // debounce-specific group restores production behavior + uses
+    // FakeAsync to drive time deterministically.
+    WearRoutesBridge.kPushDebounceWindow = Duration.zero;
   });
 
   tearDown(() {
     channel.uninstall();
+    // Restore the production default so a test that intentionally
+    // sets a non-zero window can rely on it for its lifetime.
+    WearRoutesBridge.kPushDebounceWindow = const Duration(milliseconds: 250);
     if (tempDir.existsSync()) tempDir.deleteSync(recursive: true);
   });
 
@@ -1078,6 +1086,267 @@ void main() {
           }
         }
       }
+    });
+  });
+
+  group('debounce window — production coalescing', () {
+    // The production default is a 250ms window: rapid bursts of
+    // LocalRouteStore notifications (star-storm, bulk sync drop)
+    // coalesce into ONE push per quarter-second instead of N
+    // independent pushes. The previous group used Duration.zero
+    // for the existing test surface; this group restores the
+    // production value and drives Timer via FakeAsync so we don't
+    // need real wall-clock waits.
+
+    test('initial push on attach fires immediately, NOT debounced',
+        () async {
+      // The first push needs to land right away so a newly-paired
+      // watch gets its data without a quarter-second delay.
+      WearRoutesBridge.kPushDebounceWindow = const Duration(milliseconds: 250);
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      WearRoutesBridge().attach(store);
+      // Microtask drain — no FakeAsync needed for the initial push.
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'attach() must fire its initial push without '
+              'waiting for the debounce window');
+    });
+
+    test('5 rapid notifications within 50ms coalesce into ONE push', () async {
+      // Real-time wait approach: short window (60ms) so the
+      // tests run fast (~250ms total) and reliable — FakeAsync
+      // doesn't pump platform-channel mocks.
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 60);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Fire 5 saves spaced 5ms apart. Total span: ~25ms, well
+      // under the 60ms window. Each save restarts the timer.
+      for (var i = 0; i < 5; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+        await Future<void>.delayed(const Duration(milliseconds: 5));
+      }
+      // The bursts kept the timer reset; no push has fired yet.
+      expect(channel.pushCalls, isEmpty,
+          reason: 'saves within the window must NOT have fired '
+              'a push yet — timer keeps resetting');
+
+      // Wait past the window.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'after the window expires with no new '
+              'notifications, exactly ONE coalesced push fires');
+      bridge.detach();
+    });
+
+    test('10 rapid notifications + quiescence fires once after window',
+        () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 60);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      for (var i = 0; i < 10; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      }
+      // No spacing — but each save still resets the timer.
+      // After the burst, wait past the window.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+
+      expect(channel.pushCalls, hasLength(1));
+      // Single push reflects the FINAL state — all 10 starred.
+      final payload = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      expect(payload, hasLength(10));
+      bridge.detach();
+    });
+
+    test('notifications spaced longer than the window each fire separately',
+        () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 40);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      await store.save(_makeRoute(id: 'r-a', isStarred: true));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(channel.pushCalls, hasLength(1));
+
+      await store.save(_makeRoute(id: 'r-b', isStarred: true));
+      await Future<void>.delayed(const Duration(milliseconds: 80));
+      expect(channel.pushCalls, hasLength(2));
+      bridge.detach();
+    });
+
+    test('detach cancels the pending debounced push', () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 100);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Schedule a debounced push, then detach BEFORE it fires.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      bridge.detach();
+
+      // Wait well past the window.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(channel.pushCalls, isEmpty,
+          reason: 'detach must cancel the pending debounce timer; '
+              'a push after detach would race the new bridge '
+              'instance (hot-restart scenario)');
+    });
+
+    test('detach + re-attach mid-debounce: only the re-attach initial '
+        'push fires', () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 100);
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      final b1 = WearRoutesBridge();
+      b1.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // Initial push from b1.
+      expect(channel.pushCalls, hasLength(1));
+      channel.pushCalls.clear();
+
+      // Stage a debounced push on b1.
+      await store.save(_makeRoute(id: 'r-2', isStarred: true));
+      // Within the window: detach b1, attach b2.
+      b1.detach();
+      final b2 = WearRoutesBridge();
+      b2.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // b2's initial push: now starred set = [r-1, r-2] which is
+      // different from b1's initial push set [r-1] (b2 saw the
+      // store AFTER r-2 was saved). So b2 fires once.
+      expect(channel.pushCalls, hasLength(1));
+
+      // Wait past where b1's pending debounce WOULD have fired —
+      // nothing extra.
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'only b2 initial push fires; b1 pending was '
+              'cancelled cleanly by detach');
+      b2.detach();
+    });
+
+    test('debounce + diff cache: rapid identical re-saves still '
+        'result in ZERO post-debounce pushes', () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 60);
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // Initial push captured.
+      expect(channel.pushCalls, hasLength(1));
+      channel.pushCalls.clear();
+
+      // 20 identical re-saves. notifyListeners fires each; bridge
+      // schedules a debounced push each. After the window expires
+      // exactly once, _push runs — diff cache short-circuits
+      // because the payload matches the initial push's bytes.
+      for (var i = 0; i < 20; i++) {
+        await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(channel.pushCalls, isEmpty,
+          reason: '20 identical re-saves through the debounce '
+              'still hit the diff cache — zero channel hits');
+      bridge.detach();
+    });
+
+    test('debounce + diff cache: rapid TOGGLES collapse to ONE push '
+        'reflecting the final state', () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 60);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // 5 toggles within the window. Final state determines what
+      // the watch sees.
+      for (var i = 0; i < 5; i++) {
+        await store.save(_makeRoute(id: 'r-1', isStarred: i % 2 == 0));
+      }
+      // Index 4 → isStarred=true → final state has [r-1] starred.
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(channel.pushCalls, hasLength(1));
+      final payload = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      expect(payload, hasLength(1));
+      expect((payload.single as Map)['id'], 'r-1');
+      bridge.detach();
+    });
+
+    test('saveBatch (single notify) fires after the window', () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 60);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      await store.saveBatch([
+        _makeRoute(id: 'a', isStarred: true),
+        _makeRoute(id: 'b', isStarred: true),
+      ]);
+      // Immediately after: not yet fired.
+      expect(channel.pushCalls, isEmpty);
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(channel.pushCalls, hasLength(1));
+      bridge.detach();
+    });
+
+    test('zero-duration window restores immediate-fire semantics', () async {
+      WearRoutesBridge.kPushDebounceWindow = Duration.zero;
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // No window → every save fires synchronously through the
+      // listener. This is the test-only path that the existing
+      // suite relies on.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      await store.save(_makeRoute(id: 'r-2', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+
+      expect(channel.pushCalls, hasLength(2),
+          reason: 'zero window = no coalescing — each save fires '
+              'inline');
+    });
+
+    test('debounce window can be reconfigured per-test via the '
+        'static @visibleForTesting setter', () async {
+      WearRoutesBridge.kPushDebounceWindow =
+          const Duration(milliseconds: 100);
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      expect(channel.pushCalls, isEmpty,
+          reason: '50ms < 100ms window — no push yet');
+
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(channel.pushCalls, hasLength(1),
+          reason: '150ms > 100ms window — push fired');
+      bridge.detach();
     });
   });
 }
