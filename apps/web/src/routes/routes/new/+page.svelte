@@ -1185,22 +1185,26 @@
 	 */
 	.canvas-empty {
 		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -50%);
+		/* Tucked into the bottom-left so it doesn't sit over the
+		 * area the user is about to click. The map's top-right
+		 * is occupied by MapLibre's nav + locate controls and the
+		 * AppBar's search box is centered up top — bottom-left is
+		 * the empty corner. */
+		bottom: var(--space-md);
+		left: var(--space-md);
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		text-align: center;
+		align-items: flex-start;
+		text-align: left;
 		gap: var(--space-xs);
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--space-md) var(--space-lg);
 		background: color-mix(in srgb, var(--color-surface) 92%, transparent);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-lg);
 		backdrop-filter: blur(8px);
-		max-width: 22rem;
+		max-width: 20rem;
 		pointer-events: none;
 		transition: opacity 180ms ease-out;
 	}

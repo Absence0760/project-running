@@ -4,6 +4,7 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
+	import { mapStyleUrlFromEnv } from '$lib/map-style.svelte';
 	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
 	import { supabase } from '$lib/supabase';
 	import {
@@ -278,7 +279,16 @@
 
 		map = new maplibregl.Map({
 			container: mapContainer,
-			style: `https://api.maptiler.com/maps/streets-v2/style.json?key=${PUBLIC_MAPTILER_KEY}`,
+			// Honours PUBLIC_TILE_STYLE_URL override the same way every
+			// other map surface does (decisions.md § 68). `prefersDark`
+			// isn't read here — the live spectator page renders dark
+			// the same way the run-detail map does (the helper handles
+			// the OS-preference path internally).
+			style: mapStyleUrlFromEnv(
+				PUBLIC_MAPTILER_KEY,
+				typeof window !== 'undefined' &&
+					window.matchMedia('(prefers-color-scheme: dark)').matches,
+			),
 			center: [fallbackLng, fallbackLat],
 			zoom: 15,
 		});

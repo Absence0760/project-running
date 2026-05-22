@@ -19,6 +19,8 @@
 		selectLoopAnchors,
 	} from '$lib/route_loop';
 	import { formatDistance, getUnit } from '$lib/units.svelte';
+	import { searchPlaces } from '$lib/geocoding';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
 	import {
 		closestPointDistanceM,
@@ -152,13 +154,13 @@
 			showResults = false;
 			return;
 		}
-		const url = `https://api.maptiler.com/geocoding/${encodeURIComponent(query)}.json?key=${PUBLIC_MAPTILER_KEY}&limit=5`;
-		const res = await fetch(url);
-		if (!res.ok) return;
-		const data = await res.json();
-		searchResults = data.features.map((f: { place_name: string; center: [number, number] }) => ({
-			name: f.place_name, lng: f.center[0], lat: f.center[1]
-		}));
+		// Use the shared `searchPlaces` helper so the search works
+		// regardless of whether MapTiler is configured. When the key
+		// is set we go through MapTiler (faster + better ranking);
+		// otherwise we fall back to Nominatim (OSM's free geocoder),
+		// which keeps the local Protomaps dev stack functional.
+		// See `decisions.md § 68` for the override design.
+		searchResults = await searchPlaces(query);
 		showResults = searchResults.length > 0;
 	}
 
@@ -1598,10 +1600,31 @@
 	});
 
 	function goToMyLocation() {
+		// `navigator.geolocation` is gated to secure contexts in
+		// modern browsers (localhost counts as secure). On `http://`
+		// over a LAN it'll be undefined — surface that explicitly.
+		if (!navigator.geolocation) {
+			showToast('Geolocation needs HTTPS (or localhost).', 'error');
+			return;
+		}
+		// The previous handler had an empty error callback, so a
+		// denied permission, position-unavailable, or timeout left
+		// the user staring at a non-responsive button. Surface each
+		// failure mode as a toast so the user knows the click landed.
 		navigator.geolocation.getCurrentPosition(
 			(pos) => map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: 17 }),
-			() => {},
-			{ timeout: 5000 }
+			(err) => {
+				const msg =
+					err.code === err.PERMISSION_DENIED
+						? 'Location permission denied. Allow location for localhost in your browser to use this.'
+						: err.code === err.POSITION_UNAVAILABLE
+							? "Couldn't determine your location."
+							: err.code === err.TIMEOUT
+								? "Location request timed out."
+								: "Couldn't get your location.";
+				showToast(msg, 'error');
+			},
+			{ timeout: 5000 },
 		);
 	}
 
