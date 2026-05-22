@@ -27,6 +27,7 @@ import 'tile_cache.dart';
 import 'training_service.dart';
 import 'watch_ingest_queue.dart';
 import 'wear_auth_bridge.dart';
+import 'wear_routes_bridge.dart';
 
 /// Holds the auth-state subscription registered in [main]. Top-level so
 /// a re-entrant main (rare — full hot-restart resets isolate state, but
@@ -296,6 +297,7 @@ void main() async {
       }
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);
+    WearRoutesBridge().attach(routeStore);
     final devEmail = dotenv.env['DEV_USER_EMAIL'];
     final devPassword = dotenv.env['DEV_USER_PASSWORD'];
     Future(() async {

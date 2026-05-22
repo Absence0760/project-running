@@ -230,6 +230,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private val sessionStore = SessionStore(application)
     private val sessionBridge = SessionBridge(application)
     private val routeStore = LocalRouteStore(application)
+    private val routesBridge = RoutesBridge(application)
     private val checkpoints = CheckpointStore(application)
     private val networkWatcher = NetworkWatcher(application)
     /// MapTiler tile source — process-wide singleton shared with
@@ -282,6 +283,41 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         checkBatteryLevel()
         checkRecovery()
         loadCachedRoutes()
+        observeRoutesBridge()
+    }
+
+    /// Listen for starred-route pushes from the paired phone. Phone-side
+    /// `WearRoutesBridge` forwards the user's starred subset on every
+    /// `LocalRouteStore` change; the watch overwrites its DataStore cache
+    /// + the live picker so a watch out of network range stays current
+    /// with whatever was last starred on the phone. Supabase fetch in
+    /// `refreshRoutes()` remains the canonical refresh path when the
+    /// watch has its own connectivity.
+    private fun observeRoutesBridge() {
+        viewModelScope.launch {
+            try {
+                routesBridge.current()?.let { initial ->
+                    if (initial.isNotEmpty()) {
+                        routeStore.save(initial)
+                        val recents = routeStore.recentIds.first()
+                        _state.value = _state.value.copy(
+                            routes = sortByRecency(initial, recents),
+                        )
+                    }
+                }
+            } catch (_: Throwable) { /* best-effort cold-start hydrate */ }
+        }
+        viewModelScope.launch {
+            routesBridge.events.collect { routes ->
+                try {
+                    routeStore.save(routes)
+                    val recents = routeStore.recentIds.first()
+                    _state.value = _state.value.copy(
+                        routes = sortByRecency(routes, recents),
+                    )
+                } catch (_: Throwable) { /* swallow — picker keeps prior list */ }
+            }
+        }
     }
 
     private fun observeRecording() {
