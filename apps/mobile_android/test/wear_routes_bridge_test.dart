@@ -562,4 +562,522 @@ void main() {
       expect((payload.single as Map)['id'], 'r-1');
     });
   });
+
+  group('payload-diff cache', () {
+    // Reason: LocalRouteStore.save() fires for every route mutation,
+    // not just `is_starred` changes. Editing description, toggling
+    // is_public, adding a tag — none of those change the watch-
+    // visible subset (id + name + distance + waypoints of starred
+    // routes). Without the diff cache the bridge wakes the watch's
+    // DataClient listener on every such edit. The cache turns
+    // those into local-only operations.
+
+    test('re-saving an identical row does not fire a second push', () async {
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // attach() fires the initial push.
+      expect(channel.pushCalls, hasLength(1));
+
+      // Same row, same starred state — payload is byte-equivalent.
+      // Diff gate must swallow.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'identical payload must NOT fire a redundant push');
+    });
+
+    test('saving an UNSTARRED route does not fire a push when no other '
+        'starred change happened', () async {
+      // Only starred routes ride the wire; an unstarred save() can't
+      // change the wire payload. Diff gate catches this.
+      await store.save(_makeRoute(id: 'starred', isStarred: true));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Add an unstarred route — starred subset is still [starred].
+      await store.save(_makeRoute(id: 'plain-1'));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, isEmpty,
+          reason: 'unstarred save() must not cause a push when the '
+              'starred subset is byte-identical');
+
+      // Another unstarred — still no push.
+      await store.save(_makeRoute(id: 'plain-2'));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, isEmpty);
+    });
+
+    test('mutation that does not affect the wire fields is a no-op push',
+        () async {
+      // Editing description, toggling is_public, etc. fires
+      // LocalRouteStore.save() but doesn't change id / name /
+      // distance / waypoints. The wire payload is identical;
+      // diff must skip.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Same id + name + distance + waypoints + isStarred — only
+      // non-wire fields would have changed (in a real edit). The
+      // _makeRoute helper doesn't take those args, so this is
+      // effectively a "re-save unchanged" — same byte result.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, isEmpty);
+    });
+
+    test('starring a NEW route invalidates the cache and fires a push',
+        () async {
+      await store.save(_makeRoute(id: 'old-starred', isStarred: true));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // New starred route → payload changes → push.
+      await store.save(_makeRoute(id: 'new-starred', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+      final payload = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      // Payload contains both routes (newest-first by store ordering).
+      expect(payload, hasLength(2));
+    });
+
+    test('unstarring an existing starred route fires a push', () async {
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await store.save(_makeRoute(id: 'r-2', isStarred: true));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Unstar r-1 → starred subset becomes [r-2] — different payload.
+      await store.save(_makeRoute(id: 'r-1'));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+      final payload = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      expect(payload.map((r) => (r as Map)['id']), ['r-2']);
+    });
+
+    test('star-then-unstar-then-restar produces THREE pushes (not deduped)',
+        () async {
+      // Each toggle changes the wire payload. Diff cache only
+      // catches IDENTICAL bytes; A → B → A produces three pushes
+      // (each different from its predecessor) even though the
+      // first and third payloads match.
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Star — payload: [r-1]
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+
+      // Unstar — payload: []
+      await store.save(_makeRoute(id: 'r-1'));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(2));
+
+      // Re-star — payload: [r-1] (same as push 1, but diff cache's
+      // last-sent is [] so this is a change).
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(3),
+          reason: 'A→B→A produces 3 pushes, not 1 — the diff cache '
+              'tracks last-sent only, not historical state');
+    });
+
+    test('a swallowed PlatformException does NOT update the diff cache',
+        () async {
+      // The next legitimate change should still fire the push,
+      // since the previous attempt never actually shipped.
+      channel.throwPlatform = true;
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // The exception-throwing channel was hit but didn't record
+      // the call (handler throws before pushCalls.add). Diff
+      // cache stays empty so the next attempt fires.
+
+      channel.throwPlatform = false;
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'a failed push must NOT poison the diff cache; '
+              'the next save should still ship');
+    });
+
+    test('a swallowed MissingPluginException also leaves the cache alone',
+        () async {
+      channel.throwMissingPlugin = true;
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+
+      channel.throwMissingPlugin = false;
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+    });
+
+    test('detach resets the cache — fresh attach pushes even if subset '
+        'matches', () async {
+      // The bridge has no insight into whether the watch is still
+      // in sync after a detach (process restart / hot reload).
+      // Best-effort: re-fire on attach so the watch gets at least
+      // one push for the new bridge lifecycle.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // Initial push fired.
+      expect(channel.pushCalls, hasLength(1));
+
+      bridge.detach();
+      // Re-attach with the same store — same starred subset.
+      // Without the cache-reset on detach, the next attach() would
+      // diff-match and skip. We want it to fire so a new
+      // subscriber's process is guaranteed at least one push.
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(2),
+          reason: 'detach must reset the diff cache so the next attach '
+              "fires unconditionally — otherwise a hot-restart in dev "
+              "or a re-init in prod wouldn't push the new subscriber");
+    });
+
+    test('re-attach within the same bridge instance also resets the cache',
+        () async {
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+
+      // Re-attach without explicit detach — the bridge's idempotent
+      // attach() calls detach() internally which resets the cache.
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(2));
+    });
+  });
+
+  group('burst + lifecycle characterization', () {
+    test('5 starred saves of DIFFERENT routes fire 5 pushes', () async {
+      // No throttling today — each distinct save fires a push.
+      // Pin this so a future debounce/throttle PR has explicit
+      // test acknowledgement.
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      for (var i = 0; i < 5; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(5),
+          reason: 'no throttling — 5 distinct saves produce 5 pushes; '
+              'a future debounce would update this expectation');
+    });
+
+    test('100 rapid IDENTICAL re-saves fire ONE push (diff catches '
+        'the rest)', () async {
+      // The diff cache turns this into O(1) work.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      for (var i = 0; i < 100; i++) {
+        await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, isEmpty,
+          reason: '100 identical re-saves must produce zero pushes; '
+              'the watch sees the original push and that is it');
+    });
+
+    test('burst of 100 alternating star-then-unstar fires 100 pushes',
+        () async {
+      // A→B→A→B pattern: every save differs from the previous,
+      // so every save fires.
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      for (var i = 0; i < 100; i++) {
+        await store.save(_makeRoute(id: 'r-1', isStarred: i % 2 == 0));
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(100));
+    });
+
+    test('mixed burst: starred + plain interleaved fires once per '
+        'starred-set change', () async {
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Plain saves don't fire pushes (diff catches them).
+      await store.save(_makeRoute(id: 'plain-1'));
+      await store.save(_makeRoute(id: 'plain-2'));
+      expect(channel.pushCalls, isEmpty);
+
+      // Star one — fires.
+      await store.save(_makeRoute(id: 'starred-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+
+      // More plains — no push.
+      await store.save(_makeRoute(id: 'plain-3'));
+      await store.save(_makeRoute(id: 'plain-4'));
+      expect(channel.pushCalls, hasLength(1));
+
+      // Star another — fires.
+      await store.save(_makeRoute(id: 'starred-2', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(2));
+    });
+
+    test('saveBatch with 50 starred + 50 plain fires ONE push '
+        '(notify-once contract)', () async {
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      final routes = [
+        for (var i = 0; i < 50; i++)
+          _makeRoute(id: 's-$i', isStarred: true),
+        for (var i = 0; i < 50; i++) _makeRoute(id: 'p-$i'),
+      ];
+      await store.saveBatch(routes);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'saveBatch notifies listeners exactly once');
+      final payload = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      expect(payload, hasLength(50));
+    });
+
+    test('detach mid-burst stops further pushes', () async {
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1));
+
+      bridge.detach();
+
+      // After detach, further saves don't fire.
+      for (var i = 0; i < 10; i++) {
+        await store.save(_makeRoute(id: 'r-burst-$i', isStarred: true));
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'detach must immediately stop all subsequent pushes');
+    });
+
+    test('detach during an in-flight push completes the in-flight + stops '
+        'subsequent', () async {
+      // The race-condition shape: a save fires the listener, _push
+      // schedules + awaits the channel.invoke. Before that
+      // completes, detach() runs. The in-flight invocation should
+      // resolve normally; no new pushes fire after.
+      final bridge = WearRoutesBridge();
+      bridge.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      channel.pushCalls.clear();
+
+      // Trigger a save WITHOUT awaiting the microtask.
+      final saveFuture = store.save(_makeRoute(id: 'r-1', isStarred: true));
+      // Detach immediately — the listener has already been invoked
+      // (LocalRouteStore notifies synchronously after the file
+      // write), so the in-flight _push call is already mid-await.
+      bridge.detach();
+      // Let everything settle.
+      await saveFuture;
+      await Future<void>.delayed(Duration.zero);
+
+      // Either: the in-flight push completed (1 call) OR detach()
+      // got in before invokeMethod (0 calls). The contract is
+      // "no crash, no leak" — pin that subsequent saves fire NO
+      // pushes either way.
+      final beforeBurst = channel.pushCalls.length;
+      for (var i = 0; i < 5; i++) {
+        await store.save(_makeRoute(id: 'late-$i', isStarred: true));
+      }
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls.length, beforeBurst,
+          reason: 'after detach, NO subsequent saves should fire pushes');
+    });
+
+    test('attach + immediate detach + new attach (hot-restart pattern)',
+        () async {
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      final b1 = WearRoutesBridge();
+      b1.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      b1.detach();
+      channel.pushCalls.clear();
+
+      // Hot-restart pattern: new bridge instance, fresh attach.
+      final b2 = WearRoutesBridge();
+      b2.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls, hasLength(1),
+          reason: 'a new bridge instance pushes once on attach');
+    });
+
+    test('two bridge instances pointed at the same store push '
+        'independently', () async {
+      // This shouldn't happen in production (main.dart attaches a
+      // single bridge) but pin the behavior — each bridge has its
+      // own diff cache + lifecycle.
+      await store.save(_makeRoute(id: 'r-1', isStarred: true));
+      final b1 = WearRoutesBridge();
+      final b2 = WearRoutesBridge();
+      b1.attach(store);
+      b2.attach(store);
+      await Future<void>.delayed(Duration.zero);
+      // Both bridges share the same channel mock, so two attaches
+      // = two pushes.
+      expect(channel.pushCalls.length, greaterThanOrEqualTo(2),
+          reason: 'separate bridge instances both push on attach');
+
+      channel.pushCalls.clear();
+      await store.save(_makeRoute(id: 'r-2', isStarred: true));
+      await Future<void>.delayed(Duration.zero);
+      expect(channel.pushCalls.length, greaterThanOrEqualTo(2),
+          reason: 'separate bridges each fire on each save');
+    });
+  });
+
+  group('end-to-end wire round-trip', () {
+    // Tests that exercise the full Dart-side pipeline: store mutation
+    // → bridge listener → encode → diff gate → channel.invokeMethod
+    // → captured payload. The captured payload bytes are exactly
+    // what the Wear OS RoutesBridge's parseRoutesJson reads.
+
+    test('captured channel payload is structurally identical to '
+        'encodeRoutesForWatch direct output', () async {
+      final routes = [
+        _makeRoute(id: 'a', isStarred: true, distance: 5000),
+        _makeRoute(id: 'b', isStarred: true, distance: 10000),
+      ];
+      for (final r in routes) {
+        await store.save(r);
+      }
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+
+      final captured = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      // Apply the same filter the bridge applies internally.
+      final direct = WearRoutesBridge.encodeRoutesForWatch(
+        WearRoutesBridge.pickRoutesForWatchPush(store.routes),
+      );
+      final directJson = jsonDecode(jsonEncode(direct));
+      expect(captured, directJson,
+          reason: 'the bridge must ship exactly what the public '
+              'encodeRoutesForWatch helper produces — drift here means '
+              'the helpers tests are no longer pinning production behavior');
+    });
+
+    test('captured payload round-trips through jsonDecode without losing '
+        'route shape', () async {
+      await store.save(_makeRoute(
+        id: 'rt-1',
+        name: 'A & B "test" route',
+        isStarred: true,
+        waypoints: const [
+          Waypoint(lat: 47.37, lng: 8.54),
+          Waypoint(lat: 47.371, lng: 8.541),
+        ],
+      ));
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+
+      final raw = channel.pushCalls.single['routes_json'] as String;
+      final decoded = jsonDecode(raw) as List;
+      final row = decoded.single as Map<String, dynamic>;
+      expect(row['id'], 'rt-1');
+      // The XML/JSON-special characters round-trip via jsonEncode's
+      // built-in escaping — this is what the Kotlin parser receives.
+      expect(row['name'], 'A & B "test" route');
+      expect((row['waypoints'] as List).length, 2);
+    });
+
+    test('updated_at_ms is a monotonic-increasing integer across '
+        'consecutive pushes', () async {
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+
+      // Force three distinct pushes by alternating starred state.
+      for (var i = 0; i < 3; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+        await Future<void>.delayed(const Duration(milliseconds: 2));
+      }
+
+      final stamps = channel.pushCalls
+          .map((c) => c['updated_at_ms'] as int)
+          .toList();
+      expect(stamps, hasLength(4));
+      // Each subsequent stamp >= the previous — DateTime.now() is
+      // monotonic-millis-best-effort on the timeline.
+      for (var i = 1; i < stamps.length; i++) {
+        expect(stamps[i], greaterThanOrEqualTo(stamps[i - 1]),
+            reason: 'updated_at_ms must be non-decreasing — the '
+                "watch's stale-push gate relies on this");
+      }
+    });
+
+    test('every captured payload satisfies the wire-format contract: '
+        'JSON-array of objects with the four canonical keys', () async {
+      // Walk the bridge through a multi-step user flow and assert
+      // every push that lands on the channel still meets the
+      // contract.
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+
+      await store.save(_makeRoute(id: 'a', isStarred: true));
+      await store.save(_makeRoute(id: 'b', isStarred: true));
+      await store.save(_makeRoute(id: 'c')); // plain — no push, just bookkeeping
+      await store.delete('a');
+      await Future<void>.delayed(Duration.zero);
+
+      for (final call in channel.pushCalls) {
+        final raw = call['routes_json'] as String;
+        final decoded = jsonDecode(raw);
+        expect(decoded, isA<List>(),
+            reason: 'every payload must be a JSON array');
+        for (final el in decoded as List) {
+          final row = el as Map<String, dynamic>;
+          expect(row.keys.toSet(), {'id', 'name', 'distance_m', 'waypoints'},
+              reason: 'every row must carry exactly the four wire keys');
+          expect(row['id'], isA<String>());
+          expect(row['name'], isA<String>());
+          expect(row['distance_m'], isA<num>());
+          expect(row['waypoints'], isA<List>());
+          for (final wp in row['waypoints'] as List) {
+            final wpMap = wp as Map;
+            expect(wpMap.keys.toSet(), {'lat', 'lng'});
+            expect(wpMap['lat'], isA<num>());
+            expect(wpMap['lng'], isA<num>());
+          }
+        }
+      }
+    });
+  });
 }

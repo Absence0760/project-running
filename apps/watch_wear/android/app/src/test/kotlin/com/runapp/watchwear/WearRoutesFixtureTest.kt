@@ -9,6 +9,7 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -149,5 +150,147 @@ class WearRoutesFixtureTest {
         assertTrue("fixture file missing at ${f.absolutePath}", f.exists())
         assertNotNull("fixture not valid JSON",
             Json.parseToJsonElement(f.readText()))
+    }
+
+    // ---- end-to-end pipeline via the fixture ----------------------------
+    //
+    // The Dart writer + Kotlin parser are tested independently above.
+    // These tests compose them through the canonical fixture so a
+    // change to one side that breaks the contract is caught even
+    // when both sides still parse their own output.
+
+    @Test
+    fun `full pipeline — fixture wire payload → parser → applied state matches expected`() {
+        // 1. Take the wire shape the phone-side encoder is contracted
+        //    to produce.
+        val wireText = fixture["expected_payload_json"]!!.jsonArray.toString()
+
+        // 2. Parse it via the watch's actual parser.
+        val parsed = parseRoutesJson(json, wireText)
+
+        // 3. Apply the stale-push gate as the consumer would for a
+        //    first push (lastAppliedMs = 0, incoming = arbitrary
+        //    positive). This must always apply.
+        val ok = shouldApplyRoutesPush(0L, 100L)
+        assertTrue("first push must always apply", ok)
+
+        // 4. Apply recents-based sort with a recents list that
+        //    includes one of the fixture's ids. The matching id
+        //    should float to the front.
+        val recents = listOf("rt-trail-uuid-002")
+        val sorted = sortRoutesByRecency(parsed, recents)
+
+        // The "trail run" id must lead now.
+        assertEquals("trail run must float to the front",
+            "rt-trail-uuid-002", sorted.first().id)
+        // Length is preserved (sort never adds or drops).
+        assertEquals(parsed.size, sorted.size)
+        // The fixture's expected_parsed_routes baseline still
+        // matches in count.
+        assertEquals(
+            fixture["expected_parsed_routes"]!!.jsonArray.size,
+            sorted.size,
+        )
+    }
+
+    @Test
+    fun `pipeline preserves Unicode end-to-end (writer→wire→parser→sort)`() {
+        val wireText = fixture["expected_payload_json"]!!.jsonArray.toString()
+        val parsed = parseRoutesJson(json, wireText)
+        val sorted = sortRoutesByRecency(parsed, emptyList())
+        val trail = sorted.first { it.id == "rt-trail-uuid-002" }
+        assertEquals("Trail run with Unicode 🏃", trail.name)
+    }
+
+    @Test
+    fun `pipeline applies a sequence of two pushes with stale-push gate`() {
+        // Simulate the realistic flow:
+        //  push A (older) → apply → state = A's set, ts=100
+        //  push B (newer) → apply → state = B's set, ts=200
+        // Then the fixture's wire JSON is "B". Apply it as push B,
+        // then re-apply the same wire JSON as a "stale re-delivery"
+        // (older timestamp) and confirm the state stays at B.
+        val wireText = fixture["expected_payload_json"]!!.jsonArray.toString()
+
+        // Push A — older.
+        val pushAt100 = shouldApplyRoutesPush(0L, 100L)
+        assertTrue(pushAt100)
+        var lastApplied = 100L
+
+        // Push B (the fixture) — newer.
+        val pushAt200 = shouldApplyRoutesPush(lastApplied, 200L)
+        assertTrue(pushAt200)
+        val parsedB = parseRoutesJson(json, wireText)
+        assertEquals(fixture["expected_parsed_routes"]!!.jsonArray.size, parsedB.size)
+        lastApplied = 200L
+
+        // Stale re-delivery of A: must NOT apply, state preserved.
+        val staleA = shouldApplyRoutesPush(lastApplied, 100L)
+        assertTrue("stale push must be rejected", !staleA)
+    }
+
+    @Test
+    fun `pipeline accepts an empty wire payload as legitimate (unstar-all)`() {
+        // The fixture is the populated case; this test inverts it:
+        // an empty array IS valid — the user unstarred everything.
+        // The pipeline must clear without throwing.
+        val emptyWire = "[]"
+        val parsed = parseRoutesJson(json, emptyWire)
+        assertTrue("empty wire produces empty list", parsed.isEmpty())
+        val sorted = sortRoutesByRecency(parsed, listOf("rt-trail-uuid-002"))
+        assertTrue("sort of empty stays empty", sorted.isEmpty())
+        // Stale-push gate still works on empty content.
+        assertTrue("first empty push applies", shouldApplyRoutesPush(0L, 100L))
+        assertTrue(
+            "subsequent empty push at newer timestamp also applies",
+            shouldApplyRoutesPush(100L, 200L),
+        )
+    }
+
+    @Test
+    fun `pipeline tolerates re-delivery of byte-identical wire at newer timestamp`() {
+        // The phone-side diff cache catches identical re-sends at
+        // the source, but the watch must still tolerate them in
+        // case the cache is bypassed (different bridge instances,
+        // legacy phone-side build). The gate accepts the newer
+        // timestamp; the parser produces the same SavedRoute set.
+        val wireText = fixture["expected_payload_json"]!!.jsonArray.toString()
+        val first = parseRoutesJson(json, wireText)
+        val second = parseRoutesJson(json, wireText)
+        assertEquals(first.size, second.size)
+        for (i in first.indices) {
+            assertEquals(first[i].id, second[i].id)
+            assertEquals(first[i].name, second[i].name)
+            assertEquals(first[i].distanceM, second[i].distanceM, 1e-9)
+            assertEquals(first[i].waypoints.size, second[i].waypoints.size)
+        }
+    }
+
+    @Test
+    fun `pipeline route shape is exactly id+name+distanceM+waypoints — no leaks`() {
+        // Pin that the watch's domain model is the narrow set —
+        // any wire field the phone might add (user_id, club_id,
+        // is_starred, secret) cannot land on the watch's
+        // SavedRoute. Defends against an inadvertent phone-side
+        // encoder bloat leaking sensitive fields onto the watch.
+        val wireText = fixture["expected_payload_json"]!!.jsonArray.toString()
+        val parsed = parseRoutesJson(json, wireText)
+        val fields = SavedRoute::class.java.declaredFields
+            .map { it.name }
+            .toSet()
+        // Only the four wire fields (plus the synthetic $stable
+        // Compose marker on data classes) should be present.
+        for (forbidden in listOf("userId", "user_id", "clubId", "isStarred",
+            "is_public", "tags", "secret")) {
+            assertFalse(
+                "SavedRoute must NOT carry $forbidden — would leak from a future phone-side change",
+                fields.contains(forbidden),
+            )
+        }
+        // Sanity: every parsed route's id is non-empty (the parser
+        // would have dropped any row with a null/missing id).
+        for (r in parsed) {
+            assertTrue("parser produces non-empty id", r.id.isNotEmpty())
+        }
     }
 }

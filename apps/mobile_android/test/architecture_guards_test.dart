@@ -1913,6 +1913,49 @@ void main() {
           contains('static List<Map<String, Object>> encodeRoutesForWatch('),
           reason: 'extracted helper for the wire-format encoding');
     });
+
+    test('payload-diff cache is wired in _push + reset on detach', () {
+      // Reason: every LocalRouteStore.save() fires the listener,
+      // including for mutations that don't affect the wire payload
+      // (description edit, is_public toggle, tag add). Without the
+      // diff cache the bridge wakes the watch's DataClient listener
+      // on every such edit. Pin the production code keeps:
+      //
+      //   1. A `_lastPushedRoutesJson` field for the byte cache.
+      //   2. An early-return when the encoded payload matches the
+      //      cached value.
+      //   3. A reset on detach so a re-attach always fires once.
+      //   4. The cache update happens ONLY on successful push (a
+      //      swallowed PlatformException must not poison the cache
+      //      so the next attempt re-fires).
+      final src =
+          File('lib/wear_routes_bridge.dart').readAsStringSync();
+      expect(src, contains('_lastPushedRoutesJson'),
+          reason: 'diff cache field must exist; without it every '
+              'LocalRouteStore.save fires a redundant DataLayer push');
+      expect(src, contains('if (routesJson == _lastPushedRoutesJson) return'),
+          reason: 'diff gate must short-circuit BEFORE the channel '
+              'invocation — otherwise the gate is a no-op');
+      expect(
+        src,
+        contains(
+            RegExp(r'_lastPushedRoutesJson = null\s*;[\s\S]*?Future<void> _push'),
+        ),
+        reason: 'detach() must reset _lastPushedRoutesJson so a re-attach '
+            'fires unconditionally',
+      );
+      // The cache update is INSIDE the try block, after the
+      // channel.invoke await — so a thrown PlatformException
+      // skips the assignment. Pin the order.
+      expect(
+        src.indexOf("_lastPushedRoutesJson = routesJson"),
+        greaterThan(src.indexOf("await _channel.invokeMethod")),
+        reason: 'cache must be updated AFTER the channel invoke '
+            'succeeds — otherwise a swallowed PlatformException '
+            'leaves the cache claiming we sent something that '
+            'never landed',
+      );
+    });
   });
 
   // ---- Cross-language fixture path guards ------------------------------

@@ -40,6 +40,23 @@ class WearRoutesBridge {
   LocalRouteStore? _store;
   VoidCallback? _listener;
 
+  /// Last encoded `routes_json` payload that the channel actually
+  /// shipped. Used by the diff gate in [_push]: if the next
+  /// computed payload matches byte-for-byte, the push is skipped.
+  ///
+  /// Why this matters: `LocalRouteStore.save()` fires for any
+  /// route mutation — toggling `is_public`, adding a tag, editing
+  /// description, etc. None of those change the watch-visible
+  /// subset (starred id + name + distance + waypoints). Without
+  /// the diff, every such edit shipped an identical-bytes push +
+  /// woke the watch's DataClient listener for nothing. The cache
+  /// turns those into local-only operations.
+  ///
+  /// Reset on [detach] so a re-attach pushes once for the new
+  /// subscriber's benefit even if the subset is the same as
+  /// before the detach.
+  String? _lastPushedRoutesJson;
+
   /// Subscribe to the local route store and push the starred subset on
   /// every change. Idempotent — a second `attach` (e.g. after a hot
   /// restart) replaces the prior subscription rather than leaking it.
@@ -57,15 +74,33 @@ class WearRoutesBridge {
     if (s != null && l != null) s.removeListener(l);
     _store = null;
     _listener = null;
+    // Drop the diff cache so a fresh `attach` always pushes once,
+    // even when the new subscription's starred set happens to
+    // match what the previous one shipped. The bridge has no idea
+    // whether the watch's view is still in sync after the detach
+    // (e.g., a process restart could've happened on either side).
+    _lastPushedRoutesJson = null;
   }
 
   Future<void> _push(LocalRouteStore store) async {
     final selected =
         pickRoutesForWatchPush(store.routes, maxRoutes: kMaxRoutesPerPush);
     final payload = encodeRoutesForWatch(selected);
+    final routesJson = jsonEncode(payload);
+
+    // Diff gate: skip when the payload is byte-equivalent to the
+    // last one we shipped. `LocalRouteStore.save` notifies on
+    // every route mutation; this drops the spurious wake-ups
+    // (e.g. editing a route's description fires the listener but
+    // doesn't change the starred subset). The watch's stale-push
+    // gate would discard the redundant DataItem anyway, but
+    // skipping at source saves the DataLayer hop + a watch CPU
+    // wake. See [_lastPushedRoutesJson] for the lifecycle.
+    if (routesJson == _lastPushedRoutesJson) return;
+
     try {
       await _channel.invokeMethod<void>('push', {
-        'routes_json': jsonEncode(payload),
+        'routes_json': routesJson,
         // Stamped so the watch can decide whether a freshly-received
         // push is newer than its current cache without comparing the
         // payload byte-for-byte. Wearable DataLayer dedups identical
@@ -74,6 +109,10 @@ class WearRoutesBridge {
         // `RoutesBridge.events` on the watch side.
         'updated_at_ms': DateTime.now().millisecondsSinceEpoch,
       });
+      // Only mark sent on success — a swallowed exception means the
+      // channel never delivered the payload; the next save attempt
+      // should fire again so the watch has a chance to catch up.
+      _lastPushedRoutesJson = routesJson;
     } on PlatformException {
       // Wearable Data Layer unavailable (no Google Play services on the
       // device). Silently ignore — phone-only behaviour is unaffected.
