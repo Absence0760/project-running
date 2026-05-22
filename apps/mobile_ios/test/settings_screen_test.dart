@@ -59,13 +59,13 @@ void main() {
     });
 
     testWidgets('renders the Account section', (tester) async {
-      // Section headers were promoted to uppercase + outline-tinted
-      // + bold so the long flat tile list is scannable. Pin the
-      // exact label so a future style refactor that flattens the
-      // headers fails loud (the visual contract is the polish).
+      // Section headers polish round 2 — Title-Case (not uppercase)
+      // with a primary-colour accent bar + titleSmall weight so
+      // each section reads as a deliberate block. Pin the exact
+      // label so a future regression to flat-uppercase fails.
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
-      expect(find.text('ACCOUNT'), findsOneWidget);
+      expect(find.text('Account'), findsOneWidget);
     });
 
     testWidgets('renders the Preferences section', (tester) async {
@@ -73,28 +73,26 @@ void main() {
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       await tester.drag(find.byType(ListView), const Offset(0, -300));
       await tester.pump();
-      expect(find.text('PREFERENCES'), findsOneWidget);
+      expect(find.text('Preferences'), findsOneWidget);
     });
 
-    testWidgets('every section header is uppercase + outline-tinted',
+    testWidgets('every section header uses the title-case + accent shape',
         (tester) async {
-      // Walk the section labels — pinning the all-caps labels
-      // catches a regression where one section reverts to the old
-      // titleSmall style and breaks visual consistency. We use
+      // Walk the section labels — the polish round 2 shape uses
+      // Title-Case with a primary-colour accent bar. We use
       // scrollUntilVisible per-label because ListView.builder lazy-
-      // builds rows; ACCOUNT scrolls out of frame the moment we
-      // reach ABOUT, so a single after-scroll sweep doesn't work.
+      // builds rows.
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       final list = find.byType(Scrollable).first;
-      for (final label in const ['ACCOUNT', 'SENSORS', 'PREFERENCES', 'ABOUT']) {
+      for (final label in const ['Account', 'Sensors', 'Preferences', 'About']) {
         await tester.scrollUntilVisible(
           find.text(label),
           300,
           scrollable: list,
         );
         expect(find.text(label), findsAtLeastNWidgets(1),
-            reason: '$label section header must render in all caps');
+            reason: '$label section header must render in Title Case');
       }
     });
 

@@ -1890,16 +1890,43 @@ class _SettingsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-      child: Text(
-        title.toUpperCase(),
-        style: theme.textTheme.labelMedium?.copyWith(
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.08,
-          color: theme.colorScheme.outline,
+    // Polish: heavier visual hierarchy for section headers.
+    // Pre-polish was a small uppercase outline-grey label that
+    // blended into the list. The new shape uses a 3-px primary-
+    // colour accent bar + a titleSmall heading + a top divider —
+    // each section reads as a deliberate block. The Material 3
+    // settings-list pattern.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 12),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            children: [
+              // Accent bar — same colour as the AppBar / FAB / link
+              // tints so settings sections feel part of the same
+              // visual language.
+              Container(
+                width: 3,
+                height: 16,
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.primary,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Text(
+                title,
+                style: theme.textTheme.titleSmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ],
+          ),
         ),
-      ),
+      ],
     );
   }
 }
