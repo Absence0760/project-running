@@ -14,6 +14,7 @@
     "dev:db:mailpit": "xdg-open http://127.0.0.1:54324",
     "dev:db:psql": "psql postgresql://postgres:postgres@127.0.0.1:54322/postgres",
     "dev:db:logs": "docker logs -f supabase_db_backend",
+    "dev:db:seed-tracks": "node scripts/seed-run-tracks.mjs",
     "dev:run:web": "pnpm -C apps/web dev",
     "dev:run:web:preview": "pnpm -C apps/web preview",
     "dev:run:fns": "cd apps/backend && supabase functions serve --env-file .env.local",

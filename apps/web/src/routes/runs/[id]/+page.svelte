@@ -1406,9 +1406,6 @@
 	}
 
 	@media (max-width: 640px) {
-		.key-stats {
-			grid-template-columns: repeat(2, 1fr);
-		}
 		.key-stat-value {
 			font-size: 1.3rem;
 		}
@@ -1430,18 +1427,11 @@
 	 * Svelte compiler emits CSS.
 	 */
 	@container stats (max-width: 520px) {
-		.key-stats {
-			grid-template-columns: repeat(2, 1fr);
-		}
 		.key-stat-value {
 			font-size: 1.25rem;
 		}
 	}
 	@container stats (max-width: 380px) {
-		.key-stats {
-			grid-template-columns: 1fr;
-			gap: var(--space-2xs);
-		}
 		.detail-header-top {
 			/* Title + action buttons go vertical so the buttons
 			 * don't squeeze the title. */
@@ -1803,24 +1793,44 @@
 		letter-spacing: 0;
 	}
 
+	/*
+	 * Key-stats grid. Polish pass:
+	 *   - `auto-fit` + `minmax(132px, 1fr)` so cells fluidly reflow
+	 *     by their CONTAINER's width — no explicit 4 → 3 → 2 → 1
+	 *     breakpoints needed (the container queries on the panel
+	 *     remain for typography sizing, not column count).
+	 *   - Hairline dividers via `gap: 1px` + a background colour
+	 *     trick: parent paints `var(--color-border)`, cells paint
+	 *     `var(--color-bg-secondary)`, the 1px gap shows through
+	 *     as a clean tile separator regardless of how the row
+	 *     wraps. Looks like a unified card from a distance + a
+	 *     clear grid up close.
+	 *   - `tabular-nums lining-nums` on the values so multi-digit
+	 *     stats line up vertically + don't jitter when the underlying
+	 *     value ticks (`12:34` vs `12:36` was visually shifting).
+	 */
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(4, 1fr);
-		gap: var(--space-sm);
+		grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+		gap: 1px;
 		margin-bottom: var(--space-xl);
-		padding: var(--space-md);
-		background: var(--color-bg-secondary);
+		background: var(--color-border);
+		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
+		overflow: hidden;
 	}
 
 	.key-stat {
 		display: flex;
 		flex-direction: column;
-		gap: 0.15rem;
+		gap: 0.25rem;
 		min-width: 0;
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-bg-secondary);
 	}
 
 	.key-stat-value {
+		font-variant-numeric: tabular-nums lining-nums;
 		font-size: 1.5rem;
 		font-weight: 700;
 		font-variant-numeric: tabular-nums;

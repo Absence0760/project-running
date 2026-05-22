@@ -133,6 +133,40 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
   '[{"lat":37.2710,"lng":-79.9416,"ele":280},{"lat":37.2700,"lng":-79.9400,"ele":300},{"lat":37.2688,"lng":-79.9385,"ele":330},{"lat":37.2675,"lng":-79.9370,"ele":365},{"lat":37.2660,"lng":-79.9355,"ele":405},{"lat":37.2645,"lng":-79.9345,"ele":445},{"lat":37.2630,"lng":-79.9338,"ele":485},{"lat":37.2615,"lng":-79.9335,"ele":520},{"lat":37.2602,"lng":-79.9332,"ele":555},{"lat":37.2592,"lng":-79.9330,"ele":580},{"lat":37.2602,"lng":-79.9332,"ele":555},{"lat":37.2615,"lng":-79.9335,"ele":520},{"lat":37.2630,"lng":-79.9338,"ele":485},{"lat":37.2645,"lng":-79.9345,"ele":445},{"lat":37.2660,"lng":-79.9355,"ele":405},{"lat":37.2675,"lng":-79.9370,"ele":365},{"lat":37.2688,"lng":-79.9385,"ele":330},{"lat":37.2700,"lng":-79.9400,"ele":300},{"lat":37.2710,"lng":-79.9416,"ele":280}]',
   7200, 300, 'trail', true);
 
+-- Four Virginia run rows with explicit IDs that match the upload
+-- targets in scripts/seed-run-tracks.mjs. The track itself doesn't
+-- ship in this seed file — the tracks are gzipped JSON in Storage,
+-- not jsonb columns, so seed.sql can't seed the bytes. Run
+-- `npm run dev:db:seed-tracks` AFTER `supabase db reset` to upload
+-- the matching files. Until then these runs show "No GPS track for
+-- this run" on /runs/[id]; with the tracks uploaded they render
+-- real polylines on the map.
+INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, track_url, metadata) VALUES
+  -- Belle Isle + Pipeline Loop tempo run, Richmond
+  ('a1000001-0000-0000-0000-000000000001'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-15 07:30:00+00', 2280, 6500.0, 'app', true,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000001.json.gz',
+    '{"activity_type":"run","title":"Tempo on Belle Isle","avg_bpm":158,"steps":7900}'::jsonb),
+  -- UVA Rotunda Loop easy run, Charlottesville
+  ('a1000001-0000-0000-0000-000000000002'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-12 18:00:00+00', 1620, 4200.0, 'app', true,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000002.json.gz',
+    '{"activity_type":"run","title":"UVA loop after work","avg_bpm":146,"steps":5400}'::jsonb),
+  -- Mount Vernon Trail long run, Arlington
+  ('a1000001-0000-0000-0000-000000000003'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-10 06:45:00+00', 3720, 10200.0, 'app', false,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000003.json.gz',
+    '{"activity_type":"run","title":"Sunday long along the Potomac","avg_bpm":152,"steps":12800}'::jsonb),
+  -- Mill Mountain Star Climb hill workout, Roanoke
+  ('a1000001-0000-0000-0000-000000000004'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-08 08:00:00+00', 2580, 7200.0, 'app', true,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000004.json.gz',
+    '{"activity_type":"run","title":"Star climb hill reps","avg_bpm":165,"steps":8800}'::jsonb);
+
 -- Star three of the seeded routes so the watch picker shows a
 -- realistic "what I run weekly" rotation out of the box. Without
 -- this, the watch's starred-only fetch returns empty and a fresh
