@@ -520,6 +520,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return Scaffold(
       appBar: AppBar(
         title: Text(_title),
+        // Action row polish: pre-polish had 4 stacked icon buttons
+        // (Edit / Save as route / Share / Delete) which crowded
+        // the AppBar — common at standard widths, broken at
+        // narrow widths. Keep Edit + Share visible (most-used
+        // actions), move Save as route + Delete into an overflow
+        // (`...`) menu.
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
@@ -527,19 +533,40 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             onPressed: _editDetails,
           ),
           IconButton(
-            icon: const Icon(Icons.add_road_outlined),
-            tooltip: 'Save as route',
-            onPressed: _saveAsRoute,
-          ),
-          IconButton(
             icon: const Icon(Icons.share_outlined),
             tooltip: 'Share run',
             onPressed: _shareRun,
           ),
-          IconButton(
-            icon: const Icon(Icons.delete_outline),
-            tooltip: 'Delete run',
-            onPressed: () => _confirmDelete(context),
+          PopupMenuButton<String>(
+            tooltip: 'More',
+            onSelected: (action) {
+              switch (action) {
+                case 'save_as_route':
+                  _saveAsRoute();
+                case 'delete':
+                  _confirmDelete(context);
+              }
+            },
+            itemBuilder: (_) => const [
+              PopupMenuItem(
+                value: 'save_as_route',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.add_road_outlined),
+                  title: Text('Save as route'),
+                ),
+              ),
+              PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'delete',
+                child: ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text('Delete run',
+                      style: TextStyle(color: Colors.red)),
+                ),
+              ),
+            ],
           ),
         ],
       ),
