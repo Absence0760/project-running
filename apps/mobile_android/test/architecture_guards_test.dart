@@ -1795,4 +1795,151 @@ void main() {
       );
     });
   });
+
+  // ---- WearRoutesBridge cross-language wiring guards -------------------
+  //
+  // Reason: the phone→watch route push spans three source files in
+  // two languages (Dart + Kotlin), plus two more in a different
+  // Gradle module (watch_wear). Drift on any single side breaks the
+  // wire silently. Source-grep guards close the loop without
+  // requiring a Kotlin test source set on the phone app (which
+  // doesn't exist today).
+  //
+  // Schema: 4 channel names + 1 DataLayer path + 2 data map keys
+  // must agree across:
+  //
+  //   apps/mobile_android/lib/wear_routes_bridge.dart           (Dart writer)
+  //   apps/mobile_android/android/.../WearRoutesBridge.kt       (Kotlin native bridge)
+  //   apps/mobile_android/android/.../MainActivity.kt           (registration)
+  //   apps/watch_wear/.../RoutesBridge.kt                       (Kotlin parser)
+  //   apps/watch_wear/.../RunViewModel.kt                       (consumer)
+  //
+  // See decisions.md § 64 for the design rationale.
+  group('WearRoutesBridge cross-language wiring guards', () {
+    test('Dart-side WearRoutesBridge declares the channel name + path keys',
+        () {
+      final src =
+          File('lib/wear_routes_bridge.dart').readAsStringSync();
+      expect(src, contains("MethodChannel('run_app/wear_routes')"),
+          reason: 'channel name must match the Kotlin handler in '
+              'android/app/src/main/kotlin/com/threkir/app/WearRoutesBridge.kt — '
+              'if you rename it, rename it in BOTH files in the same commit');
+      expect(src, contains("'routes_json'"),
+          reason: 'routes_json data-map key — must match the Kotlin '
+              'WearRoutesBridge.kt writer AND the watch-side RoutesBridge.kt '
+              'parser');
+      expect(src, contains("'updated_at_ms'"),
+          reason: 'updated_at_ms data-map key — drives the stale-push '
+              'protection on the watch side');
+      expect(src, contains('kMaxRoutesPerPush'),
+          reason: 'the 50-route Wearable Data Layer 100 KB cap is '
+              'load-bearing; do not remove the constant without a '
+              'corresponding bump on the watch picker side');
+    });
+
+    test('Phone-side WearRoutesBridge.kt mirrors the Dart channel + path',
+        () {
+      final src = File(
+              'android/app/src/main/kotlin/com/threkir/app/WearRoutesBridge.kt')
+          .readAsStringSync();
+      expect(src, contains('"run_app/wear_routes"'),
+          reason: 'Kotlin channel name must match the Dart writer');
+      expect(src, contains('"/saved_routes"'),
+          reason: 'DataLayer path must match the watch-side RoutesBridge.kt — '
+              "drift here means the watch's listener never fires");
+      expect(src, contains('"routes_json"'),
+          reason: 'routes_json data-map key must match BOTH the Dart '
+              'writer and the watch parser');
+      expect(src, contains('"updated_at_ms"'),
+          reason: 'updated_at_ms data-map key must match the Dart writer '
+              "AND the watch's stale-push gate");
+      expect(src, contains('PutDataMapRequest'),
+          reason: 'the bridge must use PutDataMapRequest, not raw '
+              'PutDataRequest — DataMap fields are how the keys ship');
+    });
+
+    test('MainActivity.kt registers the WearRoutesBridge in '
+        'configureFlutterEngine', () {
+      // The bridge is constructed in configureFlutterEngine alongside
+      // WearAuthBridge + RunNotificationBridge. Without this line
+      // the MethodChannel handler never registers and every push
+      // from the Dart side throws MissingPluginException (which
+      // the Dart bridge swallows — the user sees no error, but
+      // the watch never gets updates).
+      final src = File(
+              'android/app/src/main/kotlin/com/threkir/app/MainActivity.kt')
+          .readAsStringSync();
+      expect(src, contains('WearRoutesBridge('),
+          reason: 'MainActivity must construct WearRoutesBridge inside '
+              'configureFlutterEngine; dropping the registration means '
+              'every phone→watch push silently fails');
+      expect(src, contains('flutterEngine.dartExecutor.binaryMessenger'),
+          reason: 'the bridge needs the FlutterEngine binary messenger '
+              'to bind its MethodChannel');
+    });
+
+    test('main.dart attaches WearRoutesBridge after Supabase init '
+        'with the LocalRouteStore', () {
+      // The bridge is wired in main.dart's post-Supabase
+      // post-frame callback, alongside WearAuthBridge.attach. If
+      // attach() is dropped, no LocalRouteStore changes fire the
+      // push — the watch never sees the user's starred set.
+      final src = File('lib/main.dart').readAsStringSync();
+      expect(src, contains('WearRoutesBridge'),
+          reason: 'main.dart must import + attach WearRoutesBridge — '
+              'see the wear_auth_bridge import alongside it');
+      expect(src, contains('.attach(routeStore)'),
+          reason: 'WearRoutesBridge must be attached to the same '
+              'LocalRouteStore that drives the routes screen — '
+              "otherwise stars on the phone don't propagate");
+    });
+
+    test('pickRoutesForWatchPush + encodeRoutesForWatch are @visibleForTesting',
+        () {
+      // The extracted pure helpers are the testable seam — a future
+      // refactor that inlines them back into _push must update the
+      // tests in lockstep. Pin the @visibleForTesting attribute so
+      // the helpers stay reachable from the test surface.
+      final src =
+          File('lib/wear_routes_bridge.dart').readAsStringSync();
+      expect(src, contains('@visibleForTesting'),
+          reason: 'pickRoutesForWatchPush + encodeRoutesForWatch must '
+              'stay @visibleForTesting so the tests can reach them; '
+              'inlining them back into _push without the annotation '
+              'means a tests-go-stale situation');
+      expect(src, contains('static List<Route> pickRoutesForWatchPush('),
+          reason: 'extracted helper for the starred filter + cap');
+      expect(src,
+          contains('static List<Map<String, Object>> encodeRoutesForWatch('),
+          reason: 'extracted helper for the wire-format encoding');
+    });
+  });
+
+  // ---- Cross-language fixture path guards ------------------------------
+  group('Wear routes wire-format fixture', () {
+    test('canonical fixture lives at fixtures/wear_routes_payload.json', () {
+      // The fixture path is referenced by BOTH the Dart test
+      // (apps/mobile_android/test/wear_routes_fixture_test.dart)
+      // AND the Kotlin test (apps/watch_wear/.../WearRoutesFixtureTest.kt).
+      // Moving the file silently skips both — pin the canonical
+      // path here.
+      final f = File('../../fixtures/wear_routes_payload.json');
+      expect(f.existsSync(), isTrue,
+          reason: 'fixture must live at ${f.absolute.path} so both '
+              'platform tests can read it');
+    });
+
+    test('fixture declares the three contract keys the tests rely on', () {
+      final f = File('../../fixtures/wear_routes_payload.json');
+      final body = f.readAsStringSync();
+      expect(body, contains('"input_routes"'),
+          reason: 'Dart side reads input_routes to feed the encoder');
+      expect(body, contains('"expected_payload_json"'),
+          reason: 'wire shape — both the Dart side asserts the encoder '
+              'produces this AND the Kotlin side parses this');
+      expect(body, contains('"expected_parsed_routes"'),
+          reason: 'Kotlin side asserts parseRoutesJson produces this '
+              'from expected_payload_json');
+    });
+  });
 }

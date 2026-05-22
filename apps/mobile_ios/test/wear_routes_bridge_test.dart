@@ -305,6 +305,197 @@ void main() {
     });
   });
 
+  group('pickRoutesForWatchPush', () {
+    test('returns only starred routes', () {
+      final routes = [
+        _makeRoute(id: 'a', isStarred: true),
+        _makeRoute(id: 'b'),
+        _makeRoute(id: 'c', isStarred: true),
+        _makeRoute(id: 'd'),
+      ];
+      final picked = WearRoutesBridge.pickRoutesForWatchPush(routes);
+      expect(picked.map((r) => r.id), ['a', 'c']);
+    });
+
+    test('preserves caller order (LocalRouteStore is newest-first)', () {
+      // The LocalRouteStore always insert(0, route)s so the first
+      // element is the most recently touched. The watch picker
+      // wants the newest first too — the helper must NOT re-sort.
+      final routes = [
+        _makeRoute(id: 'newest', isStarred: true),
+        _makeRoute(id: 'middle', isStarred: true),
+        _makeRoute(id: 'oldest', isStarred: true),
+      ];
+      final picked = WearRoutesBridge.pickRoutesForWatchPush(routes);
+      expect(picked.map((r) => r.id), ['newest', 'middle', 'oldest']);
+    });
+
+    test('returns empty when no routes are starred', () {
+      final routes = [
+        _makeRoute(id: 'a'),
+        _makeRoute(id: 'b'),
+      ];
+      expect(WearRoutesBridge.pickRoutesForWatchPush(routes), isEmpty);
+    });
+
+    test('returns empty for empty input', () {
+      expect(WearRoutesBridge.pickRoutesForWatchPush(const []), isEmpty);
+    });
+
+    test('caps at maxRoutes when more than maxRoutes are starred', () {
+      final routes = [
+        for (var i = 0; i < 100; i++) _makeRoute(id: 'r-$i', isStarred: true),
+      ];
+      final picked =
+          WearRoutesBridge.pickRoutesForWatchPush(routes, maxRoutes: 10);
+      expect(picked, hasLength(10));
+      // Confirms the cap keeps the FIRST N (most-recent), not a random slice.
+      expect(picked.map((r) => r.id),
+          ['r-0', 'r-1', 'r-2', 'r-3', 'r-4', 'r-5', 'r-6', 'r-7', 'r-8', 'r-9']);
+    });
+
+    test('returns all starred when fewer than maxRoutes', () {
+      final routes = [
+        _makeRoute(id: 'a', isStarred: true),
+        _makeRoute(id: 'b', isStarred: true),
+      ];
+      final picked =
+          WearRoutesBridge.pickRoutesForWatchPush(routes, maxRoutes: 50);
+      expect(picked.map((r) => r.id), ['a', 'b']);
+    });
+
+    test('default maxRoutes is the published constant', () {
+      expect(WearRoutesBridge.kMaxRoutesPerPush, 50,
+          reason: 'changing the cap is a wire-format-adjacent decision; '
+              'update the watch DataLayer 100 KB budget calc if you change it');
+      final routes = [
+        for (var i = 0; i < 60; i++) _makeRoute(id: 'r-$i', isStarred: true),
+      ];
+      final picked = WearRoutesBridge.pickRoutesForWatchPush(routes);
+      expect(picked, hasLength(50));
+    });
+
+    test('mixed starred + plain over the cap honours both filters', () {
+      // 100 routes total: 80 starred, 20 plain. With cap 30, the
+      // first 30 starred (in input order) make it through.
+      final routes = [
+        for (var i = 0; i < 100; i++)
+          _makeRoute(id: 'r-$i', isStarred: i % 5 != 0),
+      ];
+      final picked =
+          WearRoutesBridge.pickRoutesForWatchPush(routes, maxRoutes: 30);
+      expect(picked, hasLength(30));
+      for (final r in picked) {
+        expect(r.isStarred, isTrue);
+      }
+    });
+  });
+
+  group('encodeRoutesForWatch', () {
+    test('emits the wire-format shape: id + name + distance_m + waypoints',
+        () {
+      final encoded = WearRoutesBridge.encodeRoutesForWatch([
+        _makeRoute(
+          id: 'rt-1',
+          name: 'Park loop',
+          distance: 5000,
+          waypoints: const [
+            Waypoint(lat: 47.37, lng: 8.54),
+            Waypoint(lat: 47.371, lng: 8.541),
+          ],
+        ),
+      ]);
+      expect(encoded, hasLength(1));
+      final row = encoded.single;
+      expect(row['id'], 'rt-1');
+      expect(row['name'], 'Park loop');
+      expect(row['distance_m'], 5000);
+      final wps = row['waypoints'] as List;
+      expect(wps, hasLength(2));
+      expect((wps.first as Map)['lat'], 47.37);
+      expect((wps.first as Map)['lng'], 8.54);
+    });
+
+    test('omits everything that isnt id / name / distance / waypoints', () {
+      // Surface and tags etc. stay on the phone — the watch only
+      // needs enough to render a picker row + feed RouteMath.
+      final encoded = WearRoutesBridge.encodeRoutesForWatch([
+        _makeRoute(id: 'rt-1', name: 'X', distance: 1000),
+      ]);
+      final row = encoded.single;
+      expect(row.keys.toSet(), {'id', 'name', 'distance_m', 'waypoints'});
+    });
+
+    test('empty input produces empty output', () {
+      expect(WearRoutesBridge.encodeRoutesForWatch(const []), isEmpty);
+    });
+
+    test('waypoint shape is exactly {lat, lng} — no elevation or timestamp',
+        () {
+      // The watch's RouteMath only consumes lat/lng. Leaking
+      // elevation or timestamp would bloat the payload and risk
+      // approaching the DataLayer cap.
+      final encoded = WearRoutesBridge.encodeRoutesForWatch([
+        _makeRoute(
+          id: 'rt-1',
+          waypoints: const [
+            Waypoint(lat: 1, lng: 2, elevationMetres: 100, timestamp: null),
+            Waypoint(lat: 3, lng: 4),
+          ],
+        ),
+      ]);
+      final wps = encoded.single['waypoints'] as List;
+      for (final w in wps) {
+        expect((w as Map).keys.toSet(), {'lat', 'lng'});
+      }
+    });
+
+    test('round-trips through jsonEncode + jsonDecode without loss', () {
+      final input = [
+        _makeRoute(
+          id: 'rt-1',
+          name: 'Round-trip',
+          distance: 5432.1,
+          waypoints: const [
+            Waypoint(lat: 47.37, lng: 8.54),
+            Waypoint(lat: 47.371, lng: 8.541),
+          ],
+        ),
+      ];
+      final encoded = WearRoutesBridge.encodeRoutesForWatch(input);
+      final wire = jsonEncode(encoded);
+      final decoded = jsonDecode(wire) as List;
+      expect(decoded, hasLength(1));
+      final row = decoded.single as Map<String, dynamic>;
+      expect(row['id'], 'rt-1');
+      expect(row['distance_m'], 5432.1);
+      expect((row['waypoints'] as List).length, 2);
+    });
+  });
+
+  group('cap enforcement at the channel boundary', () {
+    test('pushing 100 starred routes truncates to kMaxRoutesPerPush at the wire',
+        () async {
+      // Save 100 starred routes. The bridge must invoke the channel
+      // with at most kMaxRoutesPerPush entries; the full set stays
+      // on the phone's local store.
+      for (var i = 0; i < 100; i++) {
+        await store.save(_makeRoute(id: 'r-$i', isStarred: true));
+      }
+      WearRoutesBridge().attach(store);
+      await Future<void>.delayed(Duration.zero);
+
+      expect(channel.pushCalls, hasLength(1));
+      final payload = jsonDecode(
+        channel.pushCalls.single['routes_json'] as String,
+      ) as List;
+      expect(payload, hasLength(WearRoutesBridge.kMaxRoutesPerPush));
+      // The 100 routes were all saved — the cap is a push-side
+      // limit, not a store-side one.
+      expect(store.routes, hasLength(100));
+    });
+  });
+
   group('integration with LocalRouteStore.saveBatch + delete', () {
     test('saveBatch triggers exactly one push (single listener notification)',
         () async {

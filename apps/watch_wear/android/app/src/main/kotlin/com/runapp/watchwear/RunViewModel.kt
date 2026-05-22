@@ -286,6 +286,14 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         observeRoutesBridge()
     }
 
+    /// Tracks the `updated_at_ms` of the last phone push the watch
+    /// actually applied. A Wearable Data Layer reconnect after a
+    /// watch reboot can deliver an older DataItem after a newer one;
+    /// without the gate, the watch would roll its starred set back
+    /// to the older state. `shouldApplyRoutesPush` decides per
+    /// arrival whether to apply or drop.
+    private var lastAppliedRoutesPushMs: Long = 0L
+
     /// Listen for starred-route pushes from the paired phone. Phone-side
     /// `WearRoutesBridge` forwards the user's starred subset on every
     /// `LocalRouteStore` change; the watch overwrites its DataStore cache
@@ -296,25 +304,34 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     private fun observeRoutesBridge() {
         viewModelScope.launch {
             try {
-                routesBridge.current()?.let { initial ->
-                    if (initial.isNotEmpty()) {
-                        routeStore.save(initial)
+                routesBridge.current()?.let { push ->
+                    if (push.routes.isNotEmpty() &&
+                        shouldApplyRoutesPush(lastAppliedRoutesPushMs, push.updatedAtMs)
+                    ) {
+                        routeStore.save(push.routes)
                         val recents = routeStore.recentIds.first()
                         _state.value = _state.value.copy(
-                            routes = sortByRecency(initial, recents),
+                            routes = sortByRecency(push.routes, recents),
                         )
+                        lastAppliedRoutesPushMs = push.updatedAtMs
                     }
                 }
             } catch (_: Throwable) { /* best-effort cold-start hydrate */ }
         }
         viewModelScope.launch {
-            routesBridge.events.collect { routes ->
+            routesBridge.events.collect { push ->
                 try {
-                    routeStore.save(routes)
+                    if (!shouldApplyRoutesPush(lastAppliedRoutesPushMs, push.updatedAtMs)) {
+                        // Stale or out-of-order delivery — keep the
+                        // current state, don't roll back.
+                        return@collect
+                    }
+                    routeStore.save(push.routes)
                     val recents = routeStore.recentIds.first()
                     _state.value = _state.value.copy(
-                        routes = sortByRecency(routes, recents),
+                        routes = sortByRecency(push.routes, recents),
                     )
+                    lastAppliedRoutesPushMs = push.updatedAtMs
                 } catch (_: Throwable) { /* swallow — picker keeps prior list */ }
             }
         }
@@ -790,19 +807,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
 
     /// Stable-sort: routes whose IDs appear in `recentIds` first,
     /// in LRU order; everything else preserves its incoming
-    /// (`updated_at desc`) order. Pure helper so it's testable
-    /// without booting the ViewModel.
+    /// (`updated_at desc`) order. Thin wrapper around the file-level
+    /// [sortRoutesByRecency] so test code can exercise the math
+    /// without instantiating the ViewModel.
     private fun sortByRecency(
         routes: List<SavedRoute>,
         recentIds: List<String>,
-    ): List<SavedRoute> {
-        if (recentIds.isEmpty()) return routes
-        val byId = routes.associateBy { it.id }
-        val recents = recentIds.mapNotNull { byId[it] }
-        val recentSet = recents.map { it.id }.toSet()
-        val rest = routes.filter { it.id !in recentSet }
-        return recents + rest
-    }
+    ): List<SavedRoute> = sortRoutesByRecency(routes, recentIds)
 
     fun openRoutePicker() {
         _state.value = _state.value.copy(stage = Stage.RoutePicker)

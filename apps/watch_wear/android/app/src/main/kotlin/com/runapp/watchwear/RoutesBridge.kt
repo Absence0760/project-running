@@ -19,6 +19,18 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
+/// One delivery from the phone-side push: the parsed route list plus
+/// the `updated_at_ms` epoch stamp the writer embedded in the
+/// DataMap. The consumer (`RunViewModel.observeRoutesBridge`) keeps
+/// the most-recently-seen stamp so an out-of-order Wearable Data
+/// Layer delivery (rare but possible — DataItem propagation isn't
+/// strictly FIFO across reconnects) can't roll the watch back to
+/// an older starred set.
+data class RoutesPush(
+    val routes: List<SavedRoute>,
+    val updatedAtMs: Long,
+)
+
 /// Sibling of [SessionBridge] — listens at `/saved_routes` for the
 /// starred-route subset the paired phone pushes via the Wearable Data
 /// Layer. Without this, the watch's route picker is online-only at
@@ -30,14 +42,18 @@ import kotlinx.serialization.json.jsonPrimitive
 /// offline, survives an LTE-less out-and-back, and the picker shows
 /// the latest list without a Supabase round-trip.
 ///
-/// Payload shape: a single `routes_json` string carrying the same
+/// Payload shape: `routes_json` (the same
 /// `[{id, name, distance_m, waypoints:[{lat,lng}]}]` array the
-/// phone's `LocalRouteStore` exposes filtered to `isStarred==true`.
+/// phone's `LocalRouteStore` exposes filtered to `isStarred==true`)
+/// plus `updated_at_ms` (epoch millis when the phone serialised the
+/// push). The cap on the phone side is 50 routes per DataItem to
+/// stay under the ~100 KB Wearable Data Layer limit; the parser
+/// here just accepts whatever lands.
 class RoutesBridge(context: Context) {
     private val dataClient: DataClient = Wearable.getDataClient(context)
     private val json = Json { ignoreUnknownKeys = true }
 
-    val events: Flow<List<SavedRoute>> = callbackFlow {
+    val events: Flow<RoutesPush> = callbackFlow {
         val listener = DataClient.OnDataChangedListener { evts ->
             for (event in evts) {
                 if (event.dataItem.uri.path != PATH) continue
@@ -45,21 +61,24 @@ class RoutesBridge(context: Context) {
                 val dm = DataMapItem.fromDataItem(event.dataItem).dataMap
                 val raw = dm.getString("routes_json") ?: continue
                 val parsed = parseRoutesJson(json, raw)
-                trySend(parsed)
+                val updatedAtMs = dm.getLong("updated_at_ms")
+                trySend(RoutesPush(routes = parsed, updatedAtMs = updatedAtMs))
             }
         }
         dataClient.addListener(listener)
         awaitClose { dataClient.removeListener(listener) }
     }
 
-    suspend fun current(): List<SavedRoute>? {
+    suspend fun current(): RoutesPush? {
         val uri = Uri.Builder().scheme("wear").path(PATH).build()
         val buffer = dataClient.getDataItems(uri).await()
         return try {
             buffer.firstOrNull()?.let { item ->
-                val raw = DataMapItem.fromDataItem(item).dataMap.getString("routes_json")
-                    ?: return@let null
-                parseRoutesJson(json, raw)
+                val dm = DataMapItem.fromDataItem(item).dataMap
+                val raw = dm.getString("routes_json") ?: return@let null
+                val parsed = parseRoutesJson(json, raw)
+                val updatedAtMs = dm.getLong("updated_at_ms")
+                RoutesPush(routes = parsed, updatedAtMs = updatedAtMs)
             }
         } finally {
             buffer.release()
@@ -69,6 +88,42 @@ class RoutesBridge(context: Context) {
     companion object {
         const val PATH = "/saved_routes"
     }
+}
+
+/// Stable-sort: routes whose IDs appear in [recentIds] move to the
+/// front in LRU order; everything else preserves its incoming
+/// (`updated_at desc`) order. Pure helper so the re-ordering math is
+/// unit-testable without booting `RunViewModel`. Used by
+/// `RunViewModel.sortByRecency` + `observeRoutesBridge`.
+internal fun sortRoutesByRecency(
+    routes: List<SavedRoute>,
+    recentIds: List<String>,
+): List<SavedRoute> {
+    if (recentIds.isEmpty()) return routes
+    val byId = routes.associateBy { it.id }
+    val recents = recentIds.mapNotNull { byId[it] }
+    val recentSet = recents.map { it.id }.toSet()
+    val rest = routes.filter { it.id !in recentSet }
+    return recents + rest
+}
+
+/// Defensive stale-push gate. Returns true when [incoming] should
+/// be applied — strictly newer than [lastApplied] (or the watch has
+/// never applied a push yet). Pure helper so it's unit-testable
+/// without booting the ViewModel.
+///
+/// Wearable Data Layer usually delivers in FIFO order, but a
+/// reconnect or sync after a watch reboot can deliver an older
+/// DataItem after a newer one. Applying the older one would roll
+/// the watch's starred set back. Compare by `updated_at_ms` and
+/// drop the older.
+internal fun shouldApplyRoutesPush(lastAppliedMs: Long, incoming: Long): Boolean {
+    // Zero/negative timestamps are a corrupt or pre-stamp-aware
+    // writer; accept them once but track the higher of the two so
+    // a subsequent properly-stamped push isn't rejected by a stale
+    // legacy push that landed first.
+    if (incoming <= 0L) return lastAppliedMs == 0L
+    return incoming > lastAppliedMs
 }
 
 /// Pure parser pulled out as a file-level helper so the JSON contract

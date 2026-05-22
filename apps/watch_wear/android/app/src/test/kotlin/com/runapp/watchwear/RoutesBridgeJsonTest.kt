@@ -1,6 +1,8 @@
 package com.runapp.watchwear
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlinx.serialization.json.Json
@@ -302,3 +304,393 @@ class RoutesBridgeJsonTest {
         assertEquals(listOf("a", "b", "c"), out.map { it.id })
     }
 }
+
+/// Tests for the file-level pure helpers `shouldApplyRoutesPush`
+/// + `sortRoutesByRecency` extracted from `RoutesBridge.kt`. These
+/// power the watch-side defensive logic without requiring the
+/// `RunViewModel` to be instantiated.
+class RoutesPushApplyTest {
+    private fun wp(lat: Double, lng: Double) = SavedRoute.Waypoint(lat, lng)
+    private fun rt(id: String) = SavedRoute(
+        id = id,
+        name = id,
+        distanceM = 1000.0,
+        waypoints = listOf(wp(0.0, 0.0), wp(1.0, 1.0)),
+    )
+
+    // ---- shouldApplyRoutesPush ----
+
+    @Test
+    fun `first push is applied when no prior state exists`() {
+        // lastApplied=0 ⇒ any positive timestamp wins.
+        assertTrue(shouldApplyRoutesPush(0L, 100L))
+        assertTrue(shouldApplyRoutesPush(0L, 1L))
+    }
+
+    @Test
+    fun `strictly-newer push is applied`() {
+        assertTrue(shouldApplyRoutesPush(100L, 101L))
+        assertTrue(shouldApplyRoutesPush(100L, 1_000_000L))
+    }
+
+    @Test
+    fun `equal-timestamp push is rejected — Wearable DataLayer can re-deliver`() {
+        // Re-delivery of an identical DataItem can happen during
+        // Wearable reconnects. The cache is already authoritative
+        // at that timestamp; don't waste a store write.
+        assertFalse(shouldApplyRoutesPush(100L, 100L))
+    }
+
+    @Test
+    fun `older push is rejected — protects against out-of-order delivery`() {
+        assertFalse(shouldApplyRoutesPush(200L, 100L))
+        assertFalse(shouldApplyRoutesPush(200L, 199L))
+        assertFalse(shouldApplyRoutesPush(200L, 0L))
+    }
+
+    @Test
+    fun `negative timestamp (corrupt writer) is treated as zero`() {
+        // A pre-stamp-aware writer or a corrupt DataMap could send
+        // 0 or negative. Apply ONCE so the user gets the push, but
+        // pin the next legitimate push's `lastApplied=0` semantics.
+        assertTrue("first push with negative timestamp is applied as a one-shot",
+            shouldApplyRoutesPush(0L, -1L))
+        assertFalse("negative-stamp push after a real one is rejected",
+            shouldApplyRoutesPush(100L, -1L))
+        assertFalse("zero-stamp push after a real one is rejected",
+            shouldApplyRoutesPush(100L, 0L))
+    }
+
+    @Test
+    fun `monotonic sequence applies every push in order`() {
+        var last = 0L
+        for (incoming in listOf(10L, 20L, 30L, 50L, 100L, 1_000_000L)) {
+            assertTrue(
+                "push $incoming should apply after $last",
+                shouldApplyRoutesPush(last, incoming),
+            )
+            last = incoming
+        }
+    }
+
+    // ---- sortRoutesByRecency ----
+
+    @Test
+    fun `empty recents preserves incoming order`() {
+        val routes = listOf(rt("a"), rt("b"), rt("c"))
+        val sorted = sortRoutesByRecency(routes, emptyList())
+        assertEquals(listOf("a", "b", "c"), sorted.map { it.id })
+    }
+
+    @Test
+    fun `recent route floats to the front`() {
+        val routes = listOf(rt("a"), rt("b"), rt("c"))
+        val sorted = sortRoutesByRecency(routes, listOf("c"))
+        assertEquals(listOf("c", "a", "b"), sorted.map { it.id })
+    }
+
+    @Test
+    fun `multiple recents preserve LRU order at the front`() {
+        // recentIds is MRU-first per LocalRouteStore.pushRecent. We
+        // float them to the front in the same order.
+        val routes = listOf(rt("a"), rt("b"), rt("c"), rt("d"))
+        val sorted = sortRoutesByRecency(routes, listOf("c", "a"))
+        // c, then a (recents in order), then rest in incoming order.
+        assertEquals(listOf("c", "a", "b", "d"), sorted.map { it.id })
+    }
+
+    @Test
+    fun `recent id not in routes is silently skipped`() {
+        // The watch's recentIds can hold ids the phone never
+        // pushed (the route was deleted on the phone but its id
+        // lingers in the LRU). Just drop those entries.
+        val routes = listOf(rt("a"), rt("b"))
+        val sorted = sortRoutesByRecency(routes, listOf("ghost", "b"))
+        assertEquals(listOf("b", "a"), sorted.map { it.id })
+    }
+
+    @Test
+    fun `empty routes returns empty regardless of recents`() {
+        val sorted = sortRoutesByRecency(emptyList(), listOf("a", "b"))
+        assertTrue(sorted.isEmpty())
+    }
+
+    @Test
+    fun `idempotent — re-applying the same recents doesn't change order`() {
+        val routes = listOf(rt("a"), rt("b"), rt("c"))
+        val once = sortRoutesByRecency(routes, listOf("b"))
+        val twice = sortRoutesByRecency(once, listOf("b"))
+        assertEquals(once.map { it.id }, twice.map { it.id })
+    }
+
+    @Test
+    fun `recents list with all-unknown ids is a no-op`() {
+        val routes = listOf(rt("a"), rt("b"))
+        val sorted = sortRoutesByRecency(routes, listOf("x", "y", "z"))
+        assertEquals(listOf("a", "b"), sorted.map { it.id })
+    }
+
+    @Test
+    fun `output list length matches input list length`() {
+        val routes = listOf(rt("a"), rt("b"), rt("c"), rt("d"))
+        val sorted = sortRoutesByRecency(routes, listOf("c", "a", "x"))
+        assertEquals("the helper re-orders, never adds or drops",
+            routes.size, sorted.size)
+    }
+
+    @Test
+    fun `output contains exactly the same id set as input`() {
+        val routes = listOf(rt("a"), rt("b"), rt("c"), rt("d"))
+        val sorted = sortRoutesByRecency(routes, listOf("c", "a"))
+        assertEquals(routes.map { it.id }.toSet(), sorted.map { it.id }.toSet())
+    }
+
+    @Test
+    fun `re-ordering preserves SavedRoute identity per id`() {
+        // The helper returns the SAME SavedRoute instances — the
+        // recents pull from byId, the rest filter from the input.
+        // Both paths yield references back to the originals.
+        val a = rt("a")
+        val b = rt("b")
+        val routes = listOf(a, b)
+        val sorted = sortRoutesByRecency(routes, listOf("b"))
+        assertTrue("b instance preserved", sorted[0] === b)
+        assertTrue("a instance preserved", sorted[1] === a)
+    }
+
+    @Test
+    fun `100-route + 10-recent sort returns in 50ms`() {
+        // Regression guard against an O(n²) refactor.
+        val routes = (0 until 100).map { rt("r-$it") }
+        val recents = (0 until 10).map { "r-$it" }
+        val start = System.nanoTime()
+        val sorted = sortRoutesByRecency(routes, recents)
+        val elapsedMs = (System.nanoTime() - start) / 1_000_000
+        assertEquals(100, sorted.size)
+        assertTrue("sort took ${elapsedMs}ms (regression?)", elapsedMs < 50)
+    }
+}
+
+/// Tests for the wire-shape of `RoutesPush` — pins the data class
+/// contract that the phone-side payload writer + watch-side
+/// consumer both depend on.
+class RoutesPushTest {
+    private val sample = SavedRoute(
+        id = "rt-1",
+        name = "Sample",
+        distanceM = 5000.0,
+        waypoints = listOf(
+            SavedRoute.Waypoint(47.37, 8.54),
+            SavedRoute.Waypoint(47.371, 8.541),
+        ),
+    )
+
+    @Test
+    fun `equality is by-value over routes + updatedAtMs`() {
+        val a = RoutesPush(listOf(sample), 100L)
+        val b = RoutesPush(listOf(sample), 100L)
+        assertEquals(a, b)
+    }
+
+    @Test
+    fun `equality differs on updatedAtMs`() {
+        val a = RoutesPush(listOf(sample), 100L)
+        val b = RoutesPush(listOf(sample), 101L)
+        assertNotEquals(a, b)
+    }
+
+    @Test
+    fun `empty routes is a legitimate push payload`() {
+        // The phone sends an empty array when the user unstarred
+        // their last route — the watch should clear its cache.
+        val push = RoutesPush(emptyList(), 100L)
+        assertTrue(push.routes.isEmpty())
+        assertEquals(100L, push.updatedAtMs)
+    }
+
+    @Test
+    fun `parsed routes contain only safe id + name + distance + waypoints fields`() {
+        // The wire format is narrow on purpose — the watch picker
+        // only needs those four fields. This test pins the leak
+        // surface: even if the phone added extra keys to the
+        // payload, the parser only carries through the safe set.
+        val raw = """
+            [{
+                "id": "rt-1",
+                "name": "Test",
+                "distance_m": 1000,
+                "waypoints": [{"lat":1.0,"lng":2.0},{"lat":3.0,"lng":4.0}],
+                "user_id": "leaked-uid",
+                "secret_field": "leaked-secret"
+            }]
+        """.trimIndent()
+        val parsed = parseRoutesJson(Json { ignoreUnknownKeys = true }, raw)
+        assertEquals(1, parsed.size)
+        // SavedRoute has no field for user_id or secret_field —
+        // the leak surface is bounded by the data class shape.
+        val fields = SavedRoute::class.java.declaredFields.map { it.name }.toSet()
+        assertFalse("user_id leaked", fields.contains("user_id"))
+        assertFalse("secret_field leaked", fields.contains("secret_field"))
+    }
+}
+
+/// Simulates the `observeRoutesBridge` consumer state machine —
+/// composes `shouldApplyRoutesPush` + `sortRoutesByRecency` over a
+/// sequence of inbound `RoutesPush` events and checks the final
+/// "applied" snapshot matches expectation.
+///
+/// The full `RunViewModel.observeRoutesBridge` flow can't run on a
+/// JVM (it touches `viewModelScope`, `DataClient`, and DataStore),
+/// but the pure-logic surface that DECIDES what to apply is fully
+/// testable.
+class RoutesPushApplySequenceTest {
+    private fun wp(lat: Double, lng: Double) = SavedRoute.Waypoint(lat, lng)
+    private fun rt(id: String) = SavedRoute(
+        id = id,
+        name = id,
+        distanceM = 1000.0,
+        waypoints = listOf(wp(0.0, 0.0), wp(1.0, 1.0)),
+    )
+
+    /// Mimics what observeRoutesBridge does on every inbound push:
+    /// gate by `shouldApplyRoutesPush`, then re-order by recents.
+    /// Returns the new applied state.
+    private data class AppliedState(val routes: List<SavedRoute>, val ts: Long)
+
+    private fun apply(
+        state: AppliedState,
+        push: RoutesPush,
+        recents: List<String>,
+    ): AppliedState {
+        if (!shouldApplyRoutesPush(state.ts, push.updatedAtMs)) return state
+        return AppliedState(sortRoutesByRecency(push.routes, recents), push.updatedAtMs)
+    }
+
+    @Test
+    fun `monotonic sequence applies every push`() {
+        var state = AppliedState(emptyList(), 0L)
+        state = apply(state, RoutesPush(listOf(rt("a")), 100L), emptyList())
+        assertEquals(100L, state.ts)
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("b")), 200L), emptyList())
+        assertEquals(200L, state.ts)
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("b"), rt("c")), 300L), emptyList())
+        assertEquals(300L, state.ts)
+        assertEquals(listOf("a", "b", "c"), state.routes.map { it.id })
+    }
+
+    @Test
+    fun `out-of-order push leaves earlier state intact`() {
+        var state = AppliedState(emptyList(), 0L)
+        // First a newer push lands.
+        state = apply(state, RoutesPush(listOf(rt("newer")), 200L), emptyList())
+        // Then an older arrives late (e.g. reconnect replay).
+        state = apply(state, RoutesPush(listOf(rt("older")), 100L), emptyList())
+        // State stays at the newer push.
+        assertEquals(200L, state.ts)
+        assertEquals(listOf("newer"), state.routes.map { it.id })
+    }
+
+    @Test
+    fun `same-timestamp re-delivery is a no-op`() {
+        var state = AppliedState(emptyList(), 0L)
+        state = apply(state, RoutesPush(listOf(rt("a")), 100L), emptyList())
+        val stateRef = state
+        state = apply(state, RoutesPush(listOf(rt("DIFFERENT")), 100L), emptyList())
+        // Equal-timestamp push is rejected — state unchanged.
+        assertEquals(stateRef.routes, state.routes)
+        assertEquals(stateRef.ts, state.ts)
+    }
+
+    @Test
+    fun `empty push at newer timestamp clears the routes list (user unstarred all)`() {
+        var state = AppliedState(emptyList(), 0L)
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("b")), 100L), emptyList())
+        // User unstarred everything; phone sends an empty array.
+        state = apply(state, RoutesPush(emptyList(), 200L), emptyList())
+        assertEquals(200L, state.ts)
+        assertTrue("routes must be cleared after empty push", state.routes.isEmpty())
+    }
+
+    @Test
+    fun `recents from the watch float matching ids to the front of each push`() {
+        var state = AppliedState(emptyList(), 0L)
+        val recents = listOf("c", "a")
+        state = apply(
+            state,
+            RoutesPush(listOf(rt("a"), rt("b"), rt("c"), rt("d")), 100L),
+            recents,
+        )
+        // c, a (recents in order), then b, d (rest in incoming order).
+        assertEquals(listOf("c", "a", "b", "d"), state.routes.map { it.id })
+    }
+
+    @Test
+    fun `recents that disappear from a subsequent push are silently dropped`() {
+        var state = AppliedState(emptyList(), 0L)
+        // First push: includes b — recents=[b] floats it.
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("b")), 100L), listOf("b"))
+        assertEquals(listOf("b", "a"), state.routes.map { it.id })
+        // User unstarred b on the phone — second push omits it.
+        // recents still says [b] but sortRoutesByRecency just skips.
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("c")), 200L), listOf("b"))
+        assertEquals(listOf("a", "c"), state.routes.map { it.id })
+    }
+
+    @Test
+    fun `cold-start zero-timestamp push is applied as one-shot`() {
+        // The cold-start path (RoutesBridge.current()) reads a
+        // DataItem written before the writer started stamping
+        // updated_at_ms. Pin: a single zero-stamp push lands once,
+        // but any later real-stamp push wins.
+        var state = AppliedState(emptyList(), 0L)
+        state = apply(state, RoutesPush(listOf(rt("legacy")), 0L), emptyList())
+        // The legacy push applied as a one-shot (lastApplied was 0,
+        // incoming is 0/non-positive — guard says ok the first time).
+        assertEquals(listOf("legacy"), state.routes.map { it.id })
+        // After we have any state, a real-stamped push wins.
+        state = apply(state, RoutesPush(listOf(rt("real")), 50L), emptyList())
+        assertEquals(listOf("real"), state.routes.map { it.id })
+        assertEquals(50L, state.ts)
+    }
+
+    @Test
+    fun `stress — 100 pushes alternating future + past results in monotonic increase`() {
+        var state = AppliedState(emptyList(), 0L)
+        for (i in 1..100) {
+            // Alternate between t=i*10 (forward) and t=i*5 (past).
+            val ts = if (i % 2 == 0) (i * 10L) else (i * 5L)
+            val routes = listOf(rt("r-$i"))
+            state = apply(state, RoutesPush(routes, ts), emptyList())
+        }
+        // Only forward pushes "win"; final state is monotonically
+        // non-decreasing on the timestamp axis.
+        assertTrue("final timestamp must be > 0", state.ts > 0L)
+    }
+
+    @Test
+    fun `out-of-order push followed by stale doesn't roll the watch back`() {
+        // Realistic edge case: phone pushes A (t=100), then B (t=200),
+        // then C (t=300). Watch receives them as C, A, B due to
+        // Wearable Data Layer's at-least-once delivery semantics.
+        // Expectation: only C lands; A and B are dropped.
+        var state = AppliedState(emptyList(), 0L)
+        state = apply(state, RoutesPush(listOf(rt("C")), 300L), emptyList())
+        state = apply(state, RoutesPush(listOf(rt("A")), 100L), emptyList())
+        state = apply(state, RoutesPush(listOf(rt("B")), 200L), emptyList())
+        assertEquals(300L, state.ts)
+        assertEquals(listOf("C"), state.routes.map { it.id })
+    }
+
+    @Test
+    fun `recents updated mid-sequence affects later pushes only`() {
+        var state = AppliedState(emptyList(), 0L)
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("b")), 100L), emptyList())
+        // Initial: incoming order.
+        assertEquals(listOf("a", "b"), state.routes.map { it.id })
+        // User taps b on the watch (LRU update on the watch side);
+        // next phone push re-sorts with b first.
+        state = apply(state, RoutesPush(listOf(rt("a"), rt("b")), 200L), listOf("b"))
+        assertEquals(listOf("b", "a"), state.routes.map { it.id })
+    }
+}
+

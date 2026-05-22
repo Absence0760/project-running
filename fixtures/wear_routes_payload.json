@@ -1,0 +1,101 @@
+{
+  "_doc": "Canonical phone→watch routes payload. Cross-platform contract for the WearRoutesBridge → RoutesBridge wire format. Two clients agree on the shape: the Flutter encoder (apps/mobile_android/lib/wear_routes_bridge.dart#encodeRoutesForWatch) writes this; the Kotlin parser (apps/watch_wear/.../RoutesBridge.kt#parseRoutesJson) reads it. Both tests load this file and must agree. If you change a field here, update both tests in the same commit. See docs/decisions.md § 64 for the design.",
+
+  "input_routes": {
+    "_doc": "The Route objects the phone-side encoder consumes. Mirrors the apps/mobile_android/lib/local_route_store.dart shape after isStarred filtering. Only starred routes ship; pin routes (offline-only) do NOT make it onto the wire.",
+    "starred": [
+      {
+        "id": "9c4dca1e-cf7a-4f12-9f19-e29c70bdf101",
+        "name": "Park loop",
+        "distance_m": 5000.5,
+        "waypoints": [
+          { "lat": 47.37, "lng": 8.54 },
+          { "lat": 47.371, "lng": 8.541 },
+          { "lat": 47.372, "lng": 8.542 }
+        ]
+      },
+      {
+        "id": "rt-trail-uuid-002",
+        "name": "Trail run with Unicode 🏃",
+        "distance_m": 10000,
+        "waypoints": [
+          { "lat": 51.5, "lng": -0.1 },
+          { "lat": 51.6, "lng": -0.2 }
+        ]
+      },
+      {
+        "id": "rt-minimal",
+        "name": "Minimal two-point",
+        "distance_m": 100,
+        "waypoints": [
+          { "lat": 0, "lng": 0 },
+          { "lat": 0.001, "lng": 0.001 }
+        ]
+      }
+    ]
+  },
+
+  "expected_payload_json": [
+    {
+      "id": "9c4dca1e-cf7a-4f12-9f19-e29c70bdf101",
+      "name": "Park loop",
+      "distance_m": 5000.5,
+      "waypoints": [
+        { "lat": 47.37, "lng": 8.54 },
+        { "lat": 47.371, "lng": 8.541 },
+        { "lat": 47.372, "lng": 8.542 }
+      ]
+    },
+    {
+      "id": "rt-trail-uuid-002",
+      "name": "Trail run with Unicode 🏃",
+      "distance_m": 10000,
+      "waypoints": [
+        { "lat": 51.5, "lng": -0.1 },
+        { "lat": 51.6, "lng": -0.2 }
+      ]
+    },
+    {
+      "id": "rt-minimal",
+      "name": "Minimal two-point",
+      "distance_m": 100,
+      "waypoints": [
+        { "lat": 0, "lng": 0 },
+        { "lat": 0.001, "lng": 0.001 }
+      ]
+    }
+  ],
+
+  "expected_parsed_routes": [
+    {
+      "id": "9c4dca1e-cf7a-4f12-9f19-e29c70bdf101",
+      "name": "Park loop",
+      "distanceM": 5000.5,
+      "waypointCount": 3,
+      "firstLat": 47.37,
+      "firstLng": 8.54,
+      "lastLat": 47.372,
+      "lastLng": 8.542
+    },
+    {
+      "id": "rt-trail-uuid-002",
+      "name": "Trail run with Unicode 🏃",
+      "distanceM": 10000,
+      "waypointCount": 2,
+      "firstLat": 51.5,
+      "firstLng": -0.1,
+      "lastLat": 51.6,
+      "lastLng": -0.2
+    },
+    {
+      "id": "rt-minimal",
+      "name": "Minimal two-point",
+      "distanceM": 100,
+      "waypointCount": 2,
+      "firstLat": 0,
+      "firstLng": 0,
+      "lastLat": 0.001,
+      "lastLng": 0.001
+    }
+  ]
+}
