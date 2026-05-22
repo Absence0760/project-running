@@ -76,7 +76,8 @@ void main() {
       expect(find.text('Run'), findsOneWidget);
       expect(find.text('Walk'), findsOneWidget);
       expect(find.text('Cycle'), findsOneWidget);
-      expect(find.text('Hike'), findsOneWidget);
+      // Picker label rebrand: Hike → Trail run. Enum stays `hike`.
+      expect(find.text('Trail run'), findsOneWidget);
     });
 
     testWidgets('tapping Save without values does not save a run', (tester) async {

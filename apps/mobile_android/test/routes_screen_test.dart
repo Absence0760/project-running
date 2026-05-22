@@ -80,18 +80,186 @@ void main() {
       await _pump(tester, prefs: prefs);
       await tester.pump();
       expect(find.byType(FloatingActionButton), findsOneWidget);
-      expect(find.text('Import'), findsOneWidget);
-      expect(find.byIcon(Icons.upload_file), findsOneWidget);
+      // The empty-state hint now ALSO surfaces an "Import" label
+      // inline (matching the FAB) so a first-time user can pair
+      // the verbal CTA with the visual button. There are
+      // therefore two "Import" texts on an empty screen — one in
+      // the FAB, one in the hint row.
+      expect(find.text('Import'), findsAtLeastNWidgets(1));
+      expect(find.byIcon(Icons.upload_file), findsAtLeastNWidgets(1));
     });
 
     testWidgets('shows the empty state when there are no routes',
         (tester) async {
+      // Empty-state copy now mentions BOTH the Build affordance and
+      // the Import affordance so a first-time user finds both
+      // FABs. The original copy said "Tap Import to add a GPX
+      // or KML file" — Build wasn't surfaced at all, even though
+      // it's the canonical "create from scratch" path on this
+      // screen.
       final prefs = await _makePrefs();
       await _pump(tester, prefs: prefs);
       await tester.pump();
       expect(find.text('No routes yet'), findsOneWidget);
-      expect(find.text('Tap Import to add a GPX or KML file'), findsOneWidget);
+      // Match the new copy.
+      expect(
+        find.textContaining('Tap Build to draw a route'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('Import a GPX'), findsOneWidget);
     });
+  });
+
+  group('RoutesScreen — per-card row polish', () {
+    // Polish iteration after the original chip-pill strip — the
+    // user noted the routes cards were visibly taller than the
+    // History tab's run cards. Subtitle is now a single line
+    // (`distance · elevation`) matching runs' `date · duration`,
+    // and the state badges moved into the trailing row + a small
+    // title-prefix glyph for public routes. Tests here pin the
+    // new inline shape.
+    testWidgets(
+      'unsynced (locally-built) routes show the cloud-upload glyph '
+      'in the trailing row',
+      (tester) async {
+        final prefs = await _makePrefs();
+        // ignore: invalid_use_of_visible_for_testing_member
+        final routeStore = LocalRouteStore()
+          // Seed WITHOUT marking synced — these are local-only.
+          // ignore: invalid_use_of_visible_for_testing_member
+          ..debugSeed(_makeRoutes(1), markSynced: false);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RoutesScreen(
+              apiClient: null,
+              routeStore: routeStore,
+              preferences: prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        // Inline glyph + tooltip — single-line row, no subtitle bloat.
+        expect(find.byIcon(Icons.cloud_upload_outlined), findsOneWidget);
+        expect(find.byTooltip('Queued to sync'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'synced routes do NOT show the cloud-upload glyph',
+      (tester) async {
+        final prefs = await _makePrefs();
+        // ignore: invalid_use_of_visible_for_testing_member
+        final routeStore = LocalRouteStore()
+          // debugSeed defaults to markSynced=true.
+          // ignore: invalid_use_of_visible_for_testing_member
+          ..debugSeed(_makeRoutes(1));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RoutesScreen(
+              apiClient: null,
+              routeStore: routeStore,
+              preferences: prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byIcon(Icons.cloud_upload_outlined), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'public routes show the globe glyph as a title prefix',
+      (tester) async {
+        final prefs = await _makePrefs();
+        final publicRoute = cm.Route(
+          id: 'public-route-1',
+          userId: 'test-user',
+          name: 'Open to all',
+          waypoints: const [
+            cm.Waypoint(lat: 51.5, lng: -0.12),
+            cm.Waypoint(lat: 51.51, lng: -0.13),
+          ],
+          distanceMetres: 5000,
+          elevationGainMetres: 50,
+          isPublic: true,
+        );
+        // ignore: invalid_use_of_visible_for_testing_member
+        final routeStore = LocalRouteStore()
+          // ignore: invalid_use_of_visible_for_testing_member
+          ..debugSeed([publicRoute]);
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RoutesScreen(
+              apiClient: null,
+              routeStore: routeStore,
+              preferences: prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byIcon(Icons.public), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'private routes do NOT show the globe glyph — keeps the '
+      'title clean on the default-case route',
+      (tester) async {
+        final prefs = await _makePrefs();
+        // ignore: invalid_use_of_visible_for_testing_member
+        final routeStore = LocalRouteStore()
+          // _makeRoutes defaults to isPublic=false.
+          // ignore: invalid_use_of_visible_for_testing_member
+          ..debugSeed(_makeRoutes(1));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RoutesScreen(
+              apiClient: null,
+              routeStore: routeStore,
+              preferences: prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(find.byIcon(Icons.public), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'route subtitle is a single line (distance · elevation) — '
+      'matches the History tab card height',
+      (tester) async {
+        // Pre-fix the routes-card subtitle had a two-row Column
+        // (distance line + Wrap badge chips below) which made the
+        // card visibly taller than the History tab's run-card.
+        // Both are now single-line.
+        final prefs = await _makePrefs();
+        // ignore: invalid_use_of_visible_for_testing_member
+        final routeStore = LocalRouteStore()
+          // ignore: invalid_use_of_visible_for_testing_member
+          ..debugSeed(_makeRoutes(1));
+        await tester.pumpWidget(
+          MaterialApp(
+            home: RoutesScreen(
+              apiClient: null,
+              routeStore: routeStore,
+              preferences: prefs,
+            ),
+          ),
+        );
+        await tester.pump();
+        // 5 km / 50 m gain — pinned in `_makeRoutes`. Subtitle
+        // text contains both pieces of metadata in the same Text.
+        expect(
+          find.textContaining('5.00 km'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('50 m ↑'),
+          findsOneWidget,
+        );
+      },
+    );
   });
 
   group('RoutesScreen pagination', () {
@@ -214,6 +382,13 @@ void main() {
         scrollable: find.byType(Scrollable).first,
       );
       expect(find.text('Load 20 more'), findsOneWidget);
+      // ensureVisible — the route-cards are taller after the
+      // polish round (96×56 thumbnail vs the old 72×40), so the
+      // load-more footer drifted a few pixels past the 600-px test
+      // viewport. ensureVisible re-anchors the scroll so the tap
+      // offset lands inside the renderbox.
+      await tester.ensureVisible(find.text('Load 20 more'));
+      await tester.pump();
       await tester.tap(find.text('Load 20 more'));
       await tester.pump();
 

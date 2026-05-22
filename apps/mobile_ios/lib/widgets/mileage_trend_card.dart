@@ -34,16 +34,17 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
 
   @override
   Widget build(BuildContext context) {
-    if (widget.runs.isEmpty) return const SizedBox.shrink();
+    // No early return on empty runs anymore — user request:
+    // "ensure if there is little to no data a minimum of 3
+    // weeks, 3 months, and 3 years are shown." Empty input now
+    // back-fills 3 empty buckets so the chart frame still
+    // renders. Yearly view keeps its 5-year minimum via
+    // padYearlyToMin so the prior-years context isn't lost.
     final periods = aggregateMileage(
       widget.runs,
       view: _view,
       now: widget.now,
-      // Padding ON so the yearly view backfills empty prior years
-      // when the user only has a single year of data — fixes "the
-      // Mileage -> year looks ugly with just one year." Pure-logic
-      // aggregateMileage callers default to false so the change
-      // doesn't surprise non-rendering consumers.
+      minBuckets: 3,
       padYearlyToMin: true,
     );
     if (periods.isEmpty) return const SizedBox.shrink();

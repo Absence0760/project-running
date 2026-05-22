@@ -1,5 +1,9 @@
 // ignore_for_file: avoid_relative_lib_imports
+import 'dart:io';
+
 import 'package:core_models/core_models.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/widgets/track_preview.dart';
@@ -114,5 +118,181 @@ void main() {
       expect(projectTrack(const [], 100, 100), isEmpty);
       expect(projectTrack([_w(0, 0)], 100, 100), isEmpty);
     });
+  });
+
+  group('TrackPreview — map-backed render path (static MapTiler PNG)', () {
+    setUp(() {
+      // Force-clear any prior load so the empty-key / set-key
+      // branches are independent across tests.
+      dotenv.loadFromString(envString: '', isOptional: true);
+      dotenv.env.clear();
+    });
+
+    testWidgets(
+      'without MAPTILER_KEY — renders the polyline-only ColoredBox '
+      'fallback (no Image.network attempt)',
+      (tester) async {
+        dotenv.loadFromString(envString: '', isOptional: true);
+        dotenv.env.clear();
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: SizedBox(
+                width: 72,
+                height: 40,
+                child: TrackPreview(
+                  points: const [
+                    Waypoint(lat: 51.5, lng: -0.12),
+                    Waypoint(lat: 51.51, lng: -0.13),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pump();
+        expect(
+          find.byType(Image),
+          findsNothing,
+          reason: 'No MapTiler key → no static-image fetch.',
+        );
+      },
+    );
+
+    test(
+      'when MAPTILER_KEY is set, TrackPreview hits the Static Maps '
+      'API and renders the result via Image.network — NOT a full '
+      'FlutterMap (which has rendering quirks at sub-100-px sizes)',
+      () {
+        // Pin the static-image render path. The user previously
+        // reported "the route detail map works but the list
+        // thumbnails don\'t" — root cause was that FlutterMap
+        // doesn\'t reliably render tiles at 72×40 thumbnail sizes.
+        // The fix is the Static Maps API; this guard catches a
+        // regression that reverts to flutter_map.
+        final src = File(
+          'lib/widgets/track_preview.dart',
+        ).readAsStringSync();
+        expect(
+          src.contains("dotenv.env['MAPTILER_KEY']"),
+          isTrue,
+          reason: 'TrackPreview must read MAPTILER_KEY so a real key '
+              'flips the map-backed render on at runtime.',
+        );
+        expect(
+          src.contains('class _StaticMapPreview'),
+          isTrue,
+          reason: 'Map-backed render must live in _StaticMapPreview '
+              '(static-image path) — not _MapTrackPreview '
+              '(FlutterMap, removed because it doesn\'t render at '
+              'thumbnail sizes).',
+        );
+        expect(
+          src.contains('api.maptiler.com/maps/streets-v2-dark/static/auto'),
+          isTrue,
+          reason: 'Must hit the Static Maps `/static/auto` endpoint '
+              'so MapTiler centres + zooms on the path overlay '
+              'server-side (no client-side projection math).',
+        );
+        expect(
+          src.contains('@2x.png'),
+          isTrue,
+          reason: '@2x for crisp rendering on high-density screens.',
+        );
+        expect(
+          src.contains('Image.network('),
+          isTrue,
+          reason: 'Static PNG is rendered by Image.network — '
+              'Flutter\'s built-in image cache handles repeat '
+              'views without re-fetching.',
+        );
+      },
+    );
+
+    test(
+      'long polylines (> 60 points) are simplified before URL '
+      'build — defends against MapTiler\'s ~8 KB URL cap',
+      () {
+        final src = File(
+          'lib/widgets/track_preview.dart',
+        ).readAsStringSync();
+        expect(
+          src.contains('_maxPolylinePoints = 60'),
+          isTrue,
+          reason: 'Cap pinned so a refactor can\'t silently raise it '
+              'past the URL-length cap.',
+        );
+        expect(
+          src.contains('simplifyTrack(points,'),
+          isTrue,
+          reason: 'Must use the shared Ramer-Douglas-Peucker '
+              'helper (not an inline ad-hoc simplifier).',
+        );
+      },
+    );
+
+    test(
+      'loading + error builders both fall through to the polyline-'
+      'only CustomPaint — thumbnail never renders as a blank box',
+      () {
+        // While the PNG is in flight (loadingBuilder) AND on a
+        // network error (errorBuilder), we paint the polyline on
+        // the slate fallback. Pin both so a refactor that drops
+        // either branch produces a visibly-broken state.
+        final src = File(
+          'lib/widgets/track_preview.dart',
+        ).readAsStringSync();
+        expect(src.contains('loadingBuilder:'), isTrue);
+        expect(src.contains('errorBuilder:'), isTrue);
+        expect(src.contains('_polylineOnlyFallback()'), isTrue);
+      },
+    );
+
+    test(
+      'URL path param uses LITERAL pipes + commas (not URL-encoded) '
+      'and only escapes # as %23 — the encoding MapTiler\'s parser '
+      'actually accepts',
+      () {
+        // User-reported regression: with `Uri.encodeQueryComponent`
+        // the path param turned into stroke%3A%23.. %7C ..%2C..
+        // — MapTiler 4xx\'d and the thumbnail fell through to the
+        // polyline-only slate fallback. The user saw "the route
+        // detail map works but list thumbnails don\'t."
+        // Pin the literal-pipe encoding so a refactor that re-adds
+        // `Uri.encodeQueryComponent` fails this test.
+        final src = File(
+          'lib/widgets/track_preview.dart',
+        ).readAsStringSync();
+        // Stroke colour prefix uses %23 inline (the load-bearing
+        // fix vs the over-encoded path). The full path string now
+        // also includes `fill:none|` + `width:3` style prefixes
+        // per MapTiler's canonical docs example.
+        expect(
+          src.contains("'fill:none|stroke:%23\$stroke|width:3'"),
+          isTrue,
+          reason: 'Path style prefix must include fill:none + stroke + '
+              'width per MapTiler\'s docs example. # encoded as '
+              '%23 inline because it\'s the HTTP fragment delimiter.',
+        );
+        // Pipe separator is a literal `|` (not %7C / not encoded
+        // by anything).
+        expect(
+          src.contains("pathParam.write('|"),
+          isTrue,
+          reason: 'Polyline points must be separated by a LITERAL '
+              'pipe — MapTiler\'s path parser does not decode '
+              '%7C back.',
+        );
+        // No `Uri.encodeQueryComponent` over the whole path
+        // string — that was the bug.
+        expect(
+          src.contains('Uri.encodeQueryComponent(pathParam'),
+          isFalse,
+          reason: 'Path string must NOT be wrapped in '
+              'Uri.encodeQueryComponent — over-encoding broke the '
+              'request. Negative pin against the regression.',
+        );
+      },
+    );
   });
 }

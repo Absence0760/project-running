@@ -38,9 +38,21 @@ void main() {
   final now = DateTime(2026, 5, 19, 12); // Tuesday
 
   group('MileageTrendCard', () {
-    testWidgets('renders nothing when there are no runs', (tester) async {
+    testWidgets(
+        'renders the empty-but-framed chart when there are no runs '
+        '(3 back-filled buckets — minBuckets=3 opt-in at the card '
+        'layer per user request "ensure 3 weeks/months/years are '
+        'shown even with little/no data")',
+        (tester) async {
       await _pump(tester, runs: const [], now: now);
-      expect(find.text('MILEAGE'), findsNothing);
+      // Card frame must render — header label + segmented toggle —
+      // even when the data set is empty. Pre-fix this collapsed
+      // to SizedBox.shrink and the dashboard had a "missing tile"
+      // gap until the user logged their first run.
+      expect(find.text('MILEAGE'), findsOneWidget);
+      expect(find.text('Week'), findsOneWidget);
+      expect(find.text('Month'), findsOneWidget);
+      expect(find.text('Year'), findsOneWidget);
     });
 
     testWidgets('renders the header + view toggle when populated',

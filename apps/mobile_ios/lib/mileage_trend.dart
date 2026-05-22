@@ -41,14 +41,20 @@ List<MileagePeriod> aggregateMileage(
   required MileageView view,
   required DateTime now,
   int maxBuckets = 12,
-  /// When true AND view==yearly, backfill empty bucket(s) for prior
-  /// years so a single-year user sees a year-over-year-trend frame
-  /// instead of a lonely bar. Off by default so the pure aggregation
-  /// shape stays unchanged for non-rendering callers.
+  /// Minimum number of buckets to return — back-fills empty
+  /// buckets (distanceM=0) going back from `now` when the actual
+  /// data set is sparser. User request: "ensure if there is little
+  /// to no data a minimum of 3 weeks, 3 months, and 3 years are
+  /// shown." Default 0 (no pad) preserves the pure-aggregation
+  /// shape for downstream callers; the dashboard rendering card
+  /// opts in to `minBuckets: 3`.
+  int minBuckets = 0,
+  /// Back-compat for the original "pad yearly to 5" caller; when
+  /// true on the yearly view, pads to `_kYearlyMinBuckets` (5)
+  /// instead of `minBuckets`. Preserves the existing dashboard
+  /// behaviour where the yearly card wanted 5-year context.
   bool padYearlyToMin = false,
 }) {
-  if (runs.isEmpty) return const [];
-  // Bucket key → (sortKey, label, summedDistance).
   final groups = <String, _Bucket>{};
   for (final r in runs) {
     final d = r.startedAt.toLocal();
@@ -64,31 +70,55 @@ List<MileagePeriod> aggregateMileage(
       bucket.distanceM += r.distanceMetres.round();
     }
   }
-  // Sort chronologically; keep only the most recent N.
   final ordered = groups.values.toList()
     ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
-  // Yearly view: a user with all-runs-in-one-year would otherwise
-  // see a single lonely bar (e.g. just "2026"). Backfill empty
-  // buckets for the prior years up to `_kYearlyMinBuckets` so the
-  // chart reads as a year-over-year trend even when most years are
-  // zero. Weekly / monthly views always have ≥12 buckets in their
-  // natural cadence so they don't need this guard.
-  if (padYearlyToMin &&
-      view == MileageView.yearly &&
-      ordered.length < _kYearlyMinBuckets) {
-    final newest = ordered.last;
-    final newestYear = newest.startsAt.year;
-    final existingYears = ordered.map((b) => b.startsAt.year).toSet();
-    for (var y = newestYear - _kYearlyMinBuckets + 1; y < newestYear; y++) {
-      if (existingYears.contains(y)) continue;
+
+  // Determine the effective minimum: yearly + padYearlyToMin
+  // overrides minBuckets with the legacy 5-year minimum; otherwise
+  // the new `minBuckets` (default 3) applies to every view.
+  final effectiveMin = (padYearlyToMin && view == MileageView.yearly)
+      ? _kYearlyMinBuckets
+      : minBuckets;
+
+  // Back-fill empty buckets going back from `now`. Walks N-1 buckets
+  // into the past from the anchor bucket of `now`, inserting an
+  // empty bucket for any key that's missing. Handles the "no runs"
+  // case (ordered is empty → anchor is the current week/month/year,
+  // we back-fill from there).
+  if (effectiveMin > 0 && ordered.length < effectiveMin) {
+    final anchor = ordered.isNotEmpty
+        ? ordered.last.startsAt
+        : _startOfBucket(now, view);
+    final existingKeys =
+        ordered.map((b) => _keyForDate(b.startsAt, view)).toSet();
+    // Walk back from the anchor bucket up to `effectiveMin` buckets
+    // total. We need (effectiveMin - 1) buckets STARTING from the
+    // anchor going back (the anchor is one of them if present;
+    // otherwise we include it as the "current" bucket).
+    final include = !existingKeys.contains(_keyForDate(anchor, view));
+    if (include) {
       ordered.add(_Bucket(
-        startsAt: DateTime(y),
-        label: y.toString(),
+        startsAt: anchor,
+        label: _labelFor(anchor, view),
         distanceM: 0,
       ));
+      existingKeys.add(_keyForDate(anchor, view));
+    }
+    var cursor = anchor;
+    while (ordered.length < effectiveMin) {
+      cursor = _previousBucketStart(cursor, view);
+      final key = _keyForDate(cursor, view);
+      if (existingKeys.contains(key)) continue;
+      ordered.add(_Bucket(
+        startsAt: cursor,
+        label: _labelFor(cursor, view),
+        distanceM: 0,
+      ));
+      existingKeys.add(key);
     }
     ordered.sort((a, b) => a.startsAt.compareTo(b.startsAt));
   }
+
   final start = ordered.length > maxBuckets
       ? ordered.length - maxBuckets
       : 0;
@@ -100,6 +130,35 @@ List<MileagePeriod> aggregateMileage(
         startsAt: ordered[i].startsAt,
       ),
   ];
+}
+
+/// Step back one bucket in the chosen view. Weekly: -7 days from a
+/// Monday-anchored start. Monthly: previous month-start. Yearly:
+/// previous January 1st.
+DateTime _previousBucketStart(DateTime d, MileageView view) {
+  switch (view) {
+    case MileageView.weekly:
+      return d.subtract(const Duration(days: 7));
+    case MileageView.monthly:
+      return DateTime(d.year, d.month - 1);
+    case MileageView.yearly:
+      return DateTime(d.year - 1);
+  }
+}
+
+/// Key string for back-fill dedupe. Uses the same shape as
+/// `_keyFor(run.startedAt, view)` so the existing-set lookup works.
+String _keyForDate(DateTime d, MileageView view) {
+  switch (view) {
+    case MileageView.weekly:
+      // Already at start-of-bucket (Monday); same shape as _keyFor.
+      final iso = d.toIso8601String().substring(0, 10);
+      return iso;
+    case MileageView.monthly:
+      return '${d.year}-${d.month.toString().padLeft(2, '0')}';
+    case MileageView.yearly:
+      return d.year.toString();
+  }
 }
 
 class _Bucket {

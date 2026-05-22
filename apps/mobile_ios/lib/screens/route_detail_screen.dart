@@ -11,8 +11,10 @@ import 'package:share_plus/share_plus.dart';
 import '../backend_timeout.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
+import '../route_geometry.dart' show interpolateAlongRoute;
 import '../social_service.dart' show ClubView, SocialService;
 import '../widgets/live_run_map.dart';
+import '../widgets/missing_map_tiles_hint.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/route_share_card.dart';
 import '../widgets/segments_panel.dart';
@@ -86,25 +88,18 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   // LiveRunMap's plannedRoute prop.
   List<cm.Waypoint> _displayWaypoints = const [];
 
-  bool get _isOwner => widget.isOwner && widget.apiClient?.userId != null;
+  /// 0.0 = start, 1.0 = finish. Drives the route-preview scrubber:
+  /// dragging the slider feeds an interpolated lat/lng to the
+  /// LiveRunMap as a "runner" pulse marker so the user can preview
+  /// the direction + path of the run before they start.
+  double _scrubFraction = 0.0;
+  /// True while the user has the scrubber thumb under their finger
+  /// — controls whether the runner marker is mounted on the map.
+  /// Released the thumb → marker fades out so the static route
+  /// preview is the default state.
+  bool _scrubbing = false;
 
-  Widget _inlineMeta(ThemeData theme, IconData icon, String label) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: theme.colorScheme.outline),
-        const SizedBox(width: 4),
-        Text(
-          label,
-          style: TextStyle(
-            fontSize: 12,
-            fontWeight: FontWeight.w600,
-            color: theme.colorScheme.outline,
-          ),
-        ),
-      ],
-    );
-  }
+  bool get _isOwner => widget.isOwner && widget.apiClient?.userId != null;
 
   @override
   void initState() {
@@ -121,7 +116,21 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     // Owner / direct-owner-bypass surface keeps the row's waypoints —
     // RPC at render time would round-trip and an outage would blank
     // the owner's own map.
-    if (viewerId != null && viewerId == ownerId) {
+    //
+    // **Locally-built routes** carry an empty `userId` until the next
+    // SyncService cycle pushes them to the cloud (the `Route`
+    // constructor defaults to `userId = ''`). Treat empty-ownerId as
+    // "owned by the current viewer" so the user can preview the route
+    // they just saved without waiting for sync to land. Without this,
+    // opening a freshly-built route shows "Waiting for GPS..." instead
+    // of the polyline — the user's report.
+    if (viewerId != null && (viewerId == ownerId || ownerId.isEmpty)) {
+      setState(() => _displayWaypoints = widget.route.waypoints);
+      return;
+    }
+    // Signed-out viewer looking at a locally-built route — same
+    // logic, no cloud row to clip against. Use the row waypoints.
+    if (viewerId == null && ownerId.isEmpty) {
       setState(() => _displayWaypoints = widget.route.waypoints);
       return;
     }
@@ -202,14 +211,62 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   }
 
   Future<void> _togglePublic() async {
-    final api = widget.apiClient;
-    if (api == null || api.userId == null) return;
     final newValue = !_isPublic;
+    final r = widget.route;
+    cm.Route buildRoute(bool isPublic) => cm.Route(
+          id: r.id,
+          userId: r.userId,
+          name: r.name,
+          waypoints: r.waypoints,
+          distanceMetres: r.distanceMetres,
+          elevationGainMetres: r.elevationGainMetres,
+          isPublic: isPublic,
+          createdAt: r.createdAt,
+          surface: r.surface,
+          tags: _tags,
+          featured: r.featured,
+          runCount: r.runCount,
+          isStarred: _isStarred,
+          description: r.description,
+        );
+    // Same offline-tolerant pattern as `_toggleStar`: write the
+    // local store first so the toggle is durable across the
+    // signed-out / network-down / cloud-not-ready paths. Pre-fix,
+    // _togglePublic bailed entirely when signed-out and rolled
+    // back local state on any cloud error — locally-built routes
+    // (which can't have a cloud row yet) could never be made
+    // public until after the next sync, which wasn't obvious.
     setState(() => _isPublic = newValue);
+    await widget.routeStore.save(buildRoute(newValue));
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      // Signed-out / no api → local-only is the right answer; the
+      // route's `isPublic` flag rides through the next
+      // SyncService cycle's `saveRoute` push (the route's still in
+      // `unsyncedRoutes`).
+      if (mounted) {
+        showTopBanner(
+          context,
+          newValue
+              ? 'Route set to public. Will sync next time.'
+              : 'Route set to private. Will sync next time.',
+        );
+      }
+      return;
+    }
     try {
       await api.setRoutePublic(widget.route.id, newValue);
-    } catch (_) {
-      if (mounted) setState(() => _isPublic = !newValue);
+    } catch (e) {
+      // Roll back local state to match what cloud thinks. Surface
+      // the error so the user knows the toggle didn't persist
+      // cloud-side. The route stays in the unsynced queue if it
+      // was locally-built so the SyncService will retry the
+      // saveRoute push on the next cycle.
+      if (mounted) {
+        setState(() => _isPublic = !newValue);
+        await widget.routeStore.save(buildRoute(!newValue));
+        showTopBanner(context, 'Could not update visibility: $e');
+      }
     }
   }
 
@@ -337,7 +394,28 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
     final route = widget.route;
+    // Surface the primary "Start run" CTA as a floating action
+    // button so it's always reachable — pre-polish it lived at the
+    // very bottom of the ListView, after description / surface /
+    // tags / segments / reviews, so the user had to scroll past
+    // every detail panel to actually start a run with the route.
+    // Hidden when the polyline is empty (clipped-to-empty privacy
+    // outcome) — nothing meaningful to start.
+    final canStartRun = _displayWaypoints.length >= 2;
     return Scaffold(
+      floatingActionButton: canStartRun
+          ? FloatingActionButton.extended(
+              heroTag: 'route_detail_start_run',
+              onPressed: () => Navigator.pop(context, route),
+              backgroundColor: const Color(0xFF22C55E),
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.play_arrow),
+              label: const Text(
+                'Start run',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            )
+          : null,
       appBar: AppBar(
         title: Text(route.name),
         actions: [
@@ -362,7 +440,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               tooltip: _isStarred ? 'Unstar route' : 'Star to show on watch',
               onPressed: _toggleStar,
             ),
-          if (_isOwner)
+          // Show the visibility toggle whenever the local store
+          // considers the viewer to own this route — regardless of
+          // signed-in state. _togglePublic itself handles the
+          // signed-out path (writes local + queues for sync) so the
+          // user surfaces the affordance they expect to see and
+          // ALSO doesn't lose the toggle on a network hiccup.
+          if (widget.isOwner)
             IconButton(
               icon: Icon(_isPublic ? Icons.public : Icons.public_off),
               tooltip: _isPublic ? 'Make private' : 'Make public',
@@ -423,8 +507,40 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 track: const [],
                 plannedRoute: _displayWaypoints,
                 followRunner: false,
+                // Only mount the preview-runner pulse while the user
+                // is actually scrubbing — releasing the thumb fades
+                // back to the static polyline view so the marker
+                // doesn't sit at the start indefinitely after a
+                // single drag.
+                previewPosition: _scrubbing
+                    ? interpolateAlongRoute(
+                        _displayWaypoints,
+                        _scrubFraction,
+                      )
+                    : null,
               ),
             ),
+            // Diagnostic for the "I'm still not seeing the map"
+            // user report — when `MAPTILER_KEY` isn't set in
+            // `.env.local`, the LiveRunMap above renders the
+            // polyline on a blank grey backdrop (the tile fetch
+            // returns 401 with an empty key). The hint widget
+            // surfaces the exact fix-instruction instead of the
+            // user having to scroll logs.
+            const MissingMapTilesHint(),
+            // Route preview scrubber — drag the thumb to see the
+            // direction of the run. Hidden when the polyline is too
+            // short to interpolate (`< 2` waypoints — clipped-to-
+            // empty privacy outcome or a degenerate route).
+            if (_displayWaypoints.length >= 2)
+              _RoutePreviewScrubber(
+                fraction: _scrubFraction,
+                totalDistanceM: route.distanceMetres,
+                unit: unit,
+                onChangeStart: () => setState(() => _scrubbing = true),
+                onChanged: (f) => setState(() => _scrubFraction = f),
+                onChangeEnd: () => setState(() => _scrubbing = false),
+              ),
 
             Padding(
               padding: const EdgeInsets.all(24),
@@ -456,41 +572,102 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               ),
             ),
 
-            if (route.description != null && route.description!.isNotEmpty)
+            // Inline Visibility row for the route owner — surfaced
+            // here in the body (in addition to the AppBar icon) so
+            // the affordance is impossible to miss. Pre-fix, users
+            // who didn't notice the small globe icon in the AppBar
+            // couldn't figure out how to make their routes public
+            // on mobile.
+            if (widget.isOwner)
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
-                child: Text(
-                  route.description!,
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                    height: 1.4,
+                child: SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Row(
+                    children: [
+                      Icon(
+                        _isPublic ? Icons.public : Icons.lock_outline,
+                        size: 20,
+                        color: _isPublic
+                            ? Theme.of(context).colorScheme.primary
+                            : Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _isPublic ? 'Public route' : 'Private route',
+                      ),
+                    ],
                   ),
+                  subtitle: Text(
+                    _isPublic
+                        ? 'Anyone with the share link can view this route'
+                        : 'Only you can see this route',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                  value: _isPublic,
+                  onChanged: (_) => _togglePublic(),
                 ),
               ),
 
-            if (route.surface != null)
+            if (route.description != null && route.description!.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(24, 0, 24, 8),
-                child: Wrap(
-                  alignment: WrapAlignment.center,
-                  spacing: 12,
-                  runSpacing: 4,
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _inlineMeta(
-                      theme,
-                      _surfaceIcon(route.surface!),
-                      _surfaceLabel(route.surface!),
+                    Text(
+                      'Description',
+                      style: theme.textTheme.labelMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
                     ),
-                    if (_isPublic)
-                      _inlineMeta(theme, Icons.public, 'PUBLIC'),
+                    const SizedBox(height: 6),
+                    Text(
+                      route.description!,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+            // Surface + run-count + featured metadata. Left-aligned
+            // (was centered + orphaned-feeling) and uses the same
+            // chip language as the new VerifiedBadge / sync-pill
+            // affordances elsewhere.
+            if (route.surface != null ||
+                route.runCount > 0 ||
+                route.featured)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(24, 0, 24, 12),
+                child: Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    if (route.surface != null)
+                      _MetaChip(
+                        icon: _surfaceIcon(route.surface!),
+                        label: _surfaceLabel(route.surface!),
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
                     if (route.runCount > 0)
-                      _inlineMeta(
-                        theme,
-                        Icons.directions_run,
-                        '${route.runCount} ${route.runCount == 1 ? 'RUN' : 'RUNS'}',
+                      _MetaChip(
+                        icon: Icons.directions_run,
+                        label:
+                            '${route.runCount} ${route.runCount == 1 ? 'run' : 'runs'}',
+                        color: theme.colorScheme.primary,
                       ),
                     if (route.featured)
-                      _inlineMeta(theme, Icons.star, 'FEATURED'),
+                      _MetaChip(
+                        icon: Icons.star,
+                        label: 'Featured',
+                        color: const Color(0xFFFBBF24),
+                      ),
                   ],
                 ),
               ),
@@ -599,27 +776,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     ),
                   )),
 
-            const SizedBox(height: 16),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: FilledButton.icon(
-                  onPressed: () => Navigator.pop(context, route),
-                  style: FilledButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: const Color(0xFF22C55E),
-                  ),
-                  icon: const Icon(Icons.play_arrow),
-                  label: const Text(
-                    'Start run with this route',
-                    style:
-                        TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-            ),
+            // Trailing bottom-of-scroll padding so the FAB doesn't
+            // sit on top of the last review card.
+            const SizedBox(height: 88),
           ],
         ),
       ),
@@ -887,6 +1046,150 @@ String _routeToGpx(cm.Route route) {
   buf.writeln('  </trk>');
   buf.writeln('</gpx>');
   return buf.toString();
+}
+
+/// Horizontal scrubber for previewing a route's direction. Hosted
+/// just below the static map view on `RouteDetailScreen`: drag the
+/// thumb from left (start) to right (finish) and the `LiveRunMap`
+/// renders a pulsing runner marker at the interpolated position
+/// along the polyline.
+///
+/// Self-contained — owns no map state; emits a 0..1 [fraction] up
+/// to the parent which interpolates the lat/lng via
+/// [interpolateAlongRoute] and passes it to the map. Three
+/// callbacks (`onChangeStart` / `onChanged` / `onChangeEnd`) mirror
+/// Material's [Slider] so the parent can mount the runner marker
+/// only while the user is actively dragging (fade-back behaviour).
+class _RoutePreviewScrubber extends StatelessWidget {
+  final double fraction;
+  final double totalDistanceM;
+  final DistanceUnit unit;
+  final VoidCallback onChangeStart;
+  final ValueChanged<double> onChanged;
+  final VoidCallback onChangeEnd;
+
+  const _RoutePreviewScrubber({
+    required this.fraction,
+    required this.totalDistanceM,
+    required this.unit,
+    required this.onChangeStart,
+    required this.onChanged,
+    required this.onChangeEnd,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final reachedM = totalDistanceM * fraction;
+    final reachedLabel =
+        UnitFormat.distance(reachedM, unit);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.directions_run,
+                size: 16,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Preview',
+                style: theme.textTheme.labelMedium?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              // Live distance readout — updates as the user drags.
+              // Gives feedback in distance terms rather than raw
+              // percentage so the runner knows "I'm 2.3 km in" not
+              // "I'm at 43%".
+              Text(
+                reachedLabel,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
+          Slider(
+            value: fraction.clamp(0.0, 1.0),
+            min: 0.0,
+            max: 1.0,
+            onChangeStart: (_) => onChangeStart(),
+            onChanged: onChanged,
+            onChangeEnd: (_) => onChangeEnd(),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Start',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+                Text(
+                  'Finish',
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Compact icon + label pill used by the surface / run-count /
+/// featured metadata row. Same visual language as the routes-list
+/// badges (Will-sync / Public) so the two surfaces read as one
+/// design system.
+class _MetaChip extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final Color color;
+  const _MetaChip({
+    required this.icon,
+    required this.label,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.10),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.20)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 class _Stat extends StatelessWidget {

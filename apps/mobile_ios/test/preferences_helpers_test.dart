@@ -115,7 +115,11 @@ void main() {
       expect(ActivityType.run.label, 'Run');
       expect(ActivityType.walk.label, 'Walk');
       expect(ActivityType.cycle.label, 'Cycle');
-      expect(ActivityType.hike.label, 'Hike');
+      // Surfaced as "Trail run" on the picker so runners pick a
+      // more natural label for off-road runs. Internal enum name
+      // stays `hike` for back-compat with the runs.metadata
+      // CHECK constraint + Strava / Health Connect importers.
+      expect(ActivityType.hike.label, 'Trail run');
     });
 
     test('usesSpeed is true only for cycle', () {

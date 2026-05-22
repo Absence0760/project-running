@@ -1196,7 +1196,7 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 // falls back to `GenericStringError` and downstream type assertions
 // fail svelte-check.
 const CLUB_SELECT_COLS =
-	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, join_policy, member_count, created_at, updated_at' as const;
+	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, created_at, updated_at' as const;
 
 // Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
 // from anon + authenticated (migrations 20260723_001 + 20260806_001 +
@@ -1267,6 +1267,7 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 		avatar_url: (r.avatar_url ?? null) as string | null,
 		location_label: (r.location_label ?? null) as string | null,
 		is_public: r.is_public as boolean,
+		is_verified: (r.is_verified as boolean | undefined) ?? false,
 		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
 		member_count: (r.member_count ?? 0) as number,
 		created_at: r.created_at as string,

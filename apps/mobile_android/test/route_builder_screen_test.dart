@@ -432,6 +432,86 @@ void main() {
         reason: 'Single-waypoint hint must surface the mode label.',
       );
     });
+
+    test(
+        'drag mode surfaces delete + cancel icons in the status pill',
+        () {
+      // Pin the per-waypoint delete affordance. Pre-fix, the only
+      // way to remove a specific interior waypoint was Undo (which
+      // removes the LAST one + loses everything after) or Clear
+      // (which removes all). With drag mode active, the status pill
+      // exposes a red trash icon next to the cancel-drag X so the
+      // user can lift + drop a stray waypoint in two taps without
+      // disturbing the rest of the route.
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        source.contains('Icons.delete_outline'),
+        isTrue,
+        reason:
+            'Delete icon must be present in the status pill\'s drag-mode '
+            'branch — the user reported missing per-waypoint delete '
+            'as a UX gap.',
+      );
+      expect(
+        source.contains('onDeleteDragged'),
+        isTrue,
+        reason: 'Delete-icon callback (onDeleteDragged) must be wired '
+            'from the status pill back to the state class\'s '
+            '_deleteSelectedWaypoint handler.',
+      );
+      // Tooltip carries the 1-based waypoint number so screen-reader
+      // users + tooltip hovers get the affordance unambiguously.
+      expect(
+        source.contains(r"tooltip: 'Delete point ${dragIndex! + 1}'"),
+        isTrue,
+        reason:
+            'Delete-button tooltip must include the 1-based waypoint '
+            'number so the user is sure which marker is about to go.',
+      );
+    });
+
+    test(
+        '_undo clears _dragIndex when the to-be-removed waypoint is '
+        'the one being dragged',
+        () {
+      // Pre-fix bug: long-pressing the LAST waypoint then tapping
+      // Undo removed the waypoint but left _dragIndex pointing at
+      // the now-stale index. The status pill stayed in drag mode
+      // saying "Tap to move point N" for a marker that no longer
+      // existed. Pin the clear-on-undo behaviour in source.
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        source.contains('if (_dragIndex == _waypoints.length - 1)'),
+        isTrue,
+        reason: '_undo must clear _dragIndex when the removed '
+            'waypoint is the one being dragged — otherwise the pill '
+            'stays in a ghost drag state for a vanished marker.',
+      );
+    });
+
+    test('_deleteSelectedWaypoint exists + clears drag + reroutes', () {
+      // Pin the method shape: clears _dragIndex BEFORE the await
+      // (so the visual lift is dropped immediately on tap), then
+      // delegates to _rerouteThrough for the polyline rebuild.
+      final source =
+          File('lib/screens/route_builder_screen.dart').readAsStringSync();
+      expect(
+        source.contains('Future<void> _deleteSelectedWaypoint()'),
+        isTrue,
+        reason: 'The delete-waypoint handler must exist on the state.',
+      );
+      // Wired through to the status pill.
+      expect(
+        source.contains('onDeleteDragged: _deleteSelectedWaypoint'),
+        isTrue,
+        reason:
+            'Status pill must receive _deleteSelectedWaypoint as the '
+            'onDeleteDragged callback — without this wiring the trash '
+            'icon would be inert.',
+      );
+    });
   });
 
   // ─── SaveRouteDialog ────────────────────────────────────────────────

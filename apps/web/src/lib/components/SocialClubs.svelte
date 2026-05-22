@@ -6,6 +6,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
 	let subtab = $state<'browse' | 'mine'>('mine');
@@ -213,7 +214,12 @@
 							{(club.name[0] ?? '?').toUpperCase()}
 						</div>
 						<div class="card-title">
-							<h3>{club.name}</h3>
+							<h3>
+									{club.name}
+									{#if club.is_verified}
+										<VerifiedBadge />
+									{/if}
+								</h3>
 							{#if club.location_label}
 								<span class="location">
 									<span class="material-symbols" aria-hidden="true">place</span>

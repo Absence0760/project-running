@@ -17,7 +17,7 @@ import 'recurrence.dart';
 // lockstep.
 const String _clubSelectCols =
     'id, owner_id, name, slug, description, avatar_url, location_label, '
-    'is_public, join_policy, member_count, created_at, updated_at';
+    'is_public, is_verified, join_policy, member_count, created_at, updated_at';
 
 // Column-level grant lockdown: `events.meet_lat` / `meet_lng` are
 // revoked from anon + authenticated (migrations 20260723_001 +
@@ -189,6 +189,19 @@ class SocialService extends ChangeNotifier {
       );
     }
     return Supabase.instance.client;
+  }
+
+  /// True iff [_c] would succeed — i.e. the override is set or
+  /// `Supabase.initialize()` has resolved. Callers can probe this
+  /// BEFORE invoking a Supabase-backed method so the UI surfaces
+  /// a friendly "you need to be online + signed in to do this"
+  /// message instead of letting the raw StateError bubble up
+  /// (which was the user-reported `Bad state: SocialService called
+  /// before Supabase.initialize() resolved.` crash on the New Club
+  /// page).
+  bool get isReady {
+    if (_override != null) return true;
+    return ApiClient.isInitialized;
   }
 
   String? get _uid => _c.auth.currentUser?.id;

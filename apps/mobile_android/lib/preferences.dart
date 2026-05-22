@@ -23,7 +23,18 @@ enum ActivityType {
       case ActivityType.cycle:
         return 'Cycle';
       case ActivityType.hike:
-        return 'Hike';
+        // Surfaced as "Trail run" on the activity picker. The
+        // internal enum + database value stays `hike` for back-
+        // compat (existing rows, the SQL CHECK constraint, the
+        // Strava + Health Connect importers, and the `parity.md`
+        // matrix all key on the name), but the user-facing label
+        // is the more accurate "Trail run" — a runner picking
+        // this typically means "off-road run", not a hike. User
+        // surfaced the old label as confusing because trail
+        // runners didn't see themselves represented in the
+        // picker and assumed selecting Hike meant they'd be
+        // pushed onto roads.
+        return 'Trail run';
     }
   }
 

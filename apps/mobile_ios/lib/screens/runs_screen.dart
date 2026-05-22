@@ -750,8 +750,30 @@ class _RunsScreenState extends State<RunsScreen> {
 
   AppBar _normalAppBar() {
     final unsyncedCount = widget.runStore.unsyncedCount;
+    final visibleCount = _visible.length;
+    // Move the date-range label + visible-count into the AppBar
+    // title so the otherwise-empty left half of the bar carries
+    // meaningful state. Pre-polish this lived on its own row at
+    // the top of `_RunsFilterHeader` directly under an empty
+    // AppBar — half a row of dead vertical real estate. The new
+    // title row composes the range ("This week") with a small
+    // count chip ("12 runs") next to it.
     return AppBar(
-      // No title — the bottom-nav already labels this tab "History".
+      title: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.baseline,
+        textBaseline: TextBaseline.alphabetic,
+        children: [
+          Text(_activeRangeLabel()),
+          const SizedBox(width: 8),
+          Text(
+            '$visibleCount run${visibleCount == 1 ? '' : 's'}',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.outline,
+                ),
+          ),
+        ],
+      ),
       actions: [
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
@@ -1145,6 +1167,15 @@ class _RunTile extends StatelessWidget {
       if (isUnsynced) 'not yet synced',
     ].join(', ');
 
+    // Split the trailing metric into value + unit pieces so the
+    // numeric reads as the hero and the unit/label as supporting
+    // metadata. `trailingMetric` is "{value} {unit}" — find the
+    // last space and pivot.
+    final lastSpace = trailingMetric.lastIndexOf(' ');
+    final trailingValue =
+        lastSpace > 0 ? trailingMetric.substring(0, lastSpace) : trailingMetric;
+    final trailingUnit =
+        lastSpace > 0 ? trailingMetric.substring(lastSpace + 1) : '';
     return Semantics(
       label: semanticsLabel,
       button: true,
@@ -1155,23 +1186,74 @@ class _RunTile extends StatelessWidget {
             : null,
         child: ListTile(
           leading: leading,
+          // Title row: activity icon (signature colour, not outline-
+          // grey) + bold distance text. Pre-polish the distance was
+          // bodyMedium-default-weight which read as "metadata"; the
+          // distance is the run's primary identifier and deserves
+          // hero treatment.
           title: Row(
             children: [
-              Icon(activity.icon, size: 16, color: theme.colorScheme.outline),
+              Icon(activity.icon, size: 18, color: theme.colorScheme.primary),
               const SizedBox(width: 6),
-              Text(dist),
+              Text(
+                dist,
+                style: theme.textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
-          subtitle: Text('$date  •  $dur'),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
+          // Subtitle: date · duration · activity-label. Adding the
+          // activity word ("run", "walk", "cycle", "trail run")
+          // makes a glanceable list of mixed activities readable
+          // without expanding the row. Same `·` separator used by
+          // the routes-list polish.
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 2),
+            child: Text(
+              '$date  ·  $dur  ·  ${activity.label.toLowerCase()}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          // Trailing: pace value (bold) + unit (small, muted)
+          // stacked. Pre-polish was a single small bodySmall text
+          // — the pace got visually lost. Stack treatment matches
+          // the run-detail screen's `_Stat` widget shape.
+          trailing: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text(trailingMetric, style: theme.textTheme.bodySmall),
-              if (isUnsynced) ...[
-                const SizedBox(width: 8),
-                Icon(Icons.cloud_off,
-                    size: 16, color: theme.colorScheme.outline),
-              ],
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    trailingValue,
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  if (isUnsynced) ...[
+                    const SizedBox(width: 6),
+                    Tooltip(
+                      message: 'Queued to sync',
+                      child: Icon(
+                        Icons.cloud_upload_outlined,
+                        size: 16,
+                        color: theme.colorScheme.tertiary,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              if (trailingUnit.isNotEmpty)
+                Text(
+                  trailingUnit,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    letterSpacing: 0.3,
+                  ),
+                ),
             ],
           ),
           onTap: onTap,
@@ -1300,27 +1382,23 @@ class _RunsFilterHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(rangeLabel, style: theme.textTheme.titleMedium),
-            Text(
-              '$visibleCount run${visibleCount == 1 ? '' : 's'}',
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.outline,
+        // Range label + run count used to live here as a dedicated
+        // row; they now anchor the AppBar title (filling the
+        // previously-empty left half of the bar). Only the summary
+        // line ("47 km · 5h 12m") remains — it's the metric that
+        // actually changes as filter chips toggle, so it earns the
+        // body slot.
+        if (summary.runCount > 0)
+          Padding(
+            padding: const EdgeInsets.only(top: 0, bottom: 4),
+            child: Text(
+              _summaryLine(summary, unit),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w500,
               ),
             ),
-          ],
-        ),
-        if (summary.runCount > 0) ...[
-          const SizedBox(height: 4),
-          Text(
-            _summaryLine(summary, unit),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
-            ),
           ),
-        ],
         const SizedBox(height: 8),
         ChipTheme(
           data: theme.chipTheme.copyWith(

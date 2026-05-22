@@ -37,6 +37,7 @@
 	import EventEditor from '$lib/components/EventEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
+	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
 	import type {
 		ClubWithMeta,
 		EventWithMeta,
@@ -533,7 +534,12 @@
 			</div>
 			<div class="hero-text">
 				<div class="hero-title-row">
-					<h1>{club.name}</h1>
+					<h1>
+						{club.name}
+						{#if club.is_verified}
+							<VerifiedBadge size={20} />
+						{/if}
+					</h1>
 					{#if !club.is_public}
 						<span class="badge">Private</span>
 					{/if}

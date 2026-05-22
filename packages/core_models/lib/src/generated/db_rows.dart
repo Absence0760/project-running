@@ -115,6 +115,7 @@ class ClubRow {
   static const String colAvatarUrl = 'avatar_url';
   static const String colLocationLabel = 'location_label';
   static const String colIsPublic = 'is_public';
+  static const String colIsVerified = 'is_verified';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
   static const String colJoinPolicy = 'join_policy';
@@ -130,6 +131,7 @@ class ClubRow {
   final String? avatarUrl;
   final String? locationLabel;
   final bool? isPublic;
+  final bool isVerified;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String joinPolicy;
@@ -146,6 +148,7 @@ class ClubRow {
     this.avatarUrl,
     this.locationLabel,
     this.isPublic,
+    this.isVerified = false,
     this.createdAt,
     this.updatedAt,
     required this.joinPolicy,
@@ -163,6 +166,7 @@ class ClubRow {
     avatarUrl: json['avatar_url'] as String?,
     locationLabel: json['location_label'] as String?,
     isPublic: json['is_public'] as bool?,
+    isVerified: (json['is_verified'] as bool?) ?? false,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     joinPolicy: json['join_policy'] as String,
@@ -180,6 +184,7 @@ class ClubRow {
     colAvatarUrl: avatarUrl,
     colLocationLabel: locationLabel,
     colIsPublic: isPublic,
+    colIsVerified: isVerified,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
     colJoinPolicy: joinPolicy,

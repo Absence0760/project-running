@@ -410,6 +410,22 @@ create table clubs (
                                                       -- to rank higher-membership clubs above brand-new
                                                       -- empty ones at the same geographic distance.
   is_public     boolean default true,
+  is_verified   boolean default false not null,         -- Manually-verified-as-official flag.
+                                                        -- `clubs.name` is intentionally NOT unique
+                                                        -- (only `clubs.slug` is) — squatting on a
+                                                        -- popular name shouldn't lock out the
+                                                        -- official entity (e.g. the Richmond
+                                                        -- Marathon). When two clubs share a name
+                                                        -- on different slugs, the verified badge
+                                                        -- (Icons.verified blue) on the authentic
+                                                        -- club is the disambiguator users see in
+                                                        -- the UI. Service-role-only flip via the
+                                                        -- `clubs_protect_is_verified` trigger
+                                                        -- (migration 20260909_001); no admin UI
+                                                        -- in v1 — toggled via direct DB access
+                                                        -- after manual moderation. Events inherit
+                                                        -- verification visually from their parent
+                                                        -- club; no `events.is_verified` column.
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );

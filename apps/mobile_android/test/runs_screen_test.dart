@@ -79,15 +79,34 @@ void main() {
   });
 
   group('RunsScreen', () {
-    testWidgets('AppBar carries no "History" title (bottom-nav labels suffice)',
+    testWidgets(
+        'AppBar carries the date-range label + run-count (claiming the '
+        'previously-empty title slot)',
         (tester) async {
-      // Bottom-nav already labels this tab "History". Pin the absence
-      // of a duplicate AppBar title.
+      // Pre-polish the AppBar had no title and the date-range label
+      // lived on its own row below — half a row of dead vertical
+      // real estate. Now the range label anchors the AppBar title
+      // and the body row drops.
       final s = await _makeStores();
       await _pump(tester, runStore: s.runStore, routeStore: s.routeStore, prefs: s.prefs);
       expect(find.byType(AppBar), findsOneWidget);
-      final appBar = tester.widget<AppBar>(find.byType(AppBar));
-      expect(appBar.title, isNull);
+      // Default range is "This week" — pinned in the AppBar.
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('This week'),
+        ),
+        findsOneWidget,
+      );
+      // "0 runs" count chip (empty seed store) sits next to the
+      // title.
+      expect(
+        find.descendant(
+          of: find.byType(AppBar),
+          matching: find.text('0 runs'),
+        ),
+        findsOneWidget,
+      );
     });
 
     testWidgets('shows empty state when store has no runs', (tester) async {

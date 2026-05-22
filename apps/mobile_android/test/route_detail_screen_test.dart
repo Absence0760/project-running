@@ -131,6 +131,50 @@ void main() {
       // sentinel either; the route's name still renders as the title.
       expect(find.text(''), findsNothing);
     });
+
+    testWidgets(
+      'locally-built route (empty userId) skips the clip-RPC and '
+      'renders the row waypoints — no "Waiting for GPS..." stuck state',
+      (tester) async {
+        // Bug the user surfaced: after building a route, opening its
+        // detail page showed "Waiting for GPS..." instead of the
+        // polyline. Root cause: locally-built routes carry an empty
+        // `userId` (the Route constructor defaults to '') until the
+        // SyncService cycle pushes them to the cloud. The
+        // owner-vs-viewer check `viewerId == ownerId` then resolved
+        // false, the screen fell through to clipRouteForViewer which
+        // failed (no cloud row to clip), and `_displayWaypoints`
+        // stayed empty — LiveRunMap then renders the GPS-loading
+        // placeholder. Fix: treat empty-ownerId as "owned by viewer"
+        // so the row's waypoints render immediately.
+        final localRoute = cm.Route(
+          id: 'locally-built',
+          userId: '', // <-- the load-bearing condition
+          name: 'Just-built loop',
+          waypoints: const [
+            cm.Waypoint(lat: 51.5, lng: -0.1),
+            cm.Waypoint(lat: 51.51, lng: -0.11),
+            cm.Waypoint(lat: 51.5, lng: -0.1),
+          ],
+          distanceMetres: 1500,
+          elevationGainMetres: 12,
+          isPublic: false,
+        );
+        await _pump(tester, localRoute);
+        // The "Waiting for GPS..." placeholder should NOT appear —
+        // the row waypoints carry the polyline.
+        expect(
+          find.text('Waiting for GPS...'),
+          findsNothing,
+          reason:
+              'Locally-built routes (empty userId) must render their row '
+              'waypoints directly — the user reported this as "the map '
+              'preview doesn\'t load, it says Waiting for GPS".',
+        );
+        // The route header still renders normally.
+        expect(find.text('Just-built loop'), findsOneWidget);
+      },
+    );
   });
 
   group('adminClubsForRouteTransfer', () {

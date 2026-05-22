@@ -13,6 +13,12 @@ import '../lib/widgets/club_form_sheet.dart';
 class _FakeSocialService extends SocialService {
   final Object _throwOnCreate;
   _FakeSocialService(this._throwOnCreate);
+  // The page now probes `isReady` BEFORE calling createClub (defence
+  // against the "Bad state: SocialService called before Supabase
+  // .initialize() resolved." crash the user reported). Test doubles
+  // must opt-in to "ready" so the throwOnCreate path actually fires.
+  @override
+  bool get isReady => true;
   @override
   Future<ClubRow> createClub({
     required String name,
@@ -148,5 +154,140 @@ void main() {
       expect(find.textContaining('creating clubs too quickly'),
           findsNothing);
     });
+
+    testWidgets(
+      'opens as a full-screen page with an AppBar back button — '
+      'NOT a modal bottom sheet (user-requested layout change)',
+      (tester) async {
+        // The user surfaced "they also seem to be using the old modal,
+        // and not the page with the back button" — pin the new
+        // MaterialPageRoute shape so a future refactor that reverts
+        // to showModalBottomSheet fails this test loud.
+        await _openSheet(tester);
+        // Full-screen page anchored AppBar.
+        expect(find.byType(AppBar), findsOneWidget);
+        // Back arrow auto-injected by MaterialPageRoute.
+        expect(find.byTooltip('Back'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'readiness probe fires friendly inline error when '
+      'SocialService is not ready — no raw StateError leak',
+      (tester) async {
+        // The user reported "Bad state: SocialService called before
+        // Supabase.initialize() resolved" on Create. The page now
+        // probes `isReady` BEFORE the call so the friendly copy
+        // surfaces instead of the raw stack trace.
+        await _openSheet(tester);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Name'),
+          'Loop Club',
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining("Can't reach the server right now"),
+          findsOneWidget,
+        );
+        // Raw stack-trace fragments must not reach the surface.
+        expect(find.textContaining('Bad state'), findsNothing);
+        expect(
+          find.textContaining('Supabase.initialize'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'defensive catch maps late StateError from createClub to the '
+      'same friendly copy (readiness probe was stale)',
+      (tester) async {
+        // If the readiness probe was stale between the pre-flight
+        // check and the actual call (race), the defensive catch in
+        // _submit must catch + remap the StateError so the user
+        // never sees the raw "Bad state:" prefix.
+        final fake = _FakeSocialService(
+          StateError(
+            'SocialService called before Supabase.initialize() resolved.',
+          ),
+        );
+        await _openSheet(tester, social: fake);
+        await tester.enterText(
+          find.widgetWithText(TextField, 'Name'),
+          'Loop Club',
+        );
+        await tester.tap(find.widgetWithText(FilledButton, 'Create'));
+        await tester.pumpAndSettle();
+        expect(
+          find.textContaining("Can't reach the server right now"),
+          findsOneWidget,
+        );
+        expect(find.textContaining('Bad state'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'form body is wrapped in SingleChildScrollView — prevents the '
+      '"BOTTOM OVERFLOWED" overflow under a shrunk viewport',
+      (tester) async {
+        // The user reported "BOTTOM OVERFLOWED BY 54 PIXELS" on the
+        // New Club page when a typing field had focus + keyboard up.
+        // Pin the new scrollable form layout.
+        await _openSheet(tester);
+        expect(
+          find.byType(SingleChildScrollView),
+          findsOneWidget,
+          reason: 'Form must wrap its column in SingleChildScrollView '
+              'so the body can scroll when the keyboard shrinks the '
+              'viewport.',
+        );
+      },
+    );
   });
+
+  group('SocialService.isReady', () {
+    test('returns false when Supabase has not been initialised', () {
+      // The probe must return false WITHOUT throwing so UIs can
+      // gate their submit-buttons / show friendly errors. Pre-fix,
+      // touching `_c` threw immediately; isReady is the safe probe.
+      final social = SocialService();
+      expect(social.isReady, isFalse);
+    });
+
+    test('does NOT throw — probe is safe to call before any Supabase work',
+        () {
+      // The whole point of the probe: pre-flight check without
+      // crashing. Pin so a refactor that re-throws (e.g.
+      // delegating to `_c` directly) gets caught at test time.
+      final social = SocialService();
+      expect(
+        () => social.isReady,
+        returnsNormally,
+        reason: 'isReady must never throw — the WHOLE point of the '
+            'probe is to be a safe pre-flight check. Pre-fix, '
+            'touching `_c` threw immediately, which is what the '
+            'user reported as "Bad state: SocialService called '
+            'before Supabase.initialize() resolved."',
+      );
+    });
+
+    test('test-double subclass can opt-in via `isReady` override', () {
+      // The club-form-sheet test pattern uses subclasses overriding
+      // `isReady` so the screen\'s pre-flight check passes through
+      // to the createClub stub. Pin that the override path actually
+      // works — without it the new readiness gate would short-
+      // circuit every existing test_double-driven test.
+      final readyDouble = _AlwaysReadySocial();
+      expect(readyDouble.isReady, isTrue);
+    });
+  });
+}
+
+/// Minimal test double that opts-in to "ready" via the override
+/// hook. Mirrors the pattern used in club_form_sheet_test.dart.
+class _AlwaysReadySocial extends SocialService {
+  _AlwaysReadySocial() : super();
+  @override
+  bool get isReady => true;
 }

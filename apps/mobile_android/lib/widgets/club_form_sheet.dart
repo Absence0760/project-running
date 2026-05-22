@@ -4,29 +4,51 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../rate_limit_errors.dart';
 import '../social_service.dart';
 
-/// Modal bottom sheet for creating a new club. Mirrors the web
-/// `ClubEditor.svelte`: name + description + location + visibility
-/// + join policy. Returns the new slug on success.
+/// Show the "New club" form as a full-screen page with a back arrow.
+/// Returns the new slug on success.
+///
+/// **History:** This used to be a `showModalBottomSheet`. The user
+/// reported three real bugs against that layout:
+///
+///   1. The bottom sheet's content overflowed by ~54 px when the
+///      software keyboard came up + when the inline error banner was
+///      visible — the column couldn't shrink under the keyboard so
+///      the bottom of the form went off-screen with the yellow
+///      RenderFlex "BOTTOM OVERFLOWED" stripe.
+///   2. Create / Cancel buttons sat under the system navigation
+///      gesture bar (Samsung One UI, gesture-nav devices) because the
+///      sheet didn't account for `viewPadding.bottom`.
+///   3. The modal hid the rest of the app behind a dim layer; the
+///      user wanted a proper page with a back button so they could
+///      tap-out the keyboard or back-out without dismissing the
+///      modal accidentally.
+///
+/// Full-screen `MaterialPageRoute` solves all three — `Scaffold`
+/// auto-handles bottom-inset for the keyboard via
+/// `resizeToAvoidBottomInset: true`, `SafeArea` clears the system
+/// nav bar, and the back button matches the rest of the app's
+/// navigation pattern.
 Future<String?> showClubFormSheet(
   BuildContext context, {
   required SocialService social,
 }) {
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
-    builder: (_) => _ClubForm(social: social),
+  return Navigator.of(context).push<String>(
+    MaterialPageRoute(
+      builder: (_) => _ClubFormScreen(social: social),
+      fullscreenDialog: false,
+    ),
   );
 }
 
-class _ClubForm extends StatefulWidget {
+class _ClubFormScreen extends StatefulWidget {
   final SocialService social;
-  const _ClubForm({required this.social});
+  const _ClubFormScreen({required this.social});
 
   @override
-  State<_ClubForm> createState() => _ClubFormState();
+  State<_ClubFormScreen> createState() => _ClubFormScreenState();
 }
 
-class _ClubFormState extends State<_ClubForm> {
+class _ClubFormScreenState extends State<_ClubFormScreen> {
   final _name = TextEditingController();
   final _description = TextEditingController();
   final _location = TextEditingController();
@@ -55,6 +77,19 @@ class _ClubFormState extends State<_ClubForm> {
     final slug = _slugify(name);
     if (slug.isEmpty) {
       setState(() => _error = 'Name needs at least one letter or digit.');
+      return;
+    }
+    // Pre-flight readiness check — without this the createClub call
+    // hits SocialService._c which throws StateError "called before
+    // Supabase.initialize() resolved." The user surfaced this as a
+    // crash when their build came up without Supabase env vars / the
+    // init failed silently. Surface a friendly inline error instead.
+    if (!widget.social.isReady) {
+      setState(() {
+        _error =
+            'Can\'t reach the server right now. Check your connection '
+            'or sign in, then try again.';
+      });
       return;
     }
     setState(() {
@@ -89,6 +124,15 @@ class _ClubFormState extends State<_ClubForm> {
         final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
         if (friendly != null) message = friendly;
       }
+      // Defensive catch for the late-init StateError — if for any
+      // reason the readiness probe above was stale by the time the
+      // request fired, we still surface the friendly message
+      // instead of the raw "Bad state:" toString.
+      if (e is StateError &&
+          e.message.contains('Supabase.initialize')) {
+        message = 'Can\'t reach the server right now. Check your '
+            'connection or sign in, then try again.';
+      }
       setState(() {
         _busy = false;
         _error = message;
@@ -99,114 +143,140 @@ class _ClubFormState extends State<_ClubForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final inset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + inset),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text('New club', style: theme.textTheme.titleLarge),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _name,
-            autofocus: true,
-            maxLength: 80,
-            decoration: const InputDecoration(
-              labelText: 'Name',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _description,
-            maxLines: 3,
-            maxLength: 500,
-            decoration: const InputDecoration(
-              labelText: 'Description (optional)',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _location,
-            maxLength: 80,
-            decoration: const InputDecoration(
-              labelText: 'Location (optional)',
-              hintText: 'Edinburgh, UK',
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SegmentedButton<bool>(
-            segments: const [
-              ButtonSegment(value: true, label: Text('Public'), icon: Icon(Icons.public)),
-              ButtonSegment(value: false, label: Text('Private'), icon: Icon(Icons.lock_outline)),
-            ],
-            selected: {_isPublic},
-            onSelectionChanged: (s) => setState(() {
-              _isPublic = s.first;
-              if (!_isPublic && _joinPolicy != 'invite') _joinPolicy = 'invite';
-              if (_isPublic && _joinPolicy == 'invite') _joinPolicy = 'open';
-            }),
-          ),
-          const SizedBox(height: 12),
-          Text('Join policy', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 4),
-          Wrap(
-            spacing: 8,
+    return Scaffold(
+      // resizeToAvoidBottomInset=true (the default) means the body
+      // shrinks when the keyboard slides up so the SingleChildScrollView
+      // can scroll its contents — no more 54-px RenderFlex overflow.
+      appBar: AppBar(
+        title: const Text('New club'),
+      ),
+      body: SafeArea(
+        // Clears the bottom system nav bar so Create / Cancel
+        // aren't covered by Samsung's gesture handle.
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (_isPublic) ...[
-                ChoiceChip(
-                  label: const Text('Open — anyone joins'),
-                  selected: _joinPolicy == 'open',
-                  onSelected: (_) => setState(() => _joinPolicy = 'open'),
+              TextField(
+                controller: _name,
+                autofocus: true,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  labelText: 'Name',
+                  border: OutlineInputBorder(),
                 ),
-                ChoiceChip(
-                  label: const Text('Request — admins approve'),
-                  selected: _joinPolicy == 'request',
-                  onSelected: (_) => setState(() => _joinPolicy = 'request'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _description,
+                maxLines: 3,
+                maxLength: 500,
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                  border: OutlineInputBorder(),
                 ),
-              ] else
-                ChoiceChip(
-                  label: const Text('Invite only'),
-                  selected: _joinPolicy == 'invite',
-                  onSelected: (_) => setState(() => _joinPolicy = 'invite'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _location,
+                maxLength: 80,
+                decoration: const InputDecoration(
+                  labelText: 'Location (optional)',
+                  hintText: 'Edinburgh, UK',
+                  border: OutlineInputBorder(),
                 ),
+              ),
+              const SizedBox(height: 12),
+              SegmentedButton<bool>(
+                segments: const [
+                  ButtonSegment(
+                    value: true,
+                    label: Text('Public'),
+                    icon: Icon(Icons.public),
+                  ),
+                  ButtonSegment(
+                    value: false,
+                    label: Text('Private'),
+                    icon: Icon(Icons.lock_outline),
+                  ),
+                ],
+                selected: {_isPublic},
+                onSelectionChanged: (s) => setState(() {
+                  _isPublic = s.first;
+                  if (!_isPublic && _joinPolicy != 'invite') {
+                    _joinPolicy = 'invite';
+                  }
+                  if (_isPublic && _joinPolicy == 'invite') {
+                    _joinPolicy = 'open';
+                  }
+                }),
+              ),
+              const SizedBox(height: 12),
+              Text('Join policy', style: theme.textTheme.labelLarge),
+              const SizedBox(height: 4),
+              Wrap(
+                spacing: 8,
+                children: [
+                  if (_isPublic) ...[
+                    ChoiceChip(
+                      label: const Text('Open — anyone joins'),
+                      selected: _joinPolicy == 'open',
+                      onSelected: (_) =>
+                          setState(() => _joinPolicy = 'open'),
+                    ),
+                    ChoiceChip(
+                      label: const Text('Request — admins approve'),
+                      selected: _joinPolicy == 'request',
+                      onSelected: (_) =>
+                          setState(() => _joinPolicy = 'request'),
+                    ),
+                  ] else
+                    ChoiceChip(
+                      label: const Text('Invite only'),
+                      selected: _joinPolicy == 'invite',
+                      onSelected: (_) =>
+                          setState(() => _joinPolicy = 'invite'),
+                    ),
+                ],
+              ),
+              if (_error != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _error!,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.error,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 20),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed:
+                        _busy ? null : () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _busy ? null : _submit,
+                    child: _busy
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child:
+                                CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Text('Create'),
+                  ),
+                ],
+              ),
             ],
           ),
-          if (_error != null) ...[
-            const SizedBox(height: 12),
-            Text(
-              _error!,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.error,
-              ),
-            ),
-          ],
-          const SizedBox(height: 16),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              TextButton(
-                onPressed: _busy ? null : () => Navigator.pop(context),
-                child: const Text('Cancel'),
-              ),
-              const SizedBox(width: 8),
-              FilledButton(
-                onPressed: _busy ? null : _submit,
-                child: _busy
-                    ? const SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Create'),
-              ),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 }
+

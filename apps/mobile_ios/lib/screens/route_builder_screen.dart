@@ -118,6 +118,15 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   bool _routing = false;
   bool _saving = false;
 
+  /// Monotonic counter incremented on every `_rerouteThrough` entry.
+  /// Each routing pass captures `_routeGeneration` at start, threads
+  /// it into `fetchRouteThrough` as a cancellation gate, and drops
+  /// its result if the gate fires (which happens whenever the user
+  /// places another pin, drags a marker, or hits clear / undo
+  /// before the previous routing pass completes). Mirrors web's
+  /// `routeVersion` counter on RouteBuilder.svelte.
+  int _routeGeneration = 0;
+
   // Drag state. When the user long-presses a marker, we enter drag
   // mode; subsequent map taps move that waypoint until the user taps
   // the marker again or hits the cancel chip.
@@ -218,14 +227,25 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       });
       return;
     }
+    // Bump the generation on entry; the captured snapshot is the
+    // version this pass owns. Any newer pass during our awaits will
+    // increment _routeGeneration, the `cancelled` gate will fire,
+    // and we'll drop the result on the way back.
+    final myGen = ++_routeGeneration;
     setState(() => _routing = true);
     try {
       final routed = await fetchRouteThrough(
         waypoints,
         profile: _osrmProfile,
         fetcher: widget.osrmFetcher,
+        cancelled: () => myGen != _routeGeneration,
       );
       if (!mounted) return;
+      if (routed.wasCancelled) {
+        // A newer pass has started — DON'T touch _polyline /
+        // _distanceM / _routing. The newer pass owns those now.
+        return;
+      }
       setState(() {
         _waypoints
           ..clear()
@@ -235,9 +255,27 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _overlapSpans = detectOverlapSpans(routed.coordinates);
         _routing = false;
       });
+      // Web-parity soft warning: per-segment routing means a
+      // single unreachable waypoint falls back to a straight line
+      // for that segment but the rest of the polyline stays
+      // road-accurate. Surface the partial-success state so the
+      // user knows to drag the bad pin.
+      if (routed.hadFallbacks && routed.totalSegments > 0) {
+        final failed = routed.totalSegments - routed.okSegments;
+        showTopBanner(
+          context,
+          failed == routed.totalSegments
+              ? 'Couldn\'t route — showing straight lines through your pins.'
+              : '$failed segment${failed == 1 ? '' : 's'} couldn\'t snap '
+                  'to a road. Drag the affected pins to adjust.',
+        );
+      }
       unawaited(_refreshElevation());
     } catch (e) {
       if (!mounted) return;
+      // Don't surface stale errors from cancelled passes — only the
+      // current generation owns the user-visible banner.
+      if (myGen != _routeGeneration) return;
       setState(() => _routing = false);
       showTopBanner(context, 'Routing failed: $e');
     }
@@ -268,7 +306,13 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   }
 
   Future<void> _onMapTap(TapPosition _, LatLng latLng) async {
-    if (_routing || _saving) return;
+    // Don't gate on `_routing` — the cancellation system in
+    // `_rerouteThrough` (gen-counter + `cancelled` gate threaded
+    // into fetchRouteThrough) handles overlapping passes correctly,
+    // and gating the tap here would make rapid pin placement feel
+    // sticky on a slow OSRM call. Still gate on `_saving` because
+    // the save-dialog flow shouldn't be racing pin placements.
+    if (_saving) return;
     final tapWaypoint =
         cm.Waypoint(lat: latLng.latitude, lng: latLng.longitude);
 
@@ -284,6 +328,23 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
               profile: _osrmProfile,
               fetcher: widget.osrmFetcher,
             );
+      // Reject a drag that lands within 5 m of any OTHER existing
+      // waypoint — the OSRM segment between them would be a
+      // zero-length back-and-forth, distorting the polyline and
+      // the distance / elevation readouts. Surface the rejection
+      // so the user knows the drag didn't take and can retry.
+      if (isTooCloseToOtherWaypoints(
+        candidate: moved,
+        existing: _waypoints,
+        excludeIndex: idx,
+      )) {
+        if (!mounted) return;
+        showTopBanner(
+          context,
+          'Too close to another pin — drag a bit further.',
+        );
+        return;
+      }
       final next = List<cm.Waypoint>.from(_waypoints);
       next[idx] = moved;
       await _rerouteThrough(next);
@@ -291,7 +352,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     }
 
     // Snap-to-start: close the loop instead of placing a stub-end
-    // waypoint right next to the start marker.
+    // waypoint right next to the start marker. Runs BEFORE the
+    // close-to-existing check below — closing the loop on the
+    // start is a deliberate UX affordance, not a degenerate
+    // placement.
     if (shouldSnapToStart(
       tap: tapWaypoint,
       existingWaypoints: _waypoints,
@@ -308,12 +372,55 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
             profile: _osrmProfile,
             fetcher: widget.osrmFetcher,
           );
+    // Reject the placement when the new pin (post-snap) would
+    // duplicate or near-duplicate an existing one. This catches:
+    //   - fat-finger double-taps on the same spot
+    //   - a tap visually distinct from the prior pin that
+    //     `snapToRoad` pulled onto the same road segment
+    // Either way the user's intended action would produce a
+    // zero-length OSRM segment that breaks the polyline.
+    if (isTooCloseToOtherWaypoints(
+      candidate: next,
+      existing: _waypoints,
+    )) {
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        'Pin already there — tap further apart to add another.',
+      );
+      return;
+    }
     await _rerouteThrough([..._waypoints, next]);
   }
 
   Future<void> _undo() async {
     if (_routing || _saving || _waypoints.isEmpty) return;
     final next = _waypoints.sublist(0, _waypoints.length - 1);
+    // If the user was dragging the to-be-removed last waypoint,
+    // cancel the drag — otherwise `_dragIndex` points at a stale
+    // index and the status pill shows "Tap to move point N" for a
+    // marker that no longer exists.
+    if (_dragIndex == _waypoints.length - 1) {
+      setState(() => _dragIndex = null);
+    }
+    await _rerouteThrough(next);
+  }
+
+  /// Remove the currently-dragged waypoint and re-route through the
+  /// rest. Surfaced via the trash button in the status pill when a
+  /// marker is "lifted" (drag mode active).
+  ///
+  /// Pre-fix, the only way to remove a specific interior waypoint
+  /// was to Undo back to it (losing every later placement) and redo
+  /// the rest of the route. With this affordance you can lift the
+  /// stray waypoint and delete it in two taps without disturbing
+  /// anything else.
+  Future<void> _deleteSelectedWaypoint() async {
+    if (_saving) return;
+    final idx = _dragIndex;
+    if (idx == null) return;
+    setState(() => _dragIndex = null);
+    final next = List<cm.Waypoint>.from(_waypoints)..removeAt(idx);
     await _rerouteThrough(next);
   }
 
@@ -437,6 +544,13 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     setState(() => _saving = true);
     final route = cm.Route(
       id: const Uuid().v4(),
+      // Stamp the signed-in user's id when available so route-detail
+      // / share / kudos surfaces that branch on owner-vs-viewer can
+      // recognise the freshly-built route as "mine" before the cloud
+      // round-trip stamps it server-side. Falls back to '' for
+      // signed-out builds (the route still saves locally; the detail
+      // screen's empty-ownerId branch picks it up).
+      userId: widget.apiClient.userId ?? '',
       name: result.name,
       waypoints: _polyline,
       distanceMetres: _distanceM,
@@ -542,8 +656,28 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   }
 
   void _toggleDragOn(int index) {
-    if (_routing || _saving) return;
+    if (_saving) return;
     setState(() => _dragIndex = _dragIndex == index ? null : index);
+  }
+
+  /// Tap on a marker while a different marker is in drag mode →
+  /// move the dragged marker to that marker's exact position.
+  /// Skips the 5 m dedupe (the user deliberately chose to place the
+  /// dragged marker on top of the tapped one — it's explicit
+  /// intent, not a fat-finger accident).
+  Future<void> _placeOverMarker(int tappedIndex) async {
+    if (_saving) return;
+    final draggedIdx = _dragIndex;
+    if (draggedIdx == null || draggedIdx == tappedIndex) return;
+    // Snapshot the tapped marker's position BEFORE clearing the
+    // drag index, then build the new waypoints list with the
+    // dragged marker relocated. The 5 m dedupe is intentionally
+    // skipped — see method kdoc.
+    final target = _waypoints[tappedIndex];
+    setState(() => _dragIndex = null);
+    final next = List<cm.Waypoint>.from(_waypoints);
+    next[draggedIdx] = target;
+    await _rerouteThrough(next);
   }
 
   @override
@@ -656,13 +790,31 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                     for (var i = 0; i < waypointLatLngs.length; i++)
                       Marker(
                         point: waypointLatLngs[i],
-                        width: 36,
-                        height: 36,
+                        // Bigger marker hit-box + tap-area for the
+                        // marker that's currently being dragged —
+                        // makes it obvious where the "lifted" pin is
+                        // and easier to tap to drop / cancel.
+                        width: _dragIndex == i ? 56 : 36,
+                        height: _dragIndex == i ? 56 : 36,
                         child: GestureDetector(
+                          // Long-press = pick up this marker (or drop
+                          // it if it's already picked up).
                           onLongPress: () => _toggleDragOn(i),
+                          // Tap behaviour depends on drag state:
+                          //   - no drag active → no-op (clean map
+                          //     gestures stay in charge)
+                          //   - this marker is dragged → tap drops it
+                          //     (cancel-drag affordance)
+                          //   - a DIFFERENT marker is dragged → tap
+                          //     places the dragged marker at this
+                          //     marker's exact position ("place over
+                          //     another marker" — the user's
+                          //     described intent)
                           onTap: _dragIndex == null
                               ? null
-                              : () => _toggleDragOn(i),
+                              : _dragIndex == i
+                                  ? () => _toggleDragOn(i)
+                                  : () => _placeOverMarker(i),
                           child: _WaypointPin(
                             index: i,
                             isStart: i == 0,
@@ -692,6 +844,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
               mode: _mode,
               dragIndex: _dragIndex,
               onCancelDrag: () => setState(() => _dragIndex = null),
+              onDeleteDragged: _deleteSelectedWaypoint,
             ),
           ),
           // Search-results dropdown (under the AppBar).
@@ -862,6 +1015,7 @@ class _StatusPill extends StatelessWidget {
   final RouteBuilderMode mode;
   final int? dragIndex;
   final VoidCallback onCancelDrag;
+  final VoidCallback onDeleteDragged;
 
   const _StatusPill({
     required this.distanceM,
@@ -872,6 +1026,7 @@ class _StatusPill extends StatelessWidget {
     required this.mode,
     required this.dragIndex,
     required this.onCancelDrag,
+    required this.onDeleteDragged,
   });
 
   @override
@@ -879,7 +1034,11 @@ class _StatusPill extends StatelessWidget {
     final theme = Theme.of(context);
     String label;
     if (dragIndex != null) {
-      label = 'Tap anywhere to move point ${dragIndex! + 1}';
+      // Pinning the affordance hierarchy: PRIMARY action is move,
+      // SECONDARY is delete, TERTIARY is cancel. The label leads with
+      // "Tap anywhere" because that's the move gesture; the two
+      // icons cover the other two intents.
+      label = 'Tap to move point ${dragIndex! + 1}, or use the icons';
     } else if (waypointCount == 0) {
       // Surface the current routing mode in the empty hint so flipping
       // Trail / Road / Straight gives immediate visual feedback even
@@ -908,14 +1067,21 @@ class _StatusPill extends StatelessWidget {
       child: Row(
         children: [
           Expanded(child: Text(label, style: theme.textTheme.bodyMedium)),
-          if (dragIndex != null)
+          if (dragIndex != null) ...[
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 20),
+              tooltip: 'Delete point ${dragIndex! + 1}',
+              color: theme.colorScheme.error,
+              onPressed: onDeleteDragged,
+              visualDensity: VisualDensity.compact,
+            ),
             IconButton(
               icon: const Icon(Icons.close, size: 18),
               tooltip: 'Cancel drag',
               onPressed: onCancelDrag,
               visualDensity: VisualDensity.compact,
-            )
-          else if (routing || saving) ...[
+            ),
+          ] else if (routing || saving) ...[
             const SizedBox(width: 8),
             const SizedBox(
               width: 16,
@@ -1023,25 +1189,46 @@ class _WaypointPinState extends State<_WaypointPin>
             : widget.isEnd
                 ? Colors.red
                 : Colors.blueGrey;
+    // Drag mode bumps the pin from 22→32 dp + adds a coloured
+    // shadow so it visibly "lifts" off the map. Without this the
+    // only sign you'd entered drag mode was a colour shift the
+    // user might not notice.
+    final size = widget.isDragging ? 32.0 : 22.0;
     final pin = Container(
-      width: 22,
-      height: 22,
+      width: size,
+      height: size,
       decoration: BoxDecoration(
         color: color,
         shape: BoxShape.circle,
         border: Border.all(color: Colors.white, width: 2),
+        boxShadow: widget.isDragging
+            ? const [
+                BoxShadow(
+                  color: Colors.amber,
+                  blurRadius: 12,
+                  spreadRadius: 2,
+                ),
+              ]
+            : null,
       ),
       alignment: Alignment.center,
       child: Text(
         '${widget.index + 1}',
-        style: const TextStyle(
+        style: TextStyle(
           color: Colors.white,
           fontWeight: FontWeight.bold,
-          fontSize: 11,
+          fontSize: widget.isDragging ? 14 : 11,
         ),
       ),
     );
-    if (!widget.pulseStart) return pin;
+    // Two pulsing-halo paths: the start-pin "snap to close loop"
+    // affordance (existing) and the new "drag in progress" affordance.
+    // Either reuses the same `_pulse` controller so the animation
+    // stays coordinated when both ever overlap (shouldn't, because
+    // pulseStart gates on `_dragIndex == null`).
+    final shouldPulse = widget.pulseStart || widget.isDragging;
+    if (!shouldPulse) return pin;
+    final ringColor = widget.isDragging ? Colors.amber : Colors.green;
     return AnimatedBuilder(
       animation: _pulse,
       builder: (_, child) {
@@ -1049,19 +1236,19 @@ class _WaypointPinState extends State<_WaypointPin>
         final ringScale = 1 + 0.7 * t;
         final ringOpacity = (1 - t).clamp(0.0, 1.0);
         return SizedBox(
-          width: 36,
-          height: 36,
+          width: widget.isDragging ? 56 : 36,
+          height: widget.isDragging ? 56 : 36,
           child: Stack(
             alignment: Alignment.center,
             children: [
               Transform.scale(
                 scale: ringScale,
                 child: Container(
-                  width: 22,
-                  height: 22,
+                  width: size,
+                  height: size,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: Colors.green.withValues(alpha: 0.25 * ringOpacity),
+                    color: ringColor.withValues(alpha: 0.30 * ringOpacity),
                   ),
                 ),
               ),

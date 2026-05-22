@@ -16,6 +16,7 @@ import '../backend_timeout.dart';
 import '../widgets/event_form_sheet.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/route_track_preview.dart';
+import '../widgets/verified_badge.dart';
 import 'event_detail_screen.dart';
 import 'plan_detail_screen.dart';
 import 'public_route_screen.dart';
@@ -304,7 +305,23 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: Text(c.row.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+        // Verified-official badge inline with the title for owner-
+        // authenticated clubs. Disambiguates the authentic operator
+        // from squatter / fan clubs holding the same name.
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              child: Text(
+                c.row.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            if (c.row.isVerified)
+              const VerifiedBadge(size: 18),
+          ],
+        ),
         actions: [
           IconButton(
             tooltip: 'Report club',

@@ -10,6 +10,7 @@ import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/club_form_sheet.dart';
 import '../widgets/error_state.dart';
+import '../widgets/verified_badge.dart';
 import 'club_detail_screen.dart';
 import 'club_invite_screen.dart';
 import 'people_screen.dart';
@@ -314,6 +315,15 @@ class _ClubTile extends StatelessWidget {
                           ),
                         ),
                       ),
+                      // Verified-official badge — differentiates an
+                      // authentic operator (e.g. the Richmond
+                      // Marathon) from a fan or squatter holding the
+                      // same name on a sibling slug. clubs.name is
+                      // intentionally NOT unique; the badge is the
+                      // disambiguator. Renders right after the name
+                      // text so screen-reader tab order is name →
+                      // verified → private.
+                      if (c.isVerified) const VerifiedBadge(),
                       if (!(c.isPublic ?? true))
                         Container(
                           margin: const EdgeInsets.only(left: 6),

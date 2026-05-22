@@ -24,7 +24,10 @@ void main() {
       expect(ActivityType.run.label, 'Run');
       expect(ActivityType.walk.label, 'Walk');
       expect(ActivityType.cycle.label, 'Cycle');
-      expect(ActivityType.hike.label, 'Hike');
+      // Surfaced as "Trail run" — see kdoc on label getter. The
+      // enum name stays `hike` for back-compat with the SQL CHECK
+      // constraint + Strava / Health Connect importer mappings.
+      expect(ActivityType.hike.label, 'Trail run');
     });
   });
 

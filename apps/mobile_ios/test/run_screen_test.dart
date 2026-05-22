@@ -106,7 +106,10 @@ void main() {
       expect(find.text('Run'), findsOneWidget);
       expect(find.text('Walk'), findsOneWidget);
       expect(find.text('Cycle'), findsOneWidget);
-      expect(find.text('Hike'), findsOneWidget);
+      // "Hike" renamed to "Trail run" so trail runners see
+      // themselves represented in the picker. Internal enum
+      // name stays `hike` for back-compat.
+      expect(find.text('Trail run'), findsOneWidget);
     });
 
     testWidgets('shows a Start affordance (the run-ready entry point)',
@@ -206,7 +209,10 @@ void main() {
     // other three so the whole enum is covered.
     for (final spec in const [
       ('Cycle', 'cycle'),
-      ('Hike', 'hike'),
+      // Picker label is "Trail run" but the enum slug stays `hike`
+      // (the SQL CHECK constraint + Strava / Health Connect
+      // importer mappings key on the slug).
+      ('Trail run', 'hike'),
       ('Run', 'run'),
     ]) {
       final (label, slug) = spec;

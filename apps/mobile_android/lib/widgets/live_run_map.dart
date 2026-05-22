@@ -105,6 +105,19 @@ class LiveRunMap extends StatefulWidget {
   /// brushing pattern). `null` clears the marker.
   final int? hoverIdx;
 
+  /// Free-form "runner" marker position — when non-null, paints a
+  /// pulsing dot at this lat/lng. Used by the route-detail screen's
+  /// scrubber: a horizontal slider feeds an interpolated position
+  /// along the planned polyline (computed by
+  /// [interpolateAlongRoute] in `route_geometry.dart`) so the user
+  /// can drag from start to finish and see the direction of the run.
+  ///
+  /// Independent of [hoverIdx] — that's an index into a recorded
+  /// `track`, this is a free position along an arbitrary
+  /// [plannedRoute]. Both can be set at once; both render the same
+  /// `_PulsingDot` so the visual language stays consistent.
+  final Waypoint? previewPosition;
+
   const LiveRunMap({
     super.key,
     required this.track,
@@ -119,6 +132,7 @@ class LiveRunMap extends StatefulWidget {
     this.onSegmentSelect,
     this.ghostPosition,
     this.hoverIdx,
+    this.previewPosition,
   });
 
   @override
@@ -637,6 +651,27 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
                     width: 28,
                     height: 28,
                     child: _HoverMarkerDot(animation: _pulseAnimation),
+                  ),
+                ],
+              ),
+
+            // Free-form preview marker driven by the route-detail
+            // scrubber. Pulsing dot rendered at an interpolated
+            // position along the planned polyline so the user can
+            // drag a slider from 0 → 100 % and watch the "runner"
+            // glide along the route.
+            if (widget.previewPosition != null)
+              MarkerLayer(
+                key: const ValueKey('route-preview-runner'),
+                markers: [
+                  Marker(
+                    point: LatLng(
+                      widget.previewPosition!.lat,
+                      widget.previewPosition!.lng,
+                    ),
+                    width: 48,
+                    height: 48,
+                    child: _PulsingDot(animation: _pulseAnimation),
                   ),
                 ],
               ),

@@ -1,8 +1,11 @@
 import 'dart:math';
 
 import 'package:core_models/core_models.dart';
-import 'package:flutter/foundation.dart' show visibleForTesting;
+import 'package:flutter/foundation.dart' show debugPrint, visibleForTesting;
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+import '../route_simplify.dart' show simplifyTrack;
 
 /// Compact static thumbnail of a GPS track. Mirrors
 /// `apps/web/src/lib/components/TrackPreview.svelte` so a route saved on
@@ -27,9 +30,182 @@ class TrackPreview extends StatelessWidget {
     if (points.length < 2) {
       return const _Placeholder();
     }
-    return CustomPaint(
-      painter: _TrackPreviewPainter(points: points, color: color),
-      size: Size.infinite,
+    final mapTilerKey = dotenv.env['MAPTILER_KEY'] ?? '';
+    if (mapTilerKey.isEmpty) {
+      // Fallback for builds without a MapTiler key configured —
+      // polyline-only render but with a subtle slate background
+      // (not pure white) so the thumbnail still reads as a map
+      // surface. Without this paint, dev / offline builds showed
+      // pure white cards which the user flagged as "the preview
+      // doesn't show a map background."
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: ColoredBox(
+          color: const Color(0xFF1F2937), // slate-800, subtle terrain tint
+          child: CustomPaint(
+            painter: _TrackPreviewPainter(points: points, color: color),
+            size: Size.infinite,
+          ),
+        ),
+      );
+    }
+    // Map-backed preview via MapTiler's Static Maps API. We hit a
+    // SINGLE PNG endpoint that bakes basemap + path-overlay into
+    // one image, then render it with `Image.network` + Flutter's
+    // built-in image cache. Pre-fix, the thumbnails mounted a
+    // full `FlutterMap` at 72×40 — `flutter_map` has known
+    // rendering quirks at sub-100-px sizes (tiles either don't
+    // load or load partially-cropped). The static-image path is
+    // bulletproof at any size and matches the visual the user
+    // sees on the route detail screen, just baked at request
+    // time instead of composed client-side.
+    return _StaticMapPreview(
+      points: points,
+      color: color,
+      mapTilerKey: mapTilerKey,
+    );
+  }
+}
+
+/// Static-image track preview — hits MapTiler's Static Maps API
+/// for a single PNG (basemap + path overlay baked together) and
+/// renders via `Image.network`. Used by [TrackPreview] when
+/// `MAPTILER_KEY` is set.
+///
+/// Why static-image vs interactive FlutterMap: the user reported
+/// "the route detail map works but the list thumbnails don't."
+/// Root cause — `flutter_map` has known rendering quirks at sub-
+/// 100-px sizes (the same widget renders fine at 320-px on the
+/// route detail screen). MapTiler's Static Maps API bakes the
+/// basemap + the path into one PNG, sized exactly to the
+/// requested width × height — guaranteed-rendering at any size.
+///
+/// Falls through to the polyline-only CustomPaint render on a
+/// network error so a missing internet connection doesn't blank
+/// the thumbnail.
+class _StaticMapPreview extends StatelessWidget {
+  final List<Waypoint> points;
+  final Color color;
+  final String mapTilerKey;
+
+  const _StaticMapPreview({
+    required this.points,
+    required this.color,
+    required this.mapTilerKey,
+  });
+
+  /// MapTiler's Static Maps URL has a practical length cap around
+  /// ~8 KB. For a typical run (1000+ track points × 16 chars per
+  /// point) we'd blow past that on the first kilometre. Simplify
+  /// the polyline first — Ramer-Douglas-Peucker preserves the
+  /// shape but drops noise. 60 points is enough resolution for a
+  /// 72-px wide thumbnail (each polyline edge averaging ~1 px).
+  static const int _maxPolylinePoints = 60;
+
+  List<Waypoint> _simplifiedPath() {
+    if (points.length <= _maxPolylinePoints) return points;
+    // Bump epsilon until the count drops below the cap. Starting
+    // at 10 m (the recorder's default) and doubling keeps the loop
+    // bounded — 6 iterations cover 10 m → 320 m which is enough
+    // for any sensible polyline.
+    var epsilon = 10.0;
+    var simplified = simplifyTrack(points, epsilonMetres: epsilon);
+    for (var i = 0; i < 6 && simplified.length > _maxPolylinePoints; i++) {
+      epsilon *= 2;
+      simplified = simplifyTrack(points, epsilonMetres: epsilon);
+    }
+    return simplified;
+  }
+
+  /// Build the MapTiler Static Maps URL with the polyline path
+  /// overlay. `auto` for centre + zoom means MapTiler fits the
+  /// path bbox automatically — no client-side projection math
+  /// needed (the API computes it server-side).
+  ///
+  /// Encoding subtlety: MapTiler's path param expects LITERAL pipes
+  /// (`|`) and commas (`,`) as part of its syntax. The previous
+  /// implementation used `Uri.encodeQueryComponent`, which turns
+  /// those into `%7C` / `%2C` — MapTiler's URL parser doesn't
+  /// decode them back, so the request 4xx'd and Image.network's
+  /// errorBuilder kicked in, falling through to the polyline-only
+  /// slate fallback. User-visible failure: "I see the route detail
+  /// map but list thumbnails don't load." Only `#` (HTTP fragment
+  /// delimiter) needs encoding inside a query string.
+  String _buildUrl(int width, int height) {
+    final path = _simplifiedPath();
+    final stroke = (color.value & 0xFFFFFF)
+        .toRadixString(16)
+        .padLeft(6, '0');
+    // Canonical MapTiler path syntax: `fill:none|stroke:#hex|width:N|
+    // lng,lat|lng,lat|...`. The `#` becomes `%23` (HTTP fragment
+    // delimiter must be encoded in a query string); pipes + commas
+    // stay literal because MapTiler\'s path parser uses them as
+    // grammar separators and doesn\'t decode percent-encoded forms
+    // back. Pre-fix the value was wrapped in `Uri.encodeQueryComponent`
+    // which turned every pipe + comma into %7C / %2C → MapTiler
+    // 4xx\'d every request.
+    final pathParam = StringBuffer('fill:none|stroke:%23$stroke|width:3');
+    for (final p in path) {
+      // lng,lat per the API (MapTiler reverses the typical Leaflet
+      // lat,lng order).
+      pathParam.write('|${p.lng.toStringAsFixed(6)},${p.lat.toStringAsFixed(6)}');
+    }
+    return 'https://api.maptiler.com/maps/streets-v2-dark/static/auto/${width}x$height@2x.png'
+        '?key=$mapTilerKey'
+        '&path=$pathParam'
+        '&padding=8';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final w = constraints.maxWidth.isFinite
+              ? constraints.maxWidth.round().clamp(40, 1024)
+              : 256;
+          final h = constraints.maxHeight.isFinite
+              ? constraints.maxHeight.round().clamp(40, 1024)
+              : 144;
+          final url = _buildUrl(w, h);
+          return Image.network(
+            url,
+            width: w.toDouble(),
+            height: h.toDouble(),
+            fit: BoxFit.cover,
+            // Loading + error fallbacks both fall back to the
+            // polyline-only paint so the thumbnail always reads as
+            // a route preview — never a blank box.
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return _polylineOnlyFallback();
+            },
+            errorBuilder: (context, error, stack) {
+              // Surface the URL + error to the device log so a user
+              // who's seeing the polyline-only fallback can paste
+              // the URL into a browser to see MapTiler's 4xx body
+              // (the most common cause of an opaque "thumbnail
+              // doesn't load" failure). Without this, the only
+              // signal is the fallback rendering.
+              debugPrint(
+                'TrackPreview: static-map failed → $error\n  url: $url',
+              );
+              return _polylineOnlyFallback();
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _polylineOnlyFallback() {
+    return ColoredBox(
+      color: const Color(0xFF1F2937),
+      child: CustomPaint(
+        painter: _TrackPreviewPainter(points: points, color: color),
+        size: Size.infinite,
+      ),
     );
   }
 }

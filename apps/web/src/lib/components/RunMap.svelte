@@ -55,6 +55,14 @@
 		/// on the polyline. Driven by the elevation/pace chart's
 		/// pointer hover via the parent. Null = no marker.
 		hoverIdx?: number | null;
+		/// Free-form "runner" position for the route-detail scrubber.
+		/// When non-null, paints a pulsing marker at this [lng, lat].
+		/// Independent of `hoverIdx` — that's an index into `track`,
+		/// this is a free position interpolated along an arbitrary
+		/// polyline (via `interpolateAlongRoute` in `route_geometry.ts`).
+		/// Twin of the `previewPosition` prop on Flutter's
+		/// `LiveRunMap`. Null = no marker.
+		previewLngLat?: [number, number] | null;
 	}
 	let {
 		track = [],
@@ -63,6 +71,7 @@
 		totalDistanceM,
 		activity,
 		hoverIdx = null,
+		previewLngLat = null,
 	}: Props = $props();
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -228,6 +237,34 @@
 
 	$effect(() => {
 		renderHoverMarker(hoverIdx);
+	});
+
+	/// Separate handle for the scrubber preview marker so it can
+	/// coexist with the hover-marker without one stealing the other's
+	/// MapLibre instance.
+	let previewMarker: maplibregl.Marker | undefined;
+
+	function renderPreviewMarker(lngLat: [number, number] | null): void {
+		if (!map) return;
+		if (lngLat == null) {
+			previewMarker?.remove();
+			previewMarker = undefined;
+			return;
+		}
+		if (!previewMarker) {
+			const el = document.createElement('div');
+			el.className = 'hover-marker';
+			el.setAttribute('data-testid', 'route-preview-runner');
+			previewMarker = new maplibregl.Marker({ element: el })
+				.setLngLat(lngLat)
+				.addTo(map);
+		} else {
+			previewMarker.setLngLat(lngLat);
+		}
+	}
+
+	$effect(() => {
+		renderPreviewMarker(previewLngLat);
 	});
 
 	/// Cumulative distance from start to each track index, in metres.

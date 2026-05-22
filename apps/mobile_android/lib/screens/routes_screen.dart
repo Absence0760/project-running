@@ -285,6 +285,23 @@ class RoutesScreenState extends State<RoutesScreen> {
       _distanceFilter != _DistanceBucket.any ||
       _starredOnly;
 
+  /// Snapshot of route IDs that LocalRouteStore considers synced
+  /// (cloud-confirmed via the SyncService drain). Used by the list
+  /// renderer to flip the "Will sync" badge on locally-built routes
+  /// that haven't yet been pushed.
+  Set<String> _syncedOwnedIds() {
+    // unsyncedRoutes is the source of truth; flip it to the synced
+    // set by diffing against everything the local store knows about.
+    final unsyncedIds = {
+      for (final r in widget.routeStore.unsyncedRoutes) r.id,
+    };
+    return {
+      for (final r in widget.routeStore.routes)
+        if (!unsyncedIds.contains(r.id)) r.id,
+    };
+  }
+
+
   void _clearFilters() {
     setState(() {
       _search = '';
@@ -353,9 +370,14 @@ class RoutesScreenState extends State<RoutesScreen> {
   }
 
   Future<void> _toggleStar(cm.Route route) async {
-    final api = widget.apiClient;
-    if (api == null || api.userId == null) return;
     final next = !route.isStarred;
+    // BUG FIX: previous version omitted `clubId` and `description`
+    // from the constructor, so toggling a star on a route that was
+    // transferred to a club / had a description set silently wiped
+    // both. User reported "starring a route doesn't work anymore"
+    // — same incident, two visible symptoms (star fails to persist
+    // visually if the wiped fields trigger an unrelated rebuild,
+    // OR the description vanishes after a star tap).
     final updated = cm.Route(
       id: route.id,
       userId: route.userId,
@@ -370,13 +392,29 @@ class RoutesScreenState extends State<RoutesScreen> {
       featured: route.featured,
       runCount: route.runCount,
       isStarred: next,
+      clubId: route.clubId,
+      description: route.description,
     );
+    // Offline-tolerant flow (mirrors `_togglePublic` on the route
+    // detail screen): write the local store first so the toggle is
+    // durable across signed-out / network-down paths. SyncService
+    // drains the unsynced state on the next cycle.
     await widget.routeStore.save(updated);
+    if (!mounted) return;
+    setState(() {});
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) {
+      // Signed-out — local-only is correct; the next sync push
+      // carries the new isStarred flag.
+      return;
+    }
     try {
       await api.setRouteStar(route.id, next);
     } catch (e) {
+      // Cloud failed — revert local + surface.
       await widget.routeStore.save(route);
       if (mounted) {
+        setState(() {});
         showTopBanner(context, 'Could not update star: $e');
       }
     }
@@ -463,24 +501,79 @@ class RoutesScreenState extends State<RoutesScreen> {
 
     final body = mergedRoutes.isEmpty
           ? Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.route, size: 64, color: theme.colorScheme.outline),
-                  const SizedBox(height: 16),
-                  Text('No routes yet', style: theme.textTheme.bodyLarge),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Tap Import to add a GPX or KML file',
-                    style: theme.textTheme.bodySmall?.copyWith(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.route,
+                      size: 64,
                       color: theme.colorScheme.outline,
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 16),
+                    Text(
+                      'No routes yet',
+                      style: theme.textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      // Mention BOTH affordances. The Build FAB is the
+                      // canonical "create from scratch" path; Import
+                      // covers GPX / KML / KMZ / GeoJSON / TCX files.
+                      // The old copy only mentioned Import — users
+                      // missed the in-app builder.
+                      'Tap Build to draw a route on the map, or '
+                      'Import a GPX, KML, or TCX file.',
+                      textAlign: TextAlign.center,
+                      style: theme.textTheme.bodyMedium?.copyWith(
+                        color: theme.colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    // Compact inline reminder for the two FAB icons so
+                    // a user who lands on this screen for the first
+                    // time can match the verbal CTA to the visual
+                    // affordances on the right edge.
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.add_road,
+                            size: 18,
+                            color: theme.colorScheme.outline),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Build',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Icon(Icons.file_upload,
+                            size: 18,
+                            color: theme.colorScheme.outline),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Import',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: theme.colorScheme.outline,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             )
           : ListView.builder(
-              padding: const EdgeInsets.all(16),
+              // Bottom padding clears the dual-FAB column (Build +
+              // Import) — pre-fix the last route's star button + the
+              // chevron were covered by the bottom-right FABs. The
+              // 144 px reserves room for two stacked
+              // FloatingActionButton.extended (~56 dp each + 16 dp
+              // gap + 16 dp safe-area breathing room).
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 144),
               itemCount: 1 +
                   (emptyAfterFilter ? 1 : routes.length) +
                   (showLoadMore && !emptyAfterFilter ? 1 : 0),
@@ -575,11 +668,32 @@ class RoutesScreenState extends State<RoutesScreen> {
                 }
                 final route = routes[routeIndex];
                 final isOwned = ownedIds.contains(route.id);
+                // Locally-built routes (created via the in-app
+                // builder while offline / before the next sync
+                // cycle) carry a "Will sync" badge so the user sees
+                // their status at a glance. Only OWNED routes can
+                // be unsynced — bookmarked rows are server-pulled.
+                final isUnsynced = isOwned &&
+                    !ownedIds.intersection(_syncedOwnedIds()).contains(route.id);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
                   child: ListTile(
+                    // No contentPadding override — use ListTile's
+                    // default so the row height matches the History
+                    // tab's run-card exactly. Pre-fix, the routes
+                    // card was visibly taller than the runs card
+                    // because of (a) custom padding, (b) a two-row
+                    // subtitle Column with badge chips below. Both
+                    // are gone; the badges that matter move into
+                    // trailing icons (cloud-upload + bookmark) or
+                    // a tiny title-prefix glyph (public globe).
                     leading: route.waypoints.length >= 2 && widget.apiClient != null
                         ? SizedBox(
+                            // Match the History tab's run-row leading
+                            // (`runs_screen.dart:_kLeadingWidth = 72`,
+                            // height: 40). Pinned in source so both
+                            // list pages feel like a single design
+                            // system.
                             width: 72,
                             height: 40,
                             // Bookmarked rows are owned by other users — must
@@ -606,15 +720,71 @@ class RoutesScreenState extends State<RoutesScreen> {
                               ),
                             ),
                           ),
-                    title: Text(route.name),
+                    // Title row mirrors runs' `Row(activity icon +
+                    // distance)` shape — a small glyph + the name,
+                    // single line. Public routes get a globe glyph
+                    // so the visibility state stays visible without
+                    // adding a second subtitle row.
+                    title: Row(
+                      children: [
+                        if (route.isPublic) ...[
+                          Icon(
+                            Icons.public,
+                            size: 16,
+                            color: theme.colorScheme.primary,
+                          ),
+                          const SizedBox(width: 6),
+                        ],
+                        Flexible(
+                          child: Text(
+                            route.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                    // Single-line subtitle — same shape as runs'
+                    // `$date  •  $dur`. Distance + elevation is the
+                    // route equivalent.
                     subtitle: Text(
                       '${UnitFormat.distance(route.distanceMetres, unit)}'
-                      '  •  ${route.elevationGainMetres.round()}m gain'
-                      '${isOwned ? '' : '  •  Saved'}',
+                      '  •  ${route.elevationGainMetres.round()} m ↑',
                     ),
                     trailing: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
+                        // Bookmark glyph for routes the viewer
+                        // saved from someone else (not their own).
+                        // Mirrors the runs-row's `isUnsynced` icon
+                        // pattern — small inline glyph that flags
+                        // ownership without adding a subtitle row.
+                        if (!isOwned) ...[
+                          Icon(
+                            Icons.bookmark_outline,
+                            size: 16,
+                            color: theme.colorScheme.outline,
+                          ),
+                          const SizedBox(width: 4),
+                        ],
+                        // Will-sync indicator for locally-built
+                        // routes that haven't been pushed to the
+                        // cloud yet. Same affordance the runs list
+                        // uses for `isUnsynced` (cloud_off there;
+                        // cloud_upload_outlined here because the
+                        // semantic is "queued to upload" rather than
+                        // "couldn't be uploaded").
+                        if (isUnsynced) ...[
+                          Tooltip(
+                            message: 'Queued to sync',
+                            child: Icon(
+                              Icons.cloud_upload_outlined,
+                              size: 16,
+                              color: theme.colorScheme.tertiary,
+                            ),
+                          ),
+                          const SizedBox(width: 4),
+                        ],
                         if (isOwned)
                           IconButton(
                             icon: Icon(
@@ -658,15 +828,94 @@ class RoutesScreenState extends State<RoutesScreen> {
 
     if (widget.embedded) {
       // Embedded mode: SocialScreen owns the Scaffold + the FAB. The
-      // action buttons (Explore / Heatmap / Sync) move into an inline
-      // toolbar row above the list — same pattern as `dashboard_screen`.
+      // discovery affordances (Explore / Heatmap) become labelled
+      // OutlinedButtons in a clearly-titled "Discover" strip at the
+      // top of the body so they don't look like stray AppBar-style
+      // icon buttons floating above the search field. Sync stays
+      // as a compact trailing affordance on the same row.
       return Column(
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 4, 8, 0),
+            padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: _buildActions(context),
+              children: [
+                Icon(
+                  Icons.travel_explore_outlined,
+                  size: 16,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Discover',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const Spacer(),
+                if (_syncing)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    ),
+                  )
+                else if (widget.apiClient?.userId != null)
+                  IconButton(
+                    icon: const Icon(Icons.cloud_download, size: 20),
+                    tooltip: 'Sync from cloud',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _fetchRemoteRoutes,
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    icon: const Icon(Icons.explore, size: 18),
+                    label: const Text('Public routes'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ExploreRoutesScreen(
+                            apiClient: widget.apiClient,
+                            routeStore: widget.routeStore,
+                            preferences: widget.preferences,
+                            onStartRun: widget.onStartRun,
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                if (widget.apiClient != null) ...[
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      icon: const Icon(
+                        Icons.local_fire_department_outlined,
+                        size: 18,
+                      ),
+                      label: const Text('Heatmap'),
+                      onPressed: () => Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => RoutesHeatmapScreen(
+                            api: widget.apiClient!,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ],
             ),
           ),
           Expanded(child: body),
@@ -917,42 +1166,55 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              _DropdownChip<_SurfaceFilter>(
-                value: widget.surfaceFilter,
-                items: _SurfaceFilter.values,
-                labelOf: _surfaceLabel,
-                onChanged: widget.onSurfaceChanged,
+          // Single-row filter strip. Wrap → horizontal
+          // SingleChildScrollView so the four chips stay on ONE
+          // line at every viewport width (user request); if the
+          // device is too narrow to fit them all, the row scrolls
+          // horizontally instead of reflowing to two lines.
+          SizedBox(
+            height: 40,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: [
+                  _DropdownChip<_SurfaceFilter>(
+                    value: widget.surfaceFilter,
+                    items: _SurfaceFilter.values,
+                    labelOf: _surfaceLabel,
+                    onChanged: widget.onSurfaceChanged,
+                  ),
+                  const SizedBox(width: 8),
+                  _DropdownChip<_DistanceBucket>(
+                    value: widget.distanceFilter,
+                    items: _DistanceBucket.values,
+                    labelOf: _distanceLabel,
+                    onChanged: widget.onDistanceChanged,
+                  ),
+                  const SizedBox(width: 8),
+                  _DropdownChip<_RouteSort>(
+                    value: widget.sort,
+                    items: _RouteSort.values,
+                    labelOf: _sortLabel,
+                    onChanged: widget.onSortChanged,
+                  ),
+                  const SizedBox(width: 8),
+                  FilterChip(
+                    label: const Text('Starred'),
+                    avatar: Icon(
+                      widget.starredOnly
+                          ? Icons.star
+                          : Icons.star_border,
+                      size: 18,
+                      color: widget.starredOnly
+                          ? const Color(0xFFFBBF24)
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    selected: widget.starredOnly,
+                    onSelected: (_) => widget.onStarredOnlyToggled(),
+                  ),
+                ],
               ),
-              _DropdownChip<_DistanceBucket>(
-                value: widget.distanceFilter,
-                items: _DistanceBucket.values,
-                labelOf: _distanceLabel,
-                onChanged: widget.onDistanceChanged,
-              ),
-              _DropdownChip<_RouteSort>(
-                value: widget.sort,
-                items: _RouteSort.values,
-                labelOf: _sortLabel,
-                onChanged: widget.onSortChanged,
-              ),
-              FilterChip(
-                label: const Text('Starred'),
-                avatar: Icon(
-                  widget.starredOnly ? Icons.star : Icons.star_border,
-                  size: 18,
-                  color: widget.starredOnly
-                      ? const Color(0xFFFBBF24)
-                      : theme.colorScheme.onSurfaceVariant,
-                ),
-                selected: widget.starredOnly,
-                onSelected: (_) => widget.onStarredOnlyToggled(),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 8),
           Row(

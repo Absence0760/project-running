@@ -124,6 +124,14 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _LazyKeepAliveTab(
+        // rebuildKey ties the cached child to the preselected
+        // route's id — when `_startRunWithRoute` updates
+        // `_preselectedRoute`, the id flips, the cache invalidates,
+        // and the next build calls the RunScreen builder with the
+        // freshly-set `initialRoute`. Without this, a user who
+        // tapped "Start Run" from a route detail jumped to the
+        // Run tab but the route stayed unselected.
+        rebuildKey: _preselectedRoute?.id,
         builder: () => RunScreen(
           key: const PageStorageKey('run'),
           apiClient: widget.apiClient,
@@ -265,7 +273,19 @@ class _HomeScreenState extends State<HomeScreen> {
 ///     cold-start work scoped to the initial page.
 class _LazyKeepAliveTab extends StatefulWidget {
   final Widget Function() builder;
-  const _LazyKeepAliveTab({required this.builder});
+
+  /// Bump this whenever an upstream input the builder closes over
+  /// has meaningfully changed and the tab must re-mount its child.
+  /// Without this, the cache below kept the very first build of
+  /// the child alive across the lifetime of the tab — which meant
+  /// `_startRunWithRoute` could set `_preselectedRoute` + rebuild
+  /// the pages list, but RunScreen never saw the new `initialRoute`
+  /// (the cached instance from the FIRST build was returned again).
+  /// User-visible symptom: tapping "Start run" on a route's detail
+  /// FAB jumped to the Run tab but the route wasn't selected.
+  final Object? rebuildKey;
+
+  const _LazyKeepAliveTab({required this.builder, this.rebuildKey});
 
   @override
   State<_LazyKeepAliveTab> createState() => _LazyKeepAliveTabState();
@@ -277,6 +297,20 @@ class _LazyKeepAliveTabState extends State<_LazyKeepAliveTab>
 
   @override
   bool get wantKeepAlive => true;
+
+  @override
+  void didUpdateWidget(covariant _LazyKeepAliveTab old) {
+    super.didUpdateWidget(old);
+    // Invalidate the cached child when the upstream rebuildKey
+    // changes. The next `build` call below re-invokes the builder
+    // (with the latest closed-over state). Tabs without a
+    // rebuildKey keep the original "build once, keep alive
+    // forever" semantics — only the tabs that need to react to
+    // external state changes pay the rebuild cost.
+    if (old.rebuildKey != widget.rebuildKey) {
+      _child = null;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {

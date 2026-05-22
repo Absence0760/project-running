@@ -10,6 +10,8 @@
 	import SplitPane from '$lib/components/SplitPane.svelte';
 	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
+	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
+	import { interpolateAlongRoute } from '$lib/route_geometry';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -214,6 +216,22 @@
 	/// Linked-cursor index — same shape as /runs/[id]. ElevationProfile
 	/// onhover sets it; RunMap reads it.
 	let chartHoverIdx = $state<number | null>(null);
+	// Route-direction scrubber state. `scrubFraction` advances 0..1
+	// as the user drags the slider; `scrubbing` toggles while the
+	// thumb is under the finger so the preview marker only renders
+	// during an active drag (fades back to the static polyline
+	// view on release). Twin of the Flutter route-detail screen's
+	// `_scrubFraction` + `_scrubbing` fields.
+	let scrubFraction = $state(0);
+	let scrubbing = $state(false);
+	const previewLngLat = $derived.by<[number, number] | null>(() => {
+		if (!scrubbing) return null;
+		const interp = interpolateAlongRoute(
+			displayWaypoints.map((w) => ({ lat: w.lat, lng: w.lng })),
+			scrubFraction,
+		);
+		return interp ? [interp.lng, interp.lat] : null;
+	});
 
 	/// Per-waypoint elevation rollup. Walks once: total gain (sum of
 	/// positive deltas), total loss (sum of negative deltas), and the
@@ -290,7 +308,18 @@
 			{#if route}
 			<main class="map-panel">
 				{#if displayWaypoints.length > 0}
-					<RunMap track={displayWaypoints} totalDistanceM={route.distance_m} hoverIdx={chartHoverIdx} />
+					<RunMap
+						track={displayWaypoints}
+						totalDistanceM={route.distance_m}
+						hoverIdx={chartHoverIdx}
+						{previewLngLat}
+					/>
+					<RoutePreviewScrubber
+						totalDistanceM={route.distance_m}
+						fraction={scrubFraction}
+						onchange={(f) => (scrubFraction = f)}
+						onscrubbing={(active) => (scrubbing = active)}
+					/>
 				{:else}
 					<div class="map-placeholder">
 						<span class="material-symbols">map</span>

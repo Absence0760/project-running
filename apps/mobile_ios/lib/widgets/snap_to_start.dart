@@ -29,3 +29,41 @@ bool shouldSnapToStart({
   final d = haversineMetres(start.lat, start.lng, tap.lat, tap.lng);
   return d < toleranceM;
 }
+
+/// Minimum spacing between any two waypoints (metres). Tighter than
+/// the 30 m snap-to-start tolerance — that one's a deliberate UX
+/// affordance for closing the loop; this one's a defence against
+/// fat-finger double-taps, drag-onto-neighbour collisions, and
+/// snap-to-road cascades that pull two distinct taps onto the same
+/// road segment.
+///
+/// 5 m chosen so a deliberate "tight" placement (running around a
+/// statue, zig-zagging through a market) still works while obvious
+/// degenerate-near-duplicate clicks get rejected. A back-and-forth
+/// between two waypoints 5 m apart is OSRM's smallest meaningful
+/// edge and not really a place the runner can actually run.
+const double kMinWaypointSpacingM = 5;
+
+/// True when adding [tap] would land within [toleranceM] of any
+/// existing waypoint other than [excludeIndex] (the one being
+/// dragged, when applicable). Used by the route builder's tap +
+/// drag handlers to reject degenerate placements that would
+/// produce a zero-length segment in the polyline.
+///
+/// Pure function — pin test in `snap_to_start_test.dart`.
+bool isTooCloseToOtherWaypoints({
+  required Waypoint candidate,
+  required List<Waypoint> existing,
+  int? excludeIndex,
+  double toleranceM = kMinWaypointSpacingM,
+}) {
+  for (var i = 0; i < existing.length; i++) {
+    if (i == excludeIndex) continue;
+    final w = existing[i];
+    if (haversineMetres(w.lat, w.lng, candidate.lat, candidate.lng) <
+        toleranceM) {
+      return true;
+    }
+  }
+  return false;
+}
