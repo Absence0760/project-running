@@ -784,6 +784,35 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-lg);
+		/* Container queries so the dense layouts inside (stats row,
+		 * surface + map-style toggles, target-presets row) respond
+		 * to the PANEL width when the user drags the SplitPane in. */
+		container-type: inline-size;
+		container-name: sidebar;
+	}
+
+	@container sidebar (max-width: 360px) {
+		/* Surface toggle + map-style toggle are 2-button + 3-button
+		 * pill rows. Below 360 px the labels wrap or truncate ugly. */
+		.mode-buttons {
+			gap: var(--space-xs);
+		}
+		.mode-btn {
+			padding: var(--space-xs) var(--space-sm);
+			font-size: 0.8rem;
+		}
+		.style-btn {
+			font-size: 0.7rem;
+			padding: var(--space-2xs) var(--space-xs);
+		}
+		/* Stats row: distance / elevation / waypoints. At narrow
+		 * widths the 1.05rem value font overflows the cell. */
+		.builder-stat-value {
+			font-size: 0.95rem;
+		}
+		.target-presets {
+			flex-wrap: wrap;
+		}
 	}
 
 	.back-link {

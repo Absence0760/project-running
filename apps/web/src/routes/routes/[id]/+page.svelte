@@ -633,6 +633,29 @@
 		padding: var(--space-xl);
 		overflow-y: auto;
 		background: var(--color-surface);
+		/* See /runs/[id] for the container-queries rationale —
+		 * panel width is decoupled from viewport via SplitPane, so
+		 * inner layouts respond to PANEL width. */
+		container-type: inline-size;
+		container-name: stats;
+	}
+
+	/*
+	 * Container-query rules for narrow panel widths. The route
+	 * detail surface is lighter than /runs/[id] (no splits table,
+	 * no key-stats grid) but still has dense rows that need to
+	 * relax: title + star button, meta-info inline strip, tags.
+	 */
+	@container stats (max-width: 380px) {
+		.detail-header :global(.title-row) {
+			flex-wrap: wrap;
+		}
+		.route-meta {
+			gap: var(--space-xs);
+		}
+		.detail-header :global(h1) {
+			font-size: 1.2rem;
+		}
 	}
 
 	.loading {

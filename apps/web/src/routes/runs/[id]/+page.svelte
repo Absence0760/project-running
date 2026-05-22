@@ -1417,6 +1417,47 @@
 		}
 	}
 
+	/*
+	 * Container-query responsive rules. Triggered by the WIDTH of
+	 * `.stats-panel` (named container `stats`) — which the user
+	 * can shrink via the SplitPane drag. The breakpoints adapt the
+	 * dense layouts (key-stats grid, header row, meta strip,
+	 * splits table) so a 320 px-wide panel still reads cleanly.
+	 *
+	 * Why named: makes the intent explicit + lets every rule below
+	 * target the same container without each one repeating its
+	 * dimensions. Falls back to standard `@container` when the
+	 * Svelte compiler emits CSS.
+	 */
+	@container stats (max-width: 520px) {
+		.key-stats {
+			grid-template-columns: repeat(2, 1fr);
+		}
+		.key-stat-value {
+			font-size: 1.25rem;
+		}
+	}
+	@container stats (max-width: 380px) {
+		.key-stats {
+			grid-template-columns: 1fr;
+			gap: var(--space-2xs);
+		}
+		.detail-header-top {
+			/* Title + action buttons go vertical so the buttons
+			 * don't squeeze the title. */
+			flex-direction: column;
+			align-items: stretch;
+		}
+		h1 {
+			font-size: 1.2rem;
+		}
+		.splits-table th,
+		.splits-table td {
+			font-size: 0.75rem;
+			padding: var(--space-xs) 0;
+		}
+	}
+
 	.page-back {
 		padding: var(--space-sm) var(--space-xl);
 		font-size: 0.85rem;
@@ -1648,6 +1689,16 @@
 		padding: var(--space-xl);
 		overflow-y: auto;
 		background: var(--color-surface);
+		/*
+		 * Container queries — the panel is resizable via SplitPane,
+		 * so its width is decoupled from the viewport. Layouts inside
+		 * (key-stats grid, splits table, header row) need to respond
+		 * to the PANEL's width, not the page's. Naming the container
+		 * `stats` lets the `@container` rules below target it
+		 * directly without polluting the global query namespace.
+		 */
+		container-type: inline-size;
+		container-name: stats;
 	}
 
 	.detail-header {
