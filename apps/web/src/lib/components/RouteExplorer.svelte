@@ -13,6 +13,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/supabase';
+	import RouteTrackPreview from './RouteTrackPreview.svelte';
 
 	let routes = $state<Route[]>([]);
 	let loading = $state(true);
@@ -292,7 +293,19 @@
 				<div class="route-card">
 					<a href="/routes/{route.id}?from=explore" class="route-link">
 						<div class="route-map-placeholder">
-							<span class="material-symbols">{route.surface === 'trail' ? 'terrain' : route.surface === 'mixed' ? 'alt_route' : 'route'}</span>
+							<!-- RouteTrackPreview lazy-fetches the clipped
+								 polyline via the SECURITY DEFINER RPC
+								 (decisions §33) so non-owner Explore viewers
+								 see the route shape on a real tile background
+								 instead of just a generic surface icon. The
+								 surface icon stays as the fallback inside
+								 RouteTrackPreview when the polyline fetch
+								 fails or returns <2 points. -->
+							<RouteTrackPreview
+								routeId={route.id}
+								waypoints={[]}
+								ownerUserId={route.user_id}
+							/>
 							{#if route.featured}
 								<span class="featured-badge" title="Featured route">
 									<span class="material-symbols">star</span>

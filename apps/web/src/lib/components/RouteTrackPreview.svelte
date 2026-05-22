@@ -22,7 +22,8 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { buildStaticMapUrl } from '$lib/static_map';
+	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
+	import { buildStaticMapUrl, buildLocalStaticMapUrl } from '$lib/static_map';
 
 	let {
 		routeId,
@@ -100,12 +101,18 @@
 
 <div bind:this={el} class="wrap">
 	{#if points && points.length > 1}
-		{@const mapUrl = buildStaticMapUrl(points, {
-			w: 220,
-			h: 140,
-			style: 'streets-v2',
-			key: PUBLIC_MAPTILER_KEY,
-		})}
+		{@const mapUrl =
+			buildLocalStaticMapUrl(points, {
+				w: 220,
+				h: 140,
+				styleUrl: PUBLIC_TILE_STYLE_URL,
+			}) ??
+			buildStaticMapUrl(points, {
+				w: 220,
+				h: 140,
+				style: 'streets-v2',
+				key: PUBLIC_MAPTILER_KEY,
+			})}
 		{#if mapUrl}
 			<!-- Static map background: shows the route polyline overlaid
 			     on real tiles (roads, parks, water) so users can scan a

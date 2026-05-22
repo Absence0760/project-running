@@ -25,9 +25,14 @@
 
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { env } from '$env/dynamic/public';
 	import TrackPreview from './TrackPreview.svelte';
 	import { fetchTrackByPath, fetchClippedTrackForRun } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/static_map';
+
+	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
+	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
 
 	let {
 		runId,
@@ -145,7 +150,35 @@
 
 <div bind:this={el} class="wrap">
 	{#if points && points.length > 1}
-		<TrackPreview {points} />
+		{@const mapUrl =
+			buildLocalStaticMapUrl(points, {
+				w: 220,
+				h: 140,
+				styleUrl: PUBLIC_TILE_STYLE_URL,
+			}) ??
+			buildStaticMapUrl(points, {
+				w: 220,
+				h: 140,
+				style: 'streets-v2',
+				key: PUBLIC_MAPTILER_KEY,
+			})}
+		{#if mapUrl}
+			<!-- Static-map background mirroring RouteTrackPreview. Real
+				 tiles read better than a bare SVG line on cards. Falls
+				 back to the SVG when neither MapTiler nor the local
+				 Protomaps server is configured. Lazy-load so a list
+				 of 50 runs doesn't fire 50 PNGs at page load. -->
+			<img
+				src={mapUrl}
+				class="map-img"
+				loading="lazy"
+				decoding="async"
+				alt=""
+				data-testid="run-preview-map"
+			/>
+		{:else}
+			<TrackPreview {points} />
+		{/if}
 	{:else}
 		<span class="material-symbols placeholder">map</span>
 	{/if}
