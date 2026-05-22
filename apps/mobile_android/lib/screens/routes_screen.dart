@@ -1166,17 +1166,33 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
             ),
           ),
           const SizedBox(height: 8),
-          // Single-row filter strip. Wrap → horizontal
-          // SingleChildScrollView so the four chips stay on ONE
-          // line at every viewport width (user request); if the
-          // device is too narrow to fit them all, the row scrolls
-          // horizontally instead of reflowing to two lines.
+          // Single-row filter strip. Starred-first per user
+          // request — it's the most-toggled filter in practice
+          // (people flip the watch-starred set far more often
+          // than they re-pick a surface or sort order), so it
+          // earns the leftmost slot. The four chips reflow into
+          // a horizontal scroll if the device is too narrow.
           SizedBox(
             height: 40,
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: [
+                  FilterChip(
+                    label: const Text('Starred'),
+                    avatar: Icon(
+                      widget.starredOnly
+                          ? Icons.star
+                          : Icons.star_border,
+                      size: 18,
+                      color: widget.starredOnly
+                          ? const Color(0xFFFBBF24)
+                          : theme.colorScheme.onSurfaceVariant,
+                    ),
+                    selected: widget.starredOnly,
+                    onSelected: (_) => widget.onStarredOnlyToggled(),
+                  ),
+                  const SizedBox(width: 8),
                   _DropdownChip<_SurfaceFilter>(
                     value: widget.surfaceFilter,
                     items: _SurfaceFilter.values,
@@ -1196,21 +1212,6 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
                     items: _RouteSort.values,
                     labelOf: _sortLabel,
                     onChanged: widget.onSortChanged,
-                  ),
-                  const SizedBox(width: 8),
-                  FilterChip(
-                    label: const Text('Starred'),
-                    avatar: Icon(
-                      widget.starredOnly
-                          ? Icons.star
-                          : Icons.star_border,
-                      size: 18,
-                      color: widget.starredOnly
-                          ? const Color(0xFFFBBF24)
-                          : theme.colorScheme.onSurfaceVariant,
-                    ),
-                    selected: widget.starredOnly,
-                    onSelected: (_) => widget.onStarredOnlyToggled(),
                   ),
                 ],
               ),

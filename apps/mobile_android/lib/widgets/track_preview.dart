@@ -18,6 +18,11 @@ class TrackPreview extends StatelessWidget {
   final Color color;
   final double aspect;
 
+  /// Module-level guard so the diagnostic log fires only once per
+  /// process lifetime — a list of 20 thumbnails shouldn't print
+  /// 20 identical lines on scroll.
+  static bool _loggedKeyState = false;
+
   const TrackPreview({
     super.key,
     required this.points,
@@ -31,6 +36,23 @@ class TrackPreview extends StatelessWidget {
       return const _Placeholder();
     }
     final mapTilerKey = dotenv.env['MAPTILER_KEY'] ?? '';
+    // ONE-TIME diagnostic so the user can confirm which branch
+    // ran when they see "thumbnails aren't loading the map." The
+    // log says either:
+    //   "TrackPreview build: points=N, mapTilerKey=set" →
+    //       _StaticMapPreview mounted; check Image.network logs.
+    //   "TrackPreview build: points=N, mapTilerKey=EMPTY" →
+    //       env var didn't reach this build context; rebuild OR
+    //       set MAPTILER_KEY in .env.local + asset bundle.
+    // Static printed-once guard so a 20-thumbnail list doesn't
+    // spam the log on every scroll.
+    if (!_loggedKeyState) {
+      _loggedKeyState = true;
+      debugPrint(
+        'TrackPreview build: points=${points.length}, '
+        'mapTilerKey=${mapTilerKey.isEmpty ? "EMPTY" : "set"}',
+      );
+    }
     if (mapTilerKey.isEmpty) {
       // Fallback for builds without a MapTiler key configured —
       // polyline-only render but with a subtle slate background
