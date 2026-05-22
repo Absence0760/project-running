@@ -597,6 +597,15 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		padding: var(--space-lg);
+		/* Container queries so the dense runner-row layout
+		 * (rank + avatar + name + distance + elapsed + tag)
+		 * adapts to the leaderboard's actual column width — the
+		 * grid layout above can shrink the column on the
+		 * 64rem-viewport boundary, and the runner row would
+		 * otherwise overflow with long names. Mirrors the panel-
+		 * polish pattern from /runs/[id] + /routes/[id]. */
+		container-type: inline-size;
+		container-name: leaderboard;
 	}
 	.results {
 		margin-bottom: var(--space-xl);
@@ -768,6 +777,31 @@
 	}
 
 	@media (max-width: 48rem) {
+		.runner {
+			grid-template-columns: 1.8rem 1.8rem 1fr;
+			grid-template-areas:
+				'pos avatar name'
+				'. . stats';
+			row-gap: 0.25rem;
+		}
+		.runner .pos { grid-area: pos; }
+		.runner .avatar { grid-area: avatar; }
+		.runner .name { grid-area: name; }
+		.runner .dist,
+		.runner .pace,
+		.runner .elapsed {
+			grid-area: stats;
+			display: inline;
+			margin-right: var(--space-sm);
+		}
+	}
+
+	/* Container-query mirror — fires when the leaderboard COLUMN
+	 * is narrow even on a wide viewport (the 1fr|1.3fr grid puts
+	 * the leaderboard around 420 px at 1024 px viewports, and the
+	 * runner row's 5-cell layout breaks below ~380 px). Same
+	 * stacked grid as the mobile rule. */
+	@container leaderboard (max-width: 380px) {
 		.runner {
 			grid-template-columns: 1.8rem 1.8rem 1fr;
 			grid-template-areas:

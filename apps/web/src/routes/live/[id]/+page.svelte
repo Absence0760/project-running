@@ -580,6 +580,11 @@
 		background: var(--color-surface);
 		border-bottom: 1px solid var(--color-border);
 		flex-wrap: wrap;
+		/* Container query target — lets the inner stats row adapt
+		 * to the strip's actual width regardless of viewport
+		 * (forward-compat if the page ever gains a side panel). */
+		container-type: inline-size;
+		container-name: live-strip;
 	}
 
 	.live-runner {
@@ -662,6 +667,30 @@
 		}
 		.live-stat {
 			align-items: center;
+		}
+	}
+
+	/* Container-query mirror of the viewport rule above. Triggers
+	 * when the strip itself goes narrow (i.e. parent gives it less
+	 * room) even if the viewport is wide. Matches the panel-
+	 * polish pattern from /runs/[id] + /routes/[id]. */
+	@container live-strip (max-width: 36rem) {
+		.live-stat-value {
+			font-size: 1.25rem;
+		}
+		.live-stats {
+			gap: var(--space-md);
+		}
+	}
+	@container live-strip (max-width: 28rem) {
+		.live-stat {
+			min-width: 3rem;
+		}
+		.live-stat-value {
+			font-size: 1.1rem;
+		}
+		.live-runner-name {
+			font-size: 0.9rem;
 		}
 	}
 
