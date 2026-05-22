@@ -2165,6 +2165,38 @@ void main() {
       );
     });
 
+    test('Protomaps lifecycle is exposed via root npm scripts', () {
+      // Reason: every other dev-time Docker sidecar (Supabase via
+      // `dev:db:up` / `down` / `status` / `logs`) is wrapped in
+      // root package.json scripts. Protomaps follows the same
+      // pattern so developers reach for `npm run dev:tiles:*`
+      // by muscle memory.
+      final pkg = File('../../package.json').readAsStringSync();
+      for (final cmd in const [
+        'dev:tiles:fetch',
+        'dev:tiles:up',
+        'dev:tiles:restart',
+        'dev:tiles:down',
+        'dev:tiles:status',
+        'dev:tiles:logs',
+        'dev:tiles:env',
+      ]) {
+        expect(pkg, contains('"$cmd"'),
+            reason: 'root package.json must export `$cmd` so the '
+                'lifecycle matches the rest of the dev tooling');
+      }
+      // Every wrapper must call the bash script directly — no
+      // duplicated logic that could drift from the source of
+      // truth.
+      expect(
+        pkg,
+        contains(RegExp(r'"dev:tiles:up":\s*"bin/protomaps-dev\.sh start"')),
+        reason: 'dev:tiles:up must wrap bin/protomaps-dev.sh start; '
+            'duplicating the docker run command in package.json '
+            'would drift the moment the bash script gets a new flag',
+      );
+    });
+
     test('Protomaps bootstrap script — container has --restart '
         'unless-stopped policy', () {
       // Without this flag, a docker daemon reload mid-dev-session

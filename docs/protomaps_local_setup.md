@@ -8,8 +8,8 @@ The production migration is a separate decision (see [decisions.md § 68](decisi
 
 ```bash
 # One-time: needs Docker installed + running.
-bin/protomaps-dev.sh fetch    # grabs a ~1MB US-states sample
-bin/protomaps-dev.sh start    # boots tileserver-gl in Docker
+npm run dev:tiles:fetch    # grabs a ~1MB US-states sample
+npm run dev:tiles:up       # boots tileserver-gl in Docker
 
 # Copy the printed env vars into each app's .env.local, then run:
 #   apps/web:        npm run dev --workspace=apps/web
@@ -17,8 +17,11 @@ bin/protomaps-dev.sh start    # boots tileserver-gl in Docker
 #   apps/watch_wear: ./gradlew installDebug -PPUBLIC_TILE_URL_TEMPLATE=...
 
 # When you're done:
-bin/protomaps-dev.sh stop
+npm run dev:tiles:down
 ```
+
+(The `dev:tiles:*` scripts are thin wrappers around `bin/protomaps-dev.sh` —
+either invocation works.)
 
 The fetched sample only contains US-state polygons — enough to verify the wire end-to-end, not enough to render real run locations. For dev sessions in your actual area, generate a regional extract from the daily Protomaps world build (see "Getting a real PMTiles file" below).
 
@@ -43,17 +46,17 @@ The script downloads everything else on first run.
 
 ## The bootstrap script
 
-`bin/protomaps-dev.sh` exposes seven subcommands:
+`bin/protomaps-dev.sh` exposes seven subcommands. The root `package.json` wraps them with `dev:tiles:*` npm scripts for consistency with the existing `dev:db:*` Supabase lifecycle (the two are the closest analogue — both are long-running Docker sidecars).
 
-| Command | What it does |
-|---|---|
-| `fetch` | Downloads a 1MB US-states sample PMTiles into `$PROTOMAPS_HOME` — enough to smoke-test the wire end-to-end, not enough to render real run locations. |
-| `start` | Generates config + style files, boots the container with `--restart unless-stopped`, waits for readiness, prints the env-var snippets to paste into each app's `.env.local`. Fails loudly if the PMTiles file isn't found or lives outside `PROTOMAPS_HOME`. On wait-timeout, auto-tails the last 30 lines of container output. |
-| `restart` | Stop + start. Use when swapping a PMTiles file or after editing the config. |
-| `stop` | Kills + removes the container. PMTiles file stays cached for next time. |
-| `status` | Reports whether the container is running and where. |
-| `logs` | Tails the container logs (`docker logs -f`). |
-| `env` | Prints the env-var snippet without starting/stopping anything. |
+| npm script | Direct invocation | What it does |
+|---|---|---|
+| `npm run dev:tiles:fetch` | `bin/protomaps-dev.sh fetch` | Downloads a 1MB US-states sample PMTiles into `$PROTOMAPS_HOME` — enough to smoke-test the wire end-to-end, not enough to render real run locations. |
+| `npm run dev:tiles:up` | `bin/protomaps-dev.sh start` | Generates config + style files, boots the container with `--restart unless-stopped`, waits for readiness, prints the env-var snippets to paste into each app's `.env.local`. Fails loudly if the PMTiles file isn't found or lives outside `PROTOMAPS_HOME`. On wait-timeout, auto-tails the last 30 lines of container output. |
+| `npm run dev:tiles:restart` | `bin/protomaps-dev.sh restart` | Stop + start. Use when swapping a PMTiles file or after editing the config. |
+| `npm run dev:tiles:down` | `bin/protomaps-dev.sh stop` | Kills + removes the container. PMTiles file stays cached for next time. |
+| `npm run dev:tiles:status` | `bin/protomaps-dev.sh status` | Reports whether the container is running and where. |
+| `npm run dev:tiles:logs` | `bin/protomaps-dev.sh logs` | Tails the container logs (`docker logs -f`). |
+| `npm run dev:tiles:env` | `bin/protomaps-dev.sh env` | Prints the env-var snippet without starting/stopping anything. |
 
 ### Configuration
 
