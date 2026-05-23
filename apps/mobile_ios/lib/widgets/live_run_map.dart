@@ -259,6 +259,55 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       widget.currentPosition ??
       (widget.track.isNotEmpty ? widget.track.last : null);
 
+  /// `_latestPosition` snapped onto the SMOOTHED polyline that the
+  /// map actually draws. The polyline gets a two-pass weighted
+  /// moving average via `smoothTrack(smoothTrack(raw))` to remove
+  /// GPS jitter — but `currentPosition` comes from the RAW track
+  /// (run.track[replayIndex] on the replay path, the live recorder's
+  /// latest fix during recording). Without this snap the dot ended
+  /// up visibly OFF the rendered line — caught in the May 2026
+  /// audit as "the replay dot doesn't stick to the route".
+  ///
+  /// Strategy: for replay-style positions (an existing track index),
+  /// match by linear scan to find the closest raw waypoint, then
+  /// return the smoothed waypoint at the same index. O(n) per
+  /// render which is fine — even a 10 km track is < 5k points and
+  /// the scan only runs while the replay is active.
+  LatLng? _smoothedDotLatLng() {
+    final pos = _latestPosition;
+    if (pos == null) return null;
+    if (widget.track.length < 5) {
+      // smoothTrack short-circuits below 5 points → raw === smoothed,
+      // no snap needed.
+      return LatLng(pos.lat, pos.lng);
+    }
+    final smoothed = _smoothedTrackFor(widget.track);
+    // Find the raw-track index that matches `pos`. Identity on
+    // (lat, lng) is the cheap path for the replay case where
+    // `pos === run.track[index]`. Tolerance covers float-precision
+    // edge cases without admitting unrelated points.
+    int bestIdx = -1;
+    double bestDelta = 1e9;
+    for (int i = 0; i < widget.track.length; i++) {
+      final w = widget.track[i];
+      final dLat = (w.lat - pos.lat).abs();
+      final dLng = (w.lng - pos.lng).abs();
+      if (dLat < 1e-9 && dLng < 1e-9) {
+        bestIdx = i;
+        break;
+      }
+      final d = dLat + dLng;
+      if (d < bestDelta) {
+        bestDelta = d;
+        bestIdx = i;
+      }
+    }
+    if (bestIdx < 0 || bestIdx >= smoothed.length) {
+      return LatLng(pos.lat, pos.lng);
+    }
+    return smoothed[bestIdx];
+  }
+
   /// Smoothed polyline for [widget.track], cached by length. The recorder
   /// only appends, so equal lengths imply identical points — returning the
   /// cached list saves two O(n) smoothing passes + the raw LatLng
@@ -404,7 +453,11 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
     final pos = _latestPosition;
     if (pos == null) return;
-    final target = LatLng(pos.lat, pos.lng);
+    // Snap to the smoothed polyline so the dot tween targets the
+    // SAME line the user sees rendered. Without this the tween
+    // walked between raw GPS points which can be ±5 m off the
+    // smoothed polyline — replay dot visibly drifted off the line.
+    final target = _smoothedDotLatLng() ?? LatLng(pos.lat, pos.lng);
 
     // First fix — snap, don't animate. Subsequent fixes tween from the
     // current interpolated position to the new target.
@@ -441,9 +494,13 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             .toList() ??
         [];
     final latest = _latestPosition;
-    // Prefer the interpolated position when available so the dot glides
-    // between GPS fixes instead of hopping.
+    // Prefer the interpolated (tweened) position when available so
+    // the dot glides between GPS fixes instead of hopping. Fall back
+    // to the SMOOTHED snap of the latest fix so the dot stays on the
+    // rendered polyline (which is also smoothed) — see
+    // `_smoothedDotLatLng` for the why.
     final currentLatLng = _animatedLatLng ??
+        _smoothedDotLatLng() ??
         (latest != null ? LatLng(latest.lat, latest.lng) : null);
 
     // No GPS fix yet and no planned route — wait for GPS
