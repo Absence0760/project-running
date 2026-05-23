@@ -13,6 +13,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../preferences.dart';
 import '../tile_cache.dart';
+import 'live_run_map.dart' show resolveTileUrl;
 import '../widgets/top_banner.dart';
 
 /// Open a portrait "share card" modal for [route] — a branded preview
@@ -165,10 +166,10 @@ class _ShareCardContent extends StatelessWidget {
     required this.preferences,
   });
 
-  String get _tileUrl {
-    final key = dotenv.env['MAPTILER_KEY'] ?? '';
-    return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
-  }
+  /// Honours `TILE_URL_TEMPLATE` for local Protomaps dev → falls
+  /// back to MapTiler. Same single-knob override the rest of the
+  /// mobile map surfaces use (see `live_run_map.dart`).
+  String get _tileUrl => resolveTileUrl(dotenv.env);
 
   @override
   Widget build(BuildContext context) {
