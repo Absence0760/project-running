@@ -680,9 +680,12 @@
 	 * auto-fit so cells reflow with panel width; 1 px gap + bg-color
 	 * trick for hairline tile separators; tabular-nums on every
 	 * value so multi-digit values line up. */
+	/* Auto-fit with a moderate min so tiles stay 2-col at narrow
+	 * panel widths (single-column was too vertically heavy and
+	 * pushed the description / tags / scrubber way down). */
 	.key-stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
 		gap: 1px;
 		margin-bottom: var(--space-xl);
 		background: var(--color-border);
@@ -802,18 +805,29 @@
 		color: var(--color-primary);
 	}
 
+	/* Header lays out title-block (title + star) + actions side by
+	 * side at wide widths, then wraps actions below the title at
+	 * narrow widths. The May 2026 polish replaced the previous
+	 * `space-between` which produced an orphan-actions column on
+	 * narrow panels. */
 	.detail-header {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: var(--space-md);
 		margin-bottom: var(--space-xl);
+	}
+	.detail-header > div:first-child {
+		flex: 1 1 16rem;
+		min-width: 0;
 	}
 
 	.title-row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
+		flex-wrap: wrap;
 	}
 
 	.star-btn {
@@ -900,6 +914,16 @@
 		gap: var(--space-xs);
 		flex-wrap: wrap;
 		justify-content: flex-end;
+		align-items: center;
+	}
+	/* When the panel narrows past the wrap threshold, actions hop
+	 * to a new line at the LEFT (matches the title's flow rather
+	 * than dangling on the right edge with white space to its left). */
+	@container stats (max-width: 460px) {
+		.actions {
+			justify-content: flex-start;
+			width: 100%;
+		}
 	}
 
 
@@ -1064,19 +1088,47 @@
 		padding: 0;
 	}
 	.tag-x:hover { color: var(--color-danger); }
+	/* The owner-only "add tag" input. Dashed border to read as
+	 * "drop a tag here" affordance rather than a stray empty form
+	 * field — matches the dashed-chip pattern other apps use for
+	 * "add" actions. Foreground colour-tertiary so it doesn't
+	 * compete with the real chips when empty. */
 	.tag-add input {
 		padding: 0.15rem 0.55rem;
 		border: 1px dashed var(--color-border);
 		border-radius: 9999px;
 		font-size: 0.78rem;
 		background: transparent;
+		color: var(--color-text);
+		min-width: 5rem;
+		width: 7rem;
+		transition: border-color var(--transition-fast);
+	}
+	.tag-add input::placeholder {
+		color: var(--color-text-tertiary);
+	}
+	.tag-add input:hover,
+	.tag-add input:focus {
+		border-color: var(--color-primary);
+		border-style: solid;
+		outline: none;
 	}
 
 	.elev-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+		/* 4 tiles (Gain / Loss / Max / Min) need a column count that
+		 * divides evenly. `repeat(2, 1fr)` always = 2×2; the
+		 * auto-fit form orphaned the 4th tile at panel widths between
+		 * 3 and 4 columns. 2-col here gives a perfect 2×2 at most
+		 * widths and stacks 1-col only on truly tiny panels. */
+		grid-template-columns: repeat(2, 1fr);
 		gap: var(--space-sm);
 		margin-bottom: var(--space-md);
+	}
+	@container stats (min-width: 600px) {
+		.elev-grid {
+			grid-template-columns: repeat(4, 1fr);
+		}
 	}
 	.elev-tile {
 		display: flex;
