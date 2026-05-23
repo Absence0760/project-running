@@ -36,30 +36,36 @@ class TrackPreview extends StatelessWidget {
       return const _Placeholder();
     }
     final mapTilerKey = dotenv.env['MAPTILER_KEY'] ?? '';
+    final tileUrlTemplate = (dotenv.env['TILE_URL_TEMPLATE'] ?? '').trim();
     // ONE-TIME diagnostic so the user can confirm which branch
     // ran when they see "thumbnails aren't loading the map." The
-    // log says either:
-    //   "TrackPreview build: points=N, mapTilerKey=set" →
-    //       _StaticMapPreview mounted; check Image.network logs.
-    //   "TrackPreview build: points=N, mapTilerKey=EMPTY" →
-    //       env var didn't reach this build context; rebuild OR
-    //       set MAPTILER_KEY in .env.local + asset bundle.
+    // log says one of:
+    //   "TrackPreview build: points=N, source=local"   →
+    //       _StaticMapPreview hitting the local tileserver-gl
+    //       static endpoint (TILE_URL_TEMPLATE configured).
+    //   "TrackPreview build: points=N, source=maptiler" →
+    //       _StaticMapPreview hitting MapTiler's Static Maps API.
+    //   "TrackPreview build: points=N, source=fallback" →
+    //       polyline-only ColoredBox; neither env var configured.
     // Static printed-once guard so a 20-thumbnail list doesn't
     // spam the log on every scroll.
+    final source = tileUrlTemplate.isNotEmpty
+        ? 'local'
+        : mapTilerKey.isNotEmpty
+            ? 'maptiler'
+            : 'fallback';
     if (!_loggedKeyState) {
       _loggedKeyState = true;
       debugPrint(
-        'TrackPreview build: points=${points.length}, '
-        'mapTilerKey=${mapTilerKey.isEmpty ? "EMPTY" : "set"}',
+        'TrackPreview build: points=${points.length}, source=$source',
       );
     }
-    if (mapTilerKey.isEmpty) {
-      // Fallback for builds without a MapTiler key configured —
-      // polyline-only render but with a subtle slate background
-      // (not pure white) so the thumbnail still reads as a map
-      // surface. Without this paint, dev / offline builds showed
-      // pure white cards which the user flagged as "the preview
-      // doesn't show a map background."
+    if (source == 'fallback') {
+      // Polyline-only render but with a subtle slate background (not
+      // pure white) so the thumbnail still reads as a map surface.
+      // Without this paint, dev / offline builds showed pure white
+      // cards which the user flagged as "the preview doesn't show a
+      // map background."
       return ClipRRect(
         borderRadius: BorderRadius.circular(6),
         child: ColoredBox(
@@ -71,20 +77,23 @@ class TrackPreview extends StatelessWidget {
         ),
       );
     }
-    // Map-backed preview via MapTiler's Static Maps API. We hit a
-    // SINGLE PNG endpoint that bakes basemap + path-overlay into
-    // one image, then render it with `Image.network` + Flutter's
-    // built-in image cache. Pre-fix, the thumbnails mounted a
-    // full `FlutterMap` at 72×40 — `flutter_map` has known
-    // rendering quirks at sub-100-px sizes (tiles either don't
-    // load or load partially-cropped). The static-image path is
-    // bulletproof at any size and matches the visual the user
-    // sees on the route detail screen, just baked at request
-    // time instead of composed client-side.
+    // Map-backed preview. We hit a SINGLE PNG endpoint that bakes
+    // basemap + path-overlay into one image, then render it with
+    // `Image.network` + Flutter\'s built-in image cache. Pre-fix,
+    // the thumbnails mounted a full `FlutterMap` at 72×40 —
+    // `flutter_map` has known rendering quirks at sub-100-px sizes
+    // (tiles either don\'t load or load partially-cropped). The
+    // static-image path is bulletproof at any size and matches the
+    // visual the user sees on the route detail screen, just baked
+    // at request time instead of composed client-side.
+    //
+    // `source=local` routes through the local tileserver-gl
+    // (Protomaps dev) using the same path syntax MapTiler accepts.
     return _StaticMapPreview(
       points: points,
       color: color,
       mapTilerKey: mapTilerKey,
+      localTileUrlTemplate: tileUrlTemplate,
     );
   }
 }
@@ -110,10 +119,20 @@ class _StaticMapPreview extends StatelessWidget {
   final Color color;
   final String mapTilerKey;
 
+  /// When set (typically TILE_URL_TEMPLATE pointing at a local
+  /// Protomaps tileserver-gl in dev), the static-map URL is derived
+  /// from this template instead of MapTiler. tileserver-gl exposes
+  /// a `/styles/{id}/static/auto/{w}x{h}.png?path=…` endpoint that
+  /// accepts the same path syntax — single-knob override for both
+  /// the live raster tiles AND the thumbnails. Mirrors the web
+  /// `buildLocalStaticMapUrl` flow.
+  final String localTileUrlTemplate;
+
   const _StaticMapPreview({
     required this.points,
     required this.color,
     required this.mapTilerKey,
+    this.localTileUrlTemplate = '',
   });
 
   /// MapTiler's Static Maps URL has a practical length cap around
@@ -179,6 +198,26 @@ class _StaticMapPreview extends StatelessWidget {
       // lng,lat per the API (MapTiler reverses the typical Leaflet
       // lat,lng order).
       pathParam.write('|${p.lng.toStringAsFixed(6)},${p.lat.toStringAsFixed(6)}');
+    }
+    // Local tileserver-gl path: derive `…/styles/{id}/static/auto/...`
+    // from the configured `TILE_URL_TEMPLATE` (which is the raster
+    // tile URL `…/styles/{id}/{z}/{x}/{y}.png`). tileserver-gl
+    // doesn\'t support the `@2x` scale suffix on its path syntax —
+    // 220×140 at 1× looks fine on a list-row thumbnail and the
+    // marginal sharpness at 2× isn\'t worth the transfer time.
+    if (localTileUrlTemplate.isNotEmpty) {
+      final base = localTileUrlTemplate.replaceFirst(
+        RegExp(r'/\{z\}/\{x\}/\{y\}\.png$'),
+        '',
+      );
+      // If the replace didn\'t match, the template isn\'t the standard
+      // raster tile shape — fall through to MapTiler so we don\'t emit
+      // a malformed URL.
+      if (base != localTileUrlTemplate) {
+        return '$base/static/auto/${width}x$height.png'
+            '?path=$pathParam'
+            '&padding=8';
+      }
     }
     return 'https://api.maptiler.com/maps/streets-v2-dark/static/auto/${width}x$height@2x.png'
         '?key=$mapTilerKey'

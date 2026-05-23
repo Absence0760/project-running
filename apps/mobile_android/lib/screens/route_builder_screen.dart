@@ -205,21 +205,9 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// Delegate to the shared `resolveTileUrl` helper so the route
   /// builder honours `TILE_URL_TEMPLATE` (local Protomaps dev) the
   /// same way every other mobile map surface does — see
-  /// `live_run_map.dart` for the helper. Falls back to MapTiler
-  /// when the key is set, then OpenStreetMap tiles when neither is
-  /// configured.
-  String get _tileUrl {
-    final resolved = resolveTileUrl(dotenv.env);
-    // resolveTileUrl returns the MapTiler URL with `key=` (empty)
-    // when neither override nor key is set — that produces 403s. So
-    // when we know MapTiler is unconfigured, fall back to OSM
-    // tiles directly (the existing pre-May-2026 behaviour).
-    if (_maptilerKey.isEmpty &&
-        (dotenv.env['TILE_URL_TEMPLATE'] ?? '').trim().isEmpty) {
-      return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
-    }
-    return resolved;
-  }
+  /// `live_run_map.dart` for the helper, which falls back to OSM
+  /// tiles when neither MAPTILER_KEY nor TILE_URL_TEMPLATE is set.
+  String get _tileUrl => resolveTileUrl(dotenv.env);
 
   OsrmProfile get _osrmProfile =>
       _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;

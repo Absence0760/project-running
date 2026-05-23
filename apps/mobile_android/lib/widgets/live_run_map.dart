@@ -41,10 +41,21 @@ List<LatLng> smoothTrack(List<LatLng> points) {
 /// Live map shown during a run, displaying the GPS track and current position.
 ///
 /// Inspired by Nike Run Club: dark map, bright route line, pulsing blue dot.
-/// Build the raster-tile URL template. Honours the
-/// `TILE_URL_TEMPLATE` override (used by the local Protomaps
-/// tileserver-gl dev setup — see `docs/protomaps_local_setup.md`)
-/// and falls back to the MapTiler URL keyed by `MAPTILER_KEY`.
+/// OSM-tile fallback URL. Public, free, rate-limited per OSM's
+/// tile-usage policy — appropriate for the no-config dev path but
+/// NOT for production. The fallback exists so the map renders
+/// SOMETHING when neither MAPTILER_KEY nor TILE_URL_TEMPLATE is
+/// set in `.env.local`; MissingMapTilesHint surfaces the diagnostic
+/// alongside.
+const _kOsmTileUrl =
+    'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+/// Build the raster-tile URL template. Resolution precedence:
+///   1. `TILE_URL_TEMPLATE` override (local Protomaps tileserver-gl
+///      dev setup — see `docs/protomaps_local_setup.md`)
+///   2. `MAPTILER_KEY` → MapTiler streets-v2-dark
+///   3. OSM tiles as a last-resort fallback so the map isn\'t blank
+///      on a dev setup with neither env var configured
 ///
 /// File-level pure helper so the env-resolution contract is
 /// unit-testable without booting the widget. Reads only the keys it
@@ -55,12 +66,22 @@ List<LatLng> smoothTrack(List<LatLng> points) {
 /// after `TILE_URL_TEMPLATE=` in `.env.local` shouldn't silently
 /// disable MapTiler. Matches the Kotlin `buildTileUrl` `isNotBlank`
 /// semantics on the Wear OS side; see `decisions.md § 68`.
+///
+/// The OSM fallback (May 2026 audit) replaces a pre-existing bug
+/// where the helper returned `https://api.maptiler.com/...?key=`
+/// (empty key) on an unconfigured dev machine — every tile request
+/// 403\'d and the map rendered blank. Callers that wanted OSM as a
+/// fallback had to reimplement the check themselves; now it\'s the
+/// universal contract.
 @visibleForTesting
 String resolveTileUrl(Map<String, String> env) {
   final override = (env['TILE_URL_TEMPLATE'] ?? '').trim();
   if (override.isNotEmpty) return override;
-  final key = env['MAPTILER_KEY'] ?? '';
-  return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
+  final key = (env['MAPTILER_KEY'] ?? '').trim();
+  if (key.isNotEmpty) {
+    return 'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=$key';
+  }
+  return _kOsmTileUrl;
 }
 
 class LiveRunMap extends StatefulWidget {

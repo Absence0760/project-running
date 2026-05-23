@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../privacy.dart';
 import '../settings_sync.dart';
+import '../widgets/live_run_map.dart' show resolveTileUrl;
 import '../widgets/top_banner.dart';
 
 /// Settings → Privacy zones: tap-to-add geofences clipped from the
@@ -146,8 +148,13 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
               ),
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  // Honours TILE_URL_TEMPLATE → MAPTILER_KEY → OSM in
+                  // that order, matching every other map surface in
+                  // the app. Hardcoded OSM pre-May-2026 made the
+                  // privacy-zones picker the only map that worked on
+                  // a Protomaps-only dev setup, which masked the
+                  // resolveTileUrl regression.
+                  urlTemplate: resolveTileUrl(dotenv.env),
                   userAgentPackageName: 'com.threkir.app',
                 ),
                 CircleLayer(

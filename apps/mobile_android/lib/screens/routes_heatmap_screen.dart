@@ -11,6 +11,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../geocoding.dart';
+import '../widgets/live_run_map.dart' show resolveTileUrl;
 import '../widgets/top_banner.dart';
 import 'public_route_screen.dart';
 
@@ -363,8 +364,15 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                   ),
                   children: [
                     TileLayer(
-                      urlTemplate:
-                          'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      // Honours TILE_URL_TEMPLATE → MAPTILER_KEY → OSM
+                      // in that order, matching every other map surface
+                      // in the app. Pre-May-2026 this was hardcoded to
+                      // OSM, which made the heatmap the only mobile map
+                      // that worked on a Protomaps-only dev setup but
+                      // also burned OSM\'s tile quota for every dev
+                      // session in production builds with a configured
+                      // MapTiler key.
+                      urlTemplate: resolveTileUrl(dotenv.env),
                       userAgentPackageName: 'com.threkir.app',
                     ),
                     CircleLayer(

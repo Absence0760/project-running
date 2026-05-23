@@ -15,10 +15,23 @@ import '../lib/widgets/live_run_map.dart';
 /// run` + a window), so the testable seam is this resolver.
 void main() {
   group('resolveTileUrl', () {
-    test('no env vars → MapTiler URL with empty key', () {
+    test('no env vars → OSM fallback', () {
+      // May 2026 audit: previously this returned a MapTiler URL
+      // with an empty `?key=`, which 403s every tile request. The
+      // OSM tiles let the map render SOMETHING on an unconfigured
+      // dev machine; MissingMapTilesHint surfaces the diagnostic
+      // alongside.
       final url = resolveTileUrl(const {});
-      expect(url,
-          'https://api.maptiler.com/maps/streets-v2-dark/{z}/{x}/{y}@2x.png?key=');
+      expect(url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
+    });
+
+    test('whitespace-only MAPTILER_KEY → OSM fallback', () {
+      // Same fail-safe applies when the key is a stray whitespace
+      // — equivalent to "unconfigured".
+      final url = resolveTileUrl(const {
+        'MAPTILER_KEY': '   ',
+      });
+      expect(url, 'https://tile.openstreetmap.org/{z}/{x}/{y}.png');
     });
 
     test('MAPTILER_KEY set → MapTiler URL with key', () {
