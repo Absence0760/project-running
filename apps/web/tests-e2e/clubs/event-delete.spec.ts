@@ -42,7 +42,7 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 			title
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { level: 1, name: title }))
 			.toBeVisible({ timeout: 10_000 });
 
@@ -51,9 +51,9 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 		await expect(dialog).toBeVisible({ timeout: 5_000 });
 		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
-		await page.waitForURL(/\/clubs\/sydney-run-club$/, { timeout: 10_000 });
+		await page.waitForURL(/\/clubs\/richmond-run-club$/, { timeout: 10_000 });
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.getByRole('tab', { name: /^Events/ }).click();
@@ -93,7 +93,7 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 		});
 		if (resErr) throw resErr;
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { level: 1, name: title }))
 			.toBeVisible({ timeout: 10_000 });
 
@@ -102,7 +102,7 @@ test.describe('/clubs/[slug]/events/[id] — admin event delete', () => {
 		await expect(dialog).toBeVisible({ timeout: 5_000 });
 		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
-		await page.waitForURL(/\/clubs\/sydney-run-club$/, { timeout: 10_000 });
+		await page.waitForURL(/\/clubs\/richmond-run-club$/, { timeout: 10_000 });
 
 		const { data: eventRow } = await admin
 			.from('events')

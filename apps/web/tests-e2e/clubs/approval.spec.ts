@@ -56,7 +56,7 @@ test.describe('/clubs/[slug] — approval flow', () => {
 		// stays unjoined. Counterpart to the approval test below.
 		await page.goto('/clubs/tempo-tuesday');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Tempo Tuesday' })
+			page.getByRole('heading', { level: 1, name: 'UVA Tempo Tuesday' })
 		).toBeVisible({ timeout: 10_000 });
 
 		const pendingPanel = page.locator('section.admin-card', {
@@ -82,7 +82,7 @@ test.describe('/clubs/[slug] — approval flow', () => {
 	}) => {
 		await page.goto('/clubs/tempo-tuesday');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Tempo Tuesday' })
+			page.getByRole('heading', { level: 1, name: 'UVA Tempo Tuesday' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Pending requests panel renders for admins when there's at

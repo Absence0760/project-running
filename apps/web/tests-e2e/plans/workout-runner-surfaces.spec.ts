@@ -28,7 +28,7 @@ import { USER_A } from '../fixtures/users';
  * Adherence + per-step results — the *post-run* runner output —
  * are covered by `apps/web/tests-e2e/runs/workout-review.spec.ts`.
  *
- * The seed provisions the Sydney Half plan with a tempo workout on
+ * The seed provisions the Richmond Half plan with a tempo workout on
  * 2026-04-07 (10 km, structure: warmup 2km + steady 6km @ 4:30 + cool-
  * down 2km), an interval workout on 2026-04-14 (12 km, structure:
  * warmup 1.5 km + 5×1000m @ 4:00 with 400m jog + cooldown 1.5 km),

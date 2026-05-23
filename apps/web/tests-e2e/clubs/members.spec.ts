@@ -22,7 +22,7 @@ test.describe('/clubs/[slug] — admin role change', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeEach(async () => {
-		// Insert morgan as a plain member of Sydney Run Club so the
+		// Insert morgan as a plain member of Richmond Run Club so the
 		// admin's role-change UI has someone to operate on.
 		const admin = getAdminClient();
 		await admin.from('club_members').upsert(
@@ -53,7 +53,7 @@ test.describe('/clubs/[slug] — admin role change', () => {
 	test('owner promotes a member to admin via the role dropdown — change persists across reload', async ({
 		page
 	}) => {
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('tab', { name: /^Members/ }).click();
 
 		const morganRow = page.locator('.member-list .member', {
@@ -86,7 +86,7 @@ test.describe('/clubs/[slug] — admin role change', () => {
 		// pending-requests panel. Pins the kick affordance + the
 		// ConfirmDialog gate (a misclick on the trash icon shouldn't
 		// silently boot a member).
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('tab', { name: /^Members/ }).click();
 
 		const morganRow = page.locator('.member-list .member', {

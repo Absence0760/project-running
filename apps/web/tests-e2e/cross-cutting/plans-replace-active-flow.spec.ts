@@ -9,12 +9,12 @@ import { USER_A } from '../fixtures/users';
  * The Cancel branch is already pinned by tests-e2e/plans/create.spec.ts.
  * This saga covers the Confirm path end-to-end:
  *
- *  1. The seed's "Sydney Half 2026" card is showing as active.
+ *  1. The seed's "Richmond Half 2026" card is showing as active.
  *  2. Open the New-plan wizard, fill it, click "Create plan".
  *  3. Replace-plan ConfirmDialog appears → click "Replace plan".
  *  4. Land on /plans/<new-id>.
  *  5. Back on /plans: the new plan card has `.card-active`, and the
- *     Sydney Half card now shows the `status-completed` badge (the
+ *     Richmond Half card now shows the `status-completed` badge (the
  *     seed's plan was auto-demoted by createTrainingPlan so the new
  *     one could take the per-user "one active plan" slot).
  *
@@ -46,14 +46,14 @@ test.describe('/plans — Replace active plan confirm path', () => {
 		}
 	});
 
-	test('Replace plan confirm path flips Sydney Half from active to completed', async ({
+	test('Replace plan confirm path flips Richmond Half from active to completed', async ({
 		page,
 	}) => {
 		const name = `e2e replace active ${Date.now()}`;
 
-		await test.step('seed Sydney Half plan starts active', async () => {
+		await test.step('seed Richmond Half plan starts active', async () => {
 			await page.goto('/plans');
-			const seedCard = page.locator('.card', { hasText: 'Sydney Half 2026' });
+			const seedCard = page.locator('.card', { hasText: 'Richmond Half 2026' });
 			await expect(seedCard).toBeVisible({ timeout: 10_000 });
 			await expect(seedCard).toHaveClass(/card-active/);
 		});
@@ -79,7 +79,7 @@ test.describe('/plans — Replace active plan confirm path', () => {
 				hasText: /Replace your active plan/,
 			});
 			await expect(confirm).toBeVisible({ timeout: 5_000 });
-			await expect(confirm).toContainText('Sydney Half 2026');
+			await expect(confirm).toContainText('Richmond Half 2026');
 			await confirm.getByRole('button', { name: 'Replace plan' }).click();
 		});
 
@@ -91,13 +91,13 @@ test.describe('/plans — Replace active plan confirm path', () => {
 			).toBeVisible({ timeout: 10_000 });
 		});
 
-		await test.step('back on /plans: new card active, Sydney Half flipped to completed', async () => {
+		await test.step('back on /plans: new card active, Richmond Half flipped to completed', async () => {
 			await page.goto('/plans');
 			const newCard = page.locator('.card', { hasText: name });
 			await expect(newCard).toBeVisible({ timeout: 10_000 });
 			await expect(newCard).toHaveClass(/card-active/);
 
-			const seedCard = page.locator('.card', { hasText: 'Sydney Half 2026' });
+			const seedCard = page.locator('.card', { hasText: 'Richmond Half 2026' });
 			await expect(seedCard).toBeVisible();
 			await expect(seedCard).not.toHaveClass(/card-active/);
 			await expect(seedCard.locator('.badge.status-completed')).toBeVisible();

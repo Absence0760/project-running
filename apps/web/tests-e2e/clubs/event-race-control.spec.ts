@@ -18,7 +18,7 @@ import { USER_A, USER_B } from '../fixtures/users';
  * Arm — that handoff is driven by the same realtime channel).
  *
  * This spec drives the full Arm → GO → End sequence in the admin
- * context (USER_A — Sydney Run Club owner) and asserts that the
+ * context (USER_A — Richmond Run Club owner) and asserts that the
  * member context (USER_B — active member) sees each state transition
  * land WITHOUT a page reload. A regression in any link of the chain
  * (the page's realtime channel filter, the race_sessions publication,
@@ -60,8 +60,8 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 			const memberPage = await memberCtx.newPage();
 
 			await Promise.all([
-				adminPage.goto(`/clubs/sydney-run-club/events/${eventId}`),
-				memberPage.goto(`/clubs/sydney-run-club/events/${eventId}`)
+				adminPage.goto(`/clubs/richmond-run-club/events/${eventId}`),
+				memberPage.goto(`/clubs/richmond-run-club/events/${eventId}`)
 			]);
 
 			// Wait for both to finish their initial load AND for the
@@ -198,8 +198,8 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 			const memberPage = await memberCtx.newPage();
 
 			await Promise.all([
-				adminPage.goto(`/clubs/sydney-run-club/events/${eventId}`),
-				memberPage.goto(`/clubs/sydney-run-club/events/${eventId}`)
+				adminPage.goto(`/clubs/richmond-run-club/events/${eventId}`),
+				memberPage.goto(`/clubs/richmond-run-club/events/${eventId}`)
 			]);
 			// Same data-realtime-ready guard as the Arm → GO → End test
 			// above. The member's WS handshake must reach SUBSCRIBED

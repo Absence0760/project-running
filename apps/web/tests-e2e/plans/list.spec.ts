@@ -32,11 +32,11 @@ test.describe('/plans', () => {
 		await expect(page.locator('.modal')).toHaveCount(0);
 	});
 
-	test('seeded Sydney Half 2026 plan renders + drill into detail', async ({
+	test('seeded Richmond Half 2026 plan renders + drill into detail', async ({
 		page
 	}) => {
 		// seed.sql provisions a single active training_plan named
-		// "Sydney Half 2026" with id a1a1eada-aaaa-... A regression
+		// "Richmond Half 2026" with id a1a1eada-aaaa-... A regression
 		// in the plan-list fetch (RLS, query, or rendering) would
 		// surface as the empty state instead. The card links to
 		// /plans/<id> via an outer <a>, so we can also navigate
@@ -47,15 +47,15 @@ test.describe('/plans', () => {
 			page.getByRole('heading', { name: 'No plans yet.' })
 		).toHaveCount(0);
 		await expect(
-			page.getByRole('heading', { name: 'Sydney Half 2026' })
+			page.getByRole('heading', { name: 'Richmond Half 2026' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Drill into the plan detail to prove /plans/[id] also mounts.
-		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
+		await page.getByRole('link', { name: /Richmond Half 2026/ }).click();
 		await expect(page).toHaveURL(/\/plans\/[0-9a-f-]+$/);
 		// /plans/[id] renders the plan name as a heading too.
 		await expect(
-			page.getByRole('heading', { name: /Sydney Half 2026/ })
+			page.getByRole('heading', { name: /Richmond Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 	});
 
@@ -76,7 +76,7 @@ test.describe('/plans', () => {
 		page
 	}) => {
 		await page.goto('/plans');
-		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
+		await page.getByRole('link', { name: /Richmond Half 2026/ }).click();
 		await page.waitForURL(/\/plans\/[0-9a-f-]+$/, { timeout: 10_000 });
 		// Edit-plan button only exists on the detail page; its presence
 		// proves the navigation completed past the loading shell.
@@ -106,13 +106,13 @@ test.describe('/plans', () => {
 			filterRow.getByRole('button', { name: /^All\b/ })
 		).toHaveAttribute('aria-pressed', 'true');
 
-		// Seeded Sydney Half plan is active — Active button shows a 1-pill
+		// Seeded Richmond Half plan is active — Active button shows a 1-pill
 		// + clicking it keeps the card visible.
 		const activeBtn = filterRow.getByRole('button', { name: /^Active\b/ });
 		await activeBtn.click();
 		await expect(activeBtn).toHaveAttribute('aria-pressed', 'true');
 		await expect(
-			page.getByRole('heading', { name: /Sydney Half 2026/ })
+			page.getByRole('heading', { name: /Richmond Half 2026/ })
 		).toBeVisible();
 
 		// Completed is empty in the seed → filter-empty state appears
@@ -127,9 +127,9 @@ test.describe('/plans', () => {
 		await expect(
 			filterRow.getByRole('button', { name: /^All\b/ })
 		).toHaveAttribute('aria-pressed', 'true');
-		// The seeded Sydney Half plan is visible again.
+		// The seeded Richmond Half plan is visible again.
 		await expect(
-			page.getByRole('heading', { name: /Sydney Half 2026/ })
+			page.getByRole('heading', { name: /Richmond Half 2026/ })
 		).toBeVisible();
 	});
 
@@ -140,13 +140,13 @@ test.describe('/plans', () => {
 		// plus a progress bar with aria-valuemin / max / now. This pins
 		// (a) the calendar-week math doesn't regress to NaN, (b) the
 		// progressbar role is reachable to screen readers, and (c) the
-		// `card-active` accent applies. The seeded Sydney Half plan runs
+		// `card-active` accent applies. The seeded Richmond Half plan runs
 		// 12 weeks ending 2026-06-20 with start 2026-03-29 — today
 		// 2026-05-16 falls inside that window, so the progressbar should
 		// have a non-zero, non-100 aria-valuenow.
 		await page.goto('/plans');
 
-		const card = page.locator('.card', { hasText: 'Sydney Half 2026' });
+		const card = page.locator('.card', { hasText: 'Richmond Half 2026' });
 		await expect(card).toBeVisible({ timeout: 10_000 });
 		await expect(card).toHaveClass(/card-active/);
 

@@ -5,7 +5,7 @@ import { RUNNER_PUBLIC_ROUTE_ID } from '../fixtures/seeded-data';
 import { USER_A } from '../fixtures/users';
 
 const SYDNEY_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
-const SYDNEY_SLUG = 'sydney-run-club';
+const SYDNEY_SLUG = 'richmond-run-club';
 
 function setConsentAccepted() {
 	localStorage.setItem(
@@ -36,7 +36,7 @@ async function restoreRouteToPersonal() {
  * the seed state is preserved for sibling specs.
  */
 
-test.describe('/routes — owner transfers a personal route into Sydney Run Club', () => {
+test.describe('/routes — owner transfers a personal route into Richmond Run Club', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeEach(async ({ context }) => {
@@ -55,7 +55,7 @@ test.describe('/routes — owner transfers a personal route into Sydney Run Club
 
 		await page.goto(`/clubs/${SYDNEY_SLUG}`);
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.getByRole('tab', { name: /^Routes/ }).click();

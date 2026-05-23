@@ -117,19 +117,19 @@ test.describe('surface smoke — authed', () => {
 			.toBeVisible({ timeout: 10_000 });
 	});
 
-	test('/clubs/sydney-run-club mounts with the club heading', async ({
+	test('/clubs/richmond-run-club mounts with the club heading', async ({
 		page
 	}) => {
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('/plans/<seeded> mounts with the plan heading', async ({ page }) => {
 		await page.goto('/plans/a1a1eada-aaaa-0000-0000-000000000001');
 		await expect(
-			page.getByRole('heading', { level: 1, name: /Sydney Half/ })
+			page.getByRole('heading', { level: 1, name: /Richmond Half/ })
 		).toBeVisible({ timeout: 10_000 });
 	});
 });

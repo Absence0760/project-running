@@ -59,9 +59,9 @@ test.describe('/social — tab strip + redirects', () => {
 		page
 	}) => {
 		await page.goto('/social?tab=clubs');
-		// Runner owns / admins Sydney Run Club in the seed.
+		// Runner owns / admins Richmond Run Club in the seed.
 		await expect(
-			page.locator('.card', { hasText: 'Sydney Run Club' }).first()
+			page.locator('.card', { hasText: 'Richmond Run Club' }).first()
 		).toBeVisible({ timeout: 10_000 });
 	});
 });

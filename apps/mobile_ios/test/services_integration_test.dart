@@ -15,7 +15,7 @@ import '../lib/training_service.dart';
 // up as a clear test failure rather than a vague NotFound deep in
 // SocialService.
 const _seededClubId = 'c1111111-0000-0000-0000-000000000001';
-const _seededClubSlug = 'sydney-run-club';
+const _seededClubSlug = 'richmond-run-club';
 const _seededRecurringEventId = 'e1111111-0000-0000-0000-000000000001';
 const _seededRecurringEventInstance = '2026-04-19T06:30:00Z';
 const _seededTopLevelPostId = 'b1111111-0000-0000-0000-000000000001';
@@ -141,12 +141,10 @@ void main() {
 
     test('searchClubs with a region geocode + matching text returns a hit',
         () async {
-      // seed.sql repurposes the `sydney-run-club` slug (UUID is
-      // load-bearing across other fixtures) into the heatmap demo's
-      // `Richmond Run Club` at `Richmond, VA` so the Virginia tile
-      // extract has something pinnable. Geocode-stub a wide
-      // Richmond bbox so the ST_DWithin half of the RPC includes
-      // it even if the text doesn't perfectly match.
+      // The seeded `richmond-run-club` has location_label `Richmond, VA`
+      // and a location_point in Richmond. Geocode-stub a wide Richmond
+      // bbox so the ST_DWithin half of the RPC includes it even if the
+      // text doesn't perfectly match.
       final out = await social.searchClubs(
         'richmond',
         mapTilerKey: '',
@@ -160,9 +158,8 @@ void main() {
       );
       expect(out.any((c) => c.row.slug == _seededClubSlug), isTrue,
           reason: 'searchClubs with a Richmond geocode + text="richmond" '
-              'must surface the seeded sydney-run-club (now repurposed '
-              'to Richmond Run Club) via either the ILIKE or the '
-              'ST_DWithin branch of search_clubs');
+              'must surface the seeded richmond-run-club via either the '
+              'ILIKE or the ST_DWithin branch of search_clubs');
     });
 
     test('fetchMyClubs surfaces clubs the seed user belongs to', () async {
@@ -242,10 +239,10 @@ void main() {
       client.dispose();
     });
 
-    test('fetchClubBySlug returns the seeded sydney-run-club', () async {
+    test('fetchClubBySlug returns the seeded richmond-run-club', () async {
       final club = await social.fetchClubBySlug(_seededClubSlug);
       expect(club, isNotNull,
-          reason: 'seed.sql provisions sydney-run-club; fetchClubBySlug '
+          reason: 'seed.sql provisions richmond-run-club; fetchClubBySlug '
               'should surface it for any authenticated viewer');
       expect(club!.row.slug, _seededClubSlug);
       expect(club.row.id, _seededClubId);
@@ -270,7 +267,7 @@ void main() {
     test('fetchClubPosts surfaces the seeded top-level announcement', () async {
       final posts = await social.fetchClubPosts(_seededClubId);
       expect(posts, isNotEmpty,
-          reason: 'seed.sql plants top-level posts on sydney-run-club');
+          reason: 'seed.sql plants top-level posts on richmond-run-club');
       // Replies (parent_post_id != null) must be filtered out — the
       // method's `.isFilter('parent_post_id', null)` clause is what
       // gates the threaded UI's top-level pass.

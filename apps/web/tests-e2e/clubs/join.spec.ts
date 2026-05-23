@@ -6,7 +6,7 @@ import { USER_C_PRO } from '../fixtures/users';
 /**
  * /clubs/[slug] — open-policy join + leave round-trip.
  *
- * Sydney Run Club has `join_policy = 'open'` so any signed-in user
+ * Richmond Run Club has `join_policy = 'open'` so any signed-in user
  * can become a member with a single click. Morgan is not seeded into
  * any club, so this test exercises the full conversion flow:
  *   not a member  → click Join → composer mounts → click Leave →
@@ -33,12 +33,12 @@ test.describe('/clubs/[slug] — open-policy join + leave', () => {
 		}
 	});
 
-	test('morgan joins the open-policy Sydney Run Club, posts a feed message, then leaves', async ({
+	test('morgan joins the open-policy Richmond Run Club, posts a feed message, then leaves', async ({
 		page
 	}) => {
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Starting state: morgan is not a member → "Join club" button

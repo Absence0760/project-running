@@ -16,7 +16,7 @@ function setConsentAccepted() {
 }
 
 /**
- * Cross-user event RSVP saga: USER_A (admin of Sydney Run Club) creates
+ * Cross-user event RSVP saga: USER_A (admin of Richmond Run Club) creates
  * an event. USER_B (alex, already a club member per seed.sql) RSVPs
  * "Going" via the event detail page. USER_A receives a notification
  * ("Alex Chen RSVP'd Going to your event …"). Wired by the
@@ -25,7 +25,7 @@ function setConsentAccepted() {
  */
 
 const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
-const SYDNEY_RUN_CLUB_SLUG = 'sydney-run-club';
+const SYDNEY_RUN_CLUB_SLUG = 'richmond-run-club';
 
 test.describe('saga: alex RSVPs runner-owned event → runner inbox row', () => {
 	test.describe.configure({ timeout: 90_000 });

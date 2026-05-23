@@ -24,12 +24,12 @@ test.describe('/coach', () => {
 	test.beforeEach(async () => {
 		// The plan ChipDropdown lists fetchMyPlans() ordered by
 		// created_at DESC, so any test that plants an extra plan for
-		// runner pushes Sydney Half 2026 off the first row of the
+		// runner pushes Richmond Half 2026 off the first row of the
 		// dropdown. The keyboard-nav test below (ArrowDown from "No
 		// plan") then picks the wrong plan and fails with a stale
 		// "test · 12w" assertion. Sweep any non-seed plans (including
 		// abandoned and template clones) so the dropdown order is
-		// stable. Restore Sydney Half to active in case a prior run's
+		// stable. Restore Richmond Half to active in case a prior run's
 		// Replace-plan flow left it completed.
 		const admin = getAdminClient();
 		await admin
@@ -62,7 +62,7 @@ test.describe('/coach', () => {
 	}) => {
 		// The plan chip is a ChipDropdown trigger with aria-label
 		// "Plan context". Default state on a fresh /coach load:
-		// runner's only seeded plan ("Sydney Half 2026") is the active
+		// runner's only seeded plan ("Richmond Half 2026") is the active
 		// one, so it's preselected.
 		await page.goto('/coach');
 		const planTrigger = page.getByRole('button', { name: 'Plan context' });
@@ -73,12 +73,12 @@ test.describe('/coach', () => {
 		const popover = page.locator('[role="listbox"]');
 		await expect(popover).toBeVisible({ timeout: 5_000 });
 
-		// Both options should be present: "No plan" + "Sydney Half 2026".
+		// Both options should be present: "No plan" + "Richmond Half 2026".
 		await expect(
 			popover.getByRole('option', { name: /No plan/ })
 		).toBeVisible();
 		await expect(
-			popover.getByRole('option', { name: /Sydney Half 2026/ })
+			popover.getByRole('option', { name: /Richmond Half 2026/ })
 		).toBeVisible();
 
 		// Pick "No plan" — the previous bug was that this silently
@@ -110,12 +110,12 @@ test.describe('/coach', () => {
 
 		await planTrigger.click();
 		const popover = page.locator('[role="listbox"]');
-		await popover.getByRole('option', { name: /Sydney Half 2026/ }).click();
+		await popover.getByRole('option', { name: /Richmond Half 2026/ }).click();
 		await expect(popover).toHaveCount(0);
 
 		// Plan UUIDs are 8-4-4-4-12 hex; pin the URL changed.
 		await expect(page).toHaveURL(/[?&]plan=[0-9a-f-]{36}\b/);
-		await expect(planTrigger).toContainText('Sydney Half 2026');
+		await expect(planTrigger).toContainText('Richmond Half 2026');
 	});
 
 	test('runs-limit dropdown — picking "Last 50" updates the trigger label', async ({
@@ -171,11 +171,11 @@ test.describe('/coach', () => {
 		await expect(popover).toBeVisible({ timeout: 5_000 });
 
 		// First option ("No plan") is active on open; ArrowDown moves
-		// to "Sydney Half 2026".
+		// to "Richmond Half 2026".
 		await page.keyboard.press('ArrowDown');
 		await page.keyboard.press('Enter');
 		await expect(popover).toHaveCount(0);
-		await expect(planTrigger).toContainText('Sydney Half 2026');
+		await expect(planTrigger).toContainText('Richmond Half 2026');
 	});
 
 	test('429 daily-limit response surfaces the retry message instead of failing silently', async ({
@@ -692,8 +692,8 @@ test.describe('/coach', () => {
 
 		await planTrigger.click();
 		const popover = page.locator('[role="listbox"]');
-		await popover.getByRole('option', { name: /Sydney Half 2026/ }).click();
-		await expect(planTrigger).toContainText('Sydney Half 2026');
+		await popover.getByRole('option', { name: /Richmond Half 2026/ }).click();
+		await expect(planTrigger).toContainText('Richmond Half 2026');
 
 		// Header sub-copy adapts to the plan-present state.
 		await expect(
@@ -701,7 +701,7 @@ test.describe('/coach', () => {
 		).toBeVisible({ timeout: 5_000 });
 
 		await page.reload();
-		await expect(planTrigger).toContainText('Sydney Half 2026', { timeout: 10_000 });
+		await expect(planTrigger).toContainText('Richmond Half 2026', { timeout: 10_000 });
 		await expect(page).toHaveURL(/[?&]plan=[0-9a-f-]{36}\b/);
 	});
 
@@ -716,7 +716,7 @@ test.describe('/coach', () => {
 		const planTrigger = page.getByRole('button', { name: 'Plan context' });
 		const runsTrigger = page.getByRole('button', { name: 'Recent runs to include' });
 
-		await expect(planTrigger).toContainText('Sydney Half 2026', { timeout: 10_000 });
+		await expect(planTrigger).toContainText('Richmond Half 2026', { timeout: 10_000 });
 		await expect(runsTrigger).toBeVisible();
 		await expect(runsTrigger).toContainText('Last 20');
 	});

@@ -36,7 +36,7 @@ test.describe('/plans/new — create wizard', () => {
 		}
 		// `createTrainingPlan` auto-demotes any existing active plan to
 		// 'completed' so the new one can take the per-user "one active
-		// plan" slot. The seed has Sydney Half at 'active'; without
+		// plan" slot. The seed has Richmond Half at 'active'; without
 		// this, every other test downstream of this file sees Sydney
 		// Half as 'completed' and any test that needs an active plan
 		// (e.g. /coach defaulting) would behave differently. Restore.
@@ -137,10 +137,10 @@ test.describe('/plans/new — create wizard', () => {
 		// (now intentional) replace.
 		await page.goto('/plans');
 
-		// Seed has an active plan ("Sydney Half 2026"); confirm it's
+		// Seed has an active plan ("Richmond Half 2026"); confirm it's
 		// active before we start.
 		await expect(
-			page.locator('.card', { hasText: 'Sydney Half 2026' })
+			page.locator('.card', { hasText: 'Richmond Half 2026' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Open the New-plan wizard.
@@ -167,7 +167,7 @@ test.describe('/plans/new — create wizard', () => {
 		await expect(confirm).toBeVisible({ timeout: 5_000 });
 		// Dialog names the plan being replaced so the user can see
 		// exactly what they're about to retire.
-		await expect(confirm).toContainText('Sydney Half 2026');
+		await expect(confirm).toContainText('Richmond Half 2026');
 
 		// Cancel: dialog closes, no replace happens, the original plan
 		// stays visible on /plans.
@@ -179,7 +179,7 @@ test.describe('/plans/new — create wizard', () => {
 
 		// Seed plan is still on /plans + still active (no abandon /
 		// complete flip).
-		const seedCard = page.locator('.card', { hasText: 'Sydney Half 2026' });
+		const seedCard = page.locator('.card', { hasText: 'Richmond Half 2026' });
 		await expect(seedCard).toBeVisible({ timeout: 10_000 });
 		await expect(seedCard).toHaveClass(/card-active/);
 	});

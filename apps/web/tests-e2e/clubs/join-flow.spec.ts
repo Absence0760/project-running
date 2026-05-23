@@ -13,7 +13,7 @@ import { USER_A, USER_B, USER_C_PRO } from '../fixtures/users';
  *   - 'not-authed' → sign-in + create-account CTAs with return_to
  *   - 'error' → "Invite problem" with Browse clubs + Go to dashboard
  *
- * Sydney Run Club has `join_policy = 'open'` and a null invite_token
+ * Richmond Run Club has `join_policy = 'open'` and a null invite_token
  * in the seed. We plant a token on it for the duration of each test
  * that needs one and clear it on teardown, so the seed shape is
  * restored for downstream specs (notably clubs/join.spec.ts which
@@ -24,14 +24,14 @@ const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
 const SYDNEY_INVITE_TOKEN = 'syd5n3yrun5clubtest3njoin000000';
 const BAD_TOKEN = 'no-such-token-xxx';
 
-async function plantSydneyToken(): Promise<void> {
+async function plantSeedToken(): Promise<void> {
 	await getAdminClient()
 		.from('clubs')
 		.update({ invite_token: SYDNEY_INVITE_TOKEN })
 		.eq('id', SYDNEY_RUN_CLUB_ID);
 }
 
-async function clearSydneyToken(): Promise<void> {
+async function clearSeedToken(): Promise<void> {
 	try {
 		await getAdminClient()
 			.from('clubs')
@@ -58,11 +58,11 @@ test.describe('/clubs/join/[token] — signed-out branch', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
 
 	test.beforeEach(async () => {
-		await plantSydneyToken();
+		await plantSeedToken();
 	});
 
 	test.afterEach(async () => {
-		await clearSydneyToken();
+		await clearSeedToken();
 	});
 
 	test('anon visitor sees the sign-in kicker + both CTAs with return_to back to the invite URL', async ({
@@ -146,11 +146,11 @@ test.describe('/clubs/join/[token] — already-a-member (owner)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeEach(async () => {
-		await plantSydneyToken();
+		await plantSeedToken();
 	});
 
 	test.afterEach(async () => {
-		await clearSydneyToken();
+		await clearSeedToken();
 	});
 
 	test('owner visiting their own clubs valid invite URL is bounced to /clubs/<slug>', async ({
@@ -163,9 +163,9 @@ test.describe('/clubs/join/[token] — already-a-member (owner)', () => {
 		// strand the owner on the "Invite problem" branch.
 		await page.goto(`/clubs/join/${SYDNEY_INVITE_TOKEN}`);
 
-		await page.waitForURL(/\/clubs\/sydney-run-club$/, { timeout: 15_000 });
+		await page.waitForURL(/\/clubs\/richmond-run-club$/, { timeout: 15_000 });
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 	});
 });
@@ -174,12 +174,12 @@ test.describe('/clubs/join/[token] — successful redemption (cross-user)', () =
 	test.use({ storageState: USER_C_PRO.storageStatePath });
 
 	test.beforeEach(async () => {
-		await plantSydneyToken();
+		await plantSeedToken();
 		await removeMembership(USER_C_PRO.id);
 	});
 
 	test.afterEach(async () => {
-		await clearSydneyToken();
+		await clearSeedToken();
 		await removeMembership(USER_C_PRO.id);
 	});
 
@@ -188,9 +188,9 @@ test.describe('/clubs/join/[token] — successful redemption (cross-user)', () =
 	}) => {
 		await page.goto(`/clubs/join/${SYDNEY_INVITE_TOKEN}`);
 
-		await page.waitForURL(/\/clubs\/sydney-run-club$/, { timeout: 15_000 });
+		await page.waitForURL(/\/clubs\/richmond-run-club$/, { timeout: 15_000 });
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// DB sanity — the row was inserted, not just the URL redirected.
@@ -214,13 +214,13 @@ test.describe('/clubs/join/[token] — already-a-member (existing member upsert)
 	test.use({ storageState: USER_B.storageStatePath });
 
 	test.beforeEach(async () => {
-		await plantSydneyToken();
+		await plantSeedToken();
 	});
 
 	test.afterEach(async () => {
-		await clearSydneyToken();
+		await clearSeedToken();
 		// Restore alex's seeded membership shape (active member of
-		// Sydney Run Club) so downstream specs see the seed.
+		// Richmond Run Club) so downstream specs see the seed.
 		try {
 			await getAdminClient()
 				.from('club_members')
@@ -243,9 +243,9 @@ test.describe('/clubs/join/[token] — already-a-member (existing member upsert)
 	}) => {
 		await page.goto(`/clubs/join/${SYDNEY_INVITE_TOKEN}`);
 
-		await page.waitForURL(/\/clubs\/sydney-run-club$/, { timeout: 15_000 });
+		await page.waitForURL(/\/clubs\/richmond-run-club$/, { timeout: 15_000 });
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		const { count } = await getAdminClient()

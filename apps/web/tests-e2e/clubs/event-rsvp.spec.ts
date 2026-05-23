@@ -47,7 +47,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
 		});
 
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('tab', { name: /^Events/ }).click();
 
 		await page.locator(`a[href$="/events/${eventId}"]`).click();
@@ -84,7 +84,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { name: title }))
 			.toBeVisible({ timeout: 10_000 });
 
@@ -132,7 +132,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 			recurrence_until: untilAt.toISOString()
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { name: title })).toBeVisible({
 			timeout: 10_000
 		});
@@ -219,7 +219,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 			starts_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { name: title })).toBeVisible({
 			timeout: 10_000
 		});
@@ -268,7 +268,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 			starts_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString()
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { name: title })).toBeVisible({
 			timeout: 10_000
 		});
@@ -311,7 +311,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 			starts_at: new Date(Date.now() + 3 * 24 * 3600 * 1000).toISOString()
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(page.getByRole('heading', { name: title })).toBeVisible({
 			timeout: 10_000
 		});
@@ -358,7 +358,7 @@ test.describe('/clubs/[slug]/events/[id] — RSVP', () => {
 				);
 			});
 			const anon = await anonCtx.newPage();
-			await anon.goto(`/clubs/sydney-run-club/events/${localEventId}`);
+			await anon.goto(`/clubs/richmond-run-club/events/${localEventId}`);
 			await expect(
 				anon.getByRole('heading', { name: title })
 			).toBeVisible({ timeout: 10_000 });

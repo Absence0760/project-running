@@ -43,7 +43,7 @@ test.describe('Plan publish-as-template — round-trip', () => {
 			.select('id')
 			.eq('is_template', true)
 			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Sydney Half 2026');
+			.eq('name', 'Richmond Half 2026');
 		for (const r of clones ?? []) {
 			await admin
 				.from('training_plans')
@@ -110,13 +110,13 @@ test.describe('Plan publish-as-template — round-trip', () => {
 		expect(srcAfter.parent_template_id).toBe(srcBefore.parent_template_id);
 
 		// Template surfaces on the club's Templates tab.
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 		await page.getByRole('tab', { name: /^Templates/ }).click();
 		const templateRow = page.locator('.template-row', {
-			hasText: 'Sydney Half 2026'
+			hasText: 'Richmond Half 2026'
 		});
 		await expect(templateRow).toBeVisible({ timeout: 10_000 });
 
@@ -129,7 +129,7 @@ test.describe('Plan publish-as-template — round-trip', () => {
 			.select('id')
 			.eq('is_template', true)
 			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Sydney Half 2026');
+			.eq('name', 'Richmond Half 2026');
 		expect(clones?.length).toBe(1);
 		const cloneId = (clones![0] as { id: string }).id;
 		const adoptLink = templateRow.getByRole('link', { name: /Adopt/ });
@@ -158,13 +158,13 @@ test.describe('Plan publish-as-template — round-trip', () => {
 			.select('id')
 			.eq('is_template', true)
 			.eq('club_id', SYDNEY_RUN_CLUB_ID)
-			.eq('name', 'Sydney Half 2026');
+			.eq('name', 'Richmond Half 2026');
 		expect(clones?.length).toBe(1);
 		const cloneId = (clones![0] as { id: string }).id;
 
 		await page.goto(`/plans/${cloneId}`);
 		await expect(
-			page.getByRole('heading', { level: 1, name: /Sydney Half 2026/ })
+			page.getByRole('heading', { level: 1, name: /Richmond Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 		await expect(page.locator('.chip', { hasText: 'Club template' }))
 			.toBeVisible({ timeout: 10_000 });

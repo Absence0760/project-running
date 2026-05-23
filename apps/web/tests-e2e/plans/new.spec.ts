@@ -76,7 +76,7 @@ test.describe('/plans/new — standalone wizard', () => {
 			hasText: /Replace your active plan/
 		});
 		await expect(replace).toBeVisible({ timeout: 5_000 });
-		await expect(replace).toContainText('Sydney Half 2026');
+		await expect(replace).toContainText('Richmond Half 2026');
 		await replace.getByRole('button', { name: 'Replace plan' }).click();
 
 		await page.waitForURL(/\/plans\/[0-9a-f-]+$/, { timeout: 15_000 });

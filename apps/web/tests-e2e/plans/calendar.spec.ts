@@ -21,7 +21,7 @@ import { USER_A } from '../fixtures/users';
  *   - onSelect handler dispatch when the host wants the click to open
  *     an editor instead of navigating to /plans/[id]/workouts/[wid]
  *
- * The seed provisions a 12-week plan ("Sydney Half 2026", id
+ * The seed provisions a 12-week plan ("Richmond Half 2026", id
  * `a1a1eada-aaaa-…`) with workouts in weeks 0-4 + the race week 11.
  * Weeks 5-10 have no workouts on purpose (placeholder gap) — useful
  * because it lets us exercise the in-plan-but-no-workout cell shape

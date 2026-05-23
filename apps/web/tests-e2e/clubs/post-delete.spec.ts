@@ -11,7 +11,7 @@ import { USER_A } from '../fixtures/users';
  * Delete-post path (admin-only icon button on each post row →
  * ConfirmDialog → deleteClubPost RPC).
  *
- * Runner is the owner of Sydney Run Club, so isAdmin=true and the
+ * Runner is the owner of Richmond Run Club, so isAdmin=true and the
  * Delete-post button renders. Self-contained: post a fresh message,
  * delete it, verify gone.
  */
@@ -47,14 +47,14 @@ test.describe('/clubs/[slug] — post delete', () => {
 
 		try {
 			// Visit as alex (USER_B) — alex is an active member of
-			// Sydney Run Club per seed but NOT an admin/owner.
+			// Richmond Run Club per seed but NOT an admin/owner.
 			const { USER_B } = await import('../fixtures/users');
 			const ctxAlex = await browser.newContext({
 				storageState: USER_B.storageStatePath
 			});
 			const alex = await ctxAlex.newPage();
 			try {
-				await alex.goto('/clubs/sydney-run-club');
+				await alex.goto('/clubs/richmond-run-club');
 				const post = alex.locator('article.post', { hasText: body });
 				await expect(post).toBeVisible({ timeout: 10_000 });
 				// Delete-post button absent for the non-author non-admin.
@@ -74,9 +74,9 @@ test.describe('/clubs/[slug] — post delete', () => {
 	}) => {
 		const body = `e2e-post-delete ${Date.now()}`;
 
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Composer is gated on `isMember = club.viewer_role != null` —

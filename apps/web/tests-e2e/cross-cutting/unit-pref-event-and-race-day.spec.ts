@@ -56,11 +56,11 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 			.update({ preferred_unit: 'mi' })
 			.eq('id', USER_A.id);
 
-		// Navigate to a club USER_A admins. sydney-run-club is seeded
+		// Navigate to a club USER_A admins. richmond-run-club is seeded
 		// with USER_A as admin.
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Open the New event modal.
@@ -94,7 +94,7 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 			.update({ preferred_unit: 'km' })
 			.eq('id', USER_A.id);
 
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('button', { name: /New event/ }).click();
 		const modal = page.locator('.modal', { hasText: 'New event' });
 		await expect(modal).toBeVisible({ timeout: 5_000 });
@@ -137,7 +137,7 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 				start_date: startIso,
 				end_date: endIso,
 				// 'completed' — not 'active' — because the seed already
-				// gives USER_A an active plan (Sydney Half 2026) and the
+				// gives USER_A an active plan (Richmond Half 2026) and the
 				// partial unique index `training_plans_one_active`
 				// forbids a second. RaceDayPanel only gates on end_date,
 				// not status, so this still exercises the panel.

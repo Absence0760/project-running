@@ -353,48 +353,45 @@ INSERT INTO integrations (user_id, provider, last_sync_at) VALUES
 -- Runner owns all three so the full admin surface (new event, invite link,
 -- pending-requests panel, post composer) is reachable out of the box.
 
+-- All three clubs are Virginia-themed so the seed reads consistently
+-- with the heatmap-tab Virginia tile extract + the six VA clubs +
+-- the discoverable_routes_in_bbox / clubs_in_bbox RPCs (migration
+-- 20260911_001). location_point on the two public clubs is set in
+-- the UPDATEs below — the column isn't part of the INSERT shape
+-- because PostGIS geography literals don't round-trip through the
+-- positional VALUES clause cleanly here.
 INSERT INTO clubs (id, owner_id, name, slug, description, location_label, is_public, join_policy, invite_token)
 VALUES
   ('c1111111-0000-0000-0000-000000000001',
    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-   'Sydney Run Club',
-   'sydney-run-club',
-   'Weekly long runs from Centennial Park. All paces, all welcome.',
-   'Sydney, AU',
+   'Richmond Run Club',
+   'richmond-run-club',
+   'Weekly long runs from Belle Isle. All paces, all welcome.',
+   'Richmond, VA',
    true, 'open', null),
   ('c2222222-0000-0000-0000-000000000002',
    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-   'Tempo Tuesday',
+   'UVA Tempo Tuesday',
    'tempo-tuesday',
-   'Weekly threshold session. Request to join — we keep the group around 15 so intervals stay tidy.',
-   'Sydney, AU',
+   'Weekly threshold session in Charlottesville. Request to join — group around 15.',
+   'Charlottesville, VA',
    true, 'request', null),
   ('c3333333-0000-0000-0000-000000000003',
    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
    'Friends of Jared',
    'friends-of-jared',
    'Small private group for pre-race meetups and trip planning.',
-   'Sydney, AU',
+   'Richmond, VA',
    false, 'invite',
    'c3fr13nd50fj4r3dc1ubtoken000000');
 
--- Rename + relocate the two public clubs from "Sydney" to Virginia
--- so the heatmap-tab discoverable-pin layer (clubs_in_bbox +
--- discoverable_routes_in_bbox, migration 20260911_001) reads
--- consistently with the Virginia route seeds + the Protomaps
--- Virginia tile extract. In a real-world flow the club editor
--- would set name + location_label + location_point together.
-UPDATE clubs
-   SET name = 'Richmond Run Club',
-       description = 'Weekly long runs from Belle Isle. All paces, all welcome.',
-       location_label = 'Richmond, VA',
-       location_point = ST_GeogFromText('SRID=4326;POINT(-77.4360 37.5407)')
+-- Pin the two public clubs to their stated cities so the heatmap-tab
+-- discoverable-pin layer (clubs_in_bbox + discoverable_routes_in_bbox,
+-- migration 20260911_001) lights up. friends-of-jared keeps a NULL
+-- location_point — private clubs aren't on the discoverable map.
+UPDATE clubs SET location_point = ST_GeogFromText('SRID=4326;POINT(-77.4360 37.5407)')
   WHERE id = 'c1111111-0000-0000-0000-000000000001'::uuid;
-UPDATE clubs
-   SET name = 'UVA Tempo Tuesday',
-       description = 'Weekly threshold session in Charlottesville. Request to join — group around 15.',
-       location_label = 'Charlottesville, VA',
-       location_point = ST_GeogFromText('SRID=4326;POINT(-78.4767 38.0293)')
+UPDATE clubs SET location_point = ST_GeogFromText('SRID=4326;POINT(-78.4767 38.0293)')
   WHERE id = 'c2222222-0000-0000-0000-000000000002'::uuid;
 
 -- Six more public clubs across Virginia so the heatmap shows a
@@ -598,12 +595,12 @@ INSERT INTO training_plans (
 ) VALUES (
   'a1a1eada-aaaa-0000-0000-000000000001',
   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
-  'Sydney Half 2026',
+  'Richmond Half 2026',
   'distance_half', 21097.5, 5700,    -- 1:35:00 target
   '2026-03-29', '2026-06-20', 5, 52.0, 1320,   -- 22:00 recent 5K
   'active', 'manual',
   '["80% of weekly mileage should be easy","Never increase weekly volume more than 10% week-over-week","Long run is non-negotiable — protect Sunday","Sleep 8 hours through build weeks"]'::jsonb,
-  'Goal race: Sydney Half Marathon, 2026-06-21.'
+  'Goal race: Richmond Half Marathon, 2026-06-21.'
 );
 
 -- Twelve weeks of plan_weeks rows. Phases: base 4 / build 5 / peak 2 / race 1.

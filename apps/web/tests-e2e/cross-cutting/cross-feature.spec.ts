@@ -100,7 +100,7 @@ test.describe('runs ↔ plans on /plans/[id]', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.afterEach(async () => {
-		// Clear any manually_completed=true row on the Sydney Half plan
+		// Clear any manually_completed=true row on the Richmond Half plan
 		// — the seed has zero (the one seeded completion uses
 		// completed_run_id, not manually_completed), so this scoops
 		// up exactly the workout the test marked.
@@ -123,7 +123,7 @@ test.describe('runs ↔ plans on /plans/[id]', () => {
 	}) => {
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
 		await expect(
-			page.getByRole('heading', { level: 1, name: /Sydney Half 2026/ })
+			page.getByRole('heading', { level: 1, name: /Richmond Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 
 		// Snapshot the seeded completion count. The seed has exactly

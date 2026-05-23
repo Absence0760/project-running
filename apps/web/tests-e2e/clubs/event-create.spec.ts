@@ -43,9 +43,9 @@ test.describe('/clubs/[slug] — admin event create', () => {
 			.toISOString()
 			.slice(0, 10);
 
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		// "New event" admin button → Modal opens with the EventEditor.
@@ -94,7 +94,7 @@ test.describe('/clubs/[slug] — admin event create', () => {
 			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString()
 		});
 
-		await page.goto(`/clubs/sydney-run-club/events/${eventId}`);
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
 		await expect(
 			page.getByRole('heading', { name: title })
 		).toBeVisible({ timeout: 10_000 });

@@ -304,7 +304,7 @@ test.describe('/dashboard', () => {
 		await expect(hero.getByText('Training plan', { exact: false }))
 			.toBeVisible();
 		await expect(hero.locator('.plan-hero-name')).toHaveText(
-			/Sydney Half 2026/
+			/Richmond Half 2026/
 		);
 
 		// Position: "Week N of M" — both numbers present, neither stale.
@@ -394,7 +394,7 @@ test.describe('/dashboard', () => {
 		await managePlans.click();
 		await expect(page).toHaveURL(/\/plans$/);
 		await expect(
-			page.getByRole('heading', { name: /Sydney Half 2026/ })
+			page.getByRole('heading', { name: /Richmond Half 2026/ })
 		).toBeVisible({ timeout: 10_000 });
 	});
 });

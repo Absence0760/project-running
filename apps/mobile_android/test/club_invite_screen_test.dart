@@ -28,7 +28,7 @@ Future<void> _ensureSupabase() async {
 class _FakeSocialService extends SocialService {
   String? capturedToken;
   Object? errorToThrow;
-  String returnSlug = 'sydney-run-club';
+  String returnSlug = 'richmond-run-club';
 
   @override
   Future<String> joinClubByToken(String token) async {

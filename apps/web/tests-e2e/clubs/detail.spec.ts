@@ -31,14 +31,14 @@ test.describe('/clubs/[slug]', () => {
 		await resetRateLimit(USER_A.id, 'create_club');
 	});
 
-	test('Members tab on Sydney Run Club lists runner as the owner', async ({
+	test('Members tab on Richmond Run Club lists runner as the owner', async ({
 		page
 	}) => {
 		// `enroll_club_owner_trigger` writes the owner row into
 		// club_members on insert — the Members tab queries that table
 		// via fetchClubMembers. The owner has role='owner'; the test
 		// targets that role badge.
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 
 		// Members tab — the tab label now includes the member count
 		// (e.g. "Members (2)"), so anchor on the prefix via the
@@ -56,7 +56,7 @@ test.describe('/clubs/[slug]', () => {
 		await expect(memberList.getByText('owner', { exact: true })).toBeVisible();
 	});
 
-	test('Routes tab on Sydney Run Club: admin sees "+ New route" + "Transfer" affordances', async ({
+	test('Routes tab on Richmond Run Club: admin sees "+ New route" + "Transfer" affordances', async ({
 		page
 	}) => {
 		// The Routes tab is admin-gated for the management affordances:
@@ -64,9 +64,9 @@ test.describe('/clubs/[slug]', () => {
 		// a modal that lets the admin re-home one of their personal
 		// routes. Pin both surfaces are visible for the owner so a
 		// regression in the isAdmin guard surfaces here.
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.getByRole('tab', { name: /^Routes/ }).click();
@@ -80,7 +80,7 @@ test.describe('/clubs/[slug]', () => {
 		).toBeVisible();
 	});
 
-	test('Events tab on Sydney Run Club: admin "New event" button opens the EventEditor modal', async ({
+	test('Events tab on Richmond Run Club: admin "New event" button opens the EventEditor modal', async ({
 		page
 	}) => {
 		// Admin gating: the "New event" button at the top of /clubs/[slug]
@@ -88,9 +88,9 @@ test.describe('/clubs/[slug]', () => {
 		// = true which mounts the EventEditor modal. Pin both the
 		// affordance and the modal launch — a regression that broke
 		// isAdmin or the showEventModal binding would surface here.
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(
-			page.getByRole('heading', { level: 1, name: 'Sydney Run Club' })
+			page.getByRole('heading', { level: 1, name: 'Richmond Run Club' })
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.getByRole('button', { name: /New event/ }).first().click();

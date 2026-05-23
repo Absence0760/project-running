@@ -75,7 +75,7 @@ test.describe('detail surface — plans', () => {
 		// Wait for the plan heading to mount before checking the
 		// downstream widgets.
 		await expect(
-			page.getByRole('heading', { level: 1, name: /Sydney Half/ })
+			page.getByRole('heading', { level: 1, name: /Richmond Half/ })
 		).toBeVisible({ timeout: 10_000 });
 		// At least one of: today-link OR a week article.
 		await expect(
@@ -86,7 +86,7 @@ test.describe('detail surface — plans', () => {
 	test('/plans/<seeded> publish-row is visible to the plan owner', async ({
 		page
 	}) => {
-		// Runner owns the seeded Sydney Half plan and admins three
+		// Runner owns the seeded Richmond Half plan and admins three
 		// clubs, so the publish-row renders.
 		await page.goto('/plans/a1a1eada-aaaa-0000-0000-000000000001');
 		await expect(page.locator('.publish-row'))
@@ -97,32 +97,32 @@ test.describe('detail surface — plans', () => {
 test.describe('detail surface — clubs', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('/clubs/sydney-run-club renders the Members tab', async ({ page }) => {
-		await page.goto('/clubs/sydney-run-club');
+	test('/clubs/richmond-run-club renders the Members tab', async ({ page }) => {
+		await page.goto('/clubs/richmond-run-club');
 		await expect(page.getByRole('tab', { name: /^Members/ }))
 			.toBeVisible({ timeout: 10_000 });
 	});
 
-	test('/clubs/sydney-run-club Events tab lists at least one event', async ({
+	test('/clubs/richmond-run-club Events tab lists at least one event', async ({
 		page
 	}) => {
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('tab', { name: /^Events/ }).click();
-		// Seed has 3 upcoming events on Sydney Run Club.
+		// Seed has 3 upcoming events on Richmond Run Club.
 		await expect(page.locator('a[href*="/events/"]').first())
 			.toBeVisible({ timeout: 10_000 });
 	});
 
-	test('/clubs/sydney-run-club Routes tab is reachable', async ({ page }) => {
-		await page.goto('/clubs/sydney-run-club');
+	test('/clubs/richmond-run-club Routes tab is reachable', async ({ page }) => {
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('tab', { name: /^Routes/ }).click();
 		// The routes panel may be empty in seed, but the tab switch
 		// shouldn't error — just verify we left the feed view.
 		await expect(page.locator('article.post')).toHaveCount(0);
 	});
 
-	test('/clubs/sydney-run-club Templates tab is reachable', async ({ page }) => {
-		await page.goto('/clubs/sydney-run-club');
+	test('/clubs/richmond-run-club Templates tab is reachable', async ({ page }) => {
+		await page.goto('/clubs/richmond-run-club');
 		await page.getByRole('tab', { name: /^Templates/ }).click();
 		// Same shape — no posts visible after the tab change.
 		await expect(page.locator('article.post')).toHaveCount(0);

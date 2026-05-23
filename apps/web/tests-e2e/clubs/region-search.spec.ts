@@ -90,7 +90,7 @@ test.describe('clubs Browse — geocoded region search', () => {
 
 		// Wait for the initial Browse load to settle.
 		await expect(
-			page.getByRole('heading', { name: 'Sydney Run Club' }),
+			page.getByRole('heading', { name: 'Richmond Run Club' }),
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.getByPlaceholder(/Search by name/).fill('Virginia');
@@ -101,12 +101,6 @@ test.describe('clubs Browse — geocoded region search', () => {
 		await expect(page.getByRole('heading', { name })).toBeVisible({
 			timeout: 10_000,
 		});
-
-		// Sydney Run Club should NOT appear — Sydney is far outside the
-		// Virginia bbox, and its label doesn't contain "Virginia".
-		await expect(
-			page.getByRole('heading', { name: 'Sydney Run Club' }),
-		).toHaveCount(0);
 	});
 
 	test('falls back to ILIKE on label when MapTiler returns no feature', async ({
@@ -151,7 +145,7 @@ test.describe('clubs Browse — geocoded region search', () => {
 		await page.goto('/social?tab=clubs&clubs-sub=browse');
 
 		await expect(
-			page.getByRole('heading', { name: 'Sydney Run Club' }),
+			page.getByRole('heading', { name: 'Richmond Run Club' }),
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.getByPlaceholder(/Search by name/).fill('Virginia');

@@ -43,7 +43,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		const untilDate = new Date(Date.now() + 28 * 24 * 3600 * 1000);
 		const untilIso = untilDate.toISOString().slice(0, 10);
 
-		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await page.goto(`/clubs/richmond-run-club/events/new`);
 		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
 			timeout: 10_000
 		});
@@ -62,7 +62,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 
 		await page.getByRole('button', { name: /Create event/ }).click();
 
-		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+		await page.waitForURL(/\/clubs\/richmond-run-club\/events\/[0-9a-f-]+$/, {
 			timeout: 10_000
 		});
 		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
@@ -100,7 +100,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		const startDate = new Date(Date.now() + 7 * 24 * 3600 * 1000);
 		const startIso = startDate.toISOString().slice(0, 10);
 
-		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await page.goto(`/clubs/richmond-run-club/events/new`);
 		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
 			timeout: 10_000
 		});
@@ -115,7 +115,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 
 		await page.getByRole('button', { name: /Create event/ }).click();
 
-		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+		await page.waitForURL(/\/clubs\/richmond-run-club\/events\/[0-9a-f-]+$/, {
 			timeout: 10_000
 		});
 		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
@@ -144,7 +144,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		const untilDate = new Date(Date.now() - 7 * 24 * 3600 * 1000);
 		const untilIso = untilDate.toISOString().slice(0, 10);
 
-		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await page.goto(`/clubs/richmond-run-club/events/new`);
 		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
 			timeout: 10_000
 		});
@@ -159,7 +159,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 
 		await page.getByRole('button', { name: /Create event/ }).click();
 
-		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+		await page.waitForURL(/\/clubs\/richmond-run-club\/events\/[0-9a-f-]+$/, {
 			timeout: 10_000
 		});
 		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);
@@ -180,7 +180,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 			.toISOString()
 			.slice(0, 10);
 
-		await page.goto(`/clubs/sydney-run-club/events/new`);
+		await page.goto(`/clubs/richmond-run-club/events/new`);
 		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
 			timeout: 10_000
 		});
@@ -200,7 +200,7 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		await expect(page.getByRole('button', { name: 'Mon' })).toHaveClass(/active/);
 
 		await page.getByRole('button', { name: /Create event/ }).click();
-		await page.waitForURL(/\/clubs\/sydney-run-club\/events\/[0-9a-f-]+$/, {
+		await page.waitForURL(/\/clubs\/richmond-run-club\/events\/[0-9a-f-]+$/, {
 			timeout: 10_000
 		});
 		const match = page.url().match(/\/events\/([0-9a-f-]+)$/);

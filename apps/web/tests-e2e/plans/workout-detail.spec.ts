@@ -11,7 +11,7 @@ import { USER_A } from '../fixtures/users';
  * page is the alternative route — used by deep links from the coach
  * surface, and by the "View workout" path that some plan templates
  * emit. Workout IDs are auto-generated, so we query one off the
- * seeded Sydney Half plan via service-role.
+ * seeded Richmond Half plan via service-role.
  *
  * Future depth: mark complete + unlink (button + ConfirmDialog),
  * plan-workout-with-structure renders the warmup / repeats / cooldown

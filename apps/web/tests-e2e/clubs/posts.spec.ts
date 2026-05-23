@@ -12,7 +12,7 @@ import { USER_A, USER_B } from '../fixtures/users';
  * the reply count flipping on the parent.
  *
  * Two users in two contexts: runner (admin/owner) posts the parent;
- * alex (member of Sydney Run Club per seed) clicks Reply, drafts,
+ * alex (member of Richmond Run Club per seed) clicks Reply, drafts,
  * submits. The parent post's "Reply" affordance flips to "Hide 1
  * reply" once `expandedThreads` includes the parent's id.
  */
@@ -38,7 +38,7 @@ test.describe('/clubs/[slug] — threaded replies', () => {
 
 		try {
 			// ── Runner posts the parent ──
-			await runner.goto('/clubs/sydney-run-club');
+			await runner.goto('/clubs/richmond-run-club');
 			const composer = runner.locator('.post-form textarea').first();
 			await expect(composer).toBeVisible({ timeout: 10_000 });
 			await composer.fill(parentBody);
@@ -58,7 +58,7 @@ test.describe('/clubs/[slug] — threaded replies', () => {
 			parentId = (planted as { id: string }).id;
 
 			// ── Alex (member) replies ──
-			await alex.goto('/clubs/sydney-run-club');
+			await alex.goto('/clubs/richmond-run-club');
 			const alexParent = alex.locator('article.post', { hasText: parentBody });
 			await expect(alexParent).toBeVisible({ timeout: 10_000 });
 			await alexParent.getByRole('button', { name: 'Reply' }).click();

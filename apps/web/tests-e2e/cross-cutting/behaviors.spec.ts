@@ -110,7 +110,7 @@ test.describe('trigger fan-out — UI-driven', () => {
 		const admin = getAdminClient();
 		const body = `e2e-behavior-post-${Date.now()}`;
 
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		const composer = page.locator('.post-form textarea').first();
 		await expect(composer).toBeVisible({ timeout: 10_000 });
 		await composer.fill(body);

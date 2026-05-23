@@ -27,7 +27,7 @@ test.describe('database constraints', () => {
 		// constraints; the insert below will fail with 23505.
 		const admin = getAdminClient();
 
-		// Sanity: runner already has Sydney Half active (per seed).
+		// Sanity: runner already has Richmond Half active (per seed).
 		const { data: existing } = await admin
 			.from('training_plans')
 			.select('id, status')
@@ -43,7 +43,7 @@ test.describe('database constraints', () => {
 			name: 'e2e duplicate-active-plan attempt',
 			// goal_event is a custom enum (distance_5k / distance_10k /
 			// distance_half / distance_full / custom). Pick the same
-			// shape as the seeded Sydney Half plan so the row passes
+			// shape as the seeded Richmond Half plan so the row passes
 			// the CHECK + enum cast.
 			goal_event: 'distance_half',
 			goal_distance_m: 21097,
@@ -179,7 +179,7 @@ test.describe('database constraints', () => {
 		const { error } = await admin.from('clubs').insert({
 			owner_id: USER_A.id,
 			name: 'duplicate slug attempt',
-			slug: 'sydney-run-club',
+			slug: 'richmond-run-club',
 			is_public: true,
 			join_policy: 'open'
 		});

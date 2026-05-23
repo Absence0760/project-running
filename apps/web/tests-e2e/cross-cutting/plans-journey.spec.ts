@@ -42,7 +42,7 @@ test.describe('plans journey', () => {
 		page
 	}) => {
 		await page.goto(`/plans/${SYDNEY_HALF_PLAN_ID}`);
-		await expect(page.getByRole('heading', { level: 1, name: /Sydney Half 2026/ }))
+		await expect(page.getByRole('heading', { level: 1, name: /Richmond Half 2026/ }))
 			.toBeVisible({ timeout: 10_000 });
 
 		const pct = page.locator('.pct');

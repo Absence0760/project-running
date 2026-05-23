@@ -49,7 +49,7 @@ test.describe('realtime fan-out', () => {
 		if (error) throw error;
 		const plantedId = (planted as { id: string }).id;
 
-		await page.goto('/clubs/sydney-run-club');
+		await page.goto('/clubs/richmond-run-club');
 		await expect(page.locator('article.post', { hasText: body }))
 			.toBeVisible({ timeout: 10_000 });
 
@@ -253,7 +253,7 @@ test.describe('realtime fan-out', () => {
 		let plantedId: string | null = null;
 
 		try {
-			await page.goto('/clubs/sydney-run-club');
+			await page.goto('/clubs/richmond-run-club');
 			// Wait for the initial fetch + the realtime subscription to
 			// settle. data-realtime-ready="true" is set by the page's
 			// .subscribe() callback (with a 250 ms cushion) — it's the

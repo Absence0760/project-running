@@ -106,7 +106,7 @@ test.describe('/settings/preferences', () => {
 		// surfaces); pinning it here proves both formatters track the
 		// same signal.
 		await page.goto('/plans');
-		await page.getByRole('link', { name: /Sydney Half 2026/ }).click();
+		await page.getByRole('link', { name: /Richmond Half 2026/ }).click();
 		const firstWeekVolume = page.locator('.week-volume').first();
 		await expect(firstWeekVolume).toContainText('mi', { timeout: 10_000 });
 
