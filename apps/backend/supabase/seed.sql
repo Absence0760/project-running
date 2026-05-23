@@ -104,7 +104,7 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
 INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
 -- Richmond's signature urban-park loop — Belle Isle bridge to the
 -- Floodwall + back along the Pipeline Walk + Lehigh Trail.
-('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Belle Isle + Pipeline Loop (Richmond)',
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Belle Isle + Pipeline Loop',
   '[{"lat":37.5311,"lng":-77.4520,"ele":58},{"lat":37.5318,"lng":-77.4500,"ele":54},{"lat":37.5325,"lng":-77.4480,"ele":50},{"lat":37.5331,"lng":-77.4460,"ele":47},{"lat":37.5335,"lng":-77.4438,"ele":45},{"lat":37.5340,"lng":-77.4418,"ele":43},{"lat":37.5346,"lng":-77.4398,"ele":41},{"lat":37.5352,"lng":-77.4378,"ele":40},{"lat":37.5358,"lng":-77.4360,"ele":42},{"lat":37.5362,"lng":-77.4345,"ele":45},{"lat":37.5365,"lng":-77.4330,"ele":48},{"lat":37.5360,"lng":-77.4348,"ele":50},{"lat":37.5354,"lng":-77.4368,"ele":48},{"lat":37.5348,"lng":-77.4388,"ele":46},{"lat":37.5342,"lng":-77.4408,"ele":44},{"lat":37.5337,"lng":-77.4428,"ele":42},{"lat":37.5333,"lng":-77.4448,"ele":44},{"lat":37.5328,"lng":-77.4468,"ele":48},{"lat":37.5322,"lng":-77.4488,"ele":52},{"lat":37.5315,"lng":-77.4508,"ele":56},{"lat":37.5311,"lng":-77.4520,"ele":58}]',
   6500, 70, 'mixed', true),
 -- UVA loop in Charlottesville: Rotunda → Madison Hall → Mad Bowl →
@@ -181,7 +181,7 @@ WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'
     'Richmond Park Loop',
     'Thames Path 5K',
     'Sunday Long Run',
-    'Belle Isle + Pipeline Loop (Richmond)',
+    'Belle Isle + Pipeline Loop',
     'UVA Rotunda Loop (Charlottesville)',
     'Mount Vernon Trail North (Arlington)'
   );
@@ -457,7 +457,7 @@ ON CONFLICT (id) DO NOTHING;
 -- watch picker already stars by default — same visual shortlist.
 UPDATE routes SET featured = true, featured_at = now()
   WHERE name IN (
-    'Belle Isle + Pipeline Loop (Richmond)',
+    'Belle Isle + Pipeline Loop',
     'UVA Rotunda Loop (Charlottesville)',
     'Mount Vernon Trail North (Arlington)'
   );
