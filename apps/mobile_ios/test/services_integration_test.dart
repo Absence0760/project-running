@@ -141,25 +141,28 @@ void main() {
 
     test('searchClubs with a region geocode + matching text returns a hit',
         () async {
-      // The seeded `sydney-run-club` has location_label `Sydney, NSW`
-      // and a location_point in Sydney. Geocode-stub it as a wide
-      // Australia bbox so the ST_DWithin half of the RPC includes it
-      // even if the text doesn't perfectly match.
+      // seed.sql repurposes the `sydney-run-club` slug (UUID is
+      // load-bearing across other fixtures) into the heatmap demo's
+      // `Richmond Run Club` at `Richmond, VA` so the Virginia tile
+      // extract has something pinnable. Geocode-stub a wide
+      // Richmond bbox so the ST_DWithin half of the RPC includes
+      // it even if the text doesn't perfectly match.
       final out = await social.searchClubs(
-        'sydney',
+        'richmond',
         mapTilerKey: '',
         geocoder: (_) async => const GeocodedPlace(
-          name: 'Sydney, NSW, Australia',
-          lng: 151.2093,
-          lat: -33.8688,
+          name: 'Richmond, VA, USA',
+          lng: -77.4360,
+          lat: 37.5407,
           radiusM: 50000,
           placeType: 'municipality',
         ),
       );
       expect(out.any((c) => c.row.slug == _seededClubSlug), isTrue,
-          reason: 'searchClubs with a Sydney geocode + text="sydney" '
-              'must surface the seeded sydney-run-club via either the '
-              'ILIKE or the ST_DWithin branch of search_clubs');
+          reason: 'searchClubs with a Richmond geocode + text="richmond" '
+              'must surface the seeded sydney-run-club (now repurposed '
+              'to Richmond Run Club) via either the ILIKE or the '
+              'ST_DWithin branch of search_clubs');
     });
 
     test('fetchMyClubs surfaces clubs the seed user belongs to', () async {
