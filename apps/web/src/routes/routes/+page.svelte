@@ -503,10 +503,7 @@
 
 	/* Heatmap tab takes the FULL viewport (full-bleed). Drops the
 	 * page-padding gutters entirely + zeroes the page-header
-	 * margin so the map sits flush against the layout column.
-	 * The legend overlay inside RouteHeatmap is positioned
-	 * absolutely so it survives the edge-to-edge canvas. May 2026
-	 * UX pass — heatmap real-estate optimization. */
+	 * margin so the map sits flush against the layout column. */
 	.page-heatmap {
 		display: flex;
 		flex-direction: column;

@@ -111,6 +111,27 @@
 		});
 		stopResizeWatch = watchMapResize(mapEl, map);
 
+		// Aggressive resize pass — the May 2026 layout audit caught
+		// that the heatmap canvas ended up rendered at ~80 px tall
+		// even with watchMapResize in place. The ResizeObserver
+		// fires once when the heatmap-wrap reaches its final size,
+		// but MapLibre's WebGL canvas can be allocated at the
+		// mount-time size and the texture stays at that resolution
+		// even after .resize() updates the projection.
+		//
+		// requestAnimationFrame defers to after the next paint, when
+		// the flex chain has settled + the BillingIssueBanner has
+		// measured + the container is at its final size. A second
+		// rAF + a setTimeout cover late-arriving font/asset reflows
+		// that nudge the layout one more time.
+		requestAnimationFrame(() => {
+			map?.resize();
+			requestAnimationFrame(() => {
+				map?.resize();
+				setTimeout(() => map?.resize(), 100);
+			});
+		});
+
 		// Dev-only e2e hook. Lets Playwright drive the map (flyTo,
 		// queryRenderedFeatures, fire click events at projected lng/lat)
 		// the same way `/routes/new` exposes `__routeBuilder`. Pinned
@@ -843,18 +864,30 @@
 <style>
 	.heatmap-wrap {
 		position: relative;
-		/* Fill the available viewport below the page chrome. The
-		 * parent /routes page now drops its bottom padding on the
-		 * heatmap tab (see /routes/+page.svelte) so this 100% goes
-		 * edge-to-edge instead of leaving a strip of dead canvas. */
+		/* Flex-column container so the map child can `flex: 1` to
+		 * fill the leftover height. Previously `display: block` +
+		 * `.map { position: absolute; inset: 0 }` worked when the
+		 * heatmap was the only sibling, but a flex parent with a
+		 * single flex:1 child is the more predictable layout
+		 * primitive — MapLibre gets a concrete computed height
+		 * before its constructor reads `clientHeight`.
+		 *
+		 * The May 2026 user-reported bug ("popup lands far below
+		 * the map") was a stale-projection symptom rooted here:
+		 * the map's getBoundingClientRect disagreed with offsetTop
+		 * by ~413 px under the old absolute-positioned layout. The
+		 * flex chain produces a single coherent rect. */
+		display: flex;
+		flex-direction: column;
 		height: 100%;
 		min-height: 24rem;
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 	}
 	.map {
-		position: absolute;
-		inset: 0;
+		flex: 1 1 auto;
+		min-height: 0;
+		width: 100%;
 	}
 	.search-box {
 		position: absolute;
