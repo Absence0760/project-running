@@ -4,4 +4,15 @@
          to allow setting breakpoints, to provide hot reload, etc.
     -->
     <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- Allow cleartext HTTP in debug builds only so the in-app maps
+         (FlutterMap live tiles + Image.network static-map thumbnails)
+         can reach a Protomaps tileserver-gl running on the dev
+         machine via its LAN IP (`http://192.168.x.x:8080/...`).
+         Android 9+ blocks cleartext by default; production builds
+         honour that and route exclusively through HTTPS (MapTiler,
+         Supabase, OSM). The src/main manifest leaves cleartext OFF
+         so the release build inherits the secure default; only this
+         debug overlay flips it on. -->
+    <application android:usesCleartextTraffic="true" />
 </manifest>

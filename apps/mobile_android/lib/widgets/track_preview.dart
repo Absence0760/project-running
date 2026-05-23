@@ -205,6 +205,13 @@ class _StaticMapPreview extends StatelessWidget {
     // doesn\'t support the `@2x` scale suffix on its path syntax —
     // 220×140 at 1× looks fine on a list-row thumbnail and the
     // marginal sharpness at 2× isn\'t worth the transfer time.
+    //
+    // `padding=2` (vs the default 0 / pre-fix 8): just enough to keep
+    // the 3-px polyline stroke from clipping the tile edge, without
+    // sacrificing real estate on a 72×40 list-row thumbnail. Pre-
+    // fix `padding=8` ate ~40 % of a small thumb, making polylines
+    // look "zoomed out too much" — the user-reported regression
+    // that surfaced when the static-map fallback shipped.
     if (localTileUrlTemplate.isNotEmpty) {
       final base = localTileUrlTemplate.replaceFirst(
         RegExp(r'/\{z\}/\{x\}/\{y\}\.png$'),
@@ -216,13 +223,13 @@ class _StaticMapPreview extends StatelessWidget {
       if (base != localTileUrlTemplate) {
         return '$base/static/auto/${width}x$height.png'
             '?path=$pathParam'
-            '&padding=8';
+            '&padding=2';
       }
     }
     return 'https://api.maptiler.com/maps/streets-v2-dark/static/auto/${width}x$height@2x.png'
         '?key=$mapTilerKey'
         '&path=$pathParam'
-        '&padding=8';
+        '&padding=2';
   }
 
   @override
