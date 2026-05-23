@@ -8,7 +8,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
-import { buildMapStyleUrl, resolveStyleOverride } from './map-style-url';
+import {
+	buildMapStyleUrl,
+	OSM_FALLBACK_STYLE_URL,
+	resolveStyleOverride,
+} from './map-style-url';
 
 test('no override + light mode → MapTiler streets-v2', () => {
 	const url = buildMapStyleUrl('streets', 'KEY', false);
@@ -124,6 +128,32 @@ test('override wins regardless of the chosen style preference', () => {
 		const url = buildMapStyleUrl(style, 'KEY', false, override);
 		assert.equal(url, override,
 			`style=${style} must not bypass the override`);
+	}
+});
+
+test('empty key + no override → OSM fallback style URL', () => {
+	// `PUBLIC_MAPTILER_KEY=""` is the CI default and the "no key
+	// configured yet" path for a fresh self-hoster. Without the OSM
+	// fallback the builder would emit
+	// `https://api.maptiler.com/.../style.json?key=` which 403s — map
+	// blank, every tile request burns, headless e2e times out
+	// waiting for `moveend`. Pin the fallback URL so a future refactor
+	// can't regress the contract.
+	for (const style of ['streets', 'dark', 'satellite', 'outdoors'] as const) {
+		const url = buildMapStyleUrl(style, '', false);
+		assert.equal(url, OSM_FALLBACK_STYLE_URL,
+			`style=${style} + empty key must fall back to the OSM style`);
+	}
+});
+
+test('whitespace-only key + no override → OSM fallback style URL', () => {
+	// Match the trim semantics on the override path (see test above)
+	// — a stray space in `.env`s shouldn't trick the builder into
+	// emitting a `key= ` MapTiler URL.
+	for (const ws of [' ', '   ', '\t', '\n', ' \t\n ']) {
+		const url = buildMapStyleUrl('streets', ws, false);
+		assert.equal(url, OSM_FALLBACK_STYLE_URL,
+			`whitespace key ${JSON.stringify(ws)} must fall back to OSM`);
 	}
 });
 

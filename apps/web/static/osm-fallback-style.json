@@ -1,0 +1,32 @@
+{
+  "version": 8,
+  "name": "OSM fallback",
+  "sources": {
+    "osm": {
+      "type": "raster",
+      "tiles": [
+        "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+        "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+      ],
+      "tileSize": 256,
+      "minzoom": 0,
+      "maxzoom": 19,
+      "attribution": "&copy; <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a> contributors"
+    }
+  },
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": { "background-color": "#dcdcdc" }
+    },
+    {
+      "id": "osm",
+      "type": "raster",
+      "source": "osm",
+      "minzoom": 0,
+      "maxzoom": 22
+    }
+  ]
+}

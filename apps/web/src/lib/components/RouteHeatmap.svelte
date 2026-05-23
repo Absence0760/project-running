@@ -464,6 +464,20 @@
 			offset: 14,
 			maxWidth: '260px',
 			className: 'heatmap-pin-popup',
+			// MapLibre's default behaviour is to call `.focus()` on the
+			// popup root the moment it mounts. The browser then auto-
+			// scrolls the nearest scroll container to bring the focused
+			// element into view — for `.heatmap-wrap` (overflow:hidden,
+			// still programmatically scrollable) that meant scrollTop
+			// got nudged hundreds of pixels and the `.map` child shifted
+			// to negative y. Two failure modes downstream:
+			//   * `heatmap-pins.spec.ts:293` (layout regression test)
+			//     observes `.map` at y=-448.
+			//   * `heatmap-pins.spec.ts:251` (popup link click) can't
+			//     reach the View-route link because the popup's
+			//     projected coords leave it out of the click area.
+			// `focusAfterOpen: false` is the documented escape hatch.
+			focusAfterOpen: false,
 		})
 			.setLngLat(coords)
 			.setHTML(html)
@@ -564,6 +578,10 @@
 			offset: 12,
 			anchor: 'bottom',
 			className: 'heatmap-hover-tip',
+			// Same focus-grab issue as the click popup above — even
+			// without a close button, the popup root takes focus on
+			// mount unless we opt out.
+			focusAfterOpen: false,
 		})
 			.setLngLat(coords)
 			.setHTML(`<span>${escapeHtml(name)}</span>`)

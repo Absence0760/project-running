@@ -30,6 +30,16 @@ export function resolveStyleOverride(
 	return trimmed;
 }
 
+/// Static fallback served from `apps/web/static/` — an OSM-raster
+/// MapLibre style with no API key requirement. Used when neither
+/// `PUBLIC_TILE_STYLE_URL` (local dev override) nor
+/// `PUBLIC_MAPTILER_KEY` (production keyed tiles) is set, so the
+/// map always renders instead of 403-ing on
+/// `https://api.maptiler.com/.../style.json?key=` (empty key).
+/// Matches the OSM fallback contract on mobile's `resolveTileUrl`
+/// (`apps/mobile_android/lib/widgets/live_run_map.dart`).
+export const OSM_FALLBACK_STYLE_URL = '/osm-fallback-style.json';
+
 export function buildMapStyleUrl(
 	chosen: MapStyle,
 	key: string,
@@ -47,6 +57,12 @@ export function buildMapStyleUrl(
 	// `isNotBlank` semantics on the mobile + Wear OS sides.
 	const trimmed = overrideUrl?.trim() ?? '';
 	if (trimmed.length > 0) return trimmed;
+
+	// No MapTiler key + no override → fall through to the OSM raster
+	// fallback style instead of constructing
+	// `https://api.maptiler.com/.../style.json?key=` (which 403s).
+	// Same semantic as mobile's `resolveTileUrl` OSM fallback.
+	if (key.trim().length === 0) return OSM_FALLBACK_STYLE_URL;
 
 	const slug = (() => {
 		switch (chosen) {
