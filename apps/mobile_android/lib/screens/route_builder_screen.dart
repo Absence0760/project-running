@@ -23,7 +23,7 @@ import '../routing.dart';
 import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
 import '../tile_cache.dart';
-import '../widgets/live_run_map.dart' show resolveTileUrl;
+import '../widgets/live_run_map.dart' show currentTileUrl;
 import '../widgets/snap_to_start.dart';
 import '../widgets/top_banner.dart';
 
@@ -202,12 +202,12 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   String get _maptilerKey => dotenv.env['MAPTILER_KEY'] ?? '';
 
-  /// Delegate to the shared `resolveTileUrl` helper so the route
+  /// Delegate to the shared `currentTileUrl` helper so the route
   /// builder honours `TILE_URL_TEMPLATE` (local Protomaps dev) the
   /// same way every other mobile map surface does — see
   /// `live_run_map.dart` for the helper, which falls back to OSM
   /// tiles when neither MAPTILER_KEY nor TILE_URL_TEMPLATE is set.
-  String get _tileUrl => resolveTileUrl(dotenv.env);
+  String get _tileUrl => currentTileUrl();
 
   OsrmProfile get _osrmProfile =>
       _mode == RouteBuilderMode.road ? OsrmProfile.car : OsrmProfile.foot;

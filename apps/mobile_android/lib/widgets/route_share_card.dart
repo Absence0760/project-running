@@ -4,7 +4,6 @@ import 'dart:ui' as ui;
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
@@ -13,7 +12,7 @@ import 'package:share_plus/share_plus.dart';
 
 import '../preferences.dart';
 import '../tile_cache.dart';
-import 'live_run_map.dart' show resolveTileUrl;
+import 'live_run_map.dart' show currentTileUrl;
 import '../widgets/top_banner.dart';
 
 /// Open a portrait "share card" modal for [route] — a branded preview
@@ -169,7 +168,7 @@ class _ShareCardContent extends StatelessWidget {
   /// Honours `TILE_URL_TEMPLATE` for local Protomaps dev → falls
   /// back to MapTiler. Same single-knob override the rest of the
   /// mobile map surfaces use (see `live_run_map.dart`).
-  String get _tileUrl => resolveTileUrl(dotenv.env);
+  String get _tileUrl => currentTileUrl();
 
   @override
   Widget build(BuildContext context) {
