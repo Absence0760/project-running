@@ -50,14 +50,21 @@ test('explicit dark style overrides prefersDark=false', () => {
 	);
 });
 
+// Parses a URL string and returns its host (so test assertions can
+// compare exact hosts instead of doing a sloppy substring match —
+// satisfies CodeQL js/incomplete-url-substring-sanitization).
+function hostOf(url: string): string {
+	return new URL(url).host;
+}
+
 test('empty-string override is treated as absent', () => {
 	const url = buildMapStyleUrl('streets', 'KEY', false, '');
-	assert.ok(url.includes('api.maptiler.com'));
+	assert.equal(hostOf(url), 'api.maptiler.com');
 });
 
 test('undefined override falls back to MapTiler', () => {
 	const url = buildMapStyleUrl('streets', 'KEY', false, undefined);
-	assert.ok(url.includes('api.maptiler.com'));
+	assert.equal(hostOf(url), 'api.maptiler.com');
 });
 
 test('whitespace-only override falls back to MapTiler (no silent breakage)',
@@ -68,8 +75,9 @@ test('whitespace-only override falls back to MapTiler (no silent breakage)',
 		// Pin the trim-then-check behaviour.
 		for (const ws of [' ', '   ', '\t', '\n', ' \t\n ']) {
 			const url = buildMapStyleUrl('streets', 'KEY', false, ws);
-			assert.ok(
-				url.includes('api.maptiler.com'),
+			assert.equal(
+				hostOf(url),
+				'api.maptiler.com',
 				`whitespace value ${JSON.stringify(ws)} must fall through`,
 			);
 		}

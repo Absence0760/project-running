@@ -1,6 +1,5 @@
 import { expect, test } from '@playwright/test';
 
-import { getAdminClient } from '../fixtures/local-supabase';
 import { deleteRun, insertRun, setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
