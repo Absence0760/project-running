@@ -71,7 +71,7 @@ class MissingMapTilesHint extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Map tiles disabled',
+                  'Using OpenStreetMap fallback tiles',
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: theme.colorScheme.error,
@@ -79,10 +79,14 @@ class MissingMapTilesHint extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Set either MAPTILER_KEY or TILE_URL_TEMPLATE in '
-                  'apps/mobile_android/.env.local and rebuild. The '
-                  'route polyline still renders correctly; only the '
-                  'basemap tiles are missing.',
+                  'Neither MAPTILER_KEY nor TILE_URL_TEMPLATE is set '
+                  'in apps/mobile_android/.env.local, so the basemap '
+                  'is falling back to OSM (rate-limited, not for '
+                  'production). Set one of those env vars and rebuild '
+                  'for a real basemap. Physical devices on the same '
+                  'WiFi as a Protomaps tileserver-gl need the LAN IP '
+                  '(e.g. 192.168.1.x) — the emulator alias 10.0.2.2 '
+                  'only works inside an emulator.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     height: 1.3,

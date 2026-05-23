@@ -295,7 +295,7 @@ class RunShareCard extends StatelessWidget {
       children: [
         TileLayer(
           urlTemplate: _tileUrl,
-          userAgentPackageName: 'com.example.mobile_android',
+          userAgentPackageName: 'com.threkir.app',
           maxZoom: 19,
           tileProvider: CachedTileProvider(
             store: TileCache.store,
