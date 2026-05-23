@@ -25,6 +25,7 @@ ClubView _club({
         locationLabel: location,
         joinPolicy: joinPolicy,
         memberCount: memberCount,
+        isVerified: false,
       ),
       memberCount: memberCount,
       viewerRole: viewerRole,

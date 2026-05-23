@@ -29,6 +29,7 @@ ClubRow _row(String id, {int memberCount = 1}) => ClubRow(
       ownerId: 'owner-1',
       createdAt: DateTime(2026, 1, 1),
       memberCount: memberCount,
+      isVerified: false,
     );
 
 ClubView _view({

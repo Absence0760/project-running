@@ -41,6 +41,7 @@ ClubView _club({
         locationLabel: location,
         joinPolicy: 'open',
         memberCount: memberCount,
+        isVerified: false,
       ),
       memberCount: memberCount,
       viewerRole: viewerRole,
@@ -117,10 +118,15 @@ void main() {
       // Mirrors web `/routes/[id]` description block. Migration
       // 20260902_001_routes_description.sql adds the column; the detail
       // screen surfaces it under the title when non-null/non-empty.
+      // The block sits below the map + the offline-pin tile, so it's
+      // out of the default 800x600 viewport — scroll the ListView first
+      // (same pattern as the Reviews-header test above).
       await _pump(
         tester,
         _route(description: 'Out-and-back along the canal, flat.'),
       );
+      await tester.drag(find.byType(ListView), const Offset(0, -400));
+      await tester.pump();
       expect(
           find.text('Out-and-back along the canal, flat.'), findsOneWidget);
     });
