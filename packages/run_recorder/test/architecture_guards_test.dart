@@ -201,4 +201,48 @@ void main() {
           '_currentWaypoint constructor.',
     );
   });
+
+  test(
+    'run_recorder has zero network / backend dependencies — every '
+    'lib/ source must only import flutter, geolocator, core_models, '
+    'or dart:* (no api_client, supabase, http, dio)',
+    () {
+      // Reason: the user must be able to start a run, see the clock
+      // tick, and watch distance accumulate even when every backend
+      // service is down. This guard pins the recorder\'s isolation
+      // from the network — any new import of an HTTP / Supabase /
+      // typed-API package would silently break the layered-
+      // resilience contract before any test exercises it.
+      const blockedSubstrings = [
+        'package:api_client',
+        'package:supabase_flutter',
+        'package:supabase',
+        'package:http/',
+        'package:dio',
+        'package:web_socket_channel',
+      ];
+      final libDir = Directory('lib');
+      expect(libDir.existsSync(), isTrue,
+          reason: 'package:run_recorder is missing its lib/ dir.');
+      final dartFiles = libDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.endsWith('.dart'))
+          .toList();
+      for (final f in dartFiles) {
+        final source = f.readAsStringSync();
+        for (final banned in blockedSubstrings) {
+          expect(
+            source.contains(banned),
+            isFalse,
+            reason: 'package:run_recorder/${f.path} pulled in `$banned` — '
+                'the recording stack must stay isolated from the '
+                'network so a backend outage cannot stop the clock '
+                'or break distance accumulation. Move backend wiring '
+                'to apps/mobile_android/lib/ instead.',
+          );
+        }
+      }
+    },
+  );
 }

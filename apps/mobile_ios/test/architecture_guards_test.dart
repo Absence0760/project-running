@@ -514,9 +514,13 @@ void main() {
             'to honour the user\'s privacy_default setting on save. '
             'See decisions / docs/settings.md.',
       );
+      // Permissive regex to tolerate either the one-line form OR the
+      // wrapped-method-chain form `await api\n  .saveRun(\n run,\n
+      // isPublic: ...)\n  .timeout(...)`. Both encode the same
+      // semantic — the isPublic kwarg must reach the API call.
       expect(
-        source.contains('api.saveRun(\n          run,\n          isPublic:') ||
-            source.contains('api.saveRun(run, isPublic:'),
+        RegExp(r'\.saveRun\s*\(\s*run\s*,\s*\n?\s*isPublic\s*:')
+            .hasMatch(source),
         isTrue,
         reason:
             'The api.saveRun call in _stop must pass isPublic so the '
@@ -1645,6 +1649,79 @@ void main() {
       expect(source.contains('.timeout(kGeocodingTimeout)'), isTrue,
           reason: 'searchPlaces must apply .timeout(kGeocodingTimeout).');
     });
+
+    test(
+      'run_screen.dart bounds every Supabase / training / social await '
+      'with kBackendLoadTimeout',
+      () {
+        // Reason: the run screen is the most-used surface AND the one
+        // where a hung backend has the biggest UX cost — every
+        // initState fetch and every finish-flow Supabase call must
+        // resolve or fail within a fixed window, or the user can\'t
+        // start a run (initState hang blocks idle-card paint) and
+        // can\'t leave the finish summary (saveRun hang strands them).
+        // Local recording is already isolated from network; this
+        // guard pins the timeouts on the small set of backend
+        // surfaces that bleed in around the edges.
+        //
+        // The architecture is: every `await api.X(...)` /
+        // `await widget.training.X(...)` / `await widget.social.X(...)`
+        // in run_screen.dart must be followed by .timeout(...).
+        // Greps for the bare-await pattern to catch any new call
+        // that lands without one.
+        final source =
+            File('lib/screens/run_screen.dart').readAsStringSync();
+        // Each pattern is the call name; the asserter checks that
+        // every `await api.X(` / `await widget.{training,social}.X(`
+        // line has a `.timeout(` somewhere in the next ~5 lines.
+        // Method-name only (not `api.X` or `widget.training.X`) so
+        // the regex tolerates the wrapped-method-chain style
+        // `await api\n  .saveRun(...)\n  .timeout(...)` that dartfmt
+        // produces for long arg lists. The semantic the guard cares
+        // about — every remote await must be bounded by a timeout —
+        // doesn\'t depend on the receiver chain anyway.
+        const methodNames = [
+          'beginLiveBroadcast',
+          'fetchRoutesIntersectingTrack',
+          'saveRun',
+          'makeRunPublic',
+          'endLiveBroadcast',
+          'fetchPlanForWorkout',
+          'fetchActiveOverview',
+          'fetchNextRsvpedEvent',
+          'fetchMyClubs',
+        ];
+        for (final name in methodNames) {
+          final pattern = RegExp(
+            r'\.' + RegExp.escape(name) + r'\s*\([\s\S]{0,400}?\)'
+            r'[\s\S]{0,40}?\.timeout\(',
+          );
+          expect(
+            pattern.hasMatch(source),
+            isTrue,
+            reason: '.$name(...) must be followed by .timeout(...) — '
+                'the wrapped-method-chain shape (newline + dot before '
+                'timeout) is OK. Backend hangs on this call would '
+                'freeze the run-start or finish-summary UI.',
+          );
+        }
+        // Also pin the import + the constant reference so a future
+        // refactor that drops backend_timeout.dart triggers this
+        // guard, not a runtime regression.
+        expect(
+          source.contains("import '../backend_timeout.dart';"),
+          isTrue,
+          reason: 'run_screen.dart must import backend_timeout.dart '
+              'for the kBackendLoadTimeout ceiling.',
+        );
+        expect(
+          source.contains('kBackendLoadTimeout'),
+          isTrue,
+          reason: 'run_screen.dart must reference kBackendLoadTimeout '
+              'on its remote awaits.',
+        );
+      },
+    );
   });
 
   group('route_builder_screen._SaveRouteDialog scrollable content', () {

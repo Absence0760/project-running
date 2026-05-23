@@ -17,6 +17,7 @@ import 'package:uuid/uuid.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../audio_cues.dart';
+import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
@@ -302,7 +303,13 @@ class _RunScreenState extends State<RunScreen> {
     if (wo == null) return;
     Map<String, int> paces = const {};
     try {
-      final plan = await widget.training.fetchPlanForWorkout(wo);
+      // `.timeout` so a hung backend doesn\'t leave the workout
+      // runner half-initialised (cm-pre-load is best-effort —
+      // missing paces just means the runner uses defaults). See
+      // backend_timeout.dart for the 15 s ceiling.
+      final plan = await widget.training
+          .fetchPlanForWorkout(wo)
+          .timeout(kBackendLoadTimeout);
       paces = _pacesFromPlan(plan);
     } catch (e) {
       debugPrint('Failed to load plan paces for workout ${wo.id}: $e');
@@ -454,7 +461,9 @@ class _RunScreenState extends State<RunScreen> {
 
   Future<void> _refreshUpcomingEvent() async {
     try {
-      final evt = await widget.social.fetchNextRsvpedEvent();
+      final evt = await widget.social
+          .fetchNextRsvpedEvent()
+          .timeout(kBackendLoadTimeout);
       if (mounted) setState(() => _upcomingEvent = evt);
     } catch (e) {
       // Non-critical — leave the card hidden if the fetch fails. Log
@@ -466,7 +475,9 @@ class _RunScreenState extends State<RunScreen> {
 
   Future<void> _refreshPlanOverview() async {
     try {
-      final p = await widget.training.fetchActiveOverview();
+      final p = await widget.training
+          .fetchActiveOverview()
+          .timeout(kBackendLoadTimeout);
       if (mounted) setState(() => _planOverview = p);
     } catch (e) {
       // Non-critical — same logging rationale as `_refreshUpcomingEvent`.
@@ -685,11 +696,13 @@ class _RunScreenState extends State<RunScreen> {
             : null,
       );
       try {
-        await api.beginLiveBroadcast(
-          runId: _runId!,
-          startedAt: _runStartedAtWall ?? DateTime.now(),
-          activityType: _activityType.name,
-        );
+        await api
+            .beginLiveBroadcast(
+              runId: _runId!,
+              startedAt: _runStartedAtWall ?? DateTime.now(),
+              activityType: _activityType.name,
+            )
+            .timeout(kBackendLoadTimeout);
         _liveBroadcaster!.attach(_runId!);
       } catch (e) {
         debugPrint('beginLiveBroadcast failed: $e');
@@ -1301,8 +1314,9 @@ class _RunScreenState extends State<RunScreen> {
         api.userId != null &&
         raw.track.length >= 2) {
       try {
-        final candidates =
-            await api.fetchRoutesIntersectingTrack(raw.track, maxResults: 5);
+        final candidates = await api
+            .fetchRoutesIntersectingTrack(raw.track, maxResults: 5)
+            .timeout(kBackendLoadTimeout);
         final match = bestStrongRouteMatch(
           candidates,
           runDistanceMetres: distanceMetres,
@@ -1358,10 +1372,18 @@ class _RunScreenState extends State<RunScreen> {
         // as "not public" everywhere). The live-broadcast path below
         // still re-asserts is_public=true via makeRunPublic so an
         // explicit broadcast wins over a private default.
-        await api.saveRun(
-          run,
-          isPublic: widget.preferences.newRunsArePublic ? true : null,
-        );
+        //
+        // `.timeout` so a hung backend (Supabase down, edge function
+        // misconfigured) doesn\'t leave the user stuck on the finish
+        // summary forever. The run is already saved locally above
+        // (line `runStore.save(run)`) and WorkManager will retry the
+        // cloud sync on the next periodic schedule.
+        await api
+            .saveRun(
+              run,
+              isPublic: widget.preferences.newRunsArePublic ? true : null,
+            )
+            .timeout(kBackendLoadTimeout);
         await widget.runStore.markSynced(run.id);
         if (mounted) setState(() => _synced = true);
       } catch (e) {
@@ -1384,12 +1406,12 @@ class _RunScreenState extends State<RunScreen> {
       final api2 = widget.apiClient;
       if (api2 != null && api2.userId != null) {
         try {
-          await api2.makeRunPublic(run.id);
+          await api2.makeRunPublic(run.id).timeout(kBackendLoadTimeout);
         } catch (e) {
           debugPrint('makeRunPublic after live broadcast failed: $e');
         }
         try {
-          await api2.endLiveBroadcast(run.id);
+          await api2.endLiveBroadcast(run.id).timeout(kBackendLoadTimeout);
         } catch (e) {
           debugPrint('endLiveBroadcast failed: $e');
         }
@@ -1567,7 +1589,9 @@ class _RunScreenState extends State<RunScreen> {
     if (_state != _ScreenState.idle) return;
     Map<String, int> paces = const {};
     try {
-      final plan = await widget.training.fetchPlanForWorkout(wo);
+      final plan = await widget.training
+          .fetchPlanForWorkout(wo)
+          .timeout(kBackendLoadTimeout);
       paces = _pacesFromPlan(plan);
     } catch (e) {
       debugPrint('fetchPlanForWorkout failed for ${wo.id}: $e');
@@ -1880,7 +1904,14 @@ class _RunScreenState extends State<RunScreen> {
                             event: _upcomingEvent!,
                             onTap: () async {
                               final evt = _upcomingEvent!;
-                              final clubs = await widget.social.fetchMyClubs();
+                              List<ClubView> clubs = const [];
+                              try {
+                                clubs = await widget.social
+                                    .fetchMyClubs()
+                                    .timeout(kBackendLoadTimeout);
+                              } catch (e) {
+                                debugPrint('fetchMyClubs failed: $e');
+                              }
                               final match = clubs
                                   .where((c) => c.row.id == evt.row.clubId)
                                   .toList();
