@@ -7,10 +7,12 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../geocoding.dart';
+import '../tile_cache.dart';
 import '../widgets/live_run_map.dart' show resolveTileUrl;
 import '../widgets/top_banner.dart';
 import 'public_route_screen.dart';
@@ -374,6 +376,20 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                       // MapTiler key.
                       urlTemplate: resolveTileUrl(dotenv.env),
                       userAgentPackageName: 'com.threkir.app',
+                      // Disk-backed tile cache shared with every other
+                      // map surface. Without it, panning the heatmap
+                      // re-downloads tiles every session AND flutter_map
+                      // logs a "Using fallback freshness age" warning
+                      // for every tile (tileserver-gl doesn\'t send
+                      // Cache-Control headers, so flutter_map\'s
+                      // internal cache layer kicks in with its 7-day
+                      // default). 30-day staleness keeps the basemap
+                      // around through a normal usage cycle.
+                      tileProvider: CachedTileProvider(
+                        store: TileCache.store,
+                        maxStale: const Duration(days: 30),
+                        dio: TileCache.dio,
+                      ),
                     ),
                     CircleLayer(
                       circles: [

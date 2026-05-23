@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
+import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../privacy.dart';
 import '../settings_sync.dart';
+import '../tile_cache.dart';
 import '../widgets/live_run_map.dart' show resolveTileUrl;
 import '../widgets/top_banner.dart';
 
@@ -156,6 +158,16 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                   // resolveTileUrl regression.
                   urlTemplate: resolveTileUrl(dotenv.env),
                   userAgentPackageName: 'com.threkir.app',
+                  // Shared disk-backed tile cache (see TileCache in
+                  // tile_cache.dart). Without it, panning the zone
+                  // picker re-downloads tiles every session AND
+                  // flutter_map logs a "Using fallback freshness age"
+                  // warning per tile.
+                  tileProvider: CachedTileProvider(
+                    store: TileCache.store,
+                    maxStale: const Duration(days: 30),
+                    dio: TileCache.dio,
+                  ),
                 ),
                 CircleLayer(
                   circles: [
