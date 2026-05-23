@@ -262,19 +262,22 @@ test.describe('Settings propagation: body_weight_kg → /runs/[id] Calories', ()
 		await expect(cal).toHaveText('250', { timeout: 10_000 });
 	});
 
-	test('body_weight_kg unset: Calories pill is hidden entirely', async ({
+	test('body_weight_kg unset: Calories pill renders the 70-kg fallback with an "(est)" label', async ({
 		page,
 	}) => {
-		// The page's gate is `{#if estimatedCalories > 0}` and
-		// `estimatedCalories = bodyWeightKg ? ... : 0`. With no
-		// setting, the pill must NOT render — a value of 0 would
-		// mislead the reader into thinking a real estimate is 0 kcal.
+		// Commit 9bf25fd flipped the unset behaviour from "hide the
+		// pill" to "show the pill with a 70-kg fallback + an `(est)`
+		// suffix on the label" so the key-stats grid never has an
+		// empty cell. Pin the new contract: 70 kg × 5 km ≈ 350 kcal,
+		// label reads "Calories kcal (est)".
 		await setUserSetting(USER_A.id, 'body_weight_kg', null);
 		await page.goto(`/runs/${runId}`);
 		await expect(page.getByRole('heading', { level: 1 }))
 			.toBeVisible({ timeout: 10_000 });
-		await expect(page.locator('.key-stat', { hasText: 'Calories' }))
-			.toHaveCount(0);
+		const calRow = page.locator('.key-stat', { hasText: 'Calories' });
+		await expect(calRow).toHaveCount(1);
+		await expect(calRow.locator('.key-stat-value')).toHaveText('350');
+		await expect(calRow.locator('.key-stat-label')).toContainText('(est)');
 	});
 
 	test('round-trip: 70 → 90 → unset → 70 each lands the documented value', async ({
@@ -284,27 +287,37 @@ test.describe('Settings propagation: body_weight_kg → /runs/[id] Calories', ()
 			.locator('.key-stat', { hasText: 'Calories' })
 			.locator('.key-stat-value');
 		const calRow = page.locator('.key-stat', { hasText: 'Calories' });
+		const calLabel = page
+			.locator('.key-stat', { hasText: 'Calories' })
+			.locator('.key-stat-label');
 
-		// 70 → 350
+		// 70 → 350, label is plain (no `(est)` suffix when set).
 		await setUserSetting(USER_A.id, 'body_weight_kg', 70);
 		await page.goto(`/runs/${runId}`);
 		await expect(cal).toHaveText('350', { timeout: 10_000 });
+		await expect(calLabel).not.toContainText('(est)');
 
-		// 90 → 450
+		// 90 → 450 (still no `(est)` suffix — value is real).
 		await setUserSetting(USER_A.id, 'body_weight_kg', 90);
 		await page.goto(`/runs/${runId}`);
 		await expect(cal).toHaveText('450', { timeout: 10_000 });
+		await expect(calLabel).not.toContainText('(est)');
 
-		// unset → hidden
+		// unset → pill keeps rendering with the 70-kg fallback + the
+		// `(est)` label (post-9bf25fd contract; previously the pill
+		// hid).
 		await setUserSetting(USER_A.id, 'body_weight_kg', null);
 		await page.goto(`/runs/${runId}`);
 		await expect(page.getByRole('heading', { level: 1 }))
 			.toBeVisible({ timeout: 10_000 });
-		await expect(calRow).toHaveCount(0);
+		await expect(calRow).toHaveCount(1);
+		await expect(cal).toHaveText('350');
+		await expect(calLabel).toContainText('(est)');
 
-		// back to 70 → 350 — proves the gate flips back open.
+		// back to 70 → 350, label drops the `(est)` suffix again.
 		await setUserSetting(USER_A.id, 'body_weight_kg', 70);
 		await page.goto(`/runs/${runId}`);
 		await expect(cal).toHaveText('350', { timeout: 10_000 });
+		await expect(calLabel).not.toContainText('(est)');
 	});
 });
