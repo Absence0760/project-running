@@ -320,6 +320,20 @@ test.describe('Heatmap pin popup (click flow)', () => {
 		const popup = page.locator('.heatmap-pin-popup');
 		await expect(popup).toBeVisible({ timeout: 5_000 });
 
+		// Map should be at viewport y >= 0 now that the heatmap
+		// lives in its own /routes/heatmap route (standalone, no
+		// flex chain). Pin this so a regression that brings back
+		// the tab-parent layout fails here.
+		const mapRect = await page
+			.locator('.maplibregl-map')
+			.evaluate((el) => {
+				const r = el.getBoundingClientRect();
+				return { top: r.top, height: r.height };
+			});
+		expect(mapRect.top, 'map should not extend above the viewport')
+			.toBeGreaterThanOrEqual(-2);
+		expect(mapRect.height, 'map should fill its container').toBeGreaterThan(400);
+
 		// Read the popup wrapper's transform — must contain a
 		// translate(...) with finite pixel offsets (not "translate(0px,
 		// 0px)" which is the corner-stuck state).

@@ -327,20 +327,46 @@
 							</button>
 						{/if}
 					</div>
-					<div class="route-meta">
-						<span>{formatDistance(route.distance_m)}</span>
-						{#if route.elevation_m}
-							<span class="meta-sep">&middot;</span>
-							<span>{route.elevation_m} m elevation gain</span>
+					<!-- Key-stats tile grid (matches /runs/[id] panel layout
+						 added in the May 2026 polish pass). Auto-fit grid,
+						 hairline separators via the `gap: 1px` background-
+						 colour trick, tabular numerics on every value. The
+						 surface + featured cells use icon + label inline so
+						 they read distinct from the numeric tiles. -->
+					<div class="key-stats">
+						<div class="key-stat">
+							<span class="key-stat-value">{formatDistance(route.distance_m)}</span>
+							<span class="key-stat-label">Distance</span>
+						</div>
+						{#if route.elevation_m != null && route.elevation_m > 0}
+							<div class="key-stat">
+								<span class="key-stat-value">{route.elevation_m} m</span>
+								<span class="key-stat-label">Elevation gain</span>
+							</div>
 						{/if}
-						<span class="meta-sep">&middot;</span>
-						<span class="surface-tag">{route.surface}</span>
+						<div class="key-stat key-stat-activity">
+							<span class="key-stat-value">
+								<span class="material-symbols">
+									{route.surface === 'trail' ? 'terrain' : route.surface === 'mixed' ? 'alt_route' : 'add_road'}
+								</span>
+								{route.surface}
+							</span>
+							<span class="key-stat-label">Surface</span>
+						</div>
 						{#if route.run_count > 0}
-							<span class="meta-sep">&middot;</span>
-							<span>run {route.run_count} {route.run_count === 1 ? 'time' : 'times'}</span>
+							<div class="key-stat">
+								<span class="key-stat-value">{route.run_count}</span>
+								<span class="key-stat-label">Runs logged</span>
+							</div>
 						{/if}
 						{#if route.featured}
-							<span class="featured-pill">★ Featured</span>
+							<div class="key-stat key-stat-activity">
+								<span class="key-stat-value">
+									<span class="material-symbols" style="color: #facc15">star</span>
+									Featured
+								</span>
+								<span class="key-stat-label">Status</span>
+							</div>
 						{/if}
 					</div>
 					{#if route.description}
@@ -648,6 +674,58 @@
 		 * inner layouts respond to PANEL width. */
 		container-type: inline-size;
 		container-name: stats;
+	}
+
+	/* Key-stats grid — mirror of /runs/[id] panel, May 2026 polish.
+	 * auto-fit so cells reflow with panel width; 1 px gap + bg-color
+	 * trick for hairline tile separators; tabular-nums on every
+	 * value so multi-digit values line up. */
+	.key-stats {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+		gap: 1px;
+		margin-bottom: var(--space-xl);
+		background: var(--color-border);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+	}
+	.key-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-bg-secondary);
+	}
+	.key-stat-value {
+		font-variant-numeric: tabular-nums lining-nums;
+		font-size: 1.5rem;
+		font-weight: 700;
+		line-height: 1.05;
+		letter-spacing: -0.01em;
+		color: var(--color-text);
+	}
+	.key-stat-label {
+		font-size: 0.7rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-tertiary);
+	}
+	/* Activity-style cells (Surface + Featured) inline an icon
+	 * before the label. Different visual rhythm from the numeric
+	 * cells, so they don't read as "just a number". */
+	.key-stat-activity .key-stat-value {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 1.05rem;
+		text-transform: capitalize;
+	}
+	.key-stat-activity .key-stat-value .material-symbols {
+		font-size: 1.25rem;
+		color: var(--color-text-secondary);
 	}
 
 	/*

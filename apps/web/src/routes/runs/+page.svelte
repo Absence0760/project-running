@@ -610,11 +610,21 @@
 							{/if}
 						</span>
 					{/if}
-					{#if run.track_url}
-						<div class="run-map-placeholder">
+					<!-- Always render the map slot so every card has the
+						 same height. Cards with a track render the real
+						 polyline + tile background; cards without (manual
+						 entries, parkrun rows with no GPS) show a subtle
+						 placeholder so the grid stays even. -->
+					<div class="run-map-placeholder">
+						{#if run.track_url}
 							<RunTrackPreview trackUrl={run.track_url} />
-						</div>
-					{/if}
+						{:else}
+							<span class="material-symbols no-track-icon" aria-hidden="true">
+								map_outlined
+							</span>
+							<span class="no-track-label">No GPS track</span>
+						{/if}
+					</div>
 					<div class="run-details">
 						<div class="run-top">
 							<span class="run-date">{formatDate(run.started_at)}</span>
@@ -882,16 +892,40 @@
 	.run-map-placeholder {
 		width: 100%;
 		height: 8rem;
-		background: var(--color-bg-tertiary);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-primary) 6%, var(--color-bg-tertiary)),
+			var(--color-bg-tertiary) 60%
+		);
 		display: flex;
+		flex-direction: column;
 		align-items: center;
 		justify-content: center;
+		gap: 0.25rem;
+		border-bottom: 1px solid var(--color-border);
 	}
 
-	.run-map-placeholder .material-symbols {
+	/* The no-track placeholder. Subtle gradient + a map-outline icon
+	 * over a small label so the user reads it as "this card just
+	 * doesn't have GPS data" rather than "the map failed to load". */
+	.run-map-placeholder .no-track-icon {
 		font-family: 'Material Symbols Outlined';
-		font-size: 1.5rem;
+		font-size: 1.75rem;
 		color: var(--color-text-tertiary);
+		opacity: 0.7;
+	}
+	.run-map-placeholder .no-track-label {
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		font-weight: 600;
+	}
+	/* RunTrackPreview's own internal map fills the slot — its
+	 * inner div takes 100% of this container. */
+	.run-map-placeholder :global(.wrap) {
+		width: 100%;
+		height: 100%;
 	}
 
 	.run-details {
