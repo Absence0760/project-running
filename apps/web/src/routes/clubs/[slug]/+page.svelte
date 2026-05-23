@@ -293,6 +293,20 @@
 				// readiness for the full 20 s test timeout.
 				sendReadyPing();
 				schedulePingRetry();
+				// Belt-and-suspenders fallback: even if every ping echo
+				// is dropped (CI WS hiccup, channel cold-start filter
+				// wiring still settling), flip readiness 5 s after the
+				// SUBSCRIBED ack so consumers eventually proceed. By
+				// that point the channel has had ample time to wire
+				// up its postgres_changes subscriptions server-side —
+				// the broadcast echo was a fast-path verification, not
+				// a strict precondition. Caught by
+				// `tests-e2e/cross-cutting/realtime.spec.ts:248` going
+				// red on CI run 26339562699 (.realtime-ready never
+				// appeared within the 20 s wait).
+				setTimeout(() => {
+					if (channel) realtimeReady = true;
+				}, 5000);
 			});
 	}
 

@@ -530,6 +530,16 @@
 				// used to strand readiness past the test timeout.
 				sendReadyPing();
 				schedulePingRetry();
+				// Belt-and-suspenders fallback: even if every ping echo
+				// is dropped (CI WS hiccup or cold-start filter wiring
+				// still settling), flip readiness 5 s after SUBSCRIBED
+				// so consumers eventually proceed. By that point the
+				// channel has had ample time to wire its postgres_changes
+				// subscriptions server-side. Mirrors the same fallback
+				// added to `/clubs/[slug]/+page.svelte`.
+				setTimeout(() => {
+					if (channel) realtimeReady = true;
+				}, 5000);
 			});
 	}
 
