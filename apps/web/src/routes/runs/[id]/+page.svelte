@@ -1,8 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { env } from '$env/dynamic/public';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/route_geometry';
+	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/static_map';
+	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
+	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
@@ -743,6 +747,30 @@
 	});
 
 	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
+
+	/// Static-map URL for the share card. Same pipeline as the
+	/// runs/routes list thumbnails — `buildLocalStaticMapUrl` for
+	/// the local Protomaps dev stack, `buildStaticMapUrl` for
+	/// production MapTiler. 1080×600 to fit the share card cleanly
+	/// at 1080-square; null when there's no track to render (the
+	/// card falls back to the stats-only layout).
+	let shareMapUrl = $derived.by(() => {
+		if (!hasMapTrack || baseTrack.length < 2) return null;
+		const pts = baseTrack.map((p) => ({ lat: p.lat, lng: p.lng }));
+		return (
+			buildLocalStaticMapUrl(pts, {
+				w: 1080,
+				h: 600,
+				styleUrl: PUBLIC_TILE_STYLE_URL,
+			}) ??
+			buildStaticMapUrl(pts, {
+				w: 1080,
+				h: 600,
+				style: 'streets-v2',
+				key: PUBLIC_MAPTILER_KEY,
+			})
+		);
+	});
 </script>
 
 {#if loading}
@@ -1361,6 +1389,21 @@
 >
 	<div class="share-card-inner">
 		<div class="share-card-eyebrow">Threkir</div>
+		{#if shareMapUrl}
+			<!-- Real map background so the share card shows WHERE the
+				 run happened, not just the stats numbers. crossorigin=
+				 anonymous so html-to-image's `toPng(...)` can read the
+				 pixel buffer back from the canvas (tileserver-gl +
+				 MapTiler both serve CORS headers, but the explicit
+				 attribute is what unlocks the canvas readback). -->
+			<img
+				src={shareMapUrl}
+				class="share-card-map"
+				alt=""
+				crossorigin="anonymous"
+				data-testid="share-card-map"
+			/>
+		{/if}
 		<div class="share-card-stats">
 			<div class="share-stat">
 				<div class="share-stat-label">Distance</div>
@@ -1524,11 +1567,20 @@
 	 * Svelte compiler emits CSS.
 	 */
 	@container stats (max-width: 520px) {
+		.stats-panel {
+			padding: var(--space-lg);
+		}
 		.key-stat-value {
 			font-size: 1.25rem;
 		}
+		.detail-header {
+			margin-bottom: var(--space-lg);
+		}
 	}
 	@container stats (max-width: 380px) {
+		.stats-panel {
+			padding: var(--space-md);
+		}
 		.detail-header-top {
 			/* Title + action buttons go vertical so the buttons
 			 * don't squeeze the title. */
@@ -1542,6 +1594,25 @@
 		.splits-table td {
 			font-size: 0.75rem;
 			padding: var(--space-xs) 0;
+		}
+		/* Section spacing tightens so the user gets more content
+		 * per scroll on a narrow panel. */
+		.section {
+			padding-top: var(--space-md);
+			margin-bottom: var(--space-md);
+		}
+		.section h2 {
+			font-size: 0.95rem;
+		}
+		/* Meta strip wraps cleanly + each item gets its own line
+		 * on very narrow panels. */
+		.detail-meta {
+			gap: 0.3rem 0.6rem;
+			font-size: 0.8rem;
+		}
+		/* Panel back link shrinks proportionally. */
+		.panel-back {
+			font-size: 0.75rem;
 		}
 	}
 
@@ -2334,6 +2405,15 @@
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 		opacity: 0.9;
+	}
+	.share-card-map {
+		display: block;
+		width: 100%;
+		height: 360px;
+		border-radius: 24px;
+		object-fit: cover;
+		border: 4px solid rgba(255, 255, 255, 0.15);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
 	}
 	.share-card-stats {
 		display: grid;

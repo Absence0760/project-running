@@ -656,15 +656,43 @@
 	 * no key-stats grid) but still has dense rows that need to
 	 * relax: title + star button, meta-info inline strip, tags.
 	 */
+	@container stats (max-width: 480px) {
+		/* Tighter padding + slightly smaller H1 at medium-narrow. */
+		.stats-panel {
+			padding: var(--space-lg);
+		}
+		.detail-header :global(h1) {
+			font-size: 1.35rem;
+		}
+		.route-meta {
+			gap: var(--space-xs) var(--space-sm);
+			font-size: 0.85rem;
+		}
+	}
 	@container stats (max-width: 380px) {
+		/* Very narrow: stack title + star, wrap meta items each on
+		 * their own line for readability, tighten section padding. */
 		.detail-header :global(.title-row) {
 			flex-wrap: wrap;
 		}
 		.route-meta {
-			gap: var(--space-xs);
+			gap: 0.3rem;
+			font-size: 0.8rem;
 		}
 		.detail-header :global(h1) {
 			font-size: 1.2rem;
+		}
+		.stats-panel :global(.section) {
+			padding-top: var(--space-md);
+			margin-bottom: var(--space-md);
+		}
+		.stats-panel :global(h2) {
+			font-size: 0.95rem;
+		}
+		/* Tag chips can wrap freely without overflow. */
+		.stats-panel :global(.tag-chip) {
+			font-size: 0.7rem;
+			padding: 0.15rem 0.5rem;
 		}
 	}
 
