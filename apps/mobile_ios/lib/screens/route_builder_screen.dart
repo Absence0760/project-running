@@ -23,6 +23,7 @@ import '../routing.dart';
 import '../social_service.dart';
 import '../run_stats.dart' show haversineMetres;
 import '../tile_cache.dart';
+import '../widgets/live_run_map.dart' show resolveTileUrl;
 import '../widgets/snap_to_start.dart';
 import '../widgets/top_banner.dart';
 
@@ -201,11 +202,23 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   String get _maptilerKey => dotenv.env['MAPTILER_KEY'] ?? '';
 
+  /// Delegate to the shared `resolveTileUrl` helper so the route
+  /// builder honours `TILE_URL_TEMPLATE` (local Protomaps dev) the
+  /// same way every other mobile map surface does — see
+  /// `live_run_map.dart` for the helper. Falls back to MapTiler
+  /// when the key is set, then OpenStreetMap tiles when neither is
+  /// configured.
   String get _tileUrl {
-    if (_maptilerKey.isEmpty) {
+    final resolved = resolveTileUrl(dotenv.env);
+    // resolveTileUrl returns the MapTiler URL with `key=` (empty)
+    // when neither override nor key is set — that produces 403s. So
+    // when we know MapTiler is unconfigured, fall back to OSM
+    // tiles directly (the existing pre-May-2026 behaviour).
+    if (_maptilerKey.isEmpty &&
+        (dotenv.env['TILE_URL_TEMPLATE'] ?? '').trim().isEmpty) {
       return 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
     }
-    return 'https://api.maptiler.com/maps/streets-v2/{z}/{x}/{y}.png?key=$_maptilerKey';
+    return resolved;
   }
 
   OsrmProfile get _osrmProfile =>

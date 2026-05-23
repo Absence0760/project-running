@@ -260,19 +260,23 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       (widget.track.isNotEmpty ? widget.track.last : null);
 
   /// `_latestPosition` snapped onto the SMOOTHED polyline that the
-  /// map actually draws. The polyline gets a two-pass weighted
-  /// moving average via `smoothTrack(smoothTrack(raw))` to remove
-  /// GPS jitter — but `currentPosition` comes from the RAW track
-  /// (run.track[replayIndex] on the replay path, the live recorder's
-  /// latest fix during recording). Without this snap the dot ended
-  /// up visibly OFF the rendered line — caught in the May 2026
-  /// audit as "the replay dot doesn't stick to the route".
+  /// map actually draws — REPLAY ONLY. The polyline gets a two-pass
+  /// weighted moving average via `smoothTrack(smoothTrack(raw))` to
+  /// remove GPS jitter. On the replay path, `currentPosition`
+  /// equals `run.track[replayIndex]` (an EXACT raw-track member);
+  /// returning the smoothed waypoint at the same index aligns the
+  /// dot with the rendered line.
   ///
-  /// Strategy: for replay-style positions (an existing track index),
-  /// match by linear scan to find the closest raw waypoint, then
-  /// return the smoothed waypoint at the same index. O(n) per
-  /// render which is fine — even a 10 km track is < 5k points and
-  /// the scan only runs while the replay is active.
+  /// CRITICAL: only snap on an EXACT index match (the replay path
+  /// where `pos === run.track[i]`). For live recording, the latest
+  /// GPS fix isn't in `widget.track` — snapping there would lie
+  /// about position (a runner 50 m off-route would visually appear
+  /// on the route). The May 2026 audit caught the nearest-by-delta
+  /// fallback I'd originally written + scoped it to exact match
+  /// only.
+  ///
+  /// Returns `null` for the live-recording case so the caller falls
+  /// back to the raw `_latestPosition` coords.
   LatLng? _smoothedDotLatLng() {
     final pos = _latestPosition;
     if (pos == null) return null;
@@ -281,31 +285,22 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       // no snap needed.
       return LatLng(pos.lat, pos.lng);
     }
-    final smoothed = _smoothedTrackFor(widget.track);
-    // Find the raw-track index that matches `pos`. Identity on
-    // (lat, lng) is the cheap path for the replay case where
-    // `pos === run.track[index]`. Tolerance covers float-precision
-    // edge cases without admitting unrelated points.
-    int bestIdx = -1;
-    double bestDelta = 1e9;
+    // Identity-on-(lat,lng) scan — the cheap path for replay where
+    // `pos === run.track[index]`. The early-exit `break` keeps this
+    // O(index) in practice (replay walks indices in order). For
+    // live recording, no track point matches the latest GPS fix,
+    // so the loop falls through to `return null` and the caller
+    // renders the raw coords unmodified.
     for (int i = 0; i < widget.track.length; i++) {
       final w = widget.track[i];
-      final dLat = (w.lat - pos.lat).abs();
-      final dLng = (w.lng - pos.lng).abs();
-      if (dLat < 1e-9 && dLng < 1e-9) {
-        bestIdx = i;
-        break;
-      }
-      final d = dLat + dLng;
-      if (d < bestDelta) {
-        bestDelta = d;
-        bestIdx = i;
+      if ((w.lat - pos.lat).abs() < 1e-9 &&
+          (w.lng - pos.lng).abs() < 1e-9) {
+        final smoothed = _smoothedTrackFor(widget.track);
+        if (i < smoothed.length) return smoothed[i];
+        return null;
       }
     }
-    if (bestIdx < 0 || bestIdx >= smoothed.length) {
-      return LatLng(pos.lat, pos.lng);
-    }
-    return smoothed[bestIdx];
+    return null;
   }
 
   /// Smoothed polyline for [widget.track], cached by length. The recorder
