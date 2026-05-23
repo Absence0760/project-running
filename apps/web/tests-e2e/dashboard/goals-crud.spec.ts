@@ -127,7 +127,11 @@ test.describe('/dashboard Goals — CRUD UI', () => {
 			await expect(card.locator('.goal-period')).toHaveText('This week');
 			await expect(card.locator('.goal-target-top')).toContainText(/Time/);
 			await expect(card.locator('.goal-target-value')).toContainText(/30m/);
-			await expect(card.locator('.goal-overall')).toHaveText('0%');
+			// Overall % depends on how much the seed user has logged in
+			// the current week / month — irrelevant to the CRUD flow's
+			// correctness. Assert the cell renders SOMETHING that looks
+			// like a percentage and move on.
+			await expect(card.locator('.goal-overall')).toHaveText(/^\d+%$/);
 		});
 
 		await test.step('click card → editor reopens populated', async () => {
@@ -154,7 +158,11 @@ test.describe('/dashboard Goals — CRUD UI', () => {
 			await expect(card).toHaveCount(1);
 			await expect(card.locator('.goal-period')).toHaveText('This month');
 			await expect(card.locator('.goal-target-value')).toContainText(/1h\s*0m|60m/);
-			await expect(card.locator('.goal-overall')).toHaveText('0%');
+			// Overall % depends on how much the seed user has logged in
+			// the current week / month — irrelevant to the CRUD flow's
+			// correctness. Assert the cell renders SOMETHING that looks
+			// like a percentage and move on.
+			await expect(card.locator('.goal-overall')).toHaveText(/^\d+%$/);
 		});
 
 		await test.step('click card → Delete → card disappears, empty state returns', async () => {
