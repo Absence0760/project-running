@@ -359,7 +359,17 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		await load();
-		subscribeRealtime();
+		// Guard each side-effect: if subscribeRealtime throws (the
+		// `.on('postgres_changes', ...) after subscribe()` bug that
+		// bites when Supabase's RealtimeClient returns a cached
+		// already-subscribed channel from a prior page lifecycle),
+		// the heartbeat must still start — otherwise dropped realtime
+		// events strand the spectator on stale state.
+		try {
+			subscribeRealtime();
+		} catch (e) {
+			console.warn('subscribeRealtime failed; falling back to poll', e);
+		}
 		startRaceSessionHeartbeat();
 	});
 

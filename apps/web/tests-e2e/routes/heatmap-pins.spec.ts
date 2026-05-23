@@ -233,6 +233,11 @@ test.describe('Heatmap pin popup (click flow)', () => {
 				project: (lngLat: [number, number]) => { x: number; y: number };
 				once: (event: string, cb: () => void) => void;
 				getContainer: () => HTMLElement;
+				queryRenderedFeatures: (
+					point: [number, number],
+					opts?: { layers?: string[] },
+				) => Array<unknown>;
+				getStyle: () => { layers?: Array<{ id: string }> };
 			};
 			const m = (window as unknown as { __heatmapMap?: MapHandle })
 				.__heatmapMap;
@@ -241,7 +246,34 @@ test.describe('Heatmap pin popup (click flow)', () => {
 				m.once('moveend', () => resolve());
 				m.flyTo({ center: [lng, lat], zoom: 14 });
 			});
-			await new Promise<void>((resolve) => setTimeout(resolve, 700));
+			// Wait for the pin layers to actually paint at the target.
+			// The 700 ms fixed wait was enough on local hardware but
+			// CI runners (slower WebGL) sometimes need longer for the
+			// pin source's data + the layer's symbol rendering to
+			// settle after flyTo. Poll `queryRenderedFeatures` at the
+			// projected pixel until SOMETHING is hit (or we give up
+			// after 4 s) — that's the load-bearing precondition for
+			// the `mouse.click` to dispatch the layer's click handler
+			// and open the popup. Caught by
+			// `tests-e2e/routes/heatmap-pins.spec.ts:275 + :293`
+			// failing on CI run 26340415025 shard 6 (popup never
+			// appeared because the click landed before pins rendered).
+			const pinLayerIds = (m.getStyle().layers ?? [])
+				.map((l) => l.id)
+				.filter(
+					(id) =>
+						id === 'heatmap-clubs-layer' ||
+						id === 'heatmap-route-pins-layer',
+				);
+			const deadline = Date.now() + 4000;
+			while (Date.now() < deadline) {
+				const pt = m.project([lng, lat]);
+				const hits = m.queryRenderedFeatures([pt.x, pt.y], {
+					layers: pinLayerIds,
+				});
+				if (hits.length > 0) break;
+				await new Promise<void>((resolve) => setTimeout(resolve, 150));
+			}
 			const pt = m.project([lng, lat]);
 			const rect = m.getContainer().getBoundingClientRect();
 			return { x: rect.left + pt.x, y: rect.top + pt.y };

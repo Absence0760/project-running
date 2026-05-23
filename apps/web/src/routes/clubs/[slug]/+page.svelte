@@ -208,7 +208,18 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		await load();
-		subscribeRealtime();
+		// Guard each side-effect: if subscribeRealtime throws (the
+		// `.on('postgres_changes', ...) after subscribe()` bug that
+		// bites when Supabase's RealtimeClient returns a cached
+		// already-subscribed channel from a prior page lifecycle),
+		// the poll fallback must still start — otherwise dropped
+		// realtime events strand the page on stale data.
+		try {
+			subscribeRealtime();
+		} catch (e) {
+			console.warn('subscribeRealtime failed; falling back to poll', e);
+		}
+		startPostsColdStartPoll();
 	});
 
 	onDestroy(() => {
@@ -216,12 +227,67 @@
 			clearTimeout(pingRetryTimer);
 			pingRetryTimer = null;
 		}
+		if (postsColdStartPoll) {
+			clearInterval(postsColdStartPoll);
+			postsColdStartPoll = null;
+		}
 		if (channel) {
 			supabase.removeChannel(channel);
 			channel = null;
 		}
 		realtimeReady = false;
 	});
+
+	/**
+	 * Cold-start safety net: even with the broadcast-echo readiness
+	 * signal + the 5 s fallback (above), the postgres_changes
+	 * INSERT event from a fresh subscriber can land in the join-ack
+	 * filter-wiring window and never fire. Without an extra prod
+	 * the page never picks up the new row.
+	 *
+	 * Serialized poll — one in-flight at a time, even if the
+	 * interval fires while a fetch is mid-flight. Without the
+	 * `inFlight` gate, a slow fetch finishing AFTER a faster one
+	 * can overwrite `posts` with a stale snapshot
+	 * (out-of-order assignment race).
+	 *
+	 * 1.5 s interval, 30 s window. By 30 s the cold-start window
+	 * has long passed and either realtime is wired (every
+	 * subsequent INSERT fires postgres_changes correctly) or the
+	 * user has interacted (every page action triggers a fresh
+	 * fetch via scheduleReload anyway).
+	 *
+	 * Caught by `tests-e2e/cross-cutting/realtime.spec.ts:248`
+	 * failing in CI run 26340415025 (post never appeared because
+	 * the service-role INSERT's postgres_changes event was dropped
+	 * on the freshly-subscribed channel).
+	 */
+	let postsColdStartPoll: ReturnType<typeof setInterval> | null = null;
+	function startPostsColdStartPoll() {
+		let elapsedMs = 0;
+		let inFlight = false;
+		const INTERVAL_MS = 1500;
+		const WINDOW_MS = 30_000;
+		postsColdStartPoll = setInterval(async () => {
+			elapsedMs += INTERVAL_MS;
+			if (!club || elapsedMs > WINDOW_MS) {
+				if (postsColdStartPoll) {
+					clearInterval(postsColdStartPoll);
+					postsColdStartPoll = null;
+				}
+				return;
+			}
+			if (inFlight) return;
+			inFlight = true;
+			try {
+				posts = await fetchClubPosts(club.id, 20);
+			} catch {
+				/* best-effort; swallow transient fetch errors */
+			} finally {
+				inFlight = false;
+			}
+		}, INTERVAL_MS);
+	}
 
 	/**
 	 * Reload the feed whenever a relevant row changes server-side. We don't
