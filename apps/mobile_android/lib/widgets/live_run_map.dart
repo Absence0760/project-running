@@ -84,6 +84,23 @@ String resolveTileUrl(Map<String, String> env) {
   return _kOsmTileUrl;
 }
 
+/// Production-callsite convenience: read dotenv defensively (the
+/// `.env` may not be loaded in widget tests) and route through
+/// [resolveTileUrl]. Use this from screen build() methods instead
+/// of `resolveTileUrl(dotenv.env)` — bare `dotenv.env` throws
+/// `NotInitializedError` when the test harness hasn\'t called
+/// `dotenv.load()`, which then propagates up and prevents the
+/// screen from rendering at all (real bug found by the May 2026
+/// audit when the privacy-zones + heatmap screens started reading
+/// dotenv in their TileLayer URL).
+String currentTileUrl() {
+  try {
+    return resolveTileUrl(dotenv.env);
+  } catch (_) {
+    return resolveTileUrl(const {});
+  }
+}
+
 class LiveRunMap extends StatefulWidget {
   /// The GPS track recorded so far.
   final List<Waypoint> track;

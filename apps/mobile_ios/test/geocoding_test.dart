@@ -27,13 +27,38 @@ void main() {
       expect(out, isEmpty);
     });
 
-    test('empty list when apiKey is empty', () async {
+    test('empty apiKey routes through the Nominatim fallback', () async {
+      // May 2026 audit: previously this returned `const []` outright
+      // when apiKey was empty. Now it falls through to Nominatim so
+      // a Protomaps-only dev stack with no MAPTILER_KEY still has a
+      // working search box — mirrors `searchPlacesWithKey` on web.
+      // The fetcher must be HIT (the Nominatim URL), the URL must
+      // be the openstreetmap.org host (NOT MapTiler), and the
+      // results must parse Nominatim's `display_name` + lat / lon
+      // string fields.
+      Uri? hitUrl;
+      Future<String> stub(Uri url) async {
+        hitUrl = url;
+        return jsonEncode([
+          {
+            'display_name': 'London, England',
+            'lat': '51.5074',
+            'lon': '-0.1278',
+          },
+        ]);
+      }
       final out = await searchPlaces(
         'London',
         apiKey: '',
-        fetcher: (_) async => fail('fetcher must not be called'),
+        fetcher: stub,
       );
-      expect(out, isEmpty);
+      expect(hitUrl, isNotNull,
+          reason: 'empty apiKey must still hit a fetcher (the Nominatim fallback)');
+      expect(hitUrl!.host, 'nominatim.openstreetmap.org');
+      expect(out, hasLength(1));
+      expect(out.first.name, 'London, England');
+      expect(out.first.lat, closeTo(51.5074, 1e-6));
+      expect(out.first.lng, closeTo(-0.1278, 1e-6));
     });
 
     test('parses MapTiler features into PlaceResult', () async {

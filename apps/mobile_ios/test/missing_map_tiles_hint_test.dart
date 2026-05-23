@@ -10,7 +10,7 @@ import '../lib/widgets/missing_map_tiles_hint.dart';
 void main() {
   group('MissingMapTilesHint', () {
     testWidgets(
-      'renders the hint banner when the env key is absent',
+      'renders the hint banner when neither env key is set',
       (tester) async {
         await tester.pumpWidget(
           const MaterialApp(
@@ -19,13 +19,18 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Map tiles disabled'), findsOneWidget);
+        // May 2026 copy update: tiles fall back to OSM instead of
+        // going blank, so the heading reflects the active fallback
+        // rather than the (no-longer-accurate) "disabled" wording.
         expect(
-          find.textContaining('Set MAPTILER_KEY'),
+          find.text('Using OpenStreetMap fallback tiles'),
           findsOneWidget,
-          reason: 'Hint must include the exact fix-instruction (env '
-              'var name + file path) so the user knows what to '
-              'set.',
+        );
+        expect(
+          find.textContaining('MAPTILER_KEY'),
+          findsOneWidget,
+          reason: 'Hint body must name the env var so users know '
+              'what to set.',
         );
         // Map-outline icon shows so the banner reads as map-related.
         expect(find.byIcon(Icons.map_outlined), findsOneWidget);
@@ -33,8 +38,8 @@ void main() {
     );
 
     testWidgets(
-      'renders NOTHING when the env key is present (production '
-      'builds with a configured key see no banner)',
+      'renders NOTHING when at least one env key is configured '
+      '(production builds + dev with a real key see no banner)',
       (tester) async {
         await tester.pumpWidget(
           const MaterialApp(
@@ -43,7 +48,10 @@ void main() {
             ),
           ),
         );
-        expect(find.text('Map tiles disabled'), findsNothing);
+        expect(
+          find.text('Using OpenStreetMap fallback tiles'),
+          findsNothing,
+        );
         expect(find.byIcon(Icons.map_outlined), findsNothing);
         // The widget collapses to SizedBox.shrink — no layout
         // footprint at all.
@@ -53,8 +61,8 @@ void main() {
     );
 
     testWidgets(
-      'hint copy mentions BOTH the env var name AND the file path so '
-      'the user can act without scrolling docs',
+      'hint copy mentions BOTH env var names, the file path, AND the '
+      '10.0.2.2 vs LAN-IP footgun for physical devices',
       (tester) async {
         await tester.pumpWidget(
           const MaterialApp(
@@ -63,11 +71,13 @@ void main() {
             ),
           ),
         );
-        // Env var name + file path are the two pieces of info
-        // needed to fix the problem. Pin both so a refactor to
-        // generic copy ("check your env config") fails this test.
+        // The four pieces of info needed to act on the hint. Pin
+        // each so a refactor to generic copy ("check your env
+        // config") fails this test.
         expect(find.textContaining('MAPTILER_KEY'), findsOneWidget);
+        expect(find.textContaining('TILE_URL_TEMPLATE'), findsOneWidget);
         expect(find.textContaining('.env.local'), findsOneWidget);
+        expect(find.textContaining('10.0.2.2'), findsOneWidget);
       },
     );
   });

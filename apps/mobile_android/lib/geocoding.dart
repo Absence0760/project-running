@@ -12,6 +12,7 @@ import 'dart:math';
 /// HttpClient — no new package dep.
 
 const _kMapTilerBase = 'https://api.maptiler.com/geocoding';
+const _kNominatimBase = 'https://nominatim.openstreetmap.org/search';
 
 /// Ceiling on each MapTiler lookup. Without it a flaky network can
 /// pin the AppBar place-search overlay indefinitely; the empty-list
@@ -50,21 +51,43 @@ Future<String> _defaultFetcher(Uri url) async {
 /// Search for places matching [query]. Returns at most [limit] results.
 /// Returns an empty list when:
 /// - the query is shorter than 2 characters (the web matches this)
-/// - the API key is missing
 /// - the HTTP call fails for any reason
 ///
+/// Provider precedence (mirrors `searchPlacesWithKey` on web):
+///   1. MapTiler when [apiKey] is non-empty
+///   2. Nominatim (OSM\'s free public geocoder) as fallback so a
+///      Protomaps-only dev stack with no MAPTILER_KEY still has a
+///      working search box. See `decisions.md § 68`.
+///
 /// The empty-on-error contract keeps the search box graceful: if
-/// MapTiler is down or unconfigured, the user sees no results rather
-/// than an error toast on every keystroke.
+/// every provider fails the user sees no results rather than an
+/// error toast on every keystroke.
 Future<List<PlaceResult>> searchPlaces(
   String query, {
   required String apiKey,
   int limit = 5,
   GeocodingFetcher? fetcher,
 }) async {
-  if (query.trim().length < 2) return const [];
-  if (apiKey.isEmpty) return const [];
-  final encoded = Uri.encodeComponent(query.trim());
+  final trimmed = query.trim();
+  if (trimmed.length < 2) return const [];
+  if (apiKey.isNotEmpty) {
+    return _searchViaMapTiler(
+      trimmed,
+      apiKey: apiKey,
+      limit: limit,
+      fetcher: fetcher,
+    );
+  }
+  return _searchViaNominatim(trimmed, limit: limit, fetcher: fetcher);
+}
+
+Future<List<PlaceResult>> _searchViaMapTiler(
+  String trimmed, {
+  required String apiKey,
+  required int limit,
+  GeocodingFetcher? fetcher,
+}) async {
+  final encoded = Uri.encodeComponent(trimmed);
   final url = Uri.parse(
     '$_kMapTilerBase/$encoded.json?key=$apiKey&limit=$limit',
   );
@@ -84,6 +107,45 @@ Future<List<PlaceResult>> searchPlaces(
             lat: ((f['center'] as List)[1] as num).toDouble(),
           ),
     ];
+  } catch (_) {
+    return const [];
+  }
+}
+
+Future<List<PlaceResult>> _searchViaNominatim(
+  String trimmed, {
+  required int limit,
+  GeocodingFetcher? fetcher,
+}) async {
+  // The `email` param signals to Nominatim that we read their usage
+  // policy. Plain UA without it has been known to get denied. See
+  // https://operations.osmfoundation.org/policies/nominatim/.
+  final url = Uri.parse(
+    '$_kNominatimBase?q=${Uri.encodeQueryComponent(trimmed)}'
+    '&format=json&limit=$limit&addressdetails=0'
+    '&email=protomaps-dev@localhost',
+  );
+  try {
+    final body = await (fetcher ?? _defaultFetcher)(url).timeout(kGeocodingTimeout);
+    final data = jsonDecode(body);
+    if (data is! List) return const [];
+    final out = <PlaceResult>[];
+    for (final f in data) {
+      if (f is! Map) continue;
+      final latRaw = f['lat'];
+      final lngRaw = f['lon'];
+      final lat = latRaw is String ? double.tryParse(latRaw) : null;
+      final lng = lngRaw is String ? double.tryParse(lngRaw) : null;
+      if (lat == null || lng == null) continue;
+      out.add(PlaceResult(
+        name: (f['display_name'] ??
+                '${lat.toStringAsFixed(3)}, ${lng.toStringAsFixed(3)}')
+            .toString(),
+        lat: lat,
+        lng: lng,
+      ));
+    }
+    return out;
   } catch (_) {
     return const [];
   }

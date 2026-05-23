@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
@@ -7,7 +6,7 @@ import 'package:latlong2/latlong.dart';
 import '../privacy.dart';
 import '../settings_sync.dart';
 import '../tile_cache.dart';
-import '../widgets/live_run_map.dart' show resolveTileUrl;
+import '../widgets/live_run_map.dart' show currentTileUrl;
 import '../widgets/top_banner.dart';
 
 /// Settings → Privacy zones: tap-to-add geofences clipped from the
@@ -156,7 +155,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                   // privacy-zones picker the only map that worked on
                   // a Protomaps-only dev setup, which masked the
                   // resolveTileUrl regression.
-                  urlTemplate: resolveTileUrl(dotenv.env),
+                  urlTemplate: currentTileUrl(),
                   userAgentPackageName: 'com.threkir.app',
                   // Shared disk-backed tile cache (see TileCache in
                   // tile_cache.dart). Without it, panning the zone

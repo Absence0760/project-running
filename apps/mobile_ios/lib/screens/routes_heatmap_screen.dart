@@ -13,7 +13,7 @@ import 'package:latlong2/latlong.dart';
 
 import '../geocoding.dart';
 import '../tile_cache.dart';
-import '../widgets/live_run_map.dart' show resolveTileUrl;
+import '../widgets/live_run_map.dart' show currentTileUrl;
 import '../widgets/top_banner.dart';
 import 'public_route_screen.dart';
 
@@ -89,7 +89,21 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   List<PlaceResult> _searchResults = const [];
   bool _searchOpen = false;
 
+  /// Last known user position, rendered as a blue dot + accuracy halo
+  /// on the map. Populated on mount (best-effort, silent on permission
+  /// denial) and refreshed on every Locate FAB tap. Mirrors the
+  /// `GeolocateControl` MapLibre primitive used by the web heatmap.
+  LatLng? _userLatLng;
+
   String get _maptilerKey => dotenv.env['MAPTILER_KEY'] ?? '';
+
+  @override
+  void initState() {
+    super.initState();
+    // Fire-and-forget so the user sees a blue dot the moment they
+    // land on the heatmap (when permission is already granted).
+    unawaited(_backgroundLocate());
+  }
 
   @override
   void dispose() {
@@ -242,7 +256,13 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           ? await widget.locateFn!()
           : await _platformLocate();
       if (!mounted) return;
-      _mapController.move(LatLng(pos.latitude, pos.longitude), 11);
+      final ll = LatLng(pos.latitude, pos.longitude);
+      // Zoom 14 = neighbourhood level (~2 km across) — close enough to
+      // see local routes / streets, far enough to keep some context.
+      // Pre-fix the FAB landed at zoom 11 (city scale ~30 km) which
+      // the user flagged as "doesn\'t zoom in enough".
+      _mapController.move(ll, 14);
+      setState(() => _userLatLng = ll);
       // Move doesn't fire `onPositionChanged` with `hasGesture: true`
       // (it's a programmatic move), so the heatmap doesn't auto-
       // refresh. Schedule one explicitly so the user's location
@@ -251,6 +271,26 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     } catch (e) {
       if (!mounted) return;
       showTopBanner(context, 'Location unavailable: $e');
+    }
+  }
+
+  /// Best-effort background fix on mount so the user sees a dot
+  /// immediately on first paint (when permission is already granted).
+  /// Silent on denial — Locate FAB is the explicit-permission path.
+  Future<void> _backgroundLocate() async {
+    if (kIsWeb) return;
+    try {
+      final perm = await Geolocator.checkPermission();
+      if (perm != LocationPermission.always &&
+          perm != LocationPermission.whileInUse) {
+        return; // Don't prompt silently — let the FAB do it.
+      }
+      final pos = await Geolocator.getCurrentPosition()
+          .timeout(const Duration(seconds: 5));
+      if (!mounted) return;
+      setState(() => _userLatLng = LatLng(pos.latitude, pos.longitude));
+    } catch (_) {
+      // Silent — the FAB is the user-initiated retry.
     }
   }
 
@@ -374,7 +414,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                       // also burned OSM\'s tile quota for every dev
                       // session in production builds with a configured
                       // MapTiler key.
-                      urlTemplate: resolveTileUrl(dotenv.env),
+                      urlTemplate: currentTileUrl(),
                       userAgentPackageName: 'com.threkir.app',
                       // Disk-backed tile cache shared with every other
                       // map surface. Without it, panning the heatmap
@@ -436,6 +476,23 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                             ),
                         ],
                       ),
+                    // User-position dot — blue with a white halo,
+                    // mirrors the styling of MapLibre's built-in
+                    // `GeolocateControl` on the web heatmap. Drawn
+                    // last so it sits above the heatmap + route
+                    // overlays. Hidden until the background-locate
+                    // (or the Locate FAB) populates `_userLatLng`.
+                    if (_userLatLng != null)
+                      MarkerLayer(
+                        markers: [
+                          Marker(
+                            point: _userLatLng!,
+                            width: 22,
+                            height: 22,
+                            child: const _UserLocationDot(),
+                          ),
+                        ],
+                      ),
                   ],
                 ),
                 // Search-results dropdown — stacked over the map so
@@ -468,6 +525,42 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     ),
                   ),
         ],
+      ),
+    );
+  }
+}
+
+/// Blue dot with a white halo + outline — the mobile twin of
+/// MapLibre's `GeolocateControl` user-position marker. Two
+/// concentric Containers via DecoratedBox so the halo reads cleanly
+/// on both light and dark basemaps.
+class _UserLocationDot extends StatelessWidget {
+  const _UserLocationDot();
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withValues(alpha: 0.6),
+      ),
+      child: Center(
+        child: Container(
+          width: 14,
+          height: 14,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: const Color(0xFF1A73E8),
+            border: Border.all(color: Colors.white, width: 2),
+            boxShadow: const [
+              BoxShadow(
+                color: Color(0x66000000),
+                blurRadius: 4,
+                offset: Offset(0, 1),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

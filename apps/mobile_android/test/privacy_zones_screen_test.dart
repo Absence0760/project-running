@@ -16,10 +16,17 @@ Future<({SettingsSyncService sync})> _makeSync() async {
 Future<void> _pump(
   WidgetTester tester, {
   required SettingsSyncService sync,
-}) {
-  return tester.pumpWidget(
+}) async {
+  await tester.pumpWidget(
     MaterialApp(home: PrivacyZonesScreen(settingsSync: sync)),
   );
+  // Drain pending timers from flutter_map_cache + Dio so the
+  // post-test "Timer is still pending" guard doesn\'t fire. The
+  // May 2026 audit wired the screen onto the shared
+  // CachedTileProvider; that provider schedules background timers
+  // (cache eviction / Dio interceptor) that the bare single-pump
+  // pattern doesn\'t flush.
+  await tester.pump(const Duration(seconds: 1));
 }
 
 void main() {
