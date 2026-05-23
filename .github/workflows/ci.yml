@@ -54,6 +54,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          # Node 24 to match the Playwright shards. Needed at all
+          # because the Web TS unit tests step at the bottom imports
+          # third-party packages (e.g. `jszip` in backup_reader.test.ts)
+          # — `npx tsx --test` can't resolve them without a populated
+          # workspace `node_modules/`.
+          node-version: 24
+          cache: npm
+      - run: npm ci
       - uses: supabase/setup-cli@a4d563a017eb7e7da097c40c441f85dbdcc4411f # v2.0.1
         with:
           version: 2.84.2
