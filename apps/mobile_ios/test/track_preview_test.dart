@@ -264,15 +264,24 @@ void main() {
           'lib/widgets/track_preview.dart',
         ).readAsStringSync();
         // Stroke colour prefix uses %23 inline (the load-bearing
-        // fix vs the over-encoded path). The full path string now
-        // also includes `fill:none|` + `width:3` style prefixes
-        // per MapTiler's canonical docs example.
+        // fix vs the over-encoded path). The fill segment is a
+        // fully-transparent hex8 (`#ffffff00`) — `fill:none` would
+        // be the obvious default but MapTiler doesn't recognise the
+        // `none` token, so closed-loop routes (first coord ≈ last
+        // coord) get the default black polygon fill and a "hole"
+        // appears inside the loop on the thumbnail. Caught by the
+        // May 2026 audit.
         expect(
-          src.contains("'fill:none|stroke:%23\$stroke|width:3'"),
+          src.contains(
+            "'fill:%23ffffff00|stroke:%23\$stroke|width:3'",
+          ),
           isTrue,
-          reason: 'Path style prefix must include fill:none + stroke + '
-              'width per MapTiler\'s docs example. # encoded as '
-              '%23 inline because it\'s the HTTP fragment delimiter.',
+          reason: 'Path style prefix must include a transparent fill '
+              '(%23ffffff00, not %23none) + stroke + width per '
+              "MapTiler's canonical docs example. # encoded as %23 "
+              "inline because it's the HTTP fragment delimiter. "
+              'fill=none would surface as a black polygon on closed '
+              'loops.',
         );
         // Pipe separator is a literal `|` (not %7C / not encoded
         // by anything).

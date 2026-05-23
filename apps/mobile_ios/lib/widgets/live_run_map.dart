@@ -72,6 +72,16 @@ class LiveRunMap extends StatefulWidget {
   /// point when null.
   final Waypoint? currentPosition;
 
+  /// Authoritative index of [currentPosition] within [track]. When set,
+  /// the smoothed-dot snap looks up `smoothed[currentPositionIndex]`
+  /// directly instead of scanning for a lat/lng match. Required for
+  /// loop routes where multiple track waypoints share the same coord
+  /// (start == end) — without the explicit index the scan would
+  /// snap-to-start every time the user scrubbed to the end. Pass it
+  /// from the replay path; leave null for live recording (where the
+  /// latest fix isn't in the track and the dot renders at raw coords).
+  final int? currentPositionIndex;
+
   /// Optional planned route to show underneath the live track.
   final List<Waypoint>? plannedRoute;
 
@@ -144,6 +154,7 @@ class LiveRunMap extends StatefulWidget {
     super.key,
     required this.track,
     this.currentPosition,
+    this.currentPositionIndex,
     this.plannedRoute,
     this.followRunner = true,
     this.bottomPadding = 0,
@@ -285,12 +296,22 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
       // no snap needed.
       return LatLng(pos.lat, pos.lng);
     }
-    // Identity-on-(lat,lng) scan — the cheap path for replay where
-    // `pos === run.track[index]`. The early-exit `break` keeps this
-    // O(index) in practice (replay walks indices in order). For
-    // live recording, no track point matches the latest GPS fix,
-    // so the loop falls through to `return null` and the caller
-    // renders the raw coords unmodified.
+    // Preferred path: caller passed the authoritative index (replay,
+    // hover-marker). Look it up directly in the smoothed track —
+    // critical for loop routes where start == end coordinates would
+    // make a coord-only scan return the wrong index.
+    final idx = widget.currentPositionIndex;
+    if (idx != null && idx >= 0 && idx < widget.track.length) {
+      final smoothed = _smoothedTrackFor(widget.track);
+      if (idx < smoothed.length) return smoothed[idx];
+    }
+    // Fallback: identity-on-(lat,lng) scan for callers that haven't
+    // adopted the explicit index yet. Live recording (where the
+    // latest GPS fix isn't in the track and no index is meaningful)
+    // falls through to `return null` and the caller renders raw
+    // coords unmodified. The `break` keeps replay walks at
+    // O(index) for non-loop tracks; loop tracks SHOULD use the
+    // explicit index path above to avoid snap-to-start.
     for (int i = 0; i < widget.track.length; i++) {
       final w = widget.track[i];
       if ((w.lat - pos.lat).abs() < 1e-9 &&

@@ -71,8 +71,11 @@ test('buildStaticMapUrl includes the key, dimensions, style, and path', () => {
 	assert.ok(out.startsWith('https://api.maptiler.com/maps/streets-v2/static/auto/'));
 	assert.match(out, /\/220x140@2x\.png/);
 	assert.match(out, new RegExp(`key=${KEY}`));
-	// Path includes the stroke (URL-encoded #) + width + coordinates.
-	assert.match(out, /stroke:%233b82f6\|width:3\|/);
+	// Path includes a transparent fill (so closed loops don't render
+	// as a black polygon), the brand stroke (URL-encoded #), width,
+	// and coordinates.
+	assert.match(out, /fill:%23ffffff00\|/);
+	assert.match(out, /stroke:%23F2A07B\|width:4\|/);
 	assert.match(out, /-0\.12760,51\.50740/);
 	assert.match(out, /-0\.12840,51\.50850/);
 });

@@ -41,11 +41,15 @@ export function buildStaticMapUrl(
 		.join('|');
 	// Theme brand colour (`--color-primary` in dark mode, complement of
 	// `--color-secondary` in light mode). Static images can't read CSS
-	// variables, so the hex is hardcoded. Chosen over the previous
-	// generic `#3b82f6` blue so the polyline reads as "this app" at
-	// thumbnail size. Width bumped from 3 to 4 so the line stays
-	// legible against busy basemap content.
-	const path = `fill:none|stroke:%23F2A07B|width:4|${coords}`;
+	// variables, so the hex is hardcoded. Width bumped from 3 to 4 so
+	// the line stays legible against busy basemap content.
+	//
+	// Fill is a fully-transparent hex8 (`#ffffff00`) rather than
+	// `none` — MapTiler's static-maps path syntax doesn't recognise
+	// `none`, so closed loops (first coord ≈ last coord) get the
+	// default black polygon fill and a "hole" appears inside the
+	// loop on the thumbnail. Caught by the May 2026 audit pass.
+	const path = `fill:%23ffffff00|stroke:%23F2A07B|width:4|${coords}`;
 	return `https://api.maptiler.com/maps/${opts.style}/static/auto/${opts.w}x${opts.h}@2x.png?path=${path}&key=${opts.key}`;
 }
 
@@ -73,13 +77,11 @@ export function buildLocalStaticMapUrl(
 	const coords = down
 		.map((p) => `${p.lng.toFixed(5)},${p.lat.toFixed(5)}`)
 		.join('|');
-	// Theme brand colour (`--color-primary` in dark mode, complement of
-	// `--color-secondary` in light mode). Static images can't read CSS
-	// variables, so the hex is hardcoded. Chosen over the previous
-	// generic `#3b82f6` blue so the polyline reads as "this app" at
-	// thumbnail size. Width bumped from 3 to 4 so the line stays
-	// legible against busy basemap content.
-	const path = `fill:none|stroke:%23F2A07B|width:4|${coords}`;
+	// Same fully-transparent fill as buildStaticMapUrl above — the
+	// tileserver-gl static endpoint mirrors MapTiler's path syntax,
+	// so `fill:none` would produce the same closed-loop "black hole"
+	// regression here too.
+	const path = `fill:%23ffffff00|stroke:%23F2A07B|width:4|${coords}`;
 	// `@2x` scale not supported by tileserver-gl's path syntax —
 	// it uses a `?scale=2` query param. Skip for now; thumbnails at
 	// 220×140 look fine at 1× on a HiDPI display + the disk write

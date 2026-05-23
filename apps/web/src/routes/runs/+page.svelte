@@ -614,13 +614,18 @@
 						 same height. Cards with a track render the real
 						 polyline + tile background; cards without (manual
 						 entries, parkrun rows with no GPS) show a subtle
-						 placeholder so the grid stays even. -->
+						 placeholder so the grid stays even.
+						 Icon ligature is `map` — the outlined variant is
+						 already applied via the `material-symbols` class
+						 (font family is `Material Symbols Outlined` per
+						 app.css). `map_outlined` would render as a
+						 missing-icon placeholder. -->
 					<div class="run-map-placeholder">
 						{#if run.track_url}
 							<RunTrackPreview trackUrl={run.track_url} />
 						{:else}
 							<span class="material-symbols no-track-icon" aria-hidden="true">
-								map_outlined
+								map
 							</span>
 							<span class="no-track-label">No GPS track</span>
 						{/if}

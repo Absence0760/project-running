@@ -267,7 +267,7 @@
 	<ImportRoute onclose={() => (showImport = false)} onimport={load} />
 {/if}
 
-<div class="page" class:page-heatmap={tab === 'heatmap'}>
+<div class="page">
 	<header class="page-header">
 		<div class="tabs" role="tablist" aria-label="Routes section">
 			<button
@@ -506,9 +506,12 @@
 		{/if}
 	{:else if tab === 'explore'}
 		<RouteExplorer />
-	{:else}
-		<RouteHeatmap />
 	{/if}
+	<!-- `tab === 'heatmap'` was a fall-through here pre-May-2026.
+		 The heatmap moved to its own /routes/heatmap route to
+		 escape this page's flex chain; onMount() now redirects
+		 the legacy ?tab=heatmap URL via goto() before this
+		 template paints. -->
 </div>
 
 <style>
@@ -516,23 +519,10 @@
 		padding: var(--page-padding-y) var(--page-padding-x);
 	}
 
-	/* Heatmap tab takes the FULL viewport (full-bleed). Drops the
-	 * page-padding gutters entirely + zeroes the page-header
-	 * margin so the map sits flush against the layout column. */
-	.page-heatmap {
-		display: flex;
-		flex-direction: column;
-		height: 100vh;
-		padding: 0;
-	}
-	.page-heatmap :global(.page-header) {
-		padding: var(--space-md) var(--space-lg) 0;
-		margin-bottom: var(--space-sm);
-	}
-	.page-heatmap > :global(:last-child) {
-		flex: 1 1 0;
-		min-height: 0;
-	}
+	/* Heatmap moved to its own /routes/heatmap route in the May
+	 * 2026 layout fix — the `.page-heatmap` modifier + its
+	 * full-bleed flex chain that used to live here are now in
+	 * `/routes/heatmap/+page.svelte` instead. Dead-code removed. */
 
 	.page-header {
 		margin-bottom: var(--space-xl);

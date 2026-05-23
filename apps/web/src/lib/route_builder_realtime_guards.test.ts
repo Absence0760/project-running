@@ -353,27 +353,36 @@ test('RouteHeatmap legend fades when the cursor enters the map', () => {
 	);
 	assert.match(
 		src,
-		/class:dimmed=\{pointerOnMap\}/,
-		"The legend must carry the class:dimmed binding so the CSS " +
-			'opacity transition fires when the cursor enters the map.',
+		/class:dimmed=\{pointerOnMap\b/,
+		"The legend must carry the class:dimmed binding (driven by " +
+			'pointerOnMap, optionally gated on the expanded state) so the ' +
+			'CSS opacity transition fires when the cursor enters the map.',
 	);
 });
 
-test('/routes page hands the heatmap tab the full viewport', () => {
-	const src = read('src/routes/routes/+page.svelte');
+test('/routes heatmap tab navigates to its own full-viewport route', () => {
+	// May 2026: the heatmap moved out of the /routes tab template
+	// into a standalone /routes/heatmap route so it can own the
+	// full layout column without fighting the routes-page flex
+	// chain that caused the canvas to render at y=-345 inside the
+	// tab branch. The /routes page now ONLY redirects when the
+	// heatmap tab is picked; the actual layout work lives in
+	// /routes/heatmap/+page.svelte.
+	const pageSrc = read('src/routes/routes/+page.svelte');
 	assert.match(
-		src,
-		/class:page-heatmap=\{tab === 'heatmap'\}/,
-		"/routes must apply a `.page-heatmap` modifier on the heatmap " +
-			"tab so the wrapper switches to a full-height flex layout. " +
-			'Without it the map shares 30 % of the viewport with empty ' +
-			'page padding — the original "wasted real estate" complaint.',
+		pageSrc,
+		/goto\(['"]\/routes\/heatmap['"]/,
+		"/routes must redirect to /routes/heatmap when the heatmap " +
+			'tab is selected — the tab branch no longer mounts the ' +
+			'heatmap inline.',
 	);
+	const heatmapSrc = read('src/routes/routes/heatmap/+page.svelte');
 	assert.match(
-		src,
-		/\.page-heatmap\s*\{[\s\S]*?height:\s*100vh/,
-		'The .page-heatmap rule must set height: 100vh so the heatmap ' +
-			'gets the rest of the viewport below the page chrome.',
+		heatmapSrc,
+		/position:\s*fixed/,
+		'The standalone heatmap route must position the wrapper as ' +
+			'`fixed` against the viewport so the canvas escapes the ' +
+			'flex chain that previously caused y=-345 sizing bugs.',
 	);
 });
 

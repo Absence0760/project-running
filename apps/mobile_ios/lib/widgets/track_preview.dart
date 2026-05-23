@@ -158,7 +158,7 @@ class _StaticMapPreview extends StatelessWidget {
     final stroke = (color.value & 0xFFFFFF)
         .toRadixString(16)
         .padLeft(6, '0');
-    // Canonical MapTiler path syntax: `fill:none|stroke:#hex|width:N|
+    // Canonical MapTiler path syntax: `fill:#hex|stroke:#hex|width:N|
     // lng,lat|lng,lat|...`. The `#` becomes `%23` (HTTP fragment
     // delimiter must be encoded in a query string); pipes + commas
     // stay literal because MapTiler\'s path parser uses them as
@@ -166,7 +166,15 @@ class _StaticMapPreview extends StatelessWidget {
     // back. Pre-fix the value was wrapped in `Uri.encodeQueryComponent`
     // which turned every pipe + comma into %7C / %2C → MapTiler
     // 4xx\'d every request.
-    final pathParam = StringBuffer('fill:none|stroke:%23$stroke|width:3');
+    //
+    // Fill is a fully-transparent hex8 (`#ffffff00`) rather than
+    // `none` — MapTiler\'s path syntax doesn\'t recognise `none`, so
+    // closed loops (first coord ≈ last coord) get the default black
+    // polygon fill and a "hole" appears inside the loop on the
+    // thumbnail. Caught by the May 2026 audit on the web twin.
+    final pathParam = StringBuffer(
+      'fill:%23ffffff00|stroke:%23$stroke|width:3',
+    );
     for (final p in path) {
       // lng,lat per the API (MapTiler reverses the typical Leaflet
       // lat,lng order).

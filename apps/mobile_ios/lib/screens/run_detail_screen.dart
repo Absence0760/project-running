@@ -606,6 +606,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                                 replayIndex < run.track.length
                             ? run.track[replayIndex]
                             : null,
+                        // Authoritative index for the smoothed-dot
+                        // snap — loop routes (start == end coord)
+                        // need the explicit index, otherwise the
+                        // lat/lng scan would return the start point
+                        // for every end-of-track scrub.
+                        currentPositionIndex: replayIndex != null &&
+                                replayIndex < run.track.length
+                            ? replayIndex
+                            : null,
                         showDecorations: mapTrack.isNotEmpty,
                         useMilesForDecorations:
                             widget.preferences.unit == DistanceUnit.mi,
