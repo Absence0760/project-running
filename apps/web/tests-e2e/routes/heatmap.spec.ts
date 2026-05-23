@@ -32,43 +32,50 @@ test.describe('/routes — Heatmap tab', () => {
 		await expect(heatmapTab).toBeVisible({ timeout: 10_000 });
 	});
 
-	test('clicking Heatmap activates the tab (My routes deactivates)', async ({ page }) => {
-		await page.goto('/routes');
-		const heatmapTab = page.getByRole('tab', { name: 'Heatmap', exact: true });
-		const mineTab = page.getByRole('tab', { name: 'My routes', exact: true });
-		// Default: My routes is active.
-		await expect(mineTab).toHaveClass(/active/);
-		await heatmapTab.click();
-		await expect(heatmapTab).toHaveClass(/active/);
-		await expect(mineTab).not.toHaveClass(/active/);
-	});
+	test('clicking Heatmap navigates to the standalone /routes/heatmap page',
+		async ({ page }) => {
+			// May 2026 layout fix: Heatmap moved to its own route so
+			// the MapLibre canvas can own the layout column without
+			// fighting the routes-page flex chain. Tab click now
+			// navigates (it used to flip in-place).
+			await page.goto('/routes');
+			const mineTab = page.getByRole('tab', { name: 'My routes', exact: true });
+			await expect(mineTab).toHaveClass(/active/);
+			await page.getByRole('tab', { name: 'Heatmap', exact: true }).click();
+			await page.waitForURL(/\/routes\/heatmap$/, { timeout: 10_000 });
+			await expect(page.locator('.maplibregl-map')).toBeVisible({
+				timeout: 15_000,
+			});
+		});
 
-	test('?tab=heatmap deep-links onto the tab on first paint', async ({ page }) => {
-		// Snapshot restore via the `?tab=` query string. A regression
-		// in setTab or the onMount tab-resolve would land on My routes
-		// even though the URL asked for Heatmap — surfaces here.
-		await page.goto('/routes?tab=heatmap');
-		await expect(
-			page.getByRole('tab', { name: 'Heatmap', exact: true })
-		).toHaveClass(/active/, { timeout: 10_000 });
-	});
+	test('legacy ?tab=heatmap URL bounces to /routes/heatmap',
+		async ({ page }) => {
+			// Deep-link compat: pre-May-2026 URLs continue to work,
+			// they just redirect to the standalone page via onMount.
+			await page.goto('/routes?tab=heatmap');
+			await page.waitForURL(/\/routes\/heatmap$/, { timeout: 10_000 });
+			await expect(page.locator('.maplibregl-map')).toBeVisible({
+				timeout: 15_000,
+			});
+		});
 
-	test('Heatmap pane mounts a maplibregl canvas after switching tabs', async ({ page }) => {
-		// The RouteHeatmap component binds a MapLibre map to a div.
-		// The canvas only mounts after the tab switches because the
-		// component is in a `{#if tab === 'heatmap'}` branch.
+	test('Heatmap page mounts a maplibregl canvas', async ({ page }) => {
+		// Standalone /routes/heatmap route — RouteHeatmap mounts
+		// directly inside a `position: fixed` container that owns
+		// the layout column. The canvas only renders once MapLibre's
+		// load event fires.
 		// MapLibre injects `<canvas class="maplibregl-canvas">` once
 		// the map's load event fires; we tolerate the canvas-missing
 		// case (no MapTiler key in CI) by accepting either the canvas
 		// or the .maplibregl-map container div.
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 		const mapContainer = page.locator('.maplibregl-map');
 		await expect(mapContainer).toBeVisible({ timeout: 15_000 });
 	});
 
 	test('Heatmap shows a search box + locate-me button', async ({ page }) => {
 		// May 2026: the heatmap shipped without nav affordances. A user
-		// who landed on /routes?tab=heatmap could only see a blank map
+		// who landed on /routes/heatmap could only see a blank map
 		// when the default centre (London) was outside the tile data
 		// they had on disk. Both controls were added in the same pass:
 		//
@@ -81,7 +88,7 @@ test.describe('/routes — Heatmap tab', () => {
 		// Pin both as rendered DOM. The actual geocoding round-trip is
 		// covered by node-tests on `searchPlacesWithKey` (the env-free
 		// dispatcher) — this test is the wire-into-the-component check.
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map'))
 			.toBeVisible({ timeout: 15_000 });
 
@@ -109,7 +116,7 @@ test.describe('/routes — Heatmap tab', () => {
 		const errors: string[] = [];
 		page.on('pageerror', (e) => errors.push(e.message));
 
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map'))
 			.toBeVisible({ timeout: 15_000 });
 
@@ -164,14 +171,13 @@ test.describe('/routes — Heatmap tab', () => {
 		expect(res.status).toBeLessThan(500);
 	});
 
-	test('tab labels are mutually exclusive (only one .active at a time)', async ({ page }) => {
-		// Tab state machine: My routes / Explore / Heatmap. The
-		// .active CSS class drives the underline + colour. A regression
-		// in setTab that left two active simultaneously would visually
-		// confuse the page but not error — pin the count.
+	test('My routes ↔ Explore tabs are mutually exclusive', async ({ page }) => {
+		// Tab state machine: My routes / Explore (Heatmap moved to
+		// its own route in the May 2026 layout fix). The .active CSS
+		// class drives the underline + colour. A regression in setTab
+		// that left two active simultaneously would visually confuse
+		// the page but not error — pin the count.
 		await page.goto('/routes');
-		await page.getByRole('tab', { name: 'Heatmap', exact: true }).click();
-		await expect(page.locator('button.tab.active')).toHaveCount(1);
 		await page.getByRole('tab', { name: 'Explore', exact: true }).click();
 		await expect(page.locator('button.tab.active')).toHaveCount(1);
 		await page.getByRole('tab', { name: 'My routes', exact: true }).click();

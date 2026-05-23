@@ -263,44 +263,78 @@
 	/// Separate handle for the scrubber preview marker so it can
 	/// coexist with the hover-marker without one stealing the other's
 	/// MapLibre instance.
-	let previewMarker: maplibregl.Marker | undefined;
+	// Manual-projection preview marker. The MapLibre `Marker` class
+	// uses an internal projection cache that gets stale when the
+	// container size changes mid-session — the user repeatedly
+	// reported the dot stuck at the top-left of the map even after
+	// the NaN guard + `map.resize()` defensive calls.
+	//
+	// Bypassing the Marker class: we maintain a regular `<div>` as
+	// a child of `.maplibregl-canvas-container` and position it via
+	// `map.project([lng, lat])` directly. The `move` event fires
+	// on every render frame during pan/zoom; subscribing keeps the
+	// dot pinned to the route line through any map interaction.
+	let previewMarkerEl: HTMLDivElement | undefined;
+	let previewLastLngLat: [number, number] | null = null;
+	let previewMoveHandler: (() => void) | undefined;
+
+	function ensurePreviewMarkerEl(): HTMLDivElement | undefined {
+		if (!map) return undefined;
+		if (previewMarkerEl?.isConnected) return previewMarkerEl;
+		const host =
+			(map.getCanvasContainer() as HTMLElement | null) ??
+			(map.getContainer() as HTMLElement | null);
+		if (!host) return undefined;
+		const el = document.createElement('div');
+		el.className = 'hover-marker';
+		el.setAttribute('data-testid', 'route-preview-runner');
+		el.style.position = 'absolute';
+		el.style.top = '0';
+		el.style.left = '0';
+		el.style.willChange = 'transform';
+		el.style.pointerEvents = 'none';
+		el.style.zIndex = '5';
+		host.appendChild(el);
+		previewMarkerEl = el;
+		return el;
+	}
+
+	function repositionPreviewMarker(): void {
+		if (!map || !previewMarkerEl || !previewLastLngLat) return;
+		const pt = map.project(previewLastLngLat);
+		if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+			previewMarkerEl.style.display = 'none';
+			return;
+		}
+		previewMarkerEl.style.display = '';
+		// Center the 12×12 dot on the projected pixel.
+		previewMarkerEl.style.transform = `translate(${pt.x - 6}px, ${pt.y - 6}px)`;
+	}
 
 	function renderPreviewMarker(lngLat: [number, number] | null): void {
 		if (!map) return;
-		// Filter NaN / non-finite coordinates defensively. MapLibre's
-		// translate3d projector silently collapses non-finite values to
-		// the marker container's origin (top-left of the map div) —
-		// caught when the scrubber appeared to "place the marker at
-		// the top-left of the map". Treat invalid as "no marker".
+		// Filter NaN / non-finite coordinates defensively.
 		if (
 			lngLat == null ||
 			!Number.isFinite(lngLat[0]) ||
 			!Number.isFinite(lngLat[1])
 		) {
-			previewMarker?.remove();
-			previewMarker = undefined;
+			previewMarkerEl?.remove();
+			previewMarkerEl = undefined;
+			previewLastLngLat = null;
+			if (previewMoveHandler) {
+				map.off('move', previewMoveHandler);
+				previewMoveHandler = undefined;
+			}
 			return;
 		}
-		// Force MapLibre to resync its internal projection with the
-		// current container size BEFORE projecting the marker. The
-		// user reported the marker stuck at the top-left of the map
-		// even after the NaN guard was in place — root cause is a
-		// stale transform (the map's projection is computed against
-		// an older container size, so projecting the lat/lng to
-		// pixel coords produces a value that lands at the corner of
-		// the visible canvas). `.resize()` is cheap (no actual
-		// re-render unless the size differs) and idempotent.
-		map.resize();
-		if (!previewMarker) {
-			const el = document.createElement('div');
-			el.className = 'hover-marker';
-			el.setAttribute('data-testid', 'route-preview-runner');
-			previewMarker = new maplibregl.Marker({ element: el })
-				.setLngLat(lngLat)
-				.addTo(map);
-		} else {
-			previewMarker.setLngLat(lngLat);
+		previewLastLngLat = lngLat;
+		ensurePreviewMarkerEl();
+		if (!previewMoveHandler) {
+			previewMoveHandler = repositionPreviewMarker;
+			map.on('move', previewMoveHandler);
 		}
+		repositionPreviewMarker();
 	}
 
 	$effect(() => {
@@ -671,6 +705,12 @@
 	onDestroy(() => {
 		cancelAnimationFrame(animationFrame);
 		stopResizeWatch?.();
+		if (previewMoveHandler && map) {
+			map.off('move', previewMoveHandler);
+			previewMoveHandler = undefined;
+		}
+		previewMarkerEl?.remove();
+		previewMarkerEl = undefined;
 		map?.remove();
 	});
 </script>

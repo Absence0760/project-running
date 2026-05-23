@@ -10,7 +10,7 @@ function setConsentAccepted() {
 }
 
 /**
- * /routes?tab=heatmap — interactive surface beyond the bare "mounts"
+ * /routes/heatmap — interactive surface beyond the bare "mounts"
  * pin in routes/heatmap.spec.ts. The component is render-only
  * (RouteHeatmap.svelte: a MapLibre canvas with a `heatmap` paint
  * layer + a legend card; no click handler on density cells), so this
@@ -30,7 +30,7 @@ function setConsentAccepted() {
  * density-shaded raster pixels, not DOM elements.
  */
 
-test.describe('/routes?tab=heatmap — interaction', () => {
+test.describe('/routes/heatmap — interaction', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeEach(async ({ context }) => {
@@ -40,7 +40,7 @@ test.describe('/routes?tab=heatmap — interaction', () => {
 	test('legend + map container + NavigationControl mount; timestamp surfaces', async ({
 		page
 	}) => {
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 
 		// May 2026 real-estate pass: legend collapsed to an info-icon
 		// button by default. The info text + timestamp surface inside
@@ -74,7 +74,7 @@ test.describe('/routes?tab=heatmap — interaction', () => {
 	test('pan → moveend debounce fires a fresh fetch (updated-timestamp ticks)', async ({
 		page
 	}) => {
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 
 		const legend = page.locator('.heatmap-wrap .legend');
 		// Expand the legend so the "Updated …" timestamp is visible —

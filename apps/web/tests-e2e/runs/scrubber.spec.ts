@@ -87,12 +87,17 @@ test.describe('/runs/[id] — Preview scrubber marker', () => {
 
 			// CRITICAL: the marker's wrapping element (the
 			// .maplibregl-marker div MapLibre creates around our `el`)
-			// gets `transform: translate(<x>px, <y>px) translate(-50%, -50%)`.
-			// If MapLibre projected NaN / 0,0 we'd see `translate(0px,
-			// 0px)` here. Anything else proves projection worked.
+			// gets `transform: translate(<x>px, <y>px)`. May 2026 fix
+			// switched the preview marker from MapLibre's `Marker`
+			// class to a manual-projection div (the Marker class's
+			// stale-projection cache was the root cause of the
+			// "stuck at top-left" symptom). The dot is now a plain
+			// `<div class="hover-marker">` whose `style.transform` is
+			// set directly from `map.project(lngLat)` — no MapLibre
+			// wrapper, no projection cache.
 			const transform = await marker.evaluate((el) => {
-				const wrap = el.closest('.maplibregl-marker') as HTMLElement | null;
-				return wrap?.style.transform ?? '';
+				const target = el as HTMLElement;
+				return target.style.transform ?? '';
 			});
 
 			// Extract the first translate's pixel offsets.

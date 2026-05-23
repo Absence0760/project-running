@@ -67,6 +67,15 @@
 	}
 
 	function setTab(next: 'mine' | 'explore' | 'heatmap') {
+		// Heatmap moved to its own route (May 2026) so it can own
+		// the full layout column without fighting the routes-page
+		// flex chain — see `/routes/heatmap/+page.svelte` for the
+		// rationale. Tab clicks navigate; the back button still
+		// returns to /routes with the previous tab restored.
+		if (next === 'heatmap') {
+			void goto('/routes/heatmap');
+			return;
+		}
 		tab = next;
 		const path = next === 'mine' ? '/routes' : `/routes?tab=${next}`;
 		goto(path, {
@@ -79,7 +88,13 @@
 	onMount(() => {
 		const initial = $page.url.searchParams.get('tab');
 		if (initial === 'explore') tab = 'explore';
-		else if (initial === 'heatmap') tab = 'heatmap';
+		else if (initial === 'heatmap') {
+			// Deep-link compat: `/routes?tab=heatmap` now bounces to
+			// the standalone `/routes/heatmap` page. Use replaceState
+			// so the back button skips the redirect hop.
+			void goto('/routes/heatmap', { replaceState: true });
+			return;
+		}
 		// Snapshot restore (SvelteKit back-nav) runs BEFORE onMount and
 		// will have already flipped filtersHydrated. Skip the localStorage
 		// read in that case — the snapshot is authoritative for this paint.

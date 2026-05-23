@@ -153,7 +153,7 @@ test.describe('Heatmap pin layers (web)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test('club + route layers mount with non-zero feature counts', async ({ page }) => {
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		// Wait for initial load + the moveend debounce.
 		await page.waitForTimeout(1500);
@@ -197,7 +197,7 @@ test.describe('Heatmap pin layers (web)', () => {
 	});
 
 	test('layer toggle hides + restores its layer', async ({ page }) => {
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		await page.waitForTimeout(1200);
 		await page.getByRole('button', { name: /show legend/i }).click();
@@ -250,7 +250,7 @@ test.describe('Heatmap pin popup (click flow)', () => {
 
 	test('clicking a route pin opens a popup with View action that navigates',
 		async ({ page }) => {
-			await page.goto('/routes?tab=heatmap');
+			await page.goto('/routes/heatmap');
 			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 			await page.waitForTimeout(1200);
 
@@ -274,7 +274,7 @@ test.describe('Heatmap pin popup (click flow)', () => {
 
 	test('clicking a club pin opens a popup with a View club action',
 		async ({ page }) => {
-			await page.goto('/routes?tab=heatmap');
+			await page.goto('/routes/heatmap');
 			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 			await page.waitForTimeout(1200);
 
@@ -303,11 +303,11 @@ test.describe('Heatmap pin popup (click flow)', () => {
 		//
 		// We do NOT assert exact viewport coords because MapLibre's
 		// container rect interacts with the page's scroll position
-		// (a separate flex-layout subtlety on /routes?tab=heatmap),
+		// (a separate flex-layout subtlety on /routes/heatmap),
 		// and changing the page-shell scroll model is out of scope
 		// for the pin-popup feature. Visibility + non-trivial
 		// translate is the load-bearing contract.
-		await page.goto('/routes?tab=heatmap');
+		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		await page.waitForTimeout(1200);
 
