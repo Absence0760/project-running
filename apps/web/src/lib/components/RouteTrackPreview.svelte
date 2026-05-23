@@ -58,9 +58,15 @@
 	let attempted = $state(false);
 
 	onMount(() => {
-		// Owner case: use the row's waypoints directly. No RPC, no fetch.
-		if (!shouldClip) {
-			points = waypoints ?? [];
+		// Owner case + waypoints present: use them directly (no fetch).
+		// Some call sites (e.g. RouteExplorer cards, where the
+		// `search_public_routes` RPC returns the redacted
+		// `public_routes` view with NO waypoints column) pass
+		// `waypoints=[]`. Fall through to the clip RPC in that case
+		// so the card still gets a polyline — `clip_route_for_viewer`
+		// returns the unclipped polyline for the owner anyway.
+		if (!shouldClip && waypoints && waypoints.length >= 2) {
+			points = waypoints;
 			attempted = true;
 			return;
 		}

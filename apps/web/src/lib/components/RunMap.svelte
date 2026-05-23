@@ -242,6 +242,9 @@
 			hoverMarker = undefined;
 			return;
 		}
+		// Same defensive resize as renderPreviewMarker — see comment
+		// there for the stale-projection rationale.
+		map.resize();
 		const at: [number, number] = [p.lng, p.lat];
 		if (!hoverMarker) {
 			const el = document.createElement('div');
@@ -278,6 +281,16 @@
 			previewMarker = undefined;
 			return;
 		}
+		// Force MapLibre to resync its internal projection with the
+		// current container size BEFORE projecting the marker. The
+		// user reported the marker stuck at the top-left of the map
+		// even after the NaN guard was in place — root cause is a
+		// stale transform (the map's projection is computed against
+		// an older container size, so projecting the lat/lng to
+		// pixel coords produces a value that lands at the corner of
+		// the visible canvas). `.resize()` is cheap (no actual
+		// re-render unless the size differs) and idempotent.
+		map.resize();
 		if (!previewMarker) {
 			const el = document.createElement('div');
 			el.className = 'hover-marker';
