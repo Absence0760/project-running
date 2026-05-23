@@ -380,14 +380,28 @@
 	});
 
 	/**
-	 * 5-second heartbeat that re-fetches just the race session row.
-	 * Realtime is best-effort: a dropped broadcast (CI load, transient
-	 * WS hiccup) leaves the page stale and the spectator has no way
-	 * to know. This is the cheap belt-and-suspenders — single small
-	 * row, only assigned when the status string actually differs from
-	 * the current value (so Svelte doesn't rerender on every tick).
-	 * Stops once the race is in a terminal state (finished / cancelled)
-	 * so a long-lived page on a finished event doesn't keep polling.
+	 * Heartbeat that re-fetches just the race session row. Realtime
+	 * is best-effort: a dropped broadcast (CI load, transient WS
+	 * hiccup, channel-cold-start filter-wiring lag) leaves the page
+	 * stale and the spectator has no way to know. This is the
+	 * cheap belt-and-suspenders — single small row, always
+	 * reassigned (Svelte 5's $state proxy occasionally misses
+	 * transitions when the previous and next values shallow-compare
+	 * equal but the page hasn't reconciled). Stops once the race
+	 * is in a terminal state (finished / cancelled) so a long-lived
+	 * page on a finished event doesn't keep polling.
+	 *
+	 * Interval: 2 s. Originally 5 s, but `event-race-control.spec.ts`
+	 * (CI run 26337440523) caught a real failure mode where the
+	 * member's channel cold-start wiring missed the admin's `armed`
+	 * broadcast AND postgres_changes row, and the next 5 s heartbeat
+	 * fired AFTER the test's 15 s `.race-banner` wait had already
+	 * expired (the test's clock budget includes auth + page mount +
+	 * `.realtime-ready` settle, leaving ~10 s for the banner). 2 s
+	 * fits ~5 polls inside the wait, restoring the contract that a
+	 * spectator can't lose a race-state transition silently. Backend
+	 * cost is 1 small SELECT every 2 s while the event page is open
+	 * — well under the rate limit any single open tab can drive.
 	 */
 	let raceHeartbeat: ReturnType<typeof setInterval> | null = null;
 	function startRaceSessionHeartbeat() {
@@ -402,12 +416,8 @@
 				return;
 			}
 			const fresh = await fetchRaceSession(event.id, activeInstance);
-			// Always reassign — Svelte 5's $state proxy occasionally
-			// misses transitions in CI when the previous and next
-			// values shallow-compare equal but the page hasn't
-			// reconciled. Cheap (one row), harmless if no change.
 			raceSession = fresh;
-		}, 5000);
+		}, 2000);
 	}
 
 	/**
