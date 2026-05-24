@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.BODY_SENSORS" />
+    <!-- BODY_SENSORS alone is not enough on Wear OS 3.5+ (API 34+):
+         the platform stops delivering HR samples once the display
+         goes ambient unless BODY_SENSORS_BACKGROUND is also granted.
+         We declare this in the Wear OS Play Data Safety form too. -->
+    <uses-permission android:name="android.permission.BODY_SENSORS_BACKGROUND" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <!-- Foreground service for long-running GPS recording. Without this
          the OS kills the recording the moment the watch goes ambient. -->
@@ -22,12 +27,17 @@
          the foreground service after ~10 minutes. -->
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
+    <!-- networkSecurityConfig (res/xml/network_security_config.xml) is
+         the canonical mechanism — it scopes cleartext to the dev
+         loopback (10.0.2.2) only. The application-level
+         usesCleartextTraffic flag was redundant and Play reviewers
+         flag it on the manifest scan without reading the NSC,
+         so we drop it. -->
     <application
         android:label="Threkir"
         android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.DeviceDefault"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="true">
+        android:networkSecurityConfig="@xml/network_security_config">
 
         <uses-library
             android:name="com.google.android.wearable"
