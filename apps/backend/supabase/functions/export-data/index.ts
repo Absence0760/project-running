@@ -315,14 +315,12 @@ async function buildGpxZip(
 	return new Uint8Array(buf);
 }
 
+// decodeTrack now lives in ./decode_track.ts so it can be unit-tested
+// in isolation (importing index.ts pulls in the entire handler +
+// Deno.serve, which we can't easily type-check standalone).
+import { decodeTrack as _decodeTrack } from './decode_track.ts';
 async function decodeTrack(blob: Blob): Promise<TrackPoint[]> {
-	// Tracks are gzipped JSON arrays. Storage's download() returns the
-	// raw bytes; we gunzip in-process.
-	const gz = new Uint8Array(await blob.arrayBuffer());
-	const ds = new (globalThis as any).DecompressionStream('gzip');
-	const stream = new Response(gz).body!.pipeThrough(ds);
-	const txt = await new Response(stream).text();
-	return JSON.parse(txt) as TrackPoint[];
+	return (await _decodeTrack(blob)) as TrackPoint[];
 }
 
 function buildGpx(run: RunRow, track: TrackPoint[]): string {
