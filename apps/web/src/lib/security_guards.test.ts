@@ -687,33 +687,52 @@ test('OIDC deploy roles carry default Project / Stack / ManagedBy tags', () => {
 });
 
 test('Coach endpoint enforces a 256 KB body cap on both wrappers', () => {
-	// Reason: pass-2 commit a2ea656 added COACH_BODY_LIMIT_BYTES at both
-	// wrappers — SvelteKit dev /api/coach/+server.ts AND the production
-	// Lambda lambda/coach/src/index.ts. Pinned because the two wrappers
-	// are textually independent and a future writer might mirror the
-	// cap on one but not the other.
+	// Reason: pass-2 commit a2ea656 originally added COACH_BODY_LIMIT_BYTES
+	// at both wrappers — SvelteKit dev /api/coach/+server.ts AND the
+	// production Lambda lambda/coach/src/index.ts.
 	//
-	// The dev wrapper checks `arrayBuffer.byteLength` (true post-
-	// decompression byte count); the Lambda checks `bodyStr.length` on
-	// the already-decoded string. The discrepancy is intentional:
-	// Function URL events arrive with `body` already decoded by the
-	// runtime, so byteLength has no meaning at that layer. What
-	// matters is that BOTH wrappers fail-fast before the request
-	// reaches the streaming handler.
+	// audit/auth (May 2026) flagged that the Lambda was checking
+	// `bodyStr.length` (UTF-16 code units), letting multi-byte UTF-8
+	// payloads ~3x the cap sail through. The two wrappers diverged.
+	//
+	// Fix: a single $lib/coach/body.ts owns the constant + the
+	// size-check helper, and both wrappers import + call it. This
+	// guard now pins the import-and-use shape so the constant can't
+	// be re-inlined per-wrapper (which is what allowed the drift in
+	// the first place).
+	const body = read('src/lib/coach/body.ts');
+	assert.match(
+		body,
+		/COACH_BODY_LIMIT_BYTES\s*=\s*256\s*\*\s*1024/,
+		'$lib/coach/body.ts must declare COACH_BODY_LIMIT_BYTES = 256 * 1024.',
+	);
 	for (const path of [
 		'src/routes/api/coach/+server.ts',
 		'lambda/coach/src/index.ts',
 	]) {
 		const source = read(path);
+		// SvelteKit dev path can use the $lib alias; the Lambda can't
+		// (the alias is resolved by Vite, not by the esbuild bundler
+		// used for the Lambda artifact). Accept either form.
 		assert.match(
 			source,
-			/COACH_BODY_LIMIT_BYTES\s*=\s*256\s*\*\s*1024/,
-			`${path} must declare COACH_BODY_LIMIT_BYTES = 256 * 1024 — pass-2 commit a2ea656.`,
+			/from\s+['"](?:\$lib\/coach\/body|\.\.\/+(?:\.\.\/+)*src\/lib\/coach\/body)['"]/,
+			`${path} must import the body helper from $lib/coach/body — ` +
+				'not re-inline the constant (re-inlining is what allowed ' +
+				'the audit/auth May 2026 drift).',
 		);
 		assert.match(
 			source,
-			/>\s*COACH_BODY_LIMIT_BYTES/,
-			`${path} must compare an incoming-body size against COACH_BODY_LIMIT_BYTES.`,
+			/COACH_BODY_LIMIT_BYTES/,
+			`${path} must reference COACH_BODY_LIMIT_BYTES so the size ` +
+				'check is wired to the shared cap.',
+		);
+		assert.match(
+			source,
+			/(decodeLambdaBody|checkBodyByteLimit)\s*\(/,
+			`${path} must call decodeLambdaBody (Lambda) or ` +
+				'checkBodyByteLimit (SvelteKit) — these are byte-counted, ' +
+				'unlike bodyStr.length which counts UTF-16 code units.',
 		);
 	}
 });

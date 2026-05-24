@@ -21,7 +21,11 @@ export const prerender = false;
 // message text per call. 256 KB is comfortable for a long
 // conversation history at typical token sizes; legitimate replies
 // from the assistant cost the same regardless.
-const COACH_BODY_LIMIT_BYTES = 256 * 1024;
+//
+// Single source of truth for the cap + the byte-count helper lives
+// in $lib/coach/body.ts so this and the production Lambda wrapper
+// stay in lockstep.
+import { COACH_BODY_LIMIT_BYTES, checkBodyByteLimit } from '$lib/coach/body';
 
 export const POST: RequestHandler = async ({ request }) => {
 	const provider = (env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
@@ -43,9 +47,10 @@ export const POST: RequestHandler = async ({ request }) => {
 	// past `length > 256*1024`. ArrayBuffer.byteLength is the true
 	// post-decompress byte count. Mirrors the Lambda handler shape.
 	const rawArr = await request.arrayBuffer();
-	if (rawArr.byteLength > COACH_BODY_LIMIT_BYTES) {
-		return new Response(JSON.stringify({ error: 'request too large' }), {
-			status: 413,
+	const sizeCheck = checkBodyByteLimit(rawArr, COACH_BODY_LIMIT_BYTES);
+	if (!sizeCheck.ok) {
+		return new Response(JSON.stringify({ error: sizeCheck.error }), {
+			status: sizeCheck.status,
 			headers: { 'content-type': 'application/json' },
 		});
 	}

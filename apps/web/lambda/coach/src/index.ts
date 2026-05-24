@@ -40,9 +40,13 @@ interface ResponseStream {
 	setContentType?: (ct: string) => void;
 }
 
-// Mirror of COACH_BODY_LIMIT_BYTES in the SvelteKit dev wrapper. See
-// apps/web/src/routes/api/coach/+server.ts.
-const COACH_BODY_LIMIT_BYTES = 256 * 1024;
+// Body decoder + byte-count limit. Single source of truth shared with
+// the SvelteKit dev wrapper (apps/web/src/routes/api/coach/+server.ts)
+// so the two surfaces can't drift on size enforcement.
+import {
+	decodeLambdaBody,
+	COACH_BODY_LIMIT_BYTES,
+} from '../../../src/lib/coach/body';
 
 export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	async (event, responseStream) => {
@@ -54,18 +58,22 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		}
 
 		// Parse the request body. Function URL events deliver `body` as
-		// a string, base64-encoded for binary content types. JSON is
-		// always plain UTF-8.
+		// a string, base64-encoded for binary content types. The size
+		// cap is enforced against the decoded byte count, not the JS
+		// string length — see $lib/coach/body.ts for the regression
+		// this guards against (multi-byte UTF-8 chars).
+		const decoded = decodeLambdaBody(
+			event.body,
+			event.isBase64Encoded === true,
+			COACH_BODY_LIMIT_BYTES,
+		);
+		if (!decoded.ok) {
+			writeJson(responseStream, decoded.status, { error: decoded.error });
+			return;
+		}
 		let rawBody: unknown;
 		try {
-			const bodyStr = event.isBase64Encoded
-				? Buffer.from(event.body ?? '', 'base64').toString('utf8')
-				: (event.body ?? '');
-			if (bodyStr.length > COACH_BODY_LIMIT_BYTES) {
-				writeJson(responseStream, 413, { error: 'request too large' });
-				return;
-			}
-			rawBody = bodyStr ? JSON.parse(bodyStr) : null;
+			rawBody = decoded.body ? JSON.parse(decoded.body) : null;
 		} catch {
 			writeJson(responseStream, 400, { error: 'invalid JSON' });
 			return;
