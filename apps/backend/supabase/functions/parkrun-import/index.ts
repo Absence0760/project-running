@@ -4,6 +4,11 @@ import * as cheerio from 'https://esm.sh/cheerio@1.0.0-rc.12';
 import { checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import {
+  MAX_PARKRUN_ROWS,
+  capParkrunField,
+  readBodyTextWithCap,
+} from './lib.ts';
 
 serve(withSentry('parkrun-import', async (req: Request) => {
   const guarded = await readJsonWithLimit<{ athleteNumber?: unknown }>(req, 1024);
@@ -61,18 +66,35 @@ serve(withSentry('parkrun-import', async (req: Request) => {
       { status: 502 },
     );
   }
-  const html = await upstream.text();
+
+  // Cap the upstream HTML before it reaches Cheerio. A hostile or
+  // misconfigured upstream serving a multi-MB page would otherwise
+  // exhaust EF memory parsing it. /audit/edge-functions Medium.
+  const htmlResult = await readBodyTextWithCap(upstream);
+  if (!htmlResult.ok) {
+    return Response.json(
+      { error: 'parkrun upstream too large' },
+      { status: 502 },
+    );
+  }
+  const html = htmlResult.text;
 
   const $ = cheerio.load(html);
   const runs: Record<string, unknown>[] = [];
 
   $('table tbody tr').each((_: number, row: cheerio.Element) => {
+    // Bound the result set independently of upstream input. /audit/all.
+    if (runs.length >= MAX_PARKRUN_ROWS) return false;
+
     const cells = $(row).find('td');
     if (cells.length < 6) return;
 
-    const event = $(cells[0]).text().trim();
-    const date = $(cells[1]).text().trim();
-    const time = $(cells[3]).text().trim();
+    // capParkrunField trims + truncates so a single scraped cell can
+    // never grow external_id or metadata.event past the cap.
+    const event = capParkrunField($(cells[0]).text());
+    const date = capParkrunField($(cells[1]).text());
+    const time = capParkrunField($(cells[3]).text());
+    const ageGrade = capParkrunField($(cells[5]).text());
 
     runs.push({
       id: crypto.randomUUID(),
@@ -87,7 +109,7 @@ serve(withSentry('parkrun-import', async (req: Request) => {
         activity_type: 'run',
         event,
         position: parseInt($(cells[4]).text().trim()),
-        age_grade: $(cells[5]).text().trim(),
+        age_grade: ageGrade,
       },
     });
   });
