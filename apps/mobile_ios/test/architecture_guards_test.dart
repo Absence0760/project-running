@@ -1453,6 +1453,109 @@ void main() {
             'BGTaskScheduler permitted-identifier above is honoured.',
       );
     });
+
+    test('ITSAppUsesNonExemptEncryption is declared', () {
+      final file = File('ios/Runner/Info.plist');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Without this key App Store Connect blocks every binary upload
+      // (TestFlight + production) because the reviewer cannot determine
+      // export-compliance status. The app only uses HTTPS, which is
+      // exempt under EAR 740.13, so the value is `false`.
+      expect(
+        body,
+        contains('<key>ITSAppUsesNonExemptEncryption</key>'),
+        reason: 'Info.plist must declare ITSAppUsesNonExemptEncryption '
+            'or App Store Connect rejects the upload.',
+      );
+    });
+
+    test('NSHealthUpdateUsageDescription is declared', () {
+      final file = File('ios/Runner/Info.plist');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // The watchOS app already writes HealthKit workouts, and the
+      // phone app shares the same HealthKit entitlement. Without an
+      // Update usage description, any write call crashes at runtime
+      // AND the App Store privacy label cannot honestly declare the
+      // "Health & Fitness - Linked to user" data class.
+      expect(
+        body,
+        contains('<key>NSHealthUpdateUsageDescription</key>'),
+        reason: 'Info.plist must declare NSHealthUpdateUsageDescription '
+            'so HealthKit writes do not crash and the nutrition label '
+            'matches the actual binary behaviour.',
+      );
+    });
+
+    test('location usage strings use the brand name (no "Run App")', () {
+      final file = File('ios/Runner/Info.plist');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Display name is "Threkir"; legacy copy in the usage strings
+      // said "Run App". App Review flags metadata mismatches like
+      // this — keep the strings in sync with CFBundleDisplayName.
+      expect(
+        body.contains('>Run App '),
+        isFalse,
+        reason: 'Location usage descriptions must reference the brand '
+            'name (Threkir), not the legacy "Run App" placeholder. '
+            'Metadata-name mismatch is an App Review rejection cause.',
+      );
+    });
+  });
+
+  group('iOS PrivacyInfo.xcprivacy', () {
+    // Required since spring 2024 for every iOS binary that uses any
+    // "required reason" API. flutter_secure_storage, shared_preferences,
+    // and workmanager all hit UserDefaults / file timestamps; the
+    // manifest declares the reason code for each.
+    test('PrivacyInfo.xcprivacy exists at ios/Runner/', () {
+      final infoPlist = File('ios/Runner/Info.plist');
+      if (!infoPlist.existsSync()) return; // Android twin
+      final file = File('ios/Runner/PrivacyInfo.xcprivacy');
+      expect(
+        file.existsSync(),
+        isTrue,
+        reason: 'ios/Runner/PrivacyInfo.xcprivacy is required for '
+            'every iOS binary using required-reason APIs '
+            '(UserDefaults, file timestamps, disk space, system boot '
+            'time). Submission fails without it.',
+      );
+    });
+
+    test('PrivacyInfo declares the required-reason API categories', () {
+      final infoPlist = File('ios/Runner/Info.plist');
+      if (!infoPlist.existsSync()) return;
+      final file = File('ios/Runner/PrivacyInfo.xcprivacy');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // The four categories the bundled plugins actually trigger.
+      // Each is paired with the canonical Apple reason code published
+      // at https://developer.apple.com/documentation/bundleresources
+      // /privacy_manifest_files/describing_use_of_required_reason_api
+      final required = <String, String>{
+        'NSPrivacyAccessedAPICategoryUserDefaults':
+            'shared_preferences / flutter_secure_storage',
+        'NSPrivacyAccessedAPICategoryFileTimestamp':
+            'path_provider / disk-backed tile cache / local stores',
+        'NSPrivacyAccessedAPICategoryDiskSpace':
+            'backup + export size estimation',
+        'NSPrivacyAccessedAPICategorySystemBootTime':
+            'workmanager periodic-task scheduling',
+      };
+      for (final entry in required.entries) {
+        expect(
+          body,
+          contains('<string>${entry.key}</string>'),
+          reason: 'PrivacyInfo.xcprivacy must declare ${entry.key} '
+              '(used by ${entry.value}).',
+        );
+      }
+      // The encryption-export key (ITSAppUsesNonExemptEncryption)
+      // lives in Info.plist, not PrivacyInfo.xcprivacy, and is
+      // covered by the Info.plist test above.
+    });
   });
 
   group('segments v2 wiring', () {
