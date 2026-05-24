@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Health Connect read permissions Threkir requests.
+     Referenced from AndroidManifest.xml via:
+         <meta-data android:name="health_permissions"
+                    android:resource="@xml/health_permissions" />
+     Play Console requires this enumeration before granting the
+     Health Connect data-access form approval. The corresponding
+     uses-permission entries already live in AndroidManifest.xml;
+     this file is the permissions-XML the Play Console review reads.
+-->
+<resources>
+    <permission name="android.permission.health.READ_EXERCISE" />
+    <permission name="android.permission.health.READ_DISTANCE" />
+    <permission name="android.permission.health.READ_HEART_RATE" />
+</resources>

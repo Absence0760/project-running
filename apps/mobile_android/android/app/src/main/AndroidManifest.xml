@@ -1,4 +1,5 @@
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+          xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
@@ -6,10 +7,22 @@
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Health Connect read permissions for importing workouts. -->
+    <!-- image_picker (run photos) on Android 13+ (API 33+) reads the
+         user's photos through the photo picker; READ_MEDIA_IMAGES is
+         required for the legacy gallery path the picker falls back to
+         on devices without the photo-picker module. Without it the
+         Play Data Safety form's "Photos and videos - read" entry
+         doesn't line up with what the binary actually requests at
+         runtime and Play flags the mismatch. -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- Health Connect read permissions for importing workouts.
+         Mirrored in res/xml/health_permissions.xml so the Play
+         Console Health-Connect data-access form sees the same set. -->
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
@@ -43,9 +56,24 @@
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"
               />
+            <!-- Health Connect permission set declared in res/xml/. Play
+                 Console reads this to validate the Health Connect data-
+                 access form against the binary's actual permission list. -->
+            <meta-data
+              android:name="health_permissions"
+              android:resource="@xml/health_permissions" />
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+            <!-- Health Connect privacy-policy rationale entry-point.
+                 Android invokes this intent when the user taps "Privacy
+                 policy" inside the Health Connect permission sheet.
+                 Without it the sheet falls back to a generic message
+                 and Play Console flags it as a Health Connect policy
+                 gap. -->
+            <intent-filter>
+                <action android:name="androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE" />
             </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
@@ -53,6 +81,20 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
+
+        <!-- Override the AndroidX WorkManager foreground service so it
+             carries a foregroundServiceType. Required on Android 14+
+             (SDK 34+) — services without a type crash at promotion
+             time. Our background-sync work is non-location, non-
+             camera, so `dataSync` is the right category. The
+             tools:replace attribute tells the manifest merger to
+             keep the rest of work-runtime's declaration (enabled,
+             exported, etc.) and only override the type. -->
+        <service
+            android:name="androidx.work.impl.foreground.SystemForegroundService"
+            android:foregroundServiceType="dataSync"
+            tools:replace="android:foregroundServiceType"
+            tools:node="merge" />
 
         <!-- flutter_web_auth_2 callback activity. Captures the Strava
              OAuth redirect (threkir://strava-callback?code=...) and

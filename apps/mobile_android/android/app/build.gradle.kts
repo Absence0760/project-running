@@ -37,7 +37,12 @@ android {
     defaultConfig {
         applicationId = "com.threkir.app"
         minSdk = 26
-        targetSdk = flutter.targetSdkVersion
+        // Play Console requires targetSdk >= 35 for new + updated apps
+        // (one year behind the latest Android release). Pinning the
+        // value here so we don't silently regress if Flutter SDK
+        // ships with an older default. Bump in lockstep with the
+        // watch_wear app (its targetSdk is also pinned to 35).
+        targetSdk = 35
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }

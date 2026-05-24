@@ -1505,6 +1505,144 @@ void main() {
     });
   });
 
+  group('Android phone manifest', () {
+    // These tests guard the Play-policy + SDK-34/35 manifest plumbing
+    // that the audit pass identified as submission blockers. The
+    // checks short-circuit on the iOS twin (no android/ directory).
+    test('READ_MEDIA_IMAGES is declared', () {
+      final file =
+          File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // image_picker (run-photo upload) on Android 13+ requests this
+      // at runtime when the photo-picker module is unavailable. Play
+      // Data Safety reviewers cross-check the Photos & videos
+      // disclosure against the actual <uses-permission> set.
+      expect(
+        body,
+        contains(
+            '<uses-permission android:name="android.permission.READ_MEDIA_IMAGES"'),
+        reason:
+            'AndroidManifest.xml must declare READ_MEDIA_IMAGES so '
+            'the runtime ask matches the Play Data Safety form.',
+      );
+    });
+
+    test('Workmanager foreground service has a foregroundServiceType', () {
+      final file =
+          File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Android 14+ (SDK 34+) crashes a foreground service that
+      // doesn't declare a type. WorkManager's SystemForegroundService
+      // is declared by androidx.work via manifest merger; we override
+      // it here so the type is present in the merged manifest.
+      expect(
+        body,
+        contains(
+            'androidx.work.impl.foreground.SystemForegroundService'),
+        reason:
+            'AndroidManifest.xml must override SystemForegroundService '
+            'with a foregroundServiceType to survive Android 14+.',
+      );
+      expect(
+        body,
+        contains('android:foregroundServiceType="dataSync"'),
+        reason:
+            'SystemForegroundService override must declare '
+            'foregroundServiceType="dataSync" (Workmanager runs are '
+            'non-location, non-camera).',
+      );
+      expect(
+        body,
+        contains(
+            '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"'),
+        reason:
+            'AndroidManifest.xml must declare FOREGROUND_SERVICE_DATA_SYNC '
+            'to back the dataSync foregroundServiceType on SDK 34+.',
+      );
+    });
+
+    test('Health Connect permissions XML is wired', () {
+      final manifest =
+          File('android/app/src/main/AndroidManifest.xml');
+      if (!manifest.existsSync()) return;
+      final body = manifest.readAsStringSync();
+      final xmlFile = File(
+          'android/app/src/main/res/xml/health_permissions.xml');
+      expect(
+        xmlFile.existsSync(),
+        isTrue,
+        reason:
+            'res/xml/health_permissions.xml must exist so the Play '
+            'Console Health Connect form has the permission '
+            'inventory to validate.',
+      );
+      expect(
+        body,
+        contains('android:name="health_permissions"'),
+        reason:
+            'MainActivity must carry the health_permissions meta-data '
+            'pointing at res/xml/health_permissions.xml.',
+      );
+      expect(
+        body,
+        contains(
+            'androidx.health.ACTION_SHOW_PERMISSIONS_RATIONALE'),
+        reason:
+            'MainActivity needs an intent-filter for the Health '
+            'Connect rationale entry-point so the permission sheet '
+            'opens our privacy explainer instead of the generic '
+            'fallback.',
+      );
+      if (xmlFile.existsSync()) {
+        final xml = xmlFile.readAsStringSync();
+        for (final perm in const [
+          'android.permission.health.READ_EXERCISE',
+          'android.permission.health.READ_DISTANCE',
+          'android.permission.health.READ_HEART_RATE',
+        ]) {
+          expect(
+            xml,
+            contains(perm),
+            reason:
+                'health_permissions.xml must list every Health '
+                'Connect permission the app actually reads ($perm '
+                'missing).',
+          );
+        }
+      }
+    });
+
+    test('targetSdk is pinned to 35 or higher', () {
+      final gradle =
+          File('android/app/build.gradle.kts');
+      if (!gradle.existsSync()) return;
+      final body = gradle.readAsStringSync();
+      // Play Console requires targetSdk >= 35 for new + updated apps.
+      // The previous `targetSdk = flutter.targetSdkVersion` indirection
+      // resolved to whatever the user's Flutter SDK shipped with —
+      // brittle and unauditable. Pin the literal here so a Flutter
+      // SDK rollback can't silently regress us under the Play floor.
+      final pinRe = RegExp(r'targetSdk\s*=\s*(\d+)');
+      final match = pinRe.firstMatch(body);
+      expect(
+        match,
+        isNotNull,
+        reason:
+            'build.gradle.kts must pin targetSdk to a literal int '
+            '(currently absent or non-numeric).',
+      );
+      final pin = int.parse(match!.group(1)!);
+      expect(
+        pin >= 35,
+        isTrue,
+        reason:
+            'targetSdk must be >= 35 (Play Console floor). Found $pin.',
+      );
+    });
+  });
+
   group('iOS PrivacyInfo.xcprivacy', () {
     // Required since spring 2024 for every iOS binary that uses any
     // "required reason" API. flutter_secure_storage, shared_preferences,
