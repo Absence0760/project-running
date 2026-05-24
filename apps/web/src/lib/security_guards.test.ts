@@ -32,24 +32,41 @@ test('RunTrackPreview routes non-owner fetches through clip-public-track EF', ()
 	);
 });
 
-test('feed tab on /u/[id] passes runId + ownerUserId to RunTrackPreview', () => {
+test('every RunTrackPreview on /u/[id] threads runId + ownerUserId', () => {
 	// Reason: the EF non-owner clip path needs the run id (server
 	// resolves track_url + clips inline). Without the prop,
 	// RunTrackPreview can't reach the EF and renders a placeholder
-	// instead of the clipped polyline. The activity feed now lives as
-	// a self-only "Feed" tab on /u/[id] (the standalone /feed route is
-	// a thin redirect into it); the guard moved with it.
+	// instead of the clipped polyline. The activity feed lives as
+	// the Feed tab AND the Runs tab on /u/[id]; both surfaces render
+	// other users' runs and both must clip. The earlier "any one
+	// mount has the prop" form of this test let the Runs tab silently
+	// regress (audit/privacy-zones, May 2026). Iterate every mount.
 	const source = read('src/routes/u/[id]/+page.svelte');
-	assert.match(
-		source,
-		/<RunTrackPreview[^>]*runId=/s,
-		'Feed tab on /u/[id] must thread the run id into RunTrackPreview so the clip-public-track EF can resolve it.',
+	const mounts = [
+		...source.matchAll(/<RunTrackPreview\b[^/>]*\/?>/gs),
+	];
+	assert.ok(
+		mounts.length >= 2,
+		'expected at least two RunTrackPreview mounts on /u/[id] ' +
+			'(Feed tab + Runs tab); got ' +
+			mounts.length +
+			' — refactor probably collapsed them.',
 	);
-	assert.match(
-		source,
-		/<RunTrackPreview[^>]*ownerUserId=/s,
-		'Feed tab on /u/[id] must thread the run owner id into RunTrackPreview so the privacy-zone clip kicks in.',
-	);
+	for (const m of mounts) {
+		const tag = m[0];
+		assert.match(
+			tag,
+			/runId=/s,
+			'RunTrackPreview on /u/[id] missing runId prop:\n' + tag,
+		);
+		assert.match(
+			tag,
+			/ownerUserId=/s,
+			'RunTrackPreview on /u/[id] missing ownerUserId prop ' +
+				'(privacy-zone clip is skipped without it):\n' +
+				tag,
+		);
+	}
 });
 
 test('RunTrackPreview cache is bounded (LRU)', () => {

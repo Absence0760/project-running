@@ -850,6 +850,27 @@ void main() {
       );
     });
 
+    test('profile_screen passes runId + ownerUserId to RunTrackPreview', () {
+      // Reason: /u/[id] (the public profile) renders OTHER users' runs.
+      // Pre-fix the runs-tab thumbnail mounted RunTrackPreview without
+      // ownerUserId, which makes _shouldClip return false and serves
+      // the unclipped polyline. audit/privacy-zones, May 2026.
+      final source =
+          File('lib/screens/profile_screen.dart').readAsStringSync();
+      expect(
+        source,
+        matches(RegExp(r'RunTrackPreview\([^)]*runId:', dotAll: true)),
+        reason: 'profile_screen must thread the run id into '
+            'RunTrackPreview so the clip-public-track EF can resolve it.',
+      );
+      expect(
+        source,
+        matches(RegExp(r'RunTrackPreview\([^)]*ownerUserId:', dotAll: true)),
+        reason: 'profile_screen must thread the run owner id into '
+            'RunTrackPreview so the privacy-zone clip kicks in.',
+      );
+    });
+
     test('RunTrackPreview cache is bounded (LRU)', () {
       // Reason: without the cap a long session through 1000+ runs
       // holds every deserialised track in memory until app restart.

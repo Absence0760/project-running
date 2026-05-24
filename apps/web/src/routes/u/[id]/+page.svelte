@@ -522,7 +522,11 @@
 						<button type="button" class="run-card" onclick={() => (openRunId = r.id)}>
 							{#if r.track_url}
 								<div class="run-map-placeholder">
-									<RunTrackPreview trackUrl={r.track_url} />
+									<RunTrackPreview
+										runId={r.id}
+										trackUrl={r.track_url}
+										ownerUserId={userId}
+									/>
 								</div>
 							{/if}
 							<div class="run-details">

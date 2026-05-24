@@ -437,7 +437,12 @@ class _ProfileScreenState extends State<ProfileScreen>
             height: 40,
             child: Center(
               child: trackUrl != null
-                  ? RunTrackPreview(trackUrl: trackUrl, api: widget.api)
+                  ? RunTrackPreview(
+                      runId: r.id,
+                      trackUrl: trackUrl,
+                      api: widget.api,
+                      ownerUserId: widget.userId,
+                    )
                   : CircleAvatar(
                       backgroundColor: theme.colorScheme.primaryContainer,
                       child: Icon(activity.icon,
