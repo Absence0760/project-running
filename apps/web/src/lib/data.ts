@@ -3764,12 +3764,23 @@ export async function setRunGear(runId: string, gearIds: string[]): Promise<void
 }
 
 /// Fetch the gear assigned to a single run. Used on the run-detail
-/// page to render the chip row. RLS gates this to runs the viewer
-/// can see (owner OR public run); non-visible runs return [].
+/// page to render the chip row. RLS gates the run_gear read to runs
+/// the viewer can see (owner OR public run); the gear table is owner-
+/// only, so non-owner viewers get nulls for the join today.
+///
+/// audit/public-rows (May 2026): enumerate only public-safe columns
+/// on the embedded `gear` join. notes / purchased_at / retired_at /
+/// target_distance_m are owner-private inventory metadata even though
+/// today's `gear` RLS happens to block non-owner reads — if that RLS
+/// is ever relaxed (e.g. "let anyone see gear on a public run's
+/// owner"), the `*` shape would silently start leaking. Pinning the
+/// column list here is defence in depth.
+const PUBLIC_GEAR_COLUMNS = 'id, kind, name, brand, model';
+
 export async function fetchRunGear(runId: string): Promise<Gear[]> {
 	const { data, error } = await supabase
 		.from('run_gear')
-		.select('gear:gear_id(*)')
+		.select(`gear:gear_id(${PUBLIC_GEAR_COLUMNS})`)
 		.eq('run_id', runId);
 	if (error || !data) {
 		console.error('fetchRunGear failed', error);

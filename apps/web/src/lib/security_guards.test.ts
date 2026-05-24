@@ -945,6 +945,31 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('fetchRunGear enumerates only public-safe columns on the gear join', () => {
+	// Reason: audit/public-rows (May 2026). When run_gear visibility
+	// extends to non-owners of public runs (the SELECT policy is
+	// is_run_visible_to-gated), a `gear:gear_id(*)` join would
+	// stream owner-private columns (`notes`, `purchased_at`,
+	// `retired_at`, `target_distance_m`) to any viewer of the public
+	// run if the underlying `gear` RLS ever drifts. Pin the
+	// enumerated allowlist to prevent the column set from regressing
+	// back to `*`.
+	const source = read('src/lib/data.ts');
+	assert.match(
+		source,
+		/PUBLIC_GEAR_COLUMNS\s*=\s*['"]id,\s*kind,\s*name,\s*brand,\s*model['"]/,
+		'data.ts must declare PUBLIC_GEAR_COLUMNS limited to ' +
+			'(id, kind, name, brand, model) — the gear join in fetchRunGear ' +
+			'is reachable from non-owner viewers of public runs.',
+	);
+	assert.doesNotMatch(
+		source,
+		/\.select\(['"`]gear:gear_id\(\*\)['"`]\)/,
+		'fetchRunGear must not select gear:gear_id(*) — use ' +
+			'PUBLIC_GEAR_COLUMNS instead (audit/public-rows).',
+	);
+});
+
 test('backup restore strips server-managed profile fields', () => {
 	// Reason: 20260718_001 INSERT WITH CHECK + 20260624_001 UPDATE
 	// trigger reject any write that touches subscription_tier /
