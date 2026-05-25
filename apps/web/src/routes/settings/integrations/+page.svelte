@@ -258,7 +258,7 @@
 						<p>{integration.description}</p>
 						{#if integration.connected && integration.lastSync}
 							<span class="last-sync">
-								Last synced {new Date(integration.lastSync).toLocaleDateString('en-GB', {
+								Last synced {new Date(integration.lastSync).toLocaleDateString(undefined, {
 									day: 'numeric',
 									month: 'short',
 									hour: '2-digit',

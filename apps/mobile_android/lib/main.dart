@@ -369,6 +369,13 @@ void main() async {
         options.release = appRelease;
         options.tracesSampleRate = 0.1;
         options.environment = appRelease == 'dev' ? 'development' : 'production';
+        // audit/app-store-privacy (2026-05-25): Sentry's default
+        // behaviour attaches the client IP and (depending on the
+        // platform) device identifiers to events. The Play Data
+        // Safety form + iOS Privacy Manifest declare crash data as
+        // "not linked to user", so we have to hold Sentry to that
+        // contract by opting out of identity attachment.
+        options.sendDefaultPii = false;
         // Drop the user's Authorization header from breadcrumbs — the
         // bearer token would otherwise land on every Sentry event.
         options.beforeSend = (event, hint) {

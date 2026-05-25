@@ -400,7 +400,7 @@
 
 	function fmtRaceDate(iso: string): string {
 		const d = planMidnight(iso);
-		return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+		return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
 	/// Combined distance + activity count for the "This Week" card.
@@ -440,7 +440,7 @@
 		for (const run of filteredRuns) {
 			const d = new Date(run.started_at);
 			const key = mileageView === 'monthly'
-				? d.toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })
+				? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
 				: String(d.getFullYear());
 			groups.set(key, (groups.get(key) ?? 0) + run.distance_m);
 		}

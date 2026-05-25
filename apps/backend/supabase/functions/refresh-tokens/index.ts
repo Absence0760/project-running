@@ -1,6 +1,7 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { withSentry } from '../_shared/sentry.ts';
+import { timingSafeEqual } from '../_shared/webhook_security.ts';
 
 /// pg_cron schedules this function on the hour; the cron job invokes
 /// it with `Authorization: Bearer ${CRON_SECRET}`. Without the gate
@@ -9,15 +10,9 @@ import { withSentry } from '../_shared/sentry.ts';
 /// refresh endpoint, burning Strava API quota and forcing token
 /// churn. The secret is shared between the cron job config and the
 /// EF env. Timing-safe compare so a missed-character probe can't
-/// tease the secret out byte-by-byte.
-function timingSafeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  let mismatch = 0;
-  for (let i = 0; i < a.length; i++) {
-    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
-  }
-  return mismatch === 0;
-}
+/// tease the secret out byte-by-byte — shared with the webhook
+/// path via _shared/webhook_security.ts to avoid divergence on a
+/// future hardening pass (audit/auth 2026-05-25).
 
 serve(withSentry('refresh-tokens', async (req: Request) => {
   const cronSecret = Deno.env.get('CRON_SECRET');

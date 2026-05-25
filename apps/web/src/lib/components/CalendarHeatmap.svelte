@@ -65,7 +65,7 @@
 
 	function formatTooltip(date: string, distance: number): string {
 		const d = new Date(date);
-		const label = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+		const label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
 		if (distance === 0) return `${label}: No run`;
 		return `${label}: ${fmtKm(distance)}`;
 	}

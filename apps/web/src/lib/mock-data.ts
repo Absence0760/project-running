@@ -108,7 +108,7 @@ export function formatDuration(seconds: number): string {
 export { formatPace, formatSpeed, formatDistance, formatPaceNoSuffix } from './units.svelte';
 
 export function formatDate(iso: string): string {
-	return new Date(iso).toLocaleDateString('en-GB', {
+	return new Date(iso).toLocaleDateString(undefined, {
 		day: 'numeric',
 		month: 'short',
 		year: 'numeric',
@@ -116,7 +116,7 @@ export function formatDate(iso: string): string {
 }
 
 export function formatDateShort(iso: string): string {
-	return new Date(iso).toLocaleDateString('en-GB', {
+	return new Date(iso).toLocaleDateString(undefined, {
 		day: 'numeric',
 		month: 'short',
 	});

@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import { isValidUuid } from '../_shared/webhook_security.ts';
 
 // Serves a privacy-zone-clipped track for a public run. Replaces
 // direct Storage download for non-owner viewers (audit/storage High,
@@ -53,6 +54,13 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   const runId = body.run_id;
   if (typeof runId !== 'string' || runId.length === 0) {
     return Response.json({ error: 'run_id required' }, { status: 400 });
+  }
+  // audit/edge-functions (2026-05-25): reject anything that isn't a
+  // UUID before it reaches the PostgREST query. PostgREST converts
+  // a non-UUID into a 22P02 (invalid_input_syntax) which surfaces
+  // as a 500 / Sentry event and still burns the rate-limit slot.
+  if (!isValidUuid(runId)) {
+    return Response.json({ error: 'run_id must be a UUID' }, { status: 400 });
   }
 
   // Rate-limit before doing any DB / Storage work. Authenticated
@@ -119,7 +127,15 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   // silently start serving non-public rows to clients that
   // shouldn't get them. Make the contract loud instead — a
   // non-owner caller must be hitting an explicitly-public run.
-  if (!run.is_public && callerId !== run.user_id) {
+  // audit/auth (2026-05-25) flagged the fragile null!==<uuid>
+  // shape: it works today because callerId is `string | null`
+  // and a null compared with any UUID falls to the non-owner
+  // branch, but a future refactor that normalises callerId to
+  // `''` or a sentinel would silently treat an anon caller as
+  // the owner of a private run. The explicit null check makes
+  // the contract loud.
+  const isOwnerBypass = callerId !== null && callerId === run.user_id;
+  if (!run.is_public && !isOwnerBypass) {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
 

@@ -96,7 +96,7 @@
 	function fmtIsoDate(iso: string): string {
 		const [y, m, d] = iso.split('-').map(Number);
 		const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-		return dt.toLocaleDateString('en-GB', {
+		return dt.toLocaleDateString(undefined, {
 			weekday: 'long',
 			day: 'numeric',
 			month: 'long',
