@@ -239,4 +239,48 @@ class ScreenWiringTest {
                 src.contains("debugTrySync"),
         )
     }
+
+    @Test
+    fun `running-screen Buttons carry contentDescription for TalkBack`() {
+        // Reason: audit/accessibility High (May 2026). The Pause /
+        // Resume / Lap / Sync / Next / Discard buttons used Text("||"),
+        // Text("Lap"), Text("×") for their visual children. TalkBack
+        // announces these as their literal text, which on a wrist
+        // display is meaningless ("||", "×"). Wrap each Button in
+        // Modifier.semantics { contentDescription = "..." } so the
+        // announcement names the action.
+        //
+        // The mobile run_screen got the equivalent fix via
+        // Semantics(label:) in commit 6b2ef21 — this pins the Wear
+        // twin so it stays in lockstep.
+        val src = readRunWatchApp()
+        for (label in listOf(
+            "Pause run",
+            "Resume run",
+            "Mark lap",
+            "Discard unsaved run",
+            "Sync run",
+            "Start next run",
+        )) {
+            // Accept either form: `contentDescription = "Label"` (static
+            // assignment) or `"Label"` as a branch of a when-expression
+            // assigned to contentDescription (e.g. the Sync/Done/Syncing
+            // toggle). The label literal alone is unique enough; the
+            // surrounding code is the contentDescription assignment.
+            assertTrue(
+                "RunWatchApp.kt must reference \"$label\" as a Button " +
+                    "contentDescription so TalkBack announces it.",
+                src.contains("\"$label\""),
+            )
+        }
+        // Belt-and-braces: at least six Modifier.semantics blocks should
+        // exist — one per Pause/Resume/Lap/Discard/Sync(toggle)/Next.
+        val semanticsBlocks = Regex("\\.semantics\\s*\\{[\\s\\S]*?contentDescription")
+            .findAll(src).count()
+        assertTrue(
+            "expected >= 6 Modifier.semantics blocks with contentDescription " +
+                "on RunWatchApp buttons; found $semanticsBlocks",
+            semanticsBlocks >= 6,
+        )
+    }
 }

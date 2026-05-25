@@ -56,6 +56,10 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1285,6 +1289,12 @@ private fun RunningScreen(
                 backgroundColor = Color.Black.copy(alpha = 0.55f),
                 contentColor = DuskPalette.parchment,
             )
+            // audit/accessibility (May 2026) High — every running-screen
+            // Button below now declares a Modifier.semantics {
+            // contentDescription = ... ; role = Role.Button } so TalkBack
+            // announces a useful label instead of the visual content
+            // ("||", "Go", "Lap"). Mirrors the recording-screen Semantics
+            // fix on the mobile twin (commit 6b2ef21).
             Box(modifier = Modifier.fillMaxSize()) {
                 if (paused) {
                     Button(
@@ -1296,7 +1306,11 @@ private fun RunningScreen(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(start = 28.dp, bottom = 32.dp)
-                            .size(ButtonDefaults.SmallButtonSize),
+                            .size(ButtonDefaults.SmallButtonSize)
+                            .semantics {
+                                contentDescription = "Resume run"
+                                role = Role.Button
+                            },
                     ) {
                         Text("Go", style = MaterialTheme.typography.caption3)
                     }
@@ -1310,7 +1324,11 @@ private fun RunningScreen(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(start = 28.dp, bottom = 32.dp)
-                            .size(ButtonDefaults.SmallButtonSize),
+                            .size(ButtonDefaults.SmallButtonSize)
+                            .semantics {
+                                contentDescription = "Pause run"
+                                role = Role.Button
+                            },
                         colors = translucent,
                     ) {
                         Text("||")
@@ -1325,7 +1343,11 @@ private fun RunningScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .padding(bottom = 12.dp)
-                        .size(ButtonDefaults.SmallButtonSize),
+                        .size(ButtonDefaults.SmallButtonSize)
+                        .semantics {
+                            contentDescription = "Mark lap"
+                            role = Role.Button
+                        },
                     colors = translucent,
                 ) {
                     Text("Lap", style = MaterialTheme.typography.caption3)
@@ -1602,13 +1624,25 @@ private fun PostRunScreen(
         // Done after. Sized to SmallButtonSize like the running
         // screen's Lap / Stop buttons — the previous full-width chip
         // dwarfed the route preview.
+        // audit/accessibility (May 2026) High — same Modifier.semantics
+        // pattern as the running-screen buttons above. "Sync" / "Done"
+        // / "Next" / "×" announce as their visual content otherwise;
+        // the contentDescription names each action explicitly.
         Button(
             onClick = if (synced) onStartNext else onSync,
             enabled = !syncing,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 14.dp)
-                .size(ButtonDefaults.SmallButtonSize),
+                .size(ButtonDefaults.SmallButtonSize)
+                .semantics {
+                    contentDescription = when {
+                        syncing -> "Syncing run"
+                        synced -> "Start next run"
+                        else -> "Sync run"
+                    }
+                    role = Role.Button
+                },
         ) {
             when {
                 syncing -> CircularProgressIndicator(
@@ -1636,7 +1670,11 @@ private fun PostRunScreen(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .padding(start = 22.dp, bottom = 36.dp)
-                    .size(ButtonDefaults.SmallButtonSize),
+                    .size(ButtonDefaults.SmallButtonSize)
+                    .semantics {
+                        contentDescription = "Start next run"
+                        role = Role.Button
+                    },
                 colors = translucent,
             ) {
                 Text("Next", style = MaterialTheme.typography.caption3)
@@ -1654,7 +1692,11 @@ private fun PostRunScreen(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(end = 22.dp, bottom = 36.dp)
-                    .size(ButtonDefaults.SmallButtonSize),
+                    .size(ButtonDefaults.SmallButtonSize)
+                    .semantics {
+                        contentDescription = "Discard unsaved run"
+                        role = Role.Button
+                    },
                 colors = translucent,
             ) {
                 Text(
