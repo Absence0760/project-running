@@ -7,7 +7,15 @@
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- Note: FOREGROUND_SERVICE_DATA_SYNC was added briefly during
+         the May 2026 audit pass but is unused. Workmanager (our
+         background-sync) on Android schedules via JobScheduler /
+         SystemJobService, not as a foreground service; no worker
+         in this app calls setForeground(). The only foreground
+         service we DO promote is geolocator's
+         GeolocatorLocationService, which carries
+         foregroundServiceType="location" baked in by the plugin
+         and is covered by FOREGROUND_SERVICE_LOCATION above. -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
@@ -81,20 +89,6 @@
         <meta-data
             android:name="flutterEmbedding"
             android:value="2" />
-
-        <!-- Override the AndroidX WorkManager foreground service so it
-             carries a foregroundServiceType. Required on Android 14+
-             (SDK 34+) — services without a type crash at promotion
-             time. Our background-sync work is non-location, non-
-             camera, so `dataSync` is the right category. The
-             tools:replace attribute tells the manifest merger to
-             keep the rest of work-runtime's declaration (enabled,
-             exported, etc.) and only override the type. -->
-        <service
-            android:name="androidx.work.impl.foreground.SystemForegroundService"
-            android:foregroundServiceType="dataSync"
-            tools:replace="android:foregroundServiceType"
-            tools:node="merge" />
 
         <!-- flutter_web_auth_2 callback activity. Captures the Strava
              OAuth redirect (threkir://strava-callback?code=...) and

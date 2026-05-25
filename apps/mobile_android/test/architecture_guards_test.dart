@@ -1549,38 +1549,45 @@ void main() {
       );
     });
 
-    test('Workmanager foreground service has a foregroundServiceType', () {
+    test('foreground services that we actually promote declare a type', () {
       final file =
           File('android/app/src/main/AndroidManifest.xml');
       if (!file.existsSync()) return;
       final body = file.readAsStringSync();
       // Android 14+ (SDK 34+) crashes a foreground service that
-      // doesn't declare a type. WorkManager's SystemForegroundService
-      // is declared by androidx.work via manifest merger; we override
-      // it here so the type is present in the merged manifest.
+      // doesn't declare a type. We only promote ONE foreground
+      // service today — geolocator's GeolocatorLocationService,
+      // and the geolocator plugin's manifest declares
+      // foregroundServiceType="location" via its own merge.
+      // FOREGROUND_SERVICE_LOCATION is the matching permission.
+      //
+      // Workmanager is NOT a foreground-service consumer in this app:
+      // its tasks run via JobScheduler (SystemJobService), not via
+      // SystemForegroundService. Don't add a dataSync override on
+      // SystemForegroundService — the manifest merger silently drops
+      // it at packaging stage (the audit pass briefly added one;
+      // the override was dead code).
       expect(
         body,
         contains(
-            'androidx.work.impl.foreground.SystemForegroundService'),
+            '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION"'),
         reason:
-            'AndroidManifest.xml must override SystemForegroundService '
-            'with a foregroundServiceType to survive Android 14+.',
+            'AndroidManifest.xml must declare FOREGROUND_SERVICE_LOCATION '
+            'so geolocator can promote its location service on SDK 34+.',
       );
+      // Look for the actual <uses-permission> declaration shape, not
+      // the bare token — the manifest legitimately mentions the
+      // permission name in an explanatory comment about why we don't
+      // declare it.
       expect(
-        body,
-        contains('android:foregroundServiceType="dataSync"'),
-        reason:
-            'SystemForegroundService override must declare '
-            'foregroundServiceType="dataSync" (Workmanager runs are '
-            'non-location, non-camera).',
-      );
-      expect(
-        body,
-        contains(
+        body.contains(
             '<uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC"'),
+        isFalse,
         reason:
-            'AndroidManifest.xml must declare FOREGROUND_SERVICE_DATA_SYNC '
-            'to back the dataSync foregroundServiceType on SDK 34+.',
+            'Do not declare FOREGROUND_SERVICE_DATA_SYNC — it backs a '
+            'service type Workmanager does not use in this app. Adding '
+            'it without a real consumer is a Play Data Safety oddity '
+            'reviewers flag.',
       );
     });
 
