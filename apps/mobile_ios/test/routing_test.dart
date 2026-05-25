@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io' show SocketException;
 
 import 'package:core_models/core_models.dart' show Waypoint;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/routing.dart';
@@ -23,6 +24,90 @@ class _StubFetcher {
 }
 
 void main() {
+  group('OSRM prod guard', () {
+    // Reason: audit/third-party-data-flows (2026-05-25) flagged the
+    // mobile route builder POSTing GPS waypoints to the OSRM public
+    // demo with no env override. The web side fails loudly on prod
+    // misconfig; mobile now does the same via assertOsrmConfiguredForProd.
+
+    setUpAll(() {
+      // dotenv needs initialising before .env can be read or
+      // mutated. `isOptional: true` skips the missing-file throw so
+      // the tests work without an actual .env on disk.
+      TestWidgetsFlutterBinding.ensureInitialized();
+      dotenv.loadFromString(isOptional: true);
+    });
+
+    setUp(() {
+      // Each test owns its dotenv state so a leaked value doesn't
+      // poison the next case.
+      dotenv.env.remove('OSRM_URL');
+    });
+
+    test('resolvedOsrmBaseUrl falls back to the public demo when '
+        'OSRM_URL is unset', () {
+      expect(resolvedOsrmBaseUrl(), 'https://router.project-osrm.org');
+    });
+
+    test('resolvedOsrmBaseUrl honours OSRM_URL when set + strips '
+        'trailing slashes', () {
+      dotenv.env['OSRM_URL'] = 'https://osrm.internal.example.com///';
+      expect(resolvedOsrmBaseUrl(), 'https://osrm.internal.example.com');
+    });
+
+    test('resolvedOsrmBaseUrl trims surrounding whitespace', () {
+      dotenv.env['OSRM_URL'] = '  https://osrm.internal.example.com  ';
+      expect(resolvedOsrmBaseUrl(), 'https://osrm.internal.example.com');
+    });
+
+    test('resolvedOsrmBaseUrl falls back to the demo on an empty '
+        'env value', () {
+      dotenv.env['OSRM_URL'] = '';
+      expect(resolvedOsrmBaseUrl(), 'https://router.project-osrm.org');
+    });
+
+    test('assertOsrmConfiguredForProd is a no-op in non-release mode', () {
+      // Default behaviour — kReleaseMode is false under flutter_test.
+      expect(() => assertOsrmConfiguredForProd(), returnsNormally);
+    });
+
+    test('assertOsrmConfiguredForProd throws when release-mode AND '
+        'OSRM_URL is unset', () {
+      expect(
+        () => assertOsrmConfiguredForProd(isReleaseModeOverride: true),
+        throwsA(
+          isA<StateError>().having(
+            (e) => e.message,
+            'message',
+            contains('OSRM not configured'),
+          ),
+        ),
+      );
+    });
+
+    test('assertOsrmConfiguredForProd succeeds when release-mode AND '
+        'OSRM_URL is a non-demo endpoint', () {
+      dotenv.env['OSRM_URL'] = 'https://osrm.internal.example.com';
+      expect(
+        () => assertOsrmConfiguredForProd(isReleaseModeOverride: true),
+        returnsNormally,
+      );
+    });
+
+    test('assertOsrmConfiguredForProd still throws when OSRM_URL is set '
+        'but points back at the public demo', () {
+      dotenv.env['OSRM_URL'] = 'https://router.project-osrm.org';
+      expect(
+        () => assertOsrmConfiguredForProd(isReleaseModeOverride: true),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    tearDown(() {
+      dotenv.env.remove('OSRM_URL');
+    });
+  });
+
   group('snapToRoad', () {
     test('returns the snapped lat/lng on a successful response', () async {
       final stub = _StubFetcher(jsonEncode({

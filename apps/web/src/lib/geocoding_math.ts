@@ -168,7 +168,7 @@ async function geocodeViaNominatim(
 		format: 'json',
 		limit: '1',
 		addressdetails: '0',
-		email: 'protomaps-dev@localhost',
+		email: 'privacy@threkir.com',
 	});
 	const url = `https://nominatim.openstreetmap.org/search?${params.toString()}`;
 	let res: Response;
@@ -231,9 +231,10 @@ async function geocodeViaNominatim(
 ///     search call site is the back-pressure.
 ///
 /// We include the `email` parameter — Nominatim treats it as the
-/// usage-policy contact channel. Empty string is fine; the parameter
-/// being present tells them "this is a real client that read the
-/// policy" and they ban it less aggressively than UA-less traffic.
+/// usage-policy contact channel. The address must be reachable so
+/// OSM can contact the operator about abuse / takedown — sending a
+/// placeholder violates the usage policy. See
+/// audit/third-party-data-flows (2026-05-25).
 ///
 /// Production deployments at any scale should self-host or use a
 /// paid alternative; this fallback is dev-only.
@@ -250,7 +251,7 @@ async function searchViaNominatim(
 		limit: String(limit),
 		addressdetails: '0',
 		// Tells Nominatim "I read the policy" — see comment above.
-		email: 'protomaps-dev@localhost',
+		email: 'privacy@threkir.com',
 	});
 	const url = `${NOMINATIM_BASE}?${params.toString()}`;
 	let res: Response;

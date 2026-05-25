@@ -120,10 +120,12 @@ Future<List<PlaceResult>> _searchViaNominatim(
   // The `email` param signals to Nominatim that we read their usage
   // policy. Plain UA without it has been known to get denied. See
   // https://operations.osmfoundation.org/policies/nominatim/.
+  // The address must be reachable so OSM can contact the operator on
+  // abuse / takedown — see audit/third-party-data-flows (2026-05-25).
   final url = Uri.parse(
     '$_kNominatimBase?q=${Uri.encodeQueryComponent(trimmed)}'
     '&format=json&limit=$limit&addressdetails=0'
-    '&email=protomaps-dev@localhost',
+    '&email=privacy@threkir.com',
   );
   try {
     final body = await (fetcher ?? _defaultFetcher)(url).timeout(kGeocodingTimeout);

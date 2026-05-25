@@ -1297,6 +1297,26 @@ test('routing helpers refuse to fall back to router.project-osrm.org in prod', (
 	);
 });
 
+test('Nominatim fallback uses a reachable contact email (no protomaps placeholder)', () => {
+	// Reason: audit/third-party-data-flows (2026-05-25). The
+	// Nominatim `email=` parameter is the usage-policy contact path
+	// — OSM Foundation requires a reachable address so they can
+	// reach the operator on abuse / takedown. The previous value
+	// (`protomaps-dev@localhost`) was a placeholder copied from a
+	// different project and violates the policy.
+	const source = read('src/lib/geocoding_math.ts');
+	assert.ok(
+		!source.includes('protomaps-dev@localhost'),
+		'geocoding_math.ts must not retain the protomaps-dev placeholder email.',
+	);
+	assert.match(
+		source,
+		/email:\s*'privacy@threkir\.com'/,
+		'Nominatim fallback must declare privacy@threkir.com (the operator-' +
+			'reachable contact alias) per OSM usage policy.',
+	);
+});
+
 test('fetchRunGear enumerates only public-safe columns on the gear join', () => {
 	// Reason: audit/public-rows (May 2026). When run_gear visibility
 	// extends to non-owners of public runs (the SELECT policy is

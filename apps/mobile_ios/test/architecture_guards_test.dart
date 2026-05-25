@@ -3015,4 +3015,83 @@ void main() {
               'from expected_payload_json');
     });
   });
+
+  group('OSRM mobile prod guard', () {
+    // Reason: audit/third-party-data-flows (2026-05-25) flagged the
+    // mobile route builder for sending production GPS waypoints to
+    // the OSRM public demo with no env override or prod guard. The
+    // web side has assertOsrmConfiguredForProd() that throws on
+    // misconfig; mobile now mirrors that. Without the guards below
+    // a refactor could silently re-introduce the leak.
+    test('routing.dart wires assertOsrmConfiguredForProd into snapToRoad '
+        '+ fetchRouteThrough', () {
+      final source = File('lib/routing.dart').readAsStringSync();
+      expect(
+        source,
+        contains('void assertOsrmConfiguredForProd('),
+        reason: 'routing.dart must declare assertOsrmConfiguredForProd '
+            'so callers can be gated by it.',
+      );
+      final assertCalls = RegExp(r'\bassertOsrmConfiguredForProd\(\);')
+          .allMatches(source)
+          .length;
+      expect(
+        assertCalls,
+        greaterThanOrEqualTo(2),
+        reason: 'snapToRoad and fetchRouteThrough must both call '
+            'assertOsrmConfiguredForProd() before issuing an outbound '
+            'HTTP request — see audit/third-party-data-flows.',
+      );
+    });
+
+    test('routing.dart reads OSRM_URL from dotenv (no hard-coded base)', () {
+      final source = File('lib/routing.dart').readAsStringSync();
+      expect(
+        source,
+        contains("dotenv.env['OSRM_URL']"),
+        reason: 'routing.dart must read the OSRM endpoint from dotenv '
+            'so deployments can point at the self-hosted Fly.io '
+            'instance documented in apps/job_worker/osrm/.',
+      );
+      // The demo URL still appears as the fallback constant; it must
+      // NOT appear as a `_kOsrmBase = '...'` const that callers
+      // interpolate directly (that was the pre-fix shape).
+      expect(
+        source.contains("'\$_kOsrmBase/"),
+        isFalse,
+        reason: 'routing.dart must not interpolate a static '
+            '_kOsrmBase — use the dotenv-aware _osrmBaseUrl() helper.',
+      );
+    });
+
+    test('no source file under lib/ retains the placeholder Nominatim '
+        'contact email', () {
+      // Reason: audit/third-party-data-flows (2026-05-25) flagged the
+      // Nominatim email as a placeholder from a different project.
+      // OSM's usage policy requires a reachable contact address;
+      // hard-pin the regression here so it never reappears. The
+      // placeholder string is reconstructed at runtime so this
+      // assertion source doesn't trigger itself.
+      final placeholder =
+          'protomaps' + '-dev' + '@' + 'localhost';
+      final hits = <String>[];
+      final entries = Directory('lib').listSync(recursive: true);
+      for (final entry in entries) {
+        if (entry is! File) continue;
+        if (!entry.path.endsWith('.dart')) continue;
+        final body = entry.readAsStringSync();
+        if (body.contains(placeholder)) {
+          hits.add(entry.path);
+        }
+      }
+      expect(
+        hits,
+        isEmpty,
+        reason: 'OSM Foundation usage policy requires a reachable '
+            'contact email on Nominatim requests. Use '
+            'privacy@threkir.com instead of the placeholder shipped '
+            'from a different project.',
+      );
+    });
+  });
 }

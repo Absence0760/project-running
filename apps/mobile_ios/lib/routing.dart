@@ -4,6 +4,8 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart' show Waypoint;
+import 'package:flutter/foundation.dart' show kReleaseMode, visibleForTesting;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Dart port of `apps/web/src/lib/routing.ts` — OSRM client for the
 /// in-app route builder. Two helpers: [snapToRoad] for the
@@ -13,8 +15,67 @@ import 'package:core_models/core_models.dart' show Waypoint;
 /// All callers can pass a [fetcher] (a `Future<String> Function(Uri)`)
 /// to inject a mock for unit tests. The default fetcher uses
 /// `dart:io`'s [HttpClient] (no new package dependency).
+///
+/// **Dev**: falls back to `https://router.project-osrm.org`, the
+/// public community demo. Convenient locally but a third-party
+/// service with no DPA, no published region, and unauthenticated.
+///
+/// **Prod**: `OSRM_URL` MUST be set in the dotenv file (typically
+/// pointing at the self-hosted `apps/job_worker/osrm/` instance on
+/// Fly.io). [assertOsrmConfiguredForProd] throws on the first
+/// routing call when a release-mode build still resolves to the
+/// public demo — keeping the binary from silently leaking user
+/// waypoints to an uncontracted third party. Mirrors the web
+/// `assertOsrmConfiguredForProd` in
+/// `apps/web/src/lib/routing.ts`. See audit/third-party-data-flows
+/// (2026-05-25).
 
-const _kOsrmBase = 'https://router.project-osrm.org';
+const _kPublicDemoOsrm = 'https://router.project-osrm.org';
+
+/// Resolve the effective OSRM base URL. Reads `dotenv.env['OSRM_URL']`
+/// if available, strips trailing slashes, and falls back to the
+/// public demo URL when the env entry is missing or empty.
+String _osrmBaseUrl() {
+  try {
+    final raw = (dotenv.env['OSRM_URL'] ?? '').trim();
+    if (raw.isEmpty) return _kPublicDemoOsrm;
+    return raw.replaceAll(RegExp(r'/+$'), '');
+  } catch (_) {
+    // dotenv may not be initialised in unit tests; that's fine —
+    // the demo URL is the safe default and the prod guard below
+    // covers the release-mode case.
+    return _kPublicDemoOsrm;
+  }
+}
+
+/// Throws when the build is in release mode AND the env override is
+/// unset (so the helper would otherwise hit the community demo).
+/// Callers invoke this at the top of each fetch helper so a
+/// misconfigured release build fails loudly on the first routing
+/// request instead of quietly forwarding user data to an
+/// uncontracted third party.
+///
+/// `isReleaseModeOverride` is an escape hatch for unit tests that
+/// need to exercise the throwing path — production callers should
+/// leave it unset so [kReleaseMode] decides.
+@visibleForTesting
+void assertOsrmConfiguredForProd({bool? isReleaseModeOverride}) {
+  final isRelease = isReleaseModeOverride ?? kReleaseMode;
+  if (!isRelease) return;
+  if (_osrmBaseUrl() == _kPublicDemoOsrm) {
+    throw StateError(
+      'OSRM not configured: set OSRM_URL in the dotenv file to a '
+      'self-hosted instance. The community endpoint '
+      'router.project-osrm.org is uncontracted (no DPA) and must '
+      'not receive production traffic. '
+      'See audit/third-party-data-flows (2026-05-25).',
+    );
+  }
+}
+
+/// Test-only accessor for the resolved OSRM base URL.
+@visibleForTesting
+String resolvedOsrmBaseUrl() => _osrmBaseUrl();
 
 /// Per-call ceilings mirroring the web side
 /// (`apps/web/src/lib/components/RouteBuilder.svelte`): 5s on the
@@ -113,13 +174,14 @@ Future<Waypoint> snapToRoad(
   OsrmProfile profile = OsrmProfile.foot,
   OsrmFetcher? fetcher,
 }) async {
+  assertOsrmConfiguredForProd();
   // `number=1` requests just the single nearest match; `radiuses=`
   // bounds how far OSRM can reach (250m) so a tap nowhere near a
   // road falls back to the input rather than snapping to an
   // unrelated road kilometres away. Both params mirror the web
   // call shape in RouteBuilder.svelte.
   final url = Uri.parse(
-    '$_kOsrmBase/nearest/v1/${profile.path}/${point.lng},${point.lat}'
+    '${_osrmBaseUrl()}/nearest/v1/${profile.path}/${point.lng},${point.lat}'
     '?number=1&radiuses=$kOsrmSnapRadiusM',
   );
   try {
@@ -197,6 +259,7 @@ Future<OsrmRouteResult> fetchRouteThrough(
   if (points.length < 2) {
     return const OsrmRouteResult(coordinates: [], distanceMetres: 0);
   }
+  assertOsrmConfiguredForProd();
   final f = fetcher ?? _defaultFetcher;
   final isCancelled = cancelled ?? () => false;
   final segmentPairs = <List<Waypoint>>[
@@ -310,7 +373,7 @@ Future<_RoutedSegment> _routeOneSegment(
 ) async {
   final coords = '${from.lng},${from.lat};${to.lng},${to.lat}';
   final url = Uri.parse(
-    '$_kOsrmBase/route/v1/${profile.path}/$coords'
+    '${_osrmBaseUrl()}/route/v1/${profile.path}/$coords'
     '?overview=full&geometries=geojson'
     '&radiuses=$kOsrmSnapRadiusM;$kOsrmSnapRadiusM',
   );
