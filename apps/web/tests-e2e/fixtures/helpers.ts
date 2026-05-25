@@ -21,6 +21,26 @@ import type { SeededUser } from './users';
  * imports for `auth.svelte.ts` + `@supabase/ssr`.
  */
 export async function signIn(page: Page, user: SeededUser) {
+	// Pre-accept the GDPR cookie banner so it doesn't float over the
+	// post-sign-in surface and intercept pointer events on the sidebar
+	// popover (signOut) or any bottom-of-screen affordance. The auth
+	// fixture's globalSetup bakes this into the persisted storageState
+	// for the cached-cookie path; tests that sign in fresh with an
+	// empty storageState (sign-in-out spec) need it injected here.
+	//
+	// Must run BEFORE goto — the consent.svelte.ts module reads
+	// localStorage once on first import, so a post-goto setItem leaves
+	// the module's $state stale until a full page reload. addInitScript
+	// fires on every navigation in this page, so the consent module
+	// sees the accepted choice on /login AND on the post-sign-in
+	// redirect to /dashboard.
+	await page.addInitScript(() => {
+		localStorage.setItem(
+			'cookie_consent',
+			JSON.stringify({ choice: 'accepted', timestamp: Date.now() })
+		);
+	});
+
 	await page.goto('/login');
 	await page.waitForLoadState('networkidle');
 
@@ -73,7 +93,14 @@ export { chromium };
  */
 export async function signOut(page: Page) {
 	await page.locator('.profile-btn').click();
-	await page.getByRole('button', { name: 'Sign out' }).click();
+	// Class-based selector instead of role/name: the popover lives
+	// inside `<div role="menu">`, which under ARIA semantics gives its
+	// children an implicit `menuitem` role rather than `button`, so
+	// `getByRole('button', { name: 'Sign out' })` no longer matches
+	// the popover item. `.popover-danger` is the only Sign-out button
+	// on the page (the profile-btn's a11y label contains the phrase
+	// "sign out" but is not styled with that class).
+	await page.locator('.popover-danger').click();
 	await expect(page).toHaveURL(/\/login/);
 }
 

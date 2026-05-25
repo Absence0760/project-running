@@ -159,13 +159,19 @@ test.describe('architecture guards', () => {
 		expect(onMountMatch).not.toBeNull();
 		const body = onMountMatch![1];
 
-		// hydrateBacklog should be invoked from the onMount body
-		// itself, NOT from inside `map.on('load', ...)`.
-		const hydrateIdx = body.indexOf('hydrateBacklog');
-		const mapLoadIdx = body.indexOf("map.on('load'");
-		expect(hydrateIdx).toBeGreaterThanOrEqual(0);
-		expect(mapLoadIdx).toBeGreaterThanOrEqual(0);
-		expect(hydrateIdx).toBeLessThan(mapLoadIdx);
+		// hydrateBacklog must be invoked from the onMount body itself
+		// so the LIVE badge + stat strip render even when the MapTiler
+		// init path hasn't fired (missing key in CI, slow style fetch,
+		// or the user hasn't accepted the consent-gated tile load).
+		expect(body).toContain('hydrateBacklog');
+
+		// The map init was extracted into initMap() behind the
+		// mapConsented gate, so `map.on('load'` no longer lives in
+		// onMount. Assert the negative: the onMount body must NOT
+		// register a load handler in-line, because anything stuffed
+		// inside that handler is the regression we're guarding
+		// against.
+		expect(body).not.toContain("map.on('load'");
 	});
 
 	test('pushPing in /live/[id] guards every map.* call with `if (!map)` or optional chain', () => {
