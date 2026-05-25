@@ -23,10 +23,14 @@ export async function hmacHex(
   body: string | Uint8Array,
 ): Promise<string> {
   const enc = new TextEncoder();
-  const keyBytes =
-    typeof secret === 'string' ? enc.encode(secret) : secret;
-  const bodyBytes =
-    typeof body === 'string' ? enc.encode(body) : body;
+  // Force a fresh Uint8Array<ArrayBuffer> view rather than the
+  // Uint8Array<ArrayBufferLike> TextEncoder returns, which fails strict
+  // BufferSource type-checking under recent Deno/TS lib versions even
+  // though the runtime accepts both. /audit/all round-7 2026-05-24.
+  const keyBytes: BufferSource =
+    typeof secret === 'string' ? enc.encode(secret) : new Uint8Array(secret);
+  const bodyBytes: BufferSource =
+    typeof body === 'string' ? enc.encode(body) : new Uint8Array(body);
   const key = await crypto.subtle.importKey(
     'raw',
     keyBytes,
