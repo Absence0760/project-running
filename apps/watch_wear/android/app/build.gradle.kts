@@ -155,7 +155,7 @@ dependencies {
     testImplementation("junit:junit:4.13.2")
 
     // Compose
-    val composeBom = platform("androidx.compose:compose-bom:2026.05.00")
+    val composeBom = platform("androidx.compose:compose-bom:2026.05.01")
     implementation(composeBom)
     implementation("androidx.activity:activity-compose:1.13.0")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
@@ -163,9 +163,9 @@ dependencies {
     implementation("androidx.compose.material:material-icons-core")
 
     // Compose-for-Wear
-    implementation("androidx.wear.compose:compose-material:1.6.1")
-    implementation("androidx.wear.compose:compose-foundation:1.6.1")
-    implementation("androidx.wear.compose:compose-navigation:1.6.1")
+    implementation("androidx.wear.compose:compose-material:1.6.2")
+    implementation("androidx.wear.compose:compose-foundation:1.6.2")
+    implementation("androidx.wear.compose:compose-navigation:1.6.2")
     implementation("androidx.wear:wear-ongoing:1.1.0")
     // AmbientLifecycleObserver + AmbientAware lives here.
     implementation("androidx.wear:wear:1.4.0")
@@ -210,5 +210,5 @@ dependencies {
     // no-ops. The Android SDK auto-captures unhandled JVM exceptions;
     // we additionally wire breadcrumbs in long-running paths via
     // Sentry.captureException calls from coroutine catch blocks.
-    implementation("io.sentry:sentry-android:8.41.0")
+    implementation("io.sentry:sentry-android:8.42.0")
 }
