@@ -1,5 +1,20 @@
 <script lang="ts">
+	import { consent } from '$lib/consent.svelte';
+
 	const lastUpdated = '2026-05-15';
+
+	// audit/cookie-consent (May 2026): the prior page told users to
+	// use a "Cookie settings" link in the footer that does not exist.
+	// Per GDPR Art 7(3) withdrawal must be as easy as giving consent;
+	// the button below clears the choice and reloads so the banner
+	// re-renders.
+	function resetConsent() {
+		consent.reset();
+		// Full reload so the consent banner re-mounts in its first-
+		// visit state (the runes-based store is already updated, but
+		// the banner gate fires once at $effect time).
+		if (typeof location !== 'undefined') location.reload();
+	}
 </script>
 
 <svelte:head>
@@ -73,11 +88,21 @@
 	</ul>
 
 	<h2>4. Your choices</h2>
+	<p class="manage-consent">
+		<button
+			type="button"
+			class="btn btn-outline"
+			onclick={resetConsent}
+			data-testid="manage-cookie-preferences"
+		>
+			Manage cookie preferences
+		</button>
+		<span class="manage-consent-hint">
+			Clears your current choice and re-opens the consent banner. Required by
+			GDPR Art 7(3): withdrawing consent must be as easy as giving it.
+		</span>
+	</p>
 	<ul>
-		<li>
-			<strong>Manage consent.</strong> Use the "Cookie settings" link in the footer to change
-			your choices at any time.
-		</li>
 		<li>
 			<strong>Block cookies in your browser.</strong> Most browsers let you reject cookies
 			from a specific site. Strictly-necessary cookies cannot be blocked without breaking
@@ -85,7 +110,7 @@
 		</li>
 		<li>
 			<strong>Browser-level "Do Not Track".</strong> We do not currently honour DNT because it
-			has no consistent meaning across browsers. Use the consent banner instead.
+			has no consistent meaning across browsers. Use the button above to change your choice.
 		</li>
 	</ul>
 
@@ -101,6 +126,16 @@
 		margin: 0 auto;
 		padding: var(--space-xl) var(--space-2xl);
 		line-height: 1.6;
+	}
+	.manage-consent {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm, 0.5rem);
+		margin: var(--space-md, 1rem) 0;
+	}
+	.manage-consent-hint {
+		color: var(--color-muted, #6b7280);
+		font-size: 0.9em;
 	}
 	.draft-banner {
 		background: var(--color-warning-bg, #fff3cd);

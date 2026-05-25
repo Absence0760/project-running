@@ -945,6 +945,37 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('/cookie-notice carries a Manage-cookie-preferences button wired to consent.reset', () => {
+	// Reason: audit/cookie-consent (May 2026). Pre-fix the page told
+	// users to use a "Cookie settings" link in the footer that did
+	// not exist anywhere in the app. GDPR Art 7(3) requires withdrawal
+	// to be as easy as giving consent; a missing UI is an illusory
+	// right that a DPA audit would reject.
+	const source = read('src/routes/cookie-notice/+page.svelte');
+	assert.match(
+		source,
+		/consent\.reset\(\)/,
+		'/cookie-notice must call consent.reset() to clear the stored choice',
+	);
+	assert.match(
+		source,
+		/data-testid="manage-cookie-preferences"/,
+		'/cookie-notice must surface a manage-cookie-preferences button so ' +
+			'the GDPR Art 7(3) withdrawal path has a discoverable test handle',
+	);
+	// Strip the <script> block so the doesNotMatch check fires on
+	// rendered copy only — the comment in the script intentionally
+	// references the old phrasing for history.
+	const renderedOnly = source.replace(/<script\b[\s\S]*?<\/script>/g, '');
+	assert.doesNotMatch(
+		renderedOnly,
+		/"Cookie settings" link in the footer/,
+		"/cookie-notice rendered copy must not point users at a footer " +
+			"'Cookie settings' link that does not exist " +
+			'(audit/cookie-consent pre-fix wording)',
+	);
+});
+
 test('routing helpers refuse to fall back to router.project-osrm.org in prod', () => {
 	// Reason: audit/third-party-data-flows (May 2026). Pre-fix, the
 	// `OSRM_BASE_URL = (publicEnv.PUBLIC_OSRM_URL || 'https://router.project-osrm.org')`
