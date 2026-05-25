@@ -891,6 +891,23 @@ UPDATE user_profiles
    SET subscription_tier = 'pro'
  WHERE id = 'c3d4e5f6-a7b8-9012-cdef-345678901234';
 
+-- 3a. Pre-grant GDPR consent timestamps for all three seed users so
+-- the Coach + Preferences surfaces render past the consent gates in
+-- test runs. Real users have to click the disclosure (migration
+-- 20260921_001 + the /coach + /settings/preferences UI); the seed
+-- short-circuits that for e2e + manual dev convenience. The dedicated
+-- consent-gate tests (web src/lib/security_guards.test.ts, mobile
+-- coach_screen_test.dart) are source-grep guards over the handler
+-- code, so pre-seeded consent doesn't bypass them.
+UPDATE user_profiles
+   SET coach_consent_at = now(),
+       health_data_consent_at = now()
+ WHERE id IN (
+   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+   'b2c3d4e5-f6a7-8901-bcde-f23456789012',
+   'c3d4e5f6-a7b8-9012-cdef-345678901234'
+ );
+
 -- 4. Cross-user engagement on one of runner's public runs. Pick the
 -- most recent UNLESS it's the pinned RUNNER_PUBLIC_RUN_ID — that one
 -- is reserved for the data-flow Playwright spec which toggles kudos

@@ -103,11 +103,12 @@ export async function handleCoach(
 	// /coach. Client UI also gates this, but the handler is the load-
 	// bearing check — a hand-rolled cURL request must fail closed.
 	// See audit/gdpr (2026-05-25).
-	const consentLookup = await supabase
-		.from('user_profiles')
-		.select('coach_consent_at')
-		.eq('id', authUser.id)
-		.maybeSingle();
+	//
+	// user_profiles.coach_consent_at is not in the public-safe column
+	// grant list (migration 20260707_001), so a direct
+	// `.select('coach_consent_at')` returns null for the caller's role.
+	// Go through the SECURITY DEFINER `get_my_profile()` RPC instead.
+	const consentLookup = await supabase.rpc('get_my_profile').maybeSingle();
 	if (consentLookup.error) {
 		console.error('[coach] consent lookup failed', consentLookup.error);
 		return jsonError(500, 'consent check failed');

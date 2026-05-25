@@ -1371,13 +1371,19 @@ test('Coach handler gates the Anthropic fan-out behind coach_consent_at', () => 
 	// data to Anthropic (US sub-processor). Art 6(1)(a) requires an
 	// affirmative consent act before the first dispatch — opening
 	// /coach is not affirmative. The handler must read
-	// user_profiles.coach_consent_at and refuse before the provider
-	// stream runs.
+	// user_profiles.coach_consent_at (via the get_my_profile RPC, since
+	// the column isn't in the public-safe grant list — migration
+	// 20260707_001) and refuse before the provider stream runs.
 	const source = read('src/lib/coach/handler.ts');
 	assert.match(
 		source,
-		/select\('coach_consent_at'\)/,
-		'handler.ts must read user_profiles.coach_consent_at to gate the consent.',
+		/\.rpc\('get_my_profile'\)/,
+		'handler.ts must call get_my_profile() to load the self row including coach_consent_at.',
+	);
+	assert.match(
+		source,
+		/coach_consent_at/,
+		'handler.ts must reference coach_consent_at as the gating field.',
 	);
 	assert.match(
 		source,
@@ -1388,7 +1394,7 @@ test('Coach handler gates the Anthropic fan-out behind coach_consent_at', () => 
 	// assert ordering by checking that the consent lookup appears
 	// before the first `tier ===` reference (which is the start of
 	// the rate-limit / provider-dispatch block).
-	const consentIdx = source.indexOf("select('coach_consent_at')");
+	const consentIdx = source.indexOf("rpc('get_my_profile')");
 	const tierIdx = source.indexOf('tier === ');
 	assert.ok(
 		consentIdx > 0 && consentIdx < tierIdx,

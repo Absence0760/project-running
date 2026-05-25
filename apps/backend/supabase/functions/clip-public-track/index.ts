@@ -175,7 +175,16 @@ serve(withSentry('clip-public-track', async (req: Request) => {
     return Response.json({ points });
   }
 
-  const { data: clipped, error: clipErr } = await userClient.rpc(
+  // Go through the service-role admin client for the clip RPC.
+  // Migration 20260603_001 (f05dcb4) revoked EXECUTE on
+  // clip_track_for_user from anon to close the residual-zone probe
+  // documented in decisions §33; the EF is the only legitimate
+  // anon-callable entry point, so it must use the service-role grant
+  // (kept available to service_role + authenticated) to call the
+  // RPC. Doing this here also lets us drop the anon-vs-authenticated
+  // userClient branch from the call site — the cookie-based JWT was
+  // never used for this read, only the row lookup above.
+  const { data: clipped, error: clipErr } = await adminClient.rpc(
     'clip_track_for_user',
     { target_user_id: run.user_id, points },
   );

@@ -41,10 +41,14 @@
 		// modal in front of the user until they accept.
 		if (auth.user) {
 			try {
+				// user_profiles.coach_consent_at is not in the public-
+				// safe column grant list (migration 20260707_001), so a
+				// direct `.select('coach_consent_at')` returns null for
+				// authenticated callers. Go through the SECURITY DEFINER
+				// `get_my_profile()` RPC instead — same pattern as the
+				// other self-row reads.
 				const { data: prof } = await supabase
-					.from('user_profiles')
-					.select('coach_consent_at')
-					.eq('id', auth.user.id)
+					.rpc('get_my_profile')
 					.maybeSingle();
 				coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
 			} catch (_) {
