@@ -216,6 +216,27 @@ export type Database = {
           },
         ]
       }
+      deletion_audit_log: {
+        Row: {
+          deleted_at: string
+          hashed_user_id: string
+          notes: string | null
+          result: string
+        }
+        Insert: {
+          deleted_at?: string
+          hashed_user_id: string
+          notes?: string | null
+          result: string
+        }
+        Update: {
+          deleted_at?: string
+          hashed_user_id?: string
+          notes?: string | null
+          result?: string
+        }
+        Relationships: []
+      }
       device_tokens: {
         Row: {
           app_version: string | null
