@@ -2081,7 +2081,6 @@ export type Database = {
           route_id: string | null
           source: string | null
           started_at: string | null
-          track_url: string | null
           user_id: string | null
         }
         Insert: {
@@ -2095,7 +2094,6 @@ export type Database = {
           route_id?: never
           source?: string | null
           started_at?: string | null
-          track_url?: string | null
           user_id?: string | null
         }
         Update: {
@@ -2109,7 +2107,6 @@ export type Database = {
           route_id?: never
           source?: string | null
           started_at?: string | null
-          track_url?: string | null
           user_id?: string | null
         }
         Relationships: []

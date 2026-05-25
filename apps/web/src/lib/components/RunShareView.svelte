@@ -37,10 +37,18 @@
 			// fetchPublicRun deliberately does NOT pre-fetch the track
 			// (audit/storage High); each branch fetches on its own to
 			// keep the owner / non-owner data paths independent.
+			//
+			// audit/storage (2026-05-25): track_url was removed from
+			// the public_runs view in migration 20260924_001. The
+			// owner branch derives the Storage path the same way the
+			// clip-public-track EF does — both pin to the
+			// `{user_id}/{run_id}.json.gz` shape that the CHECK
+			// constraint on runs.track_url (20260621_001) enforces.
 			const isOwner = auth.user?.id === r.user_id;
-			if (isOwner && r.track_url) {
+			if (isOwner) {
+				const ownerTrackPath = `${r.user_id}/${r.id}.json.gz`;
 				try {
-					track = (await fetchTrackByPath(r.track_url)) as TrackPoint[];
+					track = (await fetchTrackByPath(ownerTrackPath)) as TrackPoint[];
 				} catch (e) {
 					console.warn('Failed to fetch owner track', e);
 					track = [];

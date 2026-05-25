@@ -65,14 +65,26 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
       // download possible). The EF fails closed (returns []) on
       // outage; non-owners see an empty map rather than the
       // unclipped track.
-      final hasTrack = row.trackUrl != null && row.trackUrl!.isNotEmpty;
+      //
+      // audit/storage (2026-05-25): track_url was dropped from the
+      // public_runs view in migration 20260924_001. The owner path
+      // derives the Storage shape the same way the
+      // clip-public-track EF does — both pin to
+      // `{user_id}/{run_id}.json.gz`, the format the CHECK on
+      // runs.track_url enforces (20260621_001). Runs without a
+      // track (manual entry) fail the Storage download and the
+      // try/catch already in fetchTrackByPath / fetchClippedTrackForRun
+      // returns an empty list.
       final viewerId = widget.api.userId;
       final isOwner = viewerId != null && viewerId == row.userId;
-      final trackFuture = hasTrack
-          ? (isOwner
-              ? widget.api.fetchTrackByPath(row.trackUrl!)
+      // Wrap with onError so a missing Storage object (manual-entry
+      // run, retired blob) lands as an empty track instead of
+      // propagating into _loadError, which would mask the rest of
+      // the page.
+      final Future<List<Waypoint>> trackFuture = (isOwner
+              ? widget.api.fetchTrackByPath('${row.userId}/${row.id}.json.gz')
               : widget.api.fetchClippedTrackForRun(row.id))
-          : Future.value(const <Waypoint>[]);
+          .catchError((_) => const <Waypoint>[]);
       final results = await Future.wait<dynamic>([
         trackFuture,
         widget.api.fetchPublicProfile(row.userId),

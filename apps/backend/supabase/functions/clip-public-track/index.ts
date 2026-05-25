@@ -90,30 +90,27 @@ serve(withSentry('clip-public-track', async (req: Request) => {
   // so a non-owner querying `runs.id = ?` now returns zero rows and
   // every clip request would 404. The view's underlying definer-owned
   // query bypasses runs RLS, returns only `is_public = true` rows,
-  // and exposes the three columns we need (user_id, track_url,
-  // is_public). Owner reads still return the row because the view is
-  // is-public-filtered and the EF only ever runs on public runs (the
-  // share page renders nothing for a private run).
+  // and exposes the two columns we need (user_id, is_public). The
+  // `track_url` column was removed from the view in migration
+  // 20260924_001 per audit/storage (2026-05-25); we derive the path
+  // from `user_id + runId` below using the same shape the
+  // 20260621_001 CHECK constraint enforces on writes. Owner reads
+  // still return the row because the view is is-public-filtered
+  // and the EF only ever runs on public runs (the share page
+  // renders nothing for a private run).
   const { data: run, error: runErr } = await userClient
     .from('public_runs')
-    .select('user_id, track_url, is_public')
+    .select('user_id, is_public')
     .eq('id', runId)
     .maybeSingle();
-  if (runErr || !run || !run.track_url) {
+  if (runErr || !run) {
     return Response.json({ error: 'not found' }, { status: 404 });
   }
 
-  // Defence-in-depth against track_url forgery (audit/storage High).
-  // A CHECK constraint on runs.track_url (migration 20260621_001)
-  // pins the column to {user_id}/{run_id}.json.gz at write time.
-  // This assertion catches anything that slipped through (legacy
-  // rows pre-validate, or a future weakening of the CHECK) — without
-  // it, an attacker rewriting their own row to a victim's path
-  // could trick the service-role downloader into reading any blob.
-  const expected = `${run.user_id}/${runId}.json.gz`;
-  if (run.track_url !== expected) {
-    return Response.json({ error: 'track_url mismatch' }, { status: 422 });
-  }
+  // Derive the Storage path directly from the row owner + runId.
+  // Matches the {user_id}/{run_id}.json.gz shape enforced by
+  // CHECK on runs.track_url (migration 20260621_001).
+  const trackPath = `${run.user_id}/${runId}.json.gz`;
 
   // Explicit visibility gate. RLS already filters this row lookup —
   // a non-owner asking for a private run lands in the !run branch
@@ -128,7 +125,7 @@ serve(withSentry('clip-public-track', async (req: Request) => {
 
   const { data: blob, error: dlErr } = await adminClient.storage
     .from('runs')
-    .download(run.track_url);
+    .download(trackPath);
   if (dlErr || !blob) {
     return Response.json({ error: 'track download failed' }, { status: 502 });
   }
