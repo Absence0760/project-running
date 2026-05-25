@@ -1709,6 +1709,55 @@ void main() {
     });
   });
 
+  group('accessibility: recording-screen controls have Semantics', () {
+    // Reason: audit/accessibility (May 2026) Critical — the
+    // Pause / Discard / Lap controls on the recording screen were
+    // bare GestureDetector + Container + Icon. TalkBack announces
+    // them as their visual content ("delete", an unlabelled circle,
+    // a flag) and a screen-reader user has no way to end / pause
+    // the run from voice-only mode. Wrap each in Semantics(
+    // button: true, label: ...).
+    test('Discard / Pause / Lap GestureDetectors are wrapped in Semantics', () {
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      // Discard + Mark lap have static labels.
+      for (final label in const ['Discard run', 'Mark lap']) {
+        expect(
+          source,
+          contains("'$label'"),
+          reason: 'run_screen.dart must wrap the matching control in '
+              "Semantics(label: '$label') so TalkBack / VoiceOver "
+              "announce it correctly. audit/accessibility Critical.",
+        );
+      }
+      // Pause/Resume is a toggle: the label flips on `paused` so the
+      // announcement reflects current state. Pin the full ternary so
+      // a future refactor that collapses to a single static label
+      // fires this guard.
+      expect(
+        source,
+        contains("paused ? 'Resume run' : 'Pause run'"),
+        reason: 'Pause/Resume Semantics label must flip on `paused` '
+            'so a screen reader announces the current state. '
+            'audit/accessibility Critical.',
+      );
+      // And every one of those labels lives inside a Semantics(...)
+      // — a future refactor that moves the label string into a
+      // GestureDetector tooltip would silently drop the
+      // button-role announcement.
+      final semanticsBlocks = RegExp(
+        r'Semantics\(\s*button:\s*true[\s\S]*?label:\s*[^,)]+',
+      ).allMatches(source).toList();
+      expect(
+        semanticsBlocks.length,
+        greaterThanOrEqualTo(3),
+        reason:
+            'Expected at least three Semantics(button: true, label:) '
+            'blocks for Discard / Pause / Lap. Found '
+            '${semanticsBlocks.length}.',
+      );
+    });
+  });
+
   group('layered resilience', () {
     test('no silent catch (_) {} sites in lib/', () {
       // Reason: audit/layered-resilience (May 2026) flagged 10

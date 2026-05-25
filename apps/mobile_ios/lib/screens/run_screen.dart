@@ -2535,40 +2535,62 @@ class _StatsOverlay extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Discard button
-                  GestureDetector(
-                    onTap: onDiscard,
-                    child: Container(
-                      width: 52,
-                      height: 52,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        border: Border.all(color: theme.dividerColor),
-                      ),
-                      child: Icon(
-                        Icons.delete_outline,
-                        size: 26,
-                        color: theme.colorScheme.outline,
+                  // Discard button.
+                  // audit/accessibility (May 2026) Critical: the bare
+                  // GestureDetector + Container + Icon shape gave
+                  // TalkBack no name or role — a screen-reader user
+                  // couldn't end the run from this control.
+                  // Semantics(button: true, label:) is the Flutter idiom.
+                  Semantics(
+                    button: true,
+                    enabled: true,
+                    label: 'Discard run',
+                    hint: 'Throws away the current recording without saving',
+                    child: GestureDetector(
+                      onTap: onDiscard,
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          border: Border.all(color: theme.dividerColor),
+                        ),
+                        child: Icon(
+                          Icons.delete_outline,
+                          size: 26,
+                          color: theme.colorScheme.outline,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(width: 16),
-                  // Pause / Resume
-                  GestureDetector(
-                    onTap: onPauseToggle,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: paused ? const Color(0xFF22C55E) : const Color(0xFFF59E0B),
-                      ),
-                      child: Center(
-                        child: Icon(
-                          paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
-                          size: 32,
-                          color: Colors.white,
+                  // Pause / Resume.
+                  // audit/accessibility (May 2026) Critical — see
+                  // above. Toggle label reflects current state.
+                  Semantics(
+                    button: true,
+                    enabled: true,
+                    toggled: paused,
+                    label: paused ? 'Resume run' : 'Pause run',
+                    hint: paused
+                        ? 'Resumes the paused recording'
+                        : 'Pauses the recording without ending it',
+                    child: GestureDetector(
+                      onTap: onPauseToggle,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: paused ? const Color(0xFF22C55E) : const Color(0xFFF59E0B),
+                        ),
+                        child: Center(
+                          child: Icon(
+                            paused ? Icons.play_arrow_rounded : Icons.pause_rounded,
+                            size: 32,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -2580,17 +2602,25 @@ class _StatsOverlay extends StatelessWidget {
                     onHoldComplete: onHoldComplete,
                   ),
                   const SizedBox(width: 16),
-                  // Lap button
-                  GestureDetector(
-                    onTap: onLap,
-                    child: Container(
-                      width: 56,
-                      height: 56,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: theme.colorScheme.primaryContainer,
-                      ),
-                      child: Stack(
+                  // Lap button.
+                  // audit/accessibility (May 2026) Critical — same fix
+                  // pattern. Lap count is announced so a screen-reader
+                  // user knows how many laps the gesture produced.
+                  Semantics(
+                    button: true,
+                    enabled: true,
+                    label: lapCount > 0 ? 'Mark lap, $lapCount so far' : 'Mark lap',
+                    hint: 'Records the current split',
+                    child: GestureDetector(
+                      onTap: onLap,
+                      child: Container(
+                        width: 56,
+                        height: 56,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: theme.colorScheme.primaryContainer,
+                        ),
+                        child: Stack(
                         alignment: Alignment.center,
                         children: [
                           Icon(
@@ -2626,6 +2656,7 @@ class _StatsOverlay extends StatelessWidget {
                         ],
                       ),
                     ),
+                  ),
                   ),
                 ],
               ),
