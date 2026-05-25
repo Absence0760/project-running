@@ -2,10 +2,22 @@
 	import { toastStore } from '$lib/stores/toast.svelte';
 </script>
 
+<!--
+	audit/accessibility High (May 2026): the container had no
+	aria-live region, so screen readers never announced "Run
+	saved" / "Export failed" / etc. Wrap in role="status" +
+	aria-live="polite" by default; per-toast aria-live="assertive"
+	for error toasts so the user is interrupted on failure but not
+	on routine confirmations.
+-->
 {#if toastStore.toasts.length > 0}
-	<div class="toast-container">
+	<div class="toast-container" role="status" aria-live="polite" aria-atomic="false">
 		{#each toastStore.toasts as t (t.id)}
-			<div class="toast toast-{t.type}">
+			<div
+				class="toast toast-{t.type}"
+				role={t.type === 'error' ? 'alert' : 'status'}
+				aria-live={t.type === 'error' ? 'assertive' : 'polite'}
+			>
 				{t.message}
 			</div>
 		{/each}

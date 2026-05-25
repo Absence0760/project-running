@@ -236,7 +236,16 @@
 			</div>
 		</nav>
 
-		<main class="main-content">
+		<!--
+			audit/accessibility High (May 2026): the sidebar renders
+			5 nav items before <main>; a keyboard user must Tab
+			through all of them on every page load before reaching
+			page content. Skip link satisfies WCAG 2.4.1 (Bypass
+			Blocks). Visually hidden by default; reveals on :focus.
+		-->
+		<a href="#main-content" class="skip-link">Skip to main content</a>
+
+		<main id="main-content" class="main-content">
 			<BillingIssueBanner />
 			<slot />
 		</main>

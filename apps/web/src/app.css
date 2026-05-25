@@ -303,6 +303,32 @@ img {
 	display: block;
 }
 
+/*
+ * Skip-to-main-content link — keyboard users Tab past the sidebar
+ * straight into <main>. WCAG 2.4.1 (Bypass Blocks). Hidden until
+ * focused; reveals as a high-contrast pill at the top-left when a
+ * keyboard user lands on it via Tab. audit/accessibility High.
+ */
+.skip-link {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: 9999;
+	padding: var(--space-sm) var(--space-md);
+	background: var(--color-primary);
+	color: #fff;
+	text-decoration: none;
+	border-radius: 0 0 var(--radius-md) 0;
+	transform: translateY(-100%);
+	transition: transform 0.1s ease;
+}
+.skip-link:focus,
+.skip-link:focus-visible {
+	transform: translateY(0);
+	outline: 2px solid var(--color-primary);
+	outline-offset: 2px;
+}
+
 /* Utility classes */
 .visually-hidden {
 	position: absolute;

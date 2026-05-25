@@ -945,6 +945,71 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('accessibility: web shell wires WCAG 2.4.1 skip link + #main-content target', () => {
+	// Reason: audit/accessibility High (May 2026). Keyboard users
+	// had to Tab through 5 sidebar items before reaching page
+	// content on every load. Pin the skip-link wiring.
+	const layout = read('src/routes/+layout.svelte');
+	const css = read('src/app.css');
+	assert.match(
+		layout,
+		/<a\s+href="#main-content"\s+class="skip-link">/,
+		'+layout.svelte must render a `Skip to main content` link as the ' +
+			'first element above the sidebar (WCAG 2.4.1).',
+	);
+	assert.match(
+		layout,
+		/<main\s+id="main-content"/,
+		'+layout.svelte <main> must carry id="main-content" so the skip ' +
+			"link's anchor resolves.",
+	);
+	assert.match(
+		css,
+		/\.skip-link\s*\{[\s\S]*?:focus[\s\S]*?translateY/,
+		'app.css must style .skip-link as visually-hidden-until-focused ' +
+			'(translateY transform on :focus).',
+	);
+});
+
+test('accessibility: ToastContainer wraps the live region (audit/accessibility High)', () => {
+	// Reason: audit/accessibility High — toasts went unannounced
+	// because the container had no aria-live region. Pin role +
+	// aria-live on the wrapper AND assertive on the error toast.
+	const src = read('src/lib/components/ToastContainer.svelte');
+	assert.match(
+		src,
+		/role="status"\s+aria-live="polite"/,
+		'ToastContainer must wrap toasts in role="status" aria-live="polite".',
+	);
+	assert.match(
+		src,
+		/aria-live=\{t\.type\s*===\s*'error'\s*\?\s*'assertive'\s*:\s*'polite'\}/,
+		'Error toasts must escalate to aria-live="assertive" so screen ' +
+			'readers interrupt the user on failure.',
+	);
+});
+
+test('accessibility: login inputs carry programmatically associated labels', () => {
+	// Reason: audit/accessibility High — the email + password inputs
+	// used `placeholder` only, which disappears as the user types
+	// and screen readers announce just "edit text". Visually-hidden
+	// <label for> is the most-compatible WCAG 3.3.2 + 1.3.1 fix.
+	const src = read('src/routes/login/+page.svelte');
+	for (const id of ['login-email', 'login-password']) {
+		assert.match(
+			src,
+			new RegExp(`<label\\s+for="${id}"[^>]*>`),
+			`login page must declare a <label for="${id}"> so the input ` +
+				'has a programmatically associated name.',
+		);
+		assert.match(
+			src,
+			new RegExp(`id="${id}"`),
+			`login page input must carry id="${id}" matching its label.`,
+		);
+	}
+});
+
 test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical)', () => {
 	// Reason: audit/cookie-consent (May 2026) flagged that the prior
 	// shape fetched the Material Symbols font from fonts.googleapis.com

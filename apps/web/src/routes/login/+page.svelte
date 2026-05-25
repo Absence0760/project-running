@@ -193,7 +193,18 @@
 			{/if}
 
 			<form class="email-form" onsubmit={handleEmailSubmit}>
+				<!--
+					audit/accessibility High (May 2026): inputs used
+					placeholder-only — disappears as the user types and
+					screen readers announce just "edit text" without a
+					persistent name. Add a visually-hidden <label> via
+					.visually-hidden (defined in app.css). aria-label
+					alone is also valid per WCAG 3.3.2 but explicit
+					<label for> is the most compatible form.
+				-->
+				<label for="login-email" class="visually-hidden">Email address</label>
 				<input
+					id="login-email"
 					type="email"
 					bind:value={email}
 					placeholder="Email address"
@@ -201,7 +212,9 @@
 					autocomplete="email"
 				/>
 				{#if !isReset}
+					<label for="login-password" class="visually-hidden">Password</label>
 					<input
+						id="login-password"
 						type="password"
 						bind:value={password}
 						placeholder="Password"
