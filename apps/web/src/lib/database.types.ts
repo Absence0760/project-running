@@ -2257,6 +2257,10 @@ export type Database = {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: undefined
       }
+      delete_user_integration_secrets: {
+        Args: { p_user_id: string }
+        Returns: number
+      }
       discoverable_routes_in_bbox: {
         Args: {
           p_limit?: number

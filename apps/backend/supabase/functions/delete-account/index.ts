@@ -73,26 +73,28 @@ async function deauthorizeStrava(
   adminClient: SupabaseClient,
   userId: string,
 ): Promise<void> {
-  // 20260603_001_integrations_vault stores Strava tokens in vault.
-  // We need the access token to call deauthorize; fetch via the
-  // get_integration_tokens RPC (SECURITY DEFINER, gated to caller =
-  // owner, which is true here because we run as service_role).
+  // Self-audit (May 2026): the prior pass tried to read vault via
+  // `adminClient.schema('vault').from('decrypted_secrets')`, which
+  // fails with PGRST106 — PostgREST only exposes `public` +
+  // `graphql_public` schemas. Use the existing get_integration_tokens
+  // SECURITY DEFINER RPC (20260603_001), which returns the decrypted
+  // tokens to a service_role caller for any user_id.
   let accessToken: string | null = null;
   try {
-    const { data, error } = await adminClient
-      .from('integrations')
-      .select('access_token_secret_id')
-      .eq('user_id', userId)
-      .eq('provider', 'strava')
-      .maybeSingle();
-    if (error || !data?.access_token_secret_id) return;
-    const { data: secret } = await adminClient
-      .schema('vault')
-      .from('decrypted_secrets')
-      .select('decrypted_secret')
-      .eq('id', data.access_token_secret_id)
-      .maybeSingle();
-    if (secret?.decrypted_secret) accessToken = secret.decrypted_secret;
+    const { data, error } = await adminClient.rpc('get_integration_tokens', {
+      p_user_id: userId,
+      p_provider: 'strava',
+    });
+    if (error) {
+      console.error(
+        'delete-account: strava token lookup failed:',
+        error.message,
+      );
+      return;
+    }
+    // get_integration_tokens returns a setof; take the first row.
+    const row = Array.isArray(data) ? data[0] : data;
+    if (row?.access_token) accessToken = row.access_token;
   } catch (e) {
     console.error(
       'delete-account: strava token lookup failed:',
@@ -173,28 +175,22 @@ async function invalidateFcmTokens(
 // integrations row's FK to vault.secrets is `on delete set null`, so
 // the cascade from auth.users -> integrations leaves the secrets
 // orphaned. Explicit cleanup before the cascade.
+//
+// Self-audit (May 2026): the prior pass tried to delete via
+// `adminClient.schema('vault').from('secrets').delete()`, which
+// fails with PGRST106 — PostgREST only exposes `public` +
+// `graphql_public`. Migration 20260918_001 adds a SECURITY DEFINER
+// RPC `delete_user_integration_secrets(p_user_id uuid)` that does
+// the vault.secrets DELETE on behalf of the service-role caller.
 async function cleanupVaultSecrets(
   adminClient: SupabaseClient,
   userId: string,
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   try {
-    const { data, error } = await adminClient
-      .from('integrations')
-      .select('access_token_secret_id, refresh_token_secret_id')
-      .eq('user_id', userId);
+    const { error } = await adminClient.rpc('delete_user_integration_secrets', {
+      p_user_id: userId,
+    });
     if (error) return { ok: false, reason: error.message };
-    const ids = new Set<string>();
-    for (const row of data ?? []) {
-      if (row.access_token_secret_id) ids.add(row.access_token_secret_id);
-      if (row.refresh_token_secret_id) ids.add(row.refresh_token_secret_id);
-    }
-    if (ids.size === 0) return { ok: true };
-    const { error: delErr } = await adminClient
-      .schema('vault')
-      .from('secrets')
-      .delete()
-      .in('id', [...ids]);
-    if (delErr) return { ok: false, reason: delErr.message };
     return { ok: true };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
