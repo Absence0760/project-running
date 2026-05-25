@@ -94,6 +94,14 @@
 </svelte:head>
 
 <div class="page">
+	<!--
+		audit/accessibility (May 2026) High — WCAG 1.3.1 + 2.4.6.
+		Coach page is a chat surface; the heading bar inside
+		CoachChat surfaces the plan name, not the page identity.
+		Visually-hidden h1 so screen-reader users navigating by
+		headings can identify the route.
+	-->
+	<h1 class="visually-hidden">AI Coach</h1>
 	<div class="chat-host">
 		{#if loaded}
 			{#key planId}

@@ -448,6 +448,13 @@
 </svelte:head>
 
 <div class="page">
+	<!--
+		audit/accessibility (May 2026) High — WCAG 1.3.1 + 2.4.6.
+		Run-history page needs an h1; visually-hidden because the
+		page-header already shows the activity-type toolbar as the
+		visual primary surface.
+	-->
+	<h1 class="visually-hidden">Run history</h1>
 	<header class="page-header">
 		<div class="toolbar">
 			<div class="activity-group" role="group" aria-label="Activity type">

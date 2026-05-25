@@ -460,6 +460,14 @@
 </svelte:head>
 
 <div class="page">
+	<!--
+		audit/accessibility (May 2026) High — WCAG 1.3.1 + 2.4.6.
+		The page needs an h1 so screen-reader users navigating by
+		headings can identify it. The dashboard's visual hero is the
+		mileage cards; a literal "Dashboard" h1 above them would be
+		visual noise, so use the .visually-hidden utility.
+	-->
+	<h1 class="visually-hidden">Dashboard</h1>
 	{#if loading}
 		<div class="skeleton-hero"></div>
 		<div class="skeleton-filter"></div>

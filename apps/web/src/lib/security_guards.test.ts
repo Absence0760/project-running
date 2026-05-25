@@ -945,6 +945,28 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('accessibility: every top-level page renders an h1 (WCAG 1.3.1 + 2.4.6)', () => {
+	// Reason: audit/accessibility High — Dashboard / Runs / Coach
+	// had no h1, so a screen-reader user navigating by headings
+	// couldn't identify which route they were on. visually-hidden
+	// h1s preserve the visual design while giving the heading-by-
+	// headings flow an anchor.
+	for (const [path, expectedText] of [
+		['src/routes/dashboard/+page.svelte', 'Dashboard'],
+		['src/routes/runs/+page.svelte', 'Run history'],
+		['src/routes/coach/+page.svelte', 'AI Coach'],
+	] as const) {
+		const src = read(path);
+		assert.match(
+			src,
+			new RegExp(
+				`<h1\\s+class="visually-hidden">${expectedText}</h1>`,
+			),
+			`${path} must render <h1 class="visually-hidden">${expectedText}</h1>`,
+		);
+	}
+});
+
 test('accessibility: app.css carries a prefers-reduced-motion safety net', () => {
 	// Reason: audit/accessibility High — WCAG 2.3.3 / EU EAA. Page-
 	// level components do their own reduced-motion handling, but a
