@@ -91,6 +91,13 @@
 	// recap content surfaces. When a signed-in user visits one of these,
 	// the app shell still wraps it (sidebar stays put).
 	const anonExtraExact = ['/privacy', '/terms', '/cookie-notice', '/compare', '/guided'];
+	// `/clubs/*` paths that REQUIRE auth — keep them out of the anon-
+	// allowed set so a signed-in user lands directly in the loggedIn
+	// branch instead of briefly rendering through the anon branch
+	// during the auth.loading window, which would tear down + remount
+	// any in-flight form state (decisions/audit: clubs/new e2e flake).
+	const clubsAuthRequired = (path: string) =>
+		path === '/clubs/new' || /^\/clubs\/[^/]+\/events\/new$/.test(path);
 	const isAnonAllowed = (path: string) =>
 		isShellless(path) ||
 		anonExtraExact.includes(path) ||
@@ -100,7 +107,7 @@
 		// anon (clubs.is_public + events FK). The page-level guards on
 		// /clubs/new and /clubs/[slug]/events/new still kick non-admins,
 		// so adding the prefix here only unblocks the read surfaces.
-		path.startsWith('/clubs/');
+		(path.startsWith('/clubs/') && !clubsAuthRequired(path));
 
 	function isActive(href: string, path: string): boolean {
 		return path.startsWith(href);
