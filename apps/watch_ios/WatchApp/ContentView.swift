@@ -218,6 +218,11 @@ struct PreRunView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.coralDeep)
+                // audit/accessibility (May 2026) High — EU EAA deadline
+                // (2025-06-28) has passed. SwiftUI Button auto-derives
+                // the VoiceOver name from "Start"; the hint adds the
+                // usage cue that name alone doesn't carry.
+                .accessibilityHint("Begins a new run, starting GPS and heart-rate recording")
             }
         }
     }
@@ -269,12 +274,14 @@ struct RunningView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.duskDeep)
+                .accessibilityHint("Pauses the recording without ending it")
 
                 Button("Stop") {
                     workoutManager.stop()
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.error)
+                .accessibilityHint("Ends the run and opens the summary")
             }
         }
     }
@@ -302,11 +309,13 @@ struct PausedView: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(AppTheme.coralDeep)
+            .accessibilityHint("Resumes the paused recording")
 
             Button("Stop", role: .destructive) {
                 workoutManager.stop()
             }
             .font(.caption)
+            .accessibilityHint("Ends the run and opens the summary")
         }
     }
 }
@@ -339,11 +348,13 @@ struct RecoveryView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(AppTheme.coralDeep)
+                .accessibilityHint("Restores the unsaved run from the last checkpoint")
 
                 Button("Discard", role: .destructive) {
                     onDiscard()
                 }
                 .font(.caption)
+                .accessibilityHint("Deletes the unsaved run permanently")
             }
         }
     }
@@ -413,6 +424,7 @@ struct PostRunView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.duskDeep)
+                    .accessibilityHint("Clears this synced run from the watch and returns to the start screen")
                 } else {
                     if let error = syncError {
                         Text(error)
@@ -433,6 +445,7 @@ struct PostRunView: View {
                     }
                     .buttonStyle(.borderedProminent)
                     .tint(AppTheme.coralDeep)
+                    .accessibilityHint("Sends the completed run to your iPhone over Watch Connectivity")
 
                     #if DEBUG
                     Button("DEBUG: Sync Direct") {
@@ -445,6 +458,7 @@ struct PostRunView: View {
                         onDiscard()
                     }
                     .font(.caption)
+                    .accessibilityHint("Throws away the unsynced run permanently")
                 }
             }
         }

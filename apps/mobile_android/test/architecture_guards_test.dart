@@ -1709,6 +1709,42 @@ void main() {
     });
   });
 
+  group('accessibility: watchOS ContentView accessibility hints', () {
+    test('watchOS recording-flow buttons carry .accessibilityHint', () {
+      // Reason: audit/accessibility (May 2026) High — EU EAA. The
+      // watchOS app's primary recording buttons (Start / Pause / Stop /
+      // Resume / Recover / Discard / Sync Run) had no
+      // .accessibilityHint, leaving VoiceOver users without usage
+      // cues on the main recording surface. watch_ios has no XCTest
+      // target today, so this is a source-grep guard run from the
+      // mobile_android twin's relative path. Auto-skips when the
+      // watch_ios sibling isn't present.
+      final file = File('../watch_ios/WatchApp/ContentView.swift');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      for (final cue in const [
+        // Each cue is a substring from a hint we wrote — checking
+        // for the start of each unique sentence is enough to detect
+        // a future refactor that drops the modifier.
+        'Begins a new run',
+        'Pauses the recording without ending it',
+        'Ends the run and opens the summary',
+        'Resumes the paused recording',
+        'Restores the unsaved run',
+        'Sends the completed run to your iPhone',
+      ]) {
+        expect(
+          body,
+          contains(cue),
+          reason:
+              'ContentView.swift must carry .accessibilityHint("$cue...") '
+              'on the matching button so VoiceOver announces a usage cue. '
+              'audit/accessibility Critical.',
+        );
+      }
+    });
+  });
+
   group('accessibility: recording-screen controls have Semantics', () {
     // Reason: audit/accessibility (May 2026) Critical — the
     // Pause / Discard / Lap controls on the recording screen were
