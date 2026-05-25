@@ -2059,8 +2059,18 @@ class _RunScreenState extends State<RunScreen> {
                   // stays readable around the edges.
                   Container(color: Colors.black.withValues(alpha: 0.45)),
                   Center(
+                    // audit/accessibility (May 2026) High — WCAG
+                    // 2.3.3. Honour MediaQuery.disableAnimations so
+                    // the 350 ms scale + fade collapses to an
+                    // instant cut when the OS has reduced-motion on.
+                    // AnimatedSwitcher always animates (no
+                    // null-duration accepted), so we just feed it
+                    // Duration.zero — it still fires the right
+                    // build callbacks but skips the transition.
                     child: AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 350),
+                      duration: MediaQuery.of(context).disableAnimations
+                          ? Duration.zero
+                          : const Duration(milliseconds: 350),
                       transitionBuilder: (child, anim) => ScaleTransition(
                         scale: Tween<double>(begin: 1.4, end: 1.0).animate(
                           CurvedAnimation(

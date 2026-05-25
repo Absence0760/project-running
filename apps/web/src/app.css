@@ -304,6 +304,28 @@ img {
 }
 
 /*
+ * audit/accessibility (May 2026) High — WCAG 2.3.3 Animation from
+ * Interactions / EU EAA equivalent. Global safety net: every CSS
+ * transition + animation collapses to a near-zero duration when the
+ * user has requested reduced motion at the OS level. Per-component
+ * rules above (sidebar transition, toast slide-in, route-builder
+ * spinners) all still apply — this is the catch-all that covers
+ * future animations we forget to gate. The 0.01ms (not 0ms) is the
+ * idiomatic shape: it preserves the animation start/end events that
+ * some interactive logic listens to.
+ */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
+
+/*
  * Skip-to-main-content link — keyboard users Tab past the sidebar
  * straight into <main>. WCAG 2.4.1 (Bypass Blocks). Hidden until
  * focused; reveals as a high-contrast pill at the top-left when a

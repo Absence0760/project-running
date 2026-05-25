@@ -945,6 +945,22 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('accessibility: app.css carries a prefers-reduced-motion safety net', () => {
+	// Reason: audit/accessibility High — WCAG 2.3.3 / EU EAA. Page-
+	// level components do their own reduced-motion handling, but a
+	// global * { animation-duration: 0.01ms } catch-all covers
+	// future animations the dev forgets to gate. Pin the rule so
+	// it can't disappear in a refactor.
+	const css = read('src/app.css');
+	assert.match(
+		css,
+		/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{[\s\S]*?\*[\s\S]*?animation-duration:\s*0\.01ms[\s\S]*?transition-duration:\s*0\.01ms/,
+		'app.css must carry a global prefers-reduced-motion safety net ' +
+			'that sets animation-duration + transition-duration to 0.01ms ' +
+			'on the universal selector.',
+	);
+});
+
 test('accessibility: web shell wires WCAG 2.4.1 skip link + #main-content target', () => {
 	// Reason: audit/accessibility High (May 2026). Keyboard users
 	// had to Tab through 5 sidebar items before reaching page
