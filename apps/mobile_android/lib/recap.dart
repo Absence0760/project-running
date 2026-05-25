@@ -88,11 +88,14 @@ String _hhmm(DateTime d) =>
     '${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
 
 double _elevationOf(Run r) {
-  // Run.metadata.elevation_m is the canonical key (jsonb). Tolerate
-  // both keys for forward-compat with future renames.
+  // Run.metadata.elevation_m is the canonical key (jsonb).
+  // audit/metadata-keys (May 2026) dropped the `elevation_gain_m`
+  // fallback: no writer in the codebase ever set it, the key was
+  // not registered in docs/metadata.md, and the fallback branch was
+  // dead code that confused dead-key audits.
   final m = r.metadata;
   if (m == null) return 0;
-  final raw = m['elevation_m'] ?? m['elevation_gain_m'];
+  final raw = m['elevation_m'];
   if (raw is num) return raw.toDouble();
   return 0;
 }

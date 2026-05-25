@@ -67,15 +67,15 @@ function hhmm(d: Date): string {
 }
 
 /**
- * Returns a Run's elevation_gain (snake_case on the DB row, but
- * camelCase on the TS overlay) — falls back to 0 if neither is present.
+ * Returns a Run's elevation_gain in metres. audit/metadata-keys
+ * (May 2026) dropped the `elevation_gain_m` fallback: no writer in
+ * the codebase ever set the key, it was not in docs/metadata.md,
+ * and the fallback branch was dead code that confused dead-key
+ * audits.
  */
 function elevationOf(r: Run): number {
-	// `Run` here is the TS overlay from `types.ts`. We tolerate both
-	// shapes so the helper survives a generator change without test
-	// churn.
-	const raw = r as unknown as { elevation_m?: number | null; elevation_gain_m?: number | null };
-	return raw.elevation_m ?? raw.elevation_gain_m ?? 0;
+	const raw = r as unknown as { elevation_m?: number | null };
+	return raw.elevation_m ?? 0;
 }
 
 /**
