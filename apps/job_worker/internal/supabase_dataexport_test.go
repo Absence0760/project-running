@@ -177,12 +177,11 @@ func TestFetchExportProfile_NotPresentReturnsNilNilError(t *testing.T) {
 	}
 }
 
-func TestFetchExportProfile_ColumnRestrictedFieldsAbsentFromQuery(t *testing.T) {
-	// The select must NOT request subscription_tier /
-	// parkrun_number / subscription_at (column-level revoke from
-	// 20260707_001). The build would still succeed with
-	// service-role, but the select must stay scrubbed in case the
-	// adapter is ever switched to JWT-auth.
+func TestFetchExportProfile_ServerManagedFieldsAbsentFromQuery(t *testing.T) {
+	// Server-managed billing fields (subscription_tier,
+	// subscription_at) are not personal data the subject provided
+	// and don't belong in an Art 20 export. The column-level revoke
+	// from 20260707_001 reinforces this at the DB layer.
 	var capturedRaw string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		capturedRaw = r.URL.RawQuery
@@ -192,12 +191,43 @@ func TestFetchExportProfile_ColumnRestrictedFieldsAbsentFromQuery(t *testing.T) 
 	forbidden := []string{
 		"subscription_tier",
 		"subscription_at",
-		"parkrun_number",
 	}
 	for _, col := range forbidden {
 		if strings.Contains(capturedRaw, col) {
 			t.Errorf("profile select must not request %q: %q", col, capturedRaw)
 		}
+	}
+}
+
+func TestFetchExportProfile_IncludesPersonalDataColumns(t *testing.T) {
+	// audit/data-export-completeness (May 2026): the original select
+	// referenced a non-existent `birth_year` column (typo for
+	// `date_of_birth`) and omitted `parkrun_number`. Both are
+	// personal data the subject provided and Art 20 requires them.
+	// Service-role auth (the worker) bypasses the column-grant
+	// lockdown so the request goes through; if the adapter ever
+	// switches to JWT-auth those grants would need a corresponding
+	// fix at the DB layer.
+	var capturedRaw string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		capturedRaw = r.URL.RawQuery
+		_, _ = w.Write([]byte(`[]`))
+	})
+	_, _ = client.FetchExportProfile(context.Background(), "user-A")
+	required := []string{
+		"date_of_birth",
+		"parkrun_number",
+		"display_name",
+		"hr_zones",
+		"gender",
+	}
+	for _, col := range required {
+		if !strings.Contains(capturedRaw, col) {
+			t.Errorf("profile select must request %q: %q", col, capturedRaw)
+		}
+	}
+	if strings.Contains(capturedRaw, "birth_year") {
+		t.Errorf("profile select must not request birth_year — column does not exist (typo for date_of_birth)")
 	}
 }
 

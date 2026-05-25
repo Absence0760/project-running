@@ -985,7 +985,13 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// excludes the column-restricted fields the export doesn't need.
 	q := url.Values{}
 	q.Set("id", "eq."+userID)
-	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,birth_year,gender,activity_default,privacy_default")
+	// audit/data-export-completeness (May 2026): `birth_year` was
+	// listed in the projection but never existed in the schema, and
+	// `date_of_birth` (the real column, added by
+	// 20260829_001_segments_v2_tiered_leaderboards.sql) + `parkrun_number`
+	// were missing entirely. Both are personal data the subject has
+	// an Art 20 right to receive.
+	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default")
 	q.Set("limit", "1")
 	u := c.BaseURL + "/rest/v1/user_profiles?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
