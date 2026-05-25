@@ -65,9 +65,14 @@
 	// Demographics — live on user_profiles, not the cross-device prefs bag.
 	// Used only by tiered segment leaderboards. Both fields are optional;
 	// leaving them blank simply means the runner doesn't appear in
-	// gender/age-band-filtered views.
+	// gender/age-band-filtered views. Gender + DOB combined are
+	// special-category data under GDPR Art 9 (health-adjacent) —
+	// `healthDataConsent` captures the explicit Art 9(2)(a) consent
+	// timestamp. Withdrawing consent nulls both fields atomically.
 	let gender = $state<'male' | 'female' | 'nonbinary' | ''>('');
 	let dateOfBirth = $state('');
+	let healthDataConsent = $state(false);
+	let healthDataConsentAt = $state<string | null>(null);
 
 	// Privacy zones — geofences clipped from public track renders.
 	let privacyZones = $state<PrivacyZone[]>([]);
@@ -119,12 +124,18 @@
 
 			const { data: prof } = await supabase
 				.from('user_profiles')
-				.select('gender, date_of_birth')
+				.select('gender, date_of_birth, health_data_consent_at')
 				.eq('id', auth.user.id)
 				.maybeSingle();
 			if (prof) {
 				gender = (prof.gender as typeof gender) ?? '';
 				dateOfBirth = prof.date_of_birth ?? '';
+				healthDataConsentAt = (prof.health_data_consent_at as string | null) ?? null;
+				// Default the checkbox to the persisted state. If the row
+				// already carries a consent timestamp the user has
+				// previously ticked the box — keep it ticked so they
+				// can edit without re-consenting.
+				healthDataConsent = healthDataConsentAt != null;
 			}
 		} catch (e) {
 			console.warn('Settings load failed', e);
@@ -184,12 +195,40 @@
 
 		// Also dual-write preferred_unit to profile column for legacy readers.
 		// Demographics live here too — RPCs that tier leaderboards by gender
-		// and age band read from user_profiles directly.
-		await supabase.from('user_profiles').update({
+		// and age band read from user_profiles directly. GDPR Art 9 explicit
+		// consent gates whether gender + DOB persist at all; without it the
+		// only legal action is to null them out.
+		const hasDemographic = !!(gender || dateOfBirth);
+		if (hasDemographic && !healthDataConsent) {
+			// Fail the save loudly so the user sees the consent checkbox
+			// requirement rather than us silently dropping their input.
+			showToast(
+				'To save gender or date of birth, tick the consent ' +
+					'checkbox under Demographics.',
+				'error',
+			);
+			return;
+		}
+		const consentNowIso = new Date().toISOString();
+		const profileUpdate: Record<string, unknown> = {
 			preferred_unit: preferredUnit,
-			gender: gender || null,
-			date_of_birth: dateOfBirth || null,
-		}).eq('id', auth.user.id);
+			gender: (healthDataConsent && gender) ? gender : null,
+			date_of_birth: (healthDataConsent && dateOfBirth) ? dateOfBirth : null,
+		};
+		if (healthDataConsent) {
+			// Stamp consent timestamp on the first acceptance so the row
+			// records the moment of the affirmative act. Idempotent on
+			// subsequent saves — we only set it when it's still null.
+			if (healthDataConsentAt == null) {
+				profileUpdate.health_data_consent_at = consentNowIso;
+				healthDataConsentAt = consentNowIso;
+			}
+		} else {
+			// Withdrawal — null all three fields atomically per Art 7(3).
+			profileUpdate.health_data_consent_at = null;
+			healthDataConsentAt = null;
+		}
+		await supabase.from('user_profiles').update(profileUpdate).eq('id', auth.user.id);
 
 		try {
 			await updateUniversal(auth.user.id, changes);
@@ -374,17 +413,33 @@
 			</div>
 		</section>
 
-		<!-- Demographics — gender + DOB power tiered segment leaderboards. -->
+		<!-- Demographics — gender + DOB power tiered segment leaderboards.
+		     Combined they are special-category data under GDPR Art 9 so the
+		     explicit-consent checkbox is the precondition for saving either. -->
 		<section class="card">
 			<h2>Demographics</h2>
 			<p class="section-desc">
 				Optional. Lets segment leaderboards filter by gender and 5-year age band — the same buckets
 				Strava uses. Leave blank to stay out of those filtered views.
 			</p>
+			<p class="section-desc consent-notice">
+				These fields are health-adjacent personal data under GDPR Art 9. We process
+				them only with your explicit consent and only to power the
+				gender + age-band views you see on segment leaderboards. See our
+				<a href="/privacy">privacy policy</a> for the full purposes,
+				retention, and your withdrawal rights.
+			</p>
+			<label class="consent-checkbox">
+				<input type="checkbox" bind:checked={healthDataConsent} />
+				<span>
+					I consent to Threkir storing my gender and date of birth for the
+					segment-leaderboard tiering described above (GDPR Art 9(2)(a)).
+				</span>
+			</label>
 			<div class="form-grid">
 				<label>
 					<span class="label-text">Gender</span>
-					<select bind:value={gender}>
+					<select bind:value={gender} disabled={!healthDataConsent}>
 						<option value="">Prefer not to say</option>
 						<option value="male">Male</option>
 						<option value="female">Female</option>
@@ -393,9 +448,16 @@
 				</label>
 				<label>
 					<span class="label-text">Date of birth</span>
-					<input type="date" bind:value={dateOfBirth} />
+					<input type="date" bind:value={dateOfBirth} disabled={!healthDataConsent} />
 				</label>
 			</div>
+			{#if healthDataConsentAt}
+				<p class="section-hint">
+					Consent recorded on {new Date(healthDataConsentAt).toLocaleDateString()}.
+					Unticking the checkbox above and saving will withdraw consent and
+					clear both fields per Art 7(3).
+				</p>
+			{/if}
 		</section>
 
 		<!-- Privacy zones — clipped from the start and end of public tracks. -->
@@ -587,6 +649,9 @@
 	.toggle-btn.active { background: var(--color-primary-light); border-color: var(--color-primary); color: var(--color-primary); }
 	.checkbox-label { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; padding-top: 1.2rem; }
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
+	.consent-notice { background: var(--color-bg-tertiary); border-left: 3px solid var(--color-primary); padding: var(--space-sm) var(--space-md); border-radius: var(--radius-sm); margin-top: var(--space-md); }
+	.consent-checkbox { display: flex; gap: var(--space-sm); align-items: flex-start; font-size: 0.9rem; line-height: 1.45; margin-bottom: var(--space-md); padding: var(--space-sm) 0; }
+	.consent-checkbox input { margin-top: 0.2rem; flex-shrink: 0; }
 	.btn-save { width: auto; }
 	.muted { color: var(--color-text-tertiary); }
 	.section-hint { color: var(--color-text-secondary); font-size: 0.9rem; line-height: 1.5; margin: 0 0 var(--space-md) 0; }

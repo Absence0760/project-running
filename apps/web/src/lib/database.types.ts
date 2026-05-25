@@ -1830,10 +1830,12 @@ export type Database = {
         Row: {
           avatar_url: string | null
           billing_issue_at: string | null
+          coach_consent_at: string | null
           created_at: string | null
           date_of_birth: string | null
           display_name: string | null
           gender: string | null
+          health_data_consent_at: string | null
           id: string
           parkrun_number: string | null
           preferred_unit: string | null
@@ -1843,10 +1845,12 @@ export type Database = {
         Insert: {
           avatar_url?: string | null
           billing_issue_at?: string | null
+          coach_consent_at?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           display_name?: string | null
           gender?: string | null
+          health_data_consent_at?: string | null
           id: string
           parkrun_number?: string | null
           preferred_unit?: string | null
@@ -1856,10 +1860,12 @@ export type Database = {
         Update: {
           avatar_url?: string | null
           billing_issue_at?: string | null
+          coach_consent_at?: string | null
           created_at?: string | null
           date_of_birth?: string | null
           display_name?: string | null
           gender?: string | null
+          health_data_consent_at?: string | null
           id?: string
           parkrun_number?: string | null
           preferred_unit?: string | null
@@ -2325,10 +2331,12 @@ export type Database = {
         Returns: {
           avatar_url: string | null
           billing_issue_at: string | null
+          coach_consent_at: string | null
           created_at: string | null
           date_of_birth: string | null
           display_name: string | null
           gender: string | null
+          health_data_consent_at: string | null
           id: string
           parkrun_number: string | null
           preferred_unit: string | null

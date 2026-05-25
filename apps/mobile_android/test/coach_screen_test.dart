@@ -52,5 +52,33 @@ void main() {
       expect(find.byType(DropdownButton<String>), findsNothing);
       await tester.pump(const Duration(milliseconds: 100));
     });
+
+    testWidgets('without coach_consent_at the chat is gated behind the GDPR '
+        'disclosure (audit/gdpr 2026-05-25)', (tester) async {
+      // Reason: Coach forwards health-adjacent data to Anthropic
+      // (US sub-processor) — GDPR Art 6(1)(a) requires an
+      // affirmative consent act before the first dispatch. The
+      // _bootstrap fetch fails against the unconnected local
+      // Supabase, so _consentAt resolves to null, which must render
+      // the disclosure copy instead of the chat composer.
+      await _pump(tester);
+      // Pump past the post-frame fetch attempt + the 100ms safety
+      // margin to let _consentChecked flip true on failure.
+      await tester.pump(const Duration(milliseconds: 200));
+      expect(
+        find.text('Before you chat with Coach'),
+        findsOneWidget,
+        reason: 'consent disclosure must be visible when '
+            'coach_consent_at is null — see audit/gdpr (2026-05-25).',
+      );
+      expect(
+        find.text('I consent — start Coach'),
+        findsOneWidget,
+        reason: 'the I-consent CTA must be reachable from the '
+            'gate so the user can accept.',
+      );
+      // Settle pending timers before exit.
+      await tester.pump(const Duration(milliseconds: 200));
+    });
   });
 }

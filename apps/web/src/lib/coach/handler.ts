@@ -98,6 +98,28 @@ export async function handleCoach(
 		return jsonError(401, 'not authenticated');
 	}
 
+	// GDPR Art 6(1)(a): refuse to fan out to Anthropic until the data
+	// subject has explicitly accepted the first-use disclosure on
+	// /coach. Client UI also gates this, but the handler is the load-
+	// bearing check — a hand-rolled cURL request must fail closed.
+	// See audit/gdpr (2026-05-25).
+	const consentLookup = await supabase
+		.from('user_profiles')
+		.select('coach_consent_at')
+		.eq('id', authUser.id)
+		.maybeSingle();
+	if (consentLookup.error) {
+		console.error('[coach] consent lookup failed', consentLookup.error);
+		return jsonError(500, 'consent check failed');
+	}
+	if (!consentLookup.data?.coach_consent_at) {
+		return jsonError(
+			403,
+			'Coach consent required. Visit /coach in the app and accept ' +
+				'the first-use disclosure before retrying.',
+		);
+	}
+
 	let tier: Tier = 'free';
 	let usedToday = 0;
 	if (!config.bypassPaywallEnabled) {

@@ -343,19 +343,32 @@ Supplementary user data not stored in `auth.users`. As of `20260521_001_user_fol
 
 ```sql
 create table user_profiles (
-  id                uuid primary key references auth.users,
-  display_name      text,
-  avatar_url        text,
-  parkrun_number    text,                                -- e.g. 'A123456' (world-readable)
-  preferred_unit    text default 'km',                   -- 'km' | 'mi'
-  subscription_tier text default 'free',                 -- 'free' | 'pro' | 'lifetime' (world-readable)
-  subscription_at   timestamptz,
-  created_at        timestamptz default now()
+  id                       uuid primary key references auth.users,
+  display_name             text,
+  avatar_url               text,
+  parkrun_number           text,                                -- e.g. 'A123456' (world-readable)
+  preferred_unit           text default 'km',                   -- 'km' | 'mi'
+  subscription_tier        text default 'free',                 -- 'free' | 'pro' | 'lifetime' (world-readable)
+  subscription_at          timestamptz,
+  gender                   text,                                -- 'male' | 'female' | 'nonbinary' | null
+  date_of_birth            date,
+  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach
+  health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB persistence
+  created_at               timestamptz default now()
 );
 -- CHECK constraint enforces subscription_tier ∈ ('free','pro','lifetime') —
 -- migration 20260429_001_subscription_paywall.sql backfills any pre-existing
 -- 'premium' values to 'pro'. Keep this list in lockstep with the
 -- SubscriptionTier TS union in apps/web/src/lib/types.ts.
+--
+-- `coach_consent_at` and `health_data_consent_at` were added in
+-- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
+-- audit/gdpr (2026-05-25). Both nullable; NULL = consent not yet
+-- given. The /api/coach handler refuses to fan out to Anthropic
+-- when coach_consent_at is null; the Preferences page refuses to
+-- persist gender / DOB when health_data_consent_at is null and the
+-- consent checkbox is unticked. Withdrawal under Art 7(3) nulls
+-- the consent timestamp AND clears the associated fields atomically.
 ```
 
 ### `clone_plan_template(template_id uuid, new_start_date date)`

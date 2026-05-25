@@ -5,12 +5,25 @@
 	import CoachChat from '$lib/components/CoachChat.svelte';
 	import { fetchActivePlanOverview, fetchMyPlans } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { supabase } from '$lib/supabase';
 	import { GUIDED_RUN_LIBRARY, type GuidedRun } from '$lib/guided_runs';
 	import type { TrainingPlan } from '$lib/types';
 
 	let plans = $state<TrainingPlan[]>([]);
 	let planId = $state<string | null>(null);
 	let loaded = $state(false);
+
+	// GDPR Art 6(1)(a): the Coach forwards health-adjacent data (DOB,
+	// HR zones, recent runs) to Anthropic, a US-based sub-processor.
+	// Opening the page is not an affirmative consent act — gate the
+	// chat behind a first-use disclosure until the user clicks accept,
+	// at which point we stamp `coach_consent_at` on user_profiles.
+	// See audit/gdpr (2026-05-25).
+	let coachConsentAt = $state<string | null>(null);
+	let coachConsentChecked = $state(false);
+	let coachConsentSaving = $state(false);
+	let coachConsentError = $state('');
+	let coachConsentDecided = $derived(coachConsentChecked && coachConsentAt != null);
 
 	// Read `?plan=<id>` from the URL on first load and whenever the param
 	// changes (e.g. via the deep link from /plans/[id]). When absent, we
@@ -22,6 +35,26 @@
 		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
+		// Read the consent timestamp BEFORE anything that could fan out
+		// to Anthropic. The chat component is render-gated on
+		// `coachConsentDecided`, so a missing row keeps the disclosure
+		// modal in front of the user until they accept.
+		if (auth.user) {
+			try {
+				const { data: prof } = await supabase
+					.from('user_profiles')
+					.select('coach_consent_at')
+					.eq('id', auth.user.id)
+					.maybeSingle();
+				coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
+			} catch (_) {
+				// Failed to read consent state — fail closed so we
+				// never accidentally render the chat without an
+				// affirmative grant.
+				coachConsentAt = null;
+			}
+			coachConsentChecked = true;
+		}
 		try {
 			plans = await fetchMyPlans();
 		} catch (_) {
@@ -30,6 +63,31 @@
 		await resolvePlanId();
 		loaded = true;
 	});
+
+	async function acceptCoachConsent() {
+		if (!auth.user || coachConsentSaving) return;
+		coachConsentSaving = true;
+		coachConsentError = '';
+		const nowIso = new Date().toISOString();
+		try {
+			const { error } = await supabase
+				.from('user_profiles')
+				.update({ coach_consent_at: nowIso })
+				.eq('id', auth.user.id);
+			if (error) throw new Error(error.message);
+			coachConsentAt = nowIso;
+		} catch (e) {
+			coachConsentError = (e as Error).message ?? 'Failed to record consent.';
+		} finally {
+			coachConsentSaving = false;
+		}
+	}
+
+	function declineCoachConsent() {
+		// Leaving the Coach surface without consent keeps the chat
+		// component unmounted — no request can fire to Anthropic.
+		goto('/dashboard');
+	}
 
 	$effect(() => {
 		// Re-resolve when the query param changes (browser back/forward, or
@@ -103,12 +161,59 @@
 	-->
 	<h1 class="visually-hidden">AI Coach</h1>
 	<div class="chat-host">
-		{#if loaded}
+		{#if !coachConsentChecked || !loaded}
+			<p class="muted">Loading…</p>
+		{:else if !coachConsentDecided}
+			<!--
+				GDPR Art 6(1)(a) first-use disclosure. Render-gates the
+				chat so no fetch fans out to Anthropic until the user
+				clicks accept. Decline → /dashboard. See audit/gdpr
+				(2026-05-25).
+			-->
+			<div class="coach-consent" role="dialog" tabindex="-1" aria-labelledby="coach-consent-heading">
+				<h2 id="coach-consent-heading">Before you chat with Coach</h2>
+				<p>
+					To give you grounded advice, Coach forwards a slice of your training
+					data to <strong>Anthropic</strong>, our AI model provider in the United
+					States. That slice includes:
+				</p>
+				<ul>
+					<li>Your date of birth, gender, and configured HR zones, if you've set them.</li>
+					<li>A window of your most recent runs (distance, duration, pace, HR).</li>
+					<li>The active training plan you have selected.</li>
+					<li>The chat messages you type here.</li>
+				</ul>
+				<p>
+					Anthropic processes the data on Threkir's behalf under their data-processing
+					terms; they do not train their models on Threkir customer data by default.
+					Full details — including transfer mechanism, retention, and your withdrawal
+					rights — are on our <a href="/privacy">privacy policy</a>.
+				</p>
+				<p>
+					Click <strong>I consent</strong> to continue. Click cancel to leave the page
+					with no data sent.
+				</p>
+				{#if coachConsentError}
+					<p class="coach-consent-error" role="alert">{coachConsentError}</p>
+				{/if}
+				<div class="coach-consent-actions">
+					<button type="button" class="btn btn-secondary" onclick={declineCoachConsent}>
+						Cancel
+					</button>
+					<button
+						type="button"
+						class="btn btn-primary"
+						disabled={coachConsentSaving}
+						onclick={acceptCoachConsent}
+					>
+						{coachConsentSaving ? 'Recording consent…' : 'I consent — start Coach'}
+					</button>
+				</div>
+			</div>
+		{:else}
 			{#key planId}
 				<CoachChat {planId} {plans} onPlanChange={pickPlan} />
 			{/key}
-		{:else}
-			<p class="muted">Loading…</p>
 		{/if}
 	</div>
 
@@ -177,6 +282,32 @@
 	}
 	.muted {
 		color: var(--color-text-tertiary);
+	}
+	.coach-consent {
+		max-width: 44rem;
+		margin: var(--space-lg) auto;
+		padding: var(--space-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		line-height: 1.55;
+	}
+	.coach-consent h2 {
+		margin: 0 0 var(--space-md);
+		font-size: 1.25rem;
+	}
+	.coach-consent p { margin: 0 0 var(--space-md); }
+	.coach-consent ul { margin: 0 0 var(--space-md) 1.25rem; padding: 0; }
+	.coach-consent li { margin-bottom: var(--space-xs); }
+	.coach-consent-error {
+		color: var(--color-error, #b71c1c);
+		font-weight: 600;
+	}
+	.coach-consent-actions {
+		display: flex;
+		gap: var(--space-md);
+		justify-content: flex-end;
+		margin-top: var(--space-lg);
 	}
 
 	/* Right rail. Coach is the primary surface; the rail's hierarchy is

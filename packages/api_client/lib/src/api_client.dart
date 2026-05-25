@@ -1576,6 +1576,37 @@ class ApiClient {
     return UserProfileRow.fromJson(row);
   }
 
+  /// Read the GDPR Art 6(1)(a) coach-consent timestamp on the signed-in
+  /// user's `user_profiles` row. Returns null when consent has not yet
+  /// been recorded — callers should gate any Coach fan-out behind this.
+  /// See audit/gdpr (2026-05-25).
+  Future<DateTime?> fetchCoachConsentAt() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return null;
+    final row = await _client
+        .from('user_profiles')
+        .select('coach_consent_at')
+        .eq('id', viewerId)
+        .maybeSingle();
+    final raw = row?['coach_consent_at'];
+    if (raw == null) return null;
+    return DateTime.tryParse(raw as String);
+  }
+
+  /// Record the GDPR Art 6(1)(a) coach-consent acceptance on the signed-
+  /// in user's `user_profiles` row. Returns the timestamp the server
+  /// observed. Idempotent — re-running just re-stamps the column.
+  Future<DateTime?> recordCoachConsent() async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return null;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+    await _client
+        .from('user_profiles')
+        .update({'coach_consent_at': nowIso})
+        .eq('id', viewerId);
+    return DateTime.parse(nowIso);
+  }
+
   /// Self-read of the full `user_profiles` row, including
   /// `subscription_tier`, `subscription_at`, `parkrun_number`. Backed by
   /// the `get_my_profile()` SECURITY DEFINER RPC because those columns

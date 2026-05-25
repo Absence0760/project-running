@@ -1297,6 +1297,36 @@ test('routing helpers refuse to fall back to router.project-osrm.org in prod', (
 	);
 });
 
+test('Coach handler gates the Anthropic fan-out behind coach_consent_at', () => {
+	// Reason: audit/gdpr (2026-05-25). Coach forwards health-adjacent
+	// data to Anthropic (US sub-processor). Art 6(1)(a) requires an
+	// affirmative consent act before the first dispatch — opening
+	// /coach is not affirmative. The handler must read
+	// user_profiles.coach_consent_at and refuse before the provider
+	// stream runs.
+	const source = read('src/lib/coach/handler.ts');
+	assert.match(
+		source,
+		/select\('coach_consent_at'\)/,
+		'handler.ts must read user_profiles.coach_consent_at to gate the consent.',
+	);
+	assert.match(
+		source,
+		/return jsonError\(\s*403,\s*'Coach consent required[\s\S]*?\)/,
+		'handler.ts must return 403 when coach_consent_at is null — failing closed.',
+	);
+	// The gate must sit BEFORE any provider stream invocation. We
+	// assert ordering by checking that the consent lookup appears
+	// before the first `tier ===` reference (which is the start of
+	// the rate-limit / provider-dispatch block).
+	const consentIdx = source.indexOf("select('coach_consent_at')");
+	const tierIdx = source.indexOf('tier === ');
+	assert.ok(
+		consentIdx > 0 && consentIdx < tierIdx,
+		'coach_consent_at lookup must precede the tier / provider dispatch.',
+	);
+});
+
 test('Nominatim fallback uses a reachable contact email (no protomaps placeholder)', () => {
 	// Reason: audit/third-party-data-flows (2026-05-25). The
 	// Nominatim `email=` parameter is the usage-policy contact path

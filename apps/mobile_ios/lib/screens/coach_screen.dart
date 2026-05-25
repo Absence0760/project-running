@@ -173,6 +173,16 @@ class _CoachScreenState extends State<CoachScreen> {
   RealtimeChannel? _realtimeChannel;
   StreamSubscription<dynamic>? _streamSub;
 
+  /// GDPR Art 6(1)(a) first-use consent state. `_consentChecked` is
+  /// false until the bootstrap fetch returns; `_consentAt` is null when
+  /// the user has not yet accepted the disclosure. Until both are set
+  /// the chat surface is not rendered — no SSE request can fire. See
+  /// audit/gdpr (2026-05-25).
+  bool _consentChecked = false;
+  DateTime? _consentAt;
+  bool _consentSaving = false;
+  String? _consentError;
+
   @override
   void initState() {
     super.initState();
@@ -191,6 +201,18 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Future<void> _bootstrap() async {
+    // Resolve the consent state BEFORE anything that could fan out to
+    // /api/coach (which forwards health-adjacent data to Anthropic).
+    // _reloadAll + _subscribeRealtime can run regardless — they hit
+    // Supabase directly and do not transmit data to the AI provider.
+    try {
+      _consentAt = await widget.api.fetchCoachConsentAt();
+    } catch (e) {
+      // Fail closed — a lookup error means the disclosure stays up.
+      debugPrint('coach_screen: consent lookup failed: $e');
+      _consentAt = null;
+    }
+    if (mounted) setState(() => _consentChecked = true);
     try {
       _plans = await widget.training.fetchMyPlans();
       if (_planId != null && !_plans.any((p) => p.id == _planId)) {
@@ -209,6 +231,28 @@ class _CoachScreenState extends State<CoachScreen> {
     }
     await _reloadAll();
     _subscribeRealtime();
+  }
+
+  Future<void> _acceptCoachConsent() async {
+    if (_consentSaving) return;
+    setState(() {
+      _consentSaving = true;
+      _consentError = null;
+    });
+    try {
+      final at = await widget.api.recordCoachConsent();
+      if (!mounted) return;
+      setState(() {
+        _consentAt = at;
+        _consentSaving = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _consentError = e.toString();
+        _consentSaving = false;
+      });
+    }
   }
 
   Future<void> _reloadAll() async {
@@ -729,6 +773,20 @@ class _CoachScreenState extends State<CoachScreen> {
     final cs = theme.colorScheme;
     final hasPlan = _planId != null;
 
+    // GDPR Art 6(1)(a) gate. _consentChecked stays false until the
+    // bootstrap fetch settles so we never flash the chat surface
+    // before the lookup completes. _consentAt being null means the
+    // user must accept the disclosure before any chat fans out.
+    if (!_consentChecked) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Coach')),
+        body: const Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_consentAt == null) {
+      return _buildCoachConsentScaffold(theme);
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: Row(
@@ -788,6 +846,93 @@ class _CoachScreenState extends State<CoachScreen> {
           ),
           if (_viewingArchiveAt == null) _buildComposer(theme, cs),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCoachConsentScaffold(ThemeData theme) {
+    // GDPR Art 6(1)(a) first-use disclosure. Renders instead of the
+    // chat surface until the user clicks "I consent". Mirrors the
+    // /coach disclosure modal on web. See audit/gdpr (2026-05-25).
+    final cs = theme.colorScheme;
+    return Scaffold(
+      appBar: AppBar(title: const Text('Coach')),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                'Before you chat with Coach',
+                style: theme.textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'To give you grounded advice, Coach forwards a slice of your '
+                'training data to Anthropic, our AI model provider in the '
+                'United States. That slice includes:',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 8),
+              Padding(
+                padding: const EdgeInsets.only(left: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    Text('• Your date of birth, gender, and HR zones if set.'),
+                    SizedBox(height: 4),
+                    Text('• A window of your most recent runs.'),
+                    SizedBox(height: 4),
+                    Text('• The active training plan you have selected.'),
+                    SizedBox(height: 4),
+                    Text('• The chat messages you type in the screen below.'),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Anthropic processes the data on Threkir\'s behalf under '
+                'their data-processing terms; they do not train their '
+                'models on Threkir customer data by default. Full details '
+                '— including transfer mechanism, retention, and your '
+                'withdrawal rights — are in our privacy policy.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Tap "I consent" to continue. Tap cancel to leave the page '
+                'with no data sent.',
+                style: theme.textTheme.bodyMedium,
+              ),
+              if (_consentError != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _consentError!,
+                  style: theme.textTheme.bodyMedium?.copyWith(color: cs.error),
+                ),
+              ],
+              const SizedBox(height: 24),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed:
+                        _consentSaving ? null : () => Navigator.maybePop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  const SizedBox(width: 12),
+                  FilledButton(
+                    onPressed: _consentSaving ? null : _acceptCoachConsent,
+                    child: Text(_consentSaving
+                        ? 'Recording consent…'
+                        : 'I consent — start Coach'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -2079,6 +2079,8 @@ class UserProfileRow {
   static const String colBillingIssueAt = 'billing_issue_at';
   static const String colGender = 'gender';
   static const String colDateOfBirth = 'date_of_birth';
+  static const String colCoachConsentAt = 'coach_consent_at';
+  static const String colHealthDataConsentAt = 'health_data_consent_at';
 
   final String id;
   final String? displayName;
@@ -2091,6 +2093,8 @@ class UserProfileRow {
   final DateTime? billingIssueAt;
   final String? gender;
   final DateTime? dateOfBirth;
+  final DateTime? coachConsentAt;
+  final DateTime? healthDataConsentAt;
 
   const UserProfileRow({
     required this.id,
@@ -2104,6 +2108,8 @@ class UserProfileRow {
     this.billingIssueAt,
     this.gender,
     this.dateOfBirth,
+    this.coachConsentAt,
+    this.healthDataConsentAt,
   });
 
   factory UserProfileRow.fromJson(Map<String, dynamic> json) => UserProfileRow(
@@ -2118,6 +2124,8 @@ class UserProfileRow {
     billingIssueAt: json['billing_issue_at'] == null ? null : DateTime.parse(json['billing_issue_at'] as String),
     gender: json['gender'] as String?,
     dateOfBirth: json['date_of_birth'] == null ? null : DateTime.parse(json['date_of_birth'] as String),
+    coachConsentAt: json['coach_consent_at'] == null ? null : DateTime.parse(json['coach_consent_at'] as String),
+    healthDataConsentAt: json['health_data_consent_at'] == null ? null : DateTime.parse(json['health_data_consent_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2132,6 +2140,8 @@ class UserProfileRow {
     colBillingIssueAt: billingIssueAt?.toIso8601String(),
     colGender: gender,
     colDateOfBirth: dateOfBirth?.toIso8601String(),
+    colCoachConsentAt: coachConsentAt?.toIso8601String(),
+    colHealthDataConsentAt: healthDataConsentAt?.toIso8601String(),
   };
 }
 
