@@ -60,6 +60,7 @@
     "https://esm.sh/@supabase/storage-js@2.105.1/denonext/storage-js.mjs": "259fb2cec58f55b4f605f03b56d94d6d806bc5d70461d563435438be7a4301e8",
     "https://esm.sh/@supabase/supabase-js@2.105.1": "d96e63cd3c7d0a07d5821a3573b4923d0e556e064633265c584656d95b22fa38",
     "https://esm.sh/@supabase/supabase-js@2.105.1/denonext/supabase-js.mjs": "be653d3819a9ae95dbc46efe935d7abc3cadc9cc0a3254050a7ef7d773f61449",
+    "https://esm.sh/cheerio@1.0.0-rc.12": "fce7bbfff7de7d2c635a798ea80e9a8beb5284c394c79d76afbe6d7b9675e7c0",
     "https://esm.sh/iceberg-js@0.8.1/denonext/iceberg-js.mjs": "d839d81a2e3966500ca2cdd0c1cb458e9608bacfc91f7bb67a69b2e878dcdb4f",
     "https://esm.sh/iceberg-js@0.8.1?target=denonext": "58c849d7fe2bf4eca4a84eb501e83c161a7d8c34ca1bec15a962b3bec3062633",
     "https://esm.sh/tslib@2.8.1/denonext/tslib.mjs": "c38da5dd6da6281964435002ce204cd586634fe3bdfb24a0ee116f48cf3292e9"

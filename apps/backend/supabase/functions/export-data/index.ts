@@ -141,7 +141,7 @@ serve(withSentry('export-data', async (req: Request) => {
 
 	const { error: upErr } = await adminSupabase.storage
 		.from('runs')
-		.upload(path, new Blob([body_], { type: contentType }), {
+		.upload(path, new Blob([new Uint8Array(body_)], { type: contentType }), {
 			contentType,
 			upsert: false,
 		});
