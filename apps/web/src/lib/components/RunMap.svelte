@@ -715,8 +715,18 @@
 	});
 </script>
 
-<div class="run-map-wrapper">
-	<div bind:this={mapContainer} class="run-map"></div>
+<!--
+	audit/accessibility (May 2026) Medium — WCAG 1.1.1 + EAA. The
+	map canvas was an unlabelled <div>; screen readers had no way
+	to identify the region. role="region" + aria-label makes it a
+	named landmark so AT users can skip past or into it. The
+	companion text alternative for the map's actual data — runs
+	list on /runs, segment leaderboards on /routes/[id] — lives on
+	the same page already, so a "view as table" toggle here would
+	be redundant.
+-->
+<div class="run-map-wrapper" role="region" aria-label="Run map">
+	<div bind:this={mapContainer} class="run-map" aria-hidden="true"></div>
 	{#if animatable}
 		<button class="replay-btn" onclick={() => animating ? stopAnimation() : startAnimation()}>
 			<span class="material-symbols">{animating ? 'stop' : 'play_arrow'}</span>

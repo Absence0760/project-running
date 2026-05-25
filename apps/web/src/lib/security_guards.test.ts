@@ -951,6 +951,35 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
+	// Reason: audit/accessibility Medium — WCAG 1.1.1. Without
+	// role + aria-label, screen readers traverse every SVG child
+	// individually (rects on heatmap, paths on train-load chart)
+	// and have no name for the maplibre canvas at all. Pin each
+	// surface's labelled-landmark wrapper.
+	const heatmap = read('src/lib/components/CalendarHeatmap.svelte');
+	const train = read('src/lib/components/TrainingLoadChart.svelte');
+	const map = read('src/lib/components/RunMap.svelte');
+	assert.match(
+		heatmap,
+		/<svg[^>]*role="img"[^>]*aria-label="Activity calendar heatmap"/s,
+		'CalendarHeatmap.svelte <svg> must carry role="img" + an ' +
+			'aria-label.',
+	);
+	assert.match(
+		train,
+		/<svg[^>]*role="img"[^>]*aria-label="Training load chart/s,
+		'TrainingLoadChart.svelte <svg> must carry role="img" + an ' +
+			'aria-label that names the chart.',
+	);
+	assert.match(
+		map,
+		/<div\s+class="run-map-wrapper"\s+role="region"\s+aria-label="Run map">/,
+		'RunMap.svelte wrapper must carry role="region" + aria-label="Run map" ' +
+			'so AT users can skip past it or into it.',
+	);
+});
+
 test(
 	'accessibility: every file that suppresses :focus outline also pairs ' +
 		':focus-visible (WCAG 2.4.7 + 2.4.11)',

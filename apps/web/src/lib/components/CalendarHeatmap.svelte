@@ -75,7 +75,20 @@
 	const svgHeight = 7 * totalSize + 4;
 </script>
 
-<svg viewBox="0 0 {svgWidth} {svgHeight}" class="heatmap">
+<!--
+	audit/accessibility (May 2026) Medium — WCAG 1.1.1. Without
+	role + aria-label the whole heatmap is traversed by screen
+	readers as N×7 individual <rect> elements; with role="img" +
+	aria-label, AT treats it as a single labelled landmark. Per-
+	cell <title>s still provide the per-day detail when the user
+	zooms into individual cells.
+-->
+<svg
+	viewBox="0 0 {svgWidth} {svgHeight}"
+	class="heatmap"
+	role="img"
+	aria-label="Activity calendar heatmap"
+>
 	{#each dayLabels as label, i}
 		{#if label}
 			<text x="0" y={i * totalSize + cellSize} class="day-label">{label}</text>

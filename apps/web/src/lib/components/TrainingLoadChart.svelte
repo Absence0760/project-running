@@ -103,7 +103,22 @@
 		</div>
 
 		<div class="chart-wrap">
-			<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" class="chart-svg">
+			<!--
+				audit/accessibility (May 2026) Medium — WCAG 1.1.1.
+				Three series (CTL / ATL / TSB) over 90 days with no
+				text alternative; screen readers traversed every
+				<path> + <line> individually. role="img" + a one-line
+				summary aria-label collapses it into a single
+				landmark; the in-component legend above the chart
+				gives the per-series detail.
+			-->
+			<svg
+				viewBox="0 0 {W} {H}"
+				preserveAspectRatio="none"
+				class="chart-svg"
+				role="img"
+				aria-label="Training load chart — 90-day fitness (CTL), fatigue (ATL), and form (TSB) trends"
+			>
 				<line
 					x1={PAD_L}
 					y1={zeroY}
