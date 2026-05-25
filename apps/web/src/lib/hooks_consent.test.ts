@@ -3,10 +3,15 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, resolve } from 'node:path';
 import {
 	isConsentGiven,
 	isConsentGivenFromCookieHeader,
 } from './consent_cookie.ts';
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function reqWithCookie(cookie: string | null): Request {
 	const headers = new Headers();
@@ -66,6 +71,48 @@ test(
 		assert.equal(
 			isConsentGiven(reqWithCookie('COOKIE_CONSENT=accepted')),
 			false,
+		);
+	},
+);
+
+test(
+	'CRITICAL: a 5xx error must NOT reach Sentry without consent — ' +
+		'documented gate covers handleError too',
+	() => {
+		// Reason: the first iteration of the consent fix only wrapped
+		// `handle` and left `handleError = Sentry.handleErrorWithSentry()`
+		// untouched. captureException fires unconditionally inside
+		// handleErrorWithSentry (verified by reading the @sentry/sveltekit
+		// source). The self-audit follow-up wrapped handleError too. This
+		// test is source-grep only — actually instantiating Sentry +
+		// faking an error would require the Svelte runtime, which the
+		// tsx unit test runner can't load.
+		const src = readFileSync(
+			resolve(__dirname, '..', 'hooks.server.ts'),
+			'utf8',
+		);
+		assert.match(
+			src,
+			/export const handleError\s*:\s*HandleServerError\s*=/,
+			'hooks.server.ts must export a TYPED handleError so the ' +
+				'wrapped consent-gated version replaces the raw ' +
+				'handleErrorWithSentry. Bare ' +
+				'`export const handleError = Sentry.handleErrorWithSentry()` ' +
+				'lets 5xx errors leak to Sentry without consent.',
+		);
+		assert.match(
+			src,
+			/isConsentGiven\(input\.event\.request\)/,
+			'handleError must check isConsentGiven on the request before ' +
+				'delegating to Sentry.',
+		);
+		// Belt-and-braces: there should be NO bare assignment of
+		// handleError to Sentry.handleErrorWithSentry().
+		assert.doesNotMatch(
+			src,
+			/export const handleError\s*=\s*Sentry\.handleErrorWithSentry\(\)/,
+			'hooks.server.ts must not export the raw Sentry handleError ' +
+				'without a consent gate.',
 		);
 	},
 );
