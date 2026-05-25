@@ -102,11 +102,15 @@ void main() {
         File('lib/screens/profile_screen.dart').readAsStringSync();
 
     test('Runs tab uses RunTrackPreview as the leading thumbnail', () {
-      expect(source.contains('RunTrackPreview(trackUrl:'), isTrue,
+      expect(source.contains('RunTrackPreview('), isTrue,
           reason:
               'Runs tab must render a track preview thumbnail when the '
               'run has a track_url — same affordance as the History '
               'tab so the tile reads consistently across the app.');
+      expect(source.contains('trackUrl: trackUrl'), isTrue,
+          reason:
+              'The RunTrackPreview mount must forward the row trackUrl '
+              'so the thumbnail actually has a polyline to render.');
     });
 
     test('Runs tab tile tap routes into PublicRunScreen', () {
