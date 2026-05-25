@@ -40,6 +40,9 @@ type fakeBackend struct {
 	prefsErr      error
 	rawTrackBytes map[string][]byte
 	rawTrackErr   map[string]error
+	// audit/data-export-completeness extras (format=backup only).
+	extraTables    map[string][]map[string]interface{}
+	extraTablesErr error
 }
 
 type uploadCall struct {
@@ -88,6 +91,12 @@ func (f *fakeBackend) FetchExportProfile(_ context.Context, _ string) (map[strin
 
 func (f *fakeBackend) FetchUserSettingsPrefs(_ context.Context, _ string) (map[string]interface{}, error) {
 	return f.prefs, f.prefsErr
+}
+
+func (f *fakeBackend) FetchExportPersonalDataTables(
+	_ context.Context, _ string,
+) (map[string][]map[string]interface{}, error) {
+	return f.extraTables, f.extraTablesErr
 }
 
 func (f *fakeBackend) DownloadRawTrackBytes(_ context.Context, path string) ([]byte, error) {
@@ -1193,5 +1202,131 @@ func TestDecodeTrackBytes_GzippedJSON(t *testing.T) {
 	out2, err := DecodeTrackBytes(buf.Bytes())
 	if err != nil || len(out2) != 1 || out2[0].Lat != 51.5 {
 		t.Fatalf("gzipped decode failed: out=%+v err=%v", out2, err)
+	}
+}
+
+// audit/data-export-completeness (May 2026) — the backup format now
+// also carries every personal-data table the subject has an Art 20
+// right to receive. The backend bundles them into ExtraTables; the
+// builder writes each non-empty entry verbatim and adds a manifest
+// count keyed by the table name.
+
+func TestBuildBackupZip_ExtraTablesAppearAsZipEntries(t *testing.T) {
+	extras := map[string][]map[string]interface{}{
+		"coach_messages.json": {
+			{"id": "m1", "body": "hello", "role": "user"},
+			{"id": "m2", "body": "hi back", "role": "assistant"},
+		},
+		"notifications.json": {
+			{"id": "n1", "kind": "kudos", "read_at": nil},
+		},
+		"integrations.json": {
+			{"id": "i1", "provider": "strava", "scope": "activity:read_all"},
+		},
+		"empty_table.json": {}, // empty -> should be omitted
+	}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: nil, Routes: nil, UserID: "uid", ExportedFrom: "test",
+		ExtraTables: extras,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatalf("zip parse: %v", err)
+	}
+	names := map[string]bool{}
+	files := map[string][]byte{}
+	for _, f := range zr.File {
+		names[f.Name] = true
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		files[f.Name] = b
+	}
+	for _, want := range []string{"coach_messages.json", "notifications.json", "integrations.json"} {
+		if !names[want] {
+			t.Errorf("expected zip entry %q in backup; got %v", want, names)
+		}
+	}
+	if names["empty_table.json"] {
+		t.Errorf("empty extra table must be omitted from the zip")
+	}
+
+	// Manifest counts include the new keys (under the bare table name).
+	var manifest map[string]any
+	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
+		t.Fatal(err)
+	}
+	counts := manifest["counts"].(map[string]any)
+	for k, want := range map[string]float64{
+		"coach_messages": 2,
+		"notifications":  1,
+		"integrations":   1,
+	} {
+		got, ok := counts[k]
+		if !ok {
+			t.Errorf("manifest.counts missing %q", k)
+			continue
+		}
+		if got != want {
+			t.Errorf("manifest.counts[%q]=%v, want %v", k, got, want)
+		}
+	}
+	if _, present := counts["empty_table"]; present {
+		t.Errorf("empty extra table must not appear in manifest.counts")
+	}
+}
+
+func TestBuildBackupZip_ExtraTablesContentIsPreservedAsArray(t *testing.T) {
+	extras := map[string][]map[string]interface{}{
+		"coach_messages.json": {
+			{"id": "m1", "body": "hello"},
+		},
+	}
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	for _, f := range zr.File {
+		if f.Name != "coach_messages.json" {
+			continue
+		}
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		var rows []map[string]any
+		if err := json.Unmarshal(b, &rows); err != nil {
+			t.Fatalf("coach_messages.json parse: %v", err)
+		}
+		if len(rows) != 1 || rows[0]["body"] != "hello" {
+			t.Errorf("coach_messages content lost: %v", rows)
+		}
+	}
+}
+
+func TestServer_BackupFormatToleratesExtraTablesError(t *testing.T) {
+	// audit/data-export-completeness: a single failing table must
+	// not sink the entire export. The handler logs + ships a
+	// partial archive.
+	be := &fakeBackend{
+		runs:           []ExportRun{},
+		routes:         []ExportRoute{},
+		extraTablesErr: errors.New("supabase down"),
+	}
+	srv := &Server{JWTSecret: []byte(testJWTSecret), Backend: be}
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	req := httptest.NewRequest(http.MethodPost, "/v1/export",
+		strings.NewReader(`{"format":"backup"}`))
+	req.Header.Set("Authorization", "Bearer "+signTestToken(t, "user-A", 3600))
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Errorf("backup export must ship despite extra-tables error; got %d: %s", w.Code, w.Body.String())
 	}
 }

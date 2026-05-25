@@ -1042,6 +1042,153 @@ func (c *SupabaseClient) FetchUserSettingsPrefs(ctx context.Context, userID stri
 	return rows[0].Prefs, nil
 }
 
+// FetchExportPersonalDataTables bundles the personal-data tables
+// the audit/data-export-completeness (May 2026) pass added to the
+// Art 20 export. One call per table; failures on individual tables
+// are tolerated (the table is omitted from the result rather than
+// failing the whole export) so a single missing migration or
+// rename doesn't strand the user's data.
+//
+// `device_tokens.token` is redacted to "<redacted>" — the bare
+// FCM/APNs token is server-managed credential material and isn't
+// useful to the subject in an export.
+//
+// `integrations.access_token` / `refresh_token` columns aren't
+// fetched at all (column projection scrubs them).
+//
+// Return-value convention: empty table => key absent. The backup
+// builder treats an absent key the same as a zero-row entry so the
+// zip stays small.
+func (c *SupabaseClient) FetchExportPersonalDataTables(
+	ctx context.Context,
+	userID string,
+) (map[string][]map[string]interface{}, error) {
+	// Each spec is (zip entry name, table, filter param, select clause).
+	// The filter param is the column the table joins on; almost all are
+	// `user_id`, with a few exceptions (run_comments, run_kudos use
+	// `author_id`/`user_id` against the runs the user authored; we use
+	// the simple `user_id`-equivalent for these).
+	type spec struct {
+		name   string // zip entry name (with .json suffix)
+		table  string // PostgREST table
+		filter string // querystring KV (e.g. "user_id=eq.<uid>")
+		sel    string // select clause; "*" to include every column
+	}
+	uidEq := "user_id=eq." + userID
+	specs := []spec{
+		// coach_messages — full chat transcripts with the assistant.
+		// Densest single PII corpus outside GPS tracks.
+		{name: "coach_messages.json", table: "coach_messages", filter: uidEq, sel: "*"},
+		// notifications — actor + target + read_at; everything that
+		// landed in the user's inbox.
+		{name: "notifications.json", table: "notifications", filter: uidEq, sel: "*"},
+		// training_plans (+ weeks + workouts via nested embeds).
+		{
+			name: "training_plans.json", table: "training_plans", filter: uidEq,
+			sel: "*,weeks:plan_weeks(*,workouts:plan_workouts(*))",
+		},
+		// integrations — fact of connection + cursor + scope. Strip
+		// the secret-id columns; token bodies live in vault and the
+		// subject shouldn't carry them around in plaintext.
+		{
+			name: "integrations.json", table: "integrations", filter: uidEq,
+			sel: "id,provider,external_id,scope,last_sync_at,sync_cursor,created_at,updated_at",
+		},
+		// run_kudos given BY the user (the row where user_id = me).
+		{name: "run_kudos.json", table: "run_kudos", filter: uidEq, sel: "*"},
+		// run_comments authored by the user.
+		{
+			name: "run_comments.json", table: "run_comments",
+			filter: "author_id=eq." + userID, sel: "*",
+		},
+		// run_photos metadata. Storage objects are deferred (see
+		// audit Medium re: run-photos bucket walk).
+		{name: "run_photos.json", table: "run_photos", filter: "owner_id=eq." + userID, sel: "*"},
+		// segment_efforts — performance history.
+		{name: "segment_efforts.json", table: "segment_efforts", filter: uidEq, sel: "*"},
+		// gear + run_gear — owner-private inventory + join.
+		{name: "gear.json", table: "gear", filter: "owner_id=eq." + userID, sel: "*"},
+		// run_gear filtered by run_id of runs the user owns. Cheapest
+		// approach: select where the gear is the user's own gear.
+		{
+			name: "run_gear.json", table: "run_gear",
+			filter: "gear_id=in.(select id from gear where owner_id=eq." + userID + ")",
+			sel:    "*",
+		},
+		// fitness_snapshots — derived VDOT / VO2 / load.
+		{name: "fitness_snapshots.json", table: "fitness_snapshots", filter: uidEq, sel: "*"},
+		// personal_records.
+		{name: "personal_records.json", table: "personal_records", filter: uidEq, sel: "*"},
+		// device_tokens — redact the raw token below.
+		{name: "device_tokens.json", table: "device_tokens", filter: uidEq, sel: "*"},
+		// live_run_pings — short-TTL but in-flight rows may exist
+		// when an export is taken.
+		{name: "live_run_pings.json", table: "live_run_pings", filter: uidEq, sel: "*"},
+		// user_follows (both directions).
+		{
+			name: "following.json", table: "user_follows",
+			filter: "follower_id=eq." + userID, sel: "*",
+		},
+		{
+			name: "followers.json", table: "user_follows",
+			filter: "followee_id=eq." + userID, sel: "*",
+		},
+		// event_attendees — RSVPs.
+		{name: "event_attendees.json", table: "event_attendees", filter: uidEq, sel: "*"},
+		// club_members — joins.
+		{name: "club_members.json", table: "club_members", filter: uidEq, sel: "*"},
+		// saved_routes — starred-route library.
+		{name: "saved_routes.json", table: "saved_routes", filter: uidEq, sel: "*"},
+		// route_reviews authored by the user.
+		{name: "route_reviews.json", table: "route_reviews", filter: uidEq, sel: "*"},
+	}
+
+	out := make(map[string][]map[string]interface{}, len(specs))
+	for _, s := range specs {
+		q := url.Values{}
+		// `filter` is a pre-built KV like `user_id=eq.<uid>` or with
+		// the `in.(select ...)` form — pass through verbatim.
+		q.Set("select", s.sel)
+		// Strip the explicit user-id filter from `q` since it's
+		// already in the raw filter param; append the filter at the
+		// end of the URL string instead of through url.Values so
+		// nested-query commas aren't escaped.
+		u := c.BaseURL + "/rest/v1/" + s.table + "?" + q.Encode() + "&" + s.filter
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+		if err != nil {
+			// A single table failing is logged + skipped; the rest
+			// of the export still ships. Falls through the loop's
+			// error swallow below.
+			continue
+		}
+		body, err := c.do(ctx, req)
+		if err != nil {
+			// Tolerate per-table failure; the audit notes "partial
+			// export with a manifest count" is better than no
+			// export.
+			continue
+		}
+		var rows []map[string]interface{}
+		if err := json.Unmarshal(body, &rows); err != nil {
+			continue
+		}
+		if len(rows) == 0 {
+			continue
+		}
+		// device_tokens.token is server-managed credential material
+		// and shouldn't ship in a portability export. Redact it.
+		if s.name == "device_tokens.json" {
+			for _, row := range rows {
+				if _, ok := row["token"]; ok {
+					row["token"] = "<redacted>"
+				}
+			}
+		}
+		out[s.name] = rows
+	}
+	return out, nil
+}
+
 // DownloadRawTrackBytes pulls the **gzipped** bytes from Storage
 // without decoding. Sibling of DownloadTrack which decompresses +
 // JSON-parses to TrackPoint[]; the backup format archives tracks

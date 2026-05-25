@@ -37,6 +37,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -125,6 +126,28 @@ type Backend interface {
 	// track is missing — the run row still ships, just without a
 	// `tracks/{id}.json.gz` entry.
 	DownloadRawTrackBytes(ctx context.Context, path string) ([]byte, error)
+
+	// FetchExportPersonalDataTables bundles every additional table
+	// the audit/data-export-completeness pass added to the export
+	// (May 2026): coach_messages, notifications, training plans +
+	// weeks + workouts, integrations (with secrets scrubbed),
+	// run_kudos + run_comments authored by the user, run_photos
+	// metadata, segment_efforts, gear + run_gear,
+	// fitness_snapshots, personal_records, device_tokens (with
+	// raw token redacted), live_run_pings, user_follows,
+	// event_attendees, club_members, saved_routes, route_reviews.
+	//
+	// Returns a map keyed by zip entry name (the table name with a
+	// `.json` extension); each value is a list of JSON-encodable
+	// row maps. Empty tables are omitted from the map so the zip
+	// doesn't carry zero-row entries. Service-role auth bypasses
+	// RLS; the implementation filters on user_id for every table.
+	//
+	// Bundled as one call rather than 16 separate Backend methods
+	// to keep the fake-backend surface small and avoid leaking the
+	// per-table fan-out into the Server handler. Single Backend
+	// method = one fake stub for tests.
+	FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, error)
 }
 
 // ExportRoute is the routes-table projection for the backup format.
@@ -315,6 +338,19 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			s.log().Warn("dataexport: prefs fetch failed; including empty", "err", prefErr, "user_id", userID)
 			prefs = map[string]interface{}{}
 		}
+		// audit/data-export-completeness (May 2026): the prior shape
+		// only included runs + routes + profile. Pull every other
+		// personal-data table the subject has an Art 20 right to
+		// receive in one Backend call. Failure here is logged + we
+		// ship a partial export rather than 500 — losing the runs
+		// + routes export over a single optional table being slow
+		// would be a worse outcome.
+		extras, extrasErr := s.Backend.FetchExportPersonalDataTables(r.Context(), userID)
+		if extrasErr != nil {
+			s.log().Warn("dataexport: extra-tables fetch failed; shipping partial",
+				"err", extrasErr, "user_id", userID)
+			extras = nil
+		}
 		zipped, err := BuildBackupZip(r.Context(), BuildBackupZipInput{
 			Runs:          runs,
 			Routes:        routes,
@@ -322,6 +358,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			SettingsPrefs: prefs,
 			UserID:        userID,
 			ExportedFrom:  "go-service",
+			ExtraTables:   extras,
 		}, s.Backend.DownloadRawTrackBytes)
 		if err != nil {
 			s.log().Error("dataexport: backup zip build failed", "err", err, "user_id", userID)
@@ -593,6 +630,12 @@ type BuildBackupZipInput struct {
 	SettingsPrefs map[string]interface{}
 	UserID        string
 	ExportedFrom  string
+	// ExtraTables: zip-entry-name -> rows. Each non-empty entry is
+	// serialised as `{name}.json` (with the .json suffix already
+	// baked into the key, e.g. "coach_messages.json"). Audit/data-
+	// export-completeness (May 2026) — every personal-data table
+	// the subject has an Art 20 right to receive lives here.
+	ExtraTables map[string][]map[string]interface{}
 }
 
 // RawTrackFetcher pulls the **gzipped** bytes for a Storage path
@@ -738,20 +781,45 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		tracksAdded++
 	}
 
-	// manifest last so the counts include the actual tracks that
-	// made it in.
+	// Extra personal-data tables. Stable sort so the zip is
+	// reproducible byte-for-byte for tests (and so a restore tool
+	// can rely on entry order if it ever wants to).
+	extraCounts := map[string]int{}
+	if in.ExtraTables != nil {
+		names := make([]string, 0, len(in.ExtraTables))
+		for n := range in.ExtraTables {
+			names = append(names, n)
+		}
+		sort.Strings(names)
+		for _, name := range names {
+			rows := in.ExtraTables[name]
+			if len(rows) == 0 {
+				continue
+			}
+			if err := writeJSONEntry(zw, name, rows); err != nil {
+				return nil, err
+			}
+			extraCounts[strings.TrimSuffix(name, ".json")] = len(rows)
+		}
+	}
+
+	// manifest last so the counts include the actual tracks +
+	// extra tables that made it in.
+	counts := map[string]interface{}{
+		"runs":   len(in.Runs),
+		"routes": len(in.Routes),
+		"tracks": tracksAdded,
+	}
+	for k, v := range extraCounts {
+		counts[k] = v
+	}
 	manifest := map[string]interface{}{
 		"format":              BackupFormatName,
 		"version":             BackupFormatVersion,
 		"exported_at":         time.Now().UTC().Format(time.RFC3339),
 		"exported_by_user_id": in.UserID,
 		"exported_from":       in.ExportedFrom,
-		"counts": map[string]interface{}{
-			"runs":   len(in.Runs),
-			"routes": len(in.Routes),
-			"goals":  0,
-			"tracks": tracksAdded,
-		},
+		"counts":              counts,
 	}
 	if err := writeJSONEntry(zw, "manifest.json", manifest); err != nil {
 		return nil, err
