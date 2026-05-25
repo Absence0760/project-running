@@ -8,9 +8,17 @@
 		<meta name="application-name" content="Threkir" />
 		<meta name="apple-mobile-web-app-title" content="Threkir" />
 		<title>Threkir</title>
-		<link rel="preconnect" href="https://fonts.googleapis.com" />
-		<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
-		<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet" />
+		<!--
+		Material Symbols Outlined: self-hosted via the `material-symbols`
+		npm package, imported from app.css (`@import 'material-symbols/outlined.css'`).
+		Prior shape loaded the font from fonts.googleapis.com /
+		fonts.gstatic.com unconditionally on every page hit, which
+		audit/cookie-consent (May 2026) flagged as a critical ePrivacy
+		Art 5(3) violation: EU users' IPs reached a US sub-processor
+		before the consent banner had rendered. Self-hosting moves the
+		fetch onto our own origin (CloudFront) so no third-party data
+		flow occurs.
+		-->
 		%sveltekit.head%
 	</head>
 	<body data-sveltekit-preload-data="hover">

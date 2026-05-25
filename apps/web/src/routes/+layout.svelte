@@ -1,5 +1,12 @@
 <script lang="ts">
 	import '../app.css';
+	// Self-hosted Material Symbols Outlined. JS-side import so Vite
+	// reliably pulls both the package's @font-face CSS AND the
+	// referenced .woff2 into the bundle. audit/cookie-consent
+	// (May 2026) Critical: previously loaded from fonts.googleapis.com
+	// unconditionally, leaking EU IPs to a US sub-processor before
+	// the consent banner had rendered.
+	import 'material-symbols/outlined.css';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';

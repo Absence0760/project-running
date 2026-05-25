@@ -278,6 +278,16 @@ body, .sidebar, .login-card {
 	transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/*
+ * Material Symbols Outlined font is self-hosted via the
+ * `material-symbols` npm package (Apache 2.0). The package's CSS +
+ * .woff2 are pulled into the bundle by a JS-side import in
+ * +layout.svelte (Vite's CSS-side @import didn't reliably propagate
+ * the package's @font-face declaration). The font ends up served
+ * from our own origin (CloudFront), never from third-party CDNs.
+ * audit/cookie-consent (May 2026) Critical fix.
+ */
+
 /* Hide material icon text until font loads */
 .material-symbols {
 	font-family: 'Material Symbols Outlined';

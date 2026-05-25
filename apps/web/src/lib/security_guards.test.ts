@@ -945,6 +945,43 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical)', () => {
+	// Reason: audit/cookie-consent (May 2026) flagged that the prior
+	// shape fetched the Material Symbols font from fonts.googleapis.com
+	// / fonts.gstatic.com unconditionally on every page hit. EU IPs
+	// reached a US sub-processor before the consent banner rendered —
+	// ePrivacy Art 5(3) Critical. Self-hosted via the material-symbols
+	// npm package (Apache 2.0); the JS-side import in +layout.svelte
+	// pulls both the package CSS and the .woff2 into the build.
+	const stripHtmlComments = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '');
+	const stripCssComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+	const layout = read('src/routes/+layout.svelte');
+	const html = stripHtmlComments(read('src/app.html'));
+	const css = stripCssComments(read('src/app.css'));
+	for (const [name, surface] of [
+		['app.html', html],
+		['app.css', css],
+	] as const) {
+		assert.doesNotMatch(
+			surface,
+			/fonts\.googleapis\.com/,
+			`${name} must not reference fonts.googleapis.com — ` +
+				'the font is self-hosted via material-symbols (npm).',
+		);
+		assert.doesNotMatch(
+			surface,
+			/fonts\.gstatic\.com/,
+			`${name} must not reference fonts.gstatic.com.`,
+		);
+	}
+	assert.match(
+		layout,
+		/import\s+['"]material-symbols\/outlined\.css['"]/,
+		'+layout.svelte must import material-symbols/outlined.css so the ' +
+			'self-hosted @font-face + .woff2 are bundled.',
+	);
+});
+
 test('/cookie-notice carries a Manage-cookie-preferences button wired to consent.reset', () => {
 	// Reason: audit/cookie-consent (May 2026). Pre-fix the page told
 	// users to use a "Cookie settings" link in the footer that did
