@@ -9,7 +9,7 @@ import { dirname, resolve } from 'node:path';
 import {
 	isConsentGiven,
 	isConsentGivenFromCookieHeader,
-} from './consent_cookie.ts';
+} from './consent_cookie';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 

@@ -91,25 +91,33 @@ test('Settings → preferences writes gender + date_of_birth to user_profiles', 
 	// Reason: tiered leaderboards depend on user_profiles.gender +
 	// date_of_birth. If the settings page stops persisting them the
 	// filter dropdowns silently return empty for every user.
+	// GDPR Art 9 gates both writes behind healthDataConsent — without
+	// consent the page null-writes, with consent it writes the user
+	// input. Both branches are valid writebacks, so the guard accepts
+	// either shape.
 	const source = read('src/routes/settings/preferences/+page.svelte');
 	assert.match(source, /user_profiles/, 'page must talk to user_profiles');
 	assert.match(
 		source,
-		/gender:\s*gender\s*\|\|\s*null/,
-		'gender writeback missing',
+		/gender:\s*\(?healthDataConsent\s*&&\s*gender\)?\s*\?\s*gender\s*:\s*null/,
+		'gender writeback missing (consent-gated form)',
 	);
 	assert.match(
 		source,
-		/date_of_birth:\s*dateOfBirth\s*\|\|\s*null/,
-		'date_of_birth writeback missing',
+		/date_of_birth:\s*\(?healthDataConsent\s*&&\s*dateOfBirth\)?\s*\?\s*dateOfBirth\s*:\s*null/,
+		'date_of_birth writeback missing (consent-gated form)',
 	);
 });
 
 test('Settings → preferences hydrates gender + dob from user_profiles on load', () => {
 	const source = read('src/routes/settings/preferences/+page.svelte');
+	// The select string also carries health_data_consent_at since the
+	// GDPR consent commit — accept either the pre-consent two-column
+	// shape or the post-consent three-column shape so we don't break
+	// every time a sibling column is added to the demographic select.
 	assert.match(
 		source,
-		/\.select\('gender,\s*date_of_birth'\)/,
+		/\.select\('gender,\s*date_of_birth(,[^']*)?'\)/,
 		'preferences page must select gender + DOB to populate the form',
 	);
 });
