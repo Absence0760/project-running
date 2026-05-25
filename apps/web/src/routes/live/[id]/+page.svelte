@@ -8,12 +8,21 @@
 	import { watchMapResize } from '$lib/map_resize';
 	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
 	import { supabase } from '$lib/supabase';
+	import { hasAcceptedConsent } from '$lib/consent.svelte';
 	import {
 		isLiveHubConfigured,
 		fetchLiveSnapshot,
 		openLiveWebSocket,
 		type LivePing,
 	} from '$lib/live_hub';
+
+	// audit/cookie-consent (2026-05-25): MapTiler tile fetches log
+	// requester IPs per tile, so initialising MapLibre before consent
+	// has been recorded leaks an EU visitor's IP to a US sub-processor
+	// before any banner action. The live spectator page is anon-
+	// accessible, so we gate the map init either on the global consent
+	// state (banner-accepted) or on an explicit "Load map" click here.
+	let mapConsented = $state(false);
 
 	let { data } = $props();
 
@@ -253,6 +262,10 @@
 	}
 
 	onMount(() => {
+		// Honour the global banner choice. The "Load map" button below
+		// is the per-page acceptance path when the banner hasn't been
+		// answered yet.
+		if (hasAcceptedConsent()) mapConsented = true;
 		(async () => {
 			if (!(await ensureRunIsVisible())) return;
 			if (visibleRun && runIsFinished(visibleRun)) {
@@ -279,6 +292,19 @@
 			}
 		})();
 
+		if (mapConsented) initMap();
+	});
+
+	function loadMapNow() {
+		mapConsented = true;
+		// $effect below would normally pick this up, but the map
+		// container only mounts when `mapConsented` flips, so we wait
+		// one microtask for the DOM to render before initialising.
+		queueMicrotask(initMap);
+	}
+
+	function initMap() {
+		if (map || !mapContainer) return;
 		map = new maplibregl.Map({
 			container: mapContainer,
 			// Honours PUBLIC_TILE_STYLE_URL override the same way every
@@ -320,7 +346,7 @@
 				centred = true;
 			}
 		});
-	});
+	}
 
 	onDestroy(() => {
 		if (demoTicker) clearInterval(demoTicker);
@@ -420,12 +446,37 @@
 		</section>
 
 		<div class="live-map-wrap">
-			<div class="live-map" bind:this={mapContainer}></div>
-			{#if status === 'connecting'}
-				<div class="map-veil" aria-hidden="true">
-					<div class="map-veil-card">
-						<span class="badge-spinner" aria-hidden="true"></span>
-						<p>Waiting for the runner to start broadcasting…</p>
+			{#if mapConsented}
+				<div class="live-map" bind:this={mapContainer}></div>
+				{#if status === 'connecting'}
+					<div class="map-veil" aria-hidden="true">
+						<div class="map-veil-card">
+							<span class="badge-spinner" aria-hidden="true"></span>
+							<p>Waiting for the runner to start broadcasting…</p>
+						</div>
+					</div>
+				{/if}
+			{:else}
+				<!--
+					audit/cookie-consent (2026-05-25): MapTiler logs the
+					requester IP per tile fetch. Anonymous visitors on a
+					shared-link page must opt in explicitly before the
+					map mounts (ePrivacy / GDPR). A "Load map" tap is the
+					affirmative act that satisfies the disclosure.
+				-->
+				<div class="map-consent-veil">
+					<div class="map-consent-card">
+						<h2>Map disabled until you load it</h2>
+						<p>
+							Loading the map sends your IP address to <strong>MapTiler</strong>,
+							our tile provider in Switzerland. Tap <strong>Load map</strong>
+							below to continue. Your choice is remembered only for this page
+							session — the global setting lives in our
+							<a href="/cookie-notice">cookie notice</a>.
+						</p>
+						<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+							Load map
+						</button>
 					</div>
 				</div>
 			{/if}
@@ -727,6 +778,26 @@
 	.map-veil-card p {
 		margin: 0;
 	}
+	.map-consent-veil {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: var(--color-bg);
+		padding: var(--space-md);
+	}
+	.map-consent-card {
+		max-width: 30rem;
+		padding: var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-md);
+		text-align: left;
+	}
+	.map-consent-card h2 { margin: 0 0 var(--space-sm); font-size: 1.1rem; }
+	.map-consent-card p { margin: 0 0 var(--space-md); line-height: 1.5; color: var(--color-text-secondary); font-size: 0.92rem; }
 
 	:global(.runner-dot) {
 		width: 16px;

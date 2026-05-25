@@ -65,6 +65,15 @@
 		/// Twin of the `previewPosition` prop on Flutter's
 		/// `LiveRunMap`. Null = no marker.
 		previewLngLat?: [number, number] | null;
+		/// When `true`, the component will NOT instantiate maplibregl
+		/// until the user explicitly accepts loading the map. Anonymous
+		/// public pages (/share/run/[id], /share/route/[id]) pass true
+		/// per audit/cookie-consent (2026-05-25): MapTiler logs the
+		/// requester IP per tile fetch, so we cannot auto-initialise
+		/// before the visitor has consented. Authenticated surfaces
+		/// leave this false — those callers reach the component via a
+		/// signed-in session where consent is implicit.
+		requireExplicitConsent?: boolean;
 	}
 	let {
 		track = [],
@@ -74,7 +83,15 @@
 		activity,
 		hoverIdx = null,
 		previewLngLat = null,
+		requireExplicitConsent = false,
 	}: Props = $props();
+
+	import { hasAcceptedConsent } from '$lib/consent.svelte';
+	// Drives the placeholder ↔ map swap when `requireExplicitConsent`
+	// is true. Defaults to true on the implicit-consent path so the
+	// existing authenticated callers (/runs/[id], /routes/[id], etc.)
+	// keep their auto-init behaviour.
+	let mapConsented = $state(!requireExplicitConsent);
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -637,6 +654,10 @@
 	let trackBounds: maplibregl.LngLatBoundsLike | undefined;
 
 	onMount(() => {
+		// Honour the global banner choice when an explicit-consent
+		// caller is on an anon surface — saves the user a second tap
+		// after they've already accepted in the cookie banner.
+		if (requireExplicitConsent && hasAcceptedConsent()) mapConsented = true;
 		trackCoords = track.map((p) => [p.lng, p.lat]);
 
 		if (trackCoords.length > 0) {
@@ -648,6 +669,20 @@
 			];
 		}
 
+		if (!mapConsented) return; // Wait for the user to tap "Load map".
+		initMap();
+	});
+
+	function loadMapNow() {
+		mapConsented = true;
+		// $effect below would normally pick this up, but the map
+		// container only mounts when `mapConsented` flips, so wait one
+		// microtask for the DOM to render before initialising.
+		queueMicrotask(initMap);
+	}
+
+	function initMap() {
+		if (map || !mapContainer) return;
 		map = new maplibregl.Map({
 			container: mapContainer,
 			style: mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark),
@@ -688,7 +723,7 @@
 				map.getCanvas().style.cursor = '';
 			});
 		}
-	});
+	}
 
 	// Reactive map-style swap. The first run after `map` is created is
 	// a no-op (the style URL already matches); subsequent runs swap the
@@ -726,12 +761,34 @@
 	be redundant.
 -->
 <div class="run-map-wrapper" role="region" aria-label="Run map">
-	<div bind:this={mapContainer} class="run-map" aria-hidden="true"></div>
-	{#if animatable}
-		<button class="replay-btn" onclick={() => animating ? stopAnimation() : startAnimation()}>
-			<span class="material-symbols">{animating ? 'stop' : 'play_arrow'}</span>
-			{animating ? 'Stop' : 'Replay'}
-		</button>
+	{#if mapConsented}
+		<div bind:this={mapContainer} class="run-map" aria-hidden="true"></div>
+		{#if animatable}
+			<button class="replay-btn" onclick={() => animating ? stopAnimation() : startAnimation()}>
+				<span class="material-symbols">{animating ? 'stop' : 'play_arrow'}</span>
+				{animating ? 'Stop' : 'Replay'}
+			</button>
+		{/if}
+	{:else}
+		<!--
+			audit/cookie-consent (2026-05-25): MapTiler logs the
+			requester IP per tile fetch. Anonymous visitors must opt
+			in explicitly before the map mounts. "Load map" satisfies
+			the affirmative-act requirement under ePrivacy + GDPR.
+		-->
+		<div class="run-map-consent">
+			<div class="run-map-consent-card">
+				<h2>Map disabled until you load it</h2>
+				<p>
+					Loading the map sends your IP address to <strong>MapTiler</strong>,
+					our tile provider. Tap <strong>Load map</strong> to continue, or
+					see our <a href="/cookie-notice">cookie notice</a> for details.
+				</p>
+				<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+					Load map
+				</button>
+			</div>
+		</div>
 	{/if}
 </div>
 
@@ -745,6 +802,31 @@
 	.run-map {
 		width: 100%;
 		height: 100%;
+	}
+	.run-map-consent {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 100%;
+		height: 100%;
+		background: var(--color-bg);
+		padding: var(--space-md);
+	}
+	.run-map-consent-card {
+		max-width: 30rem;
+		padding: var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-md);
+		text-align: left;
+	}
+	.run-map-consent-card h2 { margin: 0 0 var(--space-sm); font-size: 1.1rem; }
+	.run-map-consent-card p {
+		margin: 0 0 var(--space-md);
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+		font-size: 0.92rem;
 	}
 
 	.replay-btn {

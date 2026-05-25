@@ -99,7 +99,19 @@
 
 	{#if track.length > 0}
 		<div class="map-container" class:compact>
-			<RunMap {track} activity={paceHeatmapActivity} hoverIdx={chartHoverIdx} />
+			<!--
+				requireExplicitConsent=true gates MapTiler init behind a
+				"Load map" tap until the user has accepted the cookie
+				banner (auto-passes when accepted). Anon visitors on
+				/share/run/[id] are the load-bearing case for this
+				audit/cookie-consent (2026-05-25) finding.
+			-->
+			<RunMap
+				{track}
+				activity={paceHeatmapActivity}
+				hoverIdx={chartHoverIdx}
+				requireExplicitConsent
+			/>
 		</div>
 	{/if}
 

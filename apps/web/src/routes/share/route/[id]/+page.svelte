@@ -95,7 +95,7 @@
 		<main class="content">
 			{#if waypoints.length > 0}
 				<div class="map-container">
-					<RunMap track={waypoints} />
+					<RunMap track={waypoints} requireExplicitConsent />
 				</div>
 
 				{#if hasElevationData}

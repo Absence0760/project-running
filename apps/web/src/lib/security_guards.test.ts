@@ -1297,6 +1297,57 @@ test('routing helpers refuse to fall back to router.project-osrm.org in prod', (
 	);
 });
 
+test('MapTiler tile fetches on anon public pages are gated on consent', () => {
+	// Reason: audit/cookie-consent (2026-05-25). MapTiler logs the
+	// requester IP per tile fetch. /live/[id], /share/route/[id], and
+	// /share/run/[id] are anon-accessible — the visitor's IP must
+	// not reach MapTiler until they have either accepted the cookie
+	// banner or tapped "Load map" on the placeholder.
+	const liveSrc = read('src/routes/live/[id]/+page.svelte');
+	assert.match(
+		liveSrc,
+		/hasAcceptedConsent\(\)/,
+		'/live/[id] must consult hasAcceptedConsent() before auto-mounting the map.',
+	);
+	assert.match(
+		liveSrc,
+		/{#if mapConsented}/,
+		'/live/[id] must conditionally render the map container so the ' +
+			'MapTiler init only fires after consent.',
+	);
+	assert.match(
+		liveSrc,
+		/onclick={loadMapNow}/,
+		'/live/[id] must offer a "Load map" button that flips mapConsented.',
+	);
+
+	const runMapSrc = read('src/lib/components/RunMap.svelte');
+	assert.match(
+		runMapSrc,
+		/requireExplicitConsent\?:\s*boolean/,
+		'RunMap must expose requireExplicitConsent so anon callers can gate map init.',
+	);
+	assert.match(
+		runMapSrc,
+		/if \(!mapConsented\) return;/,
+		'RunMap.onMount must short-circuit when consent is pending — no maplibregl.Map() until the user opts in.',
+	);
+
+	// The two share surfaces must pass the consent-required prop.
+	const routeShareSrc = read('src/routes/share/route/[id]/+page.svelte');
+	assert.match(
+		routeShareSrc,
+		/<RunMap[^>]*requireExplicitConsent/,
+		'/share/route/[id] must pass requireExplicitConsent to RunMap.',
+	);
+	const runShareSrc = read('src/lib/components/RunShareView.svelte');
+	assert.match(
+		runShareSrc,
+		/<RunMap[\s\S]*?requireExplicitConsent[\s\S]*?\/>/,
+		'RunShareView (used by /share/run/[id]) must pass requireExplicitConsent.',
+	);
+});
+
 test('Coach handler gates the Anthropic fan-out behind coach_consent_at', () => {
 	// Reason: audit/gdpr (2026-05-25). Coach forwards health-adjacent
 	// data to Anthropic (US sub-processor). Art 6(1)(a) requires an
