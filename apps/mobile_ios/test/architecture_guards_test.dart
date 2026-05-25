@@ -1664,6 +1664,44 @@ void main() {
     });
   });
 
+  group('layered resilience', () {
+    test('no silent catch (_) {} sites in lib/', () {
+      // Reason: audit/layered-resilience (May 2026) flagged 10
+      // `catch (_) {}` sites in lib/. The layered-resilience contract
+      // in docs/conventions.md says every auxiliary catch must do
+      // `catch (e) { debugPrint(...) }` so failures stay observable.
+      // Silent swallows mask real regressions — a TTS init failure,
+      // an integrations refresh that quietly returns nothing, a
+      // remote-delete that fails while the local store succeeds.
+      //
+      // Allowed pattern: `catch (e) { debugPrint(...); ... }` OR
+      // `catch (e2) { ... }` (nested), but NEVER `catch (_) {}`.
+      final libDir = Directory('lib');
+      if (!libDir.existsSync()) return;
+      final offenders = <String>[];
+      for (final entity in libDir.listSync(recursive: true)) {
+        if (entity is! File) continue;
+        if (!entity.path.endsWith('.dart')) continue;
+        final body = entity.readAsStringSync();
+        final lines = body.split('\n');
+        for (var i = 0; i < lines.length; i++) {
+          // Match exactly `catch (_) {}` with optional whitespace.
+          if (RegExp(r'catch\s*\(\s*_\s*\)\s*\{\s*\}').hasMatch(lines[i])) {
+            offenders.add('${entity.path}:${i + 1}');
+          }
+        }
+      }
+      expect(
+        offenders,
+        isEmpty,
+        reason: 'Silent catch (_) {} sites violate the layered-resilience '
+            'contract (docs/conventions.md). Replace with '
+            'catch (e) { debugPrint(\'...\'); } so failures stay '
+            'observable. Found:\n  ${offenders.join('\n  ')}',
+      );
+    });
+  });
+
   group('iOS PrivacyInfo.xcprivacy', () {
     // Required since spring 2024 for every iOS binary that uses any
     // "required reason" API. flutter_secure_storage, shared_preferences,

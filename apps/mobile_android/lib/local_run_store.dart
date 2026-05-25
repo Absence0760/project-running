@@ -365,7 +365,9 @@ class LocalRunStore extends ChangeNotifier {
       // Corrupt file — remove it so we don't keep tripping over it.
       try {
         await file.delete();
-      } catch (_) {}
+      } catch (e2) {
+        debugPrint('local_run_store: corrupt in-progress delete failed: $e2');
+      }
       return null;
     }
   }

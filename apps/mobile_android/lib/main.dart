@@ -108,7 +108,9 @@ void main() async {
   if (kDebugMode) {
     try {
       await dotenv.load(fileName: '.env.local', mergeWith: dotenv.env);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('main: optional .env.local load failed: $e');
+    }
   }
 
   // Construct stores synchronously so we can kick off their `init()`s in

@@ -1667,7 +1667,9 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       if (api != null && api.userId != null) {
         try {
           await api.deleteRun(run);
-        } catch (_) {}
+        } catch (e) {
+          debugPrint('run_detail: remote delete failed (local will still delete): $e');
+        }
       }
       await widget.runStore.delete(run.id);
       if (context.mounted) Navigator.pop(context);

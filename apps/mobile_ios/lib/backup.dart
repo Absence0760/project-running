@@ -207,7 +207,9 @@ class BackupService {
       if (outputFile.existsSync()) {
         try {
           outputFile.deleteSync();
-        } catch (_) {}
+        } catch (e2) {
+          debugPrint('backup: partial-download cleanup failed: $e2');
+        }
       }
       return false;
     }

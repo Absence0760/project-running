@@ -204,7 +204,9 @@ class _CoachScreenState extends State<CoachScreen> {
           }
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('coach_screen: initial plans load failed: $e');
+    }
     await _reloadAll();
     _subscribeRealtime();
   }
@@ -452,7 +454,9 @@ class _CoachScreenState extends State<CoachScreen> {
           Map<String, dynamic> j = const {};
           try {
             j = jsonDecode(raw) as Map<String, dynamic>;
-          } catch (_) {}
+          } catch (e) {
+            debugPrint('coach_screen: non-JSON error body: $e');
+          }
           if (res.statusCode == 429) {
             final used = (j['used'] as num?)?.toInt() ?? _dailyLimit;
             if (mounted) {
@@ -493,7 +497,9 @@ class _CoachScreenState extends State<CoachScreen> {
         final archives =
             await widget.api.listCoachArchives(planId: _planId);
         if (mounted) setState(() => _archives = archives);
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('coach_screen: archive refresh failed: $e');
+      }
     }
   }
 
@@ -651,7 +657,9 @@ class _CoachScreenState extends State<CoachScreen> {
         if (wasViewing) _viewingArchiveAt = null;
       });
       if (wasViewing) await _reloadAll();
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('coach_screen: archive unarchive failed: $e');
+    }
   }
 
   Future<void> _react(String messageId, String reaction) async {

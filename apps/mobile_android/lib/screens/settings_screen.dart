@@ -81,7 +81,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final list = await api.fetchIntegrations();
       if (!mounted) return;
       setState(() => _integrations = list);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('settings: integrations refresh failed: $e');
+    }
   }
 
   IntegrationRow? _strava() {
@@ -997,7 +999,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     try {
       final profile = await api.fetchMyProfile();
       existing = profile?.parkrunNumber ?? '';
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('settings: parkrun profile fetch failed: $e');
+    }
 
     final ctrl = TextEditingController(text: existing);
     if (!mounted) return;
