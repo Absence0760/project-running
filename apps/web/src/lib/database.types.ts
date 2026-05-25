@@ -220,18 +220,21 @@ export type Database = {
         Row: {
           deleted_at: string
           hashed_user_id: string
+          id: number
           notes: string | null
           result: string
         }
         Insert: {
           deleted_at?: string
           hashed_user_id: string
+          id?: number
           notes?: string | null
           result: string
         }
         Update: {
           deleted_at?: string
           hashed_user_id?: string
+          id?: number
           notes?: string | null
           result?: string
         }
