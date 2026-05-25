@@ -1017,14 +1017,20 @@ test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
 });
 
 test(
-	'accessibility: every file that suppresses :focus outline also pairs ' +
+	'accessibility: every :focus{outline:none} SELECTOR pairs ' +
 		':focus-visible (WCAG 2.4.7 + 2.4.11)',
 	() => {
 		// Reason: audit/accessibility High — bulk-removing the browser
 		// focus ring without giving keyboard users a replacement
 		// indicator violates WCAG 2.4.7 (Focus Visible) + 2.4.11
-		// (Focus Appearance). Pair every `outline: none` site with a
-		// `:focus-visible` companion so keyboard focus has a ring.
+		// (Focus Appearance).
+		//
+		// Self-audit round 6 strengthens this from "file references
+		// :focus-visible somewhere" to "every <sel>:focus{outline:none}
+		// has a matching <sel>:focus-visible". The weaker form let
+		// routes/+page.svelte ship with .search-input:focus suppressing
+		// the outline while only OTHER selectors in the same file
+		// (.star-btn, .toolbar-select) had companions.
 		const { readdirSync } = readFileSyncDeps();
 		const root = resolve(__dirname, '..', '..', 'src');
 		const walk = (dir: string, out: string[] = []): string[] => {
@@ -1035,19 +1041,43 @@ test(
 			}
 			return out;
 		};
+		const stripComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+		const focusRule = /([^{}]+?:focus)\s*\{\s*[^}]*outline\s*:\s*none[^}]*\}/g;
+		const fvRule = /([^{}]+?:focus-visible)\s*\{/g;
+		const baseOf = (sel: string, suffix: string): string[] =>
+			sel
+				.split(',')
+				.map((s) => s.trim())
+				.filter((s) => s.endsWith(suffix))
+				.map((s) => s.slice(0, -suffix.length).trim());
 		const offenders: string[] = [];
 		for (const f of walk(root)) {
-			const body = readFileSync(f, 'utf-8');
-			if (!/outline\s*:\s*none/.test(body)) continue;
-			if (!/:focus-visible/.test(body)) {
-				offenders.push(f.replace(resolve(__dirname, '..', '..') + '/', ''));
+			const body = stripComments(readFileSync(f, 'utf-8'));
+			const focusSelectors = new Set<string>();
+			let m: RegExpExecArray | null;
+			focusRule.lastIndex = 0;
+			while ((m = focusRule.exec(body)) !== null) {
+				for (const b of baseOf(m[1], ':focus')) focusSelectors.add(b);
+			}
+			if (focusSelectors.size === 0) continue;
+			const pairedSelectors = new Set<string>();
+			fvRule.lastIndex = 0;
+			while ((m = fvRule.exec(body)) !== null) {
+				for (const b of baseOf(m[1], ':focus-visible'))
+					pairedSelectors.add(b);
+			}
+			const unpaired = [...focusSelectors].filter((s) => !pairedSelectors.has(s));
+			if (unpaired.length > 0) {
+				const rel = f.replace(resolve(__dirname, '..', '..') + '/', '');
+				offenders.push(`${rel}: ${unpaired.map((s) => `${s}:focus`).join(', ')}`);
 			}
 		}
 		assert.deepEqual(
 			offenders,
 			[],
-			'these files suppress focus outline but never pair :focus-visible: ' +
-				JSON.stringify(offenders, null, 2),
+			'these selectors suppress :focus outline without a matching ' +
+				':focus-visible companion:\n  ' +
+				offenders.join('\n  '),
 		);
 	},
 );
