@@ -782,6 +782,16 @@
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px var(--color-primary-light);
 	}
+	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11 — pair the
+	   focus rule above with :focus-visible so keyboard users keep
+	   the outline ring on top of the border-color change. Self-audit
+	   round 6 caught this site: my round-5 bulk script skipped the
+	   whole file because OTHER :focus-visible blocks already existed,
+	   leaving this single selector unpaired. */
+	.search-input:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
 	.search-clear {
 		position: absolute;
 		right: 0.5rem;
