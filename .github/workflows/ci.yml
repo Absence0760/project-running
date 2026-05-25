@@ -363,11 +363,23 @@ jobs:
             supabase/functions/_shared/handler_envelope.test.ts
       - name: Run pure-helper unit tests
         working-directory: apps/backend
-        run: |
-          deno test --no-check \
-            supabase/functions/_shared/webhook_security.test.ts \
-            supabase/functions/_shared/body_limit.test.ts \
-            supabase/functions/revenuecat-webhook/lib.test.ts
+        # `deno test --no-check <dir>` recurses into the directory and
+        # picks up every `*.test.ts` file. Self-audit (May 2026) caught
+        # that the prior shape hardcoded three test paths and silently
+        # missed any new *.test.ts file added under supabase/functions/
+        # (parkrun-import/lib.test.ts, export-data/decode_track.test.ts,
+        # delete-account/lib.test.ts, delete-account/wiring.test.ts).
+        #
+        # Permissions:
+        #   --allow-read: wiring.test.ts reads its sibling index.ts to
+        #     run source-grep architecture guards.
+        #   --allow-env: handler_envelope.test.ts reads SUPABASE_TEST_URL
+        #     at top-level module load (it gates every test on the var
+        #     via `ignore:`, but the top-level read still needs the
+        #     perm). The integration step above runs the same file with
+        #     the var actually set; here it's empty so all its tests
+        #     skip, which is the expected steady state.
+        run: deno test --no-check --allow-read --allow-env supabase/functions/
 
   pgtap-rls:
     name: pgtap RLS suite
