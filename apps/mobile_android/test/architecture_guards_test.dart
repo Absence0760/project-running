@@ -1814,6 +1814,49 @@ void main() {
             '${semanticsBlocks.length}.',
       );
     });
+
+    test('START button on the idle surface carries Semantics(button, label) '
+        '(audit/accessibility 2026-05-25 High)', () {
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      // Reason: pre-fix the START button was a bare GestureDetector →
+      // Container → Text('START'). TalkBack announced it as a generic
+      // tappable region with no role. Pin the Semantics wrap in place.
+      expect(
+        source,
+        contains("label: 'Start run'"),
+        reason: 'run_screen.dart must wrap the idle-surface START '
+            "button in Semantics(label: 'Start run').",
+      );
+    });
+
+    test('run-state transitions announce via SemanticsService.announce '
+        '(audit/accessibility 2026-05-25 High, WCAG 4.1.3)', () {
+      final source = File('lib/screens/run_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('SemanticsService.announce'),
+        reason: 'run_screen.dart must call SemanticsService.announce '
+            'on start / pause / resume / lap / finish transitions so '
+            'screen-reader users hear status changes — the TTS audio '
+            'cues are gated on a user pref and cannot satisfy '
+            'WCAG 4.1.3.',
+      );
+      for (final phrase in const [
+        'Run started',
+        'Run paused',
+        'Run resumed',
+        'Lap \$n marked',
+        'Run finished',
+      ]) {
+        expect(
+          source,
+          contains(phrase),
+          reason: 'run_screen.dart must announce "$phrase" via '
+              'SemanticsService.announce — see audit/accessibility '
+              '(2026-05-25).',
+        );
+      }
+    });
   });
 
   group('layered resilience', () {

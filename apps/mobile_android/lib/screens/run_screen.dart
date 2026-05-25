@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:core_models/core_models.dart' show PlanWorkoutRow, TrainingPlanRow;
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart' hide ActivityType;
@@ -809,6 +810,7 @@ class _RunScreenState extends State<RunScreen> {
     }
 
     setState(() => _state = _ScreenState.recording);
+    _announceA11yState('Run started');
 
     // If a live race is running, attach this recorder so pings flow and
     // the finished run auto-submits to the leaderboard.
@@ -1222,14 +1224,35 @@ class _RunScreenState extends State<RunScreen> {
     );
   }
 
+  /// audit/accessibility (2026-05-25) High — WCAG 4.1.3 (Status
+  /// Messages). State transitions that a sighted user reads off the
+  /// screen (pause / lap / start / finish) are inaudible to a
+  /// TalkBack user because the recording surface uses a
+  /// `ValueListenable` rather than `setState`, so the screen-reader
+  /// announcer never fires automatically. `SemanticsService.announce`
+  /// pushes a one-shot live-region message so the cue is screen-
+  /// reader compatible (the TTS path in audio_cues.dart is gated on
+  /// the user's `audioCues` preference and so cannot satisfy the
+  /// status-message contract). Best-effort: a TTS-engine throw must
+  /// not break the recording state machine — wrap in try / catch.
+  void _announceA11yState(String message) {
+    try {
+      SemanticsService.announce(message, TextDirection.ltr);
+    } catch (e) {
+      debugPrint('SemanticsService.announce failed: $e');
+    }
+  }
+
   void _toggleManualPause() {
     if (_recorder == null) return;
     if (_manualPaused) {
       _recorder!.resume();
       setState(() => _manualPaused = false);
+      _announceA11yState('Run resumed');
     } else {
       _recorder!.pause();
       setState(() => _manualPaused = true);
+      _announceA11yState('Run paused');
     }
   }
 
@@ -1239,6 +1262,7 @@ class _RunScreenState extends State<RunScreen> {
     if (n > 0) {
       setState(() => _lapCount = n);
       _showTopBanner('Lap $n marked', duration: const Duration(seconds: 2));
+      _announceA11yState('Lap $n marked');
     }
   }
 
@@ -1348,6 +1372,7 @@ class _RunScreenState extends State<RunScreen> {
       _finishedRun = run;
       _state = _ScreenState.finished;
     });
+    _announceA11yState('Run finished');
 
     if (widget.preferences.audioCues) {
       try {
@@ -1954,43 +1979,53 @@ class _RunScreenState extends State<RunScreen> {
                 ),
                 Padding(
                   padding: const EdgeInsets.symmetric(vertical: 24),
-                  child: GestureDetector(
-                    onTap: _beginCountdown,
-                    child: Container(
-                      width: 140,
-                      height: 140,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFF22C55E).withOpacity(0.3),
-                          width: 3,
-                        ),
-                      ),
-                      padding: const EdgeInsets.all(8),
+                  // audit/accessibility (2026-05-25) High — WCAG 1.3.1 +
+                  // 4.1.2. The pre-fix tree was a bare GestureDetector
+                  // → Container → Text('START'); TalkBack saw a
+                  // generic tappable region with no role. Semantics
+                  // wraps the whole circle so the button is announced
+                  // as a discrete control with a meaningful label.
+                  child: Semantics(
+                    button: true,
+                    label: 'Start run',
+                    child: GestureDetector(
+                      onTap: _beginCountdown,
                       child: Container(
-                        decoration: const BoxDecoration(
+                        width: 140,
+                        height: 140,
+                        decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          gradient: LinearGradient(
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                            colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
+                          border: Border.all(
+                            color: const Color(0xFF22C55E).withOpacity(0.3),
+                            width: 3,
                           ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0x4022C55E),
-                              blurRadius: 24,
-                              spreadRadius: 4,
-                            ),
-                          ],
                         ),
-                        child: const Center(
-                          child: Text(
-                            'START',
-                            style: TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.white,
-                              letterSpacing: 1.5,
+                        padding: const EdgeInsets.all(8),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [Color(0xFF22C55E), Color(0xFF16A34A)],
+                            ),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Color(0x4022C55E),
+                                blurRadius: 24,
+                                spreadRadius: 4,
+                              ),
+                            ],
+                          ),
+                          child: const Center(
+                            child: Text(
+                              'START',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.white,
+                                letterSpacing: 1.5,
+                              ),
                             ),
                           ),
                         ),

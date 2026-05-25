@@ -15,6 +15,54 @@
 	let loading = $state(false);
 	let items = $state<NotificationView[]>([]);
 
+	// Focus-trap state mirrors the account popover in +layout.svelte —
+	// audit/accessibility (2026-05-25) High: pre-fix, Tab escaped the
+	// dialog into the page behind it and the user had no keyboard
+	// path through the notifications list (WCAG 2.1.2 + 2.4.3).
+	let popoverEl = $state<HTMLDivElement | null>(null);
+	let bellBtnEl = $state<HTMLButtonElement | null>(null);
+
+	$effect(() => {
+		if (!open) return;
+		const trigger = bellBtnEl;
+		queueMicrotask(() => {
+			const first = popoverEl?.querySelector<HTMLElement>(
+				'a, button, [tabindex]:not([tabindex="-1"])',
+			);
+			first?.focus();
+		});
+
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				open = false;
+				return;
+			}
+			if (e.key !== 'Tab' || !popoverEl) return;
+			const focusables = Array.from(
+				popoverEl.querySelectorAll<HTMLElement>(
+					'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+				),
+			);
+			if (focusables.length === 0) return;
+			const first = focusables[0];
+			const last = focusables[focusables.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			if (e.shiftKey && active === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && active === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('keydown', onKey);
+			if (trigger && document.body.contains(trigger)) trigger.focus();
+		};
+	});
+
 	async function togglePanel() {
 		open = !open;
 		if (open) await refreshList();
@@ -128,6 +176,7 @@
 
 <div class="bell-wrap">
 	<button
+		bind:this={bellBtnEl}
 		class="bell-btn"
 		class:active={open}
 		type="button"
@@ -155,7 +204,13 @@
 			aria-label="Close"
 			onclick={() => (open = false)}
 		></button>
-		<div class="popover" role="dialog" aria-label="Notifications">
+		<div
+			bind:this={popoverEl}
+			class="popover"
+			role="dialog"
+			tabindex="-1"
+			aria-label="Notifications"
+		>
 			<header class="popover-head">
 				<h3>Notifications</h3>
 				{#if notificationStore.unreadCount > 0}

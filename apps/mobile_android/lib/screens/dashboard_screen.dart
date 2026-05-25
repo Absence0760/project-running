@@ -592,8 +592,15 @@ class _EmptyGoalsCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // audit/accessibility (2026-05-25) High — WCAG 4.1.2. Tappable
+    // `InkWell` carries no role for TalkBack; without Semantics it
+    // reads as a generic tappable region. The label summarises the
+    // CTA so a screen-reader user understands what activates.
     return Card(
-      child: InkWell(
+      child: Semantics(
+        button: true,
+        label: 'Set a weekly running goal',
+        child: InkWell(
         onTap: onAdd,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
@@ -632,6 +639,7 @@ class _EmptyGoalsCta extends StatelessWidget {
             ],
           ),
         ),
+        ),
       ),
     );
   }
@@ -668,8 +676,15 @@ class _GoalCard extends StatelessWidget {
       for (final t in progress.targets) t.kind: t,
     };
 
+    final a11yLabel = '$periodLabel goal — '
+        '${customTitle ?? "tap to edit"}. '
+        '${progress.complete ? "Complete." : "In progress."}';
+
     return Card(
-      child: InkWell(
+      child: Semantics(
+        button: true,
+        label: a11yLabel,
+        child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Padding(
@@ -735,6 +750,7 @@ class _GoalCard extends StatelessWidget {
               ],
             ],
           ),
+        ),
         ),
       ),
     );
@@ -1014,7 +1030,20 @@ class _PeriodStatCard extends StatelessWidget {
               ),
               borderRadius: BorderRadius.circular(12),
             ),
-      child: isTappable ? InkWell(onTap: onTap, child: body) : body,
+      // audit/accessibility (2026-05-25) High — WCAG 4.1.2. The
+      // tappable InkWell was bare; without Semantics TalkBack
+      // announced only the raw stat numbers in reading order.
+      // Wrapping with a button-roled label restores the semantics
+      // for the period summary drill-in.
+      child: isTappable
+          ? Semantics(
+              button: true,
+              label: '$label summary, ${UnitFormat.distanceValue(distanceMetres, unit)} '
+                  '${UnitFormat.distanceLabel(unit)} across '
+                  '$runCount ${runCount == 1 ? "run" : "runs"}',
+              child: InkWell(onTap: onTap, child: body),
+            )
+          : body,
     );
   }
 }
