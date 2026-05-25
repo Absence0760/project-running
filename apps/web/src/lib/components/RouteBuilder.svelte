@@ -7,7 +7,7 @@
 	// Single source of truth for the OSRM endpoint — env-overridable via
 	// PUBLIC_OSRM_URL so a self-hosted backend can replace the public
 	// demo server without code edits.
-	import { OSRM_BASE_URL } from '$lib/routing';
+	import { OSRM_BASE_URL, assertOsrmConfiguredForProd } from '$lib/routing';
 	import {
 		DEFAULT_SCALE_FACTOR,
 		NEAR_POINT_M,
@@ -432,6 +432,12 @@
 		waypointsToSnap: TrackPoint[],
 		versionAtStart: number,
 	): Promise<TrackPoint[]> {
+		// audit/third-party-data-flows: refuse to ship waypoints to the
+		// community OSRM endpoint in prod. The helper in $lib/routing.ts
+		// asserts on its own; this component builds URLs inline (custom
+		// retry / batching) and bypasses those helpers, so we re-assert
+		// at every call site that issues OSRM fetches.
+		assertOsrmConfiguredForProd();
 		const lastIdx = waypointsToSnap.length - 1;
 		const snapped = await Promise.all(
 			waypointsToSnap.map(async (wp, i) => {
@@ -503,6 +509,10 @@
 		onerror(null);
 
 		try {
+			// audit/third-party-data-flows: same assertion as snapWaypoints —
+			// refuse the community OSRM endpoint in prod. Done inside the try
+			// so onerror is reachable if the assertion throws.
+			assertOsrmConfiguredForProd();
 			// Route each segment — batched in groups of 3 to avoid OSRM rate limits
 			const BATCH_SIZE = 3;
 			// Per-fetch timeout. The public OSRM demo server is frequently

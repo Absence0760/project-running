@@ -1001,6 +1001,23 @@ test('routing helpers refuse to fall back to router.project-osrm.org in prod', (
 				'GDPR Art 28 violation.',
 		);
 	}
+
+	// RouteBuilder.svelte builds OSRM URLs inline (custom retry +
+	// batching + radius / version cancellation) instead of going
+	// through the helper functions. The self-audit caught that the
+	// assertion above was therefore not reachable for the route-
+	// builder code path. Both call sites in the component now
+	// assert too.
+	const rb = read('src/lib/components/RouteBuilder.svelte');
+	const rbMatches = rb.match(/assertOsrmConfiguredForProd\(\)/g) ?? [];
+	assert.ok(
+		rbMatches.length >= 2,
+		'RouteBuilder.svelte must call assertOsrmConfiguredForProd() at ' +
+			'each OSRM-fetch entry point (snapWaypointsToRoads + ' +
+			'recalculateRoute). Found ' +
+			rbMatches.length +
+			' call sites.',
+	);
 });
 
 test('fetchRunGear enumerates only public-safe columns on the gear join', () => {
