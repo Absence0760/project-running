@@ -1924,6 +1924,16 @@
 		outline: none;
 		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
 	}
+	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: pair the
+	   :focus rule above with :focus-visible so keyboard users get a real
+	   outline. The :focus rule still removes the default ring on mouse
+	   focus (no visible outline on click); :focus-visible re-adds a
+	   proper one for keyboard / programmatic focus. */
+	.search-box input:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+
 
 	.locate-btn {
 		display: flex;

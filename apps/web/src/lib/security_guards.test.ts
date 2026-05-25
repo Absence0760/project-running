@@ -9,8 +9,14 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+function readFileSyncDeps(): { readdirSync: typeof readdirSync } {
+	return { readdirSync };
+}
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function read(...parts: string[]): string {
 	return readFileSync(resolve(...parts), 'utf-8');
@@ -944,6 +950,42 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 		);
 	}
 });
+
+test(
+	'accessibility: every file that suppresses :focus outline also pairs ' +
+		':focus-visible (WCAG 2.4.7 + 2.4.11)',
+	() => {
+		// Reason: audit/accessibility High — bulk-removing the browser
+		// focus ring without giving keyboard users a replacement
+		// indicator violates WCAG 2.4.7 (Focus Visible) + 2.4.11
+		// (Focus Appearance). Pair every `outline: none` site with a
+		// `:focus-visible` companion so keyboard focus has a ring.
+		const { readdirSync } = readFileSyncDeps();
+		const root = resolve(__dirname, '..', '..', 'src');
+		const walk = (dir: string, out: string[] = []): string[] => {
+			for (const ent of readdirSync(dir, { withFileTypes: true })) {
+				const full = `${dir}/${ent.name}`;
+				if (ent.isDirectory()) walk(full, out);
+				else if (ent.name.endsWith('.svelte')) out.push(full);
+			}
+			return out;
+		};
+		const offenders: string[] = [];
+		for (const f of walk(root)) {
+			const body = readFileSync(f, 'utf-8');
+			if (!/outline\s*:\s*none/.test(body)) continue;
+			if (!/:focus-visible/.test(body)) {
+				offenders.push(f.replace(resolve(__dirname, '..', '..') + '/', ''));
+			}
+		}
+		assert.deepEqual(
+			offenders,
+			[],
+			'these files suppress focus outline but never pair :focus-visible: ' +
+				JSON.stringify(offenders, null, 2),
+		);
+	},
+);
 
 test('accessibility: every top-level page renders an h1 (WCAG 1.3.1 + 2.4.6)', () => {
 	// Reason: audit/accessibility High — Dashboard / Runs / Coach

@@ -1758,6 +1758,14 @@
 		outline: none;
 		min-height: 3rem;
 	}
+	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: the
+	   textarea base above suppresses the browser focus ring on
+	   every state. Add :focus-visible so keyboard focus has a
+	   ring. Mouse focus stays unstyled. */
+	.post-form textarea:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
 
 	.post-form .btn-primary {
 		align-self: flex-end;

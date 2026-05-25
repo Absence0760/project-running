@@ -200,6 +200,16 @@
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 3px var(--color-primary-light);
 	}
+	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: pair the
+	   :focus rule above with :focus-visible so keyboard users get a real
+	   outline. The :focus rule still removes the default ring on mouse
+	   focus (no visible outline on click); :focus-visible re-adds a
+	   proper one for keyboard / programmatic focus. */
+	input:focus-visible, textarea:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+
 	textarea {
 		resize: vertical;
 	}

@@ -571,6 +571,16 @@
 	input, select { width: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--color-bg); }
 	input[type="checkbox"] { width: auto; padding: 0; flex-shrink: 0; }
 	input:focus, select:focus { outline: none; border-color: var(--color-primary); }
+	/* audit/accessibility (May 2026) WCAG 2.4.7 + 2.4.11: pair the
+	   :focus rule above with :focus-visible so keyboard users get a real
+	   outline. The :focus rule still removes the default ring on mouse
+	   focus (no visible outline on click); :focus-visible re-adds a
+	   proper one for keyboard / programmatic focus. */
+	input:focus-visible, select:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
+
 	.toggle-row { display: flex; gap: var(--space-sm); }
 	.toggle-btn { flex: 1; padding: var(--space-sm) var(--space-md); border: 1.5px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-bg); font-size: 0.85rem; font-weight: 500; color: var(--color-text-secondary); cursor: pointer; transition: all var(--transition-fast); }
 	.toggle-btn:hover { border-color: var(--color-primary); }
