@@ -121,6 +121,58 @@
 	});
 
 	let showLogoutModal = $state(false);
+	// Profile popover focus management. audit/accessibility (May 2026)
+	// High — WCAG 2.1.2 (No Keyboard Trap, paradoxically — the prior
+	// version had Tab ESCAPING the popover, leaving the user back in
+	// the page behind it without a way to dismiss with the keyboard)
+	// + 2.4.3 (Focus Order). When the popover opens, focus moves to
+	// the first menu item; Escape closes + returns focus to the
+	// trigger; Tab + Shift-Tab wrap inside the popover.
+	let popoverEl = $state<HTMLDivElement | null>(null);
+	let profileBtnEl = $state<HTMLButtonElement | null>(null);
+
+	$effect(() => {
+		if (!showLogoutModal) return;
+		const trigger = profileBtnEl;
+		// Move focus to first menu item once the popover renders.
+		queueMicrotask(() => {
+			const first = popoverEl?.querySelector<HTMLElement>(
+				'a, button, [tabindex]:not([tabindex="-1"])',
+			);
+			first?.focus();
+		});
+
+		const onKey = (e: KeyboardEvent) => {
+			if (e.key === 'Escape') {
+				e.stopPropagation();
+				showLogoutModal = false;
+				return;
+			}
+			if (e.key !== 'Tab' || !popoverEl) return;
+			const focusables = Array.from(
+				popoverEl.querySelectorAll<HTMLElement>(
+					'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])',
+				),
+			);
+			if (focusables.length === 0) return;
+			const first = focusables[0];
+			const last = focusables[focusables.length - 1];
+			const active = document.activeElement as HTMLElement | null;
+			if (e.shiftKey && active === first) {
+				e.preventDefault();
+				last.focus();
+			} else if (!e.shiftKey && active === last) {
+				e.preventDefault();
+				first.focus();
+			}
+		};
+		window.addEventListener('keydown', onKey);
+		return () => {
+			window.removeEventListener('keydown', onKey);
+			// Restore focus to the trigger when the popover closes.
+			if (trigger && document.body.contains(trigger)) trigger.focus();
+		};
+	});
 
 	/// Sidebar collapsed state. Persisted in localStorage so the user's
 	/// preference survives reloads. Initial value is read on first mount —
@@ -210,7 +262,9 @@
 						onclick={() => (showLogoutModal = true)}
 						aria-haspopup="menu"
 						aria-expanded={showLogoutModal}
+						aria-label="{auth.user.display_name ?? auth.user.email} — profile and sign out"
 						title={sidebarCollapsed ? auth.user.display_name ?? auth.user.email : undefined}
+						bind:this={profileBtnEl}
 					>
 						<div class="user-avatar">
 							{auth.user.display_name?.[0]?.toUpperCase() ?? '?'}
@@ -253,7 +307,12 @@
 
 	{#if showLogoutModal}
 		<div class="popover-backdrop" onclick={() => (showLogoutModal = false)} role="presentation"></div>
-		<div class="popover" role="menu">
+		<div
+			class="popover"
+			role="menu"
+			aria-label="Account menu"
+			bind:this={popoverEl}
+		>
 			<div class="popover-header">
 				<div class="popover-avatar">
 					{auth.user?.display_name?.[0]?.toUpperCase() ?? '?'}

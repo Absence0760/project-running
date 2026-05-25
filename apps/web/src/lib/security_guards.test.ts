@@ -951,6 +951,42 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('accessibility: sidebar profile popover has focus trap + ESC close + focus return', () => {
+	// Reason: audit/accessibility High — WCAG 2.1.2 (No Keyboard
+	// Trap, paradoxically — the prior version let Tab escape the
+	// popover leaving the user stranded in the page behind it
+	// without a keyboard close path) + 2.4.3 (Focus Order). Pin
+	// the focus-management wiring.
+	const src = read('src/routes/+layout.svelte');
+	assert.match(
+		src,
+		/bind:this={popoverEl}/,
+		'popover must bind a ref so the focus trap + first-focus logic ' +
+			'can find its DOM node.',
+	);
+	assert.match(
+		src,
+		/bind:this={profileBtnEl}/,
+		'profile-btn must bind a ref so focus can return on close.',
+	);
+	assert.match(
+		src,
+		/if\s*\(e\.key\s*===\s*['"]Escape['"]/,
+		'popover effect must wire an Escape key handler.',
+	);
+	assert.match(
+		src,
+		/if\s*\(e\.key\s*!==\s*['"]Tab['"]/,
+		'popover effect must wire a Tab-trap handler.',
+	);
+	assert.match(
+		src,
+		/aria-label="Account menu"/,
+		'popover root must carry an aria-label so screen readers ' +
+			'announce the menu region.',
+	);
+});
+
 test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
 	// Reason: audit/accessibility Medium — WCAG 1.1.1. Without
 	// role + aria-label, screen readers traverse every SVG child
