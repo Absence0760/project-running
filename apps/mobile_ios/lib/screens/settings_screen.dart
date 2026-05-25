@@ -1094,6 +1094,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _restorePurchases() async {
+    // Required by Apple App Store Review Guideline 3.1.1 + Play
+    // subscription policy: every subscription app must surface a
+    // restore-purchases path. audit/app-store-privacy (May 2026).
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    if (!isRevenueCatConfigured() || userId == null) {
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        'Restore needs you to be signed in with RevenueCat configured. '
+        'Manage your subscription on the web upgrade page instead.',
+      );
+      return;
+    }
+    final r = await restorePurchases(userId);
+    if (!mounted) return;
+    switch (r) {
+      case PurchaseResult.purchased:
+        showTopBanner(context, 'Restored your Pro subscription.');
+        break;
+      case PurchaseResult.cancelled:
+        // No active entitlements found — not an error, just nothing
+        // to restore. Apple Review specifically asks for this case
+        // to be communicated rather than silently dismissed.
+        showTopBanner(context, 'No active purchases found on this store account.');
+        break;
+      case PurchaseResult.failed:
+        showTopBanner(context, 'Restore failed. Try again later.');
+        break;
+      case PurchaseResult.notConfigured:
+        showTopBanner(context, 'Restore unavailable in this build.');
+        break;
+    }
+  }
+
   Future<void> _startProCheckout() async {
     // Three-way fallback to keep this tile useful on every build:
     //   1. RC configured + signed in → native sheet
@@ -1393,6 +1429,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 size: 18,
               ),
               onTap: _startProCheckout,
+            ),
+            // Apple App Store Review Guideline 3.1.1 + Play subscription
+            // policy: every subscription app must surface a "Restore
+            // purchases" path. audit/app-store-privacy (May 2026).
+            ListTile(
+              leading: const Icon(Icons.restore),
+              title: const Text('Restore purchases'),
+              subtitle: const Text(
+                'Re-link purchases from a previous install or another device',
+              ),
+              trailing: const Icon(Icons.chevron_right, size: 18),
+              onTap: _restorePurchases,
             ),
             ListTile(
               leading: const Icon(Icons.volunteer_activism_outlined),

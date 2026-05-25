@@ -129,6 +129,35 @@ Package? pickProPackage(Offerings offerings) {
   return packages.first;
 }
 
+/// Restore purchases — drives RC's restore flow so a user who has
+/// already paid (different install, different device, switched
+/// store account) gets their entitlements back. Required by Apple
+/// App Store Review Guideline 3.1.1 + Play subscription policy:
+/// every subscription app must surface a "Restore purchases"
+/// button. audit/app-store-privacy (May 2026).
+Future<PurchaseResult> restorePurchases(
+  String userId, {
+  String? keyOverride,
+}) async {
+  if (!await configureRevenueCat(userId, keyOverride: keyOverride)) {
+    return PurchaseResult.notConfigured;
+  }
+  try {
+    final info = await Purchases.restorePurchases();
+    // RC restorePurchases returns the latest CustomerInfo. Distinguish
+    // "found an active entitlement" from "no entitlement to restore"
+    // so the UI can show the right message — both are legitimate
+    // outcomes; only the former is a success.
+    final hasActive = info.entitlements.active.isNotEmpty;
+    return hasActive
+        ? PurchaseResult.purchased
+        : PurchaseResult.cancelled; // "nothing to restore" — benign
+  } catch (e) {
+    debugPrint('RevenueCat restorePurchases failed: $e');
+    return PurchaseResult.failed;
+  }
+}
+
 /// Subscription-management URL — RC's hosted portal where the user
 /// can change card / cancel. Returns null when the SDK isn't
 /// configured or the user has no active subscription.

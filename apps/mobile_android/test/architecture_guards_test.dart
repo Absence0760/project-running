@@ -1664,6 +1664,44 @@ void main() {
     });
   });
 
+  group('Restore purchases (Apple/Play subscription policy)', () {
+    test('settings_screen exposes a Restore-purchases ListTile', () {
+      // Reason: audit/app-store-privacy (May 2026) flagged the absence
+      // of a Restore-purchases entry point. Apple Review Guideline
+      // 3.1.1 + Play subscription policy require it on every
+      // subscription app. Source-grep guard so a future refactor
+      // can't quietly drop it.
+      final source = File('lib/screens/settings_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains("title: const Text('Restore purchases')"),
+        reason: 'settings_screen.dart must surface a "Restore purchases" tile.',
+      );
+      expect(
+        source,
+        contains('onTap: _restorePurchases'),
+        reason: 'settings_screen.dart must wire the tile to _restorePurchases().',
+      );
+    });
+
+    test('revenuecat.dart exports a restorePurchases helper', () {
+      final source = File('lib/revenuecat.dart').readAsStringSync();
+      expect(
+        source,
+        contains('Future<PurchaseResult> restorePurchases('),
+        reason:
+            'revenuecat.dart must export a restorePurchases helper so '
+            'the settings tile has a single source of truth for the '
+            'RC restore flow.',
+      );
+      expect(
+        source,
+        contains('Purchases.restorePurchases()'),
+        reason: 'restorePurchases must actually call the RC SDK.',
+      );
+    });
+  });
+
   group('layered resilience', () {
     test('no silent catch (_) {} sites in lib/', () {
       // Reason: audit/layered-resilience (May 2026) flagged 10
