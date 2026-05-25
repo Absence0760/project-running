@@ -1,19 +1,49 @@
+import { dev } from '$app/environment';
 import { env as publicEnv } from '$env/dynamic/public';
 import type { TrackPoint } from './types';
 
 /**
- * Base URL for the OSRM routing service. Defaults to the public demo
- * server (rate-limited, occasionally overloaded); set PUBLIC_OSRM_URL
- * to point at a self-hosted instance (see apps/job_worker/osrm/ for
- * the docker-compose recipe and `npm run dev:run:osrm`). Single source
- * of truth — RouteBuilder.svelte imports OSRM_BASE_URL from here so a
- * future env flip doesn't leave two hardcoded URLs out of sync.
+ * Base URL for the OSRM routing service.
+ *
+ * **Dev**: falls back to `https://router.project-osrm.org`, the public
+ * community demo. This is convenient locally but it's a third-party
+ * service with no DPA, no published region, and an unauthenticated
+ * URL — sending production user IPs + waypoints to it is a GDPR Art
+ * 28 violation (no processor contract). audit/third-party-data-flows
+ * (May 2026) flagged the silent fallback as Critical.
+ *
+ * **Prod**: `PUBLIC_OSRM_URL` MUST be set (typically pointing at the
+ * `apps/job_worker/osrm/` self-hosted instance on Fly.io). If it's
+ * absent the routing helpers throw the moment they're called rather
+ * than silently leaking traffic to the community endpoint.
  *
  * Read via `$env/dynamic/public` rather than the static variant so a
  * fresh clone with no local `.env.local` still type-checks — the
  * dynamic API tolerates undeclared keys and returns `undefined`.
  */
-export const OSRM_BASE_URL = (publicEnv.PUBLIC_OSRM_URL || 'https://router.project-osrm.org').replace(/\/+$/, '');
+const PUBLIC_DEMO_OSRM = 'https://router.project-osrm.org';
+const RAW_OSRM_URL = publicEnv.PUBLIC_OSRM_URL;
+
+export const OSRM_BASE_URL = (RAW_OSRM_URL || PUBLIC_DEMO_OSRM).replace(/\/+$/, '');
+
+/**
+ * Throws when the build is running in production mode AND the env var
+ * is unset (or still points at the community demo). Callers invoke
+ * this at the top of each fetch helper so a misconfigured deploy
+ * fails loudly on the first routing request instead of quietly
+ * forwarding user data to an uncontracted third party.
+ */
+export function assertOsrmConfiguredForProd(): void {
+	if (dev) return;
+	if (!RAW_OSRM_URL || OSRM_BASE_URL === PUBLIC_DEMO_OSRM) {
+		throw new Error(
+			'OSRM not configured: set PUBLIC_OSRM_URL to a self-hosted ' +
+				'instance. The community endpoint router.project-osrm.org is ' +
+				'uncontracted (no DPA) and must not receive production traffic. ' +
+				'audit/third-party-data-flows (May 2026).',
+		);
+	}
+}
 
 interface OsrmRoute {
 	geometry: {
@@ -41,6 +71,7 @@ export async function snapToRoad(
 	point: { lng: number; lat: number },
 	profile: 'foot' | 'car' = 'foot'
 ): Promise<[number, number]> {
+	assertOsrmConfiguredForProd();
 	const url = `${OSRM_BASE_URL}/nearest/v1/${profile}/${point.lng},${point.lat}`;
 	const res = await fetch(url);
 	if (!res.ok) return [point.lng, point.lat];
@@ -62,6 +93,7 @@ export async function fetchRoute(
 	to: TrackPoint,
 	profile: 'foot' | 'car' = 'foot'
 ): Promise<{ coordinates: [number, number][]; distance: number; snappedFrom: [number, number]; snappedTo: [number, number] }> {
+	assertOsrmConfiguredForProd();
 	const coords = `${from.lng},${from.lat};${to.lng},${to.lat}`;
 	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
 
@@ -96,6 +128,7 @@ export async function fetchFullRoute(
 		return { coordinates: [], distance: 0 };
 	}
 
+	assertOsrmConfiguredForProd();
 	const coords = waypoints.map((w) => `${w.lng},${w.lat}`).join(';');
 	const url = `${OSRM_BASE_URL}/route/v1/${profile}/${coords}?overview=full&geometries=geojson`;
 

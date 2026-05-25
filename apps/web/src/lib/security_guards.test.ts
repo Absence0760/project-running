@@ -945,6 +945,33 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	}
 });
 
+test('routing helpers refuse to fall back to router.project-osrm.org in prod', () => {
+	// Reason: audit/third-party-data-flows (May 2026). Pre-fix, the
+	// `OSRM_BASE_URL = (publicEnv.PUBLIC_OSRM_URL || 'https://router.project-osrm.org')`
+	// fallback meant a missing env var silently shipped user waypoints
+	// + IPs to a community endpoint with no DPA. assertOsrmConfiguredForProd
+	// throws when dev=false and the env var resolves to the demo URL.
+	const source = read('src/lib/routing.ts');
+	assert.match(
+		source,
+		/export function assertOsrmConfiguredForProd/,
+		'routing.ts must declare assertOsrmConfiguredForProd',
+	);
+	for (const fn of ['snapToRoad', 'fetchRoute', 'fetchFullRoute']) {
+		const body = source.match(
+			new RegExp(`async function ${fn}\\b[\\s\\S]*?\\n\\}`),
+		)?.[0];
+		assert.ok(body, `routing.ts missing function ${fn}`);
+		assert.match(
+			body!,
+			/assertOsrmConfiguredForProd\(\)/,
+			`${fn} must call assertOsrmConfiguredForProd() before issuing ` +
+				'an OSRM fetch — silent fallback to the demo endpoint is a ' +
+				'GDPR Art 28 violation.',
+		);
+	}
+});
+
 test('fetchRunGear enumerates only public-safe columns on the gear join', () => {
 	// Reason: audit/public-rows (May 2026). When run_gear visibility
 	// extends to non-owners of public runs (the SELECT policy is
