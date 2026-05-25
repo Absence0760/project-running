@@ -21,9 +21,13 @@ When one fails, **read the `reason:` block in the test before rubber-stamping a 
 1. Run each suite and collect output. From the repo root:
    ```
    cd apps/mobile_android && flutter test test/architecture_guards_test.dart
-   cd ../../packages/run_recorder && dart test test/architecture_guards_test.dart
+   cd ../../packages/run_recorder && flutter test test/architecture_guards_test.dart
    cd ../../apps/web && npx tsx --test src/lib/security_guards.test.ts
    ```
+   (run_recorder's suite imports `package:flutter_test/flutter_test.dart`,
+   which pulls in dart:ui types — `dart test` errors with "Offset
+   isn't a type" etc. Use `flutter test` so the Flutter SDK provides
+   the bindings. Self-audit, May 2026.)
 2. For each failing test: print the test name, the `reason:` block from the test source (the WHY), and the assertion message.
 3. **Don't fix without instruction.** Each failure is by design a "stop and think" moment.
 
