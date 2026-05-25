@@ -546,3 +546,135 @@ func TestSupabaseClient_AllNewMethodsCarryAuthHeaders(t *testing.T) {
 		}
 	}
 }
+
+// ─────────────────── FetchExportPersonalDataTables ───────────────────
+//
+// audit/data-export-completeness (May 2026) — the audit/self-audit
+// pass caught that the run_gear filter used a SQL subselect inside
+// PostgREST's `in.()` operator, which PostgREST rejects (it expects
+// a literal comma-separated value list, not a SQL fragment). The
+// fixed shape is a two-step fetch: gear ids first, then run_gear
+// filtered by the literal id list.
+
+func TestFetchExportPersonalDataTables_RunGearUsesTwoStepFetch(t *testing.T) {
+	var observed []string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		observed = append(observed, r.URL.Path+"?"+r.URL.RawQuery)
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/rest/v1/gear"):
+			_, _ = w.Write([]byte(`[{"id":"g-1","kind":"shoe"},{"id":"g-2","kind":"bike"}]`))
+		case strings.Contains(r.URL.Path, "/rest/v1/run_gear"):
+			_, _ = w.Write([]byte(`[{"run_id":"r-1","gear_id":"g-1"}]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+	_, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatalf("FetchExportPersonalDataTables: %v", err)
+	}
+
+	// Verify the run_gear request used the literal id list, NOT a
+	// SQL subselect (the bug audit/self-audit caught).
+	var runGearURL string
+	for _, p := range observed {
+		if strings.Contains(p, "/rest/v1/run_gear") {
+			runGearURL = p
+			break
+		}
+	}
+	if runGearURL == "" {
+		t.Fatalf("expected a request to /rest/v1/run_gear; saw %v", observed)
+	}
+	// Bug shape: the subselect form contains "select id from gear".
+	if strings.Contains(runGearURL, "select id from gear") {
+		t.Errorf("run_gear filter must not use a SQL subselect inside in.() "+
+			"(PostgREST rejects it). Got: %q", runGearURL)
+	}
+	// Correct shape: the literal id list contains the gear ids.
+	if !strings.Contains(runGearURL, "gear_id=in.(g-1,g-2)") {
+		t.Errorf("run_gear filter must be gear_id=in.(<ids>) with literal "+
+			"value list. Got: %q", runGearURL)
+	}
+}
+
+func TestFetchExportPersonalDataTables_RunGearSkippedWhenUserHasNoGear(t *testing.T) {
+	var runGearCalled bool
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/rest/v1/gear"):
+			_, _ = w.Write([]byte(`[]`))
+		case strings.Contains(r.URL.Path, "/rest/v1/run_gear"):
+			runGearCalled = true
+			_, _ = w.Write([]byte(`[]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if runGearCalled {
+		t.Errorf("run_gear must not be queried when the user has no gear")
+	}
+	if _, present := out["run_gear.json"]; present {
+		t.Errorf("run_gear.json must be omitted when there are no gear rows")
+	}
+}
+
+func TestFetchExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/rest/v1/device_tokens") {
+			_, _ = w.Write([]byte(`[{"token":"secret-fcm-token-do-not-leak","platform":"android"}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, ok := out["device_tokens.json"]
+	if !ok || len(rows) != 1 {
+		t.Fatalf("device_tokens.json missing or wrong count: %v", out)
+	}
+	if rows[0]["token"] != "<redacted>" {
+		t.Errorf("device_tokens.token must be redacted; got %v", rows[0]["token"])
+	}
+	if rows[0]["platform"] != "android" {
+		t.Errorf("non-secret columns must be preserved; got platform=%v", rows[0]["platform"])
+	}
+}
+
+func TestFetchExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/rest/v1/coach_messages") {
+			http.Error(w, "supabase down", http.StatusInternalServerError)
+			return
+		}
+		_, _ = w.Write([]byte(`[{"id":"x"}]`))
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Errorf("per-table failures must be swallowed; got err=%v", err)
+	}
+	if _, present := out["coach_messages.json"]; present {
+		t.Errorf("failing table must be omitted from the result")
+	}
+	if _, present := out["notifications.json"]; !present {
+		t.Errorf("other tables must still be returned: %v", extraTableKeys(out))
+	}
+}
+
+func extraTableKeys(m map[string][]map[string]interface{}) []string {
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return out
+}

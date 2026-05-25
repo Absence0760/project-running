@@ -1108,13 +1108,10 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		{name: "segment_efforts.json", table: "segment_efforts", filter: uidEq, sel: "*"},
 		// gear + run_gear — owner-private inventory + join.
 		{name: "gear.json", table: "gear", filter: "owner_id=eq." + userID, sel: "*"},
-		// run_gear filtered by run_id of runs the user owns. Cheapest
-		// approach: select where the gear is the user's own gear.
-		{
-			name: "run_gear.json", table: "run_gear",
-			filter: "gear_id=in.(select id from gear where owner_id=eq." + userID + ")",
-			sel:    "*",
-		},
+		// run_gear is filled below by a two-step fetch (PostgREST
+		// `in.()` takes a literal value list, not a SQL subselect —
+		// the self-audit caught the malformed query that this entry
+		// used to attempt). See the post-loop block.
 		// fitness_snapshots — derived VDOT / VO2 / load.
 		{name: "fitness_snapshots.json", table: "fitness_snapshots", filter: uidEq, sel: "*"},
 		// personal_records.
@@ -1186,6 +1183,39 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		}
 		out[s.name] = rows
 	}
+
+	// Two-step fetch for run_gear: PostgREST's `in.()` filter takes
+	// a comma-separated value list, not a SQL subselect. Pull the
+	// user's gear ids first, then filter run_gear by that list. A
+	// runner with hundreds of pieces of gear is unlikely, so a
+	// single id-list filter is fine; if it ever grows past
+	// PostgREST's URL length cap, page through it.
+	if gearRows, ok := out["gear.json"]; ok && len(gearRows) > 0 {
+		ids := make([]string, 0, len(gearRows))
+		for _, g := range gearRows {
+			if id, ok := g["id"].(string); ok && id != "" {
+				ids = append(ids, id)
+			}
+		}
+		if len(ids) > 0 {
+			// Build the `in.(uuid1,uuid2,...)` value list. UUIDs
+			// don't need URL-encoding but join with commas only.
+			q := url.Values{}
+			q.Set("select", "*")
+			u := c.BaseURL + "/rest/v1/run_gear?" + q.Encode() +
+				"&gear_id=in.(" + strings.Join(ids, ",") + ")"
+			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+			if err == nil {
+				if body, err := c.do(ctx, req); err == nil {
+					var rows []map[string]interface{}
+					if err := json.Unmarshal(body, &rows); err == nil && len(rows) > 0 {
+						out["run_gear.json"] = rows
+					}
+				}
+			}
+		}
+	}
+
 	return out, nil
 }
 
