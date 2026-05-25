@@ -1193,8 +1193,17 @@ test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical
 	// ePrivacy Art 5(3) Critical. Self-hosted via the material-symbols
 	// npm package (Apache 2.0); the JS-side import in +layout.svelte
 	// pulls both the package CSS and the .woff2 into the build.
-	const stripHtmlComments = (s: string) => s.replace(/<!--[\s\S]*?-->/g, '');
-	const stripCssComments = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '');
+	const stripRepeatedly = (s: string, re: RegExp): string => {
+		let prev;
+		let next = s;
+		do {
+			prev = next;
+			next = prev.replace(re, '');
+		} while (next !== prev);
+		return next;
+	};
+	const stripHtmlComments = (s: string) => stripRepeatedly(s, /<!--[\s\S]*?-->/g);
+	const stripCssComments = (s: string) => stripRepeatedly(s, /\/\*[\s\S]*?\*\//g);
 	const layout = read('src/routes/+layout.svelte');
 	const html = stripHtmlComments(read('src/app.html'));
 	const css = stripCssComments(read('src/app.css'));
@@ -1242,8 +1251,17 @@ test('/cookie-notice carries a Manage-cookie-preferences button wired to consent
 	);
 	// Strip the <script> block so the doesNotMatch check fires on
 	// rendered copy only — the comment in the script intentionally
-	// references the old phrasing for history.
-	const renderedOnly = source.replace(/<script\b[\s\S]*?<\/script>/g, '');
+	// references the old phrasing for history. Loop the replace + case-
+	// insensitive flag so nested or upper-case <SCRIPT> tags can't slip
+	// rendered copy past the guard (CodeQL js/bad-tag-filter +
+	// js/incomplete-multi-character-sanitization).
+	let renderedOnly = source;
+	let prev;
+	const scriptRe = /<script\b[\s\S]*?<\/script\s*>/gi;
+	do {
+		prev = renderedOnly;
+		renderedOnly = prev.replace(scriptRe, '');
+	} while (renderedOnly !== prev);
 	assert.doesNotMatch(
 		renderedOnly,
 		/"Cookie settings" link in the footer/,
