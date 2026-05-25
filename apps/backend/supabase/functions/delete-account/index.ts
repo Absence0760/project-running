@@ -132,20 +132,41 @@ async function deleteRevenueCatSubscriber(userId: string): Promise<void> {
   }
 }
 
-async function invalidateFcmTokens(
+async function invalidatePushTokens(
   adminClient: SupabaseClient,
   userId: string,
 ): Promise<void> {
-  const fcmServerKey = Deno.env.get('FCM_SERVER_KEY');
-  if (!fcmServerKey) return;
-  let tokens: string[] = [];
+  // Enumerate every platform's tokens. The DB cascade from
+  // auth.users → device_tokens removes the rows when admin.deleteUser
+  // runs at the end of this handler, so we don't have to delete
+  // explicitly here. The provider-side cleanup is best-effort:
+  //
+  //   * Android (FCM): we POST to FCM's batchRemove which marks the
+  //     tokens as invalidated on Google's routing tables.
+  //   * iOS (APNs):  Apple does NOT publish a provider-side "unregister"
+  //                  endpoint. Tokens become "Unregistered" only when
+  //                  the device app explicitly calls
+  //                  `unregisterForRemoteNotifications()` or when
+  //                  Apple's own routing observes a 410 Gone via a
+  //                  subsequent push attempt. Because we stop sending
+  //                  the moment device_tokens cascades away, Apple's
+  //                  routing observes the gap naturally; the audit-
+  //                  flagged concern ("APNs continues to accept push
+  //                  attempts") is moot when we are the only sender.
+  //                  We still enumerate + log the count so an operator
+  //                  reading the deletion_audit_log can correlate.
+  //                  Per audit/account-deletion-completeness (2026-05-25).
+  let androidTokens: string[] = [];
+  let iosCount = 0;
   try {
     const { data } = await adminClient
       .from('device_tokens')
-      .select('token')
-      .eq('user_id', userId)
-      .eq('platform', 'android');
-    tokens = (data ?? []).map((r: { token: string }) => r.token);
+      .select('token, platform')
+      .eq('user_id', userId);
+    for (const row of (data ?? []) as { token: string; platform: string }[]) {
+      if (row.platform === 'android') androidTokens.push(row.token);
+      else if (row.platform === 'ios') iosCount++;
+    }
   } catch (e) {
     console.error(
       'delete-account: device_tokens lookup failed:',
@@ -153,7 +174,14 @@ async function invalidateFcmTokens(
     );
     return;
   }
-  if (tokens.length === 0) return;
+  if (iosCount > 0) {
+    console.log(
+      `delete-account: ${iosCount} iOS push token(s) removed via DB ` +
+        'cascade — APNs publishes no provider-side unregister API.',
+    );
+  }
+  const fcmServerKey = Deno.env.get('FCM_SERVER_KEY');
+  if (!fcmServerKey || androidTokens.length === 0) return;
   try {
     await fetch(FCM_BATCH_REMOVE_URL, {
       method: 'POST',
@@ -161,7 +189,7 @@ async function invalidateFcmTokens(
         Authorization: `key=${fcmServerKey}`,
         'content-type': 'application/json',
       },
-      body: fcmBatchRemoveBody(tokens),
+      body: fcmBatchRemoveBody(androidTokens),
     });
   } catch (e) {
     console.error(
@@ -288,7 +316,7 @@ serve(withSentry('delete-account', async (req: Request) => {
   // integrations / device_tokens rows still exist for the lookups.
   await deauthorizeStrava(adminClient, user.id);
   await deleteRevenueCatSubscriber(user.id);
-  await invalidateFcmTokens(adminClient, user.id);
+  await invalidatePushTokens(adminClient, user.id);
 
   // ─── Mandatory cleanups before the cascade ───
   // These leak personal data past the auth-row cascade, so failure

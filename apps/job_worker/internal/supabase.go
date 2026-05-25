@@ -1138,6 +1138,26 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		{name: "saved_routes.json", table: "saved_routes", filter: uidEq, sel: "*"},
 		// route_reviews authored by the user.
 		{name: "route_reviews.json", table: "route_reviews", filter: uidEq, sel: "*"},
+		// race_pings — live race GPS+HR at ~10s granularity. Personal
+		// health + location data; absent before audit/data-export-
+		// completeness (2026-05-25).
+		{name: "race_pings.json", table: "race_pings", filter: uidEq, sel: "*"},
+		// user_device_settings — per-device behavioural prefs +
+		// last-seen-at. Distinct from user_settings.prefs (in the
+		// manifest already). Added per audit/data-export-completeness
+		// (2026-05-25).
+		{name: "user_device_settings.json", table: "user_device_settings", filter: uidEq, sel: "*"},
+		// user_coach_usage — daily message_count behavioural log.
+		// Small but personal; added per audit/data-export-completeness
+		// (2026-05-25).
+		{name: "user_coach_usage.json", table: "user_coach_usage", filter: uidEq, sel: "*"},
+		// reports authored by the user (subject's own report history).
+		// reporter_id is the user; target rows belong to others and are
+		// out of scope of THIS subject's export.
+		{
+			name: "reports.json", table: "reports",
+			filter: "reporter_id=eq." + userID, sel: "*",
+		},
 	}
 
 	out := make(map[string][]map[string]interface{}, len(specs))

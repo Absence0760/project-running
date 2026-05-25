@@ -678,3 +678,57 @@ func extraTableKeys(m map[string][]map[string]interface{}) []string {
 	}
 	return out
 }
+
+// audit/data-export-completeness (2026-05-25) pinned three missing
+// tables (race_pings, user_device_settings, user_coach_usage) plus
+// reports.reporter_id rows. Each must turn up in the export when the
+// underlying table has any rows for the subject.
+func TestFetchExportPersonalDataTables_IncludesAuditCompletenessTables(t *testing.T) {
+	hits := map[string]bool{
+		"race_pings":           false,
+		"user_device_settings": false,
+		"user_coach_usage":     false,
+		"reports":              false,
+	}
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		query := r.URL.RawQuery
+		switch {
+		case strings.Contains(path, "/rest/v1/race_pings"):
+			hits["race_pings"] = true
+			_, _ = w.Write([]byte(`[{"id":"rp1","run_id":"r1","lat":51.5,"lng":-0.1}]`))
+		case strings.Contains(path, "/rest/v1/user_device_settings"):
+			hits["user_device_settings"] = true
+			_, _ = w.Write([]byte(`[{"device_id":"d1","platform":"web"}]`))
+		case strings.Contains(path, "/rest/v1/user_coach_usage"):
+			hits["user_coach_usage"] = true
+			_, _ = w.Write([]byte(`[{"usage_date":"2026-05-25","message_count":3}]`))
+		case strings.Contains(path, "/rest/v1/reports") && strings.Contains(query, "reporter_id="):
+			hits["reports"] = true
+			_, _ = w.Write([]byte(`[{"id":"rep1","target_kind":"user","reason":"spam"}]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for table, fetched := range hits {
+		if !fetched {
+			t.Errorf("expected PostgREST call against /rest/v1/%s — audit/data-export-completeness (2026-05-25) requires this table in the manifest", table)
+		}
+	}
+	required := []string{
+		"race_pings.json",
+		"user_device_settings.json",
+		"user_coach_usage.json",
+		"reports.json",
+	}
+	for _, key := range required {
+		if rows, ok := out[key]; !ok || len(rows) == 0 {
+			t.Errorf("%s must appear in the export manifest with at least one row; got out=%v", key, extraTableKeys(out))
+		}
+	}
+}

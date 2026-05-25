@@ -104,6 +104,32 @@ test.describe('saga: account deletion via /settings/account', () => {
 		expect(beforeList.data?.find((f) => f.name.startsWith(plantedRunId)))
 			.toBeDefined();
 
+		// Plant a representative row in every personal-data table the
+		// audit/account-deletion-completeness (2026-05-25) extension
+		// asks the saga to cover. Each must cascade away with the auth
+		// row — a missing cascade slips a regression into the privacy
+		// posture that the per-table on-delete cascade test alone
+		// can't catch end-to-end.
+		await admin.from('coach_messages').insert({
+			user_id: user.id,
+			role: 'user',
+			content: 'saga: must drain on delete-account',
+		});
+		await admin.from('personal_records').insert({
+			user_id: user.id,
+			category: 'distance',
+			distance_m: 5_000,
+			run_id: plantedRunId,
+			set_at: new Date('2026-04-30T10:25:00Z').toISOString(),
+		});
+		await admin.from('notifications').insert({
+			user_id: user.id,
+			kind: 'kudos',
+			actor_id: user.id,
+			target_kind: 'run',
+			target_id: plantedRunId,
+		});
+
 		// 2) Drive the UI flow.
 		const ctx = await browser.newContext({
 			storageState: user.storageStatePath
@@ -180,6 +206,36 @@ test.describe('saga: account deletion via /settings/account', () => {
 			'gzipped track must be drained from the runs Storage bucket — ' +
 				'a privacy-deletion silent failure if blobs survive after the auth row is gone'
 		).toBeUndefined();
+
+		// audit/account-deletion-completeness (2026-05-25) — assert
+		// the load-bearing personal-data tables all cascade. Each
+		// query is service-role so RLS doesn't mask a surviving row.
+		const cm = await admin
+			.from('coach_messages')
+			.select('id')
+			.eq('user_id', user.id);
+		expect(
+			cm.data ?? [],
+			'coach_messages must cascade — chat history is the densest non-track PII'
+		).toEqual([]);
+
+		const pr = await admin
+			.from('personal_records')
+			.select('id')
+			.eq('user_id', user.id);
+		expect(
+			pr.data ?? [],
+			'personal_records must cascade — derived achievement history'
+		).toEqual([]);
+
+		const notes = await admin
+			.from('notifications')
+			.select('id')
+			.eq('user_id', user.id);
+		expect(
+			notes.data ?? [],
+			'notifications must cascade — actor + target metadata'
+		).toEqual([]);
 
 		// Mark plantedRunId as cleaned so the afterAll doesn't re-attempt.
 		plantedRunId = null;

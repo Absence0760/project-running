@@ -129,13 +129,15 @@ type Backend interface {
 
 	// FetchExportPersonalDataTables bundles every additional table
 	// the audit/data-export-completeness pass added to the export
-	// (May 2026): coach_messages, notifications, training plans +
-	// weeks + workouts, integrations (with secrets scrubbed),
-	// run_kudos + run_comments authored by the user, run_photos
-	// metadata, segment_efforts, gear + run_gear,
-	// fitness_snapshots, personal_records, device_tokens (with
-	// raw token redacted), live_run_pings, user_follows,
-	// event_attendees, club_members, saved_routes, route_reviews.
+	// (May 2026 + 2026-05-25 refresh): coach_messages, notifications,
+	// training plans + weeks + workouts, integrations (with secrets
+	// scrubbed), run_kudos + run_comments authored by the user,
+	// run_photos metadata, segment_efforts, gear + run_gear,
+	// fitness_snapshots, personal_records, device_tokens (with raw
+	// token redacted), live_run_pings, user_follows, event_attendees,
+	// club_members, saved_routes, route_reviews, race_pings,
+	// user_device_settings, user_coach_usage, and the reporter side
+	// of reports.
 	//
 	// Returns a map keyed by zip entry name (the table name with a
 	// `.json` extension); each value is a list of JSON-encodable

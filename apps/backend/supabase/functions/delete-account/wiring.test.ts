@@ -45,14 +45,35 @@ Deno.test('handler calls deleteRevenueCatSubscriber before admin.deleteUser', ()
 	);
 });
 
-Deno.test('handler calls invalidateFcmTokens before admin.deleteUser', () => {
-	const fcm = SRC.indexOf('invalidateFcmTokens(adminClient, user.id)');
+Deno.test('handler calls invalidatePushTokens before admin.deleteUser', () => {
+	const push = SRC.indexOf('invalidatePushTokens(adminClient, user.id)');
 	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
-	assert(fcm !== -1, 'handler must call invalidateFcmTokens');
+	assert(push !== -1, 'handler must call invalidatePushTokens');
 	assert(
-		fcm < del,
-		'invalidateFcmTokens must run before admin.deleteUser — the ' +
+		push < del,
+		'invalidatePushTokens must run before admin.deleteUser — the ' +
 			'device_tokens rows cascade away with the auth user',
+	);
+});
+
+Deno.test('invalidatePushTokens enumerates iOS tokens alongside Android', () => {
+	// Reason: audit/account-deletion-completeness (2026-05-25). The
+	// pre-fix function filtered .eq('platform', 'android'), missing
+	// iOS tokens entirely. The current shape selects token + platform
+	// and branches inside the loop so the iOS count is logged and
+	// the audit trail can correlate.
+	const helperBody = SRC.match(/async function invalidatePushTokens[\s\S]*?\n\}/);
+	assert(helperBody, 'invalidatePushTokens must exist in delete-account/index.ts');
+	const body = helperBody![0];
+	assert(
+		!body.includes(".eq('platform', 'android')"),
+		'invalidatePushTokens must NOT filter on platform=android — that ' +
+			'was the pre-fix shape that silently ignored every iOS token',
+	);
+	assert(
+		body.includes("select('token, platform')"),
+		'invalidatePushTokens must read the platform column so iOS tokens ' +
+			'are enumerated alongside Android',
 	);
 });
 
