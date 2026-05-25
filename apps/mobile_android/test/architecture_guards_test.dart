@@ -1475,6 +1475,28 @@ void main() {
       );
     });
 
+    test('UIBackgroundModes does not claim unused `fetch` mode', () {
+      final file = File('ios/Runner/Info.plist');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Reason: Apple App Review rejects binaries that declare a
+      // `UIBackgroundModes` capability the binary doesn't actually
+      // exercise — `fetch` requires a registered
+      // `application(_:performFetchWithCompletionHandler:)`, which
+      // none of the bundled plugins implements. The Workmanager
+      // background-sync task is a BGProcessingTask, not a fetch task,
+      // and is declared via the `processing` mode + the
+      // BGTaskSchedulerPermittedIdentifiers entry.
+      // See audit/app-store-privacy 2026-05-25.
+      expect(
+        body.contains('<string>fetch</string>'),
+        isFalse,
+        reason: 'UIBackgroundModes must not include `fetch` — no '
+            'fetch handler is implemented and Apple rejects '
+            'undeclared-capability claims.',
+      );
+    });
+
     test('ITSAppUsesNonExemptEncryption is declared', () {
       final file = File('ios/Runner/Info.plist');
       if (!file.existsSync()) return;
@@ -1882,6 +1904,62 @@ void main() {
       // The encryption-export key (ITSAppUsesNonExemptEncryption)
       // lives in Info.plist, not PrivacyInfo.xcprivacy, and is
       // covered by the Info.plist test above.
+    });
+
+    test('PrivacyInfo declares every data type the binary actually collects',
+        () {
+      final infoPlist = File('ios/Runner/Info.plist');
+      if (!infoPlist.existsSync()) return;
+      final file = File('ios/Runner/PrivacyInfo.xcprivacy');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // Reason: spring-2024 Privacy Manifest validation rejects
+      // binaries whose NSPrivacyCollectedDataTypes array is empty
+      // while the binary actually exercises the matching APIs (here
+      // CLLocation, HealthKit, image_picker, Sentry, RevenueCat,
+      // Supabase Auth). The full set must agree with the App Store
+      // Connect Privacy Nutrition Label. See audit/app-store-privacy
+      // 2026-05-25.
+      final required = <String, String>{
+        'NSPrivacyCollectedDataTypePreciseLocation':
+            'geolocator GPS recording',
+        'NSPrivacyCollectedDataTypeHealth':
+            'health (HealthKit reads/writes for HR + workout import)',
+        'NSPrivacyCollectedDataTypeFitness':
+            'pedometer + workout distance/duration',
+        'NSPrivacyCollectedDataTypeEmailAddress':
+            'Supabase Auth email sign-in',
+        'NSPrivacyCollectedDataTypeName': 'user_profiles.display_name',
+        'NSPrivacyCollectedDataTypeUserID':
+            'auth.users.id stored on RevenueCat + Supabase',
+        'NSPrivacyCollectedDataTypePhotosorVideos':
+            'image_picker run photo attachments',
+        'NSPrivacyCollectedDataTypePurchaseHistory':
+            'RevenueCat in-app subscription events',
+        'NSPrivacyCollectedDataTypeOtherUserContent':
+            'coach chat messages + notes/title + saved runs',
+        'NSPrivacyCollectedDataTypeCrashData':
+            'sentry_flutter exception capture',
+        'NSPrivacyCollectedDataTypePerformanceData':
+            'sentry_flutter performance traces',
+      };
+      for (final entry in required.entries) {
+        expect(
+          body,
+          contains('<string>${entry.key}</string>'),
+          reason: 'PrivacyInfo.xcprivacy must declare ${entry.key} '
+              '(collected by ${entry.value}). An empty or partial '
+              'NSPrivacyCollectedDataTypes array fails Privacy '
+              'Manifest validation on App Store submission.',
+        );
+      }
+      // NSPrivacyTracking must remain false for the no-IDFA stance.
+      expect(
+        body,
+        contains('<key>NSPrivacyTracking</key>\n\t<false/>'),
+        reason: 'NSPrivacyTracking must stay false — the app does '
+            'not access the IDFA or perform cross-app/site tracking.',
+      );
     });
   });
 
