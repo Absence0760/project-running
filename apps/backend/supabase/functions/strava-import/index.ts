@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import { checkRateLimit, checkRateLimitTiered } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -28,7 +27,7 @@ import {
 // lives in `../_shared/strava.ts` so the `strava-webhook` EF reuses
 // the same path without drift.
 
-serve(withSentry('strava-import', async (req: Request) => {
+Deno.serve(withSentry('strava-import', async (req: Request) => {
 	if (req.method !== 'POST') {
 		return Response.json({ error: 'method_not_allowed' }, { status: 405 });
 	}

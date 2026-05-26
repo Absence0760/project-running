@@ -25,8 +25,7 @@
 /// the platform / making backups for several reasons today" without
 /// the half-hour wait.
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import {
 	BlobWriter,
 	TextReader,
@@ -64,7 +63,7 @@ type TrackPoint = {
 	bpm?: number;
 };
 
-serve(withSentry('export-data', async (req: Request) => {
+Deno.serve(withSentry('export-data', async (req: Request) => {
 	if (req.method !== 'POST') {
 		return new Response('Method not allowed', { status: 405 });
 	}

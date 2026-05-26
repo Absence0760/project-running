@@ -30,8 +30,7 @@
 /// rows. A webhook firing while a backfill is mid-run is harmless —
 /// the dedupe check on `metadata.strava_id` short-circuits.
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import {
 	fetchStravaActivity,
 	ingestActivity,
@@ -43,7 +42,7 @@ import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
 
-serve(withSentry('strava-webhook', async (req: Request) => {
+Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 	// Body cap is enforced in the POST branch below via readJsonWithLimit
 	// — closes the chunked-transfer-encoding bypass that the bare header
 	// check left open. GET has no body.

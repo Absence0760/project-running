@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
@@ -21,7 +20,7 @@ import { isValidUuid } from '../_shared/webhook_security.ts';
 //      clip_track_for_user. Owners receive the unclipped track.
 //   5. Return the points as JSON.
 
-serve(withSentry('clip-public-track', async (req: Request) => {
+Deno.serve(withSentry('clip-public-track', async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response('Method not allowed', { status: 405 });
   }

@@ -1,5 +1,4 @@
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import { discardBody } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import { timingSafeEqual } from '../_shared/webhook_security.ts';
@@ -15,7 +14,7 @@ import { timingSafeEqual } from '../_shared/webhook_security.ts';
 /// path via _shared/webhook_security.ts to avoid divergence on a
 /// future hardening pass (audit/auth 2026-05-25).
 
-serve(withSentry('refresh-tokens', async (req: Request) => {
+Deno.serve(withSentry('refresh-tokens', async (req: Request) => {
   // No body input — drop the stream before the auth check so a caller
   // that POST-streams a chunked body can't hold the connection open
   // until the runtime timeout. The Go service equivalent already

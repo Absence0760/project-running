@@ -9,8 +9,7 @@
 /// the REVENUECAT_WEBHOOK_SECRET env var). The function runs with the
 /// Supabase service role so it can update any user's tier.
 
-import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.105.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
 import { readTextWithLimit } from '../_shared/body_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import {
@@ -26,7 +25,7 @@ import {
   mapEventToTier,
 } from './lib.ts';
 
-serve(withSentry('revenuecat-webhook', async (req: Request) => {
+Deno.serve(withSentry('revenuecat-webhook', async (req: Request) => {
   if (req.method !== 'POST') {
     return Response.json({ error: 'method_not_allowed' }, { status: 405 });
   }

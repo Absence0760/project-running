@@ -660,6 +660,183 @@ function looksLikeBareErrorIdentifier(arg: string): boolean {
     /(err|Err|error|Error)$/.test(stripped);
 }
 
+// ─── audit:deps May 2026 closeouts ───────────────────────────────────
+// Three source-level dep-hygiene pins so version drift across Edge
+// Functions can't silently accumulate. Each one walks every EF
+// `index.ts` + `_shared/*.ts` as text and asserts a property the
+// audit explicitly called out.
+
+test('every Deno import in Edge Functions has a version pin', () => {
+	// Reason: Deno fetches at module-resolution time, so an unpinned
+	// `https://esm.sh/x` or `https://deno.land/std/...` import would
+	// silently pull a different version on every cold start. The
+	// audit:deps May 2026 sweep confirmed every import was pinned
+	// today; this pin keeps it that way. Catches a future "let's see
+	// what the latest version does" experiment that ships without a
+	// version suffix.
+	const efDir = resolve(__dirname, '../../../backend/supabase/functions');
+	const offenders: Array<{ file: string; line: number; url: string }> = [];
+	function walk(dir: string): void {
+		for (const name of readdirSync(dir)) {
+			if (name.startsWith('.')) continue;
+			const full = resolve(dir, name);
+			let stat;
+			try {
+				stat = readFileSync(full);
+			} catch {
+				continue;
+			}
+			// Best-effort directory detection via existsSync of a child;
+			// use readdirSync inside try/catch instead.
+			try {
+				const entries = readdirSync(full);
+				if (entries.length >= 0) {
+					walk(full);
+					continue;
+				}
+			} catch {
+				/* not a directory; fall through to file handling */
+			}
+		}
+	}
+	// Above walk is verbose; simpler: collect every .ts file recursively
+	// via a helper that uses readdirSync with file-type checks.
+	const collectTs = (dir: string, out: string[]): void => {
+		for (const name of readdirSync(dir)) {
+			if (name.startsWith('.')) continue;
+			const full = resolve(dir, name);
+			try {
+				const entries = readdirSync(full);
+				// It's a directory — recurse.
+				collectTs(full, out);
+				void entries;
+			} catch {
+				// Not a directory — check if it's a .ts file.
+				if (full.endsWith('.ts')) out.push(full);
+			}
+		}
+	};
+	const tsFiles: string[] = [];
+	collectTs(efDir, tsFiles);
+	assert.ok(tsFiles.length >= 8, `Expected ≥8 .ts files under ${efDir}, found ${tsFiles.length}.`);
+	// Pattern: `from 'https://...'` — flag if no @version suffix appears
+	// before the next slash or quote.
+	const importRe = /from\s+['"](https:\/\/[^'"]+)['"]/g;
+	for (const path of tsFiles) {
+		const source = readFileSync(path, 'utf-8');
+		let m: RegExpExecArray | null;
+		while ((m = importRe.exec(source)) !== null) {
+			const url = m[1];
+			// Acceptable shapes: ...@x.y.z/..., ...@x.y.z, ...@vx.y.z/...,
+			// ...@<sha>/...
+			// Anything without an @ before the next / or end is unpinned.
+			// `v` prefix is common on deno.land/x/ (e.g. zipjs@v2.7.45),
+			// SHA pins are 7-40 hex chars. Loose match covers both.
+			const host = url.replace(/^https:\/\//, '').split('/')[0];
+			const path_after_host = url.replace(/^https:\/\/[^/]+/, '');
+			const hasVersionPin = /@v?[\d.]+/.test(url) || /@[0-9a-f]{7,40}\b/.test(url);
+			if (!hasVersionPin) {
+				const lineNo = source.slice(0, m.index).split('\n').length;
+				offenders.push({ file: path, line: lineNo, url });
+			}
+			void host;
+			void path_after_host;
+		}
+	}
+	assert.strictEqual(
+		offenders.length,
+		0,
+		'Every Deno import in Edge Functions must carry a @version pin. ' +
+			'Unpinned imports re-resolve on every cold start — a supply-chain risk.\n' +
+			`Offenders:\n${offenders.map((o) => `  ${o.file}:${o.line} → ${o.url}`).join('\n')}`,
+	);
+});
+
+test('Edge Functions pin @supabase/supabase-js in lockstep', () => {
+	// Reason: a partial bump where some EFs are at 2.105 and others at
+	// 2.107 produces split behaviour on auth / RLS / Storage paths
+	// (each major-line evolves its session handling differently).
+	// Catches a one-off "I bumped this function but forgot the rest"
+	// commit. The lockstep target lives in the production EFs; the
+	// _shared/strava.ts + _shared/rate_limit.ts type-only imports must
+	// match.
+	const efDir = resolve(__dirname, '../../../backend/supabase/functions');
+	const versions = new Set<string>();
+	const sites: Array<{ file: string; line: number; ver: string }> = [];
+	const collectTs = (dir: string, out: string[]): void => {
+		for (const name of readdirSync(dir)) {
+			if (name.startsWith('.')) continue;
+			const full = resolve(dir, name);
+			try {
+				readdirSync(full);
+				collectTs(full, out);
+			} catch {
+				if (full.endsWith('.ts')) out.push(full);
+			}
+		}
+	};
+	const tsFiles: string[] = [];
+	collectTs(efDir, tsFiles);
+	const versionRe = /@supabase\/supabase-js@(\d+\.\d+\.\d+)/g;
+	for (const path of tsFiles) {
+		const source = readFileSync(path, 'utf-8');
+		let m: RegExpExecArray | null;
+		while ((m = versionRe.exec(source)) !== null) {
+			versions.add(m[1]);
+			const lineNo = source.slice(0, m.index).split('\n').length;
+			sites.push({ file: path, line: lineNo, ver: m[1] });
+		}
+	}
+	assert.ok(sites.length >= 8, `Expected ≥8 supabase-js pins, found ${sites.length}.`);
+	assert.strictEqual(
+		versions.size,
+		1,
+		'Every Edge Function must pin @supabase/supabase-js to the SAME version. ' +
+			`Found ${versions.size} distinct versions: ${[...versions].join(', ')}.\n` +
+			`Sites:\n${sites.map((s) => `  ${s.file}:${s.line} → ${s.ver}`).join('\n')}`,
+	);
+});
+
+test('Edge Functions use Deno.serve, not std http/server.ts', () => {
+	// Reason: `std@0.177.0/http/server.ts` was the pre-Deno-1.35 way
+	// to start an HTTP server. Since 1.35 the built-in `Deno.serve`
+	// is the supported entry point — no supply-chain hop, no version
+	// drift between prod (0.177) and tests (0.224) that we had before
+	// the audit:deps May 2026 sweep. A future "let's restore the
+	// import" change would re-introduce the drift; pin it out.
+	const efDir = resolve(__dirname, '../../../backend/supabase/functions');
+	const offenders: Array<{ file: string; line: number }> = [];
+	const collectTs = (dir: string, out: string[]): void => {
+		for (const name of readdirSync(dir)) {
+			if (name.startsWith('.')) continue;
+			const full = resolve(dir, name);
+			try {
+				readdirSync(full);
+				collectTs(full, out);
+			} catch {
+				if (full.endsWith('.ts') && !full.endsWith('.test.ts')) out.push(full);
+			}
+		}
+	};
+	const tsFiles: string[] = [];
+	collectTs(efDir, tsFiles);
+	const stdServeRe = /from\s+['"]https:\/\/deno\.land\/std@[\d.]+\/http\/server\.ts['"]/g;
+	for (const path of tsFiles) {
+		const source = readFileSync(path, 'utf-8');
+		let m: RegExpExecArray | null;
+		while ((m = stdServeRe.exec(source)) !== null) {
+			const lineNo = source.slice(0, m.index).split('\n').length;
+			offenders.push({ file: path, line: lineNo });
+		}
+	}
+	assert.strictEqual(
+		offenders.length,
+		0,
+		'Edge Function source files (non-test) must NOT import `serve` from std/http — use built-in `Deno.serve` instead.\n' +
+			`Offenders:\n${offenders.map((o) => `  ${o.file}:${o.line}`).join('\n')}`,
+	);
+});
+
 // ─── audit:cost-controls May 2026 closeouts ──────────────────────────
 // Six source-level pins on the Terraform IaC so cost-control regressions
 // fail CI rather than waiting for the bill at end of month. Each test
