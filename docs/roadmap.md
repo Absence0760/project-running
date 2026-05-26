@@ -681,6 +681,28 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 
 ---
 
+## Future — Hardware: ultra-marathon-optimized watch
+
+**Status: research only. Not committed.** See [decisions.md § 71](decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) for why this is parked.
+
+A purpose-built wrist device for ultra-marathon use — 100+ hour GPS battery life, dual-band GNSS for foliage / canyon accuracy, Sharp MIP always-on display, 5-button layout, offline vector maps, IPX7. Targets the niche Garmin Fenix / COROS Vertix / Suunto Vertical own today. Full research lives at [`docs/hardware/`](hardware/README.md):
+
+- [Vision](hardware/vision.md) — why ultra (not road or general-purpose smartwatch), the four product requirements that fall out of that niche, the competitive set
+- [BOM](hardware/bom.md) — component picks per subsystem (Ambiq Apollo4 MCU, Sony CXD5610 dual-band GNSS, Maxim MAX86177 HR, Sharp Memory LCD, Bosch BMP390), ~$110 production BOM at 10k units
+- [Prototyping](hardware/prototyping.md) — three honest cost tiers: $1–2k bench prototype, $15–250k wearable prototype, $300–600k VC-demo / production-intent unit
+- [Firmware](hardware/firmware.md) — why Zephyr RTOS not Wear OS (battery target unreachable on Wear OS), how the watch would integrate with the existing Supabase backend and reuse the run-recorder state machine
+
+The unticked items below are the gates that would have to flip before any of this becomes real work:
+
+- [ ] Trigger (a): app has a paying user base large enough to fund a parallel hardware effort without starving the software roadmap
+- [ ] Trigger (b): an existing ODM (Mobvoi, Huami/Zepp, etc.) approaches us about a white-label firmware deal
+- [ ] Trigger (c): a co-founder with shipped-consumer-hardware experience joins the project
+- [ ] None of the above — keep `docs/hardware/` frozen at its current resolution; do not build tier-1 prototypes on hobby budget
+
+If a trigger flips, the first real piece of work is a **tier-1 bench prototype** (~$1–2k parts + 3–6 months of evenings) to validate that the firmware skeleton works end-to-end against the existing backend. That's the only milestone short enough to fit into a research budget; everything past it requires a real team and a real budget.
+
+---
+
 ## Competitive positioning
 
 | Feature | Run App | Strava | Nike Run Club | Garmin Connect | AllTrails |

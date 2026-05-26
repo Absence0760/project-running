@@ -32,6 +32,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |
 | Setting up the monorepo / melos / workspaces | [docs/monorepo.md](docs/monorepo.md) |
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
+| "Should we build our own watch hardware?" | [docs/hardware/README.md](docs/hardware/README.md) — research-only baseline for an ultra-marathon watch (vision, BOM, prototyping tiers, firmware). Decision to not build is [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) |
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
 | Where each service runs in production / cost / DR / rollback | [docs/deployment.md](docs/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
