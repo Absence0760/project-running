@@ -114,6 +114,74 @@ void main() {
     );
   });
 
+  test('iOS location settings disable auto-pause and tag activityType.fitness',
+      () {
+    // Reason: CLLocationManager.pausesLocationUpdatesAutomatically defaults
+    // to TRUE on iOS. With the default, iOS auto-pauses the GPS the moment
+    // it thinks the user has stopped moving — including the 30 s pause to
+    // photograph something interesting mid-run. The recorder MUST pass an
+    // AppleSettings with pauseLocationUpdatesAutomatically: false so iOS
+    // keeps feeding fixes through stationary segments. activityType
+    // .fitness biases the CoreLocation power-saving heuristics for foot-
+    // paced motion.
+    expect(
+      source,
+      contains('AppleSettings('),
+      reason: 'recorder must build AppleSettings on iOS — passing the '
+          'AndroidSettings base on iOS leaves every Apple-only knob at '
+          'CoreLocation defaults, including the silent-freeze auto-pause.',
+    );
+    expect(
+      source,
+      contains('pauseLocationUpdatesAutomatically: false'),
+      reason: 'AppleSettings.pauseLocationUpdatesAutomatically MUST be '
+          'false — this is the iOS twin of the Android whileInUse silent-'
+          'freeze bug. Removing this re-introduces the failure mode.',
+    );
+    expect(
+      source,
+      contains('activityType: ActivityType.fitness'),
+      reason: 'AppleSettings.activityType must be fitness so iOS biases '
+          'the location power model for running pace, not driving.',
+    );
+    expect(
+      source,
+      contains('allowBackgroundLocationUpdates: true'),
+      reason: 'AppleSettings.allowBackgroundLocationUpdates must be true '
+          'so the recorder keeps producing fixes when the screen is off '
+          '(the UIBackgroundModes:location capability gates this).',
+    );
+  });
+
+  test('Android location settings keep distanceFilter:0 + an FGS config', () {
+    // Reason: distanceFilter > 0 silently starves the blue dot at walking
+    // pace (the OS gates fix emission by physical distance), and the FGS
+    // config is what promotes the geolocator service to a typed
+    // foreground service. Without the FGS, Android puts the process into
+    // CACHED state the moment the app is backgrounded — Samsung Freecess
+    // then freezes the whole app and the position callback queue drains
+    // to nothing, exactly the failure pattern we hit in May 2026.
+    expect(
+      source,
+      contains('AndroidSettings('),
+      reason: 'recorder must build AndroidSettings on Android.',
+    );
+    expect(
+      source,
+      contains('distanceFilter: 0'),
+      reason: 'AndroidSettings.distanceFilter must be 0 — any positive '
+          'value gates fix emission at the OS level and starves the live '
+          'dot at slow paces. Software filtering handles movement gating.',
+    );
+    expect(
+      source,
+      contains('foregroundNotificationConfig:'),
+      reason: 'AndroidSettings must pass a ForegroundNotificationConfig '
+          'so the geolocator service is promoted to a typed FGS — without '
+          'it the process drops to CACHED + Samsung Freecess kills it.',
+    );
+  });
+
   test('prepare flips _prepared before the GPS checks', () {
     // Reason: indoor runs require begin() to work even when GPS is
     // unavailable. If _prepared is only set after the checks succeed,

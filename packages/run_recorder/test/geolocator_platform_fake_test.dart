@@ -21,6 +21,10 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
   StreamController<Position>? _positions;
   Stream<Position> get positions => _positions!.stream;
   int subscriptionsOpened = 0;
+  // Records the LocationSettings instance handed to each getPositionStream
+  // call so tests can pin the per-platform Settings shape (Apple vs Android,
+  // pauseLocationUpdatesAutomatically, activityType, FGS config, ...).
+  final List<LocationSettings?> lastLocationSettings = <LocationSettings?>[];
 
   @override
   Future<bool> isLocationServiceEnabled() async => serviceEnabled;
@@ -38,6 +42,7 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
   @override
   Stream<Position> getPositionStream({LocationSettings? locationSettings}) {
     subscriptionsOpened++;
+    lastLocationSettings.add(locationSettings);
     _positions ??= StreamController<Position>.broadcast();
     return _positions!.stream;
   }
@@ -183,6 +188,80 @@ void main() {
       final r = RunRecorder();
       await r.prepare();
       expect(r.prepared, isTrue);
+      r.dispose();
+    });
+  });
+
+  group('RunRecorder.prepare — per-platform location settings', () {
+    test('on iOS, passes AppleSettings with auto-pause OFF + fitness activity',
+        () async {
+      // Reason: CLLocationManager.pausesLocationUpdatesAutomatically defaults
+      // to TRUE, which auto-pauses GPS the moment iOS thinks the user has
+      // stopped moving — including pausing 30 s to take a picture. That is
+      // the iOS twin of the Android whileInUse silent freeze. The recorder
+      // MUST pin this to false. activityType.fitness biases CoreLocation's
+      // power-saving heuristics for running pace.
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final r = RunRecorder();
+      await r.prepare();
+      expect(fake.lastLocationSettings, isNotEmpty);
+      final settings = fake.lastLocationSettings.last;
+      expect(
+        settings,
+        isA<AppleSettings>(),
+        reason: 'iOS must receive AppleSettings, not AndroidSettings — '
+            'passing AndroidSettings on iOS leaves the iOS-specific knobs '
+            '(pauseLocationUpdatesAutomatically, activityType, '
+            'showBackgroundLocationIndicator) at CoreLocation defaults.',
+      );
+      final apple = settings as AppleSettings;
+      expect(
+        apple.pauseLocationUpdatesAutomatically,
+        isFalse,
+        reason: 'pauseLocationUpdatesAutomatically MUST be false — true is '
+            'the CoreLocation default and silently freezes the run when the '
+            'user stops moving for a moment (the iOS twin of the Android '
+            'whileInUse bug — same silent-freeze pattern, no error surface).',
+      );
+      expect(apple.activityType, ActivityType.fitness);
+      expect(apple.distanceFilter, 0,
+          reason: 'distanceFilter must stay 0 so every fix flows through '
+              'software filtering (same rule as Android — see ADR §21).');
+      expect(apple.allowBackgroundLocationUpdates, isTrue);
+      r.dispose();
+    });
+
+    test('on Android, passes AndroidSettings with a ForegroundNotificationConfig',
+        () async {
+      // Reason: without a ForegroundNotificationConfig the geolocator
+      // package falls back to a regular bound service, which Android puts
+      // into CACHED state the moment the app is backgrounded — Samsung
+      // Freecess then freezes the whole process and the position callback
+      // queue drains to nothing. The FGS notification is what keeps the
+      // process alive while another app holds the screen.
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      final r = RunRecorder();
+      await r.prepare();
+      final settings = fake.lastLocationSettings.last;
+      expect(
+        settings,
+        isA<AndroidSettings>(),
+        reason: 'Android must receive AndroidSettings so the FGS config '
+            'gets applied.',
+      );
+      final android = settings as AndroidSettings;
+      expect(
+        android.foregroundNotificationConfig,
+        isNotNull,
+        reason: 'ForegroundNotificationConfig is what promotes the '
+            'geolocator service to a typed foreground service — without it '
+            'the process drops to CACHED + Samsung Freecess kills it.',
+      );
+      expect(android.distanceFilter, 0,
+          reason: 'distanceFilter must stay 0 so every fix flows through '
+              'software filtering (ADR §21).');
       r.dispose();
     });
   });

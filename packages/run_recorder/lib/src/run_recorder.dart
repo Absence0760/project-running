@@ -287,19 +287,7 @@ class RunRecorder {
   void _openPositionStream() {
     _positionSub?.cancel();
     _positionSub = Geolocator.getPositionStream(
-      locationSettings: AndroidSettings(
-        accuracy: _locationAccuracy,
-        // Receive every fix from the OS; movement filtering happens in
-        // software so the blue dot can refresh without inflating the track.
-        distanceFilter: 0,
-        foregroundNotificationConfig: const ForegroundNotificationConfig(
-          notificationTitle: 'Run in progress',
-          notificationText: 'Recording your run',
-          enableWakeLock: true,
-          notificationIcon:
-              AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
-        ),
-      ),
+      locationSettings: _platformLocationSettings(),
     ).listen(
       _onPosition,
       onError: (Object e, StackTrace st) {
@@ -308,6 +296,50 @@ class RunRecorder {
         _positionSub = null;
       },
       cancelOnError: true,
+    );
+  }
+
+  /// Build the per-platform [LocationSettings] for the live position stream.
+  ///
+  /// iOS gets [AppleSettings] with [ActivityType.fitness] +
+  /// `pauseLocationUpdatesAutomatically: false`. CLLocationManager's default
+  /// for that flag is `true`, which auto-pauses the GPS the moment iOS
+  /// decides the user has stopped moving — including the 30-second pause
+  /// taken to photograph something interesting mid-run. That produces the
+  /// same silent freeze the Android `whileInUse` path produced (see
+  /// [LocationPermissionWhileInUseError]) — fixes stop, distance flat-lines,
+  /// the foreground capability stays alive so no error surfaces, and the
+  /// user only notices once they look at the finished run. Pinning the flag
+  /// here keeps the iOS twin honest. `activityType: fitness` biases the
+  /// CoreLocation power-saving heuristics for foot-paced motion.
+  ///
+  /// Android gets [AndroidSettings] with [ForegroundNotificationConfig] so
+  /// the geolocator package can promote its service to a typed foreground
+  /// service. `distanceFilter: 0` keeps every fix flowing so software
+  /// filtering can drive the blue dot at sensor rate.
+  LocationSettings _platformLocationSettings() {
+    if (defaultTargetPlatform == TargetPlatform.iOS) {
+      return AppleSettings(
+        accuracy: _locationAccuracy,
+        activityType: ActivityType.fitness,
+        distanceFilter: 0,
+        pauseLocationUpdatesAutomatically: false,
+        showBackgroundLocationIndicator: false,
+        allowBackgroundLocationUpdates: true,
+      );
+    }
+    return AndroidSettings(
+      accuracy: _locationAccuracy,
+      // Receive every fix from the OS; movement filtering happens in
+      // software so the blue dot can refresh without inflating the track.
+      distanceFilter: 0,
+      foregroundNotificationConfig: const ForegroundNotificationConfig(
+        notificationTitle: 'Run in progress',
+        notificationText: 'Recording your run',
+        enableWakeLock: true,
+        notificationIcon:
+            AndroidResource(name: 'ic_launcher', defType: 'mipmap'),
+      ),
     );
   }
 

@@ -191,6 +191,15 @@ The title / text above are only the *initial* state. Once recording begins, `_re
 
 With `distanceFilter: 0` we receive every fix the sensor produces (~1 Hz on most Android chips) and do all the filtering in software below, which lets the dot refresh at sensor rate while still keeping the track clean.
 
+### iOS-specific settings
+
+On iOS the recorder switches to `AppleSettings` inside `_platformLocationSettings` and pins two non-default values:
+
+- **`pauseLocationUpdatesAutomatically: false`** — CLLocationManager's default is `true`, which auto-pauses the GPS the moment iOS decides the user has stopped moving (including the 30 s pause to photograph something interesting mid-run). With the default flag, the run silently freezes — fixes stop arriving, distance flat-lines, no error surfaces — exactly the failure mode the Android `whileInUse` path produced. Architecture guards in `packages/run_recorder/test/architecture_guards_test.dart` pin this so a future refactor can't quietly reintroduce the auto-pause.
+- **`activityType: ActivityType.fitness`** — biases the CoreLocation power-saving heuristics for foot-paced motion instead of the default `other` (driving).
+
+The recorder also passes `allowBackgroundLocationUpdates: true` (paired with `UIBackgroundModes:location` in Info.plist, pinned by `architecture_guards_test.dart#run_screen.dart`) and `showBackgroundLocationIndicator: false`.
+
 ### Filter chain
 
 Every incoming `Position` goes through:
