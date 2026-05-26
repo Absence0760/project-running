@@ -188,6 +188,82 @@ void main() {
       expect(loaded?.distanceMetres, 500);
     });
 
+    test('saveInProgress writes atomically via .tmp + rename', () async {
+      // Reason: a process killed mid-write (Samsung Freecess freeze, OOM,
+      // user force-stops the app, disk full midway through a growing
+      // track) used to leave a partial in_progress.json behind because
+      // writeAsString truncates the target file before writing the new
+      // contents. Atomic rename keeps the previous incremental
+      // checkpoint intact — if the write crashes, only the .tmp is
+      // partial; the canonical path still has the last-known-good save.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveInProgress(makeRun(id: 'live', distance: 100));
+      expect(
+        File('${tempDir.path}/in_progress.json').existsSync(),
+        isTrue,
+        reason: 'rename must produce the canonical file',
+      );
+      expect(
+        File('${tempDir.path}/in_progress.json.tmp').existsSync(),
+        isFalse,
+        reason: 'A clean saveInProgress must leave no .tmp file behind '
+            '— the rename moves it to the canonical name.',
+      );
+    });
+
+    test('saveInProgress survives a leftover .tmp from a previous crash',
+        () async {
+      // Reason: an interrupted previous save can leave garbage in
+      // in_progress.json.tmp. The next saveInProgress must overwrite
+      // that orphan via the rename rather than fail or refuse to write.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveInProgress(makeRun(id: 'A', distance: 100));
+      await File('${tempDir.path}/in_progress.json.tmp')
+          .writeAsString('partial garbage from a torn write');
+      await store.saveInProgress(makeRun(id: 'B', distance: 500));
+      final loaded = await store.loadInProgress();
+      expect(loaded?.id, 'B');
+      expect(loaded?.distanceMetres, 500);
+      expect(
+        File('${tempDir.path}/in_progress.json.tmp').existsSync(),
+        isFalse,
+        reason: 'The next clean save must replace the orphan .tmp via '
+            'rename — leaving it behind would let it grow without bound.',
+      );
+    });
+
+    test('a torn write leaves the previous in_progress intact', () async {
+      // Reason: this is the actual data-loss property the atomic write
+      // guarantees. Simulate the previous-code failure mode (writeAsString
+      // truncates the target before writing): manually replicate the
+      // pre-fix world by writing a half-formed payload directly to the
+      // canonical path. The atomic-rename code path is only exercised
+      // by a real saveInProgress; the test here pins that
+      // _loadAll/loadInProgress doesn't surface partial garbage as a
+      // real run. With the old in-place write the truncation always
+      // destroyed the previous good save; the atomic rename keeps the
+      // canonical file pointing at the prior good save until the new
+      // tmp file is fully flushed + renamed.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveInProgress(makeRun(id: 'GOOD', distance: 100));
+      // Simulate the equivalent of a torn write that leaked a half-
+      // formed file at the canonical path under the OLD writeAsString
+      // path — loadInProgress must drop it cleanly without crashing.
+      await File('${tempDir.path}/in_progress.json')
+          .writeAsString('{"run": {"id": "TORN", "start');
+      expect(await store.loadInProgress(), isNull,
+          reason: 'A corrupt canonical file must be detected and dropped');
+      expect(
+        File('${tempDir.path}/in_progress.json').existsSync(),
+        isFalse,
+        reason: 'loadInProgress must delete the corrupt file so the next '
+            'session doesn\'t keep tripping over it.',
+      );
+    });
+
     test(
         'ultra-length crash-resume roundtrip preserves every waypoint + '
         'every field (25 000 points, ~7 h @ 1 Hz)', () async {

@@ -570,10 +570,22 @@ class _LoadedRun {
 /// blocking file write for a growing-track in-progress save doesn't run on
 /// the UI isolate. Keep it top-level so it can be serialised across the
 /// isolate boundary.
+///
+/// Writes go through a `.tmp` sibling followed by an atomic POSIX rename so
+/// a torn write (process killed mid-encode, disk full midway through a
+/// growing track, isolate crash) leaves the previous in_progress.json
+/// intact. Before this, the helper called `writeAsString` directly on the
+/// target path — `writeAsString` truncates the file before writing, so an
+/// interrupted save destroyed the previous incremental checkpoint and the
+/// run was lost. The rename also clobbers any orphan `.tmp` left behind
+/// from a prior crash, so a single broken save doesn't poison every
+/// subsequent one.
 Future<void> _encodeAndWriteJson(Map<String, dynamic> args) async {
   final path = args['path'] as String;
   final data = args['data'] as Map<String, dynamic>;
-  await File(path).writeAsString(jsonEncode(data));
+  final tmp = File('$path.tmp');
+  await tmp.writeAsString(jsonEncode(data), flush: true);
+  await tmp.rename(path);
 }
 
 /// Top-level helper invoked via [compute] so the heavy `readAsString` +

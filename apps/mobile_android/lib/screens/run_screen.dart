@@ -1369,13 +1369,37 @@ class _RunScreenState extends State<RunScreen> {
       createdAt: raw.createdAt,
     );
 
-    // Clear the in-progress file now that we've got the authoritative run.
-    await widget.runStore.clearInProgress();
+    // Persist the run BEFORE clearing the in-progress recovery file, and
+    // never gate the save on `mounted` — the recorder is already stopped
+    // and the data lives in memory, so a navigation or process kill after
+    // this point must not lose it. The two ordering invariants together
+    // (save-then-clear, save-not-gated-on-mounted) close the data-loss
+    // window that bit a real user in May 2026: clearInProgress() ran
+    // first, then setState + an awaited audio cue, then save() — if the
+    // OS killed the app during the audio cue, both in_progress.json AND
+    // the saved run file were gone, the run was lost forever. If save
+    // throws (disk full, isolate crash, plugin failure) we deliberately
+    // skip clearInProgress so the next launch promotes the partial via
+    // the recovery path in main.dart. Pinned by
+    // architecture_guards_test.dart#_stop saves before clearInProgress.
+    bool localSaved = false;
+    try {
+      await widget.runStore.save(run);
+      localSaved = true;
+    } catch (e) {
+      debugPrint('Run save failed: $e');
+    }
+    if (localSaved) {
+      await widget.runStore.clearInProgress();
+    }
 
     if (!mounted) return;
     setState(() {
       _finishedRun = run;
       _state = _ScreenState.finished;
+      if (!localSaved) {
+        _syncError = 'Couldn\'t save locally. Relaunch the app to recover.';
+      }
     });
     _announceA11yState('Run finished');
 
@@ -1391,7 +1415,10 @@ class _RunScreenState extends State<RunScreen> {
       }
     }
 
-    await widget.runStore.save(run);
+    // If the local save failed, skip the cloud push — local is the
+    // source of truth and pushing a row whose authoritative copy isn't
+    // on disk would diverge web from mobile until the next reconciliation.
+    if (!localSaved) return;
 
     if (api != null && api.userId != null) {
       try {

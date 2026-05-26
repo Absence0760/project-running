@@ -149,6 +149,17 @@ Every 10 seconds while the screen state is `recording`, the app serialises the c
 
 `_loadAll` excludes `in_progress.json` from the normal run list, so the in-progress file never pollutes history.
 
+Writes go through `in_progress.json.tmp` followed by an atomic POSIX `rename`. The previous in-place `writeAsString` truncated the canonical file before writing the new payload — a process killed mid-write left a partial file behind and the run was lost. With atomic rename, a crash during the new write leaves `in_progress.json` pointing at the last-known-good checkpoint until the new file is fully flushed + renamed.
+
+### Stop-button ordering: save before clearing the recovery file
+
+`_stop` writes the final run to `LocalRunStore.save` **before** `clearInProgress`, and the save runs **without** an `if (!mounted) return` gate. Until May 2026 the order was reversed (`clearInProgress` → `setState(finished)` → await audio cue → `save`), which produced a multi-second window where both the in-progress recovery file and the saved run file were missing. A real run was lost when the OS killed the app during the audio cue. Architecture guards in `apps/mobile_android/test/architecture_guards_test.dart` pin both invariants:
+
+- `_stop saves the run BEFORE clearing the in-progress recovery file`
+- `_stop does not gate the local save on \`mounted\``
+
+If the local save throws (disk full, isolate crash, plugin failure), `_stop` deliberately skips `clearInProgress` so the next launch promotes the partial via the crash-recovery path below — and skips the cloud push so a row whose authoritative copy isn't on disk doesn't diverge web from mobile.
+
 ### Recovery on next launch (`main.dart`)
 
 Immediately after `LocalRunStore.init()` and before `runApp`, the app checks for a leftover `in_progress.json`:

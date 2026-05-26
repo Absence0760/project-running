@@ -254,6 +254,68 @@ void main() {
       );
     });
 
+    test('_stop saves the run BEFORE clearing the in-progress recovery file',
+        () {
+      // Reason: the in_progress.json recovery file is the safety net for
+      // the window between "user tapped stop" and "run is on disk in
+      // its final form". The previous order was clearInProgress() →
+      // setState(finished) → await audio cue → save(run); if the OS
+      // killed the process during the audio cue (Samsung Freecess,
+      // OOM, force-stop, user backgrounded the app), BOTH the
+      // in_progress.json AND the saved run file were gone — the run
+      // was lost forever. Pinned the new order so a future refactor
+      // can't quietly reintroduce the data-loss window.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _stop\(\)\s*async\s*\{',
+      );
+      final saveIdx = body.indexOf('widget.runStore.save(');
+      final clearIdx = body.indexOf('widget.runStore.clearInProgress(');
+      expect(saveIdx, greaterThan(-1),
+          reason: '_stop must call runStore.save(run)');
+      expect(clearIdx, greaterThan(-1),
+          reason: '_stop must call runStore.clearInProgress()');
+      expect(
+        saveIdx,
+        lessThan(clearIdx),
+        reason: 'runStore.save MUST appear before runStore.clearInProgress '
+            'in _stop. The reverse order opens a data-loss window: if '
+            'the process is killed between clearInProgress and save, '
+            'both the in_progress.json recovery file AND the saved run '
+            'file are gone — that lost a real user\'s run in May 2026.',
+      );
+    });
+
+    test('_stop does not gate the local save on `mounted`', () {
+      // Reason: paired guarantee with the save-before-clear ordering.
+      // The recorder is already stopped and the data lives in memory
+      // — if the user navigates away or the framework unmounts the
+      // widget during stop (multi-window mode, push notification
+      // takeover, configuration change), the save still needs to run.
+      // The previous code did `if (!mounted) return;` between
+      // clearInProgress() and save(); with the in-progress file
+      // already deleted, the early bail evaporated the run. The new
+      // order has save() FIRST (no mounted check), so a navigation
+      // can't lose the run.
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> _stop\(\)\s*async\s*\{',
+      );
+      final saveIdx = body.indexOf('widget.runStore.save(');
+      // Find every `if (!mounted) return` (or `if (!mounted)`) that
+      // appears BEFORE the save call. There must be zero — the save
+      // must be unconditional on widget mount state.
+      final beforeSave = body.substring(0, saveIdx);
+      expect(
+        RegExp(r'if\s*\(\s*!\s*mounted\s*\)\s*return').hasMatch(beforeSave),
+        isFalse,
+        reason: 'No `if (!mounted) return;` may appear before the '
+            'runStore.save call in _stop. The recorder is stopped and '
+            'the data is in memory — an unmount must not evaporate the '
+            'run before it lands on disk.',
+      );
+    });
+
     test('_onPrefsChange skips rebuilds during recording', () {
       // Reason: runStore.notifyListeners() fires every 10s via
       // _saveInProgress. Without this gate, we'd get a full-screen
