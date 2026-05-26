@@ -660,6 +660,50 @@ function looksLikeBareErrorIdentifier(arg: string): boolean {
     /(err|Err|error|Error)$/.test(stripped);
 }
 
+test('refresh-tokens fails closed (503) when CRON_SECRET env is absent', () => {
+	// Reason: the function returns 503 `cron_not_configured` when
+	// `Deno.env.get('CRON_SECRET')` is null — i.e. a misconfigured
+	// production deployment refuses to do any work rather than
+	// proceeding with "no auth check at all." The 403 path
+	// (wrong/missing bearer with the env var present) is covered by
+	// integration tests in handler_envelope.test.ts; the 503 branch
+	// is a config-state property best pinned at the source level.
+	//
+	// The rollback path matters even more: refresh-tokens is the
+	// deprecated-but-kept rollback for the Go service per
+	// apps/backend/CLAUDE.md. If a future edit dropped the 503 guard
+	// and just fell through to `auth.startsWith('Bearer ')` against an
+	// undefined secret, an unauthenticated POST could trigger the
+	// integrations loop with no auth (which is the exact bug that
+	// commit b3373c6 originally closed).
+	const source = read('../backend/supabase/functions/refresh-tokens/index.ts');
+	// 1. Reads CRON_SECRET via Deno.env.get.
+	assert.match(
+		source,
+		/Deno\.env\.get\(['"]CRON_SECRET['"]\)/,
+		'refresh-tokens must read CRON_SECRET from env.',
+	);
+	// 2. Has an explicit fail-closed branch returning 503 when the
+	//    env var is missing — before the bearer check.
+	assert.match(
+		source,
+		/if\s*\(\s*!\s*cronSecret\s*\)\s*\{[\s\S]*?status:\s*503/,
+		'refresh-tokens must return 503 fail-closed when CRON_SECRET is unset, BEFORE the bearer check. ' +
+			'Falling through with an undefined secret would let an unauthenticated POST proceed.',
+	);
+	// 3. Drains the request body BEFORE the auth check (the body-
+	//    drain commit e56cd48). A regression that removed
+	//    discardBody() re-opens the slow-loris DoS window.
+	const bodyDrainIdx = source.indexOf('discardBody(req)');
+	const cronCheckIdx = source.search(/Deno\.env\.get\(['"]CRON_SECRET['"]\)/);
+	assert.notStrictEqual(bodyDrainIdx, -1,
+		'refresh-tokens must call discardBody(req) — the body-drain helper from _shared/body_limit.ts.');
+	assert.ok(
+		bodyDrainIdx < cronCheckIdx,
+		'discardBody(req) must come BEFORE the CRON_SECRET env read — otherwise a chunked-body POST holds the connection open until the runtime timeout even on the auth-reject path.',
+	);
+});
+
 test('revenuecat-webhook verifies HMAC before constructing the Supabase client', () => {
 	// Reason: the webhook is the ONLY legitimate writer of
 	// user_profiles.subscription_tier (the lock_subscription_columns
@@ -1043,15 +1087,36 @@ test('Coach pre-handshake daily-limit placeholder matches the server free cap', 
 	const tierMatch = types.match(/free:\s*\{[^}]*dailyLimit:\s*(\d+)/);
 	assert.ok(tierMatch, 'Could not extract TIER_LIMITS.free.dailyLimit from coach/types.ts.');
 	const serverCap = tierMatch![1];
-	assert.equal(serverCap, '5', 'Free dailyLimit should be 5 (audit cost-controls baseline).');
-	// Web placeholder.
+	// Source-of-truth check: the value MUST be a positive small
+	// integer (sanity guard; drifting to "0" or "10000" would be a
+	// product mistake worth catching). The exact value (2 today,
+	// reduced from 5 in commit 144d2a9 as a cost-control measure) is
+	// not pinned here — the cross-checks below verify the placeholder
+	// matches whatever the server says. The literal-value pin used to
+	// be `=== '5'`; replaced after audit:cost-controls + the
+	// 144d2a9 product change drifted past it without updating the
+	// test. The lockstep-with-server property is what actually matters.
+	assert.match(
+		serverCap,
+		/^[1-9]\d{0,2}$/,
+		`TIER_LIMITS.free.dailyLimit should be a small positive integer (1–999), was "${serverCap}".`,
+	);
+	// Web placeholder. The current shape reads
+	// `TIER_LIMITS.free.dailyLimit` directly from the imported source-
+	// of-truth, which is structurally better than the old local
+	// `DEFAULT_DAILY_LIMIT` constant — a server-cap change updates
+	// both at once because the placeholder IS the server cap. Pin the
+	// import path instead of a literal value.
 	const chat = read('src/lib/components/CoachChat.svelte');
 	assert.match(
 		chat,
-		new RegExp(`DEFAULT_DAILY_LIMIT\\s*=\\s*${serverCap}\\b`),
-		`CoachChat.svelte DEFAULT_DAILY_LIMIT must match the server cap (${serverCap}) — pass-2 commit a2ea656.`,
+		/TIER_LIMITS\.free\.dailyLimit/,
+		'CoachChat.svelte must use TIER_LIMITS.free.dailyLimit as the pre-handshake placeholder so the placeholder updates in lockstep with the server cap.',
 	);
-	// Mobile placeholder, both Dart twins.
+	// Mobile placeholder, both Dart twins. Same shape pin — the
+	// `_freeDailyLimit` local constant must be the literal value
+	// (Dart can't import from TS), so cross-check it against the
+	// server cap extracted above.
 	for (const p of [
 		'../mobile_android/lib/screens/coach_screen.dart',
 		'../mobile_ios/lib/screens/coach_screen.dart',
@@ -1059,8 +1124,9 @@ test('Coach pre-handshake daily-limit placeholder matches the server free cap', 
 		const dart = read(p);
 		assert.match(
 			dart,
-			new RegExp(`_defaultDailyLimit\\s*=\\s*${serverCap}\\b`),
-			`${p} _defaultDailyLimit must match the server cap (${serverCap}).`,
+			new RegExp(`_freeDailyLimit\\s*=\\s*${serverCap}\\b`),
+			`${p} _freeDailyLimit must equal the server cap (${serverCap}). ` +
+				'If the server tier was changed in coach/types.ts, mirror it here.',
 		);
 	}
 });

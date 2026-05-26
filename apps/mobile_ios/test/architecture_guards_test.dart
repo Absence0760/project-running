@@ -683,6 +683,33 @@ void main() {
       );
     });
 
+    test('main.dart clears SettingsSyncService on signedOut', () {
+      // Reason: the cached SettingsService instance holds the
+      // previously-signed-in user's universal + device bags
+      // (privacy_zones, preferred_unit, voice_feedback, etc.). On a
+      // shared device where A signs out and B signs in, B's
+      // LiveBroadcaster.privacyZonesProvider would read A's cached
+      // zones until B's onSignedIn re-fetch completes — leaking A's
+      // home/work coordinates to B's live spectator broadcast in the
+      // intervening window. The signedOut handler MUST call
+      // settingsSync?.onSignedOut() to drop the cache before any
+      // record can use it. See decisions §33.
+      final source = File('lib/main.dart').readAsStringSync();
+      expect(
+        source,
+        contains('AuthChangeEvent.signedOut'),
+        reason: 'main.dart must subscribe to signedOut events.',
+      );
+      expect(
+        source,
+        contains('settingsSync?.onSignedOut()'),
+        reason: 'main.dart\'s signedOut handler MUST call '
+            'settingsSync?.onSignedOut() — without it, the previous '
+            'user\'s privacy_zones stay cached and leak into the '
+            'next user\'s live broadcast.',
+      );
+    });
+
     test('main.dart stamps the watch-ingest queue before draining on signin',
         () {
       // Reason: WatchIngestQueue files queued while signed-out carry

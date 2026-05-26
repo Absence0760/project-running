@@ -337,6 +337,20 @@ void main() async {
         syncService.triggerSync('signin').catchError((Object e) {
           debugPrint('Sync on signedIn failed: $e');
         });
+      } else if (event.event == AuthChangeEvent.signedOut) {
+        // Drop the previously-signed-in user's cached settings bag
+        // so a subsequent sign-in by a DIFFERENT user on the same
+        // device doesn't read the prior user's universal/device prefs
+        // during the brief window before onSignedIn re-fetches. The
+        // privacy-zones path matters specifically here: the live
+        // broadcaster's privacyZonesProvider reads the cached bag on
+        // every push (see decisions §33), so leaving stale zones in
+        // place would leak the previous user's home/work coordinates
+        // to a new user's spectator broadcast. Other settings (units,
+        // theme) are merely cosmetic but the clear is uniform.
+        settingsSync?.onSignedOut().catchError((Object e) {
+          debugPrint('Settings sync on signedOut failed: $e');
+        });
       }
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);

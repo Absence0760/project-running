@@ -31,6 +31,25 @@ class SettingsSyncService extends ChangeNotifier {
   bool get synced => _synced;
   String? get lastError => _lastError;
 
+  /// Called when the user signs out. Drops the cached [SettingsService]
+  /// instance (which holds the previously-signed-in user's universal +
+  /// device bags) so a subsequent sign-in by a DIFFERENT user on the
+  /// same device doesn't read the previous user's settings during the
+  /// brief window before [onSignedIn] re-fetches. Without this, a
+  /// shared device shows User A's last-loaded preferred-unit / split
+  /// interval / privacy zones to User B until B's sign-in completes
+  /// the round-trip. Cosmetic on its own, but the privacy-zones path
+  /// specifically matters because [LiveBroadcaster.privacyZonesProvider]
+  /// reads the cached bag on every push — leaking the previous user's
+  /// zones to a new user's broadcast would be a real privacy regression.
+  /// Idempotent — safe to call multiple times.
+  Future<void> onSignedOut() async {
+    _settings = null;
+    _synced = false;
+    _lastError = null;
+    notifyListeners();
+  }
+
   /// Called after a successful sign-in. Fetches both bags, overlays the
   /// universal bag onto local [Preferences], and returns. Silent if the
   /// user isn't authenticated.

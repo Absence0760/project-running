@@ -629,7 +629,20 @@
 						 missing-icon placeholder. -->
 					<div class="run-map-placeholder">
 						{#if run.track_url}
-							<RunTrackPreview trackUrl={run.track_url} />
+							<!-- ownerUserId + runId are passed defensively. The /runs
+								 page is auth-gated to the viewer's own runs today, so
+								 the clip path isn't entered (shouldClip resolves
+								 false when ownerUserId === viewerId). Pinning both
+								 props keeps the safe shape if the page is ever widened
+								 to show another user's runs — without them, the clip
+								 gate silently falls open. See audit:privacy-zones
+								 2026-05-25 + the corresponding security_guards.test
+								 case below. -->
+							<RunTrackPreview
+								trackUrl={run.track_url}
+								runId={run.id}
+								ownerUserId={run.user_id}
+							/>
 						{:else}
 							<span class="material-symbols no-track-icon" aria-hidden="true">
 								map

@@ -69,9 +69,23 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
       final ownerId = fetched.ownerId;
       final isOwner =
           viewerId != null && ownerId != null && viewerId == ownerId;
-      final waypoints = (isOwner || route.waypoints.isEmpty)
-          ? route.waypoints
-          : await widget.api.clipRouteForViewer(widget.routeId);
+      // Three explicit branches, NOT a `(isOwner || waypoints.isEmpty)`
+      // short-circuit. The original combined form was correct today
+      // (empty waypoints leak zero bytes by construction) but a future
+      // change that populates `route.waypoints` for non-owners on the
+      // empty-branch would silently bypass clipRouteForViewer. The
+      // split documents each branch's intent. See audit:privacy-zones
+      // 2026-05-25.
+      final List<cm.Waypoint> waypoints;
+      if (isOwner) {
+        waypoints = route.waypoints;
+      } else if (route.waypoints.isEmpty) {
+        // Non-owner viewer + empty waypoints — nothing to render and
+        // nothing to clip. Avoids a wasted clipRouteForViewer call.
+        waypoints = const [];
+      } else {
+        waypoints = await widget.api.clipRouteForViewer(widget.routeId);
+      }
       if (!mounted) return;
       setState(() {
         _route = route;

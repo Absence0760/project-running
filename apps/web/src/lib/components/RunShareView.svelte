@@ -44,7 +44,13 @@
 			// clip-public-track EF does — both pin to the
 			// `{user_id}/{run_id}.json.gz` shape that the CHECK
 			// constraint on runs.track_url (20260621_001) enforces.
-			const isOwner = auth.user?.id === r.user_id;
+			// Strict null + equality. Supabase-js returns null (not
+			// undefined) for anon today, but the explicit `!= null` guard
+			// removes the dependency on that implementation detail. Without
+			// it, an `undefined === undefined` would route an anon viewer
+			// down the owner branch and skip the clip-public-track call.
+			// See audit:privacy-zones 2026-05-25.
+			const isOwner = auth.user?.id != null && auth.user.id === r.user_id;
 			if (isOwner) {
 				const ownerTrackPath = `${r.user_id}/${r.id}.json.gz`;
 				try {

@@ -11,7 +11,7 @@
 
 begin;
 
-select plan(14);
+select plan(15);
 
 -- ─── Fixtures ───────────────────────────────────────────────────────
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -203,6 +203,26 @@ select lives_ok(
      values ('00000000-0000-0000-0000-00000000ef01',
              '00000000-0000-0000-0000-00000000e104') $$,
   'service-role self-kudos insert bypasses the trigger (seed setup path)'
+);
+
+-- ─────────────────────────────────────────────────────────────────────
+-- 5. clone_plan_template rate-limit (audit followup, 20260927_001).
+-- ─────────────────────────────────────────────────────────────────────
+-- The RPC body now calls enforce_create_rate_limit('clone_plan_template',
+-- caller, 20, 3600). Pin via pg_proc source inspection — a future
+-- edit that drops the perform line silently re-opens the loop-clone
+-- abuse surface.
+select ok(
+  exists (
+    select 1 from pg_proc
+     where proname = 'clone_plan_template'
+       and pronamespace = 'public'::regnamespace
+       and prosrc ilike '%enforce_create_rate_limit(''clone_plan_template''%'
+  ),
+  'clone_plan_template body MUST call enforce_create_rate_limit('
+  '''clone_plan_template'', ...) — without it, a club member can '
+  'loop-clone every public template UUID and bulk-create rows '
+  'under their account (audit:rls May 2026 deferred Low fix).'
 );
 
 select * from finish();
