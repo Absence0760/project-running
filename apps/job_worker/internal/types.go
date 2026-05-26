@@ -148,6 +148,13 @@ const (
 	StravaFetchOK StravaFetchOutcome = iota
 	StravaFetchRateLimited
 	StravaFetchNotFound
+	// StravaFetchTransient = 5xx (500/502/503/504) or network-level
+	// failure. The caller defers + retries the same way as
+	// RateLimited. /audit/strava May 2026 High #5 — pre-fix, every
+	// non-2xx-non-429/503 silently dropped the user's activity on a
+	// transient Strava-side outage (multi-hour 5xx incidents at
+	// least quarterly).
+	StravaFetchTransient
 )
 
 // StravaActivityResult is the return type of

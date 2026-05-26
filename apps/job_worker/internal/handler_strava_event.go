@@ -121,16 +121,23 @@ func (w *Worker) handleStravaEvent(ctx context.Context, job *Job) error {
 		return fmt.Errorf("strava_event: fetch activity: %w", err)
 	}
 	switch result.Status {
-	case StravaFetchRateLimited:
+	case StravaFetchRateLimited, StravaFetchTransient:
 		// Roll back the dedupe row so the next retry reopens the
 		// gate. Without this the retried event would 23505 on the
 		// webhook side and silently skip the activity.
+		// Transient covers Strava 5xx + network-layer failures —
+		// audit/strava H5. Pre-fix every non-2xx-non-429/503
+		// silently dropped the user's activity on a Strava outage.
 		eventID := stravaEventID(p)
 		if delErr := w.Backend.DeleteWebhookEvent(ctx, "strava", eventID); delErr != nil {
 			w.Log.Warn("strava_event: failed to roll back dedupe row before retry",
 				"err", delErr, "event_id", eventID)
 		}
-		return &HTTPError{StatusCode: 503, Body: "strava rate-limited"}
+		reason := "strava rate-limited"
+		if result.Status == StravaFetchTransient {
+			reason = "strava transient (5xx/network)"
+		}
+		return &HTTPError{StatusCode: 503, Body: reason}
 	case StravaFetchNotFound:
 		w.Log.Info("strava_event: activity vanished or fetch unauthorised; dropping",
 			"activity_id", p.ObjectID)

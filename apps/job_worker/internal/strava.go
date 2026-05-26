@@ -110,12 +110,21 @@ func (c *StravaClient) FetchActivity(ctx context.Context, accessToken string, ac
 	}
 	resp, err := client.Do(req)
 	if err != nil {
-		return StravaActivityResult{}, err
+		// Network-level failure (DNS, dial, TLS, EOF) — transient.
+		// The dedupe-rollback in the caller lets the next retry
+		// reach the fetch stage cleanly. audit/strava H5.
+		return StravaActivityResult{Status: StravaFetchTransient}, nil
 	}
 	defer resp.Body.Close()
 	raw, _ := readAllResponse(resp)
 	if resp.StatusCode == 429 || resp.StatusCode == 503 {
 		return StravaActivityResult{Status: StravaFetchRateLimited}, nil
+	}
+	// Other 5xx (500/502/504): transient. Multi-hour 5xx incidents
+	// from Strava are common — silent drop on a genuine outage is
+	// worse than a retry-with-backoff outcome. audit/strava H5.
+	if resp.StatusCode >= 500 && resp.StatusCode < 600 {
+		return StravaActivityResult{Status: StravaFetchTransient}, nil
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return StravaActivityResult{Status: StravaFetchNotFound}, nil

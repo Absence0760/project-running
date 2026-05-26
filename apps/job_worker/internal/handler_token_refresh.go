@@ -26,11 +26,12 @@ import (
 //
 //   - Strava 5xx / network blip on ONE row → that row is skipped and
 //     logged; the job as a whole keeps going. We don't want one stuck
-//     user to block 499 others.
+//     user to block 499 others. The next hourly tick retries.
 //   - Strava 4xx (expired refresh token, revoked grant) on ONE row →
-//     same: log and skip. The next time the user re-connects they'll
-//     get a fresh refresh token; we don't have a graceful UX path for
-//     that here.
+//     stamp `disconnected_at` so subsequent sweeps don't pick the
+//     row up. The UI will show "Reconnect Strava" via the existing
+//     integrations list (a non-NULL `disconnected_at` is the flag).
+//     /audit/strava High #2.
 //   - Supabase-level errors (RPC unavailable, service-role rejected)
 //     → fail the job (transient if 5xx, permanent otherwise). The
 //     queue's retry policy applies.
@@ -59,14 +60,33 @@ func (w *Worker) handleTokenRefresh(ctx context.Context, _ *Job) error {
 		return nil
 	}
 
-	refreshed, skipped := 0, 0
+	refreshed, skipped, disconnected := 0, 0, 0
 	for _, row := range rows {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
 		if err := w.refreshOne(ctx, row.UserID); err != nil {
+			// audit/strava High #2: branch on 4xx (permanent) vs
+			// 5xx + network (transient). 4xx → mark disconnected
+			// so the next sweep doesn't pick this row up forever.
+			// Use a typed HTTPError check (mirrors isTransient in
+			// worker.go) so a wrapped error still routes correctly.
+			var httpErr *HTTPError
+			if errors.As(err, &httpErr) && httpErr.StatusCode >= 400 && httpErr.StatusCode < 500 {
+				reason := classifyStravaRefreshFailure(httpErr)
+				if dErr := w.Backend.MarkIntegrationDisconnected(ctx, row.UserID, "strava", reason); dErr != nil {
+					w.Log.Warn("token_refresh: mark-disconnected failed",
+						"user_id", row.UserID, "err", dErr)
+				}
+				disconnected++
+				w.Log.Info("token_refresh: marked disconnected",
+					"user_id", row.UserID, "reason", reason, "status", httpErr.StatusCode)
+				continue
+			}
+			// 5xx / network / wrapped non-HTTP error: transient.
+			// Log + leave the row alone; next sweep retries.
 			skipped++
-			w.Log.Warn("token_refresh: skip user", "user_id", row.UserID, "err", err)
+			w.Log.Warn("token_refresh: skip user (transient)", "user_id", row.UserID, "err", err)
 			continue
 		}
 		refreshed++
@@ -74,8 +94,41 @@ func (w *Worker) handleTokenRefresh(ctx context.Context, _ *Job) error {
 	w.Log.Info("token_refresh: done",
 		"candidates", len(rows),
 		"refreshed", refreshed,
-		"skipped", skipped)
+		"skipped", skipped,
+		"disconnected", disconnected)
 	return nil
+}
+
+// classifyStravaRefreshFailure inspects a 4xx response from Strava's
+// /oauth/token endpoint and emits the short tag for
+// integrations.disconnected_reason. `invalid_grant` is the canonical
+// "user revoked at Strava's end" response; 401 typically means the
+// refresh token aged out (90+ days idle). Anything else 4xx is
+// `unauthorized` — caller has the bytes if they want detail.
+func classifyStravaRefreshFailure(err *HTTPError) string {
+	if err.StatusCode == 401 {
+		return "unauthorized"
+	}
+	// Strava returns 400 with `{"error":"invalid_grant"}` for revoked
+	// or expired refresh tokens. Quick substring match — the body
+	// is short and the alternative (full JSON parse) is overkill.
+	if err.StatusCode == 400 && (containsToken(err.Body, "invalid_grant") || containsToken(err.Body, "expired")) {
+		return "invalid_grant"
+	}
+	return "unauthorized"
+}
+
+func containsToken(haystack, needle string) bool {
+	return len(haystack) >= len(needle) && (indexOf(haystack, needle) >= 0)
+}
+
+func indexOf(haystack, needle string) int {
+	for i := 0; i+len(needle) <= len(haystack); i++ {
+		if haystack[i:i+len(needle)] == needle {
+			return i
+		}
+	}
+	return -1
 }
 
 // refreshOne carries out the per-user refresh: pull the current refresh

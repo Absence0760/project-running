@@ -30,6 +30,13 @@ type Backend interface {
 	FetchExpiringStravaIntegrations(ctx context.Context, within time.Duration) ([]IntegrationRow, error)
 	GetIntegrationTokens(ctx context.Context, userID, provider string) (*TokenPair, error)
 	SetIntegrationTokens(ctx context.Context, userID, provider, accessToken, refreshToken string, tokenExpiry time.Time) error
+	// MarkIntegrationDisconnected stamps `disconnected_at = now()`
+	// + `disconnected_reason = <reason>` on the integrations row
+	// when the upstream grant is permanently broken (4xx from
+	// Strava's refresh endpoint). The next FetchExpiring sweep
+	// filters by `disconnected_at IS NULL`, so the broken row
+	// stops re-appearing every hour. /audit/strava High #2.
+	MarkIntegrationDisconnected(ctx context.Context, userID, provider, reason string) error
 	// Strava webhook ingest path — used by the kind='strava_event'
 	// handler that replaces apps/backend/supabase/functions/strava-webhook.
 	FindIntegrationUserByAthlete(ctx context.Context, provider string, athleteID int64) (string, error)

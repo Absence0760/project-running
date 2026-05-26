@@ -252,11 +252,28 @@ async function handleSync(
 	// Refresh on-demand if the stored token is within 5 minutes of expiry.
 	// This path runs independently of the scheduled refresh job so an
 	// ad-hoc sync after a long gap still works.
+	//
+	// /audit/strava May 2026 Medium #4: a null `refreshed` means the
+	// Strava refresh endpoint returned 4xx (revoked grant) or 5xx
+	// (transient). The handler used to silently proceed with the stale
+	// access token; the next page fetch 401'd and we'd return "imported
+	// 0, skipped 0" with no signal to the user that they need to
+	// reconnect. Surface the failure as a structured 401 so the UI can
+	// prompt Reconnect Strava — matches the shape of `strava_not_connected`
+	// 400 above. The token-refresh cron (Go worker handler_token_refresh)
+	// stamps `disconnected_at` on a 4xx refresh; the next sync attempt
+	// won't even reach this branch.
 	if (tokenRow.token_expiry) {
 		const expiryMs = new Date(tokenRow.token_expiry as string).getTime();
 		if (Date.now() + 300_000 > expiryMs) {
 			const refreshed = await refreshStravaToken(supabase, userId, tokenRow.refresh_token as string);
-			if (refreshed) accessToken = refreshed;
+			if (!refreshed) {
+				return Response.json(
+					{ error: 'refresh_failed', reconnect_required: true },
+					{ status: 401 },
+				);
+			}
+			accessToken = refreshed;
 		}
 	}
 

@@ -578,6 +578,8 @@ export type Database = {
         Row: {
           access_token_secret_id: string | null
           created_at: string | null
+          disconnected_at: string | null
+          disconnected_reason: string | null
           external_id: string | null
           id: string
           last_sync_at: string | null
@@ -592,6 +594,8 @@ export type Database = {
         Insert: {
           access_token_secret_id?: string | null
           created_at?: string | null
+          disconnected_at?: string | null
+          disconnected_reason?: string | null
           external_id?: string | null
           id?: string
           last_sync_at?: string | null
@@ -606,6 +610,8 @@ export type Database = {
         Update: {
           access_token_secret_id?: string | null
           created_at?: string | null
+          disconnected_at?: string | null
+          disconnected_reason?: string | null
           external_id?: string | null
           id?: string
           last_sync_at?: string | null

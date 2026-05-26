@@ -483,6 +483,10 @@ func (c *SupabaseClient) FetchExpiringStravaIntegrations(ctx context.Context, wi
 	q := url.Values{}
 	q.Set("provider", "eq.strava")
 	q.Set("token_expiry", "lt."+cutoff)
+	// Filter out already-disconnected rows so a permanently-broken
+	// grant doesn't get retried every hour forever. Migration
+	// 20261004_001 added the column. /audit/strava High #2.
+	q.Set("disconnected_at", "is.null")
 	q.Set("select", "id,user_id")
 	q.Set("order", "token_expiry.asc")
 	q.Set("limit", "500")
@@ -569,6 +573,35 @@ func (c *SupabaseClient) FindIntegrationUserByAthlete(ctx context.Context, provi
 		return "", nil
 	}
 	return rows[0].UserID, nil
+}
+
+// MarkIntegrationDisconnected stamps `disconnected_at = now()` +
+// `disconnected_reason` on the integrations row for the given user
+// + provider. Idempotent: re-stamping is harmless — the timestamp
+// updates to the newer mark but the FetchExpiring sweep filter
+// remains effective. /audit/strava High #2.
+func (c *SupabaseClient) MarkIntegrationDisconnected(ctx context.Context, userID, provider, reason string) error {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("provider", "eq."+provider)
+	u := c.BaseURL + "/rest/v1/integrations?" + q.Encode()
+	body, err := json.Marshal(map[string]any{
+		"disconnected_at":     time.Now().UTC().Format(time.RFC3339),
+		"disconnected_reason": reason,
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	if _, err := c.do(ctx, req); err != nil {
+		return err
+	}
+	return nil
 }
 
 // IsStravaActivityImported is the metadata.strava_id dedupe check.

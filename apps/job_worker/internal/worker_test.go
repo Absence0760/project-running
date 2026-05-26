@@ -87,7 +87,8 @@ type fakeBackend struct {
 	setTokenErrs         map[string]error
 	// token_refresh outputs
 	getTokenCalls []string
-	setTokenCalls []setTokenCall
+	setTokenCalls         []setTokenCall
+	markDisconnectedCalls []markDisconnectedCall
 	// strava_event inputs
 	integrationByAthlete map[int64]string
 	findIntegrationErr   error
@@ -410,6 +411,25 @@ type setTokenCall struct {
 	AccessToken  string
 	RefreshToken string
 	Expiry       time.Time
+}
+
+// markDisconnectedCall captures the args fakeBackend.MarkIntegration
+// Disconnected was called with. /audit/strava High #2.
+type markDisconnectedCall struct {
+	UserID   string
+	Provider string
+	Reason   string
+}
+
+func (f *fakeBackend) MarkIntegrationDisconnected(_ context.Context, userID, provider, reason string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.markDisconnectedCalls = append(f.markDisconnectedCalls, markDisconnectedCall{
+		UserID:   userID,
+		Provider: provider,
+		Reason:   reason,
+	})
+	return nil
 }
 
 // --- strava_event fake state ---
@@ -1252,6 +1272,43 @@ func TestTokenRefresh_StravaErrorOnOneRowSkipsButContinues(t *testing.T) {
 	}
 	if be.setTokenCalls[0].UserID != "bob" {
 		t.Errorf("rotated user=%q, want bob", be.setTokenCalls[0].UserID)
+	}
+	// /audit/strava High #2 — the 4xx alice row gets stamped as
+	// disconnected so the next sweep doesn't pick her up forever.
+	if got := len(be.markDisconnectedCalls); got != 1 {
+		t.Fatalf("mark-disconnected calls=%d, want 1 (alice)", got)
+	}
+	if be.markDisconnectedCalls[0].UserID != "alice" {
+		t.Errorf("marked user=%q, want alice", be.markDisconnectedCalls[0].UserID)
+	}
+	if be.markDisconnectedCalls[0].Reason != "invalid_grant" {
+		t.Errorf("reason=%q, want invalid_grant", be.markDisconnectedCalls[0].Reason)
+	}
+}
+
+func TestTokenRefresh_5xxIsTransientAndDoesntDisconnect(t *testing.T) {
+	// /audit/strava High #5 — a Strava 502 is transient. The row
+	// must NOT be marked disconnected (the next sweep should retry).
+	be := newFakeBackend()
+	be.expiring = []IntegrationRow{{ID: 1, UserID: "carol"}}
+	be.tokensByUser = map[string]TokenPair{
+		"carol": {RefreshToken: "rt-carol"},
+	}
+	st := &fakeStrava{
+		errsByToken: map[string]error{
+			"rt-carol": &HTTPError{StatusCode: 502, Body: "bad gateway"},
+		},
+	}
+	be.jobs = []*Job{{ID: 7, Kind: "token_refresh", Payload: []byte(`{}`)}}
+	w := newTokenRefreshWorker(be, st)
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+	if got := len(be.markDisconnectedCalls); got != 0 {
+		t.Fatalf("5xx must NOT trigger disconnect; got %d marks", got)
+	}
+	if got := len(be.setTokenCalls); got != 0 {
+		t.Fatalf("set calls=%d, want 0", got)
 	}
 }
 
