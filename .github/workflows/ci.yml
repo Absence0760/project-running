@@ -409,24 +409,28 @@ jobs:
     #   - 8 shards → 3-4 min for most, BUT one shard (shard 8) ran 7+
     #     min and sometimes timed out (the heavy cross-cutting / saga
     #     specs landed on it in playwright's round-robin file ordering)
-    #   - 10 shards → 144 specs / 10 = 14 per shard (was 18 at 8),
-    #     redistributes load enough that the long-tail shard no
-    #     longer dominates wall-clock. Each shard's Supabase boot
-    #     stays the dominant per-shard cost; the extra 2 shards
-    #     trade ~2 min of duplicated boot for parallelism gains
-    #     on the heavy specs.
+    #   - 10 shards → most 3-5 min, but shard 3 timed out at 25 min on
+    #     run 26468782011 — the alphabetical cluster
+    #     `clubs/* + coach/* + cross-cutting/*` lands in shard 3 and
+    #     the cross-cutting / coach specs are heavy. 9 of 10 finished
+    #     in 3-6 min on that run.
+    #   - 14 shards → 144 specs / 14 ≈ 10 per shard. Pulls the heavy
+    #     cluster apart and drops shard 3's wall-clock back under
+    #     the 25-min CI cap. Each shard's Supabase boot is the
+    #     dominant per-shard cost (~2 min); 4 extra shards trades
+    #     ~8 min of duplicated boot for parallelism gains.
     #
     # If a future shard is again the long-tail bottleneck, run
     # `pnpm exec playwright test --reporter=json` locally and find
     # the specs >60s — those are candidates for splitting into
     # smaller files (playwright shards by file, not by test).
-    name: Web e2e (Playwright) — shard ${{ matrix.shard }}/10
+    name: Web e2e (Playwright) — shard ${{ matrix.shard }}/14
     runs-on: ubuntu-latest
     timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: pnpm/action-setup@0e279bb959325dab635dd2c09392533439d90093 # v6.0.8
@@ -502,7 +506,7 @@ jobs:
           } > ../web/.env
       - name: Run Playwright suite (shard ${{ matrix.shard }}/10)
         working-directory: apps/web
-        run: pnpm exec playwright test --config=tests-e2e/playwright.config.ts --shard=${{ matrix.shard }}/10
+        run: pnpm exec playwright test --config=tests-e2e/playwright.config.ts --shard=${{ matrix.shard }}/14
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

@@ -15,10 +15,13 @@ dependency_overrides:
   # an `android/build.gradle.kts` that does a runtime cast incompat
   # with AGP 8.13's redesigned SourceSet hierarchy — the build fails
   # with `DefaultAndroidSourceSet_Decorated cannot be cast to
-  # AndroidLibrarySourceSet`. Pin to 7.0.x until upstream publishes
-  # a fixed 7.x release. Verified locally with app_links-7.0.0
-  # building cleanly. CI run 26465545860.
-  app_links: ^7.0.0
+  # AndroidLibrarySourceSet`. Caret `^7.0.0` was insufficient (it
+  # allows 7.1.0 through — caret = "^X.Y.Z" means >=X.Y.Z <X+1.0.0).
+  # Use a tight range that excludes 7.1.x specifically. Verified
+  # locally with app_links-7.0.0 building cleanly. CI runs
+  # 26465545860 + 26468782011. Revisit when upstream ships a
+  # fixed 7.1.x or 7.2.x.
+  app_links: ">=7.0.0 <7.1.0"
 
 workspace:
   - apps/mobile_android
