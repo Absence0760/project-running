@@ -426,32 +426,38 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     # production build does not eval; it was carried forward from a
     # development-stage policy. `unsafe-inline` on script-src remains
     # because the static build inlines the page-data hydration script;
-    # nonce-based tightening is the next step but requires a dynamic
-    # response path we don't have on adapter-static.
+    # nonce-based tightening requires either switching off
+    # adapter-static or injecting nonces via a CloudFront Function at
+    # the edge. Tracked as accepted risk in `docs/decisions.md` §70
+    # alongside the DOMPurify-as-last-line-of-defence story —
+    # /audit/owasp May 2026 High #1.
     content_security_policy {
       content_security_policy = join("; ", [
         "default-src 'self'",
         # OAuth avatar origins (lh3.googleusercontent.com from Google
         # sign-in, Apple's id.apple.com variants) plus Supabase
         # Storage signed URLs (run-photos bucket bytes) plus MapTiler
-        # tile previews. `data:image/svg+xml` covers the SvelteKit
-        # icon-component inline SVGs without enabling
-        # `data:text/html` (which a future {@html} regression could
-        # smuggle through into a navigation context).
-        "img-src 'self' data:image/svg+xml https://*.supabase.co https://*.maptiler.com https://lh3.googleusercontent.com https://*.appleid.apple.com",
+        # tile previews. `data:` is the family-level allowance — the
+        # browser does NOT enforce MIME qualifiers on data: sources
+        # in CSP (the `data:image/svg+xml` qualifier the previous
+        # comment claimed was misleading). Real defence against a
+        # `data:text/html` XSS regression is the avatar_url CHECK
+        # constraint (`~* '^https?://'`, migration 20260808_001),
+        # not this CSP line. /audit/owasp May 2026 Medium #4.
+        "img-src 'self' data: https://*.supabase.co https://*.maptiler.com https://lh3.googleusercontent.com https://*.appleid.apple.com",
         "script-src 'self' 'unsafe-inline'",
         "style-src 'self' 'unsafe-inline'",
         "font-src 'self' data:",
         # `connect-src` covers fetch / XHR / EventSource / WebSocket —
         # everything the browser sends OUT. `*.ingest.sentry.io` is
         # where @sentry/sveltekit's browser SDK posts errors; without
-        # it errors are silently CSP-blocked. `*.supabase.{co,io}`
-        # covers REST + Realtime + Storage; `*.maptiler.com` covers
-        # tile fetches.
-        # Drop the unused .supabase.io alias — the project is on
-        # *.supabase.co. Wildcards across two TLDs widen the
-        # exfiltration surface for no win.
-        "connect-src 'self' https://*.supabase.co https://api.threkir.com https://*.maptiler.com https://*.ingest.sentry.io",
+        # it errors are silently CSP-blocked. `*.supabase.co` covers
+        # REST + Realtime + Storage; `*.maptiler.com` covers tile
+        # fetches. `wss://*.threkir.com` covers the Go live-hub WS
+        # upgrade — the spectator page would otherwise be CSP-blocked
+        # the moment PUBLIC_LIVE_HUB_URL lands in prod. /audit/owasp
+        # May 2026 High #2a.
+        "connect-src 'self' https://*.supabase.co https://api.threkir.com https://*.maptiler.com https://*.ingest.sentry.io wss://*.threkir.com",
         "worker-src 'self' blob:",
         "manifest-src 'self'",
         "object-src 'none'",

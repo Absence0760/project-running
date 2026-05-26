@@ -79,7 +79,11 @@
 	// auth state. Landing, auth flows, and the share / spectator pages that
 	// have their own chrome. A signed-in user visiting /share/run/<id> sees
 	// the share view, not the dashboard's sidebar wrapped around it.
-	const shellLessExact = ['/', '/login', '/auth/callback', '/auth/reset'];
+	// `/auth/confirm-age` rides the same shell-less chrome as the rest
+	// of the /auth/* flows — a post-OAuth user landing on the consent
+	// gate should see the focused card, not the dashboard sidebar.
+	// /audit/owasp May 2026 Low #8.
+	const shellLessExact = ['/', '/login', '/auth/callback', '/auth/reset', '/auth/confirm-age'];
 	const isShellless = (path: string) =>
 		shellLessExact.includes(path) ||
 		path.startsWith('/share/') ||

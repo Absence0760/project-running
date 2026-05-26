@@ -1495,6 +1495,26 @@ Audit reference: `/audit/livehub` May 2026 M5.
 
 ---
 
+## 70. CSP `script-src 'unsafe-inline'` is an accepted risk under adapter-static; DOMPurify is the load-bearing XSS guard
+
+The CloudFront response-headers policy sets `script-src 'self' 'unsafe-inline'`. `'unsafe-inline'` defeats the script-execution-mitigation purpose of CSP: an injected `<script>` tag (or inline event handler) would execute freely if XSS ever lands in the rendered HTML.
+
+We ship this knowingly. Three reasons:
+
+1. **`@sveltejs/adapter-static` bakes per-page hydration scripts directly into the emitted HTML files** without a build-time nonce. Removing `'unsafe-inline'` would break every page load (hydration fails → blank screen).
+2. **Switching to a server-rendered SvelteKit adapter** (`adapter-node` behind CloudFront, or `adapter-vercel`) is the canonical fix. It's a real architecture change — server cold-start latency, container-orchestration cost, deploy-pipeline rework — and the cost is unjustified for a pre-launch product with no measured XSS surface.
+3. **The actual XSS attack surface is gated at one sink**: the AI Coach's `{@html}` block in `CoachChat.svelte`, which routes through DOMPurify (`apps/web/src/lib/coach/markdown.ts`) with a narrow `ALLOWED_TAGS` / `ALLOWED_ATTR` / `ALLOWED_URI_REGEXP`. Every other user-controlled string in the app is rendered via Svelte's auto-escaping `{expr}` syntax. The OG image generators escape via `xmlEscape` before SVG embedding.
+
+What this commits us to:
+
+- **DOMPurify is the load-bearing XSS guard.** Removing it, widening its `ALLOWED_*` lists, or adding a second `{@html}` sink anywhere in the app requires a `/safe-edit` cycle + an updated entry here.
+- **Re-validate the assumption** when a real CSP-tightening lever appears (CloudFront Functions for per-response nonce injection, an `adapter-node` migration, etc.).
+- **Document in the CSP comment block** in `infra/modules/web-stack/main.tf` so a future contributor reading the policy doesn't waste a day trying to "fix" `'unsafe-inline'` without understanding the trade-off.
+
+Audit reference: `/audit/owasp` May 2026 High #1.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

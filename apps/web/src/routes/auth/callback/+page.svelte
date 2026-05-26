@@ -51,8 +51,15 @@
 				return;
 			}
 		} catch (_) {
-			/* Profile read failed — let the user into /dashboard;
-			   the next session refresh will catch the gap. */
+			// Profile read failed — fail closed to /auth/confirm-age
+			// rather than /dashboard. The next session refresh does
+			// NOT repeat the consent check, so a transient DB error
+			// here would otherwise grant access to the app without
+			// consent. confirm_age_and_terms() is idempotent, so an
+			// already-confirmed user incurs at most one extra click.
+			// /audit/owasp May 2026 Medium #5.
+			goto('/auth/confirm-age');
+			return;
 		}
 
 		goto('/dashboard');

@@ -43,6 +43,17 @@ LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://previe
 # /audit/livehub May 2026 H3 + H4.
 LIVEHUB_REQUIRE_AUTH = "1"
 
+# SECURITY — live-hub WebSocket subscribers carry their Supabase JWT
+# in the `?token=…` query string because the browser WebSocket API
+# can't set headers on the upgrade. Fly's edge access logs include
+# the full request URL by default — the JWT is therefore log-bearing
+# until the log pipeline strips it. Operator task before public
+# launch: configure the Fly log shipper (or Fly Postgres / Honeycomb
+# / etc.) with a redaction rule masking `[?&]token=[^&]*` on URLs
+# matching `/v1/live/.+/(subscribe|snapshot)`. Until then, treat the
+# `fly logs` stream for this app as secret-bearing — no public
+# screen-shares of the log tail. /audit/owasp May 2026 High #2b.
+
 # Public HTTPS + WebSocket service (live spectator hub).
 # Fly.io's "http" handler transparently upgrades WS frames; the
 # server (apps/job_worker/internal/livehub/server.go) handles the

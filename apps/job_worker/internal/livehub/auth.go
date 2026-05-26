@@ -153,6 +153,14 @@ func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 // in-URL is acceptable for WS subscribe because the client owns
 // the URL and there's no third-party redirect surface.
 // Audit/livehub C1.
+//
+// SECURITY: any code in this file (or in server.go) that logs a
+// request URL MUST scrub the `token` query parameter before emitting
+// — the JWT grants the same access as a session cookie. The handler
+// path today never logs r.URL; the audit/owasp May 2026 High #2b
+// pin is the standing reminder. Fly.io's edge access logs are
+// considered secret-bearing for the live-hub app; redaction in the
+// Fly log pipeline is an operator task documented in fly.toml.
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
 	if len(h) >= 7 && strings.EqualFold(h[:7], "Bearer ") {

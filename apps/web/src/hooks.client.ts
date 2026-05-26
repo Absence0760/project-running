@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/sveltekit";
 import { dev } from "$app/environment";
 import { env } from "$env/dynamic/public";
+import type { HandleClientError } from "@sveltejs/kit";
 import {
 	redactBreadcrumb,
 	redactEventSignedUrls,
@@ -34,4 +35,19 @@ if (!dev && dsn && hasAcceptedConsent()) {
 	});
 }
 
-export const handleError = Sentry.handleErrorWithSentry();
+// Wrap rather than directly exporting `Sentry.handleErrorWithSentry()`
+// so the consent gate is enforced at handler-call time. The Sentry
+// SDK currently no-ops when `init` was never called, but that's a
+// version-fragile contract — making the gate explicit here means a
+// future Sentry SDK upgrade can't silently re-route errors through
+// a minimal-init path. /audit/owasp May 2026 Medium #3.
+// Cast the Sentry wrapper through `unknown` to a SvelteKit
+// HandleClientError — @sentry/sveltekit v10's exported type lists
+// the server-side RequestEvent shape, which is wider than the client
+// NavigationEvent SvelteKit passes here. The runtime is identical;
+// only the static types differ.
+const handleErrorViaSentry = Sentry.handleErrorWithSentry() as unknown as HandleClientError;
+export const handleError: HandleClientError = (input) => {
+	if (!hasAcceptedConsent()) return;
+	return handleErrorViaSentry(input);
+};

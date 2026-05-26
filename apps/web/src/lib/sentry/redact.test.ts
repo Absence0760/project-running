@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import {
 	redactBreadcrumb,
 	redactEventSignedUrls,
+	redactLiveHubToken,
 	redactSignedUrl,
+	redactUrl,
 } from './redact';
 
 const SIGNED_URL =
@@ -94,4 +96,57 @@ test('redactEventSignedUrls — redacts every span.data.url', () => {
 
 test('redactEventSignedUrls — empty event passes through', () => {
 	assert.deepEqual(redactEventSignedUrls({}), {});
+});
+
+// audit/owasp May 2026 Low #6 — live-hub JWT must not reach Sentry.
+
+const LH_URL =
+	'wss://live.threkir.com/v1/live/run-1/subscribe?token=eyJ.fake.jwt&foo=bar';
+const LH_URL_REDACTED =
+	'wss://live.threkir.com/v1/live/run-1/subscribe?token=<redacted>&foo=bar';
+
+test('redactLiveHubToken — strips ?token= on subscribe URL', () => {
+	assert.equal(redactLiveHubToken(LH_URL), LH_URL_REDACTED);
+});
+
+test('redactLiveHubToken — strips token= on snapshot URL', () => {
+	const u = 'https://live.threkir.com/v1/live/run-1/snapshot?token=jwt';
+	assert.equal(
+		redactLiveHubToken(u),
+		'https://live.threkir.com/v1/live/run-1/snapshot?token=<redacted>',
+	);
+});
+
+test('redactLiveHubToken — passes through non-livehub URLs unchanged', () => {
+	const u = 'https://example.com/?token=safe';
+	assert.equal(redactLiveHubToken(u), u);
+});
+
+test('redactLiveHubToken — passes through livehub URL without token', () => {
+	const u = 'wss://live.threkir.com/v1/live/run-1/subscribe';
+	assert.equal(redactLiveHubToken(u), u);
+});
+
+test('redactUrl — applies both Storage + live-hub redactors', () => {
+	assert.equal(redactUrl(SIGNED_URL), SIGNED_URL_REDACTED);
+	assert.equal(redactUrl(LH_URL), LH_URL_REDACTED);
+	assert.equal(redactUrl('https://example.com/'), 'https://example.com/');
+});
+
+test('redactBreadcrumb — applies live-hub redactor to data.url', () => {
+	const b = { category: 'fetch', data: { url: LH_URL } };
+	const out = redactBreadcrumb(b);
+	assert.equal(out.data!.url, LH_URL_REDACTED);
+});
+
+test('redactEventSignedUrls — redacts live-hub URL on request + transaction + spans', () => {
+	const e = {
+		transaction: LH_URL,
+		request: { url: LH_URL },
+		spans: [{ data: { url: LH_URL } }],
+	};
+	const out = redactEventSignedUrls(e);
+	assert.equal(out.transaction, LH_URL_REDACTED);
+	assert.equal(out.request!.url, LH_URL_REDACTED);
+	assert.equal(out.spans![0].data!.url, LH_URL_REDACTED);
 });
