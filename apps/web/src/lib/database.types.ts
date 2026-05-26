@@ -2444,6 +2444,10 @@ export type Database = {
           tag: string
         }[]
       }
+      privacy_aware_start_point: {
+        Args: { p_waypoints: Json; p_zones: Json }
+        Returns: unknown
+      }
       privacy_distance_m: {
         Args: { lat1: number; lat2: number; lng1: number; lng2: number }
         Returns: number
