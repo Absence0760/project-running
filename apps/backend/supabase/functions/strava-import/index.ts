@@ -134,9 +134,21 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 // FROM integrations — left vault secrets orphaned + Strava-side
 // connection live indefinitely.
 async function handleDisconnect(
-	supabase: ReturnType<typeof createClient>,
+	_userScopedSupabase: ReturnType<typeof createClient>,
 	userId: string,
 ): Promise<Response> {
+	// `delete_user_provider_secrets` is GRANTed to service_role only
+	// (migration 20261005_001) — the user-scoped client would 42501
+	// on the RPC. The user-scoped client gated the caller's identity
+	// at the EF entrypoint; from here on we run as service-role on
+	// `userId`. The other writes here (vault read via DEFINER RPC,
+	// integrations UPDATE on the user's own row) are reachable from
+	// either, so consolidating on one client keeps the path uniform.
+	const supabase = createClient(
+		Deno.env.get('SUPABASE_URL')!,
+		Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+	);
+
 	const { data: tokenRows } = await supabase.rpc('get_integration_tokens', {
 		p_user_id: userId,
 		p_provider: 'strava',

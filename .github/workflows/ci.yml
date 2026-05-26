@@ -360,8 +360,8 @@ jobs:
           # host loaded so HMACs / ?secret= / verify_token match.
           # These mirror the .env.local block written above.
           REVENUECAT_WEBHOOK_SECRET: ci-revenuecat-secret
-          STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret
-          STRAVA_VERIFY_TOKEN: ci-strava-verify-token
+          STRAVA_WEBHOOK_SECRET: ci-strava-webhook-secret-32chars-ok
+          STRAVA_VERIFY_TOKEN: ci-strava-verify-token-32-chars-ok
         run: |
           deno test --no-check --allow-net --allow-env \
             supabase/functions/_shared/handler_envelope.test.ts
