@@ -52,13 +52,23 @@ export async function buildContext(
 
 	// Use the SECURITY DEFINER `get_my_profile` RPC because
 	// `subscription_tier` is column-level revoked from authenticated callers
-	// (see migration 20260707_001).
+	// (see migration 20260707_001). `subscription_tier` is intentionally
+	// dropped from the profile projection emitted to Anthropic — the
+	// handler already knows tier and adjusts limits server-side; sending
+	// billing-tier metadata to a sub-processor violates Art 5(1)(c) data
+	// minimisation (audit/coach May 2026 Medium #9).
 	const { data: profileRow } = await supabase.rpc('get_my_profile');
-	const profile = profileRow
+	const profileRowTyped = profileRow as
+		| {
+				display_name: string | null;
+				preferred_unit: string | null;
+				health_data_consent_at: string | null;
+		  }
+		| null;
+	const profile = profileRowTyped
 		? {
-				display_name: profileRow.display_name,
-				preferred_unit: profileRow.preferred_unit,
-				subscription_tier: profileRow.subscription_tier,
+				display_name: profileRowTyped.display_name,
+				preferred_unit: profileRowTyped.preferred_unit,
 			}
 		: null;
 
@@ -69,19 +79,35 @@ export async function buildContext(
 		.maybeSingle();
 	const prefs = (userSettings?.prefs ?? {}) as Record<string, unknown>;
 
+	// GDPR Art 9(2)(a): special-category health-adjacent data (DOB +
+	// HR metrics) only flows to Anthropic when the user has actively
+	// granted health-data consent via Settings → Preferences. The
+	// `coach_consent_at` (Art 6(1)(a) AI consent) gate in handler.ts
+	// authorises using the Coach AT ALL; this guard is the second,
+	// distinct gate for the *health* category. See migration
+	// `20260921_001_user_profiles_gdpr_consent_timestamps.sql` for
+	// the two-gate design and audit/coach May 2026 High #1.
+	const healthConsentGranted = profileRowTyped?.health_data_consent_at != null;
+	const runnerContext = {
+		// Non-health prefs are always safe to send.
+		weekly_mileage_goal_m: prefs.weekly_mileage_goal_m ?? null,
+		auto_pause_enabled: prefs.auto_pause_enabled ?? null,
+		coach_personality: prefs.coach_personality ?? null,
+		// Health-category fields — gated on Art 9 consent. When
+		// consent has not been (or has been withdrawn from)
+		// `health_data_consent_at`, these emit as null so the model
+		// produces generic advice instead of HR-zone-specific advice.
+		date_of_birth: healthConsentGranted ? (prefs.date_of_birth ?? null) : null,
+		resting_hr_bpm: healthConsentGranted ? (prefs.resting_hr_bpm ?? null) : null,
+		max_hr_bpm: healthConsentGranted ? (prefs.max_hr_bpm ?? null) : null,
+		hr_zones: healthConsentGranted ? (prefs.hr_zones ?? null) : null,
+	};
+
 	return {
 		data: {
 			now_iso: new Date().toISOString(),
 			profile: profile ?? null,
-			runner_context: {
-				date_of_birth: prefs.date_of_birth ?? null,
-				resting_hr_bpm: prefs.resting_hr_bpm ?? null,
-				max_hr_bpm: prefs.max_hr_bpm ?? null,
-				hr_zones: prefs.hr_zones ?? null,
-				weekly_mileage_goal_m: prefs.weekly_mileage_goal_m ?? null,
-				auto_pause_enabled: prefs.auto_pause_enabled ?? null,
-				coach_personality: prefs.coach_personality ?? null,
-			},
+			runner_context: runnerContext,
 			plan: plan ?? null,
 			plan_weeks: weeks,
 			plan_workouts: workouts,
