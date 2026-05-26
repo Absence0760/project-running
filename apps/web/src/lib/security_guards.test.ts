@@ -464,6 +464,62 @@ test('Lambda /api/coach hardcodes bypassPaywallEnabled: false (no env read)', ()
 	);
 });
 
+test('run-photo delete sites sweep BOTH storage_path and thumb_512_path', () => {
+	// Reason: the worker-generated 512-wide thumbnail (column
+	// `thumb_512_path` added in migration 20260826_001) is a separate
+	// Storage object from the original upload. Until the audit:storage
+	// 2026-05-25 pass, both `deleteRun` (cascade-delete) and
+	// `deleteRunPhoto` (single-photo) only swept `storage_path` — the
+	// thumbnail blob persisted in the bucket indefinitely. The row
+	// cascade-delete kills the run_photos row, so the Storage SELECT
+	// policy hides the bytes (join through run_photos → empty), but the
+	// blob continues to pay for storage cost + is a latent privacy
+	// footprint. Pinning both call sites so a future "simplify the
+	// select" refactor can't quietly reintroduce the orphan.
+	const sources: Array<{ path: string; functionRe: RegExp; label: string }> = [
+		{
+			path: 'src/lib/data.ts',
+			functionRe: /export async function deleteRun\(id: string\)[\s\S]*?\n\}/,
+			label: 'deleteRun (web)',
+		},
+		{
+			path: 'src/lib/data.ts',
+			functionRe: /export async function deleteRunPhoto\(photoId: string\)[\s\S]*?\n\}/,
+			label: 'deleteRunPhoto (web)',
+		},
+	];
+	for (const { path, functionRe, label } of sources) {
+		const source = read(path);
+		const match = source.match(functionRe);
+		assert.ok(match, `Could not locate ${label} in ${path} — has the function been renamed?`);
+		const body = match![0];
+		assert.match(
+			body,
+			/select\(['"`][^'"`]*storage_path[^'"`]*thumb_512_path/,
+			`${label} must select both storage_path AND thumb_512_path from run_photos so the thumbnail blob is also swept. Without it, the 512-wide thumbnail orphans in the bucket indefinitely (audit:storage 2026-05-25 finding).`,
+		);
+		assert.match(
+			body,
+			/storage[\s\S]*?from\(['"]run-photos['"]\)[\s\S]*?\.remove\(/,
+			`${label} must call storage.from('run-photos').remove(...) with the collected paths.`,
+		);
+	}
+
+	// Mobile twin parity — same fix shape must land on api_client.dart
+	// or the mobile path leaks orphans even when the web app cleans up.
+	const apiClient = read('../../packages/api_client/lib/src/api_client.dart');
+	assert.match(
+		apiClient,
+		/Future<void> deleteRun\(Run run\)[\s\S]*?colStoragePath[\s\S]*?colThumb512Path[\s\S]*?\}/,
+		'api_client.dart#deleteRun must select both RunPhotoRow.colStoragePath AND RunPhotoRow.colThumb512Path — same orphan-cleanup contract as the web twin.',
+	);
+	assert.match(
+		apiClient,
+		/Future<void> deleteRunPhoto\(RunPhotoRow photo\)[\s\S]*?thumb512Path[\s\S]*?run-photos[\s\S]*?\.remove\(/,
+		'api_client.dart#deleteRunPhoto must include photo.thumb512Path in the storage remove list.',
+	);
+});
+
 test('Edge Functions do not log raw PostgrestError objects', () => {
   // Reason: PostgrestError objects carry `.message`, `.details`,
   // `.hint`, and `.code`. The `details` / `hint` fields can include

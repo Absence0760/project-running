@@ -598,14 +598,25 @@ class ApiClient {
     }
 
     try {
+      // Sweep both the original upload AND the worker-generated
+      // 512-wide thumbnail. Until the audit/storage pass landed,
+      // the sweep only removed `storage_path`; the thumbnail blob
+      // persisted in the bucket indefinitely (the run_photos row
+      // cascade-deleted, so the Storage SELECT policy gates the
+      // bytes, but the storage cost + latent footprint remained).
       final photoRows = await _client
           .from(RunPhotoRow.table)
-          .select(RunPhotoRow.colStoragePath)
+          .select(
+            '${RunPhotoRow.colStoragePath}, ${RunPhotoRow.colThumb512Path}',
+          )
           .eq(RunPhotoRow.colRunId, run.id);
-      final paths = photoRows
-          .map((row) => row[RunPhotoRow.colStoragePath] as String?)
-          .whereType<String>()
-          .toList();
+      final paths = <String>[];
+      for (final row in photoRows) {
+        final storage = row[RunPhotoRow.colStoragePath] as String?;
+        final thumb = row[RunPhotoRow.colThumb512Path] as String?;
+        if (storage != null && storage.isNotEmpty) paths.add(storage);
+        if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
+      }
       if (paths.isNotEmpty) {
         await _client.storage.from('run-photos').remove(paths);
       }
@@ -1944,14 +1955,21 @@ class ApiClient {
   }
 
   /// Delete a photo. Removes both the metadata row (RLS gates author
-  /// / run-owner permissions) and the underlying Storage object.
+  /// / run-owner permissions) and the underlying Storage objects —
+  /// the original upload AND the worker-generated 512-wide thumbnail.
+  /// Audit/storage Medium fix: the prior shape removed only
+  /// `storage_path`, leaving thumbnails orphaned in the bucket.
   Future<void> deleteRunPhoto(RunPhotoRow photo) async {
     await _client
         .from(RunPhotoRow.table)
         .delete()
         .eq(RunPhotoRow.colId, photo.id);
-    if (photo.storagePath.isNotEmpty) {
-      await _client.storage.from('run-photos').remove([photo.storagePath]);
+    final paths = <String>[];
+    if (photo.storagePath.isNotEmpty) paths.add(photo.storagePath);
+    final thumb = photo.thumb512Path;
+    if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
+    if (paths.isNotEmpty) {
+      await _client.storage.from('run-photos').remove(paths);
     }
   }
 

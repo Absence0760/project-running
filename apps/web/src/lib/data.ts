@@ -385,11 +385,22 @@ export async function deleteRun(id: string): Promise<void> {
 	}
 	const { data: photos } = await supabase
 		.from('run_photos')
-		.select('storage_path')
+		.select('storage_path, thumb_512_path')
 		.eq('run_id', id);
 	if (photos && photos.length > 0) {
+		// Sweep both the original upload AND the worker-generated 512-wide
+		// thumbnail. Until the audit/storage pass landed, `deleteRun` only
+		// removed `storage_path`; the row cascade-deleted (so the Storage
+		// SELECT policy hides the bytes via the run_photos join) but the
+		// thumbnail blob persisted in the bucket indefinitely, paying for
+		// storage cost and leaving a latent privacy footprint. Both paths
+		// are best-effort — the row delete is more important than the
+		// file cleanup.
 		const paths = photos
-			.map((p: { storage_path: string | null }) => p.storage_path)
+			.flatMap((p: { storage_path: string | null; thumb_512_path: string | null }) => [
+				p.storage_path,
+				p.thumb_512_path,
+			])
 			.filter((p: string | null): p is string => !!p);
 		if (paths.length > 0) {
 			try {
@@ -3469,7 +3480,7 @@ export async function addRunPhoto(input: {
 export async function deleteRunPhoto(photoId: string): Promise<void> {
 	const { data: row, error: fetchErr } = await supabase
 		.from('run_photos')
-		.select('storage_path')
+		.select('storage_path, thumb_512_path')
 		.eq('id', photoId)
 		.maybeSingle();
 	if (fetchErr) throw fetchErr;
@@ -3477,11 +3488,15 @@ export async function deleteRunPhoto(photoId: string): Promise<void> {
 	const { error } = await supabase.from('run_photos').delete().eq('id', photoId);
 	if (error) throw error;
 
-	if (row?.storage_path) {
-		// Best-effort — RLS allows the photo owner to remove their own bytes.
-		// If the run owner (not photo owner) deleted the row, the bytes
-		// will be orphaned in Storage but invisible to the UI.
-		await supabase.storage.from('run-photos').remove([row.storage_path]);
+	// Sweep both the original upload AND the worker-generated 512-wide
+	// thumbnail. Best-effort — RLS allows the photo owner to remove their
+	// own bytes. If the run owner (not photo owner) deleted the row, the
+	// bytes will be orphaned in Storage but invisible to the UI.
+	const paths = [row?.storage_path, row?.thumb_512_path].filter(
+		(p: string | null | undefined): p is string => !!p,
+	);
+	if (paths.length > 0) {
+		await supabase.storage.from('run-photos').remove(paths);
 	}
 }
 
