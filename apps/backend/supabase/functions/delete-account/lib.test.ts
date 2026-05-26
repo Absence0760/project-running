@@ -66,8 +66,8 @@ Deno.test('hashUserIdForAudit differentiates inputs', async () => {
 });
 
 Deno.test('hashUserIdForAudit honours a custom salt for testability', async () => {
-	const defaultHash = await hashUserIdForAudit('user', 'threkir-deletion-audit-v1');
-	const customHash = await hashUserIdForAudit('user', 'rotated-salt-v2');
+	const defaultHash = await hashUserIdForAudit('user', { salt: 'threkir-deletion-audit-v1' });
+	const customHash = await hashUserIdForAudit('user', { salt: 'rotated-salt-v2' });
 	assert(defaultHash !== customHash, 'salt change must alter the hash');
 });
 
@@ -76,4 +76,27 @@ Deno.test('hashUserIdForAudit matches the deletion_audit_log CHECK regex', async
 	// produce must satisfy it or the INSERT raises 23514.
 	const hex = await hashUserIdForAudit('any-user');
 	assertMatch(hex, /^[0-9a-f]{64}$/);
+});
+
+Deno.test('hashUserIdForAudit flips to HMAC mode when a key is passed', async () => {
+	// audit/account-deletion-completeness May 2026 Low closeout. The
+	// keyed mode is meaningfully pseudonymous against an adversary who
+	// holds the UUID. Unkeyed result must differ from any keyed result
+	// (different primitive: SHA-256 vs HMAC-SHA256).
+	const unkeyed = await hashUserIdForAudit('user');
+	const keyedA = await hashUserIdForAudit('user', { key: 'secret-a-32-bytes-min-yyyyyyyyyy' });
+	const keyedB = await hashUserIdForAudit('user', { key: 'secret-b-32-bytes-min-zzzzzzzzzz' });
+	assert(unkeyed !== keyedA, 'keyed hash must differ from unkeyed');
+	assert(keyedA !== keyedB, 'different keys must produce different hashes');
+	assertMatch(keyedA, /^[0-9a-f]{64}$/);
+});
+
+Deno.test('hashUserIdForAudit empty-string key falls back to unkeyed mode', async () => {
+	// The EF reads Deno.env.get('DELETION_AUDIT_KEY') ?? '' — an unset
+	// env var must NOT engage HMAC (a zero-length key would be a
+	// reproducible non-secret). Empty string must behave identically
+	// to no `key` option at all.
+	const empty = await hashUserIdForAudit('user', { key: '' });
+	const unset = await hashUserIdForAudit('user');
+	assertEquals(empty, unset);
 });

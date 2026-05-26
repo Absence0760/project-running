@@ -104,9 +104,14 @@
 		<li><strong>Strava / parkrun / Garmin Connect / Health Connect / HealthKit</strong> — only when you connect them.</li>
 	</ul>
 	<p>
-		We notify you of new sub-processors via in-app banner and the changelog at
-		<em>TODO: subprocessor-changelog URL once published</em> at least 30 days before they go
-		live. You may withdraw consent and delete your account if you object.
+		We notify you of new sub-processors via in-app banner and the public
+		<a
+			href="https://github.com/Absence0760/project-running/blob/main/docs/compliance/sub-processor-changelog.md"
+			target="_blank"
+			rel="noopener noreferrer">sub-processor changelog</a
+		>
+		at least 30 days before they go live. You may withdraw consent and delete your account if you
+		object.
 	</p>
 
 	<h2>5. International transfers</h2>
@@ -129,8 +134,13 @@
 	<ul>
 		<li><strong>Account, runs, routes</strong>: until you delete the account.</li>
 		<li><strong>Live spectator pings</strong>: 24 hours after the run ends.</li>
-		<li><strong>Coach chat history</strong>: <em>TODO: state final retention window</em>.</li>
+		<li><strong>Coach chat history</strong>: 18 months from the message timestamp.</li>
+		<li><strong>Notifications</strong>: 90 days from creation.</li>
+		<li><strong>Push tokens (FCM / APNs)</strong>: 60 days of inactivity (`last_seen_at`).</li>
+		<li><strong>Background-job records</strong>: 30 days after completion (terminal state).</li>
+		<li><strong>Rate-limit counters</strong>: 24 hours from the window start.</li>
 		<li><strong>Sentry events</strong>: 90 days (Sentry's default).</li>
+		<li><strong>AWS Lambda CloudWatch logs</strong>: 30 days (CloudFront access logging is not collected).</li>
 		<li><strong>Backups</strong>: a deleted account may persist in encrypted point-in-time-recovery backups for up to 28 days before they roll off.</li>
 	</ul>
 	<p>

@@ -116,14 +116,53 @@ Deno.test('handler walks both runs + run-photos buckets', () => {
 });
 
 Deno.test('handler writes an audit row on every path that can succeed or fail', () => {
-	// Five recordAudit call sites: success + four failure branches.
+	// Seven recordAudit call sites after the May 2026 closeouts:
+	// ok + vault + reports + jobs + segments + storage + auth.
 	const matches = SRC.match(/recordAudit\(/g) ?? [];
 	assert(
-		matches.length >= 5,
-		`handler must call recordAudit on every outcome ` +
-			`(ok + vault_cleanup_failed + reports_cleanup_failed + ` +
-			`storage_drain_failed + auth_delete_failed); found ` +
+		matches.length >= 7,
+		`handler must call recordAudit on every outcome (ok + vault + ` +
+			`reports + jobs + segments + storage + auth); found ` +
 			`${matches.length} call sites`,
+	);
+});
+
+Deno.test('handler drains user jobs pre-cascade (audit/account-deletion-completeness High)', () => {
+	// jobs.payload->>'user_id' is the user's UUID embedded in a jsonb
+	// queue payload. No FK to auth.users — the cascade leaves it
+	// behind forever if we don't delete first.
+	const drain = SRC.indexOf('drainUserJobs(adminClient, user.id)');
+	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
+	assert(drain !== -1, 'handler must call drainUserJobs');
+	assert(drain < del, 'drainUserJobs must run before admin.deleteUser');
+});
+
+Deno.test('handler anonymises authored segments pre-cascade (audit/account-deletion-completeness Medium)', () => {
+	// segments.created_by FK is `on delete set null`. Without an
+	// explicit anonymise, the deleted user's contributed segments
+	// survive with their (potentially PII-bearing) names.
+	const anon = SRC.indexOf('anonymiseAuthoredSegments(adminClient, user.id)');
+	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
+	assert(anon !== -1, 'handler must call anonymiseAuthoredSegments');
+	assert(anon < del, 'anonymiseAuthoredSegments must run before admin.deleteUser');
+});
+
+Deno.test('handler builds a third_party_outcomes record from the three best-effort calls', () => {
+	// GDPR Art 17(2) evidence trail — each call's outcome must land
+	// in deletion_audit_log.third_party_outcomes via recordAudit's
+	// fifth argument.
+	const built = /const\s+thirdPartyOutcomes\s*:\s*ThirdPartyOutcomes\s*=\s*\{[^}]*strava_deauth[^}]*revenuecat_delete[^}]*fcm_remove[^}]*\}/m
+		.test(SRC);
+	assert(
+		built,
+		'handler must build a ThirdPartyOutcomes record from deauthorizeStrava + ' +
+			'deleteRevenueCatSubscriber + invalidatePushTokens results',
+	);
+	// And recordAudit must receive it on every call site (verified by
+	// the count being ≥ 7 above + a spot-check below).
+	assert(
+		SRC.includes('thirdPartyOutcomes)') || SRC.includes('thirdPartyOutcomes,\n      );'),
+		'recordAudit calls must thread the thirdPartyOutcomes argument',
 	);
 });
 

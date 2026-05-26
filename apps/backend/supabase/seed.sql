@@ -955,6 +955,21 @@ DECLARE
   v_allowed boolean;
   v_retry integer;
 BEGIN
+  -- The rate_limits.user_id FK to auth.users (migration 20260928_001)
+  -- means these synthetic UUIDs must exist before any insert lands.
+  -- Same pattern as the route_reviews RLS test block below.
+  INSERT INTO auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    VALUES (test_user, 'rate-limit-test-1@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
+  INSERT INTO auth.users (id, email, encrypted_password,
+                          email_confirmed_at, instance_id, aud, role)
+    VALUES (test_user2, 'rate-limit-test-2@example.com', '',
+            now(), '00000000-0000-0000-0000-000000000000',
+            'authenticated', 'authenticated')
+    ON CONFLICT (id) DO NOTHING;
   DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
   PERFORM set_config('request.jwt.claim.role', 'authenticated', true);
   PERFORM set_config('request.jwt.claim.sub', test_user::text, true);
@@ -1025,7 +1040,9 @@ BEGIN
   SELECT allowed INTO v_allowed FROM check_rate_limit(test_user2, 'svc_rl', 2, 3600);
   IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: service role on second user should allow'; END IF;
 
-  DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
+  -- DELETE the synthetic test users; the FK from rate_limits.user_id
+  -- (migration 20260928_001) cascades the seed-time rate-limit rows.
+  DELETE FROM auth.users WHERE id IN (test_user, test_user2);
   PERFORM set_config('request.jwt.claim.role', '', true);
 END $$;
 

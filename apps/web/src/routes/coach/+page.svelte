@@ -47,10 +47,14 @@
 				// authenticated callers. Go through the SECURITY DEFINER
 				// `get_my_profile()` RPC instead — same pattern as the
 				// other self-row reads.
+				// `.maybeSingle()` on a SetofOptions RPC return narrows to
+				// `{}` in supabase-js v2.106's generated types — cast to
+				// the shape we know `get_my_profile` produces.
 				const { data: prof } = await supabase
 					.rpc('get_my_profile')
 					.maybeSingle();
-				coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
+				const row = prof as { coach_consent_at: string | null } | null;
+				coachConsentAt = row?.coach_consent_at ?? null;
 			} catch (_) {
 				// Failed to read consent state — fail closed so we
 				// never accidentally render the chat without an

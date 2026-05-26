@@ -9,6 +9,8 @@ import {
   type DeletionAuditResult,
   FCM_BATCH_REMOVE_URL,
   STRAVA_DEAUTHORIZE_URL,
+  type ThirdPartyOutcome,
+  type ThirdPartyOutcomes,
   fcmBatchRemoveBody,
   hashUserIdForAudit,
   revenueCatSubscriberUrl,
@@ -71,7 +73,7 @@ async function deletePrefix(
 async function deauthorizeStrava(
   adminClient: SupabaseClient,
   userId: string,
-): Promise<void> {
+): Promise<ThirdPartyOutcome> {
   // Self-audit (May 2026): the prior pass tried to read vault via
   // `adminClient.schema('vault').from('decrypted_secrets')`, which
   // fails with PGRST106 — PostgREST only exposes `public` +
@@ -89,7 +91,7 @@ async function deauthorizeStrava(
         'delete-account: strava token lookup failed:',
         error.message,
       );
-      return;
+      return 'failed';
     }
     // get_integration_tokens returns a setof; take the first row.
     const row = Array.isArray(data) ? data[0] : data;
@@ -99,42 +101,50 @@ async function deauthorizeStrava(
       'delete-account: strava token lookup failed:',
       e instanceof Error ? e.message : String(e),
     );
-    return;
+    return 'failed';
   }
-  if (!accessToken) return;
+  if (!accessToken) return 'skipped';
   try {
-    await fetch(STRAVA_DEAUTHORIZE_URL, {
+    const r = await fetch(STRAVA_DEAUTHORIZE_URL, {
       method: 'POST',
       headers: { Authorization: `Bearer ${accessToken}` },
     });
+    return r.ok ? 'ok' : 'failed';
   } catch (e) {
     console.error(
       'delete-account: strava deauthorize failed:',
       e instanceof Error ? e.message : String(e),
     );
+    return 'failed';
   }
 }
 
-async function deleteRevenueCatSubscriber(userId: string): Promise<void> {
+async function deleteRevenueCatSubscriber(userId: string): Promise<ThirdPartyOutcome> {
   const apiKey = Deno.env.get('REVENUECAT_SECRET_API_KEY');
-  if (!apiKey) return;
+  if (!apiKey) return 'skipped';
   try {
-    await fetch(revenueCatSubscriberUrl(userId), {
+    const r = await fetch(revenueCatSubscriberUrl(userId), {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${apiKey}` },
     });
+    // RevenueCat returns 200 on delete, 404 if the subscriber never
+    // existed (treated as a successful no-op for Art 17(2) purposes —
+    // there's no recipient to notify).
+    if (r.ok || r.status === 404) return 'ok';
+    return 'failed';
   } catch (e) {
     console.error(
       'delete-account: revenuecat delete failed:',
       e instanceof Error ? e.message : String(e),
     );
+    return 'failed';
   }
 }
 
 async function invalidatePushTokens(
   adminClient: SupabaseClient,
   userId: string,
-): Promise<void> {
+): Promise<ThirdPartyOutcome> {
   // Enumerate every platform's tokens. The DB cascade from
   // auth.users → device_tokens removes the rows when admin.deleteUser
   // runs at the end of this handler, so we don't have to delete
@@ -171,7 +181,7 @@ async function invalidatePushTokens(
       'delete-account: device_tokens lookup failed:',
       e instanceof Error ? e.message : String(e),
     );
-    return;
+    return 'failed';
   }
   if (iosCount > 0) {
     console.log(
@@ -180,9 +190,14 @@ async function invalidatePushTokens(
     );
   }
   const fcmServerKey = Deno.env.get('FCM_SERVER_KEY');
-  if (!fcmServerKey || androidTokens.length === 0) return;
+  if (!fcmServerKey || androidTokens.length === 0) {
+    // No Android tokens OR no FCM key — there's nothing to notify.
+    // Treat as `skipped`, distinct from `failed` so the audit trail
+    // distinguishes "no recipient" from "recipient errored".
+    return 'skipped';
+  }
   try {
-    await fetch(FCM_BATCH_REMOVE_URL, {
+    const r = await fetch(FCM_BATCH_REMOVE_URL, {
       method: 'POST',
       headers: {
         Authorization: `key=${fcmServerKey}`,
@@ -190,11 +205,57 @@ async function invalidatePushTokens(
       },
       body: fcmBatchRemoveBody(androidTokens),
     });
+    return r.ok ? 'ok' : 'failed';
   } catch (e) {
     console.error(
       'delete-account: fcm batchRemove failed:',
       e instanceof Error ? e.message : String(e),
     );
+    return 'failed';
+  }
+}
+
+// `jobs` (20260609_001) is a service-role-only queue with `payload`
+// holding the user's UUID inside a jsonb. No FK to auth.users, so
+// the cascade leaves a user's terminal jobs in the table forever.
+// audit/account-deletion-completeness High: drain pre-cascade.
+// Mandatory — failure aborts the delete so the user can retry.
+async function drainUserJobs(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    const { error } = await adminClient
+      .from('jobs')
+      .delete()
+      .filter('payload->>user_id', 'eq', userId);
+    if (error) return { ok: false, reason: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
+// `segments.created_by` (20260526_001) is `on delete set null`, so
+// segments the user authored survive deletion as orphan rows. The
+// segment NAME may carry PII (a toponym derived from the author's
+// activity). audit/account-deletion-completeness Medium: anonymise
+// pre-cascade — clear the name + null the FK so the leaderboard
+// row keeps working but the author identity is unrecoverable.
+// Mandatory — failure aborts the delete.
+async function anonymiseAuthoredSegments(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    const { error } = await adminClient
+      .from('segments')
+      .update({ name: 'Anonymous segment', created_by: null })
+      .eq('created_by', userId);
+    if (error) return { ok: false, reason: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
 }
 
@@ -251,12 +312,18 @@ async function recordAudit(
   userId: string,
   result: DeletionAuditResult,
   notes: string | null = null,
+  thirdPartyOutcomes: ThirdPartyOutcomes | null = null,
 ): Promise<void> {
   try {
     const hashed = await hashUserIdForAudit(userId);
     await adminClient
       .from('deletion_audit_log')
-      .insert({ hashed_user_id: hashed, result, notes });
+      .insert({
+        hashed_user_id: hashed,
+        result,
+        notes,
+        third_party_outcomes: thirdPartyOutcomes,
+      });
   } catch (e) {
     // Best-effort. The audit log is a regulator-evidence trail; if
     // the write itself fails we still want the delete to complete.
@@ -311,11 +378,16 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   // Each of these can fail without aborting the delete (a stale
   // Strava token, an offline RevenueCat, FCM down — none of these
   // should strand a user mid-erasure). Errors are logged but
-  // swallowed. Order: do them BEFORE the auth-row cascade so the
-  // integrations / device_tokens rows still exist for the lookups.
-  await deauthorizeStrava(adminClient, user.id);
-  await deleteRevenueCatSubscriber(user.id);
-  await invalidatePushTokens(adminClient, user.id);
+  // swallowed. Each helper returns 'ok' | 'skipped' | 'failed' which
+  // we surface to the deletion_audit_log as the per-recipient Art
+  // 17(2) evidence trail.
+  // Order: do them BEFORE the auth-row cascade so the integrations
+  // / device_tokens rows still exist for the lookups.
+  const thirdPartyOutcomes: ThirdPartyOutcomes = {
+    strava_deauth: await deauthorizeStrava(adminClient, user.id),
+    revenuecat_delete: await deleteRevenueCatSubscriber(user.id),
+    fcm_remove: await invalidatePushTokens(adminClient, user.id),
+  };
 
   // ─── Mandatory cleanups before the cascade ───
   // These leak personal data past the auth-row cascade, so failure
@@ -332,6 +404,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
       user.id,
       'vault_cleanup_failed',
       vault.reason.slice(0, 200),
+      thirdPartyOutcomes,
     );
     return Response.json({ error: 'vault cleanup failed' }, { status: 500 });
   }
@@ -347,8 +420,42 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
       user.id,
       'reports_cleanup_failed',
       reports.reason.slice(0, 200),
+      thirdPartyOutcomes,
     );
     return Response.json({ error: 'reports cleanup failed' }, { status: 500 });
+  }
+
+  // jobs queue (20260609_001, audit/account-deletion-completeness
+  // High May 2026). No FK to auth.users, no cascade — the user's
+  // UUID survives in `payload` forever if we don't drain first.
+  const jobsDrain = await drainUserJobs(adminClient, user.id);
+  if (!jobsDrain.ok) {
+    console.error('delete-account: jobs drain failed:', jobsDrain.reason);
+    await recordAudit(
+      adminClient,
+      user.id,
+      'reports_cleanup_failed',
+      `jobs drain: ${jobsDrain.reason}`.slice(0, 200),
+      thirdPartyOutcomes,
+    );
+    return Response.json({ error: 'jobs drain failed' }, { status: 500 });
+  }
+
+  // segments.created_by (20260526_001, audit/account-deletion-
+  // completeness Medium May 2026). `on delete set null` would leave
+  // the segment name behind — anonymise the row pre-cascade so the
+  // leaderboard keeps working without surfacing the author identity.
+  const segs = await anonymiseAuthoredSegments(adminClient, user.id);
+  if (!segs.ok) {
+    console.error('delete-account: segments anonymise failed:', segs.reason);
+    await recordAudit(
+      adminClient,
+      user.id,
+      'reports_cleanup_failed',
+      `segments anonymise: ${segs.reason}`.slice(0, 200),
+      thirdPartyOutcomes,
+    );
+    return Response.json({ error: 'segments anonymise failed' }, { status: 500 });
   }
 
   // Delete Storage files. The `runs` bucket holds gzipped tracks +
@@ -373,6 +480,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
       user.id,
       'storage_drain_failed',
       (err instanceof Error ? err.message : String(err)).slice(0, 200),
+      thirdPartyOutcomes,
     );
     return Response.json(
       { error: 'storage drain failed' },
@@ -416,6 +524,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
       user.id,
       'auth_delete_failed',
       (error?.message ?? String(error)).slice(0, 200),
+      thirdPartyOutcomes,
     );
     return Response.json(
       { error: 'delete failed' },
@@ -423,6 +532,6 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     );
   }
 
-  await recordAudit(adminClient, user.id, 'ok');
+  await recordAudit(adminClient, user.id, 'ok', null, thirdPartyOutcomes);
   return Response.json({ ok: true });
 }));

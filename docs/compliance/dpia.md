@@ -34,17 +34,17 @@ For each activity, the standard test:
 | Apple Watch / Wear OS run continues recording when paired phone is locked | Medium | Medium | Foreground service notification + wakelock — user is aware via lock-screen UI | Low |
 | Background-location permission granted on Android leaks beyond recording | High | Medium | `ACCESS_BACKGROUND_LOCATION` requested with rationale + Play Console justification | Medium — requires user education in the rationale dialog |
 | Public route's `waypoints` reveal home start point | High | Medium | Privacy zones clip the path in public render | Medium — depends on user opt-in |
-| Coach chat history (`coach_messages`) accumulates without auto-purge | Medium | High | None today — see `retention.md` TODO | High until purge job ships |
-| Strava token leaked after account deletion | High | Low | Strava `/oauth/deauthorize` revoke before row drop | TODO: confirm the call happens; if not, this jumps to "Medium remaining" |
+| Coach chat history (`coach_messages`) accumulates without auto-purge | Medium | High | 18-month purge via `purge-stale-coach-messages` cron (migration `20260922_001_data_retention_purge_jobs.sql`) | Low |
+| Strava token leaked after account deletion | High | Low | Strava `/oauth/deauthorize` called from `delete-account/index.ts`; outcome recorded in `deletion_audit_log.third_party_outcomes.strava_deauth` (Art 17(2) evidence) | Low — call site confirmed + per-call outcome auditable |
 
 ## Mitigations to implement
 
 Items the DPIA itself flags for action:
 
-1. **Coach-message retention**: add a `pg_cron` purge job; expose retention period in Privacy Policy + Settings.
-2. **Sentry user-opt-out toggle** in Settings → Privacy. Today the SDK is on-by-default in prod for everyone.
-3. **Live-ping retention**: confirm Postgres purge + Redis TTL both deliver the documented 24h window.
-4. **Strava deauthorize on delete**: verify the call site in `delete-account/index.ts`.
+1. ~~**Coach-message retention**: add a `pg_cron` purge job; expose retention period in Privacy Policy + Settings.~~ **Done** — migration `20260922_001_data_retention_purge_jobs.sql` + privacy-policy entry, 2026-05-26.
+2. **Sentry user-opt-out toggle** in Settings → Privacy. Today the SDK is on-by-default in prod for everyone. Tracked separately — see roadmap.
+3. ~~**Live-ping retention**: confirm Postgres purge + Redis TTL both deliver the documented 24h window.~~ **Done** — `cleanup_stale_live_run_pings()` cron (`20260602_001_pg_cron_schedules.sql`); Go live-hub Redis TTL matches.
+4. ~~**Strava deauthorize on delete**: verify the call site in `delete-account/index.ts`.~~ **Done** — confirmed; outcome now recorded in `deletion_audit_log.third_party_outcomes` (Art 17(2) evidence), migration `20260928_001_gdpr_dsar_closeouts.sql`.
 5. **Privacy-zone first-run prompt**: on the first run that records within (e.g.) 200 m of the registered home location, prompt the user to configure a privacy zone.
 
 ## Sign-off

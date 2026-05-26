@@ -112,7 +112,10 @@ export async function handleCoach(
 		console.error('[coach] consent lookup failed', consentLookup.error);
 		return jsonError(500, 'consent check failed');
 	}
-	if (!consentLookup.data?.coach_consent_at) {
+	// `.maybeSingle()` on a SetofOptions RPC narrows to `{}` in
+	// supabase-js v2.106's generated types — cast to the row shape.
+	const consentRow = consentLookup.data as { coach_consent_at: string | null } | null;
+	if (!consentRow?.coach_consent_at) {
 		return jsonError(
 			403,
 			'Coach consent required. Visit /coach in the app and accept ' +

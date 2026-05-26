@@ -223,6 +223,7 @@ export type Database = {
           id: number
           notes: string | null
           result: string
+          third_party_outcomes: Json | null
         }
         Insert: {
           deleted_at?: string
@@ -230,6 +231,7 @@ export type Database = {
           id?: number
           notes?: string | null
           result: string
+          third_party_outcomes?: Json | null
         }
         Update: {
           deleted_at?: string
@@ -237,6 +239,7 @@ export type Database = {
           id?: number
           notes?: string | null
           result?: string
+          third_party_outcomes?: Json | null
         }
         Relationships: []
       }

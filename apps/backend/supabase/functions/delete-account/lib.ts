@@ -31,18 +31,47 @@ export function fcmBatchRemoveBody(tokens: string[]): string {
 // ─── audit-log key derivation ───
 
 /**
- * Salted SHA-256 hash of the user id, written to deletion_audit_log
- * so the table isn't itself a directory of deleted accounts. The
- * salt is fixed (the table is service-role only; a salt that
- * rotates would prevent operators from looking up a known user's
- * row when investigating a delete-request fulfilment). Hex output.
+ * Pseudonymous hash of the user id, written to deletion_audit_log
+ * so the table isn't itself a directory of deleted accounts.
+ *
+ * Two modes (keyed by whether `DELETION_AUDIT_KEY` is set):
+ *
+ *   * **Keyed (recommended)**: HMAC-SHA256(key, userId). An adversary
+ *     who has a UUID and wants to test "was this user deleted?"
+ *     cannot reproduce the hash without the key — the audit log
+ *     becomes meaningfully pseudonymous. Set the env var to any
+ *     ≥ 32-byte secret (operator task; see deployment.md).
+ *
+ *   * **Unkeyed (legacy)**: SHA-256(salt || userId). Same scheme as
+ *     the original 20260917_001 audit log. Acceptable in the short
+ *     term because the table is service-role only, but a holder of
+ *     the UUID can reconstruct the hash and confirm deletion. The
+ *     `audit/account-deletion-completeness` finding documents this.
+ *
+ * The mode is chosen per-call: existing rows under the legacy salt
+ * are still resolvable by passing no key; new rows written after
+ * the operator sets the env var use HMAC. Hex output either way.
  */
 export async function hashUserIdForAudit(
 	userId: string,
-	salt: string = 'threkir-deletion-audit-v1',
+	options: { key?: string | undefined; salt?: string } = {},
 ): Promise<string> {
-	const data = new TextEncoder().encode(`${salt}:${userId}`);
-	const digest = await crypto.subtle.digest('SHA-256', data);
+	const key = options.key ?? Deno.env.get('DELETION_AUDIT_KEY') ?? '';
+	const enc = new TextEncoder();
+	let digest: ArrayBuffer;
+	if (key.length > 0) {
+		const cryptoKey = await crypto.subtle.importKey(
+			'raw',
+			enc.encode(key),
+			{ name: 'HMAC', hash: 'SHA-256' },
+			false,
+			['sign'],
+		);
+		digest = await crypto.subtle.sign('HMAC', cryptoKey, enc.encode(userId));
+	} else {
+		const salt = options.salt ?? 'threkir-deletion-audit-v1';
+		digest = await crypto.subtle.digest('SHA-256', enc.encode(`${salt}:${userId}`));
+	}
 	const bytes = new Uint8Array(digest);
 	let hex = '';
 	for (const b of bytes) hex += b.toString(16).padStart(2, '0');
@@ -57,3 +86,25 @@ export type DeletionAuditResult =
 	| 'auth_delete_failed'
 	| 'reports_cleanup_failed'
 	| 'vault_cleanup_failed';
+
+// ─── per-third-party outcome record (lands in deletion_audit_log.third_party_outcomes) ───
+
+/**
+ * GDPR Art 17(2) recipient-notification evidence trail. The
+ * delete-account EF calls third parties as best-effort; this
+ * record makes the outcome of each call auditable post-fact.
+ *
+ *   * `ok`       — the call succeeded.
+ *   * `skipped`  — there was nothing to clean (no token / no
+ *                  Android device / RevenueCat key unset). Distinct
+ *                  from `failed` because no recipient notification
+ *                  was required.
+ *   * `failed`   — the call raised. Operator can replay.
+ */
+export type ThirdPartyOutcome = 'ok' | 'skipped' | 'failed';
+
+export interface ThirdPartyOutcomes {
+	strava_deauth: ThirdPartyOutcome;
+	revenuecat_delete: ThirdPartyOutcome;
+	fcm_remove: ThirdPartyOutcome;
+}
