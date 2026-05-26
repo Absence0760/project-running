@@ -13,7 +13,7 @@ A working device that records a GPS track and a heart rate sample, displays dist
 | Nordic nRF52840 dev kit (PCA10056) | $50 |
 | u-blox MAX-M10S GPS breakout board (SparkFun) | $40 |
 | Sharp Memory LCD breakout (1.3" LS013B4DN04) | $35 |
-| MAX86177 optical HR eval board (Maxim MAXREFDES220) | $130 |
+| MAX86177 optical HR eval kit (Maxim's official EVSYS for the part — check the latest order number on the Analog Devices product page; price is in this ballpark) | ~$130 |
 | Bosch BMP390 breakout (Adafruit) | $15 |
 | LiPo battery 500 mAh + JST connector | $10 |
 | Tactile buttons + breadboard + jumpers | $20 |

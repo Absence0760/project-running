@@ -2,6 +2,8 @@
 
 Per-subsystem component choices with the reasoning, and the rejected alternatives. Prices are **single-unit / small-qty** from Digi-Key or Mouser unless flagged otherwise — production pricing at 10k+ units typically lands 40–60% of these numbers.
 
+> **Caveat — verify before procurement.** The specific model-number suffixes below (e.g. `AMA4B2KP-KXR`, `CXD5610GF`, `LS013B7DH06`, `BMM350`) are *representative* picks against vendor family pages, not parts we've sampled or received a quote for. Several of the GNSS, optical-HR, and display SKUs sit behind distributor NDAs or evolve faster than this doc. Before any procurement step, re-verify the exact part number, package, lifecycle status (active vs NRND), and stock against the vendor's current datasheet — and treat any "Garmin uses part X" line below as plausible-from-public-teardowns, not as a sourced quote.
+
 ## Application MCU
 
 | Part | Why | Trade |
@@ -16,8 +18,8 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 
 | Part | Why | Trade |
 |---|---|---|
-| **Sony CXD5610GF** | Dual-band L1+L5, GPS+GLONASS+Galileo+BeiDou+QZSS, ~9 mA tracking, ~25 mA acquisition. This is what Garmin Fenix 7 / Enduro 3 / Forerunner 965 use. ~$12 single-qty | Sony sells through reps; getting datasheet + sample under NDA takes ~4 weeks. No hobbyist breakout boards exist |
-| *Alt: u-blox X20P* | Dual-band, very low current (~15 mA acquisition), excellent multipath rejection in canyons. The technical winner on paper. ~$18 single-qty | More expensive than Sony at our volumes; u-blox's wearable-targeted M10 series doesn't yet have an L5-capable sibling |
+| **Sony CXD5610 family** | Dual-band L1+L5, multi-constellation (GPS+GLONASS+Galileo+BeiDou+QZSS), ~9 mA tracking, ~25 mA acquisition (vendor datasheet). Sony GNSS silicon is widely reported in modern Garmin Fenix / Enduro / Forerunner teardowns; the specific Sony part per model is harder to verify without a teardown of our own. ~$12 single-qty | Sony sells through reps; getting datasheet + sample under NDA takes ~4 weeks. No hobbyist breakout boards exist |
+| *Alt: u-blox dual-band wearable part* | u-blox's roadmap includes low-power dual-band parts beyond the current single-band MAX-M10S, with strong multipath rejection in canyons — likely the right answer if Sony is unsourceable, but the specific SKU and availability need verification with a u-blox FAE before relying on this | Pricing typically higher than Sony at our volumes |
 | *Alt: u-blox MAX-M10S* | Single-band L1 only, $8, easy to source, mature SDK, dev boards everywhere | **Disqualifying** for the ultra niche — the whole selling point is dual-band foliage accuracy. Fine for the bench prototype, not the shipping product |
 | *Alt: Quectel L96 / Mediatek MT3333* | Cheap (~$4), commodity | Single-band only; the parts every $50 fitness band uses |
 
@@ -27,7 +29,7 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 
 | Part | Why | Trade |
 |---|---|---|
-| **Maxim MAX86177** | The part Garmin moved to in 2023. 4-LED, 2-PD, sub-µA standby, on-chip motion-artifact algorithms. ~$6 single-qty | Algorithm IP needs licensing or in-house DSP work. Raw signal alone won't beat Garmin's tuned pipeline |
+| **Maxim MAX86177** | Industry-leading optical-HR AFE — 4-LED, 2-PD, sub-µA standby, on-chip motion-artifact preprocessing. Used by several premium wearables. ~$6 single-qty | Algorithm IP needs licensing or in-house DSP work. Raw signal alone won't beat the tuned pipelines the incumbents have iterated on for years |
 | *Alt: Goodix GH3026* | Used by Huawei, Honor, several mid-tier wearables. Cheaper at ~$3, mature drivers | Documentation is China-first; English datasheets exist but are partial. Algorithm IP almost always sourced from Goodix themselves under licence |
 | *Alt: PixArt PAH8011* | Cheapest viable optical HR at ~$2 | Single-LED — measurably worse in low-perfusion conditions (cold weather, dark skin tones) |
 

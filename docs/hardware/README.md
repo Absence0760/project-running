@@ -15,4 +15,4 @@ Nothing in this folder is committed-to. It exists so that a future "should we?" 
 
 Every doc here is **research, not commitment**. Numbers come from vendor datasheets + public teardowns + cost ranges quoted by EE/ID consultants — not from any quote we've requested. Before this becomes a project, every number needs a real quote and every component needs a sourcing path verified at the quantity we'd actually buy.
 
-The decision to *not* build hardware (and stay an app + watch-app company) is recorded in [decisions.md § 71](../decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely).
+The *current default* — to stay an app + watch-app company and not start hardware work — is recorded in [decisions.md § 71](../decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely), along with the three triggers that would re-open the question. No hard decision has been made; this folder exists so a future "should we?" conversation argues against a real cost / parts / firmware baseline rather than starting from scratch.

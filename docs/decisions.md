@@ -1517,24 +1517,24 @@ Audit reference: `/audit/owasp` May 2026 High #1.
 
 ## 71. Own-hardware (an ultra-marathon watch) stays research-only; watch development is deferred indefinitely
 
-We considered competing with Garmin Fenix / COROS Vertix in the ultra-marathon segment by building our own wrist device. We chose not to, but recorded the research so the conversation doesn't get re-started from scratch every six months. The research lives at [`docs/hardware/`](hardware/README.md) — vision, BOM, three-tier cost prototyping, firmware plan.
+We're considering whether to compete with Garmin Fenix / COROS Vertix in the ultra-marathon segment by building our own wrist device. **No decision has been made.** This entry records the *current default* (do not start hardware work) along with the cost ranges and triggers that would have to flip for that default to change. The research lives at [`docs/hardware/`](hardware/README.md) — vision, BOM, three-tier cost prototyping, firmware plan.
 
-Reasons for the decision:
+Why the current default holds:
 
 1. **The app is the moat, not the hardware.** Every dollar spent on hardware is a dollar not spent on the software stack that already differentiates us across web + Android + iOS + Wear OS + watchOS. The hardware path competes with our own roadmap for budget.
-2. **The realistic first-production-intent unit cost is ~$300–600k cash and 18–24 months calendar** with a small team of EE + ID + mech-E + RF consultant + firmware lead. Even tier-2 (a "wearable prototype" that isn't shippable) is $15–40k DIY or $80–250k consultant-built. The bench prototype (tier 1) at $1–2k is the only tier a single developer can realistically complete.
-3. **The hardware niche we'd target is genuinely real** — Garmin / COROS / Suunto own ultra, the UIs are weak, the buying demographic is technical and word-of-mouth driven. But the right way to enter it is as a software partner to an ODM (the COROS-2018 playbook) or as a custom-firmware layer on an existing watch, not from a clean-sheet PCB.
-4. **Wear OS is the wrong base** for the ultra battery target (~24–40hr GPS ceiling vs the 100hr+ target the segment requires). The right base is Zephyr RTOS on an Ambiq Apollo4 — i.e. a custom firmware project, not an app project. That's a different company.
+2. **The cost-to-first-production-intent-unit is ~$300–600k cash and 18–24 months calendar** with a small team of EE + ID + mech-E + RF consultant + firmware lead. Even tier-2 (a "wearable prototype" that isn't shippable) is $15–40k DIY or $80–250k consultant-built. Only tier 1 — a $1–2k bench prototype — is realistic for a single developer in evenings.
+3. **The hardware niche is genuinely real** — Garmin / COROS / Suunto own ultra, the UIs are widely criticised, the buying demographic is technical and word-of-mouth driven. The cleanest entry vector is probably as a software partner to an ODM (the COROS-2018 playbook) or as a custom-firmware layer on an existing watch, rather than a clean-sheet PCB.
+4. **Wear OS is the wrong base** for the ultra battery target (~24–40hr GPS ceiling vs the 100hr+ target the segment requires). The right base is a low-power RTOS (Zephyr or FreeRTOS) on an Ambiq Apollo4 or similar — i.e. a custom firmware project, not an app project.
 
 What this commits us to:
 
-- **`docs/hardware/` is a research baseline, not a roadmap commitment.** No work tracked there should appear in the roadmap's phase-tagged sections; it lives under `## Future — Hardware` as a parking-lot only.
+- **`docs/hardware/` is a research baseline, not a roadmap commitment.** Nothing tracked there should appear in the roadmap's phase-tagged sections; it lives under `## Future — Hardware` as a parking-lot only.
 - **Re-open the question** when one of: (a) the app has a paying user base large enough to fund a parallel hardware effort without starving the software roadmap, (b) an existing ODM approaches us about a white-label deal, or (c) a co-founder with shipped-consumer-hardware experience joins the project.
-- **Don't grow `docs/hardware/`** with detailed schematics, EAGLE files, or firmware code until one of the above triggers. The current four docs (README + vision + bom + prototyping + firmware) are the right resolution for "research baseline"; more detail is sunk cost until the decision flips.
+- **Don't grow `docs/hardware/`** with detailed schematics, EAGLE files, or firmware code until one of the above triggers. The current resolution (README + vision + bom + prototyping + firmware) is right for "research baseline"; more detail is sunk cost until the default flips.
 
 Don't re-litigate by:
 
-- Treating "we have an app and a watch app, therefore we should also have a watch" as a logical next step. The economics don't work; that's the point of this entry.
+- Treating "we have an app and a watch app, therefore we should also have a watch" as a logical next step. The economics in [`hardware/prototyping.md`](hardware/prototyping.md) are the point of this entry.
 - Spending discretionary engineering time on tier-1 bench prototypes "to keep the option warm." The option stays warm because the docs exist; building hardware on a hobby budget is how projects accidentally become consumer-electronics companies.
 
 ---

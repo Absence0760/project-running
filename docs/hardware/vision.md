@@ -27,19 +27,21 @@ What we'd *not* be: a general-purpose smartwatch, a phone replacement, a fitness
 | 6 | **IPX7+ water resistance** | Rain, river crossings, sweat | Sealed case + gasket; charging via inductive pad (no exposed contacts) |
 | 7 | **Barometric altimeter** | Trail elevation gain is a primary stat; GPS altitude alone is 20–50m noisy. Also drives storm detection | Bosch BMP390 (already standard in this class) |
 | 8 | **Optical heart rate that survives rough terrain** | Wrist-mounted HR is famously unreliable during high-cadence trail descents; ultras need HR for pacing, not just bragging | Goodix GH3026 or Maxim MAX86177 (the part Garmin moved to in 2023). Still won't match a chest strap; we'd also support ANT+ chest strap pairing |
-| 9 | **Solar charging panel (stretch)** | Adds 10–30% runtime in direct sun. Garmin Fenix 7X Solar pioneered this; the Powerglass technology is licensable | Custom glass stack, +$40–80 BOM, +6 months of glass-supplier qualification |
+| 9 | **Solar charging panel (stretch)** | Adds 10–30% runtime in direct sun (Garmin's published Fenix 7X Solar uplift). The underlying transparent-solar-cell technology comes from several suppliers (e.g. Sunpartner / Crystalsol families); Garmin's Powerglass brand wraps their version. Availability to third parties at our volumes needs a real supplier conversation, not an assumption | Custom glass stack, +$40–80 BOM, +6 months of glass-supplier qualification |
 | 10 | **Hot-swappable battery (stretch / repairable)** | Multi-day FKTs; right-to-repair as a brand position | Mechanical complexity, harder to seal — almost no consumer watches do this. Differentiator if we pull it off |
 
 The first 8 are table stakes for the segment. Items 9 and 10 are where we'd actually differentiate.
 
 ## What we'd be competing against
 
-| Watch | GPS battery | Display | GNSS | Price | Notable gap |
+| Watch | GPS battery (best-case mode) | Display | GNSS | Price | Notable gap |
 |---|---|---|---|---|---|
-| Garmin Fenix 7X Solar | 89hr | 1.4" MIP | Dual-band | $900 | Hostile UI, slow OS updates |
-| Garmin Enduro 3 | 110hr | 1.4" MIP | Dual-band | $900 | Same UI; slimmer, lighter |
-| COROS Vertix 2S | 140hr | 1.4" MIP | Dual-band | $700 | UI is better than Garmin; map UX still weak |
-| Suunto Vertical | 85hr | 1.4" MIP | Dual-band | $700 | Smallest software ecosystem of the three |
-| Apple Watch Ultra 2 | 12hr | AMOLED | Dual-band | $800 | Battery life makes it a non-starter for 100mi |
+| Garmin Fenix 7X Solar | ~89hr | 1.4" MIP | Dual-band | $900 | Hostile UI, slow OS updates |
+| Garmin Enduro 3 | ~110hr | 1.4" MIP | Dual-band | $900 | Same UI; slimmer, lighter |
+| COROS Vertix 2 / 2S | ~140hr / ~118hr | 1.4" MIP | Dual-band | $700 | UI is better than Garmin; map UX still weak |
+| Suunto Vertical | ~85hr (Performance mode) | 1.4" MIP | Dual-band | $700 | Smallest software ecosystem of the three |
+| Apple Watch Ultra 2 | ~12hr (workout, normal-power) | AMOLED | Dual-band | $800 | Battery life makes it a non-starter for 100mi |
 
-Our target: match or beat the Garmin Enduro 3 on battery (~110hr GPS), match the COROS Vertix 2S on UI quality (the bar is low), beat all four on map UX (vector tiles, offline-by-default, course following that doesn't feel like a 2010 GPS unit). Price target $500–$600 to undercut the segment by a meaningful margin while still leaving 40–50% gross margin on a sane production run.
+> **Important caveat on battery numbers.** Vendor "GPS hours" figures are almost always quoted for the *best-case* mode — typically single-band GPS only, no music, no maps loaded, no HR active. Switching to multi-band / all-systems GNSS (the configuration ultra runners actually want, for foliage and canyon accuracy) typically cuts the figure by 40–60%. The Garmin Fenix 7X Solar at "89hr GPS" drops to ~36hr in the multi-band-with-music configuration most runners actually use. Verify mode-for-mode before comparing, and treat the figures above as headline marketing numbers, not as what you'd see on the wrist during a 100-miler.
+
+Our target (best-case headline): match or beat the Garmin Enduro 3 on battery (~110hr GPS, single-band), match the COROS Vertix 2 on UI quality (the bar is low), beat all four on map UX (vector tiles, offline-by-default, course following that doesn't feel like a 2010 GPS unit). Price target $500–$600 to undercut the segment by a meaningful margin while still leaving 40–50% gross margin on a sane production run.
