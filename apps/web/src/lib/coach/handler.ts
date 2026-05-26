@@ -29,7 +29,6 @@ import {
 import { streamAnthropic, streamOpenAI } from './providers';
 import { COACH_SYSTEM_PROMPT } from './system_prompt';
 import {
-	PRO_HOURLY_RATE_LIMIT,
 	TIER_LIMITS,
 	emptyUsage,
 	type CoachConfig,
@@ -126,73 +125,37 @@ export async function handleCoach(
 	if (!config.bypassPaywallEnabled) {
 		const { data: isPro } = await supabase.rpc('is_pro');
 		tier = isPro === true ? 'pro' : 'free';
-		if (tier === 'free') {
-			const { data: newCount } = await supabase.rpc('increment_coach_usage', {
-				p_user_id: authUser.id,
-			});
-			usedToday = typeof newCount === 'number' ? newCount : 0;
-			// `increment_coach_usage` returns the count AFTER incrementing.
-			// `> dailyLimit` means messages 1..5 (= dailyLimit) all ran;
-			// the 6th increment lands at `usedToday = 6`, fails this gate,
-			// and no provider call streams. The counter ends at 6 on a
-			// rejected attempt — cosmetic, but the rejection semantics
-			// match the "5 messages per day" contract documented in
-			// paywall.md.
-			if (usedToday > TIER_LIMITS.free.dailyLimit) {
-				return {
-					kind: 'json',
-					status: 429,
-					headers: {
-						'content-type': 'application/json',
-						...rateLimitHeaders(tier, usedToday),
-					},
-					body: JSON.stringify({
-						error: 'daily_limit',
-						message: `You've used all ${TIER_LIMITS.free.dailyLimit} coach messages for today. Upgrade to Pro for unlimited chats, or come back tomorrow!`,
-						used: usedToday,
-						limit: TIER_LIMITS.free.dailyLimit,
-						tier,
-					}),
-				};
-			}
-		} else {
-			// Pro tier: per-user-id hourly rate limit. dailyLimit is
-			// unlimited so a stolen session token could otherwise sustain
-			// max-concurrency saturation against Anthropic's API. Per
-			// audit pass 3 — bounds spend at ~60 turns / hour / Pro
-			// account.
-			//
-			// check_rate_limit returns SETOF (allowed, retry_after_seconds)
-			// → supabase-js delivers an array of one row. Fail open on
-			// RPC error so a transient DB blip doesn't 429-storm Pro
-			// users; the WAF + reserved-concurrency caps still bound
-			// the abuse case.
-			const { data: rl, error: rlErr } = await supabase.rpc('check_rate_limit', {
-				p_user_id: authUser.id,
-				p_bucket: 'coach:pro',
-				p_max: PRO_HOURLY_RATE_LIMIT,
-				p_window_seconds: 3600,
-			});
-			if (rlErr) {
-				console.warn('[coach] check_rate_limit RPC failed; allowing request', rlErr);
-			} else {
-				const row = Array.isArray(rl) ? rl[0] : rl;
-				if (row && row.allowed === false) {
-					return {
-						kind: 'json',
-						status: 429,
-						headers: {
-							'content-type': 'application/json',
-							'Retry-After': String(row.retry_after_seconds ?? 60),
-						},
-						body: JSON.stringify({
-							error: 'rate_limit',
-							message: 'Too many requests, slow down. Try again in a minute.',
-							tier,
-						}),
-					};
-				}
-			}
+		const dailyLimit = TIER_LIMITS[tier].dailyLimit;
+		const { data: newCount } = await supabase.rpc('increment_coach_usage', {
+			p_user_id: authUser.id,
+		});
+		usedToday = typeof newCount === 'number' ? newCount : 0;
+		// `increment_coach_usage` returns the count AFTER incrementing.
+		// `usedToday > dailyLimit` means messages 1..N (= dailyLimit)
+		// all ran; the (N+1)th increment lands at `usedToday = N+1`,
+		// fails this gate, and no provider call streams. The counter
+		// ends at N+1 on a rejected attempt — cosmetic, but the
+		// rejection semantics match the per-tier daily contract
+		// documented in paywall.md.
+		if (usedToday > dailyLimit) {
+			const upgradeHint = tier === 'free'
+				? ' Upgrade to Pro for a higher daily cap, or come back tomorrow!'
+				: ' Come back tomorrow!';
+			return {
+				kind: 'json',
+				status: 429,
+				headers: {
+					'content-type': 'application/json',
+					...rateLimitHeaders(tier, usedToday),
+				},
+				body: JSON.stringify({
+					error: 'daily_limit',
+					message: `You've used all ${dailyLimit} coach messages for today.${upgradeHint}`,
+					used: usedToday,
+					limit: dailyLimit,
+					tier,
+				}),
+			};
 		}
 	} else {
 		tier = 'pro';
@@ -300,7 +263,7 @@ export async function handleCoach(
 			user_message_id: userMessageId,
 			tier,
 			limits: {
-				daily_limit: Number.isFinite(limits.dailyLimit) ? limits.dailyLimit : null,
+				daily_limit: limits.dailyLimit,
 				max_tokens: limits.maxTokens,
 				max_runs_limit: limits.maxRunsLimit,
 			},

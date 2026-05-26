@@ -97,8 +97,9 @@
 		<h1>Pro &amp; support</h1>
 		<p class="tagline">
 			Threkir is free for the parts that matter — recording, routes, plans,
-			clubs, imports. Pro lifts the daily Coach cap and pushes your map-matching
-			to the front of the queue. Or chip in one-off to help keep the lights on.
+			clubs, imports. Pro raises the daily Coach cap (2 → 10 messages) and
+			pushes your map-matching to the front of the queue. Or chip in one-off
+			to help keep the lights on.
 		</p>
 	</header>
 
@@ -127,7 +128,7 @@
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<span>AI Coach — 5 chats per day</span>
+					<span>AI Coach — 2 chats per day</span>
 				</li>
 			</ul>
 			{#if !isPro}
@@ -150,8 +151,8 @@
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<div>
-						<strong>Unlimited AI Coach</strong>
-						<span class="feat-sub">No 5/day cap on Coach chat.</span>
+						<strong>AI Coach — 10/day</strong>
+						<span class="feat-sub">5× the Free cap on Coach chat (2/day → 10/day).</span>
 					</div>
 				</li>
 				<li>

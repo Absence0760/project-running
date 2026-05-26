@@ -51,18 +51,18 @@ async function freshAccessToken(email: string, password: string): Promise<string
 test.describe('paywall — at the wire', () => {
 	test.skip(bypassPaywallActive, 'BYPASS_PAYWALL=true in apps/web/.env.local; the cap is intentionally off in this environment');
 
-	test('free user with 5 messages used today gets 429 from /api/coach (UI bypass)', async ({
+	test('free user at the free cap gets 429 from /api/coach (UI bypass)', async ({
 		request
 	}) => {
-		// Plant 5 coach_usage entries via service-role so the next
-		// request is the 6th of the day. The handler reads after-
-		// increment; on a real 6th increment it lands at 6 and fails
-		// the `usedToday > dailyLimit` gate.
+		// Plant 2 coach_usage entries via service-role so the next
+		// request is the 3rd of the day. The handler reads after-
+		// increment; on a real 3rd increment it lands at 3 and fails
+		// the `usedToday > TIER_LIMITS.free.dailyLimit` gate.
 		const admin = getAdminClient();
 		await admin
 			.from('user_coach_usage')
 			.upsert(
-				{ user_id: USER_A.id, usage_date: TODAY, message_count: 5 },
+				{ user_id: USER_A.id, usage_date: TODAY, message_count: 2 },
 				{ onConflict: 'user_id,usage_date' }
 			);
 
@@ -70,7 +70,7 @@ test.describe('paywall — at the wire', () => {
 		expect(token.length).toBeGreaterThan(20);
 
 		// curl the endpoint directly with a benign prompt. The handler
-		// will increment to 6, fail the gate, and return 429.
+		// will increment to 3, fail the gate, and return 429.
 		const res = await request.post('http://localhost:7777/api/coach', {
 			headers: {
 				'content-type': 'application/json',
@@ -87,7 +87,7 @@ test.describe('paywall — at the wire', () => {
 		const body = await res.json();
 		expect(body.error).toBe('daily_limit');
 		expect(body.tier).toBe('free');
-		expect(body.limit).toBe(5);
+		expect(body.limit).toBe(2);
 		expect(body.message).toMatch(/Daily|coach messages|Upgrade to Pro/i);
 
 		// Cleanup so other tests don't see runner sitting at the limit.
@@ -98,19 +98,20 @@ test.describe('paywall — at the wire', () => {
 			.eq('usage_date', TODAY);
 	});
 
-	test('Pro user with the same 5-message count keeps going (free cap doesn\'t apply)', async ({
+	test('Pro user at the free cap keeps going (Pro has a higher daily cap)', async ({
 		request
 	}) => {
-		// Symmetry test: morgan is on the Pro tier per seed.
-		// subscription_tier='pro' lifts the daily-cap branch entirely
-		// — the handler routes Pro callers through the per-hour
-		// rate-limit which has a much higher ceiling. With 5 messages
-		// already used, a Pro user must NOT see 429.
+		// Symmetry test: morgan is on the Pro tier per seed. Planted at
+		// the free cap (= 2 messages), which is well under Pro's daily
+		// cap (10). A Pro user must NOT see 429 at this usage level —
+		// either the LLM streams or some upstream non-429 status comes
+		// back. A 429 from `tier: 'free'` would mean the free-cap branch
+		// fired for a Pro caller (regression).
 		const admin = getAdminClient();
 		await admin
 			.from('user_coach_usage')
 			.upsert(
-				{ user_id: USER_C_PRO.id, usage_date: TODAY, message_count: 5 },
+				{ user_id: USER_C_PRO.id, usage_date: TODAY, message_count: 2 },
 				{ onConflict: 'user_id,usage_date' }
 			);
 
@@ -119,9 +120,7 @@ test.describe('paywall — at the wire', () => {
 			expect(token.length).toBeGreaterThan(20);
 
 			// We don't care if the LLM call succeeds (no API key in
-			// CI); we only care that the daily-cap gate didn't fire.
-			// A 200 with SSE OR a 4xx that's NOT 429 OR a 5xx upstream
-			// error all prove the gate let us through.
+			// CI); we only care that the free-cap branch didn't fire.
 			const res = await request.post('http://localhost:7777/api/coach', {
 				headers: {
 					'content-type': 'application/json',
@@ -134,20 +133,63 @@ test.describe('paywall — at the wire', () => {
 				}
 			});
 
-			// The free-cap branch returns 429 with `limit: 5`; the
-			// Pro per-hour branch can also return 429 (different
-			// payload, no `limit: 5`). Tolerate either non-429 OR a
-			// 429 whose payload is NOT the free-cap shape.
 			if (res.status() === 429) {
 				const body = await res.json();
-				expect(body.tier, 'pro user should not hit free-tier cap').not.toBe(
+				// Pin: the only 429 a Pro caller can legitimately see is
+				// their OWN cap (`tier: 'pro'`). A `tier: 'free'` 429
+				// means the free branch leaked to a Pro user.
+				expect(body.tier, 'pro user must not hit free-tier cap').not.toBe(
 					'free'
 				);
 			} else {
-				// 200 / 4xx / 5xx — anything that proves the free cap
-				// didn't fire. Pin the negative.
 				expect(res.status()).not.toBe(429);
 			}
+		} finally {
+			await admin
+				.from('user_coach_usage')
+				.delete()
+				.eq('user_id', USER_C_PRO.id)
+				.eq('usage_date', TODAY);
+		}
+	});
+
+	test('Pro user at the Pro cap gets 429 from /api/coach (Pro is now finite)', async ({
+		request
+	}) => {
+		// Plant 10 usage entries for the Pro user — the next request
+		// is the 11th and must trip the daily-cap gate. This pins the
+		// Pro daily cap as a real ceiling rather than the previous
+		// "unlimited" branch. See decisions.md § 23 for the policy
+		// change.
+		const admin = getAdminClient();
+		await admin
+			.from('user_coach_usage')
+			.upsert(
+				{ user_id: USER_C_PRO.id, usage_date: TODAY, message_count: 10 },
+				{ onConflict: 'user_id,usage_date' }
+			);
+
+		try {
+			const token = await freshAccessToken(USER_C_PRO.email, USER_C_PRO.password);
+			expect(token.length).toBeGreaterThan(20);
+
+			const res = await request.post('http://localhost:7777/api/coach', {
+				headers: {
+					'content-type': 'application/json',
+					'x-supabase-authorization': `Bearer ${token}`
+				},
+				data: {
+					messages: [{ role: 'user', content: 'e2e pro at-cap test' }],
+					plan_id: null,
+					recent_runs_limit: 10
+				}
+			});
+
+			expect(res.status()).toBe(429);
+			const body = await res.json();
+			expect(body.error).toBe('daily_limit');
+			expect(body.tier).toBe('pro');
+			expect(body.limit).toBe(10);
 		} finally {
 			await admin
 				.from('user_coach_usage')

@@ -192,10 +192,10 @@ test.describe('/coach', () => {
 				contentType: 'application/json',
 				body: JSON.stringify({
 					error: 'rate_limited',
-					used: 5,
-					limit: 5,
+					used: 2,
+					limit: 2,
 					tier: 'free',
-					message: 'Daily limit reached (5 messages). Come back tomorrow!'
+					message: 'Daily limit reached (2 messages). Come back tomorrow!'
 				})
 			});
 		});

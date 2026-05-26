@@ -52,18 +52,14 @@ export function jsonError(
 }
 
 /// `X-Coach-Tier` + `X-RateLimit-*` headers attached to every coach
-/// response. Pro tier reports "unlimited" for the daily fields since
-/// `dailyLimit = Infinity` doesn't serialise meaningfully.
+/// response. Both tiers now carry a finite daily cap, so the limit
+/// fields always serialise as a number.
 export function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, string> {
 	const limits = TIER_LIMITS[tier];
-	const limitStr = Number.isFinite(limits.dailyLimit) ? String(limits.dailyLimit) : 'unlimited';
-	const remainingStr = Number.isFinite(limits.dailyLimit)
-		? String(Math.max(0, limits.dailyLimit - usedToday))
-		: 'unlimited';
 	return {
 		'X-Coach-Tier': tier,
-		'X-RateLimit-Limit': limitStr,
-		'X-RateLimit-Remaining': remainingStr,
+		'X-RateLimit-Limit': String(limits.dailyLimit),
+		'X-RateLimit-Remaining': String(Math.max(0, limits.dailyLimit - usedToday)),
 		'X-RateLimit-MaxTokens': String(limits.maxTokens),
 		'X-RateLimit-MaxRuns': String(limits.maxRunsLimit),
 	};

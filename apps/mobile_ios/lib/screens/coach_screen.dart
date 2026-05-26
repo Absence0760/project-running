@@ -123,10 +123,12 @@ class _ContextSummary {
 
 class _CoachScreenState extends State<CoachScreen> {
   static const _runLimitOptions = [10, 20, 50, 100];
-  // Pre-handshake placeholder. Real value lands on the SSE `meta`
-  // event from the server (TIER_LIMITS.free.dailyLimit = 5,
-  // apps/web/src/lib/coach/types.ts).
-  static const _defaultDailyLimit = 5;
+  // Pre-handshake placeholders. Real values land on the SSE `meta`
+  // event from the server (TIER_LIMITS in apps/web/src/lib/coach/types.ts).
+  // Seed conservatively with the free cap so the banner can't flash
+  // "10 of 10" for a free user's first paint.
+  static const _freeDailyLimit = 2;
+  static const _proDailyLimit = 10;
   static const _planSuggestions = [
     "Should I run tomorrow or take a rest day?",
     "Am I on track for my goal time?",
@@ -162,12 +164,10 @@ class _CoachScreenState extends State<CoachScreen> {
   int _runsLimit = 20;
 
   String _tier = 'free';
-  int _dailyLimit = _defaultDailyLimit;
+  int _dailyLimit = _freeDailyLimit;
   int _usedToday = 0;
-  bool get _isUnlimited => _tier == 'pro';
-  bool get _limitReached => !_isUnlimited && _usedToday >= _dailyLimit;
-  int get _remaining =>
-      _isUnlimited ? 1 << 30 : (_dailyLimit - _usedToday).clamp(0, _dailyLimit);
+  bool get _limitReached => _usedToday >= _dailyLimit;
+  int get _remaining => (_dailyLimit - _usedToday).clamp(0, _dailyLimit);
 
   _ContextSummary? _ctx;
   RealtimeChannel? _realtimeChannel;
@@ -279,7 +279,7 @@ class _CoachScreenState extends State<CoachScreen> {
       _archives = archives;
       _usedToday = used;
       _tier = pro ? 'pro' : 'free';
-      _dailyLimit = pro ? 1 << 30 : _defaultDailyLimit;
+      _dailyLimit = pro ? _proDailyLimit : _freeDailyLimit;
       _threadLoaded = true;
     });
     await _loadContext();
@@ -513,7 +513,8 @@ class _CoachScreenState extends State<CoachScreen> {
                   _dailyLimit = (j['limit'] as num).toInt();
                 }
                 _error = (j['message'] as String?) ??
-                    'Daily limit reached ($_dailyLimit messages). Come back tomorrow!';
+                    'Daily limit reached ($_dailyLimit messages). '
+                        'Come back tomorrow!';
               });
             }
           } else {
@@ -836,8 +837,7 @@ class _CoachScreenState extends State<CoachScreen> {
         children: [
           if (_ctx != null) _buildContextStrip(theme),
           if (_viewingArchiveAt != null) _buildArchiveBanner(theme),
-          if (!_isUnlimited && _remaining <= 3)
-            _buildLimitBanner(theme, cs),
+          if (_remaining <= 3) _buildLimitBanner(theme, cs),
           if (_error != null) _buildErrorBanner(theme, cs),
           Expanded(
             child: _threadLoaded
@@ -1125,14 +1125,20 @@ class _CoachScreenState extends State<CoachScreen> {
   }
 
   Widget _buildLimitBanner(ThemeData theme, ColorScheme cs) {
+    final String text;
+    if (_limitReached) {
+      text = _tier == 'pro'
+          ? 'Daily limit reached. Come back tomorrow.'
+          : 'Daily limit reached. Pro gets a higher cap — upgrade in Settings.';
+    } else {
+      text = '$_remaining message${_remaining == 1 ? "" : "s"} left today';
+    }
     return Container(
       width: double.infinity,
       color: cs.tertiaryContainer,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       child: Text(
-        _limitReached
-            ? 'Daily limit reached. Pro lifts the cap — upgrade in Settings.'
-            : '$_remaining message${_remaining == 1 ? "" : "s"} left today',
+        text,
         style: theme.textTheme.bodySmall?.copyWith(color: cs.onTertiaryContainer),
       ),
     );

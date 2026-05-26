@@ -18,8 +18,8 @@ import { TIER_LIMITS } from './coach/types';
 ///
 /// - **Pro perks** — benefits that aren't hidden behind a gate but
 ///   change shape based on tier (e.g. priority processing, larger
-///   context window, unlimited coach messages). Not keyed for gating
-///   because they're behaviour changes, not screens.
+///   context window, higher daily coach-message cap). Not keyed for
+///   gating because they're behaviour changes, not screens.
 ///
 /// To add a new gated feature:
 ///   1. Add an entry to `GATED_FEATURES` with a human-readable label.
@@ -36,11 +36,11 @@ export const GATED_FEATURES: Record<
 > = {
 	ai_coach: {
 		label: 'AI Coach',
-		// Build the daily-cap number from TIER_LIMITS so this string
-		// can't drift from the server enforcement value (`handler.ts`
-		// reads the same constant).
+		// Build the daily-cap numbers from TIER_LIMITS so this string
+		// can't drift from the server enforcement values (`handler.ts`
+		// reads the same constants).
 		description:
-			`Personalised training advice from Claude, grounded in your plan and runs. Free users get ${TIER_LIMITS.free.dailyLimit} messages per day; Pro users get unlimited.`,
+			`Personalised training advice from Claude, grounded in your plan and runs. Free users get ${TIER_LIMITS.free.dailyLimit} messages per day; Pro users get ${TIER_LIMITS.pro.dailyLimit}.`,
 	},
 	priority_processing: {
 		label: 'Priority Processing',

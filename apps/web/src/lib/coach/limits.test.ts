@@ -118,10 +118,10 @@ test('jsonError — `error` field cannot be overridden by extra', () => {
 // ─────────────── rateLimitHeaders ───────────────
 
 test('rateLimitHeaders — free tier reports finite limit and remaining', () => {
-	const headers = rateLimitHeaders('free', 3);
+	const headers = rateLimitHeaders('free', 1);
 	assert.equal(headers['X-Coach-Tier'], 'free');
-	assert.equal(headers['X-RateLimit-Limit'], '5');
-	assert.equal(headers['X-RateLimit-Remaining'], '2');
+	assert.equal(headers['X-RateLimit-Limit'], '2');
+	assert.equal(headers['X-RateLimit-Remaining'], '1');
 	assert.equal(headers['X-RateLimit-MaxTokens'], '768');
 	assert.equal(headers['X-RateLimit-MaxRuns'], '30');
 });
@@ -131,13 +131,18 @@ test('rateLimitHeaders — free tier remaining clamps to 0 when usage exceeds th
 	assert.equal(headers['X-RateLimit-Remaining'], '0');
 });
 
-test('rateLimitHeaders — pro tier reports unlimited daily', () => {
-	const headers = rateLimitHeaders('pro', 999);
+test('rateLimitHeaders — pro tier reports finite daily cap (higher than free)', () => {
+	const headers = rateLimitHeaders('pro', 3);
 	assert.equal(headers['X-Coach-Tier'], 'pro');
-	assert.equal(headers['X-RateLimit-Limit'], 'unlimited');
-	assert.equal(headers['X-RateLimit-Remaining'], 'unlimited');
+	assert.equal(headers['X-RateLimit-Limit'], '10');
+	assert.equal(headers['X-RateLimit-Remaining'], '7');
 	assert.equal(headers['X-RateLimit-MaxTokens'], '2048');
 	assert.equal(headers['X-RateLimit-MaxRuns'], '75');
+});
+
+test('rateLimitHeaders — pro tier remaining clamps to 0 when usage exceeds the cap', () => {
+	const headers = rateLimitHeaders('pro', 999);
+	assert.equal(headers['X-RateLimit-Remaining'], '0');
 });
 
 // ─────────────── personalityAddendum ───────────────

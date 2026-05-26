@@ -19,15 +19,16 @@ test('emptyUsage — caller can mutate without leaking back to a fresh emptyUsag
 	assert.equal(b.input_tokens, 0);
 });
 
-test('TIER_LIMITS.free — keeps a daily cap so anonymous abuse cannot drain quota', () => {
+test('TIER_LIMITS.free — finite daily cap so anonymous abuse cannot drain quota', () => {
 	assert.ok(Number.isFinite(TIER_LIMITS.free.dailyLimit));
 	assert.ok(TIER_LIMITS.free.dailyLimit > 0);
 	assert.ok(TIER_LIMITS.free.maxTokens > 0);
 	assert.ok(TIER_LIMITS.free.maxRunsLimit > 0);
 });
 
-test('TIER_LIMITS.pro — uncapped daily limit, larger token + runs windows', () => {
-	assert.equal(TIER_LIMITS.pro.dailyLimit, Number.POSITIVE_INFINITY);
+test('TIER_LIMITS.pro — finite daily cap (bounds Anthropic spend per stolen Pro session), larger token + runs windows than free', () => {
+	assert.ok(Number.isFinite(TIER_LIMITS.pro.dailyLimit));
+	assert.ok(TIER_LIMITS.pro.dailyLimit > TIER_LIMITS.free.dailyLimit);
 	assert.ok(TIER_LIMITS.pro.maxTokens > TIER_LIMITS.free.maxTokens);
 	assert.ok(TIER_LIMITS.pro.maxRunsLimit > TIER_LIMITS.free.maxRunsLimit);
 });

@@ -5,6 +5,7 @@
 	import { fmtKm } from '$lib/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
+	import { TIER_LIMITS } from '$lib/coach/types';
 	import type { TrainingPlan } from '$lib/types';
 
 	interface Props {
@@ -248,17 +249,13 @@
 	let lastCache = $state<{ read: number; create: number; in: number; out: number } | null>(null);
 
 	// Pre-handshake placeholder. Real value lands on the SSE `meta`
-	// event from the server (TIER_LIMITS.free.dailyLimit = 5,
-	// apps/web/src/lib/coach/types.ts).
-	const DEFAULT_DAILY_LIMIT = 5;
+	// event from the server. Free cap is the conservative seed so the
+	// composer never flashes "10 of 10" on a free user's first paint.
 	let tier = $state<'free' | 'pro' | null>(null);
-	let dailyLimit = $state<number | null>(DEFAULT_DAILY_LIMIT);
+	let dailyLimit = $state<number>(TIER_LIMITS.free.dailyLimit);
 	let usedToday = $state(0);
-	let isUnlimited = $derived(dailyLimit === null);
-	let limitReached = $derived(!isUnlimited && usedToday >= (dailyLimit ?? 0));
-	let remaining = $derived(
-		isUnlimited ? Infinity : Math.max(0, (dailyLimit ?? 0) - usedToday),
-	);
+	let limitReached = $derived(usedToday >= dailyLimit);
+	let remaining = $derived(Math.max(0, dailyLimit - usedToday));
 
 	interface ContextSummary {
 		planName: string | null;
@@ -284,10 +281,10 @@
 		if (typeof usage === 'number') usedToday = usage;
 		if (isPro === true) {
 			tier = 'pro';
-			dailyLimit = null;
+			dailyLimit = TIER_LIMITS.pro.dailyLimit;
 		} else {
 			tier = 'free';
-			dailyLimit = DEFAULT_DAILY_LIMIT;
+			dailyLimit = TIER_LIMITS.free.dailyLimit;
 		}
 
 		await loadContextSummary(session.user.id);
@@ -464,10 +461,10 @@
 				if (res.status === 404) {
 					error = 'Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.';
 				} else if (res.status === 429) {
-					usedToday = j.used ?? (dailyLimit ?? DEFAULT_DAILY_LIMIT);
+					usedToday = j.used ?? dailyLimit;
 					if (typeof j.tier === 'string') tier = j.tier;
 					if (typeof j.limit === 'number') dailyLimit = j.limit;
-					error = j.message ?? `Daily limit reached (${dailyLimit ?? DEFAULT_DAILY_LIMIT} messages). Come back tomorrow!`;
+					error = j.message ?? `Daily limit reached (${dailyLimit} messages). Come back tomorrow!`;
 				} else {
 					error = j.error ?? `Coach error (${res.status})`;
 				}
@@ -533,8 +530,8 @@
 				}
 			}
 			if (typeof parsed.tier === 'string') tier = parsed.tier as 'free' | 'pro';
-			const limits = parsed.limits as { daily_limit: number | null } | undefined;
-			if (limits && 'daily_limit' in limits) dailyLimit = limits.daily_limit;
+			const limits = parsed.limits as { daily_limit: number } | undefined;
+			if (limits && typeof limits.daily_limit === 'number') dailyLimit = limits.daily_limit;
 		} else if (event === 'token') {
 			const text = (parsed.text as string) ?? '';
 			const cur = messages[assistantIdx];
@@ -982,7 +979,7 @@
 		{:else if limitReached}
 			<div class="limit-bar">
 				<span class="material-symbols">schedule</span>
-				You've used all {dailyLimit ?? DEFAULT_DAILY_LIMIT} messages for today. Come back tomorrow!
+				You've used all {dailyLimit} messages for today.{#if tier === 'free'} Upgrade to Pro for a higher daily cap, or come back tomorrow!{:else} Come back tomorrow!{/if}
 			</div>
 		{:else}
 			<form
@@ -1008,13 +1005,12 @@
 		{/if}
 		<div class="usage-bar">
 			<span class="usage-count">
-				{#if isUnlimited}
+				{#if tier === 'pro'}
 					<span class="tier-badge tier-pro">Pro</span>
-					Unlimited messages · priority context window
-				{:else}
-					{#if tier === 'free'}<span class="tier-badge tier-free">Free</span>{/if}
-					{remaining} of {dailyLimit ?? DEFAULT_DAILY_LIMIT} messages remaining today
+				{:else if tier === 'free'}
+					<span class="tier-badge tier-free">Free</span>
 				{/if}
+				{remaining} of {dailyLimit} messages remaining today{#if tier === 'pro'} · priority context window{/if}
 			</span>
 			{#if lastCache && (lastCache.read > 0 || lastCache.create > 0)}
 				<span class="cache-note">
