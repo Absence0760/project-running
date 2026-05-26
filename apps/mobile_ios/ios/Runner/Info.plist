@@ -42,6 +42,8 @@
 	<string>Threkir uses motion data to count steps and estimate cadence on treadmill runs without GPS.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Threkir lets you attach photos from your library to your runs.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Threkir saves shared run cards back to your Photos library when you tap "Save to Photos."</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

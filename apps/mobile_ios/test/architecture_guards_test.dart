@@ -1825,6 +1825,14 @@ void main() {
             'pedometer (treadmill step count / cadence)',
         'NSPhotoLibraryUsageDescription':
             'image_picker (attaching photos to runs)',
+        // NSPhotoLibraryAddUsageDescription added 2026-05 per /audit/
+        // app-store-privacy Medium — `image_picker` reads on iOS 14+
+        // don't strictly need it, but the share-card "Save to Photos"
+        // path writes back via UIImageWriteToSavedPhotosAlbum which
+        // crashes without the key. Pre-emptive add so the share
+        // flow doesn't trigger a runtime denial on iOS submission.
+        'NSPhotoLibraryAddUsageDescription':
+            'share-card save-to-photos write-back (UIImageWriteToSavedPhotosAlbum)',
       };
       for (final entry in required.entries) {
         expect(
@@ -1857,6 +1865,36 @@ void main() {
         contains('<string>processing</string>'),
         reason: 'UIBackgroundModes must include `processing` so the '
             'BGTaskScheduler permitted-identifier above is honoured.',
+      );
+    });
+
+    test('PrivacyInfo.xcprivacy declares NSPrivacyAccessedAPICategoryActiveKeyboards', () {
+      // Reason: Flutter's text-input plugin calls
+      // UITextInputMode.activeInputModes during keyboard handling, so
+      // the binary touches the Active Keyboards required-reason API.
+      // Apple's privacy-manifest upload validation rejects any binary
+      // that uses a required-reason API without an entry in
+      // PrivacyInfo.xcprivacy. Reason code 3EC4.1 ("App functionality
+      // initiated by the user") is the correct one for text-input
+      // keyboard handling. /audit/app-store-privacy May 2026 Critical.
+      final file = File('ios/Runner/PrivacyInfo.xcprivacy');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      expect(
+        body,
+        contains('NSPrivacyAccessedAPICategoryActiveKeyboards'),
+        reason: 'PrivacyInfo.xcprivacy must declare '
+            'NSPrivacyAccessedAPICategoryActiveKeyboards — Flutter '
+            'text-input plugin uses UITextInputMode.activeInputModes '
+            'and Apple rejects uploads with undeclared required-'
+            'reason API usage.',
+      );
+      expect(
+        body,
+        contains('3EC4.1'),
+        reason: 'ActiveKeyboards entry must carry reason code 3EC4.1 '
+            '(app functionality initiated by the user) — the correct '
+            'reason for text-input keyboard handling.',
       );
     });
 
@@ -1953,6 +1991,46 @@ void main() {
         reason:
             'AndroidManifest.xml must declare READ_MEDIA_IMAGES so '
             'the runtime ask matches the Play Data Safety form.',
+      );
+    });
+
+    test('AndroidManifest explicitly overrides geolocator service with foregroundServiceType="location"', () {
+      // Reason: the plugin's manifest declares the type via manifest
+      // merge — but the Play Data Safety reviewer reads the AS-
+      // COMPILED manifest, and Android 14's runtime check throws
+      // SecurityException if the merged result silently loses the
+      // type attribute (a plugin version bump or merge conflict can
+      // strip it without a build warning). The app's own manifest
+      // declares the service with tools:node="merge" so the type is
+      // visible in OUR file AND the plugin's other attributes
+      // (exported, stopWithTask) survive merge. /audit/app-store-
+      // privacy May 2026 High closeout.
+      final file = File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      expect(
+        body,
+        contains(
+            'android:name="com.baseflow.geolocator.GeolocatorLocationService"'),
+        reason: 'AndroidManifest.xml must explicitly declare the '
+            'geolocator service with our own <service> block so the '
+            'compiled manifest has foregroundServiceType="location" '
+            'visible without depending on the plugin\'s manifest merge.',
+      );
+      // The same <service> block must carry the type attribute. We
+      // grep for both literal forms (single-line + multi-line) by
+      // matching the substring after the service name.
+      expect(
+        RegExp(
+          r'GeolocatorLocationService"[\s\S]{0,200}foregroundServiceType="location"',
+        ).hasMatch(body),
+        isTrue,
+        reason: 'The explicit <service> block for '
+            'GeolocatorLocationService must carry '
+            'android:foregroundServiceType="location". Without it, a '
+            'future plugin bump that drops the attribute from the '
+            'merged manifest silently breaks Android 14 + the Play '
+            'reviewer\'s Data Safety cross-check.',
       );
     });
 
@@ -2095,6 +2173,69 @@ void main() {
         source,
         contains('onTap: _restorePurchases'),
         reason: 'settings_screen.dart must wire the tile to _restorePurchases().',
+      );
+    });
+
+    test('settings_screen exposes a Manage-subscription ListTile', () {
+      // Reason: Apple Guideline 3.1.1 + Play subscription policy
+      // require an in-app cancel / change-plan path (not just an
+      // OS-Settings deep link). RevenueCat's CustomerInfo
+      // .managementURL routes to the store-specific page; settings
+      // wires the tile to _openManageSubscription which prefers RC's
+      // URL and falls back to the web upgrade page. /audit/app-store-
+      // privacy May 2026 High closeout.
+      final source =
+          File('lib/screens/settings_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains("title: const Text('Manage subscription')"),
+        reason: 'settings_screen.dart must surface a "Manage '
+            'subscription" tile so the user can reach the cancel / '
+            'change-plan path from inside the app.',
+      );
+      expect(
+        source,
+        contains('onTap: _openManageSubscription'),
+        reason: 'settings_screen.dart must wire the tile to '
+            '_openManageSubscription() — a missing wire produces a '
+            'visible-but-dead button.',
+      );
+      // The handler must call managementUrl() so RC's hosted page
+      // is the primary target.
+      expect(
+        source,
+        contains('await managementUrl('),
+        reason: '_openManageSubscription must call managementUrl(...) '
+            'to route to RC\'s hosted manage page. A hard-coded URL '
+            'would bypass the store-specific cancel paths Apple + Play '
+            'require.',
+      );
+    });
+
+    test('Subscribe-to-Pro tile discloses price + renewal terms', () {
+      // Reason: Apple Guideline 3.1.1 + Play subscription policy
+      // require price + period + renewal terms + cancellation
+      // mechanism to be visible in the app's own UI BEFORE the
+      // native purchase sheet. The native sheet repeats it but
+      // reviewers expect the in-app prompt to match. The current
+      // subtitle includes "$9.99/month" + "Auto-renews monthly until
+      // cancelled" — pin both so a future "simplify the copy"
+      // refactor can't strip them. /audit/app-store-privacy May 2026.
+      final source =
+          File('lib/screens/settings_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains(r'$9.99/month'),
+        reason: 'Subscribe-to-Pro tile title must include the price '
+            '(\$9.99/month) for App Store + Play in-app disclosure '
+            'compliance.',
+      );
+      expect(
+        RegExp(r'Auto-renews|cancelled').hasMatch(source),
+        isTrue,
+        reason: 'Subscribe-to-Pro tile subtitle must communicate '
+            'auto-renewal AND how to cancel — at minimum the words '
+            '"Auto-renews" or "cancelled" appear in the copy.',
       );
     });
 

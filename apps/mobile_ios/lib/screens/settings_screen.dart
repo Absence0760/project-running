@@ -1130,6 +1130,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
+  Future<void> _openManageSubscription() async {
+    // Reach the cancel / change-plan path. RevenueCat's
+    // CustomerInfo.managementURL routes to:
+    //   - iOS: App Store subscriptions page
+    //   - Android: Play Store subscriptions page
+    //   - Web purchase: RC-hosted portal
+    // When RC isn't configured or the user has no active subscription,
+    // fall back to the web upgrade page (which also surfaces a
+    // cancel-the-old-one affordance for legacy purchases).
+    final supabase = Supabase.instance.client;
+    final userId = supabase.auth.currentUser?.id;
+    String? url;
+    if (isRevenueCatConfigured() && userId != null) {
+      url = await managementUrl(userId);
+    }
+    final target = url ?? 'https://run.app/settings/upgrade';
+    await _openExternal(target);
+  }
+
   Future<void> _startProCheckout() async {
     // Three-way fallback to keep this tile useful on every build:
     //   1. RC configured + signed in → native sheet
@@ -1416,11 +1435,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             ListTile(
               leading: const Icon(Icons.workspace_premium_outlined),
-              title: const Text('Subscribe to Pro'),
+              title: const Text('Subscribe to Pro — \$9.99/month'),
+              // Apple Guideline 3.1.1 + Play subscription policy require
+              // price + renewal period + cancellation mechanism to be
+              // visible in the app's own UI BEFORE the native purchase
+              // sheet. The native RevenueCat / App Store sheet repeats
+              // it but reviewers expect the in-app prompt to match.
+              // /audit/app-store-privacy May 2026 High closeout.
               subtitle: Text(
                 isRevenueCatConfigured()
-                    ? 'Unlock the AI coach and priority processing'
-                    : 'Opens the subscription portal in your browser',
+                    ? 'Unlimited AI coach + priority processing. Auto-renews monthly until cancelled in Settings → Subscriptions.'
+                    : 'Opens the subscription portal in your browser. Auto-renews monthly until cancelled.',
               ),
               trailing: Icon(
                 isRevenueCatConfigured()
@@ -1441,6 +1466,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               trailing: const Icon(Icons.chevron_right, size: 18),
               onTap: _restorePurchases,
+            ),
+            // Manage subscription tile — wires the in-app affordance
+            // required by Apple Guideline 3.1.1 + Play subscription
+            // policy (the user must be able to reach the cancel path
+            // from inside the app, not only via the OS Settings).
+            // RevenueCat's CustomerInfo.managementURL routes to the
+            // App Store / Play Store / RC-hosted page depending on
+            // the original purchase channel. /audit/app-store-privacy
+            // May 2026 High closeout.
+            ListTile(
+              leading: const Icon(Icons.settings_outlined),
+              title: const Text('Manage subscription'),
+              subtitle: const Text(
+                'Cancel, change plan, or update payment method',
+              ),
+              trailing: const Icon(Icons.open_in_new, size: 18),
+              onTap: _openManageSubscription,
             ),
             ListTile(
               leading: const Icon(Icons.volunteer_activism_outlined),

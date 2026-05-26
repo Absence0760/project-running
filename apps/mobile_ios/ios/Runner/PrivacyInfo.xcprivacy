@@ -177,6 +177,21 @@
 				<string>35F9.1</string>
 			</array>
 		</dict>
+		<dict>
+			<!-- Active Keyboards (3EC4.1: app functionality only) — Flutter's
+			     text-input plugin calls UITextInputMode.activeInputModes
+			     while routing keyboard events, so the binary touches this
+			     required-reason API even though it never reads the input
+			     for ad targeting or analytics. Apple's privacy manifest
+			     validation rejects uploads that use the API without an
+			     entry here. /audit/app-store-privacy May 2026 Critical. -->
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryActiveKeyboards</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>3EC4.1</string>
+			</array>
+		</dict>
 	</array>
 </dict>
 </plist>

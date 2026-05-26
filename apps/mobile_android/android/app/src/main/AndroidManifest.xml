@@ -106,6 +106,24 @@
                 <data android:scheme="threkir" />
             </intent-filter>
         </activity>
+
+        <!-- Explicit override of geolocator's GeolocatorLocationService
+             so the foregroundServiceType="location" attribute appears in
+             OUR manifest, not just the plugin's merged manifest. Android
+             14+ (API 34) raises SecurityException if a foreground service
+             starts without a declared type that matches the runtime
+             permission; if a future geolocator version dropped the type
+             from its manifest, manifest-merge would silently produce a
+             type-less service. Plus the Play Console Data Safety reviewer
+             reads the AS-COMPILED manifest and the type must appear here
+             to satisfy the Background Location justification cross-check.
+             /audit/app-store-privacy May 2026 High closeout.
+             tools:node="merge" so the plugin's attributes (export,
+             stopWithTask, etc.) stay intact. -->
+        <service
+            android:name="com.baseflow.geolocator.GeolocatorLocationService"
+            android:foregroundServiceType="location"
+            tools:node="merge" />
     </application>
     <!-- Required to query activities that can process text, see:
          https://developer.android.com/training/package-visibility and

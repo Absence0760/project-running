@@ -39,12 +39,29 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
           'Import GPX or KML files, or sync routes from the web app. '
           'Get off-route alerts while you run.',
     ),
+    // Background-location disclosure copy mandated by Google Play's
+    // location policy: the in-app rationale must run BEFORE the OS
+    // permission dialog, must name the specific feature using
+    // background location, and must explain what happens if the user
+    // declines. Apple's App Review Guideline 5.1.5 also requires the
+    // same disclosure in the location strings (covered by
+    // NSLocationAlwaysAndWhenInUseUsageDescription on iOS, but the
+    // pre-prompt rationale here doubles as the cross-platform copy
+    // for the Play disclosure surface). /audit/app-store-privacy May
+    // 2026 High closeout.
     _PageData(
       icon: Icons.location_on,
       title: 'Location access',
       description:
-          'We need location permission to record your runs. Background '
-          'location keeps GPS tracking active when your screen is off.',
+          'Threkir records your runs by sampling your GPS location while '
+          'the app is in the foreground AND in the background (so it '
+          'keeps tracking when your screen is off or you switch apps to '
+          'take a photo). Location data is stored on your device and '
+          'only uploaded to Threkir\'s servers when you choose to share '
+          'or sync a run. If you decline background location, runs will '
+          'stop recording the moment you switch away from the app — '
+          'you can change this later in Settings → Apps → Threkir → '
+          'Permissions.',
     ),
   ];
 
