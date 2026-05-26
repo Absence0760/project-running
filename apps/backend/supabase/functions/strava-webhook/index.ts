@@ -170,7 +170,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 		if (dedupeErr.code === '23505') {
 			return Response.json({ ok: true, skipped: 'duplicate_event' });
 		}
-		console.error('Webhook dedupe insert failed:', dedupeErr);
+		console.error('Webhook dedupe insert failed:', dedupeErr?.message ?? String(dedupeErr));
 		return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
 	}
 
@@ -240,7 +240,7 @@ serve(withSentry('strava-webhook', async (req: Request) => {
 			.eq('provider', 'strava')
 			.eq('event_id', eventId);
 		if (undoErr) {
-			console.error('strava-webhook: failed to roll back dedupe row before retry', undoErr);
+			console.error('strava-webhook: failed to roll back dedupe row before retry', undoErr?.message ?? String(undoErr));
 		}
 		return Response.json({ error: 'upstream_rate_limited' }, { status: 500 });
 	}

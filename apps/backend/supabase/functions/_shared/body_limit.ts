@@ -118,6 +118,28 @@ export async function readJsonWithLimit<T = unknown>(
   }
 }
 
+/// Discard the request body without parsing or buffering. Use at the
+/// top of Edge Functions that take NO input from the body (cron jobs,
+/// header-only auth) — without this, a caller that POST-streams a
+/// chunked body holds the connection open until the runtime timeout
+/// is the only thing that frees it, which is a slow-loris-style DoS
+/// against the function host. The fix is to signal the runtime + the
+/// client that we don't want any more bytes by cancelling the
+/// readable stream as the first thing we do.
+///
+/// Idempotent + swallows the "already closed" error — safe to call
+/// even if the runtime has already drained the body for an earlier
+/// middleware (none currently, but the helper survives future
+/// refactors).
+export function discardBody(req: Request): void {
+  // The cancel() Promise rejects when the stream is already locked or
+  // closed; we don't care either way — the caller's intent is "stop
+  // reading any more bytes," which holds in every terminal state.
+  req.body?.cancel().catch(() => {
+    /* already closed / locked — terminal state, nothing to do */
+  });
+}
+
 /// Same shape as `readJsonWithLimit` but returns the raw decoded text
 /// instead of JSON-parsing. Used by webhook handlers that need to HMAC
 /// the original bytes before deserialising — JSON.parse / stringify

@@ -118,7 +118,7 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
     if (dedupeErr.code === '23505') {
       return Response.json({ ok: true, skipped: 'duplicate_event' });
     }
-    console.error('Webhook dedupe insert failed:', dedupeErr);
+    console.error('Webhook dedupe insert failed:', dedupeErr?.message ?? String(dedupeErr));
     return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
   }
 
@@ -152,7 +152,7 @@ serve(withSentry('revenuecat-webhook', async (req: Request) => {
       .update(patch)
       .eq('id', userId);
     if (error) {
-      console.error('user_profiles patch failed:', error);
+      console.error('user_profiles patch failed:', error?.message ?? String(error));
       return Response.json({ ok: false, error: 'profile update failed' }, { status: 500 });
     }
   }

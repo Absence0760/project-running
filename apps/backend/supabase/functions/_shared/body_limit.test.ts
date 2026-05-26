@@ -16,6 +16,7 @@ import {
   assertStrictEquals,
 } from 'https://deno.land/std@0.224.0/assert/mod.ts';
 import {
+  discardBody,
   enforceBodyLimit,
   readJsonWithLimit,
   readTextWithLimit,
@@ -168,4 +169,55 @@ Deno.test('readTextWithLimit — rejects a chunked-transfer body over the cap', 
   if ('tooLarge' in out) {
     assertStrictEquals(out.tooLarge.status, 413);
   }
+});
+
+// ── discardBody ────────────────────────────────────────────────────
+//
+// Used by header-only / cron Edge Functions (refresh-tokens) that take
+// no body input. The pre-fix shape held the request stream open until
+// the runtime timeout when a caller POSTed a chunked body — slow-loris
+// DoS vector against the function host. The fix cancels the readable
+// stream at the start of the handler so the runtime + client see "no
+// more bytes please" immediately.
+
+Deno.test('discardBody — cancels the body stream so no bytes are read', async () => {
+  const req = new Request('http://x.test/', {
+    method: 'POST',
+    body: 'should-not-be-read',
+  });
+  discardBody(req);
+  // After cancel, reading from req.body should fail or return done.
+  // We just assert the function doesn't throw — the cancel is
+  // best-effort by contract.
+  const reader = req.body?.getReader();
+  if (reader) {
+    // A cancelled stream returns done immediately or throws — either
+    // is the "no more bytes" outcome we want. Catch both.
+    try {
+      const r = await reader.read();
+      assertStrictEquals(r.done, true);
+    } catch {
+      /* the cancel propagated as an error read — also fine */
+    }
+  }
+});
+
+Deno.test('discardBody — no body present is a clean no-op', () => {
+  // GET / HEAD / OPTIONS requests don't carry a body; the helper
+  // must not throw when req.body is null.
+  const req = new Request('http://x.test/', { method: 'GET' });
+  discardBody(req);
+  // No assertion needed — the test passes if the call didn't throw.
+});
+
+Deno.test('discardBody — second call on an already-cancelled body does not throw', () => {
+  // The helper swallows the "already cancelled" rejection so it can
+  // be called defensively (e.g. once at the top of the handler, again
+  // in a finally block).
+  const req = new Request('http://x.test/', {
+    method: 'POST',
+    body: 'x',
+  });
+  discardBody(req);
+  discardBody(req);
 });

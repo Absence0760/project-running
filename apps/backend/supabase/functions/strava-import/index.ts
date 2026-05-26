@@ -210,7 +210,7 @@ async function handleConnect(
 		{ onConflict: 'user_id,provider' },
 	);
 	if (upsertErr) {
-		console.error('strava-import: integrations upsert failed:', upsertErr);
+		console.error('strava-import: integrations upsert failed:', upsertErr?.message ?? String(upsertErr));
 		return Response.json({ error: 'store_integration_failed' }, { status: 500 });
 	}
 
@@ -222,7 +222,7 @@ async function handleConnect(
 		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
 	});
 	if (tokErr) {
-		console.error('strava-import: set_integration_tokens RPC failed:', tokErr);
+		console.error('strava-import: set_integration_tokens RPC failed:', tokErr?.message ?? String(tokErr));
 		return Response.json({ error: 'store_tokens_failed' }, { status: 500 });
 	}
 

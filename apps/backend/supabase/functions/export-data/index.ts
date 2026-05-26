@@ -74,7 +74,7 @@ serve(withSentry('export-data', async (req: Request) => {
 	if ('tooLarge' in guarded) return guarded.tooLarge;
 
 	const authHeader = req.headers.get('Authorization');
-	if (!authHeader) return new Response('Unauthorized', { status: 401 });
+	if (!authHeader) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
 	// Two clients: a JWT-bound one to identify the caller, and a
 	// service-role one to bypass RLS for the export upload (which
@@ -92,7 +92,7 @@ serve(withSentry('export-data', async (req: Request) => {
 
 	const { data: userData } = await authedSupabase.auth.getUser();
 	const user = userData.user;
-	if (!user) return new Response('Unauthorized', { status: 401 });
+	if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
 	// Fail-closed: an export builds a multi-MB GPX zip per call.
 	// Letting the throttle silently fall open on RPC error is a free
@@ -121,7 +121,7 @@ serve(withSentry('export-data', async (req: Request) => {
 		.limit(MAX_RUNS);
 
 	if (runsErr) {
-		console.error('export-data: runs select failed:', runsErr);
+		console.error('export-data: runs select failed:', runsErr?.message ?? String(runsErr));
 		return new Response('Run fetch failed', { status: 500 });
 	}
 
@@ -146,7 +146,7 @@ serve(withSentry('export-data', async (req: Request) => {
 			upsert: false,
 		});
 	if (upErr) {
-		console.error('export-data: storage upload failed:', upErr);
+		console.error('export-data: storage upload failed:', upErr?.message ?? String(upErr));
 		return new Response('Upload failed', { status: 500 });
 	}
 

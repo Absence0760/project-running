@@ -464,6 +464,146 @@ test('Lambda /api/coach hardcodes bypassPaywallEnabled: false (no env read)', ()
 	);
 });
 
+test('Edge Functions do not log raw PostgrestError objects', () => {
+  // Reason: PostgrestError objects carry `.message`, `.details`,
+  // `.hint`, and `.code`. The `details` / `hint` fields can include
+  // partial column values, constraint names, or row fragments. The
+  // Supabase function-log aggregator is accessible to project
+  // members (and exportable in some billing tiers), so a raw-object
+  // log is schema/credential exposure even when the response to the
+  // caller is clean. Pinned because audit:edge-functions 2026-05-25
+  // caught four sites that had regressed from the .message pattern
+  // used elsewhere in the same codebase.
+  //
+  // The check is conservative: it bans `console.error(..., name)` /
+  // `console.error(..., nameErr)` where the trailing argument is a
+  // bare identifier likely to be an error object. Allowed shapes:
+  //   - `.message` / `?.message` accesses
+  //   - `String(...)` wrappers
+  //   - `e instanceof Error ? e.message : String(e)` ternaries
+  //   - object literals (e.g. `{ status: ... }`)
+  //   - string literals
+  // — any of which scrubs the structured fields the leak relies on.
+  const efDir = resolve(__dirname, '../../../backend/supabase/functions');
+  const indexes = collectEdgeFunctionIndexes(efDir);
+  assert.ok(
+    indexes.length >= 6,
+    `Expected at least 6 Edge Function index.ts files under ${efDir}, ` +
+      `found ${indexes.length}. Has the directory layout moved?`,
+  );
+
+  const offenders: Array<{ path: string; line: number; call: string }> = [];
+  // Match `console.error( … )` with a balanced-paren scan inside.
+  const callRe = /console\.error\s*\(/g;
+  for (const path of indexes) {
+    const source = readFileSync(path, 'utf-8');
+    let m: RegExpExecArray | null;
+    while ((m = callRe.exec(source)) !== null) {
+      const start = m.index + m[0].length;
+      // Find the matching closing paren.
+      let depth = 1;
+      let i = start;
+      while (depth > 0 && i < source.length) {
+        const c = source[i];
+        if (c === '(') depth++;
+        else if (c === ')') depth--;
+        i++;
+      }
+      const argText = source.slice(start, i - 1);
+      // Split top-level by comma — only need the LAST arg (the error
+      // value); commas inside string literals / template literals
+      // are rare in console.error calls and over-counting just makes
+      // the assertion stricter (false-positive direction is safe).
+      const lastArg = lastTopLevelArg(argText).trim();
+      if (looksLikeBareErrorIdentifier(lastArg)) {
+        const lineNo = source.slice(0, m.index).split('\n').length;
+        offenders.push({ path, line: lineNo, call: lastArg });
+      }
+    }
+  }
+
+  assert.strictEqual(
+    offenders.length,
+    0,
+    'Edge Functions must not log raw error objects as the last arg ' +
+      'of console.error — wrap with `.message`, `String(...)`, or ' +
+      'the `e instanceof Error ? e.message : String(e)` pattern.\n' +
+      `Offenders:\n${offenders.map((o) => `  ${o.path}:${o.line} → console.error(…, ${o.call})`).join('\n')}`,
+  );
+});
+
+function collectEdgeFunctionIndexes(efDir: string): string[] {
+  const out: string[] = [];
+  for (const name of readdirSync(efDir)) {
+    if (name.startsWith('_')) continue; // _shared, etc.
+    const candidate = resolve(efDir, name, 'index.ts');
+    try {
+      readFileSync(candidate);
+      out.push(candidate);
+    } catch {
+      /* not a function dir (e.g. shared helpers); skip */
+    }
+  }
+  return out;
+}
+
+function lastTopLevelArg(argText: string): string {
+  // Walk forward, tracking nesting depth + string state. Return the
+  // tail after the last top-level comma. Handles `(`, `[`, `{`,
+  // template `${…}`, and single/double/backtick strings.
+  let depth = 0;
+  let lastCommaIdx = -1;
+  let i = 0;
+  while (i < argText.length) {
+    const c = argText[i];
+    if (c === '"' || c === "'" || c === '`') {
+      const quote = c;
+      i++;
+      while (i < argText.length && argText[i] !== quote) {
+        if (argText[i] === '\\') i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    if (c === '(' || c === '[' || c === '{') depth++;
+    else if (c === ')' || c === ']' || c === '}') depth--;
+    else if (c === ',' && depth === 0) lastCommaIdx = i;
+    i++;
+  }
+  return lastCommaIdx === -1 ? argText : argText.slice(lastCommaIdx + 1);
+}
+
+function looksLikeBareErrorIdentifier(arg: string): boolean {
+  // Strip a leading line comment / trailing line comment, then ask:
+  // is this a bare identifier whose name signals an error object,
+  // with no method access / wrapper?
+  const stripped = arg.replace(/\/\/.*$/gm, '').trim();
+  if (stripped.length === 0) return false;
+  // Accept: anything containing `.message` / `?.message` / `String(` /
+  // `instanceof Error` / `JSON.stringify` / object-literal `{` / array
+  // literal `[` / string literal / number / template literal.
+  if (
+    stripped.includes('.message') ||
+    stripped.includes('?.message') ||
+    stripped.startsWith('String(') ||
+    stripped.includes('instanceof Error') ||
+    stripped.includes('JSON.stringify') ||
+    stripped.startsWith('{') ||
+    stripped.startsWith('[') ||
+    stripped.startsWith('"') ||
+    stripped.startsWith("'") ||
+    stripped.startsWith('`') ||
+    /^-?\d/.test(stripped)
+  ) {
+    return false;
+  }
+  // What's left is a bare identifier (or expression without any of the
+  // accepted scrubbers). Flag it if the name suggests an error value.
+  return /^[a-zA-Z_$][\w$]*$/.test(stripped) &&
+    /(err|Err|error|Error)$/.test(stripped);
+}
+
 test('revenuecat-webhook verifies HMAC before constructing the Supabase client', () => {
 	// Reason: the webhook is the ONLY legitimate writer of
 	// user_profiles.subscription_tier (the lock_subscription_columns
