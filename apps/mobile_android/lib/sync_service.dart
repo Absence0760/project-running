@@ -181,7 +181,13 @@ class SyncService with WidgetsBindingObserver {
         'different user (signed in as ${api.userId})',
       );
     }
-    final hasPendingDeletes = runStore.pendingRemoteDeleteIds.isNotEmpty;
+    // Use the per-user view for the early-bail check so a cycle isn't
+    // wasted when the only queued deletes are owned by a different
+    // user. Without this, on a shared device with User A's queued
+    // deletes in the store + User B signed in, every sync trigger
+    // would walk into _drainPendingDeletes just to no-op.
+    final hasPendingDeletes =
+        runStore.pendingRemoteDeletesForUser(api.userId).isNotEmpty;
     final unsyncedRoutes = routeStore?.unsyncedRoutes ?? const [];
     if (unsynced.isEmpty &&
         !hasPendingDeletes &&
@@ -240,11 +246,17 @@ class SyncService with WidgetsBindingObserver {
   /// cloud, and now that the cloud row is gone the local row should
   /// follow.
   ///
+  /// Only deletes owned by the currently-signed-in user are attempted
+  /// — entries owned by a different user stay in the queue for their
+  /// rightful owner to drain on their next sync (the parallel of the
+  /// run owner-tag guard above). Untagged entries (legacy / queued-
+  /// while-signed-out) adopt to the current user.
+  ///
   /// Returns `true` iff every pending id was drained without error.
   Future<bool> _drainPendingDeletes(String reason) async {
     final api = apiClient;
     if (api == null) return true;
-    final ids = runStore.pendingRemoteDeleteIds.toList();
+    final ids = runStore.pendingRemoteDeletesForUser(api.userId).toList();
     if (ids.isEmpty) return true;
     debugPrint(
       'SyncService: retrying ${ids.length} pending remote deletes ($reason)',

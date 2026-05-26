@@ -433,6 +433,107 @@ void main() {
           false);
     });
 
+    test('pending-delete owner tag persists across cold start', () async {
+      // Reason: pairs with the run owner-tag (decisions §67) — a pending
+      // delete queued under User A must round-trip across an app
+      // restart with A's user_id intact so a subsequent User B sync
+      // can skip it. Without this, every restart re-untags A's
+      // deletes and B's drain would attempt them (and fail under RLS).
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('run-a', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('run-b', ownerUserId: 'user-b');
+      await store.markPendingRemoteDelete('run-legacy'); // no owner
+
+      expect(store.debugPendingRemoteDeleteOwner('run-a'), 'user-a');
+      expect(store.debugPendingRemoteDeleteOwner('run-b'), 'user-b');
+      expect(store.debugPendingRemoteDeleteOwner('run-legacy'), isNull);
+
+      final store2 = LocalRunStore();
+      await store2.init(overrideDirectory: tempDir);
+      expect(store2.debugPendingRemoteDeleteOwner('run-a'), 'user-a');
+      expect(store2.debugPendingRemoteDeleteOwner('run-b'), 'user-b');
+      expect(store2.debugPendingRemoteDeleteOwner('run-legacy'), isNull);
+    });
+
+    test('pendingRemoteDeletesForUser returns only drainable entries', () {
+      // Reason: pin the per-user filter contract. A user can drain
+      // entries they own OR untagged entries (adoption rule). Foreign-
+      // owned entries are skipped — they stay queued for their
+      // rightful owner.
+      final store = LocalRunStore();
+      // Test directly against the synchronous helper — no async init
+      // needed because we're only exercising in-memory state.
+      // Build the map via the public API.
+      Future<void> seed() async {
+        await store.init(overrideDirectory: tempDir);
+        await store.markPendingRemoteDelete('a-1', ownerUserId: 'user-a');
+        await store.markPendingRemoteDelete('a-2', ownerUserId: 'user-a');
+        await store.markPendingRemoteDelete('b-1', ownerUserId: 'user-b');
+        await store.markPendingRemoteDelete('legacy');
+      }
+
+      seed();
+      // The seed completes synchronously enough for the in-memory map
+      // to be populated (the file write is awaited inside markPending
+      // but the in-memory state updates before the await).
+      // We need to actually await — so wrap in a fresh test:
+    }, skip: 'replaced by the explicit async test below');
+
+    test('pendingRemoteDeletesForUser filters by owner + accepts untagged',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.markPendingRemoteDelete('a-1', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('a-2', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('b-1', ownerUserId: 'user-b');
+      await store.markPendingRemoteDelete('legacy'); // untagged
+
+      // user-a sees their own + untagged.
+      expect(store.pendingRemoteDeletesForUser('user-a'),
+          {'a-1', 'a-2', 'legacy'});
+      // user-b sees their own + untagged.
+      expect(store.pendingRemoteDeletesForUser('user-b'),
+          {'b-1', 'legacy'});
+      // A null user can drain nothing (the SyncService bails before
+      // reaching this anyway, but pin the safe-default contract).
+      expect(store.pendingRemoteDeletesForUser(null), isEmpty);
+      // The unfiltered view still returns everything (preserves the
+      // legacy callers + the "pending count" badge).
+      expect(store.pendingRemoteDeleteIds,
+          {'a-1', 'a-2', 'b-1', 'legacy'});
+    });
+
+    test('legacy {ids: [...]} sidecar format is upgraded on next write',
+        () async {
+      // Reason: existing installs have the old untagged sidecar shape
+      // on disk. Load must accept it (treating each entry as untagged
+      // / drain-by-any-user). The next mutation upgrades the file to
+      // the new {deletes: {id: owner}} shape. Without this, a build
+      // bump silently drops every queued delete on first launch.
+      File('${tempDir.path}/pending_remote_deletes.json')
+          .writeAsStringSync('{"ids":["legacy-1","legacy-2"]}');
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      expect(store.pendingRemoteDeleteIds, {'legacy-1', 'legacy-2'});
+      // Both entries are untagged (null owner) — drain under any user.
+      expect(store.debugPendingRemoteDeleteOwner('legacy-1'), isNull);
+      expect(store.debugPendingRemoteDeleteOwner('legacy-2'), isNull);
+      expect(store.pendingRemoteDeletesForUser('user-x'),
+          {'legacy-1', 'legacy-2'});
+
+      // A mutation rewrites the file in the new format.
+      await store.markPendingRemoteDelete('new-1', ownerUserId: 'user-x');
+      final raw = File('${tempDir.path}/pending_remote_deletes.json')
+          .readAsStringSync();
+      expect(raw, contains('"deletes"'),
+          reason: 'next write must upgrade to the tagged format');
+      expect(raw, isNot(contains('"ids"')),
+          reason: 'legacy key must be gone after the upgrade');
+    });
+
     test('pending_remote_deletes.json is excluded from the run-file glob',
         () async {
       // A pending-deletes sidecar plus a real run file: only the run

@@ -254,6 +254,67 @@ void main() {
 
       expect(api.deleteCallCount, 3);
     });
+
+    test('user-b drain skips a delete queued by user-a (shared device)',
+        () async {
+      // Reason: parallel of the run owner-tag drain. On a shared device
+      // where user-a queues a delete (their RLS-allowed delete failed
+      // on the first attempt — network error), then signs out, and
+      // user-b signs in, user-b's drain MUST NOT attempt user-a's
+      // delete. RLS would reject it, the queue would never drain, and
+      // the cycle would arm backoff every trigger forever.
+      await store.markPendingRemoteDelete('r-a-1', ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-b';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      expect(api.deleteCallCount, 0,
+          reason: 'user-b must not attempt user-a\'s pending delete — '
+              'RLS would reject it and the queue would never drain');
+      expect(store.pendingRemoteDeleteIds, {'r-a-1'},
+          reason: 'foreign-owned pending deletes stay queued for their '
+              'rightful owner to drain when they sign back in');
+      expect(svc.debugBackoffState().failures, 0,
+          reason: 'skipping a foreign-owned delete is a no-op, NOT a '
+              'failure — must not arm backoff');
+    });
+
+    test('user-a drain attempts only their own + untagged pending deletes',
+        () async {
+      await store.markPendingRemoteDelete('a-1', ownerUserId: 'user-a');
+      await store.markPendingRemoteDelete('b-1', ownerUserId: 'user-b');
+      await store.markPendingRemoteDelete('legacy'); // untagged
+
+      final api = _FakeApiClient()..fakeUserId = 'user-a';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      // a-1 (their own) + legacy (untagged adoption) drained.
+      expect(api.deletedIds.toSet(), {'a-1', 'legacy'});
+      // b-1 stays in the queue for user-b.
+      expect(store.pendingRemoteDeleteIds, {'b-1'});
+    });
+
+    test('queue contains only foreign-owned deletes → cycle does not '
+        'walk into _drainPendingDeletes (no wasted work)', () async {
+      // Reason: the early-bail check in _trySync should consult the
+      // per-user view, not the unfiltered count. Without that, a
+      // signed-in user with only foreign-owned pending deletes (and
+      // no unsynced runs) would walk the drain loop on every trigger.
+      await store.markPendingRemoteDelete('foreign', ownerUserId: 'user-a');
+
+      final api = _FakeApiClient()..fakeUserId = 'user-b';
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+
+      // No batch push call, no delete call — the cycle bailed early.
+      expect(api.saveBatchCallCount, 0);
+      expect(api.deleteCallCount, 0);
+    });
   });
 
   group('SyncService._trySync — combined paths', () {

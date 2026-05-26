@@ -664,6 +664,50 @@ void main() {
       );
     });
 
+    test('_drainPendingDeletes uses the per-user filter', () {
+      // Reason: the parallel of the run owner-tag filter. A pending
+      // delete queued by user-a must NOT be attempted under user-b's
+      // session on a shared device — RLS would reject and the queue
+      // would loop forever. Without this guard, a future refactor
+      // could silently switch back to the unfiltered
+      // `pendingRemoteDeleteIds` getter and the foreign-owner
+      // contamination returns.
+      final source = File('lib/sync_service.dart').readAsStringSync();
+      expect(
+        source,
+        contains('pendingRemoteDeletesForUser'),
+        reason: '_drainPendingDeletes must call '
+            'runStore.pendingRemoteDeletesForUser(api.userId), not '
+            'the unfiltered pendingRemoteDeleteIds, so foreign-owned '
+            'deletes stay queued for their rightful owner.',
+      );
+    });
+
+    test('runs_screen passes the current user id when queuing pending '
+        'deletes', () {
+      // Reason: pairs with the drain guard above. Tagging at queue
+      // time is what makes the filter useful — without the tag,
+      // every entry is "untagged" and the filter degrades to "drain
+      // by any user", which is exactly the bug the tag was added to
+      // prevent.
+      final source =
+          File('lib/screens/runs_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('markManyPendingRemoteDelete('),
+        reason: 'runs_screen must queue failed deletes through '
+            'markManyPendingRemoteDelete.',
+      );
+      expect(
+        source,
+        contains('ownerUserId: api?.userId'),
+        reason: 'runs_screen MUST pass api?.userId as ownerUserId so '
+            'the queued delete carries the current user\'s tag — '
+            'without it, the entry is untagged and a different '
+            'user\'s drain would attempt it (and fail under RLS).',
+      );
+    });
+
     test('SyncService accepts signin as a backoff-bypass reason', () {
       // Reason: pairs with the main.dart guard above. The signin
       // trigger only matters if SyncService treats it as a bypass —

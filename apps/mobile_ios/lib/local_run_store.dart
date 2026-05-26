@@ -17,12 +17,22 @@ class LocalRunStore extends ChangeNotifier {
   late Directory _dir;
   List<Run> _runs = [];
   final Set<String> _syncedIds = {};
-  // Run ids whose cloud-side delete failed on the first attempt. The
-  // local copy was kept so the UI stays consistent with the cloud; the
-  // SyncService drains this queue on its usual triggers (foreground,
-  // connectivity-on, startup) and removes ids on success. Persisted to
-  // its own sidecar so a crash mid-retry doesn't lose the work item.
-  final Set<String> _pendingRemoteDeleteIds = {};
+  // Run ids whose cloud-side delete failed on the first attempt, mapped
+  // to the user_id who queued the delete. The local copy was kept so the
+  // UI stays consistent with the cloud; the SyncService drains this queue
+  // on its usual triggers (foreground, connectivity-on, startup) and
+  // removes ids on success. Persisted to its own sidecar so a crash mid-
+  // retry doesn't lose the work item.
+  //
+  // The owner-tag (value) parallels the run owner-tag pattern (decisions
+  // §67): on a shared device where User A queues a delete then signs
+  // out and User B signs in, B's sync drain MUST skip A's pending
+  // deletes — otherwise the queue retries A's deletes under B's session,
+  // RLS rejects every one, and the queue gets stuck failing forever.
+  // A null value means "untagged" (legacy entries from before owner-
+  // tagging shipped, or queued while signed-out) — those drain under
+  // whichever user is signed in next, matching the run adoption rule.
+  final Map<String, String?> _pendingRemoteDeletes = {};
 
   /// Returns the currently-signed-in user id (or `null` for the
   /// "offline / not signed in" case). Set once at app bootstrap so
@@ -65,8 +75,38 @@ class LocalRunStore extends ChangeNotifier {
   /// SyncService retries these on the next sync trigger. Surfaced as
   /// an unmodifiable view so callers can't mutate the set directly —
   /// use [markPendingRemoteDelete] / [clearPendingRemoteDelete].
+  ///
+  /// Includes every queued id regardless of owner — use
+  /// [pendingRemoteDeletesForUser] for the per-user drainable subset.
   Set<String> get pendingRemoteDeleteIds =>
-      Set<String>.unmodifiable(_pendingRemoteDeleteIds);
+      Set<String>.unmodifiable(_pendingRemoteDeletes.keys);
+
+  /// Subset of [pendingRemoteDeleteIds] that the currently-signed-in
+  /// [userId] is allowed to drain. A pending delete is drainable when:
+  ///
+  ///  * its owner tag matches [userId], OR
+  ///  * its owner tag is null (untagged / legacy / queued while signed-
+  ///    out — adopts to whoever is signed in next, mirroring the run
+  ///    owner-adoption rule).
+  ///
+  /// Used by [SyncService._drainPendingDeletes] to keep User A's
+  /// queued deletes from being attempted under User B's session on a
+  /// shared device. See `docs/decisions.md § 67` for the parallel
+  /// run owner-tag design.
+  Set<String> pendingRemoteDeletesForUser(String? userId) {
+    if (userId == null) return const <String>{};
+    return _pendingRemoteDeletes.entries
+        .where((e) => e.value == null || e.value == userId)
+        .map((e) => e.key)
+        .toSet();
+  }
+
+  /// The owner user_id stamped on a pending-delete entry, or null when
+  /// the entry is untagged (legacy / queued-while-signed-out) or the id
+  /// isn't in the queue. Exposed for tests that need to assert the tag.
+  @visibleForTesting
+  String? debugPendingRemoteDeleteOwner(String runId) =>
+      _pendingRemoteDeletes[runId];
 
   /// Test-only seed that populates the in-memory list directly,
   /// bypassing `init()` + `_loadAll()` and their parallel async file
@@ -420,19 +460,38 @@ class LocalRunStore extends ChangeNotifier {
   /// by the SyncService on the next sync trigger. Idempotent — repeated
   /// calls don't grow the queue. Notifies listeners so any visible
   /// "pending delete" badge can update without a separate channel.
-  Future<void> markPendingRemoteDelete(String runId) async {
-    if (_pendingRemoteDeleteIds.add(runId)) {
-      await _persistPendingRemoteDeletes();
-      notifyListeners();
-    }
+  ///
+  /// [ownerUserId] is stamped onto the queued entry so the drain path
+  /// can skip foreign-owned deletes on a shared device. Pass the
+  /// currently-signed-in user id at the time of failure; pass null
+  /// when no user is signed in (legacy adoption — first signed-in
+  /// user picks it up).
+  Future<void> markPendingRemoteDelete(
+    String runId, {
+    String? ownerUserId,
+  }) async {
+    final existed = _pendingRemoteDeletes.containsKey(runId);
+    final prevOwner = existed ? _pendingRemoteDeletes[runId] : null;
+    if (existed && prevOwner == ownerUserId) return;
+    _pendingRemoteDeletes[runId] = ownerUserId;
+    await _persistPendingRemoteDeletes();
+    notifyListeners();
   }
 
   /// Bulk variant for the runs_screen batch-delete path — folds N
   /// failures into a single sidecar write + single notify.
-  Future<void> markManyPendingRemoteDelete(Iterable<String> runIds) async {
+  Future<void> markManyPendingRemoteDelete(
+    Iterable<String> runIds, {
+    String? ownerUserId,
+  }) async {
     var changed = false;
     for (final id in runIds) {
-      if (_pendingRemoteDeleteIds.add(id)) changed = true;
+      final existed = _pendingRemoteDeletes.containsKey(id);
+      final prevOwner = existed ? _pendingRemoteDeletes[id] : null;
+      if (!existed || prevOwner != ownerUserId) {
+        _pendingRemoteDeletes[id] = ownerUserId;
+        changed = true;
+      }
     }
     if (!changed) return;
     await _persistPendingRemoteDeletes();
@@ -443,33 +502,58 @@ class LocalRunStore extends ChangeNotifier {
   /// after a successful retry, or by the user if they purge the
   /// orphan locally.
   Future<void> clearPendingRemoteDelete(String runId) async {
-    if (_pendingRemoteDeleteIds.remove(runId)) {
-      await _persistPendingRemoteDeletes();
-      notifyListeners();
-    }
+    // containsKey guard, not `remove() != null` — entries can have a
+    // null value (untagged / legacy) and Map.remove returns the value,
+    // which would silently skip the persistence + notify for those.
+    if (!_pendingRemoteDeletes.containsKey(runId)) return;
+    _pendingRemoteDeletes.remove(runId);
+    await _persistPendingRemoteDeletes();
+    notifyListeners();
   }
 
   Future<void> _persistPendingRemoteDeletes() async {
     try {
-      if (_pendingRemoteDeleteIds.isEmpty &&
+      if (_pendingRemoteDeletes.isEmpty &&
           _pendingRemoteDeletesFile.existsSync()) {
         await _pendingRemoteDeletesFile.delete();
         return;
       }
+      // New format: {"deletes": {id: owner_user_id_or_null}}. Old
+      // format ({"ids": [...]}) is still readable (see
+      // _readPendingRemoteDeletes) for one-way migration from existing
+      // installs — the next write upgrades them.
       await _pendingRemoteDeletesFile.writeAsString(jsonEncode({
-        'ids': _pendingRemoteDeleteIds.toList(),
+        'deletes': _pendingRemoteDeletes,
       }));
     } catch (e) {
       debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
     }
   }
 
-  Future<Set<String>?> _readPendingRemoteDeletes() async {
+  Future<Map<String, String?>?> _readPendingRemoteDeletes() async {
     final file = _pendingRemoteDeletesFile;
     if (!file.existsSync()) return null;
     try {
       final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-      return (data['ids'] as List).cast<String>().toSet();
+      // Prefer the new tagged shape when present.
+      if (data['deletes'] is Map) {
+        final raw = data['deletes'] as Map;
+        final out = <String, String?>{};
+        for (final entry in raw.entries) {
+          final key = entry.key as String;
+          final value = entry.value;
+          out[key] = value is String ? value : null;
+        }
+        return out;
+      }
+      // Legacy untagged shape: {"ids": [...]} — every entry adopts to
+      // whichever user signs in next. The next write upgrades the file
+      // to the tagged shape.
+      if (data['ids'] is List) {
+        final ids = (data['ids'] as List).cast<String>();
+        return <String, String?>{for (final id in ids) id: null};
+      }
+      return null;
     } catch (e) {
       debugPrint('Failed to read pending_remote_deletes sidecar: $e');
       return null;
@@ -479,10 +563,10 @@ class LocalRunStore extends ChangeNotifier {
   Future<void> _loadAll() async {
     _runs = [];
     _syncedIds.clear();
-    _pendingRemoteDeleteIds.clear();
+    _pendingRemoteDeletes.clear();
 
     final pendingDeletes = await _readPendingRemoteDeletes();
-    if (pendingDeletes != null) _pendingRemoteDeleteIds.addAll(pendingDeletes);
+    if (pendingDeletes != null) _pendingRemoteDeletes.addAll(pendingDeletes);
 
     // listSync is intentional: the async stream form (`_dir.list()`)
     // deadlocks inside `testWidgets` because the I/O isolate's reply
