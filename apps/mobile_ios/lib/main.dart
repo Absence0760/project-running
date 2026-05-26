@@ -260,6 +260,12 @@ void main() async {
   // across both apps.
   if (api != null && api.userId != null) {
     WatchIngest.attach(api, watchQueue);
+    // Bootstrap with whoever is currently signed in (cached session
+    // from a previous launch). Any payloads enqueued during a future
+    // signed-out window will carry this stamp, so a different user
+    // signing in later can't accidentally adopt them. The same call
+    // fires from the signedIn listener below for fresh sign-ins.
+    unawaited(watchQueue.setLastKnownOwner(api.userId));
   }
 
   // Everything below here runs AFTER the first frame paints:
@@ -289,6 +295,18 @@ void main() async {
         .listen((event) {
       if (event.event == AuthChangeEvent.signedIn) {
         WatchIngest.attach(apiNonNull, watchQueue);
+        // Stamp the queue with the freshly-signed-in user BEFORE
+        // draining. The drain below skips files whose stamp names a
+        // different user — without this update the drain would still
+        // see the previous user's stamp and skip every file. The
+        // setLastKnownOwner write is itself unawaited (it's cheap
+        // file I/O and we don't want to gate the drain on it); the
+        // queue's in-memory cache updates synchronously inside the
+        // call, which is what drain actually consults via the
+        // `intended_owner_user_id` check against `api.userId`.
+        watchQueue.setLastKnownOwner(apiNonNull.userId).catchError((Object e) {
+          debugPrint('Watch ingest last-owner stamp failed: $e');
+        });
         // Mirror web's `fetchUser` upsert-when-null path so a mobile-
         // only sign-up (user creates an account on mobile and never
         // visits web) gets a `user_profiles` row materialised with

@@ -683,6 +683,59 @@ void main() {
       );
     });
 
+    test('main.dart stamps the watch-ingest queue before draining on signin',
+        () {
+      // Reason: WatchIngestQueue files queued while signed-out carry
+      // an `intended_owner_user_id` stamp set from the
+      // setLastKnownOwner cache. drain() skips files whose stamp
+      // names a different user from the one currently signed in. For
+      // that filter to work on signin, main.dart must update the
+      // last-known-owner stamp to the FRESHLY-SIGNED-IN user BEFORE
+      // calling drain — otherwise the drain still sees the previous
+      // user's stamp and skips every file (or, worse, if a previous
+      // user never signed in, drains everything to the new user).
+      // Pinned because a refactor that reordered the listener body
+      // (e.g. hoisting drain ahead of the stamp call) would silently
+      // re-open the shared-device contamination window the stamp was
+      // added to close.
+      final mainSource = File('lib/main.dart').readAsStringSync();
+      final stampIdx = mainSource.indexOf(
+        'watchQueue.setLastKnownOwner(apiNonNull.userId)',
+      );
+      final drainIdx = mainSource.indexOf(
+        'watchQueue.drain(apiNonNull)',
+      );
+      expect(stampIdx, greaterThan(-1),
+          reason: 'main.dart must call watchQueue.setLastKnownOwner '
+              'in the signedIn listener — without the update, the '
+              'queue\'s stamp stays at the previous user and drain '
+              'misclassifies new files.');
+      expect(drainIdx, greaterThan(-1),
+          reason: 'main.dart must call watchQueue.drain on signedIn.');
+      expect(
+        stampIdx,
+        lessThan(drainIdx),
+        reason: 'watchQueue.setLastKnownOwner MUST appear before '
+            'watchQueue.drain in the signedIn handler. The reverse '
+            'order leaves drain running with the PREVIOUS user\'s '
+            'stamp — a fresh user-b sign-in would skip every file '
+            '(because the stamp is still user-a), and the queue '
+            'would never drain for either user.',
+      );
+      // Also pin the bootstrap call so a process restart with a
+      // cached session writes the stamp before any payloads can
+      // arrive.
+      expect(
+        mainSource,
+        contains('watchQueue.setLastKnownOwner(api.userId)'),
+        reason: 'main.dart bootstrap must call '
+            'watchQueue.setLastKnownOwner(api.userId) when restoring '
+            'a cached session — without it, payloads arriving during '
+            'a signed-out window after the restart carry no stamp '
+            'and adopt to whichever user signs in next.',
+      );
+    });
+
     test('LiveBroadcaster drops in-zone pings client-side', () {
       // Reason: the `live_run_pings_drop_in_zone` BEFORE INSERT
       // trigger (migration 20260618_001) only protects the legacy
