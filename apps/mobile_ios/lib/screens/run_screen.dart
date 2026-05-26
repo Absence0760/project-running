@@ -1210,6 +1210,11 @@ class _RunScreenState extends State<RunScreen> {
           : 'No GPS — tracking will start when permission is granted.';
       actionLabel = 'Settings';
       onAction = () => Geolocator.openAppSettings();
+    } else if (error is LocationPermissionWhileInUseError) {
+      message = 'Set Location to "Allow all the time" — runs stop recording '
+          'when you switch apps without background permission.';
+      actionLabel = 'Settings';
+      onAction = () => Geolocator.openAppSettings();
     } else {
       message = 'Recording without GPS — could not start the sensor.';
     }

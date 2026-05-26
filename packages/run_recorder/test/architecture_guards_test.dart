@@ -103,6 +103,15 @@ void main() {
       reason: 'prepare() must throw LocationPermissionDeniedError on '
           'denied permission — the run_screen snackbar branches on this.',
     );
+    expect(
+      source,
+      contains('throw LocationPermissionWhileInUseError()'),
+      reason: 'prepare() must throw LocationPermissionWhileInUseError on '
+          'Android when permission is whileInUse — without this, runs '
+          'silently freeze the moment another app takes focus because '
+          'Android stops delivering background fixes without "Allow all '
+          'the time", even though the foreground service is still alive.',
+    );
   });
 
   test('prepare flips _prepared before the GPS checks', () {

@@ -28,6 +28,22 @@ class LocationPermissionDeniedError extends Error {
       : 'Location permission was denied';
 }
 
+/// Thrown by [RunRecorder.prepare] on Android when location permission is
+/// only "While using the app". Android 11+ stops delivering GPS fixes the
+/// moment another app takes focus — the geolocator foreground service stays
+/// alive but the callback queue silently dries up, so distance freezes the
+/// instant the user opens the camera, replies to a notification, or locks
+/// the screen. Background recording requires "Allow all the time"
+/// (`ACCESS_BACKGROUND_LOCATION`). Not thrown on iOS, where "While Using
+/// the App" + the `UIBackgroundModes:location` capability is enough for
+/// the OS to keep feeding fixes during a recording session.
+class LocationPermissionWhileInUseError extends Error {
+  @override
+  String toString() =>
+      'Background location permission ("Allow all the time") is required '
+      'so runs keep recording when the app is in the background';
+}
+
 /// A single lap split marked mid-run. Captures the cumulative distance and
 /// duration at the moment the user tapped the lap button. Cumulative values
 /// are convenient for the recorder loop (no previous-lap bookkeeping); the
@@ -186,9 +202,14 @@ class RunRecorder {
   /// Throws [LocationServiceDisabledError] if device location services are
   /// off. Throws [LocationPermissionDeniedError] if the user denies (or has
   /// permanently denied — see [LocationPermissionDeniedError.forever]) the
-  /// permission prompt. Both errors leave [prepared] == true; the recorder
-  /// is still usable as a time-only session and the retry loop will re-open
-  /// the stream automatically when services / permission come back.
+  /// permission prompt. On Android, throws [LocationPermissionWhileInUseError]
+  /// when the user only granted "While using the app" — background recording
+  /// is silently broken without "Allow all the time", so we surface it as an
+  /// error rather than let the run record fine in foreground then freeze the
+  /// moment another app takes focus. All three errors leave [prepared] ==
+  /// true; the recorder is still usable as a time-only session and the retry
+  /// loop will re-open the stream automatically when services / permission
+  /// come back.
   Future<void> prepare({
     Route? route,
     int distanceFilterMetres = 3,
@@ -249,6 +270,10 @@ class RunRecorder {
     }
     if (permission == LocationPermission.denied) {
       throw LocationPermissionDeniedError();
+    }
+    if (defaultTargetPlatform == TargetPlatform.android &&
+        permission == LocationPermission.whileInUse) {
+      throw LocationPermissionWhileInUseError();
     }
 
     _openPositionStream();

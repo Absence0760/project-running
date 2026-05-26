@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:run_recorder/run_recorder.dart';
@@ -141,6 +142,35 @@ void main() {
       } on LocationPermissionDeniedError catch (e) {
         expect(e.forever, isTrue);
       }
+      r.dispose();
+    });
+
+    test('throws LocationPermissionWhileInUseError on Android when permission is whileInUse',
+        () async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      fake.permissionState = LocationPermission.whileInUse;
+      final r = RunRecorder();
+      await expectLater(
+        r.prepare(),
+        throwsA(isA<LocationPermissionWhileInUseError>()),
+      );
+      // Same contract as the other prepare errors — _prepared flips to true
+      // so the screen can still run a time-only / indoor session.
+      expect(r.prepared, isTrue);
+      r.dispose();
+    });
+
+    test('does NOT throw on iOS when permission is whileInUse', () async {
+      // iOS treats "While Using the App" + UIBackgroundModes:location as
+      // a valid background-recording configuration — only Android needs
+      // the escalation to "Allow all the time".
+      debugDefaultTargetPlatformOverride = TargetPlatform.iOS;
+      addTearDown(() => debugDefaultTargetPlatformOverride = null);
+      fake.permissionState = LocationPermission.whileInUse;
+      final r = RunRecorder();
+      await r.prepare();
+      expect(r.prepared, isTrue);
       r.dispose();
     });
 
