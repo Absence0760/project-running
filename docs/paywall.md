@@ -10,29 +10,33 @@ is no Pro-only screen. `PRO_ONLY_FEATURES` in
 `isLocked()` helper, `GATED_FEATURES` registry) is kept so a future
 Pro-only screen is a one-line addition. See [decisions.md § 23]
 (decisions.md#23-pro-tier-reintroduced-at-999mo-alongside-one-off-donations)
-for why the AI Coach is rate-limited rather than gated.
+for why the AI Coach uses per-tier daily caps rather than a screen
+gate.
 
 What the Pro tier changes:
 
-- **Unlimited AI Coach.** Free users get
-  `TIER_LIMITS.free.dailyLimit = 5` messages per UTC day, then the
+- **Higher AI Coach daily cap (10/day vs 2/day for free).** Both tiers
+  go through the same `increment_coach_usage` RPC and the same
+  `usedToday > dailyLimit` gate in `apps/web/src/lib/coach/handler.ts`;
+  only the resolved cap differs. Free users get
+  `TIER_LIMITS.free.dailyLimit = 2` messages per UTC day, then the
   composer is replaced by a `<div class="limit-bar">` "you've used all
-  5 messages for today" banner until midnight. Pro users get the chat
-  surface with no daily cap. Enforcement lives in
-  `apps/web/src/lib/coach/handler.ts` (call into
-  `increment_coach_usage` RPC); the production AWS Lambda hardcodes
-  `bypassPaywallEnabled: false`, so a free user that POSTs directly to
-  `/api/coach` from devtools still gets a 429 on the sixth attempt
-  with `{ error: 'daily_limit', tier: 'free', limit: 5 }`.
+  2 messages for today — Upgrade to Pro…" banner until midnight. Pro
+  users get `TIER_LIMITS.pro.dailyLimit = 10` and the same limit-bar
+  shape at the higher ceiling. The production AWS Lambda hardcodes
+  `bypassPaywallEnabled: false`, so a caller that POSTs directly to
+  `/api/coach` from devtools still gets a 429 once they exceed their
+  tier's cap with `{ error: 'daily_limit', tier, limit }`.
 - **Priority processing.** Pro users get a wider processing budget on
   every coach request: a 2048 max-token response (vs 768 for free) for
   longer / more thorough answers, and up to 75 runs of context per
-  turn (vs 30 for free). Coupled with the unlimited daily cap above,
+  turn (vs 30 for free). Coupled with the higher daily cap above,
   these are concrete tier-aware budgets enforced server-side on
   `/api/coach/+server.ts` and surfaced in `X-Coach-Tier` /
   `X-RateLimit-*` response headers. Backend Edge Functions don't
-  currently branch on tier; that's the next planned widening when
-  individual functions get hot.
+  currently branch on tier beyond the shared tier-aware rate-limit
+  helper; that's the next planned widening when individual functions
+  get hot.
 
 `/settings/upgrade` shows a two-card layout: a Pro plan card
 ($9.99 / month, feature bullets, "Get Pro" CTA) and a one-off Donate
@@ -48,8 +52,8 @@ dropped); reviving transparent funding later is a one-page revert.
 
 | Tier | How you get it | What it unlocks |
 |---|---|---|
-| `free` | Default for every new account | Every screen in the app. AI Coach capped at 5 messages/day. Standard request priority. |
-| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + unlimited AI Coach + priority processing (wider context budget, longer responses). |
+| `free` | Default for every new account | Every screen in the app. AI Coach capped at 2 messages/day. Standard request priority. |
+| `pro` | RevenueCat subscription ($9.99 / month) | Everything free users get + AI Coach capped at 10 messages/day (5× the free cap) + priority processing (wider context budget, longer responses). |
 | `lifetime` | RevenueCat one-time purchase (not currently sold) | Same as `pro`. |
 
 `user_profiles.subscription_tier` is the authoritative column. A CHECK
@@ -75,7 +79,7 @@ flow requires an admin SQL session; from a client there is no way.
 
 | Perk | Feature key | Enforcement point |
 |---|---|---|
-| Unlimited AI Coach (vs 5 msg/day) | `ai_coach` | Server: `apps/web/src/lib/coach/handler.ts` checks `is_pro()` via the auth context and resolves `TIER_LIMITS[tier].dailyLimit`. Free users hit `increment_coach_usage`; on the sixth attempt of a UTC day the handler returns 429 with `{ error: 'daily_limit', tier: 'free', limit: 5 }`. Pro users skip the daily-cap branch entirely. Client: `CoachChat.svelte` reads back the tier from the SSE `meta` event and shows the "Free badge · N of 5 remaining" or "Pro badge · Unlimited messages" footer. The composer is replaced with a `.limit-bar` block when `usedToday >= dailyLimit`. |
+| Higher AI Coach daily cap (10/day vs 2/day) | `ai_coach` | Server: `apps/web/src/lib/coach/handler.ts` checks `is_pro()` via the auth context, resolves `TIER_LIMITS[tier].dailyLimit`, and runs the same `increment_coach_usage` + `usedToday > dailyLimit` gate for both tiers. A free user's 3rd attempt of a UTC day returns 429 with `{ error: 'daily_limit', tier: 'free', limit: 2 }`; a Pro user's 11th attempt returns 429 with `{ error: 'daily_limit', tier: 'pro', limit: 10 }`. Client: `CoachChat.svelte` reads back the tier and limit from the SSE `meta` event and shows the "Free badge · N of 2 remaining" or "Pro badge · N of 10 remaining · priority context window" footer. The composer is replaced with a `.limit-bar` block when `usedToday >= dailyLimit`. |
 | Priority processing — coach context | `priority_processing` | Server: `/api/coach/+server.ts` derives `tier` from `is_pro()` then resolves a `TIER_LIMITS` budget (`maxTokens`, `maxRunsLimit`, `dailyLimit`). Pro gets 2048 max-tokens + 75-runs context cap; free gets 768 + 30. Budget is echoed in `X-Coach-Tier` / `X-RateLimit-*` headers and the response body's `tier` + `limits`, so clients can render the right footer state without parsing headers. |
 | Priority map-matching | `priority_processing` | DB: every enqueue site for `kind='map_match'` jobs (the auto-trigger `runs_enqueue_match_job` and the manual-rematch RPC `enqueue_run_rematch`) calls `job_scheduled_at_for_user(uuid)` from migration `20260730_001`. Pro / lifetime → `now()` (front of queue); free → `now() + 30 s` (defers behind Pro). The worker's `claim_next_job` orders by `(scheduled_at, id)` so Pro jobs are always claimable strictly before free jobs enqueued at the same instant. **Future job kinds follow the same pattern** — call the helper at enqueue time; don't inline `case ... subscription_tier ...`. See [decisions.md § 57](decisions.md#57-map-matching-is-free-queue-priority-is-the-pro-perk). |
 
@@ -91,8 +95,8 @@ they don't call through `isLocked()`. Add a key to
 `apps/web/src/lib/features.ts` exports `isPro()` — reads the auth
 store's cached `user_profiles.subscription_tier` and returns true for
 `pro` / `lifetime`. Use it for conditional UI flourishes (a "Pro"
-badge, a "Pro — unlimited" label next to the coach input). Never use
-it as the sole check for anything expensive: always mirror the check
+badge, a higher-cap label next to the coach input). Never use it as
+the sole check for anything expensive: always mirror the check
 server-side with the `is_pro()` RPC.
 
 ## Adding a new gated feature

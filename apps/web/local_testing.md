@@ -137,16 +137,16 @@ The coach endpoint at `/api/coach/+server.ts` supports two providers, picked by 
 4. Switch back to Anthropic by setting `COACH_PROVIDER=anthropic` and restarting — no other changes needed.
 
 **Tier-aware budget (priority processing)**
-1. As a free user (default seed), open `/coach` → footer shows a small "Free" badge and "5 of 5 messages remaining today".
-2. Send a message → DevTools → Network tab → response headers should include `X-Coach-Tier: free`, `X-RateLimit-Limit: 5`, `X-RateLimit-Remaining: 4`, `X-RateLimit-MaxTokens: 768`, `X-RateLimit-MaxRuns: 30`.
-3. Flip `subscription_tier` to `pro` in Studio (`update user_profiles set subscription_tier = 'pro' where id = '...';`) and reload `/coach`. Footer changes to "Pro · Unlimited messages · priority context window".
-4. Send a message → response headers now read `X-Coach-Tier: pro`, `X-RateLimit-Limit: unlimited`, `X-RateLimit-MaxTokens: 2048`, `X-RateLimit-MaxRuns: 200`. Pro answers visibly run longer when the question warrants it.
-5. With `BYPASS_PAYWALL=true`, the server reports `tier: 'pro'` regardless of the user's actual subscription so you can dev against the unlimited shape without paying RevenueCat.
+1. As a free user (default seed), open `/coach` → footer shows a small "Free" badge and "2 of 2 messages remaining today".
+2. Send a message → DevTools → Network tab → response headers should include `X-Coach-Tier: free`, `X-RateLimit-Limit: 2`, `X-RateLimit-Remaining: 1`, `X-RateLimit-MaxTokens: 768`, `X-RateLimit-MaxRuns: 30`.
+3. Flip `subscription_tier` to `pro` in Studio (`update user_profiles set subscription_tier = 'pro' where id = '...';`) and reload `/coach`. Footer changes to "Pro · 10 of 10 messages remaining today · priority context window".
+4. Send a message → response headers now read `X-Coach-Tier: pro`, `X-RateLimit-Limit: 10`, `X-RateLimit-Remaining: 9`, `X-RateLimit-MaxTokens: 2048`, `X-RateLimit-MaxRuns: 75`. Pro answers visibly run longer when the question warrants it.
+5. With `BYPASS_PAYWALL=true`, the server reports `tier: 'pro'` regardless of the user's actual subscription so you can dev against the Pro shape without paying RevenueCat. The bypass also skips the daily-cap increment entirely so you can iterate without burning quota.
 
 **Common failures**
 - *503 with "Coach is not configured"* → `ANTHROPIC_API_KEY` missing while `COACH_PROVIDER=anthropic`.
 - *502 "coach upstream 4xx"* on Ollama path → model name mismatch (try `ollama list`) or Ollama not running.
-- *429 with daily-limit message* → free-tier 5/day cap. Either set `BYPASS_PAYWALL=true` in `.env.local`, or flip the seed user's `subscription_tier` to `pro` in Studio.
+- *429 with daily-limit message* → tier daily cap hit (free: 2/day, pro: 10/day). Either set `BYPASS_PAYWALL=true` in `.env.local`, flip the seed user's `subscription_tier` to `pro` in Studio for a higher cap, or `delete from user_coach_usage where user_id = '<seed>';` to reset today's counter.
 
 ### Cross-platform syncing (web ↔ mobile)
 

@@ -366,7 +366,7 @@ Claude-powered training advisor embedded in the web app. Reviews the runner's pl
 
 - [x] Server endpoint (`/api/coach/+server.ts`) with prompt-cached system prompt + context dump
 - [x] `CoachChat.svelte` UI with suggestion chips and cache-hit stats
-- [x] Daily usage limit of 5 messages per user (`user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
+- [x] Daily usage limit per user (free: 2, pro: 10 — `user_coach_usage` table, `increment_coach_usage` / `get_coach_usage` RPCs)
 - [x] Personality tones — `coach_personality` user setting (`supportive` / `drill_sergeant` / `analytical`) fed into the system prompt
 - [x] User preferences (date of birth, HR zones, resting/max HR, weekly mileage goal) fed into context for personalised advice
 - [x] Top-level `/coach` page with plan switcher (`?plan=<id>`), graceful plan-less fallback, and dashboard "Ask the coach" deep-link card
@@ -382,11 +382,11 @@ Claude-powered training advisor embedded in the web app. Reviews the runner's pl
 
 ### Monetisation — Pro tier + one-off donations
 
-The original free-with-donations pivot (`decisions.md #18`) was superseded by the Pro-tier revival (`decisions.md #23`). Infrastructure from the donations era is kept: no features are hidden behind the paywall today; Pro changes behaviour inside two features (coach cap, processing priority) rather than gating screens.
+The original free-with-donations pivot (`decisions.md #18`) was superseded by the Pro-tier revival (`decisions.md #23`). Infrastructure from the donations era is kept: no features are hidden behind the paywall today; Pro changes behaviour inside two features (higher coach cap, processing priority) rather than gating screens.
 
 - [x] Core gate infrastructure — `isLocked()` still returns `false` for every registered key (see `decisions.md #18` for why we retained the scaffolding)
 - [x] `/settings/upgrade` page rewritten as a two-card layout: Pro plan ($9.99 / mo) + one-off Donate button (see `decisions.md #23`)
-- [x] `/api/coach/+server.ts` skips the 5 / day rate limit for users where `is_pro()` is true
+- [x] `/api/coach/+server.ts` enforces per-tier daily caps via shared `increment_coach_usage` + `usedToday > TIER_LIMITS[tier].dailyLimit` gate (free: 2/day, pro: 10/day — see `decisions.md #23` May 2026 update)
 - [x] `features.ts` — `isPro()` helper + `priority_processing` feature-registry entry
 - [x] `monthly_funding` table retained but no longer read by the UI
 - [x] Custom `ConfirmDialog.svelte` replacing all browser `confirm()`/`alert()`/`prompt()` calls (see `decisions.md #19`)
@@ -397,7 +397,7 @@ The original free-with-donations pivot (`decisions.md #18`) was superseded by th
 
 ### Premium tier — training and coaching (deferred, see decisions.md #18 and #23)
 
-This section predates the Pro-tier revival and tracks features that were *originally* premium-gated (structured workout runner, plan generator, VO2 max, race predictor, recovery advisor). Under the current model (`decisions.md #23`) Pro unlocks **unlimited coach + priority processing** rather than gating whole features — so the items below are roadmap work, not paywall work, until product direction says otherwise.
+This section predates the Pro-tier revival and tracks features that were *originally* premium-gated (structured workout runner, plan generator, VO2 max, race predictor, recovery advisor). Under the current model (`decisions.md #23`) Pro unlocks **a higher coach daily cap (10/day vs 2/day) + priority processing** rather than gating whole features — so the items below are roadmap work, not paywall work, until product direction says otherwise.
 
 **Structured training plan runner (workout execution):**
 

@@ -355,6 +355,8 @@ Infrastructure from #18 is largely reusable: the `GATED_FEATURES` registry, the 
 
 **Don't re-litigate unless:** conversion is <0.5% after 3 months of marketing the tier, or Pro users complain that "priority processing" isn't observable (at which point we either enforce it concretely or rename the bullet).
 
+**Update (May 2026):** The unlimited Pro coach cap was replaced with a finite **10 messages / UTC day** ceiling, and the free cap was lowered from 5/day to **2 messages / UTC day**. "Unlimited" left the worst-case Anthropic spend per stolen Pro session unbounded (the previous defence — a 60/hr `check_rate_limit` on the `coach:pro` bucket — was belt-and-braces but still allowed ~$75/day in a sustained-abuse scenario). 10/day caps that at ~$0.50/day per Pro user worst case, comfortably under the $9.99/mo price, and 10 turns is enough for two real coach sessions per day. 2/day for free is tight enough to push the conversion decision early but still lets a new user have one prompt + one clarifying follow-up before deciding. Both tiers now share the same `increment_coach_usage` + `usedToday > TIER_LIMITS[tier].dailyLimit` gate in `handler.ts`; the Pro hourly rate-limit branch is removed (the daily cap subsumes it). Existing Pro subscribers signed up under the "unlimited" copy — update marketing surfaces (`/settings/upgrade`, `features.ts`, `paywall.md`) before this lands in front of them.
+
 ---
 
 ## 24. Web is the canonical feature surface; mobile and watches are platform-additive
