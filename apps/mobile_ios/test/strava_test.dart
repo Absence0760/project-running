@@ -31,7 +31,18 @@ void main() {
   group('stravaAuthUrl', () {
     test('throws when Strava is not configured', () {
       expect(
-        () => stravaAuthUrl(redirectUri: 'threkir://strava-callback'),
+        () => stravaAuthUrl(
+            redirectUri: 'threkir://strava-callback', state: 'csrf-token'),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('throws when state is empty (CSRF guard required)', () {
+      expect(
+        () => stravaAuthUrl(
+            redirectUri: 'threkir://strava-callback',
+            state: '',
+            keyOverride: '789012'),
         throwsA(isA<StateError>()),
       );
     });
@@ -40,6 +51,7 @@ void main() {
         () {
       final url = stravaAuthUrl(
         redirectUri: 'threkir://strava-callback',
+        state: 'csrf-deadbeef',
         keyOverride: '789012',
       );
       final parsed = Uri.parse(url);
@@ -55,11 +67,14 @@ void main() {
       // Web side requests "activity:read_all,read" — mobile must
       // match so the same Strava app credentials cover both clients.
       expect(parsed.queryParameters['scope'], 'activity:read_all,read');
+      // CSRF state echoed back to Strava — /audit/strava Critical #1.
+      expect(parsed.queryParameters['state'], 'csrf-deadbeef');
     });
 
     test('URL-encodes the redirect_uri', () {
       final url = stravaAuthUrl(
         redirectUri: 'https://run.app/settings/integrations',
+        state: 's',
         keyOverride: 'cid',
       );
       // The encoded form of "https://run.app/settings/integrations"
@@ -113,6 +128,34 @@ void main() {
     test('exposes the constants the AndroidManifest + Strava console pin', () {
       expect(kStravaCallbackScheme, 'threkir');
       expect(kStravaCallbackUri, 'threkir://strava-callback');
+    });
+
+    test('propagates state through callback parsing (CSRF check)', () {
+      // /audit/strava May 2026 Critical #1. The callback handler
+      // must read the state Strava echoes back so the caller can
+      // compare it against what they stashed pre-redirect.
+      final cb = parseStravaCallback(
+        'threkir://strava-callback?code=abc&scope=read&state=csrf-deadbeef',
+      );
+      expect(cb.state, 'csrf-deadbeef');
+      expect(cb.code, 'abc');
+    });
+  });
+
+  group('mintStravaOAuthState', () {
+    test('produces a 32-char hex token from secure random', () {
+      // 16 bytes × 2 hex chars/byte = 32. /audit/strava Critical #1.
+      final s = mintStravaOAuthState();
+      expect(s.length, 32);
+      expect(RegExp(r'^[0-9a-f]{32}$').hasMatch(s), isTrue);
+    });
+
+    test('mints distinct tokens across calls', () {
+      // Two consecutive calls must not collide. A trivially seeded
+      // PRNG would; Random.secure() must not.
+      final a = mintStravaOAuthState();
+      final b = mintStravaOAuthState();
+      expect(a, isNot(equals(b)));
     });
   });
 }

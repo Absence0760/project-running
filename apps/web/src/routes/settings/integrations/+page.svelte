@@ -8,6 +8,8 @@
 	import {
 		stravaAuthUrl,
 		completeStravaOAuth,
+		mintStravaOAuthState,
+		storeStravaOAuthState,
 		syncStrava,
 		isStravaConfigured,
 	} from '$lib/strava';
@@ -98,9 +100,14 @@
 				showToast('Strava is not configured on this build (missing PUBLIC_STRAVA_CLIENT_ID).', 'error');
 				return;
 			}
+			// OAuth 2.0 CSRF state. Mint, stash, then forward to Strava.
+			// The callback handler verifies + clears via consumeState.
+			// /audit/strava May 2026 Critical #1.
+			const state = mintStravaOAuthState();
+			storeStravaOAuthState(state);
 			// Redirect the window directly — Strava's OAuth page doesn't
 			// frame cleanly and the callback must come back to us.
-			window.location.href = stravaAuthUrl(window.location.origin);
+			window.location.href = stravaAuthUrl(window.location.origin, state);
 			return;
 		}
 

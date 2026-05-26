@@ -395,3 +395,84 @@ func jsonInt(n int64) string {
 	b, _ := json.Marshal(n)
 	return string(b)
 }
+
+// audit/strava Critical #2 — per-IP throttle BEFORE the secret-gate.
+func TestServer_IPRateLimitFiresBeforeSecretCompare(t *testing.T) {
+	srv := &Server{
+		WebhookSecret: "right-secret",
+		VerifyToken:   "verify",
+		Enqueuer:      &fakeEnqueuer{},
+		WebhookEvents: &fakeWebhookEvents{},
+	}
+	// Force the limiter into "no tokens left" by pre-allocating a
+	// custom one at rate=1/h and burning the first slot. The next
+	// call (from the SAME IP) must 429 — and crucially it must NOT
+	// fall through to the secret compare (which would 403 with a
+	// wrong secret).
+	srv.ipLimitImpl = newIPRateLimiter(1, time.Hour)
+	srv.ipLimitOnce.Do(func() {})
+
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+
+	// First request burns the token.
+	r1, _ := http.NewRequest("GET", ts.URL+"/v1/strava/webhook?secret=right-secret&hub.mode=subscribe&hub.verify_token=verify&hub.challenge=x", nil)
+	r1.Header.Set("cf-connecting-ip", "1.2.3.4")
+	resp, err := http.DefaultClient.Do(r1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("first call should pass, got %d", resp.StatusCode)
+	}
+
+	// Second from same IP with the WRONG secret. A bypass of the
+	// limiter would land at the secret-compare → 403; correct
+	// behaviour is 429 (limiter fires first).
+	r2, _ := http.NewRequest("POST", ts.URL+"/v1/strava/webhook?secret=WRONG", nil)
+	r2.Header.Set("cf-connecting-ip", "1.2.3.4")
+	resp2, err := http.DefaultClient.Do(r2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp2.Body.Close()
+	if resp2.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("expected 429 (rate-limit before secret), got %d", resp2.StatusCode)
+	}
+	if ra := resp2.Header.Get("Retry-After"); ra == "" {
+		t.Fatal("Retry-After header should be set on 429")
+	}
+}
+
+func TestServer_IPRateLimitPerKey(t *testing.T) {
+	// Different IPs maintain independent buckets.
+	srv := &Server{
+		WebhookSecret: "secret",
+		VerifyToken:   "v",
+		Enqueuer:      &fakeEnqueuer{},
+		WebhookEvents: &fakeWebhookEvents{},
+	}
+	srv.ipLimitImpl = newIPRateLimiter(1, time.Hour)
+	srv.ipLimitOnce.Do(func() {})
+
+	mux := http.NewServeMux()
+	srv.RegisterRoutes(mux)
+	ts := httptest.NewServer(mux)
+	t.Cleanup(ts.Close)
+
+	for _, ip := range []string{"1.1.1.1", "2.2.2.2", "3.3.3.3"} {
+		r, _ := http.NewRequest("GET", ts.URL+"/v1/strava/webhook?secret=secret&hub.mode=subscribe&hub.verify_token=v&hub.challenge=c", nil)
+		r.Header.Set("cf-connecting-ip", ip)
+		resp, err := http.DefaultClient.Do(r)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != 200 {
+			t.Fatalf("ip %s first call should pass, got %d", ip, resp.StatusCode)
+		}
+	}
+}

@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 /// Dart port of `apps/web/src/lib/strava.ts` — Strava OAuth helper
@@ -44,16 +46,17 @@ const String kStravaCallbackUri = '$kStravaCallbackScheme://strava-callback';
 class StravaCallback {
   final String? code;
   final String? scope;
+  final String? state;
   final String? error;
-  const StravaCallback({this.code, this.scope, this.error});
+  const StravaCallback({this.code, this.scope, this.state, this.error});
 
   bool get isSuccess => code != null && code!.isNotEmpty && error == null;
 }
 
-/// Parse a `threkir://strava-callback?code=...&scope=...` URL into
-/// its components. Pure helper kept out of the Settings screen so the
-/// success / decline / malformed branches can be unit-tested without
-/// invoking the auth session.
+/// Parse a `threkir://strava-callback?code=...&scope=...&state=...`
+/// URL into its components. Pure helper kept out of the Settings
+/// screen so the success / decline / malformed / CSRF branches can
+/// be unit-tested without invoking the auth session.
 StravaCallback parseStravaCallback(String url) {
   Uri? parsed;
   try {
@@ -65,8 +68,21 @@ StravaCallback parseStravaCallback(String url) {
   return StravaCallback(
     code: q['code'],
     scope: q['scope'],
+    state: q['state'],
     error: q['error'],
   );
+}
+
+/// Generate a fresh OAuth CSRF state token. Wraps Random.secure() for
+/// 128-bit-equivalent entropy formatted as hex. RFC 6749 §10.12 only
+/// requires "non-guessable" — UUID-shape would do, but Dart's
+/// `crypto.randomUUID()` equivalent isn't standard library, and we
+/// don't want to add a dep just for this. /audit/strava May 2026
+/// Critical #1.
+String mintStravaOAuthState() {
+  final rng = Random.secure();
+  final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+  return bytes.map((b) => b.toRadixString(16).padLeft(2, '0')).join();
 }
 
 /// True when `STRAVA_CLIENT_ID` is present in `dotenv.env` and not the
@@ -88,11 +104,15 @@ bool isStravaConfigured({String? keyOverride}) {
 /// first.
 String stravaAuthUrl({
   required String redirectUri,
+  required String state,
   String? keyOverride,
 }) {
   final clientId = keyOverride ?? dotenv.env[_kEnvKey] ?? '';
   if (clientId.isEmpty || clientId == '12345') {
     throw StateError('Strava is not configured on this build');
+  }
+  if (state.isEmpty) {
+    throw StateError('Strava state token required for CSRF guard');
   }
   final params = <String, String>{
     'client_id': clientId,
@@ -100,6 +120,7 @@ String stravaAuthUrl({
     'redirect_uri': redirectUri,
     'approval_prompt': 'auto',
     'scope': _kStravaScope,
+    'state': state,
   };
   final qs = params.entries
       .map((e) =>

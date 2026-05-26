@@ -29,6 +29,8 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strings"
+	"sync"
 	"time"
 )
 
@@ -88,6 +90,17 @@ type Server struct {
 	Now func() time.Time
 
 	Log *slog.Logger
+
+	// ipLimiter throttles unauthenticated webhook requests per
+	// client IP before the secret-gate runs. Defense against an
+	// attacker grinding the URL secret at network speed — without
+	// it, `timingSafeEqual` only closes the per-byte side channel,
+	// not the offline guess rate. The EF version (`apps/backend/
+	// supabase/functions/strava-webhook/index.ts`) does the same
+	// via `checkRateLimit(ipBucketKey, 60, 3600, failClosed)`.
+	// /audit/strava May 2026 Critical #2.
+	ipLimitOnce sync.Once
+	ipLimitImpl *ipRateLimiter
 }
 
 // JobEnqueuer inserts a single job row. Returned `id` is the
@@ -129,6 +142,13 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 		// rather than silently accepting unauthenticated traffic.
 		s.log().Error("strava webhook: secret not configured; refusing")
 		http.Error(w, `{"error":"webhook_not_configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	// Per-IP throttle BEFORE the secret-compare. Matches the EF
+	// pattern (60/hour fail-closed). /audit/strava Critical #2.
+	if !s.ipLimiter().allow(clientIP(r)) {
+		w.Header().Set("Retry-After", "60")
+		http.Error(w, `{"error":"rate_limited"}`, http.StatusTooManyRequests)
 		return
 	}
 	supplied := r.URL.Query().Get("secret")
@@ -325,5 +345,88 @@ func writeJSON(w http.ResponseWriter, status int, body any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(body)
+}
+
+// clientIP returns the best-effort caller IP for rate-limit keying.
+// Honours the standard reverse-proxy headers Fly's edge sets
+// (cf-connecting-ip, x-real-ip, x-forwarded-for first hop), falling
+// back to the connection's remote address. The keying material is
+// untrusted — header values can be spoofed — but the worst case is
+// an attacker burns their own bucket on one of several IPs they
+// control. /audit/strava Critical #2.
+func clientIP(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get("cf-connecting-ip")); v != "" {
+		return v
+	}
+	if v := strings.TrimSpace(r.Header.Get("x-real-ip")); v != "" {
+		return v
+	}
+	if v := r.Header.Get("x-forwarded-for"); v != "" {
+		if comma := strings.Index(v, ","); comma >= 0 {
+			return strings.TrimSpace(v[:comma])
+		}
+		return strings.TrimSpace(v)
+	}
+	if host := r.RemoteAddr; host != "" {
+		// `host:port` form — strip the port.
+		if colon := strings.LastIndex(host, ":"); colon >= 0 {
+			return host[:colon]
+		}
+		return host
+	}
+	return "unknown"
+}
+
+// ipLimiter returns the lazily-initialised per-IP token bucket. 60
+// requests / hour matches the EF rate-limit (`audit/strava` Critical
+// #2). A legitimate Strava callback IP set sees << 60/hour on this
+// endpoint; an attacker grinding the secret gets throttled fast.
+func (s *Server) ipLimiter() *ipRateLimiter {
+	s.ipLimitOnce.Do(func() {
+		s.ipLimitImpl = newIPRateLimiter(60, time.Hour)
+	})
+	return s.ipLimitImpl
+}
+
+type ipRateLimiter struct {
+	rate     int
+	interval time.Duration
+	buckets  sync.Map // ip → *ipBucket
+}
+
+type ipBucket struct {
+	mu       sync.Mutex
+	tokens   float64
+	lastFill time.Time
+}
+
+func newIPRateLimiter(rate int, interval time.Duration) *ipRateLimiter {
+	return &ipRateLimiter{rate: rate, interval: interval}
+}
+
+func (l *ipRateLimiter) allow(ip string) bool {
+	now := time.Now()
+	v, _ := l.buckets.LoadOrStore(ip, &ipBucket{
+		tokens:   float64(l.rate),
+		lastFill: now,
+	})
+	b := v.(*ipBucket)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	elapsed := now.Sub(b.lastFill).Seconds()
+	refill := elapsed * float64(l.rate) / l.interval.Seconds()
+	if refill > 0 {
+		next := b.tokens + refill
+		if next > float64(l.rate) {
+			next = float64(l.rate)
+		}
+		b.tokens = next
+		b.lastFill = now
+	}
+	if b.tokens >= 1 {
+		b.tokens--
+		return true
+	}
+	return false
 }
 
