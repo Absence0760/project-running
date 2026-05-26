@@ -6,15 +6,21 @@ import '../lib/screens/sign_up_screen.dart';
 class _FakeApiClient extends ApiClient {
   String? capturedEmail;
   String? capturedPassword;
+  DateTime? capturedAgeConfirmedAt;
+  DateTime? capturedTermsAcceptedAt;
   Object? errorToThrow;
 
   @override
   Future<String> signUp({
     required String email,
     required String password,
+    DateTime? ageConfirmedAt,
+    DateTime? termsAcceptedAt,
   }) async {
     capturedEmail = email;
     capturedPassword = password;
+    capturedAgeConfirmedAt = ageConfirmedAt;
+    capturedTermsAcceptedAt = termsAcceptedAt;
     if (errorToThrow != null) throw errorToThrow!;
     return 'uid-new';
   }

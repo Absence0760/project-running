@@ -226,15 +226,50 @@ class ApiClient {
   /// Register a new account with email/password. Returns the user ID.
   ///
   /// Throws if the address is already registered or the password is too weak.
+  ///
+  /// [ageConfirmedAt] and [termsAcceptedAt] capture the moment the
+  /// user ticked the consent checkboxes on the sign-up screen. They
+  /// are stored in `raw_user_meta_data` at the auth layer AND
+  /// re-stamped on `user_profiles` via the `confirm_age_and_terms`
+  /// RPC immediately after signUp succeeds. Server-side enforcement
+  /// of GDPR Art 8 — see migration `20260929_001` and audit/gdpr
+  /// (2026-05-25) Critical.
   Future<String> signUp({
     required String email,
     required String password,
+    DateTime? ageConfirmedAt,
+    DateTime? termsAcceptedAt,
   }) async {
+    final ageIso = (ageConfirmedAt ?? DateTime.now().toUtc()).toIso8601String();
+    final termsIso =
+        (termsAcceptedAt ?? DateTime.now().toUtc()).toIso8601String();
     final response = await _client.auth.signUp(
       email: email,
       password: password,
+      data: {
+        'age_confirmed_at': ageIso,
+        'terms_accepted_at': termsIso,
+      },
     );
+    // Server-side stamp on user_profiles. Fire-and-forget — when
+    // Supabase email-confirmation is enabled the JWT isn't live yet
+    // and the RPC will 401; the sign-in path after confirmation
+    // re-runs the stamp via confirmAgeAndTerms().
+    try {
+      await _client.rpc('confirm_age_and_terms');
+    } catch (_) {
+      // Tolerated — sign-in path retries.
+    }
     return response.user!.id;
+  }
+
+  /// Stamps `age_confirmed_at` + `terms_accepted_at` on the caller's
+  /// user_profiles row. Idempotent — existing timestamps are
+  /// preserved (first-stamp wins). Call this on every post-OAuth
+  /// session refresh whose profile still has either column null,
+  /// once the user has been re-prompted.
+  Future<void> confirmAgeAndTerms() async {
+    await _client.rpc('confirm_age_and_terms');
   }
 
   /// Exchange a Google ID token (obtained by the host app via the native

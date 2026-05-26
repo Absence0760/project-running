@@ -53,6 +53,22 @@
 			error = gate.error;
 			return;
 		}
+		// Stash the consent timestamps so /auth/callback can stamp
+		// them server-side after the OAuth redirect — OAuth's first-
+		// sign-in flow can't pass options.data into raw_user_meta_data,
+		// so the post-callback RPC is the canonical capture point.
+		// See migration 20260929_001 + audit/gdpr (2026-05-25) Critical.
+		if (isSignUp) {
+			const stamp = new Date().toISOString();
+			try {
+				sessionStorage.setItem('age_confirmed_at', stamp);
+				sessionStorage.setItem('terms_accepted_at', stamp);
+			} catch (_) {
+				/* Safari private-mode disables sessionStorage — the
+				   /auth/callback fallback redirects to /auth/confirm-age
+				   when the stash is missing. */
+			}
+		}
 		loading = true;
 		try {
 			await auth.signInWithGoogle();
@@ -91,8 +107,27 @@
 			} else if (isSignUp) {
 				const gate = checkSignUpGates(isSignUp, confirmAdult, acceptTerms);
 				if (!gate.ok) throw new Error(gate.error);
-				const { error: signUpError } = await supabase.auth.signUp({ email, password });
+				const stamp = new Date().toISOString();
+				const { error: signUpError } = await supabase.auth.signUp({
+					email,
+					password,
+					options: {
+						// raw_user_meta_data carries the consent
+						// timestamps at the auth layer; the server-side
+						// stamp on user_profiles happens via the RPC
+						// below. See migration 20260929_001 + audit/gdpr.
+						data: { age_confirmed_at: stamp, terms_accepted_at: stamp },
+					},
+				});
 				if (signUpError) throw signUpError;
+				// Server-side consent stamp on user_profiles. Fire-
+				// and-forget — if email confirmation is pending and no
+				// JWT exists yet, the /auth/callback fallback retries.
+				try {
+					await supabase.rpc('confirm_age_and_terms');
+				} catch (_) {
+					/* Retry path covers the failure. */
+				}
 				await auth.refreshSession();
 				goto(safeReturnTo());
 			} else {

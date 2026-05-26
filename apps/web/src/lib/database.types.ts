@@ -1831,6 +1831,7 @@ export type Database = {
       }
       user_profiles: {
         Row: {
+          age_confirmed_at: string | null
           avatar_url: string | null
           billing_issue_at: string | null
           coach_consent_at: string | null
@@ -1844,8 +1845,10 @@ export type Database = {
           preferred_unit: string | null
           subscription_at: string | null
           subscription_tier: string | null
+          terms_accepted_at: string | null
         }
         Insert: {
+          age_confirmed_at?: string | null
           avatar_url?: string | null
           billing_issue_at?: string | null
           coach_consent_at?: string | null
@@ -1859,8 +1862,10 @@ export type Database = {
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
+          terms_accepted_at?: string | null
         }
         Update: {
+          age_confirmed_at?: string | null
           avatar_url?: string | null
           billing_issue_at?: string | null
           coach_consent_at?: string | null
@@ -1874,6 +1879,7 @@ export type Database = {
           preferred_unit?: string | null
           subscription_at?: string | null
           subscription_tier?: string | null
+          terms_accepted_at?: string | null
         }
         Relationships: []
       }
@@ -2261,6 +2267,7 @@ export type Database = {
           slug: string
         }[]
       }
+      confirm_age_and_terms: { Args: never; Returns: undefined }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
       defer_job: {
         Args: { delay_seconds: number; err?: string; job_id: number }
@@ -2329,6 +2336,7 @@ export type Database = {
       get_my_profile: {
         Args: never
         Returns: {
+          age_confirmed_at: string | null
           avatar_url: string | null
           billing_issue_at: string | null
           coach_consent_at: string | null
@@ -2342,6 +2350,7 @@ export type Database = {
           preferred_unit: string | null
           subscription_at: string | null
           subscription_tier: string | null
+          terms_accepted_at: string | null
         }
         SetofOptions: {
           from: "*"

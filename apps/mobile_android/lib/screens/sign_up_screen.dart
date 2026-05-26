@@ -57,9 +57,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
       _error = null;
     });
     try {
+      // Stamps both consent timestamps at the moment the user ticks
+      // the checkboxes; ApiClient.signUp persists them server-side
+      // via the confirm_age_and_terms RPC. See audit/gdpr Critical.
+      final stamp = DateTime.now().toUtc();
       await widget.apiClient.signUp(
         email: _emailController.text.trim(),
         password: _passwordController.text,
+        ageConfirmedAt: stamp,
+        termsAcceptedAt: stamp,
       );
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
@@ -113,6 +119,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
       }
 
       await widget.apiClient.signInWithGoogleIdToken(idToken: idToken);
+      // OAuth-path consent stamp (audit/gdpr Critical). The pre-tap
+      // gate (_checkGates) confirmed the user's age + terms intent;
+      // record that server-side now the JWT is live. Idempotent —
+      // returning Google users are a no-op via first-stamp-wins.
+      try {
+        await widget.apiClient.confirmAgeAndTerms();
+      } catch (_) {
+        // Tolerated — next refresh retries; non-blocking for sign-in.
+      }
       if (mounted) Navigator.pop(context, true);
     } on GoogleSignInException catch (e) {
       if (e.code != GoogleSignInExceptionCode.canceled) {
@@ -155,6 +170,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
       // directly — matches the Google path and keeps every auth flow
       // on the ApiClient abstraction.
       await widget.apiClient.signInWithAppleIdToken(idToken: idToken);
+      // OAuth-path consent stamp — mirrors the Google branch above.
+      try {
+        await widget.apiClient.confirmAgeAndTerms();
+      } catch (_) {
+        // Tolerated — next refresh retries.
+      }
       if (mounted) Navigator.pop(context, true);
     } catch (e) {
       debugPrint('SignUpScreen._signInWithApple failed: $e');

@@ -50,8 +50,14 @@ INSERT INTO auth.identities (
 ) ON CONFLICT DO NOTHING;
 
 -- 2. User profile
-INSERT INTO user_profiles (id, display_name, parkrun_number, preferred_unit, subscription_tier)
-VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km', 'free')
+-- age_confirmed_at + terms_accepted_at stamped at seed time so the
+-- seed user represents the post-confirm-age-and-terms state (the
+-- realistic shape every signup produces). See migration
+-- 20260929_001 + audit/gdpr (2026-05-25).
+INSERT INTO user_profiles (id, display_name, parkrun_number, preferred_unit, subscription_tier,
+                           age_confirmed_at, terms_accepted_at)
+VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km', 'free',
+        now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- 2a. User settings — runner_context for the AI Coach. Without these the
@@ -506,8 +512,10 @@ INSERT INTO auth.identities (
   'email', now(), now(), now()
 ) ON CONFLICT DO NOTHING;
 
-INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier)
-VALUES ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Alex Chen', 'km', 'free')
+INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier,
+                           age_confirmed_at, terms_accepted_at)
+VALUES ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Alex Chen', 'km', 'free',
+        now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- Alex joins Sydney Run Club as an active member + requests Tempo Tuesday.
@@ -750,8 +758,10 @@ INSERT INTO auth.identities (
   'email', now(), now(), now()
 ) ON CONFLICT DO NOTHING;
 
-INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier)
-VALUES ('c3d4e5f6-a7b8-9012-cdef-345678901234', 'Morgan Lee', 'km', 'free')
+INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier,
+                           age_confirmed_at, terms_accepted_at)
+VALUES ('c3d4e5f6-a7b8-9012-cdef-345678901234', 'Morgan Lee', 'km', 'free',
+        now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- Recent public runs for Alex — 12 entries spread across the last
