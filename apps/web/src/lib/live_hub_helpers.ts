@@ -26,10 +26,23 @@ export function buildSnapshotUrl(baseUrl: string, runId: string): string {
 
 /// Build the WebSocket subscription URL for [runId] against [baseUrl].
 /// Flips `http(s)://` to `ws(s)://` per the WebSocket scheme rule.
-export function buildSubscribeUrl(baseUrl: string, runId: string): string {
+/// When [accessToken] is provided, it is appended as `?token=<jwt>`
+/// so the Go authorizer can read it via querystring fallback — the
+/// browser WebSocket API can't set headers on the upgrade. Mobile +
+/// server-to-server callers use the Authorization header instead.
+/// /audit/livehub May 2026 C1.
+export function buildSubscribeUrl(
+	baseUrl: string,
+	runId: string,
+	accessToken?: string | null,
+): string {
 	const trimmed = trimTrailingSlash(baseUrl);
 	const wsBase = trimmed.replace(/^http(s?):\/\//, 'ws$1://');
-	return `${wsBase}/v1/live/${encodeURIComponent(runId)}/subscribe`;
+	const base = `${wsBase}/v1/live/${encodeURIComponent(runId)}/subscribe`;
+	if (accessToken && accessToken.length > 0) {
+		return `${base}?token=${encodeURIComponent(accessToken)}`;
+	}
+	return base;
 }
 
 /// Compute the next reconnect-backoff delay. Caps at 30 s so a

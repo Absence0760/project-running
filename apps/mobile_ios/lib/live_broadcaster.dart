@@ -121,10 +121,15 @@ class LiveBroadcaster {
     final hub = hubClient;
     try {
       if (hub != null && hub.isConfigured) {
+        // Forward the recorder's Supabase session JWT so the Go
+        // authorizer's owner-on-push check passes. Token may be
+        // null on a degraded session — the L4 swallow below
+        // absorbs the resulting 403. /audit/livehub May 2026 C1.
         await hub.pushPing(
           runId: id,
           lat: lat,
           lng: lng,
+          accessToken: _api.currentAccessToken,
           distanceM: distanceM,
           elapsedS: elapsedS,
           bpm: bpm,

@@ -35,6 +35,14 @@ OSRM_URL = "http://osrm.internal:5000"
 # anything not listed gets a 403 at the WS handshake.
 LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.threkir.com"
 
+# Fail-closed sentinel. With LIVEHUB_REQUIRE_AUTH=1, main.go refuses
+# to start the binary unless SUPABASE_JWT_SECRET + LIVEHUB_ALLOWED_ORIGINS
+# are both set. Prevents an accidental deploy from shipping in
+# permissive (no-auth) mode where any caller can push pings as any
+# user. Local dev leaves this unset to keep the permissive path.
+# /audit/livehub May 2026 H3 + H4.
+LIVEHUB_REQUIRE_AUTH = "1"
+
 # Public HTTPS + WebSocket service (live spectator hub).
 # Fly.io's "http" handler transparently upgrades WS frames; the
 # server (apps/job_worker/internal/livehub/server.go) handles the

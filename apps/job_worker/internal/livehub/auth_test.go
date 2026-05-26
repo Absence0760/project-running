@@ -281,7 +281,10 @@ func TestBearerToken(t *testing.T) {
 		{"Bearer abc.def.ghi", "abc.def.ghi"},
 		{"Bearer   spaced  ", "spaced"},
 		{"Token abc", ""},
-		{"bearer abc", ""}, // case-sensitive: matches Supabase header convention
+		// Case-insensitive scheme per RFC 7235 §2.1 — /audit/livehub M9.
+		{"bearer abc", "abc"},
+		{"BEARER abc", "abc"},
+		{"BeArEr abc", "abc"},
 	}
 	for _, c := range cases {
 		got := bearerToken(reqWith(c.header))
@@ -289,6 +292,33 @@ func TestBearerToken(t *testing.T) {
 			t.Errorf("bearerToken(%q) = %q, want %q", c.header, got, c.want)
 		}
 	}
+}
+
+func TestBearerToken_QuerystringFallbackForGET(t *testing.T) {
+	// audit/livehub C1: browser WebSocket clients can't set Authorization
+	// headers on the upgrade. Falling back to `?token=<jwt>` is the
+	// only available channel on GET requests (subscribe + snapshot).
+	// POST (push) keeps requiring the header — mobile + server-to-
+	// server callers can set headers freely.
+	t.Run("GET reads ?token=… when header missing", func(t *testing.T) {
+		r, _ := http.NewRequest(http.MethodGet, "https://h/v1/live/r/subscribe?token=abc.def", nil)
+		if got := bearerToken(r); got != "abc.def" {
+			t.Fatalf("bearerToken(GET ?token=) = %q, want %q", got, "abc.def")
+		}
+	})
+	t.Run("POST does NOT read ?token=… (header-only)", func(t *testing.T) {
+		r, _ := http.NewRequest(http.MethodPost, "https://h/v1/live/r/push?token=abc.def", nil)
+		if got := bearerToken(r); got != "" {
+			t.Fatalf("bearerToken(POST ?token=) = %q, want empty (POST requires header)", got)
+		}
+	})
+	t.Run("Header takes precedence over querystring", func(t *testing.T) {
+		r, _ := http.NewRequest(http.MethodGet, "https://h/v1/live/r/subscribe?token=fromquery", nil)
+		r.Header.Set("Authorization", "Bearer fromheader")
+		if got := bearerToken(r); got != "fromheader" {
+			t.Fatalf("bearerToken header+query = %q, want header value", got)
+		}
+	})
 }
 
 // TestJWTAuthorizer_EndToEndOnServer wires the authorizer into a

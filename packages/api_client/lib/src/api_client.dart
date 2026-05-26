@@ -370,6 +370,19 @@ class ApiClient {
     }
   }
 
+  /// The current Supabase session's access token (JWT), or null when
+  /// not signed in. Used by [LiveBroadcaster] / [LiveHubClient] to
+  /// Bearer the live-hub push requests. Same offline-safety as
+  /// [userId] — never throws when Supabase isn't initialised.
+  /// /audit/livehub May 2026 C1.
+  String? get currentAccessToken {
+    try {
+      return _client.auth.currentSession?.accessToken;
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// The current user's email, or null if not signed in. Same
   /// offline-safety as [userId] — returns null when Supabase
   /// hasn't been initialised rather than throwing.

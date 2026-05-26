@@ -42,11 +42,23 @@ export function isLiveHubConfigured(): boolean {
 /// 204 (room empty / no pings yet) or any non-2xx response. Errors
 /// are swallowed — the spectator page falls back to the demo
 /// animation if no signal arrives within its 5 s window.
-export async function fetchLiveSnapshot(runId: string): Promise<LivePing | null> {
+///
+/// [accessToken] (the caller's Supabase JWT) is required when the Go
+/// authorizer is enabled in prod and the underlying run is private —
+/// the hub returns 403 on private runs without a Bearer. Public
+/// runs work either way. /audit/livehub May 2026 C1.
+export async function fetchLiveSnapshot(
+	runId: string,
+	accessToken?: string | null,
+): Promise<LivePing | null> {
 	if (!isLiveHubConfigured()) return null;
 	const url = buildSnapshotUrl(PUBLIC_LIVE_HUB_URL, runId);
 	try {
-		const res = await fetch(url);
+		const headers: Record<string, string> = {};
+		if (accessToken && accessToken.length > 0) {
+			headers['Authorization'] = `Bearer ${accessToken}`;
+		}
+		const res = await fetch(url, { headers });
 		if (res.status === 204) return null;
 		if (!res.ok) return null;
 		return (await res.json()) as LivePing;
@@ -58,6 +70,12 @@ export async function fetchLiveSnapshot(runId: string): Promise<LivePing | null>
 interface OpenOpts {
 	onPing: (p: LivePing) => void;
 	onStatus?: (s: LiveHubStatus) => void;
+	/// Caller's Supabase JWT, appended to the WS URL as `?token=...`
+	/// so the Go authorizer can verify it on the upgrade request.
+	/// Browser WebSocket can't set Authorization headers — the
+	/// querystring fallback is the only available channel.
+	/// /audit/livehub May 2026 C1.
+	accessToken?: string | null;
 }
 
 /// Open a WebSocket subscription to `/v1/live/{run_id}/subscribe`.
@@ -70,7 +88,7 @@ export function openLiveWebSocket(runId: string, opts: OpenOpts): { close: () =>
 		// throw.
 		return { close: () => undefined };
 	}
-	const url = buildSubscribeUrl(PUBLIC_LIVE_HUB_URL, runId);
+	const url = buildSubscribeUrl(PUBLIC_LIVE_HUB_URL, runId, opts.accessToken);
 
 	let closed = false;
 	let ws: WebSocket | null = null;

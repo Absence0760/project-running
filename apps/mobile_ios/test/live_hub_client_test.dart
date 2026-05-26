@@ -5,12 +5,14 @@ import '../lib/live_hub_client.dart';
 class _RecordingFetcher {
   Uri? lastUrl;
   Map<String, dynamic>? lastBody;
+  String? lastAccessToken;
   int status;
   int callCount = 0;
   _RecordingFetcher({this.status = 202});
-  Future<int> call(Uri url, Map<String, dynamic> body) async {
+  Future<int> call(Uri url, Map<String, dynamic> body, String? token) async {
     lastUrl = url;
     lastBody = body;
+    lastAccessToken = token;
     callCount++;
     return status;
   }
@@ -115,7 +117,7 @@ void main() {
     });
 
     test('propagates fetcher errors', () async {
-      Future<int> bomb(Uri _, Map<String, dynamic> __) async {
+      Future<int> bomb(Uri _, Map<String, dynamic> __, String? ___) async {
         throw StateError('network down');
       }
 
@@ -128,6 +130,27 @@ void main() {
       );
       // The const c above is kept for the analyzer — unused refs flag.
       expect(c.isConfigured, isTrue);
+    });
+
+    test('forwards accessToken to the fetcher (audit/livehub C1)', () async {
+      final f = _RecordingFetcher();
+      final c =
+          LiveHubClient(baseUrl: 'https://live.threkir.com', fetcher: f.call);
+      await c.pushPing(
+        runId: 'run-1',
+        lat: 0,
+        lng: 0,
+        accessToken: 'eyJ.fake.jwt',
+      );
+      expect(f.lastAccessToken, equals('eyJ.fake.jwt'));
+    });
+
+    test('null accessToken propagates null (permissive-mode local dev)', () async {
+      final f = _RecordingFetcher();
+      final c =
+          LiveHubClient(baseUrl: 'https://live.threkir.com', fetcher: f.call);
+      await c.pushPing(runId: 'run-1', lat: 0, lng: 0);
+      expect(f.lastAccessToken, isNull);
     });
   });
 }

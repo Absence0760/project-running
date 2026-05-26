@@ -109,7 +109,11 @@
 
 	async function hydrateBacklog() {
 		if (isLiveHubConfigured()) {
-			const snap = await fetchLiveSnapshot(data.id);
+			// Forward the viewer's Supabase JWT so the Go authorizer
+			// accepts the request on private runs (public runs work
+			// either way). /audit/livehub May 2026 C1.
+			const sess = (await supabase.auth.getSession()).data.session;
+			const snap = await fetchLiveSnapshot(data.id, sess?.access_token ?? null);
 			if (snap) {
 				pushPing({
 					lat: snap.lat,
@@ -146,8 +150,14 @@
 		// the same clip before it pushes to the hub — server-side
 		// clipping is on the migration list (followups #13).
 		if (isLiveHubConfigured()) {
-			liveHubHandle = openLiveWebSocket(data.id, {
-				onPing: (p: LivePing) => {
+			// JWT goes on the WS upgrade URL as `?token=…`; browsers can't
+			// set Authorization headers on a WS upgrade. /audit/livehub C1.
+			(async () => {
+				const sess = (await supabase.auth.getSession()).data.session;
+				const token = sess?.access_token ?? null;
+				liveHubHandle = openLiveWebSocket(data.id, {
+					accessToken: token,
+					onPing: (p: LivePing) => {
 					pushPing({
 						lat: p.lat,
 						lng: p.lng,
@@ -162,6 +172,7 @@
 					}
 				},
 			});
+			})();
 			return;
 		}
 		realtimeChannel = supabase

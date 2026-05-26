@@ -141,16 +141,30 @@ func (a *JWTAuthorizer) extractSub(r *http.Request) (string, error) {
 // bearerToken pulls the raw token out of an `Authorization: Bearer
 // <jwt>` header. Returns "" when absent or malformed — the caller
 // produces the 403, so this is a pure parse helper.
+//
+// Scheme comparison is case-insensitive per RFC 7235 §2.1: clients
+// in the wild send `bearer`, `BEARER`, etc. Audit/livehub M9.
+//
+// Browser WebSocket clients can't set arbitrary headers on the
+// `Upgrade` request — fall back to `?token=<jwt>` for GET requests
+// (subscribe + snapshot only — push always requires the header,
+// since a mobile / server caller can set headers freely and we
+// don't want pings logged in webserver access logs). The token-
+// in-URL is acceptable for WS subscribe because the client owns
+// the URL and there's no third-party redirect surface.
+// Audit/livehub C1.
 func bearerToken(r *http.Request) string {
 	h := r.Header.Get("Authorization")
-	if h == "" {
-		return ""
+	if len(h) >= 7 && strings.EqualFold(h[:7], "Bearer ") {
+		return strings.TrimSpace(h[7:])
 	}
-	const prefix = "Bearer "
-	if !strings.HasPrefix(h, prefix) {
-		return ""
+	// GET-only querystring fallback for WS subscribe + snapshot.
+	if r.Method == http.MethodGet {
+		if q := r.URL.Query().Get("token"); q != "" {
+			return strings.TrimSpace(q)
+		}
 	}
-	return strings.TrimSpace(h[len(prefix):])
+	return ""
 }
 
 // Compile-time check that JWTAuthorizer.Authorize matches the

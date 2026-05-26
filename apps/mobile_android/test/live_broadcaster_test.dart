@@ -124,7 +124,7 @@ void main() {
       Map<String, dynamic>? hubBody;
       final hub = LiveHubClient(
         baseUrl: 'https://live.threkir.com',
-        fetcher: (u, b) async {
+        fetcher: (u, b, _) async {
           hubUrl = u;
           hubBody = b;
           return 202;
@@ -166,7 +166,7 @@ void main() {
       final api = _FakeApiClient();
       final hub = LiveHubClient(
         baseUrl: '',
-        fetcher: (_, __) async => fail('hub must not be hit'),
+        fetcher: (_, __, ___) async => fail('hub must not be hit'),
       );
       final lb = LiveBroadcaster(api, hubClient: hub);
       lb.attach('run-1');
@@ -179,7 +179,7 @@ void main() {
       final api = _FakeApiClient();
       final hub = LiveHubClient(
         baseUrl: 'https://live.threkir.com',
-        fetcher: (_, __) async => throw StateError('hub down'),
+        fetcher: (_, __, ___) async => throw StateError('hub down'),
       );
       final lb = LiveBroadcaster(api, hubClient: hub);
       lb.attach('run-1');
@@ -213,7 +213,7 @@ void main() {
       var hubCalls = 0;
       final hub = LiveHubClient(
         baseUrl: 'https://live.threkir.com',
-        fetcher: (u, b) async {
+        fetcher: (u, b, _) async {
           hubCalls++;
           return 202;
         },

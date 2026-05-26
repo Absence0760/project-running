@@ -15,13 +15,27 @@ import 'dart:io';
 typedef HubFetcher = Future<int> Function(
   Uri url,
   Map<String, dynamic> body,
+  String? accessToken,
 );
 
-Future<int> _defaultFetcher(Uri url, Map<String, dynamic> body) async {
+Future<int> _defaultFetcher(
+  Uri url,
+  Map<String, dynamic> body,
+  String? accessToken,
+) async {
   final client = HttpClient();
   try {
     final req = await client.postUrl(url);
     req.headers.contentType = ContentType.json;
+    // Bearer the recorder's Supabase JWT so the Go authorizer's
+    // owner-on-push check passes. When [accessToken] is null (no
+    // active session — recording offline) we omit the header; the
+    // Go side will 403 if auth is required, and the broadcaster's
+    // L4 swallow handles that. Mirrors the web client.
+    // /audit/livehub May 2026 C1.
+    if (accessToken != null && accessToken.isNotEmpty) {
+      req.headers.set('Authorization', 'Bearer $accessToken');
+    }
     req.write(jsonEncode(body));
     final res = await req.close();
     // Drain so the connection can be reused.
@@ -51,10 +65,15 @@ class LiveHubClient {
   /// POST one ping to the hub. Returns the HTTP status code. Errors
   /// bubble — the caller (`LiveBroadcaster.pushPing`) swallows them
   /// per the L4-best-effort layering contract.
+  ///
+  /// [accessToken] is the recorder's Supabase JWT. Required in prod
+  /// (the Go authorizer rejects un-Bearered pushes). Omitted in
+  /// local dev when the hub runs in permissive mode.
   Future<int> pushPing({
     required String runId,
     required double lat,
     required double lng,
+    String? accessToken,
     double? distanceM,
     int? elapsedS,
     int? bpm,
@@ -75,6 +94,6 @@ class LiveHubClient {
       if (ele != null) 'ele': ele,
       'sent_at_ms': DateTime.now().millisecondsSinceEpoch,
     };
-    return (fetcher ?? _defaultFetcher)(url, body);
+    return (fetcher ?? _defaultFetcher)(url, body, accessToken);
   }
 }

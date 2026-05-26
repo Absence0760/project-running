@@ -293,11 +293,33 @@ func main() {
 		ServiceKey: serviceKey,
 		HTTP:       client.HTTP,
 	}
-	authorizer := livehub.NewJWTAuthorizer(os.Getenv("SUPABASE_JWT_SECRET"), hub, runMetaFetcher)
+	// Production fail-closed gate. audit/livehub H3 + H4: a deploy
+	// that ships without SUPABASE_JWT_SECRET silently runs in
+	// permissive mode (any caller can push pings as any user); a
+	// deploy that ships without LIVEHUB_ALLOWED_ORIGINS accepts WS
+	// upgrades from any origin. Both are catastrophic in prod and
+	// fine in local dev. Gate on LIVEHUB_REQUIRE_AUTH=1 so the
+	// developer experience is unchanged but prod cannot start
+	// without the secrets.
+	requireAuth := os.Getenv("LIVEHUB_REQUIRE_AUTH") == "1"
+	jwtSecretEnv := os.Getenv("SUPABASE_JWT_SECRET")
+	allowedOrigins := parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS"))
+	if requireAuth {
+		if jwtSecretEnv == "" {
+			logger.Error("livehub: LIVEHUB_REQUIRE_AUTH=1 but SUPABASE_JWT_SECRET unset — refusing to start")
+			os.Exit(1)
+		}
+		if len(allowedOrigins) == 0 {
+			logger.Error("livehub: LIVEHUB_REQUIRE_AUTH=1 but LIVEHUB_ALLOWED_ORIGINS unset — refusing to start")
+			os.Exit(1)
+		}
+	}
+
+	authorizer := livehub.NewJWTAuthorizer(jwtSecretEnv, hub, runMetaFetcher)
 	hubSrv := &livehub.Server{
 		Hub:            hub,
 		Log:            logger.With("component", "livehub"),
-		AllowedOrigins: parseOrigins(os.Getenv("LIVEHUB_ALLOWED_ORIGINS")),
+		AllowedOrigins: allowedOrigins,
 		Zones:          zoneFetcher,
 	}
 	if authorizer != nil {
