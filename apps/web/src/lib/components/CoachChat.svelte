@@ -478,7 +478,15 @@
 			if (!res.ok || !ct.includes('event-stream')) {
 				const j = await res.json().catch(() => ({}));
 				if (res.status === 401) {
-					error = 'Your session expired. Please sign in again.';
+					// Prefer the server's `j.error` message when present —
+					// the e2e test mocks a 401 with a specific body string
+					// and the upstream handler likewise surfaces its own
+					// reason ("not authenticated", "consent required"...).
+					// Fall back to a generic friendly string only when the
+					// body is empty.
+					error = (typeof j.error === 'string' && j.error.length > 0)
+						? j.error
+						: 'Your session expired. Please sign in again.';
 				} else if (res.status === 404) {
 					error = 'Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.';
 				} else if (res.status === 429) {

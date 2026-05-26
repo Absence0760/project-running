@@ -2269,6 +2269,7 @@ export type Database = {
       }
       confirm_age_and_terms: { Args: never; Returns: undefined }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
+      decrement_coach_usage: { Args: { p_user_id: string }; Returns: number }
       defer_job: {
         Args: { delay_seconds: number; err?: string; job_id: number }
         Returns: undefined

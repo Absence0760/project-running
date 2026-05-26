@@ -1050,8 +1050,9 @@ BEGIN
   SELECT allowed INTO v_allowed FROM check_rate_limit(test_user2, 'svc_rl', 2, 3600);
   IF NOT v_allowed THEN RAISE EXCEPTION 'check_rate_limit: service role on second user should allow'; END IF;
 
-  -- DELETE the synthetic test users; the FK from rate_limits.user_id
-  -- (migration 20260928_001) cascades the seed-time rate-limit rows.
+  -- The FK was rolled back in 20261003_001 — drop the rate_limit
+  -- rows directly + the synthetic auth users; no cascade.
+  DELETE FROM rate_limits WHERE user_id IN (test_user, test_user2);
   DELETE FROM auth.users WHERE id IN (test_user, test_user2);
   PERFORM set_config('request.jwt.claim.role', '', true);
 END $$;

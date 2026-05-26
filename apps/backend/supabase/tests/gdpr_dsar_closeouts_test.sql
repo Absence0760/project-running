@@ -15,7 +15,7 @@
 --      relies on it to satisfy Art 17(2) recipient-notification.
 
 begin;
-select plan(7);
+select plan(6);
 
 -- ─── jobs retention cron ───
 select isnt_empty(
@@ -34,20 +34,15 @@ select has_function(
   'private.purge_stale_jobs() must exist'
 );
 
--- ─── rate_limits cascade FK ───
-select isnt_empty(
+-- ─── rate_limits FK ───
+-- The FK was added in 20260928_001, then rolled back in
+-- 20261003_001 because synthetic UUIDs from ipBucketKey() in the
+-- anon webhook paths can't satisfy it. The "deleted-uuid survives
+-- 24h" gap is now closed by the explicit drain in delete-account.
+select is_empty(
   $$select 1 from pg_constraint
       where conname = 'rate_limits_user_id_fkey'$$,
-  'rate_limits_user_id_fkey constraint must exist'
-);
-
-select is(
-  (
-    select confdeltype from pg_constraint
-    where conname = 'rate_limits_user_id_fkey'
-  ),
-  'c',
-  'rate_limits_user_id_fkey must be ON DELETE CASCADE'
+  'rate_limits_user_id_fkey must NOT exist — rolled back per 20261003_001'
 );
 
 -- ─── deletion_audit_log.third_party_outcomes ───

@@ -236,6 +236,28 @@ async function drainUserJobs(
   }
 }
 
+// `rate_limits.user_id` is NOT FK-cascaded to auth.users — the
+// table also stores synthetic UUIDs from `ipBucketKey()` for anon
+// webhook paths, which a FK would silently reject (see migration
+// 20261003_001 for the rollback rationale). Explicit drain here
+// closes the audit/gdpr High #1 "deleted UUID survives 24h" gap
+// at deletion time; the hourly cron is the long-tail sweep.
+async function drainUserRateLimits(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  try {
+    const { error } = await adminClient
+      .from('rate_limits')
+      .delete()
+      .eq('user_id', userId);
+    if (error) return { ok: false, reason: error.message };
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // `segments.created_by` (20260526_001) is `on delete set null`, so
 // segments the user authored survive deletion as orphan rows. The
 // segment NAME may carry PII (a toponym derived from the author's
@@ -439,6 +461,23 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
       thirdPartyOutcomes,
     );
     return Response.json({ error: 'jobs drain failed' }, { status: 500 });
+  }
+
+  // rate_limits drain — audit/gdpr High #1. The FK was rolled back
+  // in 20261003_001 to keep the anon-path callers working; the
+  // explicit drain here closes the same "deleted UUID survives"
+  // gap without breaking strava-webhook + clip-public-track.
+  const rl = await drainUserRateLimits(adminClient, user.id);
+  if (!rl.ok) {
+    console.error('[coach] rate_limits drain failed:', rl.reason);
+    await recordAudit(
+      adminClient,
+      user.id,
+      'reports_cleanup_failed',
+      `rate_limits drain: ${rl.reason}`.slice(0, 200),
+      thirdPartyOutcomes,
+    );
+    return Response.json({ error: 'rate_limits drain failed' }, { status: 500 });
   }
 
   // segments.created_by (20260526_001, audit/account-deletion-
