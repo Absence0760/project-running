@@ -249,10 +249,13 @@ Deno.test({
 
 const REVENUECAT_SECRET =
   Deno.env.get('REVENUECAT_WEBHOOK_SECRET') ?? 'ci-revenuecat-secret';
+// audit/strava May 2026 Low #2 — the strava-webhook EF refuses to
+// operate with a <32-char secret. Bump the test defaults so the
+// `webhook_not_configured` branch isn't the answer to every test.
 const STRAVA_WEBHOOK_SECRET =
-  Deno.env.get('STRAVA_WEBHOOK_SECRET') ?? 'ci-strava-webhook-secret';
+  Deno.env.get('STRAVA_WEBHOOK_SECRET') ?? 'ci-strava-webhook-secret-32chars-ok';
 const STRAVA_VERIFY_TOKEN =
-  Deno.env.get('STRAVA_VERIFY_TOKEN') ?? 'ci-strava-verify-token';
+  Deno.env.get('STRAVA_VERIFY_TOKEN') ?? 'ci-strava-verify-token-32-chars-ok';
 
 // HMAC-SHA256 hex of `body` keyed by `secret`. Matches the EF's
 // `hmacHex` in _shared/webhook_security.ts.

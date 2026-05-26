@@ -314,8 +314,12 @@ jobs:
           cat > .env.local <<'ENV'
           STRAVA_CLIENT_ID=ci-strava-client-id
           STRAVA_CLIENT_SECRET=ci-strava-client-secret
-          STRAVA_VERIFY_TOKEN=ci-strava-verify-token
-          STRAVA_WEBHOOK_SECRET=ci-strava-webhook-secret
+          STRAVA_VERIFY_TOKEN=ci-strava-verify-token-32-chars-ok
+          # Bumped to 32+ chars to satisfy the audit/strava Low #2
+          # length floor (`apps/backend/supabase/functions/strava-
+          # webhook/index.ts`). 24-char placeholder hit the 503
+          # webhook_not_configured branch on CI run 26473953318.
+          STRAVA_WEBHOOK_SECRET=ci-strava-webhook-secret-32chars-ok
           PARKRUN_USER_AGENT=ci-parkrun-ua
           REVENUECAT_WEBHOOK_SECRET=ci-revenuecat-secret
           CRON_SECRET=ci-cron-secret

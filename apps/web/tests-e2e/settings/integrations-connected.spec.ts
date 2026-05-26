@@ -92,13 +92,22 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(stravaCard.getByRole('button', { name: 'Connect' })).toBeVisible();
 		await expect(stravaCard.getByRole('button', { name: /Sync/i })).toHaveCount(0);
 
+		// audit/strava May 2026 High #1 — the disconnect flow now
+		// STAMPS `disconnected_at` rather than DELETEing the row.
+		// The row stays for the audit trail + so the UI can show
+		// "Reconnect Strava" later. Vault secrets get wiped (the
+		// FK columns clear to null). Verify the new shape.
 		const admin = getAdminClient();
 		const { data } = await admin
 			.from('integrations')
-			.select('id')
+			.select('id, disconnected_at, disconnected_reason, access_token_secret_id, refresh_token_secret_id')
 			.eq('user_id', USER_B.id)
 			.eq('provider', 'strava');
-		expect(data ?? []).toHaveLength(0);
+		expect(data ?? []).toHaveLength(1);
+		expect(data![0].disconnected_at).not.toBeNull();
+		expect(data![0].disconnected_reason).toBe('user_initiated');
+		expect(data![0].access_token_secret_id).toBeNull();
+		expect(data![0].refresh_token_secret_id).toBeNull();
 	});
 
 	test('Disconnect cancel keeps the integration connected', async ({ page }) => {

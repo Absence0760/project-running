@@ -737,6 +737,8 @@ class IntegrationRow {
   static const String colUpdatedAt = 'updated_at';
   static const String colAccessTokenSecretId = 'access_token_secret_id';
   static const String colRefreshTokenSecretId = 'refresh_token_secret_id';
+  static const String colDisconnectedAt = 'disconnected_at';
+  static const String colDisconnectedReason = 'disconnected_reason';
 
   final String id;
   final String userId;
@@ -750,6 +752,8 @@ class IntegrationRow {
   final DateTime? updatedAt;
   final String? accessTokenSecretId;
   final String? refreshTokenSecretId;
+  final DateTime? disconnectedAt;
+  final String? disconnectedReason;
 
   const IntegrationRow({
     required this.id,
@@ -764,6 +768,8 @@ class IntegrationRow {
     this.updatedAt,
     this.accessTokenSecretId,
     this.refreshTokenSecretId,
+    this.disconnectedAt,
+    this.disconnectedReason,
   });
 
   factory IntegrationRow.fromJson(Map<String, dynamic> json) => IntegrationRow(
@@ -779,6 +785,8 @@ class IntegrationRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     accessTokenSecretId: json['access_token_secret_id'] as String?,
     refreshTokenSecretId: json['refresh_token_secret_id'] as String?,
+    disconnectedAt: json['disconnected_at'] == null ? null : DateTime.parse(json['disconnected_at'] as String),
+    disconnectedReason: json['disconnected_reason'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -794,6 +802,8 @@ class IntegrationRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colAccessTokenSecretId: accessTokenSecretId,
     colRefreshTokenSecretId: refreshTokenSecretId,
+    colDisconnectedAt: disconnectedAt?.toIso8601String(),
+    colDisconnectedReason: disconnectedReason,
   };
 }
 

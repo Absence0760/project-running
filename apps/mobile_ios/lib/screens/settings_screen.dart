@@ -888,7 +888,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     setState(() => _stravaBusy = true);
     try {
-      final authUrl = stravaAuthUrl(redirectUri: kStravaCallbackUri);
+      // OAuth CSRF state. Mint locally, pass into the authorize
+      // URL, compare against what Strava echoes back in the callback.
+      // /audit/strava May 2026 Critical #1.
+      final state = mintStravaOAuthState();
+      final authUrl =
+          stravaAuthUrl(redirectUri: kStravaCallbackUri, state: state);
       final resultUrl = await FlutterWebAuth2.authenticate(
         url: authUrl,
         callbackUrlScheme: kStravaCallbackScheme,
@@ -901,6 +906,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
           cb.error == 'access_denied'
               ? 'Strava sign-in cancelled.'
               : 'Strava sign-in failed: ${cb.error ?? 'no code returned'}',
+        );
+        return;
+      }
+      if (cb.state != state) {
+        if (!mounted) return;
+        showTopBanner(
+          context,
+          'Strava sign-in rejected: CSRF state mismatch. Please retry.',
         );
         return;
       }

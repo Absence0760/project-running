@@ -1165,10 +1165,17 @@ export async function fetchIntegrations(): Promise<Integration[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 
+	// Filter out rows with `disconnected_at is not null` — those are
+	// integrations the user disconnected (or whose grant Strava
+	// revoked). The integrations row stays around for the audit
+	// trail + so the UI can show "Reconnect Strava", but the
+	// connected-integration list shown on /settings/integrations
+	// should treat them as gone. /audit/strava High #1 + H2.
 	const { data } = await supabase
 		.from('integrations')
 		.select('*')
-		.eq('user_id', userId);
+		.eq('user_id', userId)
+		.is('disconnected_at', null);
 
 	return data ?? [];
 }
