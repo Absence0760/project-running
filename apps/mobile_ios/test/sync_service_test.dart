@@ -566,6 +566,68 @@ void main() {
       expect(s.failures, 0);
       expect(s.lastFailureAt, isNull);
     });
+
+    test('signin reason bypasses the backoff window', () async {
+      // Reason: when the user signs out and signs back in, any prior
+      // auth-rejection backoff is stale — the session that triggered
+      // the 401 is gone. Without this bypass, a fresh sign-in is stuck
+      // waiting out the (up to 30 min) window from the signed-out
+      // cycle and the freshly-recorded offline run sits unsynced.
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.debugTrySync('test');
+      expect(api.saveBatchCallCount, 1);
+      expect(svc.debugBackoffState().failures, 1);
+
+      // A connectivity-driven retry inside the backoff is gated.
+      await svc.debugTrySync('connectivity');
+      expect(api.saveBatchCallCount, 1,
+          reason: 'connectivity retry must stay gated by backoff');
+
+      // A sign-in trigger must bypass.
+      await svc.triggerSync('signin');
+      expect(api.saveBatchCallCount, 2,
+          reason: 'signin must bypass backoff so a fresh session does '
+              'not inherit the dead one\'s rate-limit window');
+    });
+  });
+
+  group('SyncService.triggerSync — public entry point', () {
+    test('drives the same code path as the lifecycle observers', () async {
+      // Reason: pin the contract — triggerSync is the canonical way
+      // for main.dart's auth-state listener to drive a sync from the
+      // signedIn event. A regression that hides triggerSync behind a
+      // wrapper or routes it through a different code path would
+      // silently break the offline-record-then-sign-in flow.
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient();
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.triggerSync('signin');
+
+      expect(api.saveBatchCallCount, 1);
+      expect(store.unsyncedCount, 0,
+          reason: 'triggerSync must drain the queue end-to-end, '
+              'identically to a startup / foreground / connectivity sync');
+    });
+
+    test('a failed triggerSync arms the backoff like any other cycle',
+        () async {
+      // Reason: triggerSync is a thin wrapper around _trySync — the
+      // backoff bookkeeping must apply identically. Without this, an
+      // adversarial caller could drive triggerSync('signin') in a
+      // tight loop and hammer the backend through a perma-broken auth
+      // session.
+      await store.save(makeRun('r-1'));
+      final api = _FakeApiClient()..throwOnSaveBatch = true;
+      final svc = SyncService(apiClient: api, runStore: store);
+
+      await svc.triggerSync('signin');
+
+      expect(svc.debugBackoffState().failures, 1);
+    });
   });
 
   // ────────────────────────────────────────────────────────────────

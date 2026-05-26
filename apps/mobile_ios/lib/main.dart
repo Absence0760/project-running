@@ -308,6 +308,17 @@ void main() async {
         settingsSync?.onSignedIn().catchError((Object e) {
           debugPrint('Settings sync on signedIn failed: $e');
         });
+        // Drain the unsynced run queue now that a session is live.
+        // Without this trigger, runs recorded offline (or while a
+        // previous session was signed out) sit unsynced until the
+        // app is backgrounded + foregrounded, a connectivity blip
+        // fires, or the user manually taps "Sync all" in runs_screen.
+        // 'signin' also bypasses the backoff window — a fresh auth
+        // session invalidates any prior auth-rejection backoff that
+        // would otherwise stall the drain for up to 30 min.
+        syncService.triggerSync('signin').catchError((Object e) {
+          debugPrint('Sync on signedIn failed: $e');
+        });
       }
     });
     WearAuthBridge().attach(url: supabaseUrl, anonKey: anonKey);

@@ -168,7 +168,7 @@ If the phone isn't reachable (out of range / not yet paired / not signed in), th
 
 Every run the Android app handles lives in `LocalRunStore` first. The store is the source of truth on device; Supabase is the source of truth across devices. Reconciliation between the two is the sync service's job.
 
-- **Push-side** is driven by `SyncService._trySync()`: iterate `LocalRunStore.unsyncedRuns`, call `ApiClient.saveRun(run)`, mark synced on success. It's best-effort — failures are logged, not surfaced to the UI.
+- **Push-side** is driven by `SyncService._trySync()`: take `LocalRunStore.unsyncedRuns`, run it through `filterRunsForCurrentUser(unsynced, api.userId)` (drops runs whose `metadata.created_by_user_id` names a *different* user — the shared-device owner-tag guard, see [decisions.md § 67](decisions.md#67-runs-carry-an-owner-tag-in-metadata-so-shared-device-syncs-cant-cross-contaminate-accounts)), call `ApiClient.saveRunsBatch(filtered)`, mark synced on success. It's best-effort — failures arm an exponential backoff (60 s → 2 min → … capped at 30 min) but don't surface to the UI.
 - **Pull-side** is driven manually from the History screen's "pull from cloud" button. `ApiClient.getRuns()` returns cloud runs, each gets passed to `LocalRunStore.saveFromRemote()`, which applies newer-wins conflict resolution against `metadata.last_modified_at`.
 
 ### Triggers for a push
@@ -178,17 +178,20 @@ SyncService listens for:
   - app lifecycle resumed → _trySync('foreground')
   - connectivity changed to online → _trySync('connectivity')
   - startup → _trySync('startup')
+  - manual "Sync all" tap on runs_screen → triggerSync('manual')
+  - main.dart auth-state listener fires signedIn → triggerSync('signin')
 
 Each _trySync:
-  - if apiClient.userId == null: return       (not signed in, stay offline)
-  - if unsyncedRuns.isEmpty: return
   - if already syncing: return                (reentrancy guard)
-  - for each unsynced run:
-      try { ApiClient.saveRun(run); store.markSynced(run.id); pushed++ }
-      catch { debugPrint('failed...') }
+  - if reason ∉ {'manual', 'signin'} and in backoff: return
+  - if apiClient.userId == null: return       (not signed in, stay offline)
+  - filter unsyncedRuns by metadata.created_by_user_id
+  - if filtered.isEmpty + no pending deletes + no unsynced routes: return
+  - api.saveRunsBatch(filtered) → mark only the ids NOT in the
+    returned failed-track set as synced; arm backoff on any failure
 ```
 
-No queuing, no retry-with-backoff. If a push fails (network dies mid-sync, server returns 5xx), the run stays `unsynced` and the next trigger retries.
+`{'manual', 'signin'}` is the bypass set: a user-initiated retry from the runs screen always fires, and a fresh auth session is a strong signal that any prior auth-rejection backoff is stale (the session that produced the 401 is gone). Without the signin bypass, a user who signs out, the queue piles up, then signs back in is stuck waiting out a 30-min window from the dead session — their freshly-recorded offline run sits unsynced.
 
 ### Newer-wins conflict resolution (pull side)
 
@@ -212,7 +215,7 @@ The track-preservation step is specifically because cloud rows have empty `track
 ### Watch out
 
 - **`last_modified_at` is on `metadata`, not a real column.** See [metadata.md](metadata.md#internal--runtime-only). That means conflict resolution depends on both sides writing it consistently. If a non-Android client (web, watch) starts editing runs, it needs to stamp this key too — or the Android client will ignore its edits as "older than local".
-- **WorkManager-based periodic sync is live** (`background_sync.dart`, hourly with a network constraint). A run made offline with the app force-killed still syncs without a manual relaunch, though the hourly cadence means there may be up to 1 hour of delay. Foreground + connectivity-change triggers still cover the fast path.
+- **WorkManager-based periodic sync is live** (`background_sync.dart`, hourly with a network constraint). A run made offline with the app force-killed still syncs without a manual relaunch, though the hourly cadence means there may be up to 1 hour of delay. Foreground + connectivity-change triggers still cover the fast path. The WorkManager callback routes the unsynced queue through `filterRunsForCurrentUser` so the background path applies the same shared-device owner-tag guard as the foreground `SyncService` — without that mirror, the periodic fire would push User A's runs under User B's account on a shared device. Pinned by `architecture_guards_test.dart#background_sync applies the owner-tag filter before push`.
 - **No push from web or watch**. The web app writes directly to Supabase via `supabase-js`; it has no local store, so "sync" doesn't apply. The watch writes directly via `SupabaseService.swift`. Both rely on real-time connectivity and have no offline queue.
 - **Pull currently has no auto-trigger.** It only runs when the user taps the History screen's pull button. If you're debugging "why haven't I seen the web's new run on Android?", the answer is almost certainly "pull hasn't been triggered."
 

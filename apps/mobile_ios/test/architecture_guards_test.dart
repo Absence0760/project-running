@@ -617,6 +617,78 @@ void main() {
       );
     });
 
+    test('background_sync applies the owner-tag filter before push', () {
+      // Reason: WorkManager spawns a fresh isolate / process; without
+      // the filter, on a shared device where User A records and User
+      // B signs in, the next periodic fire pushes A's runs under B's
+      // session. RLS silently accepts the rows (they embed the
+      // caller's user_id), so the failure is invisible until A
+      // notices their runs missing — same shared-device contamination
+      // pattern the foreground SyncService filter was added to prevent.
+      // See `docs/decisions.md § 67` for the owner-tag design.
+      final source = File('lib/background_sync.dart').readAsStringSync();
+      expect(
+        source,
+        contains('filterRunsForCurrentUser'),
+        reason: 'background_sync.dart MUST route the unsynced list '
+            'through filterRunsForCurrentUser (from sync_service.dart) '
+            'before passing it to saveRunsBatch — without this, the '
+            'WorkManager path bypasses the shared-device owner-tag '
+            'guard the foreground SyncService applies.',
+      );
+    });
+
+    test('main.dart drives SyncService.triggerSync on signedIn', () {
+      // Reason: SyncService only fires automatically on startup,
+      // foreground-resume, and connectivity-change. A user who records
+      // offline, then signs in (no app backgrounding, no network
+      // blip) had no automatic trigger — the offline run sat unsynced
+      // until they manually tapped "Sync all" or restarted the app.
+      // The signedIn trigger also bypasses backoff (see the
+      // _backoffBypassReasons set in sync_service.dart) so a fresh
+      // session doesn't inherit a dead one's rate-limit window.
+      final source = File('lib/main.dart').readAsStringSync();
+      expect(
+        source,
+        contains('AuthChangeEvent.signedIn'),
+        reason: 'main.dart must subscribe to the auth-state stream '
+            'so it can react to signedIn.',
+      );
+      expect(
+        source,
+        contains("syncService.triggerSync('signin')"),
+        reason: 'main.dart\'s signedIn handler MUST call '
+            'syncService.triggerSync(\'signin\') — without it, runs '
+            'recorded offline sit unsynced until the next foreground '
+            'transition or manual tap.',
+      );
+    });
+
+    test('SyncService accepts signin as a backoff-bypass reason', () {
+      // Reason: pairs with the main.dart guard above. The signin
+      // trigger only matters if SyncService treats it as a bypass —
+      // otherwise the fresh sign-in is silently gated by a 30-min
+      // backoff inherited from a stale (now-replaced) session.
+      final source = File('lib/sync_service.dart').readAsStringSync();
+      expect(
+        source,
+        contains("'signin'"),
+        reason: 'sync_service.dart must list \'signin\' in the '
+            '_backoffBypassReasons set.',
+      );
+      // Also pin that the gating predicate is the set, not the old
+      // literal `reason != 'manual'` check — that one would silently
+      // ignore the signin tag.
+      expect(
+        source,
+        contains('_backoffBypassReasons.contains(reason)'),
+        reason: '_trySync must consult the _backoffBypassReasons set '
+            'instead of a literal "manual" check — the set is what '
+            'lets new bypass reasons (signin, future: post-recovery) '
+            'work without revisiting the gate.',
+      );
+    });
+
     test('import_screen uses markManySynced', () {
       // Reason: bulk import of Strava/GPX — each import can produce
       // dozens of runs. N sidecar writes > 1 sidecar write.

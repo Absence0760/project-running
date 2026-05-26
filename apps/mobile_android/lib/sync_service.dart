@@ -42,6 +42,19 @@ class SyncService with WidgetsBindingObserver {
   static const Duration _baseBackoff = Duration(seconds: 60);
   static const Duration _maxBackoff = Duration(minutes: 30);
 
+  /// Reasons that bypass the in-backoff guard in [_trySync].
+  ///
+  /// - `manual` — explicit user tap on the runs-screen "Sync all" button.
+  /// - `signin` — a fresh auth session is a strong signal that any
+  ///   prior auth-rejection backoff is stale (the session that produced
+  ///   the 401 is gone). Without this, a user who signs out, the queue
+  ///   piles up, they sign back in, the next automatic trigger is
+  ///   silently skipped for 30 min because the backoff window from the
+  ///   signed-out cycle is still ticking — and their freshly-recorded
+  ///   offline run sits unsynced until the user backgrounds + foregrounds
+  ///   the app or manually taps "Sync all".
+  static const _backoffBypassReasons = <String>{'manual', 'signin'};
+
   SyncService({
     required this.apiClient,
     required this.runStore,
@@ -53,6 +66,13 @@ class SyncService with WidgetsBindingObserver {
     _connectivitySub = Connectivity().onConnectivityChanged.listen(_onConnectivity);
     _trySync('startup');
   }
+
+  /// Public entry point for callers that need to drive a sync from a
+  /// known event (auth state change, post-import save, recovery
+  /// promotion). [reason] is a short tag used for log lines and to
+  /// decide whether to bypass the backoff window (see
+  /// [_backoffBypassReasons]).
+  Future<void> triggerSync(String reason) => _trySync(reason);
 
   void stop() {
     WidgetsBinding.instance.removeObserver(this);
@@ -138,7 +158,7 @@ class SyncService with WidgetsBindingObserver {
 
   Future<void> _trySync(String reason) async {
     if (_syncing) return;
-    if (reason != 'manual' && _isInBackoff()) {
+    if (!_backoffBypassReasons.contains(reason) && _isInBackoff()) {
       debugPrint('SyncService: in backoff, skipping ($reason)');
       return;
     }
@@ -292,8 +312,10 @@ class SyncService with WidgetsBindingObserver {
 }
 
 /// Filter [runs] to those the currently-signed-in [userId] can push.
-/// Used by [SyncService._trySync] to avoid pushing User A's runs
-/// under User B's account on a shared device.
+/// Used by both [SyncService._trySync] (foreground sync) and
+/// `background_sync.dart#callbackDispatcher` (WorkManager periodic
+/// sync) to avoid pushing User A's runs under User B's account on a
+/// shared device.
 ///
 /// A run is pushable when:
 ///
@@ -307,9 +329,9 @@ class SyncService with WidgetsBindingObserver {
 /// dropped from the push set — its rightful owner will see it on
 /// the queue when they sign back in. See `docs/decisions.md § 67`.
 ///
-/// Pure helper — extracted from the trySync body so tests can drive
-/// the filter without booting an `ApiClient` or `LocalRunStore`.
-@visibleForTesting
+/// Pure helper — no state, no I/O. Public so background_sync (which
+/// runs in its own process and can't reach a SyncService instance)
+/// can apply the same guard.
 List<Run> filterRunsForCurrentUser(List<Run> runs, String? userId) {
   if (userId == null) return const [];
   return runs.where((r) {
