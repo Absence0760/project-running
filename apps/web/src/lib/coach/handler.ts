@@ -55,8 +55,13 @@ export async function handleCoach(
 	}
 
 	if (config.bypassPaywallEnabled) {
-		console.warn(
-			'[coach] BYPASS_PAYWALL active — this MUST only run in local dev. ' +
+		// Tagged log line for the CloudWatch metric-filter alarm
+		// `coach-bypass-paywall-active` (alarms.tf). A single
+		// occurrence in production fires PagerDuty — bypassPaywall
+		// in prod means the daily-cap + cost gates are off for the
+		// session, which is a billing emergency. Audit/coach Low #14.
+		console.error(
+			'[coach] bypass_paywall_active — MUST only run in local dev. ' +
 				'If you see this in production logs, the prod-env gate failed.',
 		);
 	}
@@ -160,7 +165,10 @@ export async function handleCoach(
 				status: 429,
 				headers: {
 					'content-type': 'application/json',
-					...rateLimitHeaders(tier, usedToday),
+					// JSON branch suppresses X-Coach-Tier so the tier label
+					// isn't broadcast in an extra response header on top
+					// of the body already carrying it. Audit/coach Low #13.
+					...rateLimitHeaders(tier, usedToday, { kind: 'json' }),
 				},
 				body: JSON.stringify({
 					error: 'daily_limit',

@@ -93,6 +93,41 @@ resource "aws_cloudwatch_metric_alarm" "lambda_p95_duration" {
   }
 }
 
+resource "aws_cloudwatch_log_metric_filter" "coach_bypass_paywall" {
+  name           = "${local.resource_prefix}-coach-bypass-paywall"
+  log_group_name = aws_cloudwatch_log_group.lambda.name
+  # `console.error('[coach] bypass_paywall_active …')` from the
+  # handler. A single occurrence in production means the daily-cap
+  # + cost gates are off for the session — billing emergency. The
+  # filter pattern matches the tagged log shape so a future log-line
+  # rephrase doesn't silently break the alarm. Audit/coach May 2026
+  # Low #14.
+  pattern = "\"[coach] bypass_paywall_active\""
+
+  metric_transformation {
+    name          = "${local.resource_prefix}-coach-bypass-paywall-count"
+    namespace     = "Threkir/Coach"
+    value         = "1"
+    default_value = "0"
+  }
+}
+
+resource "aws_cloudwatch_metric_alarm" "coach_bypass_paywall" {
+  alarm_name          = "${local.resource_prefix}-coach-bypass-paywall"
+  alarm_description   = "BYPASS_PAYWALL fired in the coach handler. In production this means the env gate failed and the daily cap + spend ceilings are off — billing emergency. /audit/coach Low #14."
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = 1
+  threshold           = 1
+  treat_missing_data  = "notBreaching"
+  metric_name         = aws_cloudwatch_log_metric_filter.coach_bypass_paywall.metric_transformation[0].name
+  namespace           = aws_cloudwatch_log_metric_filter.coach_bypass_paywall.metric_transformation[0].namespace
+  period              = 60
+  statistic           = "Sum"
+  alarm_actions       = [aws_sns_topic.alerts.arn]
+  ok_actions          = [aws_sns_topic.alerts.arn]
+  tags                = var.tags
+}
+
 resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   alarm_name        = "${local.resource_prefix}-coach-lambda-throttles"
   alarm_description = "Coach Lambda throttled (≥${var.lambda_throttle_alarm_threshold} throttles across two 5-min windows). Concurrent execution cap is being hit."

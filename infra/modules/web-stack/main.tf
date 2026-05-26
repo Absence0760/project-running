@@ -347,7 +347,13 @@ resource "aws_lambda_function_url" "coach" {
   cors {
     allow_origins = ["https://${var.domain_name}"]
     allow_methods = ["POST"]
-    allow_headers = ["authorization", "content-type"]
+    # `x-supabase-authorization` is the header the client actually
+    # sends (CloudFront's Lambda OAC takes the `Authorization` slot
+    # for its sigv4 signature — see the comment block above the
+    # `aws_lambda_function.coach` resource). Missing this header
+    # silently breaks CORS preflight on any non-CloudFront origin
+    # (preview deployments hit it first). Audit/coach May 2026 Low #12.
+    allow_headers = ["authorization", "content-type", "x-supabase-authorization"]
     max_age       = 3600
   }
 }

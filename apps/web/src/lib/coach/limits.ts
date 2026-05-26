@@ -82,15 +82,29 @@ export function jsonError(
 /// `X-Coach-Tier` + `X-RateLimit-*` headers attached to every coach
 /// response. Both tiers now carry a finite daily cap, so the limit
 /// fields always serialise as a number.
-export function rateLimitHeaders(tier: Tier, usedToday: number): Record<string, string> {
+///
+/// Pass `kind: 'sse'` for the streaming response branch — the
+/// SSE payload includes a `meta` event that re-encodes the same
+/// limits, so the headers are useful diagnostics on top. Pass
+/// `kind: 'json'` for the error / cap-hit branches — the body
+/// already carries `tier` + `used` + `limit` when relevant, so
+/// the bare `X-Coach-Tier` header (a free billing-tier oracle to
+/// any network observer between the user and CloudFront over TLS)
+/// is suppressed. Audit/coach May 2026 Low #13.
+export function rateLimitHeaders(
+	tier: Tier,
+	usedToday: number,
+	opts: { kind?: 'sse' | 'json' } = { kind: 'sse' },
+): Record<string, string> {
 	const limits = TIER_LIMITS[tier];
-	return {
-		'X-Coach-Tier': tier,
+	const headers: Record<string, string> = {
 		'X-RateLimit-Limit': String(limits.dailyLimit),
 		'X-RateLimit-Remaining': String(Math.max(0, limits.dailyLimit - usedToday)),
 		'X-RateLimit-MaxTokens': String(limits.maxTokens),
 		'X-RateLimit-MaxRuns': String(limits.maxRunsLimit),
 	};
+	if (opts.kind === 'sse') headers['X-Coach-Tier'] = tier;
+	return headers;
 }
 
 /// Per-message size cap, split by role. Pre-pass-3 the cap was a
