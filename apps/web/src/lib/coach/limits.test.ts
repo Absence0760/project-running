@@ -12,6 +12,7 @@ import {
 	personalityAddendum,
 	rateLimitHeaders,
 	validateCoachMessages,
+	validateRunsLimit,
 } from './limits';
 
 // ─────────────── parseAuthHeader ───────────────
@@ -257,4 +258,44 @@ test('validateCoachMessages — rejects when aggregate exceeds the total cap', (
 		ok: false,
 		reason: 'aggregate-too-long',
 	});
+});
+
+// ─────────────── validateRunsLimit ───────────────
+// audit/coach May 2026 Low #17 — pre-flight rejection of bogus
+// `recent_runs_limit` payloads so a malformed client gets a clean
+// 400 instead of triggering the full Supabase + Anthropic pipeline.
+
+test('validateRunsLimit — null / undefined fall through to default', () => {
+	assert.deepEqual(validateRunsLimit(undefined), { ok: true });
+	assert.deepEqual(validateRunsLimit(null), { ok: true });
+});
+
+test('validateRunsLimit — accepts finite positive numbers + numeric strings', () => {
+	assert.deepEqual(validateRunsLimit(10), { ok: true });
+	assert.deepEqual(validateRunsLimit(1), { ok: true });
+	assert.deepEqual(validateRunsLimit('25'), { ok: true });
+});
+
+test('validateRunsLimit — rejects NaN / Infinity / non-finite', () => {
+	for (const bad of [NaN, Infinity, -Infinity, 'banana', {}]) {
+		const r = validateRunsLimit(bad);
+		assert.equal(r.ok, false);
+	}
+});
+
+test('validateRunsLimit — rejects negatives and zero', () => {
+	assert.equal(validateRunsLimit(-1).ok, false);
+	assert.equal(validateRunsLimit(0).ok, false);
+});
+
+test('validateRunsLimit — rejects booleans (a true would coerce to 1 otherwise)', () => {
+	// `Number(true) === 1` would silently pass through, but the
+	// caller shouldn't be sending a boolean — fail fast.
+	assert.equal(validateRunsLimit(true).ok, false);
+	assert.equal(validateRunsLimit(false).ok, false);
+});
+
+test('validateRunsLimit — caps absurdly large numbers', () => {
+	assert.equal(validateRunsLimit(1e308).ok, false);
+	assert.equal(validateRunsLimit(2_000_000).ok, false);
 });

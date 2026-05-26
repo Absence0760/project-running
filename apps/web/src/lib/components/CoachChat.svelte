@@ -426,39 +426,60 @@
 		await scrollToBottom();
 
 		try {
-			const { data: { session } } = await supabase.auth.getSession();
-			const token = session?.access_token;
+			// Snapshot the session token, then post. On 401 we refresh
+			// once and replay; mid-session JWT expiry is the only
+			// expected source of 401 here (handler.ts logs a tagged
+			// error server-side either way). Audit/coach May 2026
+			// Medium #10.
+			async function postCoach(token: string): Promise<Response> {
+				const payloadMessages = messages.slice(0, assistantIdx).map((m) => ({
+					role: m.role,
+					content: m.content,
+				}));
+				return fetch('/api/coach', {
+					method: 'POST',
+					headers: {
+						'content-type': 'application/json',
+						'X-Supabase-Authorization': `Bearer ${token}`,
+					},
+					body: JSON.stringify({
+						messages: payloadMessages,
+						plan_id: planId,
+						recent_runs_limit: runsLimit,
+						mode: opts.mode,
+						anchor_message_id: opts.anchorId ?? null,
+					}),
+				});
+			}
+
+			let session = (await supabase.auth.getSession()).data.session;
+			let token = session?.access_token;
 			if (!token) {
 				error = 'Please sign in first.';
 				return;
 			}
 
-			// Send the conversation *up to but not including* the assistant
-			// placeholder we just added.
-			const payloadMessages = messages.slice(0, assistantIdx).map((m) => ({
-				role: m.role,
-				content: m.content,
-			}));
+			let res = await postCoach(token);
 
-			const res = await fetch('/api/coach', {
-				method: 'POST',
-				headers: {
-					'content-type': 'application/json',
-					'X-Supabase-Authorization': `Bearer ${token}`,
-				},
-				body: JSON.stringify({
-					messages: payloadMessages,
-					plan_id: planId,
-					recent_runs_limit: runsLimit,
-					mode: opts.mode,
-					anchor_message_id: opts.anchorId ?? null,
-				}),
-			});
+			if (res.status === 401) {
+				// Stale JWT — refresh once + replay. If refresh itself
+				// fails the second 401 falls through to the error branch
+				// below with the standard "Please sign in" copy.
+				try {
+					const refreshed = await supabase.auth.refreshSession();
+					token = refreshed.data.session?.access_token ?? token;
+					res = await postCoach(token);
+				} catch (_) {
+					/* fall through to the error branch */
+				}
+			}
 
 			const ct = res.headers.get('content-type') ?? '';
 			if (!res.ok || !ct.includes('event-stream')) {
 				const j = await res.json().catch(() => ({}));
-				if (res.status === 404) {
+				if (res.status === 401) {
+					error = 'Your session expired. Please sign in again.';
+				} else if (res.status === 404) {
 					error = 'Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.';
 				} else if (res.status === 429) {
 					usedToday = j.used ?? dailyLimit;
@@ -476,7 +497,11 @@
 			usedToday++;
 			await readSse(res, assistantIdx);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'network error';
+			// Transport-layer failure (DNS, TLS, abort). Map to a
+			// user-actionable string; full detail goes to console for
+			// triage. Audit/coach May 2026 Low #16.
+			console.error('[coach] transport error', e);
+			error = 'Could not reach the Coach. Check your connection and try again.';
 			messages = messages.slice(0, opts.userText ? assistantIdx - 1 : assistantIdx);
 		} finally {
 			busy = false;

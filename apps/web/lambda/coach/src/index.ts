@@ -50,6 +50,14 @@ import {
 
 export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 	async (event, responseStream) => {
+	// Outer fail-closed envelope. Audit/coach May 2026 Medium #6 —
+	// a `requireEnv` throw (or any other unexpected error inside the
+	// streamifyResponse body) used to bubble up to the Lambda runtime
+	// and surface in the 502 response with the runtime's default
+	// error envelope, leaking the env-var name to the wire. Wrap the
+	// whole handler so the operator-facing error stays in the logs
+	// while the client gets a generic 503.
+	try {
 		const provider = (process.env.COACH_PROVIDER ?? 'anthropic').toLowerCase();
 		if (provider !== 'anthropic' && provider !== 'openai') {
 			console.error(`[coach lambda] invalid COACH_PROVIDER value: '${provider}'`);
@@ -129,6 +137,22 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 		} finally {
 			stream.end();
 		}
+	} catch (e) {
+		// Outer envelope from the audit/coach Medium #6 fix. Anything
+		// that escapes the inner handler path (env-var throws, JSON
+		// parse anomalies, native module load failures) becomes a
+		// generic 503 to the client and a tagged log line on the
+		// operator side.
+		console.error('[coach lambda] unhandled_error', {
+			message: e instanceof Error ? e.message : String(e),
+			stack: e instanceof Error ? e.stack : undefined,
+		});
+		try {
+			writeJson(responseStream, 503, { error: 'Coach is temporarily unavailable.' });
+		} catch (writeErr) {
+			console.error('[coach lambda] failed to write 503 envelope', writeErr);
+		}
+	}
 	},
 );
 

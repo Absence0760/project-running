@@ -25,6 +25,7 @@ import {
 	personalityAddendum,
 	rateLimitHeaders,
 	validateCoachMessages,
+	validateRunsLimit,
 } from './limits';
 import { streamAnthropic, streamOpenAI } from './providers';
 import { COACH_SYSTEM_PROMPT } from './system_prompt';
@@ -77,6 +78,16 @@ export async function handleCoach(
 	const validation = validateCoachMessages(body.messages);
 	if (!validation.ok) {
 		return jsonError(400, 'invalid messages');
+	}
+
+	// Audit/coach May 2026 Low #17 — bogus `recent_runs_limit` payloads
+	// (NaN / negative / 1e308) used to silently floor to 1 via
+	// clampRunsLimit. Validate before any Supabase RPC fires so a
+	// malformed client gets a clean 400 instead of triggering a real
+	// provider call against an empty context.
+	const runsLimitCheck = validateRunsLimit(body.recent_runs_limit);
+	if (!runsLimitCheck.ok) {
+		return jsonError(400, runsLimitCheck.reason);
 	}
 
 	const supabase = createClient(config.publicSupabaseUrl, config.publicSupabaseAnonKey, {
@@ -233,6 +244,33 @@ export async function handleCoach(
 		}
 	}
 
+	// Capture the wall-clock at provider-stream construction so the
+	// mid-stream-error log line can report elapsed_ms for the
+	// CloudWatch metric filter (audit/coach May 2026 Medium #8).
+	const streamStartMs = Date.now();
+
+	// Refund the daily-cap slot when the provider call fails BEFORE
+	// any tokens stream. Mirrors the mid-stream refund below — a user
+	// who hit a 502 with no answer must not lose a slot. Best-effort:
+	// if the RPC errors we log and continue (the original 502 is the
+	// signal the user actually cares about). Audit/coach May 2026
+	// High #3. Skip when paywall is bypassed (no slot was consumed).
+	// Capture `authUserId` outside the closure so the TS flow analyser
+	// doesn't have to re-narrow `authUser` from `User | null` inside
+	// every helper.
+	const authUserId = authUser.id;
+	async function refundCapSlot(reason: string): Promise<void> {
+		if (config.bypassPaywallEnabled) return;
+		try {
+			await supabase.rpc('decrement_coach_usage', { p_user_id: authUserId });
+		} catch (e) {
+			console.error('[coach] decrement_coach_usage failed', {
+				reason,
+				err: e instanceof Error ? e.message : String(e),
+			});
+		}
+	}
+
 	let providerStream: ProviderStream;
 	try {
 		providerStream =
@@ -255,6 +293,16 @@ export async function handleCoach(
 					);
 	} catch (e) {
 		const msg = e instanceof Error ? e.message : 'coach call failed';
+		// Structured log line for the CloudWatch metric filter — same
+		// shape as the mid-stream branch below so a single metric
+		// captures both the sync-throw and mid-stream cases.
+		console.error('[coach] provider_init_error', {
+			tier,
+			provider: config.provider,
+			elapsed_ms: Date.now() - streamStartMs,
+			message: msg,
+		});
+		await refundCapSlot('provider_init_error');
 		return jsonError(502, msg);
 	}
 
@@ -290,6 +338,24 @@ export async function handleCoach(
 			}
 		} catch (e) {
 			const msg = e instanceof Error ? e.message : 'stream failed';
+			// Structured log line for the CloudWatch metric filter +
+			// alarm — pin the shape so the metric stays stable
+			// across refactors. Audit/coach May 2026 Medium #8.
+			console.error('[coach] mid_stream_error', {
+				tier,
+				provider: config.provider,
+				elapsed_ms: Date.now() - streamStartMs,
+				accumulated_chars: accumulated.length,
+				message: msg,
+			});
+			// Refund the daily-cap slot when the user got no useful
+			// content from the stream. We treat "zero accumulated
+			// tokens" as a complete failure; a partial answer
+			// (accumulated.length > 0) still consumes the slot
+			// because the user did get something. Audit/coach High #3.
+			if (accumulated.length === 0) {
+				await refundCapSlot('mid_stream_error_zero_tokens');
+			}
 			yield sendEvent('error', { message: msg });
 			return;
 		}

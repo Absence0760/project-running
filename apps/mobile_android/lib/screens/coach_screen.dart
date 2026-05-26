@@ -457,8 +457,8 @@ class _CoachScreenState extends State<CoachScreen> {
     _scrollToBottom();
 
     try {
-      final session = Supabase.instance.client.auth.currentSession;
-      final token = session?.accessToken;
+      String? token =
+          Supabase.instance.client.auth.currentSession?.accessToken;
       if (token == null) {
         setState(() => _error = 'Please sign in first.');
         _rollback(assistantIdx, userText != null);
@@ -479,60 +479,97 @@ class _CoachScreenState extends State<CoachScreen> {
       final base = (dotenv.env['WEB_BASE_URL'] ?? 'https://app.runapp.com')
           .replaceAll(RegExp(r'/$'), '');
       final uri = Uri.parse('$base/api/coach');
-      final client = HttpClient();
-      try {
-        final req = await client.postUrl(uri);
-        req.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
-        // Production Lambda reads `x-supabase-authorization` only —
-        // CloudFront's Lambda OAC sigv4-signs every origin request in
-        // the `Authorization` header, so forwarding the viewer's
-        // bearer token in that slot would collide with IAM auth on the
-        // Function URL. The SvelteKit dev wrapper accepts the same
-        // header for parity. See apps/web/lambda/coach/src/index.ts.
-        req.headers.set('x-supabase-authorization', 'Bearer $token');
-        req.add(utf8.encode(body));
-        final res = await req.close();
-        final ct = res.headers.value(HttpHeaders.contentTypeHeader) ?? '';
-        if (res.statusCode != 200 || !ct.contains('event-stream')) {
-          final raw = await res.transform(utf8.decoder).join();
-          Map<String, dynamic> j = const {};
-          try {
-            j = jsonDecode(raw) as Map<String, dynamic>;
-          } catch (e) {
-            debugPrint('coach_screen: non-JSON error body: $e');
-          }
-          if (res.statusCode == 429) {
-            final used = (j['used'] as num?)?.toInt() ?? _dailyLimit;
-            if (mounted) {
-              setState(() {
-                _usedToday = used;
-                if (j['tier'] is String) {
-                  _tier = j['tier'] as String;
-                }
-                if (j['limit'] is num) {
-                  _dailyLimit = (j['limit'] as num).toInt();
-                }
-                _error = (j['message'] as String?) ??
-                    'Daily limit reached ($_dailyLimit messages). '
-                        'Come back tomorrow!';
-              });
-            }
-          } else {
-            if (mounted) {
-              setState(() => _error = (j['error'] as String?) ??
-                  'Coach error (${res.statusCode})');
-            }
-          }
-          _rollback(assistantIdx, userText != null);
-          return;
+
+      // Inline helper so we can retry once after a 401 (stale JWT).
+      // Each call uses a fresh HttpClient so a redirect / error
+      // leaves no half-open connection. Audit/coach May 2026 Medium #10.
+      Future<HttpClientResponse> postWith(String t) async {
+        final c = HttpClient();
+        try {
+          final r = await c.postUrl(uri);
+          r.headers.set(HttpHeaders.contentTypeHeader, 'application/json');
+          // Production Lambda reads `x-supabase-authorization` only —
+          // CloudFront's Lambda OAC sigv4-signs every origin request in
+          // the `Authorization` header, so forwarding the viewer's
+          // bearer token in that slot would collide with IAM auth on the
+          // Function URL. The SvelteKit dev wrapper accepts the same
+          // header for parity. See apps/web/lambda/coach/src/index.ts.
+          r.headers.set('x-supabase-authorization', 'Bearer $t');
+          r.add(utf8.encode(body));
+          return await r.close();
+        } catch (_) {
+          c.close(force: true);
+          rethrow;
         }
-        if (mounted) setState(() => _usedToday++);
-        await _readSse(res, assistantIdx);
-      } finally {
-        client.close(force: true);
       }
+
+      var res = await postWith(token);
+      if (res.statusCode == 401) {
+        // Stale JWT — refresh once + replay. The supabase-flutter
+        // refreshSession() drains its own retry budget; if it returns
+        // null we fall through to the 401 surface below.
+        try {
+          final refreshed =
+              await Supabase.instance.client.auth.refreshSession();
+          final newToken = refreshed.session?.accessToken;
+          if (newToken != null) {
+            token = newToken;
+            res = await postWith(newToken);
+          }
+        } catch (e) {
+          debugPrint('coach_screen: refreshSession failed: $e');
+        }
+      }
+
+      final ct = res.headers.value(HttpHeaders.contentTypeHeader) ?? '';
+      if (res.statusCode != 200 || !ct.contains('event-stream')) {
+        final raw = await res.transform(utf8.decoder).join();
+        Map<String, dynamic> j = const {};
+        try {
+          j = jsonDecode(raw) as Map<String, dynamic>;
+        } catch (e) {
+          debugPrint('coach_screen: non-JSON error body: $e');
+        }
+        if (res.statusCode == 401) {
+          if (mounted) {
+            setState(() => _error = 'Your session expired. Please sign in again.');
+          }
+        } else if (res.statusCode == 429) {
+          final used = (j['used'] as num?)?.toInt() ?? _dailyLimit;
+          if (mounted) {
+            setState(() {
+              _usedToday = used;
+              if (j['tier'] is String) {
+                _tier = j['tier'] as String;
+              }
+              if (j['limit'] is num) {
+                _dailyLimit = (j['limit'] as num).toInt();
+              }
+              _error = (j['message'] as String?) ??
+                  'Daily limit reached ($_dailyLimit messages). '
+                      'Come back tomorrow!';
+            });
+          }
+        } else {
+          if (mounted) {
+            setState(() => _error = (j['error'] as String?) ??
+                'Coach error (${res.statusCode})');
+          }
+        }
+        _rollback(assistantIdx, userText != null);
+        return;
+      }
+      if (mounted) setState(() => _usedToday++);
+      await _readSse(res, assistantIdx);
     } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
+      // Transport-layer failure (DNS, TLS, abort, timeout). Map to a
+      // user-actionable string; full detail to debugPrint for triage.
+      // Audit/coach May 2026 Low #16.
+      debugPrint('coach_screen: transport error: $e');
+      if (mounted) {
+        setState(() => _error =
+            'Could not reach the Coach. Check your connection and try again.');
+      }
       _rollback(assistantIdx, userText != null);
     } finally {
       if (mounted) {

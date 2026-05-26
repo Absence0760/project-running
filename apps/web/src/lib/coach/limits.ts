@@ -29,6 +29,34 @@ export function clampRunsLimit(requested: unknown, tier: Tier): number {
 	return Math.min(max, Math.max(1, Math.trunc(n)));
 }
 
+/// Reject explicitly-bogus `recent_runs_limit` values BEFORE the
+/// handler hits the daily-cap RPC + Anthropic. `undefined` / `null`
+/// fall through to the default; everything else must coerce to a
+/// finite positive integer (otherwise the caller is sending garbage
+/// and the handler 400s rather than silently flooring to 1). Audit/
+/// coach May 2026 Low #17.
+export function validateRunsLimit(
+	requested: unknown,
+): { ok: true } | { ok: false; reason: string } {
+	if (requested === undefined || requested === null) return { ok: true };
+	if (typeof requested === 'boolean') {
+		return { ok: false, reason: 'recent_runs_limit must be a number' };
+	}
+	const n = Number(requested);
+	if (!Number.isFinite(n)) {
+		return { ok: false, reason: 'recent_runs_limit must be a finite number' };
+	}
+	if (n < 1) {
+		return { ok: false, reason: 'recent_runs_limit must be >= 1' };
+	}
+	// Sanity cap above any reasonable tier max. Catches a -1e308 / 1e308
+	// payload that would otherwise silently min() down without raising.
+	if (n > 1_000_000) {
+		return { ok: false, reason: 'recent_runs_limit is unreasonably large' };
+	}
+	return { ok: true };
+}
+
 /// Pre-stream JSON error response shape. Re-used by every guard
 /// branch in the handler (auth missing, body invalid, daily-limit
 /// hit, provider call failed). Caller passes through `extra` for
