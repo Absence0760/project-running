@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/coder/websocket"
@@ -67,6 +68,72 @@ type Server struct {
 	// upgrade accepts. Empty → no origin check (dev). Set to the
 	// production web host(s) for any non-localhost build.
 	AllowedOrigins []string
+
+	// pushLimit is the per-room token bucket protecting against a
+	// runaway / hostile recorder spamming /push at 100 Hz. Lazy-
+	// initialised on first push so dev / tests don't need to wire
+	// it. Audit/livehub H1.
+	pushLimitOnce sync.Once
+	pushLimitImpl *pushRateLimiter
+}
+
+// pushLimiter returns the lazily-initialised per-room token bucket.
+// 12 pushes per 60s matches the LiveBroadcaster's 5s cadence plus
+// a small burst budget. Tunable at compile time.
+func (s *Server) pushLimiter() *pushRateLimiter {
+	s.pushLimitOnce.Do(func() {
+		s.pushLimitImpl = newPushRateLimiter(12, time.Minute)
+	})
+	return s.pushLimitImpl
+}
+
+// pushRateLimiter is a per-key token-bucket with a sync.Map of
+// `*roomBucket` for the in-process Hub. Each bucket regenerates one
+// token per `interval/rate` seconds and caps at [rate]. Concurrent-
+// safe. Stale buckets are reaped during GC alongside their rooms.
+type pushRateLimiter struct {
+	rate     int
+	interval time.Duration
+	buckets  sync.Map // runID → *roomBucket
+}
+
+type roomBucket struct {
+	mu       sync.Mutex
+	tokens   float64
+	lastFill time.Time
+}
+
+func newPushRateLimiter(rate int, interval time.Duration) *pushRateLimiter {
+	return &pushRateLimiter{rate: rate, interval: interval}
+}
+
+func (p *pushRateLimiter) allow(runID string) bool {
+	now := time.Now()
+	v, _ := p.buckets.LoadOrStore(runID, &roomBucket{
+		tokens:   float64(p.rate),
+		lastFill: now,
+	})
+	b := v.(*roomBucket)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	elapsed := now.Sub(b.lastFill).Seconds()
+	refill := elapsed * float64(p.rate) / p.interval.Seconds()
+	if refill > 0 {
+		b.tokens = minFloat(float64(p.rate), b.tokens+refill)
+		b.lastFill = now
+	}
+	if b.tokens >= 1 {
+		b.tokens -= 1
+		return true
+	}
+	return false
+}
+
+func minFloat(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // AuthAction tags a request for the [Server.Authorizer] callback so
@@ -133,6 +200,18 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, runID string,
 
 func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string) {
 	if !s.authorize(w, r, runID, ActionPush) {
+		return
+	}
+	// Per-room push rate-limit. Recorder cadence is one push per ~5 s
+	// (LiveBroadcaster throttle); a token bucket of 12 / 60 s lets a
+	// recorder catch up after a brief network stutter while capping
+	// the abuse case where a stolen recorder JWT spams at 100 Hz.
+	// Per-(user, run_id) would be ideal but every legitimate room is
+	// already 1:1 user:run; per-runID catches the same abuse with no
+	// JWT re-parse. Audit/livehub H1.
+	if !s.pushLimiter().allow(runID) {
+		w.Header().Set("Retry-After", "5")
+		http.Error(w, "push rate exceeded", http.StatusTooManyRequests)
 		return
 	}
 	// MaxBytesReader caps the body; json.Decoder.DisallowUnknownFields
@@ -243,6 +322,13 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	}
 	defer c.CloseNow()
 
+	// Bound inbound message size before CloseRead starts draining
+	// frames. The WS is server-streaming-only — clients have no
+	// legitimate reason to send anything larger than a control frame.
+	// 1 KiB is a comfortable cap for the close handshake + any
+	// reasonable client-side ping. Audit/livehub M7.
+	c.SetReadLimit(1024)
+
 	// CloseRead spawns a reader goroutine that drains incoming frames
 	// (we ignore them — the WS is server-streaming-only) and returns
 	// a context that's cancelled when the peer closes or the read
@@ -251,7 +337,17 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	// meantime — which the cleanup test pins in place.
 	ctx := c.CloseRead(r.Context())
 
-	ch, unsub := s.Hub.Subscribe(ctx, runID)
+	ch, unsub, subErr := s.Hub.Subscribe(ctx, runID)
+	if subErr != nil {
+		// Per-room subscriber cap reached. Audit/livehub M3. Close
+		// with `1013 Try Again Later` (StatusTryAgainLater) so well-
+		// behaved clients back off rather than reconnect-loop. Also
+		// log so the operator metric on "cap hits per minute" has a
+		// signal even before Prometheus is wired.
+		s.log().Warn("subscribe rejected (cap reached)", "run_id", runID, "err", subErr)
+		_ = c.Close(websocket.StatusTryAgainLater, "subscriber cap reached")
+		return
+	}
 	defer unsub()
 
 	// Ping every 25 s so an intermediate proxy doesn't idle-timeout

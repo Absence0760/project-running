@@ -322,6 +322,12 @@ func main() {
 		AllowedOrigins: allowedOrigins,
 		Zones:          zoneFetcher,
 	}
+	// Start the idle-room GC sweeper. Only the in-process Hub needs
+	// it — the Redis backend's per-room key has a 24h TTL set on
+	// every publish. /audit/livehub C2 + M4.
+	if inProc, ok := hub.(*livehub.Hub); ok {
+		inProc.StartGC(ctx, livehub.GCInterval, livehub.IdleRoomTTL)
+	}
 	if authorizer != nil {
 		hubSrv.Authorizer = authorizer.Authorize
 		logger.Info("livehub auth: enabled (Supabase JWT)")

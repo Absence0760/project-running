@@ -78,7 +78,7 @@ func TestRedisHub_SubscribeReceivesPublishedPings(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch, unsub := hub.Subscribe(ctx, "run-A")
+	ch, unsub, _ := hub.Subscribe(ctx, "run-A")
 	defer unsub()
 
 	// Give the pubsub goroutine a moment to subscribe before publishing
@@ -109,7 +109,7 @@ func TestRedisHub_SubscribePreloadsLastKnown(t *testing.T) {
 
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	ch, unsub := hub.Subscribe(ctx, "run-A")
+	ch, unsub, _ := hub.Subscribe(ctx, "run-A")
 	defer unsub()
 
 	select {
@@ -128,7 +128,7 @@ func TestRedisHub_UnsubClosesChannel(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	ch, unsub := hub.Subscribe(ctx, "run-A")
+	ch, unsub, _ := hub.Subscribe(ctx, "run-A")
 	unsub()
 
 	// Channel should close shortly after unsub. Read once — a closed
@@ -149,9 +149,9 @@ func TestRedisHub_TwoSubscribersBothReceive(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
-	ch1, u1 := hub.Subscribe(ctx, "run-A")
+	ch1, u1, _ := hub.Subscribe(ctx, "run-A")
 	defer u1()
-	ch2, u2 := hub.Subscribe(ctx, "run-A")
+	ch2, u2, _ := hub.Subscribe(ctx, "run-A")
 	defer u2()
 	time.Sleep(80 * time.Millisecond)
 

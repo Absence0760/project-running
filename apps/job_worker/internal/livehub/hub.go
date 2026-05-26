@@ -2,8 +2,36 @@ package livehub
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"time"
 )
+
+// MaxSubsPerRoom caps concurrent subscribers per run_id. Public-run
+// share URLs are anon-reachable; without a cap a single bad actor can
+// open thousands of WS connections to one room and force Publish's
+// O(n) subscriber-snapshot copy on every 5s ping. 500 is comfortably
+// above any plausible legitimate fanout (a popular running streamer's
+// audience) while keeping the per-room memory bounded at < 1 MB of
+// subscriber slots. /audit/livehub M3.
+const MaxSubsPerRoom = 500
+
+// ErrSubscriberCapReached is returned by Subscribe when the room's
+// subscriber count is at MaxSubsPerRoom. The HTTP server maps it to
+// a 503 with a Retry-After hint so spectators back off.
+var ErrSubscriberCapReached = errors.New("livehub: room subscriber cap reached")
+
+// IdleRoomTTL bounds how long a room with no subscribers and no
+// recent pings can live in memory before GC. Matches the Redis path's
+// 24h TTL on per-room last-known keys; the in-process hub previously
+// pinned the room forever via a non-nil lastPing, growing RSS
+// monotonically across runs. /audit/livehub C2 + M4.
+const IdleRoomTTL = 24 * time.Hour
+
+// GCInterval is how often the background sweeper walks the rooms map
+// looking for expired entries. 5 minutes balances responsiveness
+// against the lock contention of the sweep.
+const GCInterval = 5 * time.Minute
 
 // Hub is the in-process pub/sub broker keyed by run_id.
 //
@@ -49,9 +77,10 @@ func NewHub() *Hub {
 const subBufferSize = 8
 
 type room struct {
-	mu       sync.Mutex
-	subs     map[*subscriber]struct{}
-	lastPing *Ping
+	mu         sync.Mutex
+	subs       map[*subscriber]struct{}
+	lastPing   *Ping
+	lastPingAt time.Time // stamped on every Publish — drives idle-room GC.
 	// Cached privacy zones for the broadcaster of this room. Loaded
 	// lazily on the first push (or first read via [Hub.Zones]) and
 	// kept for the room's lifetime. Hub GC drops the cache along
@@ -117,6 +146,7 @@ func (h *Hub) Publish(runID string, p Ping) int {
 	r := h.roomFor(runID, true)
 	r.mu.Lock()
 	r.lastPing = &p
+	r.lastPingAt = time.Now()
 	// Snapshot subscribers so we don't hold the room mutex across
 	// channel sends. A slow consumer can't deadlock the publisher.
 	subs := make([]*subscriber, 0, len(r.subs))
@@ -146,11 +176,17 @@ func (h *Hub) Publish(runID string, p Ping) int {
 // On registration the subscriber receives the room's last-known
 // ping (if any) so a late joiner sees the runner immediately
 // instead of waiting up to 5 s for the next [Publish].
-func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func()) {
+func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
 	r := h.roomFor(runID, true)
 	s := &subscriber{ch: make(chan Ping, subBufferSize)}
 
 	r.mu.Lock()
+	// Per-room subscriber cap. Audit/livehub M3: without this an anon-
+	// reachable public-run URL is a memory amplification vector.
+	if len(r.subs) >= MaxSubsPerRoom {
+		r.mu.Unlock()
+		return nil, nil, ErrSubscriberCapReached
+	}
 	if r.lastPing != nil {
 		// Pre-load the buffer with the last known ping. Capacity is
 		// >0, so this never blocks. If the caller drains slowly the
@@ -177,7 +213,53 @@ func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func())
 		}()
 	}
 
-	return s.ch, unsub
+	return s.ch, unsub, nil
+}
+
+// RunGC walks the rooms map and drops any room whose subscriber count
+// is zero AND whose last publish (lastPingAt) is older than [maxIdle],
+// AND which has no buffered lastPing (legacy keep-alive behaviour for
+// reconnecting spectators). Idempotent — call from a background
+// goroutine on a ticker. /audit/livehub C2 + M4.
+//
+// Returns the number of rooms swept; useful for metrics + tests.
+func (h *Hub) RunGC(maxIdle time.Duration) int {
+	now := time.Now()
+	dropped := 0
+	h.mu.Lock()
+	for id, r := range h.rooms {
+		r.mu.Lock()
+		stale := len(r.subs) == 0 && !r.lastPingAt.IsZero() && now.Sub(r.lastPingAt) > maxIdle
+		r.mu.Unlock()
+		if stale {
+			delete(h.rooms, id)
+			dropped++
+		}
+	}
+	h.mu.Unlock()
+	return dropped
+}
+
+// StartGC spawns a background goroutine that runs RunGC every
+// [interval] until [ctx] is done. Returns immediately. Pass
+// `IdleRoomTTL` and `GCInterval` for the production defaults; tests
+// can use tighter values.
+func (h *Hub) StartGC(ctx context.Context, interval, maxIdle time.Duration) {
+	if interval <= 0 || maxIdle <= 0 {
+		return
+	}
+	go func() {
+		t := time.NewTicker(interval)
+		defer t.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-t.C:
+				h.RunGC(maxIdle)
+			}
+		}
+	}()
 }
 
 // LoadZones populates the room's privacy-zone cache (if not yet

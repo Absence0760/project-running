@@ -31,7 +31,11 @@ type LivePubSub interface {
 	// runner immediately. The caller MUST invoke the returned
 	// unsub func when done — leaving it dangling leaks a Redis
 	// pubsub connection or an in-process subscriber record.
-	Subscribe(ctx context.Context, runID string) (<-chan Ping, func())
+	//
+	// Returns [ErrSubscriberCapReached] when the room's subscriber
+	// count is at [MaxSubsPerRoom] — the HTTP layer maps this to a
+	// 503 so spectators back off without DoSing the server.
+	Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error)
 
 	// LastKnown returns the most recent ping or nil. Used by the
 	// HTTP `/snapshot` route.

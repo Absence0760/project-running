@@ -122,7 +122,7 @@ func (h *RedisHub) Publish(runID string, p Ping) int {
 // subscribe the caller is pre-loaded with the last-known ping from
 // the `:last` key if one is present (matches the in-process Hub's
 // late-joiner behaviour).
-func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func()) {
+func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
 	out := make(chan Ping, subBufferSize)
 
@@ -169,7 +169,7 @@ func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, fu
 		}
 	}()
 
-	return out, closeFn
+	return out, closeFn, nil
 }
 
 // LastKnown reads the `:last` key. Returns nil when there is no

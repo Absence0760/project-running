@@ -2,6 +2,7 @@ package livehub
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 	"time"
@@ -23,7 +24,7 @@ func TestHub_PublishWithoutSubscribers(t *testing.T) {
 
 func TestHub_SubscribeReceivesPublishedPings(t *testing.T) {
 	h := NewHub()
-	ch, unsub := h.Subscribe(context.Background(), "run-1")
+	ch, unsub, _ := h.Subscribe(context.Background(), "run-1")
 	defer unsub()
 
 	h.Publish("run-1", Ping{Lat: 1, Lng: 1, DistanceM: 100, ElapsedS: 10})
@@ -44,7 +45,7 @@ func TestHub_LateJoinerReceivesLastKnown(t *testing.T) {
 
 	// Now a spectator joins — they should pick up the last position
 	// immediately, not wait for the next push.
-	ch, unsub := h.Subscribe(context.Background(), "run-1")
+	ch, unsub, _ := h.Subscribe(context.Background(), "run-1")
 	defer unsub()
 	select {
 	case got := <-ch:
@@ -62,7 +63,11 @@ func TestHub_PublishFansOutToEverySubscriber(t *testing.T) {
 	chans := make([]<-chan Ping, n)
 	unsubs := make([]func(), n)
 	for i := 0; i < n; i++ {
-		chans[i], unsubs[i] = h.Subscribe(context.Background(), "run-1")
+		ch, u, err := h.Subscribe(context.Background(), "run-1")
+		if err != nil {
+			t.Fatalf("Subscribe[%d] err = %v", i, err)
+		}
+		chans[i], unsubs[i] = ch, u
 	}
 	defer func() {
 		for _, u := range unsubs {
@@ -90,7 +95,7 @@ func TestHub_PublishFansOutToEverySubscriber(t *testing.T) {
 
 func TestHub_UnsubscribeStopsDelivery(t *testing.T) {
 	h := NewHub()
-	ch, unsub := h.Subscribe(context.Background(), "run-1")
+	ch, unsub, _ := h.Subscribe(context.Background(), "run-1")
 	unsub()
 
 	// Channel should be closed; reads return the zero value with ok=false.
@@ -109,7 +114,7 @@ func TestHub_UnsubscribeStopsDelivery(t *testing.T) {
 
 func TestHub_RoomGCAfterLastUnsubscribe(t *testing.T) {
 	h := NewHub()
-	_, unsub := h.Subscribe(context.Background(), "ephemeral-run")
+	_, unsub, _ := h.Subscribe(context.Background(), "ephemeral-run")
 	if c := h.RoomCount(); c != 1 {
 		t.Fatalf("RoomCount after subscribe = %d, want 1", c)
 	}
@@ -124,7 +129,7 @@ func TestHub_RoomKeptForLateRefresh(t *testing.T) {
 	h := NewHub()
 	// Publish first so the room has a lastPing.
 	h.Publish("run-1", Ping{DistanceM: 100})
-	_, unsub := h.Subscribe(context.Background(), "run-1")
+	_, unsub, _ := h.Subscribe(context.Background(), "run-1")
 	unsub()
 	// lastPing held → room must survive so a refresh sees the
 	// starting position.
@@ -139,7 +144,7 @@ func TestHub_RoomKeptForLateRefresh(t *testing.T) {
 func TestHub_ContextCancelUnsubscribes(t *testing.T) {
 	h := NewHub()
 	ctx, cancel := context.WithCancel(context.Background())
-	ch, _ := h.Subscribe(ctx, "run-1")
+	ch, _, _ := h.Subscribe(ctx, "run-1")
 	if c := h.SubscriberCount("run-1"); c != 1 {
 		t.Fatalf("SubscriberCount = %d, want 1", c)
 	}
@@ -170,7 +175,7 @@ func TestHub_ContextCancelUnsubscribes(t *testing.T) {
 
 func TestHub_SlowConsumerDoesntBlockPublisher(t *testing.T) {
 	h := NewHub()
-	_, unsub := h.Subscribe(context.Background(), "run-1")
+	_, unsub, _ := h.Subscribe(context.Background(), "run-1")
 	defer unsub()
 	// Don't drain the channel. Publish more than the buffer holds —
 	// excess pings drop for this consumer but Publish must return
@@ -202,7 +207,7 @@ func TestHub_PublishesAreSerialAcrossGoroutines(t *testing.T) {
 			defer wg.Done()
 			ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 			defer cancel()
-			ch, unsub := h.Subscribe(ctx, "run-shared")
+			ch, unsub, _ := h.Subscribe(ctx, "run-shared")
 			defer unsub()
 			for j := 0; j < 50; j++ {
 				h.Publish("run-shared", Ping{DistanceM: float64(j)})
@@ -224,5 +229,65 @@ func TestHub_PublishesAreSerialAcrossGoroutines(t *testing.T) {
 	}
 	if c := h.SubscriberCount("run-shared"); c != 0 {
 		t.Fatalf("subscribers leaked: %d", c)
+	}
+}
+
+// audit/livehub M3 — per-room subscriber cap.
+func TestHub_SubscriberCapRejects(t *testing.T) {
+	h := NewHub()
+	// Burn MaxSubsPerRoom slots first — all must succeed.
+	cleanups := make([]func(), 0, MaxSubsPerRoom)
+	t.Cleanup(func() {
+		for _, u := range cleanups {
+			u()
+		}
+	})
+	for i := 0; i < MaxSubsPerRoom; i++ {
+		_, u, err := h.Subscribe(context.Background(), "run-cap")
+		if err != nil {
+			t.Fatalf("Subscribe[%d] should have succeeded under cap, got %v", i, err)
+		}
+		cleanups = append(cleanups, u)
+	}
+	// The next subscribe must reject with the documented error.
+	if _, _, err := h.Subscribe(context.Background(), "run-cap"); !errors.Is(err, ErrSubscriberCapReached) {
+		t.Fatalf("Subscribe at cap = %v, want ErrSubscriberCapReached", err)
+	}
+}
+
+// audit/livehub C2 + M4 — idle-room GC drops stale rooms.
+func TestHub_RunGCDropsIdleRoom(t *testing.T) {
+	h := NewHub()
+	// Publish once to a room with no subscribers; lastPingAt is now.
+	h.Publish("idle-run", Ping{Lat: 1, Lng: 1})
+	if c := h.RoomCount(); c != 1 {
+		t.Fatalf("RoomCount after publish = %d, want 1", c)
+	}
+	// Sweep with maxIdle=0 reaps immediately (publish was ≥0s ago).
+	// Use a 1ns max-idle to guarantee the room is treated as stale.
+	time.Sleep(2 * time.Millisecond)
+	if dropped := h.RunGC(time.Nanosecond); dropped != 1 {
+		t.Fatalf("RunGC dropped = %d, want 1", dropped)
+	}
+	if c := h.RoomCount(); c != 0 {
+		t.Fatalf("RoomCount after GC = %d, want 0", c)
+	}
+}
+
+// Rooms with active subscribers must NOT be GC'd even if stale.
+func TestHub_RunGCKeepsRoomsWithSubscribers(t *testing.T) {
+	h := NewHub()
+	h.Publish("live-run", Ping{Lat: 1, Lng: 1})
+	_, unsub, err := h.Subscribe(context.Background(), "live-run")
+	if err != nil {
+		t.Fatalf("Subscribe err = %v", err)
+	}
+	defer unsub()
+	time.Sleep(2 * time.Millisecond)
+	if dropped := h.RunGC(time.Nanosecond); dropped != 0 {
+		t.Fatalf("RunGC dropped = %d, want 0 (active subscriber)", dropped)
+	}
+	if c := h.RoomCount(); c != 1 {
+		t.Fatalf("RoomCount = %d, want 1", c)
 	}
 }
