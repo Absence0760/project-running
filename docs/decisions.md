@@ -1469,6 +1469,32 @@ See [`docs/protomaps_local_setup.md`](protomaps_local_setup.md) for the recipe.
 
 ---
 
+## 69. Live spectator: dual-path (Supabase Realtime + Go live-hub) coexists; cutover is a per-deploy env flip, not a flag day
+
+The live-spectator surface has two transports:
+
+- **Supabase Realtime** on `live_run_pings` (original path). The recorder inserts rows; spectators subscribe via the `postgres_changes` channel. Server-side privacy-zone clipping is enforced by the `live_run_pings_drop_in_zone` BEFORE-INSERT trigger (migration `20260618_001`).
+- **Go live-hub** at `apps/job_worker/internal/livehub/` (newer path). Recorder POSTs to `/v1/live/{run_id}/push`; spectators subscribe via WebSocket. Server-side privacy-zone clipping is enforced by `Server.shouldDrop` reading `Hub.LoadZones` (fetched lazily from Supabase by the worker's service role).
+
+**Both paths stay in the codebase until the live-hub deploy has bedded in.** The mobile recorder (`LiveBroadcaster`) gates on `dotenv.env['LIVE_HUB_URL']`: when set, it POSTs to the hub; when unset, it falls through to `ApiClient.insertLivePing`. The web spectator (`/live/[id]`) gates on `PUBLIC_LIVE_HUB_URL` the same way. Cutover is therefore a **per-deploy env flip**, not a flag day — flipping `LIVE_HUB_URL` on for a beta cohort lets the operator gauge the Go path against the Realtime baseline without orphaning anyone who still has the old build cached.
+
+**Concretely:**
+
+- **Recorder duplication is avoided** by the `dotenv` gate — a single ping flows down exactly one transport per app build. There is no "publish to both then dedupe on the spectator side" path; the audit looked for that race and confirmed it's not present.
+- **Spectator handover during a single run** is acceptable but rare: a spectator who opens the page after the recorder flipped sees the hub path; one who opened before sees Realtime. They don't observe both. The Realtime channel survives independent of the new path so historical broadcasts replay correctly from the `live_run_pings` table.
+- **Privacy-zone enforcement parity**: both transports MUST drop in-zone pings server-side. Pinned by `apps/backend/supabase/tests/rls_live_run_pings_trigger_test.sql` (Realtime) and `apps/job_worker/internal/livehub/server_test.go` `TestServer_PingInsideZoneIsDropped` + `TestServer_ZoneFetchFailureDropsFailClosed` (hub).
+- **JWT auth enforcement** rolls out via the `LIVEHUB_REQUIRE_AUTH=1` sentinel on the Fly app (migration `20260930` round). Prod refuses to start without `SUPABASE_JWT_SECRET` + `LIVEHUB_ALLOWED_ORIGINS`. Mobile + web clients now Bearer the recorder JWT (mobile `live_hub_client.dart` + web `live_hub.ts` querystring `?token=…` fallback for the WS upgrade — browsers can't set Authorization on a WS handshake).
+
+**Don't re-litigate** by:
+
+- Merging the two transports into a single client-side adapter that publishes to both — duplicate spectator events + cache-coherence headaches in the per-room caches.
+- Routing the Realtime path through the Go hub as a proxy — the whole point of Realtime is that it's already a Postgres-native fan-out path with RLS. Layering would defeat both transports.
+- Removing the Realtime path before the hub deploy has 60+ days of live traffic — the trigger pgtap test is the load-bearing privacy guard if the hub's `Server.shouldDrop` ever regresses.
+
+Audit reference: `/audit/livehub` May 2026 M5.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

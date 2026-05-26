@@ -129,6 +129,23 @@ func (p *pushRateLimiter) allow(runID string) bool {
 	return false
 }
 
+// bumpDropZone + bumpAuthFail forward to the underlying Hub's
+// atomic counters when the LivePubSub is the in-process *Hub. The
+// Redis path doesn't expose the counters yet (those would live in
+// Redis-side metrics like INCR keys); this is a best-effort
+// instrumentation for the dev / single-replica case. /audit/livehub M1.
+func (s *Server) bumpDropZone() {
+	if h, ok := s.Hub.(*Hub); ok && h.metrics != nil {
+		h.metrics.publishDropZone.Add(1)
+	}
+}
+
+func (s *Server) bumpAuthFail() {
+	if h, ok := s.Hub.(*Hub); ok && h.metrics != nil {
+		h.metrics.authFailCount.Add(1)
+	}
+}
+
 func minFloat(a, b float64) float64 {
 	if a < b {
 		return a
@@ -192,6 +209,7 @@ func (s *Server) authorize(w http.ResponseWriter, r *http.Request, runID string,
 		return true
 	}
 	if err := s.Authorizer(r, runID, action); err != nil {
+		s.bumpAuthFail()
 		http.Error(w, err.Error(), http.StatusForbidden)
 		return false
 	}
@@ -214,17 +232,23 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 		http.Error(w, "push rate exceeded", http.StatusTooManyRequests)
 		return
 	}
-	// MaxBytesReader caps the body; json.Decoder.DisallowUnknownFields
-	// keeps a fat-finger-attacker from smuggling 4 KB of unknown keys
-	// into a "valid" object that's still small enough to decode. Both
-	// gates are needed: the cap stops huge payloads at the transport
-	// layer, the unknown-fields check stops payload-shape abuse from
-	// blowing past the policy.
+	// MaxBytesReader caps the request body at 4 KiB. DisallowUnknownFields
+	// rejects payloads that smuggle in fields outside the Ping schema —
+	// a defence-in-depth gate complementing the size cap. Both are
+	// needed: size stops huge bodies at the transport layer; the
+	// unknown-fields check stops shape abuse from blowing past the
+	// policy with crafted JSON inside the limit. /audit/livehub L2.
 	dec := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
 	dec.DisallowUnknownFields()
 	var p Ping
 	if err := dec.Decode(&p); err != nil {
 		http.Error(w, "bad ping body: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	// Envelope validation — audit/livehub M2. Catches NaN / out-of-
+	// range coordinates / absurd BPM before the publish path.
+	if err := p.Validate(); err != nil {
+		http.Error(w, "invalid ping: "+err.Error(), http.StatusBadRequest)
 		return
 	}
 	// Privacy-zone clip — fail-closed: if the zone fetch errors we
@@ -236,6 +260,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 	if err != nil {
 		s.log().Warn("zone fetch failed; dropping ping",
 			"err", err, "run_id", runID)
+		s.bumpDropZone()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -246,6 +271,7 @@ func (s *Server) handlePush(w http.ResponseWriter, r *http.Request, runID string
 		return
 	}
 	if clipped {
+		s.bumpDropZone()
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusAccepted)
 		_ = json.NewEncoder(w).Encode(map[string]any{
@@ -280,10 +306,18 @@ func (s *Server) shouldDrop(ctx context.Context, runID string, p Ping) (bool, er
 	if err != nil {
 		return false, err
 	}
+	// Log at debug so an operator can distinguish "no zones
+	// configured" from "zones configured but ping out of zone" in
+	// the drop-rate metric. /audit/livehub L3.
 	if len(zones) == 0 {
+		s.log().Debug("zone check: broadcaster has no zones", "run_id", runID)
 		return false, nil
 	}
-	return IsInAnyZone(p.Lat, p.Lng, zones), nil
+	drop := IsInAnyZone(p.Lat, p.Lng, zones)
+	if drop {
+		s.log().Debug("zone check: ping in zone, dropping", "run_id", runID, "zone_count", len(zones))
+	}
+	return drop, nil
 }
 
 func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request, runID string) {

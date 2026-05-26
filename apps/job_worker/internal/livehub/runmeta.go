@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // RunMeta captures the two `runs` columns the authorizer cares about:
@@ -71,7 +72,12 @@ func (f *SupabaseRunMetaFetcher) get(ctx context.Context, path string) ([]byte, 
 	req.Header.Set("Accept", "application/json")
 	client := f.HTTP
 	if client == nil {
-		client = http.DefaultClient
+		// Fallback timeout — http.DefaultClient has no deadline, so a
+		// hung Supabase call would pin the request goroutine forever.
+		// /audit/livehub M8. The production path always sets f.HTTP
+		// to the worker's pooled client (main.go), so this branch is
+		// only hit in tests + dev.
+		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	resp, err := client.Do(req)
 	if err != nil {

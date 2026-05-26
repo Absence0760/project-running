@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 )
 
 // ZoneFetcher resolves the privacy zones the broadcaster has
@@ -129,7 +130,9 @@ func (f *SupabaseZoneFetcher) get(ctx context.Context, path string) ([]byte, err
 	req.Header.Set("Accept", "application/json")
 	client := f.HTTP
 	if client == nil {
-		client = http.DefaultClient
+		// Fallback timeout — same rationale as runmeta.go.
+		// /audit/livehub M8.
+		client = &http.Client{Timeout: 30 * time.Second}
 	}
 	resp, err := client.Do(req)
 	if err != nil {

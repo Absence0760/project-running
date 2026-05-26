@@ -33,6 +33,14 @@ const IdleRoomTTL = 24 * time.Hour
 // against the lock contention of the sweep.
 const GCInterval = 5 * time.Minute
 
+// CacheRefreshTTL bounds how long a cached (RunMeta, zones) entry
+// stays valid before the next call re-fetches. 60 s is a slow rate
+// vs the recorder's 5 s push cadence (≈12 pushes per refresh) but
+// fast enough that toggling `runs.is_public = false` mid-run
+// stops serving anon spectators within a minute. /audit/livehub
+// H2 + M6.
+const CacheRefreshTTL = 60 * time.Second
+
 // Hub is the in-process pub/sub broker keyed by run_id.
 //
 // Concurrency model:
@@ -61,13 +69,14 @@ const GCInterval = 5 * time.Minute
 // match the Publish/Subscribe shape used here, so the swap will be
 // mechanical when the Redis credentials land.
 type Hub struct {
-	mu    sync.Mutex
-	rooms map[string]*room
+	mu      sync.Mutex
+	rooms   map[string]*room
+	metrics *metricsAtomic
 }
 
 // NewHub returns an empty Hub. Cheap — call once at process start.
 func NewHub() *Hub {
-	return &Hub{rooms: make(map[string]*room)}
+	return &Hub{rooms: make(map[string]*room), metrics: &metricsAtomic{}}
 }
 
 // Per-subscriber buffer. 8 outstanding pings ≈ 40 s of slack at the
@@ -83,19 +92,22 @@ type room struct {
 	lastPingAt time.Time // stamped on every Publish — drives idle-room GC.
 	// Cached privacy zones for the broadcaster of this room. Loaded
 	// lazily on the first push (or first read via [Hub.Zones]) and
-	// kept for the room's lifetime. Hub GC drops the cache along
-	// with the room when the last subscriber leaves and no lastPing
-	// is held. nil zonesLoaded → not yet fetched; non-nil + empty →
-	// fetched, broadcaster has no zones.
-	zonesLoaded bool
-	zones       []PrivacyZone
+	// refreshed every CacheRefreshTTL so a mid-run privacy-zone
+	// edit takes effect within ~60 s instead of waiting for room
+	// GC. `zonesAt` records the last successful fetch wall-clock;
+	// callers compare against now() to decide whether to refetch.
+	// nil zones + zonesAt non-zero → fetched, broadcaster has none.
+	// /audit/livehub H2 + M6.
+	zonesAt time.Time
+	zones   []PrivacyZone
 	// Cached run metadata (`user_id`, `is_public`) for the
-	// authorizer. Same lifecycle as zones — loaded once, kept for
-	// the room's lifetime, dropped along with the room on GC.
-	// `meta == nil` after load means the run row doesn't exist (the
-	// authorizer denies in that case to prevent ghost broadcasts).
-	runMetaLoaded bool
-	runMeta       *RunMeta
+	// authorizer. Same refresh semantics as zones — a flip of
+	// `runs.is_public = false` mid-run stops serving anon
+	// spectators within CacheRefreshTTL. `meta == nil` + non-zero
+	// `runMetaAt` means the run row doesn't exist; the authorizer
+	// denies in that case to prevent ghost broadcasts.
+	runMetaAt time.Time
+	runMeta   *RunMeta
 }
 
 type subscriber struct {
@@ -143,6 +155,7 @@ func (s *subscriber) close() {
 // and with [Subscribe]. Returns the number of subscribers that
 // received the ping (i.e. didn't have a full buffer).
 func (h *Hub) Publish(runID string, p Ping) int {
+	h.metrics.publishCount.Add(1)
 	r := h.roomFor(runID, true)
 	r.mu.Lock()
 	r.lastPing = &p
@@ -185,6 +198,7 @@ func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(),
 	// reachable public-run URL is a memory amplification vector.
 	if len(r.subs) >= MaxSubsPerRoom {
 		r.mu.Unlock()
+		h.metrics.subscribeRejectCap.Add(1)
 		return nil, nil, ErrSubscriberCapReached
 	}
 	if r.lastPing != nil {
@@ -237,6 +251,9 @@ func (h *Hub) RunGC(maxIdle time.Duration) int {
 		}
 	}
 	h.mu.Unlock()
+	if dropped > 0 {
+		h.metrics.roomGCDropped.Add(uint64(dropped))
+	}
 	return dropped
 }
 
@@ -275,7 +292,7 @@ func (h *Hub) StartGC(ctx context.Context, interval, maxIdle time.Duration) {
 func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) ([]PrivacyZone, error) {
 	r := h.roomFor(runID, true)
 	r.mu.Lock()
-	if r.zonesLoaded {
+	if !r.zonesAt.IsZero() && time.Since(r.zonesAt) < CacheRefreshTTL {
 		zones := append([]PrivacyZone(nil), r.zones...)
 		r.mu.Unlock()
 		return zones, nil
@@ -292,10 +309,8 @@ func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) 
 	}
 
 	r.mu.Lock()
-	if !r.zonesLoaded {
-		r.zonesLoaded = true
-		r.zones = zones
-	}
+	r.zonesAt = time.Now()
+	r.zones = zones
 	out := append([]PrivacyZone(nil), r.zones...)
 	r.mu.Unlock()
 	return out, nil
@@ -314,7 +329,7 @@ func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) 
 func (h *Hub) LoadRunMeta(ctx context.Context, runID string, fetcher RunMetaFetcher) (*RunMeta, error) {
 	r := h.roomFor(runID, true)
 	r.mu.Lock()
-	if r.runMetaLoaded {
+	if !r.runMetaAt.IsZero() && time.Since(r.runMetaAt) < CacheRefreshTTL {
 		meta := r.runMeta
 		r.mu.Unlock()
 		return meta, nil
@@ -327,10 +342,8 @@ func (h *Hub) LoadRunMeta(ctx context.Context, runID string, fetcher RunMetaFetc
 	}
 
 	r.mu.Lock()
-	if !r.runMetaLoaded {
-		r.runMetaLoaded = true
-		r.runMeta = meta
-	}
+	r.runMetaAt = time.Now()
+	r.runMeta = meta
 	out := r.runMeta
 	r.mu.Unlock()
 	return out, nil
@@ -387,6 +400,22 @@ func (h *Hub) roomFor(runID string, createIfMissing bool) *room {
 	return r
 }
 
+// removeSubscriber unregisters one subscriber from a room. The lock
+// dance is:
+//
+//  1. h.roomFor(false): read-locks the hub map, returns nil if the
+//     room is gone (a concurrent unsub already swept it).
+//  2. r.mu: protects subs[] + lastPing. We delete the subscriber
+//     under it and decide whether the room is now empty.
+//  3. s.close(): closes the channel OUTSIDE the room lock so a
+//     slow WS reader can't pin the room lock.
+//  4. h.mu (only when empty): re-check under the hub lock that
+//     nobody resurrected the room between our `empty` decision and
+//     now, then delete from the map.
+//
+// The double hub-lock pattern is deliberate — taking it on the
+// inner branch avoids serialising every unsubscribe through the
+// global hub mutex. /audit/livehub L4.
 func (h *Hub) removeSubscriber(runID string, s *subscriber) {
 	r := h.roomFor(runID, false)
 	if r == nil {
