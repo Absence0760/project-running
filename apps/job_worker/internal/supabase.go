@@ -654,8 +654,13 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 		activityType = "hike"
 	}
 
+	// Stringify the Strava id so metadata.strava_id is the same type
+	// across every writer (EF / Go / mobile ZIP). PG's `->>` coerces
+	// numbers to canonical strings on read but downstream pure-TS
+	// readers compare against typeof === 'string'. /audit/strava L3.
+	stravaIDStr := strconv.FormatInt(act.ID, 10)
 	metadata := map[string]any{
-		"strava_id":            act.ID,
+		"strava_id":            stravaIDStr,
 		"activity_type":        activityType,
 		"imported_from":        "strava",
 		"imported_at":          time.Now().UTC().Format(time.RFC3339),
@@ -682,7 +687,10 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 		"distance_m": int(math.Round(act.Distance)),
 		"duration_s": duration,
 		"source":     "strava",
-		"metadata":   metadata,
+		// `external_id = 'strava:<id>'` is the cross-source dedupe key
+		// — same shape mobile ZIP writes. /audit/strava M3.
+		"external_id": "strava:" + stravaIDStr,
+		"metadata":    metadata,
 	}
 	payload, err := json.Marshal(row)
 	if err != nil {

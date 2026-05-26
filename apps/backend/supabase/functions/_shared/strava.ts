@@ -139,8 +139,14 @@ export async function ingestActivity(
 			? 'hike'
 			: 'run';
 
+	// Stringify the Strava id so `metadata.strava_id` is the same
+	// type in JSON regardless of writer (EF / Go / mobile ZIP). PG's
+	// `->>` coerces numbers to canonical strings on read, but
+	// downstream pure-TS readers compare against typeof === 'string'.
+	// /audit/strava L3.
+	const stravaId = String(act.id);
 	const metadata: Record<string, unknown> = {
-		strava_id: act.id,
+		strava_id: stravaId,
 		activity_type: activityType,
 		imported_from: 'strava',
 		imported_at: new Date().toISOString(),
@@ -158,6 +164,12 @@ export async function ingestActivity(
 			distance_m: Math.round(act.distance),
 			duration_s: act.moving_time || act.elapsed_time,
 			source: 'strava',
+			// `external_id = 'strava:<id>'` is the cross-source dedupe key
+			// — same shape mobile ZIP writes. A future unique constraint
+			// on `(user_id, external_id) WHERE external_id IS NOT NULL`
+			// would catch the OAuth-then-ZIP double-import path that
+			// today only `metadata.strava_id` checks against. /audit/strava M3.
+			external_id: `strava:${stravaId}`,
 			metadata,
 		})
 		.select('id')
@@ -199,19 +211,35 @@ export function buildTrackFromStreams(
 	const hr = streams.heartrate?.data as number[] | undefined;
 	const startMs = Date.parse(startIso);
 
+	// audit/strava May 2026 High #4 — bounds-check every sample.
+	// Keep in lockstep with apps/job_worker/internal/handler_strava
+	// _event.go BuildTrackFromStreams: any drift between the EF and
+	// Go path causes the same activity to render differently
+	// depending on which transport ingested it.
 	const out: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }> = [];
+	let lastTs = -1;
 	for (let i = 0; i < latlng.length; i++) {
 		const pair = latlng[i];
 		if (!Array.isArray(pair) || pair.length < 2) continue;
 		const [lat, lng] = pair;
 		if (!Number.isFinite(lat) || !Number.isFinite(lng)) continue;
+		if (lat < -90 || lat > 90 || lng < -180 || lng > 180) continue;
 		const point: { lat: number; lng: number; ele?: number; ts?: string; bpm?: number } = {
 			lat,
 			lng,
 		};
-		if (altitude?.[i] != null) point.ele = altitude[i];
+		if (altitude?.[i] != null) {
+			const ele = altitude[i];
+			if (Number.isFinite(ele) && ele >= -500 && ele <= 9000) point.ele = ele;
+		}
 		if (time?.[i] != null && Number.isFinite(startMs)) {
-			point.ts = new Date(startMs + time[i] * 1000).toISOString();
+			const ts = startMs + time[i] * 1000;
+			// Reject a sample whose ms-since-epoch goes backwards
+			// more than 1s from the prior accepted sample. Tolerate
+			// 1s wobble for upstream clock jitter.
+			if (lastTs >= 0 && ts < lastTs - 1000) continue;
+			lastTs = ts;
+			point.ts = new Date(ts).toISOString();
 		}
 		if (hr?.[i] != null && hr[i] >= 30 && hr[i] <= 230) point.bpm = hr[i];
 		out.push(point);

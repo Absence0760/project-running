@@ -621,6 +621,10 @@ export async function saveRun(input: {
 	metadata: Record<string, unknown> | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
 	title?: string | null;
+	/// Cross-source dedupe key (e.g. `strava:1234567`, `csv:<iso>-<dist>-<dur>`).
+	/// Saved into runs.external_id so a subsequent import of the same
+	/// activity by any path can detect + skip. /audit/strava M3.
+	external_id?: string | null;
 }): Promise<{ id: string; trackUploaded: boolean; trackError?: string }> {
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
@@ -640,6 +644,7 @@ export async function saveRun(input: {
 		source: input.source,
 		metadata: mergedMetadata,
 	};
+	if (input.external_id) row.external_id = input.external_id;
 
 	const { data, error } = await supabase
 		.from('runs')

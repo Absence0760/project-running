@@ -168,6 +168,9 @@ async function importOne(
 		metadata,
 		track: track ?? undefined,
 		title: row[idx.name] || null,
+		// Cross-source dedupe — matches the mobile ZIP + Strava-
+		// OAuth writers. /audit/strava M3.
+		external_id: `strava:${stravaId}`,
 	});
 }
 

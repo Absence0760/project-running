@@ -221,7 +221,15 @@ func BuildTrackFromStreams(streams map[string]StravaStream, startIso string) []T
 	startMs, _ := time.Parse(time.RFC3339, startIso)
 	startUnix := startMs.UnixMilli()
 
+	// audit/strava May 2026 High #4 — bounds-check every sample.
+	// Pre-fix, lat/lng outside the legal [-90,90]/[-180,180] window
+	// (corrupted Strava stream from a third-party uploader, operator
+	// error) was persisted as-is and rendered an unmappable run.
+	// Also enforce a monotonic-time guard: a sample whose timestamp
+	// goes backwards more than 1 second from the previous one is
+	// dropped (a 1 s wobble is allowed for upstream clock jitter).
 	out := make([]TrackPoint, 0, len(latlng))
+	var lastTs int64 = -1 // ms since epoch of the previous accepted sample
 	for i, raw := range latlng {
 		var pair []float64
 		if err := json.Unmarshal(raw, &pair); err != nil || len(pair) < 2 {
@@ -231,18 +239,29 @@ func BuildTrackFromStreams(streams map[string]StravaStream, startIso string) []T
 		if !isFiniteFloat(lat) || !isFiniteFloat(lng) {
 			continue
 		}
+		if lat < -90 || lat > 90 || lng < -180 || lng > 180 {
+			continue
+		}
 		pt := TrackPoint{Lat: lat, Lng: lng}
 		if i < len(altitude) {
 			var ele float64
-			if json.Unmarshal(altitude[i], &ele) == nil {
+			if json.Unmarshal(altitude[i], &ele) == nil && isFiniteFloat(ele) && ele >= -500 && ele <= 9000 {
 				pt.Elevation = &ele
 			}
 		}
 		if i < len(time_) && !startMs.IsZero() {
 			var sec int64
 			if json.Unmarshal(time_[i], &sec) == nil {
-				ts := time.UnixMilli(startUnix + sec*1000).UTC()
-				pt.Timestamp = &ts
+				ts := startUnix + sec*1000
+				// Reject a sample whose ms-since-epoch goes backwards
+				// more than 1s from the prior accepted sample. Tolerate
+				// 1s wobble for upstream clock jitter.
+				if lastTs >= 0 && ts < lastTs-1000 {
+					continue
+				}
+				lastTs = ts
+				t := time.UnixMilli(ts).UTC()
+				pt.Timestamp = &t
 			}
 		}
 		if i < len(hr) {
