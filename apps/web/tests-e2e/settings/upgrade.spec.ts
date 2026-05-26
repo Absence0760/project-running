@@ -50,8 +50,12 @@ test.describe('/settings/upgrade — free user', () => {
 		// Pin the polished two-card structure. Each tier carries a
 		// `check_circle` icon per feature — count must be 4 on both
 		// (Recording, Routes/plans/clubs, Strava/parkrun/Garmin, AI
-		// Coach for Free; Unlimited Coach, Priority map-matching,
-		// Priority exports, Everything in Free for Pro).
+		// Coach for Free; AI Coach 10/day, Priority map-matching,
+		// Priority exports, Everything in Free for Pro). The Pro
+		// daily Coach cap was lowered from Unlimited to 10/day in
+		// May 2026 to bound worst-case Anthropic spend per the
+		// cost-controls hardening pass — see TIER_LIMITS.pro.dailyLimit
+		// in src/lib/coach/types.ts.
 		await page.goto('/settings/upgrade');
 
 		const freeCard = page.locator('.tier-free');
@@ -68,7 +72,7 @@ test.describe('/settings/upgrade — free user', () => {
 		await expect(proCard.locator('.price-period')).toHaveText('/ month');
 		await expect(proCard.locator('.tier-features > li')).toHaveCount(4);
 		await expect(proCard.locator('.tier-features .check')).toHaveCount(4);
-		await expect(proCard).toContainText(/Unlimited AI Coach/i);
+		await expect(proCard).toContainText(/AI Coach\s+—\s+10\/day/i);
 
 		// Free tier carries the "You're on Free." note and NO active
 		// flag; Pro tier carries the CTA + cancel-anytime fine print.

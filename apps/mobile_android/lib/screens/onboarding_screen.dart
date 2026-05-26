@@ -104,40 +104,58 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (context, index) {
                   final p = _pages[index];
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 32),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          width: 120,
-                          height: 120,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: theme.colorScheme.primaryContainer,
+                  // The Location page's Play-policy disclosure copy is
+                  // long enough to overflow a small phone viewport when
+                  // centered in a fixed-height Column. LayoutBuilder +
+                  // SingleChildScrollView + ConstrainedBox(minHeight) +
+                  // IntrinsicHeight keeps the vertical centering on
+                  // pages whose content fits AND falls through to a
+                  // scrollable column on the disclosure page.
+                  return LayoutBuilder(
+                    builder: (context, constraints) {
+                      return SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(horizontal: 32),
+                        child: ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minHeight: constraints.maxHeight,
                           ),
-                          child: Icon(p.icon,
-                              size: 60, color: theme.colorScheme.primary),
-                        ),
-                        const SizedBox(height: 32),
-                        Text(
-                          p.title,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.headlineMedium?.copyWith(
-                            fontWeight: FontWeight.w700,
+                          child: IntrinsicHeight(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Container(
+                                  width: 120,
+                                  height: 120,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: theme.colorScheme.primaryContainer,
+                                  ),
+                                  child: Icon(p.icon,
+                                      size: 60, color: theme.colorScheme.primary),
+                                ),
+                                const SizedBox(height: 32),
+                                Text(
+                                  p.title,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.headlineMedium?.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  p.description,
+                                  textAlign: TextAlign.center,
+                                  style: theme.textTheme.bodyLarge?.copyWith(
+                                    color: theme.colorScheme.outline,
+                                    height: 1.5,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
-                        const SizedBox(height: 16),
-                        Text(
-                          p.description,
-                          textAlign: TextAlign.center,
-                          style: theme.textTheme.bodyLarge?.copyWith(
-                            color: theme.colorScheme.outline,
-                            height: 1.5,
-                          ),
-                        ),
-                      ],
-                    ),
+                      );
+                    },
                   );
                 },
               ),
