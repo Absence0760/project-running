@@ -26,8 +26,10 @@ import '../live_broadcaster.dart';
 import '../live_hub_client.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../preferences.dart';
+import '../privacy.dart';
 import '../race_controller.dart';
 import '../route_match.dart';
+import '../settings_sync.dart';
 import 'route_picker_screen.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
@@ -59,6 +61,13 @@ class RunScreen extends StatefulWidget {
   final TrainingService training;
   final BleHeartRate heartRate;
   final cm.Route? initialRoute;
+  /// Source of the user's privacy zones for the live-broadcast path.
+  /// Wired by the host (HomeScreen → SettingsSyncService.effective) so
+  /// the LiveBroadcaster can drop in-zone pings client-side before
+  /// they leave the device. Without this, the Go-hub transport leaks
+  /// in-zone pings to anonymous spectators — the Supabase trigger
+  /// only protects the legacy path. See decisions §33.
+  final SettingsSyncService? settingsSync;
   /// Pre-loaded planned workout. When set, the run starts in
   /// "structured workout" mode — the [WorkoutExecutionBand] mounts and
   /// `_finishRun` writes `plan_workout_id` + `workout_step_results` +
@@ -72,6 +81,7 @@ class RunScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     required this.audioCues,
+    this.settingsSync,
     required this.social,
     this.raceController,
     required this.training,
@@ -695,6 +705,13 @@ class _RunScreenState extends State<RunScreen> {
         hubClient: hubUrl.isNotEmpty
             ? LiveHubClient(baseUrl: hubUrl)
             : null,
+        // Re-evaluated on every pushPing so a mid-run "add privacy
+        // zone" save in Settings takes effect immediately. Without
+        // this wire, the Go-hub transport leaks in-zone pings to
+        // anonymous spectators — the Supabase trigger
+        // `live_run_pings_drop_in_zone` only protects the legacy
+        // path. See decisions §33.
+        privacyZonesProvider: () => _currentPrivacyZones(),
       );
       try {
         await api
@@ -1227,6 +1244,33 @@ class _RunScreenState extends State<RunScreen> {
       actionLabel: actionLabel,
       onAction: onAction,
     );
+  }
+
+  /// Read the user's privacy zones from the synced settings bag. Used
+  /// by [LiveBroadcaster] to drop in-zone pings before they leave the
+  /// device — without this gate the Go-hub transport leaks the
+  /// runner's home/work coordinates to anonymous spectators (the
+  /// `live_run_pings_drop_in_zone` trigger only protects the legacy
+  /// Supabase path). Returns an empty list when settings aren't
+  /// available (signed out, sync not yet wired) — equivalent to "no
+  /// zones configured", which is the safe default behaviour.
+  List<PrivacyZone> _currentPrivacyZones() {
+    final service = widget.settingsSync?.service;
+    if (service == null) return const [];
+    try {
+      final raw = service.effective<List<dynamic>>(
+        privacyZonesKey,
+        fallback: const <dynamic>[],
+      );
+      if (raw == null || raw.isEmpty) return const [];
+      return raw
+          .whereType<Map<String, dynamic>>()
+          .map(PrivacyZone.fromJson)
+          .toList(growable: false);
+    } catch (e) {
+      debugPrint('Privacy zones read failed: $e');
+      return const [];
+    }
   }
 
   /// audit/accessibility (2026-05-25) High — WCAG 4.1.3 (Status

@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/live_broadcaster.dart';
 import '../lib/live_hub_client.dart';
+import '../lib/privacy.dart';
 
 class _FakeApiClient extends ApiClient {
   int callCount = 0;
@@ -189,6 +190,158 @@ void main() {
       // either — failure is just a missed ping; next 5 s tick takes
       // its place.
       expect(api.callCount, 0);
+    });
+  });
+
+  group('LiveBroadcaster privacy-zone drop', () {
+    // The headline guarantee. The Supabase trigger
+    // `live_run_pings_drop_in_zone` only fires on the legacy
+    // insert path; the Go hub bypasses Postgres entirely. Without
+    // a client-side drop, a runner with a privacy zone around
+    // their home leaks every in-zone fix to anonymous spectators
+    // when the hub transport is wired. The trip-wire is the
+    // privacyZonesProvider — when set, in-zone pings must be
+    // dropped before reaching either transport.
+    PrivacyZone home() => const PrivacyZone(
+          lat: 47.37,
+          lng: 8.54,
+          radiusM: 200,
+        );
+
+    test('in-zone ping is NOT forwarded to the Go hub', () async {
+      final api = _FakeApiClient();
+      var hubCalls = 0;
+      final hub = LiveHubClient(
+        baseUrl: 'https://live.threkir.com',
+        fetcher: (u, b) async {
+          hubCalls++;
+          return 202;
+        },
+      );
+      final lb = LiveBroadcaster(
+        api,
+        hubClient: hub,
+        privacyZonesProvider: () => [home()],
+      );
+      lb.attach('run-1');
+      // Ping at the zone center — must be dropped.
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(hubCalls, 0,
+          reason: 'in-zone ping must NOT reach the Go hub — the '
+              'hub bypasses the Supabase trigger so the client-side '
+              'drop is the only privacy enforcement on this path');
+      expect(api.callCount, 0,
+          reason: 'and must not fall through to the legacy path '
+              'either — the drop is transport-agnostic');
+    });
+
+    test('in-zone ping is NOT forwarded to the Supabase path',
+        () async {
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(
+        api,
+        privacyZonesProvider: () => [home()],
+      );
+      lb.attach('run-1');
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(api.callCount, 0,
+          reason: 'even though the Supabase trigger would drop the '
+              'row server-side, sending only to have it dropped is '
+              'wasted bandwidth — the client-side gate fires first');
+    });
+
+    test('out-of-zone ping is forwarded normally', () async {
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(
+        api,
+        privacyZonesProvider: () => [home()],
+      );
+      lb.attach('run-1');
+      // ~1 km north of the zone center — well outside the 200 m
+      // radius (every degree of latitude is ~111 km).
+      await lb.pushPing(lat: 47.38, lng: 8.54);
+      expect(api.callCount, 1,
+          reason: 'a fix outside every zone must pass through');
+    });
+
+    test('dropped ping does NOT burn the throttle window', () async {
+      // The throttle update must happen AFTER the zone check, so the
+      // very next out-of-zone fix fires immediately instead of waiting
+      // out the full 5 s interval. Without this, a runner who finishes
+      // their cool-down inside the zone and then steps outside has to
+      // wait 5 s before the spectator UI updates.
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(
+        api,
+        privacyZonesProvider: () => [home()],
+      );
+      lb.attach('run-1');
+      // Drop one in-zone ping.
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(api.callCount, 0);
+      // Immediately ping out of zone — should fire, not wait the
+      // throttle window.
+      await lb.pushPing(lat: 47.38, lng: 8.54);
+      expect(api.callCount, 1,
+          reason: 'dropped pings must not consume the throttle slot');
+    });
+
+    test('null provider → no client-side clipping (legacy behaviour '
+        'preserved when settings aren\'t wired)', () async {
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(api); // no provider
+      lb.attach('run-1');
+      // Without a provider, every fix passes — the Supabase trigger
+      // is the sole enforcement, matching pre-fix behaviour for the
+      // tests + the no-settings code path.
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(api.callCount, 1);
+    });
+
+    test('provider returning empty list → no clipping (matches "no '
+        'zones configured")', () async {
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(
+        api,
+        privacyZonesProvider: () => const <PrivacyZone>[],
+      );
+      lb.attach('run-1');
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(api.callCount, 1,
+          reason: 'an empty zone list is the user opting out of the '
+              'privacy gate — must not block any pings');
+    });
+
+    test('provider is re-evaluated on EVERY pushPing (mid-run zone '
+        'changes take effect immediately)', () async {
+      // The user can add a privacy zone in Settings while a broadcast
+      // is in flight. The provider must be re-read each push so the
+      // new zone applies to the next fix, not the next run.
+      var zones = <PrivacyZone>[];
+      final api = _FakeApiClient();
+      final lb = LiveBroadcaster(
+        api,
+        privacyZonesProvider: () => zones,
+      );
+      lb.attach('run-1');
+
+      // First ping with NO zones — passes.
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(api.callCount, 1);
+
+      // User adds a zone covering the same coordinates.
+      zones = [home()];
+
+      // Bypass the throttle by waiting (or using a fresh broadcaster
+      // — simpler). The throttle counts dropped pings as well? No,
+      // we tested that dropped don't burn it. So we just need to
+      // wait the throttle window.
+      await Future.delayed(const Duration(seconds: 6));
+      await lb.pushPing(lat: 47.37, lng: 8.54);
+      expect(api.callCount, 1,
+          reason: 'after the zone is added mid-run, the next in-zone '
+              'fix must be dropped — provider read must NOT be '
+              'memoised across pushes');
     });
   });
 }

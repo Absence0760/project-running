@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 
 import 'live_hub_client.dart';
+import 'privacy.dart';
 
 /// Pushes live spectator pings while a recording is in progress.
 /// Throttled to one push every [_pingInterval], swallows network /
@@ -30,11 +31,37 @@ import 'live_hub_client.dart';
 /// The fallback keeps the feature usable on every build pre-deploy
 /// and during a Fly.io outage. See `docs/followups.md § #13` for
 /// the migration plan.
+///
+/// Privacy-zone enforcement (decisions §33). The Supabase path is
+/// protected server-side by the BEFORE INSERT trigger
+/// `live_run_pings_drop_in_zone` (migration 20260618_001). The Go hub
+/// path bypasses Postgres entirely — it POSTs straight to the hub
+/// service which fans out via WebSocket to anonymous spectators with
+/// no server-side privacy check. To close that leak, [pushPing]
+/// evaluates [privacyZonesProvider] on every call and silently drops
+/// any ping whose coordinates fall inside one of the runner's
+/// configured privacy zones. The drop happens BEFORE the throttle
+/// window updates so a subsequent out-of-zone ping fires on time
+/// instead of waiting out the full interval. Even on the Supabase
+/// path, client-side dropping cuts wire traffic — every fix sent
+/// just to be silently dropped server-side was wasted bandwidth.
 class LiveBroadcaster {
-  LiveBroadcaster(this._api, {this.hubClient});
+  LiveBroadcaster(
+    this._api, {
+    this.hubClient,
+    this.privacyZonesProvider,
+  });
 
   final ApiClient _api;
   final LiveHubClient? hubClient;
+
+  /// Source of the runner's privacy zones, re-evaluated on every
+  /// [pushPing] so a mid-run settings change takes effect immediately.
+  /// When null or returns an empty list, no client-side clipping
+  /// happens — the Supabase trigger is the server-side fallback for
+  /// that transport, but the Go hub has no equivalent, so production
+  /// callers should always wire a non-null provider.
+  final List<PrivacyZone> Function()? privacyZonesProvider;
 
   String? _runId;
   bool _active = false;
@@ -79,6 +106,17 @@ class LiveBroadcaster {
     if (!_active || id == null) return;
     final now = DateTime.now();
     if (now.difference(_lastPingAt) < _pingInterval) return;
+    // Privacy-zone drop BEFORE updating _lastPingAt so dropped pings
+    // don't burn the throttle window — when the runner leaves the zone
+    // the very next out-of-zone fix should fire immediately, not wait
+    // out the full 5 s. The Supabase trigger (decisions §33) is the
+    // server-side fallback on the legacy transport; the Go hub has no
+    // equivalent so this client-side gate is the only enforcement when
+    // hubClient is wired.
+    final zones = privacyZonesProvider?.call() ?? const <PrivacyZone>[];
+    if (zones.isNotEmpty && isInAnyZone(lat, lng, zones)) {
+      return;
+    }
     _lastPingAt = now;
     final hub = hubClient;
     try {

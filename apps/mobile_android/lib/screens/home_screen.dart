@@ -139,6 +139,7 @@ class _HomeScreenState extends State<HomeScreen> {
           routeStore: widget.routeStore,
           preferences: widget.preferences,
           audioCues: widget.audioCues,
+          settingsSync: widget.settingsSync,
           social: widget.social,
           raceController: widget.raceController,
           training: widget.training,

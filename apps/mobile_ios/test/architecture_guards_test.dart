@@ -683,6 +683,56 @@ void main() {
       );
     });
 
+    test('LiveBroadcaster drops in-zone pings client-side', () {
+      // Reason: the `live_run_pings_drop_in_zone` BEFORE INSERT
+      // trigger (migration 20260618_001) only protects the legacy
+      // Supabase transport. The Go hub bypasses Postgres entirely —
+      // it POSTs straight to the hub service which fans out via
+      // WebSocket to anonymous spectators, with no server-side
+      // privacy gate. Without a client-side drop, a runner with a
+      // privacy zone around their home leaks every in-zone fix to
+      // anonymous spectators when the hub transport is wired. The
+      // guard pins both ends of the contract: the broadcaster must
+      // accept a privacy-zones provider, and the run_screen must
+      // wire it from settingsSync.
+      final lbSource =
+          File('lib/live_broadcaster.dart').readAsStringSync();
+      expect(
+        lbSource,
+        contains('privacyZonesProvider'),
+        reason: 'LiveBroadcaster must accept a privacy-zones provider '
+            '— the Go-hub transport has no server-side privacy gate, '
+            'so client-side dropping is the only enforcement.',
+      );
+      expect(
+        lbSource,
+        contains('isInAnyZone'),
+        reason: 'LiveBroadcaster.pushPing must call isInAnyZone on '
+            'the current ping coordinates and short-circuit when '
+            'true — the in-zone drop must happen before the request '
+            'leaves the device.',
+      );
+
+      final rsSource =
+          File('lib/screens/run_screen.dart').readAsStringSync();
+      expect(
+        rsSource,
+        contains('privacyZonesProvider:'),
+        reason: 'run_screen must wire privacyZonesProvider when '
+            'constructing LiveBroadcaster — without the wire the '
+            'broadcaster has no zones to filter against and the '
+            'Go-hub leak returns.',
+      );
+      expect(
+        rsSource,
+        contains('_currentPrivacyZones'),
+        reason: 'the provider must read the zones live from '
+            '_currentPrivacyZones (which reads from settingsSync), '
+            'not a constant — mid-run zone additions in Settings '
+            'must take effect on the next ping, not the next run.',
+      );
+    });
+
     test('runs_screen passes the current user id when queuing pending '
         'deletes', () {
       // Reason: pairs with the drain guard above. Tagging at queue
