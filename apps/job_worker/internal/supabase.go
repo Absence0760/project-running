@@ -1158,6 +1158,19 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			name: "reports.json", table: "reports",
 			filter: "reporter_id=eq." + userID, sel: "*",
 		},
+		// reports filed AGAINST the user (target_kind='user'). GDPR
+		// Art 15(1)(c) gives the data subject the right to know
+		// recipients of their data, including moderation actions
+		// taken against them. We project a narrow column set —
+		// reporter_id is anonymised (competing rights under Art 15(4))
+		// while existence + reason + status disclose the action.
+		// audit/data-export-completeness May 2026 Low closeout.
+		{
+			name:   "reports_against_me.json",
+			table:  "reports",
+			filter: "target_kind=eq.user&target_id=eq." + userID,
+			sel:    "id,target_kind,target_id,reason,status,notes,created_at,resolved_at",
+		},
 	}
 
 	out := make(map[string][]map[string]interface{}, len(specs))
@@ -1202,6 +1215,45 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			}
 		}
 		out[s.name] = rows
+	}
+
+	// jobs summary — GDPR Art 15(1) right-to-know, audit/data-export-
+	// completeness May 2026 Medium. The `jobs` table holds the user's
+	// UUID inside payload jsonb (`payload->>user_id`). Disclosing the
+	// raw payload would leak internal retry state + worker timing
+	// details; the audit's preferred shape is a count-by-kind summary.
+	//
+	// Fetch the kind column only via PostgREST jsonb path filter, then
+	// group + count in Go. Failure to fetch is tolerated as with every
+	// other table — the rest of the export still ships.
+	{
+		jq := url.Values{}
+		jq.Set("select", "kind")
+		u := c.BaseURL + "/rest/v1/jobs?" + jq.Encode() +
+			"&payload->>user_id=eq." + userID
+		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil); err == nil {
+			if body, err := c.do(ctx, req); err == nil {
+				var rows []struct {
+					Kind string `json:"kind"`
+				}
+				if json.Unmarshal(body, &rows) == nil && len(rows) > 0 {
+					counts := make(map[string]int, len(rows))
+					for _, r := range rows {
+						counts[r.Kind]++
+					}
+					summary := make([]map[string]interface{}, 0, len(counts))
+					for kind, n := range counts {
+						summary = append(summary, map[string]interface{}{
+							"kind":  kind,
+							"count": n,
+						})
+					}
+					if len(summary) > 0 {
+						out["jobs_summary.json"] = summary
+					}
+				}
+			}
+		}
 	}
 
 	// Two-step fetch for run_gear: PostgREST's `in.()` filter takes

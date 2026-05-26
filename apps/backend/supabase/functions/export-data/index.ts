@@ -1,9 +1,13 @@
 /// `POST /export-data` — GDPR data portability.
 ///
-/// Two formats:
+/// Three formats:
 ///   - `csv`: single CSV with one summary row per run.
 ///   - `gpx`: zip with one per-run GPX file plus a top-level
 ///     `runs.json` summary mirroring the CSV column set.
+///   - `backup`: structured JSON zip that mirrors the Go worker's
+///     `FetchExportPersonalDataTables` table set so the deprecated
+///     EF rollback path is functionally equivalent to the primary.
+///     Added per audit/data-export-completeness May 2026 High.
 ///
 /// Output is uploaded to the `runs` Storage bucket under the caller's
 /// user-id-prefixed path (`{user_id}/exports/<ts>.<ext>`) so the
@@ -103,8 +107,10 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 
 	const body = (guarded.body ?? {}) as { format?: unknown };
 	const format = (body.format ?? 'csv') as string;
-	if (format !== 'csv' && format !== 'gpx') {
-		return new Response('format must be "csv" or "gpx"', { status: 400 });
+	if (format !== 'csv' && format !== 'gpx' && format !== 'backup') {
+		return new Response('format must be "csv", "gpx", or "backup"', {
+			status: 400,
+		});
 	}
 
 	// Pull every run for the user. The authedSupabase client respects
@@ -125,7 +131,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	}
 
 	const ts = new Date().toISOString().replace(/[:.]/g, '-');
-	const ext = format === 'gpx' ? 'zip' : 'csv';
+	const ext = format === 'csv' ? 'csv' : 'zip';
 	const path = `${user.id}/exports/${ts}.${ext}`;
 
 	let body_: Uint8Array;
@@ -133,8 +139,11 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	if (format === 'csv') {
 		body_ = new TextEncoder().encode(buildCsv(runs ?? []));
 		contentType = 'text/csv';
-	} else {
+	} else if (format === 'gpx') {
 		body_ = await buildGpxZip(adminSupabase, runs ?? []);
+		contentType = 'application/zip';
+	} else {
+		body_ = await buildBackupZip(adminSupabase, user.id, runs ?? []);
 		contentType = 'application/zip';
 	}
 
@@ -360,5 +369,135 @@ function xmlEscape(v: string): string {
 		.replace(/>/g, '&gt;')
 		.replace(/"/g, '&quot;')
 		.replace(/'/g, '&apos;');
+}
+
+// Backup format — mirrors the Go worker's FetchExportPersonalDataTables
+// in `apps/job_worker/internal/supabase.go`. Same table set, same
+// filter shapes, same column projections + redactions. When the
+// audit's rollback-path equivalence question is asked, the answer is
+// "yes — same shape, just slower because Deno isolates spin per
+// request". See audit/data-export-completeness May 2026 High.
+//
+// Per-table failures are tolerated (logged + skipped) so a single
+// missing migration doesn't strand the export. The runs.json + per-
+// run track entries match the gpx export's manifest shape.
+import { type BackupTableSpec, buildBackupSpecs, summariseJobsByKind } from './backup_spec.ts';
+
+async function buildBackupZip(
+	supabase: ReturnType<typeof createClient>,
+	userId: string,
+	runs: RunRow[],
+): Promise<Uint8Array> {
+	const blobWriter = new BlobWriter('application/zip');
+	const zip = new ZipWriter(blobWriter);
+
+	const specs = buildBackupSpecs(userId);
+
+	for (const spec of specs) {
+		try {
+			const rows = await fetchBackupTable(supabase, spec);
+			if (!rows || rows.length === 0) continue;
+			const projected = spec.redact ? rows.map(spec.redact) : rows;
+			await zip.add(
+				spec.entry,
+				new TextReader(JSON.stringify(projected, null, 2)),
+			);
+		} catch (e) {
+			console.error(
+				`export-data backup: ${spec.entry} fetch failed:`,
+				e instanceof Error ? e.message : String(e),
+			);
+			// Per-table tolerance — the rest of the export still ships.
+		}
+	}
+
+	// jobs summary — count by kind. Audit's preferred shape over the
+	// raw payload (which would leak internal retry state). Aggregation
+	// helper lives in backup_spec.ts so it can be unit-tested.
+	try {
+		const { data: jobsRows } = await supabase
+			.from('jobs')
+			.select('kind')
+			.filter('payload->>user_id', 'eq', userId);
+		if (jobsRows && jobsRows.length > 0) {
+			const summary = summariseJobsByKind(jobsRows as Array<{ kind: string }>);
+			await zip.add('jobs_summary.json', new TextReader(JSON.stringify(summary, null, 2)));
+		}
+	} catch (e) {
+		console.error(
+			'export-data backup: jobs summary failed:',
+			e instanceof Error ? e.message : String(e),
+		);
+	}
+
+	// runs.json — same shape as the gpx-zip manifest.
+	await zip.add(
+		'runs.json',
+		new TextReader(
+			JSON.stringify(
+				runs.map((r) => ({
+					id: r.id,
+					started_at: r.started_at,
+					distance_m: r.distance_m,
+					duration_s: r.duration_s,
+					source: r.source,
+					external_id: r.external_id,
+					metadata: r.metadata,
+					is_public: r.is_public,
+					event_id: r.event_id,
+					route_id: r.route_id,
+				})),
+				null,
+				2,
+			),
+		),
+	);
+
+	// Per-run track bytes — same path-shape assertion + RLS guarantee
+	// as buildGpxZip. Tracks ship as raw GPX (not gzipped JSON) so
+	// the consumer can re-import without a custom decoder.
+	for (const r of runs) {
+		if (!r.track_url) continue;
+		const expectedTrackUrl = `${r.user_id}/${r.id}.json.gz`;
+		if (r.track_url !== expectedTrackUrl) continue;
+		try {
+			const { data: blob } = await supabase.storage.from('runs').download(r.track_url);
+			if (!blob) continue;
+			const track = (await _decodeTrack(blob)) as TrackPoint[];
+			if (!track || track.length < 2) continue;
+			await zip.add(`runs/${r.id}.gpx`, new TextReader(buildGpx(r, track)));
+		} catch (_) {
+			/* skip the run; manifest still lists it */
+		}
+	}
+
+	await zip.close();
+	const blob = await blobWriter.getData();
+	const buf = await blob.arrayBuffer();
+	return new Uint8Array(buf);
+}
+
+async function fetchBackupTable(
+	supabase: ReturnType<typeof createClient>,
+	spec: BackupTableSpec,
+): Promise<Record<string, unknown>[]> {
+	// Run a raw PostgREST query so the `target_kind=eq.user&target_id=eq.X`
+	// filter (two params) works the same way the Go worker passes it.
+	// Using `from(...).select(...)` doesn't natively combine arbitrary
+	// `&`-joined filter strings, so go through the auth-bound client's
+	// REST URL directly.
+	const url =
+		`${Deno.env.get('SUPABASE_URL')!}/rest/v1/${spec.table}?select=${encodeURIComponent(spec.select)}&${spec.filter}`;
+	const r = await fetch(url, {
+		headers: {
+			apikey: Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
+			Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!}`,
+			Accept: 'application/json',
+		},
+	});
+	if (!r.ok) {
+		throw new Error(`${spec.table} REST ${r.status}`);
+	}
+	return (await r.json()) as Record<string, unknown>[];
 }
 
