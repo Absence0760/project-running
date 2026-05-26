@@ -54,6 +54,19 @@ module "web" {
   # accidentally hammers preview.
   lambda_reserved_concurrency = 5
 
+  # Explicit rather than module-default so a future module-default
+  # change doesn't silently shift preview's throttle-alarm
+  # sensitivity. 5 throttles in the 5-min eval window is enough to
+  # rule out a one-off concurrency blip but cheap enough that real
+  # abuse fires the alarm fast. /audit/cost-controls May 2026.
+  lambda_throttle_alarm_threshold = 5
+
+  # SNS subscribers for the Lambda-throttle + 5xx alarms. Without
+  # this wire preview alarms fired into an empty SNS topic — a hit
+  # concurrency cap on a fresh preview env went silent. Validated
+  # non-empty + placeholder-rejected in variables.tf.
+  alert_emails = var.alert_emails
+
   secrets_file     = fileexists(local.secrets_path) ? local.secrets_path : null
   extra_lambda_env = var.extra_lambda_env
 

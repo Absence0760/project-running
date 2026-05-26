@@ -660,6 +660,147 @@ function looksLikeBareErrorIdentifier(arg: string): boolean {
     /(err|Err|error|Error)$/.test(stripped);
 }
 
+// ─── audit:cost-controls May 2026 closeouts ──────────────────────────
+// Six source-level pins on the Terraform IaC so cost-control regressions
+// fail CI rather than waiting for the bill at end of month. Each test
+// reads infra/* as text and asserts a property that the audit explicitly
+// called out.
+
+test('prod env wires alert_emails into the web-stack module', () => {
+	// Reason: prod has tight validation on var.alert_emails (non-empty
+	// + placeholder-rejected) but if main.tf didn't pass the variable
+	// through, the module would default to [] and alarms would fire
+	// into an empty SNS topic. The wire is the load-bearing link.
+	const prodMain = read('../../infra/envs/prod/main.tf');
+	const prodVars = read('../../infra/envs/prod/variables.tf');
+	assert.match(
+		prodMain,
+		/alert_emails\s*=\s*var\.alert_emails/,
+		'infra/envs/prod/main.tf must pass alert_emails into the web-stack module — without the wire, validated input never reaches the alarm subscribers.',
+	);
+	assert.match(
+		prodVars,
+		/variable\s+"alert_emails"[\s\S]*?validation\s*\{[\s\S]*?length\(var\.alert_emails\)\s*>\s*0/,
+		'infra/envs/prod/variables.tf alert_emails must have a non-empty-list validation block.',
+	);
+	// Placeholder-rejection check accepts either the `endswith`
+	// form or the `can(regex())` form used in prod today. Either is
+	// acceptable; the load-bearing property is "rejects @example.com".
+	assert.match(
+		prodVars,
+		/variable\s+"alert_emails"[\s\S]*?(endswith\(e,\s*"@example\.com"\)|@example\\?\.com)/,
+		'infra/envs/prod/variables.tf alert_emails must reject @example.com placeholders (via endswith or regex match).',
+	);
+});
+
+test('preview env declares alert_emails with non-empty validation', () => {
+	// Reason: preview was the lone outlier — module default of [] +
+	// no env-level validation meant alarms fired into an empty SNS
+	// topic. A hit Lambda concurrency cap on a fresh preview env
+	// went silent. /audit/cost-controls May 2026 closeout.
+	const previewMain = read('../../infra/envs/preview/main.tf');
+	const previewVars = read('../../infra/envs/preview/variables.tf');
+	assert.match(
+		previewMain,
+		/alert_emails\s*=\s*var\.alert_emails/,
+		'infra/envs/preview/main.tf must pass alert_emails into the web-stack module — closes the gap that /audit/cost-controls flagged.',
+	);
+	assert.match(
+		previewVars,
+		/variable\s+"alert_emails"[\s\S]*?validation\s*\{[\s\S]*?length\(var\.alert_emails\)\s*>\s*0/,
+		'infra/envs/preview/variables.tf alert_emails must validate non-empty list.',
+	);
+});
+
+test('web-stack CloudFront uses PriceClass_100 or PriceClass_200, never _All', () => {
+	// Reason: PriceClass_All bills from every edge location, including
+	// SA + AU which 10x the per-GB cost. A user accidentally toggling
+	// the price class to _All in a "let's see if it's faster" experiment
+	// produces a multi-x bill jump that doesn't get caught until end
+	// of month.
+	const mainTf = read('../../infra/modules/web-stack/main.tf');
+	const priceClassMatch = mainTf.match(/price_class\s*=\s*"(PriceClass_\w+)"/);
+	assert.ok(priceClassMatch, 'Could not locate price_class assignment in web-stack/main.tf.');
+	assert.ok(
+		['PriceClass_100', 'PriceClass_200'].includes(priceClassMatch![1]),
+		`CloudFront price_class must be PriceClass_100 or PriceClass_200 (was "${priceClassMatch![1]}"). _All bills from every edge location regardless of where users live and 10× the per-GB cost.`,
+	);
+});
+
+test('web-stack log groups all set retention_in_days', () => {
+	// Reason: AWS CloudWatch Logs defaults to "Never expire" — that's
+	// $0.50/GB/month forever for every log byte ever written. A
+	// retention attribute on every aws_cloudwatch_log_group resource
+	// caps the per-GB exposure to the configured window.
+	const mainTf = read('../../infra/modules/web-stack/main.tf');
+	// Find every aws_cloudwatch_log_group block and assert it sets
+	// retention_in_days. The body grep is generous — exact-attribute
+	// match would be fragile against HCL formatting variants.
+	const logGroupRe = /resource\s+"aws_cloudwatch_log_group"\s+"[^"]+"\s*\{[\s\S]*?\n\}/g;
+	const blocks = mainTf.match(logGroupRe) ?? [];
+	assert.ok(
+		blocks.length > 0,
+		'Could not find any aws_cloudwatch_log_group blocks in web-stack/main.tf — has the resource moved?',
+	);
+	for (const block of blocks) {
+		assert.match(
+			block,
+			/retention_in_days\s*=\s*\d+/,
+			'Every aws_cloudwatch_log_group MUST set retention_in_days — default "Never expire" is $0.50/GB/month forever.\nBlock:\n' + block.slice(0, 200) + '…',
+		);
+	}
+});
+
+test('web-stack WAF web_acl_id wires the distribution + scope-down filters /api/coach', () => {
+	// Reason: the WAF rate-limit rule fires per IP at 100 req / 5 min;
+	// without the scope-down filter it would rate-limit ALL traffic
+	// (static assets included), throttling legitimate users on the
+	// first page load. Without the web_acl_id wire it wouldn't fire
+	// at all. Both must be present together.
+	const mainTf = read('../../infra/modules/web-stack/main.tf');
+	const wafTf = read('../../infra/modules/web-stack/waf.tf');
+	assert.match(
+		mainTf,
+		/web_acl_id\s*=\s*var\.waf_enabled[\s\S]*?aws_wafv2_web_acl\.coach\[0\]\.arn/,
+		'CloudFront distribution must attach the WAF ACL via web_acl_id (gated on var.waf_enabled).',
+	);
+	// The scope-down statement must filter to /api/coach paths only.
+	assert.match(
+		wafTf,
+		/scope_down_statement[\s\S]*?byte_match_statement[\s\S]*?\/api\/coach/,
+		'WAF rate-limit rule must have a scope_down_statement byte-matching /api/coach so static-asset traffic isn\'t rate-limited.',
+	);
+});
+
+test('AWS Budgets carries all three thresholds (50% ACTUAL, 100% ACTUAL, 100% FORECASTED)', () => {
+	// Reason: the FORECASTED notification is the only one that catches
+	// a runaway DURING the month — the two ACTUAL notifications fire
+	// only after the spend lands on the bill (up to 24 h lag). A
+	// budget that drops the FORECASTED notification leaves a 24 h
+	// window where a leaked Anthropic key can rack up hundreds of
+	// dollars before anyone notices.
+	const budgets = read('../../infra/envs/prod/budgets.tf');
+	const notifications = budgets.match(/notification\s*\{[\s\S]*?\}/g) ?? [];
+	assert.ok(
+		notifications.length >= 3,
+		`Expected ≥3 notification blocks in budgets.tf, found ${notifications.length}. The 50%/100% ACTUAL + 100% FORECASTED set is the documented baseline.`,
+	);
+	// Pin each of the three required types/thresholds.
+	const has = (re: RegExp): boolean => notifications.some((n) => re.test(n));
+	assert.ok(
+		has(/threshold\s*=\s*50[\s\S]*?notification_type\s*=\s*"ACTUAL"/),
+		'budgets.tf must declare a 50% ACTUAL notification — early warning at half-budget.',
+	);
+	assert.ok(
+		has(/threshold\s*=\s*100[\s\S]*?notification_type\s*=\s*"ACTUAL"/),
+		'budgets.tf must declare a 100% ACTUAL notification — budget blown.',
+	);
+	assert.ok(
+		has(/threshold\s*=\s*100[\s\S]*?notification_type\s*=\s*"FORECASTED"/),
+		'budgets.tf must declare a 100% FORECASTED notification — the ONLY one that catches a runaway during the month (the 24h-lagged ACTUAL fires too late).',
+	);
+});
+
 test('refresh-tokens fails closed (503) when CRON_SECRET env is absent', () => {
 	// Reason: the function returns 503 `cron_not_configured` when
 	// `Deno.env.get('CRON_SECRET')` is null — i.e. a misconfigured

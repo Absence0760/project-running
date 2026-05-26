@@ -124,6 +124,21 @@ Numbers are USD/month at the launch tier (1000 active users, ~5 runs/user/month)
 
 **Launch baseline: ~$70/month.** Scaling drivers (CloudFront egress past 1 TB once the free year ends, OSRM RAM as we add regions, Anthropic at higher coach usage) push that toward $200–300 in the 10k-user range. Detailed projections per service in each `deployment.md`.
 
+**Cost-control ceilings (what stops a runaway):**
+
+Each spend vector carries at least two independent caps — one in IaC, one (where possible) in the provider console:
+
+- **AWS account total** — `aws_budgets_budget` in [`infra/envs/prod/budgets.tf`](../infra/envs/prod/budgets.tf) fires at 50 % / 100 % ACTUAL and 100 % FORECASTED of `monthly_budget_limit_usd` (default $200). The FORECASTED notification is the one that catches a runaway *during* the month — ACTUAL lags by up to 24 h.
+- **Lambda concurrency** — `lambda_reserved_concurrency` in [`infra/envs/{prod,preview}/main.tf`](../infra/envs/prod/main.tf) caps per-env concurrency (prod 50, preview 5). Throttle alarm fires on the first throttled invocation. Subscribed via `alert_emails` (validated non-empty + placeholder-rejected on both envs).
+- **CloudFront edge cost** — `price_class = PriceClass_100` in [`infra/modules/web-stack/main.tf`](../infra/modules/web-stack/main.tf) bills only NA + EU edge locations (skips SA + AU which 10× the per-GB cost). WAF `aws_wafv2_web_acl` rate-limits `/api/coach*` at 100 req / 5 min / IP via the scope-down filter — keeps static-asset traffic outside the rate-limit envelope.
+- **CloudWatch log retention** — every log group sets `retention_in_days` ≤ 90 (default "Never expire" is $0.50/GB/month forever).
+- **S3 lifecycle** — non-current versions expire at 30 d, incomplete multipart uploads abort at 7 d (prevents version-history cost ramp).
+- **Coach per-user cap** — `TIER_LIMITS.free.dailyLimit` in [`apps/web/src/lib/coach/types.ts`](../apps/web/src/lib/coach/types.ts) caps free at 2 messages/UTC-day, server-enforced before any Anthropic call. Pro is daily-uncapped but each turn is capped at `maxTokens = 2048`.
+- **Anthropic console spend limit** — **MUST be set manually** at https://console.anthropic.com/settings/limits — code cannot enforce a provider-side ceiling on a key that's leaked from a sops file. The recommended floor is ~2× the projected monthly Anthropic spend (~$30/mo at launch baseline, so $60–$100 cap).
+- **Supabase egress alert** — **MUST be set manually** in Supabase project settings. Code cannot enforce a daily-egress ceiling at the provider level.
+
+The full audit + arch-guard tests covering each ceiling live in [`apps/web/src/lib/security_guards.test.ts`](../apps/web/src/lib/security_guards.test.ts) under the "audit:cost-controls" section.
+
 ---
 
 ## Observability

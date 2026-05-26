@@ -683,6 +683,83 @@ void main() {
       );
     });
 
+    test('background_sync WorkManager frequency is hourly + keep-existing',
+        () {
+      // Reason: WorkManager fires periodic tasks on the device. A
+      // tighter frequency (every 5 min, every 15 min) multiplied
+      // across the install base produces N× more Supabase requests
+      // per hour — a silent cost-of-Supabase amplifier with no
+      // user-visible benefit. The hourly cadence is the documented
+      // minimum acceptable interval (Android's WorkManager has a
+      // hard floor at 15 min anyway, but 60 min is the conservative
+      // baseline). ExistingPeriodicWorkPolicy.keep means re-running
+      // registerBackgroundSync (e.g. on every app launch) doesn't
+      // cancel-and-restart the existing task — without keep, the
+      // first-run window is reset every launch, which never lets the
+      // task fire at all on a frequently-relaunched device. /audit/
+      // cost-controls May 2026 closeout.
+      final source = File('lib/background_sync.dart').readAsStringSync();
+      // Frequency must be ≥ 1 hour expressed as Duration(hours: N)
+      // — Duration(minutes: <60>) or Duration(seconds: ...) would
+      // be a regression. Match the hours-form and assert the
+      // numeric is ≥ 1.
+      final freqRe = RegExp(r'frequency:\s*const\s+Duration\(\s*hours:\s*(\d+)\s*\)');
+      final m = freqRe.firstMatch(source);
+      expect(m, isNotNull,
+          reason: 'background_sync.dart must declare frequency as '
+              'Duration(hours: N). Sub-hour intervals are an N× '
+              'multiplier on Supabase request volume across the '
+              'install base.');
+      final hours = int.parse(m!.group(1)!);
+      expect(hours, greaterThanOrEqualTo(1),
+          reason: 'WorkManager frequency must be ≥ 1 hour, was '
+              '$hours. /audit/cost-controls baseline.');
+      expect(
+        source,
+        contains('ExistingPeriodicWorkPolicy.keep'),
+        reason: 'WorkManager registration must use '
+            'ExistingPeriodicWorkPolicy.keep so re-registration '
+            'on app launch doesn\'t cancel-and-restart the existing '
+            'task (which would reset the first-run window every '
+            'launch and prevent the task from ever firing on a '
+            'frequently-relaunched device).',
+      );
+    });
+
+    test('coach_screen 429 branch does NOT auto-resend', () {
+      // Reason: a 429 from the coach endpoint means the user's daily
+      // quota is exhausted. Auto-retrying produces another 429 — but
+      // a buggy retry loop would (a) pin one device's CPU on a
+      // request that can't succeed for hours, and (b) on the off-
+      // chance the cap was upped server-side, would spike spend the
+      // moment the new quota landed. The 429 branch MUST surface a
+      // toast / banner only, never re-enter _send. Pin the property
+      // at the source level — the existing test coverage is
+      // behavioural in a manual review only. /audit/cost-controls
+      // May 2026.
+      final source = File('lib/screens/coach_screen.dart').readAsStringSync();
+      // Extract the 429 branch body — `if (res.statusCode == 429) {
+      // ... }` — and assert it contains NO `_send(` call.
+      final branchRe = RegExp(
+        r'if\s*\(\s*res\.statusCode\s*==\s*429\s*\)\s*\{([\s\S]*?)\n\s{0,12}\}',
+      );
+      final m = branchRe.firstMatch(source);
+      expect(m, isNotNull,
+          reason: 'Could not locate the 429 branch in coach_screen.dart '
+              '— has the comparison shape moved?');
+      final branchBody = m!.group(1)!;
+      expect(
+        branchBody.contains('_send('),
+        isFalse,
+        reason: 'coach_screen 429 branch MUST NOT call _send() — a '
+            'retry-on-429 loop is a denial-of-wallet vector (one '
+            'device pinned on requests that can\'t succeed until '
+            'the daily cap resets at UTC midnight, and a server-'
+            'side cap bump would instantly drain the new quota). '
+            'Surface a banner/toast and return.',
+      );
+    });
+
     test('main.dart clears SettingsSyncService on signedOut', () {
       // Reason: the cached SettingsService instance holds the
       // previously-signed-in user's universal + device bags

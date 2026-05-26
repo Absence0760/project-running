@@ -309,7 +309,7 @@ RTO: ~2 hours from a cold-start of a new account if the domain is at a registrar
 - [ ] GitHub Secrets populated: `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`, `PUBLIC_MAPTILER_KEY`, `PUBLIC_REVENUECAT_WEB_API_KEY`, `PUBLIC_SENTRY_DSN`, `AWS_DEPLOY_ROLE_ARN_PROD`, `AWS_DEPLOY_ROLE_ARN_PREVIEW`
 - [ ] First preview deploy green; smoke test sign-in + dashboard + run detail at `preview.threkir.com`
 - [ ] First prod deploy green via tag `web@0.1.0`
-- [ ] Coach endpoint responds (try a free user → expect a successful streamed reply, then a 4th request → expect 429)
+- [ ] Coach endpoint responds (try a free user → expect 2 successful streamed replies, then a 3rd request → expect 429; free tier cap is `TIER_LIMITS.free.dailyLimit = 2` per `apps/web/src/lib/coach/types.ts`)
 - [ ] Push notification flow verified end-to-end (subscribe in Settings, trigger via a kudos on another account)
 - [ ] CloudWatch alarms wired to SNS → email (or PagerDuty)
 - [ ] Sentry frontend + server projects receiving events

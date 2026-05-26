@@ -76,7 +76,7 @@ variable "waf_enabled" {
 }
 
 variable "waf_rate_limit" {
-  description = "Per-IP rate limit applied to /api/coach* requests across a 5-minute rolling window (the WAF v2 default). 100 is generous against the per-user daily cap of 5/day — a single legitimate user can never approach it from one IP."
+  description = "Per-IP rate limit applied to /api/coach* requests across a 5-minute rolling window (the WAF v2 default). 100 is generous against the per-user daily cap of 2/day — a single legitimate user can never approach it from one IP. (Cap value tracked in apps/web/src/lib/coach/types.ts#TIER_LIMITS.free.dailyLimit — pinned to be kept in lockstep with this comment by security_guards.test.ts.)"
   type        = number
   default     = 100
 }
