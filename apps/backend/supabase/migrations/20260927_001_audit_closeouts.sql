@@ -131,11 +131,23 @@ create policy "avatars owner can delete"
 -- enforce_create_rate_limit call inserted before any DB write.
 -- The rate-limit raises a P0001 with a friendly tag that the
 -- mobile + web error helpers already translate.
+-- Re-apply the canonical body from 20260721_001_plan_templates_strip_fitness.sql
+-- with the rate-limit perform inserted near the top. The previous
+-- attempt in this file copy-pasted the original 20260524_001 body
+-- verbatim — but 20260721_001 had since (a) rewritten the column set
+-- to match the actual training_plans / plan_weeks / plan_workouts
+-- schema, (b) added parent_template_id wiring, (c) added the
+-- vdot / current_5k_seconds strip (publisher-private fitness data
+-- must NOT propagate to clones — that pass-3 audit fix), and (d)
+-- fixed the status='draft' bug (training_plans_status_check only
+-- allows active/completed/abandoned). The /release-readiness pgtap
+-- run caught the regression — fix it here by basing on the right
+-- body, not the original. The only addition compared to 20260721_001
+-- is the enforce_create_rate_limit call at the top.
 create or replace function clone_plan_template(
   template_id uuid,
   new_start_date date
-)
-returns uuid
+) returns uuid
 language plpgsql
 security definer
 set search_path = public
@@ -143,11 +155,11 @@ as $$
 declare
   caller uuid := auth.uid();
   tmpl training_plans%rowtype;
-  date_offset_days int;
   new_plan_id uuid;
+  new_week_id uuid;
+  date_offset_days int;
   week_record record;
   workout_record record;
-  new_week_id uuid;
 begin
   if caller is null then
     raise exception 'clone_plan_template: not authenticated';
@@ -156,16 +168,23 @@ begin
   -- Abuse guard: 20 clones/hour is well above the legitimate
   -- "browse + clone a few templates" cadence and below the
   -- "loop-clone every public template" abuse shape. Same scale
-  -- as create_route (30/h) per migration 20260907_001.
+  -- as create_route (30/h) per migration 20260907_001. New in
+  -- 20260927_001 — closes the rate-limit gap /audit:rls flagged.
   perform enforce_create_rate_limit('clone_plan_template', caller, 20, 3600);
 
-  select * into tmpl from training_plans
-    where id = template_id and is_template = true;
+  -- SECURITY DEFINER context bypasses RLS on training_plans, so the
+  -- select * into below reads any matching template row regardless
+  -- of caller. The explicit authorisation check below is the
+  -- single access gate.
+  select * into tmpl
+  from training_plans
+  where id = template_id and is_template = true;
 
   if not found then
-    raise exception 'clone_plan_template: template % not found', template_id;
+    raise exception 'clone_plan_template: template not found';
   end if;
 
+  -- Caller must own the template OR be a club member of its club.
   if tmpl.user_id <> caller
      and not (tmpl.club_id is not null and is_club_member(tmpl.club_id))
   then
@@ -177,44 +196,45 @@ begin
   insert into training_plans (
     user_id, name, goal_event, goal_distance_m, goal_time_seconds,
     start_date, end_date, days_per_week, vdot, current_5k_seconds,
-    notes, status, is_template
+    status, notes, parent_template_id, is_template
   )
   values (
     caller, tmpl.name, tmpl.goal_event, tmpl.goal_distance_m, tmpl.goal_time_seconds,
-    new_start_date,
-    tmpl.end_date + (date_offset_days || ' days')::interval,
-    tmpl.days_per_week, tmpl.vdot, tmpl.current_5k_seconds,
-    tmpl.notes, 'draft', false
+    new_start_date, tmpl.end_date + date_offset_days,
+    tmpl.days_per_week,
+    -- Publisher-private fitness data — never propagated to the clone.
+    -- The clone owner (`caller`) sets their own VDOT via /plans/new.
+    null, null,
+    'active', tmpl.notes, template_id, false
   )
   returning id into new_plan_id;
 
+  -- Iterate weeks → workouts. Date-shift workouts by date_offset_days.
   for week_record in
     select * from plan_weeks where plan_id = template_id order by week_index
   loop
-    insert into plan_weeks (plan_id, week_index, theme, target_distance_m, notes)
-    values (new_plan_id, week_record.week_index, week_record.theme,
-            week_record.target_distance_m, week_record.notes)
+    insert into plan_weeks (plan_id, week_index, phase, target_volume_m, notes)
+    values (new_plan_id, week_record.week_index, week_record.phase,
+            week_record.target_volume_m, week_record.notes)
     returning id into new_week_id;
 
     for workout_record in
       select * from plan_workouts where week_id = week_record.id
     loop
       insert into plan_workouts (
-        plan_id, week_id, day_index, kind,
-        target_distance_m, target_duration_seconds, target_pace_seconds_per_km,
-        warmup_m, cooldown_m, repetitions, rep_distance_m, rep_pace_seconds_per_km,
-        recovery_distance_m, recovery_pace_seconds_per_km, notes, scheduled_date
+        week_id, scheduled_date, kind, target_distance_m, target_duration_seconds,
+        target_pace_sec_per_km, target_pace_tolerance_sec, structure, notes
       )
       values (
-        new_plan_id, new_week_id, workout_record.day_index, workout_record.kind,
-        workout_record.target_distance_m, workout_record.target_duration_seconds,
-        workout_record.target_pace_seconds_per_km,
-        workout_record.warmup_m, workout_record.cooldown_m,
-        workout_record.repetitions, workout_record.rep_distance_m,
-        workout_record.rep_pace_seconds_per_km,
-        workout_record.recovery_distance_m, workout_record.recovery_pace_seconds_per_km,
-        workout_record.notes,
-        workout_record.scheduled_date + (date_offset_days || ' days')::interval
+        new_week_id,
+        workout_record.scheduled_date + date_offset_days,
+        workout_record.kind,
+        workout_record.target_distance_m,
+        workout_record.target_duration_seconds,
+        workout_record.target_pace_sec_per_km,
+        workout_record.target_pace_tolerance_sec,
+        workout_record.structure,
+        workout_record.notes
       );
     end loop;
   end loop;

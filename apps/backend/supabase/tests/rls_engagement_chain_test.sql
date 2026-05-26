@@ -50,9 +50,19 @@ values
 
 -- Owner attaches engagement on both runs (kudos from a different user
 -- requires a separate insert; we'll do that later).
+-- The run_kudos_reject_self trigger (20260926_001) rejects self-kudos
+-- from the authenticated path. Service-role bypasses the trigger per
+-- the documented pattern (matches the wire-leak regression suite in
+-- seed.sql) — fixture planting is a trusted setup path. Switch to
+-- service_role for the plant, then back to authenticated for the
+-- visibility assertions below.
+reset role;
+set local "request.jwt.claims" = '{"role":"service_role"}';
 insert into run_kudos (user_id, run_id) values
   ('00000000-0000-0000-0000-00000000e001', '33333333-3333-3333-3333-333333333301'),
   ('00000000-0000-0000-0000-00000000e001', '33333333-3333-3333-3333-333333333302');
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000e001"}';
 
 insert into run_comments (id, run_id, author_id, body) values
   ('cccccccc-3333-3333-3333-333333333301',

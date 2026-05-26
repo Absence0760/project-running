@@ -172,7 +172,7 @@ class ClubRow {
     inviteToken: json['invite_token'] as String?,
     locationPoint: json['location_point'],
     memberCount: (json['member_count'] as num).toInt(),
-    isVerified: json['is_verified'] as bool,
+    isVerified: (json['is_verified'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -296,7 +296,7 @@ class DeviceTokenRow {
     token: json['token'] as String,
     appVersion: json['app_version'] as String?,
     locale: json['locale'] as String?,
-    notificationsEnabled: json['notifications_enabled'] as bool,
+    notificationsEnabled: (json['notifications_enabled'] as bool?) ?? false,
     lastSeenAt: DateTime.parse(json['last_seen_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
@@ -424,7 +424,7 @@ class EventResultRow {
     note: json['note'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
-    organiserApproved: json['organiser_approved'] as bool,
+    organiserApproved: (json['organiser_approved'] as bool?) ?? false,
     organiserApprovedBy: json['organiser_approved_by'] as String?,
     organiserApprovedAt: json['organiser_approved_at'] == null ? null : DateTime.parse(json['organiser_approved_at'] as String),
   );
@@ -701,7 +701,7 @@ class GearRow {
     notes: json['notes'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
-    isDefault: json['is_default'] as bool,
+    isDefault: (json['is_default'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1055,7 +1055,7 @@ class PlanWorkoutRow {
     completedAt: json['completed_at'] == null ? null : DateTime.parse(json['completed_at'] as String),
     paceZone: json['pace_zone'] as String?,
     targetPaceEndSecPerKm: (json['target_pace_end_sec_per_km'] as num?)?.toInt(),
-    manuallyCompleted: json['manually_completed'] as bool,
+    manuallyCompleted: (json['manually_completed'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1186,7 +1186,7 @@ class RaceSessionRow {
     startedAt: json['started_at'] == null ? null : DateTime.parse(json['started_at'] as String),
     startedBy: json['started_by'] as String?,
     finishedAt: json['finished_at'] == null ? null : DateTime.parse(json['finished_at'] as String),
-    autoApprove: json['auto_approve'] as bool,
+    autoApprove: (json['auto_approve'] as bool?) ?? false,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
   );
@@ -1338,11 +1338,11 @@ class RouteRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     startPoint: json['start_point'],
     tags: (json['tags'] as List<dynamic>).cast<String>(),
-    featured: json['featured'] as bool,
+    featured: (json['featured'] as bool?) ?? false,
     featuredAt: json['featured_at'] == null ? null : DateTime.parse(json['featured_at'] as String),
     runCount: (json['run_count'] as num).toInt(),
     clubId: json['club_id'] as String?,
-    isStarred: json['is_starred'] as bool,
+    isStarred: (json['is_starred'] as bool?) ?? false,
     geom: json['geom'],
     description: json['description'] as String?,
   );
@@ -1922,7 +1922,7 @@ class TrainingPlanRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     source: json['source'] as String,
     rules: json['rules'],
-    isTemplate: json['is_template'] as bool,
+    isTemplate: (json['is_template'] as bool?) ?? false,
     parentTemplateId: json['parent_template_id'] as String?,
     clubId: json['club_id'] as String?,
   );

@@ -537,7 +537,19 @@ String _fromJsonExpr(_Column c, Set<String> enums) {
           ? '($key as num?)?.toDouble()'
           : '($key as num).toDouble()';
     case 'bool':
-      return '$key as bool$nullCast';
+      // Non-nullable booleans get the safe-false fallback even though
+      // the DB-side NOT NULL guarantees the value is present in fresh
+      // reads. The fallback is the security-conscious shape: a wire-
+      // compat read against an older fixture / cached schema (or a
+      // hand-built `from('table').select('col_a, col_b')` that omits
+      // a newer column) must surface as `false`, not crash on the null
+      // cast. The pattern is documented in the
+      // `ClubRow.is_verified defaults to false` test — every bool
+      // column added to this codebase to date has been `default false
+      // not null` for the same "explicit opt-in, never implicit" rule.
+      return c.nullable
+          ? '$key as bool?'
+          : '($key as bool?) ?? false';
     case 'DateTime':
       return c.nullable
           ? '$key == null ? null : DateTime.parse($key as String)'
