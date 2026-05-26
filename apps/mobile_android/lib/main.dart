@@ -386,7 +386,13 @@ void main() async {
   // release can be pinpointed.
   final sentryDsn = dotenv.env['SENTRY_DSN'] ?? '';
   final appRelease = const String.fromEnvironment('APP_RELEASE', defaultValue: 'dev');
-  final shouldUseSentry = kReleaseMode && sentryDsn.isNotEmpty;
+  // Sentry opt-out (audit/gdpr May 2026 High): Settings → Privacy →
+  // "Send error reports" persists `prefs.sentryOptOut`. When true,
+  // we skip init entirely so no traces / breadcrumbs / events fire.
+  // Toggle applies on next launch — the SDK can't be cleanly un-
+  // initialised mid-process without sentry-version-fragile shims.
+  final shouldUseSentry =
+      kReleaseMode && sentryDsn.isNotEmpty && !prefs.sentryOptOut;
 
   Future<void> startApp() async {
     runApp(RunApp(

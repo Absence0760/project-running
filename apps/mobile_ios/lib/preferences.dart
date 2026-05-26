@@ -189,6 +189,16 @@ class Preferences extends ChangeNotifier {
   // (the conservative default — DB column default is false anyway).
   static const _kPrivacyDefault = 'privacy_default';
 
+  // GDPR Art 7(3) / Art 21 withdrawal path for Sentry error reporting.
+  // When true, main.dart skips Sentry.init at app launch — the SDK
+  // never initialises so no traces, breadcrumbs, or events are
+  // emitted. Defaults to false (Sentry on) so existing builds are
+  // unchanged; the Settings → Privacy toggle flips it. Takes effect
+  // on next app launch (the in-place SentryFlutter.close() path is
+  // sentry_flutter-version-fragile and not worth the complexity for
+  // a once-per-account toggle). See audit/gdpr (2026-05-25) High.
+  static const _kSentryOptOut = 'sentry_opt_out';
+
   // Legacy key — a single weekly distance goal in km. Migrated into the
   // richer [goals] list on first launch of the new build, then removed.
   static const _kLegacyWeeklyGoalKm = 'weekly_goal_km';
@@ -207,6 +217,7 @@ class Preferences extends ChangeNotifier {
   ThemeMode _themeMode = ThemeMode.dark;
   double? _bodyWeightKg;
   String _privacyDefault = 'private';
+  bool _sentryOptOut = false;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
   bool get useMiles => _useMiles;
@@ -241,6 +252,13 @@ class Preferences extends ChangeNotifier {
   /// today because there's no followers-only column on `runs`).
   /// Defaults to `private` — matches the DB column default.
   String get privacyDefault => _privacyDefault;
+
+  /// GDPR Art 7(3) / Art 21 withdrawal flag for Sentry error
+  /// reporting. When true, `main.dart` skips `SentryFlutter.init`
+  /// so no events leave the device. Defaults to false (Sentry on
+  /// for opted-in builds). Toggle in Settings → Privacy → "Send
+  /// error reports".
+  bool get sentryOptOut => _sentryOptOut;
 
   /// Convenience: should newly-saved runs be marked `is_public=true`?
   /// True only when `privacyDefault == 'public'`. `followers` /
@@ -322,6 +340,7 @@ class Preferences extends ChangeNotifier {
     final bw = _prefs.getDouble(_kBodyWeightKg);
     _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
     _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
+    _sentryOptOut = _prefs.getBool(_kSentryOptOut) ?? false;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
     if (existingDeviceId != null && existingDeviceId.isNotEmpty) {
@@ -398,6 +417,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setDefaultActivityType(String v) async {
     _defaultActivityType = v;
     await _prefs.setString(_kDefaultActivityType, v);
+    notifyListeners();
+  }
+
+  Future<void> setSentryOptOut(bool v) async {
+    _sentryOptOut = v;
+    await _prefs.setBool(_kSentryOptOut, v);
     notifyListeners();
   }
 

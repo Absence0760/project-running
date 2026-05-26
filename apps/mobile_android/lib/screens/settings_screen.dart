@@ -1433,6 +1433,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 );
               },
             ),
+            // GDPR Art 7(3) / Art 21 withdrawal toggle for Sentry
+            // error reporting. Flag persists across launches; the
+            // change applies on next app start. See audit/gdpr
+            // (2026-05-25) High closeout.
+            SwitchListTile(
+              secondary: const Icon(Icons.bug_report_outlined),
+              title: const Text('Send error reports'),
+              subtitle: const Text(
+                'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.',
+              ),
+              value: !widget.preferences.sentryOptOut,
+              onChanged: (enabled) async {
+                await widget.preferences.setSentryOptOut(!enabled);
+                if (!mounted) return;
+                showTopBanner(
+                  context,
+                  enabled
+                      ? 'Error reporting enabled — restart the app to apply.'
+                      : 'Error reporting disabled — restart the app to apply.',
+                );
+              },
+            ),
             ListTile(
               leading: const Icon(Icons.workspace_premium_outlined),
               title: const Text('Subscribe to Pro — \$9.99/month'),

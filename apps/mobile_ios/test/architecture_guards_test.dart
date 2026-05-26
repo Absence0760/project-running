@@ -3663,4 +3663,31 @@ void main() {
       );
     });
   });
+
+  group('Sentry opt-out gate (audit/gdpr May 2026 High)', () {
+    // The Sentry init in main.dart MUST consult prefs.sentryOptOut
+    // before SentryFlutter.init runs, or the Settings toggle is a
+    // lie. Pin the call shape so a future refactor that splits the
+    // init into a helper file is still caught.
+
+    test('main.dart gates SentryFlutter.init on prefs.sentryOptOut', () {
+      final src = File('lib/main.dart').readAsStringSync();
+      expect(
+        src.contains('!prefs.sentryOptOut'),
+        isTrue,
+        reason: 'main.dart must compute `shouldUseSentry` against '
+            'prefs.sentryOptOut — otherwise the Settings → Privacy '
+            'toggle does not stop Sentry from initialising.',
+      );
+      // Pin the order: the boolean composition must happen BEFORE
+      // the `if (shouldUseSentry) SentryFlutter.init(...)` call.
+      final gateIdx = src.indexOf('!prefs.sentryOptOut');
+      final initIdx = src.indexOf('SentryFlutter.init');
+      expect(
+        gateIdx >= 0 && initIdx > gateIdx,
+        isTrue,
+        reason: 'The opt-out check must precede SentryFlutter.init.',
+      );
+    });
+  });
 }

@@ -15,6 +15,7 @@
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { consent } from '$lib/consent.svelte';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
@@ -498,6 +499,44 @@
 					Add a zone
 				</button>
 			</div>
+		</section>
+
+		<!-- Telemetry consent (Sentry). Mirrors the cookie banner's
+		     accept/reject choice so a returning user can withdraw their
+		     earlier acceptance per GDPR Art 7(3) / Art 21. The hook in
+		     hooks.server.ts + hooks.client.ts gates Sentry on this
+		     state. See audit/gdpr (2026-05-25) High. -->
+		<section class="card">
+			<h2>Privacy & telemetry</h2>
+			<p class="section-desc">
+				When enabled, anonymised error reports (URL paths, stack
+				traces, breadcrumbs without auth tokens) are sent to Sentry —
+				a US-hosted sub-processor — so we can spot crashes and
+				regressions. Disable to stop sending. Your withdrawal
+				takes effect immediately on the next page load.
+			</p>
+			<label class="consent-checkbox">
+				<input
+					type="checkbox"
+					checked={consent.choice === 'accepted'}
+					onchange={(e) => {
+						const enabled = (e.currentTarget as HTMLInputElement).checked;
+						consent.set(enabled ? 'accepted' : 'rejected');
+						showToast(
+							enabled
+								? 'Error reporting enabled.'
+								: 'Error reporting disabled. Reload to apply.',
+							'success',
+						);
+					}}
+				/>
+				<span>Send anonymised error reports to Sentry.</span>
+			</label>
+			{#if consent.timestamp}
+				<p class="section-hint">
+					Choice recorded on {new Date(consent.timestamp).toLocaleDateString()}.
+				</p>
+			{/if}
 		</section>
 
 		<!-- AI Coach -->

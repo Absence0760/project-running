@@ -42,7 +42,7 @@ For each activity, the standard test:
 Items the DPIA itself flags for action:
 
 1. ~~**Coach-message retention**: add a `pg_cron` purge job; expose retention period in Privacy Policy + Settings.~~ **Done** — migration `20260922_001_data_retention_purge_jobs.sql` + privacy-policy entry, 2026-05-26.
-2. **Sentry user-opt-out toggle** in Settings → Privacy. Today the SDK is on-by-default in prod for everyone. Tracked separately — see roadmap.
+2. ~~**Sentry user-opt-out toggle** in Settings → Privacy.~~ **Done** — web `/settings/preferences` has a "Privacy & telemetry" card bound to `consent.set()` (the existing cookie-banner consent primitive). Mobile twin mirrors via `Settings → Privacy → Send error reports`. The hooks (`hooks.server.ts` + `hooks.client.ts`) already gate Sentry on this state; the toggle adds the post-acceptance withdrawal path required by Art 7(3) / Art 21.
 3. ~~**Live-ping retention**: confirm Postgres purge + Redis TTL both deliver the documented 24h window.~~ **Done** — `cleanup_stale_live_run_pings()` cron (`20260602_001_pg_cron_schedules.sql`); Go live-hub Redis TTL matches.
 4. ~~**Strava deauthorize on delete**: verify the call site in `delete-account/index.ts`.~~ **Done** — confirmed; outcome now recorded in `deletion_audit_log.third_party_outcomes` (Art 17(2) evidence), migration `20260928_001_gdpr_dsar_closeouts.sql`.
 5. **Privacy-zone first-run prompt**: on the first run that records within (e.g.) 200 m of the registered home location, prompt the user to configure a privacy zone.
