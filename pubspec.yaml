@@ -6,6 +6,20 @@ environment:
 dev_dependencies:
   melos: ^7.5.1
 
+# Workspace-level dependency_overrides apply to every package below.
+# Per-app overrides would conflict in a Dart workspace ("package X is
+# overridden in both apps/mobile_android and apps/mobile_ios").
+dependency_overrides:
+  # app_links is a transitive dep of `flutter_web_auth_2` +
+  # `sign_in_with_apple`. Version 7.1.0 (published May 2026) ships
+  # an `android/build.gradle.kts` that does a runtime cast incompat
+  # with AGP 8.13's redesigned SourceSet hierarchy — the build fails
+  # with `DefaultAndroidSourceSet_Decorated cannot be cast to
+  # AndroidLibrarySourceSet`. Pin to 7.0.x until upstream publishes
+  # a fixed 7.x release. Verified locally with app_links-7.0.0
+  # building cleanly. CI run 26465545860.
+  app_links: ^7.0.0
+
 workspace:
   - apps/mobile_android
   - apps/mobile_ios
