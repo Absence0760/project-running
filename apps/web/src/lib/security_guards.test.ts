@@ -428,6 +428,74 @@ test('Client PUBLIC_BYPASS_PAYWALL gate requires three independent conditions', 
 	assert.doesNotMatch(envExpr![0], /\|\|/, 'bypassEnabled gate must AND its three conditions, not OR.');
 });
 
+test('Lambda /api/coach hardcodes bypassPaywallEnabled: false (no env read)', () => {
+	// Reason: the SvelteKit `/api/coach/+server.ts` runs in local dev and
+	// honours BYPASS_PAYWALL behind a three-condition AND gate (pinned
+	// above). The production AWS Lambda wrapper at
+	// `apps/web/lambda/coach/src/index.ts` is the only path that runs
+	// against a real Supabase project, and it MUST hardcode the flag to
+	// `false` regardless of any env var. A subtle regression — switching
+	// to `process.env.BYPASS_PAYWALL === 'true'` to "match the SvelteKit
+	// gate" — would let a stray Lambda env var unlock the daily cap for
+	// every free user in production. The three-condition AND gate in the
+	// SvelteKit handler is irrelevant in Lambda because the conditions
+	// don't apply (Lambda is `NODE_ENV=production`, points at a real
+	// Supabase URL), but the right defence is to never read the env at
+	// all in the Lambda path.
+	const source = read('lambda/coach/src/index.ts');
+	const cfgMatch = source.match(/bypassPaywallEnabled\s*:\s*([^,\n]+)/);
+	assert.ok(
+		cfgMatch,
+		'Could not locate bypassPaywallEnabled in lambda/coach/src/index.ts CoachConfig — has the field been renamed?',
+	);
+	const value = cfgMatch![1].trim();
+	assert.strictEqual(
+		value,
+		'false',
+		`Lambda CoachConfig.bypassPaywallEnabled must be the literal "false", was "${value}". ` +
+			'Reading process.env or a runtime flag here lets a stray Lambda env var unlock the paywall for every prod user.',
+	);
+	// Belt-and-braces: no `process.env.BYPASS_PAYWALL` anywhere in the
+	// Lambda source, even off the config object.
+	assert.doesNotMatch(
+		source,
+		/process\.env\.[A-Z_]*BYPASS_PAYWALL/,
+		'Lambda must not reference process.env.BYPASS_PAYWALL (or PUBLIC_BYPASS_PAYWALL) at all — there is no dev-mode condition that would safely guard it in a Lambda runtime.',
+	);
+});
+
+test('revenuecat-webhook verifies HMAC before constructing the Supabase client', () => {
+	// Reason: the webhook is the ONLY legitimate writer of
+	// user_profiles.subscription_tier (the lock_subscription_columns
+	// trigger from migration 20260624_001 rejects writes from anything
+	// other than the service_role). If a refactor reordered the function
+	// to construct the service-role `createClient` before the HMAC
+	// verify, an attacker who knows the webhook URL could forge a Pro
+	// upgrade by POSTing a valid-looking event body with no signature —
+	// the client would be alive and ready to write the moment the
+	// request handler crossed the (now-out-of-order) HMAC check.
+	// Pinning the call order keeps the privilege boundary obvious.
+	const source = read('../backend/supabase/functions/revenuecat-webhook/index.ts');
+	const lines = source.split('\n');
+	const tseqLine = lines.findIndex((l) => /timingSafeEqual\s*\(/.test(l));
+	const createLine = lines.findIndex((l) => /createClient\s*\(/.test(l));
+	assert.notStrictEqual(
+		tseqLine,
+		-1,
+		'Could not locate timingSafeEqual call in revenuecat-webhook/index.ts — has the HMAC check been removed or renamed?',
+	);
+	assert.notStrictEqual(
+		createLine,
+		-1,
+		'Could not locate createClient call in revenuecat-webhook/index.ts.',
+	);
+	assert.ok(
+		tseqLine < createLine,
+		`HMAC timingSafeEqual (line ${tseqLine + 1}) must appear before createClient (line ${createLine + 1}) — ` +
+			'a service-role client constructed before HMAC verification opens a forge-Pro-upgrade window via the webhook URL.',
+	);
+});
+
 test('isLocked() fails closed on unknown tier (default = locked)', () => {
 	// Reason: a transient auth-store load shouldn't briefly unlock a
 	// Pro-only screen. `isLocked(feature)` reads `auth.isPro`, which is
