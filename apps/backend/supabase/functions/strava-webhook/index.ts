@@ -40,6 +40,7 @@ import {
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
+import * as Sentry from 'https://deno.land/x/sentry@8.40.0/index.mjs';
 import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
 
 Deno.serve(withSentry('strava-webhook', async (req: Request) => {
@@ -49,6 +50,12 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 
 	const webhookSecret = Deno.env.get('STRAVA_WEBHOOK_SECRET');
 	if (!webhookSecret) {
+		return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
+	}
+	// audit/strava May 2026 Low #2 — short secret refuses to operate.
+	// Matches the Go variant's 32-char floor. Defends against a
+	// misconfigured deploy (e.g. `STRAVA_WEBHOOK_SECRET=test`).
+	if (webhookSecret.length < 32) {
 		return Response.json({ error: 'webhook_not_configured' }, { status: 503 });
 	}
 
@@ -270,9 +277,19 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 		// can leak schema-adjacent data into the log aggregator.
 		// /audit/all edge-functions Low.
 		console.error('strava-webhook ingest failed', {
+			alert: 'strava_ingest_failure',
 			activityId,
 			userId,
 			error: err instanceof Error ? err.message : String(err),
+		});
+		// audit/strava May 2026 Low #4 — surface to Sentry with an
+		// explicit tag so dashboards light up. The `withSentry`
+		// wrapper catches throws from the handler body; this
+		// `try/catch` swallows BEFORE the wrapper sees, so we need
+		// to capture explicitly.
+		Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+			tags: { alert: 'strava_ingest_failure' },
+			extra: { activityId, userId },
 		});
 	}
 

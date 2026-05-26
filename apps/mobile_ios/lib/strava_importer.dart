@@ -68,6 +68,20 @@ class StravaImporter {
   /// large imports. A 5-year Strava export with hundreds of activities
   /// would otherwise lock the foreground for tens of seconds.
   static Future<StravaImportResult> importFromZip(File zipFile) async {
+    // audit/strava May 2026 Medium #1 — cap the archive size so a
+    // 5 GB export from a decade-of-multi-sport-activity power user
+    // doesn't OOM the app. 500 MB matches the web side.
+    const maxZipBytes = 500 * 1024 * 1024;
+    final size = await zipFile.length();
+    if (size > maxZipBytes) {
+      final mb = (size / (1024 * 1024)).round();
+      throw FormatException(
+        'Strava ZIP too large ($mb MB). The 500 MB cap defends '
+        'against OOM on the parser. Split into yearly exports from '
+        'Strava → Settings → My Account → Download or Delete Your '
+        'Account.',
+      );
+    }
     final bytes = await zipFile.readAsBytes();
     return compute(_parseStravaZipBytes, bytes);
   }
@@ -197,7 +211,17 @@ class StravaImporter {
         : fallbackDistanceMetres;
 
     // Strava CSV date format: "Apr 9, 2026, 7:30:00 AM"
-    final startedAt = _parseStravaDate(startedAtRaw) ?? DateTime.now();
+    // audit/strava May 2026 Low #5 — a malformed date row used to
+    // silently fall back to DateTime.now() (importing the activity
+    // as "just happened"). That's a worse outcome than "drop the
+    // row + report it failed". Throw a FormatException so the
+    // caller's existing per-row try/catch buckets it into the
+    // failed count + the operator sees what went wrong.
+    final parsedDate = _parseStravaDate(startedAtRaw);
+    if (parsedDate == null) {
+      throw FormatException('Unparseable Strava CSV date: "$startedAtRaw"');
+    }
+    final startedAt = parsedDate;
 
     final duration = fallbackDurationSeconds > 0
         ? Duration(seconds: fallbackDurationSeconds)

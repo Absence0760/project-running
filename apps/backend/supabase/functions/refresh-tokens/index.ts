@@ -78,7 +78,37 @@ Deno.serve(withSentry('refresh-tokens', async (req: Request) => {
       }),
     });
 
-    if (!response.ok) continue;
+    if (!response.ok) {
+      // audit/strava May 2026 Medium #6 — 4xx → mark disconnected
+      // so the next sweep doesn't pick this row up forever. 5xx →
+      // transient skip, retry next tick. Mirrors the Go worker's
+      // handler_token_refresh.go classification.
+      if (response.status >= 400 && response.status < 500) {
+        let reason = 'unauthorized';
+        if (response.status === 400) {
+          try {
+            const errBody = await response.json();
+            if (
+              typeof errBody?.error === 'string' &&
+              (errBody.error.includes('invalid_grant') || errBody.error.includes('expired'))
+            ) {
+              reason = 'invalid_grant';
+            }
+          } catch (_) {
+            /* keep default reason */
+          }
+        }
+        await supabase
+          .from('integrations')
+          .update({
+            disconnected_at: new Date().toISOString(),
+            disconnected_reason: reason,
+          })
+          .eq('user_id', integration.user_id)
+          .eq('provider', 'strava');
+      }
+      continue;
+    }
 
     const tokens = await response.json();
 

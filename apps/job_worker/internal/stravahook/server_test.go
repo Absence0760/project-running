@@ -64,13 +64,13 @@ func newTestServer(t *testing.T, srv *Server) (string, func()) {
 
 func TestServer_GetHandshakeEchoesChallenge(t *testing.T) {
 	srv := &Server{
-		WebhookSecret: "url-secret",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef",
 		VerifyToken:   "verify-tok",
 	}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
-	resp, err := http.Get(base + "/v1/strava/webhook?secret=url-secret&hub.mode=subscribe&hub.challenge=abc123&hub.verify_token=verify-tok")
+	resp, err := http.Get(base + "/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef&hub.mode=subscribe&hub.challenge=abc123&hub.verify_token=verify-tok")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -85,11 +85,11 @@ func TestServer_GetHandshakeEchoesChallenge(t *testing.T) {
 }
 
 func TestServer_GetRejectsBadVerifyToken(t *testing.T) {
-	srv := &Server{WebhookSecret: "url-secret", VerifyToken: "verify-tok"}
+	srv := &Server{WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok"}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
-	resp, err := http.Get(base + "/v1/strava/webhook?secret=url-secret&hub.challenge=abc&hub.verify_token=wrong")
+	resp, err := http.Get(base + "/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef&hub.challenge=abc&hub.verify_token=wrong")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -100,7 +100,7 @@ func TestServer_GetRejectsBadVerifyToken(t *testing.T) {
 }
 
 func TestServer_RejectsMissingUrlSecret(t *testing.T) {
-	srv := &Server{WebhookSecret: "url-secret", VerifyToken: "verify-tok"}
+	srv := &Server{WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok"}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -115,7 +115,7 @@ func TestServer_RejectsMissingUrlSecret(t *testing.T) {
 }
 
 func TestServer_RejectsWrongUrlSecret(t *testing.T) {
-	srv := &Server{WebhookSecret: "url-secret", VerifyToken: "verify-tok"}
+	srv := &Server{WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok"}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
@@ -151,7 +151,7 @@ func TestServer_PostHappyPathEnqueuesJob(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef",
 		VerifyToken:   "verify-tok",
 		Enqueuer:      enqueuer,
 		WebhookEvents: events,
@@ -161,7 +161,7 @@ func TestServer_PostHappyPathEnqueuesJob(t *testing.T) {
 
 	body := `{"object_type":"activity","object_id":12345,"aspect_type":"create","owner_id":67890,"event_time":` +
 		jsonInt(time.Now().Unix()) + `}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestServer_PostSkipsNonActivity(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 	}
 	base, teardown := newTestServer(t, srv)
@@ -192,7 +192,7 @@ func TestServer_PostSkipsNonActivity(t *testing.T) {
 	// so Strava drops it; nothing enqueued.
 	body := `{"object_type":"athlete","object_id":1,"aspect_type":"update","owner_id":67890,"event_time":` +
 		jsonInt(time.Now().Unix()) + `}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +209,7 @@ func TestServer_PostSkipsNonCreate(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 	}
 	base, teardown := newTestServer(t, srv)
@@ -217,7 +217,7 @@ func TestServer_PostSkipsNonCreate(t *testing.T) {
 
 	body := `{"object_type":"activity","object_id":12345,"aspect_type":"update","owner_id":67890,"event_time":` +
 		jsonInt(time.Now().Unix()) + `}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestServer_PostRejectsStaleEvent(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 		FreshnessWindow: 1 * time.Hour,
 	}
@@ -248,7 +248,7 @@ func TestServer_PostRejectsStaleEvent(t *testing.T) {
 	stale := time.Now().Add(-25 * time.Hour).Unix()
 	body := `{"object_type":"activity","object_id":1,"aspect_type":"create","owner_id":1,"event_time":` +
 		jsonInt(stale) + `}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -265,7 +265,7 @@ func TestServer_PostDedupesOnSecondInsert(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 	}
 	base, teardown := newTestServer(t, srv)
@@ -275,13 +275,13 @@ func TestServer_PostDedupesOnSecondInsert(t *testing.T) {
 		jsonInt(time.Now().Unix()) + `}`
 
 	// First post — enqueues.
-	resp1, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp1, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
 	resp1.Body.Close()
 	// Second identical post — should be a no-op (dedupe wins).
-	resp2, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp2, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -302,7 +302,7 @@ func TestServer_PostBadBodyReturns400(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 	}
 	base, teardown := newTestServer(t, srv)
@@ -310,7 +310,7 @@ func TestServer_PostBadBodyReturns400(t *testing.T) {
 
 	// Unknown field — DisallowUnknownFields rejects.
 	body := `{"object_type":"activity","object_id":1,"aspect_type":"create","owner_id":1,"event_time":1700000000,"extra":"oops"}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,7 +324,7 @@ func TestServer_PostMissingFieldsReturns400(t *testing.T) {
 	enqueuer := &fakeEnqueuer{}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 	}
 	base, teardown := newTestServer(t, srv)
@@ -332,7 +332,7 @@ func TestServer_PostMissingFieldsReturns400(t *testing.T) {
 
 	// Missing event_time.
 	body := `{"object_type":"activity","object_id":1,"aspect_type":"create","owner_id":1}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -343,11 +343,11 @@ func TestServer_PostMissingFieldsReturns400(t *testing.T) {
 }
 
 func TestServer_MethodNotAllowed(t *testing.T) {
-	srv := &Server{WebhookSecret: "url-secret", VerifyToken: "verify-tok"}
+	srv := &Server{WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok"}
 	base, teardown := newTestServer(t, srv)
 	defer teardown()
 
-	req, _ := http.NewRequest(http.MethodPut, base+"/v1/strava/webhook?secret=url-secret", nil)
+	req, _ := http.NewRequest(http.MethodPut, base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatal(err)
@@ -365,7 +365,7 @@ func TestServer_PostEnqueueErrorReturns500(t *testing.T) {
 	enqueuer := &fakeEnqueuer{err: errFake}
 	events := newFakeWebhookEvents()
 	srv := &Server{
-		WebhookSecret: "url-secret", VerifyToken: "verify-tok",
+		WebhookSecret: "url-secret-32-chars-long-deadbeef", VerifyToken: "verify-tok",
 		Enqueuer: enqueuer, WebhookEvents: events,
 	}
 	base, teardown := newTestServer(t, srv)
@@ -373,7 +373,7 @@ func TestServer_PostEnqueueErrorReturns500(t *testing.T) {
 
 	body := `{"object_type":"activity","object_id":1,"aspect_type":"create","owner_id":1,"event_time":` +
 		jsonInt(time.Now().Unix()) + `}`
-	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret", "application/json", strings.NewReader(body))
+	resp, err := http.Post(base+"/v1/strava/webhook?secret=url-secret-32-chars-long-deadbeef", "application/json", strings.NewReader(body))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -399,7 +399,7 @@ func jsonInt(n int64) string {
 // audit/strava Critical #2 — per-IP throttle BEFORE the secret-gate.
 func TestServer_IPRateLimitFiresBeforeSecretCompare(t *testing.T) {
 	srv := &Server{
-		WebhookSecret: "right-secret",
+		WebhookSecret: "right-secret-32-chars-long-deadbf",
 		VerifyToken:   "verify",
 		Enqueuer:      &fakeEnqueuer{},
 		WebhookEvents: &fakeWebhookEvents{},
@@ -418,7 +418,7 @@ func TestServer_IPRateLimitFiresBeforeSecretCompare(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	// First request burns the token.
-	r1, _ := http.NewRequest("GET", ts.URL+"/v1/strava/webhook?secret=right-secret&hub.mode=subscribe&hub.verify_token=verify&hub.challenge=x", nil)
+	r1, _ := http.NewRequest("GET", ts.URL+"/v1/strava/webhook?secret=right-secret-32-chars-long-deadbf&hub.mode=subscribe&hub.verify_token=verify&hub.challenge=x", nil)
 	r1.Header.Set("cf-connecting-ip", "1.2.3.4")
 	resp, err := http.DefaultClient.Do(r1)
 	if err != nil {
@@ -432,7 +432,7 @@ func TestServer_IPRateLimitFiresBeforeSecretCompare(t *testing.T) {
 	// Second from same IP with the WRONG secret. A bypass of the
 	// limiter would land at the secret-compare → 403; correct
 	// behaviour is 429 (limiter fires first).
-	r2, _ := http.NewRequest("POST", ts.URL+"/v1/strava/webhook?secret=WRONG", nil)
+	r2, _ := http.NewRequest("POST", ts.URL+"/v1/strava/webhook?secret=WRONG-still-32-chars-long-deadbeef", nil)
 	r2.Header.Set("cf-connecting-ip", "1.2.3.4")
 	resp2, err := http.DefaultClient.Do(r2)
 	if err != nil {
@@ -450,7 +450,7 @@ func TestServer_IPRateLimitFiresBeforeSecretCompare(t *testing.T) {
 func TestServer_IPRateLimitPerKey(t *testing.T) {
 	// Different IPs maintain independent buckets.
 	srv := &Server{
-		WebhookSecret: "secret",
+		WebhookSecret: "secret-32-chars-long-deadbeef-yyyy",
 		VerifyToken:   "v",
 		Enqueuer:      &fakeEnqueuer{},
 		WebhookEvents: &fakeWebhookEvents{},
@@ -464,7 +464,7 @@ func TestServer_IPRateLimitPerKey(t *testing.T) {
 	t.Cleanup(ts.Close)
 
 	for _, ip := range []string{"1.1.1.1", "2.2.2.2", "3.3.3.3"} {
-		r, _ := http.NewRequest("GET", ts.URL+"/v1/strava/webhook?secret=secret&hub.mode=subscribe&hub.verify_token=v&hub.challenge=c", nil)
+		r, _ := http.NewRequest("GET", ts.URL+"/v1/strava/webhook?secret=secret-32-chars-long-deadbeef-yyyy&hub.mode=subscribe&hub.verify_token=v&hub.challenge=c", nil)
 		r.Header.Set("cf-connecting-ip", ip)
 		resp, err := http.DefaultClient.Do(r)
 		if err != nil {

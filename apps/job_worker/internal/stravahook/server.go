@@ -136,11 +136,18 @@ func (s *Server) RegisterRoutes(mux *http.ServeMux) {
 }
 
 func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
+	// audit/strava May 2026 Low #2 — refuse to start with a short
+	// secret. 32 chars is the floor we enforce; below that a brute-
+	// force at 60 req/h (the IP rate-limit ceiling) would clear the
+	// space in < 1 day. Empty short-circuit kept first since a
+	// missing secret needs the more specific log line.
 	if s.WebhookSecret == "" {
-		// Misconfiguration — production deploys must set the
-		// secret. Without it the endpoint refuses every request
-		// rather than silently accepting unauthenticated traffic.
 		s.log().Error("strava webhook: secret not configured; refusing")
+		http.Error(w, `{"error":"webhook_not_configured"}`, http.StatusServiceUnavailable)
+		return
+	}
+	if len(s.WebhookSecret) < 32 {
+		s.log().Error("strava webhook: secret too short (<32 chars); refusing")
 		http.Error(w, `{"error":"webhook_not_configured"}`, http.StatusServiceUnavailable)
 		return
 	}

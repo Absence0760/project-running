@@ -366,6 +366,33 @@ Use the `/check` command to run review + test-gap-checker + doc-hygiene-checker 
 
 When a Playwright / pgtap test surfaces a real bug in the app code, fix the bug **first** (separate commit from the test), then make sure the test exists to catch regressions. The order matters: test-without-fix fails CI; fix-without-test means the next regression slips through silently.
 
+## Strava integration log keys
+
+Strava is the only third-party integration whose state changes hit
+both the EF stack (`apps/backend/supabase/functions/strava-*`) and
+the Go service stack (`apps/job_worker/internal/handler_strava_*`,
+`stravahook/`). Cross-stack queries for "all Strava errors in the
+last hour" require a stable key vocabulary — otherwise a CloudWatch
+or Sentry filter has to or-of-aliases (`activity_id|activityId|...`),
+fragile and silently breaks the moment someone adds another spelling.
+
+Use these keys verbatim in every Strava log line and Sentry tag:
+
+| Key | Type | Notes |
+|---|---|---|
+| `strava.activity_id` | int64 | Strava's numeric activity id. Never `activityId`. |
+| `strava.owner_id` | int64 | Strava's athlete id. Never `ownerId`. |
+| `strava.status_code` | int | HTTP status from the Strava call. |
+| `strava.error_class` | enum | One of `auth`, `rate_limit`, `transient`, `permanent`, `parse`. |
+| `strava.endpoint` | string | `oauth_token`, `oauth_deauthorize`, `activities`, `streams`, `webhook`. |
+| `alert` | string | Tag for Sentry alerts: `strava_ingest_failure`, `strava_refresh_failure`, etc. |
+
+Don't log raw access / refresh tokens or vault secret labels — they
+embed the user UUID. The EFs that hit `vault.update_secret` strip
+the `integration_<provider>_<uuid>_<suffix>` pattern before logging.
+
+/audit/strava May 2026 Medium #8.
+
 ## Exceptions
 
 Every rule here has escape hatches for the cases where it genuinely doesn't fit. If you're about to violate one of these rules:

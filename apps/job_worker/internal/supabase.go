@@ -575,6 +575,71 @@ func (c *SupabaseClient) FindIntegrationUserByAthlete(ctx context.Context, provi
 	return rows[0].UserID, nil
 }
 
+// TryConsumeStravaQuota calls the `try_consume_strava_quota` RPC
+// (migration 20261007_001). Returns true when the call may proceed,
+// false when we've hit 90% of Strava's app-level limit. Fail-open
+// on RPC error — a Supabase outage shouldn't block legitimate
+// Strava traffic. /audit/strava M7.
+func (c *SupabaseClient) TryConsumeStravaQuota(ctx context.Context) (bool, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/rest/v1/rpc/try_consume_strava_quota",
+		bytes.NewReader([]byte("{}")))
+	if err != nil {
+		return true, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	respBody, err := c.do(ctx, req)
+	if err != nil {
+		// Fail-open. A blocked legitimate refresh is worse than a
+		// chance of brushing Strava's ceiling during a Supabase blip.
+		return true, nil
+	}
+	var allowed bool
+	if err := json.Unmarshal(respBody, &allowed); err != nil {
+		return true, nil
+	}
+	return allowed, nil
+}
+
+// SetIntegrationTokensCAS calls the `set_integration_tokens_cas`
+// RPC (migration 20261006_001). Returns `applied = true` when the
+// vault row matched expected + the write went through, false when
+// another caller rotated first. /audit/strava High #3.
+func (c *SupabaseClient) SetIntegrationTokensCAS(
+	ctx context.Context,
+	userID, provider, expectedRefresh, access, refresh string,
+	expiry time.Time,
+) (bool, error) {
+	body, err := json.Marshal(map[string]any{
+		"p_user_id":                userID,
+		"p_provider":               provider,
+		"p_expected_refresh_token": expectedRefresh,
+		"p_access_token":           access,
+		"p_refresh_token":          refresh,
+		"p_token_expiry":           expiry.UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return false, err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
+		c.BaseURL+"/rest/v1/rpc/set_integration_tokens_cas",
+		bytes.NewReader(body))
+	if err != nil {
+		return false, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	respBody, err := c.do(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	// The RPC returns a JSON boolean directly.
+	var applied bool
+	if err := json.Unmarshal(respBody, &applied); err != nil {
+		return false, fmt.Errorf("set_integration_tokens_cas: decode: %w", err)
+	}
+	return applied, nil
+}
+
 // MarkIntegrationDisconnected stamps `disconnected_at = now()` +
 // `disconnected_reason` on the integrations row for the given user
 // + provider. Idempotent: re-stamping is harmless — the timestamp

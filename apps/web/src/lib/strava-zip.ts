@@ -38,6 +38,21 @@ export async function importStravaZip(
 	const uid = auth.user?.id;
 	if (!uid) throw new Error('Not signed in');
 
+	// audit/strava May 2026 Medium #1 — bound the archive size so a
+	// decade-of-multi-sport-activity 5 GB export doesn't OOM the tab.
+	// 500 MB comfortably accommodates the heaviest legitimate users
+	// (10+ years of dense GPS data) while catching the obvious DoS.
+	// User-facing copy points the heaviest cohort at the per-year
+	// export tool in Strava's settings.
+	const MAX_STRAVA_ZIP_BYTES = 500 * 1024 * 1024;
+	if (file.size > MAX_STRAVA_ZIP_BYTES) {
+		throw new Error(
+			`Strava ZIP too large (${Math.round(file.size / (1024 * 1024))} MB). ` +
+				'The 500 MB cap defends against browser-OOM on the parser. ' +
+				'Split into yearly exports from Strava → Settings → My Account → Download or Delete Your Account.',
+		);
+	}
+
 	const zip = await JSZip.loadAsync(file);
 	const csvFile = zip.file('activities.csv');
 	if (!csvFile) {
@@ -130,17 +145,35 @@ async function importOne(
 	const actType = (row[idx.type] ?? 'run').toLowerCase();
 	const activityType = actType.includes('walk') ? 'walk' : actType.includes('hike') ? 'hike' : 'run';
 
-	// Try to parse the per-activity file for the GPS track. Strava
-	// occasionally writes `.gz` files — JSZip handles the outer archive
-	// but a `.gpx.gz` inside needs a second decompress. We support the
-	// plain extensions here and skip the compressed ones (FIT too)
-	// rather than pull in a decompression helper for an edge case.
+	// Try to parse the per-activity file for the GPS track. Modern
+	// Strava exports gzip the inner GPX/TCX (`.gpx.gz`). The browser-
+	// native DecompressionStream gunzips without a new dep. Plain
+	// extensions still work as before. `.fit` stays out of scope on
+	// web — the FIT binary parser is mobile-only today.
+	// audit/strava May 2026 Medium #2.
 	let track: ImportedRoute['waypoints'] | null = null;
 	if (filename) {
 		const entry = zip.file(filename);
-		if (entry && /\.(gpx|tcx|kml|geojson|json)$/i.test(filename)) {
-			const blob = await entry.async('blob');
-			const synthetic = new File([blob], filename.split('/').pop()!);
+		const isPlain = /\.(gpx|tcx|kml|geojson|json)$/i.test(filename);
+		const isGzWrapped = /\.(gpx|tcx|kml|geojson|json)\.gz$/i.test(filename);
+		if (entry && (isPlain || isGzWrapped)) {
+			let blob = await entry.async('blob');
+			let innerName = filename.split('/').pop()!;
+			if (isGzWrapped) {
+				try {
+					const gz = await blob.arrayBuffer();
+					const ds = new (globalThis as { DecompressionStream: typeof DecompressionStream })
+						.DecompressionStream('gzip');
+					const stream = new Response(gz).body!.pipeThrough(ds);
+					blob = await new Response(stream).blob();
+					innerName = innerName.replace(/\.gz$/i, '');
+				} catch (_) {
+					// Decompression failed — leave the row trackless
+					// rather than throw. The CSV row still imports.
+					return;
+				}
+			}
+			const synthetic = new File([blob], innerName);
 			try {
 				const routes = await parseRouteFile(synthetic);
 				if (routes.length > 0) track = routes[0].waypoints;

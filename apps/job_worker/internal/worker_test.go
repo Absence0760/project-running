@@ -89,6 +89,9 @@ type fakeBackend struct {
 	getTokenCalls []string
 	setTokenCalls         []setTokenCall
 	markDisconnectedCalls []markDisconnectedCall
+	// quotaAllowOverride: nil → always allow. Pointer-to-false →
+	// always deny. /audit/strava M7 test seam.
+	quotaAllowOverride *bool
 	// strava_event inputs
 	integrationByAthlete map[int64]string
 	findIntegrationErr   error
@@ -419,6 +422,42 @@ type markDisconnectedCall struct {
 	UserID   string
 	Provider string
 	Reason   string
+}
+
+// TryConsumeStravaQuota stub. Tests can override
+// `quotaAllowOverride` to simulate a quota-exhausted state.
+// /audit/strava M7.
+func (f *fakeBackend) TryConsumeStravaQuota(_ context.Context) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.quotaAllowOverride != nil {
+		return *f.quotaAllowOverride, nil
+	}
+	return true, nil
+}
+
+// SetIntegrationTokensCAS stub mirrors the production semantics
+// (compare expectedRefresh vs current, write only if match).
+// /audit/strava High #3.
+func (f *fakeBackend) SetIntegrationTokensCAS(_ context.Context, userID, provider, expectedRefresh, access, refresh string, expiry time.Time) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if err, ok := f.setTokenErrs[userID]; ok {
+		return false, err
+	}
+	cur, ok := f.tokensByUser[userID]
+	if !ok || cur.RefreshToken != expectedRefresh {
+		return false, nil
+	}
+	f.setTokenCalls = append(f.setTokenCalls, setTokenCall{
+		UserID:       userID,
+		Provider:     provider,
+		AccessToken:  access,
+		RefreshToken: refresh,
+		Expiry:       expiry,
+	})
+	f.tokensByUser[userID] = TokenPair{AccessToken: access, RefreshToken: refresh}
+	return true, nil
 }
 
 func (f *fakeBackend) MarkIntegrationDisconnected(_ context.Context, userID, provider, reason string) error {

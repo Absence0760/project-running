@@ -59,13 +59,30 @@ export async function refreshStravaToken(
 	});
 	if (!resp.ok) return null;
 	const tokens = (await resp.json()) as StravaTokens;
-	await supabase.rpc('set_integration_tokens', {
+	// audit/strava May 2026 High #3 — CAS write so a concurrent
+	// refresh (cron + on-demand + webhook race) doesn't overwrite
+	// the winner's new vault row with a stale-old refresh token.
+	// We pass the refresh token the caller read pre-Strava-call as
+	// the "expected" value. If the row was rotated between read +
+	// write, the RPC returns false and we silently treat that as
+	// "another caller already won — the new token is in vault";
+	// return the caller's freshly-fetched access token regardless
+	// since Strava already issued it (the old one is invalidated
+	// either way).
+	const { data: applied } = await supabase.rpc('set_integration_tokens_cas', {
 		p_user_id: userId,
 		p_provider: 'strava',
+		p_expected_refresh_token: refreshToken,
 		p_access_token: tokens.access_token,
 		p_refresh_token: tokens.refresh_token,
 		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
 	});
+	if (applied === false) {
+		// Race lost — log so the metric counter can pick this up,
+		// but the caller's fresh access token is still usable for the
+		// remainder of this turn since Strava just issued it.
+		console.warn('refreshStravaToken: CAS race lost — another caller already rotated', { userId });
+	}
 	return tokens.access_token;
 }
 

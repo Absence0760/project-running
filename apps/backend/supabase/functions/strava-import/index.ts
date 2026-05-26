@@ -58,8 +58,11 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 	// now send `action` explicitly, so the prior `body.code ? 'connect'`
 	// implicit-routing fallback was retired in /audit/all 2026-05-07.
 	const action = body.action as string | undefined;
-	if (action !== 'connect' && action !== 'sync') {
-		return Response.json({ error: 'invalid_action', expected: ['connect', 'sync'] }, { status: 400 });
+	if (action !== 'connect' && action !== 'sync' && action !== 'disconnect') {
+		return Response.json(
+			{ error: 'invalid_action', expected: ['connect', 'sync', 'disconnect'] },
+			{ status: 400 },
+		);
 	}
 
 	// Validate body shape per action before any side effects. The
@@ -104,7 +107,11 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 		? await checkRateLimit(supabase, user.id, 'strava-import:connect', 10, 3600, {
 			failClosed: true,
 		})
-		: await checkRateLimitTiered(supabase, user.id, 'strava-import:sync', 4, 16, 3600);
+		: action === 'disconnect'
+			? await checkRateLimit(supabase, user.id, 'strava-import:disconnect', 10, 3600, {
+				failClosed: true,
+			})
+			: await checkRateLimitTiered(supabase, user.id, 'strava-import:sync', 4, 16, 3600);
 	if (denied) return denied;
 
 	if (action === 'connect') {
@@ -113,8 +120,96 @@ Deno.serve(withSentry('strava-import', async (req: Request) => {
 	if (action === 'sync') {
 		return handleSync(supabase, user.id, body.lookbackDays ?? 90);
 	}
+	if (action === 'disconnect') {
+		return handleDisconnect(supabase, user.id);
+	}
 	return Response.json({ error: 'unknown_action' }, { status: 400 });
 }));
+
+// audit/strava May 2026 High #1 — user-initiated Disconnect must
+// (a) revoke at Strava's end so the token can't be replayed,
+// (b) wipe the vault rows so the operator can't read decoded
+// secrets at rest, (c) stamp `disconnected_at` so the UI shows
+// Reconnect Strava. Pre-fix the disconnect path was a bare DELETE
+// FROM integrations — left vault secrets orphaned + Strava-side
+// connection live indefinitely.
+async function handleDisconnect(
+	supabase: ReturnType<typeof createClient>,
+	userId: string,
+): Promise<Response> {
+	const { data: tokenRows } = await supabase.rpc('get_integration_tokens', {
+		p_user_id: userId,
+		p_provider: 'strava',
+	});
+	const tokenRow = tokenRows?.[0];
+
+	// audit/strava L6 — best-effort pre-deauth refresh. If the
+	// stored access token is expired, deauth would 401 and we'd
+	// record `'failed'` while the upstream connection persists.
+	// Refresh first; swallow failures so the deauth attempt still
+	// runs with whatever token we have.
+	let accessToken = (tokenRow?.access_token ?? '') as string;
+	if (tokenRow?.refresh_token && tokenRow.token_expiry) {
+		const expiryMs = new Date(tokenRow.token_expiry as string).getTime();
+		if (Date.now() + 60_000 > expiryMs) {
+			try {
+				const fresh = await refreshStravaToken(
+					supabase,
+					userId,
+					tokenRow.refresh_token as string,
+				);
+				if (fresh) accessToken = fresh;
+			} catch (_) {
+				/* fall through with stale token — best-effort */
+			}
+		}
+	}
+
+	// POST /oauth/deauthorize — Strava revokes the access token at
+	// their end. Best-effort: a 401 here is fine (the token aged out
+	// before we got around to disconnecting); a 5xx outage just
+	// means Strava's side stays live a bit longer.
+	let stravaDeauthOutcome: 'ok' | 'skipped' | 'failed' = 'skipped';
+	if (accessToken) {
+		try {
+			const r = await fetch('https://www.strava.com/oauth/deauthorize', {
+				method: 'POST',
+				headers: { Authorization: `Bearer ${accessToken}` },
+			});
+			stravaDeauthOutcome = r.ok ? 'ok' : 'failed';
+		} catch (_) {
+			stravaDeauthOutcome = 'failed';
+		}
+	}
+
+	// Drop vault rows + clear FK + clear token_expiry. Idempotent
+	// — re-running yields 0 deletes + clean state.
+	const { error: rpcErr } = await supabase.rpc('delete_user_provider_secrets', {
+		p_user_id: userId,
+		p_provider: 'strava',
+	});
+	if (rpcErr) {
+		console.error('strava-import: delete_user_provider_secrets failed', rpcErr.message);
+		return Response.json({ error: 'vault_cleanup_failed' }, { status: 500 });
+	}
+
+	// Stamp `disconnected_at` so subsequent token-refresh sweeps
+	// skip the row + the UI shows Reconnect Strava.
+	const { error: stampErr } = await supabase
+		.from('integrations')
+		.update({
+			disconnected_at: new Date().toISOString(),
+			disconnected_reason: 'user_initiated',
+		})
+		.eq('user_id', userId)
+		.eq('provider', 'strava');
+	if (stampErr) {
+		console.error('strava-import: stamp disconnected_at failed', stampErr.message);
+		return Response.json({ error: 'stamp_failed' }, { status: 500 });
+	}
+
+	return Response.json({ ok: true, strava_deauth: stravaDeauthOutcome });
+}
 
 async function handleConnect(
 	supabase: ReturnType<typeof createClient>,
@@ -156,6 +251,21 @@ async function handleConnect(
 		return Response.json({ error: 'strava_not_configured' }, { status: 503 });
 	}
 	if (!redirectUri || !allowed.includes(redirectUri)) {
+		// audit/strava May 2026 Low #1 — debug log only on the host
+		// part of the URL (NOT the path or query — those can carry the
+		// OAuth code in some malformed callers). Lets an operator
+		// diagnose a `STRAVA_ALLOWED_REDIRECTS` typo during cutover
+		// without dumping anything sensitive into logs.
+		let receivedHost = '<unparseable>';
+		try {
+			receivedHost = redirectUri ? new URL(redirectUri).host : '<missing>';
+		} catch (_) {
+			/* keep <unparseable> */
+		}
+		console.warn('strava-import: redirect_uri mismatch', {
+			received_host: receivedHost,
+			allowed_count: allowed.length,
+		});
 		return Response.json({ error: 'invalid_redirect_uri' }, { status: 400 });
 	}
 
@@ -221,7 +331,17 @@ async function handleConnect(
 		p_token_expiry: new Date(tokens.expires_at * 1000).toISOString(),
 	});
 	if (tokErr) {
-		console.error('strava-import: set_integration_tokens RPC failed:', tokErr?.message ?? String(tokErr));
+		// audit/strava May 2026 Medium #5 — the vault.update_secret
+		// upstream message can embed the secret's label
+		// (`integration_access_<uuid>_<provider>`), leaking the user
+		// UUID into the log aggregator. Strip the label pattern.
+		const msg = (tokErr?.message ?? String(tokErr))
+			.replace(/integration_(access|refresh)_[0-9a-f-]{8,}_[a-z_]+/gi, 'integration_<provider>_<redacted>');
+		console.error('strava-import: set_integration_tokens RPC failed', {
+			rpc: 'set_integration_tokens',
+			error_class: 'vault_write',
+			error: msg,
+		});
 		return Response.json({ error: 'store_tokens_failed' }, { status: 500 });
 	}
 

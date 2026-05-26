@@ -30,6 +30,12 @@ type Backend interface {
 	FetchExpiringStravaIntegrations(ctx context.Context, within time.Duration) ([]IntegrationRow, error)
 	GetIntegrationTokens(ctx context.Context, userID, provider string) (*TokenPair, error)
 	SetIntegrationTokens(ctx context.Context, userID, provider, accessToken, refreshToken string, tokenExpiry time.Time) error
+	// SetIntegrationTokensCAS is the compare-and-set variant used by
+	// the refresh path to avoid races between cron + on-demand
+	// refresh + webhook refresh. Returns `applied = true` when the
+	// vault row matched expected + the write went through, false
+	// when another caller already rotated. /audit/strava High #3.
+	SetIntegrationTokensCAS(ctx context.Context, userID, provider, expectedRefreshToken, accessToken, refreshToken string, tokenExpiry time.Time) (applied bool, err error)
 	// MarkIntegrationDisconnected stamps `disconnected_at = now()`
 	// + `disconnected_reason = <reason>` on the integrations row
 	// when the upstream grant is permanently broken (4xx from
@@ -37,6 +43,12 @@ type Backend interface {
 	// filters by `disconnected_at IS NULL`, so the broken row
 	// stops re-appearing every hour. /audit/strava High #2.
 	MarkIntegrationDisconnected(ctx context.Context, userID, provider, reason string) error
+	// TryConsumeStravaQuota gates the aggregate Strava-API call
+	// rate at 90% of Strava's published limits (90/15min + 900/day).
+	// Returns true → caller may proceed, false → caller must back
+	// off so the app doesn't trip Strava's per-app suspension.
+	// /audit/strava May 2026 Medium #7.
+	TryConsumeStravaQuota(ctx context.Context) (allowed bool, err error)
 	// Strava webhook ingest path — used by the kind='strava_event'
 	// handler that replaces apps/backend/supabase/functions/strava-webhook.
 	FindIntegrationUserByAthlete(ctx context.Context, provider string, athleteID int64) (string, error)

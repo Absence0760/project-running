@@ -144,15 +144,36 @@ func (w *Worker) refreshOne(ctx context.Context, userID string) error {
 		return errors.New("no refresh token in vault")
 	}
 
+	// audit/strava May 2026 Medium #7 — global quota gate. Defends
+	// against breaching Strava's per-app limits (100/15min, 1000/day)
+	// when many user-driven refreshes pile up on the same minute.
+	allowed, qerr := w.Backend.TryConsumeStravaQuota(ctx)
+	if qerr != nil {
+		// Fail-open on RPC error per the helper contract — log so
+		// the next cron tick's gate is observable.
+		w.Log.Warn("token_refresh: quota check errored, proceeding", "err", qerr)
+	} else if !allowed {
+		return errors.New("strava app-quota near ceiling, deferring")
+	}
+
 	fresh, err := w.Strava.Refresh(ctx, tokens.RefreshToken)
 	if err != nil {
 		return fmt.Errorf("strava refresh: %w", err)
 	}
 
+	// audit/strava May 2026 High #3 — CAS write. Pass the refresh
+	// token we read pre-network as the "expected" value. Lost race
+	// is silently fine: another caller already rotated, the new
+	// tokens are in vault. We log so the metric can pick it up.
 	expiry := time.Unix(fresh.ExpiresAt, 0).UTC()
-	if err := w.Backend.SetIntegrationTokens(ctx, userID, "strava",
-		fresh.AccessToken, fresh.RefreshToken, expiry); err != nil {
-		return fmt.Errorf("set_integration_tokens: %w", err)
+	applied, err := w.Backend.SetIntegrationTokensCAS(ctx, userID, "strava",
+		tokens.RefreshToken, fresh.AccessToken, fresh.RefreshToken, expiry)
+	if err != nil {
+		return fmt.Errorf("set_integration_tokens_cas: %w", err)
+	}
+	if !applied {
+		w.Log.Info("token_refresh: CAS race lost — another caller rotated first",
+			"user_id", userID)
 	}
 	return nil
 }

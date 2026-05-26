@@ -1188,6 +1188,19 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
+	// audit/strava May 2026 High #1 — Strava goes through the EF
+	// so the access token gets revoked at Strava's end + vault rows
+	// get wiped + `disconnected_at` is stamped. Pre-fix the path was
+	// a bare DELETE on the integrations row which left vault material
+	// orphaned + the Strava-side connection live indefinitely.
+	if (provider === 'strava') {
+		const { error: fnError } = await supabase.functions.invoke('strava-import', {
+			body: { action: 'disconnect' },
+		});
+		if (fnError) throw fnError;
+		return;
+	}
+
 	const { error } = await supabase
 		.from('integrations')
 		.delete()

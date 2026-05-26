@@ -34,6 +34,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_quota: {
+        Row: {
+          count: number
+          provider: string
+          window_kind: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          provider: string
+          window_kind: string
+          window_start: string
+        }
+        Update: {
+          count?: number
+          provider?: string
+          window_kind?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
       club_members: {
         Row: {
           club_id: string
@@ -2284,6 +2305,10 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: number
       }
+      delete_user_provider_secrets: {
+        Args: { p_provider: string; p_user_id: string }
+        Returns: number
+      }
       discoverable_routes_in_bbox: {
         Args: {
           p_limit?: number
@@ -2627,6 +2652,17 @@ export type Database = {
         }
         Returns: undefined
       }
+      set_integration_tokens_cas: {
+        Args: {
+          p_access_token: string
+          p_expected_refresh_token: string
+          p_provider: string
+          p_refresh_token: string
+          p_token_expiry?: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       submit_report: {
         Args: {
           p_notes?: string
@@ -2635,6 +2671,10 @@ export type Database = {
           p_target_kind: string
         }
         Returns: string
+      }
+      try_consume_strava_quota: {
+        Args: { p_day_limit?: number; p_short_limit?: number }
+        Returns: boolean
       }
       weekly_mileage: {
         Args: { weeks_back?: number }
