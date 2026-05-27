@@ -20,6 +20,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import '../audio_cues.dart';
 import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
+import '../embedded_bests.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
@@ -1400,6 +1401,16 @@ class _RunScreenState extends State<RunScreen> {
       }
     }
 
+    // Persona-hunt Round 2 #4: compute embedded best efforts (per
+    // canonical distance) over the GPS track and merge into metadata
+    // so the SQL `personal_records` trigger can pick up a sub-20 5k
+    // inside an 18 km long run. Helper is null-safe + idempotent + a
+    // no-op for tracks under 3 points.
+    final enrichedMetadata = enrichMetadataWithEmbeddedBests(
+      track: raw.track,
+      metadata: metadata,
+    );
+
     final run = cm.Run(
       id: runId,
       startedAt: _runStartedAtWall ?? raw.startedAt,
@@ -1409,7 +1420,7 @@ class _RunScreenState extends State<RunScreen> {
       routeId: resolvedRouteId,
       source: raw.source,
       externalId: raw.externalId,
-      metadata: metadata,
+      metadata: enrichedMetadata,
       createdAt: raw.createdAt,
     );
 

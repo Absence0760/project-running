@@ -90,6 +90,17 @@ Keys that carry transient or platform-internal state. Treat these as implementat
 | `indoor_estimated` | `bool` — always `true` when present | `mobile_android/lib/screens/run_screen.dart` (`_stop`, `_saveInProgress`) when `_everHadGpsFix` stayed false and the pedometer produced distance | — | Optional, audit-only | Marks a treadmill / indoor run where `distanceMetres` came from `steps × stride` rather than GPS. Pairs with `distance_source = "pedometer"`. PB calculations should probably exclude these. |
 | `distance_source` | `string` — `"pedometer"` (extendable) | `mobile_android/lib/screens/run_screen.dart` when saving an indoor-estimated run | — | Optional, audit-only | Explicit tag for *where* the distance came from when it isn't GPS. Present together with `indoor_estimated`. Leaving room for future sources (e.g. `"strava_import"`, `"user_entered"`) without adding new booleans. |
 
+### Personal-records hints
+
+Per-canonical-distance fastest times computed by the client at save time. Persona-hunt Round 2 finding Pro #4 — pre-fix the canonical `personal_records` cache (migration `20260528_001`) only considered whole-run `distance_m` against the bracket. A sub-20 5k inside an 18 km long run never landed in the PR table. Migration `20260529_001_personal_records_embedded_bests.sql` now factors these keys in.
+
+| Key | Shape | Writers | Readers | Required? | Notes |
+|---|---|---|---|---|---|
+| `fastest_5k_s` | `int` — seconds of the fastest rolling-5km window inside the GPS track | `mobile_android/lib/embedded_bests.dart` (called from `screens/run_screen.dart` at save time, mirrored to iOS twin) | `apps/backend/supabase/migrations/20260529_001_personal_records_embedded_bests.sql` (the `refresh_personal_records_for_user` trigger function reads it alongside whole-run candidates) | Optional — only present when the track is long enough (≥ 5 km) AND has ≥ 3 waypoints | Auto-computed at save time. A faster manual override is preserved; a slower existing value is overwritten with the auto-computed one. Public-safe (passes through `public_runs`). |
+| `fastest_10k_s` | `int` — seconds | same | same | same as above, gated on track ≥ 10 km | same |
+| `fastest_half_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 21.097 km | same |
+| `fastest_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 42.195 km | same |
+
 ### Client-side synthetic
 
 **Not persisted.** These keys exist only in in-memory `Run.metadata` maps after deserialisation, added by the client to work around API ergonomics. Do not write them in a `saveRun` call — the DB round-trip will strip them from anywhere that matters, but they'll leak into re-uploads if you're not careful.
