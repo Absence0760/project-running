@@ -676,31 +676,6 @@ test('every Deno import in Edge Functions has a version pin', () => {
 	// version suffix.
 	const efDir = resolve(__dirname, '../../../backend/supabase/functions');
 	const offenders: Array<{ file: string; line: number; url: string }> = [];
-	function walk(dir: string): void {
-		for (const name of readdirSync(dir)) {
-			if (name.startsWith('.')) continue;
-			const full = resolve(dir, name);
-			let stat;
-			try {
-				stat = readFileSync(full);
-			} catch {
-				continue;
-			}
-			// Best-effort directory detection via existsSync of a child;
-			// use readdirSync inside try/catch instead.
-			try {
-				const entries = readdirSync(full);
-				if (entries.length >= 0) {
-					walk(full);
-					continue;
-				}
-			} catch {
-				/* not a directory; fall through to file handling */
-			}
-		}
-	}
-	// Above walk is verbose; simpler: collect every .ts file recursively
-	// via a helper that uses readdirSync with file-type checks.
 	const collectTs = (dir: string, out: string[]): void => {
 		for (const name of readdirSync(dir)) {
 			if (name.startsWith('.')) continue;
@@ -1859,15 +1834,18 @@ test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical
 		['app.html', html],
 		['app.css', css],
 	] as const) {
-		assert.doesNotMatch(
-			surface,
-			/fonts\.googleapis\.com/,
+		// Plain substring checks rather than regex: CodeQL's missing-
+		// regexp-anchor rule treats `doesNotMatch(/host/)` as a (too-
+		// loose) URL validator. Substring negation expresses the actual
+		// intent — "no occurrence anywhere in the source" — without the
+		// regex shape that triggers the rule.
+		assert.ok(
+			!surface.includes('fonts.googleapis.com'),
 			`${name} must not reference fonts.googleapis.com — ` +
 				'the font is self-hosted via material-symbols (npm).',
 		);
-		assert.doesNotMatch(
-			surface,
-			/fonts\.gstatic\.com/,
+		assert.ok(
+			!surface.includes('fonts.gstatic.com'),
 			`${name} must not reference fonts.gstatic.com.`,
 		);
 	}
