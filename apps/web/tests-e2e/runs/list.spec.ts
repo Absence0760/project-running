@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { switchRunsToAllTime } from '../fixtures/helpers';
+import { createSagaUsers, deleteSagaUsers } from '../fixtures/saga-users';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -573,5 +574,45 @@ test.describe('/runs', () => {
 		// Clean up — Done exits select mode.
 		await page.getByRole('button', { name: 'Done' }).click();
 		await expect(page.locator('.bulk-bar')).toHaveCount(0);
+	});
+});
+
+// Persona-hunt finding Casual #2 — zero-run users used to see the
+// filter-empty card ("No runs match these filters") with no Add CTA.
+// A brand-new user landing on /runs would conclude they did something
+// wrong with filters they never set. Pinned via a sub-suite that
+// mints an ephemeral saga user — the seeded users all have runs.
+test.describe('/runs — zero-run empty state (Casual #2)', () => {
+	test('brand-new user with no runs sees Add-run CTA, not filter copy', async ({
+		browser
+	}) => {
+		const [user] = await createSagaUsers(1, {
+			displayNames: ['Zero Runs Test']
+		});
+		try {
+			const ctx = await browser.newContext({
+				storageState: user.storageStatePath
+			});
+			const page = await ctx.newPage();
+			await page.goto('/runs');
+
+			// Truly-empty branch carries the runs-empty-no-data testid
+			// (added with the fix). The accusatory filter copy must NOT
+			// appear for a zero-run user.
+			await expect(
+				page.locator('[data-testid="runs-empty-no-data"]')
+			).toBeVisible({ timeout: 10_000 });
+			await expect(page.getByText('No runs match these filters')).toHaveCount(0);
+
+			// Affordance: a clickable "Add a run" CTA opens the create
+			// modal. Click + check the modal mounts.
+			await page.getByRole('button', { name: 'Add a run' }).click();
+			await expect(page.getByRole('heading', { name: 'Add a run' }))
+				.toBeVisible({ timeout: 5_000 });
+
+			await ctx.close();
+		} finally {
+			await deleteSagaUsers([user]);
+		}
 	});
 });

@@ -731,11 +731,30 @@
 		{/if}
 
 		{#if filteredRuns.length === 0}
-			<div class="empty">
-				<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-				<p class="empty-text">No runs match these filters.</p>
-				<p class="empty-hint">Try widening the date range or clearing the activity / source.</p>
-			</div>
+			{#if runs.length === 0}
+				<div class="empty" data-testid="runs-empty-no-data">
+					<span class="material-symbols empty-icon" aria-hidden="true">directions_run</span>
+					<p class="empty-text">No runs yet.</p>
+					<p class="empty-hint">
+						Record your first run on the app, or import from
+						<a href="/settings/integrations">Strava / Garmin</a>.
+					</p>
+					<button
+						type="button"
+						class="btn btn-primary"
+						onclick={() => (showRunModal = true)}
+						style="margin-top: var(--space-md);"
+					>
+						Add a run
+					</button>
+				</div>
+			{:else}
+				<div class="empty" data-testid="runs-empty-filtered">
+					<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
+					<p class="empty-text">No runs match these filters.</p>
+					<p class="empty-hint">Try widening the date range or clearing the activity / source.</p>
+				</div>
+			{/if}
 		{/if}
 	{/if}
 </div>
