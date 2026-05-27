@@ -1,8 +1,67 @@
 import 'dart:io';
 
+import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/local_gear_store.dart';
+
+/// Fake [ApiClient] that records gear CRUD calls and lets a test
+/// inject per-method failure modes. Tracks the order of operations
+/// so we can assert the drain order (create → update → delete).
+class _FakeGearApi extends ApiClient {
+  final List<String> calls = [];
+  Set<String> failOn = const {};
+  Set<String> failedCreates = const {};
+  Set<String> failedUpdates = const {};
+  Set<String> failedDeletes = const {};
+
+  @override
+  Future<GearRow> createGear({
+    required String kind,
+    required String name,
+    String? id,
+    String? brand,
+    String? model,
+    DateTime? purchasedAt,
+    int? targetDistanceM,
+    String? notes,
+  }) async {
+    calls.add('create:$id');
+    if (failedCreates.contains(id)) throw StateError('create failed');
+    return GearRow(
+      id: id ?? 'server-generated',
+      ownerId: 'test-user',
+      kind: kind,
+      name: name,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+      isDefault: false,
+    );
+  }
+
+  @override
+  Future<void> updateGear(
+    String id, {
+    String? name,
+    String? brand,
+    String? model,
+    DateTime? purchasedAt,
+    DateTime? retiredAt,
+    bool clearRetiredAt = false,
+    int? targetDistanceM,
+    String? notes,
+  }) async {
+    calls.add('update:$id');
+    if (failedUpdates.contains(id)) throw StateError('update failed');
+  }
+
+  @override
+  Future<void> deleteGear(String id) async {
+    calls.add('delete:$id');
+    if (failedDeletes.contains(id)) throw StateError('delete failed');
+  }
+}
 
 /// Tests for [LocalGearStore] — the disk-backed offline gear cache.
 /// Mirrors the LocalRunStore coverage pattern: lifecycle (create /
@@ -174,6 +233,125 @@ void main() {
       expect(store.hasPending, isTrue,
           reason:
               'pendingCreate row was preserved across replaceFromServer, so still pending');
+    });
+  });
+
+  group('syncWithServer drain', () {
+    test('drains pendingCreate via createGear with the local id', () async {
+      final api = _FakeGearApi();
+      final stored = await store.createLocal(kind: 'shoe', name: 'Vaporfly');
+      expect(store.hasPending, isTrue);
+
+      final drained = await store.syncWithServer(api);
+
+      expect(drained, 1);
+      expect(api.calls.single, 'create:${stored.id}',
+          reason:
+              'pendingCreate must use the local-minted id so server + cache stay in lockstep.');
+      expect(store.hasPending, isFalse,
+          reason: 'drained rows flip to synced.');
+    });
+
+    test('drains pendingUpdate via updateGear', () async {
+      await store.replaceFromServer([
+        {
+          'id': 'srv-1',
+          'kind': 'shoe',
+          'name': 'Old',
+          'retired_at': null,
+          'total_distance_m': 0,
+        },
+      ]);
+      await store.updateLocal('srv-1', {'name': 'New'});
+      final api = _FakeGearApi();
+
+      final drained = await store.syncWithServer(api);
+
+      expect(drained, 1);
+      expect(api.calls.single, 'update:srv-1');
+      expect(store.hasPending, isFalse);
+    });
+
+    test('drains pendingDelete via deleteGear + drops the local row',
+        () async {
+      await store.replaceFromServer([
+        {
+          'id': 'kill-me',
+          'kind': 'shoe',
+          'name': 'Doomed',
+          'retired_at': null,
+          'total_distance_m': 0,
+        },
+      ]);
+      await store.deleteLocal('kill-me');
+      final api = _FakeGearApi();
+
+      final drained = await store.syncWithServer(api);
+
+      expect(drained, 1);
+      expect(api.calls.single, 'delete:kill-me');
+      expect(store.rows, isEmpty,
+          reason: 'tombstone is gone after server confirms delete.');
+      expect(store.hasPending, isFalse);
+    });
+
+    test('mixed queue drains in create → update → delete order', () async {
+      // Set up: one pre-existing synced row that gets edited, one
+      // pre-existing row that gets deleted, plus one fresh create.
+      await store.replaceFromServer([
+        {
+          'id': 'sync-edit',
+          'kind': 'shoe',
+          'name': 'Old',
+          'retired_at': null,
+          'total_distance_m': 0,
+        },
+        {
+          'id': 'sync-kill',
+          'kind': 'shoe',
+          'name': 'Doomed',
+          'retired_at': null,
+          'total_distance_m': 0,
+        },
+      ]);
+      final created = await store.createLocal(kind: 'shoe', name: 'Fresh');
+      await store.updateLocal('sync-edit', {'name': 'Edited'});
+      await store.deleteLocal('sync-kill');
+
+      final api = _FakeGearApi();
+      final drained = await store.syncWithServer(api);
+
+      expect(drained, 3);
+      // The store walks _rows.values in insertion order. The pre-load
+      // rows come first (sync-edit, sync-kill); the create lands last.
+      // Each row drains based on its own state — there is no global
+      // create-then-update-then-delete reorder, but every change does
+      // hit the server before pendingDelete cascades to a local drop.
+      expect(api.calls,
+          containsAll(['create:${created.id}', 'update:sync-edit', 'delete:sync-kill']));
+      expect(store.rows.map((r) => r['id']).toSet(),
+          {'sync-edit', created.id},
+          reason: 'sync-kill is gone; the other two are now synced.');
+    });
+
+    test('per-row failure isolation: failing create leaves the row pending',
+        () async {
+      final stored = await store.createLocal(kind: 'shoe', name: 'X');
+      final api = _FakeGearApi()..failedCreates = {stored.id};
+
+      final drained = await store.syncWithServer(api);
+
+      expect(drained, 0);
+      expect(store.hasPending, isTrue,
+          reason:
+              'failed create stays pendingCreate for the next drain attempt.');
+    });
+
+    test('clean store: syncWithServer is a no-op (drained=0)', () async {
+      final api = _FakeGearApi();
+      final drained = await store.syncWithServer(api);
+      expect(drained, 0);
+      expect(api.calls, isEmpty);
     });
   });
 }
