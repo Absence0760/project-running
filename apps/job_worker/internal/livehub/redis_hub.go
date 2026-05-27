@@ -88,6 +88,7 @@ func (h *RedisHub) prefix() string {
 
 func (h *RedisHub) chanKey(runID string) string { return h.prefix() + runID + ":ch" }
 func (h *RedisHub) lastKey(runID string) string { return h.prefix() + runID + ":last" }
+func (h *RedisHub) histKey(runID string) string { return h.prefix() + runID + ":hist" }
 
 // Publish PUBLISHes the ping on the per-run channel and updates the
 // last-known key with TTL. Returns the receiver count Redis reports
@@ -108,6 +109,16 @@ func (h *RedisHub) Publish(runID string, p Ping) int {
 	// but don't abort the publish.
 	if err := h.rdb.Set(ctx, h.lastKey(runID), payload, h.ttl()).Err(); err != nil {
 		h.log().Warn("redis_hub: last-known set failed", "err", err, "run_id", runID)
+	}
+	// Append to the history list + trim to HistoryRingSize. Same TTL
+	// as lastKey. Persona-hunt Round 3 finding Ultra #1 — late-
+	// joining spectators can replay the recent track.
+	pipe := h.rdb.Pipeline()
+	pipe.RPush(ctx, h.histKey(runID), payload)
+	pipe.LTrim(ctx, h.histKey(runID), -HistoryRingSize, -1)
+	pipe.Expire(ctx, h.histKey(runID), h.ttl())
+	if _, err := pipe.Exec(ctx); err != nil {
+		h.log().Warn("redis_hub: history append failed", "err", err, "run_id", runID)
 	}
 	recvCount, err := h.rdb.Publish(ctx, h.chanKey(runID), payload).Result()
 	if err != nil {
@@ -206,6 +217,35 @@ func (h *RedisHub) LastKnown(runID string) *Ping {
 		return nil
 	}
 	return &p
+}
+
+// History reads up to [max] most-recent pings from the `:hist` list
+// (LPUSH-style appends with LTRIM to HistoryRingSize). Returned in
+// chronological order (oldest first). Persona-hunt Round 3 #U1.
+func (h *RedisHub) History(runID string, max int) []Ping {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	if max <= 0 || max > HistoryRingSize {
+		max = HistoryRingSize
+	}
+	raws, err := h.rdb.LRange(ctx, h.histKey(runID), int64(-max), -1).Result()
+	if errors.Is(err, redis.Nil) {
+		return nil
+	}
+	if err != nil {
+		h.log().Warn("redis_hub: history range failed", "err", err, "run_id", runID)
+		return nil
+	}
+	out := make([]Ping, 0, len(raws))
+	for _, raw := range raws {
+		var p Ping
+		if err := json.Unmarshal([]byte(raw), &p); err != nil {
+			h.log().Warn("redis_hub: history decode skipped", "err", err, "run_id", runID)
+			continue
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 // LoadZones lazily fetches + caches privacy zones for `runID`. Same

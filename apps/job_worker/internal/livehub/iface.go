@@ -50,6 +50,17 @@ type LivePubSub interface {
 	// HTTP `/snapshot` route.
 	LastKnown(runID string) *Ping
 
+	// History returns up to [max] most-recent pings in chronological
+	// order (oldest first) so a late-joining spectator can render
+	// the historical track instead of a single dot. Empty when no
+	// pings have been published. The implementation caps to a sane
+	// per-room ceiling; callers can pass max=0 to request the
+	// implementation's default cap. Persona-hunt Round 3 finding
+	// Ultra #1 — closes the gap between this transport and the
+	// Supabase Realtime path, which serves the full `live_run_pings`
+	// backlog on late-join.
+	History(runID string, max int) []Ping
+
 	// LoadZones populates the per-room privacy-zone cache (lazily,
 	// once per room per process). Same fail-closed contract for
 	// fetcher errors — the push path drops the ping rather than

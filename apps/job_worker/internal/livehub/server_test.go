@@ -598,6 +598,58 @@ func TestServer_SubscribeReplaySuppressedByNewZone(t *testing.T) {
 	}
 }
 
+// Persona-hunt Round 3 finding Ultra #1 — a late-joining spectator
+// must replay the recent track, not just a single most-recent dot.
+// Pre-fix the snapshot/subscribe paths served LastKnown only.
+func TestServer_SubscribeReplaysHistoricalTrack(t *testing.T) {
+	base, teardown := newTestServer(t, &Server{})
+	defer teardown()
+
+	// Push 10 pings, then have a spectator join.
+	for i := 0; i < 10; i++ {
+		body := fmt.Sprintf(
+			`{"lat":47.%d,"lng":8.%d,"distance_m":%d,"elapsed_s":%d}`,
+			i, i, 100*i, 60*i,
+		)
+		resp, err := http.Post(base+"/v1/live/run-hist/push", "application/json",
+			strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+	}
+
+	wsURL := strings.Replace(base, "http://", "ws://", 1) + "/v1/live/run-hist/subscribe"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("ws dial: %v", err)
+	}
+	defer c.CloseNow()
+
+	// Spectator should receive all 10 replayed pings in chronological
+	// order before the live stream takes over.
+	received := 0
+	for i := 0; i < 10; i++ {
+		readCtx, readCancel := context.WithTimeout(ctx, 1*time.Second)
+		var got Ping
+		if err := wsjson.Read(readCtx, c, &got); err != nil {
+			readCancel()
+			t.Fatalf("expected replay ping %d, got err: %v", i, err)
+		}
+		readCancel()
+		if got.ElapsedS != 60*i {
+			t.Fatalf("replay ping %d out of order: ElapsedS=%d, want %d",
+				i, got.ElapsedS, 60*i)
+		}
+		received++
+	}
+	if received != 10 {
+		t.Fatalf("late joiner got %d/%d historical pings", received, 10)
+	}
+}
+
 // Smoke-test the path-parsing on an edge case: run_id with hyphens
 // + uuid-shaped — the trim-and-split logic must round-trip these.
 func TestServer_RunIDWithHyphens(t *testing.T) {

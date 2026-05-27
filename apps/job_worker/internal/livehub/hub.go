@@ -109,11 +109,28 @@ func NewHub() *Hub {
 // enough that a stuck spectator doesn't grow unbounded memory.
 const subBufferSize = 8
 
+// Per-room history ring-buffer capacity. At a 5s mobile-recorder push
+// cadence, 5000 pings covers the last ~7 hours of broadcast — enough
+// for a crew rolling up at mile 60 of a 100-mile race to see the
+// course traversed so far. Memory: 5000 × ~80 B = ~400 KB per room.
+// A 50-hour ultra exceeds this and only the most recent ~7h are
+// retained; that's the trade. Persona-hunt Round 3 finding Ultra #1.
+const HistoryRingSize = 5000
+
 type room struct {
 	mu         sync.Mutex
 	subs       map[*subscriber]struct{}
 	lastPing   *Ping
 	lastPingAt time.Time // stamped on every Publish — drives idle-room GC.
+	// Ring buffer of recent pings for late-joiner replay. history is
+	// a fixed-cap slice (cap = HistoryRingSize); `historyNext` is the
+	// next write index. When the buffer is full, writes overwrite the
+	// oldest entry, and reads start from historyNext and wrap. The
+	// total ever-written count is tracked in `historyCount` so the
+	// History reader can return the right chronological slice.
+	history      []Ping
+	historyNext  int
+	historyCount uint64
 	// Cached privacy zones for the broadcaster of this room. Loaded
 	// lazily on the first push (or first read via [Hub.Zones]) and
 	// refreshed every CacheRefreshTTL so a mid-run privacy-zone
@@ -184,6 +201,14 @@ func (h *Hub) Publish(runID string, p Ping) int {
 	r.mu.Lock()
 	r.lastPing = &p
 	r.lastPingAt = time.Now()
+	// Record into the history ring. Allocate lazily on first publish
+	// so empty rooms don't pay for the slab.
+	if r.history == nil {
+		r.history = make([]Ping, HistoryRingSize)
+	}
+	r.history[r.historyNext] = p
+	r.historyNext = (r.historyNext + 1) % HistoryRingSize
+	r.historyCount++
 	// Snapshot subscribers so we don't hold the room mutex across
 	// channel sends. A slow consumer can't deadlock the publisher.
 	subs := make([]*subscriber, 0, len(r.subs))
@@ -405,6 +430,55 @@ func (h *Hub) LastKnown(runID string) *Ping {
 	}
 	p := *r.lastPing
 	return &p
+}
+
+// History returns up to [max] most-recent pings for [runID] in
+// chronological order (oldest first). Used by the HTTP /subscribe
+// route to replay the historical track to a late-joining spectator
+// — a crew rolling up at mile 60 needs to see the runner's traversed
+// course, not a single dot. Persona-hunt Round 3 finding Ultra #1.
+//
+// max=0 → defaults to HistoryRingSize (the per-room ceiling).
+// Larger values are clamped to HistoryRingSize.
+func (h *Hub) History(runID string, max int) []Ping {
+	r := h.roomFor(runID, false)
+	if r == nil {
+		return nil
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.historyCount == 0 || len(r.history) == 0 {
+		return nil
+	}
+	if max <= 0 || max > HistoryRingSize {
+		max = HistoryRingSize
+	}
+	// Total pings ever published. The ring buffer holds at most
+	// min(historyCount, HistoryRingSize) of the most recent.
+	total := int(r.historyCount)
+	if total > HistoryRingSize {
+		total = HistoryRingSize
+	}
+	if max > total {
+		max = total
+	}
+	// The oldest still-buffered ping lives at historyNext when the
+	// buffer wrapped, or at index 0 when it hasn't. Read `max` from
+	// the END (most-recent) backwards to find the start index.
+	startOffsetFromEnd := max
+	out := make([]Ping, max)
+	// historyNext points at the next WRITE position, so historyNext-1
+	// is the most-recent write. Step backward `startOffsetFromEnd`
+	// places, wrap with HistoryRingSize.
+	start := (r.historyNext - startOffsetFromEnd + HistoryRingSize*2) % HistoryRingSize
+	if total < HistoryRingSize {
+		// Buffer hasn't wrapped — start cleanly at index 0.
+		start = total - max
+	}
+	for i := 0; i < max; i++ {
+		out[i] = r.history[(start+i)%HistoryRingSize]
+	}
+	return out
 }
 
 // SubscriberCount returns the number of active subscribers for

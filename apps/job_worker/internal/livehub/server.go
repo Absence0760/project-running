@@ -403,24 +403,38 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	}
 	defer unsub()
 
-	// Late-joiner replay: write the cached lastPing manually after
-	// re-evaluating zones. Skip silently on shouldDrop / fetch
-	// errors (fail-closed). The live stream picks up from the next
-	// Publish via `ch`.
-	if last := s.Hub.LastKnown(runID); last != nil {
-		drop, err := s.shouldDrop(ctx, runID, *last)
-		if err == nil && !drop {
-			writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
-			if werr := wsjson.Write(writeCtx, c, *last); werr != nil {
-				writeCancel()
-				if !errors.Is(werr, context.Canceled) {
-					s.log().Debug("ws late-joiner write failed", "err", werr, "run_id", runID)
-				}
-				return
-			}
-			writeCancel()
-		} else if err != nil {
+	// Late-joiner replay. Persona-hunt Round 3 finding Ultra #1 —
+	// pre-fix we only sent the last ping, so a crew rolling up at
+	// mile 60 of a 100-mile race saw a single dot with no historical
+	// course. Now we replay up to HistoryRingSize recent pings,
+	// re-evaluating each against current privacy zones. The live
+	// stream then picks up from the next Publish via `ch`.
+	history := s.Hub.History(runID, 0)
+	if len(history) == 0 {
+		// Backstop: pre-rollout rooms (or RedisHub instances without
+		// a history list) still expose LastKnown. Use it so a
+		// freshly-deployed hub doesn't regress the dot-only behaviour.
+		if last := s.Hub.LastKnown(runID); last != nil {
+			history = []Ping{*last}
+		}
+	}
+	for _, p := range history {
+		drop, err := s.shouldDrop(ctx, runID, p)
+		if err != nil {
 			s.log().Warn("subscribe zone check failed; suppressing replay", "err", err, "run_id", runID)
+			break
+		}
+		if drop {
+			continue
+		}
+		writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
+		werr := wsjson.Write(writeCtx, c, p)
+		writeCancel()
+		if werr != nil {
+			if !errors.Is(werr, context.Canceled) {
+				s.log().Debug("ws late-joiner write failed", "err", werr, "run_id", runID)
+			}
+			return
 		}
 	}
 
