@@ -391,15 +391,31 @@
 		}
 	}
 
-	async function unlinkProvider(identity: Identity) {
+	// Persona-hunt Round 2 finding Casual #3: pre-fix the unlink path
+	// used a native window.confirm() while every other destructive
+	// action on this page (Delete account, Restore from backup) uses
+	// the in-app ConfirmDialog. Native confirm looks like a phishing
+	// overlay on iOS Safari + violates the project's modal convention
+	// (docs/conventions.md § Web modals). The async dialog state is
+	// held in showUnlinkConfirm + pendingUnlink.
+	let showUnlinkConfirm = $state(false);
+	let pendingUnlink = $state<Identity | null>(null);
+
+	function unlinkProvider(identity: Identity) {
 		if (identities.length <= 1) {
 			identityError = 'You need at least one sign-in method. Link another before unlinking this one.';
 			return;
 		}
+		pendingUnlink = identity;
+		showUnlinkConfirm = true;
+	}
+
+	async function confirmUnlink() {
+		const identity = pendingUnlink;
+		showUnlinkConfirm = false;
+		pendingUnlink = null;
+		if (!identity) return;
 		const label = PROVIDER_LABEL[identity.provider] ?? identity.provider;
-		if (!confirm(`Unlink ${label}? You won't be able to sign in with this method until you link it again.`)) {
-			return;
-		}
 		unlinkingProvider = identity.provider;
 		identityError = null;
 		try {
@@ -746,6 +762,19 @@
 	danger
 	onconfirm={handleDeleteAccount}
 	oncancel={() => (showDeleteAccount = false)}
+/>
+
+<ConfirmDialog
+	open={showUnlinkConfirm}
+	title="Unlink {pendingUnlink ? (PROVIDER_LABEL[pendingUnlink.provider] ?? pendingUnlink.provider) : ''}?"
+	message="You won't be able to sign in with this method until you link it again. Other linked sign-in methods will keep working."
+	confirmLabel="Unlink"
+	danger
+	onconfirm={confirmUnlink}
+	oncancel={() => {
+		showUnlinkConfirm = false;
+		pendingUnlink = null;
+	}}
 />
 
 <style>
