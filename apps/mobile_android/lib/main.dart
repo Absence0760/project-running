@@ -472,6 +472,7 @@ class RunApp extends StatefulWidget {
   final TrainingService training;
   final BleHeartRate heartRate;
   final cm.Run? recoveredRun;
+  final String? recoveryBannerMessage;
   const RunApp({
     super.key,
     this.apiClient,
@@ -487,6 +488,7 @@ class RunApp extends StatefulWidget {
     required this.training,
     required this.heartRate,
     this.recoveredRun,
+    this.recoveryBannerMessage,
   });
 
   @override
@@ -518,6 +520,7 @@ class _RunAppState extends State<RunApp> {
                   heartRate: widget.heartRate,
                   settingsSync: widget.settingsSync,
                   recoveredRun: widget.recoveredRun,
+                  recoveryBannerMessage: widget.recoveryBannerMessage,
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,

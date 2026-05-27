@@ -2218,10 +2218,14 @@ class _RunScreenState extends State<RunScreen> {
                       ),
                     ),
                   ),
-                  // "Tap to cancel" hint — only renders the first second
-                  // so it doesn't compete with the digit on the third tick.
-                  if (_countdownValue == 3)
-                    Positioned(
+                  // "Tap to cancel" hint — visible for every countdown
+                  // tick (the outer `if (isCountdown)` already gates
+                  // the whole overlay). Persona-hunt Round 2 finding
+                  // Casual #5: pre-fix the hint only rendered while
+                  // `_countdownValue == 3` and disappeared at the
+                  // 2-second mark, leaving a fat-finger-Start casual
+                  // user no idea they could still abort.
+                  Positioned(
                       bottom: 48,
                       left: 0,
                       right: 0,
