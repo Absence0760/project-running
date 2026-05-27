@@ -183,4 +183,38 @@ test.describe('/plans/new — create wizard', () => {
 		await expect(seedCard).toBeVisible({ timeout: 10_000 });
 		await expect(seedCard).toHaveClass(/card-active/);
 	});
+
+	// Persona-hunt finding Intermediate #3: a past startDate generates a
+	// plan anchored to elapsed weeks so the today-card + progress ring
+	// report "already two workouts behind" the moment the plan is
+	// created. The wizard now validates at submit-time AND sets a
+	// markup-level `min=today` on the date input. Pin both paths so a
+	// future refactor that drops either still has the other in place.
+	test('past startDate is rejected with a clear error', async ({ page }) => {
+		await page.goto('/plans');
+		await page.getByRole('button', { name: /New plan/ }).first().click();
+		const modal = page.locator('.modal');
+		await expect(modal).toBeVisible({ timeout: 5_000 });
+		await modal
+			.getByPlaceholder('Autumn half marathon')
+			.fill('past-date guard');
+
+		// Override the min attribute to bypass the markup-level guard
+		// (simulates a stale form left open across midnight, or a future
+		// refactor that drops the min). Fill a clearly-past value.
+		const dateInput = modal.locator('input[type="date"]').first();
+		await dateInput.evaluate((el) => el.removeAttribute('min'));
+		await dateInput.fill('2020-01-01');
+
+		// Wait for the preview to render (so Create plan is enabled).
+		await expect(modal.locator('.preview')).toBeVisible({ timeout: 5_000 });
+		await modal.getByRole('button', { name: 'Create plan' }).click();
+
+		// Inline error appears explaining why the submit was blocked.
+		await expect(modal.getByText(/start date is in the past/i))
+			.toBeVisible({ timeout: 5_000 });
+
+		// Close the wizard without creating.
+		await page.locator('.modal-close').first().click();
+	});
 });

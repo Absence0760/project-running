@@ -177,6 +177,19 @@
 	async function submit(e: Event) {
 		e.preventDefault();
 		if (!name.trim() || !plan || busy) return;
+		// Persona-hunt Intermediate #3: a startDate in the past
+		// generates a plan anchored to elapsed weeks — the today-card +
+		// progress ring report "you're already two workouts behind" the
+		// moment the plan is created. The wizard's input has min=today
+		// (set on the markup below) but a user that opened the modal
+		// yesterday could submit a stale value before the page reloads,
+		// and a future refactor that drops the markup-level min loses
+		// the only guardrail. Validate at submit-time too.
+		if (startDate && startDate < todayIso()) {
+			error =
+				'Plan start date is in the past. Pick today or a future date so the plan starts at week 1, not week 0.';
+			return;
+		}
 		busy = true;
 		error = null;
 		try {
@@ -193,6 +206,12 @@
 			console.error('Plan create failed', e);
 			busy = false;
 		}
+	}
+
+	function todayIso(): string {
+		const d = new Date();
+		const pad = (n: number) => String(n).padStart(2, '0');
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 	}
 
 	async function proceedWithCreate() {
@@ -251,7 +270,12 @@
 
 			<label>
 				<span>Start date <span class="optional">first week begins Sunday</span></span>
-				<input type="date" bind:value={startDate} required />
+				<input
+					type="date"
+					bind:value={startDate}
+					min={todayIso()}
+					required
+				/>
 			</label>
 
 			<label>
