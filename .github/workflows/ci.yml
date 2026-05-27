@@ -67,8 +67,21 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      - working-directory: apps/backend
-        run: supabase start
+      # See e2e-web for the slow-ghcr.io retry rationale.
+      - name: Start local Supabase stack
+        working-directory: apps/backend
+        run: |
+          for attempt in 1 2; do
+            if timeout 480 supabase start; then
+              break
+            fi
+            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+            supabase stop --no-backup || true
+            if [ "$attempt" = "2" ]; then
+              echo "::error::supabase start failed twice"
+              exit 1
+            fi
+          done
       - run: npm run gen:types:check --workspace=apps/backend
       - if: failure()
         run: |
@@ -223,8 +236,21 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      - working-directory: apps/backend
-        run: supabase start
+      # See e2e-web for the slow-ghcr.io retry rationale.
+      - name: Start local Supabase stack
+        working-directory: apps/backend
+        run: |
+          for attempt in 1 2; do
+            if timeout 480 supabase start; then
+              break
+            fi
+            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+            supabase stop --no-backup || true
+            if [ "$attempt" = "2" ]; then
+              echo "::error::supabase start failed twice"
+              exit 1
+            fi
+          done
       - name: Regenerate Dart + Kotlin row classes
         run: dart run scripts/gen_dart_models.dart
       - name: Fail if committed outputs drifted
@@ -253,12 +279,31 @@ jobs:
       # priority wire-level ApiClient methods (signIn / getRuns /
       # saveRun + fetchTrack roundtrip — which transitively
       # covers _uploadTrack).
+      # See e2e-web for the slow-ghcr.io retry rationale.
       - name: Start local Supabase stack
         working-directory: apps/backend
-        run: supabase start
+        run: |
+          for attempt in 1 2; do
+            if timeout 480 supabase start; then
+              break
+            fi
+            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+            supabase stop --no-backup || true
+            if [ "$attempt" = "2" ]; then
+              echo "::error::supabase start failed twice"
+              exit 1
+            fi
+          done
+      # See e2e-web for the post-restart storage REST retry rationale.
       - name: Apply migrations + seed (db reset)
         working-directory: apps/backend
-        run: supabase db reset --local
+        run: |
+          if supabase db reset --local; then
+            exit 0
+          fi
+          echo "::warning::supabase db reset failed; waiting 15s for storage REST and retrying"
+          sleep 15
+          supabase db reset --local
       - run: dart pub global activate melos
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
@@ -288,7 +333,10 @@ jobs:
   edge-functions:
     name: Edge Function tests (Deno)
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Steady-state runtime is ~2 min, but the supabase-start retry can
+    # spend up to 2 × 8 min on a slow ghcr.io image pull (see the start
+    # step's retry rationale).
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: denoland/setup-deno@667a34cdef165d8d2b2e98dde39547c9daac7282 # v2.0.4
@@ -297,9 +345,21 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
+      # See e2e-web for the slow-ghcr.io retry rationale.
       - name: Start local Supabase stack
         working-directory: apps/backend
-        run: supabase start
+        run: |
+          for attempt in 1 2; do
+            if timeout 480 supabase start; then
+              break
+            fi
+            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+            supabase stop --no-backup || true
+            if [ "$attempt" = "2" ]; then
+              echo "::error::supabase start failed twice"
+              exit 1
+            fi
+          done
       # Auto-started edge-runtime container has no env vars beyond the
       # Supabase defaults — every secret-gated function 503s. Stop it
       # and run `functions serve` with `--env-file` so the rejection
@@ -394,9 +454,21 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
+      # See e2e-web for the slow-ghcr.io retry rationale.
       - name: Start local Supabase stack
         working-directory: apps/backend
-        run: supabase start
+        run: |
+          for attempt in 1 2; do
+            if timeout 480 supabase start; then
+              break
+            fi
+            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+            supabase stop --no-backup || true
+            if [ "$attempt" = "2" ]; then
+              echo "::error::supabase start failed twice"
+              exit 1
+            fi
+          done
       - name: Run pgtap RLS suite
         working-directory: apps/backend
         run: supabase test db --local
@@ -457,9 +529,26 @@ jobs:
       # (seed.sql only runs on `supabase db reset`). The e2e suite
       # depends on the pinned UUIDs + seeded users, so we reset
       # immediately after start.
+      #
+      # Per-attempt timeout + retry guards against transient slow
+      # ghcr.io image pulls (CI run 26490131303 edge-functions: a
+      # single 353MB image trickled at ~50KB/s and hung the job for
+      # the full 20-min budget). Normal cold boot is ~2 min, so 480s
+      # is ~4x headroom; the second attempt resumes from layer cache.
       - name: Start local Supabase stack
         working-directory: apps/backend
-        run: supabase start
+        run: |
+          for attempt in 1 2; do
+            if timeout 480 supabase start; then
+              break
+            fi
+            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+            supabase stop --no-backup || true
+            if [ "$attempt" = "2" ]; then
+              echo "::error::supabase start failed twice"
+              exit 1
+            fi
+          done
       # `supabase start` returns before every sidecar is ready to
       # serve requests. On a slow runner, Storage REST can still be
       # 502'ing when `db reset` tries to drop + recreate the buckets
@@ -494,9 +583,23 @@ jobs:
               exit 1
             fi
           done
+      # `supabase db reset` restarts containers internally and then
+      # immediately calls Storage REST to recreate buckets. On a slow
+      # runner the sidecar can still be cold post-restart and time out
+      # (CI run 26490131303 shard 7: `Get http://127.0.0.1:54321/
+      # storage/v1/bucket: context deadline exceeded` ~31s after the
+      # restart). The pre-reset wait-for-sidecars step doesn't help
+      # because the restart wipes that warm state. Retry once after a
+      # short wait — second pass finds the sidecar warm.
       - name: Apply migrations + seed (db reset)
         working-directory: apps/backend
-        run: supabase db reset --local
+        run: |
+          if supabase db reset --local; then
+            exit 0
+          fi
+          echo "::warning::supabase db reset failed; waiting 15s for storage REST and retrying"
+          sleep 15
+          supabase db reset --local
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Cache Playwright browsers
