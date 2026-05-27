@@ -44,11 +44,29 @@ export async function buildContext(
 		}
 	}
 
-	const { data: recentRuns } = await supabase
+	const { data: rawRecentRuns } = await supabase
 		.from('runs')
 		.select('id, started_at, distance_m, duration_s, metadata, route_id')
 		.order('started_at', { ascending: false })
 		.limit(runsLimit);
+	// Persona-hunt Round 2 finding Pro #3. `metadata` is a free-form
+	// jsonb bag (docs/metadata.md). Some keys are useful coaching
+	// signal (activity_type, avg_bpm, workout_kind, etc.); many are
+	// not — `notes` (free-form, anything the runner typed), `event`
+	// + `position` (parkrun athlete + finishing place), raw `laps[]`
+	// arrays, `imported_from`, `strava_id` / `garmin_id`, internal
+	// flags like `recovered_from_crash`, owner-only data the
+	// `public_runs` view explicitly strips. Selecting metadata whole
+	// shipped all of it to Anthropic — defence-in-depth violation
+	// against the same Art 5(1)(c) minimisation the surrounding code
+	// (subscription_tier strip, health-consent gate) defends elsewhere.
+	//
+	// Allowlist the keys the coach actually uses for advice. Pre-fix
+	// behaviour for unallowlisted keys: included. Post-fix: dropped.
+	const recentRuns = (rawRecentRuns ?? []).map((r) => ({
+		...r,
+		metadata: pickAllowedRunMetadata(r.metadata as Record<string, unknown> | null),
+	}));
 
 	// Use the SECURITY DEFINER `get_my_profile` RPC because
 	// `subscription_tier` is column-level revoked from authenticated callers
@@ -114,4 +132,33 @@ export async function buildContext(
 			recent_runs: recentRuns ?? [],
 		},
 	};
+}
+
+/// Keys on `runs.metadata` that the coach is allowed to see. Adding a
+/// key here is a deliberate decision — every key crosses a sub-
+/// processor boundary and must justify its coaching value. Audited
+/// against docs/metadata.md.
+const COACH_METADATA_ALLOWLIST: ReadonlySet<string> = new Set([
+	'activity_type', // run / walk / hike / cycle — coach gates advice on this
+	'avg_bpm', // gated on health consent at the row level; HR zones use this
+	'workout_kind', // structured workouts — coach reads to track plan adherence
+	'workout_step_results', // per-step planned-vs-actual; coach summarises adherence
+	'manual_completion', // user marked a workout done — affects plan completion
+	'is_indoor', // treadmill / track session — coach phrases advice differently
+	'elevation_m', // total gain — useful for route-context advice
+]);
+
+export function pickAllowedRunMetadata(
+	metadata: Record<string, unknown> | null,
+): Record<string, unknown> | null {
+	if (!metadata) return null;
+	const out: Record<string, unknown> = {};
+	for (const key of Object.keys(metadata)) {
+		if (COACH_METADATA_ALLOWLIST.has(key)) {
+			out[key] = metadata[key];
+		}
+	}
+	// Return null when the allowlist would emit an empty object so
+	// the JSON payload stays compact + omits the key entirely.
+	return Object.keys(out).length === 0 ? null : out;
 }
