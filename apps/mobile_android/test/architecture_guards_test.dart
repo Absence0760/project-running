@@ -2157,26 +2157,29 @@ void main() {
   });
 
   group('Restore purchases (Apple/Play subscription policy)', () {
-    test('settings_screen exposes a Restore-purchases ListTile', () {
+    test('Pro screen exposes a Restore-purchases ListTile', () {
       // Reason: audit/app-store-privacy (May 2026) flagged the absence
       // of a Restore-purchases entry point. Apple Review Guideline
       // 3.1.1 + Play subscription policy require it on every
       // subscription app. Source-grep guard so a future refactor
       // can't quietly drop it.
-      final source = File('lib/screens/settings_screen.dart').readAsStringSync();
+      final source =
+          File('lib/screens/settings_pro_screen.dart').readAsStringSync();
       expect(
         source,
         contains("title: const Text('Restore purchases')"),
-        reason: 'settings_screen.dart must surface a "Restore purchases" tile.',
+        reason:
+            'settings_pro_screen.dart must surface a "Restore purchases" tile.',
       );
       expect(
         source,
-        contains('onTap: _restorePurchases'),
-        reason: 'settings_screen.dart must wire the tile to _restorePurchases().',
+        contains('_restorePurchases(context)'),
+        reason:
+            'settings_pro_screen.dart must wire the tile to _restorePurchases().',
       );
     });
 
-    test('settings_screen exposes a Manage-subscription ListTile', () {
+    test('Pro screen exposes a Manage-subscription ListTile', () {
       // Reason: Apple Guideline 3.1.1 + Play subscription policy
       // require an in-app cancel / change-plan path (not just an
       // OS-Settings deep link). RevenueCat's CustomerInfo
@@ -2185,23 +2188,21 @@ void main() {
       // URL and falls back to the web upgrade page. /audit/app-store-
       // privacy May 2026 High closeout.
       final source =
-          File('lib/screens/settings_screen.dart').readAsStringSync();
+          File('lib/screens/settings_pro_screen.dart').readAsStringSync();
       expect(
         source,
         contains("title: const Text('Manage subscription')"),
-        reason: 'settings_screen.dart must surface a "Manage '
+        reason: 'settings_pro_screen.dart must surface a "Manage '
             'subscription" tile so the user can reach the cancel / '
             'change-plan path from inside the app.',
       );
       expect(
         source,
-        contains('onTap: _openManageSubscription'),
-        reason: 'settings_screen.dart must wire the tile to '
+        contains('_openManageSubscription(context)'),
+        reason: 'settings_pro_screen.dart must wire the tile to '
             '_openManageSubscription() — a missing wire produces a '
             'visible-but-dead button.',
       );
-      // The handler must call managementUrl() so RC's hosted page
-      // is the primary target.
       expect(
         source,
         contains('await managementUrl('),
@@ -2222,7 +2223,7 @@ void main() {
       // cancelled" — pin both so a future "simplify the copy"
       // refactor can't strip them. /audit/app-store-privacy May 2026.
       final source =
-          File('lib/screens/settings_screen.dart').readAsStringSync();
+          File('lib/screens/settings_pro_screen.dart').readAsStringSync();
       expect(
         source,
         contains(r'$9.99/month'),
