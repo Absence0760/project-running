@@ -1539,6 +1539,29 @@ Don't re-litigate by:
 
 ---
 
+## 72. Bag-backed prefs are cached on disk on mobile; offline writes queue + drain on reconnect
+
+The Settings → Preferences screen on mobile reads ~17 keys from `user_settings.prefs` + `user_device_settings.prefs` (DOB, resting/max HR, HR zones, weekly goal, week start, default activity, map style, pace format, default privacy, Strava auto-share, coach personality, auto-pause threshold, etc.). Before this change `SettingsService.load()` only succeeded with a live network round-trip — a signed-in user on an airplane saw every bag-backed tile go inert with "Sign in to edit profile-level settings", even though their account *was* signed in. Editing was also impossible: `updateUniversal` / `updateDevice` threw on the server PATCH.
+
+**Decision:** `SettingsService` now accepts a pluggable `SettingsCache` (`packages/api_client/lib/src/settings_service.dart`). Mobile supplies a `SharedPrefsSettingsCache` (`apps/mobile_android/lib/settings_cache.dart`, mirrored to iOS). On `load()` the cache hydrates the in-memory bags *before* the network fetch, so reads light up immediately. On `updateUniversal` / `updateDevice` the change is applied to in-memory + cache first; the server PATCH is best-effort and queues a `PendingSettingsChange` on failure. On the next successful `load()` the queue drains — each pending change runs `applyPrefsChanges` against the freshly-fetched server bag so a concurrent write from another device isn't clobbered.
+
+Trade-offs:
+
+- **Cache scope is per-user, per-device** for the device bag, per-user for the universal bag. Sign-out drops nothing automatically; if a different user signs in on the same device they read their own cache (which starts empty until their first load). The previous user's rows stay on disk until that user signs back in — acceptable because they only contain settings, not run data, and the rows are keyed so cross-user reads are impossible.
+- **Server is still authoritative.** The cache is a read-through + write-through mirror, not a source of truth. A cross-device concurrent edit during an offline window is resolved at queue-drain time by the same read-merge-write that already protects online writes (see decisions §… on the original `applyPrefsChanges` lift).
+- **Web doesn't get this layer.** Web sessions are a single tab on a browser with always-on connectivity assumptions, and the existing `apps/web/src/lib/settings.ts` doesn't currently need the queue. The contract on `SettingsService` is mobile-aware (the default `SettingsCache` is a no-op) so server-side tests + the web's TS port don't pay for the abstraction.
+- **Cache wire format is JSON.** No migration required when a new prefs key joins the registry — `applyPrefsChanges` round-trips it.
+
+Don't re-litigate by:
+
+- Adding a "force refresh from server" button. The queue drain on next successful load is sufficient; an explicit refresh would surface a UI state that doesn't exist on web (where there's no offline mode).
+- Caching values for signed-out users. Bag-backed prefs are user-scoped by definition — a user without an account has nothing to cache.
+- Trying to use the cache as a primary store for non-bag data (gear, runs, devices). Each of those has its own storage characteristics (Storage objects, gpx blobs) and deserves its own per-table cache (see e.g. `LocalRunStore`).
+
+Pinning tests: `packages/api_client/test/settings_cache_test.dart` (contract for the abstract `SettingsCache`), `apps/mobile_android/test/settings_cache_test.dart` (SharedPreferences round-trip + per-user scoping + corrupt-JSON guard).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

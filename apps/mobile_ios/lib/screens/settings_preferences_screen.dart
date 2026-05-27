@@ -211,6 +211,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     return '${display.toStringAsFixed(display < 10 ? 1 : 0)} ${useMiles ? 'mi' : 'km'} / week';
   }
 
+  /// The bag-backed tiles light up as soon as the [SettingsSyncService]
+  /// reports `synced`. With an on-disk cache in play (the default on
+  /// production builds) this now becomes true on cache hit, not only
+  /// after a successful server round-trip — so an airplane-mode
+  /// signed-in user can still read + write every prefs key.
   bool get _bagReady => widget.settingsSync?.synced == true;
 
   T? _bagValue<T>(String key) =>
@@ -617,11 +622,36 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   @override
   Widget build(BuildContext context) {
     final prefs = widget.preferences;
+    final offlineNotice = widget.settingsSync?.synced == true &&
+            widget.settingsSync?.service?.isServerHydrated == false
+        ? widget.settingsSync?.lastError
+        : null;
     return Scaffold(
       appBar: AppBar(title: const Text('Preferences')),
       body: SafeArea(
         child: ListView(
           children: [
+            if (offlineNotice != null)
+              Container(
+                margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.surfaceContainerHigh,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.cloud_off_outlined, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        offlineNotice,
+                        style: const TextStyle(fontSize: 13),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             _sectionLabel('Units & display'),
             SwitchListTile(
               title: const Text('Use miles'),

@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:api_client/api_client.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:ui_kit/ui_kit.dart';
 
@@ -19,6 +20,7 @@ import 'preferences.dart';
 import 'race_controller.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'settings_cache.dart';
 import 'settings_sync.dart';
 import 'social_service.dart';
 import 'sync_service.dart';
@@ -217,7 +219,11 @@ void main() async {
   if (hasSupabase && ApiClient.isInitialized) {
     try {
       api = ApiClient();
-      settingsSync = SettingsSyncService(preferences: prefs);
+      final sp = await SharedPreferences.getInstance();
+      settingsSync = SettingsSyncService(
+        preferences: prefs,
+        cache: SharedPrefsSettingsCache(sp),
+      );
     } catch (e) {
       debugPrint('ApiClient construction failed: $e');
     }

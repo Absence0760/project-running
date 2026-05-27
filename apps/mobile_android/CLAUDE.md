@@ -151,7 +151,8 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `hr_zones.dart` — pure helpers `hrZoneBreakdown` (time-weighted, 30 s pause cap) and `bpmStatsOf`. No Flutter state — unit-tested. Backs the HR-zone panel on `run_detail_screen` for runs whose track carries per-point `bpm` (Strava, FIT/TCX imports, watch recorders).
 - `fitness.dart` — Dart port of `apps/web/src/lib/fitness.ts` (VDOT / VO₂ max from Daniels' formula, EWMA-based ATL/CTL/TSB, `recoveryAdvice`). Pure functions; backs the dashboard's Fitness card. Keep in sync with the web module.
 - `race_controller.dart` — live-race orchestration: pings spectator feed, auto-submits finisher time to the leaderboard
-- `settings_sync.dart` — reads/writes the user-preferences row so settings roam across devices
+- `settings_sync.dart` — reads/writes the user-preferences row so settings roam across devices. Accepts a `SettingsCache` so the bag-backed prefs stay readable + writable when offline; on cold start the cached bags hydrate before the server fetch completes, on offline-edit the change is mirrored to cache and queued for the server.
+- `settings_cache.dart` — `SharedPrefsSettingsCache`: SharedPreferences-backed [`SettingsCache`] implementation. Keys are user-scoped (and device-scoped for the device bag) so a sign-out + sign-in as a different user on the same device can't read another user's data. Pending writes are JSON-encoded so a new prefs key round-trips without a cache-format migration.
 - `backup.dart` — export + import of the local run / route stores (troubleshooting + device-swap path)
 - `recurrence.dart` — Dart port of `apps/web/src/lib/recurrence.ts`, keep in sync
 - `training.dart` — Dart port of `apps/web/src/lib/training.ts` (VDOT, Riegel, plan generator); keep in sync, 17-test mirror suite in `test/training_test.dart`

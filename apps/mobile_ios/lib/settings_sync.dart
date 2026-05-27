@@ -19,15 +19,28 @@ import 'preferences.dart';
 class SettingsSyncService extends ChangeNotifier {
   SettingsSyncService({
     required this.preferences,
+    this.cache,
   });
 
   final Preferences preferences;
+
+  /// Optional on-disk cache so the bag-backed prefs survive a cold start
+  /// while offline, render immediately on resume before the server fetch,
+  /// and accept writes that queue + drain on next sign-in.
+  final SettingsCache? cache;
+
   SettingsService? _settings;
 
   bool _synced = false;
   String? _lastError;
 
   SettingsService? get service => _settings;
+
+  /// True when the screen can read AND write bag-backed prefs. With a
+  /// cache wired this stays true even when the server fetch fails — the
+  /// user keeps editing offline and writes drain on reconnect. Without
+  /// a cache (or on a brand-new device while offline) it falls back to
+  /// the pre-cache semantics: only true after a successful server load.
   bool get synced => _synced;
   String? get lastError => _lastError;
 
@@ -55,15 +68,25 @@ class SettingsSyncService extends ChangeNotifier {
   /// user isn't authenticated.
   Future<void> onSignedIn() async {
     try {
-      _settings = await SettingsService(
-        deviceId: preferences.deviceId,
-        platform: _platformTag(),
-        label: _deviceLabel(),
-      ).load();
+      _settings = await (cache == null
+              ? SettingsService(
+                  deviceId: preferences.deviceId,
+                  platform: _platformTag(),
+                  label: _deviceLabel(),
+                )
+              : SettingsService(
+                  deviceId: preferences.deviceId,
+                  platform: _platformTag(),
+                  label: _deviceLabel(),
+                  cache: cache!,
+                ))
+          .load();
       _applyUniversal(_settings!.universal);
       _applyDevice(_settings!.device);
       _synced = true;
-      _lastError = null;
+      _lastError = _settings!.isServerHydrated
+          ? null
+          : 'Offline — using cached settings. Edits will sync when you reconnect.';
     } catch (e) {
       _settings = null;
       _synced = false;

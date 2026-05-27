@@ -75,7 +75,24 @@ keys. Adding a new key is a client change + an entry below — no migration.
   — it pulls both bags on sign-in, overlays `preferred_unit`,
   `voice_feedback_enabled`, and `voice_feedback_interval_km` onto local
   `Preferences`, and exposes `updateUniversal` / `updateDevice`
-  passthroughs the settings screen uses for bag-only keys. Both mobile
+  passthroughs the settings screen uses for bag-only keys.
+
+  **Offline behaviour**: a `SharedPrefsSettingsCache`
+  ([`mobile_*/lib/settings_cache.dart`](../apps/mobile_android/lib/settings_cache.dart))
+  is wired into `SettingsService` in production main.dart. Both bags are
+  persisted to `SharedPreferences` after every successful server load
+  and after every optimistic local write. On the next cold start the
+  cache hydrates `SettingsService` before the network fetch, so the
+  Preferences screen renders every bag-backed tile with the correct
+  value instantly. A signed-in offline user editing a bag pref applies
+  the change to the cache + in-memory state, then if the server push
+  fails the change is queued in `PendingSettingsChange` form and
+  replayed on the next successful `SettingsService.load()` — the queue
+  drain runs the same `applyPrefsChanges` merge on top of the live
+  server bag so a concurrent write from another device isn't clobbered.
+  Cache keys are user-scoped (and device-scoped for the device bag)
+  so a sign-out + sign-in as a different user can't read another
+  user's rows. Both mobile
   settings screens edit the full universal + device registry (profile,
   HR, pace, privacy, coach, map style, auto-pause, weekly goal, coach
   personality, Strava auto-share).
