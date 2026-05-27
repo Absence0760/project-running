@@ -1551,6 +1551,7 @@ Trade-offs:
 - **Server is still authoritative.** The cache is a read-through + write-through mirror, not a source of truth. A cross-device concurrent edit during an offline window is resolved at queue-drain time by the same read-merge-write that already protects online writes (see decisions §… on the original `applyPrefsChanges` lift).
 - **Web doesn't get this layer.** Web sessions are a single tab on a browser with always-on connectivity assumptions, and the existing `apps/web/src/lib/settings.ts` doesn't currently need the queue. The contract on `SettingsService` is mobile-aware (the default `SettingsCache` is a no-op) so server-side tests + the web's TS port don't pay for the abstraction.
 - **Cache wire format is JSON.** No migration required when a new prefs key joins the registry — `applyPrefsChanges` round-trips it.
+- **`load()` never rethrows on a signed-in caller**, even when both the cache and the server are unavailable. It returns with empty bags + `isServerHydrated = false`. A signed-in user who first opens the app offline gets a usable Settings screen — writes apply to in-memory + cache and queue for the next successful drain. Pre-fix the cache-miss + server-fail path threw, forcing every bag-backed tile into the disabled "Sign in to edit profile-level settings" state even though the user *was* signed in.
 
 Don't re-litigate by:
 

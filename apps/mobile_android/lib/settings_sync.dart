@@ -86,7 +86,7 @@ class SettingsSyncService extends ChangeNotifier {
       _synced = true;
       _lastError = _settings!.isServerHydrated
           ? null
-          : 'Offline — using cached settings. Edits will sync when you reconnect.';
+          : 'Offline — edits stay on this device and sync when you reconnect.';
     } catch (e) {
       _settings = null;
       _synced = false;

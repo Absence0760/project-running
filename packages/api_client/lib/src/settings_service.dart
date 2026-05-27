@@ -186,9 +186,15 @@ class SettingsService {
   /// are immediately accurate even if the network call fails. If the
   /// server fetch succeeds the cache is overwritten and any
   /// previously-queued offline writes are drained on top. If the server
-  /// fetch fails AND the cache had data, the method returns successfully
-  /// with [isServerHydrated] = false; only a cache-miss + server-fail
-  /// rethrows so the caller can show the "offline + first run" path.
+  /// fetch fails the method **always** returns successfully — even
+  /// without a cache — with empty bags and [isServerHydrated] = false.
+  /// Writes during this state apply to the cache + pending queue, and
+  /// drain on the next successful load. This is the load-bearing
+  /// difference vs the prior "rethrow when no cache" behaviour: a
+  /// signed-in user who first opens the app offline still gets a usable
+  /// Settings screen — their edits queue cleanly until the network
+  /// returns. (Sign-out / drop-cache scenarios still throw at the
+  /// auth-check above.)
   Future<SettingsService> load() async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
@@ -197,7 +203,6 @@ class SettingsService {
     final cachedD = _cache.readDevice(userId, _deviceId);
     if (cachedU != null) _universal = Map<String, dynamic>.from(cachedU);
     if (cachedD != null) _device = Map<String, dynamic>.from(cachedD);
-    final hadCache = cachedU != null || cachedD != null;
 
     try {
       final universalRes = await _client
@@ -248,7 +253,6 @@ class SettingsService {
       await _cache.writeDevice(userId, _deviceId, _device);
       await _drainPending(userId);
     } catch (e) {
-      if (!hadCache) rethrow;
       _serverHydrated = false;
     }
     return this;
