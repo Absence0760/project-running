@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../backup.dart';
+import '../cross_source_dedup.dart';
 import '../csv_run_importer.dart';
 import '../health_connect_importer.dart';
 import '../local_route_store.dart';
@@ -87,9 +88,28 @@ class _ImportScreenState extends State<ImportScreen> {
 
     final localErrors = <StravaImportError>[];
     final savedRuns = <Run>[];
+    // Persona-hunt Round 2 #3: cross-source dedup. The store's
+    // existing runs include any prior Strava + Garmin ZIP imports;
+    // an HC import of the same Garmin activity should skip rather
+    // than double-count. Same logic in reverse for a Strava-after-HC
+    // sequence. Snapshot once before the loop so each fuzzy check
+    // runs against a consistent baseline.
+    final existing = List<Run>.of(widget.runStore.runs);
+    var skippedCrossSource = 0;
 
     for (var i = 0; i < runs.length; i++) {
       final run = runs[i];
+      if (isCrossSourceDuplicate(run, existing)) {
+        skippedCrossSource++;
+        if (mounted) {
+          setState(() {
+            _imported = i + 1;
+            _status =
+                'Skipped $skippedCrossSource duplicate(s) already imported from another source';
+          });
+        }
+        continue;
+      }
       try {
         await widget.runStore.save(run);
         savedRuns.add(run);
