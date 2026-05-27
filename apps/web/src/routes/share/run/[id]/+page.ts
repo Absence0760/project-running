@@ -16,9 +16,16 @@ import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/publi
 // would unlock that — deferred per `docs/followups.md § #15`.
 export const prerender = true;
 
-// Cap defensive — sitemap caps at 10k; 5k prerendered share pages
-// is plenty for v1 and keeps the build size sane.
-const MAX_RUNS = 5_000;
+// Cap defensive — 50k prerendered share pages. Persona-hunt Casual
+// #4: at the previous 5k cap, a new public run created between
+// builds would serve the SPA-shell fallback `<head>` (generic
+// title / og:image) until the next CI deploy — Slack / FB / X
+// unfurls of a brand-new run showed the homepage card instead of
+// the per-run one. Widening to 50k moves the gap from days to
+// months for the typical user base; the real architectural fix
+// (per-request OG SSR via a Lambda Function URL similar to
+// /api/coach) is followups.md §15.
+const MAX_RUNS = 50_000;
 
 export const entries: EntryGenerator = async () => {
 	if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) return [];

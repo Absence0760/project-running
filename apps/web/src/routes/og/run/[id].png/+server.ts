@@ -19,7 +19,11 @@ import { buildRunOgSvg } from '$lib/og_run_image';
 // LinkedIn unfurls now show the runner's distance + name + date.
 export const prerender = true;
 
-const MAX_RUNS = 5_000;
+// Matches the +page.ts cap so the OG image and the +page surface
+// cover the same set of runs. Pre-fix, both were 5k — a new public
+// run between builds served the SPA-shell fallback `<head>` AND a
+// missing og:image. 50k moves the gap from days to months.
+const MAX_RUNS = 50_000;
 
 export const entries: EntryGenerator = async () => {
 	if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) return [];
