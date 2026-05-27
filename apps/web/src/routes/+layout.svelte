@@ -28,6 +28,29 @@
 		initTheme();
 	});
 
+	// Persona-hunt Round 2 finding Casual #2. Pre-fix there was no
+	// connection-loss indicator anywhere on web — every Promise.all
+	// of fetches just hung for the Supabase default timeout (~60s)
+	// when the user's connection dropped. Track navigator.onLine +
+	// surface a thin top banner so the user knows the app saw the
+	// drop. Mirrors the mobile `backend_timeout.dart` guard's
+	// user-facing signal. Initial value defers to onLine so the
+	// banner doesn't flash during SSR hydration.
+	let isOffline = $state(false);
+	onMount(() => {
+		if (!browser) return;
+		const update = () => {
+			isOffline = !navigator.onLine;
+		};
+		update();
+		window.addEventListener('online', update);
+		window.addEventListener('offline', update);
+		return () => {
+			window.removeEventListener('online', update);
+			window.removeEventListener('offline', update);
+		};
+	});
+
 	// Hydrate the map-style signal once the user is known so the
 	// preview on /runs/[id] matches the user's saved preference without
 	// needing the preferences page to be visited first this session.
@@ -217,6 +240,13 @@
 <ToastContainer />
 <CookieConsentBanner />
 
+{#if isOffline}
+	<div class="offline-banner" role="status" aria-live="polite" data-testid="offline-banner">
+		<span class="material-symbols offline-icon" aria-hidden="true">wifi_off</span>
+		You're offline. New runs save locally and sync when you're back online.
+	</div>
+{/if}
+
 {#if isShellless($page.url.pathname)}
 	<!-- Landing, login, share, live, club-invite — these have their own
 	     chrome and render shell-less regardless of auth state. -->
@@ -362,6 +392,27 @@
 {/if}
 
 <style>
+	.offline-banner {
+		position: fixed;
+		top: 0;
+		left: 0;
+		right: 0;
+		z-index: var(--z-toast, 100);
+		background: var(--color-warning, #b45309);
+		color: white;
+		padding: 0.5rem var(--space-md);
+		font-size: 0.85rem;
+		text-align: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-sm);
+		box-shadow: var(--shadow-sm);
+	}
+	.offline-icon {
+		font-size: 1.1rem;
+	}
+
 	.app-shell {
 		display: flex;
 		min-height: 100vh;
