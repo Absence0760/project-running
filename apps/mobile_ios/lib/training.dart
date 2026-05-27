@@ -396,7 +396,12 @@ List<GeneratedWorkout> _generateWeek({
       (quality.b?.targetDistanceM ?? 0) / 1000;
   final remaining = max(0.0, weeklyKm - longKm - qualityKm);
   final daysUsed = <int>{longDow, restDow};
-  if (daysPerWeek >= 4) daysUsed.add(qaDow);
+  // Persona-hunt Intermediate #4: a 3-day plan used to be all
+  // long-run + easy with zero quality across every phase. Drop the
+  // gate from >=4 to >=3 so 3-day plans get one tempo/interval per
+  // week (the phase picks which). Race + recovery phases still
+  // produce a null quality.a and fall through to easy below.
+  if (daysPerWeek >= 3) daysUsed.add(qaDow);
   if (daysPerWeek >= 5) daysUsed.add(qbDow);
   final easyDays = daysPerWeek - daysUsed.where((d) => d != restDow).length;
   final easyKm = easyDays > 0 ? remaining / easyDays : 0.0;
@@ -426,7 +431,7 @@ List<GeneratedWorkout> _generateWeek({
       }
       continue;
     }
-    if (dow == qaDow && daysPerWeek >= 4 && quality.a != null) {
+    if (dow == qaDow && daysPerWeek >= 3 && quality.a != null) {
       workouts.add(quality.a!._withDate(date));
       continue;
     }
@@ -455,15 +460,15 @@ _QualityPair _allocateQuality({
   GeneratedWorkout? a, b;
   final placeholder = DateTime(2000, 1, 1);
   if (phase == PlanPhase.base) {
-    if (daysPerWeek >= 4) a = _tempo(placeholder, 6, paces);
+    if (daysPerWeek >= 3) a = _tempo(placeholder, 6, paces);
   } else if (phase == PlanPhase.build) {
-    if (daysPerWeek >= 4) a = _intervals(placeholder, paces);
+    if (daysPerWeek >= 3) a = _intervals(placeholder, paces);
     if (daysPerWeek >= 5) b = _tempo(placeholder, 7, paces);
   } else if (phase == PlanPhase.peak) {
-    if (daysPerWeek >= 4) a = _intervals(placeholder, paces);
+    if (daysPerWeek >= 3) a = _intervals(placeholder, paces);
     if (daysPerWeek >= 5) b = _marathonPace(placeholder, paces, goalDistanceM);
   } else if (phase == PlanPhase.taper) {
-    if (daysPerWeek >= 4) a = _tempo(placeholder, 4, paces);
+    if (daysPerWeek >= 3) a = _tempo(placeholder, 4, paces);
   }
   return _QualityPair(a, b);
 }

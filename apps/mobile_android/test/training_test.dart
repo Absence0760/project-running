@@ -112,6 +112,44 @@ void main() {
       expect(active.any((w) => w.kind == WorkoutKind.long), isTrue);
     });
 
+    // Persona-hunt Intermediate #4: 3-day plans used to be all
+    // long-run + easy with no quality work — basically a mileage
+    // log, not a training plan. Pin the post-fix behaviour.
+    test('3-day plan in base phase includes a tempo workout', () {
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceHalf,
+        startDate: DateTime(2026, 5, 3),
+        daysPerWeek: 3,
+        goalTimeSec: 105 * 60,
+      ));
+      final base = plan.weeks.firstWhere((w) => w.phase == PlanPhase.base);
+      final active =
+          base.workouts.where((w) => w.kind != WorkoutKind.rest).toList();
+      expect(active.length, 3);
+      expect(active.any((w) => w.kind == WorkoutKind.long), isTrue);
+      expect(
+        active.any((w) =>
+            w.kind == WorkoutKind.tempo || w.kind == WorkoutKind.interval),
+        isTrue,
+        reason: '3-day base phase must have a tempo/interval — '
+            'pre-fix it was all easy + long, not a training plan',
+      );
+    });
+
+    test('3-day plan in build phase includes intervals', () {
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceFull,
+        startDate: DateTime(2026, 6, 7),
+        daysPerWeek: 3,
+        goalTimeSec: 4 * 3600,
+      ));
+      final build = plan.weeks.firstWhere((w) => w.phase == PlanPhase.build);
+      expect(
+        build.workouts.any((w) => w.kind == WorkoutKind.interval),
+        isTrue,
+      );
+    });
+
     test('taper < peak by volume', () {
       final plan = generatePlan(GeneratePlanInput(
         goalEvent: GoalEvent.distanceFull,

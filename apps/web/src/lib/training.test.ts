@@ -154,6 +154,47 @@ test('generatePlan: a 4-day plan has exactly 3 runs + 1 long per week in base', 
 	assert.ok(active.some((w) => w.kind === 'long'));
 });
 
+// Persona-hunt finding Intermediate #4: 3-day plans used to be all
+// long-run + easy with no quality work in any phase — basically just
+// a mileage log, not a training plan. Drop the qualityA gate from
+// >=4 to >=3 so 3-day plans get one tempo/interval per week (the
+// phase picks which).
+test('generatePlan: a 3-day plan in base phase still includes a tempo workout', () => {
+	const plan = generatePlan({
+		goalEvent: 'distance_half',
+		startDate: '2026-05-03',
+		daysPerWeek: 3,
+		goalTimeSec: 105 * 60
+	});
+	const baseWeek = plan.weeks.find((w) => w.phase === 'base');
+	assert.ok(baseWeek, 'plan should have a base-phase week');
+	const kinds = new Set(baseWeek!.workouts.map((w) => w.kind));
+	const active = baseWeek!.workouts.filter((w) => w.kind !== 'rest');
+	assert.equal(active.length, 3, '3-day plan has 3 active days');
+	assert.ok(kinds.has('long'), '3-day plan must include the long run');
+	assert.ok(
+		kinds.has('tempo') || kinds.has('interval'),
+		'3-day plan in base phase must include at least one tempo/interval — ' +
+			'pre-fix it was all easy + long, not a training plan'
+	);
+});
+
+test('generatePlan: a 3-day plan in build phase includes intervals', () => {
+	const plan = generatePlan({
+		goalEvent: 'distance_full',
+		startDate: '2026-06-07',
+		daysPerWeek: 3,
+		goalTimeSec: 4 * 3600
+	});
+	const buildWeek = plan.weeks.find((w) => w.phase === 'build');
+	assert.ok(buildWeek, 'plan should have a build-phase week');
+	const kinds = new Set(buildWeek!.workouts.map((w) => w.kind));
+	assert.ok(
+		kinds.has('interval'),
+		'3-day build phase must include the interval workout'
+	);
+});
+
 test('generatePlan: taper weeks have lower volume than peak', () => {
 	const plan = generatePlan({
 		goalEvent: 'distance_full',

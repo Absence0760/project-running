@@ -316,7 +316,14 @@ function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 	const qualityA = 2; // Tue
 	const qualityB = 4; // Thu
 	const daysUsed = new Set<number>([longRun, rest]);
-	if (w.daysPerWeek >= 4) daysUsed.add(qualityA);
+	// Persona-hunt Intermediate #4: a 3-day plan used to be all
+	// long-run + easy with zero quality work across every phase — i.e.
+	// not a training plan, just a mileage log. A 3-day intermediate
+	// runner training for a half should still get one tempo/interval
+	// per week (the phase decides which); 4-day plans get qualityA;
+	// 5-day plans add qualityB. Race + recovery weeks still produce
+	// a null `qualityDistribution.a` and fall through to easy below.
+	if (w.daysPerWeek >= 3) daysUsed.add(qualityA);
 	if (w.daysPerWeek >= 5) daysUsed.add(qualityB);
 
 	const longRunKm = longRunDistance(w);
@@ -360,7 +367,7 @@ function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 		// with only `scheduled_date` — which the DB then rejected on insert
 		// because `kind` is NOT NULL. Race week (which allocates nothing)
 		// was the trigger.
-		if (dow === qualityA && w.daysPerWeek >= 4 && qualityDistribution.a) {
+		if (dow === qualityA && w.daysPerWeek >= 3 && qualityDistribution.a) {
 			workouts.push({ ...qualityDistribution.a, scheduled_date: date });
 			continue;
 		}
@@ -452,16 +459,16 @@ function allocateQualityKm(
 	let a: GeneratedWorkout | null = null;
 	let b: GeneratedWorkout | null = null;
 	if (w.phase === 'base') {
-		if (w.daysPerWeek >= 4) a = tempoWorkout(placeholder, 6, w.paces);
+		if (w.daysPerWeek >= 3) a = tempoWorkout(placeholder, 6, w.paces);
 	} else if (w.phase === 'build') {
-		if (w.daysPerWeek >= 4) a = intervalsWorkout(placeholder, w.paces);
+		if (w.daysPerWeek >= 3) a = intervalsWorkout(placeholder, w.paces);
 		if (w.daysPerWeek >= 5) b = tempoWorkout(placeholder, 7, w.paces);
 	} else if (w.phase === 'peak') {
-		if (w.daysPerWeek >= 4) a = intervalsWorkout(placeholder, w.paces);
+		if (w.daysPerWeek >= 3) a = intervalsWorkout(placeholder, w.paces);
 		if (w.daysPerWeek >= 5)
 			b = marathonPaceWorkout(placeholder, w.paces, w.goalDistanceM);
 	} else if (w.phase === 'taper') {
-		if (w.daysPerWeek >= 4) a = tempoWorkout(placeholder, 4, w.paces);
+		if (w.daysPerWeek >= 3) a = tempoWorkout(placeholder, 4, w.paces);
 	}
 	const totalKm =
 		(a?.target_distance_m ?? 0) / 1000 + (b?.target_distance_m ?? 0) / 1000;
