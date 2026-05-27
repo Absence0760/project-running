@@ -15,6 +15,7 @@
 import JSZip from 'jszip';
 import { parseRouteFile, type ImportedRoute } from './import';
 import { saveRun } from './data';
+import { buildStravaDedupeSet } from './strava-zip-dedupe';
 import { supabase } from './supabase';
 import { auth } from './stores/auth.svelte';
 
@@ -73,17 +74,11 @@ export async function importStravaZip(
 		throw new Error('activities.csv is missing required columns (Activity ID / Filename).');
 	}
 
-	// Existing Strava-sourced runs → dedupe key.
 	const { data: existing } = await supabase
 		.from('runs')
-		.select('metadata')
-		.eq('user_id', uid)
-		.eq('source', 'strava');
-	const seen = new Set<string>();
-	for (const r of existing ?? []) {
-		const sid = (r.metadata as Record<string, unknown> | null)?.strava_id;
-		if (sid) seen.add(String(sid));
-	}
+		.select('metadata, external_id')
+		.eq('user_id', uid);
+	const seen = buildStravaDedupeSet(existing ?? []);
 
 	const dataRows = rows.slice(1);
 	const progress: StravaZipProgress = {
