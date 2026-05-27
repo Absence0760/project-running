@@ -32,6 +32,15 @@ class IntensityBreakdown {
   );
 }
 
+/// Out-of-band HR sentinel bounds — anything outside [40, 220] BPM is
+/// treated as sensor noise rather than data. Pros' max HR rarely
+/// exceeds 210, and Polar / Wahoo contact-loss commonly drops to
+/// 30-50 (Z1 false-easy). 40 is below any realistic resting HR for a
+/// trained adult; 220 is the standard age-based theoretical maximum
+/// (220 − age = 200 at age 20). Persona-hunt finding Pro #4.
+const int kHrSanityFloorBpm = 40;
+const int kHrSanityCeilingBpm = 220;
+
 /// HR-zone bpm cutoffs (z1..z5 = upper bound of each zone). Five
 /// strictly-ascending integers; callers parse this off the
 /// `hr_zones` map in the universal settings bag.
@@ -86,7 +95,12 @@ IntensityBreakdown computeIntensityBreakdown(
     final avgRaw = r.metadata?['avg_bpm'];
     if (avgRaw is! num) continue;
     final avg = avgRaw.toDouble();
-    if (avg <= 0) continue;
+    // Persona-hunt Pro #4: sensor glitches (chest-strap contact loss,
+    // dropped pairing) commonly produce avg_bpm spikes (215+) or
+    // collapses (sub-40). Either tags a whole workout into the wrong
+    // zone and shifts the 30-day breakdown noticeably. Treat values
+    // outside [40, 220] as "missing" — same disposition as `avg <= 0`.
+    if (avg < kHrSanityFloorBpm || avg > kHrSanityCeilingBpm) continue;
     hrTracked += 1;
     int idx;
     if (avg < zones[0]) {

@@ -220,4 +220,115 @@ void main() {
       );
     });
   });
+
+  // Persona-hunt Pro #4: chest-strap glitches (contact loss → sub-40
+  // bpm collapse, dropped pairing → 215+ bpm spike) used to land in
+  // the breakdown and shift the 30-day time-in-zone readout
+  // noticeably. Sanity bounds [40, 220] treat both as "missing".
+  group('computeIntensityBreakdown — HR sanity bounds (Pro #4)', () {
+    final now = DateTime.utc(2026, 4, 30);
+    final zones = [114, 133, 152, 171, 190];
+
+    test('rejects spike: avg_bpm = 225 (above sensor ceiling)', () {
+      final out = computeIntensityBreakdown(
+        [
+          _run(
+            startedAt: now.subtract(const Duration(days: 1)),
+            durationS: 3600,
+            avgBpm: 225,
+          ),
+        ],
+        zones,
+        windowDays: 30,
+        now: now,
+      );
+      expect(out.hrTrackedRuns, 0,
+          reason: '225 bpm is a sensor glitch — must not tag the run');
+      expect(out.totalSeconds, 0);
+    });
+
+    test('rejects collapse: avg_bpm = 35 (below sensor floor)', () {
+      final out = computeIntensityBreakdown(
+        [
+          _run(
+            startedAt: now.subtract(const Duration(days: 1)),
+            durationS: 3600,
+            avgBpm: 35,
+          ),
+        ],
+        zones,
+        windowDays: 30,
+        now: now,
+      );
+      expect(out.hrTrackedRuns, 0,
+          reason: '35 bpm is contact-loss noise — must not tag Z1');
+      expect(out.totalSeconds, 0);
+    });
+
+    test('accepts boundary: avg_bpm = 40 (exact sensor floor)', () {
+      final out = computeIntensityBreakdown(
+        [
+          _run(
+            startedAt: now.subtract(const Duration(days: 1)),
+            durationS: 600,
+            avgBpm: 40,
+          ),
+        ],
+        zones,
+        windowDays: 30,
+        now: now,
+      );
+      expect(out.hrTrackedRuns, 1);
+      expect(out.totalSeconds, 600);
+    });
+
+    test('accepts boundary: avg_bpm = 220 (exact sensor ceiling)', () {
+      final out = computeIntensityBreakdown(
+        [
+          _run(
+            startedAt: now.subtract(const Duration(days: 1)),
+            durationS: 600,
+            avgBpm: 220,
+          ),
+        ],
+        zones,
+        windowDays: 30,
+        now: now,
+      );
+      expect(out.hrTrackedRuns, 1);
+      expect(out.totalSeconds, 600);
+    });
+
+    test('rejects 221 (just above ceiling)', () {
+      final out = computeIntensityBreakdown(
+        [
+          _run(
+            startedAt: now.subtract(const Duration(days: 1)),
+            durationS: 600,
+            avgBpm: 221,
+          ),
+        ],
+        zones,
+        windowDays: 30,
+        now: now,
+      );
+      expect(out.hrTrackedRuns, 0);
+    });
+
+    test('rejects 39 (just below floor)', () {
+      final out = computeIntensityBreakdown(
+        [
+          _run(
+            startedAt: now.subtract(const Duration(days: 1)),
+            durationS: 600,
+            avgBpm: 39,
+          ),
+        ],
+        zones,
+        windowDays: 30,
+        now: now,
+      );
+      expect(out.hrTrackedRuns, 0);
+    });
+  });
 }

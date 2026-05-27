@@ -87,11 +87,18 @@
 		const cutoff = Date.now() - days * 86_400_000;
 		const zoneSeconds: number[] = [0, 0, 0, 0, 0];
 		let hrTrackedRuns = 0;
+		// Persona-hunt Pro #4: sensor glitches (chest-strap contact
+		// loss, dropped pairing) commonly produce avg_bpm spikes
+		// (215+) or collapses (sub-40). Treat out-of-band values as
+		// "missing" — same disposition as avg <= 0. Bounds mirror the
+		// Dart twin's kHrSanityFloorBpm / kHrSanityCeilingBpm.
+		const HR_FLOOR = 40;
+		const HR_CEIL = 220;
 		for (const r of filteredRuns) {
 			const started = new Date(r.started_at).getTime();
 			if (started < cutoff) continue;
 			const avg = (r.metadata as { avg_bpm?: number } | null)?.avg_bpm;
-			if (typeof avg !== 'number' || avg <= 0) continue;
+			if (typeof avg !== 'number' || avg < HR_FLOOR || avg > HR_CEIL) continue;
 			hrTrackedRuns += 1;
 			let idx: number;
 			if (avg < z.z1) idx = 0;
