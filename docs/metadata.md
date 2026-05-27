@@ -100,6 +100,7 @@ Per-canonical-distance fastest times computed by the client at save time. Person
 | `fastest_10k_s` | `int` — seconds | same | same | same as above, gated on track ≥ 10 km | same |
 | `fastest_half_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 21.097 km | same |
 | `fastest_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 42.195 km | same |
+| `is_dnf` | `bool` — true when the runner marked the recording as a did-not-finish | mobile / watch runners (Round 3) | `apps/backend/supabase/migrations/20260530_001_personal_records_exclude_dnf.sql` — the PR trigger excludes DNF candidates from both whole-run and embedded-best partitions | Optional; absent ≡ not a DNF | Persona-hunt Round 3 finding Ultra #3. Pre-fix a DNF at mile 26 of a 100-miler had `distance_m=42000`, fit the widened marathon bracket, and was promoted as a marathon PR. Public-safe (passes through `public_runs`). |
 
 ### Client-side synthetic
 
