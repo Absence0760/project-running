@@ -6,6 +6,7 @@ import {
 	type StravaActivity,
 	type StravaTokens,
 	ingestActivity,
+	isStravaRunFamily,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
 
@@ -461,10 +462,12 @@ async function backfill(
 		if (!Array.isArray(activities) || activities.length === 0) break;
 
 		for (const act of activities) {
-			// Restrict to run-type activities. Strava's `sport_type` is the
-			// preferred modern field; `type` is the legacy fallback.
-			const kind = (act.sport_type ?? act.type ?? '').toLowerCase();
-			if (!kind.includes('run') && !kind.includes('walk') && !kind.includes('hike')) continue;
+			// Restrict to run-family activities (Run / TrailRun / VirtualRun
+			// / Walk / Hike). Strava's `sport_type` is the modern field;
+			// `type` is the legacy fallback. Routed through the shared
+			// helper so the allowlist stays in one place — ingestActivity
+			// now also rejects defensively (persona-hunt Pro #3).
+			if (!isStravaRunFamily(act.sport_type ?? act.type)) continue;
 			if (seen.has(String(act.id))) {
 				skipped++;
 				continue;

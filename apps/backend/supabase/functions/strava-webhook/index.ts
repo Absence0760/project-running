@@ -35,6 +35,7 @@ import {
 	fetchStravaActivity,
 	ingestActivity,
 	isAlreadyImported,
+	isStravaRunFamily,
 	refreshStravaToken,
 } from '../_shared/strava.ts';
 import { readJsonWithLimit } from '../_shared/body_limit.ts';
@@ -258,13 +259,9 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 	const activity = fetchResult.activity;
 
 	// Drop activities Strava records but we don't surface — rides etc.
-	// `ingestActivity` itself doesn't filter, so the gate lives here.
-	const sportLower = (activity.sport_type ?? activity.type ?? '').toLowerCase();
-	if (
-		!sportLower.includes('run') &&
-		!sportLower.includes('walk') &&
-		!sportLower.includes('hike')
-	) {
+	// ingestActivity now also rejects defensively, but a graceful early
+	// 200 OK here avoids logging an error on each non-run webhook hit.
+	if (!isStravaRunFamily(activity.sport_type ?? activity.type)) {
 		return new Response('OK');
 	}
 

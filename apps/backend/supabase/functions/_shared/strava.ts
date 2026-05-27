@@ -137,6 +137,23 @@ export async function isAlreadyImported(
 	return (count ?? 0) > 0;
 }
 
+/// Allowlist of Strava sport_type / type strings that map to a runs row.
+/// The /sport_type/ field is the new model (Run, TrailRun, VirtualRun,
+/// Walk, Hike); /type/ is the legacy fallback. Both can carry the same
+/// substring patterns. Anything not matching this allowlist is rejected
+/// upstream (callers should pre-filter via this list); ingestActivity
+/// also re-validates as a defence-in-depth so a future code path that
+/// reaches this function with a Swim / Ride / Ski payload can't end up
+/// in the user's weekly mileage with activity_type='run'. Persona-hunt
+/// finding Pro #3.
+export const STRAVA_RUN_SPORT_PATTERNS = ['run', 'walk', 'hike'] as const;
+
+/// True when the Strava sport_type / type field maps to a runs-table row.
+export function isStravaRunFamily(sport: string | null | undefined): boolean {
+	const s = (sport ?? '').toLowerCase();
+	return STRAVA_RUN_SPORT_PATTERNS.some((p) => s.includes(p));
+}
+
 /// Insert a Strava activity as a `runs` row + (best-effort) upload its
 /// gzipped GPS track to Storage. Caller is responsible for dedupe.
 ///
@@ -149,7 +166,19 @@ export async function ingestActivity(
 	accessToken: string,
 	act: StravaActivity,
 ): Promise<void> {
-	const sportLower = (act.sport_type ?? act.type ?? '').toLowerCase();
+	// Reject non-run-family payloads ahead of the insert. The webhook +
+	// backfill paths pre-filter, but a future caller that doesn't (or
+	// a Strava-side reclassification arriving mid-flight) must not
+	// silently ship swim / ride / ski load into weekly mileage with
+	// activity_type='run'. Persona-hunt finding Pro #3.
+	const sport = act.sport_type ?? act.type ?? '';
+	if (!isStravaRunFamily(sport)) {
+		throw new Error(
+			`ingestActivity rejected non-run-family sport: ${sport || '<empty>'} ` +
+				`(activity ${act.id}). Callers must pre-filter to run / walk / hike.`,
+		);
+	}
+	const sportLower = sport.toLowerCase();
 	const activityType = sportLower.includes('walk')
 		? 'walk'
 		: sportLower.includes('hike')
