@@ -1144,8 +1144,16 @@ void main() {
 
     test('10 rapid notifications + quiescence fires once after window',
         () async {
+      // 250ms window (not 60ms): on a slow CI runner each
+      // `await store.save(...)` writes to disk and can take
+      // 5-15ms, so 10 zero-spaced saves span 50-150ms — comfortably
+      // outside a 60ms window. CI run 26523370163 split the burst
+      // into 2 pushes when the 9th save crossed the 60ms boundary.
+      // The 5-save sibling test stays at 60ms because its explicit
+      // 5ms `Future.delayed` between saves keeps the total span
+      // <= 25ms regardless of disk latency.
       WearRoutesBridge.kPushDebounceWindow =
-          const Duration(milliseconds: 60);
+          const Duration(milliseconds: 250);
       final bridge = WearRoutesBridge();
       bridge.attach(store);
       await Future<void>.delayed(Duration.zero);
@@ -1156,7 +1164,7 @@ void main() {
       }
       // No spacing — but each save still resets the timer.
       // After the burst, wait past the window.
-      await Future<void>.delayed(const Duration(milliseconds: 100));
+      await Future<void>.delayed(const Duration(milliseconds: 350));
 
       expect(channel.pushCalls, hasLength(1));
       // Single push reflects the FINAL state — all 10 starred.

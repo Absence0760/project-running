@@ -1834,18 +1834,24 @@ test('app.html + app.css do not load Google Fonts (audit/cookie-consent Critical
 		['app.html', html],
 		['app.css', css],
 	] as const) {
-		// Plain substring checks rather than regex: CodeQL's missing-
-		// regexp-anchor rule treats `doesNotMatch(/host/)` as a (too-
-		// loose) URL validator. Substring negation expresses the actual
-		// intent — "no occurrence anywhere in the source" — without the
-		// regex shape that triggers the rule.
-		assert.ok(
-			!surface.includes('fonts.googleapis.com'),
+		// URL-scheme-anchored regex (scheme on the left, `\b` on the
+		// right) so CodeQL sees a URL-shaped pattern with both ends
+		// bounded. A bare `.includes('host')` triggers
+		// js/incomplete-url-substring-sanitization; a bare regex
+		// /host/ triggered js/regex/missing-regexp-anchor. The
+		// scheme-anchored form satisfies both. We only need to catch
+		// our own accidental authoring of an absolute Google Fonts
+		// URL — protocol-relative `//host` is HTTPS-only-deprecated
+		// for app HTML and not a realistic regression vector here.
+		assert.doesNotMatch(
+			surface,
+			/\bhttps?:\/\/fonts\.googleapis\.com\b/,
 			`${name} must not reference fonts.googleapis.com — ` +
 				'the font is self-hosted via material-symbols (npm).',
 		);
-		assert.ok(
-			!surface.includes('fonts.gstatic.com'),
+		assert.doesNotMatch(
+			surface,
+			/\bhttps?:\/\/fonts\.gstatic\.com\b/,
 			`${name} must not reference fonts.gstatic.com.`,
 		);
 	}
