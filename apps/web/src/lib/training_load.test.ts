@@ -151,3 +151,66 @@ test('aggregateDailyStress — pure-distance window (no HR runs) keeps legacy 10
 	const key = localDateKey(new Date(easy5k.started_at));
 	assert.equal(daily.get(key), 50);
 });
+
+// Persona-hunt Round 2 finding Pro #2: pre-fix, CTL started at 0
+// every render and ramped over the first ~6 weeks of the displayed
+// window. A pro who's been at CTL ≈ 80 for years saw TSB wrong by
+// tens of points for the early-window days. Fix: walk a 126-day
+// warm-up window before the displayed window so EWMAs reach steady
+// state by day 1 of the chart.
+test('computeTrainingLoadSeries — CTL is at steady state on day 1 for an established pro', () => {
+	// 6 months of daily 12 km runs ending at the chart's start. This
+	// represents a pro whose baseline ramped up before the displayed
+	// window. Pre-fix, day 1 of the chart would show ctl ≈ 0; post-
+	// fix, day 1 must be near the long-run mean (~120 stress / day at
+	// 12 km × 10 = 120, EWMA → 120).
+	const ref = new Date('2026-05-01T12:00:00Z');
+	const runs: RunForLoad[] = [];
+	// 300 days backward from ref so the helper's 126-day warm-up
+	// window is fully populated AND has runs trailing back into ages
+	// (≫ 3× ATL halflife) for full equilibrium.
+	for (let i = 1; i <= 300; i++) {
+		const d = new Date(ref);
+		d.setDate(d.getDate() - i);
+		runs.push({ started_at: d.toISOString(), distance_m: 12000, duration_s: 3600 });
+	}
+	const series = computeTrainingLoadSeries(runs, {}, 90, ref);
+	// Day 1 of the chart (last 90 days starting at ref-89) — should
+	// already be at steady state because the warm-up walked
+	// 126 days of pre-window runs.
+	const day1 = series[0];
+	assert.ok(
+		day1.ctl > 100,
+		`day 1 CTL should be ≈ 120 (steady-state for 12 km/day), got ${day1.ctl}. ` +
+			`Pre-fix this was ≈ 0 because the loop ignored pre-window runs.`,
+	);
+	// TSB at the displayed window's day 1 should be close to 0 (CTL
+	// ≈ ATL at steady state). 3× CTL halflife (126 days) gets us to
+	// ~95% of the long-run mean; the remaining gap is a small
+	// negative TSB. Pre-fix, CTL was 0 and TSB was -120 — the
+	// looseness here is about the 5% residual, not the bug.
+	assert.ok(
+		Math.abs(day1.tsb) < 10,
+		`day 1 TSB should be within 10 of 0 at steady state, got ${day1.tsb}. ` +
+			`Pre-fix this was -120 (CTL=0). Post-fix the residual is from 3×CTL ` +
+			`halflife warm-up not reaching full equilibrium.`,
+	);
+});
+
+test('computeTrainingLoadSeries — new user with no pre-window history still ramps from 0', () => {
+	// Genuine new user: their first run is in week 1 of the chart.
+	// Warm-up walk is all zeros, so EWMAs start at 0 — same shape as
+	// pre-fix for this case (no regression on truly-new users).
+	const ref = new Date('2026-05-01T12:00:00Z');
+	const startInWindow = new Date(ref);
+	startInWindow.setDate(startInWindow.getDate() - 10);
+	const series = computeTrainingLoadSeries(
+		[{ started_at: startInWindow.toISOString(), distance_m: 5000, duration_s: 1500 }],
+		{},
+		90,
+		ref,
+	);
+	// Day 1 of the chart is well before the runner's first run; CTL
+	// must still be ~0 there.
+	assert.ok(series[0].ctl < 1, `new user day-1 CTL should be ~0, got ${series[0].ctl}`);
+});

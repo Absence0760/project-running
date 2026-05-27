@@ -173,6 +173,15 @@ export interface TrainingLoadPoint {
 /// EWMA trio over a fixed-length daily window ending today (local tz).
 /// Days with no stress still tick the decay — that's the whole point.
 /// alpha = 1 - exp(-1/halflife). ATL halflife = 7, CTL halflife = 42.
+///
+/// Persona-hunt Round 2 finding Pro #2: a pro with years of run
+/// history has been at CTL ≈ 80 for ages, but the prior implementation
+/// initialised atl=0, ctl=0 and only walked the last 90 days — so the
+/// chart painted CTL ramping from 0 → ~80 over the first ~42 days
+/// (CTL halflife). TSB was wrong by tens of points for the first 6
+/// weeks. Fix: walk a warm-up window of pre-displayed runs (default
+/// 3× CTL halflife = 126 days) BEFORE the displayed window so the
+/// EWMAs reach steady state by day 1 of the chart.
 export function computeTrainingLoadSeries(
 	runs: RunForLoad[],
 	prefs: HrPrefs = {},
@@ -183,8 +192,29 @@ export function computeTrainingLoadSeries(
 	const atlAlpha = 1 - Math.exp(-1 / 7);
 	const ctlAlpha = 1 - Math.exp(-1 / 42);
 
+	// 3× CTL halflife: after 3 halflives the EWMA is within ~12.5%
+	// of its long-run mean. Pre-window data older than this contributes
+	// negligibly; pre-window data within this contributes the bulk of
+	// the warm-up. Acceptable trade vs walking the full history.
+	const WARMUP_DAYS = 42 * 3;
+
 	let atl = 0;
 	let ctl = 0;
+	// Walk the warm-up days first so EWMAs reach steady state. The
+	// loop does NOT emit chart points for these days — they only
+	// seed the running totals. If a pro started running yesterday,
+	// the warm-up walk is mostly zeros and `ctl` stays near 0 — same
+	// as before the fix for genuine new users.
+	const warmupCursor = new Date(endDate);
+	warmupCursor.setHours(0, 0, 0, 0);
+	warmupCursor.setDate(warmupCursor.getDate() - (windowDays - 1) - WARMUP_DAYS);
+	for (let i = 0; i < WARMUP_DAYS; i++) {
+		const stress = daily.get(localDateKey(warmupCursor)) ?? 0;
+		atl = atl + atlAlpha * (stress - atl);
+		ctl = ctl + ctlAlpha * (stress - ctl);
+		warmupCursor.setDate(warmupCursor.getDate() + 1);
+	}
+
 	const points: TrainingLoadPoint[] = [];
 	const cursor = new Date(endDate);
 	cursor.setHours(0, 0, 0, 0);

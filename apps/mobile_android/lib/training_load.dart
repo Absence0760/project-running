@@ -157,6 +157,13 @@ Map<DateTime, double> aggregateDailyStress(
 /// EWMA trio over a fixed-length daily window ending today (local tz).
 /// Days with no stress still tick the decay — that's the whole point.
 /// alpha = 1 - exp(-1/halflife). ATL halflife = 7, CTL halflife = 42.
+///
+/// Persona-hunt Round 2 finding Pro #2: a pro with years of history
+/// has been at CTL ≈ 80 for ages; initialising atl=0, ctl=0 and
+/// walking only the last 90 days made the chart ramp from 0 over the
+/// first 6 weeks. The warm-up walk (3× CTL halflife = 126 days
+/// before the displayed window) seeds the EWMAs to steady state so
+/// day 1 of the chart starts at the right level.
 List<TrainingLoadPoint> computeTrainingLoadSeries(
   List<Run> runs, {
   HrPrefs prefs = const HrPrefs(),
@@ -167,26 +174,40 @@ List<TrainingLoadPoint> computeTrainingLoadSeries(
   final atlAlpha = 1 - math.exp(-1 / 7);
   final ctlAlpha = 1 - math.exp(-1 / 42);
 
+  const warmupDays = 42 * 3;
+
   var atl = 0.0;
   var ctl = 0.0;
-  final points = <TrainingLoadPoint>[];
 
   final now = endDate ?? DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
-  var cursor = today.subtract(Duration(days: windowDays - 1));
 
+  // Walk warm-up days first to seed EWMAs. No chart points emitted
+  // for these — they only update the running totals. Cursor steps
+  // are CALENDAR additions (DateTime(y, m, d + 1)) rather than
+  // Duration(days: 1) so a DST transition doesn't shift the cursor
+  // off midnight and miss the day's daily-map key.
+  for (var i = 0; i < warmupDays; i++) {
+    final day = DateTime(today.year, today.month,
+        today.day - (windowDays - 1) - warmupDays + i);
+    atl = atl + atlAlpha * ((daily[day] ?? 0) - atl);
+    ctl = ctl + ctlAlpha * ((daily[day] ?? 0) - ctl);
+  }
+
+  final points = <TrainingLoadPoint>[];
   for (var i = 0; i < windowDays; i++) {
-    final stress = daily[cursor] ?? 0;
+    final day =
+        DateTime(today.year, today.month, today.day - (windowDays - 1) + i);
+    final stress = (daily[day] ?? 0).toDouble();
     atl = atl + atlAlpha * (stress - atl);
     ctl = ctl + ctlAlpha * (stress - ctl);
     points.add(TrainingLoadPoint(
-      date: cursor,
+      date: day,
       stress: stress,
       atl: _round2(atl),
       ctl: _round2(ctl),
       tsb: _round2(ctl - atl),
     ));
-    cursor = cursor.add(const Duration(days: 1));
   }
   return points;
 }

@@ -227,6 +227,32 @@ void main() {
               '($day1); pre-fix this was ~3×. Got ratio ${ratio.toStringAsFixed(2)}');
     });
 
+    // Persona-hunt Round 2 finding Pro #2 — CTL warm-up pin.
+    test('day 1 of an established pro\'s chart is at steady state', () {
+      final ref = DateTime.utc(2026, 5, 1, 12);
+      final runs = <Run>[];
+      for (var i = 1; i <= 300; i++) {
+        runs.add(_run(
+          distanceM: 12000,
+          durationS: 3600,
+          startedAt: ref.subtract(Duration(days: i)),
+        ));
+      }
+      final series = computeTrainingLoadSeries(
+        runs,
+        windowDays: 90,
+        endDate: ref,
+      );
+      final day1 = series.first;
+      expect(day1.ctl > 100, isTrue,
+          reason: 'day 1 CTL should be ≈ 120 (steady-state for 12 km/day); '
+              'pre-fix this was ≈ 0 because the loop ignored pre-window '
+              'runs. Got ${day1.ctl}');
+      expect(day1.tsb.abs() < 10, isTrue,
+          reason: 'day 1 TSB should be near 0 at steady state; '
+              'got ${day1.tsb}');
+    });
+
     test('pure-distance window keeps legacy 10/km behaviour', () {
       final r = _run(
         distanceM: 5000,
