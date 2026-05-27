@@ -2156,6 +2156,33 @@ class ApiClient {
     await _client.from(RunGearRow.table).insert(rows);
   }
 
+  /// Attach a single piece of gear to many runs at once. Used by the
+  /// post-create gear-backfill flow: the user adds shoes they've been
+  /// running in for a week, the app proposes the runs since the
+  /// purchase date, the user confirms, and this call lands the
+  /// `run_gear` rows.
+  ///
+  /// Duplicates are tolerated — if the user previously attached this
+  /// gear to one of the rows by hand, `upsert` with `ignoreDuplicates`
+  /// silently skips it. RLS gates the writes to (owner-of-run,
+  /// owner-of-gear) so a passing run-id you don't own fails the whole
+  /// batch with a 42501 PostgREST error.
+  Future<int> addGearToRuns(String gearId, List<String> runIds) async {
+    if (runIds.isEmpty) return 0;
+    final rows = runIds
+        .map((rid) => <String, dynamic>{
+              RunGearRow.colRunId: rid,
+              RunGearRow.colGearId: gearId,
+            })
+        .toList();
+    await _client.from(RunGearRow.table).upsert(
+          rows,
+          onConflict: '${RunGearRow.colRunId},${RunGearRow.colGearId}',
+          ignoreDuplicates: true,
+        );
+    return rows.length;
+  }
+
   /// Fetch the gear assigned to a single run. RLS gates the read to
   /// runs the viewer can see (owner OR public run). Drives the gear
   /// chip on run-detail screens. Returns the joined `gear` rows

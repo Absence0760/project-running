@@ -5,21 +5,37 @@ import '../preferences.dart';
 import 'top_banner.dart';
 
 /// Modal bottom sheet for creating or editing a gear row. Returns
-/// `true` from [showGearFormSheet] when the user saves (so the
-/// caller can refresh); `null` / `false` on cancel. Mirrors the web
+/// a [GearFormResult] carrying the saved row's id + the purchased_at
+/// date the user picked (so the caller can drive a backfill prompt
+/// against past runs); `null` on cancel. Mirrors the web
 /// `+page.svelte` form on /settings/gear — same fields, same
 /// unit-aware retirement-target input.
 ///
 /// Writes go through [LocalGearStore] so offline edits are persisted
 /// + queued for the next server drain.
-Future<bool?> showGearFormSheet({
+class GearFormResult {
+  GearFormResult({
+    required this.gearId,
+    required this.name,
+    required this.kind,
+    required this.isNew,
+    this.purchasedAt,
+  });
+  final String gearId;
+  final String name;
+  final String kind;
+  final bool isNew;
+  final DateTime? purchasedAt;
+}
+
+Future<GearFormResult?> showGearFormSheet({
   required BuildContext context,
   required LocalGearStore store,
   required Preferences preferences,
   required String kind,
   Map<String, dynamic>? existing,
 }) {
-  return showModalBottomSheet<bool>(
+  return showModalBottomSheet<GearFormResult>(
     context: context,
     isScrollControlled: true,
     useSafeArea: true,
@@ -115,8 +131,10 @@ class _GearFormSheetState extends State<_GearFormSheet> {
       final brand = _brand.text.trim();
       final model = _model.text.trim();
       final notes = _notes.text.trim();
+      String savedId;
       if (widget.existing != null) {
-        await widget.store.updateLocal(widget.existing!['id'] as String, {
+        savedId = widget.existing!['id'] as String;
+        await widget.store.updateLocal(savedId, {
           'name': name,
           'brand': brand.isEmpty ? null : brand,
           'model': model.isEmpty ? null : model,
@@ -126,7 +144,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
           'notes': notes.isEmpty ? null : notes,
         });
       } else {
-        await widget.store.createLocal(
+        final created = await widget.store.createLocal(
           kind: widget.kind,
           name: name,
           brand: brand.isEmpty ? null : brand,
@@ -135,9 +153,19 @@ class _GearFormSheetState extends State<_GearFormSheet> {
           targetDistanceM: _parseTargetMetres(),
           notes: notes.isEmpty ? null : notes,
         );
+        savedId = created.id;
       }
       if (!mounted) return;
-      Navigator.pop(context, true);
+      Navigator.pop(
+        context,
+        GearFormResult(
+          gearId: savedId,
+          name: name,
+          kind: widget.kind,
+          isNew: widget.existing == null,
+          purchasedAt: _purchasedAt,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

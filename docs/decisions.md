@@ -1590,6 +1590,36 @@ Pinning tests: `apps/mobile_android/test/local_gear_store_test.dart` covers crea
 
 ---
 
+## 74. New-gear post-save flow proposes attaching past runs since `purchased_at`
+
+A common pattern when adding gear is "I've been running in these shoes for a week — they're already at 30 km but the app shows 0." Pre-fix, the only path to attach past runs was to open each run's detail screen and pick the gear from the run-gear modal. Tedious and discoverable only if you knew the surface existed; Strava and Garmin both punt on this entirely.
+
+**Decision:** when the user creates a new piece of gear with a past `purchased_at` and there's an online api + a `LocalRunStore` in scope, post-save we show a modal sheet listing every run since that date whose activity-type matches the gear kind (`shoe` ↔ run / walk / hike, `bike` ↔ cycle). All candidates are selected by default; the user can deselect individuals or toggle Select-all. Confirm fires a single `ApiClient.addGearToRuns(gearId, runIds)` call that upserts into `run_gear` with `ignoreDuplicates: true` so a row the user had already attached by hand is silently no-op'd.
+
+Shape choices:
+
+- **Trigger**: only post-CREATE (not post-edit). A user editing existing gear is already attached or has consciously chosen not to be; we don't want a surprise prompt on every save.
+- **Anchor date**: `purchased_at`. If the user leaves it blank we skip the prompt — without a "use since" anchor there's no honest filter we can apply.
+- **Activity filter**: by gear `kind`. Shoes match run / walk / hike (the existing trail-run alias); bikes match cycle.
+- **Online-only**. Offline-created gear stays as a `pendingCreate` row in `LocalGearStore` until sync drains it; we don't queue the `run_gear` inserts alongside because that would need a parallel pending-write layer for the join table. The user can re-trigger backfill manually by editing the gear once it's synced — *deferred* until someone hits the offline-add path enough to justify the plumbing.
+- **Pure helper**: `gearBackfillCandidates(gearKind, since, runs)` lives in `apps/mobile_*/lib/gear_backfill.dart` with 9 unit tests so the matching rules can evolve (new activity types, new gear kinds) without re-deriving them from the UI.
+- **Duplicates are idempotent.** The upsert with `ignoreDuplicates` means a re-run of backfill (e.g. user adds a second pair of shoes whose period overlaps) doesn't error.
+
+Trade-offs:
+
+- **No web parity yet.** Web's `/settings/gear` form doesn't have this surface today. Flagging as a parity gap in `docs/parity.md` (Phase 1 row); when web ships the same we can converge on the matching rules via the shared `lib/training_load.ts` pattern (TS port of the Dart helper).
+- **Mileage refresh latency.** After backfill the rolled-up `total_distance_m` on `gear_with_distance` recomputes server-side; the screen re-fetches on `_refresh()` so the new total appears within a frame. A pull-to-refresh from the user would also work.
+- **No "remove backfill" path.** Once a user attaches gear to a run via the sheet, undoing means visiting that run's detail screen. We could add a "manage backfilled assignments" view; deferred until someone asks.
+
+Don't re-litigate by:
+
+- Auto-attaching without the confirmation sheet. The whole point of the prompt is the user might've worn different gear for some of those runs (a tempo shoe vs an easy shoe). Silent attach would land wrong data quickly.
+- Reaching for a sync-state tracker on `run_gear`. The upsert is idempotent and the table is tiny per gear — no caching layer needed for now.
+
+Pinning tests: `apps/mobile_android/test/gear_backfill_test.dart` (9 unit tests on the pure helper) + `apps/mobile_android/test/gear_backfill_sheet_test.dart` (4 widget tests on the sheet's selection + confirm + skip flows). iOS twin mirrors both.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';

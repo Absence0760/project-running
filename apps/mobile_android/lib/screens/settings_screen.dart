@@ -147,6 +147,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       api: widget.apiClient,
                       preferences: widget.preferences,
                       store: gearStore,
+                      runStore: widget.runStore,
                     ));
               },
             ),

@@ -1,8 +1,11 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../gear_backfill.dart';
 import '../local_gear_store.dart';
+import '../local_run_store.dart';
 import '../preferences.dart';
+import '../widgets/gear_backfill_sheet.dart';
 import '../widgets/gear_form_sheet.dart';
 import '../widgets/top_banner.dart';
 
@@ -24,11 +27,20 @@ class GearScreen extends StatefulWidget {
   final Preferences preferences;
   final LocalGearStore store;
 
+  /// Optional. When supplied, post-create the screen scans for past
+  /// runs that match the new gear's activity-type + purchased_at and
+  /// offers a backfill sheet so the user can attach them in one go.
+  /// Without a run store the prompt is skipped — that path is fine,
+  /// the user can still attach gear manually via each run's detail
+  /// screen.
+  final LocalRunStore? runStore;
+
   const GearScreen({
     super.key,
     required this.api,
     required this.preferences,
     required this.store,
+    this.runStore,
   });
 
   @override
@@ -95,24 +107,71 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Future<void> _create() async {
-    final created = await showGearFormSheet(
+    final result = await showGearFormSheet(
       context: context,
       store: widget.store,
       preferences: widget.preferences,
       kind: _activeKind,
     );
-    if (created == true) await _maybeSync();
+    if (result == null) return;
+    await _maybeSync();
+    if (result.isNew) await _maybeOfferBackfill(result);
   }
 
   Future<void> _edit(Map<String, dynamic> row) async {
-    final edited = await showGearFormSheet(
+    final result = await showGearFormSheet(
       context: context,
       store: widget.store,
       preferences: widget.preferences,
       kind: row['kind'] as String,
       existing: row,
     );
-    if (edited == true) await _maybeSync();
+    if (result != null) await _maybeSync();
+  }
+
+  /// If the just-created gear has a past `purchased_at` AND we have
+  /// a run store AND an online api, propose attaching the matching
+  /// past runs in one go. Skip silently when any of those is
+  /// missing — the user can still attach gear per-run via the run
+  /// detail screen. Backfill is online-only because the
+  /// pending-write queue for `run_gear` would be a separate piece
+  /// of plumbing; the first version keeps the scope tight.
+  Future<void> _maybeOfferBackfill(GearFormResult result) async {
+    final runStore = widget.runStore;
+    final api = widget.api;
+    final purchased = result.purchasedAt;
+    if (runStore == null ||
+        api == null ||
+        api.userId == null ||
+        !_isOnline ||
+        purchased == null) {
+      return;
+    }
+    final now = DateTime.now();
+    if (!purchased.isBefore(now)) return;
+    final candidates = gearBackfillCandidates(
+      gearKind: result.kind,
+      since: purchased,
+      runs: runStore.runs,
+    );
+    if (candidates.isEmpty) return;
+    if (!mounted) return;
+    final attached = await showGearBackfillSheet(
+      context: context,
+      api: api,
+      preferences: widget.preferences,
+      gearId: result.gearId,
+      gearName: result.name,
+      gearKind: result.kind,
+      candidates: candidates,
+    );
+    if (!mounted || attached == null || attached == 0) return;
+    showTopBanner(
+      context,
+      'Attached ${result.name} to $attached '
+      'run${attached == 1 ? '' : 's'}.',
+    );
+    await _refresh();
   }
 
   Future<void> _retire(Map<String, dynamic> row) async {
