@@ -67,6 +67,7 @@ module "web" {
 
   public_supabase_url      = var.public_supabase_url
   public_supabase_anon_key = var.public_supabase_anon_key
+  public_site_url          = "https://${var.apex_domain}"
 
   # Caps worst-case concurrency. 50 = ~50 simultaneous coach turns,
   # which at ~3k input + ~1k output × Anthropic pricing puts the

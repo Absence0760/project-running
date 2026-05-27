@@ -137,6 +137,14 @@ jobs:
         working-directory: apps/web
         run: node lambda/coach/build.mjs
 
+      - name: Bundle share-run Lambda
+        # Persona-hunt finding Casual #4. Per-request SSR handler for
+        # /share/run/* + /og/run/*.png. Must run AFTER the web build so
+        # apps/web/build/index.html (the SPA shell the Lambda embeds)
+        # exists. See apps/web/lambda/share-run/README.md.
+        working-directory: apps/web
+        run: node lambda/share-run/build.mjs
+
       # ──────────────────── AWS auth via OIDC ────────────────────
 
       - name: Pick deploy role ARN
@@ -177,6 +185,7 @@ jobs:
           ENV="${{ steps.env.outputs.env }}"
           echo "bucket=runonward-web-${ENV}-site" >> "$GITHUB_OUTPUT"
           echo "lambda=runonward-web-${ENV}-coach" >> "$GITHUB_OUTPUT"
+          echo "share_run_lambda=runonward-web-${ENV}-share-run" >> "$GITHUB_OUTPUT"
 
           if [[ "$ENV" == "prod" ]]; then ALIAS="threkir.com"; else ALIAS="preview.threkir.com"; fi
           DIST_ID=$(aws cloudfront list-distributions \
@@ -218,6 +227,20 @@ jobs:
             --name live \
             --function-version "$NEW_VERSION"
           echo "Coach Lambda alias 'live' now points at version $NEW_VERSION"
+
+      - name: Update share-run Lambda
+        run: |
+          NEW_VERSION=$(aws lambda update-function-code \
+            --function-name "${{ steps.aws.outputs.share_run_lambda }}" \
+            --zip-file "fileb://apps/web/lambda/share-run/dist/share-run.zip" \
+            --publish \
+            --query Version \
+            --output text)
+          aws lambda update-alias \
+            --function-name "${{ steps.aws.outputs.share_run_lambda }}" \
+            --name live \
+            --function-version "$NEW_VERSION"
+          echo "Share-run Lambda alias 'live' now points at version $NEW_VERSION"
 
       - name: Invalidate CloudFront
         run: |

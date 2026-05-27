@@ -31,6 +31,18 @@ locals {
     local.base_lambda_env,
     local.has_secrets ? data.sops_file.secrets[0].data : {},
   )
+
+  # share-run Lambda env. Doesn't need any sops-decrypted secrets —
+  # every read is via the public anon key against anon-readable
+  # views (public_runs + public_profiles). Adding PUBLIC_SITE_URL so
+  # the og:url + og:image absolute URLs are env-specific.
+  share_run_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+      PUBLIC_SITE_URL          = var.public_site_url
+    },
+  )
 }
 
 data "aws_caller_identity" "current" {}
@@ -52,7 +64,8 @@ data "archive_file" "placeholder" {
 }
 
 locals {
-  effective_zip_path = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_zip_path           = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_run_zip_path = var.share_run_lambda_zip_path != null ? var.share_run_lambda_zip_path : data.archive_file.placeholder.output_path
 }
 
 # ──────────────────────────── KMS key for sops ────────────────────────────
@@ -390,6 +403,127 @@ resource "aws_lambda_permission" "cloudfront_invoke" {
   }
 }
 
+# ─────────────── Share-run Lambda (persona-hunt Casual #4) ───────────────
+#
+# Per-request SSR handler for /share/run/<id> + /og/run/<id>.png.
+# Pre-fix, both routes were prerendered at build time via
+# adapter-static; any public run created post-build served the SPA-
+# shell fallback `<head>` so Slack / FB / X / LinkedIn unfurls of a
+# brand-new run showed the homepage card. This Lambda fetches the run
+# + display name at request time so every URL gets the right OG data,
+# regardless of build cadence. See apps/web/lambda/share-run/README.md
+# for the bundle shape + lifecycle.
+#
+# Reuses the existing `aws_iam_role.lambda` execution role + CloudWatch
+# log group naming so the operator surface stays uniform with the coach
+# Lambda — single role, single dashboard, single alarm fan-out.
+
+resource "aws_cloudwatch_log_group" "lambda_share_run" {
+  name              = "/aws/lambda/${local.resource_prefix}-share-run"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secrets.arn
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "share_run" {
+  function_name = "${local.resource_prefix}-share-run"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  # Node 24 — same runtime as the coach Lambda; @supabase/realtime-js
+  # needs WS support that landed in Node 22+. Bumping here also
+  # requires the esbuild target in apps/web/lambda/share-run/build.mjs
+  # to match.
+  runtime       = "nodejs24.x"
+  architectures = ["arm64"]
+  # 512 MB — the @resvg PNG renderer needs more headroom than the
+  # coach handler's pure-streaming shape, but the static HTML path
+  # is the hot one and runs well under 256 MB. 512 splits the
+  # difference cheaply; an alarm on duration would tell us if PNG
+  # cold-starts squeeze.
+  memory_size                    = 512
+  timeout                        = 15
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
+  filename         = local.effective_share_run_zip_path
+  source_code_hash = filebase64sha256(local.effective_share_run_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.share_run_lambda_env
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = var.tags
+
+  # Same rationale as the coach Lambda — CI updates code on every
+  # web@* tag; Terraform owns infra-shape (env, role, etc.).
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      qualified_arn,
+      version,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_share_run]
+}
+
+resource "aws_lambda_alias" "share_run_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.share_run.function_name
+  function_version = aws_lambda_function.share_run.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "share_run" {
+  function_name      = aws_lambda_function.share_run.function_name
+  qualifier          = aws_lambda_alias.share_run_live.name
+  authorization_type = "AWS_IAM"
+  # Buffered (not streaming) — share-run returns a single HTML or PNG
+  # body, no SSE. RESPONSE_STREAM would add latency overhead with no
+  # benefit.
+  invoke_mode = "BUFFERED"
+
+  cors {
+    # Crawlers + first-party viewers are the only callers; restrict
+    # to GET / OPTIONS. No custom headers needed (no JWT — every read
+    # is via the anon key inside the Lambda).
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["GET"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_share_run" {
+  name                              = "${local.resource_prefix}-share-run-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke_share_run" {
+  statement_id           = "AllowCloudFrontInvokeShareRun"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.share_run.function_name
+  qualifier              = aws_lambda_alias.share_run_live.name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ──────────────────────────── CloudFront ────────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -544,6 +678,46 @@ resource "aws_cloudfront_origin_request_policy" "lambda" {
   }
 }
 
+# Cache policy for the share-run Lambda. UNLIKE the coach passthrough
+# (no caching — coach streams personalised content), share-run
+# responses are deterministic per URL (same run id → same HTML / PNG)
+# and the freshness window is hours-long. Cache for 1 hour at the
+# edge so a crawler storm against a single share URL costs at most
+# one Lambda invocation per cache window.
+resource "aws_cloudfront_cache_policy" "share_run" {
+  name        = "${local.resource_prefix}-share-run"
+  comment     = "Share-run Lambda — cache per-id HTML / PNG for 1h"
+  default_ttl = 3600
+  max_ttl     = 3600
+  min_ttl     = 0
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+    cookies_config { cookie_behavior = "none" }
+    headers_config { header_behavior = "none" }
+    # Path varies per run id; CloudFront already keys on the path
+    # without any query-string contribution. Disable QS-in-key so a
+    # `?foo=bar` doesn't multiply cache entries.
+    query_strings_config { query_string_behavior = "none" }
+  }
+}
+
+# Origin request policy for the share-run Lambda. The Lambda doesn't
+# need any viewer headers (it builds the response purely from the
+# URL path + its own env vars), so forward nothing extra — keeps the
+# cache key tight and the OAC signature unambiguous.
+resource "aws_cloudfront_origin_request_policy" "share_run" {
+  name = "${local.resource_prefix}-share-run-origin"
+  cookies_config { cookie_behavior = "none" }
+  query_strings_config { query_string_behavior = "none" }
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = ["accept", "accept-encoding"]
+    }
+  }
+}
+
 # Trivy AWS-0010 (CloudFront access logging) is suppressed in
 # .trivyignore at the repo root. Rationale: real-time CloudWatch
 # metrics + per-Lambda alarms in alarms.tf already cover the
@@ -579,6 +753,19 @@ resource "aws_cloudfront_distribution" "this" {
     }
   }
 
+  origin {
+    origin_id                = "lambda-share-run"
+    domain_name              = replace(aws_lambda_function_url.share_run.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_run.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
   default_cache_behavior {
     target_origin_id           = "s3-site"
     viewer_protocol_policy     = "redirect-to-https"
@@ -601,7 +788,28 @@ resource "aws_cloudfront_distribution" "this" {
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 
+  # Share-run Lambda: per-request SSR for share-link HTML so brand-
+  # new runs unfurl with the right per-run head, regardless of build
+  # cadence. /og/run/<id>.png stays adapter-static-prerendered (with
+  # a 50k cap) on the S3 origin because @resvg's native arm64 binary
+  # is a deployment slice of its own. Persona-hunt finding Casual #4.
+  # See apps/web/lambda/share-run/README.md.
+  ordered_cache_behavior {
+    path_pattern               = "/share/run/*"
+    target_origin_id           = "lambda-share-run"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_run.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_run.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
   # SPA fallback — SvelteKit static fallback is index.html on 404.
+  # The Lambda-served behaviours above run BEFORE this fallback, so
+  # a 404 on a /share/run/<id> returned by the Lambda surfaces as a
+  # real 404 (the Lambda's own not-found HTML), not the SPA shell.
   custom_error_response {
     error_code         = 404
     response_code      = 200

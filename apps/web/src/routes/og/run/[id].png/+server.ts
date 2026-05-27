@@ -3,26 +3,19 @@ import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { Resvg } from '@resvg/resvg-js';
 import { buildRunOgSvg } from '$lib/og_run_image';
+import { lookupSharedRun } from '$lib/share_run_lookup';
 
-// Build-time per-run og:image PNG renderer. Mirror of
-// /og/route/[id].png — adapter-static prerenders one PNG per
-// public run so chat-app unfurls carry a real card.
-//
-// The card is stats-only (distance + runner attribution + date)
-// rather than including the polyline. Reason: the run track is a
-// gzipped JSON blob in the `runs` Storage bucket reachable only via
-// the `clip-public-track` Edge Function (decisions §33). Calling
-// that EF for every public run at build time is a hot loop we'd
-// rather not own; a future iteration can layer the polyline on if
-// the build cost stays acceptable. The current card is already a
-// significant upgrade over the generic favicon — Slack / FB / X /
-// LinkedIn unfurls now show the runner's distance + name + date.
+// Per-run og:image PNG renderer. Prerendered at build time — the
+// share-run Lambda owns the HTML head injection at request time
+// (apps/web/lambda/share-run/) but the PNG renderer stays at build
+// time because @resvg ships a native arm64 binary that would need a
+// Lambda Layer or platform-specific install to run in the Lambda
+// runtime. Out-of-scope cost for the persona-hunt fix; the realistic
+// degradation for a brand-new (over-cap) run is og:image 404 → text-
+// only unfurl, while title + description still come from the
+// Lambda. Persona-hunt finding Casual #4.
 export const prerender = true;
 
-// Matches the +page.ts cap so the OG image and the +page surface
-// cover the same set of runs. Pre-fix, both were 5k — a new public
-// run between builds served the SPA-shell fallback `<head>` AND a
-// missing og:image. 50k moves the gap from days to months.
 const MAX_RUNS = 50_000;
 
 export const entries: EntryGenerator = async () => {
@@ -46,6 +39,12 @@ export const entries: EntryGenerator = async () => {
 		return [];
 	}
 };
+//
+// The card is stats-only (distance + runner attribution + date)
+// rather than including the polyline — the run track is a gzipped
+// JSON blob in the `runs` Storage bucket reachable only via the
+// `clip-public-track` Edge Function (decisions §33), too hot a loop
+// for build-time + uncached request-time renders.
 
 export const GET: RequestHandler = async ({ params }) => {
 	const png = await renderRunPng(params.id);
@@ -58,45 +57,18 @@ export const GET: RequestHandler = async ({ params }) => {
 };
 
 async function renderRunPng(id: string): Promise<Buffer> {
-	let run:
-		| {
-				distance_m?: number | null;
-				duration_s?: number | null;
-				started_at?: string | null;
-				source?: string | null;
-				user_id?: string | null;
-		  }
-		| null = null;
-	let displayName: string | null = null;
-	if (PUBLIC_SUPABASE_URL && PUBLIC_SUPABASE_ANON_KEY) {
-		try {
-			const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-				auth: { persistSession: false },
-			});
-			const { data: row } = await supabase
-				.from('public_runs')
-				.select('id, user_id, distance_m, duration_s, started_at, source')
-				.eq('id', id)
-				.maybeSingle();
-			run = row ?? null;
-			if (run?.user_id) {
-				const { data: profile } = await supabase
-					.from('public_profiles')
-					.select('display_name')
-					.eq('id', run.user_id)
-					.maybeSingle();
-				displayName = profile?.display_name ?? null;
-			}
-		} catch (err) {
-			console.warn('og/run load: supabase fetch failed', err);
-		}
-	}
+	const lookup = await lookupSharedRun(
+		id,
+		PUBLIC_SUPABASE_URL && PUBLIC_SUPABASE_ANON_KEY
+			? { supabaseUrl: PUBLIC_SUPABASE_URL, supabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY }
+			: null,
+	);
 	const svg = buildRunOgSvg({
-		distance_m: run?.distance_m,
-		duration_s: run?.duration_s,
-		started_at: run?.started_at,
-		source: run?.source,
-		displayName,
+		distance_m: lookup.run?.distance_m,
+		duration_s: lookup.run?.duration_s,
+		started_at: lookup.run?.started_at,
+		source: lookup.run?.source,
+		displayName: lookup.displayName,
 	});
 	const resvg = new Resvg(svg, {
 		fitTo: { mode: 'width', value: 1200 },

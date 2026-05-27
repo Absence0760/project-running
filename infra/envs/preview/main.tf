@@ -48,6 +48,7 @@ module "web" {
 
   public_supabase_url      = var.public_supabase_url
   public_supabase_anon_key = var.public_supabase_anon_key
+  public_site_url          = "https://${local.domain_name}"
 
   # Tight cap on preview — single-digit concurrency is plenty for
   # smoke tests and PR review and bounds Anthropic spend if a script

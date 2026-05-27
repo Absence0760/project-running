@@ -69,8 +69,8 @@ Provisioned via Terraform — matches the workstation toolchain (`/home/jhoward/
 ```
 infra/
 ├── modules/
-│   └── web-stack/         # Reusable: S3 + CloudFront + Lambda + Function URL +
-│                          # IAM + per-env KMS key + sops integration
+│   └── web-stack/         # Reusable: S3 + CloudFront + 2 Lambdas (coach + share-run) +
+│                          # Function URLs + IAM + per-env KMS key + sops integration
 ├── envs/
 │   ├── prod/              # Root module — calls web-stack module
 │   │   ├── main.tf

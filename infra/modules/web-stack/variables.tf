@@ -61,6 +61,18 @@ variable "lambda_zip_path" {
   default     = null
 }
 
+variable "share_run_lambda_zip_path" {
+  description = "Optional path to a pre-built share-run Lambda zip (apps/web/lambda/share-run/dist/share-run.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Persona-hunt finding Casual #4 — handles /share/run/* + /og/run/*.png with per-request SSR."
+  type        = string
+  default     = null
+}
+
+variable "public_site_url" {
+  description = "Canonical public URL of this env (e.g. 'https://threkir.com' for prod, 'https://preview.threkir.com' for preview). Used by the share-run Lambda to build absolute og:url + og:image URLs in the per-run head tags. Defaults are env-specific; per-env stacks should set this explicitly."
+  type        = string
+  default     = "https://threkir.com"
+}
+
 variable "lambda_reserved_concurrency" {
   description = "Reserved concurrent executions for the coach Lambda — caps the function's worst-case concurrency so a burst can't rack up unbounded Anthropic spend. The lambda_throttles alarm fires when the cap is hit. Default 5 = safe-by-default ceiling; raise to ~50 for prod once real traffic is observed. Set explicitly in env stacks rather than relying on the default."
   type        = number
