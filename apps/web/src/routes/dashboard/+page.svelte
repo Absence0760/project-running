@@ -447,24 +447,59 @@
 		computeReadiness({ tsb: liveSnap.trainingStressBal ?? null }),
 	);
 
-	// Mileage chart data based on view mode
+	// Mileage chart data based on view mode.
+	//
+	// Persona-hunt Round 2 finding Intermediate #4. Pre-fix the
+	// monthly/yearly buckets had two issues: (1) bars rendered in
+	// insertion order — `filteredRuns` arrives newest-first from
+	// fetchRuns, so newest-month-on-left / oldest-on-right; (2) the
+	// monthly key used `toLocaleDateString(... month: 'short', year:
+	// '2-digit')` — locale-dependent labels (Jan / ene / 1月) shatter
+	// the grouping when the user's locale changes between sessions,
+	// and `year: '2-digit'` would collide 2026 with 2126 for a
+	// century-spanning history.
+	//
+	// Fix: bucket by a stable `YYYY-MM` (monthly) / `YYYY` (yearly)
+	// sort key, present a separate locale-aware display label, and
+	// sort chronologically before emitting to the chart.
 	let mileageData = $derived.by(() => {
 		if (mileageView === 'weekly') return weeklyMileage;
 
-		// Group runs by month or year. Distance stays in metres so the
-		// render-time formatter can honor the user's preferred unit.
-		const groups = new Map<string, number>();
+		const groups = new Map<string, { distance_m: number; display: string }>();
 		for (const run of filteredRuns) {
 			const d = new Date(run.started_at);
-			const key = mileageView === 'monthly'
-				? d.toLocaleDateString(undefined, { month: 'short', year: '2-digit' })
-				: String(d.getFullYear());
-			groups.set(key, (groups.get(key) ?? 0) + run.distance_m);
+			let sortKey: string;
+			let display: string;
+			if (mileageView === 'monthly') {
+				// `YYYY-MM` is locale-independent + sort-stable. Pad
+				// month to 2 digits so a January 2026 row sorts before
+				// October 2026 (lex would otherwise put 10 before 2).
+				sortKey =
+					`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+				// Display label honours the user's locale for the month
+				// abbreviation but uses a 4-digit year so a 100-year-old
+				// row doesn't collide with the current decade.
+				display = d.toLocaleDateString(undefined, {
+					month: 'short',
+					year: 'numeric',
+				});
+			} else {
+				sortKey = String(d.getFullYear());
+				display = sortKey;
+			}
+			const cur = groups.get(sortKey);
+			if (cur) {
+				cur.distance_m += run.distance_m;
+			} else {
+				groups.set(sortKey, { distance_m: run.distance_m, display });
+			}
 		}
-		return Array.from(groups.entries()).map(([week, distance_m]) => ({
-			week,
-			distance_m: Math.round(distance_m),
-		}));
+		return Array.from(groups.entries())
+			.sort(([a], [b]) => a.localeCompare(b))
+			.map(([, v]) => ({
+				week: v.display,
+				distance_m: Math.round(v.distance_m),
+			}));
 	});
 
 	let maxBar = $derived(
