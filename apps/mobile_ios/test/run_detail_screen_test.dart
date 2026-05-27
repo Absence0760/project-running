@@ -180,4 +180,5 @@ void main() {
       expect(find.text('700 kcal'), findsOneWidget);
     });
   });
+
 }

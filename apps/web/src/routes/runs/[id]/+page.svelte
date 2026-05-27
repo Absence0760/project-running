@@ -86,6 +86,8 @@
 	let editNotes = $state('');
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
+	let shareConfirmIntersectsZone = $state(false);
+	let shareConfirmHasZones = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
 	/// Map-matched track + status from run_matched_tracks. Populated on
 	/// mount in parallel with the main run fetch. Failure here is L4
@@ -349,30 +351,38 @@
 
 	async function handleShare() {
 		if (!run || !auth.user) return;
-		// Privacy-zone guard: if the run's track passes through any of
-		// the owner's saved zones, warn before flipping is_public. The
-		// non-owner share view clips the start/end of the track via
-		// `clip-public-track` (decisions §33), but the owner has no
-		// way to know clipping will happen unless we tell them.
-		// Skip the warning when the run is already public (Share is a
-		// re-copy in that case) or has no track (nothing to clip).
-		if (!run.is_public && run.track && run.track.length > 0) {
-			try {
-				const { loadSettings, effective } = await import('$lib/settings');
-				const settings = await loadSettings(auth.user.id);
-				const zones =
-					effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
-				if (zones.length > 0 && run.track.some((p) => isInAnyZone(p, zones))) {
-					showShareConfirm = true;
-					return;
-				}
-			} catch (_) {
-				// Settings load failure shouldn't block sharing — fall
-				// through to the unguarded path so the user can still
-				// share.
-			}
+		// Skip the prompt when the run is already public — Share becomes
+		// a re-copy-link in that case.
+		if (run.is_public) {
+			await proceedShare();
+			return;
 		}
-		await proceedShare();
+		// Visibility-change consent: making a previously-private run
+		// public is a non-trivial state change. A first-time / casual
+		// user has typically never set up a privacy zone, so without
+		// this dialog the share-icon tap silently exposes their full
+		// track (incl. home / work coords). The dialog body specialises
+		// on the user's actual situation: privacy-zone clip warning if
+		// the track intersects a zone, otherwise a no-zones notice with
+		// a link to set one up before sharing.
+		let intersectsZone = false;
+		let hasZones = false;
+		try {
+			const { loadSettings, effective } = await import('$lib/settings');
+			const settings = await loadSettings(auth.user.id);
+			const zones =
+				effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
+			hasZones = zones.length > 0;
+			if (run.track && run.track.length > 0 && hasZones) {
+				intersectsZone = run.track.some((p) => isInAnyZone(p, zones));
+			}
+		} catch (_) {
+			// Settings load failure shouldn't block sharing — fall
+			// through to the no-zones branch.
+		}
+		shareConfirmIntersectsZone = intersectsZone;
+		shareConfirmHasZones = hasZones;
+		showShareConfirm = true;
 	}
 
 	async function proceedShare() {
@@ -1368,11 +1378,16 @@
 
 <ConfirmDialog
 	open={showShareConfirm}
-	title="Share through a privacy zone?"
-	message="This run starts or ends inside one of your privacy zones. Viewers will see a clipped track with the in-zone segments hidden. Continue?"
-	confirmLabel="Share anyway"
+	title="Make this run public?"
+	message={shareConfirmIntersectsZone
+		? 'Sharing flips this run to public so anyone with the link can view it. This run starts or ends inside one of your privacy zones, so viewers will see a clipped track with the in-zone segments hidden.'
+		: shareConfirmHasZones
+			? 'Sharing flips this run to public so anyone with the link can view it. None of your privacy zones intersect this track, so the full track will be visible.'
+			: 'Sharing flips this run to public so anyone with the link can view it — including the start and end points of your run. You have no privacy zones set up. Consider adding one around your home before sharing.'}
+	confirmLabel="Make public & copy link"
 	onconfirm={proceedShare}
 	oncancel={() => (showShareConfirm = false)}
+	data-testid="share-confirm-dialog"
 />
 
 <!-- Off-screen share card. 1080 square, rendered to PNG by

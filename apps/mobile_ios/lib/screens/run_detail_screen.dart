@@ -12,6 +12,7 @@ import '../run_intensity.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
+import '../privacy.dart';
 import '../route_simplify.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
@@ -1623,15 +1624,24 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   /// Open the share sheet — lets the user share an image of the run card or
-  /// the raw GPX trace. Also marks the run as public so the web share page
-  /// at /share/run/{id} can display it without authentication.
+  /// the raw GPX trace. Prompts for explicit consent before flipping
+  /// is_public — a casual user tapping Share might not realise the share
+  /// link exposes their full track (incl. home / work coords) to anyone
+  /// with the URL, and the privacy-zone default is OFF (decisions §33).
+  /// The mobile Run model doesn't surface is_public so we always prompt;
+  /// makeRunPublic is idempotent so a re-share through the dialog is fine.
   Future<void> _shareRun() async {
     final api = widget.apiClient;
     if (api != null && api.userId != null) {
+      final ok = await _confirmMakePublic();
+      if (!ok) return;
       try {
         await api.makeRunPublic(run.id);
       } catch (e) {
         debugPrint('makeRunPublic failed: $e');
+        if (!mounted) return;
+        showTopBanner(context, 'Could not make run public: $e');
+        return;
       }
     }
     if (!mounted) return;
@@ -1641,6 +1651,64 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       preferences: widget.preferences,
       title: _title,
     );
+  }
+
+  /// Returns true when the user confirms making this run public. The
+  /// dialog body branches on whether the user has privacy zones and
+  /// whether this track passes through one of them — same shape as
+  /// the web `handleShare` flow.
+  Future<bool> _confirmMakePublic() async {
+    final zones = _loadPrivacyZones();
+    final hasZones = zones.isNotEmpty;
+    final track = run.track;
+    final intersectsZone = hasZones && track.isNotEmpty &&
+        track.any((p) => isInAnyZone(p.lat, p.lng, zones));
+    final body = intersectsZone
+        ? 'Sharing flips this run to public so anyone with the link '
+            'can view it. This run starts or ends inside one of your '
+            'privacy zones, so viewers will see a clipped track with '
+            'the in-zone segments hidden.'
+        : hasZones
+            ? 'Sharing flips this run to public so anyone with the link '
+                'can view it. None of your privacy zones intersect this '
+                'track, so the full track will be visible.'
+            : 'Sharing flips this run to public so anyone with the link '
+                'can view it — including the start and end points of '
+                'your run. You have no privacy zones set up. Consider '
+                'adding one around your home before sharing.';
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        key: const ValueKey('share-confirm-dialog'),
+        title: const Text('Make this run public?'),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Make public'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  List<PrivacyZone> _loadPrivacyZones() {
+    final svc = widget.settingsSync?.service;
+    if (svc == null) return const [];
+    final raw = svc.effective<List<dynamic>>(
+      privacyZonesKey,
+      fallback: const <dynamic>[],
+    );
+    if (raw == null) return const [];
+    return raw
+        .whereType<Map<String, dynamic>>()
+        .map(PrivacyZone.fromJson)
+        .toList();
   }
 
   Future<void> _confirmDelete(BuildContext context) async {

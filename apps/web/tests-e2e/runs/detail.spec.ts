@@ -199,11 +199,14 @@ test.describe('/runs/[id]', () => {
 		context
 	}) => {
 		// Private runs return 404 from /share/run for anon. Clicking the
-		// "Share link" icon-btn calls makeRunPublic() which sets
-		// runs.is_public=true and copies a shareable URL. After that the
-		// /share/run/[id] page must mount for an unauthenticated viewer.
-		// Pin the round-trip so a regression in makeRunPublic (or its
-		// underlying RLS policy) shows up as a 404 against /share.
+		// "Share link" icon-btn now opens a consent dialog (decisions §33
+		// — sharing flips is_public, exposing the full track to anyone
+		// with the link). Confirming the dialog calls makeRunPublic()
+		// which sets runs.is_public=true and copies a shareable URL.
+		// After that the /share/run/[id] page must mount for an
+		// unauthenticated viewer. Pin the round-trip so a regression in
+		// makeRunPublic (or its underlying RLS policy) shows up as a 404
+		// against /share.
 		const planted = await insertRun({
 			user_id: USER_A.id,
 			distance_m: 5_000,
@@ -218,6 +221,12 @@ test.describe('/runs/[id]', () => {
 
 			await page.goto(`/runs/${planted}`);
 			await page.locator('button[title="Share link"]').click();
+
+			// Consent dialog gates the public-flip. Confirm it explicitly.
+			const dialog = page.locator('[data-testid="share-confirm-dialog"]');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await expect(dialog).toContainText('Make this run public?');
+			await dialog.locator('button', { hasText: /Make public/ }).click();
 
 			// Toast confirms success — the makeRunPublic call resolved.
 			await expect(page.locator('.toast', { hasText: /Share link copied/ }))
@@ -256,6 +265,49 @@ test.describe('/runs/[id]', () => {
 			} finally {
 				await anonContext.close();
 			}
+		} finally {
+			await deleteRun(planted);
+		}
+	});
+
+	test('Share dialog Cancel keeps the run private (consent gate)', async ({
+		page,
+		context
+	}) => {
+		// Persona-hunt finding (Casual #1, decisions §33): the share
+		// flow USED to flip is_public silently. The dialog now gates
+		// the flip; if the user cancels, the run must stay private.
+		// Pin so a refactor that calls makeRunPublic on Cancel surfaces
+		// here as a privacy regression, not just a UX one.
+		const planted = await insertRun({
+			user_id: USER_A.id,
+			distance_m: 5_000,
+			duration_s: 1_500,
+			is_public: false
+		});
+
+		try {
+			await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+			await page.goto(`/runs/${planted}`);
+			await page.locator('button[title="Share link"]').click();
+
+			const dialog = page.locator('[data-testid="share-confirm-dialog"]');
+			await expect(dialog).toBeVisible({ timeout: 5_000 });
+			await dialog.locator('button', { hasText: /Cancel/ }).click();
+
+			// is_public must STILL be false after cancel.
+			const admin = getAdminClient();
+			const { data: row } = await admin
+				.from('runs')
+				.select('is_public')
+				.eq('id', planted)
+				.single();
+			expect(row?.is_public).toBe(false);
+
+			// No success toast either — the share never happened.
+			await expect(
+				page.locator('.toast', { hasText: /Share link copied/ })
+			).toHaveCount(0);
 		} finally {
 			await deleteRun(planted);
 		}

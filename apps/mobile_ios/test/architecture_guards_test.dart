@@ -561,6 +561,45 @@ void main() {
     });
   });
 
+  group('share-button consent before flipping is_public', () {
+    test('run_detail_screen._shareRun gates makeRunPublic on a confirm dialog',
+        () {
+      // Reason: a casual user tapping Share on a freshly-recorded run
+      // used to silently flip is_public — no warning, no copy
+      // explaining that the share link exposes the full track
+      // (incl. home / work coords) to anyone with the URL. Privacy-
+      // zone default is OFF (decisions §33). The fix requires the
+      // share path to call a `_confirmMakePublic` dialog before
+      // reaching makeRunPublic. Catches a regression that removes
+      // the gate.
+      final source =
+          File('lib/screens/run_detail_screen.dart').readAsStringSync();
+      expect(
+        source,
+        contains('_confirmMakePublic'),
+        reason: '_shareRun must route through a _confirmMakePublic '
+            'dialog before calling api.makeRunPublic. See decisions §33.',
+      );
+      expect(
+        source,
+        contains('Make this run public?'),
+        reason: 'The consent dialog title is the canonical surface a '
+            'regression would mangle; pin the literal copy.',
+      );
+      // makeRunPublic must NOT appear ahead of the dialog gate. The
+      // gate-then-call ordering: _confirmMakePublic completes first,
+      // then makeRunPublic. Both names must appear; ordering checked
+      // by line index — if makeRunPublic appears at any line BEFORE
+      // _confirmMakePublic, the regression is back.
+      final confirmIdx = source.indexOf('_confirmMakePublic');
+      final makePublicIdx = source.indexOf('api.makeRunPublic');
+      expect(makePublicIdx > confirmIdx, isTrue,
+          reason: 'api.makeRunPublic must NOT precede _confirmMakePublic '
+              'in source order — that would mean the call site is back '
+              'to flipping is_public ahead of the consent dialog.');
+    });
+  });
+
   group('privacy_default → run-save wiring', () {
     test('run_screen._stop reads newRunsArePublic when calling saveRun', () {
       // Reason: the user-flagged gap — the `privacy_default` setting
