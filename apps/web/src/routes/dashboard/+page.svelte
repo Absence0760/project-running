@@ -289,11 +289,21 @@
 		loading = false;
 	});
 
+	// Persona-hunt Round 2 finding Intermediate #2: this "This Week"
+	// stat card used to hardcode Monday as the week start. The
+	// weekly-mileage goal card on the same page already honours the
+	// user's `week_start_day` preference via goals.ts. Reading the
+	// same pref here keeps the two adjacent cards in agreement —
+	// pre-fix a Sunday-week-start user saw Sunday's runs in their
+	// goal card but missing from the "This Week" stat.
 	const now = new Date();
-	const weekStart = new Date(now);
-	const dowMon = (now.getDay() + 6) % 7; // 0 = Mon, matching runs/+page.svelte and Android
-	weekStart.setDate(now.getDate() - dowMon);
-	weekStart.setHours(0, 0, 0, 0);
+	let weekStart = $derived.by(() => {
+		const ws = new Date(now);
+		const offset = weekStartDay === 'sunday' ? now.getDay() : (now.getDay() + 6) % 7;
+		ws.setDate(now.getDate() - offset);
+		ws.setHours(0, 0, 0, 0);
+		return ws;
+	});
 
 	let filteredRuns = $derived(
 		sourceFilter === 'all' ? runs : runs.filter((r) => r.source === sourceFilter)
