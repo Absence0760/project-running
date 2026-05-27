@@ -1,3 +1,40 @@
+// Pure helpers for the parkrun scraper.
+//
+// Includes both the audit/edge-functions input-cap helpers (below)
+// and the date / time parsers extracted from index.ts so unit tests
+// can exercise them without importing the EF module (whose top-level
+// `serve(...)` binds a port at module-load time).
+
+/// Parkrun returns its result date as DD/MM/YYYY with no time-of-day
+/// or timezone. We need a UTC timestamp for the runs row, so we
+/// synthesise one. The choice of hour determines which timezones get
+/// the right local date when their dashboard / heatmap reads back.
+///
+/// Persona-hunt finding Pro #5: T08:00:00Z was a UK-centric default.
+/// At UTC-10 (Hawaii — parkrun has a Hawai'i event) and UTC-11
+/// (American Samoa), 08:00 UTC wraps backward to the PREVIOUS local
+/// calendar day. A Saturday parkrun would land on Friday in the
+/// runner's heatmap.
+///
+/// T10:00:00Z covers UTC-10 (Hawaii) through UTC+13 (New Zealand
+/// NZDT) — the realistic worldwide parkrun audience. The remaining
+/// edge case is Samoa (UTC+14 during DST), which crosses the
+/// dateline to land on Sunday locally. That's a known acceptable
+/// trade — no single UTC hour can satisfy every offset in the
+/// 26-hour worldwide range simultaneously. Pinned by lib.test.ts.
+export function parseParkrunDate(d: string): string {
+	const [dd, mm, yyyy] = d.split('/');
+	return `${yyyy}-${mm}-${dd}T10:00:00Z`;
+}
+
+export function parseParkrunTime(time: string): number {
+	const parts = time.split(':').map(Number);
+	if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
+	if (parts.length === 2) return parts[0] * 60 + parts[1];
+	return 0;
+}
+
+// ──────────────────────────────────────────────────────────────────
 // Input-cap helpers for the parkrun scraper.
 //
 // audit/edge-functions (May 2026) flagged the importer's unbounded

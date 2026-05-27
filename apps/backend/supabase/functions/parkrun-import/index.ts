@@ -6,6 +6,8 @@ import { withSentry } from '../_shared/sentry.ts';
 import {
   MAX_PARKRUN_ROWS,
   capParkrunField,
+  parseParkrunDate,
+  parseParkrunTime,
   readBodyTextWithCap,
 } from './lib.ts';
 
@@ -99,7 +101,7 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
       id: crypto.randomUUID(),
       user_id: user.id,
       started_at: parseParkrunDate(date),
-      duration_s: parseTime(time),
+      duration_s: parseParkrunTime(time),
       distance_m: 5000,
       source: 'parkrun',
       external_id: `parkrun:${event}:${date}`,
@@ -119,15 +121,3 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
 
   return Response.json({ imported: runs.length, skipped: 0 });
 }));
-
-function parseParkrunDate(d: string): string {
-  const [dd, mm, yyyy] = d.split('/');
-  return `${yyyy}-${mm}-${dd}T08:00:00Z`;
-}
-
-function parseTime(time: string): number {
-  const parts = time.split(':').map(Number);
-  if (parts.length === 3) return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  if (parts.length === 2) return parts[0] * 60 + parts[1];
-  return 0;
-}

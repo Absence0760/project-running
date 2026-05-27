@@ -4,6 +4,8 @@ import {
 	MAX_PARKRUN_HTML_BYTES,
 	MAX_PARKRUN_ROWS,
 	capParkrunField,
+	parseParkrunDate,
+	parseParkrunTime,
 	readBodyTextWithCap,
 } from './lib.ts';
 
@@ -77,4 +79,67 @@ Deno.test('constants stay in sensible ranges', () => {
 	assertEquals(MAX_PARKRUN_FIELD_LEN > 0 && MAX_PARKRUN_FIELD_LEN <= 1000, true);
 	assertEquals(MAX_PARKRUN_HTML_BYTES <= 10 * 1024 * 1024, true);
 	assertEquals(MAX_PARKRUN_ROWS > 0 && MAX_PARKRUN_ROWS <= 100000, true);
+});
+
+// ──────────────────────────────────────────────────────────────────
+// parseParkrunDate / parseParkrunTime — persona-hunt finding Pro #5.
+
+function localDateAt(stampIso: string, offsetHours: number): string {
+	const stampMs = Date.parse(stampIso);
+	const localMs = stampMs + offsetHours * 3_600_000;
+	const d = new Date(localMs);
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+}
+
+Deno.test('parseParkrunDate — DD/MM/YYYY parses to T10:00:00Z', () => {
+	assertEquals(parseParkrunDate('15/04/2026'), '2026-04-15T10:00:00Z');
+});
+
+Deno.test('parseParkrunDate — date preserved at UTC+0 (UK)', () => {
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), 0), '2026-04-15');
+});
+
+Deno.test('parseParkrunDate — date preserved at UTC+1 (UK BST)', () => {
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), 1), '2026-04-15');
+});
+
+Deno.test('parseParkrunDate — date preserved at UTC+11 (AU AEDT)', () => {
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), 11), '2026-04-15');
+});
+
+Deno.test('parseParkrunDate — date preserved at UTC+13 (NZ NZDT)', () => {
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), 13), '2026-04-15');
+});
+
+Deno.test('parseParkrunDate — date preserved at UTC-8 (US West)', () => {
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), -8), '2026-04-15');
+});
+
+Deno.test('parseParkrunDate — date preserved at UTC-10 (Hawaii, the bug case)', () => {
+	// Pre-fix at T08:00:00Z, Hawaii's UTC-10 offset wrapped a
+	// Saturday parkrun back to Friday. T10:00:00Z keeps it on
+	// Saturday. Pinned so a future "back to T08" refactor breaks
+	// this test.
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), -10), '2026-04-15');
+});
+
+Deno.test('parseParkrunDate — known limit at UTC+14 (Samoa DST)', () => {
+	// No single UTC hour can satisfy every offset in the 26-hour
+	// worldwide range. Samoa during DST (UTC+14) is the documented
+	// known exception. Pinning the actual behaviour so a future
+	// "improve this" attempt has a clear baseline.
+	assertEquals(localDateAt(parseParkrunDate('15/04/2026'), 14), '2026-04-16');
+});
+
+Deno.test('parseParkrunTime — HH:MM:SS parses to seconds', () => {
+	assertEquals(parseParkrunTime('00:18:30'), 18 * 60 + 30);
+});
+
+Deno.test('parseParkrunTime — MM:SS parses to seconds', () => {
+	assertEquals(parseParkrunTime('18:30'), 18 * 60 + 30);
+});
+
+Deno.test('parseParkrunTime — invalid input returns 0', () => {
+	assertEquals(parseParkrunTime('nope'), 0);
 });
