@@ -60,7 +60,7 @@ Future<Preferences> _makePreferences() async {
 Widget _wrap(SocialScreen child) =>
     MaterialApp(home: child);
 
-Future<SocialScreen> _socialScreen({int initialTab = 2}) async {
+Future<SocialScreen> _socialScreen({int initialTab = 0}) async {
   return SocialScreen(
     api: ApiClient(),
     social: SocialService(),
@@ -95,21 +95,22 @@ void main() {
     expect(find.text('Routes'), findsOneWidget);
   });
 
-  testWidgets('initialTab=2 (default) selects the Clubs tab',
+  testWidgets('initialTab=0 (default) selects the Feed tab',
       (tester) async {
+    // Bottom-nav default — fresh follower activity is the most-likely
+    // reason a user taps Social, so Feed wins the default slot.
     await tester.pumpWidget(_wrap(await _socialScreen()));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.controller!.index, 2);
+    expect(tabBar.controller!.index, 0);
   });
 
-  testWidgets('initialTab=0 selects the Feed tab on first frame',
+  testWidgets('initialTab=2 selects the Clubs tab on first frame',
       (tester) async {
-    // Mirrors the web `/social?tab=feed` deep link.
-    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 0)));
+    await tester.pumpWidget(_wrap(await _socialScreen(initialTab: 2)));
     await tester.pump();
     final tabBar = tester.widget<TabBar>(find.byType(TabBar));
-    expect(tabBar.controller!.index, 0);
+    expect(tabBar.controller!.index, 2);
   });
 
   testWidgets('initialTab=1 selects the People tab on first frame',

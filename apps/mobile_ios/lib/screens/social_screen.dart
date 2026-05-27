@@ -38,8 +38,9 @@ class SocialScreen extends StatefulWidget {
   /// through to the embedded `RoutesScreen`.
   final void Function(cm.Route route)? onStartRun;
   /// Sub-tab to open on first mount. 0 = Feed, 1 = People, 2 = Clubs,
-  /// 3 = Routes. Defaults to Clubs (2) — returning users mostly land
-  /// here from the bottom nav to check on a club they've joined.
+  /// 3 = Routes. Defaults to Feed (0) so a tap on the bottom-nav lands
+  /// on fresh follower activity — that's the highest-value default for
+  /// most sessions; users heading to a club still get there in one tap.
   final int initialTab;
 
   const SocialScreen({
@@ -50,7 +51,7 @@ class SocialScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     this.onStartRun,
-    this.initialTab = 2,
+    this.initialTab = 0,
   });
 
   @override

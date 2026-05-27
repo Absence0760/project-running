@@ -89,7 +89,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
-            const _SectionHeader('Settings', isPageTitle: true),
             const _SectionHeader('Profile'),
             _tab(
               icon: Icons.person_outline,
@@ -175,22 +174,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
 class _SectionHeader extends StatelessWidget {
   final String label;
-  final bool isPageTitle;
-  const _SectionHeader(this.label, {this.isPageTitle = false});
+  const _SectionHeader(this.label);
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    if (isPageTitle) {
-      return Padding(
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-        child: Text(
-          label,
-          style: theme.textTheme.headlineSmall
-              ?.copyWith(fontWeight: FontWeight.w700),
-        ),
-      );
-    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 20, 16, 4),
       child: Text(
