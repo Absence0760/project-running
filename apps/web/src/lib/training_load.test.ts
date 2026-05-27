@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
 	computeStress,
+	computeCalibration,
 	aggregateDailyStress,
 	computeTrainingLoadSeries,
 	localDateKey,
@@ -82,4 +83,71 @@ test('hasTrimpSignal — true when at least one run has avg_bpm and prefs are se
 test('hasTrimpSignal — false when prefs missing', () => {
 	const withHr: RunForLoad = { ...easy5k, metadata: { avg_bpm: 150 } };
 	assert.equal(hasTrimpSignal([withHr]), false);
+});
+
+// Persona-hunt Pro #2: per-window calibration so a strap-less day
+// doesn't fake a 3× spike in the daily series.
+
+test('computeCalibration — mode=distance when no HR prefs', () => {
+	const cal = computeCalibration([easy5k]);
+	assert.equal(cal.mode, 'distance');
+	assert.equal(cal.trimpPerKmFallback, null);
+});
+
+test('computeCalibration — mode=distance when prefs set but no HR-eligible run', () => {
+	const cal = computeCalibration([easy5k], {
+		resting_hr_bpm: 50,
+		max_hr_bpm: 190,
+	});
+	assert.equal(cal.mode, 'distance');
+});
+
+test('computeCalibration — mode=trimp when at least one run has HR', () => {
+	const withHr: RunForLoad = { ...easy5k, metadata: { avg_bpm: 140 } };
+	const cal = computeCalibration([withHr], {
+		resting_hr_bpm: 50,
+		max_hr_bpm: 190,
+	});
+	assert.equal(cal.mode, 'trimp');
+	assert.ok((cal.trimpPerKmFallback ?? 0) > 0,
+		'TRIMP-per-km fallback rate must be positive');
+});
+
+test('aggregateDailyStress — strap-less day uses calibrated fallback, not legacy 10/km', () => {
+	// The pre-fix bug: same effort got TRIMP score on a strap day,
+	// distance-fallback (10 pts/km) on a no-strap day → 3× spike.
+	// With the fix, both days should land on the same scale.
+	const stravaWithHr: RunForLoad = {
+		started_at: '2026-04-01T07:00:00Z',
+		duration_s: 3600,
+		distance_m: 12000,
+		metadata: { avg_bpm: 140 },
+	};
+	const stravaNoHr: RunForLoad = {
+		started_at: '2026-04-02T07:00:00Z',
+		duration_s: 3600,
+		distance_m: 12000,
+	};
+	const prefs = { resting_hr_bpm: 50, max_hr_bpm: 190 };
+	const daily = aggregateDailyStress([stravaWithHr, stravaNoHr], prefs);
+	const day1 = daily.get(localDateKey(new Date(stravaWithHr.started_at))) ?? 0;
+	const day2 = daily.get(localDateKey(new Date(stravaNoHr.started_at))) ?? 0;
+	// Calibrated fallback should land the no-HR day within 50% of the
+	// HR day (pre-fix: ~3× off). Both runs are similar duration +
+	// distance + effort proxy.
+	assert.ok(day1 > 0 && day2 > 0, 'both days produce stress');
+	const ratio = day2 / day1;
+	assert.ok(
+		ratio > 0.5 && ratio < 1.5,
+		`Strap-less day (${day2}) should be within 50% of strap day (${day1}); ` +
+			`got ratio ${ratio.toFixed(2)} — pre-fix this was ~3×`,
+	);
+});
+
+test('aggregateDailyStress — pure-distance window (no HR runs) keeps legacy 10/km', () => {
+	// A user with no HR data at all stays on the original behaviour
+	// so existing dashboards don't shift. easy 5k → 50 stress.
+	const daily = aggregateDailyStress([easy5k]);
+	const key = localDateKey(new Date(easy5k.started_at));
+	assert.equal(daily.get(key), 50);
 });

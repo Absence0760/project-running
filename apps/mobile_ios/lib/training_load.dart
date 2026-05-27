@@ -29,22 +29,95 @@ class TrainingLoadPoint {
   });
 }
 
-/// Per-run training stress score. Tier ladder (matches web):
-/// 1. Banister TRIMP when avg_bpm + resting + max are all known.
-/// 2. Distance proxy: 10 points per kilometre.
-/// 3. Zero when neither distance nor duration is set.
-double computeStress(Run run, [HrPrefs prefs = const HrPrefs()]) {
+/// Stress-model calibration for a window. Persona-hunt finding Pro #2
+/// (decisions §34): a per-run "TRIMP when HR present, else distance"
+/// fallback produces wildly different stress for the same effort —
+/// an easy 12 km run = ~80 TRIMP with strap, 120 distance-fallback
+/// without. A single strap-less day faked a 3× spike in the daily
+/// series → TSB drifted tens of points → wrong tapering decisions.
+///
+/// The fix: pick ONE mode per window and calibrate the fallback so
+/// runs without HR contribute comparable load. `mode='trimp'` uses
+/// the runner's own data — median TRIMP-per-km across HR-eligible
+/// runs in the window — as the fallback rate for runs that lack HR.
+class StressCalibration {
+  final String mode; // 'trimp' | 'distance'
+  final double? trimpPerKmFallback;
+  const StressCalibration({required this.mode, this.trimpPerKmFallback});
+}
+
+/// Decide the calibration for a window. If the user has the HR prefs
+/// configured AND at least one run with avg_bpm in the window, mode
+/// is 'trimp' — fallback rate is the median TRIMP-per-km of the
+/// eligible runs (anchored to the user's own intensity profile).
+/// Otherwise mode is 'distance' (legacy 10 pts/km).
+StressCalibration computeCalibration(
+  List<Run> runs, [
+  HrPrefs prefs = const HrPrefs(),
+]) {
+  final rest = _numericOrNull(prefs.restingHrBpm);
+  final max = _numericOrNull(prefs.maxHrBpm);
+  if (rest == null || max == null || max <= rest) {
+    return const StressCalibration(mode: 'distance');
+  }
+  final trimpsPerKm = <double>[];
+  for (final r in runs) {
+    final avgBpm = _numericOrNull(r.metadata?['avg_bpm']);
+    final km = r.distanceMetres / 1000.0;
+    if (avgBpm == null || km <= 0 || r.duration.inSeconds <= 0) continue;
+    final trimp = _banisterTrimp(r.duration.inSeconds, avgBpm, rest, max);
+    if (trimp > 0) trimpsPerKm.add(trimp / km);
+  }
+  if (trimpsPerKm.isEmpty) {
+    return const StressCalibration(mode: 'distance');
+  }
+  return StressCalibration(
+    mode: 'trimp',
+    trimpPerKmFallback: _median(trimpsPerKm),
+  );
+}
+
+double _banisterTrimp(int durationS, double avgBpm, double rest, double max) {
+  final durationMin = durationS / 60.0;
+  final hrr = math.max(0.0, math.min(1.0, (avgBpm - rest) / (max - rest)));
+  const k = 1.92;
+  return durationMin * hrr * 0.64 * math.exp(k * hrr);
+}
+
+double _median(List<double> xs) {
+  final sorted = [...xs]..sort();
+  final mid = sorted.length ~/ 2;
+  if (sorted.length % 2 == 0) {
+    return (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+  return sorted[mid];
+}
+
+/// Per-run training stress score. Pass a `calibration` to honour the
+/// window-level mode (recommended via `aggregateDailyStress`, which
+/// derives one calibration for the whole window). The legacy per-run
+/// dispatch (no calibration arg) is kept for callers that score a
+/// single isolated run.
+double computeStress(
+  Run run, [
+  HrPrefs prefs = const HrPrefs(),
+  StressCalibration? calibration,
+]) {
   if (run.distanceMetres <= 0 && run.duration.inSeconds <= 0) return 0;
+
+  final cal = calibration ?? computeCalibration([run], prefs);
 
   final avgBpm = _numericOrNull(run.metadata?['avg_bpm']);
   final rest = _numericOrNull(prefs.restingHrBpm);
   final max = _numericOrNull(prefs.maxHrBpm);
 
-  if (avgBpm != null && rest != null && max != null && max > rest) {
-    final durationMin = run.duration.inSeconds / 60.0;
-    final hrr = math.max(0.0, math.min(1.0, (avgBpm - rest) / (max - rest)));
-    const k = 1.92;
-    return durationMin * hrr * 0.64 * math.exp(k * hrr);
+  if (cal.mode == 'trimp') {
+    if (avgBpm != null && rest != null && max != null && max > rest) {
+      return _banisterTrimp(run.duration.inSeconds, avgBpm, rest, max);
+    }
+    final km = run.distanceMetres / 1000.0;
+    final rate = cal.trimpPerKmFallback ?? 7;
+    return km * rate;
   }
 
   return (run.distanceMetres / 1000.0) * 10;
@@ -69,9 +142,10 @@ Map<DateTime, double> aggregateDailyStress(
   List<Run> runs, [
   HrPrefs prefs = const HrPrefs(),
 ]) {
+  final calibration = computeCalibration(runs, prefs);
   final out = <DateTime, double>{};
   for (final r in runs) {
-    final stress = computeStress(r, prefs);
+    final stress = computeStress(r, prefs, calibration);
     if (stress <= 0) continue;
     final local = r.startedAt.toLocal();
     final key = DateTime(local.year, local.month, local.day);

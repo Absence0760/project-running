@@ -149,4 +149,94 @@ void main() {
       expect(hasTrimpSignal([r]), isFalse);
     });
   });
+
+  // Persona-hunt Pro #2 — per-window calibration so a strap-less day
+  // doesn't fake a 3× spike in the daily series. Mirrors the web tests
+  // for byte-identical contract.
+  group('computeCalibration (persona-hunt Pro #2)', () {
+    test('mode=distance when no HR prefs', () {
+      final r = _run(
+        distanceM: 5000,
+        durationS: 1800,
+        startedAt: DateTime.utc(2026, 4, 1),
+      );
+      final cal = computeCalibration([r]);
+      expect(cal.mode, 'distance');
+      expect(cal.trimpPerKmFallback, isNull);
+    });
+
+    test('mode=distance when prefs set but no HR-eligible run', () {
+      final r = _run(
+        distanceM: 5000,
+        durationS: 1800,
+        startedAt: DateTime.utc(2026, 4, 1),
+      );
+      final cal = computeCalibration(
+        [r],
+        const HrPrefs(restingHrBpm: 50, maxHrBpm: 190),
+      );
+      expect(cal.mode, 'distance');
+    });
+
+    test('mode=trimp when at least one run has HR', () {
+      final r = _run(
+        distanceM: 5000,
+        durationS: 1800,
+        startedAt: DateTime.utc(2026, 4, 1),
+        metadata: {'avg_bpm': 140},
+      );
+      final cal = computeCalibration(
+        [r],
+        const HrPrefs(restingHrBpm: 50, maxHrBpm: 190),
+      );
+      expect(cal.mode, 'trimp');
+      expect(cal.trimpPerKmFallback, isNotNull);
+      expect(cal.trimpPerKmFallback! > 0, isTrue);
+    });
+  });
+
+  group('aggregateDailyStress — Pro #2 spike fix', () {
+    test('strap-less day uses calibrated fallback, not legacy 10/km', () {
+      final withHr = _run(
+        distanceM: 12000,
+        durationS: 3600,
+        startedAt: DateTime.utc(2026, 4, 1, 7),
+        metadata: {'avg_bpm': 140},
+      );
+      final noHr = _run(
+        distanceM: 12000,
+        durationS: 3600,
+        startedAt: DateTime.utc(2026, 4, 2, 7),
+      );
+      final daily = aggregateDailyStress(
+        [withHr, noHr],
+        const HrPrefs(restingHrBpm: 50, maxHrBpm: 190),
+      );
+      final day1 = daily[
+        DateTime(withHr.startedAt.toLocal().year,
+            withHr.startedAt.toLocal().month, withHr.startedAt.toLocal().day)
+      ]!;
+      final day2 = daily[
+        DateTime(noHr.startedAt.toLocal().year,
+            noHr.startedAt.toLocal().month, noHr.startedAt.toLocal().day)
+      ]!;
+      final ratio = day2 / day1;
+      expect(ratio > 0.5 && ratio < 1.5, isTrue,
+          reason:
+              'Strap-less day ($day2) should be within 50% of strap day '
+              '($day1); pre-fix this was ~3×. Got ratio ${ratio.toStringAsFixed(2)}');
+    });
+
+    test('pure-distance window keeps legacy 10/km behaviour', () {
+      final r = _run(
+        distanceM: 5000,
+        durationS: 1800,
+        startedAt: DateTime.utc(2026, 4, 1),
+      );
+      final daily = aggregateDailyStress([r]);
+      final local = r.startedAt.toLocal();
+      final key = DateTime(local.year, local.month, local.day);
+      expect(daily[key], 50);
+    });
+  });
 }
