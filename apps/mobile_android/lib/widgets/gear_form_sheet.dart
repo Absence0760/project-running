@@ -149,9 +149,18 @@ class _GearFormSheetState extends State<_GearFormSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final unitLabel = widget.preferences.unit == DistanceUnit.mi ? 'mi' : 'km';
-    final insets = MediaQuery.of(context).viewInsets;
+    // Mirror the goal_editor_sheet pattern: pad by whichever of the
+    // soft-keyboard (viewInsets.bottom, when focused) or the system
+    // gesture / nav bar (viewPadding.bottom, when not) is in play.
+    // Keyboard up hides the gesture bar so they never overlap; pre-fix
+    // the sheet only padded for the keyboard, so the Cancel + Add
+    // buttons sat under Samsung's translucent gesture bar.
+    final mq = MediaQuery.of(context);
+    final bottomInset = mq.viewInsets.bottom > 0
+        ? mq.viewInsets.bottom
+        : mq.viewPadding.bottom;
     return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + insets.bottom),
+      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
       child: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
