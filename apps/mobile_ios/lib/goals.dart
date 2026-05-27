@@ -126,6 +126,14 @@ class TargetProgress {
   final bool complete;
   final String feedback;
 
+  /// True when the target can't yet be evaluated for this period
+  /// (e.g. a pace target with no pace-eligible runs — every run was a
+  /// bike ride). Persona-hunt finding Intermediate #5: pre-fix, an
+  /// ineligible pace target contributed `percent=0` to the overall
+  /// ring average, masking distance + run-count progress. Pending
+  /// targets are surfaced in the UI but skipped in `overallPercent`.
+  final bool pending;
+
   const TargetProgress({
     required this.kind,
     required this.current,
@@ -133,6 +141,7 @@ class TargetProgress {
     required this.percent,
     required this.complete,
     required this.feedback,
+    this.pending = false,
   });
 }
 
@@ -228,11 +237,16 @@ GoalProgress evaluateGoal(RunGoal goal, List<Run> runs, DateTime now) {
     ));
   }
 
-  final overall = targets.isEmpty
+  // Exclude pending targets (can't be evaluated yet) from the
+  // overall-progress average so an ineligible pace target doesn't
+  // drag the ring down with a fake 0%. Persona-hunt Intermediate #5.
+  final measurable = targets.where((t) => !t.pending).toList();
+  final overall = measurable.isEmpty
       ? 0.0
-      : targets.map((t) => t.percent).reduce((a, b) => a + b) / targets.length;
+      : measurable.map((t) => t.percent).reduce((a, b) => a + b) /
+          measurable.length;
   final complete =
-      targets.isNotEmpty && targets.every((t) => t.complete);
+      measurable.isNotEmpty && measurable.every((t) => t.complete);
 
   return GoalProgress(
     targets: targets,
@@ -323,6 +337,7 @@ TargetProgress _evalPace({
     percent: percent,
     complete: complete,
     feedback: feedback,
+    pending: current <= 0,
   );
 }
 

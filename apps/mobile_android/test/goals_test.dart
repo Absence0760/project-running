@@ -480,4 +480,39 @@ void main() {
       expect(feedback, matches(RegExp(r'\d+\.\d{2} mi')));
     });
   });
+
+  // Persona-hunt finding Intermediate #5: pending pace target (no
+  // eligible runs in the period) must NOT drag the overall ring to
+  // 0%. Mirrors the web tests.
+  group('pending pace target excluded from overall (Pro #5)', () {
+    // Same Wed midday anchor as the outer group — Monday is April 13.
+    final now = DateTime(2026, 4, 15, 12);
+
+    test('cycle-only week with hit distance + run-count → overall ~1.0', () {
+      final cycle = (DateTime when, double m) => makeRun(
+            startedAt: when,
+            distance: m,
+            duration: const Duration(minutes: 25),
+            activityType: 'cycle',
+          );
+      final goal = RunGoal(
+        id: 'g1',
+        period: GoalPeriod.week,
+        distanceMetres: 30000,
+        avgPaceSecPerKm: 300,
+        runCount: 3,
+      );
+      final p = evaluateGoal(goal, [
+        cycle(DateTime(2026, 4, 13, 7), 10000),
+        cycle(DateTime(2026, 4, 14, 7), 10000),
+        cycle(DateTime(2026, 4, 15, 7), 10000),
+      ], now);
+      final pace = targetOf(p, GoalTargetKind.avgPace);
+      expect(pace.pending, isTrue);
+      expect(p.overallPercent > 0.99, isTrue,
+          reason: 'distance + runCount met → overall ~1.0; '
+              'pre-fix the pending pace target dragged it to ~0.66');
+      expect(p.complete, isTrue);
+    });
+  });
 }

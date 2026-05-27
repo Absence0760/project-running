@@ -179,6 +179,51 @@ test('evaluateGoal — pace target with no qualifying runs reports 0%, not compl
 	assert.equal(pace.complete, false);
 	assert.equal(pace.percent, 0);
 	assert.equal(pace.currentLabel, '—');
+	assert.equal(pace.pending, true,
+		'pace target with no eligible runs must be pending');
+});
+
+// Persona-hunt finding Intermediate #5: an ineligible pace target
+// used to drag the overall ring to 0% even when distance + run-count
+// targets were on track. Pending targets are now excluded from the
+// overall average.
+test('evaluateGoal — pending pace target does not drag overall percent', () => {
+	// A weekly goal with three targets: 30 km distance, 5:00 pace, 3
+	// runs. The runner cross-trained all week (only cycle rides) but
+	// they did do 30 km on the bike + 3 sessions. The pace target is
+	// ineligible (no run-family activity) and should NOT count
+	// against the overall — only distance + run-count should.
+	const cycle = (s: string, distance_m: number, duration_s: number) =>
+		run({ started_at: s, distance_m, duration_s, activity_type: 'cycle' });
+	const goal: RunGoal = {
+		id: 'g1',
+		period: 'week',
+		distanceMetres: 30_000,
+		paceSecPerKm: 300,
+		runCount: 3,
+	};
+	const p = evaluateGoal(
+		goal,
+		[
+			cycle('2026-04-06T07:00:00', 10000, 1500),
+			cycle('2026-04-07T07:00:00', 10000, 1500),
+			cycle('2026-04-08T07:00:00', 10000, 1500),
+		],
+		NOW,
+	);
+	const pace = p.targets.find((t) => t.kind === 'pace')!;
+	assert.equal(pace.pending, true);
+	// Distance is hit (30 km) and runCount is hit (3 sessions). The
+	// overall should reflect those two at 100%, not be dragged down
+	// by the pending pace target.
+	assert.ok(
+		p.overallPercent > 0.99,
+		`overallPercent should be ~1.0 (distance + runCount both met); ` +
+			`got ${p.overallPercent} — pre-fix the pending pace target ` +
+			`dragged it to ~0.66`,
+	);
+	assert.equal(p.complete, true,
+		'goal should be complete — pending pace target excluded');
 });
 
 test('evaluateGoal — pace target reports lower-is-better partial progress', () => {

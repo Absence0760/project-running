@@ -35,6 +35,14 @@ export interface TargetProgress {
 	targetLabel: string;
 	percent: number;
 	complete: boolean;
+	/// True when the target can't yet be evaluated for this period
+	/// (e.g. a pace target with no pace-eligible runs in the window —
+	/// every run was a bike ride). Persona-hunt finding Intermediate
+	/// #5: pre-fix, an ineligible pace target contributed `percent=0`
+	/// to the overall ring average, masking distance + run-count
+	/// progress at "0% complete" forever. Excluded targets are
+	/// surfaced in the UI but skipped in `overallPercent`.
+	pending?: boolean;
 }
 
 export interface GoalProgress {
@@ -230,11 +238,15 @@ export function evaluateGoal(
 		const paceMetres = paceEligible.reduce((s, r) => s + r.distance_m, 0);
 		const paceSeconds = paceEligible.reduce((s, r) => s + r.duration_s, 0);
 		const current = paceMetres > 10 ? paceSeconds / (paceMetres / 1000) : 0;
-		// Lower-is-better. If we don't yet have any running data, percent
-		// is 0; if we beat the target, 100; otherwise (target / current).
+		// Lower-is-better. If we don't yet have any running data,
+		// mark the target as `pending` so the overall ring doesn't
+		// drag to 0 because of an unmeasurable contributor (Intermediate
+		// #5). Once any pace-eligible distance exists, the percent
+		// reflects target/current and the pending flag goes away.
+		const pending = current <= 0;
 		let percent: number;
 		let complete: boolean;
-		if (current <= 0) {
+		if (pending) {
 			percent = 0;
 			complete = false;
 		} else if (current <= goal.paceSecPerKm) {
@@ -247,10 +259,11 @@ export function evaluateGoal(
 		targets.push({
 			kind: 'pace',
 			label: 'Avg pace',
-			currentLabel: current > 0 ? formatPaceSecPerKm(current) : '—',
+			currentLabel: pending ? '—' : formatPaceSecPerKm(current),
 			targetLabel: formatPaceSecPerKm(goal.paceSecPerKm),
 			percent,
 			complete,
+			pending,
 		});
 	}
 	if (goal.runCount != null && goal.runCount > 0) {
@@ -265,11 +278,16 @@ export function evaluateGoal(
 		});
 	}
 
+	// Exclude pending targets (can't be evaluated yet) from the
+	// overall-progress average so an ineligible pace target doesn't
+	// drag the ring down with a fake 0%. The target row is still
+	// shown to the user — just labelled "—" instead of counted.
+	const measurable = targets.filter((t) => !t.pending);
 	const overall =
-		targets.length === 0
+		measurable.length === 0
 			? 0
-			: targets.reduce((s, t) => s + t.percent, 0) / targets.length;
-	const complete = targets.length > 0 && targets.every((t) => t.complete);
+			: measurable.reduce((s, t) => s + t.percent, 0) / measurable.length;
+	const complete = measurable.length > 0 && measurable.every((t) => t.complete);
 
 	return {
 		goal,
