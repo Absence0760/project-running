@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -294,8 +295,11 @@ func TestServer_WebSocketCleansUpOnDisconnect(t *testing.T) {
 
 // stubZoneFetcher returns a fixed zone list for one run; everything
 // else gets nil. Counts calls so tests can assert the per-room
-// cache.
+// cache. Mutex-protected so a test can flip zones / failNext mid-
+// run safely (required for the mid-broadcast-zone-add test in
+// TestServer_SnapshotReEvaluatesPrivacyZones).
 type stubZoneFetcher struct {
+	mu         sync.Mutex
 	matchRunID string
 	zones      []PrivacyZone
 	calls      int
@@ -303,6 +307,8 @@ type stubZoneFetcher struct {
 }
 
 func (s *stubZoneFetcher) Zones(_ context.Context, runID string) ([]PrivacyZone, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.calls++
 	if s.failNext {
 		s.failNext = false
@@ -311,7 +317,16 @@ func (s *stubZoneFetcher) Zones(_ context.Context, runID string) ([]PrivacyZone,
 	if runID != s.matchRunID {
 		return nil, nil
 	}
-	return s.zones, nil
+	return append([]PrivacyZone(nil), s.zones...), nil
+}
+
+// setZones flips the zone list under the mutex. Tests use this to
+// simulate a mid-broadcast zone addition without racing the server's
+// concurrent fetch goroutine.
+func (s *stubZoneFetcher) setZones(z []PrivacyZone) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.zones = z
 }
 
 func TestServer_PingInsideZoneIsDropped(t *testing.T) {
@@ -490,6 +505,97 @@ func TestServer_NoZoneFetcherSkipsCheckEntirely(t *testing.T) {
 		t.Fatalf("snapshot = %d, want 200 (push was published)", snap.StatusCode)
 	}
 	snap.Body.Close()
+}
+
+// Persona-hunt finding Pro-Round2 #1: a zone added mid-broadcast
+// must be honoured by /snapshot AND late-joiner /subscribe replay,
+// not just future /push calls. Pre-fix, both paths served the
+// cached lastPing verbatim regardless of current zones — leaking
+// the runner's pre-zone coords until the room was GC'd. Fix re-
+// runs shouldDrop on the cached ping against current zones before
+// serving.
+func TestServer_SnapshotReEvaluatesPrivacyZones(t *testing.T) {
+	// Cache turn-over has to be fast enough for the test to flip
+	// zones between the publish and the snapshot read.
+	t.Cleanup(SetCacheRefreshTTL(1 * time.Millisecond))
+
+	stub := &stubZoneFetcher{matchRunID: "run-1"} // no zones yet
+	base, teardown := newTestServer(t, &Server{Zones: stub})
+	defer teardown()
+
+	// 1) Publish a ping while zones are empty — passes through, lands
+	//    in lastPing.
+	resp, err := http.Post(base+"/v1/live/run-1/push", "application/json",
+		strings.NewReader(`{"lat":47.37,"lng":8.54,"distance_m":1,"elapsed_s":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("initial push status = %d, want 202", resp.StatusCode)
+	}
+
+	// Snapshot at this point returns the cached ping — sanity check.
+	snap, _ := http.Get(base + "/v1/live/run-1/snapshot")
+	if snap.StatusCode != http.StatusOK {
+		t.Fatalf("snapshot (pre-zone) = %d, want 200", snap.StatusCode)
+	}
+	snap.Body.Close()
+
+	// 2) Wait past the cache TTL, then add a zone covering the cached
+	//    ping. This simulates the runner adding a privacy zone after
+	//    a broadcast started.
+	time.Sleep(5 * time.Millisecond)
+	stub.setZones([]PrivacyZone{{Lat: 47.37, Lng: 8.54, RadiusM: 200}})
+
+	// 3) /snapshot must re-evaluate against the now-current zones and
+	//    return 204 — the cached ping is inside the new zone.
+	snap2, _ := http.Get(base + "/v1/live/run-1/snapshot")
+	if snap2.StatusCode != http.StatusNoContent {
+		t.Fatalf("snapshot (post-zone) = %d, want 204 (cached ping is in the now-current zone)", snap2.StatusCode)
+	}
+	snap2.Body.Close()
+}
+
+func TestServer_SubscribeReplaySuppressedByNewZone(t *testing.T) {
+	t.Cleanup(SetCacheRefreshTTL(1 * time.Millisecond))
+
+	stub := &stubZoneFetcher{matchRunID: "run-2"}
+	base, teardown := newTestServer(t, &Server{Zones: stub})
+	defer teardown()
+
+	// Publish before zones exist — lands in lastPing.
+	resp, err := http.Post(base+"/v1/live/run-2/push", "application/json",
+		strings.NewReader(`{"lat":47.37,"lng":8.54,"distance_m":1,"elapsed_s":1}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("push status = %d, want 202", resp.StatusCode)
+	}
+
+	// Wait past TTL + add zone covering the cached ping.
+	time.Sleep(5 * time.Millisecond)
+	stub.setZones([]PrivacyZone{{Lat: 47.37, Lng: 8.54, RadiusM: 200}})
+
+	// Late-joiner subscribes — replay must NOT deliver the in-zone
+	// cached ping.
+	wsURL := strings.Replace(base, "http://", "ws://", 1) + "/v1/live/run-2/subscribe"
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	c, _, err := websocket.Dial(ctx, wsURL, nil)
+	if err != nil {
+		t.Fatalf("ws dial: %v", err)
+	}
+	defer c.CloseNow()
+
+	readCtx, readCancel := context.WithTimeout(ctx, 300*time.Millisecond)
+	defer readCancel()
+	var got Ping
+	if err := wsjson.Read(readCtx, c, &got); err == nil {
+		t.Fatalf("ws got the cached in-zone ping %+v that should have been suppressed", got)
+	}
 }
 
 // Smoke-test the path-parsing on an edge case: run_id with hyphens

@@ -333,6 +333,21 @@ func (s *Server) handleSnapshot(w http.ResponseWriter, r *http.Request, runID st
 		w.WriteHeader(http.StatusNoContent)
 		return
 	}
+	// Re-evaluate privacy zones against the cached ping. shouldDrop
+	// runs against the CURRENT zones — a zone added mid-broadcast (or
+	// loaded after the cache TTL refresh) would catch a coord the
+	// cached ping was published before. Fail-closed on fetch error
+	// matches the /push path's contract. Persona-hunt Pro-Round2 #1.
+	drop, err := s.shouldDrop(r.Context(), runID, *last)
+	if err != nil {
+		s.log().Warn("snapshot zone check failed; dropping", "err", err, "run_id", runID)
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	if drop {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(last)
 }
 
@@ -371,7 +386,11 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 	// meantime — which the cleanup test pins in place.
 	ctx := c.CloseRead(r.Context())
 
-	ch, unsub, subErr := s.Hub.Subscribe(ctx, runID)
+	// SubscribeNoReplay so we can re-evaluate the cached lastPing
+	// against CURRENT privacy zones before the WS sees it — a zone
+	// added mid-broadcast must be honoured by the late-joiner replay,
+	// not just by future /push calls. Persona-hunt Pro-Round2 #1.
+	ch, unsub, subErr := s.Hub.SubscribeNoReplay(ctx, runID)
 	if subErr != nil {
 		// Per-room subscriber cap reached. Audit/livehub M3. Close
 		// with `1013 Try Again Later` (StatusTryAgainLater) so well-
@@ -383,6 +402,27 @@ func (s *Server) handleSubscribe(w http.ResponseWriter, r *http.Request, runID s
 		return
 	}
 	defer unsub()
+
+	// Late-joiner replay: write the cached lastPing manually after
+	// re-evaluating zones. Skip silently on shouldDrop / fetch
+	// errors (fail-closed). The live stream picks up from the next
+	// Publish via `ch`.
+	if last := s.Hub.LastKnown(runID); last != nil {
+		drop, err := s.shouldDrop(ctx, runID, *last)
+		if err == nil && !drop {
+			writeCtx, writeCancel := context.WithTimeout(ctx, 10*time.Second)
+			if werr := wsjson.Write(writeCtx, c, *last); werr != nil {
+				writeCancel()
+				if !errors.Is(werr, context.Canceled) {
+					s.log().Debug("ws late-joiner write failed", "err", werr, "run_id", runID)
+				}
+				return
+			}
+			writeCancel()
+		} else if err != nil {
+			s.log().Warn("subscribe zone check failed; suppressing replay", "err", err, "run_id", runID)
+		}
+	}
 
 	// Ping every 25 s so an intermediate proxy doesn't idle-timeout
 	// the connection. CloudFront's default idle is 60 s; 25 s leaves

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -33,13 +34,36 @@ const IdleRoomTTL = 24 * time.Hour
 // against the lock contention of the sweep.
 const GCInterval = 5 * time.Minute
 
-// CacheRefreshTTL bounds how long a cached (RunMeta, zones) entry
-// stays valid before the next call re-fetches. 60 s is a slow rate
-// vs the recorder's 5 s push cadence (≈12 pushes per refresh) but
-// fast enough that toggling `runs.is_public = false` mid-run
+// cacheRefreshTTLNanos bounds how long a cached (RunMeta, zones)
+// entry stays valid before the next call re-fetches. 60 s is a slow
+// rate vs the recorder's 5 s push cadence (≈12 pushes per refresh)
+// but fast enough that toggling `runs.is_public = false` mid-run
 // stops serving anon spectators within a minute. /audit/livehub
-// H2 + M6.
-const CacheRefreshTTL = 60 * time.Second
+// H2 + M6. Atomic so tests can lower it concurrently with running
+// HTTP handlers (snapshot / subscribe paths read it from multiple
+// goroutines) when simulating mid-broadcast zone changes —
+// TestServer_SnapshotReEvaluatesPrivacyZones drives this.
+var cacheRefreshTTLNanos atomic.Int64
+
+func init() {
+	cacheRefreshTTLNanos.Store(int64(60 * time.Second))
+}
+
+// CacheRefreshTTL returns the current cache TTL. Production callers
+// just read the result; tests use SetCacheRefreshTTL to lower it.
+func CacheRefreshTTL() time.Duration {
+	return time.Duration(cacheRefreshTTLNanos.Load())
+}
+
+// SetCacheRefreshTTL is the test hook for lowering the cache TTL.
+// Restore the previous value via the returned closure (typically in
+// t.Cleanup). Race-safe — the underlying store is atomic.
+func SetCacheRefreshTTL(d time.Duration) func() {
+	prev := cacheRefreshTTLNanos.Swap(int64(d))
+	return func() {
+		cacheRefreshTTLNanos.Store(prev)
+	}
+}
 
 // Hub is the in-process pub/sub broker keyed by run_id.
 //
@@ -190,6 +214,21 @@ func (h *Hub) Publish(runID string, p Ping) int {
 // ping (if any) so a late joiner sees the runner immediately
 // instead of waiting up to 5 s for the next [Publish].
 func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
+	return h.subscribe(ctx, runID, true)
+}
+
+// SubscribeNoReplay is identical to Subscribe but skips the late-
+// joiner replay of `r.lastPing`. The HTTP /subscribe route uses this
+// so server.go can re-run shouldDrop against the *current* privacy
+// zones before manually pushing the cached ping to the WS — a zone
+// added mid-broadcast would otherwise leak through the auto-replay
+// because the cached lastPing was published before the zone existed.
+// Persona-hunt finding Pro-Round2 #1.
+func (h *Hub) SubscribeNoReplay(ctx context.Context, runID string) (<-chan Ping, func(), error) {
+	return h.subscribe(ctx, runID, false)
+}
+
+func (h *Hub) subscribe(ctx context.Context, runID string, replay bool) (<-chan Ping, func(), error) {
 	r := h.roomFor(runID, true)
 	s := &subscriber{ch: make(chan Ping, subBufferSize)}
 
@@ -201,7 +240,7 @@ func (h *Hub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(),
 		h.metrics.subscribeRejectCap.Add(1)
 		return nil, nil, ErrSubscriberCapReached
 	}
-	if r.lastPing != nil {
+	if replay && r.lastPing != nil {
 		// Pre-load the buffer with the last known ping. Capacity is
 		// >0, so this never blocks. If the caller drains slowly the
 		// next Publish may drop, which is fine.
@@ -292,7 +331,7 @@ func (h *Hub) StartGC(ctx context.Context, interval, maxIdle time.Duration) {
 func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) ([]PrivacyZone, error) {
 	r := h.roomFor(runID, true)
 	r.mu.Lock()
-	if !r.zonesAt.IsZero() && time.Since(r.zonesAt) < CacheRefreshTTL {
+	if !r.zonesAt.IsZero() && time.Since(r.zonesAt) < CacheRefreshTTL() {
 		zones := append([]PrivacyZone(nil), r.zones...)
 		r.mu.Unlock()
 		return zones, nil
@@ -329,7 +368,7 @@ func (h *Hub) LoadZones(ctx context.Context, runID string, fetcher ZoneFetcher) 
 func (h *Hub) LoadRunMeta(ctx context.Context, runID string, fetcher RunMetaFetcher) (*RunMeta, error) {
 	r := h.roomFor(runID, true)
 	r.mu.Lock()
-	if !r.runMetaAt.IsZero() && time.Since(r.runMetaAt) < CacheRefreshTTL {
+	if !r.runMetaAt.IsZero() && time.Since(r.runMetaAt) < CacheRefreshTTL() {
 		meta := r.runMeta
 		r.mu.Unlock()
 		return meta, nil

@@ -123,12 +123,26 @@ func (h *RedisHub) Publish(runID string, p Ping) int {
 // the `:last` key if one is present (matches the in-process Hub's
 // late-joiner behaviour).
 func (h *RedisHub) Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error) {
+	return h.subscribe(ctx, runID, true)
+}
+
+// SubscribeNoReplay is identical to Subscribe but skips the
+// `:last` key preload. See the in-process Hub.SubscribeNoReplay for
+// the rationale (privacy-zone re-eval at request time).
+// Persona-hunt finding Pro-Round2 #1.
+func (h *RedisHub) SubscribeNoReplay(ctx context.Context, runID string) (<-chan Ping, func(), error) {
+	return h.subscribe(ctx, runID, false)
+}
+
+func (h *RedisHub) subscribe(ctx context.Context, runID string, replay bool) (<-chan Ping, func(), error) {
 	pubsub := h.rdb.Subscribe(ctx, h.chanKey(runID))
 	out := make(chan Ping, subBufferSize)
 
-	// Pre-load last-known if present.
-	if last := h.LastKnown(runID); last != nil {
-		out <- *last
+	// Pre-load last-known if present (unless caller opted out).
+	if replay {
+		if last := h.LastKnown(runID); last != nil {
+			out <- *last
+		}
 	}
 
 	closeOnce := &sync.Once{}

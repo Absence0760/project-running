@@ -37,6 +37,15 @@ type LivePubSub interface {
 	// 503 so spectators back off without DoSing the server.
 	Subscribe(ctx context.Context, runID string) (<-chan Ping, func(), error)
 
+	// SubscribeNoReplay is identical to Subscribe but does NOT
+	// pre-load the room's last-known ping into the new subscriber's
+	// channel. Used by the HTTP `/subscribe` route so the server can
+	// re-evaluate the cached ping against the *current* privacy
+	// zones (cached zones may be older than a zone added mid-
+	// broadcast) before manually pushing it to the WS as the first
+	// message. Persona-hunt finding Pro-Round2 #1.
+	SubscribeNoReplay(ctx context.Context, runID string) (<-chan Ping, func(), error)
+
 	// LastKnown returns the most recent ping or nil. Used by the
 	// HTTP `/snapshot` route.
 	LastKnown(runID string) *Ping
