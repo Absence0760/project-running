@@ -63,6 +63,17 @@ class LocalRunStore extends ChangeNotifier {
   File get _pendingRemoteDeletesFile =>
       File('${_dir.path}/$_pendingRemoteDeletesFilename');
 
+  // Per-active-run waypoint cursor — how many waypoints of the
+  // current in-progress run we've already persisted. Lets
+  // saveInProgress append ONLY new waypoints since the last save
+  // instead of re-encoding the whole track every tick. Persona-hunt
+  // Round 3 finding Ultra #2: pre-fix a 50-hour 100-mile race
+  // re-encoded + atomically rewrote the entire ~14 MB JSON every
+  // 10 s — ~250 GB cumulative writes, battery + flash wear. Per-
+  // tick cost is now O(new-waypoints) instead of O(total).
+  int _inProgressWaypointsWritten = 0;
+  String? _inProgressRunId;
+
   List<Run> get runs => List.unmodifiable(_runs);
 
   List<Run> get unsyncedRuns =>
@@ -370,16 +381,42 @@ class LocalRunStore extends ChangeNotifier {
 
   /// Persist the current state of an in-progress recording. Called
   /// periodically during a run so a crash or force-kill doesn't lose
-  /// everything. The encode + write runs on a background isolate via
-  /// [compute] — for a long run the track grows to thousands of waypoints
-  /// and a sync encode on the UI thread jank-spikes every 10 seconds.
+  /// everything.
+  ///
+  /// Append-only NDJSON format (one record per line). First record
+  /// after a clear writes a snapshot of the full run; subsequent
+  /// records write only NEW waypoints since the last save plus an
+  /// updated header. The loader concatenates waypoints in order and
+  /// uses the LAST valid header. A corrupt trailing line (mid-write
+  /// crash) is skipped — earlier lines still reconstruct a valid
+  /// partial run. Persona-hunt Round 3 finding Ultra #2.
   Future<void> saveInProgress(Run run) async {
     final path = _inProgressFile.path;
-    final payload = {
-      'run': run.toJson(),
-      'saved_at': DateTime.now().toIso8601String(),
+    // Reset the cursor if the active run id changed OR the file is
+    // gone (post-clearInProgress). A fresh write starts with the
+    // full track + header.
+    final isFreshRun = _inProgressRunId != run.id ||
+        !File(path).existsSync();
+    if (isFreshRun) {
+      _inProgressRunId = run.id;
+      _inProgressWaypointsWritten = 0;
+    }
+    final newSlice = run.track.length > _inProgressWaypointsWritten
+        ? run.track.sublist(_inProgressWaypointsWritten)
+        : const <Waypoint>[];
+
+    // Build the header from Run.toJson() with track stripped — the
+    // loader passes this back to Run.fromJson verbatim plus the
+    // reconstructed track, so it must use the exact same wire shape.
+    final header = Map<String, dynamic>.from(run.toJson())..remove('track');
+    final record = {
+      'h': header,
+      'w': [for (final wp in newSlice) wp.toJson()],
+      't': DateTime.now().toIso8601String(),
+      if (isFreshRun) 'snap': true,
     };
-    await compute(_encodeAndWriteJson, {'path': path, 'data': payload});
+    await compute(_appendInProgressLine, {'path': path, 'data': record});
+    _inProgressWaypointsWritten = run.track.length;
   }
 
   /// Load an in-progress run left over from a previous session, if any.
@@ -397,12 +434,28 @@ class LocalRunStore extends ChangeNotifier {
     final file = _inProgressFile;
     if (!file.existsSync()) return null;
     try {
-      final data = await compute(_readAndDecodeJson, file.path);
-      if (data == null) return null;
-      return Run.fromJson(data['run'] as Map<String, dynamic>);
+      final data = await compute(_readInProgress, file.path);
+      if (data == null) {
+        // File existed but had no parseable record (truly corrupt
+        // or empty). Delete so the next session doesn't keep
+        // tripping over it — same contract the legacy single-blob
+        // shape carried.
+        try {
+          await file.delete();
+        } catch (_) {/* swallow */}
+        return null;
+      }
+      // Restore the cursor so a save AFTER recovery writes
+      // incrementally onto the existing file.
+      _inProgressRunId = data['id'] as String?;
+      final wps = data['waypoints'] as List<dynamic>? ?? const [];
+      _inProgressWaypointsWritten = wps.length;
+      return Run.fromJson({
+        ...?(data['header'] as Map<String, dynamic>?),
+        'track': wps,
+      });
     } catch (e) {
       debugPrint('Failed to load in-progress run: $e');
-      // Corrupt file — remove it so we don't keep tripping over it.
       try {
         await file.delete();
       } catch (e2) {
@@ -415,6 +468,10 @@ class LocalRunStore extends ChangeNotifier {
   /// Remove the in-progress save file. Called on successful [stop] and on
   /// successful recovery (after promoting the partial run into the list).
   Future<void> clearInProgress() async {
+    // Drop the per-run cursor so a subsequent saveInProgress starts
+    // a fresh file with a full snapshot. (Ultra #2 cursor reset.)
+    _inProgressRunId = null;
+    _inProgressWaypointsWritten = 0;
     final file = _inProgressFile;
     if (file.existsSync()) {
       try {
@@ -684,4 +741,81 @@ Future<Map<String, dynamic>?> _readAndDecodeJson(String path) async {
   if (!file.existsSync()) return null;
   final raw = await file.readAsString();
   return jsonDecode(raw) as Map<String, dynamic>;
+}
+
+/// Append a single NDJSON record to the in-progress file. Open-
+/// append-flush-close per call — durable across a crash mid-tick
+/// because earlier lines have already been fsync'd. Persona-hunt
+/// Round 3 finding Ultra #2.
+Future<void> _appendInProgressLine(Map<String, dynamic> args) async {
+  final path = args['path'] as String;
+  final data = args['data'] as Map<String, dynamic>;
+  final f = File(path);
+  // FileMode.writeOnlyAppend creates the file if missing.
+  final sink = f.openWrite(mode: FileMode.writeOnlyAppend);
+  try {
+    sink.writeln(jsonEncode(data));
+    await sink.flush();
+  } finally {
+    await sink.close();
+  }
+}
+
+/// Read the NDJSON in-progress file + reconstruct (header, waypoints).
+/// Tolerates a trailing partial / corrupt line (mid-write crash).
+/// Also handles the legacy single-blob shape (`{run: {...}, saved_at:
+/// ...}`) for a user upgrading mid-run — first line parses as the
+/// legacy envelope, the helper unwraps it.
+Future<Map<String, dynamic>?> _readInProgress(String path) async {
+  final file = File(path);
+  if (!file.existsSync()) return null;
+  final raw = await file.readAsString();
+  if (raw.isEmpty) return null;
+  Map<String, dynamic>? header;
+  final waypoints = <dynamic>[];
+  String? lastRunId;
+  for (final line in raw.split('\n')) {
+    if (line.isEmpty) continue;
+    try {
+      final rec = jsonDecode(line) as Map<String, dynamic>;
+      // Legacy single-blob envelope (user mid-upgrade)? The old
+      // shape was {run: <Run.toJson>, saved_at: ...}. Unwrap to the
+      // same (header, waypoints) split the NDJSON path produces.
+      if (rec['run'] is Map<String, dynamic>) {
+        final runMap = Map<String, dynamic>.from(
+            rec['run'] as Map<String, dynamic>);
+        final legacyTrack = runMap['track'] as List<dynamic>? ?? const [];
+        runMap.remove('track');
+        header = runMap;
+        waypoints
+          ..clear()
+          ..addAll(legacyTrack);
+        lastRunId = runMap['id'] as String?;
+        continue;
+      }
+      // NDJSON chunk shape: {h: header, w: [waypoints]}.
+      final h = rec['h'] as Map<String, dynamic>?;
+      if (h != null) {
+        header = h;
+        lastRunId = h['id'] as String?;
+      }
+      final w = rec['w'] as List<dynamic>? ?? const [];
+      if (rec['snap'] == true) {
+        // A snap line resets the buffer — handles the "fresh file
+        // after clear" case + any future explicit re-snap.
+        waypoints.clear();
+      }
+      waypoints.addAll(w);
+    } catch (_) {
+      // Trailing partial line from a mid-write crash, or a corrupt
+      // record. Skip and keep the prior reconstruction.
+      continue;
+    }
+  }
+  if (header == null) return null;
+  return {
+    'id': lastRunId,
+    'header': header,
+    'waypoints': waypoints,
+  };
 }

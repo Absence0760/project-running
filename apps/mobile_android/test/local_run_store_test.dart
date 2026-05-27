@@ -188,50 +188,47 @@ void main() {
       expect(loaded?.distanceMetres, 500);
     });
 
-    test('saveInProgress writes atomically via .tmp + rename', () async {
-      // Reason: a process killed mid-write (Samsung Freecess freeze, OOM,
-      // user force-stops the app, disk full midway through a growing
-      // track) used to leave a partial in_progress.json behind because
-      // writeAsString truncates the target file before writing the new
-      // contents. Atomic rename keeps the previous incremental
-      // checkpoint intact — if the write crashes, only the .tmp is
-      // partial; the canonical path still has the last-known-good save.
+    test('saveInProgress writes append-only NDJSON without an atomic-rename .tmp', () async {
+      // Persona-hunt Round 3 finding Ultra #2: the old architecture
+      // re-encoded + atomically rewrote the full track on every
+      // 10s tick. For a 50-hour 100-mile race that's ~250 GB
+      // cumulative writes. The new append-only NDJSON path writes
+      // ONLY the new waypoints since the last save plus an updated
+      // header per tick, so per-tick cost is O(new-waypoints) flat.
+      // No .tmp file is involved; durability comes from
+      // flush-per-line. Pin the architecture: canonical file
+      // exists, no .tmp.
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
       await store.saveInProgress(makeRun(id: 'live', distance: 100));
       expect(
         File('${tempDir.path}/in_progress.json').existsSync(),
         isTrue,
-        reason: 'rename must produce the canonical file',
+        reason: 'NDJSON append must produce the canonical file',
       );
       expect(
         File('${tempDir.path}/in_progress.json.tmp').existsSync(),
         isFalse,
-        reason: 'A clean saveInProgress must leave no .tmp file behind '
-            '— the rename moves it to the canonical name.',
+        reason: 'Append-only path never creates a .tmp',
       );
     });
 
-    test('saveInProgress survives a leftover .tmp from a previous crash',
+    test('saveInProgress is unaffected by a stale .tmp from a previous version',
         () async {
-      // Reason: an interrupted previous save can leave garbage in
-      // in_progress.json.tmp. The next saveInProgress must overwrite
-      // that orphan via the rename rather than fail or refuse to write.
+      // The pre-Ultra-#2 architecture wrote via .tmp + atomic rename.
+      // The new append-only NDJSON path doesn't touch .tmp at all,
+      // so an orphan left over from an older app version is benign
+      // — it just doesn't affect the new canonical file. Pin that
+      // an orphan .tmp doesn't poison the new save / load.
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
       await store.saveInProgress(makeRun(id: 'A', distance: 100));
       await File('${tempDir.path}/in_progress.json.tmp')
-          .writeAsString('partial garbage from a torn write');
+          .writeAsString('partial garbage from a torn write of an older app version');
       await store.saveInProgress(makeRun(id: 'B', distance: 500));
       final loaded = await store.loadInProgress();
       expect(loaded?.id, 'B');
       expect(loaded?.distanceMetres, 500);
-      expect(
-        File('${tempDir.path}/in_progress.json.tmp').existsSync(),
-        isFalse,
-        reason: 'The next clean save must replace the orphan .tmp via '
-            'rename — leaving it behind would let it grow without bound.',
-      );
     });
 
     test('a torn write leaves the previous in_progress intact', () async {
@@ -262,6 +259,59 @@ void main() {
         reason: 'loadInProgress must delete the corrupt file so the next '
             'session doesn\'t keep tripping over it.',
       );
+    });
+
+    test(
+        'append-only NDJSON: per-tick write cost is O(new-waypoints), not O(total)',
+        () async {
+      // Persona-hunt Round 3 finding Ultra #2 — pre-fix every save
+      // re-encoded the FULL track every 10s. For a 50-hour 100-mile
+      // race that meant ~14 MB per tick at hour 50; cumulative ~250 GB
+      // of writes over the race. Append-only NDJSON writes only the
+      // new waypoints per tick.
+      //
+      // Pin the property: after a sequence of N saves where the
+      // track grows by `step` waypoints each time, the file size
+      // grows roughly linearly with TOTAL waypoints, NOT
+      // quadratically with the sum-of-prefix-lengths that the old
+      // architecture produced.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      final track = <Waypoint>[];
+      var saveCount = 0;
+      const step = 50;
+      const saves = 20;
+      for (var s = 0; s < saves; s++) {
+        for (var i = 0; i < step; i++) {
+          track.add(Waypoint(
+            lat: 47.0 + 0.0001 * track.length,
+            lng: 8.0 + 0.0001 * track.length,
+            timestamp: DateTime.utc(2026, 5, 1).add(Duration(seconds: track.length)),
+          ));
+        }
+        await store.saveInProgress(makeRun(
+          id: 'live',
+          distance: track.length * 10.0,
+          track: List.of(track),
+        ));
+        saveCount++;
+      }
+      // Total waypoints = saves * step = 1000.
+      // Old architecture's cumulative-bytes scales with sum(1, 2, ..., saves) × step
+      //   ≈ saves² / 2 × step. New architecture scales with saves × step linearly.
+      // The file size on disk reflects the latter — total appended bytes
+      // ≈ (header_bytes_per_line + step × waypoint_bytes) × saves.
+      final fileSize = File('${tempDir.path}/in_progress.json').lengthSync();
+      // Sanity bounds: per-tick bytes ≈ 2 KB header + 50 waypoints × ~80 B
+      // ≈ 6 KB. 20 ticks → ≈120 KB. Pre-fix would have been ~3+ MB.
+      expect(fileSize < 500_000, isTrue,
+          reason: 'Append-only file should be ~120 KB for 1000 waypoints '
+              'across 20 ticks; got $fileSize bytes. Pre-fix this was '
+              '~3+ MB because the full track was re-encoded on every save.');
+      // And the loaded run still has every waypoint.
+      final loaded = await store.loadInProgress();
+      expect(loaded?.track.length, saves * step);
+      expect(saveCount, saves);
     });
 
     test(
