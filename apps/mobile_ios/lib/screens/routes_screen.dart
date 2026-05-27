@@ -102,6 +102,10 @@ class RoutesScreenState extends State<RoutesScreen> {
   _RouteSort _sort = _RouteSort.newest;
   bool _starredOnly = false;
 
+  bool _selecting = false;
+  final Set<String> _selected = <String>{};
+  bool _deleting = false;
+
   @override
   void initState() {
     super.initState();
@@ -367,6 +371,165 @@ class RoutesScreenState extends State<RoutesScreen> {
             a.name.toLowerCase().compareTo(b.name.toLowerCase()));
     }
     return out;
+  }
+
+  // ── Selection mode ────────────────────────────────────────────────
+  //
+  // Mirrors the runs_screen pattern: long-press a route to enter
+  // selection, tap to add/remove, then bulk-delete. Because RoutesScreen
+  // is normally embedded under SocialScreen (which owns the AppBar +
+  // TabBar), we render the selection state as an inline banner at the
+  // top of the body — replacing a host AppBar would require plumbing
+  // selection state up through SocialScreen.
+
+  void _enterSelection(String firstId) {
+    setState(() {
+      _selecting = true;
+      _selected
+        ..clear()
+        ..add(firstId);
+    });
+  }
+
+  void _toggleSelection(String id) {
+    setState(() {
+      if (_selected.contains(id)) {
+        _selected.remove(id);
+        if (_selected.isEmpty) _selecting = false;
+      } else {
+        _selected.add(id);
+      }
+    });
+  }
+
+  void _clearSelection() {
+    setState(() {
+      _selecting = false;
+      _selected.clear();
+    });
+  }
+
+  void _selectAllOwnedVisible(List<cm.Route> visible, Set<String> ownedIds) {
+    setState(() {
+      _selected
+        ..clear()
+        ..addAll(visible.where((r) => ownedIds.contains(r.id)).map((r) => r.id));
+    });
+  }
+
+  Future<void> _deleteSelected() async {
+    final count = _selected.length;
+    if (count == 0) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete $count route${count == 1 ? '' : 's'}?'),
+        content: const Text('This cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _deleting = true);
+    final ids = Set<String>.from(_selected);
+    final failedIds = <String>{};
+    final api = widget.apiClient;
+    if (api != null && api.userId != null) {
+      for (final id in ids) {
+        try {
+          await api.deleteRoute(id);
+        } catch (e) {
+          debugPrint('deleteRoute failed for $id: $e');
+          failedIds.add(id);
+        }
+      }
+    }
+    final ok2 = ids.difference(failedIds);
+    if (ok2.isNotEmpty) await widget.routeStore.deleteMany(ok2);
+    if (!mounted) return;
+    setState(() {
+      _selecting = false;
+      _selected.clear();
+      _deleting = false;
+    });
+    if (failedIds.isNotEmpty) {
+      showTopBanner(
+        context,
+        '${ok2.length} deleted; ${failedIds.length} failed — check your connection.',
+      );
+    } else {
+      showTopBanner(
+        context,
+        '$count route${count == 1 ? '' : 's'} deleted.',
+      );
+    }
+  }
+
+  Widget _selectionBanner({
+    required ThemeData theme,
+    required List<cm.Route> visible,
+    required Set<String> ownedIds,
+  }) {
+    final ownedVisibleIds =
+        visible.where((r) => ownedIds.contains(r.id)).map((r) => r.id).toSet();
+    final allSelected = ownedVisibleIds.isNotEmpty &&
+        ownedVisibleIds.difference(_selected).isEmpty;
+    return Material(
+      color: theme.colorScheme.primaryContainer,
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Row(
+            children: [
+              IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Cancel',
+                onPressed: _deleting ? null : _clearSelection,
+              ),
+              Expanded(
+                child: Text(
+                  '${_selected.length} selected',
+                  style: theme.textTheme.titleSmall,
+                ),
+              ),
+              IconButton(
+                icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
+                tooltip: allSelected ? 'Clear' : 'Select all',
+                onPressed: _deleting
+                    ? null
+                    : (allSelected
+                        ? () => setState(() => _selected.clear())
+                        : () => _selectAllOwnedVisible(visible, ownedIds)),
+              ),
+              IconButton(
+                icon: _deleting
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.delete_outline),
+                tooltip: 'Delete',
+                onPressed: (_selected.isEmpty || _deleting)
+                    ? null
+                    : _deleteSelected,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _toggleStar(cm.Route route) async {
@@ -677,9 +840,16 @@ class RoutesScreenState extends State<RoutesScreen> {
                     !ownedIds.intersection(_syncedOwnedIds()).contains(route.id);
                 final isOfflinePinned =
                     widget.routeStore.isOfflinePinned(route.id);
+                final isSelected = _selected.contains(route.id);
                 return Card(
                   margin: const EdgeInsets.only(bottom: 12),
+                  color: isSelected
+                      ? theme.colorScheme.primaryContainer
+                      : null,
                   child: ListTile(
+                    onLongPress: isOwned && !_selecting
+                        ? () => _enterSelection(route.id)
+                        : null,
                     // No contentPadding override — use ListTile's
                     // default so the row height matches the History
                     // tab's run-card exactly. Pre-fix, the routes
@@ -815,6 +985,11 @@ class RoutesScreenState extends State<RoutesScreen> {
                       ],
                     ),
                     onTap: () async {
+                      if (_selecting) {
+                        if (!isOwned) return;
+                        _toggleSelection(route.id);
+                        return;
+                      }
                       final picked = await Navigator.push<cm.Route?>(
                         context,
                         MaterialPageRoute(
@@ -848,6 +1023,9 @@ class RoutesScreenState extends State<RoutesScreen> {
       // as a compact trailing affordance on the same row.
       return Column(
         children: [
+          if (_selecting)
+            _selectionBanner(
+                theme: theme, visible: routes, ownedIds: ownedIds),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 8, 4),
             child: Row(
@@ -941,7 +1119,15 @@ class RoutesScreenState extends State<RoutesScreen> {
         actions: _buildActions(context),
       ),
       floatingActionButton: buildRouteFabs(context),
-      body: body,
+      body: _selecting
+          ? Column(
+              children: [
+                _selectionBanner(
+                    theme: theme, visible: routes, ownedIds: ownedIds),
+                Expanded(child: body),
+              ],
+            )
+          : body,
     );
   }
 

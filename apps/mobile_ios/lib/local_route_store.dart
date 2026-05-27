@@ -199,6 +199,29 @@ class LocalRouteStore extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Bulk-delete a set of routes. Used by the multi-select / bulk-
+  /// delete UI on `routes_screen.dart`. Issues a single
+  /// `notifyListeners()` call instead of one per row so the list
+  /// doesn't flicker through N intermediate states. Idempotent on
+  /// already-deleted ids (the per-id file delete is best-effort).
+  Future<void> deleteMany(Iterable<String> routeIds) async {
+    if (routeIds.isEmpty) return;
+    final ids = routeIds.toSet();
+    final dir = await _ensureDir();
+    for (final id in ids) {
+      final file = File('${dir.path}/$id.json');
+      if (file.existsSync()) await file.delete();
+    }
+    _routes.removeWhere((r) => ids.contains(r.id));
+    final touchedSynced = _syncedIds.intersection(ids).isNotEmpty;
+    final touchedPinned = _offlinePinnedIds.intersection(ids).isNotEmpty;
+    _syncedIds.removeAll(ids);
+    _offlinePinnedIds.removeAll(ids);
+    if (touchedSynced) await _persistSyncedIds();
+    if (touchedPinned) await _persistOfflinePinnedIds();
+    notifyListeners();
+  }
+
   /// Mark a route as kept-on-device. The pin is local-only — never
   /// pushed to Supabase. Idempotent (re-pinning is a no-op).
   Future<void> pinOffline(String routeId) async {

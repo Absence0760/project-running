@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -394,6 +396,132 @@ void main() {
 
       // 25 ≤ 40 (next page) + apiClient null → no further button.
       expect(find.text('Load 20 more'), findsNothing);
+    });
+  });
+
+  group('RoutesScreen — selection mode (bulk delete)', () {
+    testWidgets('long-press on a route enters selection mode + shows banner',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        // ignore: invalid_use_of_visible_for_testing_member
+        ..debugSeed(_makeRoutes(3));
+      await tester.pumpWidget(MaterialApp(
+        home: RoutesScreen(
+          apiClient: null,
+          routeStore: routeStore,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+
+      // Pre-state: no selection banner.
+      expect(find.textContaining(' selected'), findsNothing);
+
+      await tester.longPress(find.text('Route 0'));
+      await tester.pump();
+
+      expect(find.text('1 selected'), findsOneWidget);
+      // Banner controls — Cancel, Select all, Delete.
+      expect(find.byIcon(Icons.close), findsOneWidget);
+      expect(find.byIcon(Icons.select_all), findsOneWidget);
+      expect(find.byIcon(Icons.delete_outline), findsOneWidget);
+    });
+
+    testWidgets('tap on another route in selection mode adds to the selection',
+        (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        // ignore: invalid_use_of_visible_for_testing_member
+        ..debugSeed(_makeRoutes(3));
+      await tester.pumpWidget(MaterialApp(
+        home: RoutesScreen(
+          apiClient: null,
+          routeStore: routeStore,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+
+      await tester.longPress(find.text('Route 0'));
+      await tester.pump();
+      await tester.tap(find.text('Route 1'));
+      await tester.pump();
+
+      expect(find.text('2 selected'), findsOneWidget);
+    });
+
+    testWidgets('Cancel button exits selection mode', (tester) async {
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        // ignore: invalid_use_of_visible_for_testing_member
+        ..debugSeed(_makeRoutes(2));
+      await tester.pumpWidget(MaterialApp(
+        home: RoutesScreen(
+          apiClient: null,
+          routeStore: routeStore,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+
+      await tester.longPress(find.text('Route 0'));
+      await tester.pump();
+      expect(find.text('1 selected'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.close));
+      await tester.pump();
+
+      expect(find.textContaining(' selected'), findsNothing);
+    });
+
+    testWidgets(
+        'Delete button shows a pluralised confirm dialog; Cancel keeps the rows',
+        (tester) async {
+      // We exercise the UI plumbing through the dialog. The actual
+      // disk-write path of `routeStore.deleteMany` is covered by the
+      // local_route_store_test suite; mixing the two here forces us
+      // to drive the showTopBanner Timer + dialog dismiss animation
+      // which the flutter_test runner can't drain cleanly with a
+      // ChangeNotifier overlay + ScaffoldMessenger banner stacked on
+      // top. The Cancel branch covers the UI contract; the Confirm
+      // branch is exercised via the store-level deleteMany tests.
+      final prefs = await _makePrefs();
+      // ignore: invalid_use_of_visible_for_testing_member
+      final routeStore = LocalRouteStore()
+        // ignore: invalid_use_of_visible_for_testing_member
+        ..debugSeed(_makeRoutes(3));
+      await tester.pumpWidget(MaterialApp(
+        home: RoutesScreen(
+          apiClient: null,
+          routeStore: routeStore,
+          preferences: prefs,
+        ),
+      ));
+      await tester.pump();
+
+      await tester.longPress(find.text('Route 0'));
+      await tester.pump();
+      await tester.tap(find.text('Route 1'));
+      await tester.pump();
+      expect(find.text('2 selected'), findsOneWidget);
+
+      await tester.tap(find.byIcon(Icons.delete_outline));
+      await tester.pump();
+
+      // Confirm dialog title — pluralised against the selection count.
+      expect(find.text('Delete 2 routes?'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // Cancel keeps everything in the store and exits the dialog.
+      expect(routeStore.routes, hasLength(3));
+      expect(find.text('Delete 2 routes?'), findsNothing);
     });
   });
 }

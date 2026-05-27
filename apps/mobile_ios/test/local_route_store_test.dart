@@ -246,6 +246,65 @@ void main() {
     });
   });
 
+  group('deleteMany', () {
+    test('removes every file from disk and from the in-memory list',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'a'));
+      await store.save(makeRoute(id: 'b'));
+      await store.save(makeRoute(id: 'c'));
+
+      await store.deleteMany({'a', 'c'});
+
+      expect(store.routes.map((r) => r.id).toList(), ['b']);
+      expect(File('${tempDir.path}/a.json').existsSync(), isFalse);
+      expect(File('${tempDir.path}/b.json').existsSync(), isTrue);
+      expect(File('${tempDir.path}/c.json').existsSync(), isFalse);
+    });
+
+    test('coalesces into a single notify call — no per-row flicker',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'a'));
+      await store.save(makeRoute(id: 'b'));
+      await store.save(makeRoute(id: 'c'));
+      var calls = 0;
+      store.addListener(() => calls++);
+
+      await store.deleteMany({'a', 'b', 'c'});
+
+      expect(calls, 1,
+          reason:
+              'deleteMany must batch notifications so the list does not flicker through N intermediate states.');
+    });
+
+    test('empty input is a no-op (no notify, no file work)', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'a'));
+      var calls = 0;
+      store.addListener(() => calls++);
+
+      await store.deleteMany(const <String>{});
+
+      expect(calls, 0);
+      expect(store.routes.map((r) => r.id).toList(), ['a']);
+    });
+
+    test('idempotent on already-deleted ids', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'a'));
+
+      await store.deleteMany({'never-existed', 'a'});
+
+      expect(store.routes, isEmpty);
+      expect(File('${tempDir.path}/a.json').existsSync(), isFalse);
+    });
+  });
+
   group('routes getter', () {
     test('returns an unmodifiable view — caller cannot mutate internal list',
         () async {
