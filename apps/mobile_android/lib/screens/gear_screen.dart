@@ -17,7 +17,10 @@ import '../widgets/top_banner.dart';
 /// which mirrors them to the server when online and queues them for
 /// the next drain when not.
 class GearScreen extends StatefulWidget {
-  final ApiClient api;
+  /// Optional. When null (no Supabase env vars OR user is signed-out),
+  /// the screen reads + writes exclusively to [LocalGearStore]; the
+  /// pending queue drains on the next mount that does have an api.
+  final ApiClient? api;
   final Preferences preferences;
   final LocalGearStore store;
 
@@ -55,12 +58,19 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Future<void> _refresh() async {
+    final api = widget.api;
+    if (api == null || api.userId == null) {
+      // No api or signed-out — rely on whatever the local store holds.
+      // The pending queue stays put for the next mount that has an api.
+      if (mounted) setState(() => _isOnline = false);
+      return;
+    }
     setState(() => _refreshing = true);
     try {
-      final fresh = await widget.api.fetchMyGearWithDistance();
+      final fresh = await api.fetchMyGearWithDistance();
       await widget.store.replaceFromServer(fresh);
       if (widget.store.hasPending) {
-        await widget.store.syncWithServer(widget.api);
+        await widget.store.syncWithServer(api);
       }
       _isOnline = true;
     } catch (e) {
@@ -78,6 +88,12 @@ class _GearScreenState extends State<GearScreen> {
   List<Map<String, dynamic>> get _retired =>
       _visible.where((r) => r['retired_at'] != null).toList();
 
+  Future<void> _maybeSync() async {
+    final api = widget.api;
+    if (api == null || !_isOnline) return;
+    await widget.store.syncWithServer(api);
+  }
+
   Future<void> _create() async {
     final created = await showGearFormSheet(
       context: context,
@@ -85,9 +101,7 @@ class _GearScreenState extends State<GearScreen> {
       preferences: widget.preferences,
       kind: _activeKind,
     );
-    if (created == true && _isOnline) {
-      await widget.store.syncWithServer(widget.api);
-    }
+    if (created == true) await _maybeSync();
   }
 
   Future<void> _edit(Map<String, dynamic> row) async {
@@ -98,9 +112,7 @@ class _GearScreenState extends State<GearScreen> {
       kind: row['kind'] as String,
       existing: row,
     );
-    if (edited == true && _isOnline) {
-      await widget.store.syncWithServer(widget.api);
-    }
+    if (edited == true) await _maybeSync();
   }
 
   Future<void> _retire(Map<String, dynamic> row) async {
@@ -109,7 +121,7 @@ class _GearScreenState extends State<GearScreen> {
     } else {
       await widget.store.unretireLocal(row['id'] as String);
     }
-    if (_isOnline) await widget.store.syncWithServer(widget.api);
+    await _maybeSync();
   }
 
   Future<void> _delete(Map<String, dynamic> row) async {
@@ -137,7 +149,7 @@ class _GearScreenState extends State<GearScreen> {
         false;
     if (!ok) return;
     await widget.store.deleteLocal(row['id'] as String);
-    if (_isOnline) await widget.store.syncWithServer(widget.api);
+    await _maybeSync();
     if (mounted && !_isOnline) {
       showTopBanner(
         context,

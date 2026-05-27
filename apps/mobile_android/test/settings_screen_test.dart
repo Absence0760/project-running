@@ -87,12 +87,13 @@ void main() {
       }
     });
 
-    testWidgets('Devices + Gear tiles surface a sign-in subtitle when signed-out',
+    testWidgets('Devices tile surfaces a sign-in subtitle when signed-out',
         (tester) async {
-      // No longer disabled — the tile is tappable and routes through
-      // SignInScreen first so the user has a path forward. The subtitle
-      // tells them sign-in is needed. Pre-fix the tile was greyed-out
-      // with no affordance.
+      // Devices is server-only (user_device_settings table); the tile
+      // stays tappable but the subtitle tells the user sign-in is
+      // needed. Gear, by contrast, now works fully offline via
+      // LocalGearStore, so its subtitle stays neutral regardless of
+      // sign-in state.
       final s = await _makeStores();
       await _pump(tester, prefs: s.prefs, heartRate: s.heartRate);
       final devices = tester.widget<ListTile>(find.ancestor(
@@ -108,7 +109,10 @@ void main() {
       expect(gear.onTap, isNotNull,
           reason: 'Gear tile must stay tappable when signed-out');
       expect(find.text('Sign in to manage your devices'), findsOneWidget);
-      expect(find.text('Sign in to track shoes and bikes'), findsOneWidget);
+      expect(find.text('Track shoes + bikes and per-item mileage'),
+          findsOneWidget,
+          reason:
+              'Gear is offline-capable now — no sign-in copy on the tile.');
     });
 
     testWidgets('Account tile pushes SettingsAccountScreen', (tester) async {

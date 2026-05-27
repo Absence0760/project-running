@@ -139,14 +139,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
             _tab(
               icon: Icons.directions_run,
               label: 'Gear',
-              subtitle: signedIn
-                  ? 'Track shoes + bikes and per-item mileage'
-                  : 'Sign in to track shoes and bikes',
+              subtitle: 'Track shoes + bikes and per-item mileage',
               onTap: () {
                 final gearStore = widget.gearStore;
                 if (gearStore == null) return;
-                _openAfterSignIn((_) => GearScreen(
-                      api: widget.apiClient!,
+                _open((_) => GearScreen(
+                      api: widget.apiClient,
                       preferences: widget.preferences,
                       store: gearStore,
                     ));
