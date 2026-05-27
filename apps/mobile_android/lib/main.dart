@@ -14,6 +14,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import 'audio_cues.dart';
 import 'background_sync.dart';
+import 'in_progress_recovery.dart';
 import 'local_gear_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
@@ -174,35 +175,20 @@ void main() async {
   // instead of requiring GPS waypoints — a treadmill session that crashed
   // after 10 minutes shouldn't evaporate just because there are no fixes.
   cm.Run? recoveredRun;
+  // Persona-hunt Casual #3: surface a one-time banner when a partial
+  // is recovered OR discarded, so a "the app ate my run" suspicion
+  // becomes "the app noticed and dropped a 38 m partial". Null when
+  // nothing happened.
+  String? recoveryBannerMessage;
   try {
     final partial = await store.loadInProgress();
-    final indoorEstimated =
-        partial?.metadata?['indoor_estimated'] == true;
-    final hasEnoughGps = partial != null &&
-        partial.track.length >= 3 &&
-        partial.distanceMetres >= 50;
-    final hasEnoughIndoor = partial != null &&
-        indoorEstimated &&
-        partial.duration.inSeconds >= 60;
-    if (hasEnoughGps || hasEnoughIndoor) {
-      final metadata = Map<String, dynamic>.from(partial.metadata ?? {});
-      metadata['recovered_from_crash'] = true;
-      final recovered = cm.Run(
-        id: partial.id,
-        startedAt: partial.startedAt,
-        duration: partial.duration,
-        distanceMetres: partial.distanceMetres,
-        track: partial.track,
-        routeId: partial.routeId,
-        source: partial.source,
-        externalId: partial.externalId,
-        metadata: metadata,
-        createdAt: partial.createdAt,
-      );
-      await store.save(recovered);
-      recoveredRun = recovered;
+    final evaluation = evaluateInProgressPartial(partial);
+    if (evaluation.outcome == InProgressOutcome.recovered) {
+      await store.save(evaluation.recovered!);
+      recoveredRun = evaluation.recovered;
     }
-    await store.clearInProgress();
+    recoveryBannerMessage = evaluation.bannerMessage;
+    if (partial != null) await store.clearInProgress();
   } catch (e) {
     debugPrint('In-progress recovery failed: $e');
   }
@@ -418,6 +404,7 @@ void main() async {
       training: training,
       heartRate: heartRate,
       recoveredRun: recoveredRun,
+      recoveryBannerMessage: recoveryBannerMessage,
     ));
   }
 

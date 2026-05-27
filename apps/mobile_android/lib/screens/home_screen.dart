@@ -35,6 +35,13 @@ class HomeScreen extends StatefulWidget {
   final SettingsSyncService? settingsSync;
   final cm.Run? recoveredRun;
 
+  /// Banner copy emitted by the in-progress recovery helper at app
+  /// start. Surfaced once on the first build of the Home tab. Covers
+  /// both "Recovered a 2.3 km partial..." and the new
+  /// "Discarded a 38 m partial recording..." case (Casual #3). Null
+  /// when the recovery pass had nothing to say.
+  final String? recoveryBannerMessage;
+
   const HomeScreen({
     super.key,
     this.apiClient,
@@ -49,6 +56,7 @@ class HomeScreen extends StatefulWidget {
     required this.heartRate,
     this.settingsSync,
     this.recoveredRun,
+    this.recoveryBannerMessage,
   });
 
   @override
@@ -79,15 +87,18 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _rebuildPages();
     pendingStartWorkout.addListener(_onPendingStartWorkout);
-    final recovered = widget.recoveredRun;
-    if (recovered != null) {
+    // Surface the recovery banner from main.dart's in-progress
+    // evaluation. Casual #3: this also fires on DISCARD ("Discarded a
+    // 38 m partial recording...") — pre-fix that path was silent and
+    // a casual user couldn't tell whether the app saw + dropped their
+    // tap-Start-then-quit attempt or just lost the run entirely.
+    final bannerMessage = widget.recoveryBannerMessage;
+    if (bannerMessage != null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         showTopBanner(
           context,
-          'Recovered unfinished run — '
-          '${UnitFormat.distance(recovered.distanceMetres, widget.preferences.unit)}, '
-          '${recovered.duration.inMinutes} min',
+          bannerMessage,
           duration: const Duration(seconds: 6),
         );
       });
