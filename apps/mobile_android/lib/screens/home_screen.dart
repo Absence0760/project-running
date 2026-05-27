@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart' as cm;
 
 import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
+import '../local_gear_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../main.dart' show pendingStartWorkout;
@@ -24,6 +25,7 @@ class HomeScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
+  final LocalGearStore gearStore;
   final Preferences preferences;
   final AudioCues audioCues;
   final SocialService social;
@@ -38,6 +40,7 @@ class HomeScreen extends StatefulWidget {
     this.apiClient,
     required this.runStore,
     required this.routeStore,
+    required this.gearStore,
     required this.preferences,
     required this.audioCues,
     required this.social,
@@ -175,6 +178,7 @@ class _HomeScreenState extends State<HomeScreen> {
           preferences: widget.preferences,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
+          gearStore: widget.gearStore,
           heartRate: widget.heartRate,
           settingsSync: widget.settingsSync,
         ),

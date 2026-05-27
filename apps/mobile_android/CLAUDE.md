@@ -100,6 +100,7 @@ Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specif
 - `run_notification_bridge.dart` — replaces geolocator's "Run in progress" foreground-service notification with live time/distance/pace (native `RunNotificationBridge.kt` reposts on the same channel id so the lock-screen row is live instead of static)
 - `background_sync.dart` — WorkManager periodic background sync (hourly, network-connected)
 - `local_run_store.dart` / `local_route_store.dart` — `ChangeNotifier`-style on-disk stores
+- `local_gear_store.dart` — `ChangeNotifier`-style on-disk gear store. Mirrors `LocalRunStore`'s pattern: one JSON file per row at `<appDocs>/gear/<id>.json`, in-memory cache, full CRUD that works offline. Each row carries a `GearSyncState` (`synced` / `pendingCreate` / `pendingUpdate` / `pendingDelete`); `syncWithServer(api)` drains every non-synced row in create → update → delete order and is a no-op on a clean store. Offline-create uses a client-minted v4 UUID that becomes the server id on the eventual INSERT, so no temp-id reconciliation is needed. See [decisions.md § 73](../../docs/decisions.md#73) for the rationale.
 - `preferences.dart` — SharedPreferences wrapper for settings
 - `tile_cache.dart` — disk-backed map tile cache glue
 - `audio_cues.dart` — TTS for splits and pace alerts. Pace alerts are paired with a `HapticFeedback.heavyImpact()` pulse in `run_screen.dart` (two pulses for "speed up", one for "slow down") so the cue registers with headphones paused

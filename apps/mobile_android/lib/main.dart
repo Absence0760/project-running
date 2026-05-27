@@ -14,6 +14,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import 'audio_cues.dart';
 import 'background_sync.dart';
+import 'local_gear_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
@@ -121,6 +122,7 @@ void main() async {
   // just paying plugin-channel round-trip latency N times for no reason.
   final store = LocalRunStore();
   final routeStore = LocalRouteStore();
+  final gearStore = LocalGearStore();
   final prefs = Preferences();
   final watchQueue = WatchIngestQueue();
 
@@ -138,6 +140,7 @@ void main() async {
     TileCache.init(),
     store.init(),
     routeStore.init(),
+    gearStore.init(),
     prefs.init(),
     watchQueue.init(),
     if (hasSupabase)
@@ -405,6 +408,7 @@ void main() async {
       apiClient: api,
       runStore: store,
       routeStore: routeStore,
+      gearStore: gearStore,
       preferences: prefs,
       audioCues: audioCues,
       syncService: syncService,
@@ -471,6 +475,7 @@ class RunApp extends StatefulWidget {
   final ApiClient? apiClient;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
+  final LocalGearStore gearStore;
   final Preferences preferences;
   final AudioCues audioCues;
   final SyncService syncService;
@@ -485,6 +490,7 @@ class RunApp extends StatefulWidget {
     this.apiClient,
     required this.runStore,
     required this.routeStore,
+    required this.gearStore,
     required this.preferences,
     required this.audioCues,
     required this.syncService,
@@ -516,6 +522,7 @@ class _RunAppState extends State<RunApp> {
                   apiClient: widget.apiClient,
                   runStore: widget.runStore,
                   routeStore: widget.routeStore,
+                  gearStore: widget.gearStore,
                   preferences: widget.preferences,
                   audioCues: widget.audioCues,
                   social: widget.social,

@@ -1562,6 +1562,33 @@ Pinning tests: `packages/api_client/test/settings_cache_test.dart` (contract for
 
 ---
 
+## 73. Gear has a `LocalGearStore` mirroring `LocalRunStore`; client-minted UUIDs sidestep temp-id reconciliation
+
+Settings → Gear was the last bag-backed surface on mobile that required a live network round-trip for both reads and writes. A signed-in user on an airplane saw "Failed to load gear: …" and lost every CRUD path. The fix mirrors the long-standing `LocalRunStore` pattern.
+
+**Decision:** `LocalGearStore` (`apps/mobile_*/lib/local_gear_store.dart`) is a disk-backed `ChangeNotifier` that holds the `gear_with_distance` rows + a per-row `GearSyncState`. `GearScreen` reads + writes through the store; a best-effort `replaceFromServer` overlays the latest mileage when online; `syncWithServer(api)` drains pending rows in create → update → delete order. Offline-created rows use a client-minted v4 UUID that becomes the server id on the eventual `INSERT` — so no temp-id reconciliation pass is needed (the `gear.id` column defaults to `gen_random_uuid()` but accepts client values).
+
+Sync-state rules:
+
+- `pendingCreate` on a fresh local row; preserved across subsequent `updateLocal` calls so the next sync replays the full INSERT with the merged values.
+- `pendingUpdate` on a synced row that's been edited locally; the next sync sends a PATCH.
+- `pendingDelete` is a tombstone: synced rows stay in the in-memory map (excluded from `rows`) until the next sync issues the server DELETE, then the file is dropped. A `pendingCreate` row that's deleted locally vanishes immediately — no tombstone, since the server never saw it.
+
+Trade-offs:
+
+- **Mileage is stale offline.** `total_distance_m` comes from the `gear_with_distance` view, which joins on `runs`. Offline edits to a run aren't reflected in the cached gear mileage; the value refreshes on the next online `replaceFromServer`. Acceptable because mileage drift is bounded by "how recent was your last sync" and the same constraint applies on the web `/settings/gear` view (which makes no offline pretence at all).
+- **Cross-device editing during an offline window has last-write-wins semantics.** If User A retires a shoe on phone, and offline-User-A-on-tablet renames the same shoe, the next sync from tablet sends a PATCH that overwrites the retire stamp with `retired_at=null`. The same pattern exists for `LocalRunStore` edits; addressing it would need per-row vector clocks. Out of scope.
+- **Gear cache persists across sign-out** (no `dropUser` hook today). On a shared device, User B signing in sees an empty server fetch and `replaceFromServer` drops every `synced` row — but a `pendingCreate` row from User A would survive and try to sync under B's account. Mitigation: the same `created_by_user_id` ownership tag pattern from `LocalRunStore` (decisions §67) should be added in a follow-up; for now `LocalGearStore` is best-effort offline and assumes a single-user device.
+
+Don't re-litigate by:
+
+- Adding a "Sync gear now" button. The on-mount `replaceFromServer` + drain is automatic; an explicit button would surface a UI state that doesn't exist for runs.
+- Reaching for a temp-id table or remapping layer. The `gen_random_uuid()` default on `gear.id` was the load-bearing choice — pinning a client-minted UUID at create time avoids the whole problem.
+
+Pinning tests: `apps/mobile_android/test/local_gear_store_test.dart` covers create → update → retire → delete lifecycle, drain semantics, and reload-after-restart.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

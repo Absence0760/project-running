@@ -1,53 +1,78 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../local_gear_store.dart';
 import '../preferences.dart';
 import '../widgets/gear_form_sheet.dart';
 import '../widgets/top_banner.dart';
 
 /// Settings → Gear: per-user inventory of shoes and bikes plus the
 /// rolled-up total mileage each item has accrued via assigned runs.
-/// Mirrors `apps/web/src/routes/settings/gear/+page.svelte` — same
-/// shape (sub-tabs by kind, active/retired sections, modal for
-/// create + edit), same retirement-target math.
+///
+/// Reads + writes route through [LocalGearStore] so the screen stays
+/// usable offline. On mount the store hydrates from disk (so previously-
+/// loaded gear renders immediately on a cold offline start); a best-
+/// effort server fetch overlays the latest mileage. Mutations
+/// (create / edit / retire / unretire / delete) hit the store first,
+/// which mirrors them to the server when online and queues them for
+/// the next drain when not.
 class GearScreen extends StatefulWidget {
   final ApiClient api;
   final Preferences preferences;
-  const GearScreen({super.key, required this.api, required this.preferences});
+  final LocalGearStore store;
+
+  const GearScreen({
+    super.key,
+    required this.api,
+    required this.preferences,
+    required this.store,
+  });
 
   @override
   State<GearScreen> createState() => _GearScreenState();
 }
 
 class _GearScreenState extends State<GearScreen> {
-  List<Map<String, dynamic>> _rows = const [];
-  bool _loading = true;
+  bool _refreshing = false;
+  bool _isOnline = true;
   String _activeKind = 'shoe';
 
   @override
   void initState() {
     super.initState();
-    _load();
+    widget.store.addListener(_onStoreChange);
+    _refresh();
   }
 
-  Future<void> _load() async {
-    setState(() => _loading = true);
+  @override
+  void dispose() {
+    widget.store.removeListener(_onStoreChange);
+    super.dispose();
+  }
+
+  void _onStoreChange() {
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _refresh() async {
+    setState(() => _refreshing = true);
     try {
-      final rows = await widget.api.fetchMyGearWithDistance();
-      if (!mounted) return;
-      setState(() {
-        _rows = rows;
-        _loading = false;
-      });
+      final fresh = await widget.api.fetchMyGearWithDistance();
+      await widget.store.replaceFromServer(fresh);
+      if (widget.store.hasPending) {
+        await widget.store.syncWithServer(widget.api);
+      }
+      _isOnline = true;
     } catch (e) {
-      if (!mounted) return;
-      setState(() => _loading = false);
-      showTopBanner(context, 'Failed to load gear: $e');
+      _isOnline = false;
+      debugPrint('gear_screen: refresh failed, using cache: $e');
+    } finally {
+      if (mounted) setState(() => _refreshing = false);
     }
   }
 
   List<Map<String, dynamic>> get _visible =>
-      _rows.where((r) => r['kind'] == _activeKind).toList();
+      widget.store.rows.where((r) => r['kind'] == _activeKind).toList();
   List<Map<String, dynamic>> get _active =>
       _visible.where((r) => r['retired_at'] == null).toList();
   List<Map<String, dynamic>> get _retired =>
@@ -56,35 +81,35 @@ class _GearScreenState extends State<GearScreen> {
   Future<void> _create() async {
     final created = await showGearFormSheet(
       context: context,
-      api: widget.api,
+      store: widget.store,
       preferences: widget.preferences,
       kind: _activeKind,
     );
-    if (created == true) _load();
+    if (created == true && _isOnline) {
+      await widget.store.syncWithServer(widget.api);
+    }
   }
 
   Future<void> _edit(Map<String, dynamic> row) async {
     final edited = await showGearFormSheet(
       context: context,
-      api: widget.api,
+      store: widget.store,
       preferences: widget.preferences,
       kind: row['kind'] as String,
       existing: row,
     );
-    if (edited == true) _load();
+    if (edited == true && _isOnline) {
+      await widget.store.syncWithServer(widget.api);
+    }
   }
 
   Future<void> _retire(Map<String, dynamic> row) async {
-    try {
-      if (row['retired_at'] == null) {
-        await widget.api.retireGear(row['id'] as String);
-      } else {
-        await widget.api.unretireGear(row['id'] as String);
-      }
-      await _load();
-    } catch (e) {
-      if (mounted) showTopBanner(context, 'Failed: $e');
+    if (row['retired_at'] == null) {
+      await widget.store.retireLocal(row['id'] as String);
+    } else {
+      await widget.store.unretireLocal(row['id'] as String);
     }
+    if (_isOnline) await widget.store.syncWithServer(widget.api);
   }
 
   Future<void> _delete(Map<String, dynamic> row) async {
@@ -111,11 +136,13 @@ class _GearScreenState extends State<GearScreen> {
         ) ??
         false;
     if (!ok) return;
-    try {
-      await widget.api.deleteGear(row['id'] as String);
-      await _load();
-    } catch (e) {
-      if (mounted) showTopBanner(context, 'Delete failed: $e');
+    await widget.store.deleteLocal(row['id'] as String);
+    if (_isOnline) await widget.store.syncWithServer(widget.api);
+    if (mounted && !_isOnline) {
+      showTopBanner(
+        context,
+        'Deleted locally — will sync when you reconnect.',
+      );
     }
   }
 
@@ -139,6 +166,12 @@ class _GearScreenState extends State<GearScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final pendingCount = widget.store.hasPending
+        ? widget.store.rows.length -
+            widget.store.rows
+                .where((r) => r['id'] != null && !widget.store.hasPending)
+                .length
+        : 0;
     return Scaffold(
       appBar: AppBar(
         title: const Text('Gear'),
@@ -146,12 +179,32 @@ class _GearScreenState extends State<GearScreen> {
           IconButton(
             tooltip: 'Add gear',
             icon: const Icon(Icons.add),
-            onPressed: _loading ? null : _create,
+            onPressed: _refreshing ? null : _create,
           ),
         ],
       ),
       body: Column(
         children: [
+          if (!_isOnline)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              color: theme.colorScheme.surfaceContainerHigh,
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_off_outlined, size: 16),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      widget.store.hasPending
+                          ? 'Offline — ${pendingCount > 0 ? "$pendingCount edit${pendingCount == 1 ? "" : "s"} queued, " : ""}showing cached gear.'
+                          : 'Offline — showing cached gear.',
+                      style: theme.textTheme.bodySmall,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SegmentedButton<String>(
@@ -172,29 +225,30 @@ class _GearScreenState extends State<GearScreen> {
             ),
           ),
           Expanded(
-            child: _loading
-                ? const Center(child: CircularProgressIndicator())
-                : _visible.isEmpty
-                    ? _emptyState(theme)
-                    : ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          for (final row in _active) _gearTile(row, theme),
-                          if (_retired.isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Text(
-                              'RETIRED',
-                              style: theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.outline,
-                                letterSpacing: 1.1,
-                              ),
+            child: RefreshIndicator(
+              onRefresh: _refresh,
+              child: _visible.isEmpty
+                  ? _emptyState(theme)
+                  : ListView(
+                      padding: const EdgeInsets.all(16),
+                      children: [
+                        for (final row in _active) _gearTile(row, theme),
+                        if (_retired.isNotEmpty) ...[
+                          const SizedBox(height: 16),
+                          Text(
+                            'RETIRED',
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: theme.colorScheme.outline,
+                              letterSpacing: 1.1,
                             ),
-                            const SizedBox(height: 8),
-                            for (final row in _retired)
-                              Opacity(opacity: 0.65, child: _gearTile(row, theme)),
-                          ],
+                          ),
+                          const SizedBox(height: 8),
+                          for (final row in _retired)
+                            Opacity(opacity: 0.65, child: _gearTile(row, theme)),
                         ],
-                      ),
+                      ],
+                    ),
+            ),
           ),
         ],
       ),
@@ -202,37 +256,44 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Widget _emptyState(ThemeData theme) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            _activeKind == 'shoe'
-                ? Icons.directions_run
-                : Icons.directions_bike,
-            size: 64,
-            color: theme.colorScheme.outline,
-          ),
-          const SizedBox(height: 12),
-          Text(
-            'No ${_activeKind == 'shoe' ? 'shoes' : 'bikes'} yet',
-            style: theme.textTheme.titleMedium,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Add a pair to track mileage and get retirement reminders.',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.outline,
+    return ListView(
+      children: [
+        SizedBox(
+          height: MediaQuery.of(context).size.height * 0.6,
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(
+                  _activeKind == 'shoe'
+                      ? Icons.directions_run
+                      : Icons.directions_bike,
+                  size: 64,
+                  color: theme.colorScheme.outline,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No ${_activeKind == 'shoe' ? 'shoes' : 'bikes'} yet',
+                  style: theme.textTheme.titleMedium,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Add a pair to track mileage and get retirement reminders.',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: theme.colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                FilledButton.icon(
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add gear'),
+                  onPressed: _create,
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 16),
-          FilledButton.icon(
-            icon: const Icon(Icons.add),
-            label: const Text('Add gear'),
-            onPressed: _create,
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -243,7 +304,8 @@ class _GearScreenState extends State<GearScreen> {
     final model = row['model'] as String?;
     final runCount = (row['run_count'] as num?)?.toInt() ?? 0;
     final hasTarget = (row['target_distance_m'] as num?) != null;
-    final brandModel = [brand, model].where((s) => s != null && s.isNotEmpty).join(' ');
+    final brandModel =
+        [brand, model].where((s) => s != null && s.isNotEmpty).join(' ');
     return Card(
       child: InkWell(
         onTap: () => _edit(row),
@@ -293,7 +355,8 @@ class _GearScreenState extends State<GearScreen> {
                 itemBuilder: (_) => [
                   PopupMenuItem(
                     value: 'retire',
-                    child: Text(row['retired_at'] == null ? 'Retire' : 'Restore'),
+                    child:
+                        Text(row['retired_at'] == null ? 'Retire' : 'Restore'),
                   ),
                   const PopupMenuItem(value: 'delete', child: Text('Delete')),
                 ],

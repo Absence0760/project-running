@@ -2047,9 +2047,16 @@ class ApiClient {
   }
 
   /// Insert a new gear row and return the persisted shape.
+  ///
+  /// When [id] is supplied (offline-create path), the client mints a v4
+  /// UUID, persists it to [LocalGearStore], then replays the INSERT on
+  /// the same id once online. The id column on `gear` defaults to
+  /// `gen_random_uuid()` but accepts client-minted values — no temp-id
+  /// reconciliation needed since the local id IS the server id.
   Future<GearRow> createGear({
     required String kind,
     required String name,
+    String? id,
     String? brand,
     String? model,
     DateTime? purchasedAt,
@@ -2061,6 +2068,7 @@ class ApiClient {
     final row = await _client
         .from(GearRow.table)
         .insert({
+          if (id != null) GearRow.colId: id,
           GearRow.colOwnerId: viewerId,
           GearRow.colKind: kind,
           GearRow.colName: name,

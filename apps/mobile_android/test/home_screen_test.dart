@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/audio_cues.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/local_gear_store.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -18,6 +19,7 @@ late Directory _runsDir;
 Future<({
   LocalRunStore runStore,
   LocalRouteStore routeStore,
+  LocalGearStore gearStore,
   Preferences prefs,
   SocialService social,
   TrainingService training,
@@ -34,6 +36,10 @@ Future<({
   await runStore.init(overrideDirectory: _runsDir);
 
   final routeStore = LocalRouteStore();
+  final gearStore = LocalGearStore();
+  await gearStore.init(
+      overrideDirectory:
+          Directory.systemTemp.createTempSync('gear_store_test_'));
   final social = SocialService();
   final training = TrainingService();
   final heartRate = BleHeartRate();
@@ -43,6 +49,7 @@ Future<({
   return (
     runStore: runStore,
     routeStore: routeStore,
+    gearStore: gearStore,
     prefs: prefs,
     social: social,
     training: training,
@@ -59,6 +66,7 @@ Future<void> _pump(WidgetTester tester, dynamic s) async {
         apiClient: null,
         runStore: s.runStore,
         routeStore: s.routeStore,
+        gearStore: s.gearStore,
         preferences: s.prefs,
         audioCues: s.audioCues,
         social: s.social,

@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../ble_heart_rate.dart';
+import '../local_gear_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -21,6 +22,7 @@ class SettingsScreen extends StatefulWidget {
   final Preferences preferences;
   final LocalRunStore? runStore;
   final LocalRouteStore? routeStore;
+  final LocalGearStore? gearStore;
   final BleHeartRate heartRate;
   final SettingsSyncService? settingsSync;
 
@@ -31,6 +33,7 @@ class SettingsScreen extends StatefulWidget {
     required this.heartRate,
     this.runStore,
     this.routeStore,
+    this.gearStore,
     this.settingsSync,
   });
 
@@ -140,10 +143,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: signedIn
                   ? 'Track shoes + bikes and per-item mileage'
                   : 'Sign in to track shoes and bikes',
-              onTap: () => _openAfterSignIn((_) => GearScreen(
-                    api: widget.apiClient!,
-                    preferences: widget.preferences,
-                  )),
+              onTap: () {
+                final gearStore = widget.gearStore;
+                if (gearStore == null) return;
+                _openAfterSignIn((_) => GearScreen(
+                      api: widget.apiClient!,
+                      preferences: widget.preferences,
+                      store: gearStore,
+                    ));
+              },
             ),
             const _SectionHeader('Account & legal'),
             _tab(

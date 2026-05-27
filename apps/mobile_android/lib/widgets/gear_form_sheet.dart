@@ -1,18 +1,20 @@
-import 'package:api_client/api_client.dart';
-import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../local_gear_store.dart';
 import '../preferences.dart';
 import 'top_banner.dart';
 
-/// Modal bottom sheet for creating or editing a [GearRow]. Returns
+/// Modal bottom sheet for creating or editing a gear row. Returns
 /// `true` from [showGearFormSheet] when the user saves (so the
-/// caller can refetch); `null` / `false` on cancel. Mirrors the web
+/// caller can refresh); `null` / `false` on cancel. Mirrors the web
 /// `+page.svelte` form on /settings/gear — same fields, same
 /// unit-aware retirement-target input.
+///
+/// Writes go through [LocalGearStore] so offline edits are persisted
+/// + queued for the next server drain.
 Future<bool?> showGearFormSheet({
   required BuildContext context,
-  required ApiClient api,
+  required LocalGearStore store,
   required Preferences preferences,
   required String kind,
   Map<String, dynamic>? existing,
@@ -22,7 +24,7 @@ Future<bool?> showGearFormSheet({
     isScrollControlled: true,
     useSafeArea: true,
     builder: (_) => _GearFormSheet(
-      api: api,
+      store: store,
       preferences: preferences,
       kind: kind,
       existing: existing,
@@ -31,12 +33,12 @@ Future<bool?> showGearFormSheet({
 }
 
 class _GearFormSheet extends StatefulWidget {
-  final ApiClient api;
+  final LocalGearStore store;
   final Preferences preferences;
   final String kind;
   final Map<String, dynamic>? existing;
   const _GearFormSheet({
-    required this.api,
+    required this.store,
     required this.preferences,
     required this.kind,
     this.existing,
@@ -110,25 +112,28 @@ class _GearFormSheetState extends State<_GearFormSheet> {
     if (name.isEmpty) return;
     setState(() => _saving = true);
     try {
+      final brand = _brand.text.trim();
+      final model = _model.text.trim();
+      final notes = _notes.text.trim();
       if (widget.existing != null) {
-        await widget.api.updateGear(
-          widget.existing!['id'] as String,
-          name: name,
-          brand: _brand.text.trim(),
-          model: _model.text.trim(),
-          purchasedAt: _purchasedAt,
-          targetDistanceM: _parseTargetMetres(),
-          notes: _notes.text.trim(),
-        );
+        await widget.store.updateLocal(widget.existing!['id'] as String, {
+          'name': name,
+          'brand': brand.isEmpty ? null : brand,
+          'model': model.isEmpty ? null : model,
+          'purchased_at':
+              _purchasedAt?.toIso8601String().substring(0, 10),
+          'target_distance_m': _parseTargetMetres(),
+          'notes': notes.isEmpty ? null : notes,
+        });
       } else {
-        await widget.api.createGear(
+        await widget.store.createLocal(
           kind: widget.kind,
           name: name,
-          brand: _brand.text.trim().isEmpty ? null : _brand.text.trim(),
-          model: _model.text.trim().isEmpty ? null : _model.text.trim(),
+          brand: brand.isEmpty ? null : brand,
+          model: model.isEmpty ? null : model,
           purchasedAt: _purchasedAt,
           targetDistanceM: _parseTargetMetres(),
-          notes: _notes.text.trim().isEmpty ? null : _notes.text.trim(),
+          notes: notes.isEmpty ? null : notes,
         );
       }
       if (!mounted) return;
