@@ -106,8 +106,22 @@
 
 	/// Bookmark a public route — inserts a `saved_routes` reference,
 	/// not a private clone (decisions.md § 30). Tap again to unbookmark.
+	///
+	/// Persona-hunt Round 2 finding Casual #4: pre-fix two rapid
+	/// taps both read `savedIds.has(route.id) === false` (the first
+	/// call's await hadn't yet updated savedIds), each fired
+	/// bookmarkRoute, the second was silently 23505-deduped, then a
+	/// third tap actually un-bookmarked — net result was a save the
+	/// user wanted, an un-bookmark they didn't, and a "Removed from
+	/// your library" toast they didn't expect. The `bookmarkBusy` Set
+	/// guard matches the SocialFeed.svelte / RunSocial.svelte kudos
+	/// guards.
+	let bookmarkBusy = $state(new Set<string>());
+
 	async function toggleBookmark(route: Route) {
 		if (!auth.loggedIn) return;
+		if (bookmarkBusy.has(route.id)) return;
+		bookmarkBusy = new Set([...bookmarkBusy, route.id]);
 		const isSaved = savedIds.has(route.id);
 		try {
 			if (isSaved) {
@@ -123,6 +137,10 @@
 			}
 		} catch (e) {
 			showToast(`Could not update bookmark: ${e}`, 'error');
+		} finally {
+			const next = new Set(bookmarkBusy);
+			next.delete(route.id);
+			bookmarkBusy = next;
 		}
 	}
 
@@ -350,6 +368,7 @@
 							class="save-btn"
 							class:saved={savedIds.has(route.id)}
 							onclick={() => toggleBookmark(route)}
+							disabled={bookmarkBusy.has(route.id)}
 							title={savedIds.has(route.id) ? 'Remove from your library' : 'Save to your library'}
 						>
 							<span class="material-symbols">{savedIds.has(route.id) ? 'bookmark' : 'bookmark_add'}</span>
