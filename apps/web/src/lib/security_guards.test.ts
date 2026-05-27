@@ -2107,3 +2107,36 @@ test('backup restore strips server-managed profile fields', () => {
 		}
 	}
 });
+
+// Persona-hunt Round 2 finding Casual #1: the /auth/reset page used
+// to leave the recovery session live if the user closed the tab
+// without typing a new password. supabase-js consumes the
+// `#access_token` from the URL on page load + mints a session before
+// the user touches the form. On a shared / library / family laptop
+// the next person navigating to / could land in /dashboard signed
+// in as the victim. Fix: sign out on unmount + beforeunload IF the
+// password wasn't changed. Pinned via source-grep so a future
+// refactor of the reset page that drops the cleanup surfaces here.
+test('/auth/reset signs out the recovery session on unmount when no password change happened', () => {
+	const source = read('src/routes/auth/reset/+page.svelte');
+	assert.match(
+		source,
+		/cleanupRecoverySession/,
+		'/auth/reset must define a cleanupRecoverySession helper called on unmount/beforeunload',
+	);
+	assert.match(
+		source,
+		/supabase\.auth\.signOut/,
+		'/auth/reset must call supabase.auth.signOut from the cleanup path',
+	);
+	assert.match(
+		source,
+		/passwordChanged/,
+		'cleanupRecoverySession must gate on a passwordChanged flag so a successful update -> goto(/dashboard) doesn\'t sign out the freshly-set session',
+	);
+	assert.match(
+		source,
+		/onDestroy|beforeunload/,
+		'cleanupRecoverySession must run on at least one of onDestroy / beforeunload (both is the belt-and-braces shape, but either by itself catches the casual-user case)',
+	);
+});

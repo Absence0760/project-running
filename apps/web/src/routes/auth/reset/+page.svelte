@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -12,12 +12,43 @@
 	// automatically (detectSessionInUrl=true) on this navigation, then
 	// fires onAuthStateChange with a PASSWORD_RECOVERY-tagged session.
 	let ready = $state(false);
+	// True once updateUser succeeds. When the page unmounts WITHOUT
+	// the password having been changed, we sign the recovery session
+	// out — see Persona-hunt Round 2 finding Casual #1 below.
+	let passwordChanged = $state(false);
 
 	onMount(async () => {
 		for (let i = 0; i < 30 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 100));
 		}
 		ready = true;
+	});
+
+	// Persona-hunt Round 2 finding Casual #1: supabase-js consumed
+	// the #access_token from the recovery URL on page load and minted
+	// a live session BEFORE the new password was set. A user on a
+	// shared / library / family laptop who opened the reset link
+	// then closed the tab without typing left the session live —
+	// anyone on that browser hitting /dashboard was signed in as the
+	// victim. Fix: sign out on unmount / beforeunload IF the
+	// password wasn't actually changed. This explicitly invalidates
+	// the recovery session server-side so a stolen-laptop attack
+	// can't navigate forward from a stale localStorage entry.
+	function cleanupRecoverySession() {
+		if (!passwordChanged) {
+			// Fire-and-forget — we're unmounting, no await possible.
+			supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+		}
+	}
+
+	onMount(() => {
+		const handler = () => cleanupRecoverySession();
+		window.addEventListener('beforeunload', handler);
+		return () => window.removeEventListener('beforeunload', handler);
+	});
+
+	onDestroy(() => {
+		cleanupRecoverySession();
 	});
 
 	async function handleSubmit(e: Event) {
@@ -35,6 +66,9 @@
 		try {
 			const { error: updateError } = await supabase.auth.updateUser({ password });
 			if (updateError) throw updateError;
+			// Flip BEFORE refreshSession so unmount triggered by goto
+			// doesn't sign out the freshly-set session.
+			passwordChanged = true;
 			await auth.refreshSession();
 			goto('/dashboard');
 		} catch (err) {
