@@ -17,6 +17,7 @@ function meta() {
 			duration_s: 3000,
 			started_at: '2026-04-15T07:00:00Z',
 			source: 'app',
+			metadata: null,
 		},
 		displayName: 'Jane Runner',
 		siteUrl: 'https://threkir.com',
@@ -86,6 +87,42 @@ test('injectShareRunMeta — malformed shell with no </head> returns unmodified'
 	assert.equal(out, broken);
 });
 
+test('buildShareRunMeta — surfaces runs.metadata.title over the distance formula', () => {
+	const out = buildShareRunMeta({
+		id: 'r-1',
+		run: {
+			id: 'r-1',
+			user_id: 'u-1',
+			distance_m: 10_000,
+			duration_s: 3000,
+			started_at: '2026-04-15T07:00:00Z',
+			source: 'app',
+			metadata: { title: 'Sunrise long run' },
+		},
+		displayName: 'Jane Runner',
+		siteUrl: 'https://threkir.com',
+	});
+	assert.equal(out.title, 'Sunrise long run — Threkir');
+});
+
+test('buildShareRunMeta — ignores a non-string metadata.title', () => {
+	const out = buildShareRunMeta({
+		id: 'r-1',
+		run: {
+			id: 'r-1',
+			user_id: 'u-1',
+			distance_m: 10_000,
+			duration_s: 3000,
+			started_at: '2026-04-15T07:00:00Z',
+			source: 'app',
+			metadata: { title: 42 },
+		},
+		displayName: 'Jane Runner',
+		siteUrl: 'https://threkir.com',
+	});
+	assert.ok(out.title.includes('10.0 km run'));
+});
+
 test('injectShareRunMeta — escapes HTML in display name', () => {
 	const evilMeta = buildShareRunMeta({
 		id: 'r-1',
@@ -96,6 +133,7 @@ test('injectShareRunMeta — escapes HTML in display name', () => {
 			duration_s: 1500,
 			started_at: '2026-04-15T07:00:00Z',
 			source: 'app',
+			metadata: null,
 		},
 		displayName: 'Jane "<script>alert(1)</script>"',
 		siteUrl: 'https://threkir.com',
@@ -119,6 +157,7 @@ test('injectShareRunMeta — uses per-env site URL for og:url + og:image', () =>
 			duration_s: 1500,
 			started_at: '2026-04-15T07:00:00Z',
 			source: 'app',
+			metadata: null,
 		},
 		displayName: null,
 		siteUrl: 'https://preview.threkir.com',

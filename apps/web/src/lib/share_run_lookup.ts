@@ -21,6 +21,7 @@ export interface SharedRun {
 	duration_s: number | null;
 	started_at: string | null;
 	source: string | null;
+	metadata: Record<string, unknown> | null;
 }
 
 export interface SharedRunLookup {

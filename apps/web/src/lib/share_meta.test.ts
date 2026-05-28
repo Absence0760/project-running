@@ -5,6 +5,7 @@ import {
 	buildRouteShareTitle,
 	buildRunShareDescription,
 	buildRunShareTitle,
+	cleanShareTitle,
 	formatDateStable,
 	formatKmStable,
 } from './share_meta';
