@@ -1679,6 +1679,50 @@ Pinning tests:
 
 ---
 
+## 77. Calorie estimate honours body weight + applies a 5% female-specific cross-formula calibration
+
+Persona-hunt Round 3 finding Woman #5. Pre-fix the run-detail calorie cell used two slightly different formulas:
+
+- Web (`/runs/[id]/+page.svelte`): `kcal = weight_kg × distance_km`. The 1 kcal/kg/km running heuristic. Ignored the activity type entirely.
+- Mobile (`run_detail_screen.dart`): `kcal = weight_kg × activity_kcal_per_kg_per_km × distance_km`. Activity-aware (1.0 run, 0.5 walk, 0.7 hike, 0.4 cycle).
+
+Neither honoured gender. The standard sport-science observation is that female runners' absolute energy expenditure at the same MET intensity is ~5% lower than male's (smaller skeletal-muscle mass per kg total body weight). Pre-fix every female runner was over-estimated by roughly that 5%.
+
+What we changed:
+
+- New shared pure helper `estimateRunCalories({ distanceM, weightKg?, activityKcalPerKgPerKm?, gender? })` in `apps/web/src/lib/calories.ts` ↔ `apps/mobile_android/lib/calories.dart` (byte-identical iOS twin). Both surfaces now route through it so the formula is in lockstep.
+- Activity coefficient defaults to the run value (1.0) — drop-in compatible with the web's previous formula. Web now also accepts an activity argument and threads `metadata.activity_type` through, so walks / hikes / cycle no longer get the run multiplier silently applied.
+- Body weight falls back to `DEFAULT_BODY_WEIGHT_KG = 70` (median for an adult runner) when `user_settings.prefs.body_weight_kg` is unset. The "(est)" suffix on the label keeps the fallback honest — runners who care about precision see the cue + set their real weight in Settings → Preferences.
+- Gender calibration: `female` multiplies the output by `0.95`. `male` / `null` / `nonbinary` use the unmodified curve. Same `user_profiles.gender` column the training-pace calibration (§76) and segments leaderboards already use.
+- Negative `distanceM` is clamped to 0 so a buggy upstream can't surface a "burned −300 kcal" badge. Zero / negative weight or coefficient falls back to default. Defensive shape pinned by unit tests.
+
+Why uniform 0.95 rather than per-pace adjustment:
+
+- The literature suggests 3-8% depending on speed + slope. A uniform mid-range constant under-prescribes at extreme paces but is the right shape for the data + complexity budget.
+- Conservative direction (lower) is the right error mode — the 1 kcal/kg/km heuristic already over-estimates for short slow efforts where the user typically wants a credible-ish number, not a target.
+
+Why `nonbinary` defaults to the unmodified curve:
+
+- Same reasoning as the training-pace calibration in ADR §76 — no validated calibration for non-binary athletes; applying a wrong adjustment is worse than no adjustment. Documented + pinned by a test so a future contributor doesn't silently fork this branch.
+
+Don't re-litigate by:
+
+- Adding a separate per-band coefficient for female runners. Until per-band gender × intensity calibration is published with the rigour required to override the current ladder, the uniform 0.95 stays.
+- Asking gender in the run-detail UI. The data already lives on `user_profiles.gender` (set in Settings → Preferences alongside the segments-leaderboard demographics with explicit GDPR Art 9 consent). The calorie cell silently honours it; no new UI surface.
+
+Pinning tests:
+
+- `apps/web/src/lib/calories.test.ts` — 11 tests across defaults + weight scaling, activity coefficient, gender calibration, and the negative-distance / zero-weight edge cases.
+- `apps/mobile_android/test/calories_test.dart` + iOS twin — same 11 tests in lockstep.
+
+Sources:
+
+- Daniels, J. — *Daniels' Running Formula*, 3rd ed. — the male-derived VDOT + pace base.
+- Ainsworth et al. — *Compendium of Physical Activities*, 2011 update — MET coefficients for running / walking / cycling.
+- Ten Haaf & Weijs (2014), *PLoS ONE* — gender-specific REE + active-energy corrections; reported female calibration in the 3-8% range across endurance modalities.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

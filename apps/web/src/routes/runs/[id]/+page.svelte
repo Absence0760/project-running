@@ -45,6 +45,12 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { isInAnyZone, PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/privacy';
+	import {
+		estimateRunCalories,
+		ACTIVITY_KCAL_PER_KG_PER_KM,
+		type CalorieGender,
+	} from '$lib/calories';
+	import { supabase } from '$lib/supabase';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
@@ -89,6 +95,11 @@
 	let shareConfirmIntersectsZone = $state(false);
 	let shareConfirmHasZones = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
+	// Persona-hunt Round 3 finding Woman #5. Read from
+	// user_profiles.gender (same column the segments leaderboards
+	// + training-pace calibration use). Null when unset → calorie
+	// estimate uses the unmodified male-derived curve. ADR §77.
+	let viewerGender = $state<CalorieGender>(null);
 	/// Map-matched track + status from run_matched_tracks. Populated on
 	/// mount in parallel with the main run fetch. Failure here is L4
 	/// (auxiliary) per docs/conventions.md § Layered resilience — the
@@ -160,6 +171,24 @@
 				const bw = effective<number>(settings, 'body_weight_kg');
 				if (typeof bw === 'number' && bw > 0) bodyWeightKg = bw;
 			}
+			// Read viewer gender for the calorie cross-formula
+			// calibration (persona-hunt Round 3 finding Woman #5).
+			// Same column the training-pace calibration reads — see
+			// PlanEditor.svelte. L4 best-effort: if the row read fails
+			// the estimate just falls back to the unmodified curve.
+			try {
+				const { data: prof } = await supabase
+					.from('user_profiles')
+					.select('gender')
+					.eq('id', uid)
+					.maybeSingle();
+				const g = (prof as { gender?: string | null } | null)?.gender;
+				if (g === 'male' || g === 'female' || g === 'nonbinary') {
+					viewerGender = g;
+				}
+			} catch (_) {
+				/* L4 — fall back to null */
+			}
 		} catch (_) {
 			/* noop */
 		}
@@ -206,18 +235,28 @@
 
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
 	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
-	/// Estimated calories — `bodyWeight_kg × distance_km ≈ kcal`
-	/// (the 1 kcal/kg/km running heuristic, accurate within ~10%
-	/// across a wide range of paces). When the user hasn't set
-	/// body weight in /settings, falls back to 70 kg so the cell
-	/// always renders + the grid never has a hole. The "(est)"
-	/// suffix on the label keeps the fallback honest — users who
-	/// care about precision will see the cue + go set their real
-	/// weight in /settings/preferences.
-	const DEFAULT_BODY_WEIGHT_KG = 70;
-	let calorieWeightKg = $derived(bodyWeightKg ?? DEFAULT_BODY_WEIGHT_KG);
+	/// Estimated calories — routes through the shared pure helper
+	/// `apps/web/src/lib/calories.ts` (mirrored byte-for-byte in
+	/// the Dart twin) so the formula stays in lockstep across the
+	/// web run-detail + mobile run-detail surfaces. The helper
+	/// applies the cross-formula female calibration when the
+	/// viewer's `user_profiles.gender` is `female` (see
+	/// `docs/decisions.md § 77`). Pre-fix this page hardcoded
+	/// `weight × distance` and ignored gender entirely — every
+	/// female runner was over-estimated by ~5%.
+	let runActivityType = $derived(
+		((run?.metadata as Record<string, unknown> | null)?.activity_type as string) ??
+			'run',
+	);
 	let estimatedCalories = $derived(
-		run ? Math.round(calorieWeightKg * run.distance_m / 1000) : 0,
+		run
+			? estimateRunCalories({
+					distanceM: run.distance_m,
+					weightKg: bodyWeightKg,
+					activityKcalPerKgPerKm: ACTIVITY_KCAL_PER_KG_PER_KM[runActivityType],
+					gender: viewerGender,
+			  })
+			: 0,
 	);
 	let calorieLabel = $derived(
 		bodyWeightKg ? 'Calories kcal' : 'Calories kcal (est)',

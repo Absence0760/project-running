@@ -5,8 +5,10 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../calories.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
@@ -106,6 +108,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   ({int min, int max, int avg})? _cachedBpmStats;
   List<HrZoneBucket>? _cachedHrBuckets;
   bool _hrCacheChecked = false;
+  /// Persona-hunt Round 3 finding Woman #5. Loaded once on mount
+  /// from `user_profiles.gender`. Null when unset → calorie
+  /// estimate uses the unmodified (male-derived) curve.
+  CalorieGender _viewerGender;
 
   void _resetStatsCacheIfStale() {
     if (_statsCacheRunId == run.id &&
@@ -132,6 +138,28 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     _maybeFetchTrack();
     _maybeFetchMatchedTrack();
     _maybeSuggestRoute();
+    _loadViewerGender();
+  }
+
+  Future<void> _loadViewerGender() async {
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final uid = api.userId;
+      if (uid == null) return;
+      final row = await Supabase.instance.client
+          .from('user_profiles')
+          .select('gender')
+          .eq('id', uid)
+          .maybeSingle();
+      final g = row?['gender'] as String?;
+      if (!mounted) return;
+      if (g == 'male' || g == 'female' || g == 'nonbinary') {
+        setState(() => _viewerGender = g);
+      }
+    } catch (_) {
+      /* L4 best-effort — fall back to null */
+    }
   }
 
   /// Auto-link discovery. Skips the round-trip when we already have a
@@ -1068,22 +1096,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return loss;
   }
 
-  /// Default body weight in kg when the user hasn't set
-  /// `user_settings.prefs.body_weight_kg`. Mirrors the web fallback
-  /// for parity. ~70 kg is the rough median for an adult runner —
-  /// imperfect but produces a believable number for the calorie
-  /// estimate pill on every recorded run.
-  static const _defaultBodyWeightKg = 70.0;
-
-  int get _estimatedCalories {
-    final weightKg =
-        widget.preferences.bodyWeightKg ?? _defaultBodyWeightKg;
-    return (weightKg *
-            _activityType.kcalPerKgPerKm *
-            run.distanceMetres /
-            1000)
-        .round();
-  }
+  // Calorie estimate routes through the shared pure helper in
+  // `lib/calories.dart` (mirrored byte-for-byte to web's
+  // `apps/web/src/lib/calories.ts`) so the formula stays in lockstep
+  // across surfaces. Applies the cross-formula female calibration
+  // when `_viewerGender == 'female'` (loaded in initState). Persona-
+  // hunt Round 3 finding Woman #5 + ADR §77.
+  int get _estimatedCalories => estimateRunCalories(
+        distanceM: run.distanceMetres,
+        weightKg: widget.preferences.bodyWeightKg,
+        activityKcalPerKgPerKm: _activityType.kcalPerKgPerKm,
+        gender: _viewerGender,
+      );
 
   int get _steps {
     final s = run.metadata?['steps'];
