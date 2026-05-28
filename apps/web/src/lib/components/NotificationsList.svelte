@@ -83,6 +83,7 @@
 			case 'follow':
 				return r.actor_id ? `/u/${r.actor_id}` : null;
 			case 'event_rsvp':
+			case 'event_cancel':
 				return r.event_id && item.event_club_slug
 					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
 					: null;
@@ -107,6 +108,10 @@
 				return item.event_title
 					? `${name} RSVP'd Going to your event "${item.event_title}"`
 					: `${name} RSVP'd Going to your event`;
+			case 'event_cancel':
+				return item.event_title
+					? `An occurrence of "${item.event_title}" was cancelled`
+					: 'An event occurrence you RSVP\'d to was cancelled';
 		}
 	}
 

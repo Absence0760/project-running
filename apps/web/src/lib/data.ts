@@ -1839,6 +1839,53 @@ export async function deleteEvent(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+export interface EventException {
+	event_id: string;
+	instance_start: string;
+	cancelled_by: string | null;
+	reason: string | null;
+	cancelled_at: string;
+}
+
+export async function fetchEventExceptions(eventId: string): Promise<EventException[]> {
+	const { data } = await supabase
+		.from('event_exceptions')
+		.select('event_id, instance_start, cancelled_by, reason, cancelled_at')
+		.eq('event_id', eventId);
+	return (data as EventException[] | null) ?? [];
+}
+
+/// Cancel a single occurrence of a recurring event (the rest of the series
+/// is untouched). Organiser-only via RLS; the fan-out trigger notifies every
+/// going / maybe / waitlisted attendee of this instance.
+export async function cancelEventInstance(
+	eventId: string,
+	instanceStart: string,
+	reason: string | null
+): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const { error } = await supabase.from('event_exceptions').insert({
+		event_id: eventId,
+		instance_start: instanceStart,
+		cancelled_by: userId,
+		reason: reason?.trim() || null
+	});
+	if (error) throw error;
+}
+
+export async function reinstateEventInstance(
+	eventId: string,
+	instanceStart: string
+): Promise<void> {
+	const { error } = await supabase
+		.from('event_exceptions')
+		.delete()
+		.eq('event_id', eventId)
+		.eq('instance_start', instanceStart);
+	if (error) throw error;
+}
+
 /// Upsert the caller's RSVP and return the *effective* status. When the
 /// requested status is 'going' but the event is at capacity, the
 /// enforce_event_capacity trigger (migration 20261018_001) demotes the row to

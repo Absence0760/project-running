@@ -335,6 +335,38 @@ export type Database = {
           },
         ]
       }
+      event_exceptions: {
+        Row: {
+          cancelled_at: string
+          cancelled_by: string | null
+          event_id: string
+          instance_start: string
+          reason: string | null
+        }
+        Insert: {
+          cancelled_at?: string
+          cancelled_by?: string | null
+          event_id: string
+          instance_start: string
+          reason?: string | null
+        }
+        Update: {
+          cancelled_at?: string
+          cancelled_by?: string | null
+          event_id?: string
+          instance_start?: string
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_exceptions_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_results: {
         Row: {
           age_grade_pct: number | null

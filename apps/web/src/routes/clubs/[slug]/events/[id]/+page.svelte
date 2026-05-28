@@ -23,12 +23,17 @@
 		startRace,
 		endRace,
 		approveEventResult,
+		fetchEventExceptions,
+		cancelEventInstance,
+		reinstateEventInstance,
 		type EventResultWithUser,
 		type RecentRunOption,
-		type RaceSessionRow
+		type RaceSessionRow,
+		type EventException
 	} from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
 	import { formatDistance } from '$lib/units.svelte';
 	import type {
@@ -62,6 +67,9 @@
 	let autoApproveOnArm = $state(true);
 	let showEndRaceConfirm = $state<'finished' | 'cancelled' | null>(null);
 	let showDeleteEventConfirm = $state(false);
+	let exceptions = $state<EventException[]>([]);
+	let showCancelInstance = $state(false);
+	let cancelReason = $state('');
 
 	/** The instance the user is currently RSVPing to. For one-off events this
 	 * stays equal to `event.starts_at`; for recurring events, the user can
@@ -91,10 +99,24 @@
 			? expandInstances(event, new Date(), new Date(Date.now() + 365 * 24 * 3600 * 1000))
 			: []
 	);
+	// Cancelled occurrences (persona #39) are filtered out of the live picker.
+	let cancelledSet = $derived(
+		new Set(exceptions.map((e) => new Date(e.instance_start).toISOString()))
+	);
+	let liveInstances = $derived(
+		nextInstances.filter((d) => !cancelledSet.has(d.toISOString()))
+	);
+	let activeException = $derived(
+		activeInstance
+			? exceptions.find(
+					(e) => new Date(e.instance_start).toISOString() === activeInstance
+				) ?? null
+			: null
+	);
 	let showAllInstances = $state(false);
 	const INSTANCE_PREVIEW_COUNT = 8;
 	let visibleInstances = $derived(
-		showAllInstances ? nextInstances : nextInstances.slice(0, INSTANCE_PREVIEW_COUNT)
+		showAllInstances ? liveInstances : liveInstances.slice(0, INSTANCE_PREVIEW_COUNT)
 	);
 
 	let recurrenceLabel = $derived(
@@ -112,7 +134,7 @@
 	let isPast = $derived(
 		!!event &&
 			(event.recurrence_freq
-				? nextInstances.length === 0
+				? liveInstances.length === 0
 				: new Date(event.starts_at).getTime() < Date.now())
 	);
 
@@ -137,7 +159,11 @@
 	async function load() {
 		loading = true;
 		const prevInstance = activeInstance;
-		[club, event] = await Promise.all([fetchClubBySlug(slug), fetchEventById(eventId)]);
+		[club, event, exceptions] = await Promise.all([
+			fetchClubBySlug(slug),
+			fetchEventById(eventId),
+			fetchEventExceptions(eventId)
+		]);
 		if (!event) {
 			loading = false;
 			return;
@@ -599,6 +625,34 @@
 		goto(`/clubs/${slug}`);
 	}
 
+	async function confirmCancelInstance() {
+		if (!event || !activeInstance || busy) return;
+		busy = true;
+		try {
+			await cancelEventInstance(event.id, activeInstance, cancelReason || null);
+			cancelReason = '';
+			showCancelInstance = false;
+			await load();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Could not cancel this occurrence';
+		} finally {
+			busy = false;
+		}
+	}
+
+	async function reinstateInstance() {
+		if (!event || !activeInstance || busy) return;
+		busy = true;
+		try {
+			await reinstateEventInstance(event.id, activeInstance);
+			await load();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Could not reinstate this occurrence';
+		} finally {
+			busy = false;
+		}
+	}
+
 	async function submitPost(e: Event) {
 		e.preventDefault();
 		if (!club || !event || !activeInstance || !draftPost.trim() || busy) return;
@@ -778,7 +832,28 @@
 				{/if}
 			</div>
 			<div class="hero-side">
-				{#if !isPast && auth.user}
+				{#if activeException}
+					<div class="cancelled-banner" role="status">
+						<span class="material-symbols" aria-hidden="true">event_busy</span>
+						<div>
+							<strong>This occurrence was cancelled.</strong>
+							{#if activeException.reason}
+								<span class="cancel-reason">{activeException.reason}</span>
+							{/if}
+						</div>
+					</div>
+					{#if isEventOrganiser}
+						<button
+							type="button"
+							class="btn-ghost"
+							onclick={reinstateInstance}
+							disabled={busy}
+						>
+							<span class="material-symbols" aria-hidden="true">event_available</span>
+							Reinstate this occurrence
+						</button>
+					{/if}
+				{:else if !isPast && auth.user}
 					<div
 						class="rsvp-tri"
 						role="group"
@@ -841,6 +916,18 @@
 						</button>
 					</div>
 				{/if}
+				{#if isEventOrganiser && event.recurrence_freq && activeInstance && !activeException}
+					<div class="admin-actions">
+						<button
+							type="button"
+							class="btn-ghost danger"
+							onclick={() => (showCancelInstance = true)}
+						>
+							<span class="material-symbols" aria-hidden="true">event_busy</span>
+							Cancel this occurrence
+						</button>
+					</div>
+				{/if}
 				{#if isAdmin}
 					<div class="admin-actions">
 						<button
@@ -861,7 +948,7 @@
 			<p class="error">{error}</p>
 		{/if}
 
-		{#if event.recurrence_freq && nextInstances.length > 1}
+		{#if event.recurrence_freq && liveInstances.length > 1}
 			<section class="instance-picker">
 				<span class="label">Pick an occurrence</span>
 				<div class="instance-chips">
@@ -879,7 +966,7 @@
 						</button>
 					{/each}
 				</div>
-				{#if nextInstances.length > INSTANCE_PREVIEW_COUNT}
+				{#if liveInstances.length > INSTANCE_PREVIEW_COUNT}
 					<button
 						type="button"
 						class="instance-toggle"
@@ -888,7 +975,7 @@
 					>
 						{showAllInstances
 							? 'Show fewer'
-							: `Show all ${nextInstances.length} upcoming`}
+							: `Show all ${liveInstances.length} upcoming`}
 					</button>
 				{/if}
 			</section>
@@ -1125,6 +1212,46 @@
 	oncancel={() => showDeleteEventConfirm = false}
 	danger
 />
+
+<Modal
+	open={showCancelInstance}
+	title="Cancel this occurrence"
+	onclose={() => (showCancelInstance = false)}
+>
+	<div class="cancel-instance-form">
+		<p>
+			Only this occurrence is called off — the rest of the series is unaffected.
+			Everyone who RSVP'd to it (going, maybe, or waitlisted) is notified.
+		</p>
+		<label>
+			<span>Reason (optional)</span>
+			<textarea
+				bind:value={cancelReason}
+				rows="2"
+				maxlength="300"
+				placeholder="Course flooded, public holiday, marshal shortage…"
+			></textarea>
+		</label>
+		<div class="cancel-instance-actions">
+			<button
+				type="button"
+				class="btn btn-secondary"
+				onclick={() => (showCancelInstance = false)}
+				disabled={busy}
+			>
+				Keep it
+			</button>
+			<button
+				type="button"
+				class="btn btn-danger"
+				onclick={confirmCancelInstance}
+				disabled={busy}
+			>
+				{busy ? 'Cancelling…' : 'Cancel occurrence'}
+			</button>
+		</div>
+	</div>
+</Modal>
 {/if}
 
 <style>
@@ -1288,6 +1415,38 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--color-text-secondary);
+	}
+	.cancelled-banner {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.6rem;
+		padding: 0.7rem 0.9rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-secondary);
+		margin-bottom: 0.6rem;
+	}
+	.cancelled-banner .cancel-reason {
+		display: block;
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		margin-top: 0.15rem;
+	}
+	.cancel-instance-form { display: grid; gap: 0.8rem; }
+	.cancel-instance-form label { display: grid; gap: 0.3rem; }
+	.cancel-instance-form textarea {
+		width: 100%;
+		padding: 0.5rem 0.65rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg);
+		color: var(--color-text);
+		font-family: inherit;
+	}
+	.cancel-instance-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.6rem;
 	}
 
 	.route-chip {
