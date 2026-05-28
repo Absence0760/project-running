@@ -3,10 +3,29 @@
 	import {
 		fetchEffortsForRun,
 		computeSegmentEffortsForRun,
+		fetchRoutesIntersectingTrack,
 		type SegmentEffortWithSegment,
 	} from '$lib/data';
+	import { pickAutoEffortRoute } from '$lib/auto_segment_effort';
 	import { distanceInPreferred } from '$lib/units.svelte';
 	import type { TrackPoint } from '$lib/types';
+
+	function trackLengthM(pts: TrackPoint[]): number {
+		let total = 0;
+		for (let i = 1; i < pts.length; i++) {
+			const a = pts[i - 1];
+			const b = pts[i];
+			const dLat = ((b.lat - a.lat) * Math.PI) / 180;
+			const dLng = ((b.lng - a.lng) * Math.PI) / 180;
+			const lat1 = (a.lat * Math.PI) / 180;
+			const lat2 = (b.lat * Math.PI) / 180;
+			const h =
+				Math.sin(dLat / 2) ** 2 +
+				Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+			total += 2 * 6_371_000 * Math.asin(Math.min(1, Math.sqrt(h)));
+		}
+		return total;
+	}
 
 	interface Props {
 		runId: string;
@@ -25,14 +44,27 @@
 		// the detail page, we walk the track against any segments on
 		// the parent route and INSERT new efforts. The unique
 		// constraint makes this idempotent.
-		if (routeId && track.length > 1) {
+		if (track.length > 1) {
 			try {
-				await computeSegmentEffortsForRun({
-					run_id: runId,
-					user_id: runOwnerId,
-					route_id: routeId,
-					track,
-				});
+				// Imported runs land with route_id null (strava persona #21), so
+				// they never got segment efforts. When the track is an
+				// unambiguous end-to-end match for one of the owner's saved
+				// routes, compute against that route's segments — otherwise fall
+				// back to the linked route_id. pickAutoEffortRoute returns null
+				// for partial / ambiguous matches so no wrong efforts are written.
+				let effortRouteId = routeId;
+				if (!effortRouteId) {
+					const candidates = await fetchRoutesIntersectingTrack(track);
+					effortRouteId = pickAutoEffortRoute(candidates, trackLengthM(track));
+				}
+				if (effortRouteId) {
+					await computeSegmentEffortsForRun({
+						run_id: runId,
+						user_id: runOwnerId,
+						route_id: effortRouteId,
+						track,
+					});
+				}
 			} catch (e) {
 				console.warn('segment effort compute failed', e);
 			}
