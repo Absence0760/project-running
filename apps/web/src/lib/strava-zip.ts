@@ -14,7 +14,8 @@
 
 import JSZip from 'jszip';
 import { parseRouteFile, type ImportedRoute } from './import';
-import { saveRun } from './data';
+import { saveRun, addRunPhoto } from './data';
+import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { buildStravaDedupeSet } from './strava-zip-dedupe';
 import { supabase } from './supabase';
 import { auth } from './stores/auth.svelte';
@@ -187,7 +188,7 @@ async function importOne(
 	if (avgBpm > 0) metadata.avg_bpm = Math.round(avgBpm);
 	if (idx.stravaType >= 0 && row[idx.stravaType]) metadata.strava_activity_type = row[idx.stravaType];
 
-	await saveRun({
+	const { id: runId } = await saveRun({
 		started_at: new Date(startedAt).toISOString(),
 		distance_m: Math.max(0, Math.round(distanceM)),
 		duration_s: Math.max(0, Math.round(durationS)),
@@ -200,6 +201,27 @@ async function importOne(
 		// OAuth writers. /audit/strava M3.
 		external_id: `strava:${stravaId}`,
 	});
+
+	// Attach any photos the export bundled under media/ for this activity
+	// (strava persona #19). Auxiliary — a failed photo never aborts the run
+	// import; cap at 10 so a pathological row can't stall the whole import.
+	if (idx.media >= 0) {
+		const paths = parseStravaMediaPaths(row[idx.media]).slice(0, 10);
+		for (const p of paths) {
+			const entry = zip.file(p);
+			if (!entry) continue;
+			const ext = (p.split('.').pop() ?? '').toLowerCase();
+			const type = STRAVA_PHOTO_MIME[ext];
+			if (!type) continue;
+			try {
+				const blob = await entry.async('blob');
+				const photo = new File([blob], p.split('/').pop() ?? `photo.${ext}`, { type });
+				await addRunPhoto({ run_id: runId, file: photo });
+			} catch (_) {
+				// Skip a bad/oversized photo; the run + other photos still import.
+			}
+		}
+	}
 }
 
 // --- CSV parsing ---
@@ -215,6 +237,7 @@ interface HeaderIndex {
 	movingTime: number;
 	elevation: number;
 	avgHr: number;
+	media: number;
 }
 
 function indexHeader(header: string[]): HeaderIndex {
@@ -236,6 +259,7 @@ function indexHeader(header: string[]): HeaderIndex {
 		movingTime: find('Moving Time', 'Moving Time (seconds)'),
 		elevation: find('Elevation Gain', 'Elevation Gain (m)'),
 		avgHr: find('Average Heart Rate'),
+		media: find('Media'),
 	};
 }
 
