@@ -593,13 +593,30 @@ jobs:
       # short wait — second pass finds the sidecar warm.
       - name: Apply migrations + seed (db reset)
         working-directory: apps/backend
+        # `supabase db reset` restarts containers mid-flight + then
+        # calls the storage REST endpoint to recreate buckets. If
+        # storage REST is still cold from the restart, the call
+        # 502s and the reset bails. Run 26588671185 shard 1 hit
+        # this on both attempts (first try failed at ~31s, retry
+        # failed at ~11s with a 502 after Restarting containers).
+        # The fix is two-fold:
+        #   1. Bump the inter-attempt sleep from 15s → 30s.
+        #   2. Add a THIRD attempt — sometimes the storage REST
+        #      sidecar takes ~45s to come up on a heavily-loaded
+        #      runner.
         run: |
-          if supabase db reset --local; then
-            exit 0
-          fi
-          echo "::warning::supabase db reset failed; waiting 15s for storage REST and retrying"
-          sleep 15
-          supabase db reset --local
+          for attempt in 1 2 3; do
+            if supabase db reset --local; then
+              echo "db reset succeeded on attempt $attempt"
+              exit 0
+            fi
+            if [ "$attempt" = "3" ]; then
+              echo "::error::supabase db reset failed on all 3 attempts"
+              exit 1
+            fi
+            echo "::warning::supabase db reset attempt $attempt failed; waiting 30s for sidecars and retrying"
+            sleep 30
+          done
       # `supabase db reset` restarts the edge runtime sidecar mid-flight.
       # If a Playwright spec hits an Edge Function URL before the
       # restart settles, the request 502s ("Bad Gateway" — kong routed

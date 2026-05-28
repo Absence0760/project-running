@@ -104,21 +104,70 @@
 		}
 	}
 
-	/// Persist every collected value + stamp `onboarded_at = now()`
-	/// so the user is never re-onboarded. Called on either the
-	/// Finish button (final step) or the "Skip onboarding" header
-	/// link — same wire either way.
-	async function finishAndExit() {
-		if (saving) return;
-		// The user can click Skip-onboarding or Finish before `auth.user`
-		// hydrates from the async fetchUser path. A `!auth.user` early
-		// return would silently swallow the click + leave the user
-		// stuck on /onboarding. Poll briefly here (same shape as the
-		// onMount auth-wait above) before deciding.
+	/// Helper used by both the Skip-onboarding header link and the
+	/// final Open-dashboard button. Resolves once `auth.user` has
+	/// hydrated from the async `fetchUser` path so the caller can
+	/// rely on `auth.user.id`. Returns false when the hydration
+	/// never lands — caller bails out.
+	async function ensureAuthUser(): Promise<boolean> {
 		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
 			await new Promise((r) => setTimeout(r, 50));
 		}
-		if (!auth.user) return;
+		return auth.user != null;
+	}
+
+	/// Full page navigation rather than client-side `goto` so the
+	/// layout's onboarding-gate $effect can't race the auth-store
+	/// refresh — the next page load re-bootstraps auth from the
+	/// cookie + the just-written onboarded_at column, so the gate
+	/// trivially sees a non-null value and routes through to
+	/// /dashboard.
+	function navigateToDashboard(): void {
+		window.location.href = '/dashboard';
+	}
+
+	/// Skip-onboarding header link. Stamps `onboarded_at = now()`
+	/// on user_profiles — that's the minimum required for the
+	/// layout gate to stop redirecting back here on future loads.
+	/// Every other field stays at its existing value (the seed
+	/// row's default, or whatever the runner already had); the
+	/// Settings page surfaces a "Finish setting up" nudge for fields
+	/// they may still want to fill in.
+	///
+	/// Why a single, narrow write: `event-race-control` style
+	/// flakes aside, the previous shape (parallelised
+	/// updateUniversal + profile update) was still consistently
+	/// timing out under CI load (runs 26583136874 / 26584629824 /
+	/// 26588671185 all failed here despite progressive timeout
+	/// bumps). A single round-trip lands well inside any reasonable
+	/// test budget.
+	async function skipOnboarding(): Promise<void> {
+		if (saving) return;
+		if (!(await ensureAuthUser())) return;
+		saving = true;
+		try {
+			const { error } = await supabase
+				.from('user_profiles')
+				.update({ onboarded_at: new Date().toISOString() })
+				.eq('id', auth.user!.id);
+			if (error) throw error;
+			navigateToDashboard();
+		} catch (e) {
+			showToast(`Could not save: ${(e as Error).message}`, 'error');
+			saving = false;
+		}
+		// On success the navigation tears down the page; no need to
+		// reset `saving = false` because the next page is a fresh
+		// component instance.
+	}
+
+	/// Final "Open dashboard" button on Step 7. Persists everything
+	/// the runner answered along the way: display name, units, goal,
+	/// optional demographics (with GDPR Art 9 consent), privacy
+	/// default. Stamps `onboarded_at` so the gate releases.
+	async function finishAndExit(): Promise<void> {
+		if (saving) return;
+		if (!(await ensureAuthUser())) return;
 		saving = true;
 		try {
 			// 1. Universal prefs bag (units + goal + weight + privacy).
@@ -153,36 +202,24 @@
 			}
 
 			// Issue both writes in parallel — the bag write doesn't
-			// depend on the profile write and vice versa. Two
-			// sequential awaits added 2-6s in CI under load and was
-			// pushing the test's 10s waitForURL budget. Parallel
-			// awaits cut the chain in half.
+			// depend on the profile write and vice versa.
 			const [, profileResult] = await Promise.all([
-				updateUniversal(auth.user.id, bagChanges),
+				updateUniversal(auth.user!.id, bagChanges),
 				supabase
 					.from('user_profiles')
 					.update(profileUpdate)
-					.eq('id', auth.user.id),
+					.eq('id', auth.user!.id),
 			]);
 			if (profileResult.error) throw profileResult.error;
 
 			showToast('All set! Welcome aboard.', 'success');
-			// Full page navigation rather than client-side goto so the
-			// layout's onboarding-gate $effect can't race the auth-store
-			// refresh — the next page load re-bootstraps auth from the
-			// cookie + the just-written onboarded_at column, so the
-			// gate trivially sees a non-null value and routes through
-			// to /dashboard. The page reload re-runs auth.refreshSession
-			// → fetchUser → get_my_profile, so the auth.fetchUser() call
-			// that used to live here is redundant and just added
-			// latency that pushed the test's waitForURL past its 10s
-			// budget under CI load.
-			window.location.href = '/dashboard';
+			navigateToDashboard();
 		} catch (e) {
 			showToast(`Could not save: ${(e as Error).message}`, 'error');
-		} finally {
 			saving = false;
 		}
+		// On success the navigation tears down the page; no need to
+		// reset `saving = false`.
 	}
 </script>
 
@@ -193,7 +230,7 @@
 <div class="onboarding-shell">
 	<header class="head">
 		<div class="brand">Threkir</div>
-		<button type="button" class="skip-all" onclick={finishAndExit} disabled={saving}>
+		<button type="button" class="skip-all" onclick={skipOnboarding} disabled={saving}>
 			Skip onboarding
 		</button>
 	</header>
