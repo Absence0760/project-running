@@ -11,6 +11,51 @@
 
 import type { TrackPoint } from './types';
 
+/// Canonical per-lap shape registered in docs/metadata.md § laps. `index`
+/// is 1-based; `start_offset_s` is the cumulative duration up to the START
+/// of this lap (first lap = 0); `distance_m` / `duration_s` are per-lap
+/// deltas, not cumulative. Mirrors the recorder's `lapsToCanonicalJson`.
+export interface FitLap {
+	index: number;
+	start_offset_s: number;
+	distance_m: number;
+	duration_s: number;
+}
+
+interface RawFitLap {
+	total_distance?: number;
+	total_timer_time?: number;
+	total_elapsed_time?: number;
+}
+
+/// Project FIT `lap` messages onto the canonical metadata.laps shape.
+/// Returns `[]` for a degenerate single-lap file (one lap == the whole
+/// activity, i.e. the runner never pressed lap and there were no
+/// auto-laps) so we don't write a useless one-element array. Accumulates
+/// per-lap durations for `start_offset_s` rather than reading lap
+/// timestamps, so the cumulative-BEFORE invariant holds exactly even when
+/// the device paused mid-activity.
+export function buildCanonicalLaps(laps: RawFitLap[] | undefined | null): FitLap[] {
+	if (!laps || laps.length < 2) return [];
+	const out: FitLap[] = [];
+	let cumulative = 0;
+	for (let i = 0; i < laps.length; i++) {
+		const lap = laps[i];
+		const duration = Math.max(
+			0,
+			Math.round(lap.total_timer_time ?? lap.total_elapsed_time ?? 0),
+		);
+		out.push({
+			index: i + 1,
+			start_offset_s: cumulative,
+			distance_m: Math.max(0, lap.total_distance ?? 0),
+			duration_s: duration,
+		});
+		cumulative += duration;
+	}
+	return out;
+}
+
 export interface ParsedFitRun {
 	/// ISO timestamp of the session start.
 	startedAt: string;
@@ -27,6 +72,9 @@ export interface ParsedFitRun {
 	/// Stable per-file identity from the FIT `file_id` message — used
 	/// for dedupe. `null` only for malformed files without a file_id.
 	garmin_file_id: string | null;
+	/// Canonical per-lap deltas from the FIT `lap` messages. Empty when
+	/// the file has no real laps (single whole-activity lap).
+	laps: FitLap[];
 	track: TrackPoint[];
 }
 
@@ -126,6 +174,7 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 		total_ascent_m:
 			typeof session.total_ascent === 'number' ? Math.round(session.total_ascent) : null,
 		garmin_file_id: garminFileId && garminFileId !== '-' ? garminFileId : null,
+		laps: buildCanonicalLaps(data.laps as RawFitLap[] | undefined),
 		track,
 	};
 }
