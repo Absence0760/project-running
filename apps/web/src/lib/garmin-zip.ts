@@ -23,7 +23,7 @@ import { parseRouteFile } from './import';
 import { saveRun } from './data';
 import { supabase } from './supabase';
 import { auth } from './stores/auth.svelte';
-import { parseFitBuffer, type ParsedFitRun } from './garmin-fit';
+import { parseFitBuffer, garminExternalId, type ParsedFitRun } from './garmin-fit';
 
 export interface GarminZipProgress {
 	total: number;
@@ -203,6 +203,10 @@ async function importFitFile(
 		metadata,
 		track: parsed.track.length > 0 ? parsed.track : undefined,
 		title: null,
+		// Cross-source dedupe key so a re-import (ZIP or future OAuth) of the
+		// same FIT activity is skipped by the per-user runs.external_id unique
+		// index. metadata.garmin_id alone never engaged that guard. (#18)
+		external_id: garminExternalId(parsed.garmin_file_id),
 	});
 
 	if (parsed.garmin_file_id) seenIds.add(parsed.garmin_file_id);

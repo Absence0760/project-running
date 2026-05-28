@@ -56,6 +56,14 @@ export function buildCanonicalLaps(laps: RawFitLap[] | undefined | null): FitLap
 	return out;
 }
 
+/// Cross-source dedupe key for a Garmin activity, from its FIT file_id.
+/// `garmin:{file_id}` mirrors the `strava:{id}` / `csv:{...}` convention so a
+/// re-import of the same activity is caught by the per-user runs.external_id
+/// unique index. Returns null when the file had no usable file_id (#18).
+export function garminExternalId(fileId: string | null): string | null {
+	return fileId ? `garmin:${fileId}` : null;
+}
+
 export interface ParsedFitRun {
 	/// ISO timestamp of the session start.
 	startedAt: string;

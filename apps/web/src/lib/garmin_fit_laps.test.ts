@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { buildCanonicalLaps } from './garmin-fit';
+import { buildCanonicalLaps, garminExternalId } from './garmin-fit';
+
+test('garminExternalId — prefixes the file id, or null when absent', () => {
+	assert.equal(garminExternalId('1700000000-12345'), 'garmin:1700000000-12345');
+	assert.equal(garminExternalId(null), null);
+	assert.equal(garminExternalId(''), null);
+});
 
 test('buildCanonicalLaps — empty / null / single lap yields no laps', () => {
 	// A single lap is the whole-activity lap (runner never pressed lap), so
