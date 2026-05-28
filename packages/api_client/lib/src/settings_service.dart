@@ -23,6 +23,11 @@ class SettingsKeys {
   static const dateOfBirth = 'date_of_birth';
   static const privacyDefault = 'privacy_default';
   static const stravaAutoShare = 'strava_auto_share';
+  /// Persona-hunt Round 3 finding Woman #2. Default true (every
+  /// existing account stays findable until they actively opt out).
+  /// `search_user_profiles` RPC (migration 20261015_001) reads
+  /// this key.
+  static const discoverableInSearch = 'discoverable_in_search';
   static const coachPersonality = 'coach_personality';
   static const weeklyMileageGoalMetres = 'weekly_mileage_goal_m';
   static const weekStartDay = 'week_start_day';

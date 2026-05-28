@@ -451,6 +451,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     await _putUniversal(SettingsKeys.stravaAutoShare, !current);
   }
 
+  Future<void> _editDiscoverableInSearch() async {
+    final current =
+        _bagValue<bool>(SettingsKeys.discoverableInSearch) ?? true;
+    await _putUniversal(SettingsKeys.discoverableInSearch, !current);
+  }
+
   Future<void> _editDateOfBirth() async {
     final raw = _bagValue<String>(SettingsKeys.dateOfBirth);
     final current = raw != null ? DateTime.tryParse(raw) : null;
@@ -849,6 +855,18 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               ),
               value: _bagValue<bool>(SettingsKeys.stravaAutoShare) ?? false,
               onChanged: _bagReady ? (_) => _editStravaAutoShare() : null,
+            ),
+            SwitchListTile(
+              title: const Text('Show me in name search'),
+              subtitle: const Text(
+                "When off, your account won't appear when other runners "
+                'search by display name. Your public runs and profile '
+                'remain reachable to anyone with the URL.',
+              ),
+              value:
+                  _bagValue<bool>(SettingsKeys.discoverableInSearch) ?? true,
+              onChanged:
+                  _bagReady ? (_) => _editDiscoverableInSearch() : null,
             ),
 
             _sectionLabel('AI coach'),
