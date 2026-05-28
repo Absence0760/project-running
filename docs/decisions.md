@@ -1830,6 +1830,8 @@ Don't re-litigate by:
 
 If tier-1 reveals that Embassy + Rust + nRF52840 is genuinely intractable for our specific needs, the right move is to revert: switch to Zephyr + C + same MCU, port the firmware-architecture work over, and update this entry. The firmware-architecture rules are designed to be language-portable for exactly this reason.
 
+**Amendment (2026-05-28) under [§ 92](#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) Resolution.** § 92 codified "optimise for tier-3, period" as the new decision-making rule and flagged § 80's tier-1 nRF52840 choice as a candidate for revision (Apollo510B EVB direct would be the § 92-optimal pick at tier 1). The user's 2026-05-28 Resolution kept § 80 as-is, framing the nRF52840 choice as a deliberate first-prototype compromise to "keep costs down and get a working version first." Tier-2 migrates to Apollo510B per [§ 90](#90-bom-refresh-2026-05-28-apollo510b-bmp581-swap-ins-supply-alternates-qualified); the full optimal road from tier-2 onward follows § 92's Phase 0–5 timeline. § 80's original reasoning (memory safety + tooling + async ergonomics) still holds; this amendment adds an explicit "and pragmatic first-prototype scope" frame so a future reader doesn't wonder why § 92 didn't supersede § 80.
+
 Pinning: [`apps/custom_watch/README.md`](../apps/custom_watch/README.md), [`apps/custom_watch/CLAUDE.md`](../apps/custom_watch/CLAUDE.md), [`docs/custom_watch/parts.md`](custom_watch/parts.md), [`docs/custom_watch/performance_path.md`](custom_watch/performance_path.md), [`docs/custom_watch/competitive_landscape.md`](custom_watch/competitive_landscape.md).
 
 ---
@@ -2310,6 +2312,23 @@ Don't re-litigate by:
 - **Treating "out of scope" as a valid argument.** The user explicitly said scope is not a constraint when establishing this rule.
 
 Pinning: pending entries (likely § 93-96) to revise § 80 / § 84 / § 88 / § 89 per the table above (after the user picks interpretation A vs B). [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) amendment may also need an "Amendment-2" under interpretation A.
+
+### Resolution (2026-05-28) — hybrid: § 92 long-term goal + § 80 tier-1 preserved as deliberate first-prototype compromise
+
+User resolved the A/B interpretation question with a hybrid framing: **§ 92 + interpretation A is the long-term goal** ("create the best watch ever"; the full Phase 0–5 optimal-road timeline above stands as the north star), **but tier-1 stays on nRF52840** per [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) as a deliberate first-prototype compromise to "keep costs down and get a working version first." Verbatim instruction: *"so lets have a goal to create the best watch ever. but for the first prototype lets try and keep costs down and get a working version first. then we can move to better hardware. Lets keep [the optimal road] as the final goad. But for the first prototype lets go with the nRF52840 option."*
+
+What this means for the planning sweep:
+
+- **No cascading revisions land.** § 80, § 84, § 88 Layer 3, and § 89 all stay as originally committed. Each is now formally framed as a deliberate first-prototype compromise consistent with the resolution, not as a § 92 violation. § 80 gets an amendment noting this (below).
+- **Tier-2 onward follows the optimal road.** Apollo510B production silicon per [§ 90](#90-bom-refresh-2026-05-28-apollo510b-bmp581-swap-ins-supply-alternates-qualified), MCUboot OTA per [§ 84](#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default)'s tier-2 obligation, full ANT+ Alliance engagement per [§ 88](#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3, and the rest of the Phase 0–5 timeline above.
+- **[§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) amendment stays as written for tier-1 effort framing.** "Owner-personal evenings/weekends" remains the tier-1 model. § 71's tier-2+ gating is the natural choke point where the optimal road kicks in — a § 71 trigger flipping (paying user base, ODM offer, hardware co-founder) is what enables the Phase 3+ team + capital investment the optimal road needs.
+
+What § 92 still binds under this resolution:
+
+- **Decisions that affect tier-2+ product quality** get reasoned through the § 92 optimal lens, not § 86's "small margins" lens. § 90's Apollo510B + BMP581 swaps are the worked example — already aligned because they're tier-2+ scope.
+- **Any NEW tier-1 decision that compromises tier-3 quality requires explicit "first-prototype compromise" framing.** § 80 / § 84 / § 88 Layer 3 / § 89 are grandfathered in under this resolution; any future tier-1 decision has to either be optimal or be explicitly flagged as a Resolution-style first-prototype compromise (and recorded as such in its entry).
+
+The full Phase 0–5 timeline in the table above remains the final-state vision. It's just not the tier-1 plan.
 
 ---
 
