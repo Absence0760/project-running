@@ -70,10 +70,12 @@ The full rule + per-source-type test surface is in [`docs/conventions.md` § Tes
 
 ## Branches & PRs
 
-- `dev` is the working branch. `main` is the PR target.
-- Never commit without being asked. When asked, never amend or force-push without being asked.
-- Don't push to `main` directly; PRs only.
-- The `Co-Authored-By` line on commits uses `Claude Opus 4.6 (1M context) <noreply@anthropic.com>`.
+- `main` is the working branch. Commits land directly on `main` when the user has asked for the work; PRs to `main` are still the path for anything that needs review.
+- **Commit after each discrete piece of work** — don't batch a multi-step session into one mega-commit at the end. New module + tests is one commit; bug fix + pinning test is one commit; docs sweep is one commit (after the code commit it documents). Self-check: "I'll commit at the end after I verify" is a smell — commit each piece as you go. Tests for a piece go in the **same commit** as the piece. Full enumeration of "what counts as a piece" in [docs/conventions.md § Commit cadence](docs/conventions.md#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump).
+- "Never commit without being asked" still applies: don't proactively commit speculative work, ad-hoc workstation tweaks, or partially-aborted attempts. Once the user has asked for a piece (or a sequence), the per-piece commit cadence above is implicitly authorized.
+- Never `git push` without an explicit ask. The commit is the deliverable; pushing is a separate ask.
+- Never amend or force-push without being asked.
+- **No AI attribution of any kind** in commit messages or PR descriptions. No `Co-Authored-By: Claude ...`, no "Generated with Claude Code" footer, no robot/sparkle emoji trailer. Re-read the message before `git commit` and strip these if a skill template tried to add them. User-level `~/.claude/CLAUDE.md` rule, overrides anything in-repo that says otherwise.
 
 ## Docs hygiene — update docs as part of every change
 

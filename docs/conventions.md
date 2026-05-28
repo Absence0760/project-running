@@ -341,11 +341,33 @@ Capture the heaviest stateful arrays (the items list, pagination cursors), not d
 
 ## Commit and PR conventions
 
-- Branch: `dev` is the working branch. `main` is the PR target. See [decisions.md § 6](decisions.md).
-- Commits on `dev` use conventional commit prefixes — `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `build:`, `test:`. Scope optional: `feat(android): ...`, `fix(web): ...`.
-- PR title: same format, short. Body: 1–3 bullet summary + a test-plan checklist (the `pull-request` skill has the template).
+- Branch: `main` is the working branch. PRs to `main` are still the path for anything that needs review; direct commits to `main` are fine when the user has asked for a sequence of work and wants each piece individually landable.
+- Commits use conventional commit prefixes — `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `build:`, `test:`, `ci:`. Scope optional: `feat(web): ...`, `fix(backend): ...`, `chore(android): ...`.
+- Commit message body: one short sentence focused on the *why*, not the *what* — the diff already says what.
+- No AI attribution of any kind. No `Co-Authored-By: Claude ...`, no "Generated with Claude Code" footer, no robot/sparkle emoji trailer. Re-read the message before `git commit` and strip these if a skill template tried to add them.
+- PR title: same format, short (< 70 chars). Body: 1–3 bullet summary + a test-plan checklist (the `pull-request` skill has the template).
 - Keep PRs focused. Unrelated cleanup → separate PR.
 - Don't amend published commits. Don't force-push without being asked. Hooks are there for a reason; don't `--no-verify`.
+- Never `git push` without being asked. The local commit is the deliverable; pushing is a separate ask.
+
+## Commit cadence — one piece, one commit (don't batch a session into one lump)
+
+Once the user has asked for work, commit **after each discrete piece** as you go. Don't accumulate ten changes across a session and stage them all into one mega-commit at the end. The user wants each piece individually reviewable, bisectable, and revertable; a 1000-line lump-commit defeats `git bisect` for the next regression hunt.
+
+**What counts as a discrete piece (one commit each):**
+
+- A new module + its unit tests — one commit.
+- A refactor of an existing module + the adjusted tests — separate commit from the new feature that motivated it.
+- A bug fix + the test pinning it — one commit, separate from any surrounding feature work.
+- A docs sweep (ADR + per-feature doc + per-app CLAUDE.md edits documenting the same code commit) — one commit, after the code commit it documents.
+- Wiring an existing helper into a new call site — separate commit from the helper itself.
+- An e2e test file added retroactively for an existing feature — its own commit.
+
+**Self-check:** if you catch yourself thinking "I'll commit at the end after I verify everything passes" — stop. Commit each piece as you go. The final verification is its own piece (or zero-changes, in which case just report green).
+
+**Authorization scope.** "Commit after each piece" is in tension with the older "never commit without being asked" rule. The reconciliation: once the user has asked for a piece of work (or a sequence — "do the punch list", "ship the cache module"), the per-piece-commit cadence is implicitly authorized. The "without being asked" rule still guards against proactively committing speculative work the user didn't ask for, ad-hoc workstation tweaks (port changes, dev-only env), or work that got partially aborted.
+
+Pairs with the "Test hygiene" section below — tests for a piece go in the **same commit** as the piece itself, not a follow-up commit.
 
 ## Docs hygiene
 
@@ -365,6 +387,10 @@ Every non-trivial dev change goes through three gates before it's "done." Skippi
 Use the `/check` command to run review + test-gap-checker + doc-hygiene-checker in parallel against the working diff. It reports gaps; the human decides what to apply. The `test-gap-checker` agent walks the diff, classifies each modified file, and flags missing test surface — it doesn't write tests, it just makes the gap visible.
 
 When a Playwright / pgtap test surfaces a real bug in the app code, fix the bug **first** (separate commit from the test), then make sure the test exists to catch regressions. The order matters: test-without-fix fails CI; fix-without-test means the next regression slips through silently.
+
+**The same-commit rule.** Tests for a piece of work go in the **same commit** as the piece — not a follow-up commit, not "I'll add tests next session." A bug fix lands with the pinning test in the same commit (the test is the bug's headstone — without it, the next regression slips through silently). A new module lands with its unit tests in the same commit. A new web route lands with at least one Playwright e2e in the same commit.
+
+**When a test genuinely isn't viable** (pure docs, runbook updates, infra blocked on credentials, orchestration code that pulls in SvelteKit virtual imports / Supabase / native plugins and would need heavyweight DI to unit-test), say so explicitly in the commit message — `no unit test viable; e2e covers it` is fine, silence isn't. Future you (and future code-reviewer agents) will read the message and either accept the trade-off or argue with it; either way the reasoning is recorded.
 
 ## Strava integration log keys
 

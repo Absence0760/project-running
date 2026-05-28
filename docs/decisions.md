@@ -70,13 +70,15 @@ A persistent tile cache was a "deferred from Phase 1" item. The first pass was i
 
 ---
 
-## 6. `dev` is the working branch; `main` is the PR target
+## 6. `main` is the working branch; PRs are still the path for review-needed work
 
-**Decided:** implicit from project setup
+**Decided:** updated 2026-05-28 (was: `dev` is the working branch / `main` is the PR target)
 
-All day-to-day work happens on `dev`. PRs merge `dev → main`. Do not push directly to `main`; do not force-push anywhere without being told. Commits on `dev` are fair game; commits on `main` are not amended.
+All day-to-day work happens directly on `main`. PRs to `main` are still the path for anything that needs review (security work, schema migrations, recording-stack changes, ultrareview-bound batches), but most persona-hunt / unit / docs / refactor work lands as a sequence of per-piece commits on `main`. **Never push without an explicit ask** — the local commit is the deliverable, pushing is a separate ask.
 
-**Why dev?** Lets the user experiment and reset `dev` without disturbing the canonical history on `main`. See the pull-request skill for the PR template.
+**Why the change.** The earlier `dev → main` PR setup added a round-trip step that didn't earn its keep when the user is driving the work in-session. Per-piece-commits on `main` give the same bisectability + revertability with one fewer branch to keep in sync. The "never push without being asked" rule is the safety valve: nothing leaves the workstation until the user says so.
+
+**Operating rule.** Once the user has asked for a piece of work (or a sequence), commit each piece as it lands — one piece, one commit. Tests in the same commit as the code they cover. Full enumeration of "what counts as a piece" in [`conventions.md` § Commit cadence](conventions.md#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump). The older "never commit without being asked" guard still protects against proactively committing speculative work or ad-hoc workstation tweaks. Do not force-push or amend a published commit without being told.
 
 ---
 
