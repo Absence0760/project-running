@@ -685,6 +685,8 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 
 **Status: research only. Tier 2+ not committed.** See [decisions.md § 71](decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) for the original deferral and its 2026-05-28 amendment (which permits tier-1 owner-personal bench-prototype work but binds tier 2+ to the original gates).
 
+**Full dedicated roadmap** — per-tier status, the three strategic vectors, the per-step bring-up checklist, and unresolved planning questions — lives at [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md). This section is just a parking-lot stub so the watch shows up in the main roadmap; the detail belongs with the other watch research.
+
 A purpose-built wrist device for ultra-marathon use — 100+ hour GPS battery life, dual-band GNSS for foliage / canyon accuracy, Sharp MIP always-on display, 5-button layout, offline vector maps, IPX7. Targets the niche Garmin Fenix / COROS Vertix / Suunto Vertical own today. Full research lives at [`docs/custom_watch/`](custom_watch/README.md):
 
 - [Vision](custom_watch/vision.md) — why ultra (not road or general-purpose smartwatch), the product requirements that fall out of that niche, the competitive set

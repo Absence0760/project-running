@@ -6,6 +6,7 @@ The bench-prototype firmware workspace lives at [`apps/custom_watch/`](../../app
 
 | Doc | What it answers |
 |---|---|
+| [roadmap.md](roadmap.md) | Current status across tier 1 / tier 2 / tier 3, the three strategic vectors (Connect IQ / Wear OS / ODM), the per-step bring-up checklist, and the open planning questions still to resolve. **Read this first to orient.** |
 | [vision.md](vision.md) | Why ultra (not road / triathlon / smartwatch general-purpose), the product requirements that fall out of that niche, and what we'd be competing against |
 | [competitive_landscape.md](competitive_landscape.md) | Frank read on Garmin / COROS / Suunto — what they're unbeatable on, what their real faults are, where you can credibly win, and the three asymmetric strategic vectors (Connect IQ app, Wear OS app, ODM partnership) that beat "build your own watch" |
 | [bom.md](bom.md) | Concrete component picks per subsystem (MCU, GNSS, optical HR, baro, display, battery, case) with the reasoning for each, plus the rejected alternatives |
