@@ -32,7 +32,11 @@ export function buildShareRunMeta(input: ShareRunMetaInput): ShareRunMeta {
 	const { id, run, displayName, siteUrl } = input;
 	const base = siteUrl.replace(/\/$/, '');
 	const runMeta = run
-		? { distance_m: run.distance_m, started_at: run.started_at }
+		? {
+				distance_m: run.distance_m,
+				started_at: run.started_at,
+				title: typeof run.metadata?.title === 'string' ? run.metadata.title : null,
+			}
 		: null;
 	const title = buildRunShareTitle(runMeta, displayName);
 	const description = buildRunShareDescription(runMeta, displayName);

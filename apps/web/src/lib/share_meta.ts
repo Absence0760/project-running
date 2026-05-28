@@ -19,7 +19,19 @@ export type ShareRunMeta = {
 	duration_s?: number | null;
 	started_at?: string | null;
 	source?: string | null;
+	/** The runner's own caption (runs.metadata.title), when set. */
+	title?: string | null;
 };
+
+/// Normalise a user-set run title for use in a share <title> / og:title:
+/// collapse whitespace and truncate so a pathological caption can't blow
+/// out the meta tag. Returns '' when there's nothing usable.
+export function cleanShareTitle(raw: unknown): string {
+	if (typeof raw !== 'string') return '';
+	const collapsed = raw.replace(/\s+/g, ' ').trim();
+	if (!collapsed) return '';
+	return collapsed.length > 80 ? `${collapsed.slice(0, 79).trimEnd()}…` : collapsed;
+}
 
 export type ShareRouteMeta = {
 	name?: string | null;
@@ -62,6 +74,10 @@ export function buildRunShareTitle(
 	displayName?: string | null,
 ): string {
 	if (!run) return `Run — ${SITE_NAME}`;
+	// The runner's own caption wins — it's the point of sharing for
+	// social-first users; the distance/date formula is the fallback.
+	const custom = cleanShareTitle(run.title);
+	if (custom) return `${custom} — ${SITE_NAME}`;
 	const km = formatKmStable(run.distance_m);
 	const date = formatDateStable(run.started_at);
 	const by = displayName ? ` by ${displayName}` : '';

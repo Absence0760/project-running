@@ -166,3 +166,31 @@ test('buildRouteShareDescription — elevation is appended when present', () => 
 test('buildRouteShareDescription — null returns the generic fallback', () => {
 	assert.equal(buildRouteShareDescription(null), 'A public route on Threkir.');
 });
+
+test('cleanShareTitle collapses whitespace, trims, and truncates long captions', () => {
+	assert.equal(cleanShareTitle('  8 miles  with   the gang '), '8 miles with the gang');
+	assert.equal(cleanShareTitle(''), '');
+	assert.equal(cleanShareTitle('   '), '');
+	assert.equal(cleanShareTitle(null), '');
+	assert.equal(cleanShareTitle(42), '');
+	const long = 'x'.repeat(200);
+	const out = cleanShareTitle(long);
+	assert.ok(out.length <= 80, `expected truncation, got ${out.length}`);
+	assert.ok(out.endsWith('…'));
+});
+
+test('buildRunShareTitle prefers the runner caption over the distance/date formula', () => {
+	const withTitle = buildRunShareTitle(
+		{ distance_m: 8000, started_at: '2026-05-28T07:00:00Z', title: '8 miles with the Wednesday gang' },
+		'Alex'
+	);
+	assert.equal(withTitle, '8 miles with the Wednesday gang — Threkir');
+});
+
+test('buildRunShareTitle falls back to the formula when no caption is set', () => {
+	const noTitle = buildRunShareTitle(
+		{ distance_m: 5000, started_at: '2026-05-28T07:00:00Z', title: '   ' },
+		'Alex'
+	);
+	assert.equal(noTitle, '5.0 km run by Alex on 28 May 2026 — Threkir');
+});

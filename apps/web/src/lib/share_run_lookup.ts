@@ -53,7 +53,7 @@ export async function lookupSharedRun(
 		});
 		const { data: run } = await supabase
 			.from('public_runs')
-			.select('id, user_id, distance_m, duration_s, started_at, source')
+			.select('id, user_id, distance_m, duration_s, started_at, source, metadata')
 			.eq('id', id)
 			.maybeSingle();
 		if (!run) return { run: null, displayName: null };
