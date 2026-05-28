@@ -4,7 +4,6 @@
 	import { supabase } from '$lib/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { updateUniversal } from '$lib/settings';
-	import { setUnit } from '$lib/units.svelte';
 	import {
 		isPushSupported,
 		pushPermission,
@@ -138,8 +137,6 @@
 			if (healthDataConsent && dateOfBirth) {
 				bagChanges.date_of_birth = dateOfBirth;
 			}
-			await updateUniversal(auth.user.id, bagChanges);
-
 			// 2. user_profiles columns: display_name, preferred_unit
 			// (dual-write for the cross-user readable surfaces),
 			// gender + DOB + health_data_consent_at (Art 9 gated),
@@ -154,16 +151,20 @@
 				profileUpdate.date_of_birth = dateOfBirth || null;
 				profileUpdate.health_data_consent_at = new Date().toISOString();
 			}
-			const { error } = await supabase
-				.from('user_profiles')
-				.update(profileUpdate)
-				.eq('id', auth.user.id);
-			if (error) throw error;
 
-			// 3. Refresh the auth store so the layout-level gate sees
-			// `onboarded_at` populated + doesn't re-route us back.
-			await auth.fetchUser();
-			setUnit(preferredUnit);
+			// Issue both writes in parallel — the bag write doesn't
+			// depend on the profile write and vice versa. Two
+			// sequential awaits added 2-6s in CI under load and was
+			// pushing the test's 10s waitForURL budget. Parallel
+			// awaits cut the chain in half.
+			const [, profileResult] = await Promise.all([
+				updateUniversal(auth.user.id, bagChanges),
+				supabase
+					.from('user_profiles')
+					.update(profileUpdate)
+					.eq('id', auth.user.id),
+			]);
+			if (profileResult.error) throw profileResult.error;
 
 			showToast('All set! Welcome aboard.', 'success');
 			// Full page navigation rather than client-side goto so the
@@ -171,12 +172,11 @@
 			// refresh — the next page load re-bootstraps auth from the
 			// cookie + the just-written onboarded_at column, so the
 			// gate trivially sees a non-null value and routes through
-			// to /dashboard. A goto here would re-fire the $effect on
-			// the SAME page session, which depends on the auth-store
-			// update having propagated before the URL change is
-			// observed. CI run 26583136874 saw the goto path silently
-			// redirect back to /onboarding when fetchUser hadn't
-			// resolved fast enough.
+			// to /dashboard. The page reload re-runs auth.refreshSession
+			// → fetchUser → get_my_profile, so the auth.fetchUser() call
+			// that used to live here is redundant and just added
+			// latency that pushed the test's waitForURL past its 10s
+			// budget under CI load.
 			window.location.href = '/dashboard';
 		} catch (e) {
 			showToast(`Could not save: ${(e as Error).message}`, 'error');

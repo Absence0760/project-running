@@ -78,13 +78,29 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 	test('Skip-onboarding header link stamps onboarded_at and exits to /dashboard', async ({
 		page,
 	}) => {
+		// 45s test-level budget — exceeds the 30s default to leave
+		// room for the 20s waitForURL plus the parallelised supabase
+		// writes plus the full-page navigation. The writes run inside
+		// the page handler, then the page does a full reload, then
+		// the new page bootstraps auth + the layout renders. Under
+		// CI load (multiple shards on one runner) the cumulative
+		// budget needs the extra slack.
+		test.setTimeout(45_000);
 		await page.goto('/onboarding');
 		await expect(
 			page.getByRole('heading', { name: /What should we call you/i })
 		).toBeVisible({ timeout: 5_000 });
 
 		await page.getByRole('button', { name: 'Skip onboarding' }).click();
-		await page.waitForURL(/\/dashboard/, { timeout: 10_000 });
+		// 20s budget covers the parallelised user_settings +
+		// user_profiles writes + the full page navigation under CI
+		// load. The page uses `window.location.href = '/dashboard'`
+		// (not `goto`) so the navigation is a full page reload, not
+		// a client-side route change — that re-bootstraps auth from
+		// the cookie which is what defeats the layout's onboarding
+		// gate race. Two CI runs (26583136874 + 26584629824) tripped
+		// the previous 10s budget under typical load.
+		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 
 		// Verify `onboarded_at` was actually written, not just a
 		// client-side navigation.
@@ -100,6 +116,10 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 	test('step-by-step Continue flow writes the answers and exits to /dashboard', async ({
 		page,
 	}) => {
+		// 45s test-level budget — same reason as the sibling Skip
+		// test above (full-page nav after parallelised writes under
+		// CI load).
+		test.setTimeout(45_000);
 		await page.goto('/onboarding');
 
 		// Step 1 — display name
@@ -150,7 +170,9 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		).toBeVisible();
 		await page.getByRole('button', { name: 'Open dashboard' }).click();
 
-		await page.waitForURL(/\/dashboard/, { timeout: 10_000 });
+		// 20s for the same reason as the sibling Skip-onboarding
+		// test above — full page nav after parallelised writes.
+		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
 
 		// Verify the writes landed.
 		const admin = getAdminClient();

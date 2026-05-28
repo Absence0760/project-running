@@ -2105,13 +2105,26 @@ export async function endRace(
 	instanceStart: string,
 	status: 'finished' | 'cancelled' = 'finished'
 ): Promise<RaceSessionRow> {
+	// The `race_sessions_status_temporal_invariant` CHECK constraint
+	// (migration `20260529000003`) requires `finished_at IS NULL`
+	// when `status='cancelled'` and `finished_at IS NOT NULL` when
+	// `status='finished'`. Stamping finished_at on a cancel write
+	// violates the constraint — the UPDATE errors with
+	// check_violation, the page's `raceSession` state never updates,
+	// and the Arm-race button never re-appears. The
+	// `event-race-control.spec.ts:170` Cancel-from-armed test timed
+	// out on every CI run for this reason. Only stamp finished_at
+	// when transitioning to `finished`.
+	const patch: Record<string, unknown> = {
+		status,
+		updated_at: new Date().toISOString(),
+	};
+	if (status === 'finished') {
+		patch.finished_at = new Date().toISOString();
+	}
 	const { data, error } = await supabase
 		.from('race_sessions')
-		.update({
-			status,
-			finished_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-		})
+		.update(patch)
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
 		.select()

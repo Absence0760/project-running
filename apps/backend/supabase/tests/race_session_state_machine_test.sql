@@ -2,7 +2,7 @@
 -- Persona-hunt Round 2 finding Pro #5.
 
 begin;
-select plan(8);
+select plan(10);
 
 -- Seed: a club + event so race_sessions FK to a real event row.
 do $$
@@ -107,5 +107,35 @@ select throws_ok(
   null,
   'finished without started_at is rejected (must have actually run)'
 );
+
+-- 9. armed → cancelled WITH finished_at stamped must fail. The
+-- temporal-invariant CHECK requires `finished_at IS NULL` when
+-- status='cancelled'. Pins the bug fixed in `endRace` (web data.ts)
+-- which used to stamp finished_at unconditionally — every Cancel
+-- click from armed errored with 23514, the page's local raceSession
+-- state never updated, and the Arm-race button never re-appeared
+-- (`event-race-control.spec.ts:170` timed out for 4 CI runs in a
+-- row).
+insert into race_sessions (event_id, instance_start, status)
+values ('99999999-9999-9999-9999-9999accec0e1',
+        '2026-04-15 13:00:00+00', 'armed');
+select throws_ok(
+  $$update race_sessions
+    set status = 'cancelled',
+        finished_at = '2026-04-15 13:30:00+00'
+    where event_id = '99999999-9999-9999-9999-9999accec0e1'
+      and instance_start = '2026-04-15 13:00:00+00'$$,
+  '23514',
+  null,
+  'armed → cancelled with finished_at stamped is rejected by the temporal invariant'
+);
+
+-- 10. armed → cancelled WITHOUT finished_at is accepted (the
+-- positive companion to test 9 — what `endRace` should be doing).
+update race_sessions
+  set status = 'cancelled'
+  where event_id = '99999999-9999-9999-9999-9999accec0e1'
+    and instance_start = '2026-04-15 13:00:00+00';
+select pass('armed → cancelled without finished_at is accepted');
 
 rollback;
