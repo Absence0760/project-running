@@ -58,11 +58,22 @@ Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-out
 - [ ] **OTA via a production-grade dual-bank bootloader.** [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — MCUboot is the default candidate; the specific choice gets made at tier-2 design time but the obligation is fixed.
 - [ ] **PMTiles vector renderer running on the MCU.** [§ 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) — multi-month firmware subproject (constrained subset of MapLibre's algorithm shape, port to Cortex-M4F + later Apollo4). 16 GB external SPI NAND flash committed in the BOM. Decision driven by [§ 86](../decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (end-state quality > engineering convenience).
 
-### Long-lead-time pre-validation (worth starting even while tier 2 is gated — see [OQ7](#oq7-vendor-relationship-pre-validation))
+### Vendor engagement (tiered per [§ 88](../decisions.md#88-vendor-engagement-is-tiered-across-project-maturity))
 
-- [ ] **Sony CXD5610** — datasheet + sample under NDA. ~4 weeks lead time.
-- [ ] **Maxim MAX86177 HR algorithm** — licensing terms + per-unit cost at our volumes.
-- [ ] **ANT+ Alliance adopter application** — open question whether Garmin (owner of ANT+) will sell adoption rights to a direct competitor.
+**Layer 1 — active now (free public research, zero commercial commitment):**
+
+- [ ] ANT+ Alliance public adopter list → confirm competitors (COROS, Polar, Suunto, Apple Watch) are granted adoption. Closes most of the "would Garmin refuse?" uncertainty without writing a check.
+- [ ] Sony CXD5610 public family briefs → power consumption, mode breakdowns, package options. Enough for BOM planning.
+- [ ] ADI MAX86177 public datasheet → register set + power-state characteristics for the tier-1 driver work.
+
+**Layer 2 — active when tier-1 has a working bench prototype to point at:**
+
+- [ ] Email Sony FAE with project brief + request for CXD5610 NDA datasheet + sampling conversation (~4 weeks for NDA paperwork; no commercial commitment).
+- [ ] Email ADI Maxim for HR-algorithm licensing terms at projected volume (real quote, non-binding until signed).
+
+**Layer 3 — active at tier-2 greenlight (one of § 71's triggers fires):**
+
+- [ ] ANT+ Alliance Adopter membership application ($2–5k/year + Garmin review). Commitment-grade; paying the fee + tipping our hand only makes sense once we've committed to ship hardware.
 
 ## Tier 3 — production-intent unit (gated)
 
@@ -109,14 +120,6 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 ## Open questions to resolve
 
 These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
-
-### OQ7: Vendor relationship pre-validation
-
-Should we email Sony / Maxim / ANT+ Alliance now, or wait until tier 1 demonstrates serious intent? Lead times are real (Sony ~4 weeks); zero cost to start emails. Options:
-
-- **(a)** Email all three now — establish the relationships, get the licensing/sampling pipeline started.
-- **(b)** Email Sony only now (longest lead time, no commercial commitment to start NDA conversation).
-- **(c)** Wait until tier 1 produces something we can demo. Risk: tier-2 start gets delayed by the vendor lead times.
 
 ### OQ8: User research with actual ultra runners
 

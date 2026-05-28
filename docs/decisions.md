@@ -2098,6 +2098,59 @@ Pinning: [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) "Strategic ve
 
 ---
 
+## 88. Vendor engagement is tiered across project maturity
+
+Open question OQ7 from [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) resolved.
+
+OQ7 framed it as "email all three vendors now / email Sony only / wait until tier-1 demonstrates serious intent." None of those quite captured the per-vendor reality: Sony engagement before there's a prototype likely gets filtered as tire-kicking; ADI is friendlier to small inquiries; ANT+ Alliance requires a $2–5k/year membership fee that exceeds the entire tier-1 budget AND signals commitment to ship hardware (which would breach the [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) "no commercial commitment until a trigger fires" framing).
+
+**Decision.** Vendor engagement runs in three layers, sequenced on the project's own maturity rather than treated as one flat list.
+
+**Layer 1 — active now (free public research, zero commercial commitment):**
+
+- ANT+ Alliance public adopter list → confirm competitors (COROS, Polar, Suunto, Apple Watch) are granted adoption. Closes most of the "would Garmin refuse?" uncertainty without writing a check.
+- Sony CXD5610 public family briefs → power consumption, mode breakdowns, package options. Enough for tier-2 BOM planning even without the NDA datasheet.
+- ADI MAX86177 public datasheet (already public) → register set + power-state characteristics for the tier-1 driver work.
+
+**Layer 2 — active when tier-1 has a working bench prototype to point at:**
+
+- Email Sony FAE with a written project brief + a request for the CXD5610 NDA datasheet + a sampling conversation. ~4 weeks for the NDA paperwork; no commercial commitment.
+- Email ADI Maxim for HR-algorithm licensing terms at the projected volume (e.g., "10k units over 24 months"). Real quote, non-binding until signed.
+
+A working bench prototype is the credibility threshold for serious vendor engagement. Sales teams take "we have hardware running" much more seriously than "we're investigating"; doing it earlier risks burning engagement-capital for filtered-as-tire-kicker responses.
+
+**Layer 3 — active at tier-2 greenlight (one of [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely)'s triggers fires):**
+
+- ANT+ Alliance Adopter membership application ($2–5k/year + Garmin's review). Commitment-grade — paying the fee + tipping our hand to Garmin only makes sense once we've committed to ship hardware. Per [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely), that commitment is gated; this engagement is gated with it.
+
+Why tiered (per [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)):
+
+- **Layer 1 captures most of the information value for zero cost.** The ANT+ adoption question is mostly answerable from the public adopter list; Sony has public family briefs; ADI has the full datasheet. Skipping these is leaving free signal on the table.
+- **Layer 2 protects engagement-capital.** Vendor sales teams have finite patience for tire-kicker inquiries; using up that patience pre-prototype means the post-prototype conversation starts on worse footing. Holding off until the prototype exists is the better-end-state-quality move per § 86.
+- **Layer 3 respects [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely)'s gating.** Paying ANT+ Alliance dues + revealing the project to Garmin both imply "we're committing to ship," which is exactly the commercial commitment § 71's amendment held back from authorising at tier 1.
+
+What this commits us to:
+
+- **Layer-1 web research happens in the same calendar window as tier-1 step 1 (parts arriving).** A handful of hours; produces a written summary that feeds tier-2 BOM planning.
+- **Layer-2 emails go out** the same week tier-1 first achieves a recognisable bench prototype (somewhere between step 3 GNSS bring-up and step 7 integration — the exact moment is a judgment call).
+- **Layer-3 ANT+ Alliance application waits for a [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) trigger to flip.** No exceptions; the membership fee + Garmin disclosure is too expensive to do speculatively.
+
+What this does NOT commit us to:
+
+- **A specific vendor at tier-2.** Sony / ADI / ANT+ Alliance are the working assumptions; if layer-1 research surfaces an alternative that's clearly better, the BOM gets revised.
+- **Joining ANT+ Alliance ever.** If layer-1 research confirms competitor adoption is normal, layer 3 happens at tier-2 greenlight. If layer-1 surprises us (Garmin recently changed policy), layer 3 either gets accelerated or revisited (ship BLE-only and accept the smaller compatible-strap market).
+- **A formal LLC for vendor engagement.** Layer-2 emails come from the owner-personal account with a project brief; vendors take individual inquiries with a working prototype seriously enough to start NDA conversations. Forming an LLC happens if/when a § 71 trigger flips.
+
+Don't re-litigate by:
+
+- **Emailing Sony / ADI before there's a bench prototype** "to save lead time." It saves nothing — the response is "contact us when you have a company" — and burns engagement capital you'd want post-prototype.
+- **Joining ANT+ Alliance now** "to get the answer early." Layer-1 research gives 80% of the answer for free; the remaining 20% costs $2–5k/year + tips our hand to a competitor.
+- **Skipping layer 1** "until tier 2." The free research has value at tier 1 too — feeds BOM planning, surfaces alternatives, frames vendor conversations. Free + immediate = always do layer 1.
+
+Pinning: [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) replaces the previous flat "Long-lead-time pre-validation" list with the three-layer "Vendor engagement" structure; OQ7 removed from open questions.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
