@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -167,7 +166,18 @@
 			setUnit(preferredUnit);
 
 			showToast('All set! Welcome aboard.', 'success');
-			goto('/dashboard');
+			// Full page navigation rather than client-side goto so the
+			// layout's onboarding-gate $effect can't race the auth-store
+			// refresh — the next page load re-bootstraps auth from the
+			// cookie + the just-written onboarded_at column, so the
+			// gate trivially sees a non-null value and routes through
+			// to /dashboard. A goto here would re-fire the $effect on
+			// the SAME page session, which depends on the auth-store
+			// update having propagated before the URL change is
+			// observed. CI run 26583136874 saw the goto path silently
+			// redirect back to /onboarding when fetchUser hadn't
+			// resolved fast enough.
+			window.location.href = '/dashboard';
 		} catch (e) {
 			showToast(`Could not save: ${(e as Error).message}`, 'error');
 		} finally {

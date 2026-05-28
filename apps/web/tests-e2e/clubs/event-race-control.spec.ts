@@ -248,9 +248,16 @@ test.describe('/clubs/[slug]/events/[id] — race control (admin + member multi-
 			// "Previous race cancelled." muted note above the Arm
 			// button — pin the button reappearance, not the copy, since
 			// copy is a separate UX concern.
+			//
+			// 20 s timeout matches the same file's `realtime-ready`
+			// wait at line 219 — the cancel-race flow is the same
+			// shape (action → server RPC → realtime postgres_changes
+			// → page rerender), and the 10 s budget was tripping in
+			// CI under load (runs 26577774645 + 26581301842 +
+			// 26583136874 all timed out here).
 			await expect(
 				adminPage.getByRole('button', { name: 'Arm race' })
-			).toBeVisible({ timeout: 10_000 });
+			).toBeVisible({ timeout: 20_000 });
 
 			// Member's banner clears.
 			await expect(memberPage.locator('.race-banner')).toHaveCount(0, {

@@ -1741,7 +1741,15 @@
 
 	.stat-grid {
 		display: grid;
-		grid-template-columns: repeat(5, minmax(0, 1fr));
+		/* 6 columns to match the 6 stat cards rendered on desktop
+		   (This Week, Vert, Total Runs, Longest Run, This Week
+		   Pace, Streak). The U4 web commit `807e11e1` added the
+		   Vert card to the previously-5-column grid; without
+		   bumping this to 6 the cards wrapped to a second row at
+		   1440px wide (pinned by `dashboard/page.spec.ts:333`).
+		   The narrower breakpoints below collapse to 2-up as
+		   before — phones aren't affected. */
+		grid-template-columns: repeat(6, minmax(0, 1fr));
 		gap: var(--space-md);
 	}
 

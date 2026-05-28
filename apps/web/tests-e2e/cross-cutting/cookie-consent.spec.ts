@@ -185,6 +185,23 @@ test.describe('Cookie consent banner — Global Privacy Control honoured', () =>
 			});
 		});
 		await page.goto('/');
+
+		// Wait for the banner's onMount to fire AND for the GPC
+		// branch to write `cookie_consent` to localStorage. Polling
+		// this directly avoids the hydration race where
+		// `toHaveCount(0)` would pass immediately (the component
+		// hadn't mounted yet so the banner was simply absent), then
+		// the synchronous localStorage read would return null because
+		// `consent.set('rejected')` hadn't run yet. CI run
+		// 26583136874 shard 3 caught this race — the localStorage
+		// check intermittently saw null on a cold cache hydrate.
+		await expect
+			.poll(
+				() => page.evaluate(() => localStorage.getItem('cookie_consent')),
+				{ timeout: 10_000 },
+			)
+			.not.toBeNull();
+
 		// Banner must not appear — give it a generous window so a
 		// "shows on mount then auto-dismisses" anti-pattern still
 		// fails the assertion.

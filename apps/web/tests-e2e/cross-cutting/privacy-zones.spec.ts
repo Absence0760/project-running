@@ -83,8 +83,13 @@ test.describe('privacy-zone share guardrail', () => {
 		await page.locator('button[title="Share link"]').click();
 
 		// The privacy-zone ConfirmDialog must appear with the warning
-		// text. The dialog title is "Share through a privacy zone?".
-		const dialog = page.locator('.modal', { hasText: 'Share through a privacy zone' });
+		// text. The dialog title is "Make this run public?" — was
+		// "Share through a privacy zone?" before commit `8062b39d`
+		// which restructured the share-consent UX to lead with the
+		// public-flip framing + describe the zone-clipping in the
+		// body. The "clipped" assertion below pins the message
+		// content; the title is just the modal identifier.
+		const dialog = page.locator('.modal', { hasText: 'Make this run public?' });
 		await expect(dialog).toBeVisible({ timeout: 5_000 });
 		await expect(dialog).toContainText(/clipped/i);
 
@@ -96,12 +101,12 @@ test.describe('privacy-zone share guardrail', () => {
 
 		await page.locator('button[title="Share link"]').click();
 		await expect(
-			page.locator('.modal', { hasText: 'Share through a privacy zone' })
+			page.locator('.modal', { hasText: 'Make this run public?' })
 		).toBeVisible({ timeout: 5_000 });
 
 		// Cancel again to leave the row in its private state for cleanup.
 		await page
-			.locator('.modal', { hasText: 'Share through a privacy zone' })
+			.locator('.modal', { hasText: 'Make this run public?' })
 			.getByRole('button', { name: 'Cancel' })
 			.click();
 	});
@@ -136,11 +141,13 @@ test.describe('privacy-zone share guardrail', () => {
 		).toBeVisible({ timeout: 10_000 });
 
 		await page.locator('button[title="Share link"]').click();
-		const dialog = page.locator('.modal', { hasText: 'Share through a privacy zone' });
+		const dialog = page.locator('.modal', { hasText: 'Make this run public?' });
 		await expect(dialog).toBeVisible({ timeout: 5_000 });
 
-		// Confirm.
-		await dialog.getByRole('button', { name: 'Share anyway' }).click();
+		// Confirm. Button label is "Make public & copy link" — was
+		// "Share anyway" before commit `8062b39d` reframed the
+		// dialog (see the inline note on the title-text fix above).
+		await dialog.getByRole('button', { name: 'Make public & copy link' }).click();
 		await expect(dialog).toHaveCount(0);
 
 		// makeRunPublic + a navigator.clipboard.writeText. The success
@@ -161,7 +168,7 @@ test.describe('privacy-zone share guardrail', () => {
 		await page.locator('button[title="Copy share link"]').click();
 		// Toast appears immediately; dialog does not.
 		await expect(
-			page.locator('.modal', { hasText: 'Share through a privacy zone' })
+			page.locator('.modal', { hasText: 'Make this run public?' })
 		).toHaveCount(0);
 	});
 });
