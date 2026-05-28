@@ -95,6 +95,35 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		expect(chipCount).toBeGreaterThanOrEqual(2);
 	});
 
+	test('weekly "end after N occurrences" persists recurrence_count (persona #41)', async ({
+		page
+	}) => {
+		const title = `e2e-recurrence-count ${Date.now()}`;
+		const startIso = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+
+		await page.goto('/clubs/richmond-run-club/events/new');
+		await expect(page.getByRole('heading', { level: 1, name: 'New event' })).toBeVisible({
+			timeout: 10_000
+		});
+		await page.getByPlaceholder('Sunday long run').fill(title);
+		await page.locator('input[type="date"]').first().fill(startIso);
+		await page.locator('input[type="time"]').first().fill('07:30');
+		await page.getByRole('radio', { name: 'Weekly' }).check();
+		await page.getByPlaceholder('N occurrences').fill('6');
+
+		await page.getByRole('button', { name: /Create event/ }).click();
+		await page.waitForURL(/\/clubs\/richmond-run-club\/events\/[0-9a-f-]+$/, { timeout: 10_000 });
+		eventId = page.url().match(/\/events\/([0-9a-f-]+)$/)![1];
+
+		const { data: row } = await getAdminClient()
+			.from('events')
+			.select('recurrence_freq, recurrence_count')
+			.eq('id', eventId)
+			.single();
+		expect(row?.recurrence_freq).toBe('weekly');
+		expect(row?.recurrence_count).toBe(6);
+	});
+
 	test('unbounded weekly series exposes far more than the old 6-instance cap (persona #40)', async ({
 		page
 	}) => {

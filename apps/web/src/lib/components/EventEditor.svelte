@@ -47,6 +47,7 @@
 	let recurrence = $state<'none' | RecurrenceFreq>('none');
 	let byday = $state<Weekday[]>([]);
 	let until = $state<string>('');
+	let count = $state<number | null>(null);
 
 	function toggleByday(code: Weekday) {
 		byday = byday.includes(code) ? byday.filter((c) => c !== code) : [...byday, code];
@@ -110,7 +111,9 @@
 				recurrence_freq: recurrenceFreq,
 				recurrence_byday:
 					recurrenceFreq && recurrenceFreq !== 'monthly' && byday.length > 0 ? byday : null,
-				recurrence_until: recurrenceFreq && until ? new Date(until).toISOString() : null
+				recurrence_until: recurrenceFreq && until ? new Date(until).toISOString() : null,
+				recurrence_count:
+					recurrenceFreq && count && count > 0 ? Math.floor(count) : null
 			});
 			oncreated?.(event);
 		} catch (e: unknown) {
@@ -221,6 +224,16 @@
 			<label class="until">
 				<span>Ends on <span class="optional">optional</span></span>
 				<input type="date" bind:value={until} />
+			</label>
+			<label class="until">
+				<span>End after <span class="optional">optional</span></span>
+				<input
+					type="number"
+					min="1"
+					max="520"
+					bind:value={count}
+					placeholder="N occurrences"
+				/>
 			</label>
 		{/if}
 	</fieldset>
