@@ -80,7 +80,7 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 
 | Field | Value |
 |---|---|
-| Status | Not started |
+| Status | **Active, parallel to tier-1** per [§ 87](../decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) |
 | Cost | A few weeks of Monkey C development |
 | Risk | Near zero — distributed via Garmin's own marketplace |
 | What it tests | Whether our software UX is meaningfully better than Garmin's first-party UI (the #1 complaint about Garmin) |
@@ -109,14 +109,6 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 ## Open questions to resolve
 
 These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
-
-### OQ6: Strategic-vector sequencing
-
-Is tier 1 the only thing happening, or does vector 1 (Connect IQ app) run in parallel? Vector 1 is the cheapest market test of our software differentiation — arguably should be the #1 priority, not the #4. Options:
-
-- **(a)** Sequential — finish tier 1 first, then start vector 1.
-- **(b)** Parallel — start vector 1 *now*, alongside tier 1.
-- **(c)** Vector-1-first — pause tier 1 until vector 1 has shipped + collected feedback, then resume.
 
 ### OQ7: Vendor relationship pre-validation
 

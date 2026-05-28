@@ -2058,6 +2058,46 @@ Pinning: First application in [§ 85](#85-map-renderer-full-pmtiles-vector-rende
 
 ---
 
+## 87. Strategic vector 1 (Connect IQ app) runs in parallel with tier-1 firmware
+
+Open question OQ6 from [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) resolved.
+
+[`competitive_landscape.md`](custom_watch/competitive_landscape.md) identified vector 1 — a Garmin Connect IQ app or data field targeting existing Garmin owners — as the cheapest possible market test of the custom_watch software-differentiation thesis. Distribution free via Garmin's marketplace, engineering cost a few weeks of Monkey C, downside risk near zero. OQ6 asked whether to start it sequentially after tier 1, in parallel with tier 1, or before tier 1.
+
+**Decision.** Vector 1 runs **in parallel** with tier-1 firmware bring-up. Both are active simultaneously on owner-personal evenings/weekends time per the [§ 71 amendment](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely). Per-surface evening time halves; two simultaneous learning loops produce more information per calendar week than serial single-loop work.
+
+Why parallel (per [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)):
+
+- **Tier-1 firmware quality improves with real market signal in hand.** Building tier 1 for 3–6 months without Garmin-owner feedback means making UX decisions in the dark. Parallel = tier 1 prioritises data-presentation patterns vector 1 validated and deprioritises the ones that flopped.
+- **Vector 1 is cheap insurance against a bad investment thesis.** If a few weeks of Monkey C produces "this is the same as Garmin" feedback, that's a strong signal to reconsider tier-2/3 — better caught at ~$0 than after $15–40k of tier-2 spend.
+- **§ 86 says pick the higher-quality option even when current-tier engineering cost is materially higher.** Parallel doubles the surface area being learned about per calendar week; depth-in-one-surface-first delays the cross-surface learning entirely.
+
+(a) sequential delays critical market signal by 3–6 months for no compensating quality benefit. (c) vector-1-first conflicts with the spirit of the [§ 71 amendment](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) — pausing the thing the owner is doing-because-they-enjoy-it to do market research instead is the wrong frame.
+
+What this commits us to:
+
+- **A Garmin Connect IQ app or data field built using the Connect IQ SDK (Monkey C).** v1 scope intentionally minimal — one data field or one simple watch app — to test the differentiation hypothesis quickly, not to ship feature parity with Garmin's first-party offering. Specific v1 scope is a separate design question, not codified here.
+- **Distribution via Garmin's Connect IQ store at free** — the install rate is the experiment, not "willingness to pay $X."
+- **Tier-1 firmware per-evening time drops** to roughly 50–60% to make room. Both surfaces' first deliverable lands on a similar timeline.
+- **[`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) Vector 1 status flips** from "Not started" to "Active, parallel to tier-1."
+
+What this does NOT commit us to:
+
+- **Feature parity with Garmin's first-party offering at vector-1 v1.** v1 is one thing materially better, not five things at par.
+- **A Connect IQ business model.** Free distribution at v1; monetisation is a separate question for after the install rate validates the thesis.
+- **Tier-1 deprioritisation.** Both are active; neither is paused. Tier-1's [DoD per § 82](#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype) stays in effect.
+- **Vector 2 (Wear OS reframing) or vector 3 (ODM partnership) starting alongside.** § 86 is end-state-quality-first, not maximum-parallel-experimentation. Vector 2 overlaps too much with the existing `apps/watch_wear/` scope to be additive; vector 3 only becomes interesting after vector 1 produces signal.
+
+Don't re-litigate by:
+
+- **Pausing vector 1 because "tier 1 is taking longer than expected."** Schedule slippage isn't a quality argument; the surfaces are independent learning loops, sequencing them just delays learning.
+- **Pausing tier 1 because "vector 1 is getting traction."** Tier 1 is owner-personal investigation, not a project that's only justified by external validation; the firmware path has its own learning goal (domain credibility for the eventual ODM conversation per [`competitive_landscape.md`](custom_watch/competitive_landscape.md)).
+- **Adding vector 2 or 3 alongside.** Per [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins), end-state-quality-first ≠ everything-in-parallel. Vector 1 produces signal first; subsequent vectors get sequenced on that signal.
+
+Pinning: [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) "Strategic vectors" Vector 1 status flipped; OQ6 removed from open questions.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
