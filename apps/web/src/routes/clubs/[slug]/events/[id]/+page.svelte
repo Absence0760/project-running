@@ -117,11 +117,12 @@
 	);
 
 	let rsvpCounts = $derived.by(() => {
-		const c = { going: 0, maybe: 0, declined: 0 };
+		const c = { going: 0, maybe: 0, declined: 0, waitlisted: 0 };
 		for (const a of attendees) {
 			if (a.status === 'going') c.going += 1;
 			else if (a.status === 'maybe') c.maybe += 1;
 			else if (a.status === 'declined') c.declined += 1;
+			else if (a.status === 'waitlisted') c.waitlisted += 1;
 		}
 		return c;
 	});
@@ -567,7 +568,12 @@
 		if (!event || !activeInstance || busy) return;
 		busy = true;
 		try {
-			const shouldClear = viewerRsvpForActive === status;
+			// The "going" button stands for both going and waitlisted (a
+			// waitlisted RSVP is a pending "going"), so clicking it while
+			// waitlisted leaves the queue.
+			const shouldClear =
+				viewerRsvpForActive === status ||
+				(status === 'going' && viewerRsvpForActive === 'waitlisted');
 			if (shouldClear) {
 				await clearRsvp(event.id, activeInstance);
 			} else {
@@ -757,6 +763,9 @@
 						<span class="value">
 							{event.attendee_count}{event.capacity ? ` / ${event.capacity}` : ''}
 						</span>
+						{#if rsvpCounts.waitlisted > 0}
+							<span class="waitlist-note">Full · {rsvpCounts.waitlisted} on waitlist</span>
+						{/if}
 					</div>
 				</div>
 
@@ -778,17 +787,29 @@
 						<button
 							type="button"
 							class="rsvp-opt rsvp-going"
-							class:active={viewerRsvpForActive === 'going'}
-							aria-pressed={viewerRsvpForActive === 'going'}
-							aria-label={viewerRsvpForActive === 'going' ? 'Going' : "I'm in"}
+							class:active={viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted'}
+							aria-pressed={viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted'}
+							aria-label={viewerRsvpForActive === 'going'
+								? 'Going'
+								: viewerRsvpForActive === 'waitlisted'
+									? 'Waitlisted'
+									: "I'm in"}
 							onclick={() => rsvp('going')}
 							disabled={busy}
 						>
 							<span class="material-symbols" aria-hidden="true">
-								{viewerRsvpForActive === 'going' ? 'check_circle' : 'directions_run'}
+								{viewerRsvpForActive === 'going'
+									? 'check_circle'
+									: viewerRsvpForActive === 'waitlisted'
+										? 'hourglass_top'
+										: 'directions_run'}
 							</span>
 							<span class="rsvp-label">
-								{viewerRsvpForActive === 'going' ? 'Going' : "I'm in"}
+								{viewerRsvpForActive === 'going'
+									? 'Going'
+									: viewerRsvpForActive === 'waitlisted'
+										? 'Waitlisted'
+										: "I'm in"}
 							</span>
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.going}</span>
 						</button>
@@ -1262,6 +1283,11 @@
 		font-size: 1.15rem;
 		font-weight: 700;
 		font-variant-numeric: tabular-nums;
+	}
+	.metric .waitlist-note {
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
 	}
 
 	.route-chip {

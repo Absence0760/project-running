@@ -103,7 +103,10 @@ export type PreferredUnit = 'km' | 'mi';
 export type SubscriptionTier = 'free' | 'pro' | 'lifetime';
 
 export type ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member';
-export type RsvpStatus = 'going' | 'maybe' | 'declined';
+// 'waitlisted' is assigned server-side by the event-capacity trigger
+// (migration 20261018_001) when a 'going' RSVP exceeds events.capacity; the
+// client never writes it directly. No DB CHECK exists on event_attendees.status.
+export type RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted';
 export type MembershipStatus = 'active' | 'pending';
 export type JoinPolicy = 'open' | 'request' | 'invite';
 export type RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly';

@@ -1839,20 +1839,29 @@ export async function deleteEvent(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Upsert the caller's RSVP and return the *effective* status. When the
+/// requested status is 'going' but the event is at capacity, the
+/// enforce_event_capacity trigger (migration 20261018_001) demotes the row to
+/// 'waitlisted', so the persisted status can differ from what was requested —
+/// we read it back via the upsert's returning row so the UI can show the
+/// waitlist state without a second fetch.
 export async function rsvpEvent(
 	eventId: string,
 	status: RsvpStatus,
 	instanceStart: string
-): Promise<void> {
+): Promise<RsvpStatus> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
-	const { error } = await supabase
+	const { data, error } = await supabase
 		.from('event_attendees')
 		.upsert(
 			{ event_id: eventId, user_id: userId, status, instance_start: instanceStart },
 			{ onConflict: 'event_id,user_id,instance_start' }
-		);
+		)
+		.select('status')
+		.single();
 	if (error) throw error;
+	return (data?.status as RsvpStatus | undefined) ?? status;
 }
 
 export async function clearRsvp(eventId: string, instanceStart: string): Promise<void> {
