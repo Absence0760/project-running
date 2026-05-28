@@ -2151,6 +2151,46 @@ Pinning: [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) replaces the 
 
 ---
 
+## 89. Skip user-research interviews; vector 1 install rate is the validation channel
+
+Open question OQ8 from [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) resolved.
+
+OQ8 asked whether to interview 5–10 ultra runners about their Garmin / COROS pain points to validate the product vision in [`competitive_landscape.md`](custom_watch/competitive_landscape.md), which is currently built from public forums + reviews + pattern-matching rather than first-hand conversations. The [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) lens leans toward running the interviews — ~10 hours for thesis validation is cheap on paper.
+
+**Decision.** Skip the interview round. Validation of the differentiation thesis comes from vector 1 (the Garmin Connect IQ app per [§ 87](#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware)) install rate + organic feedback instead.
+
+Why this beats interviews:
+
+- **Revealed preference beats stated preference.** "Did Garmin owners install our app + leave it on their watch?" is a stronger signal than "Did Garmin owners tell us in a 30-min call that they'd want our app?" Stated-preference interviews are notoriously prone to politeness bias — people say they'd use a thing they wouldn't actually use. Vector 1's install rate cuts through that.
+- **Vector 1 is already committed.** [§ 87](#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) puts the validation pathway in flight; interviews would be redundant validation on top, not a replacement for missing validation.
+- **The "cost" of interviews isn't really 10 hours.** Cold-outreaching strangers, scheduling calls, conducting them, synthesising findings — for an owner-personal investigation explicitly framed as "I'm doing this because I'm enjoying it," the social-coordination overhead is higher than the hour count suggests.
+
+This is a defensible exception to [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)'s "pick the higher-quality option" because:
+
+- The interview option isn't actually higher-quality than revealed-preference vector-1 signal — interviews would supplement, not replace.
+- The marginal information gain from interviews on top of vector-1 install data is small.
+- [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)'s explicit exception clause covers cases where the harder option doesn't materially improve end-state quality; this fits.
+
+What this commits us to:
+
+- **No formal user-research effort at tier 1.** The interview pathway stays closed unless we choose to revisit (see below).
+- **Vector 1's install rate becomes the validation gate** for "is the software-differentiation thesis real?" — if vector 1 succeeds, the thesis is validated; if it flops, the thesis is weakened and tier 2 should be reconsidered.
+- **No `docs/custom_watch/user_research.md`** — the doc isn't created; if interviews ever happen, it lands then.
+
+What this does NOT commit us to:
+
+- **Ignoring all user feedback.** Vector-1 reviews, Connect IQ store comments, organic feedback through any channel remain signal. Skipping is just skipping the structured-interview format.
+- **Skipping interviews forever.** If vector 1 produces ambiguous signal (middling install rate, mixed reviews), interviews become a genuinely useful second-pass validation. The decision here is "don't do them now," not "don't do them ever."
+
+Don't re-litigate by:
+
+- **Adding "we should interview some runners first" when tier 1 hits a hard problem.** Hard problems get solved by debugging, not by external user research. Talking to ultra runners doesn't unblock a driver bug.
+- **Citing [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) to argue interviews should happen now anyway.** This entry IS the explicit § 86 exception; the trade is recorded.
+
+Pinning: [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ8 removed; with OQ8 closed, all initial OQs are resolved and the "Open questions to resolve" section is restructured as a resolution-tracking table.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -119,15 +119,19 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 
 ## Open questions to resolve
 
-These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
+**All initial open questions resolved during the 2026-05-28 planning sweep.** Resolutions tracked below; new OQs land here as they arise during tier-1 / tier-2 work.
 
-### OQ8: User research with actual ultra runners
+| OQ | Topic | Resolved in |
+|---|---|---|
+| OQ1 + OQ2 | Tier-1 Definition of Done + kill criteria | [§ 82](../decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype) — one-outdoor-run DoD; explicitly no kill criteria |
+| OQ3 | Power-measurement methodology | [§ 83](../decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem) — Nordic PPK2, per-subsystem |
+| OQ4 | OTA architecture | [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — tier-1 no OTA; tier-2 obligated to a dual-bank bootloader (MCUboot default) |
+| OQ5 | Map renderer + format | [§ 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) — full PMTiles + on-MCU vector rendering + 16 GB external NAND |
+| OQ6 | Strategic-vector sequencing | [§ 87](../decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) — vector 1 (Connect IQ app) runs in parallel with tier-1 |
+| OQ7 | Vendor relationship pre-validation | [§ 88](../decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) — tiered: research now, NDA post-prototype, commercial at tier-2 |
+| OQ8 | User research with ultra runners | [§ 89](../decisions.md#89-skip-user-research-interviews-vector-1-install-rate-is-the-validation-channel) — skipped; vector-1 install rate is the validation channel |
 
-[`competitive_landscape.md`](competitive_landscape.md) is built from forums + reviews + general pattern-matching. Worth interviewing 5–10 real ultra runners about their Garmin/COROS pain points before locking the product vision? ~10 hours, free, could validate or invalidate the whole thesis. Options:
-
-- **(a)** Run the interviews before any more tier-1 work — feeds back into vision.md if findings disagree.
-- **(b)** Run them in parallel with tier-1 firmware bring-up.
-- **(c)** Skip — the competitive analysis is good enough as-is.
+**Decision-making meta-principle:** [§ 86](../decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (custom_watch picks optimise for end-state product quality, even at small margins).
 
 ## Smaller considerations
 
