@@ -81,6 +81,48 @@ test('pacesFromGoalPace: 4:00/km goal yields easy in 4:30-5:15 band', () => {
 	assert.ok(p.easy >= 270 && p.easy <= 315, `easy out of band: ${p.easy}`);
 });
 
+// Persona-hunt Round 3 finding Woman #3 — gender calibration.
+test('pacesFromGoalPace: omitting gender returns the existing (male-curve) values', () => {
+	// Back-compat pin — every caller that doesn't pass gender must
+	// see the unmodified output. A regression that hard-coded the
+	// calibration would silently slow every existing user's prescribed
+	// paces by 3%.
+	const noGender = pacesFromGoalPace(240);
+	const explicitNull = pacesFromGoalPace(240, null);
+	const explicitMale = pacesFromGoalPace(240, 'male');
+	assert.deepStrictEqual(noGender, explicitNull);
+	assert.deepStrictEqual(noGender, explicitMale);
+});
+
+test('pacesFromGoalPace: female calibration shifts every band ~3% slower', () => {
+	const male = pacesFromGoalPace(240);
+	const female = pacesFromGoalPace(240, 'female');
+	// Each band must be slower (higher seconds-per-km) for female.
+	assert.ok(female.easy > male.easy, `female easy not slower: ${female.easy} vs ${male.easy}`);
+	assert.ok(female.marathon > male.marathon);
+	assert.ok(female.tempo > male.tempo);
+	assert.ok(female.interval > male.interval);
+	assert.ok(female.repetition > male.repetition);
+	// And the shift must sit in the 2-5% range we documented — looser
+	// pin to absorb integer rounding at the tighter bands. Use the
+	// `easy` band (widest absolute, most stable under rounding).
+	const ratio = female.easy / male.easy;
+	assert.ok(
+		ratio > 1.02 && ratio < 1.05,
+		`female easy / male easy ratio out of 2-5% band: ${ratio}`
+	);
+});
+
+test('pacesFromGoalPace: nonbinary falls back to the unmodified curve', () => {
+	// We do not have a validated calibration for non-binary athletes;
+	// applying a wrong adjustment is worse than no adjustment. Pin
+	// the conservative default so a future contributor doesn't
+	// silently fork this branch.
+	const male = pacesFromGoalPace(240);
+	const nb = pacesFromGoalPace(240, 'nonbinary');
+	assert.deepStrictEqual(nb, male);
+});
+
 test('resolveTrainingPaces: a recent 5k beats a goal time as the anchor', () => {
 	// Runner wants a sub-20 5k but their recent 5k is 25:00. Plan paces
 	// should reflect current fitness, not the goal.

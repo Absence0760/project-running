@@ -1647,6 +1647,38 @@ Pinning tests:
 
 ---
 
+## 76. Training-pace derivation applies a 3% female-specific calibration to the Daniels curve
+
+Persona-hunt Round 3 finding Woman #3. Daniels' VDOT formula (`vdotFromRace`) and the pace bands derived from goal pace (`pacesFromGoalPace`) were calibrated on a predominantly male dataset. Female runners' actual VDOT plotted on the male-default curve under-predicts their training paces by ~3-5% depending on the band — the runner is being prescribed easier-than-necessary paces across the board.
+
+What we changed:
+
+- `pacesFromGoalPace(goalPaceSecPerKm, gender?)` — optional second parameter. When `gender === 'female'`, the helper multiplies every band's seconds-per-km by `1.03` (3% slower). `male` / `null` / `undefined` / `nonbinary` use the original (male-derived) curve.
+- `resolveTrainingPaces({...gender?})` and `GeneratePlanInput.gender` thread the option through.
+- The plan wizard (web `PlanEditor.svelte`, mobile `plan_new_screen.dart`) reads `user_profiles.gender` on mount and passes it in. The runner doesn't see a new field — the gender they already set in Settings → Preferences for the segments-leaderboard demographics is reused. Null when unset → unchanged paces (back-compat).
+
+Why uniform 3% rather than per-band:
+
+- Sport-science literature suggests female calibration corrections in the 2-5% range depending on intensity zone. A single uniform multiplier under-prescribes at the extreme bands (especially repetition/interval) but is the right shape for the data we have — no per-band gender × VDOT calibration has been published with the rigour required to override Daniels.
+- Uniform multiplier keeps the helper a pure single-line tweak that's easy to audit. When better data is published we can replace the constant with per-band weights without changing the call surface.
+- The conservative direction (slower) is the right error mode — over-prescribing female athletes' paces is the harm we're correcting.
+
+Why `nonbinary` defaults to the unmodified curve:
+
+- No validated calibration exists for non-binary athletes. Applying a wrong adjustment is worse than no adjustment. The conservative default is documented + pinned by a test so a future contributor doesn't silently fork this branch.
+
+Don't re-litigate by:
+
+- Asking gender in the plan wizard. The data already lives on `user_profiles.gender` (set in Settings → Preferences under the segments-leaderboard demographics with explicit GDPR Art 9 consent). Double-asking is friction.
+- Surfacing the calibration in the UI. It's an algorithmic correction, not a visible feature — runners just see paces that better match their physiology. Calling it out invites bikeshedding on the exact constant.
+
+Pinning tests:
+
+- `apps/web/src/lib/training.test.ts` — 3 new tests cover (a) omitting gender returns the existing (male-curve) values, (b) female calibration shifts every band 2-5% slower with the easy band ratio in `[1.02, 1.05]`, (c) nonbinary falls back to the unmodified curve.
+- `apps/mobile_android/test/training_test.dart` + iOS twin — same 3 tests in lockstep.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

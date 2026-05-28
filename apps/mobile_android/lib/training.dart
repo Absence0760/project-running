@@ -157,18 +157,37 @@ class TrainingPaces {
   });
 }
 
-TrainingPaces pacesFromGoalPace(double goalPaceSecPerKm) => TrainingPaces(
-      easy: (goalPaceSecPerKm * 1.22).round(),
-      marathon: (goalPaceSecPerKm * 1.06).round(),
-      tempo: (goalPaceSecPerKm * 0.97).round(),
-      interval: (goalPaceSecPerKm * 0.9).round(),
-      repetition: (goalPaceSecPerKm * 0.85).round(),
-    );
+/// Optional gender hint for pace derivation. Matches the `gender`
+/// column on `user_profiles`. Mirrored from web
+/// `training.ts#TrainingGender`. Persona-hunt Round 3 finding Woman #3.
+typedef TrainingGender = String?; // 'male' | 'female' | 'nonbinary' | null
+
+// Female-specific calibration constant. See web training.ts for the
+// full rationale comment; keep both helpers in lockstep.
+const double _kFemalePaceCalibration = 1.03;
+
+double _genderPaceMultiplier(TrainingGender gender) =>
+    gender == 'female' ? _kFemalePaceCalibration : 1.0;
+
+TrainingPaces pacesFromGoalPace(
+  double goalPaceSecPerKm, [
+  TrainingGender gender,
+]) {
+  final g = _genderPaceMultiplier(gender);
+  return TrainingPaces(
+    easy: (goalPaceSecPerKm * 1.22 * g).round(),
+    marathon: (goalPaceSecPerKm * 1.06 * g).round(),
+    tempo: (goalPaceSecPerKm * 0.97 * g).round(),
+    interval: (goalPaceSecPerKm * 0.9 * g).round(),
+    repetition: (goalPaceSecPerKm * 0.85 * g).round(),
+  );
+}
 
 TrainingPaces resolveTrainingPaces({
   required double goalDistanceM,
   int? goalTimeSec,
   int? recent5kSec,
+  TrainingGender gender,
 }) {
   double goalPace;
   if (recent5kSec != null) {
@@ -179,7 +198,7 @@ TrainingPaces resolveTrainingPaces({
   } else {
     goalPace = 600;
   }
-  return pacesFromGoalPace(goalPace);
+  return pacesFromGoalPace(goalPace, gender);
 }
 
 // ─────────────────────── Phases ───────────────────────
@@ -282,6 +301,10 @@ class GeneratePlanInput {
   final DateTime startDate;
   final int daysPerWeek;
   final int? weeks;
+  /// Optional gender from `user_profiles.gender` — applies the
+  /// female-specific calibration to derived training paces.
+  /// Persona-hunt Round 3 finding Woman #3.
+  final TrainingGender gender;
 
   const GeneratePlanInput({
     required this.goalEvent,
@@ -291,6 +314,7 @@ class GeneratePlanInput {
     required this.startDate,
     required this.daysPerWeek,
     this.weeks,
+    this.gender,
   });
 }
 
@@ -303,6 +327,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
     goalDistanceM: goalDistance,
     goalTimeSec: input.goalTimeSec,
     recent5kSec: input.recent5kSec,
+    gender: input.gender,
   );
   double? vdot;
   if (input.recent5kSec != null) {

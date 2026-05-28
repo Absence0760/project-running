@@ -35,6 +35,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   int? _weekOverride;
   bool _busy = false;
   String? _error;
+  // Persona-hunt Round 3 finding Woman #3. Pulled lazily on mount
+  // and threaded into `generatePlan` so the pace bands reflect the
+  // gender-aware calibration when present. Null → unmodified
+  // (male-curve) paces, matching pre-fix behaviour.
+  TrainingGender _viewerGender;
 
   static DateTime _nextSunday() {
     var d = DateTime.now().add(const Duration(days: 7));
@@ -42,6 +47,15 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       d = d.add(const Duration(days: 1));
     }
     return DateTime(d.year, d.month, d.day);
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    widget.training.fetchViewerGender().then((g) {
+      if (!mounted) return;
+      setState(() => _viewerGender = g);
+    });
   }
 
   int? get _goalTimeSec {
@@ -67,6 +81,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         goalTimeSec: _goalTimeSec,
         recent5kSec: _recent5kTotal,
         weeks: _weekOverride,
+        gender: _viewerGender,
       ));
     } catch (_) {
       return null;

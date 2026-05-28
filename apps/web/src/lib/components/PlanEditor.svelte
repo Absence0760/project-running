@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { createTrainingPlan, fetchActivePlanOverview } from '$lib/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import {
@@ -8,8 +9,33 @@
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
 	} from '$lib/training';
-	import type { GoalEvent, GeneratedPlan, WorkoutKind } from '$lib/training';
+	import type {
+		GoalEvent,
+		GeneratedPlan,
+		WorkoutKind,
+		TrainingGender,
+	} from '$lib/training';
+	import { auth } from '$lib/stores/auth.svelte';
+	import { supabase } from '$lib/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/units.svelte';
+
+	// Persona-hunt Round 3 finding Woman #3. Pull the runner's gender
+	// off user_profiles so generatePlan can apply the gender-aware
+	// pace calibration when available. We don't ask in the wizard
+	// (the runner already set it in Settings → Preferences alongside
+	// the segments-leaderboard demographics). null → unmodified
+	// (male-curve) paces, matching pre-fix behaviour.
+	let viewerGender = $state<TrainingGender>(null);
+	onMount(async () => {
+		if (!auth.user) return;
+		const { data } = await supabase
+			.from('user_profiles')
+			.select('gender')
+			.eq('id', auth.user.id)
+			.maybeSingle();
+		const g = (data as { gender?: string | null } | null)?.gender;
+		if (g === 'male' || g === 'female' || g === 'nonbinary') viewerGender = g;
+	});
 
 	const METRES_PER_MILE = 1609.344;
 	let distanceUnit = $derived(getUnit());
@@ -135,7 +161,7 @@
 	// until they touch a top-level input again.
 	$effect(() => {
 		// Read every input we care about so the effect tracks them.
-		void [goalEvent, goalDistance, goalTimeSec, recent5kTotal, startDate, daysPerWeek, weeks];
+		void [goalEvent, goalDistance, goalTimeSec, recent5kTotal, startDate, daysPerWeek, weeks, viewerGender];
 		if (!startDate) {
 			plan = null;
 			return;
@@ -149,6 +175,7 @@
 				startDate,
 				daysPerWeek,
 				weeks,
+				gender: viewerGender,
 			});
 			expandedWeek = null;
 		} catch (_) {

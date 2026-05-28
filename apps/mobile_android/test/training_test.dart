@@ -48,6 +48,39 @@ void main() {
       final p = pacesFromGoalPace(240);
       expect(p.easy >= 270 && p.easy <= 315, isTrue);
     });
+
+    // Persona-hunt Round 3 finding Woman #3 — gender calibration.
+    // Mirror of `pacesFromGoalPace: female calibration ...` + companion
+    // tests in `apps/web/src/lib/training.test.ts`. Keep both suites
+    // in lockstep — `shared-library-syncer` agent flags divergence.
+    test('omitting gender returns the existing (male-curve) values', () {
+      final noGender = pacesFromGoalPace(240);
+      final explicitNull = pacesFromGoalPace(240, null);
+      final explicitMale = pacesFromGoalPace(240, 'male');
+      expect(noGender.easy, explicitNull.easy);
+      expect(noGender.easy, explicitMale.easy);
+      expect(noGender.repetition, explicitMale.repetition);
+    });
+
+    test('female calibration shifts every band ~3% slower', () {
+      final male = pacesFromGoalPace(240);
+      final female = pacesFromGoalPace(240, 'female');
+      expect(female.easy > male.easy, isTrue);
+      expect(female.marathon > male.marathon, isTrue);
+      expect(female.tempo > male.tempo, isTrue);
+      expect(female.interval > male.interval, isTrue);
+      expect(female.repetition > male.repetition, isTrue);
+      final ratio = female.easy / male.easy;
+      expect(ratio > 1.02 && ratio < 1.05, isTrue,
+          reason: 'female easy / male easy ratio out of 2-5% band: $ratio');
+    });
+
+    test('nonbinary falls back to the unmodified curve', () {
+      final male = pacesFromGoalPace(240);
+      final nb = pacesFromGoalPace(240, 'nonbinary');
+      expect(nb.easy, male.easy);
+      expect(nb.repetition, male.repetition);
+    });
   });
 
   group('resolveTrainingPaces', () {

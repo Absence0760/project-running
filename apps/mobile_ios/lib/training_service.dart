@@ -3,6 +3,8 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'training.dart' show TrainingGender;
+
 import 'training.dart';
 
 /// View-model pairing a plan row with its current-week index + today's
@@ -49,6 +51,29 @@ class TrainingService extends ChangeNotifier {
     return Supabase.instance.client;
   }
   String? get _uid => _c.auth.currentUser?.id;
+
+  /// Persona-hunt Round 3 finding Woman #3. Reads the viewer's
+  /// `user_profiles.gender` so the plan wizard can apply the
+  /// gender-aware pace calibration. Returns null when the column is
+  /// unset (the default) — pacesFromGoalPace then uses the
+  /// male-derived curve unchanged. Mirror of the inline supabase
+  /// read on web `PlanEditor.svelte`.
+  Future<TrainingGender> fetchViewerGender() async {
+    final uid = _uid;
+    if (uid == null) return null;
+    try {
+      final row = await _c
+          .from('user_profiles')
+          .select('gender')
+          .eq('id', uid)
+          .maybeSingle();
+      final g = row?['gender'] as String?;
+      if (g == 'male' || g == 'female' || g == 'nonbinary') return g;
+    } catch (_) {
+      /* L4 best-effort — fall back to null on any failure */
+    }
+    return null;
+  }
 
   /// Plan templates owned by `clubId`. Visible to club members per RLS.
   Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async {

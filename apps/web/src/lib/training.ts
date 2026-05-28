@@ -91,23 +91,60 @@ export interface TrainingPaces {
 	repetition: number;
 }
 
+/// Optional gender hint for pace derivation. Matches the `gender`
+/// column on `user_profiles`. Persona-hunt Round 3 finding Woman #3.
+export type TrainingGender = 'male' | 'female' | 'nonbinary' | null;
+
+// Female runners' actual VDOT plotted on Daniels' male-default curve
+// under-predicts their training paces by ~3%. Applied as a uniform
+// pace-time multiplier (slightly slower seconds/km in every band).
+// Persona-hunt Round 3 finding Woman #3.
+//
+// Why 3% as the single calibration constant:
+//  - Sport-science literature suggests female calibration corrections
+//    in the 2-5% range depending on intensity zone. A single uniform
+//    multiplier under-prescribes at the extreme bands but is the right
+//    shape for the data we have (no per-band gender x VDOT calibration
+//    has been published with the rigour required to override Daniels).
+//  - Uniform multiplier keeps the helper a pure single-line tweak.
+//  - The conservative direction (slower) is the right error mode —
+//    over-prescribing female athletes' paces is the harm we're fixing.
+//
+// `male` and `null` use the original (male-derived) curve. `nonbinary`
+// also defaults to the original — no validated calibration exists for
+// non-binary athletes, and a wrong adjustment is worse than no
+// adjustment.
+const FEMALE_PACE_CALIBRATION = 1.03;
+
+function genderPaceMultiplier(gender: TrainingGender | undefined): number {
+	return gender === 'female' ? FEMALE_PACE_CALIBRATION : 1.0;
+}
+
 /**
  * Derive the five Daniels intensity-zone paces as multipliers of goal-race
  * pace. Numbers chosen so the output sits close to Daniels' published tables
  * across the 3:00–5:00/km goal-pace band. `goalPaceSecPerKm` is the runner's
  * target pace for the goal race.
+ *
+ * Optional `gender` parameter applies the female-specific calibration —
+ * see [decisions.md § 76](../docs/decisions.md#76) and the
+ * `FEMALE_PACE_CALIBRATION` constant above for the rationale.
  */
-export function pacesFromGoalPace(goalPaceSecPerKm: number): TrainingPaces {
+export function pacesFromGoalPace(
+	goalPaceSecPerKm: number,
+	gender: TrainingGender = null
+): TrainingPaces {
 	// Goal pace sits between marathon and tempo intensity for most runners.
 	// These multipliers are a simplification of Daniels' percentages and are
 	// stable across the typical distance/goal-time grid; see the regression
 	// tests in training.test.ts.
+	const g = genderPaceMultiplier(gender);
 	return {
-		easy: Math.round(goalPaceSecPerKm * 1.22),
-		marathon: Math.round(goalPaceSecPerKm * 1.06),
-		tempo: Math.round(goalPaceSecPerKm * 0.97),
-		interval: Math.round(goalPaceSecPerKm * 0.9),
-		repetition: Math.round(goalPaceSecPerKm * 0.85)
+		easy: Math.round(goalPaceSecPerKm * 1.22 * g),
+		marathon: Math.round(goalPaceSecPerKm * 1.06 * g),
+		tempo: Math.round(goalPaceSecPerKm * 0.97 * g),
+		interval: Math.round(goalPaceSecPerKm * 0.9 * g),
+		repetition: Math.round(goalPaceSecPerKm * 0.85 * g)
 	};
 }
 
@@ -122,6 +159,7 @@ export function resolveTrainingPaces(input: {
 	goalDistanceM: number;
 	goalTimeSec?: number | null;
 	recent5kSec?: number | null;
+	gender?: TrainingGender;
 }): TrainingPaces {
 	let goalPaceSecPerKm: number;
 	if (input.recent5kSec) {
@@ -132,7 +170,7 @@ export function resolveTrainingPaces(input: {
 	} else {
 		goalPaceSecPerKm = 600;
 	}
-	return pacesFromGoalPace(goalPaceSecPerKm);
+	return pacesFromGoalPace(goalPaceSecPerKm, input.gender ?? null);
 }
 
 // ─────────────────────── Phase schedule ───────────────────────
@@ -198,6 +236,10 @@ export interface GeneratePlanInput {
 	startDate: string; // ISO date
 	daysPerWeek: number; // 3–7
 	weeks?: number;
+	/// Optional gender from `user_profiles.gender` — applies the
+	/// female-specific calibration to derived training paces.
+	/// Persona-hunt Round 3 finding Woman #3.
+	gender?: TrainingGender;
 }
 
 export interface GeneratedPlan {
@@ -223,7 +265,8 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 	const paces = resolveTrainingPaces({
 		goalDistanceM,
 		goalTimeSec: input.goalTimeSec,
-		recent5kSec: input.recent5kSec
+		recent5kSec: input.recent5kSec,
+		gender: input.gender
 	});
 	const vdot = input.recent5kSec
 		? vdotFromRace(5000, input.recent5kSec)
