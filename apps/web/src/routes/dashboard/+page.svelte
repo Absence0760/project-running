@@ -30,7 +30,8 @@
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { PlanWorkout } from '$lib/types';
-	import { loadSettings, effective } from '$lib/settings';
+	import { loadSettings, peekCachedSettings, effective } from '$lib/settings';
+	import type { LoadedSettings } from '$lib/settings';
 	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
@@ -254,40 +255,51 @@
 		try {
 			const uid = auth.user?.id;
 			if (uid) {
+				// Offline-first: paint the bag-backed widgets from the
+				// cache before the network fetch completes so the
+				// Fitness card + Intensity card aren't held hostage by
+				// network latency. The trailing loadSettings call
+				// reconciles with the server — its values overwrite the
+				// cached ones below. Decisions §79.
+				applyDashboardSettings(peekCachedSettings(uid));
 				const settings = await loadSettings(uid);
-				weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
-				const unit = effective<string>(settings, 'preferred_unit');
-				if (unit === 'mi' || unit === 'km') {
-					preferredUnit = unit;
-					setUnit(unit);
-				}
-				const wsd = effective<string>(settings, 'week_start_day');
-				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
-				trimpPrefs = {
-					resting_hr_bpm: effective<number>(settings, 'resting_hr_bpm') ?? null,
-					max_hr_bpm: effective<number>(settings, 'max_hr_bpm') ?? null,
-				};
-				try {
-					// Layered resilience: a bad shape in the jsonb bag must
-					// not crash the dashboard. If the read or the validation
-					// throws, the intensity card falls through to its
-					// configure-zones empty state.
-					const z = effective<Record<string, number>>(settings, 'hr_zones');
-					if (
-						z &&
-						[z.z1, z.z2, z.z3, z.z4, z.z5].every((v) => typeof v === 'number' && v > 0)
-					) {
-						hrZones = { z1: z.z1, z2: z.z2, z3: z.z3, z4: z.z4, z5: z.z5 };
-					}
-				} catch (_) {
-					// silent — intensity card is additive, not load-blocking
-				}
+				applyDashboardSettings(settings);
 			}
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
 		}
 		loading = false;
 	});
+
+	function applyDashboardSettings(settings: LoadedSettings) {
+		weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
+		const unit = effective<string>(settings, 'preferred_unit');
+		if (unit === 'mi' || unit === 'km') {
+			preferredUnit = unit;
+			setUnit(unit);
+		}
+		const wsd = effective<string>(settings, 'week_start_day');
+		if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
+		trimpPrefs = {
+			resting_hr_bpm: effective<number>(settings, 'resting_hr_bpm') ?? null,
+			max_hr_bpm: effective<number>(settings, 'max_hr_bpm') ?? null,
+		};
+		try {
+			// Layered resilience: a bad shape in the jsonb bag must
+			// not crash the dashboard. If the read or the validation
+			// throws, the intensity card falls through to its
+			// configure-zones empty state.
+			const z = effective<Record<string, number>>(settings, 'hr_zones');
+			if (
+				z &&
+				[z.z1, z.z2, z.z3, z.z4, z.z5].every((v) => typeof v === 'number' && v > 0)
+			) {
+				hrZones = { z1: z.z1, z2: z.z2, z3: z.z3, z4: z.z4, z5: z.z5 };
+			}
+		} catch (_) {
+			// silent — intensity card is additive, not load-blocking
+		}
+	}
 
 	// Persona-hunt Round 2 finding Intermediate #2: this "This Week"
 	// stat card used to hardcode Monday as the week start. The

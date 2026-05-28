@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
 import { supabase } from '$lib/supabase';
+import { dropUserCache } from '$lib/settings';
 import { setUnit } from '$lib/units.svelte';
 
 interface User {
@@ -124,9 +125,15 @@ function createAuthStore() {
 		// user means when they click Sign out on the web — sign-out-
 		// everywhere belongs on a separate "sign out of all devices"
 		// affordance, not the default Sign out button.
+		const priorUserId = user?.id;
 		await supabase.auth.signOut({ scope: 'local' });
 		user = null;
 		loggedIn = false;
+		// Drop the prior user's cached prefs so a subsequent sign-in
+		// as a different user on the same browser can't read the
+		// previous user's universal / device bags or replay their
+		// queued offline writes against the wrong account.
+		if (priorUserId) dropUserCache(priorUserId);
 	}
 
 	// Listen for auth state changes

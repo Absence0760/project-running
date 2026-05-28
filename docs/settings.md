@@ -104,6 +104,25 @@ keys. Adding a new key is a client change + an entry below — no migration.
   account page at `/settings/account` dual-writes `preferred_unit` to both
   `user_profiles.preferred_unit` (legacy column) and the universal bag, and
   owns the editor for `default_activity_type` + `week_start_day`.
+
+  **Offline behaviour**: a `LocalStoragePrefsCache`
+  ([`apps/web/src/lib/settings_cache.ts`](../apps/web/src/lib/settings_cache.ts))
+  fronts every `loadSettings` / `updateUniversal` / `updateDevice` call —
+  the web mirror of the mobile pattern above. `loadSettings` returns the
+  cached bags synchronously when both are populated and fires a
+  background refresh that drains any queued offline writes; the cold
+  path (no cache) blocks on the server fetch as before, with a soft
+  fall-through to empty bags on network failure so a brand-new offline
+  visit still loads. Writes apply to the cache first; on push failure
+  the change is queued under
+  `settings_cache_pending_<userId>_<deviceId>` and replayed against a
+  fresh server bag on the next successful refresh. Cache keys are
+  user- + device-scoped, and the auth store's `logout()` calls
+  `dropUserCache(userId)` so a subsequent sign-in as a different user
+  on the same browser can't read or replay against another account.
+  This lifts the dashboard's Fitness / Intensity / weekly-goal /
+  unit-preference reads off the critical network path on every visit
+  after the first.
 - **`profiles.preferred_unit`** is dual-read during the transition — newer
   clients prefer the bag and fall back to the column. A follow-up migration
   drops the column once every client has cut over.

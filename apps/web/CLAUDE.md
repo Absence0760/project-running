@@ -44,7 +44,8 @@ src/
     mock-data.ts    # Fallback data when Supabase is empty
     units.svelte.ts # Reactive km/mi preference signal + formatters
     map-style.svelte.ts  # Reactive map-style preference signal (used by RunMap)
-    settings.ts     # `loadSettings()` + `effective<T>()` helpers over user_settings + user_device_settings
+    settings.ts     # `loadSettings()` + `effective<T>()` helpers over user_settings + user_device_settings. Now offline-first via settings_cache.ts (cache-first read, write-through, drain-on-refresh pending queue, sign-out drop). Mirrors mobile SettingsService — decisions §72 / §79.
+    settings_cache.ts  # `LocalStoragePrefsCache` + `InMemoryPrefsCache` (test seam) + pure `applyPrefsChanges`. User- + device-scoped keys (`settings_cache_universal_<userId>`, `..._device_<userId>_<deviceId>`, `..._pending_<userId>_<deviceId>`). 40-test contract in `settings_cache.test.ts`.
     theme.ts        # light/dark/auto theme toggle, persisted in localStorage
     training.ts     # VDOT, Riegel, plan generator, week phasing
     training.test.ts  # node:test suite for the training engine — `npx tsx --test`

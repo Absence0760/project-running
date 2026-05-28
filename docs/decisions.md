@@ -1759,6 +1759,34 @@ Pinning tests:
 
 Mobile (Flutter Android + iOS twin) follows per the canonical-surface rule (decisions §24). The Dart twin will mirror the same 7-step shape + the same `onboarded_at` gate; deferred to a follow-up commit so the web shape can settle first.
 
+## 79. Web prefs use a localStorage write-through cache + offline-drain queue, mirroring the mobile `SettingsCache` (§72)
+
+The web `loadSettings` / `updateUniversal` / `updateDevice` API is fronted by `LocalStoragePrefsCache` (`apps/web/src/lib/settings_cache.ts`). It's a direct port of the mobile `SettingsCache` abstract (`packages/api_client/lib/src/settings_service.dart`) and its `SharedPrefsSettingsCache` implementation (`apps/mobile_android/lib/settings_cache.dart`) — same key scoping, same `PendingChange` shape, same `applyPrefsChanges` merge rule.
+
+**The pattern:**
+
+- **Cache-first read.** `loadSettings(userId)` returns the cached universal + device bags synchronously when both are populated and fires a background refresh that drains any queued offline writes. The cold path (no cache) blocks on the server fetch as before; if the network is unreachable it degrades to empty bags rather than throwing.
+- **Write-through.** `updateUniversal` / `updateDevice` apply the merge to the cache first, then push to the server. On push failure the change is queued under `settings_cache_pending_<userId>_<deviceId>` and replayed against a fresh server bag on the next successful refresh (same read-merge-write the synchronous path uses, so concurrent writes from another device aren't clobbered).
+- **User-scoped keys.** `settings_cache_universal_<userId>`, `settings_cache_device_<userId>_<deviceId>`, `settings_cache_pending_<userId>_<deviceId>`. `dropUser(userId)` matches the universal key exactly and anchors device + pending on a trailing underscore so a sibling user whose id is a prefix (e.g. `a` vs `ab`) is never swept.
+- **Sign-out wiring.** The auth store's `logout()` captures `priorUserId`, calls `supabase.auth.signOut`, then `dropUserCache(priorUserId)` — so a subsequent sign-in as a different user on the same browser can't read or replay against the prior account.
+
+Why now: the dashboard's Fitness card + Intensity card both reach for the universal bag on every visit (`resting_hr_bpm`, `max_hr_bpm`, `hr_zones`); the post-signup onboarding wizard writes four target fields into that same bag. Pre-cache, every visit ate at least one round-trip before the cards could render, and a brief network blip would leave the cards empty for the entire session. Mobile shipped the offline-first version of this in §72 — the web reach-around was always going to follow once the surface area justified it (it does now).
+
+Trade-offs:
+
+- Stale-by-one-refresh. If user A edits HR zones on web tab A, web tab B's already-loaded dashboard keeps showing the old zones until the next mount. Same property mobile has; not a regression. The dashboard mounts on every navigation back to it, which keeps the staleness window short in practice.
+- The in-memory fallback (`InMemoryPrefsCache`) is used at module init when `localStorage` is undefined (SSR). It's persistent across requests in the dev server but never holds real user data — `loadSettings` is gated on `auth.user?.id`, which is client-only via Supabase Auth.
+
+Don't re-litigate by:
+
+- Adding a service-worker / IndexedDB layer for the prefs bag. The bag is ~50 keys, sub-kilobyte; localStorage is the right primitive. Service-worker buys nothing here.
+- Returning fresh server data from `loadSettings` on every call. That would defeat the offline-first goal. Callers that genuinely need fresh data (e.g. an admin diff against another device) should issue a Supabase query directly, not piggyback on this API.
+- Promoting the cache to a Svelte 5 `$state` store. The current shape mirrors mobile's "in-memory snapshot + on-demand re-read" pattern; reactivity would require new wiring on every consumer, and we'd lose the cache-first synchronous-return property.
+
+Pinning tests:
+
+- `apps/web/src/lib/settings_cache.test.ts` — 40 unit tests: `applyPrefsChanges` merge contract (mobile-parity), the shared cache contract run against both `InMemoryPrefsCache` and `LocalStoragePrefsCache`, prefix-overlap regression (`a` vs `ab`), corrupt-JSON read recovery, malformed-queue-entry filtering, quota-exceeded swallowing.
+
 ---
 
 ## How to add an entry
