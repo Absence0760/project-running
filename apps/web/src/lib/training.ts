@@ -247,6 +247,10 @@ export interface GeneratePlanInput {
 	/// female-specific calibration to derived training paces.
 	/// Persona-hunt Round 3 finding Woman #3.
 	gender?: TrainingGender;
+	/// When true, produce a beginner C25K-style walk-run plan instead of the
+	/// continuous-running plan. The goal stays a 5k; every session is a
+	/// `walk_run` workout of timed run/walk intervals (persona #22).
+	beginnerWalkRun?: boolean;
 }
 
 export interface GeneratedPlan {
@@ -282,6 +286,11 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 		: null;
 
 	const startDate = parseISO(input.startDate);
+
+	if (input.beginnerWalkRun) {
+		return generateWalkRunPlan(input, goalDistanceM, paces, vdot, startDate);
+	}
+
 	const weeks: GeneratedWeek[] = [];
 
 	for (let i = 0; i < totalWeeks; i++) {
@@ -318,6 +327,121 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 		endDate: formatISO(endDate),
 		goalDistanceM
 	};
+}
+
+// ─────────────────────── Beginner walk-run (C25K) ───────────────────────
+
+/// Simplified, monotonic C25K-style progression: each week is a uniform
+/// run/walk interval that lengthens the run and trims the walk, graduating
+/// to a continuous ~25-minute run. `count - 1` walk breaks sit between the
+/// runs; week 9 has a single continuous run (no recovery). Real C25K mixes
+/// interval lengths mid-program; we keep it uniform-per-week so the plan is
+/// legible and the TS↔Dart parity stays tractable.
+export const WALK_RUN_PROGRESSION: ReadonlyArray<{
+	runSec: number;
+	walkSec: number;
+	count: number;
+}> = [
+	{ runSec: 60, walkSec: 90, count: 8 },
+	{ runSec: 90, walkSec: 120, count: 7 },
+	{ runSec: 120, walkSec: 120, count: 6 },
+	{ runSec: 180, walkSec: 120, count: 5 },
+	{ runSec: 300, walkSec: 120, count: 4 },
+	{ runSec: 480, walkSec: 150, count: 3 },
+	{ runSec: 600, walkSec: 120, count: 3 },
+	{ runSec: 900, walkSec: 180, count: 2 },
+	{ runSec: 1500, walkSec: 0, count: 1 }
+];
+const WALK_RUN_WARMUP_S = 300;
+const WALK_RUN_COOLDOWN_S = 300;
+const WALK_PACE_SEC_PER_KM = 700; // ~11:40/km brisk walk, for distance estimates
+
+function walkRunWorkout(
+	scheduledDate: string,
+	weekIndex: number,
+	easyPaceSecPerKm: number
+): GeneratedWorkout {
+	const prog = WALK_RUN_PROGRESSION[Math.min(weekIndex, WALK_RUN_PROGRESSION.length - 1)];
+	const hasRecovery = prog.count > 1 && prog.walkSec > 0;
+	const repeats: NonNullable<WorkoutStructure['repeats']> = {
+		count: prog.count,
+		duration_s: prog.runSec,
+		pace_sec_per_km: easyPaceSecPerKm,
+		recovery_pace: 'walk',
+		...(hasRecovery ? { recovery_duration_s: prog.walkSec } : {})
+	};
+	const totalRunSec = prog.count * prog.runSec;
+	const totalWalkSec =
+		(hasRecovery ? (prog.count - 1) * prog.walkSec : 0) +
+		WALK_RUN_WARMUP_S +
+		WALK_RUN_COOLDOWN_S;
+	const estDistanceM = Math.round(
+		(totalRunSec * 1000) / easyPaceSecPerKm + (totalWalkSec * 1000) / WALK_PACE_SEC_PER_KM
+	);
+	return {
+		scheduled_date: scheduledDate,
+		kind: 'walk_run',
+		target_distance_m: estDistanceM,
+		target_duration_seconds: totalRunSec + totalWalkSec,
+		target_pace_sec_per_km: easyPaceSecPerKm,
+		target_pace_tolerance_sec: null,
+		structure: {
+			warmup: { duration_s: WALK_RUN_WARMUP_S, pace: 'easy' },
+			repeats,
+			cooldown: { duration_s: WALK_RUN_COOLDOWN_S, pace: 'easy' }
+		},
+		notes: hasRecovery
+			? `Walk ${WALK_RUN_WARMUP_S / 60} min, then run ${prog.runSec}s / walk ${prog.walkSec}s × ${prog.count}, walk ${WALK_RUN_COOLDOWN_S / 60} min.`
+			: `Walk ${WALK_RUN_WARMUP_S / 60} min, run ${Math.round(prog.runSec / 60)} min continuous, walk ${WALK_RUN_COOLDOWN_S / 60} min. Graduation week.`
+	};
+}
+
+function generateWalkRunPlan(
+	input: GeneratePlanInput,
+	goalDistanceM: number,
+	paces: TrainingPaces,
+	vdot: number | null,
+	startDate: Date
+): GeneratedPlan {
+	const totalWeeks = input.weeks ?? WALK_RUN_PROGRESSION.length;
+	// Beginners train 3 days/week; respect a lower request but cap at 3.
+	const runDays = Math.max(1, Math.min(input.daysPerWeek, 3));
+	// Spread run days across Mon/Wed/Fri-style offsets.
+	const dayOffsets = [0, 2, 4, 1, 3, 5, 6].slice(0, runDays).sort((a, b) => a - b);
+	const weeks: GeneratedWeek[] = [];
+	for (let i = 0; i < totalWeeks; i++) {
+		const weekStart = addDays(startDate, i * 7);
+		const runSet = new Set(dayOffsets);
+		const workouts: GeneratedWorkout[] = [];
+		for (let d = 0; d < 7; d++) {
+			const date = formatISO(addDays(weekStart, d));
+			if (runSet.has(d)) {
+				workouts.push(walkRunWorkout(date, i, paces.easy));
+			} else {
+				workouts.push({
+					scheduled_date: date,
+					kind: 'rest',
+					target_distance_m: null,
+					target_duration_seconds: null,
+					target_pace_sec_per_km: null,
+					target_pace_tolerance_sec: null,
+					structure: null,
+					notes: null
+				});
+			}
+		}
+		weeks.push({
+			week_index: i,
+			phase: i === totalWeeks - 1 ? 'race' : 'build',
+			target_volume_m: workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0),
+			notes:
+				i === totalWeeks - 1
+					? 'Final week — you can run the distance continuously now.'
+					: 'Take the walk breaks even when you feel good — they make the runs sustainable.',
+			workouts
+		});
+	}
+	return { weeks, paces, vdot, endDate: formatISO(addDays(startDate, totalWeeks * 7 - 1)), goalDistanceM };
 }
 
 function peakVolumeKm(goalDistanceM: number, daysPerWeek: number): number {

@@ -40,6 +40,33 @@ test('WORKOUT_KIND_LABEL: walk_run renders as "Walk-run"', () => {
 	assert.equal(WORKOUT_KIND_LABEL.walk_run, 'Walk-run');
 });
 
+test('generatePlan(beginnerWalkRun): every session is a walk_run workout', () => {
+	const plan = generatePlan({
+		goalEvent: 'distance_5k',
+		startDate: '2026-06-01',
+		daysPerWeek: 3,
+		beginnerWalkRun: true
+	});
+	// Default 9-week C25K progression.
+	assert.equal(plan.weeks.length, 9);
+	const allWorkouts = plan.weeks.flatMap((w) => w.workouts);
+	const sessions = allWorkouts.filter((w) => w.kind !== 'rest');
+	assert.ok(sessions.length > 0);
+	assert.ok(sessions.every((w) => w.kind === 'walk_run'));
+	// 3 run days per week.
+	assert.equal(sessions.length, 9 * 3);
+	// Week 1 session: timed run/walk repeats with a 'walk' recovery.
+	const wk1 = plan.weeks[0].workouts.find((w) => w.kind === 'walk_run')!;
+	assert.equal(wk1.structure?.repeats?.recovery_pace, 'walk');
+	assert.equal(wk1.structure?.repeats?.duration_s, 60);
+	assert.equal(wk1.structure?.repeats?.recovery_duration_s, 90);
+	assert.equal(wk1.structure?.repeats?.count, 8);
+	// Graduation week: a single continuous run, no recovery interval.
+	const wk9 = plan.weeks[8].workouts.find((w) => w.kind === 'walk_run')!;
+	assert.equal(wk9.structure?.repeats?.count, 1);
+	assert.equal(wk9.structure?.repeats?.recovery_duration_s, undefined);
+});
+
 test('WorkoutStructure: a time-based walk-run rep block is well-typed', () => {
 	// Compile-time check that duration_s / recovery_duration_s / recovery_pace
 	// 'walk' are accepted; the assertion just confirms the shape round-trips.

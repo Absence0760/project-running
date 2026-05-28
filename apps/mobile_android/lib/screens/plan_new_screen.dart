@@ -37,6 +37,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   // persona #24). The time only anchors paces once confirmed current;
   // otherwise paces stay on the conservative goal-based fallback.
   bool _recent5kConfirmed = false;
+  // Beginner / return-to-run: generate a C25K-style walk-run plan (persona #22).
+  bool _beginnerWalkRun = false;
   int? _weekOverride;
   bool _busy = false;
   String? _error;
@@ -92,6 +94,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         recent5kSec: _recent5kApplied,
         weeks: _weekOverride,
         gender: _viewerGender,
+        beginnerWalkRun: _beginnerWalkRun,
       ));
     } catch (_) {
       return null;
@@ -232,6 +235,19 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                   (v) => setState(() => _goalSeconds = v), 0, 59),
               ),
             ],
+          ),
+          const SizedBox(height: 12),
+          CheckboxListTile(
+            value: _beginnerWalkRun,
+            onChanged: (v) => setState(() => _beginnerWalkRun = v ?? false),
+            dense: true,
+            contentPadding: EdgeInsets.zero,
+            controlAffinity: ListTileControlAffinity.leading,
+            title: const Text('New to running? Use a walk-run plan'),
+            subtitle: const Text(
+              'A gentle C25K-style schedule of timed run/walk intervals that '
+              'builds to a continuous run. Overrides goal-time pacing.',
+            ),
           ),
           const SizedBox(height: 12),
           _SectionLabel('Recent 5K time · optional'),

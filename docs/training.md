@@ -82,20 +82,26 @@ Migration: `apps/backend/supabase/migrations/20260419_001_training_plans.sql`. T
 
 ```ts
 {
-  warmup?:   { distance_m: number; pace: 'easy' };
+  warmup?:   { distance_m?: number; duration_s?: number; pace: 'easy' };
   repeats?:  {
     count: number;
-    distance_m: number;
+    distance_m?: number;          // distance- OR time-based (one of these)
+    duration_s?: number;
     pace_sec_per_km: number;
-    recovery_distance_m: number;
-    recovery_pace: 'easy' | 'jog';
+    recovery_distance_m?: number;
+    recovery_duration_s?: number;
+    recovery_pace: 'easy' | 'jog' | 'walk';
   };
-  steady?:   { distance_m: number; pace_sec_per_km: number };
-  cooldown?: { distance_m: number; pace: 'easy' };
+  steady?:   { distance_m?: number; duration_s?: number; pace_sec_per_km: number };
+  cooldown?: { distance_m?: number; duration_s?: number; pace: 'easy' };
 }
 ```
 
-Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will grow the schema (lap markers, HR targets, rep numbering cues) and a migration per revision is overkill for a v1 shape that's still settling.
+Kept as `jsonb` because the execution loop (Phase 2 — mobile-primary) will grow the schema (lap markers, HR targets, rep numbering cues) and a migration per revision is overkill for a v1 shape that's still settling. Each step is **distance- or time-based**: `distance_m` wins when both are present, else `duration_s` is used (the runner's `expandWorkoutSteps` already reads either). `recovery_pace: 'walk'` marks a walk break.
+
+### Walk-run (beginner / C25K) — persona #22, decisions §91
+
+`generatePlan({ beginnerWalkRun: true })` produces a 9-week C25K-style plan: the goal stays a 5k, but every session is a `walk_run` workout of **timed** run/walk intervals (warmup walk → `count ×` (run `duration_s` / walk `recovery_duration_s`) → cooldown walk), graduating to a single continuous ~25-minute run in the final week. The progression table is `WALK_RUN_PROGRESSION` (mirrored in `training.ts` and `training.dart` — keep in lockstep). The wizard exposes it as a "New to running? Use a walk-run plan" toggle on web (`PlanEditor`) and mobile (`plan_new_screen`). Beginners train 3 days/week (the toggle caps run days at 3). `walk_run` workouts carry an estimated `target_distance_m` so the auto-match-from-run path still links them; the live recorder announces "Run"/"Walk" on interval transitions (see workout_execution.md).
 
 ## Marking a workout as done
 

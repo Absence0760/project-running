@@ -310,6 +310,11 @@ class GeneratePlanInput {
   /// Persona-hunt Round 3 finding Woman #3.
   final TrainingGender gender;
 
+  /// When true, produce a beginner C25K-style walk-run plan instead of the
+  /// continuous-running plan. Goal stays a 5k; every session is a walk_run
+  /// workout of timed run/walk intervals (persona #22).
+  final bool beginnerWalkRun;
+
   const GeneratePlanInput({
     required this.goalEvent,
     this.goalDistanceM,
@@ -319,6 +324,7 @@ class GeneratePlanInput {
     required this.daysPerWeek,
     this.weeks,
     this.gender,
+    this.beginnerWalkRun = false,
   });
 }
 
@@ -338,6 +344,10 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
     vdot = vdotFromRace(5000, input.recent5kSec!);
   } else if (input.goalTimeSec != null) {
     vdot = vdotFromRace(goalDistance, input.goalTimeSec!);
+  }
+
+  if (input.beginnerWalkRun) {
+    return _generateWalkRunPlan(input, goalDistance, paces, vdot);
   }
 
   final weeks = <GeneratedWeek>[];
@@ -372,6 +382,106 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
     vdot: vdot,
     endDate: input.startDate.add(Duration(days: totalWeeks * 7 - 1)),
     goalDistanceM: goalDistance,
+  );
+}
+
+// ─────────────────────── Beginner walk-run (C25K) ───────────────────────
+// Mirror of WALK_RUN_PROGRESSION / generateWalkRunPlan in
+// apps/web/src/lib/training.ts — keep in lockstep.
+const kWalkRunProgression = <({int runSec, int walkSec, int count})>[
+  (runSec: 60, walkSec: 90, count: 8),
+  (runSec: 90, walkSec: 120, count: 7),
+  (runSec: 120, walkSec: 120, count: 6),
+  (runSec: 180, walkSec: 120, count: 5),
+  (runSec: 300, walkSec: 120, count: 4),
+  (runSec: 480, walkSec: 150, count: 3),
+  (runSec: 600, walkSec: 120, count: 3),
+  (runSec: 900, walkSec: 180, count: 2),
+  (runSec: 1500, walkSec: 0, count: 1),
+];
+const _kWalkRunWarmupS = 300;
+const _kWalkRunCooldownS = 300;
+const _kWalkPaceSecPerKm = 700;
+
+GeneratedWorkout _walkRunWorkout(
+    DateTime date, int weekIndex, int easyPaceSecPerKm) {
+  final prog = kWalkRunProgression[
+      weekIndex < kWalkRunProgression.length
+          ? weekIndex
+          : kWalkRunProgression.length - 1];
+  final hasRecovery = prog.count > 1 && prog.walkSec > 0;
+  final repeats = <String, dynamic>{
+    'count': prog.count,
+    'duration_s': prog.runSec,
+    'pace_sec_per_km': easyPaceSecPerKm,
+    'recovery_pace': 'walk',
+    if (hasRecovery) 'recovery_duration_s': prog.walkSec,
+  };
+  final totalRunSec = prog.count * prog.runSec;
+  final totalWalkSec =
+      (hasRecovery ? (prog.count - 1) * prog.walkSec : 0) +
+          _kWalkRunWarmupS +
+          _kWalkRunCooldownS;
+  final estDistanceM =
+      ((totalRunSec * 1000) / easyPaceSecPerKm +
+              (totalWalkSec * 1000) / _kWalkPaceSecPerKm)
+          .round()
+          .toDouble();
+  return GeneratedWorkout(
+    scheduledDate: date,
+    kind: WorkoutKind.walkRun,
+    targetDistanceM: estDistanceM,
+    targetDurationSeconds: totalRunSec + totalWalkSec,
+    targetPaceSecPerKm: easyPaceSecPerKm,
+    structure: WorkoutStructure(
+      warmup: {'duration_s': _kWalkRunWarmupS, 'pace': 'easy'},
+      repeats: repeats,
+      cooldown: {'duration_s': _kWalkRunCooldownS, 'pace': 'easy'},
+    ),
+    notes: hasRecovery
+        ? 'Walk ${_kWalkRunWarmupS ~/ 60} min, then run ${prog.runSec}s / walk ${prog.walkSec}s × ${prog.count}, walk ${_kWalkRunCooldownS ~/ 60} min.'
+        : 'Walk ${_kWalkRunWarmupS ~/ 60} min, run ${(prog.runSec / 60).round()} min continuous, walk ${_kWalkRunCooldownS ~/ 60} min. Graduation week.',
+  );
+}
+
+GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
+    double goalDistanceM, TrainingPaces paces, double? vdot) {
+  final totalWeeks = input.weeks ?? kWalkRunProgression.length;
+  final runDays = input.daysPerWeek.clamp(1, 3);
+  final dayOffsets = [0, 2, 4, 1, 3, 5, 6].sublist(0, runDays)..sort();
+  final runSet = dayOffsets.toSet();
+  final weeks = <GeneratedWeek>[];
+  for (var i = 0; i < totalWeeks; i++) {
+    final weekStart = input.startDate.add(Duration(days: i * 7));
+    final workouts = <GeneratedWorkout>[];
+    for (var d = 0; d < 7; d++) {
+      final date = weekStart.add(Duration(days: d));
+      if (runSet.contains(d)) {
+        workouts.add(_walkRunWorkout(date, i, paces.easy));
+      } else {
+        workouts.add(GeneratedWorkout(
+          scheduledDate: date,
+          kind: WorkoutKind.rest,
+        ));
+      }
+    }
+    weeks.add(GeneratedWeek(
+      weekIndex: i,
+      phase: i == totalWeeks - 1 ? PlanPhase.race : PlanPhase.build,
+      targetVolumeM:
+          workouts.fold(0.0, (s, w) => s + (w.targetDistanceM ?? 0)),
+      notes: i == totalWeeks - 1
+          ? 'Final week — you can run the distance continuously now.'
+          : 'Take the walk breaks even when you feel good — they make the runs sustainable.',
+      workouts: workouts,
+    ));
+  }
+  return GeneratedPlan(
+    weeks: weeks,
+    paces: paces,
+    vdot: vdot,
+    endDate: input.startDate.add(Duration(days: totalWeeks * 7 - 1)),
+    goalDistanceM: goalDistanceM,
   );
 }
 

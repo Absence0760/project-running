@@ -15,6 +15,35 @@ void main() {
       expect(workoutKindDbValue(WorkoutKind.walkRun), 'walk_run');
       expect(workoutKindLabel(WorkoutKind.walkRun), 'Walk-run');
     });
+
+    test('generatePlan(beginnerWalkRun) yields a 9-week walk_run plan', () {
+      // Mirrors generatePlan(beginnerWalkRun) in training.test.ts.
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 3,
+        beginnerWalkRun: true,
+      ));
+      expect(plan.weeks.length, 9);
+      final sessions = plan.weeks
+          .expand((w) => w.workouts)
+          .where((w) => w.kind != WorkoutKind.rest)
+          .toList();
+      expect(sessions.length, 9 * 3);
+      expect(sessions.every((w) => w.kind == WorkoutKind.walkRun), isTrue);
+
+      final wk1 = plan.weeks[0].workouts
+          .firstWhere((w) => w.kind == WorkoutKind.walkRun);
+      expect(wk1.structure!.repeats!['recovery_pace'], 'walk');
+      expect(wk1.structure!.repeats!['duration_s'], 60);
+      expect(wk1.structure!.repeats!['recovery_duration_s'], 90);
+      expect(wk1.structure!.repeats!['count'], 8);
+
+      final wk9 = plan.weeks[8].workouts
+          .firstWhere((w) => w.kind == WorkoutKind.walkRun);
+      expect(wk9.structure!.repeats!['count'], 1);
+      expect(wk9.structure!.repeats!.containsKey('recovery_duration_s'), isFalse);
+    });
   });
 
   group('vdotFromRace', () {

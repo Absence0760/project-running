@@ -75,6 +75,8 @@
 	// persona #24). The time only anchors paces once the runner confirms it
 	// reflects current fitness; otherwise we fall back to goal-based paces.
 	let recent5kConfirmed = $state(false);
+	// Beginner / return-to-run: generate a C25K-style walk-run plan (persona #22).
+	let beginnerWalkRun = $state(false);
 
 	let weekOverride = $state<number | null>(null);
 	let busy = $state(false);
@@ -171,7 +173,7 @@
 	// until they touch a top-level input again.
 	$effect(() => {
 		// Read every input we care about so the effect tracks them.
-		void [goalEvent, goalDistance, goalTimeSec, recent5kApplied, startDate, daysPerWeek, weeks, viewerGender];
+		void [goalEvent, goalDistance, goalTimeSec, recent5kApplied, startDate, daysPerWeek, weeks, viewerGender, beginnerWalkRun];
 		if (!startDate) {
 			plan = null;
 			return;
@@ -186,6 +188,7 @@
 				daysPerWeek,
 				weeks,
 				gender: viewerGender,
+				beginnerWalkRun,
 			});
 			expandedWeek = null;
 		} catch (_) {
@@ -335,6 +338,17 @@
 					<input type="number" min="0" max="59" bind:value={targetSec} placeholder="s" />
 				</div>
 			</fieldset>
+
+			<label class="beginner-toggle">
+				<input type="checkbox" bind:checked={beginnerWalkRun} />
+				<span>
+					<span class="beginner-title">New to running? Use a walk-run plan</span>
+					<span class="hint">
+						A gentle C25K-style schedule of timed run/walk intervals that builds to a
+						continuous run. Overrides goal-time pacing.
+					</span>
+				</span>
+			</label>
 
 			<fieldset>
 				<legend>Recent 5K time <span class="optional">optional</span></legend>
@@ -583,6 +597,13 @@
 		font-size: 0.85rem;
 		font-weight: 400;
 	}
+	.beginner-toggle {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.6rem;
+	}
+	.beginner-toggle input { margin-top: 0.2rem; }
+	.beginner-title { display: block; font-weight: 600; }
 	.confirm-recent input {
 		margin-top: 0.15rem;
 	}
