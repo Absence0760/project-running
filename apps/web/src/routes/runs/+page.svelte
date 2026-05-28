@@ -18,6 +18,7 @@
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import type { Run, RunSource } from '$lib/types';
+	import { formatElevation } from '$lib/units.svelte';
 	import type { Snapshot } from './$types';
 
 	let runs = $state<Run[]>([]);
@@ -672,6 +673,14 @@
 								>
 								<span class="run-stat-label section-label">Pace</span>
 							</div>
+							{#if typeof (run.metadata as Record<string, unknown> | null)?.elevation_m === 'number' && ((run.metadata as Record<string, unknown>).elevation_m as number) > 0}
+								<div class="run-stat">
+									<span class="run-stat-value"
+										>{formatElevation((run.metadata as Record<string, unknown>).elevation_m as number)}</span
+									>
+									<span class="run-stat-label section-label">Vert</span>
+								</div>
+							{/if}
 						</div>
 						{#if run.metadata?.event}
 							<div class="run-event">

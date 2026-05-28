@@ -31,7 +31,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import { loadSettings, effective } from '$lib/settings';
-	import { fmtKm, fmtPace, setUnit } from '$lib/units.svelte';
+	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		loadGoals,
@@ -429,6 +429,18 @@
 	let totalRuns = $derived(filteredRuns.length);
 	let longestRun = $derived(filteredRuns.length > 0 ? Math.max(...filteredRuns.map((r) => r.distance_m)) : 0);
 
+	/// Total elevation gain — vert — for the current week. Reads
+	/// metadata.elevation_m on each run (writes by the recorder at
+	/// save time + Strava import). Persona-hunt Round 3 Ultra #4:
+	/// ultra runners track vert as a first-class metric; without
+	/// this card the dashboard hid the data even when it existed.
+	let thisWeekVertMetres = $derived(
+		thisWeekRuns.reduce((sum, r) => {
+			const m = (r.metadata as Record<string, unknown> | null)?.elevation_m;
+			return sum + (typeof m === 'number' && m > 0 ? m : 0);
+		}, 0)
+	);
+
 	/// Current + best run streak. Daily granularity; Strava's grace
 	/// rule means a missing today doesn't break the streak if
 	/// yesterday is intact. Filtered runs feed in so the user's
@@ -747,6 +759,11 @@
 				<span class="stat-label">Longest Run</span>
 				<span class="stat-value">{formatDistance(longestRun)}</span>
 				<span class="stat-sub">all time</span>
+			</div>
+			<div class="stat-card">
+				<span class="stat-label">This Week Vert</span>
+				<span class="stat-value">{formatElevation(thisWeekVertMetres)}</span>
+				<span class="stat-sub">elevation gain</span>
 			</div>
 			<div class="stat-card">
 				<span class="stat-label">This Week Pace</span>

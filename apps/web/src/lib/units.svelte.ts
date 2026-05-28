@@ -98,6 +98,20 @@ export function fmtKm(metres: number | null | undefined, digits = 1): string {
 	return `${(metres / 1000).toFixed(digits)} km`;
 }
 
+const FEET_PER_METRE = 3.28084;
+
+/// Elevation gain label: `Xm` / `Xft` with the unit baked in. Used
+/// for vert ("vertical metres climbed") stats on dashboards + run
+/// lists. Persona-hunt Round 3 finding Ultra #4 — pro / ultra
+/// runners track vert as a first-class metric and the dashboard
+/// hid it. null / undefined → '—'. Rounds to integer because
+/// sub-metre precision on cumulative gain is GPS-noise floor.
+export function formatElevation(metres: number | null | undefined): string {
+	if (metres == null) return '—';
+	if (unit.value === 'mi') return `${Math.round(metres * FEET_PER_METRE)} ft`;
+	return `${Math.round(metres)} m`;
+}
+
 /// Plan-surface pace formatter. Input is always seconds-per-km (the
 /// canonical unit stored on `plan_workouts`); we convert to /mi when
 /// the user prefers miles.
