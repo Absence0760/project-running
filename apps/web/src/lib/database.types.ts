@@ -2500,6 +2500,14 @@ export type Database = {
         Args: { lat: number; lng: number; zones_json: Json }
         Returns: boolean
       }
+      public_profile_by_id: {
+        Args: { p_id: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+        }[]
+      }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined

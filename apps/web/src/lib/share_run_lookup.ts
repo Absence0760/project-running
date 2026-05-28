@@ -59,12 +59,17 @@ export async function lookupSharedRun(
 		if (!run) return { run: null, displayName: null };
 		let displayName: string | null = null;
 		if (run.user_id) {
+			// public_profile_by_id is a SECURITY DEFINER RPC — anon SELECT
+			// on the public_profiles view was revoked in migration
+			// 20260530_002 because the view was enumerable in bulk. The
+			// RPC requires an explicit known uuid (which we have from
+			// the public_runs row above), so there's no enumeration
+			// surface.
 			const { data: profile } = await supabase
-				.from('public_profiles')
-				.select('display_name')
-				.eq('id', run.user_id)
+				.rpc('public_profile_by_id', { p_id: run.user_id })
 				.maybeSingle();
-			displayName = profile?.display_name ?? null;
+			displayName = (profile as { display_name?: string | null } | null)
+				?.display_name ?? null;
 		}
 		return { run: run as SharedRun, displayName };
 	} catch (err) {

@@ -244,17 +244,18 @@
 			distance_m: Number(row.distance_m ?? 0),
 		};
 		if (row.user_id) {
-			// `public_profiles` is the anon-readable projection of
-			// user_profiles (migration 20260824_001). The base table is
-			// owner-only via RLS, so reading it directly from an anon
-			// spectator session returns no rows and the runner falls
-			// back to "Anonymous runner".
+			// `public_profile_by_id` SECURITY DEFINER RPC — replaces
+			// the old anon SELECT on the public_profiles view, which
+			// PostgREST exposed with bulk filter+pagination. Anon
+			// callers can now only look up a profile they already know
+			// the uuid for (which we do, from the public_runs row
+			// above). See migration 20260530_002.
 			const { data: profile } = await supabase
-				.from('public_profiles')
-				.select('display_name')
-				.eq('id', row.user_id)
+				.rpc('public_profile_by_id', { p_id: row.user_id })
 				.maybeSingle();
-			if (profile?.display_name) runnerName = profile.display_name;
+			const dn = (profile as { display_name?: string | null } | null)
+				?.display_name ?? null;
+			if (dn) runnerName = dn;
 		}
 		return true;
 	}
