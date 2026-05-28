@@ -35,7 +35,11 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		club = await fetchClubBySlug(slug);
-		if (club?.viewer_role !== 'owner' && club?.viewer_role !== 'admin') {
+		// owner / admin / event_organiser may create events — the latter is a
+		// delegated role the DB RLS (is_event_organiser) already permits. Gating
+		// it out here was the sole blocker on the deep-linkable create route.
+		const role = club?.viewer_role;
+		if (role !== 'owner' && role !== 'admin' && role !== 'event_organiser') {
 			goto(`/clubs/${slug}`);
 			return;
 		}

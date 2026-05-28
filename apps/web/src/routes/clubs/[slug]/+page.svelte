@@ -115,6 +115,9 @@
 	let isAdmin = $derived(
 		club?.viewer_role === 'owner' || club?.viewer_role === 'admin'
 	);
+	// event_organiser is a delegated role that can manage events without full
+	// admin rights — the DB RLS (is_event_organiser) already permits it.
+	let canManageEvents = $derived(isAdmin || club?.viewer_role === 'event_organiser');
 	let isMember = $derived(club?.viewer_role != null);
 
 	async function load() {
@@ -688,7 +691,7 @@
 						{joinBusy ? 'Leaving…' : 'Leave'}
 					</button>
 				{/if}
-				{#if isAdmin}
+				{#if canManageEvents}
 					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 						<span class="material-symbols" aria-hidden="true">add</span>
 						New event

@@ -265,6 +265,21 @@ export async function setClubMemberStatus(
 	}
 }
 
+export async function setClubMemberRole(
+	clubId: string,
+	userId: string,
+	role: 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member',
+): Promise<void> {
+	const { error } = await getAdminClient()
+		.from('club_members')
+		.update({ role })
+		.eq('club_id', clubId)
+		.eq('user_id', userId);
+	if (error) {
+		throw new Error(`simulate.setClubMemberRole failed: ${error.message}`);
+	}
+}
+
 export async function insertLivePings(opts: {
 	run_id: string;
 	user_id: string;
