@@ -58,10 +58,20 @@ class TrainingService extends ChangeNotifier {
   /// unset (the default) — pacesFromGoalPace then uses the
   /// male-derived curve unchanged. Mirror of the inline supabase
   /// read on web `PlanEditor.svelte`.
+  ///
+  /// L4 best-effort by contract: the plan wizard's initState awaits
+  /// this without blocking, and any failure here only means the
+  /// paces fall through to the unmodified male-derived curve. The
+  /// try/catch must therefore wrap BOTH the `_uid` access (which
+  /// touches `_c`, which throws `StateError` in widget tests that
+  /// don't initialise Supabase) AND the network read. A regression
+  /// that narrowed the catch to the inner read alone surfaced as
+  /// `plan_new_screen_test` failing with "TrainingService called
+  /// before Supabase.initialize() resolved" in CI.
   Future<TrainingGender> fetchViewerGender() async {
-    final uid = _uid;
-    if (uid == null) return null;
     try {
+      final uid = _uid;
+      if (uid == null) return null;
       final row = await _c
           .from('user_profiles')
           .select('gender')
@@ -70,7 +80,9 @@ class TrainingService extends ChangeNotifier {
       final g = row?['gender'] as String?;
       if (g == 'male' || g == 'female' || g == 'nonbinary') return g;
     } catch (_) {
-      /* L4 best-effort — fall back to null on any failure */
+      /* L4 best-effort — fall back to null on any failure,
+         including the not-yet-initialised StateError thrown by
+         the _c getter in widget tests. */
     }
     return null;
   }

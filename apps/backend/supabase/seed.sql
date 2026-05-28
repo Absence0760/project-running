@@ -54,10 +54,17 @@ INSERT INTO auth.identities (
 -- seed user represents the post-confirm-age-and-terms state (the
 -- realistic shape every signup produces). See migration
 -- 20260929_001 + audit/gdpr (2026-05-25).
+-- `onboarded_at` is stamped so the seed user is treated as already
+-- past the post-signup wizard (migration `20261016_001` adds the
+-- column; the migration's backfill only runs once on db reset, but
+-- seed.sql then inserts fresh rows that would otherwise land with
+-- onboarded_at=null + get caught by the layout-level routing gate
+-- — every Playwright spec using the seeded user would then be
+-- redirected to /onboarding instead of its actual route).
 INSERT INTO user_profiles (id, display_name, parkrun_number, preferred_unit, subscription_tier,
-                           age_confirmed_at, terms_accepted_at)
+                           age_confirmed_at, terms_accepted_at, onboarded_at)
 VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km', 'free',
-        now(), now())
+        now(), now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- 2a. User settings — runner_context for the AI Coach. Without these the
@@ -512,10 +519,11 @@ INSERT INTO auth.identities (
   'email', now(), now(), now()
 ) ON CONFLICT DO NOTHING;
 
+-- onboarded_at: same reason as the runner profile above.
 INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier,
-                           age_confirmed_at, terms_accepted_at)
+                           age_confirmed_at, terms_accepted_at, onboarded_at)
 VALUES ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Alex Chen', 'km', 'free',
-        now(), now())
+        now(), now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- Alex joins Sydney Run Club as an active member + requests Tempo Tuesday.
@@ -758,10 +766,11 @@ INSERT INTO auth.identities (
   'email', now(), now(), now()
 ) ON CONFLICT DO NOTHING;
 
+-- onboarded_at: same reason as the runner profile above.
 INSERT INTO user_profiles (id, display_name, preferred_unit, subscription_tier,
-                           age_confirmed_at, terms_accepted_at)
+                           age_confirmed_at, terms_accepted_at, onboarded_at)
 VALUES ('c3d4e5f6-a7b8-9012-cdef-345678901234', 'Morgan Lee', 'km', 'free',
-        now(), now())
+        now(), now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- Recent public runs for Alex — 12 entries spread across the last

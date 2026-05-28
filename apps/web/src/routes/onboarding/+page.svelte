@@ -468,6 +468,17 @@
 		outline: none;
 		border-color: var(--color-primary);
 	}
+	/* Keyboard-only focus retains a visible indicator per
+	   WCAG 2.4.7 (Focus Visible) + 2.4.11 (Focus Appearance).
+	   Pointer / touch focus loses the ring (handled by the :focus
+	   rule above) so the form looks clean during mouse use. The
+	   security_guards.test.ts accessibility guard pins that every
+	   `:focus { outline:none }` selector has a matching
+	   `:focus-visible` companion. */
+	.field input:focus-visible, .field select:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+	}
 
 	.unit-toggle, .privacy-list { display: flex; flex-direction: column; gap: var(--space-sm); }
 	@media (min-width: 32rem) {
