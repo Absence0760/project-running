@@ -11,6 +11,9 @@
 		fetchEngagementSummaries,
 		followUser,
 		unfollowUser,
+		blockUser,
+		unblockUser,
+		isBlockedByViewer,
 		giveKudos,
 		rescindKudos,
 		FEED_WINDOW_DAYS,
@@ -26,6 +29,7 @@
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import NotificationsList from '$lib/components/NotificationsList.svelte';
 	import Modal from '$lib/components/Modal.svelte';
+	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import type { Run } from '$lib/types';
@@ -49,6 +53,14 @@
 	let viewerFollows = $state<Set<string>>(new Set());
 	let rowBusy = $state<Set<string>>(new Set());
 	let showReportDialog = $state(false);
+	// Block state — see migration 20261012_001_user_blocks.sql. We
+	// track whether the viewer has blocked the target so the same
+	// button toggles between Block and Unblock; a confirm dialog
+	// gates the destructive direction (block drains follows on both
+	// sides, so it's not a no-cost click).
+	let viewerHasBlocked = $state(false);
+	let blockBusy = $state(false);
+	let showBlockConfirm = $state(false);
 
 	// ── Feed state (self-only tab) ─────────────────────────────────
 	// Mirrors the shape /feed used to render: 14-day window over runs
@@ -77,16 +89,20 @@
 
 	async function load() {
 		loading = true;
-		const [p, r, fr, fg] = await Promise.all([
+		const [p, r, fr, fg, blocked] = await Promise.all([
 			fetchPublicProfile(userId),
 			fetchPublicRunsByUser(userId, 20),
 			fetchFollowers(userId, 50),
 			fetchFollowing(userId, 50),
+			auth.loggedIn && auth.user?.id !== userId
+				? isBlockedByViewer(userId)
+				: Promise.resolve(false),
 		]);
 		profile = p;
 		runs = r;
 		followers = fr;
 		following = fg;
+		viewerHasBlocked = blocked;
 		loading = false;
 		hydrateViewerFollows();
 	}
@@ -253,6 +269,44 @@
 			showToast(`Could not update follow: ${e}`, 'error');
 		} finally {
 			busy = false;
+		}
+	}
+
+	async function confirmBlock() {
+		showBlockConfirm = false;
+		if (!profile || !auth.loggedIn || isSelf || blockBusy) return;
+		blockBusy = true;
+		try {
+			await blockUser(profile.id);
+			viewerHasBlocked = true;
+			// Block subsumes unfollow on both sides — the RPC also
+			// drains existing follow rows, so the local follow state
+			// must reflect that or the Follow button would lie until
+			// reload.
+			profile = {
+				...profile,
+				viewer_follows: false,
+				follower_count: Math.max(profile.follower_count - (profile.viewer_follows ? 1 : 0), 0),
+			};
+			showToast(`Blocked ${profile.display_name ?? 'this runner'}`, 'success');
+		} catch (e) {
+			showToast(`Could not block: ${e}`, 'error');
+		} finally {
+			blockBusy = false;
+		}
+	}
+
+	async function unblock() {
+		if (!profile || !auth.loggedIn || isSelf || blockBusy) return;
+		blockBusy = true;
+		try {
+			await unblockUser(profile.id);
+			viewerHasBlocked = false;
+			showToast(`Unblocked ${profile.display_name ?? 'this runner'}`, 'success');
+		} catch (e) {
+			showToast(`Could not unblock: ${e}`, 'error');
+		} finally {
+			blockBusy = false;
 		}
 	}
 
@@ -428,6 +482,18 @@
 						title="Report this profile"
 					>
 						<span class="material-symbols" aria-hidden="true">flag</span>
+					</button>
+					<button
+						class="btn btn-outline btn-icon-only btn-block"
+						class:active={viewerHasBlocked}
+						type="button"
+						disabled={blockBusy}
+						onclick={() => (viewerHasBlocked ? unblock() : (showBlockConfirm = true))}
+						aria-label={viewerHasBlocked ? 'Unblock this profile' : 'Block this profile'}
+						title={viewerHasBlocked ? 'Unblock this profile' : 'Block this profile'}
+						aria-pressed={viewerHasBlocked}
+					>
+						<span class="material-symbols" aria-hidden="true">block</span>
 					</button>
 				{/if}
 				{#if isSelf}
@@ -858,6 +924,17 @@
 	onclose={() => (showReportDialog = false)}
 />
 
+<ConfirmDialog
+	open={showBlockConfirm}
+	title="Block {profile?.display_name ?? 'this runner'}?"
+	message="They won't be able to follow you, give kudos to your runs, or comment on them. Any existing follow between you in either direction will be cleared. You can unblock from this page at any time."
+	confirmLabel="Block"
+	cancelLabel="Cancel"
+	danger
+	onconfirm={confirmBlock}
+	oncancel={() => (showBlockConfirm = false)}
+/>
+
 <style>
 	.page {
 		padding: var(--space-xl) var(--space-2xl);
@@ -985,6 +1062,20 @@
 
 	.btn-icon-only .material-symbols {
 		font-size: 1.15rem;
+	}
+
+	/* Block button: outline by default, switches to a red-tinted fill
+	   when the viewer has the target blocked. The colour cue is the
+	   only signal that the toggle is in the active state — the icon
+	   stays the same (Material `block`). */
+	.btn-block.active {
+		background: color-mix(in srgb, var(--color-danger, #d33) 14%, transparent);
+		border-color: var(--color-danger, #d33);
+		color: var(--color-danger, #d33);
+	}
+
+	.btn-block.active:hover {
+		background: color-mix(in srgb, var(--color-danger, #d33) 22%, transparent);
 	}
 
 	.tabs {

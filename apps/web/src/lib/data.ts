@@ -2896,6 +2896,47 @@ export async function unfollowUser(targetUserId: string): Promise<void> {
 	if (error) throw error;
 }
 
+/// Block `targetUserId` — see migration 20261012_001_user_blocks.sql.
+/// `block_user` is SECURITY DEFINER and also drains existing follow
+/// rows in either direction, so a viewer-initiated block subsumes
+/// unfollow on both sides. Re-calling with a new reason updates the
+/// reason in place (the RPC upserts on conflict).
+export async function blockUser(targetUserId: string, reason?: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	if (userId === targetUserId) throw new Error("Can't block yourself");
+	const { error } = await supabase.rpc('block_user', {
+		p_target: targetUserId,
+		p_reason: reason ?? null,
+	});
+	if (error) throw error;
+}
+
+export async function unblockUser(targetUserId: string): Promise<void> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { error } = await supabase.rpc('unblock_user', { p_target: targetUserId });
+	if (error) throw error;
+}
+
+/// Returns true when the viewer has blocked `targetUserId`. Reads
+/// `user_blocks` directly — RLS already gates the read to rows where
+/// the viewer is the blocker, so no SECURITY DEFINER needed.
+export async function isBlockedByViewer(targetUserId: string): Promise<boolean> {
+	const { data: sessionData } = await supabase.auth.getSession();
+	const userId = sessionData.session?.user?.id;
+	if (!userId) return false;
+	const { data } = await supabase
+		.from('user_blocks')
+		.select('blocker_id')
+		.eq('blocker_id', userId)
+		.eq('blocked_id', targetUserId)
+		.maybeSingle();
+	return data != null;
+}
+
 export interface PeopleSuggestion extends PublicProfile {
 	public_runs_count: number;
 	shared_clubs: number;

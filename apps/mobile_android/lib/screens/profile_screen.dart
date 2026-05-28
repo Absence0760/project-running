@@ -51,6 +51,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   List<UserProfileRow> _following = const [];
   List<NotificationView> _notifications = const [];
   bool _followBusy = false;
+  bool _blocked = false;
+  bool _blockBusy = false;
   String _notifFilter = 'all'; // 'all' | 'unread'
   Set<String> _dismissedNotifIds = {};
 
@@ -100,6 +102,9 @@ class _ProfileScreenState extends State<ProfileScreen>
       final notifF = _isSelf
           ? widget.api.fetchNotificationViews(limit: 100)
           : Future.value(const <NotificationView>[]);
+      final blockedF = _isSelf
+          ? Future.value(false)
+          : widget.api.isBlockedByViewer(widget.userId);
 
       final results = await Future.wait([
         summaryF,
@@ -107,6 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         followersF,
         followingF,
         notifF,
+        blockedF,
       ]);
       if (!mounted) return;
       setState(() {
@@ -115,6 +121,7 @@ class _ProfileScreenState extends State<ProfileScreen>
         _followers = results[2] as List<UserProfileRow>;
         _following = results[3] as List<UserProfileRow>;
         _notifications = results[4] as List<NotificationView>;
+        _blocked = results[5] as bool;
         _followersHasMore = _followers.length == _kFollowsPageSize;
         _followingHasMore = _following.length == _kFollowsPageSize;
         _loading = false;
@@ -207,6 +214,97 @@ class _ProfileScreenState extends State<ProfileScreen>
       showTopBanner(context, 'Could not update follow: $e');
     } finally {
       if (mounted) setState(() => _followBusy = false);
+    }
+  }
+
+  Future<void> _toggleBlock() async {
+    if (_isSelf || _blockBusy) return;
+    if (_blocked) {
+      await _doUnblock();
+      return;
+    }
+    final ok = await _confirmBlock();
+    if (ok != true) return;
+    await _doBlock();
+  }
+
+  Future<bool?> _confirmBlock() {
+    final name = _summary?.displayName ?? 'this runner';
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Block $name?'),
+        content: const Text(
+          "They won't be able to follow you, give kudos to your runs, "
+          'or comment on them. Any existing follow between you in '
+          'either direction will be cleared. You can unblock from '
+          'this page at any time.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton.tonal(
+            style: FilledButton.styleFrom(
+              foregroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            onPressed: () => Navigator.of(ctx).pop(true),
+            child: const Text('Block'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _doBlock() async {
+    final summary = _summary;
+    if (summary == null) return;
+    setState(() => _blockBusy = true);
+    try {
+      await widget.api.blockUser(widget.userId);
+      if (!mounted) return;
+      // Block subsumes unfollow on both sides — the RPC drains
+      // existing follow rows, so the local follow state must reflect
+      // that or the Follow button would lie until reload.
+      setState(() {
+        _blocked = true;
+        _summary = ProfileSummary(
+          id: summary.id,
+          displayName: summary.displayName,
+          avatarUrl: summary.avatarUrl,
+          followerCount: summary.viewerFollows
+              ? (summary.followerCount - 1).clamp(0, 1 << 30)
+              : summary.followerCount,
+          followingCount: summary.followingCount,
+          viewerFollows: false,
+        );
+      });
+      showTopBanner(context, 'Blocked ${summary.displayName ?? 'runner'}');
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, 'Could not block: $e');
+    } finally {
+      if (mounted) setState(() => _blockBusy = false);
+    }
+  }
+
+  Future<void> _doUnblock() async {
+    final summary = _summary;
+    setState(() => _blockBusy = true);
+    try {
+      await widget.api.unblockUser(widget.userId);
+      if (!mounted) return;
+      setState(() => _blocked = false);
+      showTopBanner(
+        context,
+        'Unblocked ${summary?.displayName ?? 'runner'}',
+      );
+    } catch (e) {
+      if (!mounted) return;
+      showTopBanner(context, 'Could not unblock: $e');
+    } finally {
+      if (mounted) setState(() => _blockBusy = false);
     }
   }
 
@@ -317,6 +415,16 @@ class _ProfileScreenState extends State<ProfileScreen>
                 targetKind: 'user',
                 targetId: widget.userId,
               ),
+            ),
+          if (!_isSelf)
+            IconButton(
+              tooltip: _blocked ? 'Unblock this profile' : 'Block this profile',
+              icon: Icon(
+                Icons.block,
+                color: _blocked ? Theme.of(context).colorScheme.error : null,
+              ),
+              isSelected: _blocked,
+              onPressed: _blockBusy ? null : _toggleBlock,
             ),
         ],
         bottom: TabBar(controller: _tabs, isScrollable: true, tabs: tabs),

@@ -121,4 +121,53 @@ void main() {
               'about run-detail expecting a local Run is now obsolete.');
     });
   });
+
+  group('block button wiring — persona-hunt Round 3 W1', () {
+    // Source-level guards on the Block button in the AppBar. The
+    // backend primitive (user_blocks + block_user / unblock_user RPCs)
+    // shipped in migration 20261012_001; the UI surface here is the
+    // mobile end of the persona finding. Widget-driving the dialog
+    // requires a populated _summary which means a fake Supabase
+    // fetch — pin the structural pieces by grep so the affordance
+    // can't silently regress.
+    final source =
+        File('lib/screens/profile_screen.dart').readAsStringSync();
+
+    test('Block IconButton renders in the AppBar for non-self viewers', () {
+      expect(source.contains("tooltip: _blocked ? 'Unblock this profile'"),
+          isTrue,
+          reason:
+              'AppBar must surface a Block / Unblock IconButton when the '
+              'viewer is not viewing their own profile. Without it the '
+              'block_user RPC is unreachable from this screen — the '
+              'persona-hunt Round 3 W1 finding.');
+    });
+
+    test('Block IconButton calls blockUser via the confirm dialog', () {
+      expect(source.contains('widget.api.blockUser(widget.userId)'), isTrue,
+          reason:
+              'Block tap must reach ApiClient.blockUser. A regression that '
+              'wired it to a different RPC (or skipped the RPC entirely) '
+              'would record nothing in user_blocks.');
+      expect(source.contains('_confirmBlock'), isTrue,
+          reason:
+              'Block direction is destructive — block_user drains existing '
+              'follow rows in either direction — so the tap MUST gate on '
+              'a confirm dialog. A regression that fired blockUser '
+              'directly from the IconButton onPressed would surprise the '
+              'user with a one-tap follower drain.');
+    });
+
+    test('Unblock direction is non-destructive — no confirm dialog', () {
+      // Reason: the unblock direction restores normal interaction
+      // without losing any data, so it should be a one-tap toggle.
+      // _toggleBlock branches: blocked → _doUnblock (no confirm),
+      // unblocked → _confirmBlock then _doBlock. The presence of the
+      // _doUnblock symbol + the conditional in _toggleBlock pins the
+      // shape.
+      expect(source.contains('_doUnblock'), isTrue);
+      expect(
+          source.contains('widget.api.unblockUser(widget.userId)'), isTrue);
+    });
+  });
 }

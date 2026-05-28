@@ -1248,6 +1248,43 @@ class ApiClient {
         .eq(UserFollowRow.colFolloweeId, targetUserId);
   }
 
+  /// Block `targetUserId` via the `block_user` SECURITY DEFINER RPC.
+  /// Mirrors `apps/web/src/lib/data.ts#blockUser`. The RPC also drains
+  /// existing follow rows in either direction so a viewer-initiated
+  /// block subsumes unfollow on both sides — see migration
+  /// `20261012_001_user_blocks.sql`.
+  Future<void> blockUser(String targetUserId, {String? reason}) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) throw Exception('Not authenticated');
+    if (viewerId == targetUserId) return;
+    await _client.rpc('block_user', params: {
+      'p_target': targetUserId,
+      'p_reason': reason,
+    });
+  }
+
+  /// Unblock `targetUserId` via the `unblock_user` RPC.
+  Future<void> unblockUser(String targetUserId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return;
+    await _client.rpc('unblock_user', params: {'p_target': targetUserId});
+  }
+
+  /// Returns true when the viewer has blocked `targetUserId`. Reads
+  /// the `user_blocks` table directly — RLS already gates the read
+  /// to rows where the viewer is the blocker.
+  Future<bool> isBlockedByViewer(String targetUserId) async {
+    final viewerId = _client.auth.currentUser?.id;
+    if (viewerId == null) return false;
+    final rows = await _client
+        .from('user_blocks')
+        .select('blocker_id')
+        .eq('blocker_id', viewerId)
+        .eq('blocked_id', targetUserId)
+        .limit(1);
+    return rows.isNotEmpty;
+  }
+
   /// People who follow `userId`. `limit` is a protective cap, not a
   /// pagination cursor — promote to cursor pagination if any user
   /// approaches the ceiling in practice.
