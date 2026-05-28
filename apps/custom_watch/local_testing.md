@@ -31,7 +31,7 @@ The line between the two is enforced architecturally: pure-logic crates in `apps
 
 1. **Rust toolchain** — `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` (or `dnf install rustup && rustup-init` on Fedora).
 2. **The Cortex-M4F build target** — `rustup target add thumbv7em-none-eabihf`. This is what the nRF52840 actually runs.
-3. **probe-rs** — `cargo install probe-rs --features cli`. Open-source replacement for Segger's J-Link tools. Includes `probe-rs run` (flash + run + stream logs) and `probe-rs attach` (stream logs from an already-running board).
+3. **probe-rs** — `cargo install probe-rs-tools --locked`. Open-source replacement for Segger's J-Link tools. Includes `probe-rs run` (flash + run + stream logs) and `probe-rs attach` (stream logs from an already-running board). (The older `cargo install probe-rs --features cli` form still works, but `probe-rs-tools` is the current canonical name.)
 4. **udev rules for USB access on Linux** — copy [the official probe-rs rules](https://probe.rs/docs/getting-started/probe-setup/#udev-rules) into `/etc/udev/rules.d/` and `sudo udevadm control --reload`. Without these, non-root users can't talk to the debug probe and `probe-rs list` will report nothing even when the board is plugged in.
 5. **`cargo-watch` (optional but nice)** — `cargo install cargo-watch`. Lets you auto-reflash on file save with `cargo watch -x 'run --release'`.
 

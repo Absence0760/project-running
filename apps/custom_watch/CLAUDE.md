@@ -49,6 +49,14 @@ green-lit app SKU, not a roadmap line item, not customer-facing.
   work per [`../../docs/custom_watch/firmware.md`](../../docs/custom_watch/firmware.md);
   no `generated/db_rows.rs` exists yet and shouldn't until that sync
   ships.
+- Anything that pioneers a product feature not yet on web. Per
+  [`../../docs/decisions.md` § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive),
+  web is the canonical feature surface for the product. Firmware here
+  is for *bench-prototype investigation of the hardware path*, not for
+  proving out new product features (a novel recording-algorithm variant,
+  a different training-load model, a coach behaviour the web app doesn't
+  have). Pioneering happens on web first — same rule as the other watch
+  apps.
 
 ## Where the research lives
 
