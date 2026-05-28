@@ -34,6 +34,7 @@ import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
 import { rateLimitErrorMessage } from './rate_limit_errors';
 import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from './feed_merge';
 import {
 	assignCompetitionRanks,
 	type SegmentAgeBand,
@@ -3176,28 +3177,41 @@ export async function fetchFollowingFeed(opts?: {
 	// migration 20260626_001) — the view filters on is_public and
 	// applies the column / metadata-key redaction so feed entries
 	// don't leak third-party ids or sync-state internals.
-	let q = supabase
-		.from('public_runs')
-		.select('*')
-		.in('user_id', filteredAuthors)
-		.gte('started_at', cutoff)
-		.order('started_at', { ascending: false })
-		.order('id', { ascending: false })
-		.limit(limit);
-	if (opts?.activityType && opts.activityType !== 'all') {
-		// jsonb metadata key — Supabase exposes the `->>` operator via
-		// the column-name string syntax. Matches '{activity_type:run}'.
-		q = q.eq('metadata->>activity_type', opts.activityType);
-	}
-	if (opts?.cursor) {
-		// Stable cursor pagination on (started_at, id) — strictly less than
-		// the cursor row to skip what we've already seen.
-		q = q.or(
-			`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
-		);
-	}
-	const { data: runs } = await q;
-	if (!runs || runs.length === 0) return [];
+	//
+	// The followee set is chunked: PostgREST serialises `.in()` into the
+	// URL, so a viewer following many hundreds of people overflows the
+	// gateway's request-line limit and the query silently returns null.
+	// Each chunk applies the same cursor + ordering + limit; the global
+	// top-`limit` is a subset of the union of per-chunk results, which
+	// mergeFeedPages collapses back down.
+	const queryChunk = async (ids: string[]) => {
+		let q = supabase
+			.from('public_runs')
+			.select('*')
+			.in('user_id', ids)
+			.gte('started_at', cutoff)
+			.order('started_at', { ascending: false })
+			.order('id', { ascending: false })
+			.limit(limit);
+		if (opts?.activityType && opts.activityType !== 'all') {
+			// jsonb metadata key — Supabase exposes the `->>` operator via
+			// the column-name string syntax. Matches '{activity_type:run}'.
+			q = q.eq('metadata->>activity_type', opts.activityType);
+		}
+		if (opts?.cursor) {
+			// Stable cursor pagination on (started_at, id) — strictly less than
+			// the cursor row to skip what we've already seen.
+			q = q.or(
+				`started_at.lt.${opts.cursor.started_at},and(started_at.eq.${opts.cursor.started_at},id.lt.${opts.cursor.id})`
+			);
+		}
+		const { data } = await q;
+		return (data ?? []) as Run[];
+	};
+
+	const pages = await Promise.all(chunk(filteredAuthors, FEED_FOLLOWEE_CHUNK).map(queryChunk));
+	const runs = mergeFeedPages(pages, limit);
+	if (runs.length === 0) return [];
 
 	const authorIds = Array.from(new Set(runs.map((r) => r.user_id)));
 	const { data: profiles } = await supabase
