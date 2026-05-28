@@ -1,0 +1,30 @@
+[workspace]
+resolver = "2"
+members = [
+    "app",
+    "drivers/sharp_mip",
+    "drivers/ublox_nmea",
+    "drivers/max86177",
+    "boards/nrf52840_dk",
+]
+
+[workspace.package]
+edition = "2021"
+publish = false
+
+# On a power-constrained Cortex-M4F, optimising for size (-Os) typically beats
+# -O3: smaller code fits more in the instruction cache + flash is the slowest
+# part of the wake-up path. We keep full debug info for defmt-rtt + probe-rs.
+# See docs/custom_watch/performance_path.md for the rationale.
+
+[profile.release]
+debug = 2
+lto = "fat"
+codegen-units = 1
+opt-level = "s"
+overflow-checks = false
+
+[profile.dev]
+debug = 2
+opt-level = "s"
+overflow-checks = true

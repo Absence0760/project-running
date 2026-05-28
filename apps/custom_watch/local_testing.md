@@ -75,7 +75,53 @@ For full GDB-style debugging:
 probe-rs run --chip nRF52840_xxAA target/thumbv7em-none-eabihf/release/app
 ```
 
-In VS Code, the official [probe-rs debugger extension](https://probe.rs/docs/tools/debugger/) provides breakpoints, watch expressions, and a register view. A working `launch.json` template will land at `apps/custom_watch/.vscode/launch.json` once the workspace is scaffolded.
+In VS Code, the official [probe-rs debugger extension](https://probe.rs/docs/tools/debugger/) provides breakpoints, watch expressions, and a register view. The repo's root `.gitignore` excludes `.vscode/` so each developer keeps their own IDE config; bootstrap a working setup by saving the following to `apps/custom_watch/.vscode/launch.json`:
+
+```json
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "probe-rs-debug",
+            "request": "launch",
+            "name": "Debug app (release)",
+            "cwd": "${workspaceFolder}",
+            "chip": "nRF52840_xxAA",
+            "flashingConfig": {
+                "flashingEnabled": true,
+                "resetAfterFlashing": true,
+                "haltAfterReset": true
+            },
+            "coreConfigs": [
+                {
+                    "coreIndex": 0,
+                    "programBinary": "./target/thumbv7em-none-eabihf/release/app",
+                    "rttEnabled": true,
+                    "rttPollingInterval": 1
+                }
+            ],
+            "preLaunchTask": "cargo build --release"
+        }
+    ]
+}
+```
+
+…and pair it with a `tasks.json` for the build step:
+
+```json
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "cargo build --release",
+            "type": "shell",
+            "command": "cargo build --release",
+            "group": { "kind": "build", "isDefault": true },
+            "problemMatcher": ["$rustc"]
+        }
+    ]
+}
+```
 
 ## Without a board
 

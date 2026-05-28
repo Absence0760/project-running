@@ -1,0 +1,13 @@
+[package]
+name = "max86177"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+embedded-hal = "1.0"
+defmt        = { version = "0.3", optional = true }
+
+[features]
+default = []
+defmt   = ["dep:defmt"]
