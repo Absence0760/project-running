@@ -1999,6 +1999,14 @@ Why PMTiles + on-MCU vector rendering (rather than the easier middle options):
 - **Per [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)**, small quality compromises compound across the dozens of decisions that make up a competitive product. The map-UX edge is exactly the kind of margin § 86 says to take.
 - **Production PMTiles support is portable.** Tile generation happens server-side using existing open-source tooling (Protomaps, tippecanoe); the on-watch renderer reads a well-documented format. No proprietary pipeline to maintain.
 
+**Power cost honesty.** Among (a)/(b)/(c), full PMTiles is the **most CPU-intensive at runtime** — every pan/zoom requires tile decode + geometry clip + rasterisation on a Cortex-M4F with no GPU. Raster (option c) just blits pixels; pre-baked intermediate (b) sits between. So this is *not* a "perf-optimal on all dimensions" pick — it's a quality-vs-power trade where visual quality wins. We accept the runtime CPU cost because:
+
+- **Map interaction is infrequent during a run.** Users glance at the map at navigation decision points (intersections, course-deviation alerts), not continuously. Most active watch time is recording GPS + showing pace/distance, where the renderer is idle.
+- **Sharp MIP refresh caps at ~10 Hz.** Even under maximum interaction the renderer can't burn CPU faster than the display can show — there's a hard upper bound on the per-second cost.
+- **Estimated cost at the tier-2 power budget:** assuming ~5 minutes of active map interaction per hour during a multi-hour run, vector rendering adds an estimated **1–3% to total active-power draw** vs raster. Within the ~5% margin [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) explicitly says is worth taking for end-state quality wins.
+
+The 1–3% estimate is **unvalidated until [§ 83](#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem)'s PPK2 measurement runs at tier-1 step 4** (display bring-up). If the measured cost is >5% of total active draw, this decision gets revisited — at that point pre-baked intermediate (option b) becomes the right call. Recording this honestly per § 86's anti-rationalisation guidance: the renderer choice is a *quality-vs-power trade* where quality wins by enough margin to justify the cost, not a pick that wins on every dimension.
+
 What this commits us to:
 
 - **Tier-2 firmware budget includes a multi-month vector-renderer subproject.** Not on tier-1's plate (tier 1 doesn't render maps); tier-2 timeline + cost estimates have to account for it.
