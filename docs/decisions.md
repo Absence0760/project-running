@@ -2255,6 +2255,64 @@ New and returning runners (new + comeback personas #22) need run/walk interval s
 
 ---
 
+## 92. Custom watch decisions optimise for tier-3 production quality, period — scope and effort are not constraints
+
+This entry **supersedes [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)** ("even at small margins") with a stronger version: **all custom_watch decisions optimise for the tier-3 shipped product, regardless of how long the work takes or how much effort it costs.** § 86's exception clause for "tier-current-only choices that get rewritten anyway" is dropped — that loophole was being used to defer the harder, better, more-aligned option in several decisions. Validation noise at tier-1 compounds into tier-2 / tier-3 surprises; the optimal path gets validated from the start.
+
+**Decision.** From this entry forward, the decision-making rule for custom_watch is:
+
+1. **What's the optimal choice for the tier-3 shipped product?** That's the choice we take. End of question.
+2. **Effort, time, and tier-current scope are not valid arguments for picking the lesser option.** The "this is just tier-1, we'll redo it at tier-2" framing is dropped — we don't redo at tier-2, we validate the optimal path from tier-1.
+3. **The only legitimate constraint is technical feasibility.** If the optimal option literally doesn't exist yet (chip unreleased, HAL unwritten that we can't ourselves write in finite time), pick the closest available option that ports forward without surprise.
+
+Why this supersedes § 86 (rather than sitting alongside it):
+
+- **§ 86's exception clause was the loophole.** "Tier-current-only choice that gets rewritten anyway" is the rationale that was used to defer the harder option in [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) (nRF52840 vs Apollo510B), [§ 84](#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) (no OTA at tier-1 vs MCUboot day one), and [§ 88](#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3 (ANT+ Alliance deferred). Closing the loophole forces those decisions to be revisited.
+- **Tier-1 / tier-2 / tier-3 become validation phases, not commitment gates.** Under § 92, tier-1 is "the production firmware running on production-silicon class, possibly without the final case" — not "easier prototype on different silicon."
+- **The asymmetric play in [`competitive_landscape.md`](custom_watch/competitive_landscape.md) still holds**, but it's no longer a hedge. We're not "competing on software wins because hardware competition is unwinnable" — we're "competing on EVERY dimension, with software wins on top of hardware perf parity."
+
+**Tension with [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) — flagged for explicit resolution.** § 71's 2026-05-28 amendment scoped tier-1 as "owner-personal evenings/weekends investigation." § 92 is incompatible with that framing — the optimal-path-regardless-of-effort rule doesn't fit "investigate in spare time." Two interpretations:
+
+- **(A, strong):** § 92 supersedes § 71 amendment. Tier-1 is no longer "owner-personal investigation" — it's "real product development on the owner's available time, with explicit understanding that the time required may be years." § 71's "tier 2+ gated" framing also drops since the phases collapse.
+- **(B, weak):** § 92 binds the technical decisions only; § 71's effort cap on tier-1 still holds, which means the optimal path is acknowledged but tier-1 may take much longer than initially scoped to actually execute on it.
+
+Interpretation must be picked explicitly before the cascading revisions land. § 92 only takes full effect under interpretation A; under B, § 92 is a wish list constrained by § 71's spare-time reality.
+
+Existing decisions to revisit under § 92 (pending interpretation choice):
+
+| Entry | Current decision | Under § 92 | Revisit? |
+|---|---|---|---|
+| § 80 | Tier-1 firmware on nRF52840 (Embassy + nrf-softdevice maturity) | **Apollo510B EVB direct**, even if it costs 6-12 months of HAL bring-up | Yes |
+| § 84 | No OTA at tier-1; MCUboot at tier-2 | **MCUboot integrated from day one** — validate OTA architecture early | Yes |
+| § 88 Layer 3 | ANT+ Alliance application at tier-2 greenlight | **ANT+ Alliance application now** to get Garmin's answer + start the relationship | Yes |
+| § 89 | Skip user research interviews; vector-1 install rate is the validation | **Do interviews AND vector 1** — every signal is worth taking under § 92 | Yes |
+| § 81 | 5 buttons (UX-honest reasoning after § 86 audit revision) | Still aligned — UX argument was the right framing | No |
+| § 82 | Tier-1 DoD = one outdoor run | Still aligned — concrete completion bar; may expand "one" to "many under stress" | Maybe |
+| § 83 | PPK2 per-subsystem power measurement | Still aligned — best measurement methodology already | No |
+| § 85 | Full PMTiles renderer (+ honest power-cost paragraph) | Already aligned — picked the harder optimal option | No |
+| § 86 | End-state quality first, even at small margins | Superseded by § 92. Don't delete; mark as "extended/superseded by § 92" | Update header |
+| § 87 | Vector 1 parallel to tier-1 | Still aligned — parallel learning serves optimal-product goal | No |
+| § 90 | Apollo510B + BMP581 production-target swaps | Already aligned — pure perf-driven BOM updates | No |
+
+What § 92 commits us to (under interpretation A):
+
+- **Tier-1 firmware target switches from nRF52840 to Apollo510B EVB.** Multi-month HAL bring-up (writing `embassy-apollo` from scratch, or wrapping Ambiq's C SDK via `bindgen`) becomes the first work item.
+- **MCUboot bootloader integrated from day one.**
+- **ANT+ Alliance Adopter membership application starts now** ($2-5k/year fee + Garmin review, accepting the strategic tip-of-hand).
+- **User research interviews happen alongside vector 1.**
+- **Tier-1 timeline expands from "3-6 months evenings/weekends" to "as long as it takes" — realistically multi-year.**
+- **§ 71 amendment itself is amended** to drop "owner-personal evenings/weekends" and acknowledge this is now a serious multi-year product effort with no fixed budget cap.
+
+Don't re-litigate by:
+
+- **Citing § 86's exception** for any choice that affects end-state quality. § 92 dropped that exception; only "technically infeasible" counts.
+- **Falling back to "easier tier-1" arguments** to skip the optimal-path investment. § 92 binds even when the optimal option is multi-month / multi-year.
+- **Treating "out of scope" as a valid argument.** The user explicitly said scope is not a constraint when establishing this rule.
+
+Pinning: pending entries (likely § 93-96) to revise § 80 / § 84 / § 88 / § 89 per the table above (after the user picks interpretation A vs B). [§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) amendment may also need an "Amendment-2" under interpretation A.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
