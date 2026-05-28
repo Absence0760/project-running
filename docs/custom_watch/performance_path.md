@@ -16,11 +16,11 @@ This is the single largest decision on the whole watch. A Sharp Memory LCD in al
 
 This is why every ultra watch on the market uses Sharp MIP and every general-purpose smartwatch uses AMOLED. The trade is that MIP has a tiny colour gamut (8 colours), refreshes at about 10 Hz, and looks "old" next to AMOLED in a side-by-side demo. The trade is worth it for the ultra segment because the buyer cares about hour 26 of the 100-miler, not how the watch looks at REI.
 
-### MCU: Ambiq Apollo4 vs Nordic nRF52 — ~10× active power
+### MCU: Ambiq Apollo510B vs Nordic nRF52 — ~25× active power
 
-The Apollo4 family uses sub-threshold voltage design — it runs the silicon below the conventional threshold voltage, trading some max-clock speed for active current. The result is roughly 4 microamps per MHz active and 3 microamps sleep with the RTC running. The nRF52840 is roughly 50 microamps per MHz active. That's a ~12× active-power difference at the chip level.
+The Ambiq Apollo family uses sub-threshold voltage design — it runs the silicon below the conventional threshold voltage, trading some max-clock speed for active current. The Apollo4 introduced this approach (~4 µA/MHz active, ~3 µA sleep with RTC); **Apollo510B** is the current production-target part per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) and improves on Apollo4 by another ~2× on the same workload (Cortex-M55 + Helium MVE @ 250 MHz, integrated BLE 5.4 network processor). The nRF52840 is roughly 50 µA/MHz active. That's a ~25× active-power difference at the chip level between nRF52840 and Apollo510B.
 
-Apollo4 is what Fitbit Charge 6, Garmin Venu 3, and Huawei GT series moved to for exactly this reason. The nRF52840 is what you'd use for a bench prototype (because Zephyr and Embassy both support it first-class and the dev kit costs $50) and migrate away from for shipping silicon.
+Apollo4 family parts are what Fitbit Charge 6, Garmin Venu 3, and Huawei GT series moved to for exactly this reason; Apollo510B is the post-2025 generation. The nRF52840 is what you'd use for a bench prototype (because Zephyr and Embassy both support it first-class and the dev kit costs $50) and migrate away from for shipping silicon — see [§ 80](../decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) + [§ 92 Resolution](../decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal--80-tier-1-preserved-as-deliberate-first-prototype-compromise) for the tier-1 framing.
 
 ### GNSS: dual-band snapshot chip vs single-band always-on — 2 to 3× GPS power
 
@@ -30,7 +30,7 @@ For an ultra watch this is roughly a 2–3× reduction in GPS power at the same 
 
 ### Sensor coprocessor — 2 to 3× always-on power
 
-Modern wearable MCUs ship with a dedicated low-power core specifically for always-on sensor work. The Apollo4 has this built in. The nRF5340 has a separate network core that can be repurposed. Discrete coprocessors (Bosch BHI260, STMicro LSM6DSV) handle step counting, basic HR, and motion classification at sub-microamp power while the main CPU stays in deep sleep.
+Modern wearable MCUs ship with a dedicated low-power core specifically for always-on sensor work. The Apollo510B has an integrated 48 MHz BLE 5.4 network processor (separate from the M55 application core); Apollo4 had the same shape with a different radio. The nRF5340 has a separate network core that can be repurposed. Discrete coprocessors (Bosch BHI260, STMicro LSM6DSV) handle step counting, basic HR, and motion classification at sub-microamp power while the main CPU stays in deep sleep.
 
 The architectural rule is: **the main CPU never wakes for routine sensor reads.** It only wakes when the coprocessor signals something interesting — a step-count threshold, a heart-rate excursion, a motion event. For an always-on watch where the user only looks at the screen a few times an hour, this is a 2–3× improvement in the "watch is on your wrist doing nothing visible" power draw, which is most of the day.
 
@@ -94,7 +94,7 @@ The architectural rules to internalise during tier 1:
 
 **Write everything DMA-driven and interrupt-driven from day one.** Polling is a habit that's painful to refactor out later. Async/await in Embassy makes this almost free; Zephyr's `k_work` patterns get there with discipline.
 
-**Design with a sensor-coprocessor split in mind**, even though the nRF52840 doesn't have a great one. Structure code so the always-on path (steps, HR, baro) is isolated from the screen-on path (UI, GPS). Then when you migrate to Apollo4 or a discrete coprocessor, the boundary already exists.
+**Design with a sensor-coprocessor split in mind**, even though the nRF52840 doesn't have a great one. Structure code so the always-on path (steps, HR, baro) is isolated from the screen-on path (UI, GPS). Then when you migrate to Apollo510B (production target per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)) or a discrete coprocessor, the boundary already exists.
 
 **Plan for partial display updates** even though the bench prototype probably doesn't need them. LVGL's dirty-region invalidation is the right pattern; Slint's reactive UI model gets you there for free.
 
@@ -108,10 +108,10 @@ When tier 1 is done and you've decided to push to tier 2, the migration looks ro
 
 | Subsystem | Tier 1 | Production target | Power impact |
 |---|---|---|---|
-| MCU | Nordic nRF52840 | Ambiq Apollo4 Blue Plus | ~10× active-power improvement |
+| MCU | Nordic nRF52840 | Ambiq Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) | ~25× active-power improvement (Apollo4 → Apollo510B is another ~2× on top of Apollo4's ~10× vs nRF52840) |
 | GNSS | u-blox MAX-M10S (single-band) | Sony CXD5610 (dual-band snapshot mode) | ~2× power, ~5× accuracy in foliage |
 | Display | Sharp MIP 1.3" breakout | Sharp MIP custom-cut to case | Same chip family, same draw |
-| Sensor coprocessor | None (main CPU does everything) | Apollo4 integrated coprocessor or discrete BHI260 | ~2–3× always-on power |
+| Sensor coprocessor | None (main CPU does everything) | Apollo510B integrated 48 MHz BLE network processor or discrete BHI260 | ~2–3× always-on power |
 | Battery | 500 mAh off-shelf LiPo | Custom 600 mAh pouch shaped to case | Same chemistry, different form |
 | Power tree | Single 3.3V LDO on dev board | Multi-rail PMIC | 10–30% device-wide |
 

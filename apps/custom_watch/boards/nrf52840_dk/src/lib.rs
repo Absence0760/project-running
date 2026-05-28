@@ -33,4 +33,5 @@ pub mod buttons {
 }
 
 // TODO step 4+: add SPI pin assignments for the Sharp MIP, I²C for the
-// MAX86177 + BMP390, UART for the GPS, etc. as drivers come online.
+// MAX86177 + BMP581 (per decisions.md § 90), UART for the GPS, etc. as drivers
+// come online.

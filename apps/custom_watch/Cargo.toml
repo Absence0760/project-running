@@ -31,6 +31,6 @@ debug = 2
 # (the unoptimised async-state-machine code expansion is significant). Trades
 # incremental-build speed for a binary that actually fits. Can drop back to
 # opt-level = 0 if flash overflow stops being a concern — likely after the
-# tier-2 migration to Apollo4 / Apollo510B (4 MB internal MRAM / SRAM).
+# tier-2 migration to Apollo510B (4 MB MRAM + 3.75 MB SRAM per decisions.md § 90).
 opt-level = "s"
 overflow-checks = true

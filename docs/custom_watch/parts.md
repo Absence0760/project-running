@@ -8,7 +8,7 @@ Order numbers / vendor SKUs below are starting points — re-verify stock + curr
 
 | Part | Vendor / order number | Price | Notes |
 |---|---|---|---|
-| Nordic nRF52840 DK (PCA10056) | Mouser / Digi-Key / Adafruit / Nordic direct | ~$50 | Tier-1 MCU. Onboard Segger J-Link debugger over USB — no separate debugger needed. ANT+ available via the S340 multi-protocol SoftDevice (BLE + ANT+ concurrent). Production target migrates to Apollo4 (or nRF5340) — see [bom.md](bom.md). Chosen over the nRF5340 DK at this tier because the nRF52840 has more mature Embassy / Zephyr / `nrf-softdevice` support and stronger ANT+ tooling |
+| Nordic nRF52840 DK (PCA10056) | Mouser / Digi-Key / Adafruit / Nordic direct | ~$50 | Tier-1 MCU. Onboard Segger J-Link debugger over USB — no separate debugger needed. ANT+ available via the S340 multi-protocol SoftDevice (BLE + ANT+ concurrent). Production target migrates to **Ambiq Apollo510B** per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) — see [bom.md](bom.md). Chosen over the nRF5340 DK at this tier because the nRF52840 has more mature Embassy / Zephyr / `nrf-softdevice` support and stronger ANT+ tooling |
 | u-blox MAX-M10S GPS breakout | SparkFun GPS-21086 ("MAX-M10S Breakout") | ~$40 | Single-band L1 only. Production target migrates to Sony CXD5610 (NDA part). Fine for verifying the firmware NMEA-parser + fix-acquisition logic |
 | Sharp Memory LCD 1.3" 168×144 breakout (LS013B4DN04) | Adafruit "Sharp Memory Display Breakout" | ~$35 | The MIP display family Garmin Fenix uses. SPI interface. Static draw ~10 µA |
 | Maxim MAX86177 evaluation kit | Analog Devices `MAX86177EVSYS#` (verify current order number on the AD product page) | ~$130 | Optical HR AFE. Raw signal is fine for bench bring-up; the production HR algorithm needs licensing or in-house DSP work |
@@ -44,7 +44,7 @@ The nRF52840 DK has an onboard J-Link debugger over USB, so a standalone Segger 
 
 - **PCB design tools, PCB fab orders, stencil orders, pick-and-place setup** — all gated on the §71 triggers.
 - **Sony CXD5610 dual-band GNSS** — NDA part; the MAX-M10S is the tier-1 stand-in.
-- **Ambiq Apollo4 / nRF5340** — production-target MCUs; tier 1 uses the nRF52840 for Zephyr + Embassy maturity and the included onboard debugger.
+- **Ambiq Apollo510B** — production-target MCU per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified); tier 1 uses the nRF52840 for Embassy + `nrf-softdevice` maturity and the included onboard debugger.
 - **Custom LiPo cell tooling** — $8–15k one-off; way out of tier 1.
 - **Case CAD / industrial design / RF chamber time** — tier-2+ line items.
 - **Sapphire crystal, IPX7 sealing, drop / vibe / thermal cycling, FCC / CE certification** — tier 3.

@@ -39,7 +39,7 @@ app/
     tasks/
       gps.rs            GNSS NMEA parser task
       hr.rs             MAX86177 polling + naive peak-detect task
-      baro.rs           BMP390 sample task
+      baro.rs           BMP581 sample task (per decisions.md § 90)
       ui.rs             screen update + button-handler task
       ble.rs            GATT server + sync task
       record.rs         recording state machine (port of Dart run_recorder)

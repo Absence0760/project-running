@@ -53,7 +53,7 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 
 **16 GB SPI NAND flash** — Macronix MX25R series, Winbond W25Q series, or equivalent. ~$3–5 BOM at tier-3 volumes (TSSOP-8 / WSON-8 package). Per [decisions.md § 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash): required for the on-watch PMTiles map archives; LittleFS-formatted, partitioned for one global low-zoom tileset plus per-region high-zoom tilesets the user has explicitly downloaded.
 
-Why not internal MCU flash: the Apollo4 + nRF52/nRF53 family tops out at ~2 MB internal flash. Map storage at vector-tile resolution needs gigabytes; external SPI NAND is the only path. The Sony CXD5610 GNSS chip uses the same SPI bus; routing is straightforward.
+Why not internal MCU flash: even the Apollo510B (4 MB MRAM + 3.75 MB SRAM, the largest in our candidate set) is gigabytes short of what vector-map storage needs. External SPI NAND is the only path. The Sony CXD5610 GNSS chip uses the same SPI bus; routing is straightforward.
 
 Why not a removable card (microSD): an SD slot interrupts the IPX7 sealing story, adds a mechanical failure mode, and signals "tinkerer's device" to non-technical buyers. Fixed-flash is the segment norm (Garmin Fenix, COROS Vertix — both 32 GB internal NOR/NAND).
 
@@ -94,7 +94,7 @@ This is the largest single line item that *cannot* be borrowed from a dev board.
 
 ## Connectivity
 
-- **Bluetooth LE 5.x** — built into the Apollo4 / nRF5340. Used for phone sync, ANT+ via the nRF52840's multi-protocol radio if we go Nordic
+- **Bluetooth LE 5.4** — built into the Apollo510B (integrated 48 MHz network processor). Used for phone sync. ANT+ remains a tier-1 capability via the nRF52840's S340 multi-protocol radio; tier-2/3 ANT+ depends on the [§ 88](../decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3 ANT+ Alliance outcome and whether the Apollo510B has a path to ANT+ alongside BLE
 - **WiFi 802.11n** (optional, +$3 BOM) — only useful for direct-to-cloud sync without a phone. Garmin shipped this on the Fenix 7 family and most users never use it. **Skip for the first product**
 - **NFC** (optional, +$2 BOM) — Garmin Pay equivalent. **Skip; out of scope for ultra niche**
 
