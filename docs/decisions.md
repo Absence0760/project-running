@@ -1830,7 +1830,7 @@ Don't re-litigate by:
 
 If tier-1 reveals that Embassy + Rust + nRF52840 is genuinely intractable for our specific needs, the right move is to revert: switch to Zephyr + C + same MCU, port the firmware-architecture work over, and update this entry. The firmware-architecture rules are designed to be language-portable for exactly this reason.
 
-**Amendment (2026-05-28) under [§ 92](#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) Resolution.** § 92 codified "optimise for tier-3, period" as the new decision-making rule and flagged § 80's tier-1 nRF52840 choice as a candidate for revision (Apollo510B EVB direct would be the § 92-optimal pick at tier 1). The user's 2026-05-28 Resolution kept § 80 as-is, framing the nRF52840 choice as a deliberate first-prototype compromise to "keep costs down and get a working version first." Tier-2 migrates to Apollo510B per [§ 90](#90-bom-refresh-2026-05-28-apollo510b-bmp581-swap-ins-supply-alternates-qualified); the full optimal road from tier-2 onward follows § 92's Phase 0–5 timeline. § 80's original reasoning (memory safety + tooling + async ergonomics) still holds; this amendment adds an explicit "and pragmatic first-prototype scope" frame so a future reader doesn't wonder why § 92 didn't supersede § 80.
+**Amendment (2026-05-28) under [§ 92](#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) Resolution.** § 92 codified "optimise for tier-3, period" as the new decision-making rule and flagged § 80's tier-1 nRF52840 choice as a candidate for revision (Apollo510B EVB direct would be the § 92-optimal pick at tier 1). The user's 2026-05-28 Resolution kept § 80 as-is, framing the nRF52840 choice as a deliberate first-prototype compromise to "keep costs down and get a working version first." Tier-2 migrates to Apollo510B per [§ 90](#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified); the full optimal road from tier-2 onward follows § 92's Phase 0–5 timeline. § 80's original reasoning (memory safety + tooling + async ergonomics) still holds; this amendment adds an explicit "and pragmatic first-prototype scope" frame so a future reader doesn't wonder why § 92 didn't supersede § 80.
 
 Pinning: [`apps/custom_watch/README.md`](../apps/custom_watch/README.md), [`apps/custom_watch/CLAUDE.md`](../apps/custom_watch/CLAUDE.md), [`docs/custom_watch/parts.md`](custom_watch/parts.md), [`docs/custom_watch/performance_path.md`](custom_watch/performance_path.md), [`docs/custom_watch/competitive_landscape.md`](custom_watch/competitive_landscape.md).
 
@@ -2058,7 +2058,7 @@ What this commits us to:
 - **Future decisions entries** that touch product quality cite § 86 in their reasoning when they pick the harder option.
 - **When a decision picks the lazier option, the entry explicitly says why** (e.g., "no end-state quality impact" or "the harder option doesn't exist on the timeline available").
 
-First application: [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) (map renderer) picks the full PMTiles + on-MCU vector renderer over the pre-baked-intermediate middle option specifically because vector quality at every zoom is the win, and the engineering cost — while real (multi-month tier-2 firmware project) — is exactly the kind of investment this rule says to make.
+First application: [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash) (map renderer) picks the full PMTiles + on-MCU vector renderer over the pre-baked-intermediate middle option specifically because vector quality at every zoom is the win, and the engineering cost — while real (multi-month tier-2 firmware project) — is exactly the kind of investment this rule says to make.
 
 Don't re-litigate by:
 
@@ -2066,7 +2066,7 @@ Don't re-litigate by:
 - **Using "5% perf wins" as a hammer to justify scope creep.** The rule says pick the end-state-better option from the available set; it doesn't say invent new features. "Better renderer than middle option" is in scope; "let's also add nuclear-clock sync because that's 0.5% better" is not.
 - **Ignoring the explicit exception** for tier-current-only choices that get rewritten anyway. Spending tier-1 engineering on infrastructure that won't survive to tier-2 is waste, not quality.
 
-Pinning: First application in [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash). Future decisions in [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ list will be reasoned with this lens.
+Pinning: First application in [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash). Future decisions in [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ list will be reasoned with this lens.
 
 ---
 
@@ -2239,7 +2239,7 @@ Don't re-litigate by:
 - **Bumping to Apollo510 Lite to save BOM cost at launch.** The Lite series drops some peripherals; the BLE 5.4 + integrated network processor on the Apollo510B is precisely what makes it a drop-in for "Apollo4 Blue Plus." Lite as a future cost-down is fine; not as the launch SKU.
 - **Skipping the Sharp lifecycle letter "because Sharp Memory LCD is the de facto standard."** Mobara closure is the warning shot; a single-source on the most-visible component of the watch with a year-and-a-half tier-2 timeline is the recipe for a build-blocking surprise.
 
-Pinning: [`docs/custom_watch/bom.md`](custom_watch/bom.md) MCU + GNSS + OHR + Baro + External storage + Display sections updated. [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #1 updated. [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) tier-1 firmware decision unchanged. [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) 16 GB external NAND class unchanged.
+Pinning: [`docs/custom_watch/bom.md`](custom_watch/bom.md) MCU + GNSS + OHR + Baro + External storage + Display sections updated. [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #1 updated. [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) tier-1 firmware decision unchanged. [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash) 16 GB external NAND class unchanged.
 
 ---
 
@@ -2320,7 +2320,7 @@ User resolved the A/B interpretation question with a hybrid framing: **§ 92 + i
 What this means for the planning sweep:
 
 - **No cascading revisions land.** § 80, § 84, § 88 Layer 3, and § 89 all stay as originally committed. Each is now formally framed as a deliberate first-prototype compromise consistent with the resolution, not as a § 92 violation. § 80 gets an amendment noting this (below).
-- **Tier-2 onward follows the optimal road.** Apollo510B production silicon per [§ 90](#90-bom-refresh-2026-05-28-apollo510b-bmp581-swap-ins-supply-alternates-qualified), MCUboot OTA per [§ 84](#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default)'s tier-2 obligation, full ANT+ Alliance engagement per [§ 88](#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3, and the rest of the Phase 0–5 timeline above.
+- **Tier-2 onward follows the optimal road.** Apollo510B production silicon per [§ 90](#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified), MCUboot OTA per [§ 84](#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default)'s tier-2 obligation, full ANT+ Alliance engagement per [§ 88](#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3, and the rest of the Phase 0–5 timeline above.
 - **[§ 71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) amendment stays as written for tier-1 effort framing.** "Owner-personal evenings/weekends" remains the tier-1 model. § 71's tier-2+ gating is the natural choke point where the optimal road kicks in — a § 71 trigger flipping (paying user base, ODM offer, hardware co-founder) is what enables the Phase 3+ team + capital investment the optimal road needs.
 
 What § 92 still binds under this resolution:
