@@ -63,6 +63,19 @@ Deno.test('integrations spec redacts vault columns via narrow select', () => {
 	);
 });
 
+Deno.test('integrations spec includes disconnect timestamps (GDPR Art 15)', () => {
+	// Persona-hunt Round 3 finding Privacy #2. Migration 20261004_001
+	// added `disconnected_at` + `disconnected_reason` columns; these
+	// are personal data and must surface in the right-of-access
+	// export. A regression that narrowed the select back to the
+	// pre-fix column list would silently strip this from every
+	// future export.
+	const integ = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'integrations.json');
+	assertExists(integ);
+	assertEquals(integ.select.includes('disconnected_at'), true);
+	assertEquals(integ.select.includes('disconnected_reason'), true);
+});
+
 Deno.test('device_tokens spec carries a token-redactor', () => {
 	const dt = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'device_tokens.json');
 	assertExists(dt);

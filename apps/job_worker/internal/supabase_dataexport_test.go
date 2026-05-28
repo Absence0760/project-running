@@ -650,6 +650,47 @@ func TestFetchExportPersonalDataTables_RedactsDeviceTokens(t *testing.T) {
 	}
 }
 
+// Persona-hunt Round 3 finding Privacy #2. Migration 20261004_001
+// added `disconnected_at` + `disconnected_reason` columns to
+// `integrations`; both are personal data and must surface in the
+// GDPR Art 15 export. The select clause has to opt them in
+// explicitly because the spec uses a narrow projection (vault
+// secret columns are excluded). A regression that reverted the
+// select to the pre-fix shape would silently strip these from
+// every future export.
+func TestFetchExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColumns(t *testing.T) {
+	var integrationsURL string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/rest/v1/integrations") {
+			integrationsURL = r.URL.RawQuery
+		}
+		_, _ = w.Write([]byte(`[]`))
+	})
+	_, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatalf("FetchExportPersonalDataTables: %v", err)
+	}
+	if integrationsURL == "" {
+		t.Fatalf("expected a GET to /rest/v1/integrations")
+	}
+	// The select clause is URL-encoded as "select=...,disconnected_at,...".
+	if !strings.Contains(integrationsURL, "disconnected_at") {
+		t.Errorf("integrations select must include disconnected_at (GDPR Art 15 — persona-hunt Round 3 P2). Got: %q", integrationsURL)
+	}
+	if !strings.Contains(integrationsURL, "disconnected_reason") {
+		t.Errorf("integrations select must include disconnected_reason. Got: %q", integrationsURL)
+	}
+	// Vault secrets must STILL never surface — the original audit
+	// constraint stays in force.
+	if strings.Contains(integrationsURL, "access_token") {
+		t.Errorf("access_token must never be requested by the export select")
+	}
+	if strings.Contains(integrationsURL, "refresh_token") {
+		t.Errorf("refresh_token must never be requested by the export select")
+	}
+}
+
 func TestFetchExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

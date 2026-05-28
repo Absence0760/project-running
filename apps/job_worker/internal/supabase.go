@@ -1193,12 +1193,17 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			name: "training_plans.json", table: "training_plans", filter: uidEq,
 			sel: "*,weeks:plan_weeks(*,workouts:plan_workouts(*))",
 		},
-		// integrations — fact of connection + cursor + scope. Strip
-		// the secret-id columns; token bodies live in vault and the
-		// subject shouldn't carry them around in plaintext.
+		// integrations — fact of connection + cursor + scope +
+		// disconnect timestamp/reason. Strip the secret-id columns;
+		// token bodies live in vault and the subject shouldn't carry
+		// them around in plaintext. `disconnected_at` +
+		// `disconnected_reason` added per persona-hunt Round 3
+		// finding Privacy #2 — migration `20261004_001` introduced
+		// these columns and they're personal data under GDPR Art 15
+		// (right of access), so the export must reflect them.
 		{
 			name: "integrations.json", table: "integrations", filter: uidEq,
-			sel: "id,provider,external_id,scope,last_sync_at,sync_cursor,created_at,updated_at",
+			sel: "id,provider,external_id,scope,last_sync_at,sync_cursor,disconnected_at,disconnected_reason,created_at,updated_at",
 		},
 		// run_kudos given BY the user (the row where user_id = me).
 		{name: "run_kudos.json", table: "run_kudos", filter: uidEq, sel: "*"},

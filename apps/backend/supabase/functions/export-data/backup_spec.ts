@@ -32,8 +32,12 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			table: 'integrations',
 			filter: uidEq,
 			// access_token / refresh_token never ship — vault material.
+			// `disconnected_at` + `disconnected_reason` added per
+			// persona-hunt Round 3 finding Privacy #2 — migration
+			// `20261004_001` introduced these columns; GDPR Art 15
+			// requires the export to reflect them.
 			select:
-				'id,provider,external_id,scope,last_sync_at,sync_cursor,created_at,updated_at',
+				'id,provider,external_id,scope,last_sync_at,sync_cursor,disconnected_at,disconnected_reason,created_at,updated_at',
 		},
 		{ entry: 'run_kudos.json', table: 'run_kudos', filter: uidEq, select: '*' },
 		{
