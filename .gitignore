@@ -31,6 +31,12 @@ apps/web/playwright/.cache/
 # wrapper). Same purpose, same regeneration cycle — ignore here too.
 /test-results/
 /playwright-report/
+# Catch-all for any `test-results/` Playwright lands under a non-
+# canonical cwd (e.g. `apps/backend/` if a debugging session ran
+# `npx playwright test` after `cd apps/backend && supabase status`).
+# Per-test trace + screenshot + .last-run.json — never an artefact
+# we want under version control.
+**/test-results/
 
 # Environment
 .env
