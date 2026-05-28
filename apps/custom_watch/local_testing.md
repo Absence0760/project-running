@@ -142,17 +142,17 @@ For hardware-less integration testing of peripheral-touching code, the long-term
 
 ## CI parity
 
-The CI workflow at `.github/workflows/ci.yml` will get a `build-firmware` job (planned, lands with the Cargo workspace scaffold per [decisions.md § 80](../../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)) that runs:
+The CI workflow at `.github/workflows/ci.yml` has a `build-firmware` job (per [decisions.md § 80](../../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)) that runs on every PR:
 
 ```
-rustup target add thumbv7em-none-eabihf
+rustup show                                            # installs toolchain per rust-toolchain.toml
 cargo build --release --target thumbv7em-none-eabihf
-cargo test                                              # host-side
-cargo clippy --all-targets -- -D warnings
+cargo test --target <HOST_TRIPLE> --workspace --exclude app --exclude nrf52840_dk
+cargo clippy --workspace --release --target thumbv7em-none-eabihf -- -D warnings
 cargo fmt --check
 ```
 
-All of those run on a stock Ubuntu CI runner with no hardware. On-target tests stay manual / local until tier 2+ where we'd connect a HIL (hardware-in-the-loop) rig to a self-hosted runner.
+All of those run on a stock Ubuntu CI runner with no hardware, with Cargo registry + `target/` cached across PRs via `actions/cache` keyed on the `Cargo.toml` + `rust-toolchain.toml` hashes (uncached cold builds are ~3-5 min; cached re-runs are seconds). On-target tests stay manual / local until tier 2+ where we'd connect a HIL (hardware-in-the-loop) rig to a self-hosted runner.
 
 ## Common errors
 
