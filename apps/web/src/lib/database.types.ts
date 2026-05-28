@@ -1790,6 +1790,27 @@ export type Database = {
           },
         ]
       }
+      user_blocks: {
+        Row: {
+          blocked_id: string
+          blocker_id: string
+          created_at: string
+          reason: string | null
+        }
+        Insert: {
+          blocked_id: string
+          blocker_id: string
+          created_at?: string
+          reason?: string | null
+        }
+        Update: {
+          blocked_id?: string
+          blocker_id?: string
+          created_at?: string
+          reason?: string | null
+        }
+        Relationships: []
+      }
       user_coach_usage: {
         Row: {
           message_count: number
@@ -2228,6 +2249,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      block_user: {
+        Args: { p_reason?: string; p_target: string }
+        Returns: undefined
+      }
       check_rate_limit: {
         Args: {
           p_bucket: string
@@ -2405,6 +2430,10 @@ export type Database = {
         }[]
       }
       increment_coach_usage: { Args: { p_user_id: string }; Returns: number }
+      is_blocked_either_way: {
+        Args: { a: string; b: string }
+        Returns: boolean
+      }
       is_club_admin: { Args: { target_club: string }; Returns: boolean }
       is_club_member: { Args: { target_club: string }; Returns: boolean }
       is_event_organiser: { Args: { target_club: string }; Returns: boolean }
@@ -2684,6 +2713,7 @@ export type Database = {
         Args: { p_day_limit?: number; p_short_limit?: number }
         Returns: boolean
       }
+      unblock_user: { Args: { p_target: string }; Returns: undefined }
       weekly_mileage: {
         Args: { weeks_back?: number }
         Returns: {
