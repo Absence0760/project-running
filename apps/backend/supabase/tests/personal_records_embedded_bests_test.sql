@@ -1,4 +1,4 @@
--- Pins migration 20260529_001 — personal-records also reads embedded
+-- Pins migration 20260529000002 — personal-records also reads embedded
 -- best efforts from `metadata.fastest_X_s`. Persona-hunt Round 2 #4.
 --
 -- Scenario: a pro runs an 18 km tempo with a sub-20 5k embedded in
@@ -32,20 +32,21 @@ values (
   18000,
   4800,
   'app',
-  jsonb_build_object('fastest_5k_s', 1170)
+  jsonb_build_object('fastest_5k_s', 1170, 'activity_type', 'run')
 );
 
 -- A separate 5k race finish at 19:45 (whole-run). Slightly slower
 -- than the embedded effort above — the trigger should pick the
 -- embedded as the PR.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '22222222-2222-2222-2222-222222222222',
   '99999999-9999-9999-9999-99999999ffff',
   '2026-04-08 09:00:00+00',
   5000,
   1185,
-  'app'
+  'app',
+  '{"activity_type":"run"}'
 );
 
 -- Trigger explicit refresh.
@@ -90,7 +91,7 @@ values (
   3000,
   900,
   'app',
-  jsonb_build_object('fastest_5k_s', 'nope')  -- non-numeric — must be skipped
+  jsonb_build_object('fastest_5k_s', 'nope', 'activity_type', 'run')  -- non-numeric — must be skipped
 );
 
 do $$
@@ -117,7 +118,8 @@ values (
   '2026-04-22 09:00:00+00',
   10000,
   2400,
-  'app'
+  'app',
+  '{"activity_type":"run"}'
 ),
 (
   '55555555-5555-5555-5555-555555555555',
@@ -126,7 +128,7 @@ values (
   25000,
   6000,
   'app',
-  jsonb_build_object('fastest_10k_s', 2450)
+  jsonb_build_object('fastest_10k_s', 2450, 'activity_type', 'run')
 );
 
 do $$

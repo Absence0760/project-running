@@ -8,7 +8,7 @@ import { USER_A, USER_B } from '../fixtures/users';
 /**
  * Cross-user notification fan-out. The notification triggers fire on
  * INSERT into run_kudos / run_comments / user_follows
- * (migration 20260528_001_notifications.sql) — recipient's bell
+ * (migration 20260528000001_notifications.sql) — recipient's bell
  * surfaces the unread on the next refresh-on-auth-ready (no realtime
  * subscription wired up yet, see docs/architecture.md).
  *
@@ -175,7 +175,7 @@ test.describe('cross-user notifications', () => {
 	test('alex follows runner → runner sees a follow notification', async ({
 		browser
 	}) => {
-		// Migration 20260528_001 also installs `notify_user_follow` —
+		// Migration 20260528000001 also installs `notify_user_follow` —
 		// inserting into user_follows fans out to the followee. Pin the
 		// popover entry shape ("X started following you").
 		const ctxRunner = await browser.newContext({

@@ -92,15 +92,15 @@ Keys that carry transient or platform-internal state. Treat these as implementat
 
 ### Personal-records hints
 
-Per-canonical-distance fastest times computed by the client at save time. Persona-hunt Round 2 finding Pro #4 — pre-fix the canonical `personal_records` cache (migration `20260528_001`) only considered whole-run `distance_m` against the bracket. A sub-20 5k inside an 18 km long run never landed in the PR table. Migration `20260529_001_personal_records_embedded_bests.sql` now factors these keys in.
+Per-canonical-distance fastest times computed by the client at save time. Persona-hunt Round 2 finding Pro #4 — pre-fix the canonical `personal_records` cache (migration `20260528000002`) only considered whole-run `distance_m` against the bracket. A sub-20 5k inside an 18 km long run never landed in the PR table. Migration `20260529000002_personal_records_embedded_bests.sql` now factors these keys in.
 
 | Key | Shape | Writers | Readers | Required? | Notes |
 |---|---|---|---|---|---|
-| `fastest_5k_s` | `int` — seconds of the fastest rolling-5km window inside the GPS track | `mobile_android/lib/embedded_bests.dart` (called from `screens/run_screen.dart` at save time, mirrored to iOS twin) | `apps/backend/supabase/migrations/20260529_001_personal_records_embedded_bests.sql` (the `refresh_personal_records_for_user` trigger function reads it alongside whole-run candidates) | Optional — only present when the track is long enough (≥ 5 km) AND has ≥ 3 waypoints | Auto-computed at save time. A faster manual override is preserved; a slower existing value is overwritten with the auto-computed one. Public-safe (passes through `public_runs`). |
+| `fastest_5k_s` | `int` — seconds of the fastest rolling-5km window inside the GPS track | `mobile_android/lib/embedded_bests.dart` (called from `screens/run_screen.dart` at save time, mirrored to iOS twin) | `apps/backend/supabase/migrations/20260529000002_personal_records_embedded_bests.sql` (the `refresh_personal_records_for_user` trigger function reads it alongside whole-run candidates) | Optional — only present when the track is long enough (≥ 5 km) AND has ≥ 3 waypoints | Auto-computed at save time. A faster manual override is preserved; a slower existing value is overwritten with the auto-computed one. Public-safe (passes through `public_runs`). |
 | `fastest_10k_s` | `int` — seconds | same | same | same as above, gated on track ≥ 10 km | same |
 | `fastest_half_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 21.097 km | same |
 | `fastest_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 42.195 km | same |
-| `is_dnf` | `bool` — true when the runner marked the recording as a did-not-finish | mobile / watch runners (Round 3) | `apps/backend/supabase/migrations/20260530_001_personal_records_exclude_dnf.sql` — the PR trigger excludes DNF candidates from both whole-run and embedded-best partitions | Optional; absent ≡ not a DNF | Persona-hunt Round 3 finding Ultra #3. Pre-fix a DNF at mile 26 of a 100-miler had `distance_m=42000`, fit the widened marathon bracket, and was promoted as a marathon PR. Public-safe (passes through `public_runs`). |
+| `is_dnf` | `bool` — true when the runner marked the recording as a did-not-finish | mobile / watch runners (Round 3) | `apps/backend/supabase/migrations/20260530000001_personal_records_exclude_dnf.sql` — the PR trigger excludes DNF candidates from both whole-run and embedded-best partitions | Optional; absent ≡ not a DNF | Persona-hunt Round 3 finding Ultra #3. Pre-fix a DNF at mile 26 of a 100-miler had `distance_m=42000`, fit the widened marathon bracket, and was promoted as a marathon PR. Public-safe (passes through `public_runs`). |
 
 ### Client-side synthetic
 

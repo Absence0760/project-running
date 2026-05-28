@@ -41,10 +41,11 @@ values ('88888888-8888-8888-8888-888888888801',
         5000.0,
         '00000000-0000-0000-0000-0000000000ad');
 
-insert into race_sessions (event_id, instance_start, status, started_by, auto_approve)
+insert into race_sessions (event_id, instance_start, status, started_at, started_by, auto_approve)
 values ('88888888-8888-8888-8888-888888888801',
         '2026-04-01T08:00:00Z',
         'running',
+        '2026-04-01T08:00:00Z',
         '00000000-0000-0000-0000-0000000000ad',
         false);
 

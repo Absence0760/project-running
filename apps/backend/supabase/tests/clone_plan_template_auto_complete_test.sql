@@ -1,4 +1,4 @@
--- Pins migration 20260529_003 — clone_plan_template auto-completes
+-- Pins migration 20260529000004 — clone_plan_template auto-completes
 -- the caller's existing active plan before inserting the new one.
 -- Persona-hunt Round 2 finding Intermediate #1.
 
@@ -9,8 +9,8 @@ select plan(3);
 -- they want to adopt.
 do $$
 declare
-  v_user uuid := '99999999-9999-9999-9999-9999plan0001';
-  v_club uuid := '99999999-9999-9999-9999-9999plan0c01';
+  v_user uuid := '99999999-9999-9999-9999-9999bbaa0001';
+  v_club uuid := '99999999-9999-9999-9999-9999bbaa0c01';
   v_template uuid := gen_random_uuid();
   v_active_plan uuid := gen_random_uuid();
 begin
@@ -23,8 +23,8 @@ begin
   insert into user_profiles (id, display_name, preferred_unit, subscription_tier)
     values (v_user, 'Plan Adopter', 'km', 'free')
     on conflict (id) do nothing;
-  insert into clubs (id, slug, name, visibility, join_policy, created_by)
-    values (v_club, 'plan-club', 'Plan Club', 'public', 'open', v_user)
+  insert into clubs (id, slug, name, is_public, join_policy, owner_id)
+    values (v_club, 'plan-club', 'Plan Club', true, 'open', v_user)
     on conflict (id) do nothing;
   insert into club_members (club_id, user_id, role, status, joined_at)
     values (v_club, v_user, 'member', 'active', now())
@@ -57,7 +57,7 @@ end $$;
 
 -- Pretend we're authenticated as the test user so auth.uid() in the
 -- RPC returns the right value.
-set local request.jwt.claims = '{"sub":"99999999-9999-9999-9999-9999plan0001","role":"authenticated"}';
+set local request.jwt.claims = '{"sub":"99999999-9999-9999-9999-9999bbaa0001","role":"authenticated"}';
 set local role = 'authenticated';
 
 -- Call the RPC.

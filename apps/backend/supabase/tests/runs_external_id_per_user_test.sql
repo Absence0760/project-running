@@ -1,4 +1,4 @@
--- Pins migration 20260528_002 — runs.external_id is per-user unique,
+-- Pins migration 20260528000003 — runs.external_id is per-user unique,
 -- not globally unique.
 --
 -- Pre-fix, two users importing the same Strava activity ID (or any
@@ -31,10 +31,10 @@ begin
 
   -- Same Strava-ish external_id for two different users — must NOT
   -- collide post-fix.
-  insert into runs (user_id, started_at, distance_m, duration_s, source, external_id)
-    values (v_user_a, '2026-04-01 09:00:00+00', 5000, 1500, 'strava', 'strava:99001');
-  insert into runs (user_id, started_at, distance_m, duration_s, source, external_id)
-    values (v_user_b, '2026-04-01 10:00:00+00', 5000, 1500, 'strava', 'strava:99001');
+  insert into runs (user_id, started_at, distance_m, duration_s, source, external_id, metadata)
+    values (v_user_a, '2026-04-01 09:00:00+00', 5000, 1500, 'strava', 'strava:99001', '{"activity_type":"run"}');
+  insert into runs (user_id, started_at, distance_m, duration_s, source, external_id, metadata)
+    values (v_user_b, '2026-04-01 10:00:00+00', 5000, 1500, 'strava', 'strava:99001', '{"activity_type":"run"}');
 end $$;
 
 select is(
@@ -51,9 +51,9 @@ declare
   v_collided boolean := false;
 begin
   begin
-    insert into runs (user_id, started_at, distance_m, duration_s, source, external_id)
+    insert into runs (user_id, started_at, distance_m, duration_s, source, external_id, metadata)
       values ('99999999-9999-9999-9999-99999999dddd'::uuid,
-              '2026-04-02 09:00:00+00', 5000, 1500, 'strava', 'strava:99001');
+              '2026-04-02 09:00:00+00', 5000, 1500, 'strava', 'strava:99001', '{"activity_type":"run"}');
   exception when unique_violation then
     v_collided := true;
   end;

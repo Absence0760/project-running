@@ -1,4 +1,4 @@
--- Pins migration 20260528_001 — personal-records distance brackets
+-- Pins migration 20260528000002 — personal-records distance brackets
 -- widened to ±2% so real-world race-day Strava finishes qualify.
 --
 -- Pre-fix: a 2:50 marathon recorded at 42.45 km was excluded by the
@@ -30,63 +30,68 @@ end $$;
 
 -- Seed: one Strava-recorded marathon at 42.45 km / 2:50:00. Real-
 -- world overshot. Must qualify under the widened ±2% bracket.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '11111111-1111-1111-1111-111111111111',
   '99999999-9999-9999-9999-99999999cccc',
   '2026-04-01 09:00:00+00',
   42450,
   10200,
-  'strava'
+  'strava',
+  '{"activity_type":"run"}'
 );
 
 -- Seed: a Strava-recorded 10k at 10.15 km / 40:00. Was excluded by
 -- the old 9900..10100 bracket; must qualify under widened 9800..10200.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '22222222-2222-2222-2222-222222222222',
   '99999999-9999-9999-9999-99999999cccc',
   '2026-04-08 09:00:00+00',
   10150,
   2400,
-  'strava'
+  'strava',
+  '{"activity_type":"run"}'
 );
 
 -- Seed: a Strava-recorded half-marathon at 21.25 km / 1:25:00.
 -- Was excluded by the old 21000..21200 bracket.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '33333333-3333-3333-3333-333333333333',
   '99999999-9999-9999-9999-99999999cccc',
   '2026-04-15 09:00:00+00',
   21250,
   5100,
-  'strava'
+  'strava',
+  '{"activity_type":"run"}'
 );
 
 -- Seed: a 5k at 5.05 km / 18:00 — already qualified pre-fix; checked
 -- here to confirm the widening didn't regress the 5k bracket.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '44444444-4444-4444-4444-444444444444',
   '99999999-9999-9999-9999-99999999cccc',
   '2026-04-22 09:00:00+00',
   5050,
   1080,
-  'strava'
+  'strava',
+  '{"activity_type":"run"}'
 );
 
 -- Seed: a 41 km long run at 41.0 km — clearly NOT a marathon (≥1%
 -- under). Must NOT qualify as a marathon PR even under the widened
 -- bracket (lower bound 41351).
-insert into runs (id, user_id, started_at, distance_m, duration_s, source)
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
 values (
   '55555555-5555-5555-5555-555555555555',
   '99999999-9999-9999-9999-99999999cccc',
   '2026-04-29 09:00:00+00',
   41000,
   10800,
-  'strava'
+  'strava',
+  '{"activity_type":"run"}'
 );
 
 -- Trigger the refresh explicitly (the inserts also fired the trigger,
