@@ -7,6 +7,7 @@
 		fetchPublicRunsByUser,
 		fetchFollowers,
 		fetchFollowing,
+		FOLLOW_PAGE_SIZE,
 		fetchFollowingFeed,
 		fetchEngagementSummaries,
 		followUser,
@@ -39,6 +40,10 @@
 	let runs = $state<Run[]>([]);
 	let followers = $state<PublicProfile[]>([]);
 	let following = $state<PublicProfile[]>([]);
+	let followersHasMore = $state(false);
+	let followingHasMore = $state(false);
+	let followersLoadingMore = $state(false);
+	let followingLoadingMore = $state(false);
 	let loading = $state(true);
 	let busy = $state(false);
 	let tab = $state<'runs' | 'followers' | 'following' | 'notifications' | 'feed'>('runs');
@@ -92,8 +97,8 @@
 		const [p, r, fr, fg, blocked] = await Promise.all([
 			fetchPublicProfile(userId),
 			fetchPublicRunsByUser(userId, 20),
-			fetchFollowers(userId, 50),
-			fetchFollowing(userId, 50),
+			fetchFollowers(userId, { limit: FOLLOW_PAGE_SIZE }),
+			fetchFollowing(userId, { limit: FOLLOW_PAGE_SIZE }),
 			auth.loggedIn && auth.user?.id !== userId
 				? isBlockedByViewer(userId)
 				: Promise.resolve(false),
@@ -102,9 +107,47 @@
 		runs = r;
 		followers = fr;
 		following = fg;
+		followersHasMore = fr.length === FOLLOW_PAGE_SIZE;
+		followingHasMore = fg.length === FOLLOW_PAGE_SIZE;
 		viewerHasBlocked = blocked;
 		loading = false;
 		hydrateViewerFollows();
+	}
+
+	async function loadMoreFollowers() {
+		if (followersLoadingMore || !followersHasMore) return;
+		followersLoadingMore = true;
+		try {
+			const more = await fetchFollowers(userId, {
+				limit: FOLLOW_PAGE_SIZE,
+				offset: followers.length,
+			});
+			followers = [...followers, ...more];
+			followersHasMore = more.length === FOLLOW_PAGE_SIZE;
+			hydrateViewerFollows();
+		} catch (e) {
+			showToast(`Could not load more followers: ${e}`, 'error');
+		} finally {
+			followersLoadingMore = false;
+		}
+	}
+
+	async function loadMoreFollowing() {
+		if (followingLoadingMore || !followingHasMore) return;
+		followingLoadingMore = true;
+		try {
+			const more = await fetchFollowing(userId, {
+				limit: FOLLOW_PAGE_SIZE,
+				offset: following.length,
+			});
+			following = [...following, ...more];
+			followingHasMore = more.length === FOLLOW_PAGE_SIZE;
+			hydrateViewerFollows();
+		} catch (e) {
+			showToast(`Could not load more: ${e}`, 'error');
+		} finally {
+			followingLoadingMore = false;
+		}
 	}
 
 	// Single-query batch lookup of viewer→target edges over the union of
@@ -675,6 +718,13 @@
 						</div>
 					{/each}
 				</div>
+				{#if followersHasMore}
+					<div class="load-more">
+						<button class="btn btn-outline" onclick={loadMoreFollowers} disabled={followersLoadingMore}>
+							{followersLoadingMore ? 'Loading…' : 'Load more'}
+						</button>
+					</div>
+				{/if}
 			{/if}
 		{:else if tab === 'following'}
 			{#if following.length === 0}
@@ -735,6 +785,13 @@
 						</div>
 					{/each}
 				</div>
+				{#if followingHasMore}
+					<div class="load-more">
+						<button class="btn btn-outline" onclick={loadMoreFollowing} disabled={followingLoadingMore}>
+							{followingLoadingMore ? 'Loading…' : 'Load more'}
+						</button>
+					</div>
+				{/if}
 			{/if}
 		{:else if tab === 'feed' && isSelf}
 			<div class="feed-toolbar">

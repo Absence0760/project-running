@@ -3095,13 +3095,23 @@ async function hydratePeopleSuggestions(
 }
 
 /// People who follow `userId`, paginated client-side after fetch.
-export async function fetchFollowers(userId: string, limit = 50): Promise<PublicProfile[]> {
+/// Default page size for the follower / following lists. The /u/[id]
+/// tabs request one page at a time and load more on demand, so a user
+/// with hundreds of followers is fully reachable rather than truncated.
+export const FOLLOW_PAGE_SIZE = 50;
+
+export async function fetchFollowers(
+	userId: string,
+	opts?: { limit?: number; offset?: number }
+): Promise<PublicProfile[]> {
+	const limit = opts?.limit ?? FOLLOW_PAGE_SIZE;
+	const offset = opts?.offset ?? 0;
 	const { data: edges } = await supabase
 		.from('user_follows')
 		.select('follower_id, followed_at')
 		.eq('followee_id', userId)
 		.order('followed_at', { ascending: false })
-		.limit(limit);
+		.range(offset, offset + limit - 1);
 	const ids = (edges ?? []).map((e) => e.follower_id as string);
 	if (ids.length === 0) return [];
 	const { data: profiles } = await supabase
@@ -3115,13 +3125,18 @@ export async function fetchFollowers(userId: string, limit = 50): Promise<Public
 }
 
 /// People `userId` follows, ordered by most-recently followed.
-export async function fetchFollowing(userId: string, limit = 50): Promise<PublicProfile[]> {
+export async function fetchFollowing(
+	userId: string,
+	opts?: { limit?: number; offset?: number }
+): Promise<PublicProfile[]> {
+	const limit = opts?.limit ?? FOLLOW_PAGE_SIZE;
+	const offset = opts?.offset ?? 0;
 	const { data: edges } = await supabase
 		.from('user_follows')
 		.select('followee_id, followed_at')
 		.eq('follower_id', userId)
 		.order('followed_at', { ascending: false })
-		.limit(limit);
+		.range(offset, offset + limit - 1);
 	const ids = (edges ?? []).map((e) => e.followee_id as string);
 	if (ids.length === 0) return [];
 	const { data: profiles } = await supabase
