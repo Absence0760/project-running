@@ -113,6 +113,74 @@ It understands `create table`, `alter table ... add column`, and `alter table ..
 1. Reorganise the migration into a `drop column` + `add column` pair that the generator *can* parse. Works for renames in this pre-launch codebase.
 2. Grow `_parseAlterTable` in `scripts/gen_dart_models.dart` to handle the new form. Add a test case if the parser is getting complex.
 
+### Bare-body `create or replace function` strips prior fixes
+
+**Whenever a migration does `create or replace function X`, write the COMPLETE desired body — do NOT write from scratch as if `X` had just been created.** PostgreSQL replaces the entire function definition every time, so any guard / clause / rate-limit call added by an earlier migration gets silently dropped when a later migration bare-bodies the function with a partial rewrite.
+
+How this bites: `20260904_001_pr_refresh_restore_auth_guard` restored a JWT-role guard on `refresh_personal_records_for_user` by writing a fresh body — and unwittingly dropped the widened brackets (`20260528000002`), embedded-best efforts (`20260529000002`), and DNF exclusion (`20260530000001`) that earlier persona-fix migrations had added. Same cascade hit `clone_plan_template`: `20260721_001` legitimately stripped publisher fitness data from the clone, but in doing so dropped the auto-complete-active-plan UPDATE (`20260529000004`). The Round 3 cleanup commit `f134c807` added two consolidation migrations (`20261009_001` + `20261010_001`) to roll everything together — that's the pattern to follow.
+
+**Before writing `create or replace function X`:**
+
+1. `grep -ln "function X" apps/backend/supabase/migrations/*.sql` to find every prior touch.
+2. Read the LATEST one — that's the live body in the DB.
+3. Patch what you need on top of that body; don't go back to the original.
+4. If the function is well-trodden (PR refresher, kudos / comments policies, `is_run_visible_to`, etc.), strongly consider whether your fix should be a brand-new sibling migration at the end of the chain rather than threading through the existing rewrites.
+
+This same trap applies to bare-body `drop policy + create policy` replacements where a sibling migration's policy gets lost — see the RLS gotcha below.
+
+### `drop policy if exists "wrong-name"` is a silent no-op
+
+When you replace an RLS policy, the `drop policy if exists "name"` is keyed by EXACT name. A wrong name (typo, stale guess, name that was changed by a later migration) silently does nothing — your new policy then gets created ALONGSIDE the original, and at evaluation Postgres OR's them: the more permissive policy wins. The restrictive new policy you thought you added is bypassed.
+
+**Before replacing a policy, grep the current authoritative name:**
+
+```bash
+grep -B 1 "on user_follows for insert" apps/backend/supabase/migrations/*.sql | tail
+```
+
+Pick the latest `create policy "..." on user_follows for insert` you find — that's the name to drop. Don't guess. Cost me an extra iteration on Round 3 W1 (the user_blocks finding): I dropped `"user_follows owner insert"` thinking that was the name; the real one was `"users follow on their own behalf"` from `20260521_001_user_follows.sql`. Both policies coexisted afterwards and the test that expected a block-induced 42501 saw the insert succeed via the un-touched original.
+
+### CI green ≠ migration applied
+
+Older `supabase/setup-cli` versions on CI **silently skip** migrations that collide on the `YYYYMMDD` version key (rather than erroring like the local CLI). A `Result: PASS` on the pgtap CI job does NOT prove your migration ran. The Round 2 persona-fix migrations sat in `main` for weeks "passing" CI before anyone noticed they hadn't been applied in any environment. **Always verify a new migration with `cd apps/backend && supabase db reset --local` locally before trusting CI.** If the local CLI errors with `duplicate key value violates unique constraint "schema_migrations_pkey"`, CI is probably just hiding the same error.
+
+## pgtap test gotchas
+
+### UUIDs must be 32 valid hex chars (0-9 a-f) in 8-4-4-4-12 layout
+
+Synthetic UUID literals like `'99999999-9999-9999-9999-99999dnfaaaa'` (contains non-hex `n`) or `'11111111-1111-1111-1111-111111ddd01'` (trailing segment is only 11 chars) error at first insert with `invalid input syntax for type uuid`. The whole test then reports "Bad plan: you planned N tests but ran 0" — easy to miss in a long pgtap summary because no individual test is marked as failing. **Use only `0-9 a-f` in synthetic UUIDs, and count the trailing segment** (12 hex chars). Patterns I've used safely: `99999999-9999-9999-9999-9999ddddaa01`, `88888888-8888-8888-8888-888888aaaaaa`, `aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01`.
+
+### `INSERT INTO runs (...)` needs `metadata.activity_type`
+
+Migration `20260601_001_runs_metadata_activity_type_required.sql` added a CHECK constraint that rejects runs without `metadata.activity_type`. Any pgtap test that seeds a row in `runs` must include `metadata` with at least `{"activity_type":"run"}`:
+
+```sql
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
+values (..., 'app', '{"activity_type":"run"}');
+```
+
+Or with `jsonb_build_object`: `jsonb_build_object('activity_type', 'run', ...other keys...)`. Forgetting it errors test setup before any assertion runs → "Bad plan" again.
+
+### `set local "request.jwt.claims"` needs double quotes
+
+The parameter name contains a dot, so PostgreSQL requires double quotes around it in `SET LOCAL`. Unquoted form `set local request.jwt.claims = '...'` is parsed differently and silently fails to set the JWT context — `auth.uid()` returns NULL, your RLS test passes (or fails) for the wrong reason. Always:
+
+```sql
+set local "request.jwt.claims" = '{"sub":"...","role":"authenticated"}';
+```
+
+Companion line: `set local role authenticated;` (or `anon` / `service_role`). The double-quoted form is what every working RLS pgtap test in `apps/backend/supabase/tests/` uses — copy that pattern.
+
+### Common column-name typos that cost a `db reset`
+
+- `user_follows` columns are `follower_id` + `followee_id` — **not** `followed_id`.
+- `run_comments` author is `author_id` — **not** `user_id`.
+- `clubs` visibility lives on `is_public` (boolean) — **not** a `visibility` text column. The owner is `owner_id` — **not** `created_by`.
+- `events` has no `kind` column. Don't add one in test fixtures.
+- `race_sessions` has a temporal-invariant CHECK: `status='running'` requires `started_at IS NOT NULL`. A test fixture inserting `running` without `started_at` errors at first insert.
+
+When in doubt, `grep "create table $TABLE" apps/backend/supabase/migrations/*.sql` and read the latest schema before writing the test.
+
 ## Edge Functions
 
 Eight functions live under `supabase/functions/`. All are wired up. Test coverage breakdown:
