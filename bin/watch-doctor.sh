@@ -56,13 +56,23 @@ fi
 step "Connected debug probes"
 if command -v probe-rs >/dev/null; then
 	probes_output="$(probe-rs list 2>&1 || true)"
-	if [[ -z "$probes_output" ]] || echo "$probes_output" | grep -qiE 'no debug probes|no probes'; then
+	# Fail-closed: only treat as detected if we recognise a probe identifier
+	# in the output. `probe-rs list` can exit 0 while emitting a non-empty
+	# error string (e.g. udev-permission failures on Linux print
+	# "No access to any debug probe..." but still exit 0); the older
+	# negative-match-on-"no probes" logic mis-handled that case by printing
+	# the raw error string as if it were a probe list.
+	if echo "$probes_output" | grep -qiE 'J-Link|CMSIS-DAP|ST-Link|DAPLink|FTDI|nRF'; then
+		echo "$probes_output" | sed 's/^/    /'
+	else
 		warn "No debug probes detected"
 		dim "Plug the nRF52840 DK into a USB port (data cable, not power-only)."
 		dim "Linux: if the board is plugged in but not listed, you may be missing udev rules."
 		dim "See https://probe.rs/docs/getting-started/probe-setup/#udev-rules for the file."
-	else
-		echo "$probes_output" | sed 's/^/    /'
+		if [[ -n "$probes_output" ]]; then
+			dim "Raw 'probe-rs list' output (for diagnosis):"
+			echo "$probes_output" | head -5 | sed 's/^/      /'
+		fi
 	fi
 fi
 
