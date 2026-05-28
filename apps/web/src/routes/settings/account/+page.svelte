@@ -23,6 +23,14 @@
 		getCurrentSubscription,
 	} from '$lib/push';
 	import { cloudExport } from '$lib/cloud_export';
+	import {
+		MAX_TRUSTED_CONTACTS,
+		TRUSTED_CONTACTS_KEY,
+		hasReachableChannel,
+		normaliseTrustedContacts,
+		type TrustedContact,
+	} from '$lib/trusted_contacts';
+	import { updateUniversal } from '$lib/settings';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -52,6 +60,44 @@
 	let passwordError = $state<string | null>(null);
 
 	let parkrunImporting = $state(false);
+
+	// Persona-hunt Round 3 finding Woman #4. Trusted-contact scaffold:
+	// a runner heading out for a solo long run designates one or more
+	// contacts who would be notified if the run goes wrong. Storage
+	// shape lives in `lib/trusted_contacts.ts`. The actual notify-on-
+	// overdue / panic-button delivery is deferred; this surface just
+	// gives the data a home.
+	let trustedContacts = $state<TrustedContact[]>([]);
+	let trustedContactsSaving = $state(false);
+
+	function addTrustedContact() {
+		if (trustedContacts.length >= MAX_TRUSTED_CONTACTS) return;
+		trustedContacts = [...trustedContacts, { name: '' }];
+	}
+
+	function removeTrustedContact(idx: number) {
+		trustedContacts = trustedContacts.filter((_, i) => i !== idx);
+	}
+
+	async function saveTrustedContacts() {
+		if (!auth.user || trustedContactsSaving) return;
+		trustedContactsSaving = true;
+		try {
+			const cleaned = normaliseTrustedContacts(trustedContacts);
+			await updateUniversal(auth.user.id, { [TRUSTED_CONTACTS_KEY]: cleaned });
+			trustedContacts = cleaned;
+			showToast(
+				cleaned.length === 0
+					? 'Trusted contacts cleared.'
+					: `${cleaned.length} trusted contact${cleaned.length === 1 ? '' : 's'} saved.`,
+				'success',
+			);
+		} catch (e) {
+			showToast(`Save failed: ${(e as Error).message}`, 'error');
+		} finally {
+			trustedContactsSaving = false;
+		}
+	}
 
 	/// Kick the existing `parkrun-import` Edge Function with the
 	/// user's stashed athlete number. The function does the scrape +
@@ -116,6 +162,9 @@
 			dateOfBirth = (p.date_of_birth as string) ?? '';
 			restingHr = (p.resting_hr_bpm as number)?.toString() ?? '';
 			maxHr = (p.max_hr_bpm as number)?.toString() ?? '';
+			trustedContacts = normaliseTrustedContacts(
+				p[TRUSTED_CONTACTS_KEY] as TrustedContact[] | null | undefined,
+			);
 		}
 		await loadIdentities();
 		await refreshPushState();
@@ -639,6 +688,91 @@
 		</button>
 	</section>
 
+	<!-- Safety — trusted contacts. Persona-hunt Round 3 Woman #4. -->
+	<section class="card">
+		<h2>Safety</h2>
+		<p class="section-desc">
+			Designate one or more trusted contacts. The scaffold stores the list with your
+			account so the planned "overdue run" + panic-button surfaces have somewhere to
+			send notifications. Up to {MAX_TRUSTED_CONTACTS}.
+		</p>
+		<div class="contact-list">
+			{#each trustedContacts as contact, idx (idx)}
+				<div class="contact-row">
+					<div class="contact-fields">
+						<label class="field">
+							<span class="label-text">Name</span>
+							<input
+								type="text"
+								placeholder="e.g. Alex Chen"
+								bind:value={contact.name}
+								maxlength="80"
+							/>
+						</label>
+						<label class="field">
+							<span class="label-text">Phone</span>
+							<input
+								type="tel"
+								placeholder="+1 555 123 4567"
+								bind:value={contact.phone}
+								maxlength="40"
+							/>
+						</label>
+						<label class="field">
+							<span class="label-text">Email</span>
+							<input
+								type="email"
+								placeholder="alex@example.com"
+								bind:value={contact.email}
+								maxlength="120"
+							/>
+						</label>
+						<label class="field">
+							<span class="label-text">Relationship</span>
+							<input
+								type="text"
+								placeholder="partner / parent / run buddy"
+								bind:value={contact.relationship}
+								maxlength="40"
+							/>
+						</label>
+					</div>
+					{#if !hasReachableChannel(contact) && contact.name?.trim()}
+						<p class="warn-text">
+							Add a phone or email so we have a way to reach them.
+						</p>
+					{/if}
+					<button
+						type="button"
+						class="btn btn-outline btn-sm"
+						onclick={() => removeTrustedContact(idx)}
+					>
+						Remove
+					</button>
+				</div>
+			{/each}
+		</div>
+		<div class="btn-row">
+			<button
+				type="button"
+				class="btn btn-outline"
+				onclick={addTrustedContact}
+				disabled={trustedContacts.length >= MAX_TRUSTED_CONTACTS}
+			>
+				<span class="material-symbols">person_add</span>
+				Add contact
+			</button>
+			<button
+				type="button"
+				class="btn btn-primary"
+				onclick={saveTrustedContacts}
+				disabled={trustedContactsSaving}
+			>
+				{trustedContactsSaving ? 'Saving...' : 'Save contacts'}
+			</button>
+		</div>
+	</section>
+
 	<!-- Notifications -->
 	<section class="card">
 		<h2>Notifications</h2>
@@ -817,6 +951,28 @@
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
 	.btn-save { width: auto; }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
+
+	.contact-list { display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-md); }
+	.contact-row {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-bg-secondary);
+	}
+	.contact-fields {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+		gap: var(--space-sm);
+	}
+	.warn-text {
+		margin: 0;
+		font-size: 0.78rem;
+		color: var(--color-warning, #b06000);
+		line-height: 1.4;
+	}
 	.error-text { color: #ef5350; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.ok-text { color: #66bb6a; font-size: 0.85rem; margin-top: var(--space-sm); }
 	.danger-heading { color: var(--color-danger); }

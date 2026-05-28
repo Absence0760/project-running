@@ -28,6 +28,12 @@ class SettingsKeys {
   /// `search_user_profiles` RPC (migration 20261015_001) reads
   /// this key.
   static const discoverableInSearch = 'discoverable_in_search';
+  /// Persona-hunt Round 3 finding Woman #4. Array of
+  /// `TrustedContact` rows (see `lib/trusted_contacts.dart` shape).
+  /// The notify-on-overdue / panic-button delivery logic is
+  /// deferred; this key just gives the data a stable home so
+  /// runners can populate their list ahead of the feature.
+  static const trustedContacts = 'trusted_contacts';
   static const coachPersonality = 'coach_personality';
   static const weeklyMileageGoalMetres = 'weekly_mileage_goal_m';
   static const weekStartDay = 'week_start_day';

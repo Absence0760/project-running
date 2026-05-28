@@ -38,6 +38,7 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `privacy_default` | `'public' \| 'followers' \| 'private'` | U | `followers` | Default visibility of new runs. Per-run override still wins. |
 | `strava_auto_share` | `bool` | U | `false` | Auto-push every new run to Strava (requires connected integration). |
 | `discoverable_in_search` | `bool` | U | `true` | When `false`, this user is excluded from People-tab name search (`search_user_profiles` RPC — migration `20261015_001`). The user remains reachable by direct profile URL and via share-page unfurls; this only gates name-string discovery. Persona-hunt Round 3 finding Woman #2. |
+| `trusted_contacts` | `TrustedContact[]` | U | `[]` | Array of `{ name, phone?, email?, relationship? }` rows (max 5). Scaffold for the planned overdue-run / panic-button surface — no delivery logic ships with this key. Pure shape lives in `apps/web/src/lib/trusted_contacts.ts` ↔ `apps/mobile_android/lib/trusted_contacts.dart`. Persona-hunt Round 3 finding Woman #4. |
 | `coach_personality` | `'supportive' \| 'drill_sergeant' \| 'analytical'` | U | `supportive` | Tone preset for the Claude coach chat. |
 | `voice_feedback_enabled` | `bool` | D | `false` | Speak pace/distance callouts during a run. Device-scoped because mic/speaker availability differs. |
 | `voice_feedback_interval_km` | `double` | D | `1.0` | Interval in km between spoken callouts. |

@@ -18,6 +18,7 @@ import '../widgets/top_banner.dart';
 import 'import_screen.dart';
 import 'guided_runs_screen.dart';
 import 'privacy_zones_screen.dart';
+import 'trusted_contacts_screen.dart';
 import 'profile_screen.dart';
 import 'sign_in_screen.dart';
 
@@ -403,6 +404,25 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                     context,
                     MaterialPageRoute(
                       builder: (_) => PrivacyZonesScreen(settingsSync: s),
+                    ),
+                  );
+                },
+              ),
+            if (signedIn)
+              ListTile(
+                leading: const Icon(Icons.contact_emergency_outlined),
+                title: const Text('Trusted contacts'),
+                subtitle: const Text(
+                    'Designated people for the planned overdue-run / panic surface'),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () {
+                  final s = widget.settingsSync;
+                  if (s == null) return;
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) =>
+                          TrustedContactsScreen(settingsSync: s),
                     ),
                   );
                 },
