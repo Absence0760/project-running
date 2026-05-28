@@ -127,12 +127,17 @@ List<DateTime> expandInstances(
   final byday = (e.byday == null || e.byday!.isEmpty)
       ? [_dartWeekday(e.startsAt)]
       : e.byday!;
-  // Anchor on the Sunday of startsAt's week so weekIndex * 7 == elapsed weeks.
-  // startsAt may be a UTC DateTime from Supabase; convert to local so the
-  // extracted date fields match the user's wall-clock day.
+  // Anchor on the Monday of startsAt's week so weekIndex * 7 == elapsed weeks.
+  // Must match the web twin's Monday anchor (recurrence.ts: (getDay()+6)%7) —
+  // a Sunday anchor here disagreed with web on which calendar weeks are "even"
+  // for biweekly events whose byday set crosses the weekend, producing
+  // different instance dates on the two platforms. `weekday - 1` (Dart weekday
+  // is 1=Mon..7=Sun) is the exact offset web computes. startsAt may be a UTC
+  // DateTime from Supabase; convert to local so the extracted date fields match
+  // the user's wall-clock day.
   final localStart = e.startsAt.toLocal();
   final anchor = DateTime(localStart.year, localStart.month, localStart.day)
-      .subtract(Duration(days: localStart.weekday % 7));
+      .subtract(Duration(days: localStart.weekday - 1));
 
   for (var dayOffset = 0; dayOffset < max * stepDays * 7; dayOffset++) {
     final d = anchor.add(Duration(days: dayOffset));

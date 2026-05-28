@@ -79,6 +79,34 @@ test('expandInstances — biweekly produces fewer instances than weekly in the s
 	assert.ok(b.length < w.length, `biweekly ${b.length} should be fewer than weekly ${w.length}`);
 });
 
+test('expandInstances — biweekly with a weekend-crossing byday anchors on Monday', () => {
+	// Twin-parity contract with apps/mobile_android/lib/recurrence.dart: the week
+	// is anchored on Monday, so a biweekly [SA, SU] event starting on a Saturday
+	// fires Sat+Sun on the start week, skips a week, then Sat+Sun again. A Sunday
+	// anchor (the old Dart behaviour) split the Sunday into the next week and
+	// produced a different set of dates. CI runs in UTC; the start time is given
+	// in Z so getDay() reads Saturday.
+	const e = ev({
+		starts_at: '2026-05-02T09:00:00Z', // Sat
+		recurrence_freq: 'biweekly',
+		recurrence_byday: ['SA', 'SU'],
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-05-01T00:00:00Z'),
+		new Date('2026-05-31T23:59:59Z'),
+	);
+	const dates = out.map((d) => d.toISOString().slice(0, 10));
+	assert.deepEqual(dates, [
+		'2026-05-02',
+		'2026-05-03',
+		'2026-05-16',
+		'2026-05-17',
+		'2026-05-30',
+		'2026-05-31',
+	]);
+});
+
 test('expandInstances — recurrence_count caps the number of instances', () => {
 	const e = ev({
 		starts_at: '2026-04-01T08:00:00Z',

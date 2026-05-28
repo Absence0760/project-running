@@ -68,6 +68,28 @@ void main() {
       expect(bInstances.length, lessThan(wInstances.length));
     });
 
+    test('biweekly with a weekend-crossing byday matches the web Monday anchor', () {
+      // Twin-parity regression: Dart used to anchor the week on Sunday while
+      // web anchors on Monday, so a biweekly [SA, SU] event disagreed on which
+      // alternating weeks fire. Local (unzoned) start so the byday is the same
+      // wall-clock Saturday in every test timezone. Expected dates are the
+      // canonical web output (Monday anchor): May 2/3, 16/17, 30/31 2026.
+      final e = EventRecurrence(
+        startsAt: DateTime(2026, 5, 2, 9, 0), // Sat 09:00 local
+        freq: RecurrenceFreq.biweekly,
+        byday: const [Weekday.sa, Weekday.su],
+      );
+
+      final instances = expandInstances(
+        e,
+        DateTime(2026, 5, 1),
+        DateTime(2026, 5, 31, 23, 59, 59),
+      );
+
+      final dates = instances.map((d) => '${d.year}-${d.month}-${d.day}').toList();
+      expect(dates, ['2026-5-2', '2026-5-3', '2026-5-16', '2026-5-17', '2026-5-30', '2026-5-31']);
+    });
+
     test('recurrence_count cap limits the number of instances', () {
       final utcStart = DateTime.utc(2026, 4, 1, 8, 0, 0);
       final e = EventRecurrence(
