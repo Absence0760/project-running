@@ -683,23 +683,26 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 
 ## Future — Hardware: ultra-marathon-optimized watch
 
-**Status: research only. Not committed.** See [decisions.md § 71](decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) for why this is parked.
+**Status: research only. Tier 2+ not committed.** See [decisions.md § 71](decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) for the original deferral and its 2026-05-28 amendment (which permits tier-1 owner-personal bench-prototype work but binds tier 2+ to the original gates).
 
-A purpose-built wrist device for ultra-marathon use — 100+ hour GPS battery life, dual-band GNSS for foliage / canyon accuracy, Sharp MIP always-on display, 5-button layout, offline vector maps, IPX7. Targets the niche Garmin Fenix / COROS Vertix / Suunto Vertical own today. Full research lives at [`docs/hardware/`](hardware/README.md):
+A purpose-built wrist device for ultra-marathon use — 100+ hour GPS battery life, dual-band GNSS for foliage / canyon accuracy, Sharp MIP always-on display, 5-button layout, offline vector maps, IPX7. Targets the niche Garmin Fenix / COROS Vertix / Suunto Vertical own today. Full research lives at [`docs/custom_watch/`](custom_watch/README.md):
 
-- [Vision](hardware/vision.md) — why ultra (not road or general-purpose smartwatch), the four product requirements that fall out of that niche, the competitive set
-- [BOM](hardware/bom.md) — component picks per subsystem (Ambiq Apollo4 MCU, Sony CXD5610 dual-band GNSS, Maxim MAX86177 HR, Sharp Memory LCD, Bosch BMP390), ~$110 production BOM at 10k units
-- [Prototyping](hardware/prototyping.md) — three honest cost tiers: $1–2k bench prototype, $15–250k wearable prototype, $300–600k VC-demo / production-intent unit
-- [Firmware](hardware/firmware.md) — why Zephyr RTOS not Wear OS (battery target unreachable on Wear OS), how the watch would integrate with the existing Supabase backend and reuse the run-recorder state machine
+- [Vision](custom_watch/vision.md) — why ultra (not road or general-purpose smartwatch), the product requirements that fall out of that niche, the competitive set
+- [Competitive landscape](custom_watch/competitive_landscape.md) — frank read on what's unbeatable (chip-level hardware, GNSS algorithm IP, brand trust, retail), what's exploitable (Garmin's hostile UI, weak community, glacial updates), and the three asymmetric strategic vectors that beat building your own watch
+- [BOM](custom_watch/bom.md) — component picks per subsystem (Ambiq Apollo4 MCU, Sony CXD5610 dual-band GNSS, Maxim MAX86177 HR, Sharp Memory LCD, Bosch BMP390), ~$110 production BOM at 10k units
+- [Prototyping](custom_watch/prototyping.md) — three honest cost tiers: $1–2k bench prototype, $15–250k wearable prototype, $300–600k VC-demo / production-intent unit
+- [Performance path](custom_watch/performance_path.md) — where battery life actually comes from: big levers (display, MCU, GNSS chip, sensor coprocessor) vs medium (DMA, tickless RTOS, partial display, multi-rail PMIC) vs the small ones that don't move the needle (RTOS / language / compiler / UI library)
+- [Firmware](custom_watch/firmware.md) — original Zephyr proposal + Supabase-integration design. Superseded by [§ 80](decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) which picked Embassy + Rust for tier 1; reads as the fallback spec
+- [Parts](custom_watch/parts.md) — active tier-1 shopping list (~$300 silicon + $200-900 bench tools) with order checkboxes
 
-The unticked items below are the gates that would have to flip before any of this becomes real work:
+The unticked items below are the gates that would have to flip before *tier 2+* becomes real work. **Tier-1 bench-prototype work is happening now** on the owner-personal path per the §71 amendment — the active workspace is at [`apps/custom_watch/`](../apps/custom_watch/README.md).
 
 - [ ] Trigger (a): app has a paying user base large enough to fund a parallel hardware effort without starving the software roadmap
 - [ ] Trigger (b): an existing ODM (Mobvoi, Huami/Zepp, etc.) approaches us about a white-label firmware deal
 - [ ] Trigger (c): a co-founder with shipped-consumer-hardware experience joins the project
-- [ ] None of the above — keep `docs/hardware/` frozen at its current resolution; do not build tier-1 prototypes on hobby budget
+- [ ] None of the above — keep `docs/custom_watch/` strategic content frozen at its current resolution; tier-1 owner-personal work continues under the §71 amendment but tier 2+ stays gated
 
-If a trigger flips, the first real piece of work is a **tier-1 bench prototype** (~$1–2k parts + 3–6 months of evenings) to validate that the firmware skeleton works end-to-end against the existing backend. That's the only milestone short enough to fit into a research budget; everything past it requires a real team and a real budget.
+Tier-1 (~$1–2k parts + 3–6 months of evenings) validates that the firmware skeleton works end-to-end against the existing backend. Anything past it — wearable prototype, production-intent unit, retail launch — requires a real team and a real budget and remains gated on the triggers above.
 
 ---
 

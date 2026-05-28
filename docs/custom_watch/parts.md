@@ -1,14 +1,14 @@
 # Parts list — tier 1 bench prototype
 
-Single shopping list for building the tier-1 bench prototype from scratch. Total ~$1k–$2k including tools. Sourced from the cost analysis in [`docs/hardware/prototyping.md`](../docs/hardware/prototyping.md).
+Single shopping list for building the tier-1 bench prototype from scratch. Total ~$1k–$2k including tools. Sourced from the cost analysis in [`prototyping.md`](prototyping.md).
 
-Order numbers / vendor SKUs below are starting points — re-verify stock + current price + lifecycle status at the vendor before ordering. See also the procurement caveat at the top of [`docs/hardware/bom.md`](../docs/hardware/bom.md).
+Order numbers / vendor SKUs below are starting points — re-verify stock + current price + lifecycle status at the vendor before ordering. See also the procurement caveat at the top of [`bom.md`](bom.md).
 
 ## MCU + sensor breakouts (~$280)
 
 | Part | Vendor / order number | Price | Notes |
 |---|---|---|---|
-| Nordic nRF52840 DK (PCA10056) | Mouser / Digi-Key / Adafruit / Nordic direct | ~$50 | Tier-1 MCU. Onboard Segger J-Link debugger over USB — no separate debugger needed. ANT+ available via the S340 multi-protocol SoftDevice (BLE + ANT+ concurrent). Production target migrates to Apollo4 (or nRF5340) — see [bom.md](../docs/hardware/bom.md). Chosen over the nRF5340 DK at this tier because the nRF52840 has more mature Embassy / Zephyr / `nrf-softdevice` support and stronger ANT+ tooling |
+| Nordic nRF52840 DK (PCA10056) | Mouser / Digi-Key / Adafruit / Nordic direct | ~$50 | Tier-1 MCU. Onboard Segger J-Link debugger over USB — no separate debugger needed. ANT+ available via the S340 multi-protocol SoftDevice (BLE + ANT+ concurrent). Production target migrates to Apollo4 (or nRF5340) — see [bom.md](bom.md). Chosen over the nRF5340 DK at this tier because the nRF52840 has more mature Embassy / Zephyr / `nrf-softdevice` support and stronger ANT+ tooling |
 | u-blox MAX-M10S GPS breakout | SparkFun GPS-21086 ("MAX-M10S Breakout") | ~$40 | Single-band L1 only. Production target migrates to Sony CXD5610 (NDA part). Fine for verifying the firmware NMEA-parser + fix-acquisition logic |
 | Sharp Memory LCD 1.3" 168×144 breakout (LS013B4DN04) | Adafruit "Sharp Memory Display Breakout" | ~$35 | The MIP display family Garmin Fenix uses. SPI interface. Static draw ~10 µA |
 | Maxim MAX86177 evaluation kit | Analog Devices `MAX86177EVSYS#` (verify current order number on the AD product page) | ~$130 | Optical HR AFE. Raw signal is fine for bench bring-up; the production HR algorithm needs licensing or in-house DSP work |

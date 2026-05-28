@@ -1,5 +1,7 @@
 # Firmware — why not Wear OS, and how it integrates with the existing app
 
+> **Status (2026-05-28): superseded by [decisions.md § 80](../decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance).** §80 picked Embassy on Rust on the Nordic nRF52840 over Zephyr on C; the active firmware workspace at [`/apps/custom_watch/`](../../apps/custom_watch/README.md) reflects that decision. This doc remains as the reference for the Zephyr fallback path called out in §80 — taken only if Embassy hits a blocking driver issue that takes more than two weeks to resolve. The "Why not Wear OS" reasoning below still holds in either language; "The right base: Zephyr RTOS" section reflects the original proposal and should be read as the fallback spec, not the active one. For the active firmware spec see the `apps/custom_watch/` README; for where the performance levers actually live see [`performance_path.md`](performance_path.md).
+
 ## Why not Wear OS
 
 Wear OS is the wrong base for an ultra watch. Specifically:
@@ -31,7 +33,7 @@ Zephyr's specific wins for this project:
 ## Build environment
 
 ```
-firmware/
+apps/custom_watch/         # tier-1 firmware workspace (would also host the Zephyr fallback per §80)
   zephyr/                  # zephyr workspace, west-managed
   app/                     # our application code
     src/

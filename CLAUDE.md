@@ -32,7 +32,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |
 | Setting up the monorepo / melos / workspaces | [docs/monorepo.md](docs/monorepo.md) |
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
-| "Should we build our own watch hardware?" | [docs/hardware/README.md](docs/hardware/README.md) — research-only baseline for an ultra-marathon watch (vision, BOM, prototyping tiers, firmware). Current default of not starting hardware work + the triggers that would change it are recorded in [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely). The 2026-05-28 §71 amendment permits owner-personal tier-1 bench-prototype work; that workspace + active parts list lives at [firmware/](firmware/README.md) |
+| "Should we build our own watch hardware?" | [docs/custom_watch/README.md](docs/custom_watch/README.md) — research baseline for an ultra-marathon watch (vision, competitive landscape, BOM, prototyping cost tiers, performance path, firmware architecture). Current default of not starting hardware work + the triggers that would change it are recorded in [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely). The 2026-05-28 §71 amendment permits owner-personal tier-1 bench-prototype work; the active firmware workspace lives at [apps/custom_watch/](apps/custom_watch/README.md) and the live parts shopping list at [docs/custom_watch/parts.md](docs/custom_watch/parts.md). Firmware language locked to Rust + Embassy per [§ 80](docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) |
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
 | Where each service runs in production / cost / DR / rollback | [docs/deployment.md](docs/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
@@ -47,6 +47,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 - [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter; **`lib/` and `test/` are byte-identical to `mobile_android`** ([decisions.md § 39](docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)); platform-specific behaviour dispatches via `Platform.isIOS` inside the unified files
 - [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter); wrist-only complement, NOT a pocket-app mirror
 - [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional; wrist-only complement, NOT a pocket-app mirror
+- [apps/custom_watch/CLAUDE.md](apps/custom_watch/CLAUDE.md) — Rust + Embassy firmware for the ultra-marathon watch research effort; **research-tier, tier-1 bench prototype only**, see [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance). Strategy + BOM + cost tiers + parts list live at [docs/custom_watch/](docs/custom_watch/README.md)
 
 ## Audit commands
 
@@ -137,6 +138,7 @@ apps/
   mobile_ios/        → Flutter; lib/ + test/ kept byte-identical to mobile_android (see decisions.md § 39)
   watch_wear/        → native Kotlin + Compose-for-Wear (not Flutter)
   watch_ios/         → native SwiftUI Xcode project, functional
+  custom_watch/      → Rust + Embassy firmware for the ultra-marathon watch research effort (research-tier, tier-1 bench prototype only; decisions §71 amendment + §80, 2026-05-28)
   job_worker/        → Go background-job worker (drains the `jobs` queue; first kind is map_match)
 packages/
   core_models/       → Dart domain classes + generated row DTOs
@@ -152,9 +154,6 @@ infra/               → Terraform stacks for AWS web hosting (decisions §53)
   dns/               → Route 53 hosted zone + ACM cert
   github-oidc/       → OIDC provider + per-env deploy roles
   envs/{prod,preview}/ → root modules for each environment
-firmware/            → Tier-1 bench-prototype workspace for the ultra-marathon watch research effort (decisions §71 amendment, 2026-05-28)
-  README.md          → Status + next steps
-  parts.md           → Active shopping list
 scripts/
   gen_dart_models.dart  → Dart row-class generator
 .github/workflows/

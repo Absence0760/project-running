@@ -1,17 +1,17 @@
-# Firmware — bench-prototype workspace (tier 1)
+# custom_watch — tier-1 bench-prototype workspace
 
-Tier-1 bench-prototype code for the ultra-marathon watch research effort. Status, scope, and parts list live here; product vision + BOM + cost tiers + firmware architecture live under [`docs/hardware/`](../docs/hardware/README.md).
+Rust + Embassy firmware for the ultra-marathon watch research effort. This is *only* the active workspace + per-step build status; the broader research (strategy, BOM, cost tiers, firmware architecture, performance path, parts list) lives under [`docs/custom_watch/`](../../docs/custom_watch/README.md). See also [`CLAUDE.md`](CLAUDE.md) in this directory for the scope rules.
 
 ## Status
 
-**Planning — no parts ordered, no code written.** [decisions.md §71](../docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) was amended 2026-05-28 to allow owner-personal tier-1 work in evenings/weekends. Tier 2+ (PCB CAD, case CAD, RF consultant spend, ODM conversations) remain gated on the three triggers in §71.
+**Planning — no parts ordered, no code written.** [decisions.md §71](../../docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) was amended 2026-05-28 to allow owner-personal tier-1 work in evenings/weekends. Tier 2+ (PCB CAD, case CAD, RF consultant spend, ODM conversations) remain gated on the three triggers in §71.
 
-**Language + framework decided: Rust + Embassy on the Nordic nRF52840.** See [decisions.md §80](../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) for why (short version: memory safety + tooling + async ergonomics, *not* perf — Rust vs C is within ±5% on this class of MCU). See [`docs/hardware/performance_path.md`](../docs/hardware/performance_path.md) for where the performance levers actually live, and [`docs/hardware/competitive_landscape.md`](../docs/hardware/competitive_landscape.md) for the strategic framing of why tier 1 exists at all.
+**Language + framework decided: Rust + Embassy on the Nordic nRF52840.** See [decisions.md §80](../../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) for why (short version: memory safety + tooling + async ergonomics, *not* perf — Rust vs C is within ±5% on this class of MCU). See [`docs/custom_watch/performance_path.md`](../../docs/custom_watch/performance_path.md) for where the performance levers actually live, and [`docs/custom_watch/competitive_landscape.md`](../../docs/custom_watch/competitive_landscape.md) for the strategic framing of why tier 1 exists at all.
 
 ## Next steps
 
-1. **Order parts** — see [parts.md](parts.md). Total ~$300 for the MCU + sensor breakouts + battery + breadboard, plus ~$200–$900 in bench tools depending on which soldering iron / multimeter / logic analyzer tier you pick.
-2. **Scaffold the Cargo workspace** — `Cargo.toml` + Embassy + `embassy-nrf` + `nrf-softdevice` + `defmt` + `probe-rs` runner config, plus a "blink-LED" `firmware/app/` binary as the first flash target. Confirms the toolchain works end-to-end before any sensor work.
+1. **Order parts** — see [`docs/custom_watch/parts.md`](../../docs/custom_watch/parts.md). Total ~$300 for the MCU + sensor breakouts + battery + breadboard, plus ~$200–$900 in bench tools depending on which soldering iron / multimeter / logic analyzer tier you pick.
+2. **Scaffold the Cargo workspace** — `Cargo.toml` + Embassy + `embassy-nrf` + `nrf-softdevice` + `defmt` + `probe-rs` runner config, plus a "blink-LED" `app/` binary as the first flash target. Confirms the toolchain works end-to-end before any sensor work.
 3. **GNSS bring-up** — u-blox MAX-M10S over UART, NMEA parser, log fixes at 1 Hz via `defmt` over RTT.
 4. **Display bring-up** — Sharp Memory LCD over SPI, render current GPS fix. This is the first hand-rolled driver — about 100 lines of SPI bit-banging plus a small framebuffer abstraction.
 5. **Optical HR bring-up** — MAX86177 over I²C, raw photodiode sample → naive peak-detect (the licensed HR algorithm comes later via `bindgen` against Maxim's C library, post-tier-1).
@@ -22,30 +22,29 @@ Each step is roughly 2–4 weeks of evenings depending on prior firmware experie
 
 ## Layout
 
-To be created in step 2 above. Target shape (Cargo workspace):
+To be created in step 2 above. Target shape (Cargo workspace, all paths relative to `apps/custom_watch/`):
 
 ```
-firmware/
-  Cargo.toml              workspace root
-  rust-toolchain.toml     pins to a recent stable Rust + thumbv7em-none-eabihf target
-  .cargo/config.toml      runner = probe-rs, default target, defmt log level
-  app/
-    Cargo.toml
-    src/
-      main.rs             #[embassy_executor::main] entry, spawns tasks
-      tasks/
-        gps.rs            GNSS NMEA parser task
-        hr.rs             MAX86177 polling + naive peak-detect task
-        baro.rs           BMP390 sample task
-        ui.rs             screen update + button-handler task
-        ble.rs            GATT server + sync task
-        record.rs         recording state machine (port of Dart run_recorder)
-  drivers/
-    sharp_mip/            Sharp Memory LCD driver crate
-    ublox_nmea/           u-blox NMEA parser crate (no_std)
-    max86177/             MAX86177 register-level driver + bindgen wrapper for the HR algorithm
-  boards/
-    nrf52840_dk/          board-support crate: pinmux, peripheral assignments
+Cargo.toml              workspace root
+rust-toolchain.toml     pins a recent stable Rust + thumbv7em-none-eabihf target
+.cargo/config.toml      runner = probe-rs, default target, defmt log level
+app/
+  Cargo.toml
+  src/
+    main.rs             #[embassy_executor::main] entry, spawns tasks
+    tasks/
+      gps.rs            GNSS NMEA parser task
+      hr.rs             MAX86177 polling + naive peak-detect task
+      baro.rs           BMP390 sample task
+      ui.rs             screen update + button-handler task
+      ble.rs            GATT server + sync task
+      record.rs         recording state machine (port of Dart run_recorder)
+drivers/
+  sharp_mip/            Sharp Memory LCD driver crate
+  ublox_nmea/           u-blox NMEA parser crate (no_std)
+  max86177/             MAX86177 register-level driver + bindgen wrapper for the HR algorithm
+boards/
+  nrf52840_dk/          board-support crate: pinmux, peripheral assignments
 ```
 
-This is intentionally close to the per-task / per-driver split that the Zephyr-flavoured proposal in [`docs/hardware/firmware.md`](../docs/hardware/firmware.md) uses — so the firmware architecture stays portable across the language choice. If we ever revert to C/Zephyr per the §80 fallback, the task boundaries map directly onto Zephyr threads + work queues.
+This is intentionally close to the per-task / per-driver split that the Zephyr-flavoured proposal in [`docs/custom_watch/firmware.md`](../../docs/custom_watch/firmware.md) uses — so the firmware architecture stays portable across the language choice. If we ever revert to C/Zephyr per the §80 fallback, the task boundaries map directly onto Zephyr threads + work queues.

@@ -1519,7 +1519,7 @@ Audit reference: `/audit/owasp` May 2026 High #1.
 
 ## 71. Own-hardware (an ultra-marathon watch) stays research-only; watch development is deferred indefinitely
 
-We're considering whether to compete with Garmin Fenix / COROS Vertix in the ultra-marathon segment by building our own wrist device. **No decision has been made.** This entry records the *current default* (do not start hardware work) along with the cost ranges and triggers that would have to flip for that default to change. The research lives at [`docs/hardware/`](hardware/README.md) — vision, BOM, three-tier cost prototyping, firmware plan.
+We're considering whether to compete with Garmin Fenix / COROS Vertix in the ultra-marathon segment by building our own wrist device. **No decision has been made.** This entry records the *current default* (do not start hardware work) along with the cost ranges and triggers that would have to flip for that default to change. The research lives at [`docs/custom_watch/`](custom_watch/README.md) — vision, competitive landscape, BOM, three-tier cost prototyping, performance path, firmware plan. The tier-1 bench-prototype firmware workspace (permitted by the 2026-05-28 amendment to this entry, below) lives at [`apps/custom_watch/`](../apps/custom_watch/README.md).
 
 Why the current default holds:
 
@@ -1530,16 +1530,16 @@ Why the current default holds:
 
 What this commits us to:
 
-- **`docs/hardware/` is a research baseline, not a roadmap commitment.** Nothing tracked there should appear in the roadmap's phase-tagged sections; it lives under `## Future — Hardware` as a parking-lot only.
+- **`docs/custom_watch/` is a research baseline, not a roadmap commitment.** Nothing tracked there should appear in the roadmap's phase-tagged sections; it lives under `## Future — Hardware` as a parking-lot only.
 - **Re-open the question** when one of: (a) the app has a paying user base large enough to fund a parallel hardware effort without starving the software roadmap, (b) an existing ODM approaches us about a white-label deal, or (c) a co-founder with shipped-consumer-hardware experience joins the project.
-- **Don't grow `docs/hardware/`** with detailed schematics, EAGLE files, or firmware code until one of the above triggers. The current resolution (README + vision + bom + prototyping + firmware) is right for "research baseline"; more detail is sunk cost until the default flips.
+- **Don't grow `docs/custom_watch/`** with detailed schematics, EAGLE files, or PCB-CAD source until one of the above triggers. The current resolution (README + vision + competitive_landscape + bom + prototyping + performance_path + firmware + parts) is right for "research baseline"; more detail is sunk cost until the default flips. Tier-1 *firmware* code is permitted per the amendment below and lives under [`apps/custom_watch/`](../apps/custom_watch/README.md), not here.
 
 Don't re-litigate by:
 
 - Treating "we have an app and a watch app, therefore we should also have a watch" as a logical next step. The economics in [`hardware/prototyping.md`](hardware/prototyping.md) are the point of this entry.
 - Spending discretionary engineering time on tier-1 bench prototypes "to keep the option warm." The option stays warm because the docs exist; building hardware on a hobby budget is how projects accidentally become consumer-electronics companies.
 
-**Amendment (2026-05-28) — tier-1 personal investigation permitted.** Owner is starting tier-1 bench-prototype work personally as an evenings-and-weekends investigation. The [`firmware/`](../firmware/README.md) directory at the repo root now exists for this; treat it as research-tier scaffolding, not a product commitment or a roadmap line item. The cost discipline above still binds tier 2+ — no PCB CAD or schematic files, no case CAD, no RF consultant spend, no ODM conversations, no marketing of "we're building a watch" — until one of triggers (a/b/c) above fires. The language / RTOS choice (Zephyr in C vs Embassy in Rust) will get its own decisions entry once made. If tier-1 work shows the firmware path is intractable for a single developer, the right move is to delete `firmware/` and revert this amendment rather than escalate.
+**Amendment (2026-05-28) — tier-1 personal investigation permitted.** Owner is starting tier-1 bench-prototype work personally as an evenings-and-weekends investigation. The [`apps/custom_watch/`](../apps/custom_watch/README.md) directory now exists for this; treat it as research-tier scaffolding, not a product commitment or a roadmap line item. The cost discipline above still binds tier 2+ — no PCB CAD or schematic files, no case CAD, no RF consultant spend, no ODM conversations, no marketing of "we're building a watch" — until one of triggers (a/b/c) above fires. The language / RTOS choice was made the same day in [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) (Embassy on Rust on the Nordic nRF52840). If tier-1 work shows the firmware path is intractable for a single developer, the right move is to delete `apps/custom_watch/` and revert this amendment rather than escalate.
 
 ---
 
@@ -1817,10 +1817,10 @@ Trade-offs we accept:
 
 What this commits us to:
 
-- All tier-1 firmware code lives in [`/firmware/`](../firmware/README.md), structured as a Cargo workspace.
-- Drivers we write for our specific BOM (Sharp MIP, MAX86177 wrapper, u-blox NMEA parser) are published as separate crates in `firmware/drivers/<sensor>/` so they're independently reusable and individually testable.
+- All tier-1 firmware code lives in [`/apps/custom_watch/`](../apps/custom_watch/README.md), structured as a Cargo workspace.
+- Drivers we write for our specific BOM (Sharp MIP, MAX86177 wrapper, u-blox NMEA parser) are published as separate crates in `apps/custom_watch/drivers/<sensor>/` so they're independently reusable and individually testable.
 - `cargo test` runs on the host where it can; on-target tests use Embassy's test harness through `probe-rs`.
-- CI gets a `build-firmware` job that runs `cargo build --target thumbv7em-none-eabihf` on PRs that touch `firmware/`.
+- CI gets a `build-firmware` job that runs `cargo build --target thumbv7em-none-eabihf` on PRs that touch `apps/custom_watch/`.
 
 Don't re-litigate by:
 
@@ -1830,7 +1830,7 @@ Don't re-litigate by:
 
 If tier-1 reveals that Embassy + Rust + nRF52840 is genuinely intractable for our specific needs, the right move is to revert: switch to Zephyr + C + same MCU, port the firmware-architecture work over, and update this entry. The firmware-architecture rules are designed to be language-portable for exactly this reason.
 
-Pinning: [`firmware/README.md`](../firmware/README.md), [`firmware/parts.md`](../firmware/parts.md), [`docs/hardware/performance_path.md`](hardware/performance_path.md), [`docs/hardware/competitive_landscape.md`](hardware/competitive_landscape.md).
+Pinning: [`apps/custom_watch/README.md`](../apps/custom_watch/README.md), [`apps/custom_watch/CLAUDE.md`](../apps/custom_watch/CLAUDE.md), [`docs/custom_watch/parts.md`](custom_watch/parts.md), [`docs/custom_watch/performance_path.md`](custom_watch/performance_path.md), [`docs/custom_watch/competitive_landscape.md`](custom_watch/competitive_landscape.md).
 
 ---
 
