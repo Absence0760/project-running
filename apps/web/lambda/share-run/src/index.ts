@@ -39,11 +39,18 @@ import { injectShareRunMeta } from '../../../src/lib/share_run_spa_shell';
 // the deployed bundle.
 declare const __SPA_SHELL_HTML__: string;
 
-// 1-hour CloudFront cache so a crawler storm against a single share
-// URL costs at most one Lambda invocation per hour. A visibility
-// flip (private → public or vice versa) takes up to 1h to propagate;
-// acceptable for a feature that's overwhelmingly read-heavy.
-const CACHE_CONTROL = 'public, max-age=3600';
+// 5-min CloudFront cache + 60s stale-while-revalidate. Trades a bit
+// of crawler-storm protection for fast-propagating visibility flips —
+// persona-hunt Round 3 finding Privacy #3. Pre-fix the 1h TTL meant a
+// public→private flip still surfaced the OG unfurl for up to an hour
+// after the user had hidden the run; the same window applied to a
+// new public run waiting for the unfurl to appear. 5 min + SWR keeps
+// the Lambda invocation cost bounded (one call every ~5 min per hot
+// URL, with the prior response served for the next 60 s while the
+// revalidation completes) while bringing the worst-case stale-image
+// window down by 12x.
+const CACHE_CONTROL =
+	'public, max-age=300, s-maxage=300, stale-while-revalidate=60';
 
 const HTML_PATH_RE = /^\/share\/run\/([^/]+)\/?$/;
 
@@ -96,11 +103,17 @@ async function handleHtml(
 	});
 	// 404 for runs that don't exist or aren't public. The browser
 	// will fall back to the SPA's 404 surface if a human follows the
-	// link; crawlers get a clean signal.
+	// link; crawlers get a clean signal. Same short TTL as the 200
+	// path — a brand-new run flipping public must un-404 within the
+	// same propagation window as a public→private flip stales the
+	// existing unfurl. Persona-hunt Round 3 finding Privacy #3.
 	if (!lookup.run) {
 		return {
 			statusCode: 404,
-			headers: { 'content-type': 'text/html; charset=utf-8' },
+			headers: {
+				'content-type': 'text/html; charset=utf-8',
+				'cache-control': CACHE_CONTROL,
+			},
 			body: notFoundHtml(),
 		};
 	}

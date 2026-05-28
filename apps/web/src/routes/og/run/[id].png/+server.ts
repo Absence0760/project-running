@@ -51,7 +51,14 @@ export const GET: RequestHandler = async ({ params }) => {
 	return new Response(new Uint8Array(png), {
 		headers: {
 			'content-type': 'image/png',
-			'cache-control': 'public, max-age=3600',
+			// 5-min cache to match the share-run Lambda's HTML TTL.
+			// Persona-hunt Round 3 finding Privacy #3 — a flip from
+			// public to private must propagate to the og:image unfurl
+			// within minutes, not the previous hour. The PNG is
+			// adapter-static-prerendered at build time so this header
+			// is written into the static file's Cache-Control;
+			// CloudFront honours it for the on-edge cache.
+			'cache-control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=60',
 		},
 	});
 };

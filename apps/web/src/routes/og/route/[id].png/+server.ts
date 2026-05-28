@@ -53,7 +53,9 @@ export const GET: RequestHandler = async ({ params }) => {
 	return new Response(new Uint8Array(png), {
 		headers: {
 			'content-type': 'image/png',
-			'cache-control': 'public, max-age=3600',
+			// Match the og/run TTL — same privacy contract. Persona-
+			// hunt Round 3 finding Privacy #3.
+			'cache-control': 'public, max-age=300, s-maxage=300, stale-while-revalidate=60',
 		},
 	});
 };

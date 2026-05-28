@@ -685,10 +685,17 @@ resource "aws_cloudfront_origin_request_policy" "lambda" {
 # edge so a crawler storm against a single share URL costs at most
 # one Lambda invocation per cache window.
 resource "aws_cloudfront_cache_policy" "share_run" {
-  name        = "${local.resource_prefix}-share-run"
-  comment     = "Share-run Lambda — cache per-id HTML / PNG for 1h"
-  default_ttl = 3600
-  max_ttl     = 3600
+  name = "${local.resource_prefix}-share-run"
+  # 5-min TTL — persona-hunt Round 3 finding Privacy #3. The
+  # previous 1h pinned a public→private visibility flip to a
+  # 1h propagation window on the OG unfurl. The Lambda's
+  # Cache-Control header is now `max-age=300, s-maxage=300,
+  # stale-while-revalidate=60`; both must match because either
+  # ceiling (CloudFront's max_ttl OR the origin's Cache-Control)
+  # ends up clamping the stale window.
+  comment     = "Share-run Lambda — cache per-id HTML for 5m so visibility flips propagate fast"
+  default_ttl = 300
+  max_ttl     = 300
   min_ttl     = 0
   parameters_in_cache_key_and_forwarded_to_origin {
     enable_accept_encoding_brotli = true
