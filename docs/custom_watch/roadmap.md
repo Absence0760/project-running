@@ -56,6 +56,7 @@ Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-out
 ### Architectural obligations (must land before tier-2 prototype reaches a field tester)
 
 - [ ] **OTA via a production-grade dual-bank bootloader.** [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — MCUboot is the default candidate; the specific choice gets made at tier-2 design time but the obligation is fixed.
+- [ ] **PMTiles vector renderer running on the MCU.** [§ 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) — multi-month firmware subproject (constrained subset of MapLibre's algorithm shape, port to Cortex-M4F + later Apollo4). 16 GB external SPI NAND flash committed in the BOM. Decision driven by [§ 86](../decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (end-state quality > engineering convenience).
 
 ### Long-lead-time pre-validation (worth starting even while tier 2 is gated — see [OQ7](#oq7-vendor-relationship-pre-validation))
 
@@ -108,14 +109,6 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 ## Open questions to resolve
 
 These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
-
-### OQ5: Map renderer + format
-
-Per [`firmware.md`](firmware.md) open Q#1, vector-map rendering on a Cortex-M4F is a multi-month firmware project. Tier 1 doesn't need maps, but BOM flash size depends on the choice. Options:
-
-- **(a)** Build a PMTiles parser + minimal renderer — multi-month firmware project, max flexibility, 16+ GB flash.
-- **(b)** Pre-bake vector tiles into a simpler intermediate (compressed line/polygon arrays per zoom level) — less flexible than PMTiles but tractable to render on M4F.
-- **(c)** Punt to raster tiles — worse zoom-in quality, reduce flash to ~4GB, accept the segment-laggard reputation on map UX (the thing both Garmin and COROS are bad at — see [`competitive_landscape.md`](competitive_landscape.md)).
 
 ### OQ6: Strategic-vector sequencing
 

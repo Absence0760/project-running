@@ -1983,6 +1983,81 @@ Pinning: [`apps/custom_watch/app/memory.x`](../apps/custom_watch/app/memory.x) h
 
 ---
 
+## 85. Map renderer: full PMTiles vector rendering on the MCU + 16 GB external NAND flash
+
+Open question OQ5 from [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) and the related open Q#1 in [`docs/custom_watch/firmware.md`](custom_watch/firmware.md) resolved.
+
+`firmware.md` flagged that vector map rendering on a Cortex-M4F is a multi-month firmware project — MapLibre Native + Mapbox GL Native assume an MMU-class CPU and tens of MB of RAM. Realistic options were: build a constrained-subset PMTiles renderer (multi-month), pre-bake into a simpler intermediate (medium effort), or punt to raster (lowest effort, worst UX). [`competitive_landscape.md`](custom_watch/competitive_landscape.md) explicitly called out vector map quality on-watch as one of the few areas where we can credibly beat Garmin / COROS / Suunto.
+
+**Decision.** Tier-2/3 firmware ships a constrained-subset PMTiles parser + minimal vector renderer running on the MCU. Reads PMTiles archives directly from external flash; renders lines, polygons, and label features at the active view transform. **16 GB external SPI NAND flash in the tier-2/3 BOM** (Macronix MX25R / Winbond W25Q / equivalent). Multi-month tier-2 firmware project; reference implementations to port from include MapLibre Native (too big as-is, but the algorithm shape carries) and the small-scale PMTiles readers in the Embassy / embedded-rust community.
+
+Why PMTiles + on-MCU vector rendering (rather than the easier middle options):
+
+- **Vector quality at every zoom level is the win.** Pre-baked intermediates trade flexibility for renderer simplicity; raster trades quality outright. Both options voluntarily concede the map-UX lever [`competitive_landscape.md`](custom_watch/competitive_landscape.md) flagged as winnable.
+- **Per [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins)**, small quality compromises compound across the dozens of decisions that make up a competitive product. The map-UX edge is exactly the kind of margin § 86 says to take.
+- **Production PMTiles support is portable.** Tile generation happens server-side using existing open-source tooling (Protomaps, tippecanoe); the on-watch renderer reads a well-documented format. No proprietary pipeline to maintain.
+
+What this commits us to:
+
+- **Tier-2 firmware budget includes a multi-month vector-renderer subproject.** Not on tier-1's plate (tier 1 doesn't render maps); tier-2 timeline + cost estimates have to account for it.
+- **16 GB external NAND in the tier-2/3 BOM** — meaningful PCB real-estate impact (TSSOP-8 or WSON-8 package + SPI bus routing), modest BOM cost (~$3–5 at tier-3 volumes vs ~$1–2 for 4 GB).
+- **Pre-bake pipeline still exists server-side** — Protomaps + tippecanoe in [`apps/job_worker/`](../apps/job_worker/) or a sibling Go service generates per-region PMTiles archives. Differs from the rejected "pre-baked intermediate" option in that the on-watch side reads standard PMTiles, not a custom format we'd own and maintain.
+- **Style language:** subset of the Mapbox style spec (already what Protomaps + MapLibre standardise on). Watch ships with one bundled style; no in-watch style customisation at v1.0 (a Connect-IQ-style ecosystem question, out of scope).
+
+What this does NOT commit us to:
+
+- Doing the renderer work at tier 1. Tier 1 doesn't render maps; per [§ 82](#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype), the DoD is GPS + HR + display + sync.
+- A specific NAND vendor — just the size class. Vendor pick at tier-2 PCB design.
+- Animated map transitions or 60-fps render targets. The Sharp MIP is ~10 Hz; we render to its capability, not above.
+- Raster fallback at tier 2 "to ship something." If the renderer is taking longer than expected, the right call is to scope down map coverage (one region, not global) and still ship vector at tier 3.
+
+Don't re-litigate by:
+
+- **Falling back to the pre-baked intermediate "to save engineering."** That's exactly the trade [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) says no to — small-margin quality wins that compound.
+- **Switching to raster at tier-2 "because the renderer is taking longer than expected."** Schedule slippage isn't a quality argument; scope down coverage, don't drop the format.
+- **Skipping the 16 GB flash to save $3 BOM.** Map storage is the constraint; cost-down vs the multi-year product is rounding error.
+
+Pinning: [`docs/custom_watch/bom.md`](custom_watch/bom.md) adds the External storage section. [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #5 updated. [`docs/custom_watch/firmware.md`](custom_watch/firmware.md) open Q#1 (map renderer) closed by this entry. [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ5 removed; PMTiles renderer added as a tier-2 architectural obligation.
+
+---
+
+## 86. Custom watch decisions optimise for end-state product performance, even at small margins
+
+The decisions for custom_watch so far (§ 71 + amendment, § 80 – § 85) have each individually traded "tier-1 engineering cost" against "tier-2/3 product quality." The pattern across them has been to accept tier-1 deferrals when they save engineering without compromising end-state quality (e.g., [§ 84](#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) defers MCUboot to tier-2 because tier-1 doesn't need OTA at all). When the tradeoff DOES affect end-state quality, the rule is different: pick the higher-quality option even when the margin is small (~5% or less on any single metric) and the engineering cost is real.
+
+**Decision.** For custom_watch tool / architecture / BOM picks, apply this lens explicitly:
+
+1. **What does each option produce on the tier-3 shipped product?** Compare options on user-visible quality of the final watch — battery hours, GPS accuracy, HR accuracy, map render quality, UI responsiveness, weight, repairability, water resistance, etc. ("Performance" here is shorthand for that full quality basket, not just CPU cycles.)
+2. **Pick the option with the better end-state outcome,** even when:
+   - The edge is small (~5% or less on any single metric).
+   - The engineering cost at the current tier is materially higher.
+   - The "easier middle option" exists and would be acceptable.
+3. **The exception:** when the option doesn't affect end-state quality (e.g., a tier-1-only scaffolding choice that gets rewritten at tier-2), pick the cheapest option. The rule is end-state-quality-first, not engineering-cost-blindness.
+
+Why this rule for custom_watch specifically:
+
+- **The watch competes in the ultra-marathon niche** against established players (Garmin Fenix / Enduro, COROS Vertix, Suunto Vertical) with multi-year head starts on hardware quality. Per [`competitive_landscape.md`](custom_watch/competitive_landscape.md), the only credible play is being *better on the things they're weak at* — UI polish, map UX, software-update cadence, community, AI coach quality. "Better" doesn't survive accepting easier-but-worse compromises during build.
+- **Small margins compound.** The watch has roughly a dozen end-state quality dimensions. A 5% concession on each compounds to a ~40–50% gap by tier-3 launch. The compounding is invisible at any single decision point — which is why this rule has to be explicit.
+- **The asymmetric play depends on it.** Each "did we accept the lazy option here?" call is small in isolation but accumulates. Going easy on the small ones is how you end up with a Garmin clone that's worse than Garmin.
+
+What this commits us to:
+
+- **Remaining open questions in [`roadmap.md`](custom_watch/roadmap.md)** (OQ6, OQ7, OQ8) get reasoned through with the end-state quality lens, not the tier-current-convenience lens.
+- **Future decisions entries** that touch product quality cite § 86 in their reasoning when they pick the harder option.
+- **When a decision picks the lazier option, the entry explicitly says why** (e.g., "no end-state quality impact" or "the harder option doesn't exist on the timeline available").
+
+First application: [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) (map renderer) picks the full PMTiles + on-MCU vector renderer over the pre-baked-intermediate middle option specifically because vector quality at every zoom is the win, and the engineering cost — while real (multi-month tier-2 firmware project) — is exactly the kind of investment this rule says to make.
+
+Don't re-litigate by:
+
+- **Applying the rule to non-custom_watch decisions** without thinking. The main app's tradeoffs have their own rationales; § 86 is scoped to custom_watch.
+- **Using "5% perf wins" as a hammer to justify scope creep.** The rule says pick the end-state-better option from the available set; it doesn't say invent new features. "Better renderer than middle option" is in scope; "let's also add nuclear-clock sync because that's 0.5% better" is not.
+- **Ignoring the explicit exception** for tier-current-only choices that get rewritten anyway. Spending tier-1 engineering on infrastructure that won't survive to tier-2 is waste, not quality.
+
+Pinning: First application in [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash). Future decisions in [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ list will be reasoned with this lens.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

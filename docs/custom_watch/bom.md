@@ -43,6 +43,14 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 
 **Bosch BMI270 (IMU) + BMM350 (magnetometer)** — combined ~$5. Garmin / COROS use the Bosch sensor stack. The alternative is ST's LSM6DSV16X + LIS2MDL which is equivalent in spec and very slightly cheaper; either is fine, pick on local distributor stock.
 
+## External storage
+
+**16 GB SPI NAND flash** — Macronix MX25R series, Winbond W25Q series, or equivalent. ~$3–5 BOM at tier-3 volumes (TSSOP-8 / WSON-8 package). Per [decisions.md § 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash): required for the on-watch PMTiles map archives; LittleFS-formatted, partitioned for one global low-zoom tileset plus per-region high-zoom tilesets the user has explicitly downloaded.
+
+Why not internal MCU flash: the Apollo4 + nRF52/nRF53 family tops out at ~2 MB internal flash. Map storage at vector-tile resolution needs gigabytes; external SPI NAND is the only path. The Sony CXD5610 GNSS chip uses the same SPI bus; routing is straightforward.
+
+Why not a removable card (microSD): an SD slot interrupts the IPX7 sealing story, adds a mechanical failure mode, and signals "tinkerer's device" to non-technical buyers. Fixed-flash is the segment norm (Garmin Fenix, COROS Vertix — both 32 GB internal NOR/NAND).
+
 ## Display
 
 | Part | Why | Trade |
@@ -88,15 +96,16 @@ At 10k unit production volume:
 
 | Category | Cost |
 |---|---|
-| MCU + flash + DRAM | $7 |
+| MCU + internal flash + DRAM | $7 |
 | GNSS module + antenna | $11 |
 | Optical HR + IMU + baro + mag | $9 |
+| External storage (16 GB SPI NAND) | $4 |
 | Display | $14 |
 | Battery + BMS | $5 |
 | Case + crystal + buttons + strap | $50 |
 | PCB + assembly | $8 |
 | Misc (connectors, passives, packaging) | $6 |
-| **Total** | **~$110** |
+| **Total** | **~$114** |
 
 Retail at $549 gives a ~5x BOM multiplier — standard for consumer electronics (Apple Watch is ~4–4.5x). That leaves room for marketing, channel margin (40% to REI / running specialty retailers), and the first 2–3 years of firmware development before unit economics get good.
 
