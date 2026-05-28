@@ -1337,21 +1337,17 @@ class ApiClient {
         .toList();
   }
 
-  /// Free-text people search. Matches `user_profiles.display_name`
-  /// with ILIKE, excludes self, hydrates viewer→target follow edges
-  /// so the row's Follow toggle starts in the right state. Mirrors
-  /// `searchPeople` in `apps/web/src/lib/data.ts`.
-  /// Display-name search on `user_profiles`, ranked by web parity:
-  /// public-runs count desc, then shared-clubs count desc, then
-  /// display name asc. Mirrors `apps/web/src/lib/data.ts:searchPeople`
-  /// + `apps/web/src/lib/search_ranking.ts:comparePeopleRank`.
+  /// Free-text people search. Routes through the
+  /// `search_user_profiles` SECURITY DEFINER RPC so the search
+  /// honours the `discoverable_in_search` opt-out pref (persona-hunt
+  /// Round 3 finding Woman #2 — a runner who's been stalked must be
+  /// able to remove themselves from name search; user_settings has
+  /// owner-only RLS so the join can't run client-side).
   ///
-  /// Before this round, mobile fetched exactly `limit` candidates and
-  /// returned them in whatever order PostgREST handed back. Web
-  /// over-fetched 3× then ranked, so a search for a common first name
-  /// surfaced active users above zero-run / zero-club accounts (the
-  /// anti-spam phase-1 ranking). Mobile now over-fetches + applies the
-  /// same comparator so search results match across platforms.
+  /// Display-name search ranked for web parity: public-runs count
+  /// desc, then shared-clubs count desc, then display name asc.
+  /// Mirrors `apps/web/src/lib/data.ts:searchPeople` +
+  /// `apps/web/src/lib/search_ranking.ts:comparePeopleRank`.
   Future<List<PeopleSuggestion>> searchPeople(
     String query, {
     int limit = 20,
@@ -1360,13 +1356,12 @@ class ApiClient {
     if (term.isEmpty) return const [];
     final viewerId = _client.auth.currentUser?.id;
     final candidateLimit = limit * 3 > 120 ? 120 : limit * 3;
-    final profiles = await _client
-        .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url')
-        .ilike(UserProfileRow.colDisplayName, '%$term%')
-        .limit(candidateLimit);
-    final ids = profiles
-        .map<String>((p) => p['id'] as String)
+    final profiles = await _client.rpc('search_user_profiles', params: {
+      'p_query': term,
+      'p_limit': candidateLimit,
+    });
+    final ids = (profiles as List<dynamic>)
+        .map<String>((p) => (p as Map<String, dynamic>)['id'] as String)
         .where((id) => id != viewerId)
         .toList();
     if (ids.isEmpty) return const [];

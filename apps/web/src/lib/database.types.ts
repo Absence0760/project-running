@@ -2664,6 +2664,14 @@ export type Database = {
           isSetofReturn: true
         }
       }
+      search_user_profiles: {
+        Args: { p_limit?: number; p_query: string }
+        Returns: {
+          avatar_url: string
+          display_name: string
+          id: string
+        }[]
+      }
       segment_leaderboard_tiered: {
         Args: {
           p_age_band?: string

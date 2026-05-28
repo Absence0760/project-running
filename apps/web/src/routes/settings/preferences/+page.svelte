@@ -36,6 +36,11 @@
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(false);
 	let voiceFeedbackIntervalKm = $state('1.0');
+	// Persona-hunt Round 3 finding Woman #2. Default true for back-
+	// compat — every existing account stays findable until they
+	// actively opt out via this toggle. The `search_user_profiles`
+	// RPC reads the same key.
+	let discoverableInSearch = $state(true);
 
 	// Theme — persisted to localStorage, not the cross-device settings
 	// bag. Intentionally per-browser: a dark laptop + a light iPad is a
@@ -111,6 +116,7 @@
 			voiceFeedbackIntervalKm = (
 				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
 			).toString();
+			discoverableInSearch = effective(settings, 'discoverable_in_search', true) ?? true;
 
 			const zones = effective<Record<string, number>>(settings, 'hr_zones');
 			if (zones) {
@@ -175,6 +181,7 @@
 			strava_auto_share: stravaAutoShare,
 			voice_feedback_enabled: voiceFeedbackEnabled,
 			voice_feedback_interval_km: parseFloat(voiceFeedbackIntervalKm) || 1.0,
+			discoverable_in_search: discoverableInSearch,
 		};
 		if (weeklyMileageGoal) {
 			changes.weekly_mileage_goal_m = parseInt(weeklyMileageGoal, 10) || null;
@@ -410,6 +417,17 @@
 				<label class="checkbox-row">
 					<input type="checkbox" bind:checked={stravaAutoShare} />
 					<span>Auto-push runs to Strava</span>
+				</label>
+				<label class="checkbox-row">
+					<input type="checkbox" bind:checked={discoverableInSearch} />
+					<span>
+						Show me in name search
+						<span class="hint">
+							When off, your account won't appear when other runners search by
+							display name. Your public runs and profile remain reachable to
+							anyone with the URL.
+						</span>
+					</span>
 				</label>
 			</div>
 		</section>
@@ -667,7 +685,14 @@
 	.form-grid.zones { grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr)); }
 	.form-stack { display: flex; flex-direction: column; gap: var(--space-md); margin-bottom: var(--space-lg); }
 	.field { display: flex; flex-direction: column; }
-	.checkbox-row { display: flex; align-items: center; gap: 0.5rem; font-size: 0.9rem; }
+	.checkbox-row { display: flex; align-items: flex-start; gap: 0.5rem; font-size: 0.9rem; }
+	.checkbox-row .hint {
+		display: block;
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+		line-height: 1.45;
+		margin-top: 0.2rem;
+	}
 	.label-text { display: block; font-size: 0.8rem; font-weight: 600; color: var(--color-text-secondary); margin-bottom: var(--space-xs); }
 	input, select { width: 100%; padding: var(--space-sm) var(--space-md); border: 1px solid var(--color-border); border-radius: var(--radius-md); font-size: 0.9rem; background: var(--color-bg); }
 	input[type="checkbox"] { width: auto; padding: 0; flex-shrink: 0; }

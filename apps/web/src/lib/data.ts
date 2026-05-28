@@ -2943,33 +2943,37 @@ export interface PeopleSuggestion extends PublicProfile {
 	viewer_follows: boolean;
 }
 
-/// Free-text people search for /social People tab. Matches user_profiles
-/// display_name with ILIKE, excludes self, hydrates viewer→target follow
-/// edges + per-result public-runs count so the row's Follow toggle
-/// starts in the right state. Results are ranked by `public_runs_count`
-/// descending so a bot mass-creating dummy accounts can't push real
-/// runners off the top — anti-spam phase 1 of 3 in
-/// `docs/decisions.md § search ranking`. RLS on user_profiles is
-/// public-read so this works for any signed-in viewer.
+/// Free-text people search for /social People tab. Used to do a
+/// direct ILIKE against `user_profiles`; now routes through the
+/// `search_user_profiles` SECURITY DEFINER RPC so it can filter by
+/// the `discoverable_in_search` opt-out pref (persona-hunt Round 3
+/// finding Woman #2 — a runner who's been stalked needs a way to
+/// remove themselves from name search; user_settings has owner-only
+/// RLS so the join can't run client-side).
+///
+/// Excludes self, hydrates viewer→target follow edges + per-result
+/// public-runs count so the row's Follow toggle starts in the right
+/// state. Results are ranked by `public_runs_count` descending so a
+/// bot mass-creating dummy accounts can't push real runners off the
+/// top — anti-spam phase 1 of 3 in `docs/decisions.md § search ranking`.
 ///
 /// `limit` caps the returned list. We fetch `limit * 3` candidates
-/// from the ILIKE pass (capped at 120) so the rank step has more to
-/// chew on; with > N exact-name hits, the cap still defines the visible
-/// page and the user can refine the query.
+/// from the RPC (capped server-side at 200) so the rank step has more
+/// to chew on; with > N exact-name hits, the cap still defines the
+/// visible page and the user can refine the query.
 export async function searchPeople(q: string, limit = 20): Promise<PeopleSuggestion[]> {
 	const term = q.trim();
 	if (term.length < 1) return [];
 	const { data: sessionData } = await supabase.auth.getSession();
 	const viewerId = sessionData.session?.user?.id ?? null;
 	const candidateLimit = Math.min(limit * 3, 120);
-	const { data: profiles, error } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.ilike('display_name', `%${term}%`)
-		.limit(candidateLimit);
+	const { data: profiles, error } = await supabase.rpc('search_user_profiles', {
+		p_query: term,
+		p_limit: candidateLimit,
+	});
 	if (error || !profiles) return [];
-	const ids = profiles
-		.map((p) => p.id as string)
+	const ids = (profiles as Array<{ id: string }>)
+		.map((p) => p.id)
 		.filter((id) => id !== viewerId);
 	if (ids.length === 0) return [];
 	const hydrated = await hydratePeopleSuggestions(ids, viewerId);
