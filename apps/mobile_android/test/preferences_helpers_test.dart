@@ -110,6 +110,37 @@ void main() {
     });
   });
 
+  group('UnitFormat.elevation', () {
+    // Mirrors `formatElevation` in `apps/web/src/lib/units.svelte.ts`.
+    // Persona-hunt Round 3 finding Ultra #4: vert is a first-class
+    // metric for ultra / pro runners and the dashboard hid it.
+    test('km mode renders metres rounded to the nearest integer', () {
+      expect(UnitFormat.elevation(120, DistanceUnit.km), '120 m');
+      expect(UnitFormat.elevation(120.4, DistanceUnit.km), '120 m');
+      expect(UnitFormat.elevation(120.5, DistanceUnit.km), '121 m');
+    });
+
+    test('mi mode converts to feet at 3.28084 ft per metre, rounded', () {
+      // 100 m = 328.084 ft → rounds to 328.
+      expect(UnitFormat.elevation(100, DistanceUnit.mi), '328 ft');
+      // 1 m = 3.28084 ft → rounds to 3.
+      expect(UnitFormat.elevation(1, DistanceUnit.mi), '3 ft');
+    });
+
+    test('null renders as em-dash', () {
+      expect(UnitFormat.elevation(null, DistanceUnit.km), '—');
+      expect(UnitFormat.elevation(null, DistanceUnit.mi), '—');
+    });
+
+    test('zero renders cleanly without the em-dash fallback', () {
+      // A run with explicit zero elevation gain (treadmill / flat) is
+      // different from a run with no signal at all — null is the
+      // "no data" sentinel, 0 is "we measured 0".
+      expect(UnitFormat.elevation(0, DistanceUnit.km), '0 m');
+      expect(UnitFormat.elevation(0, DistanceUnit.mi), '0 ft');
+    });
+  });
+
   group('ActivityType', () {
     test('label maps each enum value to its display string', () {
       expect(ActivityType.run.label, 'Run');

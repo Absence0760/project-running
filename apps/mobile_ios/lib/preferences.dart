@@ -557,6 +557,20 @@ class UnitFormat {
   /// Speed unit label e.g. "km/h" or "mph".
   static String speedLabel(DistanceUnit unit) =>
       unit == DistanceUnit.mi ? 'mph' : 'km/h';
+
+  static const _feetPerMetre = 3.28084;
+
+  /// Format cumulative elevation gain: "120 m" / "394 ft". Integer
+  /// rounding because sub-metre precision on cumulative gain is the
+  /// GPS-noise floor. Null renders as em-dash. Mirrors web
+  /// `formatElevation` in `apps/web/src/lib/units.svelte.ts`.
+  static String elevation(double? metres, DistanceUnit unit) {
+    if (metres == null) return '—';
+    if (unit == DistanceUnit.mi) {
+      return '${(metres * _feetPerMetre).round()} ft';
+    }
+    return '${metres.round()} m';
+  }
 }
 
 // ───────────── Global active-preferences accessor ─────────────
@@ -596,6 +610,12 @@ DistanceUnit get activeDistanceUnit =>
 /// don't carry a Preferences dep.
 String formatDistanceForPref(double metres) =>
     UnitFormat.distance(metres, activeDistanceUnit);
+
+/// Format an elevation gain using the active user unit pref. Mirrors
+/// `formatElevation` in `apps/web/src/lib/units.svelte.ts`. Null →
+/// em-dash.
+String formatElevationForPref(double? metres) =>
+    UnitFormat.elevation(metres, activeDistanceUnit);
 
 @visibleForTesting
 void resetActivePreferencesForTest() {

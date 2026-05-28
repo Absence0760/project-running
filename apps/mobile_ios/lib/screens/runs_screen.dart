@@ -1141,6 +1141,15 @@ class _RunTile extends StatelessWidget {
         ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
         : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
     final date = _formatDate(run.startedAt);
+    // Per-row vert chip — persona-hunt Round 3 finding Ultra #4
+    // (mobile twin of web `/runs/+page.svelte`). Mirrors the web
+    // condition: render only when `metadata.elevation_m` is positive
+    // so layouts don't widen on runs with no elevation signal.
+    final vertRaw = run.metadata?['elevation_m'];
+    final vertMetres = (vertRaw is num && vertRaw > 0) ? vertRaw.toDouble() : 0.0;
+    final vertLabel = vertMetres > 0
+        ? '  ·  ${UnitFormat.elevation(vertMetres, unit)} ↑'
+        : '';
 
     final trackUrl = run.metadata?['track_url'] as String?;
     final hasInlineTrack = run.track.length >= 2;
@@ -1172,6 +1181,7 @@ class _RunTile extends StatelessWidget {
       date,
       dur,
       trailingMetric,
+      if (vertMetres > 0) '${UnitFormat.elevation(vertMetres, unit)} elevation gain',
       if (isUnsynced) 'not yet synced',
     ].join(', ');
 
@@ -1219,7 +1229,7 @@ class _RunTile extends StatelessWidget {
           subtitle: Padding(
             padding: const EdgeInsets.only(top: 2),
             child: Text(
-              '$date  ·  $dur  ·  ${activity.label.toLowerCase()}',
+              '$date  ·  $dur  ·  ${activity.label.toLowerCase()}$vertLabel',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),

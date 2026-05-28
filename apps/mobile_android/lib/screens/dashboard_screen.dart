@@ -205,9 +205,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Replaces four separate `.where().fold()` chains. Matters at 10k+ runs.
     var weekRunCount = 0;
     var weekDistance = 0.0;
+    var weekVert = 0.0;
     var monthRunCount = 0;
     var monthDistance = 0.0;
+    var monthVert = 0.0;
     var allDistance = 0.0;
+    var allVert = 0.0;
     Run? longest;
     const pbDistances = <String, double>{
       '5 km': 5000,
@@ -218,13 +221,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final bestEfforts = <String, Duration>{};
     for (final r in runs) {
       allDistance += r.distanceMetres;
+      final vert = _vertOf(r);
+      allVert += vert;
       if (!r.startedAt.isBefore(weekStart)) {
         weekRunCount++;
         weekDistance += r.distanceMetres;
+        weekVert += vert;
       }
       if (!r.startedAt.isBefore(monthStart)) {
         monthRunCount++;
         monthDistance += r.distanceMetres;
+        monthVert += vert;
       }
       if (!_isRunActivity(r)) continue;
       if (longest == null || r.distanceMetres > longest.distanceMetres) {
@@ -360,6 +367,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         label: 'Week',
                         distanceMetres: weekDistance,
                         runCount: weekRunCount,
+                        vertMetres: weekVert,
                         unit: unit,
                         onTap: () => _openPeriodSummary(PeriodType.week),
                       ),
@@ -370,6 +378,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         label: 'Month',
                         distanceMetres: monthDistance,
                         runCount: monthRunCount,
+                        vertMetres: monthVert,
                         unit: unit,
                         onTap: () => _openPeriodSummary(PeriodType.month),
                       ),
@@ -380,6 +389,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         label: 'All time',
                         distanceMetres: allDistance,
                         runCount: runs.length,
+                        vertMetres: allVert,
                         unit: unit,
                         onTap: null,
                       ),
@@ -493,6 +503,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
   static bool _isRunActivity(Run r) {
     final raw = r.metadata?['activity_type'] as String?;
     return raw == null || raw == 'run';
+  }
+
+  /// Positive-only elevation gain (metres) for the period-stat
+  /// aggregates. Mirrors web's `metadata.elevation_m` read on
+  /// `/dashboard/+page.svelte`. Same canonical key the recap helper
+  /// already uses (`lib/recap.dart#_elevationOf`).
+  static double _vertOf(Run r) {
+    final raw = r.metadata?['elevation_m'];
+    if (raw is num) {
+      final v = raw.toDouble();
+      return v > 0 ? v : 0;
+    }
+    return 0;
   }
 
   static String _formatDuration(Duration d) {
@@ -921,6 +944,7 @@ class _PeriodStatCard extends StatelessWidget {
   final String label;
   final double distanceMetres;
   final int runCount;
+  final double vertMetres;
   final DistanceUnit unit;
   final VoidCallback? onTap;
 
@@ -928,6 +952,7 @@ class _PeriodStatCard extends StatelessWidget {
     required this.label,
     required this.distanceMetres,
     required this.runCount,
+    required this.vertMetres,
     required this.unit,
     required this.onTap,
   });
@@ -982,6 +1007,31 @@ class _PeriodStatCard extends StatelessWidget {
               color: theme.colorScheme.outline,
             ),
           ),
+          if (vertMetres > 0) ...[
+            const SizedBox(height: 2),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.terrain,
+                  size: 12,
+                  color: theme.colorScheme.outline,
+                ),
+                const SizedBox(width: 3),
+                Flexible(
+                  child: Text(
+                    '${UnitFormat.elevation(vertMetres, unit)} vert',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.fade,
+                    softWrap: false,
+                  ),
+                ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -1040,7 +1090,8 @@ class _PeriodStatCard extends StatelessWidget {
               button: true,
               label: '$label summary, ${UnitFormat.distanceValue(distanceMetres, unit)} '
                   '${UnitFormat.distanceLabel(unit)} across '
-                  '$runCount ${runCount == 1 ? "run" : "runs"}',
+                  '$runCount ${runCount == 1 ? "run" : "runs"}'
+                  '${vertMetres > 0 ? ", ${UnitFormat.elevation(vertMetres, unit)} elevation gain" : ""}',
               child: InkWell(onTap: onTap, child: body),
             )
           : body,
