@@ -10,6 +10,12 @@
 		danger?: boolean;
 		onconfirm: () => void;
 		oncancel: () => void;
+		/// Forwarded to the rendered backdrop element so e2e specs
+		/// can target a specific confirm dialog (e.g. distinguishing
+		/// share-confirm-dialog from delete-confirm-dialog on the
+		/// same page). Mirrors the `data-testid` pattern already
+		/// used on the Modal primitive.
+		'data-testid'?: string;
 	}
 
 	let {
@@ -21,10 +27,11 @@
 		danger = false,
 		onconfirm,
 		oncancel,
+		'data-testid': testId,
 	}: Props = $props();
 </script>
 
-<Modal {open} {title} narrow onclose={oncancel} bodyClass="confirm-body">
+<Modal {open} {title} narrow onclose={oncancel} bodyClass="confirm-body" data-testid={testId}>
 	<p>{message}</p>
 	<div class="actions">
 		<button type="button" class="btn btn-secondary" onclick={oncancel}>

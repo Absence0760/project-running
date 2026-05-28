@@ -707,42 +707,6 @@ class _LoadedRun {
   const _LoadedRun(this.run, this.synced);
 }
 
-/// Top-level helper invoked via [compute] so the heavy `jsonEncode` +
-/// blocking file write for a growing-track in-progress save doesn't run on
-/// the UI isolate. Keep it top-level so it can be serialised across the
-/// isolate boundary.
-///
-/// Writes go through a `.tmp` sibling followed by an atomic POSIX rename so
-/// a torn write (process killed mid-encode, disk full midway through a
-/// growing track, isolate crash) leaves the previous in_progress.json
-/// intact. Before this, the helper called `writeAsString` directly on the
-/// target path — `writeAsString` truncates the file before writing, so an
-/// interrupted save destroyed the previous incremental checkpoint and the
-/// run was lost. The rename also clobbers any orphan `.tmp` left behind
-/// from a prior crash, so a single broken save doesn't poison every
-/// subsequent one.
-Future<void> _encodeAndWriteJson(Map<String, dynamic> args) async {
-  final path = args['path'] as String;
-  final data = args['data'] as Map<String, dynamic>;
-  final tmp = File('$path.tmp');
-  await tmp.writeAsString(jsonEncode(data), flush: true);
-  await tmp.rename(path);
-}
-
-/// Top-level helper invoked via [compute] so the heavy `readAsString` +
-/// `jsonDecode` of an ultra-length in-progress save doesn't stall the UI
-/// isolate at app launch (the recovery path runs synchronously before
-/// `runApp`). Returns the parsed top-level map, or `null` when the file
-/// doesn't exist by the time the isolate runs (e.g. a concurrent crash
-/// cleanup deleted it between the existsSync check and here — rare but
-/// possible).
-Future<Map<String, dynamic>?> _readAndDecodeJson(String path) async {
-  final file = File(path);
-  if (!file.existsSync()) return null;
-  final raw = await file.readAsString();
-  return jsonDecode(raw) as Map<String, dynamic>;
-}
-
 /// Append a single NDJSON record to the in-progress file. Open-
 /// append-flush-close per call — durable across a crash mid-tick
 /// because earlier lines have already been fsync'd. Persona-hunt

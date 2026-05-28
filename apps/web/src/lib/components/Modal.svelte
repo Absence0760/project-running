@@ -15,6 +15,11 @@
 		/// than the action warrants.
 		dimBackdrop?: boolean;
 		children: Snippet;
+		/// Forwarded to the rendered dialog element so e2e specs
+		/// can target a specific modal on a page that hosts more
+		/// than one (e.g. ConfirmDialog wraps Modal + adds its own
+		/// data-testid; consumers pass it through).
+		'data-testid'?: string;
 	}
 
 	let {
@@ -26,6 +31,7 @@
 		bodyClass = '',
 		dimBackdrop = true,
 		children,
+		'data-testid': testId,
 	}: Props = $props();
 
 	let dialogEl = $state<HTMLDivElement | null>(null);
@@ -74,6 +80,7 @@
 		aria-label={title}
 		bind:this={dialogEl}
 		tabindex="-1"
+		data-testid={testId}
 	>
 		<header class="modal-header">
 			<h2>{title}</h2>

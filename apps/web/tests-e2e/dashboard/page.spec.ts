@@ -336,8 +336,11 @@ test.describe('/dashboard', () => {
 		// User feedback: stat-grid was 5 cards but rendering as 4+1
 		// across two rows; the recap-link sat on its own horizontal rail
 		// above the source-filter chips, burning a line for one element.
-		// Fix: stat-grid → 5-up at >=1100px, recap-link rides on the
-		// right side of the same row as the .filter-chips group.
+		// Fix: stat-grid lays out N-up at >=1100px (N = number of stat
+		// cards, currently 6 after the U4 web vert-on-dashboard
+		// commit `807e11e1` added the "This Week Vert" card), recap-link
+		// rides on the right side of the same row as the .filter-chips
+		// group.
 		await page.setViewportSize({ width: 1440, height: 900 });
 		await page.goto('/dashboard');
 		await expect(page.locator('.stat-grid .stat-card').first()).toBeVisible({
@@ -354,11 +357,16 @@ test.describe('/dashboard', () => {
 		expect(recapBox!.x).toBeGreaterThan(chipsBox!.x);
 		expect(Math.abs(recapBox!.y - chipsBox!.y)).toBeLessThan(30);
 
-		// 5 stat cards all share the same top edge → 1 row.
+		// All stat cards share the same top edge → 1 row. The card
+		// count itself isn't the invariant being pinned — what matters
+		// is they all land on the same horizontal rail at this viewport
+		// (1440px wide). Count is asserted to catch the inverse
+		// regression: a card silently disappearing from the surface.
 		const cards = page.locator('.stat-grid .stat-card');
-		await expect(cards).toHaveCount(5);
+		await expect(cards).toHaveCount(6);
+		const count = await cards.count();
 		const tops: number[] = [];
-		for (let i = 0; i < 5; i++) {
+		for (let i = 0; i < count; i++) {
 			const b = await cards.nth(i).boundingBox();
 			tops.push(b!.y);
 		}

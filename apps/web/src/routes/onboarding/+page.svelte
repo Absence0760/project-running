@@ -57,6 +57,16 @@
 	let saving = $state(false);
 
 	onMount(async () => {
+		// `auth.svelte.ts` flips loading=false before the async
+		// fetchUser resolves, so a hard reload onto /onboarding can
+		// mount with `auth.user` still null. Poll briefly so the
+		// pre-fill below sees the real row. Same canonical pattern
+		// as /runs/[id], /settings/account, /settings/preferences —
+		// pinned by tests-e2e/cross-cutting/architecture-guards.spec.ts
+		// because the auth-race has caused multiple production bugs.
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		// Pre-fill display name from the auth row if the OAuth provider
 		// returned one — the user can edit before continuing.
 		if (auth.user?.display_name) displayName = auth.user.display_name;
@@ -101,7 +111,16 @@
 	/// Finish button (final step) or the "Skip onboarding" header
 	/// link — same wire either way.
 	async function finishAndExit() {
-		if (!auth.user || saving) return;
+		if (saving) return;
+		// The user can click Skip-onboarding or Finish before `auth.user`
+		// hydrates from the async fetchUser path. A `!auth.user` early
+		// return would silently swallow the click + leave the user
+		// stuck on /onboarding. Poll briefly here (same shape as the
+		// onMount auth-wait above) before deciding.
+		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
+		if (!auth.user) return;
 		saving = true;
 		try {
 			// 1. Universal prefs bag (units + goal + weight + privacy).

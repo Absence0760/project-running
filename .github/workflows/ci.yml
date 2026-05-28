@@ -600,6 +600,33 @@ jobs:
           echo "::warning::supabase db reset failed; waiting 15s for storage REST and retrying"
           sleep 15
           supabase db reset --local
+      # `supabase db reset` restarts the edge runtime sidecar mid-flight.
+      # If a Playwright spec hits an Edge Function URL before the
+      # restart settles, the request 502s ("Bad Gateway" — kong routed
+      # but the upstream is still cold). Wait again for both the
+      # storage REST + edge runtime endpoints before letting tests
+      # run. Mirrors the pre-reset wait above. Run 26581301842
+      # shard 3 saw 4 clip-public-track tests fail with 502 because of
+      # this gap.
+      - name: Wait for stack sidecars (post-reset)
+        run: |
+          for endpoint in \
+            "http://127.0.0.1:54321/storage/v1/bucket" \
+            "http://127.0.0.1:54321/functions/v1/refresh-tokens"; do
+            for i in $(seq 1 30); do
+              code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$endpoint" || echo 000)
+              if [ "$code" != "000" ]; then
+                echo "ready post-reset: $endpoint -> $code"
+                break
+              fi
+              echo "wait post-reset: $endpoint (attempt $i)"
+              sleep 2
+            done
+            if [ "$code" = "000" ]; then
+              echo "::error::$endpoint never came back after db reset"
+              exit 1
+            fi
+          done
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Cache Playwright browsers
