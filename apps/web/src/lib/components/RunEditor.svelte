@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { createManualRun, fetchRoutes } from '$lib/data';
+	import { loadSettings, effective } from '$lib/settings';
+	import { privacyDefaultToIsPublic } from '$lib/run_visibility';
+	import { supabase } from '$lib/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { getUnit } from '$lib/units.svelte';
 	import type { Route } from '$lib/types';
@@ -29,11 +32,32 @@
 	let routeId = $state('');
 	let routes = $state<Route[]>([]);
 	let submitting = $state(false);
+	// Seeded from the user's privacy_default on mount so the toggle reflects
+	// their standing preference; a per-run change overrides it for this run.
+	// `touched` guards against the async settings load (below) clobbering a
+	// choice the user made before it resolved.
+	let isPublic = $state(false);
+	let touched = $state(false);
 
 	let distanceLabel = $derived(`Distance (${unit})`);
 
 	onMount(async () => {
 		unit = getUnit();
+		try {
+			// getUser() (awaited) is reliable on first paint; the reactive
+			// auth store may not be hydrated yet when onMount fires.
+			const { data: authData } = await supabase.auth.getUser();
+			const userId = authData.user?.id;
+			if (userId) {
+				const settings = await loadSettings(userId);
+				const seeded = privacyDefaultToIsPublic(
+					effective<string>(settings, 'privacy_default', 'followers')
+				);
+				if (!touched) isPublic = seeded;
+			}
+		} catch (_) {
+			isPublic = false;
+		}
 		try {
 			routes = await fetchRoutes();
 		} catch (_) {
@@ -61,7 +85,8 @@
 				distanceM,
 				activityType,
 				notes: notes.trim() || null,
-				routeId: routeId || null
+				routeId: routeId || null,
+				isPublic
 			});
 			showToast('Run added.', 'success');
 			oncreated?.({ id });
@@ -135,6 +160,22 @@
 		></textarea>
 	</label>
 
+	<label class="field toggle-field">
+		<input
+			type="checkbox"
+			bind:checked={isPublic}
+			onchange={() => (touched = true)}
+			class="toggle-input"
+		/>
+		<span>
+			<span class="field-label toggle-label">Make this run public</span>
+			<span class="field-hint">
+				Public runs appear in your followers' feed and on your profile. Defaults to
+				your visibility preference in Settings.
+			</span>
+		</span>
+	</label>
+
 	<div class="actions">
 		{#if oncancel}
 			<button
@@ -158,6 +199,13 @@
 		gap: 1.1rem;
 	}
 	.field { display: grid; gap: 0.35rem; }
+	.toggle-field {
+		grid-template-columns: auto 1fr;
+		align-items: start;
+		gap: 0.6rem;
+	}
+	.toggle-input { margin-top: 0.2rem; }
+	.toggle-label { text-transform: none; letter-spacing: 0; }
 	.activity-field { border: 0; padding: 0; margin: 0; }
 	.activity-field .field-label { padding: 0; }
 	.field-label {

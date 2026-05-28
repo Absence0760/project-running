@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
+import { clearUserSettingKey, setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -40,6 +41,98 @@ test.describe('/runs/new', () => {
 
 	test.afterEach(async () => {
 		await cleanupPlantedRuns();
+		// Privacy tests below seed privacy_default; reset so the seed user's
+		// default returns to unset (effective falls back to 'followers') and
+		// downstream specs aren't affected.
+		await clearUserSettingKey(USER_A.id, 'privacy_default');
+	});
+
+	test('visibility toggle controls runs.is_public (per-run override, persona #27)', async ({
+		page
+	}) => {
+		// The toggle is the explicit per-run override. Ticking it must make
+		// the run public; leaving it unticked keeps it private — regardless
+		// of the standing privacy_default. Pins the createManualRun wiring.
+		const admin = getAdminClient();
+		await page.goto('/runs/new');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Add a run' })
+		).toBeVisible({ timeout: 10_000 });
+
+		const numberInputs = page.locator('input[type="number"]');
+		await numberInputs.nth(0).fill('6');
+		await numberInputs.nth(1).fill('30');
+		await page.getByRole('checkbox', { name: /Make this run public/ }).check();
+		await page.getByRole('button', { name: /Save/ }).click();
+		const newId = await captureCreatedRunId(page);
+		await page.waitForLoadState('networkidle');
+
+		const { data: row } = await admin
+			.from('runs')
+			.select('is_public')
+			.eq('id', newId)
+			.single();
+		expect(row?.is_public).toBe(true);
+	});
+
+	test('privacy_default=public makes a new manual run public without touching the toggle', async ({
+		page
+	}) => {
+		// Comeback persona #27: web ignored privacy_default entirely (runs
+		// always landed private). With the pref set to public, a manual run
+		// must land public even though the user never touches the toggle.
+		const admin = getAdminClient();
+		await setUserSetting(USER_A.id, 'privacy_default', 'public');
+
+		await page.goto('/runs/new');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Add a run' })
+		).toBeVisible({ timeout: 10_000 });
+		// Toggle reflects the standing preference.
+		await expect(
+			page.getByRole('checkbox', { name: /Make this run public/ })
+		).toBeChecked();
+
+		const numberInputs = page.locator('input[type="number"]');
+		await numberInputs.nth(0).fill('7');
+		await numberInputs.nth(1).fill('40');
+		await page.getByRole('button', { name: /Save/ }).click();
+		const newId = await captureCreatedRunId(page);
+		await page.waitForLoadState('networkidle');
+
+		const { data: row } = await admin
+			.from('runs')
+			.select('is_public')
+			.eq('id', newId)
+			.single();
+		expect(row?.is_public).toBe(true);
+	});
+
+	test('default (no privacy_default set) keeps a manual run private', async ({ page }) => {
+		const admin = getAdminClient();
+		await clearUserSettingKey(USER_A.id, 'privacy_default');
+
+		await page.goto('/runs/new');
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Add a run' })
+		).toBeVisible({ timeout: 10_000 });
+		await expect(
+			page.getByRole('checkbox', { name: /Make this run public/ })
+		).not.toBeChecked();
+
+		const numberInputs = page.locator('input[type="number"]');
+		await numberInputs.nth(0).fill('8');
+		await numberInputs.nth(1).fill('45');
+		await page.getByRole('button', { name: /Save/ }).click();
+		const newId = await captureCreatedRunId(page);
+		await page.waitForLoadState('networkidle');
+
+		const { data: row } = await admin
+			.from('runs')
+			.select('is_public')
+			.eq('id', newId)
+			.single();
+		expect(row?.is_public).toBe(false);
 	});
 
 	test('renders page chrome (kicker, h1, tagline, back link)', async ({ page }) => {

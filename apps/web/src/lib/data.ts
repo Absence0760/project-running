@@ -2,6 +2,8 @@
  * Data access layer — all Supabase queries in one place.
  */
 import { supabase } from './supabase';
+import { loadSettings, effective } from './settings';
+import { privacyDefaultToIsPublic } from './run_visibility';
 import type {
 	Run,
 	Route,
@@ -565,6 +567,23 @@ export async function saveRunAsRoute(
 /// `'app'` so the run picks up the "Recorded" label in the UI; the
 /// `metadata.manual_entry = true` flag lets the detail page show
 /// "Manual entry" instead of the map.
+/// Map the user's `privacy_default` preference to the `runs.is_public`
+/// boolean for a newly-created run. Only `public` yields a public run;
+/// `followers` and `private` stay private (runs have no followers-only
+/// visibility tier — see docs/settings.md). Mirrors mobile
+/// `Preferences.newRunsArePublic`. Web previously ignored this entirely
+/// (runs always landed at the `is_public default false`), so a runner who
+/// chose `public` still got private runs from web saves + imports
+/// (comeback persona #27). Fail-closed: any settings-read failure → private.
+async function defaultRunIsPublic(userId: string): Promise<boolean> {
+	try {
+		const settings = await loadSettings(userId);
+		return privacyDefaultToIsPublic(effective<string>(settings, 'privacy_default', 'followers'));
+	} catch {
+		return false;
+	}
+}
+
 export async function createManualRun(input: {
 	startedAt: string; // ISO UTC
 	durationS: number;
@@ -572,10 +591,14 @@ export async function createManualRun(input: {
 	activityType?: 'run' | 'walk' | 'hike' | 'cycle';
 	notes?: string | null;
 	routeId?: string | null;
+	/// Per-run visibility override. When omitted, falls back to the user's
+	/// `privacy_default` preference (`public` → public, else private).
+	isPublic?: boolean;
 }): Promise<{ id: string }> {
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
 	if (!userId) throw new Error('Not authenticated');
+	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
 	const metadata: Record<string, unknown> = {
 		manual_entry: true,
@@ -593,6 +616,7 @@ export async function createManualRun(input: {
 			source: 'app',
 			metadata,
 			route_id: input.routeId ?? null,
+			is_public: isPublic,
 		})
 		.select('id')
 		.single();
@@ -626,10 +650,15 @@ export async function saveRun(input: {
 	/// Saved into runs.external_id so a subsequent import of the same
 	/// activity by any path can detect + skip. /audit/strava M3.
 	external_id?: string | null;
+	/// Per-run visibility override. When omitted, falls back to the user's
+	/// `privacy_default` preference. Importers omit it so a bulk import
+	/// honours the runner's default visibility.
+	isPublic?: boolean;
 }): Promise<{ id: string; trackUploaded: boolean; trackError?: string }> {
 	const { data: authUser } = await supabase.auth.getUser();
 	const userId = authUser.user?.id;
 	if (!userId) throw new Error('Not authenticated');
+	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
 	// elevation_m and title are not columns on `runs` (elevation_m lives on
 	// `routes`; title has no DB column). Merge both into metadata so they
@@ -644,6 +673,7 @@ export async function saveRun(input: {
 		duration_s: input.duration_s,
 		source: input.source,
 		metadata: mergedMetadata,
+		is_public: isPublic,
 	};
 	if (input.external_id) row.external_id = input.external_id;
 
