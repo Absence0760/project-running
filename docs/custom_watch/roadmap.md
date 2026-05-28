@@ -53,6 +53,10 @@ Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-out
 - [ ] **Trigger (b)** — an existing ODM (Mobvoi, Amazfit, Polar) approaches us about a white-label deal.
 - [ ] **Trigger (c)** — a co-founder with shipped-consumer-hardware experience joins.
 
+### Architectural obligations (must land before tier-2 prototype reaches a field tester)
+
+- [ ] **OTA via a production-grade dual-bank bootloader.** [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — MCUboot is the default candidate; the specific choice gets made at tier-2 design time but the obligation is fixed.
+
 ### Long-lead-time pre-validation (worth starting even while tier 2 is gated — see [OQ7](#oq7-vendor-relationship-pre-validation))
 
 - [ ] **Sony CXD5610** — datasheet + sample under NDA. ~4 weeks lead time.
@@ -104,14 +108,6 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 ## Open questions to resolve
 
 These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
-
-### OQ4: OTA architecture decision
-
-Per [`firmware.md`](firmware.md) open Q#3, OTA must be in v1.0 or shipped units can't be updated. Tier 1 doesn't implement OTA, but flash-layout decisions made now affect it. Options:
-
-- **(a)** Adopt MCUboot — Embassy ecosystem has integration; production-proven dual-bank bootloader.
-- **(b)** Roll our own dual-bank bootloader — more work, more risk, no clear benefit unless MCUboot has a specific gap.
-- **(c)** Declare "tier-1 units are throwaway; no OTA design needed yet." Defer the decision to tier 2. Acceptable if we don't ship tier-1 to anyone.
 
 ### OQ5: Map renderer + format
 

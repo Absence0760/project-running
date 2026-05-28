@@ -1946,6 +1946,43 @@ Pinning: [`docs/custom_watch/parts.md`](custom_watch/parts.md) "Bench tools" sec
 
 ---
 
+## 84. Tier-1 firmware ships no OTA; tier-2 obligated to a production-grade dual-bank bootloader (MCUboot default)
+
+Open question OQ4 from [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) and the related open Q#3 in [`docs/custom_watch/firmware.md`](custom_watch/firmware.md) resolved.
+
+`firmware.md` flagged that OTA "must be in v1.0; cannot be added later without bricking shipped units" — but tier-1 units are owner-personal dev boards that get re-flashed via USB constantly. There's no v1.0 ship happening at tier-1. The real question is when in the tier-1 → tier-2 → tier-3 progression we start designing for OTA.
+
+**Decision.** Tier-1 firmware ships **no** OTA mechanism — no bootloader, no dual-bank slots, no image-validation infrastructure. The DK is re-flashed via USB + probe-rs for every change. Tier-2 firmware **must** ship a production-grade dual-bank bootloader before any prototype reaches a field tester; **MCUboot is the default candidate** and the specific choice gets made at tier-2 design time, but the obligation is fixed now so it's not noticed at tier-3 panic time.
+
+When step 6 (BLE bring-up) adds `nrf-softdevice`, `memory.x` moves `FLASH ORIGIN` to `0x27000` (S140 7.x SoftDevice region) and reduces `LENGTH` from 1024K to ~860K. The comment in `memory.x` notes that tier-2 will further carve a bootloader + dual-bank slots out of this region — so a future reader sees the plan even though it's not implemented at tier 1.
+
+Why defer to tier-2 (rather than MCUboot at tier-1):
+
+- **Tier-1 units are throwaway.** Owner-personal, never shipped, re-flashable via USB any time. OTA at tier-1 = solving a problem we don't have.
+- **MCUboot integration at tier-1 costs ~1–2 weeks** (bootloader + slot-layout + image-validation + sign-verify-boot-roll-back testing) for zero tier-1 value. Trades against [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)'s "keep tier-1 narrow" intent.
+- **Tier-2 rewrites the memory layout anyway.** New MCU candidate (Apollo4 or refreshed nRF5340), different SoftDevice version, possibly different bootloader region size. Whatever bootloader work we'd do at tier-1 gets redone — marginal carry-forward benefit.
+
+Why MCUboot rather than rolling our own:
+
+- **MCUboot is production-proven** across the Embassy ecosystem and the broader Cortex-M wearable industry. Known-good integrations documented, sample projects exist, security model is audited.
+- **Rolling our own** is more work, more risk, no clear win unless MCUboot has a specific gap that surfaces at tier-2 design time.
+
+What this commits us to:
+
+- **Tier-2 firmware ships with OTA via a dual-bank bootloader before any prototype reaches a field tester.** Hard obligation, codified here.
+- **MCUboot is the candidate-by-default;** if tier-2 design surfaces a reason to pick something else (e.g., MCUboot doesn't work cleanly with the Apollo4 + Ambiq SDK toolchain), the alternative must be production-grade and equivalent in capability (dual-bank, image signature verification, roll-back on boot failure).
+- **`memory.x` at tier-1 step 6 leaves a comment** noting the future bootloader allocation, even though it's not carved out at tier-1.
+
+Don't re-litigate by:
+
+- **Adopting MCUboot at tier-1 "just to be safe."** Tier-1 firmware doesn't need OTA; adding the bootloader stack costs ~1–2 weeks of tier-1 budget for zero tier-1 benefit, and the layout gets rebuilt at tier-2 anyway.
+- **Rolling our own bootloader to avoid an MCUboot integration dependency.** The integration work is well-trodden in the Embassy ecosystem; "avoid the dependency" isn't a real win unless MCUboot has a measurable gap at the tier-2 design pass.
+- **Shipping a tier-2 prototype to a field tester without OTA.** The whole point of codifying the obligation here is to make this a hard "no" before it becomes a soft "we'll add it later." A tier-2 prototype reaching an external hand without the bootloader in place breaks this entry.
+
+Pinning: [`apps/custom_watch/app/memory.x`](../apps/custom_watch/app/memory.x) header comment updated to flag the tier-2 bootloader allocation. [`docs/custom_watch/firmware.md`](custom_watch/firmware.md) open Q#3 (OTA) closed by this entry. [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ4 removed; OTA added as a tier-2 architectural obligation.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
