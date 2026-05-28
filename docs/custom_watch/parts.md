@@ -16,13 +16,14 @@ Order numbers / vendor SKUs below are starting points — re-verify stock + curr
 | LiPo battery 500 mAh + JST-PH 2-pin | Adafruit 1578 | ~$10 | For runs off the dev-board |
 | Breadboard + jumper wires + headers | Generic (Adafruit / SparkFun / Amazon) | ~$20 | Half-size breadboard, ~30× male-male + male-female jumpers, a strip of 0.1" male headers |
 
-## Bench tools (~$200–$900 depending on tier)
+## Bench tools (~$320–$1020 depending on tier)
 
 | Tool | Recommended | Price | Notes |
 |---|---|---|---|
 | Soldering iron | Pinecil V2 ($50) **or** Hakko FX-888D ($100) | $50–$100 | Pinecil is excellent for the money; Hakko is the lab standard |
 | Solder + flux + desoldering wick | Generic | ~$25 | Lead-free 60/40 0.6mm, no-clean flux pen, copper braid |
 | Multimeter | Aneng AN8009 ($30) **or** Brymen BM235 ($120) | $30–$120 | Continuity beeper + diode test required; auto-range nice |
+| **Nordic Power Profiler Kit II (PPK2)** | Nordic direct / Mouser / Digi-Key | ~$120 | Per-subsystem power measurement per [decisions.md § 83](../decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem). 1 nA – 1 A dynamic range; required for sub-µA sleep-current readings the multimeter can't reach. Wire between each isolated subsystem and its power input |
 | USB-UART adapter | FTDI FT232RL or CP2102 | ~$10 | For viewing serial logs separately from the dev-board's onboard CDC-ACM |
 | Logic analyzer | Generic 8-channel FX2 clone ($15) **or** Saleae Logic 8 ($400) | $15–$400 | FX2 clones run `sigrok` / PulseView; Saleae is night-and-day better but $400. Buy the cheap one first; upgrade only if you find yourself fighting the tool |
 | ESD-safe mat + wrist strap | Generic | ~$30 | Cheap insurance against frying parts |
@@ -61,6 +62,7 @@ Tick as parts arrive (don't tick to "buy"; tick when received):
 - [ ] Breadboard + jumpers + headers
 - [ ] Soldering iron + solder + flux
 - [ ] Multimeter
+- [ ] Nordic Power Profiler Kit II (PPK2)
 - [ ] USB-UART adapter
 - [ ] Logic analyzer (any tier)
 - [ ] ESD mat + wrist strap

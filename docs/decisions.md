@@ -1909,6 +1909,43 @@ Pinning: [`apps/custom_watch/README.md`](../apps/custom_watch/README.md) step 7 
 
 ---
 
+## 83. Tier-1 power measurement uses Nordic Power Profiler Kit II, applied per-subsystem
+
+Open question OQ3 from [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) resolved.
+
+The metric that decides whether the production watch is competitive is battery life under realistic ultra-runner load. The tier-1 dev kit cannot measure that directly — the nRF52840 DK's onboard J-Link debugger + LEDs + power LDOs burn ~30 mA at idle, which dwarfs anything the firmware does and makes whole-device readings useless as a baseline. But "wait until tier 2" is the wrong answer: tier-2 silicon costs $15–40k and an architecture that misses the power budget there is a tier-2-scale mistake. Tier-1 needs an instrumentation methodology that produces forward-looking data without needing tier-2 hardware.
+
+**Decision.** Add a Nordic Power Profiler Kit II (PPK2) to the tier-1 bench-tools kit (~$120 from Mouser / Digi-Key / Nordic direct). Use it **per-subsystem**, not whole-device:
+
+- **Bare-MCU sleep current.** Power off everything else, measure the nRF52840 in deep sleep. Maps to tier-2 sleep power on whichever production MCU we migrate to (~3 µA target on Apollo4).
+- **GPS module active vs sleep.** Power the u-blox MAX-M10S in isolation; measure acquisition + tracking + sleep separately. Matches tier-2 since the production Sony CXD5610 is the same chip class.
+- **Optical-HR AFE sample current.** MAX86177 in isolation across the LED-on, LED-off, sample-readout phases. Matches tier-2 directly (same chip).
+- **Display refresh energy.** Sharp MIP in isolation; per-line update vs full-frame redraw. Matches tier-2 (same display family).
+- **Combined "all sensors live" rig.** Once individual subsystems are characterised, wire them together (still excluding the DK's debugger LEDs) and measure the integrated sleep-and-wake cycle.
+
+These five datapoints map directly to the tier-2 / tier-3 power-budget table in [`performance_path.md`](custom_watch/performance_path.md). When we later port from nRF52840 to Apollo4 + Sony CXD5610, the per-subsystem deltas predict the integrated tier-2 power; the prediction is verifiable; we discover architecture problems at tier-1 cost rather than tier-2 cost.
+
+Why this over alternatives:
+
+- **Whole-device measurement on the DK is misleading.** The dev board itself draws ~30 mA at idle from non-firmware sources; you'd be measuring the dev board rather than the firmware. Useless as a forward-looking baseline.
+- **"Defer to tier-2"** trades $120 now against the risk of discovering an architecture problem after $15–40k of tier-2 spend. Bad odds for an investigation whose explicit deliverable (per [`competitive_landscape.md`](custom_watch/competitive_landscape.md)) is "credible technical story for ODM conversations" — power data is the language vendors speak.
+- **Bench multimeter** (already on the parts list) reads down to ~10 µA on cheap units; sub-µA sleep measurement needs the PPK2's dedicated current-source channels.
+
+What this commits us to:
+
+- Power measurements get captured as the per-step bring-up proceeds. Steps 3–6 each produce per-subsystem numbers; step 7 integration produces the combined number. Where they live: the `docs/custom_watch/tier1_log.md` planned in the [smaller considerations](custom_watch/roadmap.md#smaller-considerations) section of the roadmap, created when step 3 actually starts.
+- Tier-1 [Definition of Done (§ 82)](#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype) does **not** require hitting any specific power target — these measurements inform tier-2 planning, they don't gate tier-1 completion. § 82's "What this does *not* require" explicitly noted this.
+
+Don't re-litigate by:
+
+- **Switching to a cheaper alternative.** Cheap USB-current meters (USB Tester, MakerHawk) read down to ~1 mA — fine for charging-rate checks, useless for sleep-current. The PPK2's value is its 1 nA – 1 A dynamic range; no $20 substitute exists.
+- **Deferring instrumentation until "we have time."** Power data collected during bring-up is cheap; retrofitting measurements onto already-written firmware always means restructuring code to add measurement points. Measure early.
+- **Reading whole-device DK numbers as if they're meaningful.** The DK's non-firmware power draw makes whole-device readings deceptive; the convention is per-subsystem until tier-2 silicon exists.
+
+Pinning: [`docs/custom_watch/parts.md`](custom_watch/parts.md) "Bench tools" section adds the PPK2. [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) removes OQ3 from open questions and adds a Power instrumentation subsection under tier 1. The eventual `docs/custom_watch/tier1_log.md` (deferred until step 3 starts) captures per-subsystem readings.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

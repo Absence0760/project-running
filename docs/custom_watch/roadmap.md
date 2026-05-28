@@ -33,9 +33,13 @@ Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order
 - [ ] **Step 6 — BLE GATT bring-up.** Phone pairs via `nrf-softdevice`, custom service.
 - [ ] **Step 7 — Integration.** Wire steps 3–6 into a single recording state machine (port of Dart `run_recorder`).
 
+### Power instrumentation
+
+Per [decisions.md § 83](../decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem): a Nordic Power Profiler Kit II (PPK2, ~$120) is part of the tier-1 bench-tools kit. Used **per-subsystem** (bare-MCU sleep, GPS active/sleep, HR AFE sample, display refresh) rather than whole-device — the DK's onboard J-Link + LEDs burn ~30 mA at idle and make whole-device readings useless as a baseline. The per-subsystem numbers project to tier-2 / tier-3 power (see [`performance_path.md`](performance_path.md)). DoD doesn't require hitting any specific number; these measurements inform tier-2 planning, they don't gate tier-1 completion.
+
 ### Definition of Done
 
-Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end. No power-budget bar (separate question — see [OQ3](#oq3-power-measurement-methodology) below).
+Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end.
 
 ## Tier 2 — wearable prototype (gated)
 
@@ -100,14 +104,6 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 ## Open questions to resolve
 
 These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
-
-### OQ3: Power-measurement methodology
-
-How do we know we're meeting the performance budget at tier 1, given the DK can't measure realistic ultra-watch power? Options:
-
-- **(a)** Buy a Nordic Power Profiler Kit II (~$120) — measures sub-µA on a test rig wired between the DK and its USB power input.
-- **(b)** Proxy metrics — measure sleep-current, peripheral-active-current, GPS-fix-current via PPK2 on isolated subsystems; project tier-2 power from those.
-- **(c)** Accept blindness — defer real measurement to tier-2 silicon. Risk: don't discover the architecture misses the budget until tier 2.
 
 ### OQ4: OTA architecture decision
 
