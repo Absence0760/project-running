@@ -8,6 +8,10 @@ Rust + Embassy firmware for the ultra-marathon watch research effort. This is *o
 
 **Language + framework decided: Rust + Embassy on the Nordic nRF52840.** See [decisions.md §80](../../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) for why (short version: memory safety + tooling + async ergonomics, *not* perf — Rust vs C is within ±5% on this class of MCU). See [`docs/custom_watch/performance_path.md`](../../docs/custom_watch/performance_path.md) for where the performance levers actually live, and [`docs/custom_watch/competitive_landscape.md`](../../docs/custom_watch/competitive_landscape.md) for the strategic framing of why tier 1 exists at all.
 
+## Local testing
+
+The watch's developer inner loop is `bin/watch-flash.sh` from the repo root (or `cargo run --release` from this directory): build the firmware, flash it to a connected Nordic nRF52840 DK, stream `defmt` logs back to your terminal until Ctrl-C. Host-side unit tests run via `bin/watch-test.sh` or `cargo test` and don't need a board. Run `bin/watch-doctor.sh` once per machine to verify toolchain + board detection. See [`local_testing.md`](local_testing.md) for the full setup walkthrough, the host-vs-on-target testing split, and the common-error reference.
+
 ## Next steps
 
 1. **Order parts** — see [`docs/custom_watch/parts.md`](../../docs/custom_watch/parts.md). Total ~$300 for the MCU + sensor breakouts + battery + breadboard, plus ~$200–$900 in bench tools depending on which soldering iron / multimeter / logic analyzer tier you pick.
