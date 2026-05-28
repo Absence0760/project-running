@@ -7,7 +7,7 @@
 -- name-based stalking the pref was introduced to defend against.
 
 begin;
-select plan(7);
+select plan(9);
 
 do $$
 declare
@@ -15,6 +15,8 @@ declare
   v_bob   uuid := '99999999-9999-9999-9999-999999bbbbbb';
   v_carol uuid := '99999999-9999-9999-9999-999999cccccc';
   v_dan   uuid := '99999999-9999-9999-9999-999999dddddd';
+  v_kid   uuid := '99999999-9999-9999-9999-9999999ee011';
+  v_adult uuid := '99999999-9999-9999-9999-9999999ff011';
 begin
   insert into auth.users (id, email, encrypted_password,
                           email_confirmed_at, instance_id, aud, role)
@@ -26,6 +28,10 @@ begin
       (v_carol, 'carol@search.local', '', now(),
        '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
       (v_dan,   'dan@search.local',   '', now(),
+       '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+      (v_kid,   'kid@search.local',   '', now(),
+       '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+      (v_adult, 'adult@search.local', '', now(),
        '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated')
     on conflict (id) do nothing;
   insert into user_profiles (id, display_name, preferred_unit, subscription_tier)
@@ -33,8 +39,21 @@ begin
       (v_alice, 'Alice Searcher', 'km', 'free'),
       (v_bob,   'Bob Searcher',   'km', 'free'),
       (v_carol, 'Carol Searcher', 'km', 'free'),
-      (v_dan,   'Dan Other',      'km', 'free')
+      (v_dan,   'Dan Other',      'km', 'free'),
+      (v_kid,   'Kid Younger',    'km', 'free'),
+      (v_adult, 'Adult Younger',  'km', 'free')
     on conflict (id) do nothing;
+  -- A declared minor (DOB ~11 years ago) and a declared adult (DOB ~40
+  -- years ago), both default-discoverable. The minor must be excluded
+  -- regardless; the adult must remain. Dates are anchored off
+  -- current_date so the test doesn't rot.
+  insert into user_settings (user_id, prefs)
+    values
+      (v_kid,   jsonb_build_object('date_of_birth',
+                  to_char(current_date - interval '11 years', 'YYYY-MM-DD'))),
+      (v_adult, jsonb_build_object('date_of_birth',
+                  to_char(current_date - interval '40 years', 'YYYY-MM-DD')))
+    on conflict (user_id) do update set prefs = excluded.prefs;
   -- Bob has opted out via the new pref.
   insert into user_settings (user_id, prefs)
     values (v_bob, jsonb_build_object('discoverable_in_search', false))
@@ -132,6 +151,24 @@ select is(
   ),
   true,
   'authenticated has EXECUTE on search_user_profiles'
+);
+
+-- 8. A declared minor (DOB ~11 years ago) is excluded from search even
+--    though they never opted out — the hard minor floor (20261017_001).
+select is(
+  (select count(*)::int from search_user_profiles('Younger', 60)
+    where display_name = 'Kid Younger'),
+  0,
+  'search_user_profiles excludes a declared minor regardless of opt-out pref'
+);
+
+-- 9. A declared adult with a DOB on file is still returned — the minor
+--    clause must not over-exclude DOB-bearing adults.
+select is(
+  (select count(*)::int from search_user_profiles('Younger', 60)
+    where display_name = 'Adult Younger'),
+  1,
+  'search_user_profiles still surfaces a declared adult with a DOB on file'
 );
 
 select * from finish();
