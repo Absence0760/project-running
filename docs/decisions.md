@@ -1539,6 +1539,8 @@ Don't re-litigate by:
 - Treating "we have an app and a watch app, therefore we should also have a watch" as a logical next step. The economics in [`hardware/prototyping.md`](hardware/prototyping.md) are the point of this entry.
 - Spending discretionary engineering time on tier-1 bench prototypes "to keep the option warm." The option stays warm because the docs exist; building hardware on a hobby budget is how projects accidentally become consumer-electronics companies.
 
+**Amendment (2026-05-28) — tier-1 personal investigation permitted.** Owner is starting tier-1 bench-prototype work personally as an evenings-and-weekends investigation. The [`firmware/`](../firmware/README.md) directory at the repo root now exists for this; treat it as research-tier scaffolding, not a product commitment or a roadmap line item. The cost discipline above still binds tier 2+ — no PCB CAD or schematic files, no case CAD, no RF consultant spend, no ODM conversations, no marketing of "we're building a watch" — until one of triggers (a/b/c) above fires. The language / RTOS choice (Zephyr in C vs Embassy in Rust) will get its own decisions entry once made. If tier-1 work shows the firmware path is intractable for a single developer, the right move is to delete `firmware/` and revert this amendment rather than escalate.
+
 ---
 
 ## 72. Bag-backed prefs are cached on disk on mobile; offline writes queue + drain on reconnect
@@ -1788,6 +1790,47 @@ Don't re-litigate by:
 Pinning tests:
 
 - `apps/web/src/lib/settings_cache.test.ts` — 40 unit tests: `applyPrefsChanges` merge contract (mobile-parity), the shared cache contract run against both `InMemoryPrefsCache` and `LocalStoragePrefsCache`, prefix-overlap regression (`a` vs `ab`), corrupt-JSON read recovery, malformed-queue-entry filtering, quota-exceeded swallowing.
+
+---
+
+## 80. Tier-1 firmware uses Embassy on Rust on the Nordic nRF52840 — chosen for memory safety, tooling, and async ergonomics, not for performance
+
+[§71](#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) was amended on 2026-05-28 to permit owner-personal tier-1 bench-prototype firmware work, with the framework / language choice left open for a follow-up entry. This is that entry.
+
+**Decision:** Tier-1 firmware is written in Rust using the [Embassy](https://embassy.dev/) async embedded framework, targeting the Nordic nRF52840 DK (PCA10056) as the bench-prototype board. Tooling stack is `cargo`, [`probe-rs`](https://probe.rs/), and [`defmt`](https://defmt.ferrous-systems.com/) for binary logging over RTT. UI bring-up uses [Slint](https://slint.dev/) on the Rust side; if Slint turns out to be too heavy for the Sharp MIP refresh-rate budget, fall back to a hand-rolled framebuffer driver with the existing LVGL design language as the visual target.
+
+Why Rust + Embassy:
+
+1. **Memory safety eliminates a whole class of firmware bugs.** Concurrent firmware that mixes interrupt handlers, threads, and shared data is where C's lifetime / aliasing footguns do the most damage. Rust's borrow checker rules these out at compile time. For a single-developer evenings-and-weekends project where debugging time is the bottleneck, this matters more than the equivalent productivity loss from writing the occasional driver from scratch.
+2. **Modern tooling.** `cargo` is one command. `probe-rs` replaces the proprietary Segger toolchain with an open-source equivalent that works with any CMSIS-DAP adapter as well as J-Link. `defmt` ships structured binary logs over RTT with sub-microsecond timestamps. Combined, the developer experience is materially better than the CMake-meets-Kconfig-meets-`west` Zephyr workflow.
+3. **Async-first ergonomics.** Embassy's `async fn` model expresses "wait for GPS UART, then wait for HR I²C, then sleep" as readable straight-line code. The Zephyr / FreeRTOS equivalent is either callback soup or one thread per task with the associated per-thread stack overhead.
+4. **First-class nRF52840 support.** Embassy ships maintained HAL crates for the nRF52 family. `nrf-softdevice` wraps Nordic's BLE + ANT+ SoftDevice in safe Rust bindings. Production users include several shipping wearables and IoT devices.
+
+**Why not for performance reasons.** Rust and C compile through the same LLVM backend on Cortex-M targets — `rustc` and `clang` literally share the optimisation passes. On a bare-metal MCU there's no GC, no JIT, no runtime, no interpreter overhead in either case. The two languages land within ±5% of each other on typical sensor-processing workloads, with the direction of the delta depending on the specific code. **The battery target (the metric that actually matters on this watch) is determined by hardware choices and firmware architecture, not language**, and is documented in detail in [`hardware/performance_path.md`](hardware/performance_path.md). Anyone reading this entry hoping that "we picked Rust for the speed" is the takeaway will be disappointed; that's not the takeaway.
+
+Trade-offs we accept:
+
+- **Smaller driver ecosystem.** Zephyr ships in-tree drivers for the Sharp MIP display, BMP390, BMI270, and BLE host stack. Embassy doesn't — we'll write the Sharp MIP driver from scratch (~100 lines of SPI), pull a community `bmp388-rs` crate for the BMP390 (or wrap the C driver via `bindgen` if it doesn't extend cleanly), and use `nrf-softdevice` for BLE. Each of these is a couple of days of work; net loss is maybe a month of project time vs Zephyr.
+- **The Maxim MAX86177 optical-HR algorithm is a proprietary C library.** Both languages have to FFI it via `bindgen`; this is a wash.
+- **LVGL is C-only.** Slint is the Rust-native equivalent and is genuinely usable on MCUs as small as 320 KB flash, but it's less mature than LVGL for outdoor-watch use cases. If Slint becomes a blocker, fallback is hand-rolled SPI display routines plus a small framebuffer abstraction — we are not introducing a Zephyr port mid-project just to use LVGL.
+- **Hireability narrows slightly.** Rust embedded is a minority skill in the wearable industry; if tier-1 eventually leads to ODM partnership conversations (per [`hardware/competitive_landscape.md`](hardware/competitive_landscape.md)) the ODM almost certainly works in C/C++. The firmware-architecture rules in `performance_path.md` are language-agnostic, so a future port is real work but not a redo of design decisions.
+
+What this commits us to:
+
+- All tier-1 firmware code lives in [`/firmware/`](../firmware/README.md), structured as a Cargo workspace.
+- Drivers we write for our specific BOM (Sharp MIP, MAX86177 wrapper, u-blox NMEA parser) are published as separate crates in `firmware/drivers/<sensor>/` so they're independently reusable and individually testable.
+- `cargo test` runs on the host where it can; on-target tests use Embassy's test harness through `probe-rs`.
+- CI gets a `build-firmware` job that runs `cargo build --target thumbv7em-none-eabihf` on PRs that touch `firmware/`.
+
+Don't re-litigate by:
+
+- Switching to Zephyr partway through unless we hit a blocking driver issue that takes more than two weeks to resolve in Rust. The cost of a partial rewrite is higher than the cost of writing the driver.
+- Adding C dependencies via `bindgen` for things that have working Rust crates. We've already accepted FFI for the Maxim HR algorithm and (if needed) the Bosch BMP390 driver; that's the budget.
+- Treating the language choice as the reason for any performance characteristic. If the watch is slow, the answer is in `performance_path.md`, not in `Cargo.toml`.
+
+If tier-1 reveals that Embassy + Rust + nRF52840 is genuinely intractable for our specific needs, the right move is to revert: switch to Zephyr + C + same MCU, port the firmware-architecture work over, and update this entry. The firmware-architecture rules are designed to be language-portable for exactly this reason.
+
+Pinning: [`firmware/README.md`](../firmware/README.md), [`firmware/parts.md`](../firmware/parts.md), [`docs/hardware/performance_path.md`](hardware/performance_path.md), [`docs/hardware/competitive_landscape.md`](hardware/competitive_landscape.md).
 
 ---
 

@@ -32,7 +32,7 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 | Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |
 | Setting up the monorepo / melos / workspaces | [docs/monorepo.md](docs/monorepo.md) |
 | "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
-| "Should we build our own watch hardware?" | [docs/hardware/README.md](docs/hardware/README.md) — research-only baseline for an ultra-marathon watch (vision, BOM, prototyping tiers, firmware). Current default of not starting hardware work + the triggers that would change it are recorded in [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) |
+| "Should we build our own watch hardware?" | [docs/hardware/README.md](docs/hardware/README.md) — research-only baseline for an ultra-marathon watch (vision, BOM, prototyping tiers, firmware). Current default of not starting hardware work + the triggers that would change it are recorded in [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely). The 2026-05-28 §71 amendment permits owner-personal tier-1 bench-prototype work; that workspace + active parts list lives at [firmware/](firmware/README.md) |
 | House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
 | Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
 | Where each service runs in production / cost / DR / rollback | [docs/deployment.md](docs/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
@@ -152,6 +152,9 @@ infra/               → Terraform stacks for AWS web hosting (decisions §53)
   dns/               → Route 53 hosted zone + ACM cert
   github-oidc/       → OIDC provider + per-env deploy roles
   envs/{prod,preview}/ → root modules for each environment
+firmware/            → Tier-1 bench-prototype workspace for the ultra-marathon watch research effort (decisions §71 amendment, 2026-05-28)
+  README.md          → Status + next steps
+  parts.md           → Active shopping list
 scripts/
   gen_dart_models.dart  → Dart row-class generator
 .github/workflows/
