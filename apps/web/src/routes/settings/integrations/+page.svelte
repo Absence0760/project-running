@@ -273,6 +273,13 @@
 								})}
 							</span>
 						{/if}
+						{#if integration.connected && integration.provider === 'strava'}
+							<p class="sync-note">
+								Sync pulls the last 90 days from Strava. For your full
+								back-catalogue, use <strong>Bulk import from a Strava export</strong>
+								below — that's the only path that brings in older activities.
+							</p>
+						{/if}
 					</div>
 					<div class="btn-group">
 						{#if integration.connected && integration.provider === 'strava'}
@@ -663,6 +670,12 @@
 		color: var(--color-text-secondary);
 		margin: 0 0 var(--space-md);
 		line-height: 1.45;
+	}
+	.sync-note {
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+		margin: var(--space-sm) 0 0;
+		line-height: 1.4;
 	}
 	.card-sub a {
 		color: var(--color-primary);

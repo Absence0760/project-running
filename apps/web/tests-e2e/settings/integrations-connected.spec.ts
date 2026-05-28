@@ -65,6 +65,8 @@ test.describe('/settings/integrations — connected-state UI (planted rows)', ()
 		await expect(stravaCard.getByText(/Last synced/i)).toBeVisible();
 		await expect(stravaCard.getByRole('button', { name: /Sync/i })).toBeVisible();
 		await expect(stravaCard.getByRole('button', { name: 'Disconnect' })).toBeVisible();
+		// Sync-history cap notice points to the full-history ZIP path (#20).
+		await expect(stravaCard.getByText(/last 90 days/i)).toBeVisible();
 	});
 
 	test('Disconnect Strava → confirm → card flips to disconnected + DB row gone', async ({
