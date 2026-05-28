@@ -152,3 +152,56 @@ test.describe('Cookie consent banner', () => {
 		}
 	});
 });
+
+test.describe('Cookie consent banner — Global Privacy Control honoured', () => {
+	// Persona-hunt Round 3 finding Privacy #4. A user who has flipped
+	// the browser-level GPC toggle (Firefox / Brave / DuckDuckGo / iOS
+	// Safari) has already opted out of analytics + tracking; showing
+	// the consent banner anyway is (a) annoying and (b) non-compliant
+	// with CCPA/CPRA + the EDPB's GDPR Art 21 reading.
+	//
+	// Two surfaces to cover:
+	//  1. Client-side: `navigator.globalPrivacyControl === true` on
+	//     mount → the banner auto-persists `rejected` and never shows.
+	//  2. Server-side: `Sec-GPC: 1` request header → `isConsentGiven`
+	//     returns false even if a stale `cookie_consent=accepted`
+	//     cookie is present (a user can flip GPC after accepting on
+	//     a previous visit; we must honour the new signal).
+	//
+	// Playwright supports both via `extraHTTPHeaders` (header on every
+	// request) + an `addInitScript` that defines `globalPrivacyControl`
+	// on the navigator stub.
+
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('navigator.globalPrivacyControl=true → banner never shows + rejected persisted', async ({
+		context,
+		page,
+	}) => {
+		await context.addInitScript(() => {
+			Object.defineProperty(navigator, 'globalPrivacyControl', {
+				value: true,
+				configurable: true,
+			});
+		});
+		await page.goto('/');
+		// Banner must not appear — give it a generous window so a
+		// "shows on mount then auto-dismisses" anti-pattern still
+		// fails the assertion.
+		await expect(page.getByRole('dialog', { name: /Cookies/ }))
+			.toHaveCount(0, { timeout: 3_000 });
+
+		// And the rejected choice was persisted, not just suppressed.
+		// A regression that hid the banner without persisting would
+		// re-show it on the next pageload.
+		const stored = await page.evaluate(() =>
+			localStorage.getItem('cookie_consent'),
+		);
+		expect(stored).not.toBeNull();
+		expect(JSON.parse(stored!).choice).toBe('rejected');
+
+		// Navigate to another page → still no banner.
+		await page.goto('/privacy');
+		await expect(page.getByRole('dialog', { name: /Cookies/ })).toHaveCount(0);
+	});
+});

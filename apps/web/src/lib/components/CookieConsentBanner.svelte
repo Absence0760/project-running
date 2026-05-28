@@ -13,7 +13,41 @@
 	let dismissed = $state(false);
 	onMount(() => {
 		mounted = true;
+
+		// Persona-hunt Round 3 finding Privacy #4. Honour the Global
+		// Privacy Control signal (navigator.globalPrivacyControl is
+		// the client-side mirror of the Sec-GPC: 1 request header;
+		// browsers that ship one ship the other). California AG +
+		// Colorado AG have ruled GPC is a binding "Do Not Sell /
+		// Share" signal under CCPA/CPRA + CPA; EDPB treats it as an
+		// objection under GDPR Art 21. A user who has flipped their
+		// browser-level toggle has already opted out — surfacing a
+		// banner asking them again would be (a) annoying and (b)
+		// non-compliant, since the implicit "Reject" via GPC must
+		// be persisted just like an explicit click. Auto-persist as
+		// `rejected` so future loads + the server-side gate see a
+		// consistent state.
+		if (consent.pending && hasGpcSignal()) {
+			consent.set('rejected');
+			dismissed = true;
+		}
 	});
+
+	function hasGpcSignal(): boolean {
+		// `globalPrivacyControl` is non-standard but widely supported
+		// (Firefox 100+, Brave, DuckDuckGo, iOS Safari Privacy
+		// Protections). Treat undefined as "no signal" — the banner
+		// then runs its normal pending → click path.
+		try {
+			return (
+				typeof navigator !== 'undefined' &&
+				(navigator as Navigator & { globalPrivacyControl?: boolean })
+					.globalPrivacyControl === true
+			);
+		} catch {
+			return false;
+		}
+	}
 
 	function accept() {
 		consent.set('accepted');

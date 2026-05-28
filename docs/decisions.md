@@ -1620,6 +1620,33 @@ Pinning tests: `apps/mobile_android/test/gear_backfill_test.dart` (9 unit tests 
 
 ---
 
+## 75. Sec-GPC: 1 hard-overrides the consent cookie on the server, and `navigator.globalPrivacyControl` auto-rejects the banner on the client
+
+Persona-hunt Round 3 finding Privacy #4. Pre-fix the cookie-consent banner ignored the Global Privacy Control signal entirely: a Firefox / Brave / DuckDuckGo / iOS Safari user with the browser-level GPC toggle on still saw the banner asking them to accept (already wrong — they opted out at the browser level), and the server-side `isConsentGiven(request)` gate read only the `cookie_consent` cookie, so Sentry + other consent-gated paths would fire for a GPC-on user until they manually clicked Reject.
+
+Behaviour:
+
+- **Client banner (`CookieConsentBanner.svelte`)**: on mount, if `navigator.globalPrivacyControl === true` AND the local choice is still pending, auto-call `consent.set('rejected')` and never show the banner. The "rejected" choice persists to localStorage + the cookie, so future loads see a consistent state without needing GPC to be re-read.
+- **Server gate (`isConsentGiven(request)` in `apps/web/src/lib/consent_cookie.ts`)**: short-circuits to `false` when `Sec-GPC: 1` is present, regardless of what the cookie says. A user who once accepted but later flipped their browser-level GPC toggle has withdrawn consent; the gate honours the new signal immediately, not on next manual visit.
+
+Why this exact shape:
+
+- **GPC is a binding opt-out, not a hint.** California AG + Colorado AG have ruled GPC is a binding "Do Not Sell / Share" signal under CCPA/CPRA + CPA; the EDPB treats it as an objection signal under GDPR Art 21. We can't show the banner asking again or load consent-gated SDKs on the side.
+- **Header is the source of truth, not the cookie.** A user can flip the browser-level toggle without revisiting the site. The cookie reflects whatever they did at last visit; the header reflects current preference. When they disagree, the header wins.
+- **`Sec-GPC: 0`** is "no opt-out" — distinct from "no signal". Some clients send it explicitly. Our `hasGpcSignalFromHeader` checks for `"1"` exactly so a `"0"` doesn't accidentally light up an else branch.
+
+Don't re-litigate by:
+
+- Showing the banner with a pre-checked "Reject all" when GPC is on. The whole point of GPC is the user shouldn't have to interact with another consent surface — auto-dismiss + auto-persist is the right shape.
+- Reading `navigator.globalPrivacyControl` on the server. The header is what server-side code sees; the navigator property is what client-side code sees. Different surfaces, same signal.
+
+Pinning tests:
+
+- `apps/web/src/lib/consent_cookie.test.ts` — 13 tests across the cookie helper, the GPC helper, and the combined `isConsentGiven` gate (including the GPC-hard-overrides-accepted-cookie case).
+- `apps/web/tests-e2e/cross-cutting/cookie-consent.spec.ts` — Playwright spec defines `navigator.globalPrivacyControl=true` via `addInitScript`, then asserts the banner never shows AND `cookie_consent` persists with `choice='rejected'`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
