@@ -81,10 +81,20 @@
 		}
 	}
 
+	// All upcoming occurrences within a year. The previous (max 6, 120-day)
+	// cap left weeks 7+ of a weekly series unreachable (parkrun persona #40);
+	// expandInstances still honours recurrence_until / recurrence_count, so a
+	// bounded series stops naturally. The picker shows a preview and expands
+	// to the full list on demand (see INSTANCE_PREVIEW_COUNT below).
 	let nextInstances = $derived(
 		event
-			? expandInstances(event, new Date(), new Date(Date.now() + 120 * 24 * 3600 * 1000), 6)
+			? expandInstances(event, new Date(), new Date(Date.now() + 365 * 24 * 3600 * 1000))
 			: []
+	);
+	let showAllInstances = $state(false);
+	const INSTANCE_PREVIEW_COUNT = 8;
+	let visibleInstances = $derived(
+		showAllInstances ? nextInstances : nextInstances.slice(0, INSTANCE_PREVIEW_COUNT)
 	);
 
 	let recurrenceLabel = $derived(
@@ -834,7 +844,7 @@
 			<section class="instance-picker">
 				<span class="label">Pick an occurrence</span>
 				<div class="instance-chips">
-					{#each nextInstances as iso}
+					{#each visibleInstances as iso}
 						<button
 							class="instance-chip"
 							class:active={activeInstance === iso.toISOString()}
@@ -848,6 +858,18 @@
 						</button>
 					{/each}
 				</div>
+				{#if nextInstances.length > INSTANCE_PREVIEW_COUNT}
+					<button
+						type="button"
+						class="instance-toggle"
+						onclick={() => (showAllInstances = !showAllInstances)}
+						aria-expanded={showAllInstances}
+					>
+						{showAllInstances
+							? 'Show fewer'
+							: `Show all ${nextInstances.length} upcoming`}
+					</button>
+				{/if}
 			</section>
 		{/if}
 
@@ -1199,6 +1221,17 @@
 		background: var(--color-primary);
 		color: var(--color-bg);
 		border-color: var(--color-primary);
+	}
+
+	.instance-toggle {
+		margin-top: 0.6rem;
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--color-primary);
+		font-weight: 600;
+		font-size: 0.85rem;
+		cursor: pointer;
 	}
 
 	.desc {

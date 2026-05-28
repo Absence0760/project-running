@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
-import { deleteEvent } from '../fixtures/simulate';
+import { deleteEvent, insertEvent } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+
+const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
 
 /**
  * /clubs/[slug]/events/new — recurrence editor depth.
@@ -91,6 +93,45 @@ test.describe('/clubs/[slug]/events/new — recurrence', () => {
 		const instanceChips = page.locator('.instance-chip');
 		const chipCount = await instanceChips.count();
 		expect(chipCount).toBeGreaterThanOrEqual(2);
+	});
+
+	test('unbounded weekly series exposes far more than the old 6-instance cap (persona #40)', async ({
+		page
+	}) => {
+		// Regression guard: the picker used to call expandInstances(..., 6) over
+		// a 120-day window, so weeks 7+ of a weekly series were unreachable.
+		// An unbounded weekly series should now preview a fixed number of chips
+		// and expand to the full ~52-occurrence year on demand.
+		const title = `e2e-recurring-uncapped ${Date.now()}`;
+		eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			created_by: USER_A.id,
+			title,
+			starts_at: new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString(),
+			recurrence_freq: 'weekly'
+		});
+
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1, name: title })).toBeVisible({
+			timeout: 10_000
+		});
+
+		// Preview is capped at INSTANCE_PREVIEW_COUNT (8) — already > the old 6.
+		const chips = page.locator('.instance-chip');
+		await expect(chips).toHaveCount(8);
+
+		// The toggle advertises the full count, which for an unbounded weekly
+		// series within a year is ~52 — proving weeks 7+ are reachable.
+		const toggle = page.getByRole('button', { name: /Show all \d+ upcoming/ });
+		await expect(toggle).toBeVisible();
+		const label = (await toggle.textContent()) ?? '';
+		const total = Number(label.match(/\d+/)?.[0] ?? '0');
+		expect(total).toBeGreaterThan(6);
+		expect(total).toBeGreaterThanOrEqual(40);
+
+		// Expanding reveals every occurrence, not just the preview.
+		await toggle.click();
+		expect(await chips.count()).toBe(total);
 	});
 
 	test('monthly recurring event: row carries freq=monthly, no byday required', async ({
