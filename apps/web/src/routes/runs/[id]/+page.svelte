@@ -609,6 +609,13 @@
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
 
+	/** parkrun age-graded percentage (e.g. "54.23%"), set by the
+	 *  parkrun importer into metadata.age_grade. See docs/metadata.md. */
+	let ageGrade = $derived.by(() => {
+		const v = run?.metadata?.['age_grade'];
+		return typeof v === 'string' && v.trim() ? v.trim() : null;
+	});
+
 	/// Visible key-stats count + parity. The grid's `auto-fit` columns
 	/// look broken when the cell count is odd (one empty trailing slot
 	/// at 2-col layouts is the most common shape). Counts the
@@ -624,7 +631,8 @@
 			(run && movingSeconds > 0 && movingSeconds !== run.duration_s ? 1 : 0) +
 			(totalSteps != null ? 1 : 0) +
 			(avgCadence != null ? 1 : 0) +
-			(avgBpm != null ? 1 : 0),
+			(avgBpm != null ? 1 : 0) +
+			(ageGrade != null ? 1 : 0),
 	);
 	let showActivityFiller = $derived(keyStatsCount % 2 === 1 && activity !== null);
 
@@ -1166,6 +1174,12 @@
 				<div class="key-stat">
 					<span class="key-stat-value">{avgBpm}</span>
 					<span class="key-stat-label">Avg HR bpm</span>
+				</div>
+			{/if}
+			{#if ageGrade != null}
+				<div class="key-stat">
+					<span class="key-stat-value">{ageGrade}</span>
+					<span class="key-stat-label">Age grade</span>
 				</div>
 			{/if}
 			<!-- Parity filler. The auto-fit key-stats grid looks broken

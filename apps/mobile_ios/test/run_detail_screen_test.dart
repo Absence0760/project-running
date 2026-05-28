@@ -17,6 +17,7 @@ Run _run({
   Duration duration = const Duration(minutes: 25),
   String? title,
   bool withTrack = false,
+  Map<String, dynamic>? metadata,
 }) =>
     Run(
       id: 'run-1',
@@ -24,7 +25,8 @@ Run _run({
       duration: duration,
       distanceMetres: distanceMetres,
       source: RunSource.app,
-      metadata: title != null ? {'title': title, 'activity_type': 'run'} : null,
+      metadata: metadata ??
+          (title != null ? {'title': title, 'activity_type': 'run'} : null),
       // The secondary-stats row (which hosts the Calories pill) is
       // gated on `run.track.length >= 2 || _hasElevation`. A
       // 2-waypoint stub track is the cheapest way to make the gate
@@ -118,6 +120,17 @@ void main() {
       final run = _run(title: 'Easy run');
       await _pump(tester, run);
       expect(find.text('Run'), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('surfaces parkrun age_grade as a secondary stat (#9)',
+        (tester) async {
+      final run = _run(
+        withTrack: true,
+        metadata: {'activity_type': 'run', 'age_grade': '55.42%'},
+      );
+      await _pump(tester, run);
+      expect(find.text('Age grade'), findsOneWidget);
+      expect(find.text('55.42%'), findsOneWidget);
     });
   });
 

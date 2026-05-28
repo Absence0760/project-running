@@ -890,6 +890,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         value: '$_avgBpm bpm',
                       ),
                     ),
+                  if (_ageGrade != null)
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.emoji_events,
+                        label: 'Age grade',
+                        value: _ageGrade!,
+                      ),
+                    ),
                 ],
               ),
             ),
@@ -1138,6 +1146,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     if (v is int) return v;
     if (v is num) return v.round();
     return 0;
+  }
+
+  /// parkrun age-graded percentage (e.g. "54.23%"), set by the parkrun
+  /// importer into metadata.age_grade. Null when absent. See metadata.md.
+  String? get _ageGrade {
+    final v = run.metadata?['age_grade'];
+    return (v is String && v.trim().isNotEmpty) ? v.trim() : null;
   }
 
   static const _bestEffortDistances = <String, double>{
