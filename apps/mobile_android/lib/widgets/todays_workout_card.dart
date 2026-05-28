@@ -112,6 +112,7 @@ class TodaysWorkoutCard extends StatelessWidget {
         WorkoutKind.long => Icons.directions_run,
         WorkoutKind.tempo => Icons.speed,
         WorkoutKind.interval => Icons.timelapse,
+        WorkoutKind.walkRun => Icons.directions_walk,
         WorkoutKind.marathonPace => Icons.flag,
         WorkoutKind.race => Icons.emoji_events,
         WorkoutKind.rest => Icons.self_improvement,

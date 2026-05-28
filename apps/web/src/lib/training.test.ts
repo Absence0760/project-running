@@ -28,8 +28,33 @@ import {
 	defaultPlanWeeks,
 	GOAL_DISTANCES_M,
 	formatISO,
-	isWorkoutCompleted
+	isWorkoutCompleted,
+	WORKOUT_KIND_LABEL,
+	type WorkoutStructure
 } from './training';
+
+// ─────────────────────── walk-run kind + structure (#22) ───────────────────────
+
+test('WORKOUT_KIND_LABEL: walk_run renders as "Walk-run"', () => {
+	// Mirrors workoutKindLabel(WorkoutKind.walkRun) in training_test.dart.
+	assert.equal(WORKOUT_KIND_LABEL.walk_run, 'Walk-run');
+});
+
+test('WorkoutStructure: a time-based walk-run rep block is well-typed', () => {
+	// Compile-time check that duration_s / recovery_duration_s / recovery_pace
+	// 'walk' are accepted; the assertion just confirms the shape round-trips.
+	const s: WorkoutStructure = {
+		repeats: {
+			count: 8,
+			duration_s: 60,
+			pace_sec_per_km: 420,
+			recovery_duration_s: 90,
+			recovery_pace: 'walk'
+		}
+	};
+	assert.equal(s.repeats?.recovery_pace, 'walk');
+	assert.equal(s.repeats?.duration_s, 60);
+});
 
 // ─────────────────────── VDOT ───────────────────────
 

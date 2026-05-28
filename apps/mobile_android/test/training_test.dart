@@ -8,6 +8,15 @@ import '../lib/preferences.dart';
 import '../lib/training.dart';
 
 void main() {
+  group('walk_run workout kind (#22)', () {
+    test('walk_run round-trips through fromDb / dbValue / label', () {
+      // Mirrors the WORKOUT_KIND_LABEL.walk_run test in training.test.ts.
+      expect(workoutKindFromDb('walk_run'), WorkoutKind.walkRun);
+      expect(workoutKindDbValue(WorkoutKind.walkRun), 'walk_run');
+      expect(workoutKindLabel(WorkoutKind.walkRun), 'Walk-run');
+    });
+  });
+
   group('vdotFromRace', () {
     test('20-minute 5k lands near VDOT 50', () {
       final v = vdotFromRace(5000, 20 * 60);

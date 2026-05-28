@@ -17,6 +17,7 @@ enum WorkoutKind {
   tempo,
   interval,
   marathonPace,
+  walkRun,
   race,
   rest,
 }
@@ -71,6 +72,7 @@ WorkoutKind workoutKindFromDb(String s) => switch (s) {
       'tempo' => WorkoutKind.tempo,
       'interval' => WorkoutKind.interval,
       'marathon_pace' => WorkoutKind.marathonPace,
+      'walk_run' => WorkoutKind.walkRun,
       'race' => WorkoutKind.race,
       _ => WorkoutKind.rest,
     };
@@ -82,6 +84,7 @@ String workoutKindDbValue(WorkoutKind k) => switch (k) {
       WorkoutKind.tempo => 'tempo',
       WorkoutKind.interval => 'interval',
       WorkoutKind.marathonPace => 'marathon_pace',
+      WorkoutKind.walkRun => 'walk_run',
       WorkoutKind.race => 'race',
       WorkoutKind.rest => 'rest',
     };
@@ -93,6 +96,7 @@ String workoutKindLabel(WorkoutKind k) => switch (k) {
       WorkoutKind.tempo => 'Tempo',
       WorkoutKind.interval => 'Intervals',
       WorkoutKind.marathonPace => 'Marathon pace',
+      WorkoutKind.walkRun => 'Walk-run',
       WorkoutKind.race => 'Race',
       WorkoutKind.rest => 'Rest',
     };

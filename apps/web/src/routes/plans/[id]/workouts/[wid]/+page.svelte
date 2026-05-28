@@ -58,14 +58,25 @@
 		await load();
 	}
 
+	// A step's "magnitude" for the proportional bar: distance when present,
+	// else duration (walk-run sessions are fully time-based — see training.md).
+	function mag(b: { distance_m?: number; duration_s?: number } | undefined): number {
+		if (!b) return 0;
+		return b.distance_m ?? b.duration_s ?? 0;
+	}
+	function repMag(r: WorkoutStructure['repeats']): number {
+		return r?.distance_m ?? r?.duration_s ?? 0;
+	}
+	function recMag(r: WorkoutStructure['repeats']): number {
+		return r?.recovery_distance_m ?? r?.recovery_duration_s ?? 0;
+	}
+
 	function intervalTotal(s: WorkoutStructure): number {
 		return (
-			(s.warmup?.distance_m ?? 0) +
-			(s.repeats
-				? s.repeats.count * (s.repeats.distance_m + s.repeats.recovery_distance_m)
-				: 0) +
-			(s.steady?.distance_m ?? 0) +
-			(s.cooldown?.distance_m ?? 0)
+			mag(s.warmup) +
+			(s.repeats ? s.repeats.count * (repMag(s.repeats) + recMag(s.repeats)) : 0) +
+			mag(s.steady) +
+			mag(s.cooldown)
 		);
 	}
 
@@ -78,18 +89,18 @@
 		const total = intervalTotal(s);
 		if (total <= 0) return [];
 		const out: SegmentVisual[] = [];
-		if (s.warmup) out.push({ role: 'warmup', fraction: s.warmup.distance_m / total });
+		if (s.warmup) out.push({ role: 'warmup', fraction: mag(s.warmup) / total });
 		if (s.repeats) {
 			for (let i = 0; i < s.repeats.count; i++) {
-				out.push({ role: 'work', fraction: s.repeats.distance_m / total });
+				out.push({ role: 'work', fraction: repMag(s.repeats) / total });
 				if (i < s.repeats.count - 1) {
-					out.push({ role: 'recovery', fraction: s.repeats.recovery_distance_m / total });
+					out.push({ role: 'recovery', fraction: recMag(s.repeats) / total });
 				}
 			}
-			out.push({ role: 'recovery', fraction: s.repeats.recovery_distance_m / total });
+			out.push({ role: 'recovery', fraction: recMag(s.repeats) / total });
 		}
-		if (s.steady) out.push({ role: 'steady', fraction: s.steady.distance_m / total });
-		if (s.cooldown) out.push({ role: 'cooldown', fraction: s.cooldown.distance_m / total });
+		if (s.steady) out.push({ role: 'steady', fraction: mag(s.steady) / total });
+		if (s.cooldown) out.push({ role: 'cooldown', fraction: mag(s.cooldown) / total });
 		return out;
 	}
 

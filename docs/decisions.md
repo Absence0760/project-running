@@ -2241,6 +2241,20 @@ Pinning: [`docs/custom_watch/bom.md`](custom_watch/bom.md) MCU + GNSS + OHR + Ba
 
 ---
 
+## 91. Walk-run (C25K / Galloway) is a first-class workout kind expressed by time-based intervals
+
+New and returning runners (new + comeback personas #22) need run/walk interval sessions — run 60 s, walk 90 s, repeat — which the plan model couldn't express: `WorkoutStructure` was distance-only and `recovery_pace` was `'easy' | 'jog'`, with no "walk" notion, and there was no workout kind to flag a beginner session.
+
+**Decision.** Add `walk_run` as a `WorkoutKind` (Postgres enum value, web `WorkoutKind` union, Dart `WorkoutKind.walkRun`, migration `20261020_001`), and extend `WorkoutStructure` so a rep/recovery can be expressed by **duration** (`duration_s` / `recovery_duration_s`) as well as distance, with `recovery_pace` widening to include `'walk'`. The live `WorkoutRunner` already supported duration-based steps, so no runner-model change was needed for expressibility — only the generator types + the kind.
+
+**Why time-based, not distance-based.** C25K and Galloway prescribe *time* intervals ("run 1 minute, walk 90 seconds"), not distances — a beginner can't pace by distance reliably, and the whole point is a fixed effort/rest clock. Distance-based reps would be the wrong primitive for the population this serves.
+
+**Trade-off.** `distance_m` on the structure sub-objects became optional, so display/edit consumers (`WorkoutEditor`, the workout-detail breakdown) had to handle "distance OR duration" — a `mag()`-style fallback. The advanced structure *editor* still authors distance-based intervals only; walk-run sessions are produced by the beginner plan generator (§ commit B) rather than hand-built in that editor, which is acceptable because the beginner audience uses templates, not the power-user editor.
+
+**Don't re-litigate by** collapsing `walk_run` back into `interval` "because it's just intervals with walk recovery" — the distinct kind is what lets the dashboard, plan calendar, recorder cues ("Run"/"Walk"), and plan-compliance treat a beginner session correctly instead of scoring it like a hard interval workout. Pinning: migration `20261020_001`; `training.ts` ↔ `training.dart` parity pair (keep in lockstep); `docs/training.md` § walk-run.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

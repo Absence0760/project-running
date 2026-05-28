@@ -21,6 +21,7 @@ export type WorkoutKind =
 	| 'tempo'
 	| 'interval'
 	| 'marathon_pace'
+	| 'walk_run'
 	| 'race'
 	| 'rest';
 export type PlanPhase = 'base' | 'build' | 'peak' | 'taper' | 'race';
@@ -195,16 +196,22 @@ export function phaseFor(weekIndex: number, totalWeeks: number): PlanPhase {
  * not. See `docs/training.md` for the shape spec.
  */
 export interface WorkoutStructure {
-	warmup?: { distance_m: number; pace: 'easy' };
+	warmup?: { distance_m?: number; duration_s?: number; pace: 'easy' };
+	// A rep / recovery may be expressed by distance (distance_m) or by time
+	// (duration_s) — the runner reads whichever is present (distance wins).
+	// Walk-run (C25K / Galloway) sessions use duration-based reps with a
+	// 'walk' recovery; see docs/training.md § walk-run.
 	repeats?: {
 		count: number;
-		distance_m: number;
+		distance_m?: number;
+		duration_s?: number;
 		pace_sec_per_km: number;
-		recovery_distance_m: number;
-		recovery_pace: 'easy' | 'jog';
+		recovery_distance_m?: number;
+		recovery_duration_s?: number;
+		recovery_pace: 'easy' | 'jog' | 'walk';
 	};
-	steady?: { distance_m: number; pace_sec_per_km: number };
-	cooldown?: { distance_m: number; pace: 'easy' };
+	steady?: { distance_m?: number; duration_s?: number; pace_sec_per_km: number };
+	cooldown?: { distance_m?: number; duration_s?: number; pace: 'easy' };
 }
 
 // ─────────────────────── Plan generation ───────────────────────
@@ -651,6 +658,7 @@ export const WORKOUT_KIND_LABEL: Record<WorkoutKind, string> = {
 	tempo: 'Tempo',
 	interval: 'Intervals',
 	marathon_pace: 'Marathon pace',
+	walk_run: 'Walk-run',
 	race: 'Race',
 	rest: 'Rest'
 };

@@ -265,6 +265,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
       case WorkoutKind.tempo:
         return const Color(0xFFC98ECF);
       case WorkoutKind.interval:
+      case WorkoutKind.walkRun:
         return const Color(0xFFD97A54);
       case WorkoutKind.marathonPace:
         return const Color(0xFFE6A96B);

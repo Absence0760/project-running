@@ -323,6 +323,8 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           "Run the reps hard enough that the last one feels like the first. Don't pick a pace you can only hold for two or three reps.",
         WorkoutKind.marathonPace =>
           'Lock into goal marathon pace exactly. This is a rehearsal session — no faster, no slower.',
+        WorkoutKind.walkRun =>
+          'Alternate easy running and walking on the timed intervals. The walk breaks are part of the workout — take them even when you feel fresh.',
         WorkoutKind.race =>
           "Trust the plan. Don't chase a PB in the first mile.",
         WorkoutKind.rest =>

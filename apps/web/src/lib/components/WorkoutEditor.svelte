@@ -89,13 +89,13 @@
 	);
 	let warmupDistance = $state<number | null>(
 		untrack(() =>
-			initialStructure?.warmup ? metresToUnit(initialStructure.warmup.distance_m) : 2
+			initialStructure?.warmup ? metresToUnit(initialStructure.warmup.distance_m ?? 0) : 2
 		)
 	);
 	let cooldownDistance = $state<number | null>(
 		untrack(() =>
 			initialStructure?.cooldown
-				? metresToUnit(initialStructure.cooldown.distance_m)
+				? metresToUnit(initialStructure.cooldown.distance_m ?? 0)
 				: 2
 		)
 	);
@@ -105,7 +105,7 @@
 	let repeatsDistance = $state<number | null>(
 		untrack(() =>
 			initialStructure?.repeats
-				? metresToUnit(initialStructure.repeats.distance_m)
+				? metresToUnit(initialStructure.repeats.distance_m ?? 0)
 				: 1
 		)
 	);
@@ -126,17 +126,17 @@
 	let recoveryDistance = $state<number | null>(
 		untrack(() =>
 			initialStructure?.repeats
-				? metresToUnit(initialStructure.repeats.recovery_distance_m)
+				? metresToUnit(initialStructure.repeats.recovery_distance_m ?? 0)
 				: 0.4
 		)
 	);
-	let recoveryPace = $state<'easy' | 'jog'>(
+	let recoveryPace = $state<'easy' | 'jog' | 'walk'>(
 		untrack(() => initialStructure?.repeats?.recovery_pace ?? 'jog')
 	);
 	let steadyDistance = $state<number | null>(
 		untrack(() =>
 			initialStructure?.steady
-				? metresToUnit(initialStructure.steady.distance_m)
+				? metresToUnit(initialStructure.steady.distance_m ?? 0)
 				: null
 		)
 	);
