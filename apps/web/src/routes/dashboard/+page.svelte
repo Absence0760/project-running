@@ -30,7 +30,8 @@
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { PlanWorkout } from '$lib/types';
-	import { loadSettings, peekCachedSettings, effective } from '$lib/settings';
+	import { loadSettings, peekCachedSettings, effective, updateUniversal } from '$lib/settings';
+	import { relativeAge } from '$lib/pr_recency';
 	import type { LoadedSettings } from '$lib/settings';
 	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -46,7 +47,13 @@
 
 	let runs = $state<Run[]>([]);
 	let weeklyMileage = $state<{ week: string; distance_m: number }[]>([]);
-	let personalRecords = $state<{ distance: string; time_s: number; date: string }[]>([]);
+	let personalRecords = $state<{ key: string; distance: string; time_s: number; date: string }[]>([]);
+	// Distance keys the runner has chosen to hide (comeback persona #28). Stored
+	// in the universal `hidden_prs` settings bag, so it roams across devices.
+	let hiddenPrs = $state<string[]>([]);
+	let showHiddenPrs = $state(false);
+	let visiblePrs = $derived(personalRecords.filter((pr) => !hiddenPrs.includes(pr.key)));
+	let hiddenPrRows = $derived(personalRecords.filter((pr) => hiddenPrs.includes(pr.key)));
 	let planOverview = $state<ActivePlanOverview | null>(null);
 	let loading = $state(true);
 	let mileageView = $state<'weekly' | 'monthly' | 'yearly'>('weekly');
@@ -273,6 +280,8 @@
 
 	function applyDashboardSettings(settings: LoadedSettings) {
 		weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
+		const hidden = effective<string[]>(settings, 'hidden_prs');
+		hiddenPrs = Array.isArray(hidden) ? hidden : [];
 		const unit = effective<string>(settings, 'preferred_unit');
 		if (unit === 'mi' || unit === 'km') {
 			preferredUnit = unit;
@@ -300,6 +309,19 @@
 			// silent — intensity card is additive, not load-blocking
 		}
 	}
+
+	async function setHiddenPrs(next: string[]) {
+		hiddenPrs = next;
+		const uid = auth.user?.id;
+		if (!uid) return;
+		try {
+			await updateUniversal(uid, { hidden_prs: next });
+		} catch (e) {
+			console.warn('hidden_prs save failed', e);
+		}
+	}
+	const hidePr = (key: string) => setHiddenPrs([...new Set([...hiddenPrs, key])]);
+	const unhidePr = (key: string) => setHiddenPrs(hiddenPrs.filter((k) => k !== key));
 
 	// Persona-hunt Round 2 finding Intermediate #2: this "This Week"
 	// stat card used to hardcode Monday as the week start. The
@@ -1091,27 +1113,64 @@
 			<!-- Personal records -->
 			<section class="card">
 				<h2>Personal Records</h2>
-				{#if personalRecords.length > 0}
+				{#if visiblePrs.length > 0}
 					<table class="pr-table">
 						<thead>
 							<tr>
 								<th>Distance</th>
 								<th>Time</th>
 								<th>Date</th>
+								<th></th>
 							</tr>
 						</thead>
 						<tbody>
-							{#each personalRecords as pr}
+							{#each visiblePrs as pr}
 								<tr>
 									<td class="pr-distance">{pr.distance}</td>
 									<td class="pr-time">{formatDuration(pr.time_s)}</td>
-									<td class="pr-date">{formatDate(pr.date)}</td>
+									<td class="pr-date">
+										{formatDate(pr.date)}
+										<span class="pr-age">{relativeAge(pr.date)}</span>
+									</td>
+									<td>
+										<button
+											type="button"
+											class="pr-hide"
+											title="Hide this record"
+											aria-label="Hide {pr.distance} record"
+											onclick={() => hidePr(pr.key)}>×</button
+										>
+									</td>
 								</tr>
 							{/each}
 						</tbody>
 					</table>
-				{:else}
+				{:else if personalRecords.length === 0}
 					<p class="empty-text">Complete qualifying runs to see PRs</p>
+				{:else}
+					<p class="empty-text">All records hidden.</p>
+				{/if}
+				{#if hiddenPrRows.length > 0}
+					<button
+						type="button"
+						class="pr-show-hidden"
+						onclick={() => (showHiddenPrs = !showHiddenPrs)}
+						aria-expanded={showHiddenPrs}
+					>
+						{showHiddenPrs ? 'Hide' : `Show ${hiddenPrRows.length} hidden`}
+					</button>
+					{#if showHiddenPrs}
+						<ul class="pr-hidden-list">
+							{#each hiddenPrRows as pr}
+								<li>
+									<span>{pr.distance} · {formatDuration(pr.time_s)}</span>
+									<button type="button" class="pr-unhide" onclick={() => unhidePr(pr.key)}>
+										Unhide
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
 				{/if}
 			</section>
 
@@ -2505,6 +2564,53 @@
 	}
 	.pr-table tbody tr:last-child td { border-bottom: none; }
 	.pr-distance { font-weight: 600; }
+	.pr-age {
+		display: block;
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+	}
+	.pr-hide {
+		background: none;
+		border: none;
+		color: var(--color-text-tertiary);
+		font-size: 1.1rem;
+		line-height: 1;
+		cursor: pointer;
+		padding: 0 0.2rem;
+	}
+	.pr-hide:hover { color: var(--color-text); }
+	.pr-show-hidden {
+		margin-top: 0.6rem;
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--color-primary);
+		font-size: 0.8rem;
+		font-weight: 600;
+		cursor: pointer;
+	}
+	.pr-hidden-list {
+		list-style: none;
+		margin: 0.5rem 0 0;
+		padding: 0;
+		display: grid;
+		gap: 0.35rem;
+	}
+	.pr-hidden-list li {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+	}
+	.pr-unhide {
+		background: none;
+		border: none;
+		color: var(--color-primary);
+		font-size: 0.8rem;
+		cursor: pointer;
+		padding: 0;
+	}
 	.pr-time {
 		font-family: 'SF Mono', 'Menlo', monospace;
 		font-weight: 600;

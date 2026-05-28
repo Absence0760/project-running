@@ -1184,6 +1184,7 @@ export async function fetchPersonalRecords() {
 		.slice()
 		.sort((a, b) => (order[a.distance] ?? 99) - (order[b.distance] ?? 99))
 		.map((r) => ({
+			key: r.distance as string,
 			distance: labels[r.distance] ?? r.distance,
 			time_s: r.best_time_s,
 			date: r.achieved_at.slice(0, 10),
