@@ -26,5 +26,11 @@ overflow-checks = false
 
 [profile.dev]
 debug = 2
+# opt-level = "s" in dev too (not the default 0): at opt-level = 0 the Embassy +
+# nrf-softdevice debug binary tends to overflow the nRF52840's 1 MB flash budget
+# (the unoptimised async-state-machine code expansion is significant). Trades
+# incremental-build speed for a binary that actually fits. Can drop back to
+# opt-level = 0 if flash overflow stops being a concern — likely after the
+# tier-2 migration to Apollo4 / Apollo510B (4 MB internal MRAM / SRAM).
 opt-level = "s"
 overflow-checks = true
