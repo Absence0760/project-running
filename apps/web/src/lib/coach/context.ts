@@ -109,7 +109,6 @@ export async function buildContext(
 	const runnerContext = {
 		// Non-health prefs are always safe to send.
 		weekly_mileage_goal_m: prefs.weekly_mileage_goal_m ?? null,
-		auto_pause_enabled: prefs.auto_pause_enabled ?? null,
 		coach_personality: prefs.coach_personality ?? null,
 		// Health-category fields — gated on Art 9 consent. When
 		// consent has not been (or has been withdrawn from)

@@ -50,8 +50,6 @@ void main() {
       final ud = [
         'preferred_unit',
         'default_activity_type',
-        'auto_pause_enabled',
-        'auto_pause_speed_mps',
         'map_style',
         'units_pace_format',
       ];

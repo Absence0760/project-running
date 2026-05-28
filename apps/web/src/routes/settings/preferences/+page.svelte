@@ -29,8 +29,6 @@
 	let weekStartDay = $state<'monday' | 'sunday'>('monday');
 	let mapStyle = $state<'streets' | 'satellite' | 'outdoors' | 'dark'>('streets');
 	let privacyDefault = $state<'public' | 'followers' | 'private'>('followers');
-	let autoPauseEnabled = $state(true);
-	let autoPauseSpeed = $state('0.8');
 	let weeklyMileageGoal = $state('');
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let stravaAutoShare = $state(false);
@@ -107,8 +105,6 @@
 			mapStyle = effective(settings, 'map_style', 'streets') ?? 'streets';
 			setMapStyle(mapStyle);
 			privacyDefault = effective(settings, 'privacy_default', 'followers') ?? 'followers';
-			autoPauseEnabled = effective(settings, 'auto_pause_enabled', true) ?? true;
-			autoPauseSpeed = (effective<number>(settings, 'auto_pause_speed_mps', 0.8) ?? 0.8).toString();
 			weeklyMileageGoal = (effective<number>(settings, 'weekly_mileage_goal_m') ?? '')?.toString() ?? '';
 			coachPersonality = effective(settings, 'coach_personality', 'supportive') ?? 'supportive';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
@@ -175,8 +171,6 @@
 			week_start_day: weekStartDay,
 			map_style: mapStyle,
 			privacy_default: privacyDefault,
-			auto_pause_enabled: autoPauseEnabled,
-			auto_pause_speed_mps: parseFloat(autoPauseSpeed) || 0.8,
 			coach_personality: coachPersonality,
 			strava_auto_share: stravaAutoShare,
 			voice_feedback_enabled: voiceFeedbackEnabled,
@@ -356,16 +350,6 @@
 						<option value="cycle">Cycle</option>
 					</select>
 				</label>
-				<label class="checkbox-label">
-					<input type="checkbox" bind:checked={autoPauseEnabled} />
-					<span>Auto-pause when stationary</span>
-				</label>
-				{#if autoPauseEnabled}
-					<label>
-						<span class="label-text">Auto-pause speed (m/s)</span>
-						<input type="number" bind:value={autoPauseSpeed} step="0.1" min="0.1" max="3" />
-					</label>
-				{/if}
 				<label class="checkbox-label">
 					<input type="checkbox" bind:checked={voiceFeedbackEnabled} />
 					<span>Spoken split announcements (mobile + watch)</span>

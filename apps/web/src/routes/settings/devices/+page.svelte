@@ -302,12 +302,6 @@
 				],
 			},
 		},
-		{ key: 'auto_pause_enabled', label: 'Auto-pause', shape: { kind: 'bool' } },
-		{
-			key: 'auto_pause_speed_mps',
-			label: 'Auto-pause threshold',
-			shape: { kind: 'number', min: 0.1, max: 3, step: 0.1, unit: 'm/s' },
-		},
 	];
 
 	let addingForDevice = $state<string | null>(null);

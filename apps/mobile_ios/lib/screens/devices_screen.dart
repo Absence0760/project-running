@@ -325,18 +325,6 @@ const overrideKeyRegistry = <OverrideKeySpec>[
     options: ['run', 'walk', 'hike', 'cycle'],
   ),
   OverrideKeySpec(
-    key: 'auto_pause_enabled',
-    label: 'Auto-pause',
-    hint: 'Stop the clock when stopped.',
-    kind: 'bool',
-  ),
-  OverrideKeySpec(
-    key: 'auto_pause_speed_mps',
-    label: 'Auto-pause speed (m/s)',
-    hint: 'Threshold below which auto-pause engages.',
-    kind: 'double',
-  ),
-  OverrideKeySpec(
     key: 'map_style',
     label: 'Map style',
     hint: 'MapLibre style for the map view.',

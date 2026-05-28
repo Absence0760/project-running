@@ -44,8 +44,8 @@ test('effective — universal null with no device value returns the fallback', (
 });
 
 test('effective — falsy-but-concrete values win (0, "", false are NOT treated as missing)', () => {
-	const zero: LoadedSettings = { universal: {}, device: { auto_pause_speed_mps: 0 } };
-	assert.equal(effective<number>(zero, 'auto_pause_speed_mps', 0.8), 0);
+	const zero: LoadedSettings = { universal: {}, device: { voice_feedback_interval_km: 0 } };
+	assert.equal(effective<number>(zero, 'voice_feedback_interval_km', 1.0), 0);
 
 	const empty: LoadedSettings = { universal: {}, device: { activity_type: '' } };
 	assert.equal(effective<string>(empty, 'activity_type', 'run'), '');

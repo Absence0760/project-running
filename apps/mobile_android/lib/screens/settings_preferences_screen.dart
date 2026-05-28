@@ -429,23 +429,6 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
-  Future<void> _editAutoPauseSpeed() async {
-    final current =
-        _bagValue<num>(SettingsKeys.autoPauseSpeedMps)?.toDouble();
-    final picked = await _pickDouble(
-      title: 'Auto-pause below',
-      current: current ?? 0.8,
-      suffix: 'm/s',
-      minValue: 0.1,
-      maxValue: 3.0,
-    );
-    if (picked == null) return;
-    await _putUniversal(
-      SettingsKeys.autoPauseSpeedMps,
-      picked == -1.0 ? null : picked,
-    );
-  }
-
   Future<void> _editStravaAutoShare() async {
     final current = _bagValue<bool>(SettingsKeys.stravaAutoShare) ?? false;
     await _putUniversal(SettingsKeys.stravaAutoShare, !current);
@@ -756,22 +739,6 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               value: prefs.advancedGps,
               onChanged: prefs.setAdvancedGps,
             ),
-            SwitchListTile(
-              title: const Text('Auto-pause'),
-              subtitle: const Text('Not available on this device.'),
-              value: _bagValue<bool>(SettingsKeys.autoPauseEnabled) ?? true,
-              onChanged: null,
-            ),
-            ListTile(
-              title: const Text('Auto-pause threshold'),
-              subtitle: Text(
-                '${(_bagValue<num>(SettingsKeys.autoPauseSpeedMps)?.toDouble() ?? 0.8).toStringAsFixed(1)} m/s',
-              ),
-              trailing: const Icon(Icons.chevron_right),
-              enabled: _bagReady,
-              onTap: _editAutoPauseSpeed,
-            ),
-
             _sectionLabel('Training & demographics'),
             if (!_bagReady)
               const Padding(

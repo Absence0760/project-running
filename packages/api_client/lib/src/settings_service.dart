@@ -39,8 +39,6 @@ class SettingsKeys {
   static const weekStartDay = 'week_start_day';
   static const mapStyle = 'map_style';
   static const unitsPaceFormat = 'units_pace_format';
-  static const autoPauseEnabled = 'auto_pause_enabled';
-  static const autoPauseSpeedMps = 'auto_pause_speed_mps';
 
   // Device (D)
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';

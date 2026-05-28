@@ -44,8 +44,6 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `voice_feedback_enabled` | `bool` | D | `false` | Speak pace/distance callouts during a run. Device-scoped because mic/speaker availability differs. |
 | `voice_feedback_interval_km` | `double` | D | `1.0` | Interval in km between spoken callouts. |
 | `haptic_feedback_enabled` | `bool` | D | `true` | Vibration on lap + pace-zone changes. Watches only. |
-| `auto_pause_enabled` | `bool` | UD | `true` | Stop the clock when the user stops moving. Overridable per-device since auto-pause is less reliable on some hardware. |
-| `auto_pause_speed_mps` | `double` | UD | `0.8` | Threshold below which auto-pause engages. |
 | `keep_screen_on` | `bool` | D | `true` | Disable OS auto-dim while the running screen is visible. Phones only; watches use ambient mode. |
 | `map_style` | `'streets' \| 'satellite' \| 'outdoors' \| 'dark'` | UD | `streets` | MapLibre style for the map view. |
 | `units_pace_format` | `'min_per_km' \| 'min_per_mi' \| 'kph' \| 'mph'` | UD | `min_per_km` | Display format for pace. Independent of `preferred_unit` so users can keep km distances but pace in mph if they want — but the web preferences page will auto-snap `min_per_km` ↔ `min_per_mi` when the user flips `preferred_unit` so they don't have to update both. Speed formats (`kph`/`mph`) are treated as deliberate choices and are left alone. |
