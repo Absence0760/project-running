@@ -26,7 +26,10 @@
 	--color-border: #DDD5C5;
 	--color-text: #1F2328;
 	--color-text-secondary: #56616B;
-	--color-text-tertiary: #8A8E93;
+	/* >=4.5:1 (WCAG AA) against the worst-case (darkest) light surface tertiary
+	   text sits on — #EBE5D8 (--color-bg-tertiary). #8A8E93 was 2.63:1 there
+	   and failed; stays lighter than --color-text-secondary to keep hierarchy. */
+	--color-text-tertiary: #62666B;
 
 	/* Gradients */
 	--gradient-primary: linear-gradient(135deg, #2C5F6E 0%, #4F8090 50%, #F2A07B 100%);
@@ -125,7 +128,9 @@
 		--color-border: #3A2E5C;
 		--color-text: #F7F3EC;
 		--color-text-secondary: #B5ADC3;
-		--color-text-tertiary: #7E7692;
+		/* >=4.5:1 against the lightest dark surface (#241B3D). #7E7692 was
+		   3.77:1 there and failed AA. */
+		--color-text-tertiary: #9A93AE;
 
 		--gradient-primary: linear-gradient(135deg, #F2A07B 0%, #B9A7E8 50%, #6B4C8A 100%);
 		--gradient-surface: linear-gradient(135deg, rgba(242, 160, 123, 0.06) 0%, rgba(185, 167, 232, 0.06) 100%);
@@ -170,7 +175,8 @@
 	--color-border: #3A2E5C;
 	--color-text: #F7F3EC;
 	--color-text-secondary: #B5ADC3;
-	--color-text-tertiary: #7E7692;
+	/* >=4.5:1 against the lightest dark surface (#241B3D); see :root note. */
+	--color-text-tertiary: #9A93AE;
 
 	--gradient-primary: linear-gradient(135deg, #F2A07B 0%, #B9A7E8 50%, #6B4C8A 100%);
 	--gradient-surface: linear-gradient(135deg, rgba(242, 160, 123, 0.06) 0%, rgba(185, 167, 232, 0.06) 100%);
