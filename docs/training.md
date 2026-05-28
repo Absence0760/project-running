@@ -60,6 +60,7 @@ Pure TypeScript, no deps, 100% tested under `src/lib/training.test.ts` (20 tests
 
 - **VDOT from race** — Daniels' published formula: `vo2 = -4.6 + 0.182258v + 0.000104v²`, `pct = 0.8 + 0.1894393·e^(-0.012778T) + 0.2989558·e^(-0.1932605T)`, `VDOT = vo2 / pct`.
 - **Riegel equivalence** — `t2 = t1 × (d2/d1)^1.06` for projecting a recent 5K to the goal-race distance.
+- **Recent-5K recency gate** — both wizards (`PlanEditor.svelte`, `plan_new_screen.dart`) only pass the entered 5K time into `generatePlan` once the runner ticks a "reflects my current fitness" confirmation. An entered-but-unconfirmed time is treated as absent so paces fall back to the conservative goal-based estimate — a returning runner typing an old PR otherwise gets paces that are too fast (comeback persona #24, fail-closed default).
 - **Training paces** — 5 intensity zones (easy / marathon / tempo / interval / repetition) computed as multipliers of goal pace. See `pacesFromGoalPace` in the source.
 - **Plan generator** — `generatePlan({ goalEvent, goalTimeSec?, recent5kSec?, startDate, daysPerWeek, weeks? })` → `{ weeks, paces, vdot, endDate, goalDistanceM }`. Phase breakdown 30/40/20/10 base/build/peak/taper with the final week always 'race'. Step-back every 4th week. Long run grows with volume, capped at ~35% of the week.
 

@@ -32,6 +32,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
 
   int? _goalHours, _goalMinutes, _goalSeconds;
   int? _recent5kMin, _recent5kSec;
+  // Returning runners type an old PR; the engine would treat it as current
+  // fitness and prescribe paces that are too fast (injury risk — comeback
+  // persona #24). The time only anchors paces once confirmed current;
+  // otherwise paces stay on the conservative goal-based fallback.
+  bool _recent5kConfirmed = false;
   int? _weekOverride;
   bool _busy = false;
   String? _error;
@@ -72,6 +77,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     return (_recent5kMin ?? 0) * 60 + (_recent5kSec ?? 0);
   }
 
+  // Only anchor paces on the entered time once the runner confirms it's
+  // current; an entered-but-unconfirmed time is treated as absent.
+  int? get _recent5kApplied => _recent5kConfirmed ? _recent5kTotal : null;
+  bool get _recent5kNeedsConfirm => _recent5kTotal != null && !_recent5kConfirmed;
+
   GeneratedPlan? _preview() {
     try {
       return generatePlan(GeneratePlanInput(
@@ -79,7 +89,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         startDate: _startDate,
         daysPerWeek: _daysPerWeek,
         goalTimeSec: _goalTimeSec,
-        recent5kSec: _recent5kTotal,
+        recent5kSec: _recent5kApplied,
         weeks: _weekOverride,
         gender: _viewerGender,
       ));
@@ -103,7 +113,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         goalEvent: _goal,
         goalDistanceM: preview.goalDistanceM,
         goalTimeSec: _goalTimeSec,
-        recent5kSec: _recent5kTotal,
+        recent5kSec: _recent5kApplied,
         startDate: _startDate,
         daysPerWeek: _daysPerWeek,
         generated: preview,
@@ -247,6 +257,29 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               color: theme.colorScheme.outline,
             ),
           ),
+          if (_recent5kTotal != null)
+            CheckboxListTile(
+              value: _recent5kConfirmed,
+              onChanged: (v) => setState(() => _recent5kConfirmed = v ?? false),
+              dense: true,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text(
+                'This is a time I could run today — it reflects my current fitness.',
+              ),
+            ),
+          if (_recent5kNeedsConfirm)
+            Padding(
+              padding: const EdgeInsets.only(top: 4),
+              child: Text(
+                'Until you confirm, paces stay on the conservative goal-based '
+                'estimate. Anchoring on an old result can prescribe paces that '
+                'are too fast for a returning runner.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
           const SizedBox(height: 16),
           _numField(
             _weekOverrideCtrl,

@@ -70,6 +70,11 @@
 
 	let recent5kMin = $state<number | null>(null);
 	let recent5kSec = $state<number | null>(null);
+	// Returning runners type an old PR; the engine would treat it as current
+	// fitness and prescribe paces that are too fast (injury risk — comeback
+	// persona #24). The time only anchors paces once the runner confirms it
+	// reflects current fitness; otherwise we fall back to goal-based paces.
+	let recent5kConfirmed = $state(false);
 
 	let weekOverride = $state<number | null>(null);
 	let busy = $state(false);
@@ -154,6 +159,11 @@
 			? (recent5kMin ?? 0) * 60 + (recent5kSec ?? 0)
 			: null
 	);
+	// Only anchor paces on the entered time once the runner confirms it's
+	// current. An entered-but-unconfirmed time is treated as absent so paces
+	// stay on the conservative goal-based fallback.
+	let recent5kApplied = $derived(recent5kConfirmed ? recent5kTotal : null);
+	let recent5kNeedsConfirm = $derived(recent5kTotal != null && !recent5kConfirmed);
 
 	// Re-generate the editable plan whenever any input that drives
 	// generation changes. Replaces the previous $derived preview so we
@@ -161,7 +171,7 @@
 	// until they touch a top-level input again.
 	$effect(() => {
 		// Read every input we care about so the effect tracks them.
-		void [goalEvent, goalDistance, goalTimeSec, recent5kTotal, startDate, daysPerWeek, weeks, viewerGender];
+		void [goalEvent, goalDistance, goalTimeSec, recent5kApplied, startDate, daysPerWeek, weeks, viewerGender];
 		if (!startDate) {
 			plan = null;
 			return;
@@ -171,7 +181,7 @@
 				goalEvent,
 				goalDistanceM: goalDistance,
 				goalTimeSec,
-				recent5kSec: recent5kTotal,
+				recent5kSec: recent5kApplied,
 				startDate,
 				daysPerWeek,
 				weeks,
@@ -250,7 +260,7 @@
 				goalEvent,
 				goalDistanceM: goalDistance,
 				goalTimeSec,
-				recent5kSec: recent5kTotal,
+				recent5kSec: recent5kApplied,
 				startDate,
 				daysPerWeek,
 				generated: plan!,
@@ -334,6 +344,19 @@
 					<span>:</span>
 					<input type="number" min="0" max="59" bind:value={recent5kSec} placeholder="s" />
 				</div>
+				{#if recent5kTotal != null}
+					<label class="confirm-recent">
+						<input type="checkbox" bind:checked={recent5kConfirmed} />
+						<span>This is a time I could run today — it reflects my current fitness.</span>
+					</label>
+				{/if}
+				{#if recent5kNeedsConfirm}
+					<p class="hint warn" role="status">
+						Until you confirm, paces stay on the conservative goal-based estimate.
+						Anchoring on an old result can prescribe paces that are too fast for a
+						returning runner.
+					</p>
+				{/if}
 			</fieldset>
 
 			<label>
@@ -545,6 +568,23 @@
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
 		margin-bottom: 0.4rem;
+	}
+	/* Full-contrast text (not --color-warning, which is a light accent that
+	   fails AA as body text on the cream surface); emphasis carries "warning". */
+	.hint.warn {
+		color: var(--color-text);
+		font-weight: 500;
+	}
+	.confirm-recent {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		margin-top: 0.5rem;
+		font-size: 0.85rem;
+		font-weight: 400;
+	}
+	.confirm-recent input {
+		margin-top: 0.15rem;
 	}
 	.time-row {
 		display: flex;

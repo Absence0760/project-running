@@ -44,4 +44,55 @@ void main() {
       expect(find.text('Create plan'), findsOneWidget);
     });
   });
+
+  group('PlanNewScreen — recent-5K recency gate (comeback persona #24)', () {
+    final warnFinder = find.textContaining('too fast for a returning runner');
+    final confirmFinder = find.textContaining('reflects my current fitness');
+
+    testWidgets('no confirm checkbox or warning until a 5K time is entered',
+        (tester) async {
+      await _pump(tester);
+      await tester.pump();
+      expect(confirmFinder, findsNothing);
+      expect(warnFinder, findsNothing);
+    });
+
+    testWidgets('entering a 5K time surfaces the confirm box + warning',
+        (tester) async {
+      // Reason: a returning runner typing an old PR must be told the time
+      // isn't trusted until confirmed, and that unconfirmed leaves paces on
+      // the conservative goal-based estimate — otherwise the engine would
+      // prescribe dangerously fast paces.
+      await _pump(tester);
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.widgetWithText(TextField, 'min').last,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'min').last, '22');
+      await tester.pump();
+      expect(confirmFinder, findsOneWidget);
+      expect(warnFinder, findsOneWidget);
+    });
+
+    testWidgets('ticking the confirm box clears the warning', (tester) async {
+      await _pump(tester);
+      await tester.pump();
+      await tester.scrollUntilVisible(
+        find.widgetWithText(TextField, 'min').last,
+        200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.enterText(find.widgetWithText(TextField, 'min').last, '22');
+      await tester.pump();
+      // Tap the tile title (the raw Checkbox sits below the fold); the
+      // CheckboxListTile toggles from a tap anywhere on the tile.
+      await tester.ensureVisible(confirmFinder);
+      await tester.pump();
+      await tester.tap(confirmFinder);
+      await tester.pump();
+      expect(warnFinder, findsNothing);
+    });
+  });
 }
