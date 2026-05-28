@@ -1,8 +1,38 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
+	import { auth } from '$lib/stores/auth.svelte';
+	import { supabase } from '$lib/supabase';
 
 	type Tab = { href: string; label: string; icon: string };
 	type Section = { label: string; tabs: Tab[] };
+
+	// "Finish setup" nudge — shows when a user who skipped fields
+	// during the /onboarding wizard hasn't filled them in since. The
+	// onboarded_at column is already populated (the wizard stamps it
+	// on Finish OR Skip-onboarding so the gate doesn't re-trigger),
+	// so we detect the fields directly. Conservative: only checks
+	// the highest-impact unset values so we don't badger users who
+	// deliberately left optional fields blank.
+	let unsetFields = $state<string[]>([]);
+	onMount(async () => {
+		if (!auth.user) return;
+		const checks: string[] = [];
+		if (!auth.user.display_name) checks.push('display name');
+		try {
+			const { data } = await supabase
+				.from('user_settings')
+				.select('prefs')
+				.eq('user_id', auth.user.id)
+				.maybeSingle();
+			const p = (data?.prefs ?? {}) as Record<string, unknown>;
+			if (!p.body_weight_kg) checks.push('body weight (for calorie estimates)');
+			if (!p.privacy_default) checks.push('default visibility for new runs');
+		} catch (_) {
+			/* L4 — if the read fails, just don't surface the nudge. */
+		}
+		unsetFields = checks;
+	});
 
 	const sections: Section[] = [
 		{
@@ -52,6 +82,15 @@
 		{/each}
 	</nav>
 	<div class="settings-content">
+		{#if unsetFields.length > 0}
+			<aside class="finish-setup">
+				<span class="material-symbols">info</span>
+				<div class="finish-setup-text">
+					<strong>Finish setting up</strong>
+					<span>You skipped {unsetFields.join(', ')} during onboarding. Fill them in below for better calibration + the right defaults.</span>
+				</div>
+			</aside>
+		{/if}
 		<slot />
 	</div>
 </div>
@@ -117,6 +156,26 @@
 		flex: 1;
 		min-width: 0;
 	}
+	.finish-setup {
+		display: flex;
+		gap: 0.65rem;
+		align-items: flex-start;
+		margin: var(--space-lg) var(--space-2xl) 0;
+		padding: var(--space-md);
+		background: color-mix(in srgb, var(--color-primary) 7%, transparent);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 25%, transparent);
+		border-radius: var(--radius-md);
+		font-size: 0.85rem;
+	}
+	.finish-setup .material-symbols {
+		font-size: 1.2rem;
+		color: var(--color-primary);
+		flex-shrink: 0;
+		margin-top: 0.1rem;
+	}
+	.finish-setup-text { display: flex; flex-direction: column; gap: 0.2rem; }
+	.finish-setup-text strong { font-weight: 600; }
+	.finish-setup-text span { color: var(--color-text-secondary); line-height: 1.45; }
 	.material-symbols {
 		font-family: 'Material Symbols Outlined', system-ui;
 		font-weight: normal;

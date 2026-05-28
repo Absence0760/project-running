@@ -17,6 +17,14 @@ interface User {
 	/// global "Update your card to keep Pro" banner so the user can
 	/// fix the card before the grace period exhausts.
 	billing_issue_at: string | null;
+	/// ISO timestamp stamped when the post-signup onboarding wizard
+	/// either completes or is dismissed. Null = user has not yet
+	/// seen / dismissed the wizard. Migration 20261016_001
+	/// backfilled every existing row to `now()` so the wizard never
+	/// shows up retroactively — only new signups land with null.
+	/// The auth-shell layout reads this to decide whether to
+	/// redirect to /onboarding on login.
+	onboarded_at: string | null;
 }
 
 function createAuthStore() {
@@ -82,10 +90,13 @@ function createAuthStore() {
 				preferred_unit: profile.preferred_unit ?? 'km',
 				subscription_tier: profile.subscription_tier ?? 'free',
 				billing_issue_at: profile.billing_issue_at ?? null,
+				onboarded_at: profile.onboarded_at ?? null,
 			};
 			setUnit(user.preferred_unit);
 		} else {
-			// Profile doesn't exist yet — create it
+			// Profile doesn't exist yet — create it. `onboarded_at`
+			// stays null so the layout's gate routes the new user to
+			// /onboarding.
 			await supabase.from('user_profiles').upsert({
 				id: userId,
 				preferred_unit: 'km',
@@ -100,6 +111,7 @@ function createAuthStore() {
 				preferred_unit: 'km',
 				subscription_tier: 'free',
 				billing_issue_at: null,
+				onboarded_at: null,
 			};
 			setUnit('km');
 		}

@@ -1723,6 +1723,44 @@ Sources:
 
 ---
 
+## 78. Post-signup onboarding wizard at `/onboarding` — step-by-step, skippable per step, gated by `user_profiles.onboarded_at`
+
+New-runner persona's #1 finding-area was "after sign-up the persona is dropped at an empty dashboard with no guidance." Existing apps (Garmin Connect, Strava, Apple Fitness) all walk new users through a 6-10 question setup before letting them reach the dashboard. We didn't, and the new-runner persona will bounce inside the first session as a result.
+
+What we added:
+
+- Migration `20261016_001` adds `user_profiles.onboarded_at timestamptz` (nullable) + backfills every existing row with `now()`. No retroactive re-onboarding.
+- `/onboarding/+page.svelte` walks through 7 steps: display name, units, primary goal, optional demographics (gender + DOB + weight with Art 9 consent), privacy default, push notifications, done.
+- Layout-level gate (`apps/web/src/routes/+layout.svelte`): a signed-in user with `onboarded_at = null` lands on `/onboarding` from any protected route. `/onboarding` is shell-less (no sidebar) so the wizard owns the whole viewport.
+- Skippable per step (each step except step 1/2/5/7 has a Skip button) AND fully dismissible (the header carries a `Skip onboarding` link). Either path stamps `onboarded_at = now()` so the gate never re-fires.
+- Settings layout shows a small "Finish setting up" nudge for users who left display_name, body_weight_kg, or privacy_default unset.
+
+Why these specific choices:
+
+- **Step-by-step, not single-page.** Lower per-step cognitive load. The new-runner persona is overwhelmed by choice; a Garmin-style "one question per screen" is the right shape for them. The trade-off is more taps for an experienced migrant, but the Skip-onboarding link + the auto-skip for existing users mean the migrant never sees the wizard anyway.
+- **Per-step skip, not single big skip.** A skippable-as-block flow gets dismissed in 1 tap by users who'd actually answer 4 of the 6 questions if asked individually. The per-step pattern collects more data without forcing it.
+- **Existing users auto-skip.** Backfilling `onboarded_at = now()` in the migration is the cleanest implementation. The alternative (showing every existing user the wizard on next login) would feel like re-onboarding to users who've been using the app for months.
+- **`onboarded_at` on `user_profiles`, not in `user_settings.prefs`.** The auth-shell layout reads it on every login to decide the gate; `user_profiles` is already part of the post-login bootstrap (via `get_my_profile`), `user_settings` is loaded lazily. Putting the gate in the lazy bag would mean a flash-of-dashboard-then-redirect.
+- **Gender + DOB persist only with Art 9 consent.** Same shape as `/settings/preferences`. The consent checkbox renders only when one of the two fields has a value, so users who pick "prefer not to say" + leave DOB blank never see the consent prompt at all.
+- **Push notifications are last.** Browser permission prompts are interrupt-the-user surfaces; landing it on the second-to-last step gives the user context for why we're asking, vs. asking on step 1 before they have any investment in the app.
+
+Don't re-litigate by:
+
+- Adding more required fields. The wizard's job is to lower the empty-dashboard pain, not to capture every possible profile field. Anything beyond the 7 steps belongs in Settings.
+- Showing the wizard to existing users. The backfill is the explicit contract that says "they're already past it conceptually." If a future schema change adds a new required field, prompt for it in-context (banner on the surface that needs it), not by re-running onboarding.
+- Forcing notification permission. The new-runner persona will deny + uninstall if pushed. Soft-ask only.
+
+Pinning tests:
+
+- `apps/web/src/lib/onboarding.test.ts` — 4 unit tests on the goal-key + label map + step count.
+- `apps/web/tests-e2e/onboarding/wizard.spec.ts` — 4 e2e tests: existing user passes through, gate redirects null user, Skip-onboarding stamps the column, full step-by-step writes the four target fields + stamps the column.
+- `apps/web/tests-e2e/auth/login.spec.ts` — updated the happy-path signup assertion to expect `/onboarding` instead of the dashboard sidebar (the new routing handoff).
+- `apps/web/tests-e2e/fixtures/saga-users.ts` — updated to upsert `onboarded_at = now()` so saga users (programmatically minted, not real signups) skip the wizard and existing saga-based specs continue to land on /dashboard.
+
+Mobile (Flutter Android + iOS twin) follows per the canonical-surface rule (decisions §24). The Dart twin will mirror the same 7-step shape + the same `onboarded_at` gate; deferred to a follow-up commit so the web shape can settle first.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

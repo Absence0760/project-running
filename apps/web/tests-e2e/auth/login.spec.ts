@@ -74,17 +74,19 @@ test.describe('/login', () => {
 
 			await submit.click();
 
-			// Successful sign-up triggers refreshSession() then goto('/dashboard').
-			// Don't assert on dashboard chrome — for a brand-new user with
-			// no runs / no goal, /dashboard renders an extended loading
-			// shell while the empty-state derivations resolve. The URL
-			// transition is the contract: signUp() → session minted →
-			// goto('/dashboard') fired (a redirect back to /login on a
-			// failed signUp would mean the test broke). Sidebar nav
-			// rendering is a separate proxy that the auth state lifted.
+			// Successful sign-up triggers refreshSession() then
+			// goto('/dashboard'). Migration 20261016_001 added the
+			// `onboarded_at` column + the layout-level gate routes new
+			// users to /onboarding before they reach /dashboard — so a
+			// fresh signup lands on /onboarding, not /dashboard. Assert
+			// the URL transition off /login + onto /onboarding as the
+			// signup-success contract. The wizard's behaviour itself is
+			// pinned in `tests-e2e/onboarding/wizard.spec.ts`; here we
+			// only verify the routing handoff fired.
+			await page.waitForURL(/\/onboarding/, { timeout: 10_000 });
 			await expect(
-				page.getByRole('link', { name: /Dashboard/ }).first()
-			).toBeVisible({ timeout: 10_000 });
+				page.getByRole('heading', { name: /What should we call you/i })
+			).toBeVisible({ timeout: 5_000 });
 
 			// Capture the new auth.users.id for cleanup.
 			const admin = getAdminClient();

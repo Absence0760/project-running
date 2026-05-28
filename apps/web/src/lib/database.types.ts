@@ -1889,6 +1889,7 @@ export type Database = {
           gender: string | null
           health_data_consent_at: string | null
           id: string
+          onboarded_at: string | null
           parkrun_number: string | null
           preferred_unit: string | null
           subscription_at: string | null
@@ -1906,6 +1907,7 @@ export type Database = {
           gender?: string | null
           health_data_consent_at?: string | null
           id: string
+          onboarded_at?: string | null
           parkrun_number?: string | null
           preferred_unit?: string | null
           subscription_at?: string | null
@@ -1923,6 +1925,7 @@ export type Database = {
           gender?: string | null
           health_data_consent_at?: string | null
           id?: string
+          onboarded_at?: string | null
           parkrun_number?: string | null
           preferred_unit?: string | null
           subscription_at?: string | null
@@ -2407,6 +2410,7 @@ export type Database = {
           gender: string | null
           health_data_consent_at: string | null
           id: string
+          onboarded_at: string | null
           parkrun_number: string | null
           preferred_unit: string | null
           subscription_at: string | null

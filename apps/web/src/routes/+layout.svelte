@@ -106,7 +106,14 @@
 	// of the /auth/* flows — a post-OAuth user landing on the consent
 	// gate should see the focused card, not the dashboard sidebar.
 	// /audit/owasp May 2026 Low #8.
-	const shellLessExact = ['/', '/login', '/auth/callback', '/auth/reset', '/auth/confirm-age'];
+	const shellLessExact = [
+		'/',
+		'/login',
+		'/auth/callback',
+		'/auth/reset',
+		'/auth/confirm-age',
+		'/onboarding',
+	];
 	const isShellless = (path: string) =>
 		shellLessExact.includes(path) ||
 		path.startsWith('/share/') ||
@@ -152,6 +159,24 @@
 			const isDefault = returnTo === '/dashboard' || returnTo === '/';
 			goto(isDefault ? '/login' : `/login?return_to=${encodeURIComponent(returnTo)}`);
 		}
+	});
+
+	// Onboarding gate — a signed-in user whose `user_profiles.onboarded_at`
+	// is still null (= they're a fresh signup that hasn't seen the wizard
+	// yet) gets routed to /onboarding. Migration 20261016_001 backfilled
+	// every existing row with `now()` so this only catches the new-signup
+	// case. Skipped on the shell-less / anon-allowed surfaces so a /login,
+	// /share/run/<id>, or /privacy view doesn't bounce a half-onboarded
+	// user out of where they meant to go. Also a no-op when already on
+	// /onboarding (the page is shell-less; we don't want a loop).
+	$effect(() => {
+		if (!browser) return;
+		if (auth.loading || !auth.loggedIn || !auth.user) return;
+		if (auth.user.onboarded_at != null) return;
+		const path = $page.url.pathname;
+		if (path === '/onboarding') return;
+		if (isAnonAllowed(path)) return;
+		goto('/onboarding');
 	});
 
 	let showLogoutModal = $state(false);

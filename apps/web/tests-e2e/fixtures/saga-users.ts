@@ -79,7 +79,14 @@ export async function createSagaUsers(
 					id,
 					display_name: displayName,
 					preferred_unit: 'km',
-					subscription_tier: 'free'
+					subscription_tier: 'free',
+					// Saga users are programmatically minted, not real
+					// signups — skip the /onboarding wizard so existing
+					// tests that wait for /dashboard or /runs aren't
+					// redirected away. The wizard's own e2e spec mints
+					// a separate saga user with onboarded_at: null to
+					// exercise the gate.
+					onboarded_at: new Date().toISOString()
 				});
 			if (profileError) {
 				throw new Error(
