@@ -151,5 +151,22 @@ void main() {
       expect(find.text('49.8'), findsOneWidget);
       expect(find.text('VDOT'), findsOneWidget);
     });
+
+    testWidgets('wraps in a Tooltip when a plain-English message is given (#25)',
+        (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: Scaffold(
+            body: FitnessStat(
+              label: 'VDOT',
+              value: '49.8',
+              tooltip: 'Running-fitness score from your best recent effort.',
+            ),
+          ),
+        ),
+      );
+      final tip = tester.widget<Tooltip>(find.byType(Tooltip));
+      expect(tip.message, contains('Running-fitness score'));
+    });
   });
 }

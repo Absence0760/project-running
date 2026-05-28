@@ -44,11 +44,23 @@ class FitnessCard extends StatelessWidget {
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    FitnessStat(label: 'VO₂ max', value: fmt(snapshot.vo2Max)),
-                    FitnessStat(label: 'VDOT', value: fmt(snapshot.vdot)),
+                    FitnessStat(
+                      label: 'VO₂ max',
+                      value: fmt(snapshot.vo2Max),
+                      tooltip:
+                          'Your aerobic engine: how much oxygen your body can use per minute. Higher is fitter.',
+                    ),
+                    FitnessStat(
+                      label: 'VDOT',
+                      value: fmt(snapshot.vdot),
+                      tooltip:
+                          "Daniels' running-fitness score from your best recent race effort. Drives your training paces.",
+                    ),
                     FitnessStat(
                       label: 'Runs',
                       value: '${snapshot.qualifyingRunCount}',
+                      tooltip:
+                          'Recent runs long enough to count toward your fitness estimate.',
                     ),
                   ],
                 ),
@@ -59,14 +71,20 @@ class FitnessCard extends StatelessWidget {
                     FitnessStat(
                       label: 'Fitness (CTL)',
                       value: fmt(snapshot.chronicLoad, digits: 0),
+                      tooltip:
+                          'Your rolling 42-day training load. Builds slowly; this is your endurance base.',
                     ),
                     FitnessStat(
                       label: 'Fatigue (ATL)',
                       value: fmt(snapshot.acuteLoad, digits: 0),
+                      tooltip:
+                          'Your last 7 days of load. Rises fast after hard sessions and drops with rest.',
                     ),
                     FitnessStat(
                       label: 'Form (TSB)',
                       value: fmt(snapshot.trainingStressBal, digits: 0),
+                      tooltip:
+                          'Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.',
                     ),
                   ],
                 ),
@@ -111,12 +129,21 @@ class FitnessCard extends StatelessWidget {
 class FitnessStat extends StatelessWidget {
   final String label;
   final String value;
-  const FitnessStat({super.key, required this.label, required this.value});
+
+  /// Optional plain-English explanation of the metric. When set, long-press
+  /// (or the semantics tooltip) explains the acronym for newer runners (#25).
+  final String? tooltip;
+  const FitnessStat({
+    super.key,
+    required this.label,
+    required this.value,
+    this.tooltip,
+  });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Column(
+    final column = Column(
       children: [
         Text(value,
             style: theme.textTheme.headlineMedium?.copyWith(
@@ -128,6 +155,12 @@ class FitnessStat extends StatelessWidget {
               color: theme.colorScheme.outline,
             )),
       ],
+    );
+    if (tooltip == null) return column;
+    return Tooltip(
+      message: tooltip!,
+      triggerMode: TooltipTriggerMode.longPress,
+      child: column,
     );
   }
 }

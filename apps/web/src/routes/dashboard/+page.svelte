@@ -931,7 +931,10 @@
 		{#if liveSnap.vo2Max != null || liveSnap.chronicLoad != null}
 			<section class="fitness-card">
 				<div class="fitness-row">
-					<div class="fitness-metric">
+					<div
+						class="fitness-metric"
+						title="VO₂ max — your aerobic engine: how much oxygen your body can use per minute. Higher is fitter."
+					>
 						<span class="fitness-label">VO₂ max</span>
 						<span class="fitness-value">
 							{liveSnap.vo2Max != null ? liveSnap.vo2Max.toFixed(1) : '—'}
@@ -939,19 +942,28 @@
 						<span class="fitness-unit">ml/kg/min</span>
 					</div>
 					{#if liveSnap.chronicLoad != null}
-						<div class="fitness-metric">
+						<div
+							class="fitness-metric"
+							title="Fitness (CTL) — your rolling 42-day training load. Builds slowly; this is your endurance base."
+						>
 							<span class="fitness-label">CTL (fitness)</span>
 							<span class="fitness-value">{liveSnap.chronicLoad.toFixed(0)}</span>
 							<span class="fitness-unit">42-day avg TSS</span>
 						</div>
-						<div class="fitness-metric">
+						<div
+							class="fitness-metric"
+							title="Fatigue (ATL) — your last 7 days of load. Rises fast after hard sessions and drops with rest."
+						>
 							<span class="fitness-label">ATL (fatigue)</span>
 							<span class="fitness-value">
 								{liveSnap.acuteLoad != null ? liveSnap.acuteLoad.toFixed(0) : '—'}
 							</span>
 							<span class="fitness-unit">7-day avg TSS</span>
 						</div>
-						<div class="fitness-metric">
+						<div
+							class="fitness-metric"
+							title="Form (TSB) — fitness minus fatigue. Positive means fresh and race-ready; negative means you're carrying fatigue."
+						>
 							<span class="fitness-label">TSB (form)</span>
 							<span
 								class="fitness-value"
