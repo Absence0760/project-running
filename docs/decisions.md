@@ -2191,6 +2191,46 @@ Pinning: [`docs/custom_watch/roadmap.md`](custom_watch/roadmap.md) OQ8 removed; 
 
 ---
 
+## 90. BOM refresh 2026-05-28 — Apollo510B + BMP581 swap-ins; supply alternates qualified
+
+Audit pass on 2026-05-28 against current (May 2026) component availability flagged three categories of BOM staleness:
+
+1. **Apollo4 Blue Plus is now last-gen.** Ambiq shipped Apollo510 (Sep 2024) and Apollo510B (Sep 2025): Cortex-M55 + Helium MVE @ 250 MHz, 4 MB MRAM, 3.75 MB SRAM, **~2× lower energy + ~10× lower latency vs Apollo4 family**, plus secureSPOT 3.0 security stack. Apollo510B specifically adds an integrated 48 MHz BLE 5.4 network processor — the like-for-like replacement for "Apollo4 Blue Plus." Lower-cost Apollo510 Lite family is sampling now with volume Q1 2026. AP510EVB is on Digi-Key.
+2. **BMP390 is meaningfully outclassed.** Bosch BMP581 (capacitive vs piezoresistive) ships **~85% lower current** (1.3 µA @ 1 Hz vs ~3 µA), 80% lower noise, 33% lower temperature coefficient, 0.5 µA deep standby, ±0.1 hPa / 12-month drift. For an ultra watch where the altimeter is sampled continuously to drive elevation-gain math, this is the second-biggest perf swap available.
+3. **Supply / sourcing risk shifted** since the BOM was first written: JDI's Mobara LCD fab is closing in March 2026 (Sharp Memory LCD substrate supply contracting); NOR/NAND flash 6–9 month lead times in 2025–2026.
+
+**Decision.** Refresh the tier-2/3 BOM with:
+
+- **MCU:** Apollo4 Blue Plus → **Ambiq Apollo510B** (production target). The tier-1 stand-in (Nordic nRF52840 DK) is unaffected — that choice is tier-1-specific per [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) and stays as the bench-prototype board.
+- **Barometer:** BMP390 → **Bosch BMP581**. Drop the stale "BMP581 newer but BMP390 equally accurate" line from `bom.md`; it's now factually wrong.
+- **OHR upgrade path documented:** keep MAX86177 as the PPG-only pick. **MAX86178** (PPG + ECG + BioZ + IEC 60601-2-47-compliant ECG channel) noted as the upgrade path for a future ECG-capable SKU.
+- **GNSS alt clarified:** keep Sony CXD5610 as the production pick; replace the vague "u-blox dual-band wearable part" alt with the specific **Airoha AG3335M** (12 nm L1+L5; powers some Garmin/COROS-tier watches; Quectel LC29H is built on it). u-blox ZED-X20P intentionally NOT listed — that part targets industrial / UAV / robotics; power envelope is wrong for wrist.
+- **Display backup:** keep Sharp LS013B7DH06 as the production pick. **Qualify LS027B7DH01 as the backup** in case the LS013 line goes NRND post-Mobara closure. Action: request a Sharp lifecycle letter before tier-2 case-CAD tooling spend (~$30–80k commitment to a specific size).
+- **NAND second source:** keep 16 GB SPI NAND class (Macronix MX25R / Winbond W25Q). **Add GigaDevice GD5F as a qualified second-source** at PCB design time so a 2026 allocation event doesn't stall a tier-2 build.
+- **Battery:** hold Li-Po; silicon-anode pouches (>900 Wh/L) are commercial but only at sizes too large for wrist. Tier-3+ refresh consideration only.
+
+Why this is § 86-driven (and not over-eager updating):
+
+- **Apollo4 → Apollo510B is well above the 5% margin** — ~2× lower energy on the same workload directly translates to materially more battery life on the MCU-active portion of the budget. For a watch whose competitive position hinges on battery, locking in a year-old part on a 3-year product is the trade [§ 86](#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) says to reject.
+- **BMP390 → BMP581 is ~85% lower current.** Altimeter is sampled continuously (every GPS fix + storm-detection background loop); cumulative power saving over a 100-hour battery target is real, not rounding error.
+- **Supply-chain alternates** (Sharp backup, Airoha GNSS alt, GigaDevice NAND second-source) are not perf swaps — they're risk mitigation for a multi-year program where component allocation can stall a build for months. § 86 doesn't strictly require these but the marginal effort is small and the downside protection is meaningful.
+
+What this commits us to:
+
+- [`docs/custom_watch/bom.md`](custom_watch/bom.md) updated: MCU + Baro swaps land in the spec; GNSS/Display/NAND/OHR alternates added; the "equally accurate" line on BMP581 fixed.
+- [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #1 updated: "Low-power MCU (Ambiq Apollo4 / Nordic nRF5340)" → references Apollo510B for production + nRF52840 for tier-1 stand-in.
+- **No change to [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) or the tier-1 scaffold** — Apollo510B is a tier-2+ production part; tier-1 stays on nRF52840 because that's where the Embassy + `nrf-softdevice` ecosystem is mature today.
+
+Don't re-litigate by:
+
+- **Bumping back to Apollo4 because "the Apollo510 SDK is less mature."** Apollo510B has been in volume since Q4 2025; the Ambiq SDK + HAL support is current. Locking in last-gen silicon for a tier-3 product that ships in 2027+ is exactly the asymmetric-competitiveness loss § 86 names.
+- **Bumping to Apollo510 Lite to save BOM cost at launch.** The Lite series drops some peripherals; the BLE 5.4 + integrated network processor on the Apollo510B is precisely what makes it a drop-in for "Apollo4 Blue Plus." Lite as a future cost-down is fine; not as the launch SKU.
+- **Skipping the Sharp lifecycle letter "because Sharp Memory LCD is the de facto standard."** Mobara closure is the warning shot; a single-source on the most-visible component of the watch with a year-and-a-half tier-2 timeline is the recipe for a build-blocking surprise.
+
+Pinning: [`docs/custom_watch/bom.md`](custom_watch/bom.md) MCU + GNSS + OHR + Baro + External storage + Display sections updated. [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #1 updated. [§ 80](#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) tier-1 firmware decision unchanged. [§ 85](#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu-16-gb-external-nand-flash) 16 GB external NAND class unchanged.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
