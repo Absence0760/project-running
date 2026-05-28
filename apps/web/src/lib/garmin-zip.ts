@@ -193,6 +193,7 @@ async function importFitFile(
 	if (parsed.avg_bpm != null) metadata.avg_bpm = parsed.avg_bpm;
 	if (parsed.max_bpm != null) metadata.max_bpm = parsed.max_bpm;
 	if (parsed.laps.length > 0) metadata.laps = parsed.laps;
+	if (parsed.indoor) metadata.indoor = true;
 
 	await saveRun({
 		started_at: parsed.startedAt,

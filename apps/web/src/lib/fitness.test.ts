@@ -18,6 +18,7 @@ function r(partial: {
 	distance_m: number;
 	duration_s: number;
 	source?: Run['source'];
+	metadata?: Record<string, unknown> | null;
 }): Run {
 	return {
 		id: 'r' + partial.started_at,
@@ -34,7 +35,7 @@ function r(partial: {
 		is_public: null,
 		created_at: null,
 		updated_at: null,
-		metadata: null,
+		metadata: partial.metadata ?? null,
 	} as unknown as Run;
 }
 
@@ -52,6 +53,18 @@ test('qualifyingRuns — drops sub-5min runs (sprint efforts)', () => {
 	const longEnough = r({ started_at: '2026-04-01T07:00:00Z', distance_m: 5000, duration_s: 1500 });
 	const tooShort = r({ started_at: '2026-04-02T07:00:00Z', distance_m: 5000, duration_s: 200 });
 	assert.deepEqual(qualifyingRuns([longEnough, tooShort]), [longEnough]);
+});
+
+test('qualifyingRuns — drops indoor/treadmill runs (belt distance is not VDOT-worthy)', () => {
+	const outdoor = r({ started_at: '2026-04-01T07:00:00Z', distance_m: 5000, duration_s: 1500 });
+	const treadmill = r({
+		started_at: '2026-04-02T07:00:00Z',
+		distance_m: 5000,
+		duration_s: 1500,
+		source: 'garmin',
+		metadata: { indoor: true }
+	});
+	assert.deepEqual(qualifyingRuns([outdoor, treadmill]), [outdoor]);
 });
 
 test('qualifyingRuns — accepts every recognised source, drops others', () => {

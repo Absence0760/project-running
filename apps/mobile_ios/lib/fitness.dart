@@ -39,12 +39,14 @@ class FitnessSnapshot {
 }
 
 /// Qualifying runs for fitness math: an actual recording or reliable
-/// import, distance >= 3 km, duration >= 5 min.
+/// import, distance >= 3 km, duration >= 5 min. Indoor / treadmill runs are
+/// excluded — belt-/estimate-derived distance must not feed VDOT (#16).
 List<Run> qualifyingRuns(Iterable<Run> runs) {
   return [
     for (final r in runs)
       if (r.distanceMetres >= 3000 &&
           r.duration.inSeconds >= 300 &&
+          r.metadata?['indoor'] != true &&
           (r.source == RunSource.app ||
               r.source == RunSource.watch ||
               r.source == RunSource.strava ||

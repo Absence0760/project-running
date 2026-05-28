@@ -7,6 +7,7 @@ Run _r({
   required int durationS,
   DateTime? startedAt,
   RunSource source = RunSource.app,
+  Map<String, dynamic>? metadata,
 }) =>
     Run(
       id: 'r${distance.toInt()}-${durationS}',
@@ -15,6 +16,7 @@ Run _r({
       distanceMetres: distance,
       track: const [],
       source: source,
+      metadata: metadata,
     );
 
 void main() {
@@ -36,6 +38,22 @@ void main() {
       expect(v, isNotNull);
       // VDOT for 3:30 marathon sits in the mid-40s.
       expect(v!, inInclusiveRange(42, 48));
+    });
+  });
+
+  group('qualifyingRuns', () {
+    test('drops indoor/treadmill runs (belt distance is not VDOT-worthy)', () {
+      // Mirrors the indoor-exclusion test in fitness.test.ts.
+      final outdoor = _r(distance: 5000, durationS: 1500);
+      final treadmill = _r(
+        distance: 5000,
+        durationS: 1500,
+        source: RunSource.garmin,
+        metadata: {'indoor': true},
+      );
+      final qualifying = qualifyingRuns([outdoor, treadmill]);
+      expect(qualifying, hasLength(1));
+      expect(qualifying.first.id, outdoor.id);
     });
   });
 

@@ -83,6 +83,9 @@ export interface ParsedFitRun {
 	/// Canonical per-lap deltas from the FIT `lap` messages. Empty when
 	/// the file has no real laps (single whole-activity lap).
 	laps: FitLap[];
+	/// True for treadmill / indoor / virtual sessions — distance is
+	/// belt-/estimate-derived, not GPS, so it must not feed VDOT (#16).
+	indoor: boolean;
 	track: TrackPoint[];
 }
 
@@ -149,6 +152,11 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 
 	const sport = (session.sport ?? '').toLowerCase();
 	const subSport = ((session as { sub_sport?: string }).sub_sport ?? '').toLowerCase();
+	const indoor =
+		subSport.includes('treadmill') ||
+		subSport.includes('indoor') ||
+		subSport.includes('virtual') ||
+		sport.includes('treadmill');
 	let activityType: ParsedFitRun['activity_type'] = null;
 	if (sport === 'running' || subSport.includes('run')) activityType = 'run';
 	else if (sport === 'walking' || subSport.includes('walk')) activityType = 'walk';
@@ -183,6 +191,7 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 			typeof session.total_ascent === 'number' ? Math.round(session.total_ascent) : null,
 		garmin_file_id: garminFileId && garminFileId !== '-' ? garminFileId : null,
 		laps: buildCanonicalLaps(data.laps as RawFitLap[] | undefined),
+		indoor,
 		track,
 	};
 }

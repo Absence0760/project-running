@@ -32,12 +32,15 @@ export interface FitnessSnapshot {
 
 /// Qualifying runs for fitness math: source is an actual recording or
 /// reliable import, distance is >= 3 km (shorter runs are too noisy),
-/// duration / distance both sane.
+/// duration / distance both sane. Indoor / treadmill runs are excluded —
+/// their distance is belt-/estimate-derived, not measured, so feeding it to
+/// VDOT inflates the runner's fitness ceiling (#16).
 export function qualifyingRuns(runs: Run[]): Run[] {
 	return runs.filter(
 		(r) =>
 			r.distance_m >= 3000 &&
 			r.duration_s >= 300 &&
+			(r.metadata as Record<string, unknown> | null)?.indoor !== true &&
 			(r.source === 'app' ||
 				r.source === 'watch' ||
 				r.source === 'strava' ||
