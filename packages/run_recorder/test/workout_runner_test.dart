@@ -75,6 +75,38 @@ void main() {
       expect(steps[2].label, 'Recovery 1/5');
     });
 
+    test('walk-run (duration reps + walk recovery) → Run/Walk labels + walk kind', () {
+      // Beginner C25K session: warmup walk → 8× (run 60s / walk 90s) → cooldown
+      // walk. recovery_pace 'walk' flips the labels to Run/Walk and tags the
+      // rest step as WorkoutStepKind.walk so the recorder cues "Run"/"Walk".
+      final steps = expandWorkoutSteps(
+        structure: {
+          'warmup': {'duration_s': 300, 'pace': 'easy'},
+          'repeats': {
+            'count': 8,
+            'duration_s': 60,
+            'pace_sec_per_km': 420,
+            'recovery_duration_s': 90,
+            'recovery_pace': 'walk',
+          },
+          'cooldown': {'duration_s': 300, 'pace': 'easy'},
+        },
+        paces: const {'easy': 360},
+        toleranceSecPerKm: 10,
+      );
+      // 1 warmup + 8 runs + 7 walks + 1 cooldown = 17.
+      expect(steps, hasLength(17));
+      expect(steps.where((s) => s.kind == WorkoutStepKind.rep).length, 8);
+      expect(steps.where((s) => s.kind == WorkoutStepKind.walk).length, 7);
+      expect(steps.first.kind, WorkoutStepKind.warmup);
+      expect(steps[1].label, 'Run 1/8');
+      expect(steps[1].targetDurationSec, 60);
+      expect(steps[1].isDurationBased, isTrue);
+      expect(steps[2].label, 'Walk 1/7');
+      expect(steps[2].kind, WorkoutStepKind.walk);
+      expect(steps[2].targetDurationSec, 90);
+    });
+
     test('no structure with fallback → single steady step', () {
       final steps = expandWorkoutSteps(
         structure: null,

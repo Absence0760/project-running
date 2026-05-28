@@ -8,6 +8,7 @@ WorkoutStep _step({
   int? repIndex = 3,
   int? repTotal = 5,
   double targetDistanceMetres = 800,
+  int? targetDurationSec,
   int targetPaceSecPerKm = 240,
   String label = 'Rep',
 }) =>
@@ -16,6 +17,7 @@ WorkoutStep _step({
       repIndex: repIndex,
       repTotal: repTotal,
       targetDistanceMetres: targetDistanceMetres,
+      targetDurationSec: targetDurationSec,
       targetPaceSecPerKm: targetPaceSecPerKm,
       label: label,
     );
@@ -130,6 +132,27 @@ void main() {
         DistanceUnit.km,
       );
       expect(out.startsWith('Warmup. '), isTrue);
+    });
+
+    test('walk-run: duration-based work rep reads "Run X of Y. N seconds."', () {
+      final out = formatWorkoutStepUtterance(
+        _step(repIndex: 1, repTotal: 8, targetDurationSec: 60),
+        DistanceUnit.km,
+      );
+      expect(out, 'Run 1 of 8. 1 minute.');
+    });
+
+    test('walk-run: walk step reads "Walk X of Y. N seconds." with no pace', () {
+      final out = formatWorkoutStepUtterance(
+        _step(
+            kind: WorkoutStepKind.walk,
+            repIndex: 1,
+            repTotal: 7,
+            targetDurationSec: 90),
+        DistanceUnit.km,
+      );
+      expect(out, 'Walk 1 of 7. 1 minute 30 seconds.');
+      expect(out.contains('per kilometre'), isFalse);
     });
 
     test('recovery / steady / cooldown intros all match their kind', () {

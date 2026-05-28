@@ -377,7 +377,7 @@ class WorkoutRunner {
   }
 }
 
-enum WorkoutStepKind { warmup, rep, recovery, steady, cooldown }
+enum WorkoutStepKind { warmup, rep, recovery, walk, steady, cooldown }
 
 enum PaceAdherence { onPace, ahead, behind, wayAhead, wayBehind }
 
@@ -444,6 +444,7 @@ class WorkoutStepResult {
         WorkoutStepKind.warmup => 'warmup',
         WorkoutStepKind.rep => 'rep',
         WorkoutStepKind.recovery => 'recovery',
+        WorkoutStepKind.walk => 'walk',
         WorkoutStepKind.steady => 'steady',
         WorkoutStepKind.cooldown => 'cooldown',
       },
@@ -655,12 +656,17 @@ List<WorkoutStep> expandWorkoutSteps({
         if (recBlock.isEmpty) recBlock = null;
       }
 
+      // Walk-run sessions (recovery_pace == 'walk') relabel the work/rest
+      // intervals as Run / Walk and tag the rest step as a walk so the
+      // recorder's TTS announces "Run"/"Walk" instead of "Rep"/"Recovery"
+      // (persona #22).
+      final isWalkRun = recBlock != null && recBlock['pace'] == 'walk';
       for (var i = 0; i < count; i++) {
         final repStep = buildStep(
           block: repBlock,
           kind: WorkoutStepKind.rep,
-          label: 'Rep ${i + 1}/$count',
-          paceFallback: 'interval',
+          label: isWalkRun ? 'Run ${i + 1}/$count' : 'Rep ${i + 1}/$count',
+          paceFallback: isWalkRun ? 'easy' : 'interval',
           repIndex: i + 1,
           repTotal: count,
         );
@@ -672,9 +678,11 @@ List<WorkoutStep> expandWorkoutSteps({
         if (i < count - 1 && recBlock != null) {
           final recStep = buildStep(
             block: recBlock,
-            kind: WorkoutStepKind.recovery,
-            label: 'Recovery ${i + 1}/${count - 1}',
-            paceFallback: 'jog',
+            kind: isWalkRun ? WorkoutStepKind.walk : WorkoutStepKind.recovery,
+            label: isWalkRun
+                ? 'Walk ${i + 1}/${count - 1}'
+                : 'Recovery ${i + 1}/${count - 1}',
+            paceFallback: isWalkRun ? 'easy' : 'jog',
             repIndex: i + 1,
             repTotal: count - 1,
           );

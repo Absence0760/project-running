@@ -218,6 +218,10 @@ class WorkoutStepReview {
         label = repIndex != null && repTotal != null
             ? 'Recovery $repIndex/${repTotal}'
             : 'Recovery';
+      case 'walk':
+        label = repIndex != null && repTotal != null
+            ? 'Walk $repIndex/${repTotal}'
+            : 'Walk';
       default:
         label = kind;
     }

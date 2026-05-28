@@ -14,7 +14,7 @@ The user opens a planned workout (from `todays_workout_card` or `workout_detail_
 - **Manual controls** in the band: skip to next step, rewind to previous step, abandon (convert to free run).
 - **Post-run summary** that shows planned vs actual per step, not just the overall pace.
 
-Non-goals for v1: time-based steps (v2 — all current plan workouts are distance-based), live interval-aware heart-rate zones (nice-to-have), adapting upcoming steps based on current effort.
+Non-goals for v1: ~~time-based steps~~ (**shipped** — walk-run / C25K plans use `duration_s` reps; the runner reads distance OR duration per step), live interval-aware heart-rate zones (nice-to-have), adapting upcoming steps based on current effort.
 
 ## Data flow
 
@@ -52,6 +52,8 @@ run.metadata.workout_adherence    ← 'completed' | 'partial' | 'abandoned'
 Example: 6×400 with warmup + cooldown → **14 steps** (1 warmup + 6 reps + 5 recoveries + 1 cooldown).
 
 A workout with no `structure` (e.g. "Easy 8 km") expands to a **single step** covering `target_distance_m` at the workout's `target_pace_sec_per_km`. The execution band still shows, just with a single row — the user gets a visible progress bar and pace-adherence pip without adding a code branch.
+
+**Walk-run (C25K / Galloway) — persona #22, decisions §91.** A rep or recovery block may carry `duration_s` / `recovery_duration_s` instead of distances; the runner builds duration-based steps (end condition is elapsed time, not distance). When `recovery_pace == 'walk'`, `expandWorkoutSteps` relabels the work intervals **Run i/n** (kept `WorkoutStepKind.rep`) and the rest intervals **Walk i/n** (tagged `WorkoutStepKind.walk`), so the transition cue announces "Run 1 of 8. 1 minute." / "Walk 1 of 7. 1 minute 30 seconds." (duration spoken instead of distance + pace). Example: warmup-walk → 8× (run 60s / walk 90s) → cooldown-walk expands to **17 steps** (1 + 8 runs + 7 walks + 1).
 
 Step resolution for symbolic paces (`'easy'`, `'jog'`): look up on the plan's `paces` bag (VDOT-derived, already stored on `training_plans`). `'easy'` → `paces.easy`, `'jog'` → `paces.recovery`. Numeric paces in `repeats.pace_sec_per_km` / `steady.pace_sec_per_km` pass through unchanged.
 

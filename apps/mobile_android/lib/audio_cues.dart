@@ -73,6 +73,14 @@ String formatSpokenDistance(double metres, DistanceUnit unit) {
 /// cues during a structured workout. The pace and distance honour
 /// the user's unit pref so a mi-mode runner hears "Warmup. 1 mile
 /// at 8 minutes per mile" instead of the km form.
+String _spokenDuration(int sec) {
+  final m = sec ~/ 60;
+  final s = sec % 60;
+  if (m == 0) return '$s seconds';
+  final mPart = m == 1 ? '1 minute' : '$m minutes';
+  return s == 0 ? mPart : '$mPart $s seconds';
+}
+
 String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit) {
   const metresPerMile = 1609.344;
   final paceSecPerUnit = unit == DistanceUnit.mi
@@ -85,15 +93,26 @@ String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit) {
       ? '$paceM minutes $unitTail'
       : '$paceM minutes $paceS seconds $unitTail';
   final dist = formatSpokenDistance(step.targetDistanceMetres, unit);
+  // A duration-based work rep is a walk-run "Run" interval; a distance-based
+  // one is an interval "Rep" (persona #22).
+  final durationBased = step.isDurationBased;
   final intro = switch (step.kind) {
     WorkoutStepKind.warmup => 'Warmup',
     WorkoutStepKind.rep => step.repIndex != null && step.repTotal != null
-        ? 'Rep ${step.repIndex} of ${step.repTotal}'
-        : 'Rep',
+        ? '${durationBased ? 'Run' : 'Rep'} ${step.repIndex} of ${step.repTotal}'
+        : (durationBased ? 'Run' : 'Rep'),
     WorkoutStepKind.recovery => 'Recovery',
+    WorkoutStepKind.walk => step.repIndex != null && step.repTotal != null
+        ? 'Walk ${step.repIndex} of ${step.repTotal}'
+        : 'Walk',
     WorkoutStepKind.steady => 'Steady',
     WorkoutStepKind.cooldown => 'Cooldown',
   };
+  // Time-based steps (walk-run intervals, timed warmup/cooldown) announce
+  // their duration; distance-based steps announce distance + pace.
+  if (durationBased) {
+    return '$intro. ${_spokenDuration(step.targetDurationSec!)}.';
+  }
   return '$intro. $dist at $paceTail.';
 }
 
