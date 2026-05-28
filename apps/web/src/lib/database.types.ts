@@ -2214,6 +2214,10 @@ export type Database = {
       }
     }
     Functions: {
+      _privacy_downsample: {
+        Args: { arr: Json; max_out: number }
+        Returns: Json
+      }
       _run_comment_parent_is_top_level: {
         Args: { parent_id: string }
         Returns: boolean

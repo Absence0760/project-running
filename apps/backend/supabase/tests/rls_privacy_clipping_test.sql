@@ -14,7 +14,7 @@
 
 begin;
 
-select plan(17);
+select plan(19);
 
 -- ── Fixture: one user with privacy zones, one user without ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -207,25 +207,83 @@ select is(
   'clip on a track that never touches the zone returns input unchanged'
 );
 
--- 13. Input array length cap (50000) is enforced — reject pathological
---     inputs before the per-point loop.
+-- 13. Persona-hunt Round 3 finding Ultra #5: oversize inputs no
+--     longer raise. The clipper now downsamples > 50k inputs via
+--     even-stride sampling (preserving endpoints) and then runs
+--     the zone-clip pass over the downsampled array. Asserts the
+--     call succeeds (no exception) on a 60001-point input.
 do $$
 declare
   big jsonb;
+  out_count int;
 begin
-  -- Build a 50001-element array of identical out-of-zone points.
   select jsonb_agg(jsonb_build_object('lat', 47.37, 'lng', 8.5550))
     into big
-    from generate_series(1, 50001);
-  begin
-    perform clip_track_for_user('00000000-0000-0000-0000-00000000c101', big);
-    raise exception 'clip_track_for_user should have rejected 50001-point input';
-  exception when others then
-    null; -- expected
-  end;
+    from generate_series(1, 60001);
+  -- A bare call that doesn't raise — the actual count assertion
+  -- happens in the next pgtap test below.
+  perform clip_track_for_user('00000000-0000-0000-0000-00000000c101', big);
 end;
 $$;
-select pass('clip_track_for_user rejects > 50000-point input');
+select pass('clip_track_for_user no longer rejects > 50000-point input — it downsamples');
+
+-- 14. Downsampled output is bounded at ≤ ~50k points. The +1
+--     headroom accounts for the explicit "pin the last element"
+--     branch when stride doesn't land on (len - 1).
+select cmp_ok(
+  (
+    select jsonb_array_length(
+      clip_track_for_user(
+        '00000000-0000-0000-0000-00000000c101',
+        (select jsonb_agg(jsonb_build_object('lat', 47.37, 'lng', 8.5550))
+           from generate_series(1, 60001))
+      )
+    )
+  ),
+  '<=', 50001,
+  'clip_track_for_user output is ≤ 50001 points for a 60001-point input'
+);
+
+-- 15. Endpoint preservation — the persona's stated correctness
+--     criterion. After downsampling, the first and last samples of
+--     the OUT-OF-ZONE input must still appear in the output. We
+--     build an input where positions 0 and N-1 are uniquely
+--     identifiable (slightly different lng) so we can assert their
+--     survival without ambiguity.
+do $$
+declare
+  big jsonb;
+  out_arr jsonb;
+  first_in jsonb;
+  last_in jsonb;
+  first_out jsonb;
+  last_out jsonb;
+begin
+  -- Build a 60001-element array of out-of-zone points where each
+  -- carries an ordinal so we can spot the endpoints.
+  select jsonb_agg(
+    jsonb_build_object(
+      'lat', 47.37,
+      'lng', 8.55 + (i::float / 60001) * 0.01
+    ) order by i
+  ) into big
+  from generate_series(0, 60000) as i;
+
+  first_in := big -> 0;
+  last_in := big -> 60000;
+  out_arr := clip_track_for_user('00000000-0000-0000-0000-00000000c101', big);
+  first_out := out_arr -> 0;
+  last_out := out_arr -> (jsonb_array_length(out_arr) - 1);
+
+  if first_in is distinct from first_out then
+    raise exception 'first endpoint changed: in=% out=%', first_in, first_out;
+  end if;
+  if last_in is distinct from last_out then
+    raise exception 'last endpoint changed: in=% out=%', last_in, last_out;
+  end if;
+end;
+$$;
+select pass('clip_track_for_user preserves first + last endpoints when downsampling');
 
 -- 14. The most important wire-leak guard: the SECURITY DEFINER context
 --     bypasses RLS on user_settings to read zones. Verify that zones
