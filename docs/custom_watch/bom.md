@@ -65,12 +65,14 @@ Per-subsystem component choices with the reasoning, and the rejected alternative
 
 ## Case + crystal + buttons
 
+Per [decisions.md § 81](../decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen), the production watch ships with **exactly 5 buttons in the Garmin Fenix 7 / Enduro 3 arrangement** (left side: LIGHT, UP, DOWN; right side: START/STOP, BACK/LAP), **no touchscreen**, no capacitive overlay, no touch controller IC. Tier-1 bench prototype uses the nRF52840 DK's 4 onboard buttons; production button mapping lands when there's a custom PCB.
+
 This is where the budget actually goes once you get serious. A CNC-machined titanium case (Fenix 7X Sapphire), sapphire crystal, and 5 buttons with proper IPX7 sealing is **~$80–120 in materials and assembly per unit** at small production volumes, dropping to ~$40–60 at 10k+. The tooling to get there:
 
 - Industrial design + mechanical engineering: ~$30–80k one-off
 - Injection mould tooling (if we go polymer body instead of titanium): ~$25–50k one-off
 - Sapphire crystal tooling: ~$15–30k one-off
-- Button + gasket tooling: ~$10–20k one-off
+- Button + gasket tooling: ~$10–20k one-off (5 buttons × overmoulded silicone gasket — proven 20-year design on Garmin Fenix)
 
 This is the largest single line item that *cannot* be borrowed from a dev board. Reference designs don't ship as case-included.
 

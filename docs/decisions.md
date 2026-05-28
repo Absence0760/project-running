@@ -1834,6 +1834,40 @@ Pinning: [`apps/custom_watch/README.md`](../apps/custom_watch/README.md), [`apps
 
 ---
 
+## 81. Custom watch input is 5 physical buttons in the Garmin Fenix layout, no touchscreen
+
+`vision.md` requirement #4 left the touchscreen as "optional for map panning only" and the button count as "5-button layout (Garmin pattern)" — both deliberately under-specified at scaffold time. This entry locks both in.
+
+**Decision.** The production watch ships with exactly five physical buttons in the Garmin Fenix 7 / Enduro 3 arrangement and no touchscreen:
+
+- Left side (3): LIGHT (top), UP (middle), DOWN (bottom)
+- Right side (2): START/STOP (top), BACK/LAP (bottom)
+
+No capacitive overlay. No touch controller IC. No haptic-replacement layer. The tier-1 nRF52840 DK keeps using its 4 onboard buttons for bring-up; a future production-PCB BSP will map LIGHT/UP/DOWN/START/BACK to the real GPIO pins.
+
+Why exactly 5 in the Garmin pattern:
+
+1. **Touchscreens fail in the conditions ultra runners actually experience** — sweat, rain, gloves, gel-coated fingers, river crossings. The reasoning was already in `vision.md` req #4; this entry closes the door instead of leaving it "optional."
+2. **The 3+2 asymmetric split is a learned visual cue.** Experienced runners recognise "left side = workout controls, right side = navigation" without re-reading the manual. Symmetric 3+3 or novel layouts force a re-learn for the largest target demographic.
+3. **5 is the well-trodden number.** Garmin Fenix 7, Polar Vantage V3, Suunto Vertical, Garmin Enduro 3 — all 5. We follow Enduro 3 specifically (5 buttons, no touchscreen) because that's the closest analogue to our target product.
+4. **Dropping the touchscreen is real BOM + power + weight + sealing relief.** ~5–50 µA always-on idle draw (2–5% of total battery), ~$2–5 BOM, the cap-touch glass overlay (weight + thickness + an IPX7 seal interface), and the firmware touch driver. Death by 1000 cuts.
+
+Trade-offs we accept:
+
+- **Map pan/zoom is button-driven.** UP/DOWN scrolls or zooms depending on the active screen; long-press toggles modes. Slower than swipe gestures but works with gloves.
+- **No quick-reply or text-entry.** The watch is a tool for the run, not a smartphone. If we ever want spectator messaging on-watch, it's preset templates selected via UP/DOWN.
+- **5 buttons = 5 gasket-sealed interfaces.** Each is a fail point at the IPX7 test. Mitigation: standard piezo-style buttons with overmoulded silicone gaskets — a proven 20-year design on Garmin Fenix.
+
+Don't re-litigate by:
+
+- **Adding a touchscreen "just for the map" later.** The map UX has to be glove-friendly from day one; "touch for power users" splits design effort and produces a watch that's mediocre at both.
+- **Switching to 3 buttons + digital crown.** COROS Vertix 2 proves the crown design works, but it adds tooling complexity and a rotating mechanism with its own seal problem. 5 buttons is simpler at the tier-2 case-CAD stage.
+- **Adding a 6th button "for symmetry."** Symmetric layouts remove the asymmetric visual cue that helps gloved-hand orientation. 3+2 stays.
+
+Pinning: [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #4 (updated), [`docs/custom_watch/bom.md`](custom_watch/bom.md) "Case + crystal + buttons" section (updated). The DK BSP at [`apps/custom_watch/boards/nrf52840_dk/src/lib.rs`](../apps/custom_watch/boards/nrf52840_dk/src/lib.rs) keeps exposing the dev kit's BTN1–BTN4 as-is; the production BSP comes with the custom PCB.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
