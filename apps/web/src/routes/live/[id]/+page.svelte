@@ -15,6 +15,7 @@
 		openLiveWebSocket,
 		type LivePing,
 	} from '$lib/live_hub';
+	import { runnerHandle, shouldRevealDisplayName } from '$lib/runner_handle';
 
 	// audit/cookie-consent (2026-05-25): MapTiler tile fetches log
 	// requester IPs per tile, so initialising MapLibre before consent
@@ -253,9 +254,46 @@
 			const { data: profile } = await supabase
 				.rpc('public_profile_by_id', { p_id: row.user_id })
 				.maybeSingle();
-			const dn = (profile as { display_name?: string | null } | null)
-				?.display_name ?? null;
-			if (dn) runnerName = dn;
+			const dn =
+				(profile as { display_name?: string | null } | null)?.display_name ??
+				null;
+
+			// Persona-hunt Round 3 finding Privacy #5. Only reveal the
+			// display_name to friends (one-way follow in either
+			// direction, or the runner themselves). Strangers + anon
+			// see the anonymous `runnerHandle` instead so sharing a
+			// live URL doesn't unmask the runner to anyone with the
+			// link. Two follow-edge probes — both small index lookups
+			// — gate the reveal.
+			const viewerId = (await supabase.auth.getSession()).data.session?.user
+				?.id ?? null;
+			let viewerFollowsRunner = false;
+			let runnerFollowsViewer = false;
+			if (viewerId && viewerId !== row.user_id) {
+				const [vfr, rfv] = await Promise.all([
+					supabase
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', viewerId)
+						.eq('followee_id', row.user_id)
+						.maybeSingle(),
+					supabase
+						.from('user_follows')
+						.select('follower_id')
+						.eq('follower_id', row.user_id)
+						.eq('followee_id', viewerId)
+						.maybeSingle(),
+				]);
+				viewerFollowsRunner = vfr.data != null;
+				runnerFollowsViewer = rfv.data != null;
+			}
+			const reveal = shouldRevealDisplayName({
+				viewerUserId: viewerId,
+				runnerUserId: row.user_id as string,
+				viewerFollowsRunner,
+				runnerFollowsViewer,
+			});
+			runnerName = reveal && dn ? dn : runnerHandle(row.user_id as string);
 		}
 		return true;
 	}

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 
 import { RUNNER_PUBLIC_RUN_ID } from '../fixtures/seeded-data';
 import { deleteRun, insertLivePings, insertRun } from '../fixtures/simulate';
-import { USER_A } from '../fixtures/users';
+import { USER_A, USER_B } from '../fixtures/users';
 
 const MELBOURNE_NEARBY_OUT_OF_ZONE: Array<{ lat: number; lng: number }> = [
 	{ lat: -37.8160, lng: 144.9700 },
@@ -63,7 +63,16 @@ test.describe('/live/[id] — anon spectator', () => {
 			});
 			await expect(page.locator('.live-badge')).toContainText('LIVE');
 
-			await expect(page.locator('.live-runner-name')).toContainText('Jared Howard');
+			// Persona-hunt Round 3 finding Privacy #5. Anon viewers see
+			// `Runner #ABCD` (4-hex-char handle derived from the
+			// runner's uuid), NOT the runner's display_name. USER_A's
+			// uuid is `a1b2c3d4-...` so the handle is `Runner #A1B2`.
+			// A regression that surfaced "Jared Howard" to anon would
+			// re-leak the runner's real name on every shared live URL.
+			await expect(page.locator('.live-runner-name')).toContainText('Runner #A1B2');
+			await expect(page.locator('.live-runner-name')).not.toContainText(
+				'Jared Howard'
+			);
 
 			await expect(page.locator('.live-stat-value').first()).toContainText('4.5');
 			await expect(page.locator('.live-stat-value').nth(1)).toContainText('22:30');
@@ -261,6 +270,60 @@ test.describe('/live/[id] — anon spectator', () => {
 			// fails this test and forces a deliberate update.
 			expect(distanceText).toMatch(/^0\s*m$/);
 			expect(elapsedText).toMatch(/^0:00$/);
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+});
+
+test.describe('/live/[id] — friend spectator sees the display_name', () => {
+	// Persona-hunt Round 3 finding Privacy #5. The second half of the
+	// reveal contract: a viewer with a one-way follow edge in either
+	// direction (or the runner viewing their own live) MUST see the
+	// display_name, not the anonymous handle. USER_B (alex) follows
+	// USER_A (runner) per the seed, so this storageState exercises
+	// the viewer→runner follow branch.
+	test.use({ storageState: USER_B.storageStatePath });
+
+	test('alex follows runner per seed → live page reveals "Jared Howard", not the handle', async ({
+		page,
+	}) => {
+		const startedAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 5_000,
+			duration_s: 3_600,
+			is_public: true,
+		});
+		try {
+			await insertLivePings({
+				run_id: runId,
+				user_id: USER_A.id,
+				points: [
+					{
+						lat: -37.816,
+						lng: 144.97,
+						distance_m: 1_000,
+						elapsed_s: 300,
+					},
+				],
+			});
+
+			await page.goto(`/live/${runId}`);
+
+			// Friend viewer — name is revealed.
+			await expect(page.locator('.live-runner-name')).toContainText(
+				'Jared Howard',
+				{ timeout: 10_000 }
+			);
+			// Negative pin — the handle must NOT show up. A regression
+			// that fell through to the handle path even for friends
+			// would hide friendly identifiers and surprise users who
+			// expected to recognise the runner they were tracking.
+			await expect(page.locator('.live-runner-name')).not.toContainText(
+				'Runner #'
+			);
 		} finally {
 			await deleteRun(runId);
 		}
