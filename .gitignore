@@ -76,3 +76,5 @@ apps/backend/supabase/.temp/
 
 # Claude Code runtime state (agents/, commands/ are checked in)
 .claude/*.lock
+.claude/settings.local.json
+.claude/session-tasks.md
