@@ -35,11 +35,7 @@ Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order
 
 ### Definition of Done
 
-> **TBD — see [OQ1](#oq1-tier-1-definition-of-done) below.** Without an explicit completion bar, sunk-cost decides when tier 1 ends.
-
-### Kill criteria
-
-> **TBD — see [OQ2](#oq2-tier-1-kill-criteria) below.** § 71 has reopen triggers for tier 2+ but no shut-down criteria for tier 1; if tier 1 grows past its budget, there's no codified stop condition.
+Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end. No power-budget bar (separate question — see [OQ3](#oq3-power-measurement-methodology) below).
 
 ## Tier 2 — wearable prototype (gated)
 
@@ -104,24 +100,6 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 ## Open questions to resolve
 
 These are the unsettled planning calls from the 2026-05-28 audit pass. Listed in roughly the order they bottleneck other decisions. Each is a candidate for a future `decisions.md` entry.
-
-### OQ1: Tier-1 Definition of Done
-
-When do we declare tier 1 "complete"? Candidate bars:
-
-- **(a)** After step 7 (integration) compiles + the bench prototype loop runs end-to-end on the DK.
-- **(b)** After a real outdoor run produces a GPS+HR-tagged track that syncs to Supabase.
-- **(c)** After the bench prototype hits some power-budget target (depends on [OQ3](#oq3-power-measurement-methodology) being resolved first).
-- **(d)** After we've used tier-1 knowledge to credibly pitch one of: vector 1 (Connect IQ), vector 2 (Wear OS), or vector 3 (ODM conversation).
-
-### OQ2: Tier-1 kill criteria
-
-When do we definitively stop? Candidate bars (any one triggers stop):
-
-- **(a)** > $3k cash spent.
-- **(b)** > 400 hours of evenings/weekends elapsed.
-- **(c)** A single blocker (driver, certification, NDA refusal) consumes >25% of total tier-1 budget.
-- **(d)** Owner stops enjoying it. (A valid kill criterion for an owner-personal project.)
 
 ### OQ3: Power-measurement methodology
 

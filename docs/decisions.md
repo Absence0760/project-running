@@ -1868,6 +1868,47 @@ Pinning: [`docs/custom_watch/vision.md`](custom_watch/vision.md) requirement #4 
 
 ---
 
+## 82. Tier-1 firmware is "done" when one outdoor run syncs end-to-end to Supabase from the bench prototype
+
+Until now, tier-1 in `apps/custom_watch/README.md` was a 7-step bring-up plan with no explicit completion bar. Without a Definition of Done, sunk-cost decides when tier-1 ends, and "ends" usually means "drifts indefinitely."
+
+**Decision.** Tier-1 is complete when the bench prototype produces and syncs **one real outdoor run** — full stack from GNSS acquisition through display rendering through BLE sync to the existing Supabase `runs` Storage bucket. Specifically:
+
+- A run recorded outdoors on a real wrist (Velcro strap is fine; the dev kit doesn't have to look like a watch).
+- GPS fixes parsed from u-blox MAX-M10S via the `ublox_nmea` crate.
+- HR samples from MAX86177 (raw photodiode reads + naive peak-detect is sufficient — the licensed Maxim algorithm is post-tier-1).
+- Current pace + distance shown on the Sharp MIP display.
+- Sync over BLE to a paired phone running the existing app, which writes to the same `{user_id}/{run_id}.json.gz` Storage path mobile + watch_wear already use.
+
+When this happens once on a real run, tier-1 is done.
+
+Why this bar:
+
+- **It forces field-test instead of bench-test.** "Code compiles + runs on the DK" doesn't prove anything that matters; the DK on a Velcro strap doesn't behave like the DK on a desk. Field-test is where the bugs live.
+- **It integrates the entire stack** — GNSS + HR + display + BLE + recording state machine + backend — in one shot. A passing run means every subsystem talks to its neighbours.
+- **It produces a tangible artifact.** A row in your Supabase `runs` table with a real track on the map is the most credible possible demo of "this works."
+- **It's concrete enough to be unambiguously passed.** No fuzziness around "credibly pitch" or "hit a power target." Either the run synced or it didn't.
+
+What this does *not* require:
+
+- Hitting a power-budget target. Power measurement at tier-1 is a separate open question (see [`roadmap.md` OQ3](custom_watch/roadmap.md#oq3-power-measurement-methodology)); we can't measure ultra-watch battery life on a DK regardless.
+- Apollo4 silicon, Sony GNSS, or any other tier-2+ migration. The nRF52840 + MAX-M10S combo on breadboard is the tier-1 target.
+- A finished UI. Showing current pace + distance on the MIP display is enough; full data-screen menus + watch faces come later.
+- Implementing OTA, vector maps, ANT+ pairing, sleep modes, or any other "would be nice" features. Strict tier-1 scope is GPS + HR + display + sync.
+- Field validation under stress (foliage, urban canyon, multi-hour ultra). That's tier-2+ field-testing.
+- Multiple runs. A second run would be "reassuring," not "decision-changing"; the bar is pinned at one to avoid the goal-post drift that traps hobby projects.
+
+Don't re-litigate by:
+
+- **Raising the bar to "100km ultra event tracked end-to-end."** That's tier-2+ field-testing. The point of tier-1 is to prove the stack works at all, not under maximum stress.
+- **Lowering the bar to "code compiles + bench loop runs."** Code compiling proves nothing about the hardware path — see the post-scaffold audit where the original scaffold's deps were fabricated yet "the code looked fine."
+- **Adding a kill-criterion clause after the fact.** Owner-personal investigations terminate when the owner stops investigating; codifying termination would treat this as a managed project, which it deliberately isn't.
+- **Upgrading single-run to multi-run.** The single-run bar is intentional; multi-run discipline is a tier-2 concern when we start caring about reliability under stress.
+
+Pinning: [`apps/custom_watch/README.md`](../apps/custom_watch/README.md) step 7 ("Integration") is the activity that achieves this. [`docs/custom_watch/roadmap.md` "Definition of Done"](custom_watch/roadmap.md#definition-of-done) replaces the previous TBD placeholder with a pointer to this entry.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
