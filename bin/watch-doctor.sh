@@ -84,6 +84,24 @@ else
 	dim "See apps/custom_watch/README.md step 2 for the scaffold instructions."
 fi
 
+step "Configured chip target (.cargo/config.toml runner)"
+CONFIG_FILE="$REPO_ROOT/apps/custom_watch/.cargo/config.toml"
+if [[ -f "$CONFIG_FILE" ]]; then
+	# Pull the --chip arg out of the runner = "probe-rs run --chip <CHIP>" line.
+	chip="$(grep -E '^[[:space:]]*runner[[:space:]]*=.*--chip' "$CONFIG_FILE" | sed -E 's/.*--chip[[:space:]]+([A-Za-z0-9_]+).*/\1/' | head -1)"
+	if [[ -n "$chip" ]]; then
+		ok "Configured chip: $chip"
+		dim "Verify this matches the actual silicon on your DK."
+		dim "PCA10056 = nRF52840_xxAA. PCA10095 = nRF5340_xxAA."
+		dim "Mismatch symptom: 'successful' flash but no LED, no defmt logs, or chip resets immediately."
+		dim "Run 'probe-rs chip list nRF52' to see all known nRF52 variants if you suspect a mismatch."
+	else
+		warn "Could not parse --chip from $CONFIG_FILE runner line"
+	fi
+else
+	dim "No .cargo/config.toml found yet (lands when workspace is scaffolded)."
+fi
+
 step "Verdict"
 if (( FAILS > 0 )); then
 	err "$FAILS hard failure(s) — install the missing pieces above before flashing"
