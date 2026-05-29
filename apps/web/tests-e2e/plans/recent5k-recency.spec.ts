@@ -33,8 +33,11 @@ test.describe('/plans/new — recent-5K recency gate', () => {
 		await expect(confirm).toBeVisible();
 		await expect(warning).toBeVisible();
 
-		// Confirming current fitness clears the warning.
-		await modal.getByRole('checkbox').check();
+		// Confirming current fitness clears the warning. Target the recency
+		// checkbox by name — the modal also has the persona #22 "New to
+		// running? Use a walk-run plan" checkbox, so a bare checkbox locator
+		// is ambiguous (strict-mode violation).
+		await modal.getByRole('checkbox', { name: /current fitness/i }).check();
 		await expect(warning).toBeHidden();
 	});
 });

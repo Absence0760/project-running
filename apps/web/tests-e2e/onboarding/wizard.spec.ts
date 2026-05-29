@@ -49,20 +49,46 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 	// the wizard by design).
 	test.use({ storageState: USER_A.storageStatePath });
 
+	// USER_A is the shared seed user. The Continue-flow test completes the
+	// wizard, which writes preferred_unit ('mi'), display_name, primary_goal
+	// + privacy_default to the profile + settings. Other specs on this shard
+	// assume the seed baseline (notably the km-based plans tests), so snapshot
+	// the mutated rows in beforeEach and restore them in afterEach — leaving
+	// the user pristine regardless of which fields the wizard touched.
+	let savedProfile: { display_name: string | null; preferred_unit: string | null; onboarded_at: string | null } | null = null;
+	let savedPrefs: Record<string, unknown> | null = null;
+
 	test.beforeEach(async () => {
 		const admin = getAdminClient();
-		await admin
+		const { data: prof } = await admin
 			.from('user_profiles')
-			.update({ onboarded_at: null })
-			.eq('id', USER_A.id);
+			.select('display_name, preferred_unit, onboarded_at')
+			.eq('id', USER_A.id)
+			.single();
+		savedProfile = prof ?? null;
+		const { data: settings } = await admin
+			.from('user_settings')
+			.select('prefs')
+			.eq('user_id', USER_A.id)
+			.maybeSingle();
+		savedPrefs = (settings?.prefs as Record<string, unknown> | null) ?? null;
+
+		await admin.from('user_profiles').update({ onboarded_at: null }).eq('id', USER_A.id);
 	});
 
 	test.afterEach(async () => {
 		const admin = getAdminClient();
 		await admin
 			.from('user_profiles')
-			.update({ onboarded_at: new Date().toISOString() })
+			.update({
+				onboarded_at: savedProfile?.onboarded_at ?? new Date().toISOString(),
+				display_name: savedProfile?.display_name ?? null,
+				preferred_unit: savedProfile?.preferred_unit ?? 'km',
+			})
 			.eq('id', USER_A.id);
+		if (savedPrefs) {
+			await admin.from('user_settings').update({ prefs: savedPrefs }).eq('user_id', USER_A.id);
+		}
 	});
 
 	test('protected route redirects to /onboarding when onboarded_at is null', async ({
