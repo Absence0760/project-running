@@ -4,6 +4,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchRuns } from '$lib/data';
 	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/recap';
+	import { buildRecapShareSvg } from '$lib/recap_share_image';
 	import { fmtKm, getUnit } from '$lib/units.svelte';
 	import type { Run } from '$lib/types';
 
@@ -62,6 +63,35 @@
 
 	const MONTH_LABELS = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
 
+	/// Rasterise an SVG string to a PNG blob via an offscreen canvas.
+	/// The recap is personal data with no public URL, so the card is
+	/// rendered client-side rather than served as an og:image.
+	async function svgToPngBlob(svg: string, size: number): Promise<Blob> {
+		const url = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' }));
+		try {
+			const img = new Image(size, size);
+			await new Promise<void>((resolve, reject) => {
+				img.onload = () => resolve();
+				img.onerror = () => reject(new Error('recap card svg failed to load'));
+				img.src = url;
+			});
+			const canvas = document.createElement('canvas');
+			canvas.width = size;
+			canvas.height = size;
+			const ctx = canvas.getContext('2d');
+			if (!ctx) throw new Error('no 2d canvas context');
+			ctx.drawImage(img, 0, 0, size, size);
+			return await new Promise<Blob>((resolve, reject) => {
+				canvas.toBlob(
+					(b) => (b ? resolve(b) : reject(new Error('canvas.toBlob returned null'))),
+					'image/png',
+				);
+			});
+		} finally {
+			URL.revokeObjectURL(url);
+		}
+	}
+
 	async function shareRecap() {
 		if (!recap) return;
 		const lines = [
@@ -73,6 +103,30 @@
 			`Top week: ${fmtKm(recap.topWeek?.distanceM ?? 0)}`,
 		];
 		const text = lines.join('\n');
+
+		// Primary path: share / download the rendered card image. Any
+		// failure (no canvas, blocked toBlob, share rejected) falls
+		// through to the text share below — the card is additive, never
+		// the only way out.
+		try {
+			const svg = buildRecapShareSvg(recap, getUnit());
+			const blob = await svgToPngBlob(svg, 1080);
+			const file = new File([blob], `threkir-${recap.year}.png`, { type: 'image/png' });
+			if (navigator.canShare?.({ files: [file] })) {
+				await navigator.share({ files: [file], title: `My ${recap.year} in running`, text });
+				return;
+			}
+			const dl = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = dl;
+			a.download = `threkir-${recap.year}.png`;
+			a.click();
+			URL.revokeObjectURL(dl);
+			return;
+		} catch (err) {
+			console.warn('recap card share failed, falling back to text', err);
+		}
+
 		if (navigator.share) {
 			try {
 				await navigator.share({ title: `My ${recap.year} in running`, text });

@@ -114,16 +114,81 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		await expect(page.getByRole('button', { name: 'Share recap' })).toBeVisible();
 	});
 
-	test('Share recap button copies a recap summary to the clipboard', async ({
-		page,
-		context
+	test('Share recap shares the rendered card image when file-share is supported', async ({
+		page
 	}) => {
+		await page.addInitScript(() => {
+			const w = window as unknown as { __shared?: Record<string, unknown> };
+			Object.defineProperty(navigator, 'canShare', {
+				value: (data: { files?: unknown[] }) => Array.isArray(data?.files),
+				configurable: true
+			});
+			Object.defineProperty(navigator, 'share', {
+				value: async (data: { files?: File[]; title?: string; text?: string }) => {
+					w.__shared = {
+						fileCount: data.files?.length ?? 0,
+						fileName: data.files?.[0]?.name ?? null,
+						fileType: data.files?.[0]?.type ?? null,
+						fileSize: data.files?.[0]?.size ?? 0,
+						title: data.title ?? null,
+						text: data.text ?? null
+					};
+				},
+				configurable: true
+			});
+		});
+
+		await page.goto(`/recap/${CURRENT_YEAR}`);
+		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
+			timeout: 10_000
+		});
+
+		await page.getByRole('button', { name: 'Share recap' }).click();
+
+		const shared = await expect
+			.poll(
+				async () =>
+					page.evaluate(() => (window as unknown as { __shared?: unknown }).__shared ?? null),
+				{ timeout: 5_000 }
+			)
+			.not.toBeNull();
+		const payload = (await page.evaluate(
+			() => (window as unknown as { __shared: Record<string, unknown> }).__shared
+		)) as Record<string, unknown>;
+		expect(payload.fileCount).toBe(1);
+		expect(payload.fileName).toBe(`threkir-${CURRENT_YEAR}.png`);
+		expect(payload.fileType).toBe('image/png');
+		expect(payload.fileSize as number).toBeGreaterThan(0);
+		expect(payload.title).toBe(`My ${CURRENT_YEAR} in running`);
+		void shared;
+	});
+
+	test('Share recap downloads the card image when file-share is unavailable', async ({ page }) => {
+		await page.addInitScript(() => {
+			Object.defineProperty(navigator, 'canShare', { value: undefined, configurable: true });
+			Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+		});
+
+		await page.goto(`/recap/${CURRENT_YEAR}`);
+		await expect(page.getByText(`My ${CURRENT_YEAR} in running`).first()).toBeVisible({
+			timeout: 10_000
+		});
+
+		const downloadPromise = page.waitForEvent('download', { timeout: 8_000 });
+		await page.getByRole('button', { name: 'Share recap' }).click();
+		const download = await downloadPromise;
+		expect(download.suggestedFilename()).toBe(`threkir-${CURRENT_YEAR}.png`);
+	});
+
+	test('Falls back to clipboard text when card rendering fails', async ({ page, context }) => {
 		await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
 			origin: 'http://localhost:7777'
 		});
 
 		await page.addInitScript(() => {
 			Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+			// Force the SVG→PNG rasterise to throw so the text fallback runs.
+			HTMLCanvasElement.prototype.getContext = () => null as never;
 		});
 
 		const alerts: string[] = [];
@@ -149,19 +214,20 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 		expect(clipText).toMatch(/Top week:/);
 	});
 
-	test('Wrap-it-up closing CTA also triggers share copy', async ({ page, context }) => {
-		await context.grantPermissions(['clipboard-read', 'clipboard-write'], {
-			origin: 'http://localhost:7777'
-		});
-
+	test('Wrap-it-up closing CTA also shares the card image', async ({ page }) => {
 		await page.addInitScript(() => {
-			Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
-		});
-
-		const alerts: string[] = [];
-		page.on('dialog', async (dialog) => {
-			alerts.push(dialog.message());
-			await dialog.dismiss();
+			const w = window as unknown as { __sharedCount?: number };
+			w.__sharedCount = 0;
+			Object.defineProperty(navigator, 'canShare', {
+				value: (data: { files?: unknown[] }) => Array.isArray(data?.files),
+				configurable: true
+			});
+			Object.defineProperty(navigator, 'share', {
+				value: async () => {
+					w.__sharedCount = (w.__sharedCount ?? 0) + 1;
+				},
+				configurable: true
+			});
 		});
 
 		await page.goto(`/recap/${CURRENT_YEAR}`);
@@ -171,7 +237,12 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 
 		await page.getByRole('button', { name: `Share my ${CURRENT_YEAR}` }).click();
 
-		await expect.poll(() => alerts.length, { timeout: 5_000 }).toBeGreaterThan(0);
-		expect(alerts[0]).toMatch(/copied to clipboard/i);
+		await expect
+			.poll(
+				async () =>
+					page.evaluate(() => (window as unknown as { __sharedCount?: number }).__sharedCount ?? 0),
+				{ timeout: 5_000 }
+			)
+			.toBeGreaterThan(0);
 	});
 });
