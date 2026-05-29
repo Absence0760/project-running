@@ -22,6 +22,7 @@ import '../audio_cues.dart';
 import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
 import '../embedded_bests.dart';
+import '../health_connect_exporter.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
@@ -1548,6 +1549,15 @@ class _RunScreenState extends State<RunScreen> {
     }
     if (localSaved) {
       await widget.runStore.clearInProgress();
+      // Best-effort write-back to Health Connect (persona #36) when the
+      // user opted in. Android-only + fire-and-forget — a HC failure must
+      // never touch the save flow or the finish UI.
+      if (Platform.isAndroid && widget.preferences.writeToHealthConnect) {
+        unawaited(HealthConnectExporter.writeRun(run).catchError((Object e) {
+          debugPrint('Health Connect write-back failed: $e');
+          return false;
+        }));
+      }
     }
 
     if (!mounted) return;

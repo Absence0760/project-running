@@ -178,6 +178,12 @@ class Preferences extends ChangeNotifier {
   // Defaults true so existing users keep the wakelock-on-during-run
   // behaviour they're used to.
   static const _kKeepScreenOn = 'keep_screen_on';
+  // Per-device, never synced: write completed runs back to Android
+  // Health Connect so they flow on to Google Fit / Samsung Health / etc.
+  // Off by default — writing user data to a third-party store is opt-in
+  // (persona #36). Local-only because Health Connect is an Android
+  // on-device capability, not a roaming account preference.
+  static const _kWriteToHealthConnect = 'write_to_health_connect';
   // Timestamp of the last successful runs-list fetch. Drives the
   // delta-fetch path in RunsScreen so refreshes only pull rows modified
   // since, instead of re-paging the entire history every time.
@@ -226,6 +232,7 @@ class Preferences extends ChangeNotifier {
   String _deviceId = '';
   String _defaultActivityType = 'run';
   bool _keepScreenOn = true;
+  bool _writeToHealthConnect = false;
   ThemeMode _themeMode = ThemeMode.dark;
   double? _bodyWeightKg;
   String _privacyDefault = 'private';
@@ -249,6 +256,12 @@ class Preferences extends ChangeNotifier {
   /// Whether the run screen should hold a wakelock while recording.
   /// Mirrors the device-scoped `keep_screen_on` settings-bag key.
   bool get keepScreenOn => _keepScreenOn;
+
+  /// Whether completed runs are written back to Android Health Connect
+  /// (persona #36). Local-only, off by default, Android-only at the call
+  /// site. Toggled from Settings → Integrations after the user grants
+  /// the Health Connect write permission.
+  bool get writeToHealthConnect => _writeToHealthConnect;
 
   /// User's body weight in kg, mirrored from the universal
   /// `body_weight_kg` settings-bag key. Null when the user hasn't set
@@ -344,6 +357,7 @@ class Preferences extends ChangeNotifier {
     _onboarded = _prefs.getBool(_kOnboarded) ?? false;
     _targetPaceSecPerKm = _prefs.getInt(_kTargetPaceSecPerKm) ?? 0;
     _advancedGps = _prefs.getBool(_kAdvancedGps) ?? false;
+    _writeToHealthConnect = _prefs.getBool(_kWriteToHealthConnect) ?? false;
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
     _defaultActivityType =
         _prefs.getString(_kDefaultActivityType) ?? 'run';
@@ -441,6 +455,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setKeepScreenOn(bool v) async {
     _keepScreenOn = v;
     await _prefs.setBool(_kKeepScreenOn, v);
+    notifyListeners();
+  }
+
+  Future<void> setWriteToHealthConnect(bool v) async {
+    _writeToHealthConnect = v;
+    await _prefs.setBool(_kWriteToHealthConnect, v);
     notifyListeners();
   }
 

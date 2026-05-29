@@ -123,6 +123,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onTap: () => _open((_) => SettingsIntegrationsScreen(
                     apiClient: widget.apiClient,
                     heartRate: widget.heartRate,
+                    preferences: widget.preferences,
                   )),
             ),
             _tab(

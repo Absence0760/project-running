@@ -9,7 +9,7 @@ A reference for every external data source the app connects to, how each integra
 | Source | Type | Auth | Data | Phase |
 |---|---|---|---|---|
 | Apple HealthKit | On-device SDK | System permission | All iOS workouts from any app | Phase 1 |
-| Android Health Connect | On-device SDK | System permission | All Android workouts from any app | Phase 1 |
+| Android Health Connect | On-device SDK | System permission | All Android workouts from any app (read) + writes finished runs back (opt-in) | Phase 1 |
 | Strava | Official REST API | OAuth 2.0 + webhook | Activities, routes, GPS streams | Phase 3 |
 | parkrun | HTML scrape | Athlete number (public) | 5k times, event history | Phase 3 |
 | Garmin Connect | Official developer program | OAuth 2.0 + webhook | .FIT files, HR, training data | Phase 3 |
@@ -87,6 +87,10 @@ final data = await health.getHealthDataFromTypes(
   types: [HealthDataType.WORKOUT],
 );
 ```
+
+### Write-back (persona #36)
+
+Read is not the only direction — Threkir also **writes finished runs back** to Health Connect so they flow on to Google Fit / Samsung Health / Fitbit / anything that reads it. `lib/health_connect_exporter.dart#writeRun` maps `metadata.activity_type` → `HealthWorkoutActivityType` and calls `health.writeWorkoutData` (an `ExerciseSessionRecord` + a `DistanceRecord`), needing the `WRITE_EXERCISE` + `WRITE_DISTANCE` permissions (added to `AndroidManifest.xml` + `res/xml/health_permissions.xml`). It's **opt-in per device**: off by default, toggled from Settings → Integrations (which requests the write grant and only flips the local `Preferences.writeToHealthConnect` flag if granted). When on, `run_screen` fires a best-effort, fire-and-forget `writeRun` after the local save (Android-only, never blocks the finish flow). The flag is local-only (Health Connect is an on-device capability, not a roaming account pref) and the write path is gated on `Platform.isAndroid`, so iOS/HealthKit is unaffected (HealthKit write would need separate entitlements — deferred).
 
 ### Platform notes
 

@@ -2153,14 +2153,18 @@ void main() {
           'android.permission.health.READ_EXERCISE',
           'android.permission.health.READ_DISTANCE',
           'android.permission.health.READ_HEART_RATE',
+          // Write-back perms (persona #36) — writeWorkoutData inserts an
+          // ExerciseSessionRecord + a DistanceRecord.
+          'android.permission.health.WRITE_EXERCISE',
+          'android.permission.health.WRITE_DISTANCE',
         ]) {
           expect(
             xml,
             contains(perm),
             reason:
                 'health_permissions.xml must list every Health '
-                'Connect permission the app actually reads ($perm '
-                'missing).',
+                'Connect permission the app actually reads or writes '
+                '($perm missing).',
           );
         }
       }

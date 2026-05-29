@@ -12,4 +12,7 @@
     <permission name="android.permission.health.READ_EXERCISE" />
     <permission name="android.permission.health.READ_DISTANCE" />
     <permission name="android.permission.health.READ_HEART_RATE" />
+    <!-- Write recorded runs back to Health Connect (persona #36). -->
+    <permission name="android.permission.health.WRITE_EXERCISE" />
+    <permission name="android.permission.health.WRITE_DISTANCE" />
 </resources>

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
@@ -8,17 +9,21 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../ble_heart_rate.dart';
+import '../health_connect_exporter.dart';
+import '../preferences.dart';
 import '../strava.dart';
 import '../widgets/top_banner.dart';
 
 class SettingsIntegrationsScreen extends StatefulWidget {
   final ApiClient? apiClient;
   final BleHeartRate heartRate;
+  final Preferences preferences;
 
   const SettingsIntegrationsScreen({
     super.key,
     required this.apiClient,
     required this.heartRate,
+    required this.preferences,
   });
 
   @override
@@ -357,10 +362,49 @@ class _SettingsIntegrationsScreenState
               ),
             const Divider(),
             HeartRateMonitorTile(heartRate: widget.heartRate),
+            if (Platform.isAndroid) ...[
+              const Divider(),
+              SwitchListTile(
+                secondary: const Icon(Icons.health_and_safety_outlined),
+                title: const Text('Write runs to Health Connect'),
+                subtitle: const Text(
+                  'Send each finished run to Health Connect so it appears in '
+                  'Google Fit, Samsung Health, Fitbit and others.',
+                ),
+                value: widget.preferences.writeToHealthConnect,
+                onChanged: _toggleHealthConnectWrite,
+              ),
+            ],
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _toggleHealthConnectWrite(bool enable) async {
+    if (!enable) {
+      await widget.preferences.setWriteToHealthConnect(false);
+      if (mounted) setState(() {});
+      return;
+    }
+    // Turning on requires the Health Connect WRITE grant; only flip the
+    // pref if the user actually grants it, so a denied prompt doesn't
+    // leave the toggle on with nothing being written.
+    bool granted = false;
+    try {
+      granted = await HealthConnectExporter.requestWritePermission();
+    } catch (e) {
+      debugPrint('Health Connect write-permission request failed: $e');
+    }
+    await widget.preferences.setWriteToHealthConnect(granted);
+    if (!mounted) return;
+    setState(() {});
+    if (!granted) {
+      showTopBanner(
+        context,
+        'Health Connect permission not granted — runs won\'t be written.',
+      );
+    }
   }
 }
 

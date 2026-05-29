@@ -34,6 +34,10 @@
     <uses-permission android:name="android.permission.health.READ_EXERCISE" />
     <uses-permission android:name="android.permission.health.READ_DISTANCE" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
+    <!-- Write recorded runs back to Health Connect (persona #36). Opt-in
+         per-device; the workout session + its distance record need these. -->
+    <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
+    <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
 
     <!-- Bluetooth LE for chest-strap HR monitors. Android 12+ (API 31)
          replaced legacy BLUETOOTH / BLUETOOTH_ADMIN / ACCESS_FINE_LOCATION
