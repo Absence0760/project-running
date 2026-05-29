@@ -33,6 +33,23 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: 'unauthorized' }, { status: 401 });
 
+  // Honour the user's privacy_default for imported runs — parity with the
+  // web createManualRun/saveRun + Strava/Garmin ZIP-import paths (persona
+  // #27). Only an explicit 'public' default publishes; followers/private/
+  // unset stay private, and any read error falls closed to private.
+  let importIsPublic = false;
+  try {
+    const { data: settings } = await supabase
+      .from('user_settings')
+      .select('prefs')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    const prefs = (settings?.prefs ?? null) as Record<string, unknown> | null;
+    importIsPublic = prefs?.privacy_default === 'public';
+  } catch (_) {
+    importIsPublic = false;
+  }
+
   // Per-user limit: free 4/h, pro 16/h. parkrun.org doesn't publish
   // a crawl rate; the free ceiling errs on polite scraping while
   // still letting a user retry after a glitch. The pro multiplier is
@@ -104,6 +121,7 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
       duration_s: parseParkrunTime(time),
       distance_m: 5000,
       source: 'parkrun',
+      is_public: importIsPublic,
       external_id: `parkrun:${event}:${date}`,
       metadata: {
         // parkrun is always 5K running — no walking-only events.

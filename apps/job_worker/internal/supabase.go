@@ -699,11 +699,26 @@ func (c *SupabaseClient) IsStravaActivityImported(ctx context.Context, userID st
 	return len(rows) > 0, nil
 }
 
+// privacyDefaultIsPublic resolves whether a newly-imported run for this
+// user should be public, from the universal `privacy_default` pref in
+// user_settings.prefs. Only an explicit 'public' default publishes;
+// followers/private/unset — and any read error — fall closed to private.
+// Mirrors the web `privacyDefaultToIsPublic` mapping + the EF parkrun /
+// strava-import paths (persona #27).
+func (c *SupabaseClient) privacyDefaultIsPublic(ctx context.Context, userID string) bool {
+	prefs, err := c.FetchUserSettingsPrefs(ctx, userID)
+	if err != nil {
+		return false
+	}
+	return prefs["privacy_default"] == "public"
+}
+
 // InsertStravaRun inserts a runs row sourced from a Strava activity.
 // Mirrors the EF `ingestActivity` row shape (apps/backend/supabase/
 // functions/_shared/strava.ts) — fields, source='strava', metadata
 // keys all in lockstep so dashboard queries that read across both
-// writers see one consistent shape.
+// writers see one consistent shape. is_public honours the user's
+// privacy_default (persona #27), fail-closed to private.
 //
 // Returns the inserted row's id (so the caller can subsequently
 // upload the gzipped track + PATCH track_url).
@@ -752,6 +767,7 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 		"distance_m": int(math.Round(act.Distance)),
 		"duration_s": duration,
 		"source":     "strava",
+		"is_public":  c.privacyDefaultIsPublic(ctx, userID),
 		// `external_id = 'strava:<id>'` is the cross-source dedupe key
 		// — same shape mobile ZIP writes. /audit/strava M3.
 		"external_id": "strava:" + stravaIDStr,

@@ -427,6 +427,23 @@ async function backfill(
 	let skipped = 0;
 	let failed = 0;
 
+	// Resolve privacy_default ONCE for the whole backfill (persona #27) so
+	// imported runs match the user's chosen visibility. Only an explicit
+	// 'public' default publishes; followers/private/unset and any read error
+	// fall closed to private.
+	let importIsPublic = false;
+	try {
+		const { data: settings } = await supabase
+			.from('user_settings')
+			.select('prefs')
+			.eq('user_id', userId)
+			.maybeSingle();
+		const prefs = (settings?.prefs ?? null) as Record<string, unknown> | null;
+		importIsPublic = prefs?.privacy_default === 'public';
+	} catch (_) {
+		importIsPublic = false;
+	}
+
 	// Pull existing Strava-sourced runs in one shot so we can dedupe
 	// without hitting the DB per activity. Keyed by Strava activity ID
 	// stored in metadata.
@@ -473,7 +490,7 @@ async function backfill(
 				continue;
 			}
 			try {
-				await ingestActivity(supabase, userId, accessToken, act);
+				await ingestActivity(supabase, userId, accessToken, act, importIsPublic);
 				imported++;
 			} catch (_) {
 				failed++;

@@ -165,6 +165,11 @@ export async function ingestActivity(
 	userId: string,
 	accessToken: string,
 	act: StravaActivity,
+	// Honour the user's privacy_default for imported runs (persona #27).
+	// The caller resolves the pref once and passes it; defaults to private
+	// (fail-closed) so a caller that doesn't pass it — e.g. the deprecated
+	// strava-webhook rollback path — never publishes.
+	isPublic = false,
 ): Promise<void> {
 	// Reject non-run-family payloads ahead of the insert. The webhook +
 	// backfill paths pre-filter, but a future caller that doesn't (or
@@ -210,6 +215,7 @@ export async function ingestActivity(
 			distance_m: Math.round(act.distance),
 			duration_s: act.moving_time || act.elapsed_time,
 			source: 'strava',
+			is_public: isPublic,
 			// `external_id = 'strava:<id>'` is the cross-source dedupe key
 			// — same shape mobile ZIP writes. A future unique constraint
 			// on `(user_id, external_id) WHERE external_id IS NOT NULL`
