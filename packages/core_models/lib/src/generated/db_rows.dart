@@ -866,6 +866,7 @@ class NotificationRow {
   static const String colReadAt = 'read_at';
   static const String colCreatedAt = 'created_at';
   static const String colEventId = 'event_id';
+  static const String colPlanId = 'plan_id';
 
   final String id;
   final String userId;
@@ -876,6 +877,7 @@ class NotificationRow {
   final DateTime? readAt;
   final DateTime createdAt;
   final String? eventId;
+  final String? planId;
 
   const NotificationRow({
     required this.id,
@@ -887,6 +889,7 @@ class NotificationRow {
     this.readAt,
     required this.createdAt,
     this.eventId,
+    this.planId,
   });
 
   factory NotificationRow.fromJson(Map<String, dynamic> json) => NotificationRow(
@@ -899,6 +902,7 @@ class NotificationRow {
     readAt: json['read_at'] == null ? null : DateTime.parse(json['read_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
     eventId: json['event_id'] as String?,
+    planId: json['plan_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -911,6 +915,7 @@ class NotificationRow {
     colReadAt: readAt?.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
     colEventId: eventId,
+    colPlanId: planId,
   };
 }
 
@@ -1025,6 +1030,8 @@ class PlanWorkoutRow {
   static const String colPaceZone = 'pace_zone';
   static const String colTargetPaceEndSecPerKm = 'target_pace_end_sec_per_km';
   static const String colManuallyCompleted = 'manually_completed';
+  static const String colUpdatedBy = 'updated_by';
+  static const String colUpdatedAt = 'updated_at';
 
   final String id;
   final String weekId;
@@ -1041,6 +1048,8 @@ class PlanWorkoutRow {
   final String? paceZone;
   final int? targetPaceEndSecPerKm;
   final bool manuallyCompleted;
+  final String? updatedBy;
+  final DateTime? updatedAt;
 
   const PlanWorkoutRow({
     required this.id,
@@ -1058,6 +1067,8 @@ class PlanWorkoutRow {
     this.paceZone,
     this.targetPaceEndSecPerKm,
     required this.manuallyCompleted,
+    this.updatedBy,
+    this.updatedAt,
   });
 
   factory PlanWorkoutRow.fromJson(Map<String, dynamic> json) => PlanWorkoutRow(
@@ -1076,6 +1087,8 @@ class PlanWorkoutRow {
     paceZone: json['pace_zone'] as String?,
     targetPaceEndSecPerKm: (json['target_pace_end_sec_per_km'] as num?)?.toInt(),
     manuallyCompleted: (json['manually_completed'] as bool?) ?? false,
+    updatedBy: json['updated_by'] as String?,
+    updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1094,6 +1107,8 @@ class PlanWorkoutRow {
     colPaceZone: paceZone,
     colTargetPaceEndSecPerKm: targetPaceEndSecPerKm,
     colManuallyCompleted: manuallyCompleted,
+    colUpdatedBy: updatedBy,
+    colUpdatedAt: updatedAt?.toIso8601String(),
   };
 }
 

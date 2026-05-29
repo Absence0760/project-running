@@ -123,6 +123,8 @@
 				return r.event_id && item.event_club_slug
 					? `/clubs/${item.event_club_slug}/events/${r.event_id}`
 					: null;
+			case 'plan_update':
+				return r.plan_id ? `/plans/${r.plan_id}` : null;
 		}
 	}
 
@@ -148,6 +150,8 @@
 				return item.event_title
 					? `An occurrence of "${item.event_title}" was cancelled`
 					: 'An event occurrence you RSVP\'d to was cancelled';
+			case 'plan_update':
+				return `${name} updated your training plan`;
 		}
 	}
 

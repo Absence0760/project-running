@@ -4298,6 +4298,7 @@ export interface NotificationRow {
 	run_id: string | null;
 	comment_id: string | null;
 	event_id: string | null;
+	plan_id: string | null;
 	read_at: string | null;
 	created_at: string;
 }

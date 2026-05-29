@@ -117,7 +117,8 @@ export type NotificationKind =
 	| 'comment_reply'
 	| 'follow'
 	| 'event_rsvp'
-	| 'event_cancel';
+	| 'event_cancel'
+	| 'plan_update';
 
 // `invite_token` is excluded from the base type because the column-
 // level grant lockdown (migrations 20260801_001 + 20260818_001 redo)

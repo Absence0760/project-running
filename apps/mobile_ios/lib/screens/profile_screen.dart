@@ -800,6 +800,8 @@ class _ProfileScreenState extends State<ProfileScreen>
         return item.eventTitle != null
             ? '$name RSVP\'d Going to your event "${item.eventTitle}"'
             : '$name RSVP\'d Going to your event';
+      case 'plan_update':
+        return '$name updated your training plan';
       default:
         return '$name interacted with your activity';
     }

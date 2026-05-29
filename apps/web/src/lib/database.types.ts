@@ -815,6 +815,7 @@ export type Database = {
           event_id: string | null
           id: string
           kind: string
+          plan_id: string | null
           read_at: string | null
           run_id: string | null
           user_id: string
@@ -826,6 +827,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           kind: string
+          plan_id?: string | null
           read_at?: string | null
           run_id?: string | null
           user_id: string
@@ -837,6 +839,7 @@ export type Database = {
           event_id?: string | null
           id?: string
           kind?: string
+          plan_id?: string | null
           read_at?: string | null
           run_id?: string | null
           user_id?: string
@@ -854,6 +857,13 @@ export type Database = {
             columns: ["event_id"]
             isOneToOne: false
             referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notifications_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "training_plans"
             referencedColumns: ["id"]
           },
           {
@@ -965,6 +975,8 @@ export type Database = {
           target_pace_end_sec_per_km: number | null
           target_pace_sec_per_km: number | null
           target_pace_tolerance_sec: number | null
+          updated_at: string | null
+          updated_by: string | null
           week_id: string
         }
         Insert: {
@@ -982,6 +994,8 @@ export type Database = {
           target_pace_end_sec_per_km?: number | null
           target_pace_sec_per_km?: number | null
           target_pace_tolerance_sec?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
           week_id: string
         }
         Update: {
@@ -999,6 +1013,8 @@ export type Database = {
           target_pace_end_sec_per_km?: number | null
           target_pace_sec_per_km?: number | null
           target_pace_tolerance_sec?: number | null
+          updated_at?: string | null
+          updated_by?: string | null
           week_id?: string
         }
         Relationships: [
