@@ -140,7 +140,11 @@ class RecentRunRow {
 /// newly inserted finishers that the server-side rerank trigger hasn't
 /// caught up on — UIs render null as an em-dash.
 class EventResultView {
-  final String userId;
+  // Null for bib-only finishers imported from a chip-timing CSV (persona
+  // #43) — those carry [bib] + [finisherName] instead of an account.
+  final String? userId;
+  final String? bib;
+  final String? finisherName;
   final String? displayName;
   final String? runId;
   final int durationS;
@@ -153,6 +157,8 @@ class EventResultView {
 
   const EventResultView({
     required this.userId,
+    this.bib,
+    this.finisherName,
     required this.displayName,
     required this.runId,
     required this.durationS,
@@ -926,8 +932,8 @@ class SocialService extends ChangeNotifier {
     final rows = await _c
         .from('event_results_redacted')
         .select(
-          'user_id, run_id, duration_s, distance_m, rank, '
-          'finisher_status, age_grade_pct, note, created_at, '
+          'user_id, bib, finisher_name, run_id, duration_s, distance_m, '
+          'rank, finisher_status, age_grade_pct, note, created_at, '
           'organiser_approved',
         )
         .eq('event_id', eventId)
@@ -936,20 +942,33 @@ class SocialService extends ChangeNotifier {
         .order('created_at', ascending: true);
     final results = (rows as List).cast<Map<String, dynamic>>();
     if (results.isEmpty) return const [];
-    final ids = results.map((r) => r['user_id'] as String).toList();
-    final profiles = await _c
-        .from('user_profiles')
-        .select('id, display_name')
-        .inFilter('id', ids);
+    // Bib-only imported finishers (persona #43) have no account; only
+    // fetch profiles for the rows that carry a user_id.
+    final ids = [
+      for (final r in results)
+        if (r['user_id'] != null) r['user_id'] as String,
+    ];
     final byId = <String, String?>{};
-    for (final p in profiles as List) {
-      byId[(p as Map)['id'] as String] = p['display_name'] as String?;
+    if (ids.isNotEmpty) {
+      final profiles = await _c
+          .from('user_profiles')
+          .select('id, display_name')
+          .inFilter('id', ids);
+      for (final p in profiles as List) {
+        byId[(p as Map)['id'] as String] = p['display_name'] as String?;
+      }
     }
     return [
       for (final r in results)
         EventResultView(
-          userId: r['user_id'] as String,
-          displayName: byId[r['user_id']],
+          userId: r['user_id'] as String?,
+          bib: r['bib'] as String?,
+          finisherName: r['finisher_name'] as String?,
+          // Account rows resolve through the profile map; bib-only rows
+          // fall back to the name printed on the results sheet.
+          displayName: r['user_id'] != null
+              ? byId[r['user_id']]
+              : r['finisher_name'] as String?,
           runId: r['run_id'] as String?,
           durationS: (r['duration_s'] as num).toInt(),
           distanceM: (r['distance_m'] as num).toDouble(),
