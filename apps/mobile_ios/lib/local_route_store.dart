@@ -32,6 +32,11 @@ class LocalRouteStore extends ChangeNotifier {
   /// shows up on the watch picker; an offline-pinned route gates
   /// what stays on this device.
   final Set<String> _offlinePinnedIds = {};
+  // Serialises sidecar writes: concurrent pin/unpin calls each await this
+  // tail, so writes apply in call order and the last one to land reflects
+  // the latest in-memory state (otherwise overlapping writeAsString calls
+  // can finish out of order and leave the on-disk set stale).
+  Future<void> _offlinePersistChain = Future<void>.value();
   static const _offlinePinnedIdsFilename = 'offline_pinned_route_ids.json';
   File get _offlinePinnedIdsFile =>
       File('${_dir!.path}/$_offlinePinnedIdsFilename');
@@ -331,13 +336,19 @@ class LocalRouteStore extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistOfflinePinnedIds() async {
-    try {
-      await _offlinePinnedIdsFile.writeAsString(jsonEncode({
-        'ids': _offlinePinnedIds.toList(),
-      }));
-    } catch (e) {
-      debugPrint('Failed to persist offline pinned route ids sidecar: $e');
-    }
+  Future<void> _persistOfflinePinnedIds() {
+    // Chain onto the previous write so concurrent calls serialise. Each
+    // write snapshots the set at execution time, so once the in-memory
+    // mutations have settled the final write matches the final state.
+    _offlinePersistChain = _offlinePersistChain.then((_) async {
+      try {
+        await _offlinePinnedIdsFile.writeAsString(jsonEncode({
+          'ids': _offlinePinnedIds.toList(),
+        }));
+      } catch (e) {
+        debugPrint('Failed to persist offline pinned route ids sidecar: $e');
+      }
+    });
+    return _offlinePersistChain;
   }
 }
