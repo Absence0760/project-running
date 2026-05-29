@@ -46,6 +46,12 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 			distance_m: 6_000,
 			duration_s: 1_800,
 			is_public: true,
+			// Backdate past the 24h window so the run_completed follower
+			// fan-out (persona #38, migration 20261101_001) does NOT fire —
+			// this test asserts the kudos + comment cascade and must not
+			// depend on USER_A's follower state, which other tests in the
+			// shard mutate. notifBefore is then deterministically 2.
+			started_at: '2026-04-01T08:00:00Z',
 			// Add a track so the Storage object is on disk to be swept.
 			track: [
 				{ lat: -33.89, lng: 151.27, ele: 10, t: '2026-04-01T08:00:00Z' },
