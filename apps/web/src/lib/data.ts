@@ -1876,6 +1876,25 @@ export async function fetchEventExceptions(eventId: string): Promise<EventExcept
 	return (data as EventException[] | null) ?? [];
 }
 
+/// Event meetup coordinates, gated to active club members by the
+/// `get_event_meet_point` SECURITY DEFINER RPC. `meet_lat` / `meet_lng`
+/// are column-revoked from every client role (precise meeting points
+/// leak organiser home addresses — migrations 20260723_001 /
+/// 20260806_001), so a direct column select can't reach them. Returns
+/// null for non-members and events without a meet point set.
+/// Persona-hunt social-group #10.
+export async function fetchEventMeetPoint(
+	eventId: string
+): Promise<{ lat: number; lng: number } | null> {
+	const { data, error } = await supabase.rpc('get_event_meet_point', {
+		p_event_id: eventId
+	});
+	if (error || !data || data.length === 0) return null;
+	const row = data[0];
+	if (typeof row.meet_lat !== 'number' || typeof row.meet_lng !== 'number') return null;
+	return { lat: row.meet_lat, lng: row.meet_lng };
+}
+
 /// Cancel a single occurrence of a recurring event (the rest of the series
 /// is untouched). Organiser-only via RLS; the fan-out trigger notifies every
 /// going / maybe / waitlisted attendee of this instance.

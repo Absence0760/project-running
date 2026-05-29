@@ -28,6 +28,7 @@
 		reinstateEventInstance,
 		fetchEventPhotos,
 		addRunPhoto,
+		fetchEventMeetPoint,
 		type EventResultWithUser,
 		type RecentRunOption,
 		type RaceSessionRow,
@@ -39,6 +40,8 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
 	import { formatDistance, getUnit } from '$lib/units.svelte';
+	import { env } from '$env/dynamic/public';
+	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/finisher_certificate';
 	import { rasterizeSvgToPng, downloadBlob } from '$lib/svg_raster';
 	import type {
@@ -55,6 +58,19 @@
 
 	let club = $state<ClubWithMeta | null>(null);
 	let event = $state<EventWithMeta | null>(null);
+	// Meetup coordinates, members-only via the get_event_meet_point RPC
+	// (the raw columns are revoked from clients). Persona social-group #10.
+	let meetPoint = $state<{ lat: number; lng: number } | null>(null);
+	let meetMapUrl = $derived(
+		meetPoint
+			? buildStaticMarkerMapUrl(meetPoint.lat, meetPoint.lng, {
+					w: 320,
+					h: 180,
+					style: 'streets-v2',
+					key: env.PUBLIC_MAPTILER_KEY ?? ''
+				})
+			: null
+	);
 	let attendees = $state<(EventAttendee & { display_name: string | null; avatar_url: string | null })[]>([]);
 	let eventPosts = $state<ClubPostWithAuthor[]>([]);
 	let route = $state<Route | null>(null);
@@ -179,6 +195,8 @@
 		// rsvp() (which calls load()) silently warps the user back to the
 		// next instance after every click on a later one.
 		activeInstance = prevInstance ?? event.next_instance_start;
+		// Members-only meetup coordinates (null for non-members / no point set).
+		meetPoint = await fetchEventMeetPoint(event.id);
 		await reloadInstance();
 		loading = false;
 	}
@@ -897,6 +915,31 @@
 						<span class="muted">— {formatDistance(route.distance_m)}</span>
 					</a>
 				{/if}
+
+				{#if meetPoint}
+					<div class="meet-point">
+						{#if meetMapUrl}
+							<a
+								class="meet-map"
+								href={mapsDirectionsUrl(meetPoint.lat, meetPoint.lng)}
+								target="_blank"
+								rel="noopener noreferrer"
+								aria-label="Open the meeting point in maps"
+							>
+								<img src={meetMapUrl} alt="Map of the meeting point" loading="lazy" />
+							</a>
+						{/if}
+						<a
+							class="btn btn-secondary meet-directions"
+							href={mapsDirectionsUrl(meetPoint.lat, meetPoint.lng)}
+							target="_blank"
+							rel="noopener noreferrer"
+						>
+							<span class="material-symbols" aria-hidden="true">directions</span>
+							Get directions{event.meet_label ? ` to ${event.meet_label}` : ''}
+						</a>
+					</div>
+				{/if}
 			</div>
 			<div class="hero-side">
 				{#if activeException}
@@ -1575,6 +1618,34 @@
 		font-size: 0.9rem;
 		width: fit-content;
 		text-decoration: none;
+	}
+
+	.meet-point {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		margin-top: var(--space-md);
+		width: fit-content;
+		max-width: 320px;
+	}
+
+	.meet-map {
+		display: block;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		line-height: 0;
+		border: 1px solid var(--color-border);
+	}
+
+	.meet-map img {
+		display: block;
+		width: 320px;
+		max-width: 100%;
+		height: auto;
+	}
+
+	.meet-directions {
+		width: fit-content;
 	}
 
 	.hero-side {

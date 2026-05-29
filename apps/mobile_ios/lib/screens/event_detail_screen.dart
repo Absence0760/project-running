@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../preferences.dart';
 import '../recurrence.dart';
@@ -34,6 +37,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   RaceSessionRow? _raceSession;
   DateTime? _activeInstance;
   List<DateTime> _instances = const [];
+  /// Members-only meetup coordinates via get_event_meet_point (null for
+  /// non-members / no point set). Persona-hunt social-group #10.
+  ({double lat, double lng})? _meetPoint;
   bool _loading = true;
   bool _busy = false;
   bool _submittingResult = false;
@@ -81,6 +87,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         widget.social.fetchAttendees(event.row.id, _activeInstance!),
         widget.social.fetchEventResults(event.row.id, _activeInstance!),
         widget.social.fetchRaceSession(event.row.id, _activeInstance!),
+        widget.social.fetchEventMeetPoint(event.row.id),
       ]).timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() {
@@ -89,6 +96,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _attendees = bodyResults[0] as List<AttendeeView>;
         _results = bodyResults[1] as List<EventResultView>;
         _raceSession = bodyResults[2] as RaceSessionRow?;
+        _meetPoint = bodyResults[3] as ({double lat, double lng})?;
         _instances = instances;
         _loading = false;
       });
@@ -124,6 +132,80 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _debounce = Timer(const Duration(milliseconds: 250), () {
       if (mounted) _load();
     });
+  }
+
+  /// MapTiler static map centred on the meetup point with a marker.
+  /// lon,lat order in the path; null when no key configured. Mirrors the
+  /// web `buildStaticMarkerMapUrl` shape (persona social-group #10).
+  String? _meetMapUrl(double lat, double lng) {
+    final key = dotenv.env['MAPTILER_KEY'] ?? '';
+    if (key.isEmpty) return null;
+    final lo = lng.toStringAsFixed(5);
+    final la = lat.toStringAsFixed(5);
+    return 'https://api.maptiler.com/maps/streets-v2/static/'
+        '$lo,$la,14/320x180@2x.png?markers=$lo,$la&key=$key';
+  }
+
+  /// Open the meetup point in a maps app. `geo:` is the Android-native
+  /// intent (opens the user's chosen map app); the Google Maps universal
+  /// URL is the fallback for iOS / when no geo: handler is present.
+  Future<void> _navigateToMeetPoint(double lat, double lng, String? label) async {
+    final gmaps = Uri.parse(
+      'https://www.google.com/maps/search/?api=1&query=$lat,$lng',
+    );
+    if (Platform.isAndroid) {
+      final q = label != null ? '?q=$lat,$lng(${Uri.encodeComponent(label)})' : '';
+      final geo = Uri.parse('geo:$lat,$lng$q');
+      try {
+        if (await canLaunchUrl(geo)) {
+          await launchUrl(geo, mode: LaunchMode.externalApplication);
+          return;
+        }
+      } catch (e) {
+        debugPrint('geo: launch failed, falling back to maps URL: $e');
+      }
+    }
+    try {
+      await launchUrl(gmaps, mode: LaunchMode.externalApplication);
+    } catch (e) {
+      debugPrint('maps URL launch failed: $e');
+      if (mounted) {
+        showTopBanner(context, 'Could not open maps.');
+      }
+    }
+  }
+
+  List<Widget> _buildMeetPoint(ThemeData theme, EventView e) {
+    final mp = _meetPoint!;
+    final mapUrl = _meetMapUrl(mp.lat, mp.lng);
+    final label = e.row.meetLabel;
+    return [
+      const SizedBox(height: 10),
+      if (mapUrl != null)
+        ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: InkWell(
+            onTap: () => _navigateToMeetPoint(mp.lat, mp.lng, label),
+            child: Image.network(
+              mapUrl,
+              height: 160,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              // L4: a tile-fetch failure must not break the card.
+              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+            ),
+          ),
+        ),
+      const SizedBox(height: 8),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: OutlinedButton.icon(
+          onPressed: () => _navigateToMeetPoint(mp.lat, mp.lng, label),
+          icon: const Icon(Icons.directions, size: 18),
+          label: Text(label != null ? 'Get directions to $label' : 'Get directions'),
+        ),
+      ),
+    ];
   }
 
   @override
@@ -336,6 +418,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ],
             ),
           ],
+          if (_meetPoint != null) ..._buildMeetPoint(theme, e),
           if (e.row.description != null && e.row.description!.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(e.row.description!, style: theme.textTheme.bodyMedium),

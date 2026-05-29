@@ -725,6 +725,24 @@ class SocialService extends ChangeNotifier {
     return xs.isEmpty ? null : xs.first;
   }
 
+  /// Event meetup coordinates, gated to active club members by the
+  /// `get_event_meet_point` SECURITY DEFINER RPC. The `meet_lat` /
+  /// `meet_lng` columns are revoked from every client role (precise
+  /// meeting points leak organiser home addresses — migrations
+  /// 20260723_001 / 20260806_001), so a direct column read can't reach
+  /// them. Returns null for non-members and events with no point set.
+  /// Persona-hunt social-group #10.
+  Future<({double lat, double lng})?> fetchEventMeetPoint(String eventId) async {
+    final res = await _c.rpc('get_event_meet_point', params: {'p_event_id': eventId});
+    if (res is! List || res.isEmpty) return null;
+    final row = res.first;
+    if (row is! Map) return null;
+    final lat = row['meet_lat'];
+    final lng = row['meet_lng'];
+    if (lat is! num || lng is! num) return null;
+    return (lat: lat.toDouble(), lng: lng.toDouble());
+  }
+
   /// Events that the current user is going to (status='going') in the next N
   /// hours. Used by the Run tab's "upcoming event" card. Returns the nearest.
   Future<EventView?> fetchNextRsvpedEvent({Duration window = const Duration(hours: 48)}) async {

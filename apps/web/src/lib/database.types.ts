@@ -2483,6 +2483,13 @@ export type Database = {
       }
       get_club_invite_token: { Args: { target_club: string }; Returns: string }
       get_coach_usage: { Args: { p_user_id: string }; Returns: number }
+      get_event_meet_point: {
+        Args: { p_event_id: string }
+        Returns: {
+          meet_lat: number
+          meet_lng: number
+        }[]
+      }
       get_integration_tokens: {
         Args: { p_provider: string; p_user_id: string }
         Returns: {

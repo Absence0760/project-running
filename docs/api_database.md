@@ -487,8 +487,8 @@ create table events (
   description     text,
   starts_at       timestamptz not null,
   duration_min    integer,
-  meet_lat        double precision,
-  meet_lng        double precision,
+  meet_lat        double precision,                   -- SELECT revoked from anon + authenticated (see below)
+  meet_lng        double precision,                   -- reachable only via get_event_meet_point() RPC
   meet_label      text,
   route_id        uuid references routes on delete set null,
   distance_m      numeric(10, 2),
@@ -521,6 +521,8 @@ create table club_posts (
 ```
 
 **Helper functions** (RLS readability): `is_club_member(club_id)` and `is_club_admin(club_id)` — `security definer` functions that encapsulate the `club_members` lookup so every policy below can read cleanly. A trigger auto-enrolls the owner as an `owner`-role member on club insert, so the helpers work uniformly for owners too.
+
+**`events.meet_lat` / `meet_lng` are column-revoked** from both `anon` and `authenticated` (migrations `20260723_001` / `20260806_001` / `20260818_001`) — a direct `select meet_lat, meet_lng from events` raises `42501`, because precise meeting coordinates would otherwise leak an organiser's home address to any signed-in non-member of a public club. The member-facing map pin + "Get directions" link on the event detail page reads them through `get_event_meet_point(p_event_id uuid) returns table(meet_lat, meet_lng)` (migration `20261027_001`): a `security definer` function that returns the coordinates only when `is_club_member(events.club_id)` and the point is set, and zero rows otherwise. EXECUTE is granted to `anon` + `authenticated` — the in-function membership check is the authorization gate, not the EXECUTE grant. Persona-hunt social-group #10.
 
 **Narrow unions** (client-side, no DB CHECK): `ClubRole = 'owner' | 'admin' | 'member'`, `RsvpStatus = 'going' | 'maybe' | 'declined'`. See `apps/web/src/lib/types.ts`.
 

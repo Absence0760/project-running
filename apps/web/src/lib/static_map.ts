@@ -89,3 +89,38 @@ export function buildLocalStaticMapUrl(
 	// a small card.
 	return `${base}/static/auto/${opts.w}x${opts.h}.png?path=${path}`;
 }
+
+/// Build a MapTiler Static Maps URL centred on a single point with a
+/// marker — used for the meetup-point thumbnail on the event detail
+/// page (persona-hunt social-group #10). Returns null when the key is
+/// missing or the coordinates are out of range so the caller can hide
+/// the thumbnail and fall back to the text label + directions link.
+export function buildStaticMarkerMapUrl(
+	lat: number,
+	lng: number,
+	opts: { w: number; h: number; style: string; key: string; zoom?: number },
+): string | null {
+	if (!opts.key) return null;
+	if (!Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+	if (lat < -90 || lat > 90 || lng < -180 || lng > 180) return null;
+	const zoom = opts.zoom ?? 14;
+	// Centre + zoom in the path, marker (lon,lat order) as a query param.
+	return (
+		`https://api.maptiler.com/maps/${opts.style}/static/` +
+		`${lng.toFixed(5)},${lat.toFixed(5)},${zoom}/${opts.w}x${opts.h}@2x.png` +
+		`?markers=${lng.toFixed(5)},${lat.toFixed(5)}&key=${opts.key}`
+	);
+}
+
+/// Platform-agnostic "open in maps" deep link for a meetup point.
+/// `geo:` is honoured by Android (and most mobile map apps); the
+/// Google Maps universal URL is the safe fallback for desktop / iOS
+/// browsers. Callers pick which to use per platform.
+export function mapsDirectionsUrl(lat: number, lng: number): string {
+	return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}
+
+export function geoUri(lat: number, lng: number, label?: string): string {
+	const q = label ? `?q=${lat},${lng}(${encodeURIComponent(label)})` : '';
+	return `geo:${lat},${lng}${q}`;
+}
