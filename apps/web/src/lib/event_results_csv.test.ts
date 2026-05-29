@@ -91,3 +91,53 @@ test('empty file reports an error', () => {
 	assert.equal(rows.length, 0);
 	assert.ok(errors.length > 0);
 });
+
+test('strips a leading UTF-8 BOM so the first header still matches', () => {
+	const csv = '﻿bib,name,time\n101,Alice,24:00\n';
+	const { rows, errors } = parseChipTimingCsv(csv, D);
+	assert.deepEqual(errors, []);
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].bib, '101');
+});
+
+test('header matching tolerates surrounding whitespace and mixed case', () => {
+	const csv = ' Bib , Full Name , Gun Time \n101,Alice,24:00\n';
+	const { rows, errors } = parseChipTimingCsv(csv, D);
+	assert.deepEqual(errors, []);
+	assert.equal(rows[0].finisherName, 'Alice');
+	assert.equal(rows[0].durationS, 1440);
+});
+
+test('CRLF line endings parse identically to LF', () => {
+	const { rows } = parseChipTimingCsv('bib,name,time\r\n101,Alice,24:00\r\n', D);
+	assert.equal(rows.length, 1);
+	assert.equal(rows[0].durationS, 1440);
+});
+
+test('a distance column with a zero/blank value falls back to the event distance', () => {
+	const { rows } = parseChipTimingCsv('bib,name,time,distance km\n1,A,20:00,0\n2,B,21:00,\n', D);
+	assert.equal(rows[0].distanceM, D);
+	assert.equal(rows[1].distanceM, D);
+});
+
+test('a blank line between rows is skipped, not treated as a bad row', () => {
+	const { rows, errors } = parseChipTimingCsv('bib,name,time\n101,Alice,24:00\n\n102,Bob,25:00\n', D);
+	assert.deepEqual(errors, []);
+	assert.deepEqual(
+		rows.map((r) => r.bib),
+		['101', '102']
+	);
+});
+
+test('status column is case-insensitive (DNF / Dnf / dnf all match)', () => {
+	const { rows } = parseChipTimingCsv('bib,name,time,status\n1,A,,DNF\n2,B,,Dnf\n3,C,20:00,finished\n', D);
+	assert.equal(rows[0].finisherStatus, 'dnf');
+	assert.equal(rows[1].finisherStatus, 'dnf');
+	assert.equal(rows[2].finisherStatus, 'finished');
+});
+
+test('a finished row with a blank time is rejected (no silent zero)', () => {
+	const { rows, errors } = parseChipTimingCsv('bib,name,time\n101,Alice,\n', D);
+	assert.equal(rows.length, 0);
+	assert.ok(errors.some((e) => e.includes('Row 2') && e.includes('unparseable')));
+});

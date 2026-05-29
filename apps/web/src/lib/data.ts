@@ -2129,6 +2129,12 @@ export async function removeEventResult(
 // `(event_id, instance_start, bib)` unique constraint so re-importing a
 // corrected sheet updates in place rather than duplicating. RLS gates the
 // write to the event's organiser via `event_results_insert_organiser`.
+//
+// `user_id` is deliberately NOT in the payload: on a fresh bib it defaults
+// to NULL (account-less), and on a re-import of a bib that a runner has
+// since claimed (persona #43 claim flow → user_id set by an organiser
+// approval) the column is left untouched so a corrected re-upload can't
+// silently revert the result to account-less and wipe the claim.
 export async function bulkImportEventResults(params: {
 	eventId: string;
 	instanceStart: string;
@@ -2138,7 +2144,6 @@ export async function bulkImportEventResults(params: {
 	const payload = params.rows.map((r) => ({
 		event_id: params.eventId,
 		instance_start: params.instanceStart,
-		user_id: null,
 		bib: r.bib,
 		finisher_name: r.finisherName,
 		duration_s: r.durationS,

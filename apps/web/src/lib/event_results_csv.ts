@@ -114,7 +114,10 @@ function parseStatus(raw: string | undefined): 'finished' | 'dnf' | 'dns' {
 // fixed-distance race). A non-finished row (DNF/DNS) keeps a 0 duration.
 export function parseChipTimingCsv(text: string, eventDistanceM: number): ParsedResultCsv {
 	const errors: string[] = [];
-	const table = tokenize(text).filter((r) => r.some((c) => c.trim() !== ''));
+	// Excel and many timing exports prepend a UTF-8 BOM; left in place it
+	// corrupts the first header ("﻿bib" never matches "bib").
+	const clean = text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
+	const table = tokenize(clean).filter((r) => r.some((c) => c.trim() !== ''));
 	if (table.length === 0) return { rows: [], errors: ['The file is empty.'] };
 
 	const header = table[0];
