@@ -2330,6 +2330,28 @@ What § 92 still binds under this resolution:
 
 The full Phase 0–5 timeline in the table above remains the final-state vision. It's just not the tier-1 plan.
 
+## 93. Training plans apply a masters (50+) recovery calibration — wider hard-day spacing + a 3-week cycle, not slower paces
+
+Persona-hunt finding Older #30. The plan generator (`generatePlan`) scheduled the first quality session 48h after the Sunday long run (Tuesday) and stepped weekly volume back every 4th week. Both defaults are tuned for younger physiology — masters athletes recover more slowly between hard efforts, so every masters-specific plan widens hard-day spacing toward ~72h and shortens the build/recover cycle.
+
+What we changed (mirrored across the `training.ts` ↔ `training.dart` twins):
+
+- `GeneratePlanInput.age` — optional whole-years field. `isMastersAge(age)` is true at or above `MASTERS_AGE` (50). Null/undefined → the standard schedule (back-compat).
+- When masters: the first quality day moves Tue→Wed (72h after the long run) and the second Thu→Fri (keeping ~48h between the two hard sessions); volume steps back every 3rd week instead of every 4th. `isStepBackWeek(i, masters)` centralises the cadence and always keeps week 0 at full ramp.
+- The plan wizard (web `PlanEditor.svelte`, mobile `plan_new_screen.dart` via `TrainingService.fetchViewerAge`) reads `user_profiles.date_of_birth` on mount and passes the derived age. No new wizard field — the DOB the runner already set in Settings → Preferences (HR-max derivation, age-grading) is reused.
+
+Why recovery density and not pace (unlike the § 76 female pace calibration):
+
+- The harm being fixed is hard-day frequency, not prescribed intensity. A masters runner can still hit Daniels paces for the duration of a session; what hurts is stacking those sessions too close together.
+- No age × VDOT pace table has been published with the rigour required to override Daniels. Slowing every band by an age factor would be guessing — the conservative move is to leave paces alone and fix the spacing the literature actually supports.
+
+Don't re-litigate by:
+
+- Asking age in the plan wizard — the DOB already lives on the profile.
+- Adding a per-age sliding scale (55 vs 70). The single 50+ threshold matches how masters categories work in the sport; a finer gradient invites bikeshedding without data to back the curve.
+
+Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/test/training_test.dart` (4) — boundary, Wed-not-Tue first quality, never-<72h invariant, 3-week step-back.
+
 ---
 
 ## How to add an entry
