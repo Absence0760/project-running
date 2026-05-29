@@ -17,8 +17,8 @@ Wear OS is the wrong base for an ultra watch. Specifically:
 
 | Option | Verdict |
 |---|---|
-| **Zephyr RTOS** | First-class support on both candidate MCUs (Apollo4 + nRF5340). LTS releases. Apache 2.0 licence. Modern device-tree-based BSP. Drivers for every sensor on the BOM already exist upstream. Used by Nordic, Intel, Bose, and a growing share of wearable / IoT projects. **Pick this.** |
-| FreeRTOS | Mature, simple, ubiquitous. Widely used in consumer wearables (Garmin and Polar's older firmware lines are FreeRTOS-derived, per public teardowns and job-postings). Smaller community than Zephyr. Driver ecosystem is per-vendor SDK rather than upstream. Reasonable fallback if Zephyr's HAL for the Apollo4 turns out to have gaps |
+| **Zephyr RTOS** | First-class support on both candidate MCUs (Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) + nRF5340). LTS releases. Apache 2.0 licence. Modern device-tree-based BSP. Drivers for every sensor on the BOM already exist upstream. Used by Nordic, Intel, Bose, and a growing share of wearable / IoT projects. **Pick this.** |
+| FreeRTOS | Mature, simple, ubiquitous. Widely used in consumer wearables (Garmin and Polar's older firmware lines are FreeRTOS-derived, per public teardowns and job-postings). Smaller community than Zephyr. Driver ecosystem is per-vendor SDK rather than upstream. Reasonable fallback if Zephyr's HAL for the Apollo510B turns out to have gaps |
 | MyNewt / RIOT / NuttX | Niche; smaller communities; less reason to pick them over Zephyr unless you have specific licence or architectural concerns |
 | MicroPython / CircuitPython | Cute for tier-1 bench prototypes; performance + memory cost rules them out for shipping firmware |
 | Custom no-RTOS bare-metal | Possible (this is what 2010-era Garmin did) but gives up the cooperative-multitasking + driver ecosystem that Zephyr provides. Worth +20% battery life maybe, costs 6–12 months of engineering to replicate |
@@ -50,7 +50,7 @@ apps/custom_watch/         # tier-1 firmware workspace (would also host the Zeph
   west.yml                 # workspace manifest
 ```
 
-Toolchain: Zephyr SDK 0.16+, west, west build for cross-compiling. Debugger: JLink (Apollo4) or nRF Connect (nRF5340). CI: GitHub Actions with `zmkfirmware/zephyr-west-action` for build verification.
+Toolchain: Zephyr SDK 0.16+, west, west build for cross-compiling. Debugger: JLink (Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)) or nRF Connect (nRF5340). CI: GitHub Actions with `zmkfirmware/zephyr-west-action` for build verification.
 
 ## Integration with the existing app
 
