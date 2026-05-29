@@ -75,6 +75,7 @@ void main() {
         joinPolicy: 'open',
         memberCount: 0,
         isVerified: true,
+        requiresActivityWaiver: false,
       );
       final json = row.toJson();
       expect(json.containsKey('is_verified'), isTrue);
@@ -95,6 +96,7 @@ void main() {
         joinPolicy: 'open',
         memberCount: 42,
         isVerified: true,
+        requiresActivityWaiver: false,
       );
       final roundTripped = ClubRow.fromJson(original.toJson());
       expect(roundTripped.id, original.id);
