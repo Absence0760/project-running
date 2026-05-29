@@ -540,6 +540,7 @@ These are stubs. Each closes a gap against a specific competitor (see `docs/comp
 ### Social graph
 **Closes:** Strava, Nike Run Club.
 **Stub:** `follows` table; activity feed of people you follow; kudos (one-tap); threaded comments on runs; per-user privacy zones that blur start/end within radius.
+**Shipped (web):** 1:1 **direct messages** (persona #55) — `/messages`, gated on the follow graph + blocks, with a `message` notification. Realtime delivery + a non-follower "message requests" inbox are deferred.
 
 ### Gear tracking
 **Closes:** Strava, Garmin.

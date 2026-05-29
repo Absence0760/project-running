@@ -506,6 +506,15 @@
 						</span>
 						<span>{profile.viewer_follows ? 'Following' : 'Follow'}</span>
 					</button>
+					<a
+						class="btn btn-outline btn-message"
+						href={`/messages/${userId}`}
+						aria-label="Message"
+						title="Message"
+					>
+						<span class="material-symbols" aria-hidden="true">chat_bubble</span>
+						<span>Message</span>
+					</a>
 				{/if}
 				<button
 					class="btn btn-outline btn-icon-only"

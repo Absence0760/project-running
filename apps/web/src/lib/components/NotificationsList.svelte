@@ -89,6 +89,8 @@
 					: null;
 			case 'plan_update':
 				return r.plan_id ? `/plans/${r.plan_id}` : null;
+			case 'message':
+				return r.actor_id ? `/messages/${r.actor_id}` : null;
 		}
 	}
 
@@ -116,6 +118,8 @@
 					: 'An event occurrence you RSVP\'d to was cancelled';
 			case 'plan_update':
 				return `${name} updated your training plan`;
+			case 'message':
+				return `${name} sent you a message`;
 		}
 	}
 

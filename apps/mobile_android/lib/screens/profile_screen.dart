@@ -802,6 +802,8 @@ class _ProfileScreenState extends State<ProfileScreen>
             : '$name RSVP\'d Going to your event';
       case 'plan_update':
         return '$name updated your training plan';
+      case 'message':
+        return '$name sent you a message';
       default:
         return '$name interacted with your activity';
     }

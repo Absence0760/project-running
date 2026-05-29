@@ -4527,3 +4527,124 @@ export async function submitReport(input: {
 	}
 	return data as string;
 }
+
+// ─────────────────────── Direct messages (#55) ───────────────────────
+
+export interface DirectMessage {
+	id: string;
+	sender_id: string;
+	recipient_id: string;
+	body: string;
+	created_at: string;
+	read_at: string | null;
+}
+
+export interface DmThread {
+	partnerId: string;
+	partnerName: string | null;
+	partnerAvatar: string | null;
+	lastBody: string;
+	lastAt: string;
+	lastFromMe: boolean;
+	unread: number;
+}
+
+/// Conversation list: the latest message per partner + an unread count.
+/// Aggregated client-side from a recent window of the viewer's messages
+/// — fine at MVP volume; a per-thread RPC can replace it if a power
+/// user's inbox outgrows the window.
+export async function fetchDmThreads(): Promise<DmThread[]> {
+	const me = auth.user?.id;
+	if (!me) return [];
+	const { data, error } = await supabase
+		.from('direct_messages')
+		.select('*')
+		.or(`sender_id.eq.${me},recipient_id.eq.${me}`)
+		.order('created_at', { ascending: false })
+		.limit(500);
+	if (error || !data) return [];
+	const rows = data as DirectMessage[];
+	const byPartner = new Map<string, DmThread>();
+	for (const m of rows) {
+		const partner = m.sender_id === me ? m.recipient_id : m.sender_id;
+		let t = byPartner.get(partner);
+		if (!t) {
+			t = {
+				partnerId: partner,
+				partnerName: null,
+				partnerAvatar: null,
+				lastBody: m.body,
+				lastAt: m.created_at,
+				lastFromMe: m.sender_id === me,
+				unread: 0,
+			};
+			byPartner.set(partner, t);
+		}
+		// Unread = messages TO me from this partner that I haven't read.
+		if (m.recipient_id === me && m.read_at === null) t.unread += 1;
+	}
+	const partnerIds = [...byPartner.keys()];
+	if (partnerIds.length > 0) {
+		const { data: profiles } = await supabase
+			.from('user_profiles')
+			.select('id, display_name, avatar_url')
+			.in('id', partnerIds);
+		for (const p of profiles ?? []) {
+			const t = byPartner.get(p.id as string);
+			if (t) {
+				t.partnerName = (p.display_name as string | null) ?? null;
+				t.partnerAvatar = (p.avatar_url as string | null) ?? null;
+			}
+		}
+	}
+	return [...byPartner.values()].sort((a, b) => b.lastAt.localeCompare(a.lastAt));
+}
+
+/// Full message history with one partner, oldest-first for rendering.
+export async function fetchDmThread(otherId: string, limit = 200): Promise<DirectMessage[]> {
+	const me = auth.user?.id;
+	if (!me) return [];
+	const { data, error } = await supabase
+		.from('direct_messages')
+		.select('*')
+		.or(
+			`and(sender_id.eq.${me},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${me})`,
+		)
+		.order('created_at', { ascending: true })
+		.limit(limit);
+	if (error || !data) return [];
+	return data as DirectMessage[];
+}
+
+/// Send a message. RLS enforces the no-block + follow-graph gate; a
+/// 42501 surfaces as a friendly "can't message this person" error.
+export async function sendDm(recipientId: string, body: string): Promise<DirectMessage> {
+	const me = auth.user?.id;
+	if (!me) throw new Error('Not signed in');
+	const trimmed = body.trim();
+	if (!trimmed) throw new Error('Message is empty');
+	const { data, error } = await supabase
+		.from('direct_messages')
+		.insert({ sender_id: me, recipient_id: recipientId, body: trimmed })
+		.select('*')
+		.single();
+	if (error || !data) {
+		if (error?.code === '42501') {
+			throw new Error("You can only message people you follow (or who follow you), and who haven't blocked you.");
+		}
+		throw error ?? new Error('Send failed');
+	}
+	return data as DirectMessage;
+}
+
+/// Mark every message from `otherId` to the viewer as read.
+export async function markDmThreadRead(otherId: string): Promise<void> {
+	const me = auth.user?.id;
+	if (!me) return;
+	await supabase
+		.from('direct_messages')
+		.update({ read_at: new Date().toISOString() })
+		.eq('sender_id', otherId)
+		.eq('recipient_id', me)
+		.is('read_at', null);
+}

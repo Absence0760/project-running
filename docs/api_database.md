@@ -306,6 +306,22 @@ Two indexes for the read path: `(user_id, created_at desc)` for the list view, a
 
 RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them. `notify_event_rsvp` fires for the event's `created_by` only and only when `status = 'going'`; Maybe / Declined intentionally produce no inbox row.
 
+### `direct_messages`
+
+```sql
+create table direct_messages (
+  id            uuid primary key default gen_random_uuid(),
+  sender_id     uuid references auth.users(id) on delete cascade not null,
+  recipient_id  uuid references auth.users(id) on delete cascade not null,
+  body          text not null check (length(btrim(body)) between 1 and 4000),
+  created_at    timestamptz not null default now(),
+  read_at       timestamptz,
+  check (sender_id <> recipient_id)
+);
+```
+
+1:1 direct messages (very-social persona #55, migration `20261026_001`). A "thread" is the unordered participant pair — no separate threads table; indexes use `least/greatest(sender_id, recipient_id)` so A→B and B→A share a symmetric thread index. RLS: each participant reads their own threads; **INSERT is gated on `not is_blocked_either_way(sender, recipient)` AND an existing follow in either direction** — a plain `user_blocks` subquery would be hidden from the sender by that table's owner-read RLS, so the SECURITY DEFINER helper is load-bearing here, not a convenience. The recipient marks read (UPDATE); either party deletes. A `message` notification fires to the recipient only on the first unread message of a burst (the trigger checks for an existing unread from the same sender) so an active thread doesn't flood the bell. Deferred: realtime delivery, a non-follower "message requests" inbox, mobile.
+
 ### `segments` / `segment_efforts`
 
 Segments + leaderboards (decisions §37). v1 segments are slices of a *saved route* — `(route_id, start_distance_m, end_distance_m)` — not arbitrary geometry. Visibility on both tables tracks the parent route via EXISTS.
