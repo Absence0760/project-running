@@ -329,6 +329,17 @@ Manifest: `<service android:name=".tiles.ActiveRunTileService">` with `permissio
 What the UI exposes during a recording, for quick reference when reading
 `ui/RunWatchApp.kt`:
 
+**Rotary input (bezel / crown).** The genuinely scrollable list screens —
+`BatteryInstructions` and the route picker — attach
+`Modifier.rotaryScrollable(RotaryScrollableDefaults.behavior(scrollableState
+= listState), focusRequester)` and request focus on appearance, so a
+Galaxy Watch physical bezel or a Pixel Watch crown scrolls them (persona
+samsung #32). The pre-run screen is deliberately NOT a scrolling column —
+it's a region-anchored `Box` so overflow in one region can't push the
+Start button off-frame — and the sign-in screen is excluded because its
+`FocusRequester` belongs to the text inputs (auto-focusing the list would
+steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
+
 - **Pre-run activity picker.** `CompactChip` on `PreRunScreen` cycles
   `run → walk → hike → cycle`; the choice flows through to
   `metadata.activity_type` on save.

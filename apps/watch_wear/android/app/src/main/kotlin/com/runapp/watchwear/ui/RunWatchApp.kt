@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -67,6 +65,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.wear.compose.foundation.lazy.AutoCenteringParams
 import androidx.wear.compose.foundation.lazy.ScalingLazyColumn
 import androidx.wear.compose.foundation.lazy.rememberScalingLazyListState
+import androidx.wear.compose.foundation.rotary.RotaryScrollableDefaults
+import androidx.wear.compose.foundation.rotary.rotaryScrollable
 import androidx.wear.compose.foundation.lazy.ScalingLazyListState
 import androidx.wear.compose.material.Button
 import androidx.wear.compose.material.ButtonDefaults
@@ -349,8 +349,18 @@ private fun BatteryInstructions(
     onClose: () -> Unit,
 ) {
     val listState = rememberScalingLazyListState()
+    // Rotary bezel / crown drives the scroll (Galaxy Watch physical
+    // bezel, Pixel Watch crown). Without this the only way down a list
+    // longer than the screen is a touch drag. Persona samsung #32.
+    val rotaryFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { rotaryFocus.requestFocus() }
     ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .rotaryScrollable(
+                RotaryScrollableDefaults.behavior(scrollableState = listState),
+                focusRequester = rotaryFocus,
+            ),
         state = listState,
         horizontalAlignment = Alignment.CenterHorizontally,
         autoCentering = AutoCenteringParams(itemIndex = 0),
@@ -1398,8 +1408,16 @@ private fun RoutePickerScreen(
     onCancel: () -> Unit,
 ) {
     val listState = rememberScalingLazyListState()
+    // Rotary bezel / crown scroll for the route list. Persona samsung #32.
+    val rotaryFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { rotaryFocus.requestFocus() }
     ScalingLazyColumn(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .rotaryScrollable(
+                RotaryScrollableDefaults.behavior(scrollableState = listState),
+                focusRequester = rotaryFocus,
+            ),
         state = listState,
         horizontalAlignment = Alignment.CenterHorizontally,
         autoCentering = AutoCenteringParams(itemIndex = 0),
