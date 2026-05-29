@@ -88,7 +88,10 @@ step "Configured chip target (.cargo/config.toml runner)"
 CONFIG_FILE="$REPO_ROOT/apps/custom_watch/.cargo/config.toml"
 if [[ -f "$CONFIG_FILE" ]]; then
 	# Pull the --chip arg out of the runner = "probe-rs run --chip <CHIP>" line.
-	chip="$(grep -E '^[[:space:]]*runner[[:space:]]*=.*--chip' "$CONFIG_FILE" | sed -E 's/.*--chip[[:space:]]+([A-Za-z0-9_]+).*/\1/' | head -1)"
+	# Allow optional surrounding " or ' on the chip arg, and allow hyphens in
+	# the chip name (some probe-rs IDs include them). Single quote inside the
+	# sed pattern needs '\'' to escape out of the outer single-quoted string.
+	chip="$(grep -E '^[[:space:]]*runner[[:space:]]*=.*--chip' "$CONFIG_FILE" | sed -E 's/.*--chip[[:space:]]+["'\'']?([A-Za-z0-9_-]+).*/\1/' | head -1)"
 	if [[ -n "$chip" ]]; then
 		ok "Configured chip: $chip"
 		dim "Verify this matches the actual silicon on your DK."
