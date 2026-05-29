@@ -1173,12 +1173,19 @@ export async function fetchPersonalRecords() {
 	if (!data || data.length === 0) return [];
 
 	const labels: Record<string, string> = {
+		'1_mile': 'Mile',
 		'5k': '5k',
 		'10k': '10k',
 		half_marathon: 'Half Marathon',
 		marathon: 'Marathon',
 	};
-	const order: Record<string, number> = { '5k': 0, '10k': 1, half_marathon: 2, marathon: 3 };
+	const order: Record<string, number> = {
+		'1_mile': 0,
+		'5k': 1,
+		'10k': 2,
+		half_marathon: 3,
+		marathon: 4,
+	};
 
 	return data
 		.slice()
