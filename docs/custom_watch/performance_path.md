@@ -108,7 +108,7 @@ When tier 1 is done and you've decided to push to tier 2, the migration looks ro
 
 | Subsystem | Tier 1 | Production target | Power impact |
 |---|---|---|---|
-| MCU | Nordic nRF52840 | Ambiq Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) | ~25× active-power improvement (Apollo4 → Apollo510B is another ~2× on top of Apollo4's ~10× vs nRF52840) |
+| MCU | Nordic nRF52840 | Ambiq Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) | ~25× active-power improvement (Apollo4 → Apollo510B is another ~2× on top of Apollo4's ~12× vs nRF52840 — body text above derives this from 50 µA/MHz ÷ 4 µA/MHz = 12.5×) |
 | GNSS | u-blox MAX-M10S (single-band) | Sony CXD5610 (dual-band snapshot mode) | ~2× power, ~5× accuracy in foliage |
 | Display | Sharp MIP 1.3" breakout | Sharp MIP custom-cut to case | Same chip family, same draw |
 | Sensor coprocessor | None (main CPU does everything) | Apollo510B integrated 48 MHz BLE network processor or discrete BHI260 | ~2–3× always-on power |
