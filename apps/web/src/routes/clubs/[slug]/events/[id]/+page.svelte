@@ -24,6 +24,11 @@
 		endRace,
 		approveEventResult,
 		bulkImportEventResults,
+		requestEventResultClaim,
+		fetchMyEventResultClaims,
+		fetchPendingEventResultClaims,
+		decideEventResultClaim,
+		type EventResultClaimWithUser,
 		fetchEventExceptions,
 		cancelEventInstance,
 		reinstateEventInstance,
@@ -222,6 +227,37 @@
 		results = res[3];
 		raceSession = res[4];
 		eventPhotos = res[5];
+		// Bib-result claims (persona #43): the viewer's own claim state for
+		// the pending-row affordance, and the organiser's adjudication queue.
+		myClaims = myUserId
+			? await fetchMyEventResultClaims(event.id, activeInstance)
+			: new Map();
+		pendingClaims = isEventOrganiser
+			? await fetchPendingEventResultClaims(event.id, activeInstance)
+			: [];
+	}
+
+	let myClaims = $state<Map<string, 'pending' | 'approved' | 'rejected'>>(new Map());
+	let pendingClaims = $state<EventResultClaimWithUser[]>([]);
+
+	async function claimResult(resultId: string) {
+		try {
+			await requestEventResultClaim(resultId);
+			showToast('Claim submitted — the organiser will review it.', 'success');
+			await reloadInstance();
+		} catch (err) {
+			showToast(err instanceof Error ? err.message : 'Could not submit claim.', 'error');
+		}
+	}
+
+	async function decideClaim(claimId: string, approve: boolean) {
+		try {
+			await decideEventResultClaim(claimId, approve);
+			showToast(approve ? 'Claim approved.' : 'Claim rejected.', 'success');
+			await reloadInstance();
+		} catch (err) {
+			showToast(err instanceof Error ? err.message : 'Could not update claim.', 'error');
+		}
 	}
 
 	// #49: the viewer can contribute to the event gallery when they have
@@ -1313,9 +1349,35 @@
 							{:else if isRaceDirector && r.user_id !== null && r.organiser_approved && r.user_id !== myUserId}
 								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id!, false)}>Unverify</button>
 							{/if}
+							{#if myUserId && r.user_id === null && !hasMyResult}
+								{#if myClaims.get(r.id) === 'pending'}
+									<span class="claim-pending">Claim pending</span>
+								{:else}
+									<button type="button" class="btn-link claim" onclick={() => claimResult(r.id)}>This is me</button>
+								{/if}
+							{/if}
 						</li>
 					{/each}
 				</ol>
+			{/if}
+
+			{#if isEventOrganiser && pendingClaims.length > 0}
+				<div class="claims-queue">
+					<h4>Result claims ({pendingClaims.length})</h4>
+					<p class="muted claims-help">A runner is asking to attach their account to an imported result. Approving links it to them.</p>
+					<ul>
+						{#each pendingClaims as c (c.id)}
+							<li>
+								<span class="claim-desc">
+									<strong>{c.claimant_name ?? 'Runner'}</strong> claims bib {c.bib ?? '—'}
+									{#if c.finisher_name}<span class="muted">({c.finisher_name})</span>{/if}
+								</span>
+								<button type="button" class="btn-link approve" onclick={() => decideClaim(c.id, true)}>Approve</button>
+								<button type="button" class="btn-link reject" onclick={() => decideClaim(c.id, false)}>Reject</button>
+							</li>
+						{/each}
+					</ul>
+				</div>
 			{/if}
 
 			{#if showResultPicker}
@@ -2320,6 +2382,37 @@
 		margin: var(--space-sm) 0 0;
 		font-size: 0.9rem;
 		font-weight: 600;
+	}
+	.claim-pending {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		font-style: italic;
+	}
+	.claims-queue {
+		margin-top: var(--space-lg);
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+	}
+	.claims-help {
+		font-size: 0.85rem;
+		margin: 0 0 var(--space-sm);
+	}
+	.claims-queue ul {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+	}
+	.claims-queue li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+	}
+	.claim-desc {
+		flex: 1;
+		font-size: 0.9rem;
 	}
 	.race-panel {
 		border: 1.5px solid var(--color-primary);
