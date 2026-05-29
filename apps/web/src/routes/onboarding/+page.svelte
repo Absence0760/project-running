@@ -45,7 +45,12 @@
 	let healthDataConsent = $state(false);
 
 	// ── Step 5: privacy default ───────────────────────────────
-	let privacyDefault = $state<'public' | 'followers' | 'private'>('followers');
+	// Defaults to `private` (privacy-by-default) so a new runner isn't
+	// silently opted into a follower-visible feed, and so the value the
+	// wizard writes to the bag matches the mobile onboarding default —
+	// previously this 'followers' default propagated via SettingsSync and
+	// overrode a mobile user's private choice. Persona-hunt new #56.
+	let privacyDefault = $state<'public' | 'followers' | 'private'>('private');
 
 	// ── Step 6: notifications ─────────────────────────────────
 	const pushSupported = isPushSupported();

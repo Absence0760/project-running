@@ -524,6 +524,7 @@ class _RunAppState extends State<RunApp> {
                 )
               : OnboardingScreen(
                   preferences: widget.preferences,
+                  settingsSync: widget.settingsSync,
                   onDone: () => setState(() {}),
                 ),
         );

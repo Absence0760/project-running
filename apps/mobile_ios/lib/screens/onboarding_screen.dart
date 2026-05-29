@@ -1,19 +1,27 @@
+import 'package:api_client/api_client.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
 import '../preferences.dart';
+import '../settings_sync.dart';
 
-/// First-launch welcome flow. Three swipable pages followed by permission
-/// request. Marks preferences.onboarded = true on completion.
+/// First-launch welcome flow. Three info pages, then a privacy-default
+/// chooser, followed by the location-permission request. Marks
+/// preferences.onboarded = true on completion.
 class OnboardingScreen extends StatefulWidget {
   final Preferences preferences;
   final VoidCallback onDone;
+  /// Optional — when present, the chosen privacy default is written to
+  /// the universal settings bag so it roams and isn't silently
+  /// overridden by another device's default (persona #56).
+  final SettingsSyncService? settingsSync;
 
   const OnboardingScreen({
     super.key,
     required this.preferences,
     required this.onDone,
+    this.settingsSync,
   });
 
   @override
@@ -23,6 +31,14 @@ class OnboardingScreen extends StatefulWidget {
 class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _page = 0;
+  /// Default visibility for new runs, chosen on the final onboarding
+  /// page. Privacy-by-default for a brand-new runner (persona #56);
+  /// matches the web wizard's default so cross-device sync agrees.
+  String _privacyDefault = 'private';
+
+  /// Total onboarding pages: the info pages + the privacy chooser.
+  int get _pageCount => _pages.length + 1;
+  bool get _onPrivacyPage => _page == _pages.length;
 
   final _pages = const [
     _PageData(
@@ -66,12 +82,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   ];
 
   Future<void> _next() async {
-    if (_page < _pages.length - 1) {
+    if (_page < _pageCount - 1) {
       _controller.nextPage(
         duration: const Duration(milliseconds: 300),
         curve: Curves.easeOut,
       );
     } else {
+      // Persist the privacy choice locally (drives is_public on every
+      // run save) AND push it to the universal bag so it's an explicit
+      // value that roams + isn't overridden by another device's default
+      // (persona #56). The bag write is best-effort — the local pref is
+      // what protects new-run visibility immediately.
+      await widget.preferences.setPrivacyDefault(_privacyDefault);
+      try {
+        await widget.settingsSync?.updateUniversal(
+          <String, dynamic>{SettingsKeys.privacyDefault: _privacyDefault},
+        );
+      } catch (e) {
+        debugPrint('onboarding privacy bag write failed (kept local): $e');
+      }
       await _requestLocationPermission();
       await widget.preferences.setOnboarded(true);
       if (!mounted) return;
@@ -100,9 +129,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             Expanded(
               child: PageView.builder(
                 controller: _controller,
-                itemCount: _pages.length,
+                itemCount: _pageCount,
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (context, index) {
+                  if (index == _pages.length) return _buildPrivacyPage(theme);
                   final p = _pages[index];
                   // The Location page's Play-policy disclosure copy is
                   // long enough to overflow a small phone viewport when
@@ -162,7 +192,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
             Row(
               mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(_pages.length, (i) {
+              children: List.generate(_pageCount, (i) {
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 200),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -187,7 +217,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: Text(
-                    _page == _pages.length - 1 ? 'Grant permission' : 'Next',
+                    _onPrivacyPage ? 'Grant permission' : 'Next',
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -195,6 +225,75 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildPrivacyPage(ThemeData theme) {
+    const options = [
+      (
+        value: 'private',
+        icon: Icons.lock_outline,
+        title: 'Private',
+        subtitle: 'Only you can see your runs. You can share any run later.',
+      ),
+      (
+        value: 'followers',
+        icon: Icons.group_outlined,
+        title: 'Followers',
+        subtitle: 'People who follow you see new runs in their feed.',
+      ),
+      (
+        value: 'public',
+        icon: Icons.public,
+        title: 'Public',
+        subtitle: 'Anyone can find and view your runs.',
+      ),
+    ];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const SizedBox(height: 8),
+          Text(
+            'Who sees your runs?',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.headlineMedium
+                ?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Pick a default for new runs. You can change it any time in '
+            'Settings, and override it on any single run.',
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyMedium
+                ?.copyWith(color: theme.colorScheme.outline, height: 1.4),
+          ),
+          const SizedBox(height: 20),
+          for (final o in options)
+            Card(
+              margin: const EdgeInsets.symmetric(vertical: 6),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: _privacyDefault == o.value
+                      ? theme.colorScheme.primary
+                      : theme.colorScheme.outline.withValues(alpha: 0.25),
+                  width: _privacyDefault == o.value ? 2 : 1,
+                ),
+              ),
+              child: RadioListTile<String>(
+                value: o.value,
+                groupValue: _privacyDefault,
+                onChanged: (v) => setState(() => _privacyDefault = v!),
+                secondary: Icon(o.icon, color: theme.colorScheme.primary),
+                title: Text(o.title,
+                    style: const TextStyle(fontWeight: FontWeight.w600)),
+                subtitle: Text(o.subtitle),
+              ),
+            ),
+        ],
       ),
     );
   }
