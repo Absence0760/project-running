@@ -2394,6 +2394,18 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 97. Coach-athlete roster is a web-first invite/accept link model (persona-hunt coach #46)
+
+**Decided (2026-05-29, persona-hunt #46):** a human coach connects to an athlete through a shareable invite token, not a follow or a club. Migration `20261102_001` adds `coach_athletes` — one row per link: `coach_id`, nullable `athlete_id`, `status` (`pending` | `active` | `ended`), `invite_token`, plus `note` / `accepted_at` / `ended_at`. The coach mints a `pending` row (athlete_id null) on `/coaching` and shares `/coaching/accept/<token>`; the athlete redeems via the `redeem_coach_invite` SECURITY DEFINER RPC, which sets `athlete_id = auth.uid()` and flips the row to `active`. RLS scopes every read/write to the two parties; either may end a link (`status='ended'`), and a coach may delete an unredeemed invite.
+
+**Why a token, not a directed follow or a request/approve queue:** a coach often onboards athletes who aren't on the app yet, so the link has to survive "share a URL, they sign up, then accept" — a follow presumes both accounts already exist and a request queue adds an approval round-trip the invite URL already encodes. The token also makes the consent explicit and revocable from both ends, which is the property the run-visibility tier (§ 98) leans on. `athlete_id` is nullable precisely so one coach can hold many open invites at once; a partial unique index keeps at most one live (`pending`/`active`) link per `(coach, athlete)` pair while letting unredeemed invites (null athlete) coexist.
+
+**Why web-first / MVP scope:** per § 24 the web app is the canonical surface, and the coaching roster is pure CRUD over a link table — no device capability is involved — so it ships web-only first with no mobile/watch mirror yet. v1 is invite / accept / roster-list / end-link only. **Deliberately deferred:** coach-owned training plans and plan assignment, plan-edit notifications to the athlete (persona #48), notifications on accept, and any mobile/watch surface. Consent-gated coach run visibility (#47) builds directly on the `active` link — see § 98.
+
+**Don't re-litigate unless** coaches need to invite a specific known user without copy-pasting a URL (then add a directed-invite-by-handle path alongside the token), or an org/club wants to manage a shared roster of coaches (then the link grows a `club_id` scope and the roster surface moves under the club).
+
+---
+
 ## 98. An active coach reads an athlete's runs (private + public); the raw GPS track stays owner-only
 
 **Decided (2026-05-29, persona-hunt #47):** the coach-athlete link (`coach_athletes`, migration `20261102_001`, persona #46, decisions § 97) is the consent spine for run visibility. Migration `20261103_001` adds a `private.is_active_coach_of(coach, athlete)` SECURITY DEFINER helper, a `runs` SELECT policy (`active coach reads athlete runs`), and a coach branch inside `private.is_run_visible_to`. Net effect: a coach with a `status = 'active'` link can read all of their athlete's run rows — **public and private** — and the social rows hanging off them (run_kudos / run_comments / run_photos / segment_efforts / live_run_pings, all gated on `is_run_visible_to`).
