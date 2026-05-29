@@ -273,11 +273,13 @@ create table run_photos (
   storage_path  text not null,            -- {owner_id}/{photo_id}.{ext}
   caption       text check (caption is null or length(caption) <= 280),
   position_idx  smallint not null default 0,
-  created_at    timestamptz not null default now()
+  created_at    timestamptz not null default now(),
+  event_id              uuid references events(id) on delete set null,  -- #49 gallery tag
+  event_instance_start  timestamptz
 );
 ```
 
-In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies gate SELECT on `is_run_visible_to(rp.run_id, auth.uid())` (joining through `run_photos`) and INSERT/DELETE on the per-user folder. The bucket is private; clients use signed URLs with a 1 h TTL. Known gaps: no server-side thumbnail generation and no EXIF stripping.
+In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies gate SELECT on `is_run_visible_to(rp.run_id, auth.uid())` (joining through `run_photos`) and INSERT/DELETE on the per-user folder. The bucket is private; clients use signed URLs with a 1 h TTL. Known gaps: no EXIF stripping. **Event gallery (#49, migration `20261025_001`):** `event_id` + `event_instance_start` tag a photo to an event occurrence; a `for select` policy makes event-tagged photos readable by anyone who can read the event (the `exists (… from events …)` subquery inherits the events RLS), so the gallery aggregates attendees' photos even across private runs. The INSERT policy additionally requires the uploader can see the tagged event.
 
 ### `notifications`
 

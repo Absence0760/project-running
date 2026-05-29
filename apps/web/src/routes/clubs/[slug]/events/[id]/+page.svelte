@@ -26,10 +26,13 @@
 		fetchEventExceptions,
 		cancelEventInstance,
 		reinstateEventInstance,
+		fetchEventPhotos,
+		addRunPhoto,
 		type EventResultWithUser,
 		type RecentRunOption,
 		type RaceSessionRow,
-		type EventException
+		type EventException,
+		type EventPhoto
 	} from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -60,6 +63,8 @@
 	let error = $state<string | null>(null);
 	let draftPost = $state('');
 	let results = $state<EventResultWithUser[]>([]);
+	let eventPhotos = $state<EventPhoto[]>([]);
+	let photoUploading = $state(false);
 	let showResultPicker = $state(false);
 	let runOptions = $state<RecentRunOption[]>([]);
 	let submitting = $state(false);
@@ -185,7 +190,8 @@
 			event.route_id ? fetchRouteById(event.route_id) : Promise.resolve(null),
 			fetchClubPosts(club.id, 50),
 			fetchEventResults(event.id, activeInstance),
-			fetchRaceSession(event.id, activeInstance)
+			fetchRaceSession(event.id, activeInstance),
+			fetchEventPhotos(event.id, activeInstance)
 		]);
 		attendees = res[0];
 		route = res[1];
@@ -194,6 +200,36 @@
 		);
 		results = res[3];
 		raceSession = res[4];
+		eventPhotos = res[5];
+	}
+
+	// #49: the viewer can contribute to the event gallery when they have
+	// a finisher result here (their own result row carries run_id; the
+	// redaction view nulls it for everyone else). The photo attaches to
+	// that run and is tagged with the event so it shows in the gallery.
+	let myEventRunId = $derived(
+		results.find((r) => r.user_id === myUserId && r.run_id)?.run_id ?? null
+	);
+
+	async function handleAddEventPhoto(e: Event) {
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0];
+		input.value = '';
+		if (!file || !event || !myEventRunId || photoUploading) return;
+		photoUploading = true;
+		try {
+			await addRunPhoto({
+				run_id: myEventRunId,
+				file,
+				event_id: event.id,
+				event_instance_start: activeInstance
+			});
+			eventPhotos = await fetchEventPhotos(event.id, activeInstance!);
+		} catch (err) {
+			error = err instanceof Error ? err.message : 'Photo upload failed';
+		} finally {
+			photoUploading = false;
+		}
 	}
 
 	/**
@@ -1200,6 +1236,41 @@
 		</section>
 
 		<section class="card">
+			<div class="results-head">
+				<h3>Photos ({eventPhotos.length})</h3>
+				{#if myEventRunId}
+					<label class="btn-link photo-add">
+						{photoUploading ? 'Uploading…' : 'Add photo'}
+						<input
+							type="file"
+							accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+							onchange={handleAddEventPhoto}
+							disabled={photoUploading}
+							hidden
+						/>
+					</label>
+				{/if}
+			</div>
+			{#if eventPhotos.length === 0}
+				<p class="muted">
+					No photos yet.{myEventRunId ? ' Add one from your run at this event.' : ''}
+				</p>
+			{:else}
+				<div class="photo-gallery">
+					{#each eventPhotos as p (p.id)}
+						<figure class="photo-tile">
+							<img src={p.thumbUrl ?? p.url} alt={p.caption ?? 'Event photo'} loading="lazy" />
+							<figcaption>
+								{#if p.caption}<span class="cap">{p.caption}</span>{/if}
+								<span class="by">{p.uploader_name ?? 'Runner'}</span>
+							</figcaption>
+						</figure>
+					{/each}
+				</div>
+			{/if}
+		</section>
+
+		<section class="card">
 			<h3>Attendees ({attendees.length})</h3>
 			{#if attendees.length === 0}
 				<div class="attendees-empty">
@@ -2098,4 +2169,43 @@
 	}
 	.btn-link.approve { color: #2e7d32; }
 	.btn-link.reject { color: var(--color-danger); }
+
+	.photo-add {
+		cursor: pointer;
+	}
+	.photo-gallery {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(8rem, 1fr));
+		gap: var(--space-sm);
+		margin-top: var(--space-sm);
+	}
+	.photo-tile {
+		margin: 0;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+	}
+	.photo-tile img {
+		width: 100%;
+		aspect-ratio: 1 / 1;
+		object-fit: cover;
+		display: block;
+	}
+	.photo-tile figcaption {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		padding: 0.3rem 0.45rem;
+		font-size: 0.72rem;
+	}
+	.photo-tile .cap {
+		color: var(--color-text);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.photo-tile .by {
+		color: var(--color-text-tertiary);
+	}
 </style>

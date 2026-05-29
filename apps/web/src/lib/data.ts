@@ -3570,8 +3570,17 @@ export interface RunPhoto {
 	caption: string | null;
 	position_idx: number;
 	created_at: string;
+	/// Set when the photo is tagged to an event gallery (#49).
+	event_id: string | null;
+	event_instance_start: string | null;
 	url: string;
 	thumbUrl: string | null;
+}
+
+/// A photo in an event gallery — a `RunPhoto` plus the uploader's
+/// display name so the gallery can attribute each shot. (#49)
+export interface EventPhoto extends RunPhoto {
+	uploader_name: string | null;
 }
 
 const PHOTO_MIME_TO_EXT: Record<string, string> = {
@@ -3638,10 +3647,59 @@ export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhot
 	}));
 }
 
+/// Event gallery (#49): every photo tagged to this event instance,
+/// across all attendees' runs. RLS lets anyone who can see the event
+/// read these even when the underlying run is private. Uploader names
+/// are fetched in a second batched query (the `run_photos` → `runs` →
+/// `user_profiles` join isn't expressible through PostgREST resource
+/// embedding because the run may be invisible to the viewer).
+export async function fetchEventPhotos(
+	eventId: string,
+	instanceStart: string,
+	limit = 100,
+): Promise<EventPhoto[]> {
+	const { data, error } = await supabase
+		.from('run_photos')
+		.select('*')
+		.eq('event_id', eventId)
+		.eq('event_instance_start', instanceStart)
+		.order('created_at', { ascending: true })
+		.limit(limit);
+	if (error) {
+		console.error('fetchEventPhotos failed', error);
+		return [];
+	}
+	const rows = data ?? [];
+	if (rows.length === 0) return [];
+	const paths: string[] = [];
+	for (const r of rows) {
+		paths.push(r.storage_path);
+		if (r.thumb_512_path) paths.push(r.thumb_512_path);
+	}
+	const ownerIds = [...new Set(rows.map((r) => r.owner_id))];
+	const [signed, profiles] = await Promise.all([
+		signRunPhotoPaths(paths),
+		supabase.from('user_profiles').select('id, display_name').in('id', ownerIds),
+	]);
+	const nameById = new Map<string, string | null>(
+		(profiles.data ?? []).map((p) => [p.id as string, (p.display_name as string | null) ?? null]),
+	);
+	return rows.map((r) => ({
+		...r,
+		url: signed[r.storage_path] ?? '',
+		thumbUrl: r.thumb_512_path ? (signed[r.thumb_512_path] ?? null) : null,
+		uploader_name: nameById.get(r.owner_id) ?? null,
+	}));
+}
+
 export async function addRunPhoto(input: {
 	run_id: string;
 	file: File;
 	caption?: string | null;
+	/// When set, the photo joins the event's gallery (#49). The DB
+	/// INSERT policy requires the uploader can see the event.
+	event_id?: string | null;
+	event_instance_start?: string | null;
 }): Promise<RunPhoto> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
@@ -3679,6 +3737,8 @@ export async function addRunPhoto(input: {
 			storage_path: storagePath,
 			caption: input.caption?.trim() || null,
 			position_idx: nextIdx,
+			event_id: input.event_id ?? null,
+			event_instance_start: input.event_instance_start ?? null,
 		})
 		.select('*')
 		.single();

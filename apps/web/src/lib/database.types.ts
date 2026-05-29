@@ -1510,6 +1510,8 @@ export type Database = {
         Row: {
           caption: string | null
           created_at: string
+          event_id: string | null
+          event_instance_start: string | null
           id: string
           owner_id: string
           position_idx: number
@@ -1520,6 +1522,8 @@ export type Database = {
         Insert: {
           caption?: string | null
           created_at?: string
+          event_id?: string | null
+          event_instance_start?: string | null
           id?: string
           owner_id: string
           position_idx?: number
@@ -1530,6 +1534,8 @@ export type Database = {
         Update: {
           caption?: string | null
           created_at?: string
+          event_id?: string | null
+          event_instance_start?: string | null
           id?: string
           owner_id?: string
           position_idx?: number
@@ -1538,6 +1544,13 @@ export type Database = {
           thumb_512_path?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "run_photos_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "run_photos_run_id_fkey"
             columns: ["run_id"]

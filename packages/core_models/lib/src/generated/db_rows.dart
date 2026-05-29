@@ -1602,6 +1602,8 @@ class RunPhotoRow {
   static const String colPositionIdx = 'position_idx';
   static const String colCreatedAt = 'created_at';
   static const String colThumb512Path = 'thumb_512_path';
+  static const String colEventId = 'event_id';
+  static const String colEventInstanceStart = 'event_instance_start';
 
   final String id;
   final String runId;
@@ -1611,6 +1613,8 @@ class RunPhotoRow {
   final int positionIdx;
   final DateTime createdAt;
   final String? thumb512Path;
+  final String? eventId;
+  final DateTime? eventInstanceStart;
 
   const RunPhotoRow({
     required this.id,
@@ -1621,6 +1625,8 @@ class RunPhotoRow {
     required this.positionIdx,
     required this.createdAt,
     this.thumb512Path,
+    this.eventId,
+    this.eventInstanceStart,
   });
 
   factory RunPhotoRow.fromJson(Map<String, dynamic> json) => RunPhotoRow(
@@ -1632,6 +1638,8 @@ class RunPhotoRow {
     positionIdx: (json['position_idx'] as num).toInt(),
     createdAt: DateTime.parse(json['created_at'] as String),
     thumb512Path: json['thumb_512_path'] as String?,
+    eventId: json['event_id'] as String?,
+    eventInstanceStart: json['event_instance_start'] == null ? null : DateTime.parse(json['event_instance_start'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1643,6 +1651,8 @@ class RunPhotoRow {
     colPositionIdx: positionIdx,
     colCreatedAt: createdAt.toIso8601String(),
     colThumb512Path: thumb512Path,
+    colEventId: eventId,
+    colEventInstanceStart: eventInstanceStart?.toIso8601String(),
   };
 }
 
