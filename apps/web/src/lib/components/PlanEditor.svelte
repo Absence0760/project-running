@@ -26,15 +26,32 @@
 	// the segments-leaderboard demographics). null → unmodified
 	// (male-curve) paces, matching pre-fix behaviour.
 	let viewerGender = $state<TrainingGender>(null);
+	// Persona-hunt finding Older #30. Age (from date_of_birth) drives the
+	// masters recovery calibration in generatePlan — wider hard-day
+	// spacing + a 3-week build/recover cycle for 50+. Like gender, it's
+	// read off the profile rather than asked in the wizard. null → the
+	// standard (younger-physiology) schedule.
+	let viewerAge = $state<number | null>(null);
 	onMount(async () => {
 		if (!auth.user) return;
 		const { data } = await supabase
 			.from('user_profiles')
-			.select('gender')
+			.select('gender, date_of_birth')
 			.eq('id', auth.user.id)
 			.maybeSingle();
 		const g = (data as { gender?: string | null } | null)?.gender;
 		if (g === 'male' || g === 'female' || g === 'nonbinary') viewerGender = g;
+		const dob = (data as { date_of_birth?: string | null } | null)?.date_of_birth;
+		if (dob) {
+			const born = new Date(dob);
+			if (!Number.isNaN(born.getTime())) {
+				const now = new Date();
+				let age = now.getFullYear() - born.getFullYear();
+				const m = now.getMonth() - born.getMonth();
+				if (m < 0 || (m === 0 && now.getDate() < born.getDate())) age--;
+				if (age >= 0 && age < 120) viewerAge = age;
+			}
+		}
 	});
 
 	const METRES_PER_MILE = 1609.344;
@@ -188,6 +205,7 @@
 				daysPerWeek,
 				weeks,
 				gender: viewerGender,
+				age: viewerAge,
 				beginnerWalkRun,
 			});
 			expandedWeek = null;

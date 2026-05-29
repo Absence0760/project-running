@@ -407,5 +407,89 @@ void main() {
       registerActivePreferences(miPrefs);
       expect(fmtKm(5000), '3.1 mi');
     });
+
+    // ─────────── masters age-band calibration (#30) ───────────
+    // Mirrors the masters tests in apps/web/src/lib/training.test.ts.
+
+    test('isMastersAge: boundary 50 inclusive; null is not masters', () {
+      expect(isMastersAge(49), isFalse);
+      expect(isMastersAge(50), isTrue);
+      expect(isMastersAge(72), isTrue);
+      expect(isMastersAge(null), isFalse);
+    });
+
+    test('masters push the first quality day to 72h after the long run', () {
+      const quality = {
+        WorkoutKind.tempo,
+        WorkoutKind.interval,
+        WorkoutKind.marathonPace,
+      };
+      int? offset(GeneratedWeek w) {
+        final start = w.workouts.first.scheduledDate;
+        final q = w.workouts
+            .where((x) => quality.contains(x.kind))
+            .cast<GeneratedWorkout?>()
+            .firstWhere((x) => true, orElse: () => null);
+        if (q == null) return null;
+        return q.scheduledDate.difference(start).inDays;
+      }
+
+      final standard = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceHalf,
+        startDate: DateTime(2026, 6, 7),
+        daysPerWeek: 5,
+        goalTimeSec: 100 * 60,
+      ));
+      final masters = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceHalf,
+        startDate: DateTime(2026, 6, 7),
+        daysPerWeek: 5,
+        goalTimeSec: 100 * 60,
+        age: 58,
+      ));
+      final stdWeek = standard.weeks.firstWhere((w) => offset(w) != null);
+      final mstWeek = masters.weeks.firstWhere((w) => offset(w) != null);
+      expect(offset(stdWeek), 2);
+      expect(offset(mstWeek), 3);
+    });
+
+    test('masters never schedule a quality day < 72h after the long run', () {
+      const quality = {
+        WorkoutKind.tempo,
+        WorkoutKind.interval,
+        WorkoutKind.marathonPace,
+      };
+      final masters = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceFull,
+        startDate: DateTime(2026, 6, 7),
+        daysPerWeek: 5,
+        recent5kSec: 24 * 60,
+        age: 55,
+      ));
+      for (final w in masters.weeks) {
+        final start = w.workouts.first.scheduledDate;
+        for (final x in w.workouts.where((x) => quality.contains(x.kind))) {
+          expect(x.scheduledDate.difference(start).inDays >= 3, isTrue);
+        }
+      }
+    });
+
+    test('masters step back volume every 3rd week, not every 4th', () {
+      final masters = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distanceFull,
+        startDate: DateTime(2026, 6, 7),
+        daysPerWeek: 5,
+        recent5kSec: 22 * 60,
+        age: 60,
+      ));
+      if (masters.weeks.length >= 4 &&
+          masters.weeks[2].phase != PlanPhase.taper) {
+        expect(
+          masters.weeks[2].targetVolumeM <= masters.weeks[1].targetVolumeM,
+          isTrue,
+        );
+        expect(masters.weeks[2].notes, contains('Step-back'));
+      }
+    });
   });
 }

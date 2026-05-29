@@ -47,6 +47,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   // gender-aware calibration when present. Null → unmodified
   // (male-curve) paces, matching pre-fix behaviour.
   TrainingGender _viewerGender;
+  // Persona-hunt finding Older #30. Pulled lazily on mount and threaded
+  // into `generatePlan` so 50+ runners get the masters recovery
+  // calibration (72h hard-day spacing + 3-week cycle). Null → standard
+  // schedule.
+  int? _viewerAge;
 
   static DateTime _nextSunday() {
     var d = DateTime.now().add(const Duration(days: 7));
@@ -62,6 +67,10 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     widget.training.fetchViewerGender().then((g) {
       if (!mounted) return;
       setState(() => _viewerGender = g);
+    });
+    widget.training.fetchViewerAge().then((a) {
+      if (!mounted) return;
+      setState(() => _viewerAge = a);
     });
   }
 
@@ -94,6 +103,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
         recent5kSec: _recent5kApplied,
         weeks: _weekOverride,
         gender: _viewerGender,
+        age: _viewerAge,
         beginnerWalkRun: _beginnerWalkRun,
       ));
     } catch (_) {

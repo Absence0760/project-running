@@ -25,6 +25,7 @@ import {
 	resolveTrainingPaces,
 	phaseFor,
 	generatePlan,
+	isMastersAge,
 	defaultPlanWeeks,
 	GOAL_DISTANCES_M,
 	formatISO,
@@ -463,5 +464,92 @@ test("isWorkoutCompleted: true when both set", () => {
 		isWorkoutCompleted({ manually_completed: true, completed_run_id: "run-1" }),
 		true
 	);
+});
+
+// ─────────────────────── masters age-band calibration (#30) ───────────────────────
+
+test('isMastersAge: boundary is 50 inclusive; null/undefined are not masters', () => {
+	assert.equal(isMastersAge(49), false);
+	assert.equal(isMastersAge(50), true);
+	assert.equal(isMastersAge(72), true);
+	assert.equal(isMastersAge(null), false);
+	assert.equal(isMastersAge(undefined), false);
+});
+
+// Offset (in days) of a workout from its week's first slot (the long
+// run / race on dow 0). workouts are pushed in dow order, so [0] is the
+// week start.
+function dayOffsetInWeek(week: { workouts: { scheduled_date: string; kind: string }[] }, kinds: string[]): number | null {
+	const start = Date.parse(week.workouts[0].scheduled_date + 'T00:00:00Z');
+	const q = week.workouts.find((w) => kinds.includes(w.kind));
+	if (!q) return null;
+	const at = Date.parse(q.scheduled_date + 'T00:00:00Z');
+	return Math.round((at - start) / 86_400_000);
+}
+
+const QUALITY_KINDS = ['tempo', 'interval', 'marathon_pace'];
+
+test('generatePlan: masters push the first quality day to 72h after the long run (Wed vs Tue)', () => {
+	const base = {
+		goalEvent: 'distance_half' as const,
+		startDate: '2026-06-07', // a Sunday — long run lands on dow 0
+		daysPerWeek: 5,
+		goalTimeSec: 100 * 60
+	};
+	const standard = generatePlan(base);
+	const masters = generatePlan({ ...base, age: 58 });
+
+	// Find a build-phase week that actually allocated quality in both plans.
+	const stdWeek = standard.weeks.find((w) => dayOffsetInWeek(w, QUALITY_KINDS) != null)!;
+	const mstWeek = masters.weeks.find((w) => dayOffsetInWeek(w, QUALITY_KINDS) != null)!;
+	assert.equal(dayOffsetInWeek(stdWeek, QUALITY_KINDS), 2, 'standard plan: first quality on Tue (48h)');
+	assert.equal(dayOffsetInWeek(mstWeek, QUALITY_KINDS), 3, 'masters plan: first quality on Wed (72h)');
+});
+
+test('generatePlan: masters never schedule a quality day on the slot right after the long run', () => {
+	const masters = generatePlan({
+		goalEvent: 'distance_full',
+		startDate: '2026-06-07',
+		daysPerWeek: 5,
+		recent5kSec: 24 * 60,
+		age: 55
+	});
+	for (const week of masters.weeks) {
+		const off = dayOffsetInWeek(week, QUALITY_KINDS);
+		if (off != null) {
+			assert.ok(off >= 3, `masters quality must be >=72h after long run, got ${off}d (week ${week.week_index})`);
+		}
+	}
+});
+
+test('generatePlan: masters step back volume every 3rd week, not every 4th', () => {
+	const masters = generatePlan({
+		goalEvent: 'distance_full',
+		startDate: '2026-06-07',
+		daysPerWeek: 5,
+		recent5kSec: 22 * 60,
+		age: 60
+	});
+	// Week index 2 (3rd week) is the masters step-back. Guard against it
+	// being pushed into taper on a short plan.
+	if (masters.weeks.length >= 4 && masters.weeks[2].phase !== 'taper') {
+		assert.ok(
+			masters.weeks[2].target_volume_m <= masters.weeks[1].target_volume_m,
+			'masters 3rd-week step-back should not exceed the 2nd week'
+		);
+		assert.match(masters.weeks[2].notes ?? '', /Step-back/);
+	}
+});
+
+test('generatePlan: a sub-masters age leaves the standard Tue/Thu schedule intact', () => {
+	const plan = generatePlan({
+		goalEvent: 'distance_half',
+		startDate: '2026-06-07',
+		daysPerWeek: 5,
+		goalTimeSec: 100 * 60,
+		age: 34
+	});
+	const week = plan.weeks.find((w) => dayOffsetInWeek(w, QUALITY_KINDS) != null)!;
+	assert.equal(dayOffsetInWeek(week, QUALITY_KINDS), 2);
 });
 

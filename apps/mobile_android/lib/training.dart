@@ -173,6 +173,17 @@ const double _kFemalePaceCalibration = 1.03;
 double _genderPaceMultiplier(TrainingGender gender) =>
     gender == 'female' ? _kFemalePaceCalibration : 1.0;
 
+// Masters (50+) recovery calibration. Mirrors MASTERS_AGE +
+// isMastersAge in apps/web/src/lib/training.ts — see the full rationale
+// comment there. At or above this age the plan widens the first hard
+// day to 72h after the long run (Wed not Tue, second hard day Fri not
+// Thu) and steps volume back every 3rd week instead of every 4th. Pace
+// bands stay on the shared Daniels curve. Persona-hunt finding Older
+// #30.
+const int kMastersAge = 50;
+
+bool isMastersAge(int? age) => age != null && age >= kMastersAge;
+
 TrainingPaces pacesFromGoalPace(
   double goalPaceSecPerKm, [
   TrainingGender gender,
@@ -310,6 +321,12 @@ class GeneratePlanInput {
   /// Persona-hunt Round 3 finding Woman #3.
   final TrainingGender gender;
 
+  /// Optional age (years) from `user_profiles.date_of_birth`. At or above
+  /// kMastersAge it applies the masters recovery calibration — wider
+  /// hard-day spacing + a 3-week build/recover cycle. Persona-hunt
+  /// finding Older #30.
+  final int? age;
+
   /// When true, produce a beginner C25K-style walk-run plan instead of the
   /// continuous-running plan. Goal stays a 5k; every session is a walk_run
   /// workout of timed run/walk intervals (persona #22).
@@ -324,6 +341,7 @@ class GeneratePlanInput {
     required this.daysPerWeek,
     this.weeks,
     this.gender,
+    this.age,
     this.beginnerWalkRun = false,
   });
 }
@@ -351,11 +369,12 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
   }
 
   final weeks = <GeneratedWeek>[];
+  final masters = isMastersAge(input.age);
   for (var i = 0; i < totalWeeks; i++) {
     final phase = phaseFor(i, totalWeeks);
     final peakKm = _peakVolumeKm(goalDistance, input.daysPerWeek,
         input.goalTimeSec != null || input.recent5kSec != null);
-    final frac = _mileageFraction(i, totalWeeks, phase);
+    final frac = _mileageFraction(i, totalWeeks, phase, masters);
     final weeklyKm = (peakKm * frac).round();
     final weekStart = input.startDate.add(Duration(days: i * 7));
     final workouts = _generateWeek(
@@ -367,12 +386,13 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
       paces: paces,
       goalDistanceM: goalDistance,
       goalPaceSecPerKm: paces.marathon * (goalDistance >= 21000 ? 1 : 0.95),
+      masters: masters,
     );
     weeks.add(GeneratedWeek(
       weekIndex: i,
       phase: phase,
       targetVolumeM: weeklyKm * 1000.0,
-      notes: _weekNote(phase, i, totalWeeks),
+      notes: _weekNote(phase, i, totalWeeks, masters),
       workouts: workouts,
     ));
   }
@@ -501,18 +521,28 @@ double _peakVolumeKm(double goalDistanceM, int daysPerWeek,
       .roundToDouble();
 }
 
-double _mileageFraction(int i, int total, PlanPhase phase) {
+// Masters recover on a 3-week cycle; the default is 4 weeks. Week 0 is
+// never a step-back so the plan doesn't open on a recovery week.
+bool _isStepBackWeek(int i, bool masters) {
+  if (i == 0) return false;
+  return masters ? i % 3 == 2 : i % 4 == 3;
+}
+
+double _mileageFraction(int i, int total, PlanPhase phase,
+    [bool masters = false]) {
   if (phase == PlanPhase.race) return 0.35;
   if (phase == PlanPhase.taper) return 0.55;
   final ramp = 0.6 + (0.4 * i) / max(1, total - 3);
-  final stepBack = i > 0 && i % 4 == 3 ? 0.82 : 1;
+  final stepBack = _isStepBackWeek(i, masters) ? 0.82 : 1;
   return min(1.0, ramp * stepBack);
 }
 
-String? _weekNote(PlanPhase phase, int i, int total) {
+String? _weekNote(PlanPhase phase, int i, int total, [bool masters = false]) {
   if (phase == PlanPhase.race) return 'Race week — trust the work.';
   if (phase == PlanPhase.taper) return 'Taper — volume down, sharpness stays.';
-  if (i > 0 && i % 4 == 3) return 'Step-back week — recover before the next build.';
+  if (_isStepBackWeek(i, masters)) {
+    return 'Step-back week — recover before the next build.';
+  }
   return null;
 }
 
@@ -525,9 +555,14 @@ List<GeneratedWorkout> _generateWeek({
   required TrainingPaces paces,
   required double goalDistanceM,
   required double goalPaceSecPerKm,
+  bool masters = false,
 }) {
   // Same allocation as web: Mon rest, Sun long, Tue qualityA, Thu qualityB.
-  const restDow = 1, longDow = 0, qaDow = 2, qbDow = 4;
+  // Masters (Older #30) push the first quality day to Wed (72h after the
+  // Sunday long run) and the second to Fri, keeping ~48h between hards.
+  const restDow = 1, longDow = 0;
+  final qaDow = masters ? 3 : 2; // Wed for masters, else Tue
+  final qbDow = masters ? 5 : 4; // Fri for masters, else Thu
   final workouts = <GeneratedWorkout>[];
 
   final longKm = (weeklyKm * 0.33).round();

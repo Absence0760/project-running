@@ -87,6 +87,39 @@ class TrainingService extends ChangeNotifier {
     return null;
   }
 
+  /// Persona-hunt finding Older #30. Reads the viewer's
+  /// `user_profiles.date_of_birth` and returns whole years so the plan
+  /// wizard can apply the masters recovery calibration (50+). Returns
+  /// null when the column is unset or unparseable — generatePlan then
+  /// uses the standard younger-physiology schedule. Same L4 best-effort
+  /// contract as fetchViewerGender (the try/catch must wrap the `_uid`
+  /// access too, for widget tests without an initialised Supabase).
+  Future<int?> fetchViewerAge() async {
+    try {
+      final uid = _uid;
+      if (uid == null) return null;
+      final row = await _c
+          .from('user_profiles')
+          .select('date_of_birth')
+          .eq('id', uid)
+          .maybeSingle();
+      final dob = row?['date_of_birth'] as String?;
+      if (dob == null) return null;
+      final born = DateTime.tryParse(dob);
+      if (born == null) return null;
+      final now = DateTime.now();
+      var age = now.year - born.year;
+      if (now.month < born.month ||
+          (now.month == born.month && now.day < born.day)) {
+        age--;
+      }
+      if (age >= 0 && age < 120) return age;
+    } catch (_) {
+      /* L4 best-effort — null on any failure. */
+    }
+    return null;
+  }
+
   /// Plan templates owned by `clubId`. Visible to club members per RLS.
   Future<List<TrainingPlanRow>> fetchClubTemplates(String clubId) async {
     final rows = await _c

@@ -121,6 +121,24 @@ function genderPaceMultiplier(gender: TrainingGender | undefined): number {
 	return gender === 'female' ? FEMALE_PACE_CALIBRATION : 1.0;
 }
 
+// Masters (50+) recovery calibration. Persona-hunt finding Older #30:
+// the default week schedules the first quality session 48h after the
+// Sunday long run and steps back volume every 4th week. Both are tuned
+// for younger physiology — masters athletes recover more slowly, so
+// the literature (and every masters-specific plan) widens hard-day
+// spacing to ~72h and shortens the build/recover cycle. When `age >=
+// MASTERS_AGE` we (a) push the first quality day from Tue→Wed (72h
+// after the long run) and the second from Thu→Fri, and (b) step volume
+// back every 3rd week instead of every 4th. Pace bands are left on the
+// shared Daniels curve — no validated age×VDOT pace table exists, and
+// the harm being fixed here is recovery density, not pace. See
+// docs/decisions.md § masters-recovery-calibration.
+const MASTERS_AGE = 50;
+
+export function isMastersAge(age: number | null | undefined): boolean {
+	return age != null && age >= MASTERS_AGE;
+}
+
 /**
  * Derive the five Daniels intensity-zone paces as multipliers of goal-race
  * pace. Numbers chosen so the output sits close to Daniels' published tables
@@ -247,6 +265,11 @@ export interface GeneratePlanInput {
 	/// female-specific calibration to derived training paces.
 	/// Persona-hunt Round 3 finding Woman #3.
 	gender?: TrainingGender;
+	/// Optional age (years) from `user_profiles.date_of_birth`. At or above
+	/// MASTERS_AGE it applies the masters recovery calibration — wider
+	/// hard-day spacing + a 3-week build/recover cycle. Persona-hunt
+	/// finding Older #30.
+	age?: number | null;
 	/// When true, produce a beginner C25K-style walk-run plan instead of the
 	/// continuous-running plan. The goal stays a 5k; every session is a
 	/// `walk_run` workout of timed run/walk intervals (persona #22).
@@ -292,6 +315,7 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 	}
 
 	const weeks: GeneratedWeek[] = [];
+	const masters = isMastersAge(input.age);
 
 	for (let i = 0; i < totalWeeks; i++) {
 		const phase = phaseFor(i, totalWeeks);
@@ -302,7 +326,7 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 			input.daysPerWeek,
 			!!(input.goalTimeSec || input.recent5kSec)
 		);
-		const fraction = mileageFraction(i, totalWeeks, phase);
+		const fraction = mileageFraction(i, totalWeeks, phase, masters);
 		const weeklyKm = Math.round(peakWeeklyKm * fraction);
 		const workouts = generateWeek({
 			weekIndex: i,
@@ -312,13 +336,14 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 			weeklyKm,
 			paces,
 			goalDistanceM,
-			goalPaceSecPerKm: paces.marathon * (goalDistanceM >= 21_000 ? 1 : 0.95)
+			goalPaceSecPerKm: paces.marathon * (goalDistanceM >= 21_000 ? 1 : 0.95),
+			masters
 		});
 		weeks.push({
 			week_index: i,
 			phase,
 			target_volume_m: weeklyKm * 1000,
-			notes: weekNote(phase, i, totalWeeks),
+			notes: weekNote(phase, i, totalWeeks, masters),
 			workouts
 		});
 	}
@@ -466,19 +491,33 @@ function peakVolumeKm(
 	return Math.round((goalDistanceM / 1000) * baseMultiplier * dayFactor * anchorFactor);
 }
 
-function mileageFraction(i: number, total: number, phase: PlanPhase): number {
+// Masters recover on a 3-week cycle (step back every 3rd week); the
+// default build/recover cycle is 4 weeks. Both keep the very first
+// week (i === 0) at full ramp so the plan doesn't open on a step-back.
+function isStepBackWeek(i: number, masters: boolean): boolean {
+	if (i === 0) return false;
+	return masters ? i % 3 === 2 : i % 4 === 3;
+}
+
+function mileageFraction(
+	i: number,
+	total: number,
+	phase: PlanPhase,
+	masters = false
+): number {
 	if (phase === 'race') return 0.35;
 	if (phase === 'taper') return 0.55;
-	// Linear ramp inside base+build+peak, with a 0.8× step-back every 4th week.
+	// Linear ramp inside base+build+peak, with a 0.82× step-back on the
+	// recovery week (every 3rd week for masters, every 4th otherwise).
 	const ramp = 0.6 + (0.4 * i) / Math.max(1, total - 3);
-	const stepBack = i > 0 && i % 4 === 3 ? 0.82 : 1;
+	const stepBack = isStepBackWeek(i, masters) ? 0.82 : 1;
 	return Math.min(1, ramp * stepBack);
 }
 
-function weekNote(phase: PlanPhase, i: number, total: number): string | null {
+function weekNote(phase: PlanPhase, i: number, total: number, masters = false): string | null {
 	if (phase === 'race') return 'Race week — trust the work.';
 	if (phase === 'taper') return 'Taper — volume down, sharpness stays.';
-	if (i > 0 && i % 4 === 3) return 'Step-back week — recover before the next build.';
+	if (isStepBackWeek(i, masters)) return 'Step-back week — recover before the next build.';
 	return null;
 }
 
@@ -491,17 +530,21 @@ interface WeekGenInput {
 	paces: TrainingPaces;
 	goalDistanceM: number;
 	goalPaceSecPerKm: number;
+	masters?: boolean;
 }
 
 function generateWeek(w: WeekGenInput): GeneratedWorkout[] {
 	const workouts: GeneratedWorkout[] = [];
 	// Fixed rest day: Monday. Long run: Sunday.
 	// Quality days: Tuesday (intervals or tempo), Thursday (tempo or MP).
+	// Masters (Older #30) recover slower, so the first quality day moves
+	// to Wednesday — 72h after the Sunday long run instead of 48h — and
+	// the second to Friday, keeping ~48h between the two hard sessions.
 	// Remaining active days are easy.
 	const rest = 1; // Mon
 	const longRun = 0; // Sun (weekday 0)
-	const qualityA = 2; // Tue
-	const qualityB = 4; // Thu
+	const qualityA = w.masters ? 3 : 2; // Wed for masters, else Tue
+	const qualityB = w.masters ? 5 : 4; // Fri for masters, else Thu
 	const daysUsed = new Set<number>([longRun, rest]);
 	// Persona-hunt Intermediate #4: a 3-day plan used to be all
 	// long-run + easy with zero quality work across every phase — i.e.
