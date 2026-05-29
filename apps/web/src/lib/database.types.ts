@@ -400,6 +400,51 @@ export type Database = {
           },
         ]
       }
+      event_result_claims: {
+        Row: {
+          claimant_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          result_id: string
+          status: string
+        }
+        Insert: {
+          claimant_id: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          result_id: string
+          status?: string
+        }
+        Update: {
+          claimant_id?: string
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          id?: string
+          result_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_result_claims_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "event_results"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_result_claims_result_id_fkey"
+            columns: ["result_id"]
+            isOneToOne: false
+            referencedRelation: "event_results_redacted"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       event_results: {
         Row: {
           age_grade_pct: number | null
@@ -2085,6 +2130,7 @@ export type Database = {
           event_id: string | null
           finisher_name: string | null
           finisher_status: string | null
+          id: string | null
           instance_start: string | null
           note: string | null
           organiser_approved: boolean | null
@@ -2102,6 +2148,7 @@ export type Database = {
           event_id?: string | null
           finisher_name?: string | null
           finisher_status?: string | null
+          id?: string | null
           instance_start?: string | null
           note?: never
           organiser_approved?: boolean | null
@@ -2119,6 +2166,7 @@ export type Database = {
           event_id?: string | null
           finisher_name?: string | null
           finisher_status?: string | null
+          id?: string | null
           instance_start?: string | null
           note?: never
           organiser_approved?: boolean | null
@@ -2398,6 +2446,24 @@ export type Database = {
           tier: string
         }[]
       }
+      claim_event_result: {
+        Args: { p_result_id: string }
+        Returns: {
+          claimant_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          result_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "event_result_claims"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       claim_next_job: {
         Args: { kind_filter?: string; worker_id: string }
         Returns: {
@@ -2440,6 +2506,24 @@ export type Database = {
       }
       confirm_age_and_terms: { Args: never; Returns: undefined }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
+      decide_event_result_claim: {
+        Args: { p_approve: boolean; p_claim_id: string }
+        Returns: {
+          claimant_id: string
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          id: string
+          result_id: string
+          status: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "event_result_claims"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       decrement_coach_usage: { Args: { p_user_id: string }; Returns: number }
       defer_job: {
         Args: { delay_seconds: number; err?: string; job_id: number }
