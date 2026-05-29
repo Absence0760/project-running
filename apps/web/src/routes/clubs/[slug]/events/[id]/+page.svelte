@@ -35,7 +35,9 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
-	import { formatDistance } from '$lib/units.svelte';
+	import { formatDistance, getUnit } from '$lib/units.svelte';
+	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/finisher_certificate';
+	import { rasterizeSvgToPng, downloadBlob } from '$lib/svg_raster';
 	import type {
 		EventWithMeta,
 		ClubWithMeta,
@@ -356,6 +358,35 @@
 			return `${h}:${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
 		}
 		return `${m}:${sec.toString().padStart(2, '0')}`;
+	}
+
+	/// #44: build + download a finisher certificate PNG for a result row.
+	/// Client-rendered SVG → PNG (no server PDF service). Available on any
+	/// finished + approved result — finisher data is already public on the
+	/// leaderboard, and a certificate is celebratory, not sensitive.
+	let certBusy = $state<string | null>(null);
+	async function downloadCertificate(r: EventResultWithUser) {
+		if (!event || certBusy) return;
+		certBusy = r.user_id;
+		try {
+			const svg = buildFinisherCertificateSvg({
+				eventTitle: event.title,
+				finisherName: r.display_name ?? 'Runner',
+				durationS: r.duration_s,
+				distanceM: r.distance_m,
+				rank: r.rank,
+				dateIso: activeInstance ?? event.starts_at,
+				unit: getUnit(),
+				clubName: club?.name ?? null,
+			});
+			const blob = await rasterizeSvgToPng(svg, CERT_WIDTH, CERT_HEIGHT);
+			const safe = event.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+			downloadBlob(blob, `threkir-certificate-${safe}.png`);
+		} catch (e) {
+			console.error('certificate generation failed', e);
+		} finally {
+			certBusy = null;
+		}
 	}
 
 	function formatRunDate(iso: string): string {
@@ -1113,6 +1144,17 @@
 							{#if r.finisher_status === 'finished'}
 								<span class="time">{formatDuration(r.duration_s)}</span>
 								<span class="dist muted">{formatDistance(r.distance_m)}</span>
+							{/if}
+							{#if r.finisher_status === 'finished' && r.organiser_approved}
+								<button
+									type="button"
+									class="btn-link cert"
+									title="Download finisher certificate"
+									disabled={certBusy === r.user_id}
+									onclick={() => downloadCertificate(r)}
+								>
+									{certBusy === r.user_id ? '…' : 'Certificate'}
+								</button>
 							{/if}
 							{#if isRaceDirector && !r.organiser_approved}
 								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id, true)}>Approve</button>

@@ -1,0 +1,86 @@
+import { expect, test } from '@playwright/test';
+
+import { getAdminClient } from '../fixtures/local-supabase';
+import { deleteEvent, insertEvent } from '../fixtures/simulate';
+import { USER_A } from '../fixtures/users';
+
+/**
+ * /clubs/[slug]/events/[id] — finisher certificate (#44).
+ *
+ * Creates a one-off event, seeds an approved + finished event_results
+ * row for the owner, then drives the Certificate button on the
+ * leaderboard and captures the PNG download. afterEach deletes the
+ * event (results cascade) so the seed shape is intact.
+ */
+
+const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';
+
+test.describe('/clubs/[slug]/events/[id] — finisher certificate', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	let eventId: string | null = null;
+	let instanceStart: string | null = null;
+
+	test.beforeEach(async () => {
+		instanceStart = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+		eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			created_by: USER_A.id,
+			title: `e2e-cert ${Date.now()}`,
+			starts_at: instanceStart,
+			recurrence_freq: 'weekly'
+		});
+		await getAdminClient()
+			.from('event_results')
+			.upsert(
+				{
+					event_id: eventId,
+					instance_start: instanceStart,
+					user_id: USER_A.id,
+					duration_s: 2705,
+					distance_m: 10000,
+					rank: 1,
+					finisher_status: 'finished',
+					organiser_approved: true
+				},
+				{ onConflict: 'event_id,instance_start,user_id' }
+			);
+	});
+
+	test.afterEach(async () => {
+		if (eventId) {
+			try {
+				await deleteEvent(eventId);
+			} catch (_) {
+				/* cascade best-effort */
+			}
+			eventId = null;
+		}
+	});
+
+	test('downloads a finisher certificate PNG from an approved result', async ({ page }) => {
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+
+		const certBtn = page.getByRole('button', { name: 'Certificate' }).first();
+		await expect(certBtn).toBeVisible({ timeout: 10_000 });
+
+		const downloadPromise = page.waitForEvent('download', { timeout: 10_000 });
+		await certBtn.click();
+		const download = await downloadPromise;
+		expect(download.suggestedFilename()).toMatch(/^threkir-certificate-.*\.png$/);
+	});
+
+	test('no certificate button while the result is unapproved', async ({ page }) => {
+		await getAdminClient()
+			.from('event_results')
+			.update({ organiser_approved: false })
+			.eq('event_id', eventId)
+			.eq('user_id', USER_A.id)
+			.eq('instance_start', instanceStart);
+
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByRole('button', { name: 'Certificate' })).toHaveCount(0);
+	});
+});
