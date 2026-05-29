@@ -119,4 +119,26 @@ test.describe('bib-result claim — organiser approval', () => {
 			timeout: 10_000
 		});
 	});
+
+	test('an organiser can reject a pending claim', async ({ page }) => {
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+
+		await expect(page.getByRole('heading', { name: /^Result claims/ })).toBeVisible({
+			timeout: 10_000
+		});
+		await page.getByRole('button', { name: 'Reject' }).first().click();
+
+		// Queue empties, and the row stays bib-only (no account attached).
+		await expect(page.getByRole('heading', { name: /^Result claims/ })).toHaveCount(0, {
+			timeout: 10_000
+		});
+		const { data } = await getAdminClient()
+			.from('event_results')
+			.select('user_id')
+			.eq('event_id', eventId!)
+			.eq('bib', '101')
+			.single();
+		expect(data?.user_id).toBeNull();
+	});
 });
