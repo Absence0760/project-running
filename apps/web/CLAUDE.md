@@ -25,7 +25,7 @@ src/
   lib/
     components/     # Modal + SplitPane (primitives), RunMap, ElevationProfile (Android-style interactive chart), ImportRoute, RouteBuilder, CoachChat,
                     # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer,
-                    # CalendarHeatmap, LicenseList, ClubEditor, EventEditor, PlanEditor (editable preview), PlanMetaEditor, RunEditor
+                    # CalendarHeatmap, PersonalHeatmap (geographic heatmap of the user's own tracks on /runs/heatmap — distinct from RouteHeatmap's public community map), LicenseList, ClubEditor, EventEditor, PlanEditor (editable preview), PlanMetaEditor, RunEditor
                     # (modal-hosted creation forms), PrivacyZonePicker (MapLibre map picker for owner zones, decisions §33),
                     # TrainingLoadChart (90-day fitness/fatigue/form trio on /dashboard, decisions §34),
                     # PeriodSummary (week/month stats + run list — used by dashboard modal AND /dashboard/period/...),
@@ -68,6 +68,7 @@ src/
     dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
     runs/           # Run history with source + activity type filters
+    runs/heatmap/   # Personal run-track heatmap — the user's OWN tracks (PersonalHeatmap.svelte + lib/run_heatmap.ts). Distinct from the public /routes/heatmap community map. Persona #30.
     runs/[id]/      # Run detail with map, elevation, splits
     routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab.
     routes/new/     # Route builder (MapLibre + OSRM)

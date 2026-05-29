@@ -524,6 +524,7 @@
 					<button class="link-btn" onclick={selectAllVisible} type="button">Select all</button>
 					<button class="link-btn" onclick={exitSelectMode} type="button">Done</button>
 				{:else}
+					<a class="link-btn" href="/runs/heatmap">Heatmap</a>
 					<button class="link-btn" onclick={() => (selecting = true)} type="button">Select</button>
 					<button class="add-btn" type="button" onclick={() => (showRunModal = true)}>+ Add run</button>
 				{/if}
