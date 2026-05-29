@@ -1124,13 +1124,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return 0;
   }
 
-  /// Average cadence in steps-per-minute, derived as
-  /// `steps / moving_time_minutes`. Mirrors the web formula at
-  /// `apps/web/src/routes/runs/[id]/+page.svelte` (`avgCadence`).
-  /// Returns 0 when the input is too thin to compute meaningfully
-  /// (no steps, or under 30 s of moving time) so the tile collapses
-  /// to "0 spm" instead of misreporting.
+  /// Average cadence in steps-per-minute. Prefers a directly-reported
+  /// value (`metadata.cadence_spm`, written by the Garmin FIT importer
+  /// which has no pedometer step count — persona #17), then falls back
+  /// to `steps / moving_time_minutes`. Mirrors the web `avgCadence` at
+  /// `apps/web/src/routes/runs/[id]/+page.svelte`. Returns 0 when the
+  /// input is too thin to compute meaningfully (no stored cadence, no
+  /// steps, or under 30 s of moving time) so the tile collapses to
+  /// "0 spm" instead of misreporting.
   int get _cadence {
+    final stored = run.metadata?['cadence_spm'];
+    if (stored is num && stored > 0) return stored.round();
     final steps = _steps;
     final movingSeconds = _movingTime.inSeconds;
     if (steps <= 0 || movingSeconds < 30) return 0;

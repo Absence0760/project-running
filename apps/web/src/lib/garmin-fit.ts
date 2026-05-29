@@ -56,6 +56,17 @@ export function buildCanonicalLaps(laps: RawFitLap[] | undefined | null): FitLap
 	return out;
 }
 
+/// Convert a FIT cadence reading to steps-per-minute. FIT running
+/// cadence is per-foot (RPM), so for foot sports the spm a runner
+/// recognises is double the reported value; cycling cadence is crank
+/// RPM and isn't a step rate, so it's dropped (null). Returns null for
+/// missing / non-finite / non-positive readings. Persona-hunt garmin #17.
+export function fitCadenceToSpm(raw: unknown, isFootSport: boolean): number | null {
+	if (!isFootSport) return null;
+	if (typeof raw !== 'number' || !Number.isFinite(raw) || raw <= 0) return null;
+	return Math.round(raw * 2);
+}
+
 /// Cross-source dedupe key for a Garmin activity, from its FIT file_id.
 /// `garmin:{file_id}` mirrors the `strava:{id}` / `csv:{...}` convention so a
 /// re-import of the same activity is caught by the per-user runs.external_id
@@ -76,6 +87,11 @@ export interface ParsedFitRun {
 	activity_type: 'run' | 'walk' | 'hike' | 'cycle' | null;
 	avg_bpm: number | null;
 	max_bpm: number | null;
+	/// Average running cadence in steps-per-minute (both feet). FIT
+	/// reports running cadence per-foot (RPM), so this is doubled for
+	/// foot sports; null for cycling (crank RPM is a different metric)
+	/// and for files with no cadence. Persona-hunt garmin #17.
+	avg_cadence_spm: number | null;
 	total_ascent_m: number | null;
 	/// Stable per-file identity from the FIT `file_id` message — used
 	/// for dedupe. `null` only for malformed files without a file_id.
@@ -164,6 +180,14 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 	else if (sport === 'cycling' || subSport.includes('cycl') || subSport.includes('bike'))
 		activityType = 'cycle';
 
+	const isFoot =
+		activityType === 'run' || activityType === 'walk' || activityType === 'hike';
+	const avgCadenceSpm = fitCadenceToSpm(
+		(session as { avg_running_cadence?: number; avg_cadence?: number }).avg_running_cadence ??
+			(session as { avg_cadence?: number }).avg_cadence,
+		isFoot,
+	);
+
 	const fileIdEntry = data.file_ids?.[0];
 	const garminFileId = fileIdEntry
 		? `${fileIdEntry.time_created ?? ''}-${fileIdEntry.serial_number ?? ''}`
@@ -187,6 +211,7 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 			typeof session.max_heart_rate === 'number' && session.max_heart_rate > 0
 				? Math.round(session.max_heart_rate)
 				: null,
+		avg_cadence_spm: avgCadenceSpm,
 		total_ascent_m:
 			typeof session.total_ascent === 'number' ? Math.round(session.total_ascent) : null,
 		garmin_file_id: garminFileId && garminFileId !== '-' ? garminFileId : null,

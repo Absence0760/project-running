@@ -192,6 +192,7 @@ async function importFitFile(
 	if (parsed.garmin_file_id) metadata.garmin_id = parsed.garmin_file_id;
 	if (parsed.avg_bpm != null) metadata.avg_bpm = parsed.avg_bpm;
 	if (parsed.max_bpm != null) metadata.max_bpm = parsed.max_bpm;
+	if (parsed.avg_cadence_spm != null) metadata.cadence_spm = parsed.avg_cadence_spm;
 	if (parsed.laps.length > 0) metadata.laps = parsed.laps;
 	if (parsed.indoor) metadata.indoor = true;
 

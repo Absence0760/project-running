@@ -617,9 +617,13 @@
 		return typeof v === 'number' ? v : null;
 	});
 
-	/** Average cadence = steps / moving_time_minutes. Null when we don't
-	 *  have enough data to compute meaningfully. */
+	/** Average cadence in steps-per-minute. Prefers a directly-reported
+	 *  value (`metadata.cadence_spm`, written by the Garmin FIT importer
+	 *  which has no pedometer step count — persona #17), then falls back
+	 *  to steps / moving_time_minutes for pedometer-recorded runs. */
 	let avgCadence = $derived.by(() => {
+		const stored = run?.metadata?.['cadence_spm'];
+		if (typeof stored === 'number' && stored > 0) return Math.round(stored);
 		if (totalSteps == null || movingSeconds < 30) return null;
 		return Math.round((totalSteps / (movingSeconds / 60)) || 0);
 	});

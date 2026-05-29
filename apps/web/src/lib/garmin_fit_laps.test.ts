@@ -1,7 +1,25 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { buildCanonicalLaps, garminExternalId } from './garmin-fit';
+import { buildCanonicalLaps, garminExternalId, fitCadenceToSpm } from './garmin-fit';
+
+test('fitCadenceToSpm — doubles per-foot RPM for foot sports', () => {
+	// FIT reports running cadence per foot; the runner-facing spm is ×2.
+	assert.equal(fitCadenceToSpm(85, true), 170);
+	assert.equal(fitCadenceToSpm(90.5, true), 181); // rounds
+});
+
+test('fitCadenceToSpm — null for cycling (crank RPM, not a step rate)', () => {
+	assert.equal(fitCadenceToSpm(90, false), null);
+});
+
+test('fitCadenceToSpm — null for missing / non-positive / non-finite', () => {
+	assert.equal(fitCadenceToSpm(undefined, true), null);
+	assert.equal(fitCadenceToSpm(0, true), null);
+	assert.equal(fitCadenceToSpm(-5, true), null);
+	assert.equal(fitCadenceToSpm(Number.NaN, true), null);
+	assert.equal(fitCadenceToSpm('85', true), null);
+});
 
 test('garminExternalId — prefixes the file id, or null when absent', () => {
 	assert.equal(garminExternalId('1700000000-12345'), 'garmin:1700000000-12345');
