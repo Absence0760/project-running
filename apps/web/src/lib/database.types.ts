@@ -2604,6 +2604,7 @@ export type Database = {
           surface: string
         }[]
       }
+      end_coach_link: { Args: { p_id: string }; Returns: boolean }
       enforce_create_rate_limit: {
         Args: {
           p_bucket: string

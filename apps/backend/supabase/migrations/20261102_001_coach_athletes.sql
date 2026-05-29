@@ -55,12 +55,11 @@ create policy "coach creates own pending invite"
   on coach_athletes for insert
   with check (coach_id = auth.uid() and athlete_id is null and status = 'pending');
 
--- Either party can mutate a link they're part of (the only client mutation today
--- is ending it). The redeem path runs as definer and bypasses this.
-create policy "party updates own link"
-  on coach_athletes for update
-  using (coach_id = auth.uid() or athlete_id = auth.uid())
-  with check (coach_id = auth.uid() or athlete_id = auth.uid());
+-- No direct UPDATE policy: the only legitimate client mutation is ending a link,
+-- which goes through the end_coach_link SECURITY DEFINER RPC below. With no UPDATE
+-- policy, RLS denies every client UPDATE, so a coach cannot reassign athlete_id
+-- (which would forge a consent-free link that #47's visibility tier would honour)
+-- or flip a pending invite to active without the athlete redeeming it.
 
 -- A coach can revoke (delete) an invite they created that nobody redeemed yet.
 create policy "coach deletes own unredeemed invite"
@@ -114,3 +113,31 @@ end;
 $$;
 
 grant execute on function redeem_coach_invite(text) to authenticated;
+
+-- End an active link. Either party may call. Runs as definer because there is no
+-- direct-UPDATE RLS path (removed above so a coach can't reassign athlete_id and
+-- forge a consent-free link). Returns true when a row was ended.
+create or replace function end_coach_link(p_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  uid uuid := auth.uid();
+  n int;
+begin
+  if uid is null then
+    raise exception 'not authenticated';
+  end if;
+  update coach_athletes
+    set status = 'ended', ended_at = now()
+    where id = p_id
+      and status = 'active'
+      and (coach_id = uid or athlete_id = uid);
+  get diagnostics n = row_count;
+  return n > 0;
+end;
+$$;
+
+grant execute on function end_coach_link(uuid) to authenticated;

@@ -4965,13 +4965,12 @@ export async function redeemCoachInvite(token: string): Promise<string> {
 	return data as string;
 }
 
-/// End an active link (either party may call). Soft-ends via status so the row
-/// and its acceptance history survive for audit.
+/// End an active link (either party may call). Goes through the end_coach_link
+/// RPC, not a direct UPDATE: coach_athletes has no client UPDATE policy, so a
+/// coach can't reassign athlete_id to forge a link. Soft-ends via status so the
+/// row and its acceptance history survive for audit.
 export async function endCoachLink(id: string): Promise<void> {
-	const { error } = await supabase
-		.from('coach_athletes')
-		.update({ status: 'ended', ended_at: new Date().toISOString() })
-		.eq('id', id);
+	const { error } = await supabase.rpc('end_coach_link', { p_id: id });
 	if (error) throw error;
 }
 
