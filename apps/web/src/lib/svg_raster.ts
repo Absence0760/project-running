@@ -42,5 +42,8 @@ export function downloadBlob(blob: Blob, filename: string): void {
 	a.href = url;
 	a.download = filename;
 	a.click();
-	URL.revokeObjectURL(url);
+	// Defer the revoke: revoking synchronously right after click() can abort
+	// the download before the browser has resolved the blob URL (the resolution
+	// is async), which manifests as a download that silently never starts.
+	setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }

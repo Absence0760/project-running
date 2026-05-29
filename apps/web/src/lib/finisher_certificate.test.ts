@@ -34,6 +34,24 @@ test('renders a well-formed certificate svg with the headline facts', () => {
 	assert.ok(svg.includes('12 June 2026'));
 });
 
+test('certificate svg attribute quoting is balanced (valid XML)', () => {
+	// Regression guard: the font-family constants used to embed DOUBLE quotes
+	// (Georgia,"Times New Roman",serif) which, inside a double-quoted
+	// font-family="..." attribute, terminated the attribute and produced
+	// malformed XML. The browser Image loader then rejected the SVG with
+	// "svg failed to load" and no certificate was ever generated — for every
+	// user, not just the e2e. Multi-word family names must be single-quoted.
+	const svg = buildFinisherCertificateSvg(input({ clubName: 'Richmond Run Club' }));
+	// In well-formed XML every attribute's closing quote is followed by
+	// whitespace, '/', or '>'. A double quote leaking into a value breaks that.
+	assert.ok(
+		!/="[^"]*"(?=[^\s/>])/.test(svg),
+		'a double quote leaked into a double-quoted attribute value (malformed XML)',
+	);
+	assert.ok(svg.includes("'Times New Roman'"), 'multi-word serif family is single-quoted');
+	assert.ok(!svg.includes('"Times New Roman"'), 'serif family must not use double quotes');
+});
+
 test('formats sub-hour times as m:ss', () => {
 	const svg = buildFinisherCertificateSvg(input({ durationS: 22 * 60 + 9 }));
 	assert.ok(svg.includes('22:09'));

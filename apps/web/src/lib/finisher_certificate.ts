@@ -63,8 +63,12 @@ function xmlEscape(s: string): string {
 /// brand-accent border; finisher name is the hero, time + distance +
 /// placing sit below.
 export function buildFinisherCertificateSvg(input: FinisherCertificateInput): string {
-	const F = 'Georgia,"Times New Roman",serif';
-	const SANS = 'system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+	// Multi-word family names use SINGLE quotes: these strings are interpolated
+	// into double-quoted SVG attributes (font-family="..."), so a double quote
+	// here would terminate the attribute and make the whole SVG malformed XML —
+	// the Image load then fails and no certificate is ever produced.
+	const F = "Georgia,'Times New Roman',serif";
+	const SANS = "system-ui,-apple-system,'Segoe UI',Roboto,sans-serif";
 	const W = CERT_WIDTH;
 	const H = CERT_HEIGHT;
 	const ACCENT = '#b45309'; // amber-700, a "medal" tone

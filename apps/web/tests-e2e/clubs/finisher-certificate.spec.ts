@@ -22,7 +22,14 @@ test.describe('/clubs/[slug]/events/[id] — finisher certificate', () => {
 	let instanceStart: string | null = null;
 
 	test.beforeEach(async () => {
-		instanceStart = new Date(Date.now() + 7 * 24 * 3600 * 1000).toISOString();
+		// Zero the milliseconds: the event page derives the active instance via
+		// expandInstances, which stamps each occurrence with setHours(h,m,s,0)
+		// (ms=0). Production results are keyed on that ms=0 instant, so a seed
+		// with non-zero ms would never match fetchEventResults' instance_start
+		// filter and the result (+ its Certificate button) would never render.
+		const seed = new Date(Date.now() + 7 * 24 * 3600 * 1000);
+		seed.setMilliseconds(0);
+		instanceStart = seed.toISOString();
 		eventId = await insertEvent({
 			club_id: SYDNEY_RUN_CLUB_ID,
 			created_by: USER_A.id,
