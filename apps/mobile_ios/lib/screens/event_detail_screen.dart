@@ -79,10 +79,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
       _activeInstance ??= event.nextInstanceStart;
       final now = DateTime.now();
-      final horizon = now.add(const Duration(days: 120));
-      final instances = expandInstances(
-        event.toRecurrence(), now, horizon, max: 6,
-      );
+      // Match web (persona #40): a full year of upcoming occurrences at the
+      // default cap, so a weekly series' weeks 7+ are reachable in the picker
+      // rather than truncated at 6. expandInstances still honours
+      // recurrence_until / recurrence_count.
+      final horizon = now.add(const Duration(days: 365));
+      final instances = expandInstances(event.toRecurrence(), now, horizon);
       final bodyResults = await Future.wait([
         widget.social.fetchAttendees(event.row.id, _activeInstance!),
         widget.social.fetchEventResults(event.row.id, _activeInstance!),
