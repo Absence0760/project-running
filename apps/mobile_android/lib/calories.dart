@@ -15,6 +15,9 @@ const Map<String, double> kActivityKcalPerKgPerKm = {
   'walk': 0.5,
   'hike': 0.7,
   'cycle': 0.4,
+  // Running while pushing a stroller — a touch above open running. Before
+  // this key, stroller runs fell back to walk (0.5), ~50% low (#51).
+  'stroller': 1.1,
 };
 
 // Female-specific calibration. See web `calories.ts` for the full

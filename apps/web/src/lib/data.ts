@@ -588,7 +588,7 @@ export async function createManualRun(input: {
 	startedAt: string; // ISO UTC
 	durationS: number;
 	distanceM: number;
-	activityType?: 'run' | 'walk' | 'hike' | 'cycle';
+	activityType?: 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
 	notes?: string | null;
 	routeId?: string | null;
 	/// Per-run visibility override. When omitted, falls back to the user's

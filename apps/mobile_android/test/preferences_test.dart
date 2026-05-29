@@ -61,14 +61,22 @@ void main() {
 
   group('ActivityType.kcalPerKgPerKm', () {
     test('values land in a plausible metabolic range', () {
-      // 0.4–1.0 kcal/kg/km covers walking through running per the
-      // approximate METs translation. A regression introducing e.g.
-      // 10.0 (10× too big) would inflate the dashboard's
-      // calories-burned number by an order of magnitude.
+      // 0.4–1.2 kcal/kg/km covers cycling through stroller-running per the
+      // approximate METs translation (stroller pushes a load so it sits just
+      // above open running at 1.1). A regression introducing e.g. 10.0 (10×
+      // too big) would inflate the dashboard's calories number by an order of
+      // magnitude.
       for (final t in ActivityType.values) {
         expect(t.kcalPerKgPerKm, greaterThanOrEqualTo(0.4));
-        expect(t.kcalPerKgPerKm, lessThanOrEqualTo(1.0));
+        expect(t.kcalPerKgPerKm, lessThanOrEqualTo(1.2));
       }
+    });
+
+    test('stroller burns at least as much as open running (#51)', () {
+      expect(
+        ActivityType.stroller.kcalPerKgPerKm,
+        greaterThanOrEqualTo(ActivityType.run.kcalPerKgPerKm),
+      );
     });
 
     test('run > hike > walk > cycle (relative metabolic cost)', () {

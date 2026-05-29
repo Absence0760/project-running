@@ -27,7 +27,7 @@
 	let durationMin = $state(30);
 	let durationSec = $state(0);
 	let distance = $state(5);
-	let activityType = $state<'run' | 'walk' | 'hike' | 'cycle'>('run');
+	let activityType = $state<'run' | 'walk' | 'hike' | 'cycle' | 'stroller'>('run');
 	let notes = $state('');
 	let routeId = $state('');
 	let routes = $state<Route[]>([]);
@@ -107,7 +107,7 @@
 	<fieldset class="field activity-field">
 		<legend class="field-label">Activity</legend>
 		<div class="chip-row" role="radiogroup" aria-label="Activity">
-			{#each ['run', 'walk', 'hike', 'cycle'] as a}
+			{#each ['run', 'walk', 'hike', 'cycle', 'stroller'] as a}
 				<button
 					type="button"
 					role="radio"

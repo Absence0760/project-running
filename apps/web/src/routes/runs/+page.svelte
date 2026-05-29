@@ -274,6 +274,7 @@
 		{ value: 'walk', label: 'Walk', icon: 'directions_walk' },
 		{ value: 'cycle', label: 'Cycle', icon: 'directions_bike' },
 		{ value: 'hike', label: 'Hike', icon: 'terrain' },
+		{ value: 'stroller', label: 'Stroller', icon: 'child_friendly' },
 	];
 
 	/// Monotonic generation counter. Every loadInitial() captures the

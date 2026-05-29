@@ -53,6 +53,17 @@ test('estimateRunCalories: activity coefficient scales output', () => {
 	assert.equal(walk, 350); // half of run per the ladder
 });
 
+test('estimateRunCalories — stroller burns above run, not below walk (#51)', () => {
+	const stroller = estimateRunCalories({
+		distanceM: 10_000,
+		weightKg: 70,
+		activityKcalPerKgPerKm: ACTIVITY_KCAL_PER_KG_PER_KM.stroller,
+	});
+	// 1.1 coeff → 770 kcal; previously a stroller run fell back to walk (350).
+	assert.equal(stroller, 770);
+	assert.equal(ACTIVITY_KCAL_PER_KG_PER_KM.stroller, 1.1);
+});
+
 test('estimateRunCalories: null / zero activity coefficient falls back to run', () => {
 	const explicit = estimateRunCalories({
 		distanceM: 5_000,

@@ -44,6 +44,16 @@ void main() {
       expect(walk, 350);
     });
 
+    test('stroller burns above run, not below walk (#51)', () {
+      final stroller = estimateRunCalories(
+        distanceM: 10000,
+        weightKg: 70,
+        activityKcalPerKgPerKm: kActivityKcalPerKgPerKm['stroller'],
+      );
+      expect(stroller, 770);
+      expect(kActivityKcalPerKgPerKm['stroller'], 1.1);
+    });
+
     test('null / zero activity coefficient falls back to run', () {
       final explicit = estimateRunCalories(
         distanceM: 5000,

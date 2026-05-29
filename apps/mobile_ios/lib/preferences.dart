@@ -12,7 +12,8 @@ enum ActivityType {
   run,
   walk,
   cycle,
-  hike;
+  hike,
+  stroller;
 
   String get label {
     switch (this) {
@@ -35,6 +36,8 @@ enum ActivityType {
         // picker and assumed selecting Hike meant they'd be
         // pushed onto roads.
         return 'Trail run';
+      case ActivityType.stroller:
+        return 'Stroller';
     }
   }
 
@@ -48,6 +51,8 @@ enum ActivityType {
         return Icons.directions_bike;
       case ActivityType.hike:
         return Icons.terrain;
+      case ActivityType.stroller:
+        return Icons.child_friendly;
     }
   }
 
@@ -66,6 +71,9 @@ enum ActivityType {
         return 0.4;
       case ActivityType.hike:
         return 0.7;
+      case ActivityType.stroller:
+        // Running while pushing a stroller — a touch above open running.
+        return 1.1;
     }
   }
 
@@ -119,6 +127,8 @@ enum ActivityType {
         return 0.0; // pedometer not meaningful for cycling
       case ActivityType.hike:
         return 0.85; // shorter than running, longer than walking
+      case ActivityType.stroller:
+        return 1.1; // running stride
     }
   }
 
@@ -138,6 +148,8 @@ enum ActivityType {
         return 25; // 90 km/h — higher than any sane cyclist
       case ActivityType.hike:
         return 6; // slow running overlap for scrambling / downhill
+      case ActivityType.stroller:
+        return 9; // running with a pram — a touch under open-run peak
     }
   }
 

@@ -25,7 +25,7 @@
 	// Universal settings from docs/settings.md
 	let preferredUnit = $state<'km' | 'mi'>('km');
 	let paceFormat = $state<'min_per_km' | 'min_per_mi' | 'kph' | 'mph'>('min_per_km');
-	let defaultActivity = $state<'run' | 'walk' | 'hike' | 'cycle'>('run');
+	let defaultActivity = $state<'run' | 'walk' | 'hike' | 'cycle' | 'stroller'>('run');
 	let weekStartDay = $state<'monday' | 'sunday'>('monday');
 	let mapStyle = $state<'streets' | 'satellite' | 'outdoors' | 'dark'>('streets');
 	let privacyDefault = $state<'public' | 'followers' | 'private'>('followers');

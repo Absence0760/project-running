@@ -36,6 +36,10 @@ export const ACTIVITY_KCAL_PER_KG_PER_KM: Record<string, number> = {
 	walk: 0.5,
 	hike: 0.7,
 	cycle: 0.4,
+	// Running while pushing a stroller — a touch above open running. Before
+	// this key existed, stroller runs fell back to walk (0.5) and undercounted
+	// calories by ~50% (family-club persona #51).
+	stroller: 1.1,
 };
 
 /// Female-specific calibration. ~5% reduction in absolute energy
