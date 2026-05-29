@@ -14,6 +14,7 @@
 	let location = $state('');
 	let visibility = $state<'public' | 'private'>('public');
 	let joinPolicy = $state<JoinPolicy>('open');
+	let requireWaiver = $state(false);
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
@@ -51,7 +52,8 @@
 				location_label: location.trim() || undefined,
 				location_point_wkt: locationPointWkt,
 				is_public: visibility === 'public',
-				join_policy: joinPolicy
+				join_policy: joinPolicy,
+				requires_activity_waiver: requireWaiver
 			});
 			oncreated?.(club);
 		} catch (e: unknown) {
@@ -150,6 +152,14 @@
 			</label>
 		</fieldset>
 	{/if}
+
+	<label class="waiver-toggle">
+		<input type="checkbox" bind:checked={requireWaiver} />
+		<span>
+			Require an activity-risk acknowledgement to join. Members confirm they
+			understand the physical risks of group runs before joining.
+		</span>
+	</label>
 
 	{#if error}
 		<p class="error">{error}</p>

@@ -98,6 +98,9 @@
 	let draftPost = $state('');
 	let postingBusy = $state(false);
 	let joinBusy = $state(false);
+	// Activity-risk acknowledgement (persona #45) — only gates the join button
+	// for clubs that require it.
+	let waiverAck = $state(false);
 	let error = $state<string | null>(null);
 	let showLeaveConfirm = $state(false);
 	let showReportDialog = $state(false);
@@ -383,7 +386,7 @@
 		if (!club || joinBusy) return;
 		joinBusy = true;
 		try {
-			const status = await joinClub(club.id, club.join_policy);
+			const status = await joinClub(club.id, club.join_policy, waiverAck);
 			if (status === 'pending') {
 				error = `Request sent. An admin will review it.`;
 			}
@@ -675,7 +678,17 @@
 						Invite only
 					</button>
 				{:else if !club.viewer_role}
-					<button class="btn-primary" onclick={join} disabled={joinBusy}>
+					{#if club.requires_activity_waiver}
+						<label class="waiver-ack">
+							<input type="checkbox" bind:checked={waiverAck} />
+							<span>I understand the physical risks of group running and join at my own risk.</span>
+						</label>
+					{/if}
+					<button
+						class="btn-primary"
+						onclick={join}
+						disabled={joinBusy || (club.requires_activity_waiver && !waiverAck)}
+					>
 						{#if joinBusy}
 							{club.join_policy === 'request' ? 'Requesting…' : 'Joining…'}
 						{:else if club.join_policy === 'request'}

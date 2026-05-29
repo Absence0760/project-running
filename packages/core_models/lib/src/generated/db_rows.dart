@@ -15,12 +15,14 @@ class ClubMemberRow {
   static const String colRole = 'role';
   static const String colJoinedAt = 'joined_at';
   static const String colStatus = 'status';
+  static const String colActivityWaiverAckAt = 'activity_waiver_ack_at';
 
   final String clubId;
   final String userId;
   final String role;
   final DateTime? joinedAt;
   final String status;
+  final DateTime? activityWaiverAckAt;
 
   const ClubMemberRow({
     required this.clubId,
@@ -28,6 +30,7 @@ class ClubMemberRow {
     required this.role,
     this.joinedAt,
     required this.status,
+    this.activityWaiverAckAt,
   });
 
   factory ClubMemberRow.fromJson(Map<String, dynamic> json) => ClubMemberRow(
@@ -36,6 +39,7 @@ class ClubMemberRow {
     role: json['role'] as String,
     joinedAt: json['joined_at'] == null ? null : DateTime.parse(json['joined_at'] as String),
     status: json['status'] as String,
+    activityWaiverAckAt: json['activity_waiver_ack_at'] == null ? null : DateTime.parse(json['activity_waiver_ack_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -44,6 +48,7 @@ class ClubMemberRow {
     colRole: role,
     colJoinedAt: joinedAt?.toIso8601String(),
     colStatus: status,
+    colActivityWaiverAckAt: activityWaiverAckAt?.toIso8601String(),
   };
 }
 
@@ -122,6 +127,7 @@ class ClubRow {
   static const String colLocationPoint = 'location_point';
   static const String colMemberCount = 'member_count';
   static const String colIsVerified = 'is_verified';
+  static const String colRequiresActivityWaiver = 'requires_activity_waiver';
 
   final String id;
   final String ownerId;
@@ -138,6 +144,7 @@ class ClubRow {
   final dynamic locationPoint;
   final int memberCount;
   final bool isVerified;
+  final bool requiresActivityWaiver;
 
   const ClubRow({
     required this.id,
@@ -155,6 +162,7 @@ class ClubRow {
     this.locationPoint,
     required this.memberCount,
     required this.isVerified,
+    required this.requiresActivityWaiver,
   });
 
   factory ClubRow.fromJson(Map<String, dynamic> json) => ClubRow(
@@ -173,6 +181,7 @@ class ClubRow {
     locationPoint: json['location_point'],
     memberCount: (json['member_count'] as num).toInt(),
     isVerified: (json['is_verified'] as bool?) ?? false,
+    requiresActivityWaiver: (json['requires_activity_waiver'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -191,6 +200,7 @@ class ClubRow {
     colLocationPoint: locationPoint,
     colMemberCount: memberCount,
     colIsVerified: isVerified,
+    colRequiresActivityWaiver: requiresActivityWaiver,
   };
 }
 

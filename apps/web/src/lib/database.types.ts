@@ -57,6 +57,7 @@ export type Database = {
       }
       club_members: {
         Row: {
+          activity_waiver_ack_at: string | null
           club_id: string
           joined_at: string | null
           role: string
@@ -64,6 +65,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          activity_waiver_ack_at?: string | null
           club_id: string
           joined_at?: string | null
           role?: string
@@ -71,6 +73,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          activity_waiver_ack_at?: string | null
           club_id?: string
           joined_at?: string | null
           role?: string
@@ -157,6 +160,7 @@ export type Database = {
           member_count: number
           name: string
           owner_id: string
+          requires_activity_waiver: boolean
           slug: string
           updated_at: string | null
         }
@@ -174,6 +178,7 @@ export type Database = {
           member_count?: number
           name: string
           owner_id: string
+          requires_activity_waiver?: boolean
           slug: string
           updated_at?: string | null
         }
@@ -191,6 +196,7 @@ export type Database = {
           member_count?: number
           name?: string
           owner_id?: string
+          requires_activity_waiver?: boolean
           slug?: string
           updated_at?: string | null
         }
@@ -2654,6 +2660,7 @@ export type Database = {
           member_count: number
           name: string
           owner_id: string
+          requires_activity_waiver: boolean
           slug: string
           updated_at: string | null
         }[]

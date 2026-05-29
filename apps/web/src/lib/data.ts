@@ -1271,7 +1271,7 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 // falls back to `GenericStringError` and downstream type assertions
 // fail svelte-check.
 const CLUB_SELECT_COLS =
-	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, created_at, updated_at' as const;
+	'id, owner_id, name, slug, description, avatar_url, location_label, is_public, is_verified, join_policy, member_count, requires_activity_waiver, created_at, updated_at' as const;
 
 // Column-level grant lockdown: `meet_lat` / `meet_lng` are revoked
 // from anon + authenticated (migrations 20260723_001 + 20260806_001 +
@@ -1345,6 +1345,7 @@ export async function searchClubs(query: string): Promise<ClubWithMeta[]> {
 		is_verified: (r.is_verified as boolean | undefined) ?? false,
 		join_policy: (r.join_policy ?? 'open') as JoinPolicy,
 		member_count: (r.member_count ?? 0) as number,
+		requires_activity_waiver: (r.requires_activity_waiver as boolean | undefined) ?? false,
 		created_at: r.created_at as string,
 		updated_at: r.updated_at as string,
 	}));
@@ -1432,6 +1433,7 @@ export async function createClub(input: {
 	location_point_wkt?: string;
 	is_public: boolean;
 	join_policy: JoinPolicy;
+	requires_activity_waiver?: boolean;
 }): Promise<Club & { invite_token: string | null }> {
 	// invite_token is excluded from the base Club shape (column-grant
 	// lockdown) but createClub knows the freshly-generated token —
@@ -1458,6 +1460,7 @@ export async function createClub(input: {
 				location_point: input.location_point_wkt ?? null,
 				is_public: input.is_public,
 				join_policy: input.join_policy,
+				requires_activity_waiver: input.requires_activity_waiver ?? false,
 				invite_token: inviteToken
 			})
 			.select(CLUB_SELECT_COLS)
@@ -1509,13 +1512,23 @@ export async function deleteClub(id: string): Promise<void> {
 	if (error) throw error;
 }
 
-export async function joinClub(clubId: string, policy: JoinPolicy = 'open'): Promise<MembershipStatus> {
+export async function joinClub(
+	clubId: string,
+	policy: JoinPolicy = 'open',
+	ackWaiver = false,
+): Promise<MembershipStatus> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const status: MembershipStatus = policy === 'request' ? 'pending' : 'active';
-	const { error } = await supabase
-		.from('club_members')
-		.insert({ club_id: clubId, user_id: userId, role: 'member', status });
+	const { error } = await supabase.from('club_members').insert({
+		club_id: clubId,
+		user_id: userId,
+		role: 'member',
+		status,
+		// Records the activity-risk acknowledgement when the club requires it
+		// (persona #45); null when the club doesn't require a waiver.
+		activity_waiver_ack_at: ackWaiver ? new Date().toISOString() : null,
+	});
 	if (error && error.code !== '23505') throw error;
 	return status;
 }
