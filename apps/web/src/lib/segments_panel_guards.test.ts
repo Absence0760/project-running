@@ -58,14 +58,16 @@ test('SegmentsPanel.svelte populates the age dropdown from SEGMENT_AGE_BANDS', (
 });
 
 test('SegmentsPanel.svelte exposes a Reset chip while a filter is set', () => {
-	// Reason: a user who narrows by gender + age has no other affordance
-	// to clear the filter — closing and re-opening the same segment
-	// would lose context. The Reset chip lives behind `genderFilter ||
-	// ageFilter` so it appears only when relevant.
+	// Reason: a user who narrows by gender + age (+ the persona #50 club-only
+	// toggle) has no other affordance to clear the filter — closing and
+	// re-opening the same segment would lose context. The Reset chip lives
+	// behind `genderFilter || ageFilter` (plus the optional `|| clubOnly`
+	// term when a club leaderboard is in play) so it appears only when
+	// relevant.
 	const source = read('src/lib/components/SegmentsPanel.svelte');
 	assert.match(
 		source,
-		/\{#if genderFilter \|\| ageFilter\}/,
+		/\{#if genderFilter \|\| ageFilter(?: \|\| clubOnly)?\}/,
 		'Reset chip visibility gate missing',
 	);
 	assert.match(source, /class="clear-btn"/, 'Reset chip class missing');
