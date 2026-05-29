@@ -822,8 +822,10 @@
 						best {runStreaks.best} {runStreaks.best === 1 ? 'day' : 'days'}
 					{:else if runStreaks.current > 0}
 						all-time best
+					{:else if runStreaks.best > 0}
+						run today to restart it
 					{:else}
-						no active streak
+						run today to start one
 					{/if}
 				</span>
 			</div>

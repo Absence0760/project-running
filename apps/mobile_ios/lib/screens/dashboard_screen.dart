@@ -1120,7 +1120,11 @@ class _StreakRow extends StatelessWidget {
         ? 'best ${streaks.best} ${streaks.best == 1 ? "day" : "days"}'
         : streaks.current > 0
             ? 'all-time best'
-            : 'no active streak';
+            // Encourage rather than guilt a beginner with no current streak
+            // (new persona #26).
+            : streaks.best > 0
+                ? 'run today to restart it'
+                : 'run today to start one';
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
