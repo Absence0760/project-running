@@ -57,6 +57,15 @@ create unique index notifications_run_completed_uniq
 -- ─────────────────────── triggers ───────────────────────
 
 -- New club post → notify every member of the club except the author.
+-- One notification per post per member by design — there is deliberately
+-- no dedupe index here. The natural per-event key for a club_post is the
+-- post id (each post is a distinct event a member should hear about), and
+-- that id is not a notifications column, so a (user_id, club_id) unique
+-- index would wrongly collapse every future post in a club into the first
+-- member's single row. The AFTER INSERT FOR EACH ROW trigger already
+-- fires exactly once per club_posts row, so there is no double-fire to
+-- guard against. (run_completed below CAN dedupe because run_id, its
+-- natural key, IS a column.)
 create or replace function notify_club_post()
 returns trigger
 language plpgsql

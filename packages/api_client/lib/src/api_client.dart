@@ -3188,10 +3188,22 @@ class ApiClient {
             .from(UserProfileRow.table)
             .select('id, display_name, avatar_url')
             .inFilter(UserProfileRow.colId, actorIds);
+    // Two run reads: `runs` resolves the recipient's OWN runs (kudos /
+    // comment / reply notifications, where the recipient owns the run
+    // and it may be private), and `public_runs` resolves runs owned by
+    // someone else (run_completed, where the recipient is a follower —
+    // the bare `runs` table has owner-only SELECT since migration
+    // 20260701_001 so a follower read returns nothing). Merged below.
     final runRowsF = runIds.isEmpty
         ? Future.value(<dynamic>[])
         : _client
             .from(RunRow.table)
+            .select('${RunRow.colId}, ${RunRow.colDistanceM}')
+            .inFilter(RunRow.colId, runIds);
+    final publicRunRowsF = runIds.isEmpty
+        ? Future.value(<dynamic>[])
+        : _client
+            .from('public_runs')
             .select('${RunRow.colId}, ${RunRow.colDistanceM}')
             .inFilter(RunRow.colId, runIds);
     final commentRowsF = commentIds.isEmpty
@@ -3210,13 +3222,15 @@ class ApiClient {
     final results = await Future.wait([
       actorRowsF,
       runRowsF,
+      publicRunRowsF,
       commentRowsF,
       eventRowsF,
     ]);
     final actorRows = results[0];
     final runRows = results[1];
-    final commentRows = results[2];
-    final eventRows = results[3];
+    final publicRunRows = results[2];
+    final commentRows = results[3];
+    final eventRows = results[4];
 
     final actorsById = <String, PublicProfile>{};
     for (final r in actorRows) {
@@ -3224,6 +3238,13 @@ class ApiClient {
       actorsById[row['id'] as String] = PublicProfile.fromJson(row);
     }
     final runDistanceById = <String, double>{};
+    // Public view first; the owner read overlays it (same columns) so a
+    // private own-run the public view omits still resolves a distance.
+    for (final r in publicRunRows) {
+      final row = r as Map<String, dynamic>;
+      final dist = row[RunRow.colDistanceM];
+      if (dist is num) runDistanceById[row[RunRow.colId] as String] = dist.toDouble();
+    }
     for (final r in runRows) {
       final row = r as Map<String, dynamic>;
       final dist = row[RunRow.colDistanceM];

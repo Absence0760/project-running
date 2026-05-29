@@ -4559,12 +4559,22 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 	const eventIds = Array.from(new Set(rows.map((r) => (r as { event_id?: string | null }).event_id).filter((x): x is string => !!x)));
 	const clubIds = Array.from(new Set(rows.map((r) => (r as { club_id?: string | null }).club_id).filter((x): x is string => !!x)));
 
-	const [profiles, runs, comments, events, clubs] = await Promise.all([
+	const [profiles, runs, publicRuns, comments, events, clubs] = await Promise.all([
 		actorIds.length > 0
 			? supabase.from('user_profiles').select('id, display_name, avatar_url').in('id', actorIds)
 			: Promise.resolve({ data: [] as PublicProfile[] }),
+		// Two run reads: `runs` resolves the recipient's OWN runs
+		// (kudos / comment / reply notifications, where the recipient is
+		// the owner and the run may be private), and `public_runs`
+		// resolves runs owned by someone else (run_completed, where the
+		// recipient is a follower — the bare `runs` table has owner-only
+		// SELECT since migration 20260701_001 so a follower read returns
+		// nothing). Merged below; either source filling the distance.
 		runIds.length > 0
 			? supabase.from('runs').select('id, distance_m, started_at').in('id', runIds)
+			: Promise.resolve({ data: [] as { id: string; distance_m: number; started_at: string }[] }),
+		runIds.length > 0
+			? supabase.from('public_runs').select('id, distance_m, started_at').in('id', runIds)
 			: Promise.resolve({ data: [] as { id: string; distance_m: number; started_at: string }[] }),
 		commentIds.length > 0
 			? supabase.from('run_comments').select('id, body').in('id', commentIds)
@@ -4580,6 +4590,11 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 	const profileBy = new Map<string, PublicProfile>();
 	for (const p of (profiles.data ?? []) as PublicProfile[]) profileBy.set(p.id, p);
 	const runBy = new Map<string, { distance_m: number; started_at: string }>();
+	for (const r of (publicRuns.data ?? []) as { id: string; distance_m: number; started_at: string }[]) {
+		runBy.set(r.id, { distance_m: r.distance_m, started_at: r.started_at });
+	}
+	// Owner-read overlays public — both carry the same columns; this just
+	// fills any private run the public view omits.
 	for (const r of (runs.data ?? []) as { id: string; distance_m: number; started_at: string }[]) {
 		runBy.set(r.id, { distance_m: r.distance_m, started_at: r.started_at });
 	}
