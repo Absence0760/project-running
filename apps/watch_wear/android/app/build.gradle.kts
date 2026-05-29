@@ -69,8 +69,14 @@ android {
         // (gitignored). All default false so the shipping build has no
         // seed-creds and no emulator-synthesised HR leaking into runs.
         buildConfigField("boolean", "BYPASS_LOGIN", envFlag("BYPASS_LOGIN").toString())
-        buildConfigField("boolean", "ENABLE_HR", envFlag("ENABLE_HR").toString())
-        // TTS defaults **on** — unlike ENABLE_HR, there's no emulator
+        // HR defaults **on** so a real watch records optical heart rate
+        // (persona samsung #33) — the previous default-off shipped every
+        // release with HR silently disabled, so no run ever carried
+        // avg_bpm. The Wear OS emulator synthesises fake HR that looks
+        // real, so set DISABLE_HR=true in `.env.local` when developing on
+        // the emulator to keep fabricated readings out of the runs table.
+        buildConfigField("boolean", "ENABLE_HR", (!envFlag("DISABLE_HR")).toString())
+        // TTS defaults **on** — like ENABLE_HR, but there's no emulator
         // quirk to guard against. The TTS engine degrades gracefully if
         // a voice isn't installed. Set DISABLE_TTS=true in
         // `.env.local` if you're developing in a quiet space.

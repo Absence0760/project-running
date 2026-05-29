@@ -196,7 +196,7 @@ time and emitted as `BuildConfig` constants; changes require a rebuild
 | Flag | Default | Effect |
 |---|---|---|
 | `BYPASS_LOGIN` | `false` | On app start, if no cached session and no phone handoff, auto-sign-in as `runner@test.com` / `testtest`. Skips the sign-in screen. Use only against local/dev Supabase. **Not a sign-out switch**: flipping to `false` won't sign out a user whose session is already cached — tap the "Sign out" chip on PreRun or `./gradlew uninstallDebug && ./gradlew installDebug` to get a clean slate. |
-| `ENABLE_HR` | `false` | Start the Health Services `MeasureClient` during a run and write `avg_bpm` into run metadata. Default off because the Wear OS emulator produces synthetic HR samples that look like real readings — leaving it off by default keeps fake data out of the runs table. Turn on when building for a real device with a real sensor. |
+| `DISABLE_HR` | `false` | HR (Health Services `MeasureClient` → `avg_bpm` in run metadata) defaults **ON** so real watches record heart rate (persona samsung #33 — the old default-off shipped every release with HR silently disabled). Set `DISABLE_HR=true` **only on the emulator**, which synthesises fake HR samples that look real and would otherwise pollute the runs table. The `BuildConfig` field is still `ENABLE_HR` (now `!DISABLE_HR`); consumers are unchanged. |
 | `PUBLIC_MAPTILER_KEY` | `""` | MapTiler raster tile API key. When set, `ui/RouteMiniMap.kt` fetches `streets-v2-dark` tiles via `ui/TileSource.kt` and draws them under the polyline using the same Web Mercator projection (`recording/MercatorTiles.kt`). Empty ⇒ map falls back to polyline + position dot on a midnight background — same behaviour as v1. The env-var name matches the web app's so a single key can be shared across web and watch. |
 
 The UI tracks the flags: with `ENABLE_HR` off, the BPM row on the Running
@@ -306,6 +306,15 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
 - **Google Sign-In on the watch** (today only email/password direct
   sign-in works; for Google use the phone app + Data Layer handoff, or
   build out `RemoteActivityHelper`).
+- **BLE chest-strap HR on the watch (standalone).** The watch records
+  optical HR via Health Services `MeasureClient` only. Pairing an
+  external BLE chest strap directly to the watch (its own GATT client +
+  scan/pair UI + `BLUETOOTH_SCAN`/`BLUETOOTH_CONNECT` runtime perms) is
+  deferred — a sizeable feature for a minority of watch-standalone
+  users, and the phone already owns BLE strap pairing
+  (`apps/mobile_android/lib/ble_heart_rate.dart`). Persona samsung #33
+  flipped the optical-HR default on; the BLE-on-wrist half stays out of
+  scope until there's demand.
 - **End-to-end soak test on a real device.** All of the above ships in
   this session as compiles-cleanly code; verifying it actually
   records 60+ minutes without dropping samples requires putting it on a
