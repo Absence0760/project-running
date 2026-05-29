@@ -1995,6 +1995,7 @@ export async function fetchEventAttendees(
 // --- Event results (leaderboard) ---
 
 export interface EventResultRow {
+	id: string;
 	// Null for bib-only finishers imported from a chip-timing CSV
 	// (persona #43) — those rows carry `bib` + `finisher_name` instead.
 	user_id: string | null;
@@ -2037,7 +2038,7 @@ export async function fetchEventResults(
 	const { data: results } = await supabase
 		.from('event_results_redacted')
 		.select(
-			'user_id, bib, finisher_name, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved'
+			'id, user_id, bib, finisher_name, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved'
 		)
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
@@ -2148,6 +2149,105 @@ export async function bulkImportEventResults(params: {
 	const { error } = await supabase
 		.from('event_results')
 		.upsert(payload, { onConflict: 'event_id,instance_start,bib' });
+	if (error) throw error;
+}
+
+export interface EventResultClaim {
+	id: string;
+	result_id: string;
+	claimant_id: string;
+	status: 'pending' | 'approved' | 'rejected';
+	created_at: string;
+}
+
+export interface EventResultClaimWithUser extends EventResultClaim {
+	claimant_name: string | null;
+	// The bib + finisher_name of the result being claimed, for the
+	// organiser's approval queue ("Bob claims bib 102 — Alice Anon").
+	bib: string | null;
+	finisher_name: string | null;
+}
+
+// A logged-in runner claims a bib-only imported result (persona #43).
+// Organiser-approve trust model — the row stays bib-only until an organiser
+// approves via approveEventResultClaim. Returns the created/re-opened claim.
+export async function requestEventResultClaim(resultId: string): Promise<void> {
+	const { error } = await supabase.rpc('claim_event_result', { p_result_id: resultId });
+	if (error) throw error;
+}
+
+// The current user's claims for a given (event, instance), keyed by
+// result_id so the leaderboard can show a "claim pending" state on the row
+// the viewer claimed. Reads through the RLS SELECT policy (claimant sees own).
+export async function fetchMyEventResultClaims(
+	eventId: string,
+	instanceStart: string
+): Promise<Map<string, EventResultClaim['status']>> {
+	const userId = auth.user?.id;
+	if (!userId) return new Map();
+	const { data } = await supabase
+		.from('event_result_claims')
+		.select('result_id, status, event_results!inner(event_id, instance_start)')
+		.eq('claimant_id', userId)
+		.eq('event_results.event_id', eventId)
+		.eq('event_results.instance_start', instanceStart);
+	const map = new Map<string, EventResultClaim['status']>();
+	for (const r of (data ?? []) as Array<{ result_id: string; status: EventResultClaim['status'] }>)
+		map.set(r.result_id, r.status);
+	return map;
+}
+
+// Pending claims an organiser needs to adjudicate for a given (event,
+// instance). RLS gates this to organisers of the parent event.
+export async function fetchPendingEventResultClaims(
+	eventId: string,
+	instanceStart: string
+): Promise<EventResultClaimWithUser[]> {
+	const { data } = await supabase
+		.from('event_result_claims')
+		.select(
+			'id, result_id, claimant_id, status, created_at, event_results!inner(event_id, instance_start, bib, finisher_name)'
+		)
+		.eq('status', 'pending')
+		.eq('event_results.event_id', eventId)
+		.eq('event_results.instance_start', instanceStart)
+		.order('created_at', { ascending: true });
+	const rows = (data ?? []) as Array<{
+		id: string;
+		result_id: string;
+		claimant_id: string;
+		status: EventResultClaim['status'];
+		created_at: string;
+		// PostgREST returns the embedded relationship as an array.
+		event_results: Array<{ bib: string | null; finisher_name: string | null }>;
+	}>;
+	if (rows.length === 0) return [];
+	const claimantIds = [...new Set(rows.map((r) => r.claimant_id))];
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name')
+		.in('id', claimantIds);
+	const byId = new Map<string, string | null>();
+	for (const p of profiles ?? []) byId.set(p.id, p.display_name);
+	return rows.map((r) => ({
+		id: r.id,
+		result_id: r.result_id,
+		claimant_id: r.claimant_id,
+		status: r.status,
+		created_at: r.created_at,
+		claimant_name: byId.get(r.claimant_id) ?? null,
+		bib: r.event_results[0]?.bib ?? null,
+		finisher_name: r.event_results[0]?.finisher_name ?? null
+	}));
+}
+
+// Organiser approves or rejects a claim. Approving attaches the claimant's
+// account to the result row and auto-rejects competing claims (server-side).
+export async function decideEventResultClaim(claimId: string, approve: boolean): Promise<void> {
+	const { error } = await supabase.rpc('decide_event_result_claim', {
+		p_claim_id: claimId,
+		p_approve: approve
+	});
 	if (error) throw error;
 }
 
