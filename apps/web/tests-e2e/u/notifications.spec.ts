@@ -3,6 +3,7 @@ import { expect, test } from '@playwright/test';
 import { getAdminClient } from '../fixtures/local-supabase';
 import {
 	clearNotifications,
+	deleteClub,
 	deleteRun,
 	insertComment,
 	insertKudos,
@@ -160,5 +161,69 @@ test.describe('/u/[me]?tab=notifications — run_completed render (persona #38)'
 		// distance-less "completed a run" fallback. A unit-agnostic match
 		// (km or mi) so the test survives USER_B's unit preference.
 		await expect(verb.first()).toHaveText(/completed a [\d.]+\s*(km|mi) run/i);
+	});
+});
+
+/**
+ * club_post render (persona #38). Guards the clubs join in
+ * fetchNotifications (verb needs the club name, link needs the slug) and
+ * the tap navigation into /clubs/[slug].
+ */
+test.describe('/u/[me]?tab=notifications — club_post render (persona #38)', () => {
+	test.use({ storageState: USER_B.storageStatePath });
+
+	let clubId: string | null = null;
+	const clubName = 'E2E Notify Harriers';
+	const clubSlug = `e2e-notify-harriers-${Date.now()}`;
+
+	test.beforeEach(async () => {
+		const admin = getAdminClient();
+		await clearNotifications(USER_B.id);
+		// USER_A owns the club (auto-enrolled active); USER_B is an active
+		// member. A post by USER_A fans out a club_post notification to B.
+		const { data: club } = await admin
+			.from('clubs')
+			.insert({
+				owner_id: USER_A.id,
+				name: clubName,
+				slug: clubSlug,
+				is_public: true,
+				join_policy: 'open'
+			})
+			.select('id')
+			.single();
+		clubId = (club as { id: string }).id;
+		await admin
+			.from('club_members')
+			.insert({ club_id: clubId, user_id: USER_B.id, role: 'member', status: 'active' });
+		await admin
+			.from('club_posts')
+			.insert({ club_id: clubId, author_id: USER_A.id, body: 'e2e weather call' });
+	});
+
+	test.afterEach(async () => {
+		if (clubId) {
+			try {
+				await deleteClub(clubId);
+			} catch (_) {
+				/* best-effort — cascade clears members/posts/notifications */
+			}
+			clubId = null;
+		}
+	});
+
+	test('member sees the club_post notification and it links to the club', async ({ page }) => {
+		await page.goto(`/u/${USER_B.id}?tab=notifications`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+
+		const verb = page.locator('.item-wrap .verb', { hasText: /posted in/ });
+		await expect(verb.first()).toBeVisible({ timeout: 10_000 });
+		// Verb resolves the club NAME (not a bare "a club you're in"
+		// fallback) — proves the clubs join in fetchNotifications worked.
+		await expect(verb.first()).toHaveText(new RegExp(`posted in ${clubName}`));
+
+		// Tapping the row navigates to the club home via the resolved slug.
+		await verb.first().click();
+		await expect(page).toHaveURL(new RegExp(`/clubs/${clubSlug}`));
 	});
 });
