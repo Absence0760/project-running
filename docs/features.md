@@ -531,7 +531,7 @@ These are stubs. Each closes a gap against a specific competitor (see `docs/comp
 ### Heatmap / popular-route discovery
 **Closes:** Strava, Komoot.
 **Stub:** anonymised GPS aggregation into raster or vector tiles served from CDN. Privacy default is opt-out (user data included unless they toggle off) — this is the decision knob worth re-litigating before shipping.
-**Shipped (web):** two distinct surfaces. (1) The community "where people run" heatmap on `/routes/heatmap` (public-routes-only, PostGIS RPC). (2) A **personal** run-track heatmap on `/runs/heatmap` (persona-hunt #30) — a Strava-style map of the signed-in runner's OWN tracks, aggregated client-side from their own Storage blobs via the pure `run_heatmap.ts` grid-weighting helper. Owner-only data path, no cross-user aggregation, so the opt-out privacy knob above doesn't apply to it.
+**Shipped (web):** two distinct surfaces. (1) The community "where people run" heatmap on `/routes/heatmap` (public-routes-only, PostGIS RPC). (2) A **personal** run-track heatmap on `/runs/heatmap` (persona-hunt #53) — a Strava-style map of the signed-in runner's OWN tracks, aggregated client-side from their own Storage blobs via the pure `run_heatmap.ts` grid-weighting helper. Owner-only data path, no cross-user aggregation, so the opt-out privacy knob above doesn't apply to it.
 
 ### Trail / offline navigation
 **Closes:** AllTrails, Komoot.

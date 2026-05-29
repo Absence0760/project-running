@@ -1,5 +1,5 @@
 /// Pure aggregation for the personal run-track heatmap (`/runs/heatmap`,
-/// persona-hunt finding #30 — privacy / strava-migration). Flattens many
+/// persona-hunt finding #53 — privacy / strava-migration). Flattens many
 /// of the runner's own GPS tracks into weighted grid cells: repeated
 /// routes accumulate weight in the same cell instead of exploding the
 /// point count, so the MapLibre heatmap layer can render thousands of
