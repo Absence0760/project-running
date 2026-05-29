@@ -1714,6 +1714,8 @@ Don't re-litigate by:
 - Adding a separate per-band coefficient for female runners. Until per-band gender × intensity calibration is published with the rigour required to override the current ladder, the uniform 0.95 stays.
 - Asking gender in the run-detail UI. The data already lives on `user_profiles.gender` (set in Settings → Preferences alongside the segments-leaderboard demographics with explicit GDPR Art 9 consent). The calorie cell silently honours it; no new UI surface.
 
+**Wear OS (persona samsung #34, 2026-05-29):** the watch's PostRun summary now shows the same estimate via a Kotlin port — `RunCalories.estimate(distanceM, weightKg?, activityType)` in `apps/watch_wear/.../recording/RunCalories.kt`, reading `body_weight_kg` from the prefs bag (added to `UniversalSettings`). One deliberate divergence: the watch reads only `user_settings.prefs`, not the `user_profiles` row, so it can't apply the gender calibration — it computes the unmodified curve. That only affects the wrist's own glanceable figure; the run-detail pages recompute with gender once the run syncs. Documented in `RunCalories.kt`. Pinned by `RunCaloriesTest.kt` (5 tests) + the `body_weight_kg` parse case in `UniversalSettingsTest.kt`.
+
 Pinning tests:
 
 - `apps/web/src/lib/calories.test.ts` — 11 tests across defaults + weight scaling, activity coefficient, gender calibration, and the negative-distance / zero-weight edge cases.

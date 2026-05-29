@@ -67,6 +67,17 @@ class UniversalSettingsTest {
     }
 
     @Test
+    fun `body_weight_kg parses in range and rejects out-of-range (persona #34)`() {
+        val ok = parseUniversalSettings("""[{"prefs":{"body_weight_kg":68.5}}]""")
+        assertEquals(68.5, ok?.bodyWeightKg)
+        // Out of the [20, 400] sanity range → dropped.
+        assertNull(parseUniversalSettings("""[{"prefs":{"body_weight_kg":5}}]""")?.bodyWeightKg)
+        assertNull(parseUniversalSettings("""[{"prefs":{"body_weight_kg":900}}]""")?.bodyWeightKg)
+        // Absent → null (default applies downstream).
+        assertNull(parseUniversalSettings("""[{"prefs":{"default_activity_type":"run"}}]""")?.bodyWeightKg)
+    }
+
+    @Test
     fun `walk hike cycle all accepted`() {
         for (kind in listOf("walk", "hike", "cycle")) {
             val out = parseUniversalSettings("""[{"prefs":{"default_activity_type":"$kind"}}]""")

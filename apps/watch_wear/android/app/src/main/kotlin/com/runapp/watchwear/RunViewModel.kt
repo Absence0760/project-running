@@ -104,6 +104,10 @@ data class UiState(
     /// `hr_zones` / `max_hr_bpm` / `date_of_birth` from the bag.
     /// Drives the "Z3" badge next to the live BPM on the RunningScreen.
     val hrZoneCutoffs: List<Int>? = null,
+    /// Body weight (kg) from `user_settings.prefs.body_weight_kg`, for
+    /// the PostRun calorie estimate (persona samsung #34). Null → the
+    /// shared 70 kg default applies.
+    val bodyWeightKg: Double? = null,
     /// Latest GPS fix during this run, or null until the first fix
     /// lands. Drives the runner-position dot on the on-watch mini-map.
     val latestPoint: GpsPoint? = null,
@@ -674,7 +678,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             // BPM. Updated regardless of stage; null cutoffs disable
             // the badge silently.
             val resolved = resolveZoneCutoffs(settings, System.currentTimeMillis())
-            _state.value = _state.value.copy(hrZoneCutoffs = resolved)
+            _state.value = _state.value.copy(
+                hrZoneCutoffs = resolved,
+                bodyWeightKg = settings.bodyWeightKg,
+            )
             // default_activity_type — only prime; never override a
             // started run or a manual chip choice.
             val preferred = settings.defaultActivityType ?: return@launch

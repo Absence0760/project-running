@@ -112,6 +112,9 @@ data class UniversalSettings(
     val restingHrBpm: Int? = null,
     val maxHrBpm: Int? = null,
     val dateOfBirth: String? = null,
+    /// Body weight in kg for the post-run calorie estimate (persona
+    /// samsung #34). Null → the shared default (70 kg) applies.
+    val bodyWeightKg: Double? = null,
 )
 
 /// Allowed values for `default_activity_type`. Mirrors the CHECK
@@ -157,6 +160,8 @@ internal fun parseUniversalSettings(body: String?): UniversalSettings? {
                 ?.takeIf { it in 100..240 },
             dateOfBirth = prefs["date_of_birth"]?.jsonPrimitive?.contentOrNull
                 ?.takeIf { isValidIsoDate(it) },
+            bodyWeightKg = (prefs["body_weight_kg"]?.jsonPrimitive?.doubleOrNull)
+                ?.takeIf { it in 20.0..400.0 },
         )
     } catch (_: Throwable) {
         null

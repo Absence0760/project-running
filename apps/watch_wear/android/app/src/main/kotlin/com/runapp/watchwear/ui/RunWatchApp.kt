@@ -230,6 +230,7 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                 )
                 Stage.PostRun -> PostRunScreen(
                     summary = state.lastRunSummary,
+                    bodyWeightKg = state.bodyWeightKg,
                     synced = state.thisRunSynced,
                     syncing = state.syncing,
                     syncError = state.syncError,
@@ -1573,6 +1574,7 @@ private fun HoldToStopButton(
 @Composable
 private fun PostRunScreen(
     summary: com.runapp.watchwear.FinishedSummary?,
+    bodyWeightKg: Double?,
     synced: Boolean,
     syncing: Boolean,
     syncError: String?,
@@ -1631,6 +1633,22 @@ private fun PostRunScreen(
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.coral,
                     )
+                }
+                // Calorie estimate (persona samsung #34). Same 1 kcal/kg/km
+                // ladder the phone/web run-detail uses, so the figure here
+                // matches what the synced run shows there (modulo the
+                // gender calibration the watch can't read — see RunCalories).
+                run {
+                    val kcal = com.runapp.watchwear.recording.RunCalories.estimate(
+                        summary.distanceM, bodyWeightKg, summary.activityType,
+                    )
+                    if (kcal > 0) {
+                        Text(
+                            "$kcal kcal",
+                            style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
+                            color = DuskPalette.haze,
+                        )
+                    }
                 }
                 if (synced) {
                     Text(

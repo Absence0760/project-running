@@ -329,6 +329,16 @@ Manifest: `<service android:name=".tiles.ActiveRunTileService">` with `permissio
 What the UI exposes during a recording, for quick reference when reading
 `ui/RunWatchApp.kt`:
 
+**Post-run calories (persona samsung #34).** `PostRunScreen` shows a
+`kcal` figure computed by `recording/RunCalories.kt` — the same
+1 kcal/kg/km activity ladder as `apps/web/src/lib/calories.ts`, reading
+`body_weight_kg` from the prefs bag (now on `UniversalSettings`, default
+70 kg). It does NOT apply the female calibration the phone/web cell uses,
+because the watch reads `user_settings.prefs` only, not the
+`user_profiles.gender` column — the run-detail pages recompute with
+gender once synced, so the only place the watch figure is final is its
+own summary. Pinned by `RunCaloriesTest`. See decisions.md § 77.
+
 **Rotary input (bezel / crown).** The genuinely scrollable list screens —
 `BatteryInstructions` and the route picker — attach
 `Modifier.rotaryScrollable(RotaryScrollableDefaults.behavior(scrollableState
