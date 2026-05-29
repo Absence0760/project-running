@@ -143,11 +143,12 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 		await page.getByRole('radio', { name: /Run a 10K/i }).click();
 		await page.getByRole('button', { name: 'Continue' }).click();
 
-		// Step 4 — about you (skip to keep the test focused)
+		// Step 4 — about you (skip to keep the test focused). `exact`
+		// disambiguates the per-step "Skip" from the header "Skip onboarding".
 		await expect(
 			page.getByRole('heading', { name: /A bit about you/i })
 		).toBeVisible();
-		await page.getByRole('button', { name: 'Skip' }).click();
+		await page.getByRole('button', { name: 'Skip', exact: true }).click();
 
 		// Step 5 — privacy
 		await expect(

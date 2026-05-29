@@ -59,6 +59,14 @@
 
 	let saving = $state(false);
 
+	// Gates the wizard render until onMount has run (auth polled + fields
+	// prefilled). The page is prerendered + hydrated, so without this the
+	// interactive form paints before hydration attaches handlers — an early
+	// click on Continue / Skip is silently dropped and the prefill clobbers
+	// a value typed into the gap. Rendering the wizard only once `ready` is
+	// true means it exists only client-side, post-hydration, fully wired.
+	let ready = $state(false);
+
 	onMount(async () => {
 		// `auth.svelte.ts` flips loading=false before the async
 		// fetchUser resolves, so a hard reload onto /onboarding can
@@ -79,6 +87,7 @@
 		if (pushSupported) {
 			pushSubscribed = !!(await getCurrentSubscription());
 		}
+		ready = true;
 	});
 
 	function next() {
@@ -247,7 +256,9 @@
 	</div>
 
 	<main class="card">
-		{#if step === 1}
+		{#if !ready}
+			<p class="loading-hint">Loading…</p>
+		{:else if step === 1}
 			<section aria-labelledby="step-1-title">
 				<h1 id="step-1-title">What should we call you?</h1>
 				<p class="hint">
@@ -426,6 +437,7 @@
 			</section>
 		{/if}
 
+		{#if ready}
 		<div class="nav-row">
 			{#if step > 1}
 				<button type="button" class="btn btn-outline" onclick={back} disabled={saving}>
@@ -451,6 +463,7 @@
 				{/if}
 			</div>
 		</div>
+		{/if}
 	</main>
 </div>
 
