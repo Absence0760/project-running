@@ -88,6 +88,7 @@ apps/watch_wear/
             │   │   └── TrackOverlayBuffer.kt    # rolling-buffer geometric halving
             │   ├── system/
             │   │   ├── BatteryOptimization.kt   # whitelist check + UI nudge
+            │   │   ├── BatteryGuidance.kt        # pure Samsung-vs-stock fix strategy (#35)
             │   │   ├── BatteryStatus.kt         # capacity reading for pre-run warning
             │   │   └── NetworkWatcher.kt        # ConnectivityManager.NetworkCallback flow
             │   ├── tiles/
@@ -249,7 +250,15 @@ backgrounding, low-memory kills).
   `onResume`. If we're not whitelisted, the pre-run screen surfaces a
   **"Fix battery saver"** chip that opens the system whitelist prompt.
   Without this, Android throttles the foreground service after ~10
-  minutes — fatal for long runs.
+  minutes — fatal for long runs. **Samsung One UI Watch (persona #35):**
+  `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` *resolves* on Galaxy
+  watches but is a no-op (the toggle lives in the paired Galaxy Wearable
+  app). `system/BatteryGuidance.kt` (pure, `batteryFixStrategy(Build.MANUFACTURER)`)
+  detects Samsung; `requestExemption` then returns
+  `PromptResult.ManualGuidanceRecommended` instead of launching the dead
+  intent, and the `BatteryInstructions` card leads with the Galaxy
+  Wearable manual steps and hides the no-op "Try auto-open" chip. Pure
+  strategy is unit-tested in `system/BatteryGuidanceTest.kt`.
 - `system/NetworkWatcher.kt` — `ConnectivityManager.NetworkCallback`
   flow. The ViewModel collects it; offline → online transitions fire
   `drainQueue` automatically so a run recorded out of range uploads as

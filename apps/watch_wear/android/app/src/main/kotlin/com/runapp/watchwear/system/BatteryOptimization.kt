@@ -33,9 +33,20 @@ object BatteryOptimization {
         /// Watch companion app rather than in the watch's own Settings.
         NotSupportedOnThisWatch,
 
+        /// Samsung One UI Watch: the system intent resolves but is a no-op,
+        /// so we deliberately don't launch it. The caller should show the
+        /// Galaxy Wearable manual steps instead (persona #35).
+        ManualGuidanceRecommended,
+
         /// Handler claimed to resolve but threw when launched.
         Failed,
     }
+
+    /// Whether this device should be steered to the manual Galaxy Wearable
+    /// path instead of the (no-op) system prompt. Drives both
+    /// [requestExemption] and the instruction-card layout.
+    fun recommendsManualGuidance(): Boolean =
+        batteryFixStrategy(Build.MANUFACTURER) == BatteryFixStrategy.SamsungManualGuidance
 
     /// Asks the OS to whitelist this app from battery optimisation.
     /// Returns a [PromptResult] so the caller can render appropriate
@@ -44,6 +55,11 @@ object BatteryOptimization {
     fun requestExemption(activity: Activity): PromptResult {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.M) {
             return PromptResult.NotSupportedOnThisWatch
+        }
+        // Samsung One UI Watch: the direct intent resolves but does nothing.
+        // Don't launch a no-op — tell the caller to show manual steps.
+        if (recommendsManualGuidance()) {
+            return PromptResult.ManualGuidanceRecommended
         }
         val direct = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
             data = Uri.parse("package:${activity.packageName}")

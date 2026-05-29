@@ -141,6 +141,10 @@ fun RunWatchApp(vm: RunViewModel, activity: Activity, isAmbient: Boolean = false
                     }
                     if (batteryHelp) {
                         BatteryInstructions(
+                            // Samsung One UI Watch: the auto-open intent is a
+                            // no-op, so lead with the Galaxy Wearable manual
+                            // path and hide the dead button (persona #35).
+                            samsung = BatteryOptimization.recommendsManualGuidance(),
                             onTryAutoOpen = {
                                 BatteryOptimization.requestExemption(activity)
                             },
@@ -340,6 +344,7 @@ private fun CountdownOverlay(
 /// intent does work.
 @Composable
 private fun BatteryInstructions(
+    samsung: Boolean,
     onTryAutoOpen: () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -360,43 +365,58 @@ private fun BatteryInstructions(
         }
         item {
             Text(
-                "Needed so GPS keeps recording on long runs.",
+                if (samsung) {
+                    "Samsung watches manage this in Galaxy Wearable on your phone."
+                } else {
+                    "Needed so GPS keeps recording on long runs."
+                },
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.haze,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(vertical = 6.dp),
             )
         }
+        // The Galaxy Wearable manual step is the primary (and on Samsung,
+        // the only working) path — show it prominently first.
         item {
             Text(
-                "On phone: open Wear OS / Galaxy Wearable → Threkir → Battery → Unrestricted.",
+                if (samsung) {
+                    "On phone: Galaxy Wearable → Watch settings → Apps → Threkir → Battery → Allow background activity / Unrestricted."
+                } else {
+                    "On phone: open Wear OS / Galaxy Wearable → Threkir → Battery → Unrestricted."
+                },
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.parchment,
                 textAlign = TextAlign.Start,
                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp),
             )
         }
-        item {
-            Text(
-                "Or on watch: Settings → Apps → Threkir → Battery → Unrestricted (if shown).",
-                style = MaterialTheme.typography.caption3,
-                color = DuskPalette.haze,
-                textAlign = TextAlign.Start,
-                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
-            )
-        }
-        item {
-            Chip(
-                onClick = onTryAutoOpen,
-                label = {
-                    Text(
-                        "Try auto-open",
-                        style = MaterialTheme.typography.caption2,
-                    )
-                },
-                colors = ChipDefaults.secondaryChipColors(),
-                modifier = Modifier.fillMaxWidth(),
-            )
+        // Stock Wear OS exposes an on-watch settings path + a working
+        // auto-open shortcut. On Samsung both are no-ops, so we suppress
+        // them rather than offer a button that silently does nothing.
+        if (!samsung) {
+            item {
+                Text(
+                    "Or on watch: Settings → Apps → Threkir → Battery → Unrestricted (if shown).",
+                    style = MaterialTheme.typography.caption3,
+                    color = DuskPalette.haze,
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp),
+                )
+            }
+            item {
+                Chip(
+                    onClick = onTryAutoOpen,
+                    label = {
+                        Text(
+                            "Try auto-open",
+                            style = MaterialTheme.typography.caption2,
+                        )
+                    },
+                    colors = ChipDefaults.secondaryChipColors(),
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
         item {
             Chip(

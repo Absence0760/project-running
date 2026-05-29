@@ -160,6 +160,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] GPS recording independent of phone (`FusedLocationProviderClient` in `GpsRecorder.kt`)
 - [x] HR recording via Health Services (`MeasureClient` in `HeartRateMonitor.kt`, average pushed to `run.metadata.avg_bpm`)
 - [x] Ultra-length (10h+) recording: streaming on-disk track writer, rolling-HR aggregation, checkpoint-by-reference, throttled notification refresh, streamed gzip upload, low-battery pre-run warning
+- [x] Battery-optimisation whitelist nudge — "Fix battery saver" pre-run chip + instruction card. Samsung One UI Watch (persona #35) is steered to the Galaxy Wearable manual path because the system whitelist intent is a no-op there; strategy in `system/BatteryGuidance.kt` (unit-tested)
 - [x] Live race mode: server-authoritative Arm/GO/End + per-runner pings feeding a spectator leaderboard, auto-submitted `event_results` rows, optional organiser approval gating
 - [x] Recording UX parity with Android — pre-run activity picker (run / walk / hike / cycle cycles via a CompactChip), 3-second start countdown (`CountdownOverlay`), pause / resume, lap button + splits table on PostRun, 800 ms hold-to-stop with circular progress ring, haptic confirmations on lap / pause / resume (`LocalHapticFeedback`)
 - [x] TTS audio cues (`recording/TtsAnnouncer.kt`) — "Run started", per-km splits, pace-drift nudges, "Run complete". Gated on `BuildConfig.ENABLE_TTS`; phrasing mirrors `apps/mobile_android/lib/audio_cues.dart`.
