@@ -1,0 +1,21 @@
+-- Repair a column-grant regression from 20261023_001_club_activity_waiver.sql.
+--
+-- `clubs` is under a column-level SELECT lockdown
+-- (20260818_001_redo_column_grant_lockdowns.sql): `select` is revoked at
+-- the table level and re-granted column-by-column, so every column added
+-- to `clubs` afterwards is deny-by-default until an explicit
+-- `grant select (col) on clubs to authenticated, anon` lands. Row-level
+-- policies do NOT bypass column-level grants.
+--
+-- 20261023_001 added `requires_activity_waiver` without the grant — the
+-- exact mistake 20260913_001 fixed for `is_verified`. Both clients
+-- enumerate the column in their club select lists
+-- (`apps/web/src/lib/data.ts` `EVENT`/`_clubSelectCols`,
+-- `apps/mobile_android/lib/social_service.dart`), so every non-service-role
+-- read against `clubs` (browseClubs, fetchClubBySlug, the club-detail +
+-- event-detail pages, search) fails with 42501 `permission denied for
+-- table clubs` / PostgREST 403. Granting SELECT on the one column restores
+-- it without widening anything else (invite_token stays ungranted per
+-- 20260801_001).
+
+grant select (requires_activity_waiver) on clubs to authenticated, anon;

@@ -3,7 +3,7 @@
 -- membership can record the acknowledgement timestamp.
 
 begin;
-select plan(3);
+select plan(5);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -39,6 +39,17 @@ select isnt(
      and user_id = 'aaaaaaaa-0000-0000-0000-0000000000a2'),
   null,
   'a membership records the activity-waiver acknowledgement timestamp');
+
+-- `clubs` is under a column-level SELECT lockdown (20260818_001), so every
+-- new column needs an explicit grant or non-service-role reads 42501. Both
+-- clients enumerate this column in their club select lists. Repaired by
+-- 20261029_001.
+select ok(
+  has_column_privilege('authenticated', 'clubs', 'requires_activity_waiver', 'SELECT'),
+  'authenticated can SELECT clubs.requires_activity_waiver under the column-grant lockdown');
+select ok(
+  has_column_privilege('anon', 'clubs', 'requires_activity_waiver', 'SELECT'),
+  'anon can SELECT clubs.requires_activity_waiver under the column-grant lockdown');
 
 select * from finish();
 rollback;
