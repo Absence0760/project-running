@@ -1,6 +1,7 @@
 package com.runapp.watchwear.recording
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import java.util.Locale
 
@@ -27,6 +28,17 @@ class TtsAnnouncer(context: Context) {
             if (status == TextToSpeech.SUCCESS) {
                 tts?.language = Locale.US
                 tts?.setSpeechRate(0.5f)
+                // Navigation-guidance usage makes the platform request
+                // transient ducking, so a cue lowers the runner's music
+                // / podcast instead of hard-interrupting it. Matches the
+                // phone's setAudioAttributesForNavigation path (persona
+                // android + samsung #12).
+                tts?.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build(),
+                )
                 ready = true
             }
         }

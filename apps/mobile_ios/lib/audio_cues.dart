@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:run_recorder/run_recorder.dart' show
@@ -116,6 +118,21 @@ String formatWorkoutStepUtterance(WorkoutStep step, DistanceUnit unit) {
   return '$intro. $dist at $paceTail.';
 }
 
+/// Which audio-focus ducking strategy a platform gets for TTS cues.
+/// Android requests navigation-guidance focus (transient-may-duck);
+/// iOS uses the playback category with duckOthers; every other platform
+/// gets none (no native ducking path). Persona android + samsung #12.
+enum TtsDuckingStrategy { androidNavigation, iosDuck, none }
+
+TtsDuckingStrategy ttsDuckingStrategyFor({
+  required bool isAndroid,
+  required bool isIOS,
+}) {
+  if (isAndroid) return TtsDuckingStrategy.androidNavigation;
+  if (isIOS) return TtsDuckingStrategy.iosDuck;
+  return TtsDuckingStrategy.none;
+}
+
 class AudioCues {
   final FlutterTts _tts = FlutterTts();
   bool _initialized = false;
@@ -133,6 +150,31 @@ class AudioCues {
       await _tts.setLanguage('en-US');
       await _tts.setSpeechRate(0.5);
       await _tts.setVolume(1.0);
+      // Request transient ducking so a cue lowers the runner's music /
+      // podcast instead of talking over it (Android) or hard-pausing it
+      // (iOS). Persona-hunt android + samsung #12. Each platform call is
+      // best-effort: a failure here must not stop the cue from speaking,
+      // so it stays inside the same L4 try/catch as the voice settings.
+      switch (ttsDuckingStrategyFor(
+        isAndroid: Platform.isAndroid,
+        isIOS: Platform.isIOS,
+      )) {
+        case TtsDuckingStrategy.androidNavigation:
+          // USAGE_ASSISTANCE_NAVIGATION_GUIDANCE → AUDIOFOCUS_GAIN_
+          // TRANSIENT_MAY_DUCK, the nav-app ducking behaviour.
+          await _tts.setAudioAttributesForNavigation();
+        case TtsDuckingStrategy.iosDuck:
+          await _tts.setIosAudioCategory(
+            IosTextToSpeechAudioCategory.playback,
+            [
+              IosTextToSpeechAudioCategoryOptions.mixWithOthers,
+              IosTextToSpeechAudioCategoryOptions.duckOthers,
+            ],
+            IosTextToSpeechAudioMode.voicePrompt,
+          );
+        case TtsDuckingStrategy.none:
+          break;
+      }
     } catch (e) {
       debugPrint('audio_cues._init partial failure: $e');
     }

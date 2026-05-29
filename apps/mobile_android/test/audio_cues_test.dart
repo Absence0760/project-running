@@ -286,4 +286,21 @@ void main() {
       expect(r, isNot(contains('kilometres')));
     });
   });
+
+  group('ttsDuckingStrategyFor (persona #12)', () {
+    test('Android → navigation-guidance ducking', () {
+      expect(ttsDuckingStrategyFor(isAndroid: true, isIOS: false),
+          TtsDuckingStrategy.androidNavigation);
+    });
+
+    test('iOS → playback duckOthers', () {
+      expect(ttsDuckingStrategyFor(isAndroid: false, isIOS: true),
+          TtsDuckingStrategy.iosDuck);
+    });
+
+    test('any other platform → no native ducking path', () {
+      expect(ttsDuckingStrategyFor(isAndroid: false, isIOS: false),
+          TtsDuckingStrategy.none);
+    });
+  });
 }
