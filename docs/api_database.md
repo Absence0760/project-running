@@ -822,7 +822,9 @@ Generated training plans + week phasing + scheduled workouts. Owner-only RLS, de
 
 ### `event_results`
 
-Per-instance event leaderboard. PK is `(event_id, instance_start, user_id)` so a recurring event's Tuesday-this-week and Tuesday-next-week have independent rankings. `finisher_status` ∈ `'finished' | 'dnf' | 'dns'`; `rank` is recomputed by `recompute_event_ranks` (called by trigger on insert/update/delete and by the race-mode auto-finalize path). Migration `20260424_001_event_results.sql`; rank tooling and approval grants in `20260428_001_role_permissions.sql`.
+Per-instance event leaderboard. `finisher_status` ∈ `'finished' | 'dnf' | 'dns'`; `rank` is recomputed by `recompute_event_ranks` (called by trigger on insert/update/delete and by the race-mode auto-finalize path). Migration `20260424_001_event_results.sql`; rank tooling and approval grants in `20260428_001_role_permissions.sql`.
+
+The table is **account-optional** (migration `20261028_001_event_results_account_optional.sql`, persona #43): the PK is a surrogate `id` and `user_id` is nullable so an organiser can bulk-import chip-timing results for finishers with no account, identified by `bib` + `finisher_name`. Two plain `UNIQUE` constraints — `(event_id, instance_start, user_id)` and `(event_id, instance_start, bib)` — keep one result per account/bib per instance (SQL NULL-distinctness means account rows never collide on bib and vice-versa) and double as the `onConflict` arbiters for the self-submit and bulk-import upserts. A CHECK forces every row to identify its finisher by an account OR a bib + name. INSERT is permitted to the row owner (`event_results_insert_self`) OR a club event-organiser (`event_results_insert_organiser`); the leaderboard read surface `event_results_redacted` exposes `bib` + `finisher_name` (public race data) while keeping `run_id` / `age_grade_pct` / `note` owner-only.
 
 ### `reports`
 

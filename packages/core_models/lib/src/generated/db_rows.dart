@@ -386,10 +386,13 @@ class EventResultRow {
   static const String colOrganiserApproved = 'organiser_approved';
   static const String colOrganiserApprovedBy = 'organiser_approved_by';
   static const String colOrganiserApprovedAt = 'organiser_approved_at';
+  static const String colId = 'id';
+  static const String colBib = 'bib';
+  static const String colFinisherName = 'finisher_name';
 
   final String eventId;
   final DateTime instanceStart;
-  final String userId;
+  final String? userId;
   final String? runId;
   final int durationS;
   final double distanceM;
@@ -402,11 +405,14 @@ class EventResultRow {
   final bool organiserApproved;
   final String? organiserApprovedBy;
   final DateTime? organiserApprovedAt;
+  final String id;
+  final String? bib;
+  final String? finisherName;
 
   const EventResultRow({
     required this.eventId,
     required this.instanceStart,
-    required this.userId,
+    this.userId,
     this.runId,
     required this.durationS,
     required this.distanceM,
@@ -419,12 +425,15 @@ class EventResultRow {
     required this.organiserApproved,
     this.organiserApprovedBy,
     this.organiserApprovedAt,
+    required this.id,
+    this.bib,
+    this.finisherName,
   });
 
   factory EventResultRow.fromJson(Map<String, dynamic> json) => EventResultRow(
     eventId: json['event_id'] as String,
     instanceStart: DateTime.parse(json['instance_start'] as String),
-    userId: json['user_id'] as String,
+    userId: json['user_id'] as String?,
     runId: json['run_id'] as String?,
     durationS: (json['duration_s'] as num).toInt(),
     distanceM: (json['distance_m'] as num).toDouble(),
@@ -437,6 +446,9 @@ class EventResultRow {
     organiserApproved: (json['organiser_approved'] as bool?) ?? false,
     organiserApprovedBy: json['organiser_approved_by'] as String?,
     organiserApprovedAt: json['organiser_approved_at'] == null ? null : DateTime.parse(json['organiser_approved_at'] as String),
+    id: json['id'] as String,
+    bib: json['bib'] as String?,
+    finisherName: json['finisher_name'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -455,6 +467,9 @@ class EventResultRow {
     colOrganiserApproved: organiserApproved,
     colOrganiserApprovedBy: organiserApprovedBy,
     colOrganiserApprovedAt: organiserApprovedAt?.toIso8601String(),
+    colId: id,
+    colBib: bib,
+    colFinisherName: finisherName,
   };
 }
 

@@ -403,11 +403,14 @@ export type Database = {
       event_results: {
         Row: {
           age_grade_pct: number | null
+          bib: string | null
           created_at: string
           distance_m: number
           duration_s: number
           event_id: string
+          finisher_name: string | null
           finisher_status: string
+          id: string
           instance_start: string
           note: string | null
           organiser_approved: boolean
@@ -416,15 +419,18 @@ export type Database = {
           rank: number | null
           run_id: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         Insert: {
           age_grade_pct?: number | null
+          bib?: string | null
           created_at?: string
           distance_m: number
           duration_s: number
           event_id: string
+          finisher_name?: string | null
           finisher_status?: string
+          id?: string
           instance_start: string
           note?: string | null
           organiser_approved?: boolean
@@ -433,15 +439,18 @@ export type Database = {
           rank?: number | null
           run_id?: string | null
           updated_at?: string
-          user_id: string
+          user_id?: string | null
         }
         Update: {
           age_grade_pct?: number | null
+          bib?: string | null
           created_at?: string
           distance_m?: number
           duration_s?: number
           event_id?: string
+          finisher_name?: string | null
           finisher_status?: string
+          id?: string
           instance_start?: string
           note?: string | null
           organiser_approved?: boolean
@@ -450,7 +459,7 @@ export type Database = {
           rank?: number | null
           run_id?: string | null
           updated_at?: string
-          user_id?: string
+          user_id?: string | null
         }
         Relationships: [
           {
@@ -2069,10 +2078,12 @@ export type Database = {
       event_results_redacted: {
         Row: {
           age_grade_pct: number | null
+          bib: string | null
           created_at: string | null
           distance_m: number | null
           duration_s: number | null
           event_id: string | null
+          finisher_name: string | null
           finisher_status: string | null
           instance_start: string | null
           note: string | null
@@ -2084,10 +2095,12 @@ export type Database = {
         }
         Insert: {
           age_grade_pct?: never
+          bib?: string | null
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
           event_id?: string | null
+          finisher_name?: string | null
           finisher_status?: string | null
           instance_start?: string | null
           note?: never
@@ -2099,10 +2112,12 @@ export type Database = {
         }
         Update: {
           age_grade_pct?: never
+          bib?: string | null
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
           event_id?: string | null
+          finisher_name?: string | null
           finisher_status?: string | null
           instance_start?: string | null
           note?: never
@@ -2328,11 +2343,14 @@ export type Database = {
         }
         Returns: {
           age_grade_pct: number | null
+          bib: string | null
           created_at: string
           distance_m: number
           duration_s: number
           event_id: string
+          finisher_name: string | null
           finisher_status: string
+          id: string
           instance_start: string
           note: string | null
           organiser_approved: boolean
@@ -2341,7 +2359,7 @@ export type Database = {
           rank: number | null
           run_id: string | null
           updated_at: string
-          user_id: string
+          user_id: string | null
         }
         SetofOptions: {
           from: "*"
