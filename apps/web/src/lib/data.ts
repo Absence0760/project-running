@@ -1907,12 +1907,18 @@ export async function cancelEventInstance(
 ): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
-	const { error } = await supabase.from('event_exceptions').insert({
-		event_id: eventId,
-		instance_start: instanceStart,
-		cancelled_by: userId,
-		reason: reason?.trim() || null
-	});
+	// Idempotent: two organisers cancelling the same occurrence (or a
+	// double-click) must not surface a raw 23505 on the (event_id,
+	// instance_start) PK. First cancellation wins — ignore the duplicate.
+	const { error } = await supabase.from('event_exceptions').upsert(
+		{
+			event_id: eventId,
+			instance_start: instanceStart,
+			cancelled_by: userId,
+			reason: reason?.trim() || null
+		},
+		{ onConflict: 'event_id,instance_start', ignoreDuplicates: true }
+	);
 	if (error) throw error;
 }
 
@@ -3380,6 +3386,10 @@ export async function fetchFollowers(
 		.select('follower_id, followed_at')
 		.eq('followee_id', userId)
 		.order('followed_at', { ascending: false })
+		// Secondary key so offset pages are stable when two follows share a
+		// followed_at timestamp — without it a row on a page boundary can be
+		// duplicated or skipped on load-more.
+		.order('follower_id', { ascending: true })
 		.range(offset, offset + limit - 1);
 	const ids = (edges ?? []).map((e) => e.follower_id as string);
 	if (ids.length === 0) return [];
@@ -3405,6 +3415,9 @@ export async function fetchFollowing(
 		.select('followee_id, followed_at')
 		.eq('follower_id', userId)
 		.order('followed_at', { ascending: false })
+		// Secondary key so offset pages are stable when two follows share a
+		// followed_at timestamp (see fetchFollowers).
+		.order('followee_id', { ascending: true })
 		.range(offset, offset + limit - 1);
 	const ids = (edges ?? []).map((e) => e.followee_id as string);
 	if (ids.length === 0) return [];

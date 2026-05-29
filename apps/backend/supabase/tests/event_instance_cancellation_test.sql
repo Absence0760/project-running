@@ -9,7 +9,7 @@
 
 begin;
 
-select plan(9);
+select plan(11);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -109,6 +109,30 @@ select is(
   (select count(*)::int from event_exceptions
    where event_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeedd01'),
   0, 'organiser can reinstate an occurrence by deleting the exception');
+
+-- 9. Cancelling the same occurrence twice is idempotent. The cancelEventInstance
+--    data-layer call issues ON CONFLICT (event_id, instance_start) DO NOTHING so
+--    two organisers (or a double-click) don't surface a raw 23505 on the PK.
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaab02"}';
+insert into event_exceptions (event_id, instance_start, cancelled_by, reason)
+  values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeedd01', '2026-06-20 09:00:00+00',
+          'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaab02', 'first cancel')
+  on conflict (event_id, instance_start) do nothing;
+select lives_ok(
+  $$ insert into event_exceptions (event_id, instance_start, cancelled_by, reason)
+     values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeedd01', '2026-06-20 09:00:00+00',
+             'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaab02', 'second cancel')
+     on conflict (event_id, instance_start) do nothing $$,
+  're-cancelling the same occurrence is a no-op, not a 23505');
+
+-- 10. The duplicate left exactly one row (first cancel wins).
+reset role;
+select is(
+  (select count(*)::int from event_exceptions
+   where event_id = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeedd01'
+     and instance_start = '2026-06-20 09:00:00+00'),
+  1, 'the idempotent re-cancel left exactly one exception row');
 
 select * from finish();
 
