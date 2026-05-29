@@ -48,7 +48,7 @@ if command -v probe-rs >/dev/null; then
 	ok "probe-rs $(probe-rs --version 2>/dev/null | awk 'NR==1 {print $2}')"
 else
 	err "probe-rs not installed"
-	dim "Fix: cargo install probe-rs --features cli"
+	dim "Fix: cargo install probe-rs-tools --locked"
 	dim "Or:  https://probe.rs/docs/getting-started/installation/"
 	bump_fail
 fi
