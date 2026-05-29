@@ -4143,7 +4143,11 @@ export async function fetchSegmentLeaderboard(
  */
 export async function fetchSegmentLeaderboardTiered(
 	segmentId: string,
-	filter: { gender?: SegmentGenderFilter | null; ageBand?: SegmentAgeBand | null } = {},
+	filter: {
+		gender?: SegmentGenderFilter | null;
+		ageBand?: SegmentAgeBand | null;
+		clubId?: string | null;
+	} = {},
 	limit = 50,
 ): Promise<SegmentLeaderboardEntry[]> {
 	const { data, error } = await supabase.rpc('segment_leaderboard_tiered', {
@@ -4151,6 +4155,7 @@ export async function fetchSegmentLeaderboardTiered(
 		p_gender: filter.gender ?? null,
 		p_age_band: filter.ageBand ?? null,
 		p_limit: limit,
+		p_club_id: filter.clubId ?? null,
 	});
 	if (error || !data) {
 		console.warn('fetchSegmentLeaderboardTiered failed', error);

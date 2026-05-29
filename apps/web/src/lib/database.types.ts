@@ -2711,6 +2711,7 @@ export type Database = {
       segment_leaderboard_tiered: {
         Args: {
           p_age_band?: string
+          p_club_id?: string
           p_gender?: string
           p_limit?: number
           p_segment_id: string

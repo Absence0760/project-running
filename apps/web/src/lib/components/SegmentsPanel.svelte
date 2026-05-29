@@ -21,8 +21,12 @@
 		routeId: string;
 		routeDistanceM: number;
 		canCreate: boolean;
+		/// The route's owning club, if any. When set, a "Club only" leaderboard
+		/// toggle is offered that filters efforts to that club (persona #50).
+		clubId?: string | null;
 	}
-	let { routeId, routeDistanceM, canCreate }: Props = $props();
+	let { routeId, routeDistanceM, canCreate, clubId = null }: Props = $props();
+	let clubOnly = $state(false);
 
 	let segments = $state<Segment[]>([]);
 	let loading = $state(true);
@@ -73,12 +77,14 @@
 		openSegmentId = seg.id;
 		genderFilter = null;
 		ageFilter = null;
+		clubOnly = false;
 	}
 
 	async function refreshLeaderboard(segmentId: string) {
 		const entries = await fetchSegmentLeaderboardTiered(segmentId, {
 			gender: genderFilter,
 			ageBand: ageFilter,
+			clubId: clubOnly ? clubId : null,
 		});
 		leaderboards = new Map(leaderboards).set(segmentId, entries);
 	}
@@ -90,8 +96,10 @@
 		const segId = openSegmentId;
 		const _g = genderFilter;
 		const _a = ageFilter;
+		const _c = clubOnly;
 		void _g;
 		void _a;
+		void _c;
 		if (segId) refreshLeaderboard(segId);
 	});
 
@@ -261,13 +269,20 @@
 										{/each}
 									</select>
 								</label>
-								{#if genderFilter || ageFilter}
+								{#if clubId}
+									<label class="club-only-toggle">
+										<input type="checkbox" bind:checked={clubOnly} />
+										Club only
+									</label>
+								{/if}
+								{#if genderFilter || ageFilter || clubOnly}
 									<button
 										class="clear-btn"
 										type="button"
 										onclick={() => {
 											genderFilter = null;
 											ageFilter = null;
+											clubOnly = false;
 										}}
 										title="Clear filters"
 									>

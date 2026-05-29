@@ -510,6 +510,7 @@
 					routeId={route.id}
 					routeDistanceM={route.distance_m}
 					canCreate={auth.loggedIn}
+					clubId={route.club_id ?? null}
 				/>
 			</section>
 
