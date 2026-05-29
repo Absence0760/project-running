@@ -12,7 +12,7 @@ Order numbers / vendor SKUs below are starting points — re-verify stock + curr
 | u-blox MAX-M10S GPS breakout | SparkFun GPS-21086 ("MAX-M10S Breakout") | ~$40 | Single-band L1 only. Production target migrates to Sony CXD5610 (NDA part). Fine for verifying the firmware NMEA-parser + fix-acquisition logic |
 | Sharp Memory LCD 1.3" 168×144 breakout (LS013B4DN04) | Adafruit "Sharp Memory Display Breakout" | ~$35 | The MIP display family Garmin Fenix uses. SPI interface. Static draw ~10 µA |
 | Maxim MAX86177 evaluation kit | Analog Devices `MAX86177EVSYS#` (verify current order number on the AD product page) | ~$130 | Optical HR AFE. Raw signal is fine for bench bring-up; the production HR algorithm needs licensing or in-house DSP work |
-| Bosch BMP390 breakout | Adafruit BMP390 "Precision Altimeter" (P/N 4816) | ~$15 | Barometric altimeter |
+| Bosch BMP390 breakout | Adafruit BMP390 "Precision Altimeter" (P/N 4816) | ~$15 | Barometric altimeter. Production target migrates to **Bosch BMP581** per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) (~85% lower current, capacitive vs piezoresistive) — BMP390 breakouts are cheap and well-supported, fine for tier-1 bench bring-up |
 | LiPo battery 500 mAh + JST-PH 2-pin | Adafruit 1578 | ~$10 | For runs off the dev-board |
 | Breadboard + jumper wires + headers | Generic (Adafruit / SparkFun / Amazon) | ~$20 | Half-size breadboard, ~30× male-male + male-female jumpers, a strip of 0.1" male headers |
 
