@@ -2368,6 +2368,18 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 95. event_results is account-optional and stores non-account finisher PII for chip-timing imports
+
+**Decided (2026-05-29, persona-hunt event-organiser #43):** `event_results` was account-only — `user_id` NOT NULL, part of the PK, self-only INSERT. A chip-timing CSV is keyed on bib + printed name + time for finishers who mostly have no account, so the table is now account-optional: surrogate `id` PK, nullable `user_id`, `bib` + `finisher_name` columns, two plain `UNIQUE` constraints `(event, instance, user_id)` and `(event, instance, bib)` (SQL NULL-distinctness keeps account and bib rows from colliding, and they double as `onConflict` arbiters), a CHECK requiring an account OR a bib+name, and an additive `event_results_insert_organiser` policy so a club's event-organiser can bulk-insert. Migration `20261028_001`.
+
+**Why one table, not a sibling `event_external_results`:** a leaderboard is inherently a mix of account holders and bib-only finishers ranked together by time, and the existing `recompute_event_ranks` trigger already ranks every row in an `(event, instance)` group in one pass. A second table would force a cross-table UNION rank (or denormalised duplicate rank) plus a parallel copy of the redaction view and visibility policy. The self-insert invariant a separate table would "protect" isn't worth much here — the feature deliberately adds an organiser write path regardless.
+
+**Privacy / non-account PII:** the bulk import stores **name + bib of people who are not users**. This is inherent to chip-timing import on any schema. Lawful basis: official race results are inherently public (bibs are worn visibly, finisher names are published), so `event_results_redacted` exposes `bib` + `finisher_name` un-redacted while keeping `run_id` / `age_grade_pct` / `note` owner-only. These rows are owned by the event, not a user: they are **not** touched by a user's account deletion (no `user_id`), and are cleared by the `on delete cascade` from `events` when the organiser deletes the event/instance. A later "claim your result" flow (a registered user linking their bib) is deliberately deferred — separate UX, dedupe, and abuse surface.
+
+**Don't re-litigate unless** we add the claim flow (then a bib→account merge path + dedupe-against-self-submission lands), or a retention/erasure requirement for non-account finisher PII emerges (then add an organiser-facing delete-imported-results control beyond the event cascade).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
