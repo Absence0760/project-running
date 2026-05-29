@@ -11,6 +11,7 @@
 		type PendingCoachInvite
 	} from '$lib/data';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { auth } from '$lib/stores/auth.svelte';
 
 	let athletes = $state<CoachAthleteLink[]>([]);
 	let pending = $state<PendingCoachInvite[]>([]);
@@ -20,6 +21,14 @@
 
 	async function load() {
 		loading = true;
+		// Wait for the auth store to hydrate before fetching — the roster
+		// fetchers bail to [] when auth.user is null, and on a hard load
+		// (or under CI load) onMount can fire before fetchUser resolves,
+		// leaving an empty roster that never refills. Same poll the
+		// /coaching/accept landing uses.
+		for (let i = 0; i < 40 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
 		[athletes, pending, coaches] = await Promise.all([
 			fetchMyAthletes(),
 			fetchPendingCoachInvites(),
