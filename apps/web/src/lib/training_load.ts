@@ -16,6 +16,14 @@ export interface RunForLoad {
 	metadata?: Record<string, unknown> | null;
 }
 
+/// Consecutive run-less days after which we treat fitness as lost and
+/// reset the CTL/ATL EWMAs to zero. Four weeks of no running is well
+/// past any taper or rest week and into genuine detraining territory;
+/// without the reset a long layoff leaves a phantom CTL that inflates
+/// TSB into "well-rested, train hard" — dangerous advice for a runner
+/// returning from injury / illness. Persona-hunt comeback #29.
+export const kLayoffResetDays = 28;
+
 export interface HrPrefs {
 	resting_hr_bpm?: number | null;
 	max_hr_bpm?: number | null;
@@ -200,6 +208,28 @@ export function computeTrainingLoadSeries(
 
 	let atl = 0;
 	let ctl = 0;
+	// Consecutive zero-stress days. After a sustained layoff (no runs for
+	// kLayoffResetDays) fitness is genuinely lost, so we zero the EWMAs —
+	// otherwise CTL (42-day halflife) lingers while ATL (7-day) craters,
+	// producing a falsely-high TSB that reads as "fresh, train hard" to a
+	// returning runner whose fitness has actually eroded. Persona-hunt
+	// comeback #29. The streak carries across the warm-up → display
+	// boundary so a gap straddling it still resets.
+	let zeroStreak = 0;
+	const step = (stress: number): void => {
+		if (stress > 0) {
+			zeroStreak = 0;
+		} else {
+			zeroStreak++;
+			if (zeroStreak >= kLayoffResetDays) {
+				atl = 0;
+				ctl = 0;
+			}
+		}
+		atl = atl + atlAlpha * (stress - atl);
+		ctl = ctl + ctlAlpha * (stress - ctl);
+	};
+
 	// Walk the warm-up days first so EWMAs reach steady state. The
 	// loop does NOT emit chart points for these days — they only
 	// seed the running totals. If a pro started running yesterday,
@@ -209,9 +239,7 @@ export function computeTrainingLoadSeries(
 	warmupCursor.setHours(0, 0, 0, 0);
 	warmupCursor.setDate(warmupCursor.getDate() - (windowDays - 1) - WARMUP_DAYS);
 	for (let i = 0; i < WARMUP_DAYS; i++) {
-		const stress = daily.get(localDateKey(warmupCursor)) ?? 0;
-		atl = atl + atlAlpha * (stress - atl);
-		ctl = ctl + ctlAlpha * (stress - ctl);
+		step(daily.get(localDateKey(warmupCursor)) ?? 0);
 		warmupCursor.setDate(warmupCursor.getDate() + 1);
 	}
 
@@ -223,8 +251,7 @@ export function computeTrainingLoadSeries(
 	for (let i = 0; i < windowDays; i++) {
 		const key = localDateKey(cursor);
 		const stress = daily.get(key) ?? 0;
-		atl = atl + atlAlpha * (stress - atl);
-		ctl = ctl + ctlAlpha * (stress - ctl);
+		step(stress);
 		points.push({
 			date: key,
 			stress,

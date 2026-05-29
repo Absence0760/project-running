@@ -8,6 +8,12 @@ import 'package:core_models/core_models.dart';
 /// returns a 90-day daily series with the EWMA Fitness / Fatigue / Form
 /// trio. Stays in sync with the web copy.
 
+/// Consecutive run-less days after which fitness is treated as lost and
+/// the CTL/ATL EWMAs reset to zero. Mirrors `kLayoffResetDays` in
+/// `training_load.ts` / `fitness.ts` (and `fitness.dart`) — keep all four
+/// in lockstep. Persona-hunt comeback #29.
+const int kLayoffResetDays = 28;
+
 class HrPrefs {
   final num? restingHrBpm;
   final num? maxHrBpm;
@@ -178,6 +184,26 @@ List<TrainingLoadPoint> computeTrainingLoadSeries(
 
   var atl = 0.0;
   var ctl = 0.0;
+  // Consecutive zero-stress days. After a sustained layoff
+  // (kLayoffResetDays of no runs) fitness is genuinely lost, so we zero
+  // the EWMAs — otherwise CTL (42-day halflife) lingers while ATL
+  // (7-day) craters, faking a high TSB that reads as "fresh, train hard"
+  // to a returning runner. Carries across the warm-up → display boundary.
+  // Persona-hunt comeback #29. Mirrors training_load.ts.
+  var zeroStreak = 0;
+  void step(double stress) {
+    if (stress > 0) {
+      zeroStreak = 0;
+    } else {
+      zeroStreak++;
+      if (zeroStreak >= kLayoffResetDays) {
+        atl = 0;
+        ctl = 0;
+      }
+    }
+    atl = atl + atlAlpha * (stress - atl);
+    ctl = ctl + ctlAlpha * (stress - ctl);
+  }
 
   final now = endDate ?? DateTime.now();
   final today = DateTime(now.year, now.month, now.day);
@@ -190,8 +216,7 @@ List<TrainingLoadPoint> computeTrainingLoadSeries(
   for (var i = 0; i < warmupDays; i++) {
     final day = DateTime(today.year, today.month,
         today.day - (windowDays - 1) - warmupDays + i);
-    atl = atl + atlAlpha * ((daily[day] ?? 0) - atl);
-    ctl = ctl + ctlAlpha * ((daily[day] ?? 0) - ctl);
+    step((daily[day] ?? 0).toDouble());
   }
 
   final points = <TrainingLoadPoint>[];
@@ -199,8 +224,7 @@ List<TrainingLoadPoint> computeTrainingLoadSeries(
     final day =
         DateTime(today.year, today.month, today.day - (windowDays - 1) + i);
     final stress = (daily[day] ?? 0).toDouble();
-    atl = atl + atlAlpha * (stress - atl);
-    ctl = ctl + ctlAlpha * (stress - ctl);
+    step(stress);
     points.add(TrainingLoadPoint(
       date: day,
       stress: stress,

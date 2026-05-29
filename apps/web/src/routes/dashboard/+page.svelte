@@ -20,7 +20,7 @@
 		insertFitnessSnapshot,
 		type FitnessSnapshotRow,
 	} from '$lib/data';
-	import { computeSnapshot, recoveryAdvice } from '$lib/fitness';
+	import { computeSnapshot, recoveryAdvice, isReturningFromLayoff } from '$lib/fitness';
 	import { computeRunStreaks } from '$lib/streaks';
 	import { computeReadiness } from '$lib/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training_load';
@@ -1003,7 +1003,7 @@
 					{/if}
 				</div>
 				<p class="fitness-advice">
-					{recoveryAdvice(liveSnap.trainingStressBal, liveSnap.chronicLoad)}
+					{recoveryAdvice(liveSnap.trainingStressBal, liveSnap.chronicLoad, isReturningFromLayoff(runs))}
 				</p>
 				{#if trendPath}
 					<!-- Trend sparkline: VO2 max over the persisted

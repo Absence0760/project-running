@@ -25,6 +25,7 @@ class FitnessCard extends StatelessWidget {
     final advice = recoveryAdvice(
       snapshot.trainingStressBal,
       snapshot.chronicLoad,
+      returningFromLayoff: isReturningFromLayoff(runs, now: now),
     );
 
     String fmt(double? v, {int digits = 1}) =>

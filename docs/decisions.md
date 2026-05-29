@@ -2354,6 +2354,18 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 94. CTL/ATL reset after a layoff — fitness is treated as lost after 28 run-less days
+
+**Decided (2026-05-29, persona-hunt comeback #29):** both training-load engines — `training_load.ts`/`training_load.dart` (the 90-day dashboard chart) and `fitness.ts`/`fitness.dart` (`trainingLoad` → recovery advice + `fitness_snapshots`) — now zero the CTL and ATL EWMAs after `kLayoffResetDays` (28) consecutive run-less days.
+
+**Why:** the EWMA decays correctly during a gap, but ATL (7-day halflife) decays far faster than CTL (42-day). A few weeks into a layoff that leaves CTL elevated while ATL has cratered, so `TSB = CTL − ATL` swings strongly *positive* — the model's "well-rested, peak form, train hard / race soon" signal. For a runner coming back from injury, surgery, or illness that's both wrong and dangerous advice. After the reset, a returning runner's CTL starts from 0, so `recoveryAdvice` falls into the "fitness is still building, focus on consistency" rung instead. A new `isReturningFromLayoff(runs)` helper (recent run preceded by a ≥28-day gap) additionally swaps in explicit "welcome back, rebuild gradually" copy on the recovery card.
+
+**Trade-off:** 28 days is a single hard threshold rather than a gradual confidence decay. It can under-credit someone who cross-trained heavily through a running gap (the model only sees runs). Chosen because the failure it prevents (telling a deconditioned returnee to go hard) is far more harmful than the failure it introduces (telling a cross-trainer to ease back in). Four weeks of zero running is well past any taper or rest week.
+
+**Don't re-litigate unless** we add cross-training/HR-only load inputs (then the gap definition should consider those), or telemetry shows the 28-day cliff misfiring for a real cohort (then move to a graduated CTL-confidence decay). `kLayoffResetDays` is defined once in `training_load.{ts,dart}` and imported by `fitness.{ts,dart}` so all four stay in lockstep. Pinning tests: `training_load.test.ts` + `fitness.test.ts` + the Dart twins (layoff-reset series, `isReturningFromLayoff` truth table, advice override).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -51,6 +51,25 @@ test('computeTrainingLoadSeries — emits exactly windowDays entries', () => {
 	assert.equal(series.length, 30);
 });
 
+test('computeTrainingLoadSeries — a long layoff resets CTL/TSB (comeback #29)', () => {
+	const ref = new Date('2026-04-30T12:00:00Z');
+	const runs: RunForLoad[] = [];
+	// A solid 3-week build ending ~50 days ago, then nothing — a layoff
+	// well past the 28-day reset threshold.
+	for (let i = 70; i >= 50; i--) {
+		const d = new Date(ref);
+		d.setDate(d.getDate() - i);
+		runs.push({ started_at: d.toISOString(), distance_m: 10000, duration_s: 3000 });
+	}
+	const series = computeTrainingLoadSeries(runs, {}, 90, ref);
+	const last = series[series.length - 1];
+	// Without the reset, CTL would linger (42-day halflife) and TSB would
+	// read strongly positive ("fresh — train hard"). After the reset both
+	// collapse to ~0.
+	assert.ok(last.ctl < 1, `CTL should reset to ~0 after a >28d layoff, got ${last.ctl}`);
+	assert.ok(Math.abs(last.tsb) < 1, `TSB should be ~0 after a layoff, got ${last.tsb}`);
+});
+
 test('computeTrainingLoadSeries — TSB rises during taper (no runs after a build)', () => {
 	const runs: RunForLoad[] = [];
 	// Two weeks of daily 5k runs ending two weeks before the end date,

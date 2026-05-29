@@ -84,6 +84,25 @@ void main() {
       expect(series.length, 30);
     });
 
+    test('a long layoff resets CTL/TSB (comeback #29)', () {
+      final ref = DateTime.utc(2026, 4, 30, 12);
+      final runs = <Run>[];
+      // 3-week build ending ~50 days ago, then nothing — past the 28-day
+      // reset threshold.
+      for (var i = 70; i >= 50; i--) {
+        runs.add(_run(
+          distanceM: 10000,
+          durationS: 3000,
+          startedAt: ref.subtract(Duration(days: i)),
+        ));
+      }
+      final series = computeTrainingLoadSeries(runs, windowDays: 90, endDate: ref);
+      expect(series.last.ctl < 1, isTrue,
+          reason: 'CTL should reset to ~0 after a >28d layoff');
+      expect(series.last.tsb.abs() < 1, isTrue,
+          reason: 'TSB should be ~0 after a layoff');
+    });
+
     test('TSB rises during taper (no runs after a build)', () {
       final runs = <Run>[];
       final ref = DateTime.utc(2026, 4, 30, 12);

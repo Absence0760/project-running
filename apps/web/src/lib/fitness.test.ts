@@ -10,6 +10,7 @@ import {
 	trainingLoad,
 	computeSnapshot,
 	recoveryAdvice,
+	isReturningFromLayoff,
 } from './fitness';
 import type { Run } from './types';
 
@@ -290,4 +291,46 @@ test('recoveryAdvice — ladder rises through the TSB bands', () => {
 	assert.equal(all.size, 5, 'each band should map to a unique message');
 	assert.match(heavy, /easy|rest|recovery/i);
 	assert.match(fresh, /fresh|race|build/i);
+});
+
+test('recoveryAdvice — returning-from-layoff overrides the freshness rungs (comeback #29)', () => {
+	// A high TSB + decent CTL would normally read "very fresh — race soon",
+	// which is exactly the wrong call for a returning runner.
+	const normal = recoveryAdvice(40, 50, false);
+	const returning = recoveryAdvice(40, 50, true);
+	assert.notEqual(normal, returning);
+	assert.match(returning, /back|rebuild|gradual|break/i);
+	assert.doesNotMatch(returning, /race soon/i);
+});
+
+test('isReturningFromLayoff — true when a recent run follows a >28d gap', () => {
+	const runs = [
+		r({ started_at: '2025-12-01T07:00:00Z', distance_m: 10000, duration_s: 3000 }),
+		// ~60 days later, then resuming the day before NOW.
+		r({ started_at: '2026-04-29T07:00:00Z', distance_m: 5000, duration_s: 1800 }),
+	];
+	assert.equal(isReturningFromLayoff(runs, NOW), true);
+});
+
+test('isReturningFromLayoff — false for a steady runner (no gap)', () => {
+	const runs = [
+		r({ started_at: '2026-04-20T07:00:00Z', distance_m: 8000, duration_s: 2400 }),
+		r({ started_at: '2026-04-27T07:00:00Z', distance_m: 8000, duration_s: 2400 }),
+		r({ started_at: '2026-04-29T07:00:00Z', distance_m: 8000, duration_s: 2400 }),
+	];
+	assert.equal(isReturningFromLayoff(runs, NOW), false);
+});
+
+test('isReturningFromLayoff — false for a single run (new runner, not returning)', () => {
+	const runs = [r({ started_at: '2026-04-29T07:00:00Z', distance_m: 5000, duration_s: 1800 })];
+	assert.equal(isReturningFromLayoff(runs, NOW), false);
+});
+
+test('isReturningFromLayoff — false when not currently active (gap is ongoing)', () => {
+	// Last run was 40 days ago — they're mid-layoff, not "returning".
+	const runs = [
+		r({ started_at: '2026-02-01T07:00:00Z', distance_m: 10000, duration_s: 3000 }),
+		r({ started_at: '2026-03-21T07:00:00Z', distance_m: 10000, duration_s: 3000 }),
+	];
+	assert.equal(isReturningFromLayoff(runs, NOW), false);
 });

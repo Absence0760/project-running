@@ -20,6 +20,7 @@
 ///   averages over daily TSS. 7-day ATL, 42-day CTL, TSB = CTL − ATL.
 
 import type { Run } from './types';
+import { kLayoffResetDays } from './training_load';
 
 export interface FitnessSnapshot {
 	vdot: number | null;
@@ -28,6 +29,25 @@ export interface FitnessSnapshot {
 	chronicLoad: number | null;
 	trainingStressBal: number | null;
 	qualifyingRunCount: number;
+}
+
+/// Whether the runner is returning from a layoff: their most recent
+/// qualifying run is recent (≤ 14 days before `nowMs`) but the gap
+/// before it was ≥ kLayoffResetDays. Drives the gentle "rebuild
+/// gradually" framing on the recovery card so a returning runner isn't
+/// told they're "very fresh — race soon". Persona-hunt comeback #29.
+export function isReturningFromLayoff(runs: Run[], nowMs: number = Date.now()): boolean {
+	const days = qualifyingRuns(runs)
+		.map((r) => new Date(r.started_at).getTime())
+		.filter((t) => Number.isFinite(t) && t <= nowMs)
+		.sort((a, b) => a - b);
+	if (days.length === 0) return false;
+	const dayMs = 24 * 3600_000;
+	const latest = days[days.length - 1];
+	if (nowMs - latest > 14 * dayMs) return false; // not currently active
+	if (days.length === 1) return false; // one run can't prove a prior gap (new runner, not returning)
+	const prev = days[days.length - 2];
+	return latest - prev >= kLayoffResetDays * dayMs;
 }
 
 /// Qualifying runs for fitness math: source is an actual recording or
@@ -181,10 +201,22 @@ export function trainingLoad(
 
 	let atl = 0;
 	let ctl = 0;
+	// After a sustained layoff (kLayoffResetDays of no runs) fitness is
+	// genuinely lost — zero the EWMAs so a returning runner doesn't carry
+	// a phantom CTL that, paired with a cratered ATL, fakes a high TSB and
+	// triggers "very fresh, build again / race soon" advice. Persona-hunt
+	// comeback #29.
+	let zeroStreak = 0;
 	const dayMs = 24 * 3600_000;
 	for (let t = startDay.getTime(); t <= endDay.getTime(); t += dayMs) {
 		const key = new Date(t).toISOString().slice(0, 10);
 		const tss = byDay.get(key) ?? 0;
+		if (tss > 0) {
+			zeroStreak = 0;
+		} else if (++zeroStreak >= kLayoffResetDays) {
+			atl = 0;
+			ctl = 0;
+		}
 		atl = ewma(atl, tss, 7);
 		ctl = ewma(ctl, tss, 42);
 	}
@@ -211,9 +243,20 @@ export function computeSnapshot(runs: Run[], nowMs: number = Date.now()): Fitnes
 /// the simplest honest signal we can give without getting into
 /// performance-coach territory. Mirrors what Training Peaks / Zwift
 /// show at a similar scope.
-export function recoveryAdvice(tsb: number | null, ctl: number | null): string {
+export function recoveryAdvice(
+	tsb: number | null,
+	ctl: number | null,
+	returningFromLayoff = false,
+): string {
 	if (tsb == null || ctl == null) {
 		return 'Not enough data yet — log a few runs with HR and try again.';
+	}
+	// A returning runner can show a high TSB purely because ATL decayed
+	// faster than CTL during the break — that's detraining, not freshness.
+	// Override the freshness rungs with rebuild-gradually framing.
+	// Persona-hunt comeback #29.
+	if (returningFromLayoff) {
+		return 'Welcome back. Your form numbers reset after the break — rebuild gradually with easy, consistent running before any hard sessions.';
 	}
 	if (ctl < 10) {
 		return 'Fitness is still building. Focus on consistency; one quality session a week is plenty for now.';

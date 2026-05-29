@@ -183,6 +183,48 @@ void main() {
       expect(recoveryAdvice(null, 50), contains('Not enough'));
       expect(recoveryAdvice(0, null), contains('Not enough'));
     });
+
+    test('returning-from-layoff overrides freshness rungs (comeback #29)', () {
+      final normal = recoveryAdvice(40, 50);
+      final returning = recoveryAdvice(40, 50, returningFromLayoff: true);
+      expect(returning, isNot(equals(normal)));
+      expect(returning.toLowerCase(), anyOf(contains('rebuild'), contains('back')));
+    });
+  });
+
+  group('isReturningFromLayoff (comeback #29)', () {
+    final now = DateTime.utc(2026, 4, 30, 7);
+    test('true when a recent run follows a >28d gap', () {
+      final runs = [
+        _r(distance: 10000, durationS: 3000, startedAt: DateTime.utc(2025, 12, 1, 7)),
+        _r(distance: 5000, durationS: 1800, startedAt: DateTime.utc(2026, 4, 29, 7)),
+      ];
+      expect(isReturningFromLayoff(runs, now: now), isTrue);
+    });
+
+    test('false for a steady runner with no gap', () {
+      final runs = [
+        _r(distance: 8000, durationS: 2400, startedAt: DateTime.utc(2026, 4, 20, 7)),
+        _r(distance: 8000, durationS: 2400, startedAt: DateTime.utc(2026, 4, 27, 7)),
+        _r(distance: 8000, durationS: 2400, startedAt: DateTime.utc(2026, 4, 29, 7)),
+      ];
+      expect(isReturningFromLayoff(runs, now: now), isFalse);
+    });
+
+    test('false for a single run (new runner, not returning)', () {
+      final runs = [
+        _r(distance: 5000, durationS: 1800, startedAt: DateTime.utc(2026, 4, 29, 7)),
+      ];
+      expect(isReturningFromLayoff(runs, now: now), isFalse);
+    });
+
+    test('false when the gap is ongoing (not currently active)', () {
+      final runs = [
+        _r(distance: 10000, durationS: 3000, startedAt: DateTime.utc(2026, 2, 1, 7)),
+        _r(distance: 10000, durationS: 3000, startedAt: DateTime.utc(2026, 3, 21, 7)),
+      ];
+      expect(isReturningFromLayoff(runs, now: now), isFalse);
+    });
   });
 
   group('computeSnapshot', () {

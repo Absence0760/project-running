@@ -2,6 +2,8 @@ import 'dart:math' as math;
 
 import 'package:core_models/core_models.dart';
 
+import 'training_load.dart' show kLayoffResetDays;
+
 /// Fitness metrics — VO2 max + training-load math.
 ///
 /// Dart port of `apps/web/src/lib/fitness.ts`. Pure functions; inputs are
@@ -180,10 +182,21 @@ TrainingLoad trainingLoad(
 
   var atl = 0.0;
   var ctl = 0.0;
+  // After a sustained layoff (kLayoffResetDays of no runs) fitness is
+  // genuinely lost — zero the EWMAs so a returning runner doesn't carry
+  // a phantom CTL that fakes a high TSB and "very fresh, race soon"
+  // advice. Persona-hunt comeback #29. Mirrors fitness.ts.
+  var zeroStreak = 0;
   for (var d = startDay;
       !d.isAfter(endDay);
       d = d.add(const Duration(days: 1))) {
     final tss = byDay[_dayKey(d)] ?? 0.0;
+    if (tss > 0) {
+      zeroStreak = 0;
+    } else if (++zeroStreak >= kLayoffResetDays) {
+      atl = 0;
+      ctl = 0;
+    }
     atl = _ewma(atl, tss, 7);
     ctl = _ewma(ctl, tss, 42);
   }
@@ -217,11 +230,41 @@ FitnessSnapshot computeSnapshot(Iterable<Run> runs, {DateTime? now}) {
   );
 }
 
+/// Whether the runner is returning from a layoff: their most recent
+/// qualifying run is recent (≤ 14 days before [now]) but the gap before
+/// it was ≥ kLayoffResetDays. Drives the gentle "rebuild gradually"
+/// framing so a returning runner isn't told they're "very fresh — race
+/// soon". Mirrors fitness.ts. Persona-hunt comeback #29.
+bool isReturningFromLayoff(Iterable<Run> runs, {DateTime? now}) {
+  final nowMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  final days = qualifyingRuns(runs)
+      .map((r) => r.startedAt.millisecondsSinceEpoch)
+      .where((t) => t <= nowMs)
+      .toList()
+    ..sort();
+  if (days.isEmpty) return false;
+  const dayMs = 24 * 3600 * 1000;
+  final latest = days.last;
+  if (nowMs - latest > 14 * dayMs) return false; // not currently active
+  if (days.length == 1) return false; // one run can't prove a prior gap
+  final prev = days[days.length - 2];
+  return latest - prev >= kLayoffResetDays * dayMs;
+}
+
 /// Rule-based recovery advice from TSB + CTL. Mirrors the web's
 /// thresholds 1:1.
-String recoveryAdvice(double? tsb, double? ctl) {
+String recoveryAdvice(double? tsb, double? ctl,
+    {bool returningFromLayoff = false}) {
   if (tsb == null || ctl == null) {
     return 'Not enough data yet — log a few runs with HR and try again.';
+  }
+  // A returning runner can show a high TSB purely because ATL decayed
+  // faster than CTL during the break — detraining, not freshness.
+  // Persona-hunt comeback #29.
+  if (returningFromLayoff) {
+    return 'Welcome back. Your form numbers reset after the break — '
+        'rebuild gradually with easy, consistent running before any hard '
+        'sessions.';
   }
   if (ctl < 10) {
     return 'Fitness is still building. Focus on consistency; one quality '
