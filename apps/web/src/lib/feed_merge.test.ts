@@ -55,3 +55,32 @@ test('mergeFeedPages dedupes by id and tolerates null/undefined pages', () => {
 test('mergeFeedPages returns empty for all-empty input', () => {
 	assert.deepEqual(mergeFeedPages([null, [], undefined], 20), []);
 });
+
+test('mergeFeedPages trims to the global top-N across multiple saturated chunks', () => {
+	// Three chunks each returning a full `limit`-sized page (the worst case:
+	// every chunk is saturated). The merge must surface the global newest
+	// `limit` rows across all chunks, not just one chunk's worth.
+	const limit = 3;
+	const mk = (id: string, day: number) => ({
+		id,
+		started_at: `2026-05-${String(day).padStart(2, '0')}T10:00:00Z`
+	});
+	// Interleave dates across chunks so the correct top-3 (days 12,11,10) is
+	// spread over all three pages — a naive "take the first chunk" would miss it.
+	const pageA = [mk('a3', 3), mk('a2', 2), mk('a1', 1)];
+	const pageB = [mk('b12', 12), mk('b6', 6), mk('b5', 5)];
+	const pageC = [mk('c11', 11), mk('c10', 10), mk('c4', 4)];
+	const merged = mergeFeedPages([pageA, pageB, pageC], limit);
+	assert.equal(merged.length, limit);
+	assert.deepEqual(
+		merged.map((r) => r.id),
+		['b12', 'c11', 'c10']
+	);
+});
+
+test('mergeFeedPages returns [] when limit is 0', () => {
+	assert.deepEqual(
+		mergeFeedPages([[{ id: 'x', started_at: '2026-05-02T10:00:00Z' }]], 0),
+		[]
+	);
+});
