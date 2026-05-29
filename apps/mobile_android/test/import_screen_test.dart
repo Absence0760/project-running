@@ -192,4 +192,33 @@ void main() {
       );
     });
   });
+
+  group('buildImportStatus (#37)', () {
+    test('Health Connect import appends the no-route note', () {
+      final s = buildImportStatus(
+        savedCount: 5,
+        errorCount: 0,
+        label: 'Health Connect',
+        noGpsNote: true,
+      );
+      expect(s, contains('Imported 5 runs from Health Connect'));
+      expect(s, contains('no map'));
+    });
+
+    test('non-HC import omits the note; zero-saved omits it too', () {
+      expect(
+        buildImportStatus(savedCount: 3, errorCount: 0, label: 'Strava'),
+        'Imported 3 runs from Strava',
+      );
+      expect(
+        buildImportStatus(
+          savedCount: 0,
+          errorCount: 0,
+          label: 'Health Connect',
+          noGpsNote: true,
+        ),
+        isNot(contains('no map')),
+      );
+    });
+  });
 }

@@ -68,7 +68,10 @@ class _ImportScreenState extends State<ImportScreen> {
 
       setState(() => _status = 'Reading workouts...');
       final runs = await HealthConnectImporter.fetchWorkouts();
-      await _saveImportedRuns(runs, label: _healthLabel);
+      // Health Connect exposes workout summaries but not route geometry, so
+      // these runs land without a GPS track / map — tell the user so a
+      // map-less run detail doesn't read as a bug (garmin persona #37).
+      await _saveImportedRuns(runs, label: _healthLabel, noGpsNote: true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -80,7 +83,8 @@ class _ImportScreenState extends State<ImportScreen> {
 
   /// Common save loop used by both Strava and Health Connect imports.
   /// Saves each run locally, then batch-pushes to the cloud if signed in.
-  Future<void> _saveImportedRuns(List<Run> runs, {required String label}) async {
+  Future<void> _saveImportedRuns(List<Run> runs,
+      {required String label, bool noGpsNote = false}) async {
     setState(() {
       _total = runs.length;
       _status = 'Saving locally...';
@@ -152,9 +156,12 @@ class _ImportScreenState extends State<ImportScreen> {
     setState(() {
       _busy = false;
       _errors = localErrors.map((e) => '${e.filename}: ${e.message}').toList();
-      _status = localErrors.isEmpty
+      final base = localErrors.isEmpty
           ? 'Imported ${savedRuns.length} runs from $label'
           : 'Imported ${savedRuns.length} runs (${localErrors.length} failed)';
+      _status = noGpsNote && savedRuns.isNotEmpty
+          ? '$base. $label has no route data, so these runs have no map.'
+          : base;
     });
   }
 

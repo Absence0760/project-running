@@ -13,6 +13,24 @@ import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../strava_importer.dart';
 
+/// Build the post-import status line. Appends a no-route note for sources
+/// (Health Connect) that expose workout summaries but not GPS geometry, so a
+/// map-less run detail reads as expected rather than a bug (#37).
+String buildImportStatus({
+  required int savedCount,
+  required int errorCount,
+  required String label,
+  bool noGpsNote = false,
+}) {
+  final base = errorCount == 0
+      ? 'Imported $savedCount runs from $label'
+      : 'Imported $savedCount runs ($errorCount failed)';
+  if (noGpsNote && savedCount > 0) {
+    return '$base. $label has no route data, so these runs have no map.';
+  }
+  return base;
+}
+
 /// Bulk import screen — Strava ZIP, Health Connect / Apple Health,
 /// CSV summary, and full-backup ZIP. CSV and Backup-ZIP both work
 /// **offline-first** so a user can restore on a freshly-installed
@@ -68,7 +86,10 @@ class _ImportScreenState extends State<ImportScreen> {
 
       setState(() => _status = 'Reading workouts...');
       final runs = await HealthConnectImporter.fetchWorkouts();
-      await _saveImportedRuns(runs, label: _healthLabel);
+      // Health Connect exposes workout summaries but not route geometry, so
+      // these runs land without a GPS track / map — tell the user so a
+      // map-less run detail doesn't read as a bug (garmin persona #37).
+      await _saveImportedRuns(runs, label: _healthLabel, noGpsNote: true);
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -80,7 +101,8 @@ class _ImportScreenState extends State<ImportScreen> {
 
   /// Common save loop used by both Strava and Health Connect imports.
   /// Saves each run locally, then batch-pushes to the cloud if signed in.
-  Future<void> _saveImportedRuns(List<Run> runs, {required String label}) async {
+  Future<void> _saveImportedRuns(List<Run> runs,
+      {required String label, bool noGpsNote = false}) async {
     setState(() {
       _total = runs.length;
       _status = 'Saving locally...';
@@ -152,9 +174,12 @@ class _ImportScreenState extends State<ImportScreen> {
     setState(() {
       _busy = false;
       _errors = localErrors.map((e) => '${e.filename}: ${e.message}').toList();
-      _status = localErrors.isEmpty
-          ? 'Imported ${savedRuns.length} runs from $label'
-          : 'Imported ${savedRuns.length} runs (${localErrors.length} failed)';
+      _status = buildImportStatus(
+        savedCount: savedRuns.length,
+        errorCount: localErrors.length,
+        label: label,
+        noGpsNote: noGpsNote,
+      );
     });
   }
 
