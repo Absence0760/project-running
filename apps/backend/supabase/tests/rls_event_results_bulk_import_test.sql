@@ -17,14 +17,16 @@
 
 begin;
 
-select plan(5);
+select plan(8);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
   ('00000000-0000-0000-0000-0000000043a1', 'authenticated', 'authenticated',
    'director@evt.local', '', now(), now()),
   ('00000000-0000-0000-0000-0000000043a2', 'authenticated', 'authenticated',
-   'member@evt.local', '', now(), now());
+   'member@evt.local', '', now(), now()),
+  ('00000000-0000-0000-0000-0000000043a3', 'authenticated', 'authenticated',
+   'organiser@evt.local', '', now(), now());
 
 set local role service_role;
 
@@ -38,7 +40,11 @@ values
 insert into club_members (club_id, user_id, role, status)
 values
   ('43434343-4343-4343-4343-434343434301',
-   '00000000-0000-0000-0000-0000000043a2', 'member', 'active');
+   '00000000-0000-0000-0000-0000000043a2', 'member', 'active'),
+  -- A plain event_organiser (NOT owner/admin) — the role the import path
+  -- exists for, and the one the re-import UPDATE policy must cover.
+  ('43434343-4343-4343-4343-434343434301',
+   '00000000-0000-0000-0000-0000000043a3', 'event_organiser', 'active');
 
 insert into events (id, club_id, title, starts_at, created_by)
 values
@@ -108,6 +114,48 @@ select throws_ok(
   null,
   'a duplicate bib on the same (event, instance) is rejected by event_results_bib_uniq'
 );
+
+-- ── Re-import path for a plain event_organiser (not owner/admin) ──
+-- The first import is an INSERT; a re-import upserts and so hits the UPDATE
+-- RLS path. Without event_results_update_organiser_bib (20261031_001) this
+-- 42501s for the event_organiser role. (Tests 6-8.)
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000043a3","role":"authenticated"}';
+
+-- 6. event_organiser can INSERT a new bib row.
+select lives_ok(
+  $$ insert into event_results (event_id, instance_start, bib, finisher_name,
+                                duration_s, distance_m)
+     values ('43434343-4343-4343-4343-434343434311', '2026-06-06 09:00+00',
+             '201', 'Cara Organiser', 2800, 10000) $$,
+  'a plain event_organiser can INSERT a bib-only result');
+
+-- 7. event_organiser can UPDATE an existing bib-only row (the re-import path).
+select lives_ok(
+  $$ update event_results set duration_s = 2750, finisher_name = 'Cara O.'
+     where event_id = '43434343-4343-4343-4343-434343434311'
+       and instance_start = '2026-06-06 09:00+00' and bib = '201' $$,
+  'a plain event_organiser can UPDATE a bib-only result (re-import path)');
+
+-- 8. event_organiser CANNOT mutate an account-owned result via this path.
+-- Mark bib 101 as account-owned, then have the organiser try to overwrite its
+-- time; RLS (USING user_id is null) filters the row out so the UPDATE touches
+-- 0 rows and the value is unchanged.
+set local role service_role;
+update event_results set user_id = '00000000-0000-0000-0000-0000000043a2'
+  where event_id = '43434343-4343-4343-4343-434343434311'
+    and instance_start = '2026-06-06 09:00+00' and bib = '101';
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-0000000043a3","role":"authenticated"}';
+update event_results set duration_s = 9999
+  where event_id = '43434343-4343-4343-4343-434343434311'
+    and instance_start = '2026-06-06 09:00+00' and bib = '101';
+set local role service_role;
+select is(
+  (select duration_s from event_results
+   where event_id = '43434343-4343-4343-4343-434343434311'
+     and instance_start = '2026-06-06 09:00+00' and bib = '101'),
+  2400,
+  'a plain event_organiser cannot UPDATE an account-owned result via the import policy');
 
 select * from finish();
 
