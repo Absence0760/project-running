@@ -105,6 +105,7 @@ Persist completed runs locally with distance, duration, average pace, and a map 
 - [x] Google and Apple OAuth scaffolded (needs provider credentials to enable); iOS: Apple Sign-In scaffolded behind _kAppleSignInEnabled = false pending Services ID setup
 - [x] Auth callback route for OAuth redirect
 - [x] Onboarding flow on first launch with location permission request (Android)
+- [x] Pre-run background-location nudge (Android 11+) — the initial dialog only grants "while in use", so before a run starts `run_screen` checks for `ACCESS_BACKGROUND_LOCATION` and, when missing, deep-links to app settings ("Allow all the time"). Non-blocking. Pure `background_location_nudge.dart` (persona #57); iOS twin returns false (its own Always escalation).
 - [x] Offline-only mode — runs work without backend or auth (Android)
 - [x] UUID run IDs to avoid sync collisions across devices
 - [x] Pull remote runs from Supabase, merge with local store (Android)

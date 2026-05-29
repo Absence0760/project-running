@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 import 'dart:ui';
 
 import 'package:api_client/api_client.dart';
@@ -32,6 +33,7 @@ import '../race_controller.dart';
 import '../route_match.dart';
 import '../settings_sync.dart';
 import 'route_picker_screen.dart';
+import '../background_location_nudge.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
@@ -559,6 +561,46 @@ class _RunScreenState extends State<RunScreen> {
     await Permission.notification.request();
   }
 
+  /// Android 11+ only grants "while in use" from the initial dialog;
+  /// background recording needs "Allow all the time", which the OS
+  /// routes through app settings. If foreground location is granted but
+  /// background isn't, surface a one-tap deep-link to settings before the
+  /// run starts (persona #57). Non-blocking — the run proceeds either
+  /// way; recording still works while the app is on screen.
+  Future<void> _maybeNudgeBackgroundLocation() async {
+    if (!Platform.isAndroid) return;
+    final foreground = await Permission.location.isGranted;
+    final always = await Permission.locationAlways.isGranted;
+    if (!shouldNudgeBackgroundLocation(
+      isAndroid: Platform.isAndroid,
+      foregroundGranted: foreground,
+      alwaysGranted: always,
+    )) {
+      return;
+    }
+    if (!mounted) return;
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(kBackgroundLocationNudgeTitle),
+        content: const Text(kBackgroundLocationNudgeBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Start anyway'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
+    if (openSettings == true) {
+      await openAppSettings();
+    }
+  }
+
   Future<void> _selectRoute() async {
     final routes = widget.routeStore.routes;
     if (routes.isEmpty) {
@@ -578,6 +620,11 @@ class _RunScreenState extends State<RunScreen> {
     if (_startRequested || _state != _ScreenState.idle) return;
     _startRequested = true;
     await _maybeRequestPermission();
+    if (!mounted) {
+      _startRequested = false;
+      return;
+    }
+    await _maybeNudgeBackgroundLocation();
     if (!mounted) {
       _startRequested = false;
       return;
