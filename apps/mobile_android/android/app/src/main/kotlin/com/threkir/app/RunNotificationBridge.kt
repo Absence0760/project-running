@@ -40,7 +40,15 @@ class RunNotificationBridge(
 
     private val methodChannel = MethodChannel(messenger, CHANNEL)
 
+    // #14: set true once the Dart side announces its method-call handler is
+    // live (`ready`). A notification action that arrives before then (cold
+    // start — the process was relaunched by tapping a button) is stashed
+    // and flushed on `ready` so it isn't dropped.
+    private var dartReady = false
+    private var pendingAction: String? = null
+
     init {
+        instance = this
         methodChannel.setMethodCallHandler(this)
         // Pre-create the notification channel with VISIBILITY_PUBLIC before
         // geolocator does. lockscreenVisibility is immutable after channel
@@ -74,7 +82,14 @@ class RunNotificationBridge(
                 val title = args["title"] as? String ?: "Running"
                 val text = args["text"] as? String ?: ""
                 val bigText = args["big_text"] as? String
-                post(title, text, bigText)
+                val paused = args["paused"] as? Boolean ?: false
+                post(title, text, bigText, paused)
+                result.success(null)
+            }
+            "ready" -> {
+                dartReady = true
+                pendingAction?.let { methodChannel.invokeMethod("action", it) }
+                pendingAction = null
                 result.success(null)
             }
             "clear" -> {
@@ -83,6 +98,18 @@ class RunNotificationBridge(
                 result.success(null)
             }
             else -> result.notImplemented()
+        }
+    }
+
+    /// Forward a lock-screen action ("pause" / "resume" / "stop") to Dart.
+    /// Called by MainActivity when a notification-action PendingIntent
+    /// relaunches the activity. If Dart hasn't registered its handler yet
+    /// (cold start), stash and flush on `ready`.
+    fun dispatchAction(action: String) {
+        if (dartReady) {
+            methodChannel.invokeMethod("action", action)
+        } else {
+            pendingAction = action
         }
     }
 
@@ -120,8 +147,25 @@ class RunNotificationBridge(
         nm.createNotificationChannel(channel)
     }
 
-    private fun post(title: String, text: String, bigText: String?) {
-        // Tapping the notification returns the user to MainActivity.
+    /// PendingIntent that relaunches MainActivity carrying a `run_action`
+    /// extra. Distinct request codes keep the three actions' PendingIntents
+    /// from collapsing into one another under FLAG_UPDATE_CURRENT.
+    private fun actionIntent(action: String, requestCode: Int): PendingIntent {
+        val intent = Intent(context, MainActivity::class.java).apply {
+            this.action = "com.threkir.app.RUN_ACTION_$action"
+            putExtra(EXTRA_RUN_ACTION, action)
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        }
+        return PendingIntent.getActivity(
+            context,
+            requestCode,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun post(title: String, text: String, bigText: String?, paused: Boolean) {
+        // Tapping the notification body returns the user to MainActivity.
         val openIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -152,6 +196,16 @@ class RunNotificationBridge(
             builder.setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
         }
 
+        // #14: lock-screen controls. Pause toggles to Resume while paused;
+        // Stop ends the run. Icon 0 renders text-only, which is fine on a
+        // workout notification and avoids shipping new drawables.
+        if (paused) {
+            builder.addAction(0, "Resume", actionIntent(ACTION_RESUME, RC_RESUME))
+        } else {
+            builder.addAction(0, "Pause", actionIntent(ACTION_PAUSE, RC_PAUSE))
+        }
+        builder.addAction(0, "Stop", actionIntent(ACTION_STOP, RC_STOP))
+
         // Posting with the same (channel, id) that geolocator's foreground
         // service is using replaces the visible row without interfering
         // with the service lifecycle — startForeground() was called with
@@ -170,5 +224,23 @@ class RunNotificationBridge(
         // stops applying silently — update here if you see a second row.
         private const val GEOLOCATOR_CHANNEL_ID = "geolocator_channel_01"
         private const val GEOLOCATOR_NOTIFICATION_ID = 75415
+
+        // #14: notification-action plumbing. MainActivity reads
+        // EXTRA_RUN_ACTION off a relaunch intent and forwards it here.
+        const val EXTRA_RUN_ACTION = "run_action"
+        private const val ACTION_PAUSE = "pause"
+        private const val ACTION_RESUME = "resume"
+        private const val ACTION_STOP = "stop"
+        private const val RC_PAUSE = 101
+        private const val RC_RESUME = 102
+        private const val RC_STOP = 103
+
+        /// Live instance so MainActivity can forward notification-action
+        /// intents into the method channel. The bridge outlives any single
+        /// intent because it's created with the application context in
+        /// MainActivity.configureFlutterEngine.
+        @Volatile
+        var instance: RunNotificationBridge? = null
+            private set
     }
 }

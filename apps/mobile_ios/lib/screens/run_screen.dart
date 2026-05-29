@@ -608,6 +608,25 @@ class _RunScreenState extends State<RunScreen> {
     _recorder = RunRecorder();
     _snapshotSub = _recorder!.snapshots.listen(_onSnapshot);
 
+    // #14: wire the lock-screen notification's Pause / Resume / Stop
+    // buttons to the recorder. The actions route through the native
+    // RunNotificationBridge → MainActivity → method channel; here we map
+    // them onto the same handlers the on-screen controls use, so a11y
+    // announcements + UI state stay consistent. Android-only — on iOS the
+    // notification has no action buttons so these never fire.
+    _lockScreen.onPause = () {
+      if (!mounted || _recorder == null || _manualPaused) return;
+      _toggleManualPause();
+    };
+    _lockScreen.onResume = () {
+      if (!mounted || _recorder == null || !_manualPaused) return;
+      _toggleManualPause();
+    };
+    _lockScreen.onStop = () {
+      if (!mounted || _recorder == null) return;
+      _stop();
+    };
+
     // Pedometer sensor stream. We subscribe now, but don't count steps
     // toward the run until _begin sets a baseline.
     _subscribeToPedometer();
@@ -1118,6 +1137,7 @@ class _RunScreenState extends State<RunScreen> {
       text: '$timeStr  •  $distanceStr  •  $paceStr',
       bigText:
           'Time: $timeStr\nDistance: $distanceStr\n${_activityType.usesSpeed ? "Speed" : "Pace"}: $paceStr',
+      paused: _manualPaused,
     );
   }
 
