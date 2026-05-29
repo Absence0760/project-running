@@ -2394,6 +2394,18 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 98. An active coach reads an athlete's runs (private + public); the raw GPS track stays owner-only
+
+**Decided (2026-05-29, persona-hunt #47):** the coach-athlete link (`coach_athletes`, migration `20261102_001`, persona #46, decisions § 97) is the consent spine for run visibility. Migration `20261103_001` adds a `private.is_active_coach_of(coach, athlete)` SECURITY DEFINER helper, a `runs` SELECT policy (`active coach reads athlete runs`), and a coach branch inside `private.is_run_visible_to`. Net effect: a coach with a `status = 'active'` link can read all of their athlete's run rows — **public and private** — and the social rows hanging off them (run_kudos / run_comments / run_photos / segment_efforts / live_run_pings, all gated on `is_run_visible_to`).
+
+**Why redemption is the consent:** the athlete forms the link by redeeming the coach's invite token (`redeem_coach_invite`); that deliberate act *is* the consent to share training. No separate per-athlete share toggle in v1 — the link's existence carries it. Ending the link (status → `ended`, either party) revokes everything immediately because the helper only matches `'active'`. The policy is SELECT-only; a coach never gains a write path into an athlete's runs (the owner-only `users own their runs` FOR ALL policy is the sole UPDATE/DELETE path).
+
+**Trade-off — the raw GPS track stays owner-only.** The `runs` Storage bucket SELECT policy (`20260410_001`, first-path-segment = `auth.uid()`) is intentionally left untouched, so a coach reads the run row + stats but not the track bytes. Non-owner track access already routes through `clip_track_for_user` (privacy zones, §33) via the `clip-public-track` Edge Function, which serves public runs only. Granting a coach raw track storage would silently bypass the privacy-zone clip — a real privacy decision (does the athlete want their home location visible to the coach?) plus an Edge Function change. That tier is deferred rather than smuggled into an RLS migration. A second consequence falls out of gating the social-table INSERT policies on the same helper: a coach can now kudos/comment on the athlete's private runs. That is intended — coach feedback on a run is the point.
+
+**Don't re-litigate unless** coaches need the track to render a map in the roster run-review UI (then add a coach branch to `clip-public-track` or a sibling EF that clips against the athlete's zones — keep it routed through `clip_track_for_user`, never a raw Storage grant), or athletes ask to share only a subset of runs with a coach (then a per-run or per-link visibility flag checked in the helper).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

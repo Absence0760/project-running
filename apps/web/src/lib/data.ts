@@ -33,6 +33,7 @@ export type { NotificationKind };
 import { parseRunSource } from './types';
 import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
+import type { CoachAthleteStatus } from './types';
 import { nextInstanceAfter } from './recurrence';
 import { rateLimitErrorMessage } from './rate_limit_errors';
 import type { ParsedResultRow } from './event_results_csv';
@@ -4837,4 +4838,146 @@ export async function markDmThreadRead(otherId: string): Promise<void> {
 		.eq('sender_id', otherId)
 		.eq('recipient_id', me)
 		.is('read_at', null);
+}
+
+// --- Coach-athlete roster (persona #46) -------------------------------------
+//
+// A coach mints a shareable invite token (createCoachInvite); the athlete
+// redeems it (redeemCoachInvite -> redeem_coach_invite RPC) to form an active
+// link. RLS scopes every read/write to the two parties. Profiles are joined in
+// a second query, mirroring the club-member fetch pattern above.
+
+export interface CoachAthleteLink {
+	id: string;
+	status: CoachAthleteStatus;
+	note: string | null;
+	created_at: string;
+	accepted_at: string | null;
+	/// The athlete on a coach's roster, or the coach on an athlete's list.
+	user_id: string;
+	display_name: string | null;
+	avatar_url: string | null;
+}
+
+export interface PendingCoachInvite {
+	id: string;
+	invite_token: string;
+	note: string | null;
+	created_at: string;
+}
+
+/// Mint a pending invite. The token is client-generated (122-bit UUID); only
+/// the coach can read their own pending rows (RLS), so it never needs the
+/// column-grant lockdown clubs use. Returns the token so the caller can build
+/// the /coaching/accept/<token> share link.
+export async function createCoachInvite(note?: string): Promise<string> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not authenticated');
+	const token = crypto.randomUUID().replace(/-/g, '');
+	const { error } = await supabase.from('coach_athletes').insert({
+		coach_id: userId,
+		status: 'pending',
+		invite_token: token,
+		note: note?.trim() || null
+	});
+	if (error) throw error;
+	return token;
+}
+
+/// Active athletes on the signed-in coach's roster, newest acceptance first.
+export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data: rows } = await supabase
+		.from('coach_athletes')
+		.select('id, status, note, created_at, accepted_at, athlete_id')
+		.eq('coach_id', userId)
+		.eq('status', 'active')
+		.order('accepted_at', { ascending: false });
+	if (!rows || rows.length === 0) return [];
+	const ids = (rows as { athlete_id: string }[]).map((r) => r.athlete_id);
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', ids);
+	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	return (rows as Array<Record<string, unknown>>).map((r) => ({
+		id: r.id as string,
+		status: r.status as CoachAthleteStatus,
+		note: (r.note as string | null) ?? null,
+		created_at: r.created_at as string,
+		accepted_at: (r.accepted_at as string | null) ?? null,
+		user_id: r.athlete_id as string,
+		display_name: byId.get(r.athlete_id as string)?.display_name ?? null,
+		avatar_url: byId.get(r.athlete_id as string)?.avatar_url ?? null
+	}));
+}
+
+/// Unredeemed invites the signed-in coach has minted.
+export async function fetchPendingCoachInvites(): Promise<PendingCoachInvite[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data } = await supabase
+		.from('coach_athletes')
+		.select('id, invite_token, note, created_at')
+		.eq('coach_id', userId)
+		.eq('status', 'pending')
+		.is('athlete_id', null)
+		.order('created_at', { ascending: false });
+	return (data as PendingCoachInvite[]) ?? [];
+}
+
+/// Active coaches the signed-in athlete is linked to.
+export async function fetchMyCoaches(): Promise<CoachAthleteLink[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data: rows } = await supabase
+		.from('coach_athletes')
+		.select('id, status, note, created_at, accepted_at, coach_id')
+		.eq('athlete_id', userId)
+		.eq('status', 'active')
+		.order('accepted_at', { ascending: false });
+	if (!rows || rows.length === 0) return [];
+	const ids = (rows as { coach_id: string }[]).map((r) => r.coach_id);
+	const { data: profiles } = await supabase
+		.from('user_profiles')
+		.select('id, display_name, avatar_url')
+		.in('id', ids);
+	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
+	for (const p of profiles ?? []) byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	return (rows as Array<Record<string, unknown>>).map((r) => ({
+		id: r.id as string,
+		status: r.status as CoachAthleteStatus,
+		note: (r.note as string | null) ?? null,
+		created_at: r.created_at as string,
+		accepted_at: (r.accepted_at as string | null) ?? null,
+		user_id: r.coach_id as string,
+		display_name: byId.get(r.coach_id as string)?.display_name ?? null,
+		avatar_url: byId.get(r.coach_id as string)?.avatar_url ?? null
+	}));
+}
+
+/// Redeem an invite token. Returns the coach's user id.
+export async function redeemCoachInvite(token: string): Promise<string> {
+	const { data, error } = await supabase.rpc('redeem_coach_invite', { token });
+	if (error) throw error;
+	return data as string;
+}
+
+/// End an active link (either party may call). Soft-ends via status so the row
+/// and its acceptance history survive for audit.
+export async function endCoachLink(id: string): Promise<void> {
+	const { error } = await supabase
+		.from('coach_athletes')
+		.update({ status: 'ended', ended_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+/// Revoke (hard-delete) an unredeemed invite. RLS only permits this on the
+/// coach's own pending, athlete-less rows.
+export async function revokeCoachInvite(id: string): Promise<void> {
+	const { error } = await supabase.from('coach_athletes').delete().eq('id', id);
+	if (error) throw error;
 }

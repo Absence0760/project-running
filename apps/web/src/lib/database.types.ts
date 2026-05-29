@@ -202,6 +202,42 @@ export type Database = {
         }
         Relationships: []
       }
+      coach_athletes: {
+        Row: {
+          accepted_at: string | null
+          athlete_id: string | null
+          coach_id: string
+          created_at: string
+          ended_at: string | null
+          id: string
+          invite_token: string
+          note: string | null
+          status: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          athlete_id?: string | null
+          coach_id: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          invite_token: string
+          note?: string | null
+          status?: string
+        }
+        Update: {
+          accepted_at?: string | null
+          athlete_id?: string | null
+          coach_id?: string
+          created_at?: string
+          ended_at?: string | null
+          id?: string
+          invite_token?: string
+          note?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       coach_messages: {
         Row: {
           archived_at: string | null
@@ -2762,6 +2798,7 @@ export type Database = {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined
       }
+      redeem_coach_invite: { Args: { token: string }; Returns: string }
       refresh_personal_records_for_user: {
         Args: { p_user_id: string }
         Returns: undefined

@@ -118,7 +118,8 @@
 		shellLessExact.includes(path) ||
 		path.startsWith('/share/') ||
 		path.startsWith('/live/') ||
-		path.startsWith('/clubs/join/');
+		path.startsWith('/clubs/join/') ||
+		path.startsWith('/coaching/accept/');
 
 	// "Anon-allowed" surfaces: reachable without auth. Superset of shell-less
 	// — also includes the legal pages, marketing pages, and the guided /
@@ -397,6 +398,14 @@
 				>
 					<span class="material-symbols">person</span>
 					View profile
+				</a>
+				<a
+					class="popover-item"
+					href="/coaching"
+					onclick={() => (showLogoutModal = false)}
+				>
+					<span class="material-symbols">groups</span>
+					Coaching
 				</a>
 				<a
 					class="popover-item"

@@ -204,6 +204,67 @@ class ClubRow {
   };
 }
 
+/// Row shape for the `coach_athletes` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class CoachAthleteRow {
+  static const String table = 'coach_athletes';
+  static const String colId = 'id';
+  static const String colCoachId = 'coach_id';
+  static const String colAthleteId = 'athlete_id';
+  static const String colStatus = 'status';
+  static const String colInviteToken = 'invite_token';
+  static const String colNote = 'note';
+  static const String colCreatedAt = 'created_at';
+  static const String colAcceptedAt = 'accepted_at';
+  static const String colEndedAt = 'ended_at';
+
+  final String id;
+  final String coachId;
+  final String? athleteId;
+  final String status;
+  final String inviteToken;
+  final String? note;
+  final DateTime createdAt;
+  final DateTime? acceptedAt;
+  final DateTime? endedAt;
+
+  const CoachAthleteRow({
+    required this.id,
+    required this.coachId,
+    this.athleteId,
+    required this.status,
+    required this.inviteToken,
+    this.note,
+    required this.createdAt,
+    this.acceptedAt,
+    this.endedAt,
+  });
+
+  factory CoachAthleteRow.fromJson(Map<String, dynamic> json) => CoachAthleteRow(
+    id: json['id'] as String,
+    coachId: json['coach_id'] as String,
+    athleteId: json['athlete_id'] as String?,
+    status: json['status'] as String,
+    inviteToken: json['invite_token'] as String,
+    note: json['note'] as String?,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    acceptedAt: json['accepted_at'] == null ? null : DateTime.parse(json['accepted_at'] as String),
+    endedAt: json['ended_at'] == null ? null : DateTime.parse(json['ended_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colCoachId: coachId,
+    colAthleteId: athleteId,
+    colStatus: status,
+    colInviteToken: inviteToken,
+    colNote: note,
+    colCreatedAt: createdAt.toIso8601String(),
+    colAcceptedAt: acceptedAt?.toIso8601String(),
+    colEndedAt: endedAt?.toIso8601String(),
+  };
+}
+
 /// Row shape for the `coach_messages` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class CoachMessageRow {

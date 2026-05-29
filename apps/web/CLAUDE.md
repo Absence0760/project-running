@@ -79,6 +79,8 @@ src/
     clubs/[slug]/events/new/      # Admin: create event (one-off OR weekly/biweekly/monthly recurrence)
     clubs/[slug]/events/[id]/     # Event detail + per-instance RSVP + per-event updates
     clubs/join/[token]/           # Public invite-link landing (redeems via join_club_by_token RPC)
+    coaching/                     # Coach-athlete roster hub (persona #46): mint/revoke invite links + athlete & coach lists
+    coaching/accept/[token]/      # Public coach-invite landing (redeems via redeem_coach_invite RPC)
     plans/          # Training plans list
     plans/new/      # New-plan wizard with editable week-by-week preview (click a week to expand the day-by-day editor; edits persist on submit)
     plans/[id]/     # Plan detail: progress ring, today card, week grid + Edit-plan button (PlanMetaEditor) for owner-only meta edits (name, days/week, goal time, rules)

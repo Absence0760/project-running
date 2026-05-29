@@ -15,6 +15,18 @@ type ClubPostRow = Database['public']['Tables']['club_posts']['Row'];
 type TrainingPlanRow = Database['public']['Tables']['training_plans']['Row'];
 type PlanWeekRow = Database['public']['Tables']['plan_weeks']['Row'];
 type PlanWorkoutRow = Database['public']['Tables']['plan_workouts']['Row'];
+type CoachAthleteRow = Database['public']['Tables']['coach_athletes']['Row'];
+
+// Coach-athlete link lifecycle (persona #46). Enforced by the
+// `coach_athletes_status_check` CHECK in 20261102_001_coach_athletes.sql;
+// the apps/web/scripts/check_constraint_unions.mjs guard keeps the two in
+// lockstep. 'pending' = an unredeemed invite token (athlete_id null),
+// 'active' = a redeemed live link, 'ended' = severed by either party.
+export type CoachAthleteStatus = 'pending' | 'active' | 'ended';
+
+export type CoachAthlete = Omit<CoachAthleteRow, 'status'> & {
+	status: CoachAthleteStatus;
+};
 
 export interface TrackPoint {
 	lat: number;
