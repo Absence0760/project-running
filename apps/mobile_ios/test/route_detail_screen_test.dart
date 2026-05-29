@@ -42,6 +42,7 @@ ClubView _club({
         joinPolicy: 'open',
         memberCount: memberCount,
         isVerified: false,
+        requiresActivityWaiver: false,
       ),
       memberCount: memberCount,
       viewerRole: viewerRole,

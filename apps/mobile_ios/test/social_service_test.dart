@@ -30,6 +30,7 @@ ClubRow _row(String id, {int memberCount = 1}) => ClubRow(
       createdAt: DateTime(2026, 1, 1),
       memberCount: memberCount,
       isVerified: false,
+      requiresActivityWaiver: false,
     );
 
 ClubView _view({
