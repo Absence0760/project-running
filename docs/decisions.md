@@ -731,10 +731,10 @@ A run is more than the GPX — Strava's "attach a photo" is core to how runners 
 **Trade-offs:**
 
 1. **No automatic thumbnail generation.** Clients render the original. We size the upload to 4 MB max and document that as the price of skipping a thumbnail pipeline. Storage egress is the only meaningful cost; on a public bucket through Supabase's CDN it's negligible at our scale.
-2. **No EXIF stripping.** Phones may embed GPS coordinates in EXIF that survive upload. We document this in the upload UI ("photos may include location data — strip in your camera app first if a privacy zone matters") and accept the gap. v2 fix: a server-side Edge Function that re-encodes on upload.
+2. **EXIF stripping (shipped, two layers).** Phones embed GPS in EXIF. The `job_worker` `photo_process` handler re-encodes uploads server-side to drop metadata; the mobile clients additionally strip the EXIF/XMP APP1 segment client-side *before* upload (`apps/mobile_android/lib/exif_strip.dart` — a lossless marker-walk that keeps the ICC profile + pixels, persona family-club #52) so a geotagged original never lands in the bucket during the async-worker window. Web currently relies on the server worker alone (its pre-upload strip would need a canvas re-encode — deferred).
 3. **`owner_id` always equals `runs.user_id`** in v1. The schema separates them so a future "anyone in the club can attach a photo to a club event's race run" feature is forward-compatible without a migration.
 
-**Don't re-litigate unless:** photo bandwidth becomes the dominant Storage cost (then add server-side thumbnail generation), users ask for video clips (different bucket, different MIME policy, probably a separate `run_videos` table), or someone reports an EXIF leak (then ship the EXIF-strip Edge Function).
+**Don't re-litigate unless:** photo bandwidth becomes the dominant Storage cost (then add server-side thumbnail generation), users ask for video clips (different bucket, different MIME policy, probably a separate `run_videos` table), or the web client needs the same pre-upload strip the mobile clients now do (then add a canvas re-encode).
 
 ---
 

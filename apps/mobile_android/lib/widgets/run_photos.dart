@@ -6,6 +6,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../exif_strip.dart';
 import '../widgets/top_banner.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
@@ -200,10 +201,14 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
     setState(() => _uploading = true);
     try {
       final bytes = await f.readAsBytes();
+      // Strip EXIF/XMP (incl. GPS) before the bytes leave the device —
+      // the server worker strips too, but only after upload, leaving a
+      // geotagged-original window in the bucket. Persona family-club #52.
+      final clean = stripJpegExif(Uint8List.fromList(bytes));
       final ext = extensionForFilename(f.name);
       final added = await widget.api.addRunPhoto(
         runId: widget.runId,
-        bytes: Uint8List.fromList(bytes),
+        bytes: clean,
         contentType: contentTypeForExtension(ext),
         extension: ext,
         caption: _pendingCaptionCtrl.text.trim().isEmpty
