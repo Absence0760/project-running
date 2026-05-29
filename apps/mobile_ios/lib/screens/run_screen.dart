@@ -109,6 +109,10 @@ class _RunScreenState extends State<RunScreen> {
   // Empty list + null avg when no strap is paired, which is fine —
   // metadata just omits the key.
   StreamSubscription<int>? _hrSub;
+  // Auto-reconnect status of the BLE strap so a mid-run drop is disclosed
+  // rather than the BPM readout silently flat-lining. Persona android #13.
+  StreamSubscription<BleHrStatus>? _hrStatusSub;
+  BleHrStatus _hrStatus = BleHrStatus.disconnected;
   final List<int> _bpmSamples = [];
   int? _currentBpm;
 
@@ -873,6 +877,35 @@ class _RunScreenState extends State<RunScreen> {
       },
     );
 
+    // Disclose strap drops / reconnects while recording. The strap's
+    // BPM stream just goes silent on a drop, so without this the live
+    // BPM readout freezes on its last value with no explanation.
+    _hrStatus = widget.heartRate.status;
+    _hrStatusSub = widget.heartRate.statusStream.listen((s) {
+      final prev = _hrStatus;
+      _hrStatus = s;
+      if (!mounted) return;
+      switch (s) {
+        case BleHrStatus.reconnecting:
+          if (prev == BleHrStatus.connected) {
+            _showTopBanner('Heart-rate strap lost — reconnecting…');
+          }
+          setState(() => _currentBpm = null);
+        case BleHrStatus.connected:
+          if (prev == BleHrStatus.reconnecting) {
+            _showTopBanner('Heart-rate strap reconnected',
+                duration: const Duration(seconds: 2));
+          }
+        case BleHrStatus.disconnected:
+          if (prev == BleHrStatus.reconnecting) {
+            _showTopBanner('Heart-rate strap lost — recording continues without HR.');
+          }
+          setState(() => _currentBpm = null);
+        case BleHrStatus.connecting:
+          break;
+      }
+    });
+
     // Crash-safe incremental persistence — every 10s, write the current
     // track + stats to a separate file so a force-kill mid-run is recoverable.
     _incrementalSaveTimer =
@@ -1421,6 +1454,8 @@ class _RunScreenState extends State<RunScreen> {
     }
     await _hrSub?.cancel();
     _hrSub = null;
+    await _hrStatusSub?.cancel();
+    _hrStatusSub = null;
 
     // Structured-workout review trail. Three keys are registered in
     // [docs/metadata.md]: plan_workout_id, workout_step_results,
@@ -1696,6 +1731,10 @@ class _RunScreenState extends State<RunScreen> {
     _incrementalSaveTimer?.cancel();
     _gpsLostCheckTimer?.cancel();
     _permissionWatchdogTimer?.cancel();
+    // The strap stream is app-owned, but our subscriptions are not —
+    // drop them so a mid-run screen tear-down doesn't leak listeners.
+    _hrSub?.cancel();
+    _hrStatusSub?.cancel();
     // Active top banner is global (Overlay-backed); dismiss any
     // entry we own so the screen tear-down doesn't leave one stuck.
     hideTopBanner();

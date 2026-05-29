@@ -26,11 +26,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// `stream` emits on every notification (usually 1Hz) while connected.
 /// Callers collect into a running list for `avg_bpm` computation and
 /// render `current` in the live run UI. If the connection drops mid-run
-/// we stop forwarding bytes until it's restored — distance/pace keep
-/// going.
+/// we stop forwarding bytes and **auto-reconnect** with backoff until
+/// it's restored or [disconnect] is called — distance/pace keep going.
+/// [statusStream] surfaces the reconnecting / lost state so the run UI
+/// can disclose the drop instead of silently flat-lining HR. Persona
+/// android #13.
+enum BleHrStatus { disconnected, connecting, connected, reconnecting }
+
 class BleHeartRate {
   static const String _prefsDeviceId = 'ble_hr_device_id';
   static const String _prefsDeviceName = 'ble_hr_device_name';
+
+  /// Give up auto-reconnecting after this many consecutive failed
+  /// attempts (~9 min at the capped backoff) so a strap that's been
+  /// taken off doesn't drain the battery retrying forever.
+  static const int _maxReconnectAttempts = 20;
 
   static final Uuid _heartRateService =
       Uuid.parse('0000180d-0000-1000-8000-00805f9b34fb');
@@ -47,10 +57,34 @@ class BleHeartRate {
   StreamSubscription<ConnectionStateUpdate>? _connectionSub;
   StreamSubscription<List<int>>? _notifySub;
   final StreamController<int> _controller = StreamController<int>.broadcast();
+  final StreamController<BleHrStatus> _statusController =
+      StreamController<BleHrStatus>.broadcast();
+
+  /// True once the active session has reached `connected` at least once.
+  /// Gates auto-reconnect — an initial connect that never succeeds (strap
+  /// off at app start) reports failure to the caller and does NOT retry;
+  /// only a drop after a working connection triggers the reconnect loop.
+  bool _everConnected = false;
+  /// Set by the public [disconnect] / [forget] / [dispose] so the drop
+  /// handler can tell a deliberate teardown from a strap going out of range.
+  bool _intentional = false;
+  int _reconnectAttempt = 0;
+  Timer? _reconnectTimer;
+  BleHrStatus _status = BleHrStatus.disconnected;
 
   /// Live stream of BPM readings. Open-ended — stays subscribed until
   /// [stop] is called or the process dies.
   Stream<int> get stream => _controller.stream;
+
+  /// Connection-state stream so the run UI can disclose a mid-run drop /
+  /// reconnect attempt. Emits on every transition. Persona android #13.
+  Stream<BleHrStatus> get statusStream => _statusController.stream;
+  BleHrStatus get status => _status;
+
+  void _setStatus(BleHrStatus s) {
+    _status = s;
+    if (!_statusController.isClosed) _statusController.add(s);
+  }
 
   /// Scan for BLE strap candidates advertising the Heart Rate Service.
   /// Emits a de-duplicated list as more devices are discovered. Stops
@@ -137,20 +171,32 @@ class BleHeartRate {
 
   Future<void> _connect(String deviceId) async {
     await disconnect();
+    // disconnect() latched _intentional; clear it now that we're opening
+    // a fresh session that SHOULD auto-reconnect on a drop.
+    _intentional = false;
+    _everConnected = false;
+    _reconnectAttempt = 0;
     final completer = Completer<void>();
+    _openConnection(deviceId, completer);
+    await completer.future;
+  }
 
-    // flutter_reactive_ble models the connection as a long-lived
-    // stream: cancelling the subscription disconnects, the stream
-    // emits ConnectionStateUpdate on every transition. We resolve
-    // [_connect]'s future on the first `connected` event (so callers
-    // can `await pair()` and have a working stream by the time it
-    // returns), and rely on the subscription staying open for the
-    // recording session.
+  /// Open (or re-open) the long-lived connection stream. `completer` is
+  /// non-null only for the initial [_connect] so callers can `await` a
+  /// working stream; reconnect attempts pass null. flutter_reactive_ble
+  /// models the connection as a stream: cancelling the subscription
+  /// disconnects, and `connectToDevice` is single-attempt — a drop ends
+  /// the stream, so we re-open it ourselves to reconnect.
+  void _openConnection(String deviceId, Completer<void>? completer) {
+    _setStatus(completer != null ? BleHrStatus.connecting : BleHrStatus.reconnecting);
     _connectionSub = _ble.connectToDevice(
       id: deviceId,
       connectionTimeout: const Duration(seconds: 10),
     ).listen((update) {
       if (update.connectionState == DeviceConnectionState.connected) {
+        _everConnected = true;
+        _reconnectAttempt = 0;
+        _setStatus(BleHrStatus.connected);
         final char = QualifiedCharacteristic(
           serviceId: _heartRateService,
           characteristicId: _heartRateMeasurement,
@@ -165,31 +211,63 @@ class BleHeartRate {
         }, onError: (Object e) {
           debugPrint('BLE notify error: $e');
         });
-        if (!completer.isCompleted) completer.complete();
+        if (completer != null && !completer.isCompleted) completer.complete();
       } else if (update.connectionState == DeviceConnectionState.disconnected) {
-        // Connection lost mid-recording. flutter_reactive_ble does
-        // NOT auto-reconnect on its own — `connectToDevice` is a
-        // single-attempt stream, so a drop ends the session. Cancel
-        // the notify subscription; the caller can call connectCached
-        // again to start a fresh attempt.
         _notifySub?.cancel();
         _notifySub = null;
-        if (update.failure != null && !completer.isCompleted) {
-          completer.completeError(
-            StateError('Connection failed: ${update.failure}'),
-          );
+        if (_intentional) return;
+        if (!_everConnected) {
+          // Initial connect never succeeded (strap off at app start).
+          // Report failure to the caller and don't burn battery retrying
+          // a strap the user may not even have on.
+          _setStatus(BleHrStatus.disconnected);
+          if (completer != null && !completer.isCompleted) {
+            completer.completeError(
+              StateError('Connection failed: ${update.failure}'),
+            );
+          }
+          return;
         }
+        // A working connection dropped mid-session — reconnect.
+        _scheduleReconnect(deviceId);
       }
     }, onError: (Object e) {
       debugPrint('BLE connectToDevice error: $e');
-      if (!completer.isCompleted) completer.completeError(e);
+      if (completer != null && !completer.isCompleted) {
+        completer.completeError(e);
+      } else if (!_intentional && _everConnected) {
+        _scheduleReconnect(deviceId);
+      }
     });
-
-    await completer.future;
   }
 
-  /// Drop the current connection. Safe to call when not connected.
+  void _scheduleReconnect(String deviceId) {
+    if (_intentional) return;
+    if (_reconnectAttempt >= _maxReconnectAttempts) {
+      // Give up — strap has been gone too long. The run keeps recording
+      // without HR; the user can re-pair from Settings.
+      _setStatus(BleHrStatus.disconnected);
+      return;
+    }
+    _setStatus(BleHrStatus.reconnecting);
+    final delay = bleReconnectDelay(_reconnectAttempt);
+    _reconnectAttempt++;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = Timer(delay, () {
+      if (_intentional) return;
+      // Tear down the stale connection stream before re-opening.
+      _connectionSub?.cancel();
+      _connectionSub = null;
+      _openConnection(deviceId, null);
+    });
+  }
+
+  /// Drop the current connection and stop any in-flight reconnect loop.
+  /// Safe to call when not connected.
   Future<void> disconnect() async {
+    _intentional = true;
+    _reconnectTimer?.cancel();
+    _reconnectTimer = null;
     await _notifySub?.cancel();
     _notifySub = null;
     // Cancelling the connection-state subscription is what tells
@@ -197,6 +275,7 @@ class BleHeartRate {
     // explicit `disconnect()` API.
     await _connectionSub?.cancel();
     _connectionSub = null;
+    _setStatus(BleHrStatus.disconnected);
   }
 
   /// Forget the paired strap entirely. Disconnects + clears the stored id.
@@ -210,7 +289,17 @@ class BleHeartRate {
   Future<void> dispose() async {
     await disconnect();
     await _controller.close();
+    await _statusController.close();
   }
+}
+
+/// Backoff before the Nth (0-based) auto-reconnect attempt: 2, 4, 8, 16,
+/// then capped at 30 s. Extracted as a top-level pure function so the
+/// schedule can be unit-tested without a BLE stack. Persona android #13.
+Duration bleReconnectDelay(int attempt) {
+  final clamped = attempt < 0 ? 0 : (attempt > 4 ? 4 : attempt);
+  final secs = 2 << clamped; // 2,4,8,16,32
+  return Duration(seconds: secs > 30 ? 30 : secs);
 }
 
 /// Discovered candidate during a [BleHeartRate.scan]. Plain value type

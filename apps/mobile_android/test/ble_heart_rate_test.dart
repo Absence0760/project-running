@@ -50,4 +50,24 @@ void main() {
       );
     });
   });
+
+  group('bleReconnectDelay (persona #13)', () {
+    test('exponential backoff 2/4/8/16 then caps at 30s', () {
+      expect(bleReconnectDelay(0), const Duration(seconds: 2));
+      expect(bleReconnectDelay(1), const Duration(seconds: 4));
+      expect(bleReconnectDelay(2), const Duration(seconds: 8));
+      expect(bleReconnectDelay(3), const Duration(seconds: 16));
+      // 2<<4 = 32 → capped at 30.
+      expect(bleReconnectDelay(4), const Duration(seconds: 30));
+    });
+
+    test('stays capped at 30s for high attempt counts', () {
+      expect(bleReconnectDelay(10), const Duration(seconds: 30));
+      expect(bleReconnectDelay(99), const Duration(seconds: 30));
+    });
+
+    test('negative attempt clamps to the first delay', () {
+      expect(bleReconnectDelay(-1), const Duration(seconds: 2));
+    });
+  });
 }
