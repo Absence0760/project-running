@@ -21,11 +21,11 @@ async fn main(spawner: Spawner) {
     let p = embassy_nrf::init(Default::default());
     info!("custom_watch firmware booting (tier 1, blink-LED stub)");
 
-    spawner.must_spawn(tasks::ui::blink_task(p.P0_13.into()));
+    spawner.spawn(unwrap!(tasks::ui::blink_task(p.P0_13.into())));
 
-    spawner.must_spawn(tasks::gps::run());
-    spawner.must_spawn(tasks::hr::run());
-    spawner.must_spawn(tasks::baro::run());
-    spawner.must_spawn(tasks::ble::run());
-    spawner.must_spawn(tasks::record::run());
+    spawner.spawn(unwrap!(tasks::gps::run()));
+    spawner.spawn(unwrap!(tasks::hr::run()));
+    spawner.spawn(unwrap!(tasks::baro::run()));
+    spawner.spawn(unwrap!(tasks::ble::run()));
+    spawner.spawn(unwrap!(tasks::record::run()));
 }
