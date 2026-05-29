@@ -566,7 +566,7 @@
 			</label>
 			<label>
 				<span class="label-text">Max HR (bpm)</span>
-				<input type="number" bind:value={maxHr} placeholder="e.g. 190 (or leave blank for 220-age)" min="100" max="230" />
+				<input type="number" bind:value={maxHr} placeholder="e.g. 190 (blank = 208 − 0.7 × age)" min="100" max="230" />
 			</label>
 		</div>
 		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>

@@ -40,6 +40,7 @@
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/run_stats';
+	import { defaultZoneCutoffs } from '$lib/hr_zones';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -95,6 +96,10 @@
 	let shareConfirmIntersectsZone = $state(false);
 	let shareConfirmHasZones = $state(false);
 	let bodyWeightKg = $state<number | null>(null);
+	// HR-zone fallback inputs, read from the universal settings bag on
+	// mount. Used only when explicit `hr_zones` is unset (Older #8).
+	let maxHrBpm = $state<number | null>(null);
+	let viewerAgeYears = $state<number | null>(null);
 	// Persona-hunt Round 3 finding Woman #5. Read from
 	// user_profiles.gender (same column the segments leaderboards
 	// + training-pace calibration use). Null when unset → calorie
@@ -166,6 +171,23 @@
 					const z1 = zones.z1, z2 = zones.z2, z3 = zones.z3, z4 = zones.z4, z5 = zones.z5;
 					if ([z1, z2, z3, z4, z5].every((z) => typeof z === 'number' && z > 0)) {
 						zoneCutoffs = [z1, z2, z3, z4, z5];
+					}
+				}
+				// Fallback inputs for when `hr_zones` is unset: an explicit
+				// max-HR override, then age (Tanaka 208 − 0.7×age) derived
+				// from the universal `date_of_birth` pref. Older #8 —
+				// otherwise everyone defaulted to a 190-bpm ceiling.
+				const mhr = effective<number>(settings, 'max_hr_bpm');
+				if (typeof mhr === 'number' && mhr > 0) maxHrBpm = mhr;
+				const dob = effective<string>(settings, 'date_of_birth');
+				if (typeof dob === 'string') {
+					const born = new Date(dob);
+					if (!Number.isNaN(born.getTime())) {
+						const now = new Date();
+						let age = now.getFullYear() - born.getFullYear();
+						const m = now.getMonth() - born.getMonth();
+						if (m < 0 || (m === 0 && now.getDate() < born.getDate())) age--;
+						if (age >= 0 && age < 120) viewerAgeYears = age;
 					}
 				}
 				const bw = effective<number>(settings, 'body_weight_kg');
@@ -689,7 +711,8 @@
 	});
 
 	/// Zone upper bounds (BPM) from the user's settings bag, or sane
-	/// defaults keyed off their max HR (or 220 − 30 when unknown).
+	/// defaults keyed off their max HR (an explicit override, then
+	/// Tanaka from age, then a 190-bpm fallback — see hr_zones.ts).
 	/// Fetched once on mount in the existing settings load path; we
 	/// fall back here when they're absent.
 	let zoneCutoffs = $state<[number, number, number, number, number] | null>(null);
@@ -707,7 +730,10 @@
 		if (samples.length === 0) return [];
 		// Cutoffs default to the classic Karvonen-ish bands at 60 / 70
 		// / 80 / 90 / 100 % of max HR when the user hasn't set them.
-		const cutoffs = zoneCutoffs ?? [114, 133, 152, 171, 190];
+		// The default max HR comes from an explicit override, then the
+		// runner's age (Tanaka), then 190 — see defaultZoneCutoffs.
+		const cutoffs =
+			zoneCutoffs ?? defaultZoneCutoffs({ maxHrBpm, ageYears: viewerAgeYears });
 
 		// Time-weighted when timestamps are available on every sample.
 		// Each sample's "weight" is half the gap to the previous sample

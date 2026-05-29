@@ -669,7 +669,7 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             // hours after the fetch returns.
             universalPrivacyDefault = settings.privacyDefault
             // hr-zone cutoffs — resolved in priority order (explicit
-            // hr_zones > max_hr_bpm > 220-age from DOB). Stored on the
+            // hr_zones > max_hr_bpm > Tanaka 208−0.7×age from DOB). Stored on the
             // VM state so the RunningScreen can render "Z3" next to
             // BPM. Updated regardless of stage; null cutoffs disable
             // the badge silently.

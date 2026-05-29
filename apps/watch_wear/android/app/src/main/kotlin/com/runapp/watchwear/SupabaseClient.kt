@@ -104,7 +104,7 @@ internal fun humanErrorMessage(code: Int, body: String): String {
 ///     "Z3" badge next to BPM on the RunningScreen. The
 ///     `resolveZoneCutoffs` precedence is: explicit hr_zones >
 ///     60/70/80/90/100% of max_hr_bpm > 60/70/80/90/100% of
-///     (220 - age from DOB) > null (no zone display).
+///     (Tanaka 208 − 0.7×age from DOB) > null (no zone display).
 data class UniversalSettings(
     val defaultActivityType: String?,
     val privacyDefault: String?,
@@ -215,7 +215,7 @@ internal fun hrZoneOf(bpm: Int, cutoffs: List<Int>?): Int? {
 
 /// Pick zone cutoffs in priority order: explicit `hr_zones` >
 /// 60/70/80/90/100% of `max_hr_bpm` > 60/70/80/90/100% of
-/// (220 - age from `date_of_birth`) > null.
+/// (Tanaka 208 − 0.7×age from `date_of_birth`) > null.
 ///
 /// `nowMs` is injected so tests can pin the age calculation —
 /// production callers pass `System.currentTimeMillis()`.
@@ -223,17 +223,22 @@ internal fun resolveZoneCutoffs(s: UniversalSettings, nowMs: Long): List<Int>? {
     s.hrZones?.let { return it }
     val maxHr = s.maxHrBpm ?: ageBasedMaxHr(s.dateOfBirth, nowMs)
     if (maxHr == null) return null
-    // 60/70/80/90/100% — matches the Dart fallback ladder
-    // (60% × 190 = 114, etc.) and the web inferred path.
+    // 60/70/80/90/100% — matches the Dart `zoneCutoffsFromMaxHr`
+    // ladder (60% × 190 = 114, etc.) and the web inferred path.
+    // Math.round, not truncation, to stay byte-for-byte with the twin.
     return listOf(
-        (maxHr * 0.60).toInt(),
-        (maxHr * 0.70).toInt(),
-        (maxHr * 0.80).toInt(),
-        (maxHr * 0.90).toInt(),
+        Math.round(maxHr * 0.60).toInt(),
+        Math.round(maxHr * 0.70).toInt(),
+        Math.round(maxHr * 0.80).toInt(),
+        Math.round(maxHr * 0.90).toInt(),
         maxHr,
     )
 }
 
+/// Tanaka (2001) age-predicted maximal heart rate: 208 − 0.7 × age.
+/// More accurate for masters runners than the classic 220 − age, which
+/// overestimates HR-max past ~40 (persona-hunt Older #8). Mirrors the
+/// Dart `tanakaMaxHr` + the web `tanakaMaxHr`.
 private fun ageBasedMaxHr(dob: String?, nowMs: Long): Int? {
     if (dob == null) return null
     return try {
@@ -244,7 +249,7 @@ private fun ageBasedMaxHr(dob: String?, nowMs: Long): Int? {
             .atZone(java.time.ZoneOffset.UTC).toLocalDate()
         val born = java.time.LocalDate.of(year, month, day)
         val age = java.time.Period.between(born, now).years
-        if (age in 5..120) (220 - age) else null
+        if (age in 5..120) Math.round(208 - 0.7 * age).toInt() else null
     } catch (_: Throwable) {
         null
     }

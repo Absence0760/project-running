@@ -316,8 +316,9 @@ class UniversalSettingsTest {
     }
 
     @Test
-    fun `resolveZoneCutoffs derives from dob via 220 minus age`() {
-        // Born 1990-01-01; "now" of 2026-01-01 → 36 years old → 184 max.
+    fun `resolveZoneCutoffs derives from dob via Tanaka 208 minus 0_7 age`() {
+        // Born 1990-01-01; "now" of 2026-01-01 → 36 years old.
+        // Tanaka: 208 − 0.7×36 = 182.8 → round → 183 max.
         val s = UniversalSettings(
             defaultActivityType = null,
             privacyDefault = null,
@@ -325,9 +326,8 @@ class UniversalSettingsTest {
         )
         val now2026 = java.time.LocalDate.of(2026, 1, 1)
             .atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
-        // 60/70/80/90/100% of 184 = 110, 128, 147, 165, 184.
-        // (`(184 * 0.60).toInt()` = 110 via truncation).
-        assertEquals(listOf(110, 128, 147, 165, 184), resolveZoneCutoffs(s, now2026))
+        // round(183 × 60/70/80/90/100%) = 110, 128, 146, 165, 183.
+        assertEquals(listOf(110, 128, 146, 165, 183), resolveZoneCutoffs(s, now2026))
     }
 
     @Test

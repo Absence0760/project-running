@@ -773,7 +773,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               subtitle: Text(
                 _bagValue<num>(SettingsKeys.maxHrBpm) != null
                     ? '${_bagValue<num>(SettingsKeys.maxHrBpm)!.round()} bpm'
-                    : 'Not set — falls back to 220 − age',
+                    : 'Not set — falls back to 208 − 0.7 × age',
               ),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,

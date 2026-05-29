@@ -1430,14 +1430,34 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     ];
   }
 
-  /// Pull the user's `hr_zones` from the universal settings bag.
-  /// Returns null when not signed in / not configured / malformed —
-  /// `hrZoneBreakdown` falls back to the default 60/70/80/90/100 %
-  /// HR-max bands in that case.
+  /// Resolve the zone cutoffs for this run. Precedence (mirrors web's
+  /// run-detail page + the Wear OS `resolveZoneCutoffs`): explicit
+  /// `hr_zones` → `max_hr_bpm` override → Tanaka (208 − 0.7×age) from
+  /// `date_of_birth` → the legacy 190-bpm fallback. Returns null only
+  /// when not signed in, so `hrZoneBreakdown` uses its own default.
   List<int>? _userHrCutoffs() {
     final svc = widget.settingsSync?.service;
     if (svc == null) return null;
-    return parseHrZones(svc.effective<Map>(SettingsKeys.hrZones));
+    final explicit = parseHrZones(svc.effective<Map>(SettingsKeys.hrZones));
+    if (explicit != null) return explicit;
+    final maxHr = svc.effective<num>(SettingsKeys.maxHrBpm)?.round();
+    final age = _ageFromBag(svc.effective<String>(SettingsKeys.dateOfBirth));
+    return defaultZoneCutoffs(maxHrBpm: maxHr, ageYears: age);
+  }
+
+  /// Whole years from a `YYYY-MM-DD` `date_of_birth` bag value, or null
+  /// when absent / unparseable / out of range.
+  static int? _ageFromBag(String? dob) {
+    if (dob == null) return null;
+    final born = DateTime.tryParse(dob);
+    if (born == null) return null;
+    final now = DateTime.now();
+    var age = now.year - born.year;
+    if (now.month < born.month ||
+        (now.month == born.month && now.day < born.day)) {
+      age--;
+    }
+    return (age >= 0 && age < 120) ? age : null;
   }
 
   static String _formatZoneSeconds(int s) {

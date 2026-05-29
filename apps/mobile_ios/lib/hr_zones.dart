@@ -63,6 +63,31 @@ List<HrZoneBucket> hrZoneBreakdown(
   });
 }
 
+/// Tanaka (2001) age-predicted maximal heart rate: 208 − 0.7 × age.
+/// More accurate for masters runners than the classic 220 − age, which
+/// systematically overestimates HR-max past ~40 and pushed older
+/// runners into falsely-low zones (persona-hunt Older #8). Kept in
+/// lockstep with `apps/web/src/lib/hr_zones.ts` (`tanakaMaxHr`).
+int tanakaMaxHr(int ageYears) => (208 - 0.7 * ageYears).round();
+
+/// Zone upper bounds (Z1..Z5) at 60/70/80/90/100 % of a max HR.
+List<int> zoneCutoffsFromMaxHr(int maxHr) =>
+    [0.6, 0.7, 0.8, 0.9, 1.0].map((p) => (maxHr * p).round()).toList();
+
+/// Default zone cutoffs when the runner hasn't set explicit `hr_zones`.
+/// Precedence: an explicit `max_hr_bpm` override → Tanaka from age →
+/// the legacy 190-bpm fallback (`zoneCutoffsFromMaxHr(190)` ==
+/// `[114, 133, 152, 171, 190]`). Mirrors the TS `defaultZoneCutoffs`.
+List<int> defaultZoneCutoffs({int? maxHrBpm, int? ageYears}) {
+  if (maxHrBpm != null && maxHrBpm >= 80 && maxHrBpm <= 240) {
+    return zoneCutoffsFromMaxHr(maxHrBpm);
+  }
+  if (ageYears != null && ageYears >= 5 && ageYears <= 120) {
+    return zoneCutoffsFromMaxHr(tanakaMaxHr(ageYears));
+  }
+  return zoneCutoffsFromMaxHr(190);
+}
+
 double _capHalf(double gap) {
   // 30 s cap on either half-gap so a multi-minute pause can't inflate one
   // sample's slice into the entire run.

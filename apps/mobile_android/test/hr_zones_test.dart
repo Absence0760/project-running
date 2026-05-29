@@ -104,4 +104,42 @@ void main() {
       expect(stats.avg, 110); // (80+100+150)/3 = 110
     });
   });
+
+  group('default cutoff derivation', () {
+    test('tanakaMaxHr applies 208 − 0.7×age, rounded', () {
+      expect(tanakaMaxHr(20), 194);
+      expect(tanakaMaxHr(36), 183); // 182.8 → 183
+      expect(tanakaMaxHr(60), 166);
+    });
+
+    test('zoneCutoffsFromMaxHr is 60/70/80/90/100 % rounded', () {
+      expect(zoneCutoffsFromMaxHr(190), [114, 133, 152, 171, 190]);
+      expect(zoneCutoffsFromMaxHr(200), [120, 140, 160, 180, 200]);
+    });
+
+    test('defaultZoneCutoffs prefers an explicit max-HR override', () {
+      expect(defaultZoneCutoffs(maxHrBpm: 200, ageYears: 60),
+          [120, 140, 160, 180, 200]);
+    });
+
+    test('defaultZoneCutoffs derives from age (Tanaka) when no override', () {
+      expect(defaultZoneCutoffs(ageYears: 60), zoneCutoffsFromMaxHr(166));
+      // A masters runner's top zone is below the legacy 190 default.
+      expect(defaultZoneCutoffs(ageYears: 60)[4] < 190, isTrue);
+    });
+
+    test('defaultZoneCutoffs falls back to the legacy 190 ladder', () {
+      expect(defaultZoneCutoffs(), [114, 133, 152, 171, 190]);
+      expect(defaultZoneCutoffs(maxHrBpm: null, ageYears: null),
+          [114, 133, 152, 171, 190]);
+    });
+
+    test('defaultZoneCutoffs ignores out-of-range inputs', () {
+      // implausible max HR falls through to age
+      expect(defaultZoneCutoffs(maxHrBpm: 40, ageYears: 30),
+          zoneCutoffsFromMaxHr(tanakaMaxHr(30)));
+      // implausible age falls through to the legacy default
+      expect(defaultZoneCutoffs(ageYears: 200), [114, 133, 152, 171, 190]);
+    });
+  });
 }

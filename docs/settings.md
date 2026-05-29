@@ -33,7 +33,7 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `default_activity_type` | `'run' \| 'walk' \| 'hike' \| 'cycle'` | UD | `run` | Pre-selected activity on the watch/phone start screen. |
 | `hr_zones` | `{ z1: int, z2: int, z3: int, z4: int, z5: int }` | U | — | HR zone upper bounds in bpm. Used by training plan pace derivation + post-run zone split. |
 | `resting_hr_bpm` | `int` | U | — | Resting heart rate. Feeds VDOT estimate if a recent race isn't available. |
-| `max_hr_bpm` | `int` | U | — | Max heart rate override. If absent, we fall back to `220 - age`. |
+| `max_hr_bpm` | `int` | U | — | Max heart rate override. If absent, we fall back to Tanaka `208 − 0.7 × age` (from `date_of_birth`), then a 190-bpm default. See `apps/web/src/lib/hr_zones.ts` / `apps/mobile_android/lib/hr_zones.dart`. |
 | `date_of_birth` | `YYYY-MM-DD` | U | — | Used for age-based HR max + age-grade calculation. Also gates name-search discoverability: a declared minor (under 18) is hard-excluded from `search_user_profiles` regardless of `discoverable_in_search` (migration `20261017_001`). |
 | `privacy_default` | `'public' \| 'followers' \| 'private'` | U | `followers` | Default visibility of new runs. Per-run override still wins. |
 | `strava_auto_share` | `bool` | U | `false` | Auto-push every new run to Strava (requires connected integration). |
