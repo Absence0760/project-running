@@ -5,10 +5,12 @@ import 'package:flutter/material.dart';
 
 import '../preferences.dart';
 import '../social_service.dart';
+import '../training_service.dart';
 import '../widgets/error_state.dart';
 import '../widgets/report_sheet.dart';
 import '../widgets/run_track_preview.dart';
 import '../widgets/top_banner.dart';
+import 'club_detail_screen.dart';
 import 'event_detail_screen.dart';
 import 'public_run_screen.dart';
 
@@ -741,7 +743,8 @@ class _ProfileScreenState extends State<ProfileScreen>
   Future<void> _onNotifTap(NotificationView item) async {
     await _markNotifRead(item);
     if (!mounted) return;
-    if (item.row.kind == 'event_rsvp' &&
+    final kind = item.row.kind;
+    if (kind == 'event_rsvp' &&
         item.row.eventId != null &&
         item.eventClubSlug != null) {
       await Navigator.of(context).push(
@@ -751,6 +754,23 @@ class _ProfileScreenState extends State<ProfileScreen>
             clubSlug: item.eventClubSlug!,
             eventId: item.row.eventId!,
           ),
+        ),
+      );
+    } else if (kind == 'club_post' && item.clubSlug != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ClubDetailScreen(
+            social: SocialService(),
+            training: TrainingService(),
+            slug: item.clubSlug!,
+          ),
+        ),
+      );
+    } else if (kind == 'run_completed' && item.row.runId != null) {
+      await Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              PublicRunScreen(api: widget.api, runId: item.row.runId!),
         ),
       );
     }
@@ -804,6 +824,14 @@ class _ProfileScreenState extends State<ProfileScreen>
         return '$name updated your training plan';
       case 'message':
         return '$name sent you a message';
+      case 'club_post':
+        return item.clubName != null
+            ? '$name posted in ${item.clubName}'
+            : '$name posted in a club you\'re in';
+      case 'run_completed':
+        return item.runDistanceM != null
+            ? '$name completed a ${formatDistanceForPref(item.runDistanceM!)} run'
+            : '$name completed a run';
       default:
         return '$name interacted with your activity';
     }

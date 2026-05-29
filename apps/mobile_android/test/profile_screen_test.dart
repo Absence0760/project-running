@@ -91,6 +91,44 @@ void main() {
     });
   });
 
+  group('_verbFor — club_post + run_completed wiring (persona #38)', () {
+    // Migration 20261101_001 added the club_post + run_completed fan-out
+    // kinds. The mobile inbox verb switch + tap navigation must list them
+    // explicitly and mirror the web NotificationsList phrasing so the two
+    // surfaces stay in lockstep.
+    final source =
+        File('lib/screens/profile_screen.dart').readAsStringSync();
+
+    test('handles the club_post + run_completed notification kinds', () {
+      expect(source.contains("case 'club_post':"), isTrue,
+          reason: 'club_post fan-out (migration 20261101_001) must render.');
+      expect(source.contains("case 'run_completed':"), isTrue,
+          reason:
+              'run_completed fan-out (migration 20261101_001) must render.');
+    });
+
+    test('verb strings mirror the web NotificationsList phrasing', () {
+      expect(source.contains(r'posted in ${item.clubName}'), isTrue,
+          reason: 'club_post verb must match the web "posted in <club>" line.');
+      expect(source.contains('completed a '), isTrue,
+          reason:
+              'run_completed verb must match the web "completed a <dist> run" '
+              'line.');
+    });
+
+    test('club_post tap opens the club detail; run_completed opens the run',
+        () {
+      expect(source.contains('ClubDetailScreen('), isTrue,
+          reason:
+              'Tapping a club_post notification must open ClubDetailScreen '
+              'for the linked club slug.');
+      expect(source.contains("kind == 'run_completed'"), isTrue,
+          reason:
+              'run_completed tap must route to PublicRunScreen via the '
+              'row runId.');
+    });
+  });
+
   group('runs tab — visual upgrade', () {
     // Source-level guards on the Runs tab polish (see the History
     // tab's _RunTile pattern). Driving the full widget tree requires

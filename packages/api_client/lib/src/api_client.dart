@@ -3176,6 +3176,11 @@ class ApiClient {
         .map<String>((r) => r.eventId!)
         .toSet()
         .toList();
+    final clubLinkIds = rows
+        .where((r) => r.clubId != null)
+        .map<String>((r) => r.clubId!)
+        .toSet()
+        .toList();
 
     final actorRowsF = actorIds.isEmpty
         ? Future.value(<dynamic>[])
@@ -3238,20 +3243,25 @@ class ApiClient {
         clubId: (row[EventRow.colClubId] as String?) ?? '',
       );
     }
-    final clubIds = eventById.values
-        .map((e) => e.clubId)
-        .where((id) => id.isNotEmpty)
-        .toSet()
-        .toList();
-    final clubSlugById = <String, String>{};
+    // Resolve clubs both for event-linked notifications (need the slug
+    // to build the /clubs/<slug>/events/<id> link) and for club_post
+    // notifications (linked directly via notifications.club_id — need
+    // the slug to navigate and the name for the verb line).
+    final clubIds = <String>{
+      ...eventById.values.map((e) => e.clubId).where((id) => id.isNotEmpty),
+      ...clubLinkIds,
+    }.toList();
+    final clubById = <String, ({String slug, String name})>{};
     if (clubIds.isNotEmpty) {
       final clubRows = await _client
           .from(ClubRow.table)
-          .select('${ClubRow.colId}, ${ClubRow.colSlug}')
+          .select('${ClubRow.colId}, ${ClubRow.colSlug}, ${ClubRow.colName}')
           .inFilter(ClubRow.colId, clubIds);
       for (final row in clubRows) {
-        clubSlugById[row[ClubRow.colId] as String] =
-            (row[ClubRow.colSlug] as String?) ?? '';
+        clubById[row[ClubRow.colId] as String] = (
+          slug: (row[ClubRow.colSlug] as String?) ?? '',
+          name: (row[ClubRow.colName] as String?) ?? '',
+        );
       }
     }
 
@@ -3270,11 +3280,12 @@ class ApiClient {
 
     return rows.map((row) {
       final event = row.eventId == null ? null : eventById[row.eventId!];
-      final clubSlug = event != null && event.clubId.isNotEmpty
-          ? (clubSlugById[event.clubId]?.isNotEmpty ?? false
-              ? clubSlugById[event.clubId]
-              : null)
+      final eventClub = event != null && event.clubId.isNotEmpty
+          ? clubById[event.clubId]
           : null;
+      final eventClubSlug =
+          (eventClub?.slug.isNotEmpty ?? false) ? eventClub!.slug : null;
+      final linkedClub = row.clubId == null ? null : clubById[row.clubId!];
       return NotificationView(
         row: row,
         actor: row.actorId == null ? null : actorsById[row.actorId!],
@@ -3283,7 +3294,9 @@ class ApiClient {
         commentExcerpt: excerpt(row.commentId),
         eventTitle:
             event != null && event.title.isNotEmpty ? event.title : null,
-        eventClubSlug: clubSlug,
+        eventClubSlug: eventClubSlug,
+        clubName: (linkedClub?.name.isNotEmpty ?? false) ? linkedClub!.name : null,
+        clubSlug: (linkedClub?.slug.isNotEmpty ?? false) ? linkedClub!.slug : null,
       );
     }).toList();
   }

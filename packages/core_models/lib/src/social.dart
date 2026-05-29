@@ -94,6 +94,8 @@ class NotificationView {
   final String? commentExcerpt;
   final String? eventTitle;
   final String? eventClubSlug;
+  final String? clubName;
+  final String? clubSlug;
 
   const NotificationView({
     required this.row,
@@ -102,6 +104,8 @@ class NotificationView {
     this.commentExcerpt,
     this.eventTitle,
     this.eventClubSlug,
+    this.clubName,
+    this.clubSlug,
   });
 }
 
