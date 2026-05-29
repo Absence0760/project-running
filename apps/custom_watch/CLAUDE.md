@@ -15,6 +15,19 @@ prototype firmware code on owner-personal evenings-and-weekends, nothing
 more). Everything in this directory is **research scaffolding** — not a
 green-lit app SKU, not a roadmap line item, not customer-facing.
 
+**Long-term goal: [§ 92](../../docs/decisions.md#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) — "build the best watch ever".**
+The tier-1 scope above is a deliberate first-prototype compromise per the
+[§ 92 Resolution](../../docs/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise):
+keep tier-1 costs down + get a working version first, with the
+understanding that tier-2 migrates to Apollo510B silicon per
+[§ 90](../../docs/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)
+and the full Phase 0–5 optimal road follows from there. **Tier-2+ decisions
+are governed by § 92's "optimal regardless of effort/scope" rule**, which
+supersedes § 86's "even at small margins" framing. If you're about to make
+a tier-2+ decision while reading this file, use § 92 as the lens; § 86's
+exception clause for "tier-current-only choices that get rewritten anyway"
+no longer applies.
+
 **Build here:**
 
 - Tier-1 bench-prototype Rust firmware: Embassy tasks, hand-rolled drivers
