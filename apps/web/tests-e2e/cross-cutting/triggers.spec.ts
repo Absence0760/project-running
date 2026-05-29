@@ -273,4 +273,142 @@ test.describe('database triggers via UI', () => {
 			await admin.from('run_comments').delete().eq('id', parentId);
 		}
 	});
+
+	test('notify_club_post fans out to active members but not the author (persona #38)', async () => {
+		// Migration 20261101_001: a new club_posts row notifies every
+		// active member except the author, carrying club_id. Plant a
+		// club (owner = USER_A, auto-enrolled active), add USER_B as an
+		// active member, then post as USER_A.
+		const admin = getAdminClient();
+		const slug = `e2e-clubpost-${Date.now()}`;
+		const { data: club } = await admin
+			.from('clubs')
+			.insert({
+				owner_id: USER_A.id,
+				name: `e2e clubpost ${Date.now()}`,
+				slug,
+				is_public: true,
+				join_policy: 'open'
+			})
+			.select('id')
+			.single();
+		const clubId = (club as { id: string }).id;
+		try {
+			await admin
+				.from('club_members')
+				.insert({ club_id: clubId, user_id: USER_B.id, role: 'member', status: 'active' });
+
+			await admin
+				.from('club_posts')
+				.insert({ club_id: clubId, author_id: USER_A.id, body: 'e2e course change' });
+
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('notifications')
+							.select('club_id, actor_id, user_id')
+							.eq('user_id', USER_B.id)
+							.eq('kind', 'club_post')
+							.eq('club_id', clubId);
+						return data?.length ?? 0;
+					},
+					{ timeout: 5_000 }
+				)
+				.toBeGreaterThanOrEqual(1);
+
+			const { data: memberRows } = await admin
+				.from('notifications')
+				.select('club_id, actor_id')
+				.eq('user_id', USER_B.id)
+				.eq('kind', 'club_post')
+				.eq('club_id', clubId);
+			expect(memberRows?.[0]?.actor_id).toBe(USER_A.id);
+
+			// The author is never notified of their own post.
+			const { data: authorRows } = await admin
+				.from('notifications')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('kind', 'club_post')
+				.eq('club_id', clubId);
+			expect(authorRows?.length ?? 0).toBe(0);
+		} finally {
+			// Deleting the club cascades members, posts, and the
+			// club_id-linked notifications.
+			await admin.from('clubs').delete().eq('id', clubId);
+		}
+	});
+
+	test('notify_run_completed fans out a fresh public run to followers (persona #38)', async () => {
+		// Migration 20261101_001: a public run started within the last
+		// 24h notifies the runner's followers. USER_B follows USER_A,
+		// then USER_A records a fresh public run.
+		const admin = getAdminClient();
+		await admin
+			.from('user_follows')
+			.delete()
+			.eq('follower_id', USER_B.id)
+			.eq('followee_id', USER_A.id);
+		await admin
+			.from('user_follows')
+			.insert({ follower_id: USER_B.id, followee_id: USER_A.id });
+
+		const { data: run } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 30 * 60_000).toISOString(),
+				duration_s: 1800,
+				distance_m: 5000,
+				source: 'app',
+				is_public: true,
+				metadata: { activity_type: 'run' }
+			})
+			.select('id')
+			.single();
+		const runId = (run as { id: string }).id;
+		try {
+			await expect
+				.poll(
+					async () => {
+						const { data } = await admin
+							.from('notifications')
+							.select('run_id, actor_id, user_id')
+							.eq('user_id', USER_B.id)
+							.eq('kind', 'run_completed')
+							.eq('run_id', runId);
+						return data?.length ?? 0;
+					},
+					{ timeout: 5_000 }
+				)
+				.toBeGreaterThanOrEqual(1);
+
+			const { data: rows } = await admin
+				.from('notifications')
+				.select('run_id, actor_id')
+				.eq('user_id', USER_B.id)
+				.eq('kind', 'run_completed')
+				.eq('run_id', runId);
+			expect(rows?.[0]?.actor_id).toBe(USER_A.id);
+
+			// The runner is never notified of their own run.
+			const { data: selfRows } = await admin
+				.from('notifications')
+				.select('id')
+				.eq('user_id', USER_A.id)
+				.eq('kind', 'run_completed')
+				.eq('run_id', runId);
+			expect(selfRows?.length ?? 0).toBe(0);
+		} finally {
+			// run_id is on delete cascade, so deleting the run clears
+			// the notification; drop the test follow too.
+			await admin.from('runs').delete().eq('id', runId);
+			await admin
+				.from('user_follows')
+				.delete()
+				.eq('follower_id', USER_B.id)
+				.eq('followee_id', USER_A.id);
+		}
+	});
 });

@@ -4520,6 +4520,7 @@ export interface NotificationRow {
 	comment_id: string | null;
 	event_id: string | null;
 	plan_id: string | null;
+	club_id: string | null;
 	read_at: string | null;
 	created_at: string;
 }
@@ -4532,6 +4533,8 @@ export interface NotificationView {
 	comment_excerpt: string | null;
 	event_title: string | null;
 	event_club_slug: string | null;
+	club_name: string | null;
+	club_slug: string | null;
 }
 
 /**
@@ -4554,8 +4557,9 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 	const runIds = Array.from(new Set(rows.map((r) => r.run_id).filter((x): x is string => !!x)));
 	const commentIds = Array.from(new Set(rows.map((r) => r.comment_id).filter((x): x is string => !!x)));
 	const eventIds = Array.from(new Set(rows.map((r) => (r as { event_id?: string | null }).event_id).filter((x): x is string => !!x)));
+	const clubIds = Array.from(new Set(rows.map((r) => (r as { club_id?: string | null }).club_id).filter((x): x is string => !!x)));
 
-	const [profiles, runs, comments, events] = await Promise.all([
+	const [profiles, runs, comments, events, clubs] = await Promise.all([
 		actorIds.length > 0
 			? supabase.from('user_profiles').select('id, display_name, avatar_url').in('id', actorIds)
 			: Promise.resolve({ data: [] as PublicProfile[] }),
@@ -4568,6 +4572,9 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 		eventIds.length > 0
 			? supabase.from('events').select('id, title, club_id, clubs(slug)').in('id', eventIds)
 			: Promise.resolve({ data: [] as { id: string; title: string; clubs: { slug: string } | { slug: string }[] | null }[] }),
+		clubIds.length > 0
+			? supabase.from('clubs').select('id, name, slug').in('id', clubIds)
+			: Promise.resolve({ data: [] as { id: string; name: string; slug: string }[] }),
 	]);
 
 	const profileBy = new Map<string, PublicProfile>();
@@ -4585,12 +4592,17 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 		const club = Array.isArray(e.clubs) ? e.clubs[0] ?? null : e.clubs;
 		eventBy.set(e.id, { title: e.title, club_slug: club?.slug ?? null });
 	}
+	const clubBy = new Map<string, { name: string; slug: string }>();
+	for (const c of (clubs.data ?? []) as { id: string; name: string; slug: string }[]) {
+		clubBy.set(c.id, { name: c.name, slug: c.slug });
+	}
 
 	return rows.map((row) => {
 		const r = row as NotificationRow;
 		const run = r.run_id ? runBy.get(r.run_id) ?? null : null;
 		const body = r.comment_id ? commentBy.get(r.comment_id) ?? null : null;
 		const ev = r.event_id ? eventBy.get(r.event_id) ?? null : null;
+		const club = r.club_id ? clubBy.get(r.club_id) ?? null : null;
 		return {
 			row: r,
 			actor: r.actor_id ? profileBy.get(r.actor_id) ?? null : null,
@@ -4599,6 +4611,8 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 			comment_excerpt: body ? (body.length > 120 ? body.slice(0, 117) + '…' : body) : null,
 			event_title: ev?.title ?? null,
 			event_club_slug: ev?.club_slug ?? null,
+			club_name: club?.name ?? null,
+			club_slug: club?.slug ?? null,
 		};
 	});
 }

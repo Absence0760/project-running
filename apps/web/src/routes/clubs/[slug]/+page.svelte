@@ -1029,7 +1029,7 @@
 					<p class="empty-text">
 						{#if isAdmin}
 							Set up a weekly long run, a tempo session, or a race-day meetup.
-							Members get a tab badge the moment you publish.
+							It shows up here for every member to RSVP the moment you publish.
 						{:else}
 							Admins post group runs, tempo sessions, and races here. Check
 							back soon — or browse past events below.

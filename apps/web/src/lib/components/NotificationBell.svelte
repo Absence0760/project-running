@@ -127,6 +127,10 @@
 				return r.plan_id ? `/plans/${r.plan_id}` : null;
 			case 'message':
 				return r.actor_id ? `/messages/${r.actor_id}` : null;
+			case 'club_post':
+				return item.club_slug ? `/clubs/${item.club_slug}` : null;
+			case 'run_completed':
+				return r.run_id ? `/share/run/${r.run_id}` : null;
 		}
 	}
 
@@ -156,6 +160,14 @@
 				return `${name} updated your training plan`;
 			case 'message':
 				return `${name} sent you a message`;
+			case 'club_post':
+				return item.club_name
+					? `${name} posted in ${item.club_name}`
+					: `${name} posted in a club you're in`;
+			case 'run_completed':
+				return item.run_distance_m
+					? `${name} completed a ${fmtKm(item.run_distance_m)} run`
+					: `${name} completed a run`;
 		}
 	}
 

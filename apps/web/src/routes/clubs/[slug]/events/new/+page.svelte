@@ -89,7 +89,7 @@
 			<span class="kicker">{club.name}</span>
 			<h1>New event</h1>
 			<p class="tagline">
-				Every active member gets a tab badge on this club the moment you publish.
+				Every active member can RSVP to this event the moment you publish.
 			</p>
 		</header>
 
