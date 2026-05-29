@@ -297,7 +297,11 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 		const phase = phaseFor(i, totalWeeks);
 		// Mileage curve: ramp from 0.6× peak at week 0 up to 1.0× at peak-end,
 		// then drop to 0.5× in taper and 0.35× in race week.
-		const peakWeeklyKm = peakVolumeKm(goalDistanceM, input.daysPerWeek);
+		const peakWeeklyKm = peakVolumeKm(
+			goalDistanceM,
+			input.daysPerWeek,
+			!!(input.goalTimeSec || input.recent5kSec)
+		);
 		const fraction = mileageFraction(i, totalWeeks, phase);
 		const weeklyKm = Math.round(peakWeeklyKm * fraction);
 		const workouts = generateWeek({
@@ -444,13 +448,22 @@ function generateWalkRunPlan(
 	return { weeks, paces, vdot, endDate: formatISO(addDays(startDate, totalWeeks * 7 - 1)), goalDistanceM };
 }
 
-function peakVolumeKm(goalDistanceM: number, daysPerWeek: number): number {
+function peakVolumeKm(
+	goalDistanceM: number,
+	daysPerWeek: number,
+	hasAnchor: boolean = true
+): number {
 	// Rough volumes: ~4× goal for 5k/10k runners, ~2.5× for half, ~1.8× for full,
 	// scaled gently by training days. Tuneable; see tests for expected outputs.
 	const baseMultiplier =
 		goalDistanceM <= 10_000 ? 5 : goalDistanceM <= 21_100 ? 2.5 : 1.8;
 	const dayFactor = 0.7 + (daysPerWeek - 3) * 0.1;
-	return Math.round((goalDistanceM / 1000) * baseMultiplier * dayFactor);
+	// With no fitness anchor (no goal time, no recent 5k) we can't assume the
+	// runner can absorb the full volume — a no-info 5k plan otherwise peaked
+	// at ~25 km/week with a punishing week-1 (new persona #23). Scale the peak
+	// down so the ramp starts somewhere a cautious runner can actually hit.
+	const anchorFactor = hasAnchor ? 1 : 0.6;
+	return Math.round((goalDistanceM / 1000) * baseMultiplier * dayFactor * anchorFactor);
 }
 
 function mileageFraction(i: number, total: number, phase: PlanPhase): number {
@@ -565,8 +578,13 @@ function limitToDays(ws: GeneratedWorkout[], days: number): GeneratedWorkout[] {
 	// Shouldn't happen with current allocation, but guard against it: drop
 	// extra 'easy' workouts from the end of the week.
 	let remove = activeCount - days;
+	// Drop the auto-generated filler days (easy AND recovery — a short easy
+	// day is emitted as 'recovery', which the old check missed, so a 4-day
+	// plan silently ran 6 days and stacked floored 3 km recoveries into an
+	// impossible week-1 volume — new persona #23). Long runs + quality
+	// sessions are always preserved.
 	return ws.map((w) => {
-		if (remove > 0 && w.kind === 'easy') {
+		if (remove > 0 && (w.kind === 'easy' || w.kind === 'recovery')) {
 			remove--;
 			return { ...w, kind: 'rest' as WorkoutKind, target_distance_m: null, target_pace_sec_per_km: null };
 		}

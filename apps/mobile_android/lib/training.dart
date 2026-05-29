@@ -353,7 +353,8 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
   final weeks = <GeneratedWeek>[];
   for (var i = 0; i < totalWeeks; i++) {
     final phase = phaseFor(i, totalWeeks);
-    final peakKm = _peakVolumeKm(goalDistance, input.daysPerWeek);
+    final peakKm = _peakVolumeKm(goalDistance, input.daysPerWeek,
+        input.goalTimeSec != null || input.recent5kSec != null);
     final frac = _mileageFraction(i, totalWeeks, phase);
     final weeklyKm = (peakKm * frac).round();
     final weekStart = input.startDate.add(Duration(days: i * 7));
@@ -485,14 +486,19 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
   );
 }
 
-double _peakVolumeKm(double goalDistanceM, int daysPerWeek) {
+double _peakVolumeKm(double goalDistanceM, int daysPerWeek,
+    [bool hasAnchor = true]) {
   final baseMul = goalDistanceM <= 10000
       ? 5.0
       : goalDistanceM <= 21100
           ? 2.5
           : 1.8;
   final dayFactor = 0.7 + (daysPerWeek - 3) * 0.1;
-  return ((goalDistanceM / 1000) * baseMul * dayFactor).roundToDouble();
+  // No fitness anchor (no goal time, no recent 5k) -> scale the peak down so
+  // a no-info 5k plan doesn't open with a punishing week 1 (new persona #23).
+  final anchorFactor = hasAnchor ? 1.0 : 0.6;
+  return ((goalDistanceM / 1000) * baseMul * dayFactor * anchorFactor)
+      .roundToDouble();
 }
 
 double _mileageFraction(int i, int total, PlanPhase phase) {
@@ -689,9 +695,14 @@ List<GeneratedWorkout> _limitToDays(List<GeneratedWorkout> ws, int days) {
   final activeCount = ws.where((w) => w.kind != WorkoutKind.rest).length;
   if (activeCount <= days) return ws;
   var remove = activeCount - days;
+  // Drop auto-generated filler days (easy AND recovery — a short easy day is
+  // emitted as recovery, which the old check missed, so a 4-day plan ran 6
+  // days and stacked floored 3 km recoveries into an impossible week 1 —
+  // new persona #23). Long runs + quality sessions are preserved.
   return [
     for (final w in ws)
-      if (remove > 0 && w.kind == WorkoutKind.easy)
+      if (remove > 0 &&
+          (w.kind == WorkoutKind.easy || w.kind == WorkoutKind.recovery))
         (() {
           remove--;
           return GeneratedWorkout(

@@ -40,6 +40,27 @@ test('WORKOUT_KIND_LABEL: walk_run renders as "Walk-run"', () => {
 	assert.equal(WORKOUT_KIND_LABEL.walk_run, 'Walk-run');
 });
 
+test('generatePlan: a no-anchor 5k plan ramps gentler than an anchored one (#23)', () => {
+	const base = {
+		goalEvent: 'distance_5k' as const,
+		startDate: '2026-06-01',
+		daysPerWeek: 4
+	};
+	const anchored = generatePlan({ ...base, recent5kSec: 22 * 60 });
+	const noAnchor = generatePlan(base);
+	const weekVol = (p: typeof anchored, i: number) =>
+		p.weeks[i].workouts.reduce((s, w) => s + (w.target_distance_m ?? 0), 0);
+	const activeDays = (p: typeof anchored, i: number) =>
+		p.weeks[i].workouts.filter((w) => w.kind !== 'rest').length;
+	// Week 1 must honour daysPerWeek — the old limitToDays missed 'recovery'
+	// fillers, so a 4-day plan ran 6 days and stacked floored recoveries.
+	assert.equal(activeDays(noAnchor, 0), 4);
+	// No-anchor peak scaling makes its week-1 lower than the anchored plan's,
+	// and beginner-sane for a no-info 5k (< 15 km vs the old ~20 km).
+	assert.ok(weekVol(noAnchor, 0) < weekVol(anchored, 0));
+	assert.ok(weekVol(noAnchor, 0) < 15_000, `week1=${weekVol(noAnchor, 0)}`);
+});
+
 test('generatePlan(beginnerWalkRun): every session is a walk_run workout', () => {
 	const plan = generatePlan({
 		goalEvent: 'distance_5k',

@@ -16,6 +16,30 @@ void main() {
       expect(workoutKindLabel(WorkoutKind.walkRun), 'Walk-run');
     });
 
+    test('no-anchor 5k plan ramps gentler than an anchored one (#23)', () {
+      // Mirrors the no-anchor volume test in training.test.ts.
+      double weekVol(GeneratedPlan p, int i) => p.weeks[i].workouts
+          .fold(0.0, (s, w) => s + (w.targetDistanceM ?? 0));
+      int activeDays(GeneratedPlan p, int i) => p.weeks[i].workouts
+          .where((w) => w.kind != WorkoutKind.rest)
+          .length;
+      final base = GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 4,
+      );
+      final anchored = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 4,
+        recent5kSec: 22 * 60,
+      ));
+      final noAnchor = generatePlan(base);
+      expect(activeDays(noAnchor, 0), 4);
+      expect(weekVol(noAnchor, 0) < weekVol(anchored, 0), isTrue);
+      expect(weekVol(noAnchor, 0) < 15000, isTrue);
+    });
+
     test('generatePlan(beginnerWalkRun) yields a 9-week walk_run plan', () {
       // Mirrors generatePlan(beginnerWalkRun) in training.test.ts.
       final plan = generatePlan(GeneratePlanInput(
