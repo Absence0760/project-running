@@ -195,6 +195,7 @@ export async function insertEvent(opts: {
 	recurrence_byday?: string[] | null;
 	recurrence_until?: string | null;
 	capacity?: number | null;
+	distance_m?: number | null;
 }): Promise<string> {
 	const { data, error } = await getAdminClient()
 		.from('events')
@@ -210,7 +211,8 @@ export async function insertEvent(opts: {
 			recurrence_freq: opts.recurrence_freq ?? null,
 			recurrence_byday: opts.recurrence_byday ?? null,
 			recurrence_until: opts.recurrence_until ?? null,
-			capacity: opts.capacity ?? null
+			capacity: opts.capacity ?? null,
+			distance_m: opts.distance_m ?? null
 		})
 		.select('id')
 		.single();

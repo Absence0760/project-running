@@ -23,6 +23,7 @@
 		startRace,
 		endRace,
 		approveEventResult,
+		bulkImportEventResults,
 		fetchEventExceptions,
 		cancelEventInstance,
 		reinstateEventInstance,
@@ -44,6 +45,8 @@
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/finisher_certificate';
 	import { rasterizeSvgToPng, downloadBlob } from '$lib/svg_raster';
+	import { parseChipTimingCsv, type ParsedResultRow } from '$lib/event_results_csv';
+	import { showToast } from '$lib/stores/toast.svelte';
 	import type {
 		EventWithMeta,
 		ClubWithMeta,
@@ -418,6 +421,64 @@
 	/// Client-rendered SVG → PNG (no server PDF service). Available on any
 	/// finished + approved result — finisher data is already public on the
 	/// leaderboard, and a certificate is celebratory, not sensitive.
+	// --- Organiser bulk results import (persona #43) ---
+	let importOpen = $state(false);
+	let importBusy = $state(false);
+	let importErrors = $state<string[]>([]);
+	let importPreview = $state<ParsedResultRow[]>([]);
+	let importFileName = $state<string | null>(null);
+	let importInput: HTMLInputElement | null = $state(null);
+
+	function openImport() {
+		importOpen = true;
+		importErrors = [];
+		importPreview = [];
+		importFileName = null;
+	}
+
+	function closeImport() {
+		importOpen = false;
+		importErrors = [];
+		importPreview = [];
+		importFileName = null;
+		if (importInput) importInput.value = '';
+	}
+
+	async function onImportFile(e: Event) {
+		const file = (e.currentTarget as HTMLInputElement).files?.[0];
+		if (!file) return;
+		importFileName = file.name;
+		try {
+			const text = await file.text();
+			const { rows, errors } = parseChipTimingCsv(text, event?.distance_m ?? 0);
+			importPreview = rows;
+			importErrors = errors;
+		} catch {
+			importPreview = [];
+			importErrors = ['Could not read the file.'];
+		}
+	}
+
+	async function confirmImport() {
+		if (!event || !activeInstance || importBusy || importPreview.length === 0) return;
+		importBusy = true;
+		try {
+			await bulkImportEventResults({
+				eventId: event.id,
+				instanceStart: activeInstance,
+				rows: importPreview
+			});
+			showToast(`Imported ${importPreview.length} result${importPreview.length === 1 ? '' : 's'}.`, 'success');
+			closeImport();
+			await reloadInstance();
+		} catch (err) {
+			console.error('bulk result import failed', err);
+			showToast('Import failed. Check your permissions and try again.', 'error');
+		} finally {
+			importBusy = false;
+		}
+	}
+
 	let certBusy = $state<string | null>(null);
 	async function downloadCertificate(r: EventResultWithUser) {
 		if (!event || certBusy) return;
@@ -1199,15 +1260,20 @@
 		<section class="card">
 			<div class="results-head">
 				<h3>Results ({results.length})</h3>
-				{#if myUserId}
-					{#if hasMyResult}
-						<button type="button" class="btn-link" onclick={removeMyResult}>Remove mine</button>
-					{:else}
-						<button type="button" class="btn btn-primary-sm" onclick={openResultPicker} disabled={submitting}>
-							{submitting ? 'Submitting…' : 'Submit my time'}
-						</button>
+				<div class="results-actions">
+					{#if isEventOrganiser}
+						<button type="button" class="btn-link" onclick={openImport}>Import results CSV</button>
 					{/if}
-				{/if}
+					{#if myUserId}
+						{#if hasMyResult}
+							<button type="button" class="btn-link" onclick={removeMyResult}>Remove mine</button>
+						{:else}
+							<button type="button" class="btn btn-primary-sm" onclick={openResultPicker} disabled={submitting}>
+								{submitting ? 'Submitting…' : 'Submit my time'}
+							</button>
+						{/if}
+					{/if}
+				</div>
 			</div>
 			{#if results.length === 0}
 				<p class="muted">No results yet. Submit your time after the event and others will see it here.</p>
@@ -1280,6 +1346,52 @@
 						<button type="button" class="btn-link" onclick={() => recordNonFinish('dnf')} disabled={submitting}>Record DNF</button>
 						<button type="button" class="btn-link" onclick={() => recordNonFinish('dns')} disabled={submitting}>Record DNS</button>
 						<button type="button" class="btn-link" onclick={() => (showResultPicker = false)}>Cancel</button>
+					</div>
+				</div>
+			{/if}
+
+			{#if importOpen}
+				<div class="picker import-panel">
+					<h4>Import chip-timing results</h4>
+					<p class="muted import-help">
+						Upload a CSV with <code>bib</code>, <code>name</code> and <code>time</code> columns
+						(an optional <code>status</code> column accepts <code>dnf</code> / <code>dns</code>).
+						Finishers without an account are added by bib; re-importing a corrected file
+						updates them in place.
+					</p>
+					<label class="btn-link import-file">
+						{importFileName ? `File: ${importFileName}` : 'Choose CSV file'}
+						<input
+							bind:this={importInput}
+							type="file"
+							accept=".csv,text/csv"
+							onchange={onImportFile}
+							hidden
+						/>
+					</label>
+					{#if importErrors.length > 0}
+						<ul class="import-errors">
+							{#each importErrors.slice(0, 8) as err}
+								<li>{err}</li>
+							{/each}
+							{#if importErrors.length > 8}
+								<li>…and {importErrors.length - 8} more.</li>
+							{/if}
+						</ul>
+					{/if}
+					{#if importPreview.length > 0}
+						<p class="import-summary">{importPreview.length} result{importPreview.length === 1 ? '' : 's'} ready to import.</p>
+					{/if}
+					<div class="picker-actions">
+						<button
+							type="button"
+							class="btn btn-primary-sm"
+							onclick={confirmImport}
+							disabled={importBusy || importPreview.length === 0}
+						>
+							{importBusy ? 'Importing…' : `Import ${importPreview.length || ''} result${importPreview.length === 1 ? '' : 's'}`}
+						</button>
+						<button type="button" class="btn-link" onclick={closeImport} disabled={importBusy}>Cancel</button>
 					</div>
 				</div>
 			{/if}
@@ -2185,6 +2297,29 @@
 		display: flex;
 		gap: 0.4rem;
 		margin-top: var(--space-md);
+	}
+	.results-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+	}
+	.import-help {
+		font-size: 0.85rem;
+		margin: 0 0 var(--space-sm);
+	}
+	.import-file {
+		display: inline-block;
+	}
+	.import-errors {
+		margin: var(--space-sm) 0 0;
+		padding-left: 1.1rem;
+		color: var(--color-danger);
+		font-size: 0.85rem;
+	}
+	.import-summary {
+		margin: var(--space-sm) 0 0;
+		font-size: 0.9rem;
+		font-weight: 600;
 	}
 	.race-panel {
 		border: 1.5px solid var(--color-primary);
