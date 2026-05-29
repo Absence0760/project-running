@@ -35,6 +35,7 @@ import type { GeneratedPlan, GoalEvent } from './training';
 import { auth } from './stores/auth.svelte';
 import { nextInstanceAfter } from './recurrence';
 import { rateLimitErrorMessage } from './rate_limit_errors';
+import type { ParsedResultRow } from './event_results_csv';
 import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
 import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from './feed_merge';
 import {
@@ -1994,7 +1995,11 @@ export async function fetchEventAttendees(
 // --- Event results (leaderboard) ---
 
 export interface EventResultRow {
-	user_id: string;
+	// Null for bib-only finishers imported from a chip-timing CSV
+	// (persona #43) — those rows carry `bib` + `finisher_name` instead.
+	user_id: string | null;
+	bib: string | null;
+	finisher_name: string | null;
 	run_id: string | null;
 	duration_s: number;
 	distance_m: number;
@@ -2032,7 +2037,7 @@ export async function fetchEventResults(
 	const { data: results } = await supabase
 		.from('event_results_redacted')
 		.select(
-			'user_id, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved'
+			'user_id, bib, finisher_name, run_id, duration_s, distance_m, rank, finisher_status, age_grade_pct, note, created_at, organiser_approved'
 		)
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
@@ -2041,18 +2046,22 @@ export async function fetchEventResults(
 	if (!results) return [];
 	const rows = results as EventResultRow[];
 	if (rows.length === 0) return [];
-	const userIds = rows.map((r) => r.user_id);
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', userIds);
+	const userIds = rows.map((r) => r.user_id).filter((id): id is string => id !== null);
 	const byId = new Map<string, { display_name: string | null; avatar_url: string | null }>();
-	for (const p of profiles ?? [])
-		byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	if (userIds.length > 0) {
+		const { data: profiles } = await supabase
+			.from('user_profiles')
+			.select('id, display_name, avatar_url')
+			.in('id', userIds);
+		for (const p of profiles ?? [])
+			byId.set(p.id, { display_name: p.display_name, avatar_url: p.avatar_url });
+	}
 	return rows.map((r) => ({
 		...r,
-		display_name: byId.get(r.user_id)?.display_name ?? null,
-		avatar_url: byId.get(r.user_id)?.avatar_url ?? null,
+		// Bib-only imported finishers have no profile — fall back to the
+		// name printed on the results sheet.
+		display_name: r.user_id ? (byId.get(r.user_id)?.display_name ?? null) : r.finisher_name,
+		avatar_url: r.user_id ? (byId.get(r.user_id)?.avatar_url ?? null) : null,
 	}));
 }
 
@@ -2111,6 +2120,34 @@ export async function removeEventResult(
 		.eq('event_id', eventId)
 		.eq('user_id', userId)
 		.eq('instance_start', instanceStart);
+	if (error) throw error;
+}
+
+// Organiser bulk-import of chip-timing results (persona #43). Rows are
+// bib-only finishers (no account) keyed on bib; the upsert arbiter is the
+// `(event_id, instance_start, bib)` unique constraint so re-importing a
+// corrected sheet updates in place rather than duplicating. RLS gates the
+// write to the event's organiser via `event_results_insert_organiser`.
+export async function bulkImportEventResults(params: {
+	eventId: string;
+	instanceStart: string;
+	rows: ParsedResultRow[];
+}): Promise<void> {
+	if (params.rows.length === 0) return;
+	const payload = params.rows.map((r) => ({
+		event_id: params.eventId,
+		instance_start: params.instanceStart,
+		user_id: null,
+		bib: r.bib,
+		finisher_name: r.finisherName,
+		duration_s: r.durationS,
+		distance_m: r.distanceM,
+		finisher_status: r.finisherStatus,
+		updated_at: new Date().toISOString(),
+	}));
+	const { error } = await supabase
+		.from('event_results')
+		.upsert(payload, { onConflict: 'event_id,instance_start,bib' });
 	if (error) throw error;
 }
 

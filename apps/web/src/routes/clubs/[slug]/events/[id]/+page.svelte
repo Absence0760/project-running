@@ -421,7 +421,7 @@
 	let certBusy = $state<string | null>(null);
 	async function downloadCertificate(r: EventResultWithUser) {
 		if (!event || certBusy) return;
-		certBusy = r.user_id;
+		certBusy = rowKey(r);
 		try {
 			const svg = buildFinisherCertificateSvg({
 				eventTitle: event.title,
@@ -452,6 +452,13 @@
 	}
 
 	let myUserId = $derived(auth.user?.id ?? null);
+
+	// Stable per-row key for the leaderboard. Account rows have a unique
+	// user_id per instance; bib-only imported rows (persona #43) have a
+	// unique bib. The identity CHECK guarantees one of them is set.
+	function rowKey(r: EventResultWithUser): string {
+		return r.user_id ?? r.bib ?? '';
+	}
 	let hasMyResult = $derived(
 		myUserId !== null && results.some((r) => r.user_id === myUserId)
 	);
@@ -1206,15 +1213,15 @@
 				<p class="muted">No results yet. Submit your time after the event and others will see it here.</p>
 			{:else}
 				<ol class="results">
-					{#each results as r (r.user_id)}
-						<li class="result" class:me={r.user_id === myUserId} class:pending={!r.organiser_approved}>
+					{#each results as r (rowKey(r))}
+						<li class="result" class:me={r.user_id !== null && r.user_id === myUserId} class:pending={!r.organiser_approved}>
 							<span class="rank">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
-							<div class="avatar-sm" style="--seed: {hashHue(r.user_id)}">
+							<div class="avatar-sm" style="--seed: {hashHue(rowKey(r))}">
 								{initial(r.display_name)}
 							</div>
 							<div class="res-info">
 								<strong>{r.display_name ?? 'Runner'}</strong>
-								{#if r.user_id === myUserId}<span class="you">(you)</span>{/if}
+								{#if r.user_id !== null && r.user_id === myUserId}<span class="you">(you)</span>{/if}
 								{#if !r.organiser_approved}<span class="pending-tag">PENDING</span>{/if}
 								{#if r.finisher_status !== 'finished'}
 									<span class="dnf-tag">{r.finisher_status.toUpperCase()}</span>
@@ -1229,16 +1236,16 @@
 									type="button"
 									class="btn-link cert"
 									title="Download finisher certificate"
-									disabled={certBusy === r.user_id}
+									disabled={certBusy === rowKey(r)}
 									onclick={() => downloadCertificate(r)}
 								>
-									{certBusy === r.user_id ? '…' : 'Certificate'}
+									{certBusy === rowKey(r) ? '…' : 'Certificate'}
 								</button>
 							{/if}
-							{#if isRaceDirector && !r.organiser_approved}
-								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id, true)}>Approve</button>
-							{:else if isRaceDirector && r.organiser_approved && r.user_id !== myUserId}
-								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id, false)}>Unverify</button>
+							{#if isRaceDirector && r.user_id !== null && !r.organiser_approved}
+								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id!, true)}>Approve</button>
+							{:else if isRaceDirector && r.user_id !== null && r.organiser_approved && r.user_id !== myUserId}
+								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id!, false)}>Unverify</button>
 							{/if}
 						</li>
 					{/each}

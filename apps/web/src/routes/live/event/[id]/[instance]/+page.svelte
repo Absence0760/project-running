@@ -70,21 +70,29 @@
 		return ((h % 360) + 360) % 360;
 	}
 
-	function colorFor(userId: string): string {
-		return `hsl(${hueFor(userId)}, 70%, 50%)`;
+	// Stable key per leaderboard row: account rows key on user_id, bib-only
+	// imported rows (persona #43) key on bib. The identity CHECK guarantees
+	// one is set. `profiles` is seeded under this key in load() so the
+	// name/avatar helpers resolve bib-only finishers too.
+	function keyOf(r: EventResultWithUser): string {
+		return r.user_id ?? r.bib ?? '';
 	}
 
-	function tintFor(userId: string): string {
-		return `hsla(${hueFor(userId)}, 70%, 50%, 0.18)`;
+	function colorFor(key: string): string {
+		return `hsl(${hueFor(key)}, 70%, 50%)`;
 	}
 
-	function initialsFor(userId: string): string {
-		const name = profiles.get(userId)?.display_name;
+	function tintFor(key: string): string {
+		return `hsla(${hueFor(key)}, 70%, 50%, 0.18)`;
+	}
+
+	function initialsFor(key: string): string {
+		const name = profiles.get(key)?.display_name;
 		if (name) {
 			const parts = name.trim().split(/\s+/).slice(0, 2);
 			return parts.map((p) => p.charAt(0).toUpperCase()).join('') || '?';
 		}
-		return userId.slice(0, 2).toUpperCase();
+		return key.slice(0, 2).toUpperCase();
 	}
 
 	async function load() {
@@ -100,16 +108,20 @@
 		results = rr;
 		const ids = new Set<string>();
 		for (const p of ps) ids.add(p.user_id);
-		for (const r of rr) ids.add(r.user_id);
+		for (const r of rr) if (r.user_id) ids.add(r.user_id);
+		const map = new Map<string, { display_name: string | null }>();
 		if (ids.size > 0) {
 			const { data } = await supabase
 				.from('user_profiles')
 				.select('id, display_name')
 				.in('id', [...ids]);
-			const map = new Map<string, { display_name: string | null }>();
 			for (const p of data ?? []) map.set(p.id, { display_name: p.display_name });
-			profiles = map;
 		}
+		// Seed every result under its row key (user_id, or bib for the
+		// account-less imported finishers) so the helpers resolve a name —
+		// fetchEventResults already falls back to finisher_name.
+		for (const r of rr) map.set(keyOf(r), { display_name: r.display_name });
+		profiles = map;
 		loading = false;
 	}
 
@@ -220,8 +232,8 @@
 		return `${m}:${s.toString().padStart(2, '0')}/km`;
 	}
 
-	function nameFor(userId: string): string {
-		return profiles.get(userId)?.display_name ?? 'Runner';
+	function nameFor(key: string): string {
+		return profiles.get(key)?.display_name ?? 'Runner';
 	}
 
 	let finishedResults = $derived(results.filter((r) => r.finisher_status === 'finished'));
@@ -472,13 +484,13 @@
 						<span class="count">{finishedResults.length}</span>
 					</header>
 					<ol class="runners">
-						{#each finishedResults as r (r.user_id)}
+						{#each finishedResults as r (keyOf(r))}
 							<li class="runner" class:pending={!r.organiser_approved}>
 								<span class="pos">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
-								<span class="avatar" style="background: {tintFor(r.user_id)}; color: {colorFor(r.user_id)};">
-									{initialsFor(r.user_id)}
+								<span class="avatar" style="background: {tintFor(keyOf(r))}; color: {colorFor(keyOf(r))};">
+									{initialsFor(keyOf(r))}
 								</span>
-								<span class="name">{nameFor(r.user_id)}</span>
+								<span class="name">{nameFor(keyOf(r))}</span>
 								<span class="dist">{formatDistance(r.distance_m)}</span>
 								<span class="elapsed">{formatDuration(r.duration_s)}</span>
 								{#if !r.organiser_approved}
@@ -495,13 +507,13 @@
 						<span class="count">{dnfResults.length}</span>
 					</header>
 					<ol class="runners">
-						{#each dnfResults as r (r.user_id)}
+						{#each dnfResults as r (keyOf(r))}
 							<li class="runner dnf-row">
 								<span class="pos">—</span>
-								<span class="avatar" style="background: {tintFor(r.user_id)}; color: {colorFor(r.user_id)};">
-									{initialsFor(r.user_id)}
+								<span class="avatar" style="background: {tintFor(keyOf(r))}; color: {colorFor(keyOf(r))};">
+									{initialsFor(keyOf(r))}
 								</span>
-								<span class="name">{nameFor(r.user_id)}</span>
+								<span class="name">{nameFor(keyOf(r))}</span>
 								<span class="dnf">{r.finisher_status.toUpperCase()}</span>
 							</li>
 						{/each}
