@@ -891,6 +891,7 @@ export type Database = {
       notifications: {
         Row: {
           actor_id: string | null
+          club_id: string | null
           comment_id: string | null
           created_at: string
           event_id: string | null
@@ -903,6 +904,7 @@ export type Database = {
         }
         Insert: {
           actor_id?: string | null
+          club_id?: string | null
           comment_id?: string | null
           created_at?: string
           event_id?: string | null
@@ -915,6 +917,7 @@ export type Database = {
         }
         Update: {
           actor_id?: string | null
+          club_id?: string | null
           comment_id?: string | null
           created_at?: string
           event_id?: string | null
@@ -926,6 +929,13 @@ export type Database = {
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "notifications_club_id_fkey"
+            columns: ["club_id"]
+            isOneToOne: false
+            referencedRelation: "clubs"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "notifications_comment_id_fkey"
             columns: ["comment_id"]

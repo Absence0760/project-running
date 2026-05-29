@@ -882,6 +882,7 @@ class NotificationRow {
   static const String colCreatedAt = 'created_at';
   static const String colEventId = 'event_id';
   static const String colPlanId = 'plan_id';
+  static const String colClubId = 'club_id';
 
   final String id;
   final String userId;
@@ -893,6 +894,7 @@ class NotificationRow {
   final DateTime createdAt;
   final String? eventId;
   final String? planId;
+  final String? clubId;
 
   const NotificationRow({
     required this.id,
@@ -905,6 +907,7 @@ class NotificationRow {
     required this.createdAt,
     this.eventId,
     this.planId,
+    this.clubId,
   });
 
   factory NotificationRow.fromJson(Map<String, dynamic> json) => NotificationRow(
@@ -918,6 +921,7 @@ class NotificationRow {
     createdAt: DateTime.parse(json['created_at'] as String),
     eventId: json['event_id'] as String?,
     planId: json['plan_id'] as String?,
+    clubId: json['club_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -931,6 +935,7 @@ class NotificationRow {
     colCreatedAt: createdAt.toIso8601String(),
     colEventId: eventId,
     colPlanId: planId,
+    colClubId: clubId,
   };
 }
 

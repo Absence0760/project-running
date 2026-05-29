@@ -283,18 +283,19 @@ In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column 
 
 ### `notifications`
 
-Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, and `event_attendees` so the notification lands in the same transaction as the source write.
+Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows / club posts / completed runs) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, `event_attendees`, `club_posts`, and `runs` so the notification lands in the same transaction as the source write.
 
 ```sql
 create table notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid references auth.users(id) on delete cascade not null,
   actor_id    uuid references auth.users(id) on delete set null,
-  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update')),
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed')),
   run_id      uuid references runs(id) on delete cascade,
   comment_id  uuid references run_comments(id) on delete cascade,
   event_id    uuid references events(id) on delete cascade,
   plan_id     uuid references training_plans(id) on delete cascade,
+  club_id     uuid references clubs(id) on delete cascade,
   read_at     timestamptz,
   created_at  timestamptz not null default now()
 );
@@ -302,7 +303,9 @@ create table notifications (
 
 The `plan_update` kind (migration `20261024_001`, coach persona #48) fires from an AFTER UPDATE trigger on `plan_workouts` when the editor (`auth.uid()`) is someone other than the plan owner — the coach-edit notification. `plan_workouts` also gained `updated_by` + `updated_at`, stamped by a BEFORE UPDATE trigger. The cross-user edit path itself lands with the coach-athlete roster (persona #46); until then the notify trigger is dormant (owner-only RLS) while the audit columns populate on every edit.
 
-Two indexes for the read path: `(user_id, created_at desc)` for the list view, and a **partial** `(user_id, created_at desc) where read_at is null` so the bell-badge count query is O(unread). A third partial unique `(user_id, actor_id, event_id) where kind = 'event_rsvp'` de-dupes RSVP-status flips (Going → Maybe → Going re-fires the trigger but `on conflict do nothing` keeps one row). Source FKs use `on delete cascade` so notifications die with their parent (deleted run, deleted comment, deleted event), keeping the inbox honest without a cleanup job.
+The `club_post` + `run_completed` kinds (migration `20261101_001`, persona #38) are the two community fan-outs. `notify_club_post` fires on `club_posts` insert and fans out to every **active** member of the club except the author (pending join-requests are skipped — which is what makes the club-home "Posts here notify every active member" copy truthful). `notify_run_completed` fires on `runs` insert and fans out to the runner's followers (`user_follows`), but only for a **public** run **started within the last 24 hours** — the recency gate keeps a bulk history import (Strava/Garmin ZIP, parkrun backfill, CSV restore) or a late offline sync from exploding every follower's inbox with old activity; the window is wide enough to cover an ultra-length single session. Device push (FCM/APNs) for these kinds stays deferred per roadmap Phase 4b — the row IS the delivery surface today and the in-app inbox renders it; the future push sender reads the same rows.
+
+Two indexes for the read path: `(user_id, created_at desc)` for the list view, and a **partial** `(user_id, created_at desc) where read_at is null` so the bell-badge count query is O(unread). A partial unique `(user_id, actor_id, event_id) where kind = 'event_rsvp'` de-dupes RSVP-status flips (Going → Maybe → Going re-fires the trigger but `on conflict do nothing` keeps one row), and a partial unique `(user_id, run_id) where kind = 'run_completed'` is the same defensive dedupe for completed-run fan-out. Source FKs use `on delete cascade` so notifications die with their parent (deleted run, deleted comment, deleted event, deleted club), keeping the inbox honest without a cleanup job.
 
 RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them. `notify_event_rsvp` fires for the event's `created_by` only and only when `status = 'going'`; Maybe / Declined intentionally produce no inbox row.
 

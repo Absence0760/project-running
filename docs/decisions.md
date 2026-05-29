@@ -2382,6 +2382,18 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 96. run_completed notifications fan out only for public runs started in the last 24 h
+
+**Decided (2026-05-29, persona-hunt #38):** the `notifications` inbox gained two community fan-outs (migration `20261101_001`): `club_post` (a club-feed post notifies every active member) and `run_completed` (a finished run notifies the runner's followers). The `run_completed` trigger fires on `runs` INSERT and is gated on `is_public = true AND started_at > now() - interval '24 hours'`.
+
+**Why the 24 h recency gate, not source filtering:** the obvious explosion is a bulk history import — a Strava/Garmin ZIP, a parkrun backfill, or a CSV restore can insert hundreds or thousands of public runs in one batch. Without a guard, each would fan out to every follower (a 200-follower migrator importing 2 000 runs = 400 000 inbox rows). The first instinct was to restrict to `source = 'app'`, but that excludes a legitimately fresh run that arrived via the Strava webhook an hour after finishing — exactly the kind of "X just ran" signal a follower wants. A recency window is strictly better: a fresh run from *any* source notifies; an old run from any source (the bulk-import case, or a late offline sync draining days later) does not. 24 h is wide enough to bracket an ultra-length single session and a same-day sync, narrow enough that no realistic batch import lands a meaningful number of rows.
+
+**Trade-off:** a run saved private and later flipped public never notifies (the trigger is INSERT-only; there's no UPDATE path), and a genuinely fresh run synced more than a day late is silently dropped. Both are acceptable v1 gaps — most app-recorded runs save public-from-start (honouring `privacy_default`) and sync promptly. There is also no per-kind mute yet: a follower of a prolific runner gets one inbox row per public run. The dismiss + mark-all-read affordances cover the noise for now; a notification-preferences surface is deferred until it's actually asked for. Device push (FCM/APNs) for both new kinds stays deferred per roadmap Phase 4b — the row is the delivery surface and the in-app inbox renders it.
+
+**Don't re-litigate unless** the no-UPDATE-path gap draws complaints (then add an `is_public` false→true UPDATE branch with an `OLD.is_public` guard to avoid double-fire), or per-kind notification muting is requested (then a `notification_prefs` bag keyed by kind, checked in each trigger or at read time).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
