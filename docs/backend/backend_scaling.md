@@ -281,17 +281,19 @@ Clients still talk to Supabase for 90%+ of requests. The Go service handles real
 
 During a run, the runner's phone/watch publishes GPS position to the Go service every 3 seconds. Friends and family connect via a spectator URL and see the runner move in real time.
 
-```
-Runner connects:
-  ws://go-service/track/{run_id}
-  → Authenticates via Supabase JWT
-  → Publishes: { lat, lng, pace, distance, elapsed }
+As built (the worker is reachable at `live.threkir.com` once deployed; see `apps/job_worker/internal/livehub/`):
 
-Spectator connects:
-  ws://go-service/watch/{run_id}
-  → No auth required (public link)
-  → Receives: position updates every 3 seconds
-  → Receives: summary on run complete
+```
+Runner (recorder) publishes:
+  POST /v1/live/{run_id}/push           (HTTPS; recorder's ~5s broadcaster tick)
+  → Authenticates via Supabase JWT — owner-only
+  → Body: { lat, lng, pace, distance, elapsed }
+
+Spectator subscribes:
+  wss://live.threkir.com/v1/live/{run_id}/subscribe
+  → Anon for is_public runs; owner-only (JWT) for private runs
+  → On join: last-known snapshot, then position updates as they arrive
+  GET /v1/live/{run_id}/snapshot         (late-joiner one-shot, 204 when empty)
 ```
 
 **Data flow:**
