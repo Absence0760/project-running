@@ -4,7 +4,17 @@ You're in a cross-platform running app monorepo: Flutter (Android + iOS), native
 
 ## Read first
 
-The docs are organised by concern, not by platform. Start with whichever is closest to the task you've been given:
+The `docs/` tree is grouped into topical folders, by concern rather than by platform:
+
+- **`docs/architecture/`** — system map, monorepo setup, ADR log (`decisions.md`), house conventions, schema codegen
+- **`docs/product/`** — roadmap, parity matrix, feature specs, competitor analysis, open follow-ups
+- **`docs/backend/`** — schema / RPCs / RLS reference, backend scaling, the `metadata.md` + `settings.md` registries
+- **`docs/features/`** — per-feature deep dives: run recording, training, clubs, workout execution, integrations, paywall, web auth, end-to-end flows
+- **`docs/testing/`** — testing guide + `test_inventory.md`, manual / mobile-e2e recipes, dev accounts, coverage snapshot, dev/prod isolation
+- **`docs/ops/`** — deployment hub, releasing, backup/restore, local Protomaps tiles
+- **`docs/custom_watch/`** — ultra-marathon-watch hardware research (research-tier; see `decisions.md § 71`)
+
+Start with whichever row below is closest to the task you've been given:
 
 | If the task is... | Start with |
 |---|---|
