@@ -330,16 +330,21 @@ jobs:
               exit 1
             fi
           done
-      # See e2e-web for the post-restart storage REST retry rationale.
-      - name: Apply migrations + seed (db reset)
+      # Seed over psql, not `supabase db reset` — see the e2e-web
+      # "Seed the database" step for why reset's mid-flight storage
+      # restart + health poll is a chronic flake. `supabase start`
+      # (2.84.2) applied the migrations; seeding over psql leaves the
+      # already-healthy storage sidecar untouched.
+      - name: Seed the database
         working-directory: apps/backend
         run: |
-          if supabase db reset --local; then
-            exit 0
+          DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'")
+          if [ "$seeded" != "1" ]; then
+            echo "::error::seed.sql ran but the pinned seed user is missing — the integration suite cannot sign in"
+            exit 1
           fi
-          echo "::warning::supabase db reset failed; waiting 15s for storage REST and retrying"
-          sleep 15
-          supabase db reset --local
       - run: dart pub global activate melos
       - run: melos bootstrap
       - run: cp apps/mobile_android/.env.example apps/mobile_android/.env.local
@@ -561,10 +566,11 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      # `supabase start` brings the stack up but does NOT run seed.sql
-      # (seed.sql only runs on `supabase db reset`). The e2e suite
-      # depends on the pinned UUIDs + seeded users, so we reset
-      # immediately after start.
+      # `supabase start` brings the stack up + applies every migration
+      # but does NOT run seed.sql on this pinned CLI (2.84.2). The e2e
+      # suite depends on the pinned UUIDs + seeded users, so the "Seed
+      # the database" step below loads seed.sql over psql once the
+      # stack is up.
       #
       # Per-attempt timeout + retry guards against transient slow
       # ghcr.io image pulls (CI run 26490131303 edge-functions: a
@@ -586,17 +592,15 @@ jobs:
             fi
           done
       # `supabase start` returns before every sidecar is ready to
-      # serve requests. On a slow runner, Storage REST can still be
-      # 502'ing when `db reset` tries to drop + recreate the buckets
-      # (CI run 26478978751 shard 8: `Get http://127.0.0.1:54321/
-      # storage/v1/bucket: context deadline exceeded`), and the auto-
-      # started edge-runtime can still be cold when the first
-      # delete-account-guards fetch lands (same run, shard 4: the
-      # GET → 405 test timed out at 30s on the fetch alone, before
-      # any subsequent test ran). Both are observation-only — the
-      # containers DO come up eventually — so a one-time wait-loop
-      # here costs at most ~60s on a slow runner and zero on a warm
-      # one. Cheaper than a flaky retry budget.
+      # serve requests. On a slow runner the auto-started edge-runtime
+      # can still be cold when the first delete-account-guards fetch
+      # lands (CI run 26478978751 shard 4: the GET → 405 test timed out
+      # at 30s on the fetch alone, before any subsequent test ran), and
+      # Storage REST can still be 502'ing when the first track-download
+      # test fires. Both are observation-only — the containers DO come
+      # up eventually — so a one-time wait-loop here costs at most ~60s
+      # on a slow runner and zero on a warm one. Cheaper than a flaky
+      # retry budget.
       - name: Wait for stack sidecars (storage REST + edge runtime)
         run: |
           for endpoint in \
@@ -619,67 +623,33 @@ jobs:
               exit 1
             fi
           done
-      # `supabase db reset` restarts containers internally and then
-      # immediately calls Storage REST to recreate buckets. On a slow
-      # runner the sidecar can still be cold post-restart and time out
-      # (CI run 26490131303 shard 7: `Get http://127.0.0.1:54321/
-      # storage/v1/bucket: context deadline exceeded` ~31s after the
-      # restart). The pre-reset wait-for-sidecars step doesn't help
-      # because the restart wipes that warm state. Retry once after a
-      # short wait — second pass finds the sidecar warm.
-      - name: Apply migrations + seed (db reset)
+      # `supabase start` (CLI 2.84.2, pinned above) applies every
+      # migration but does NOT run seed.sql, so we seed explicitly.
+      # We seed over psql against the DB port rather than via
+      # `supabase db reset`: reset recreates the DB and RESTARTS the
+      # storage + edge-runtime containers mid-flight, then polls
+      # /storage/v1/bucket until it answers. On a loaded runner that
+      # poll 502s / times out and the reset bails — a chronic flake
+      # fought with escalating retries that still failed all 3 reset
+      # attempts on shard 11 of run 26664782937 (earlier casualties:
+      # runs 26478978751, 26490131303, 26588671185, 26581301842).
+      # `supabase start` already brought storage up healthy; seeding
+      # over psql never touches or restarts it, so the flake can't
+      # occur. The end state is identical — reset's own seed phase is
+      # just `psql -f seed.sql` after the migrations it replays.
+      - name: Seed the database
         working-directory: apps/backend
-        # `supabase db reset` restarts containers mid-flight + then
-        # calls the storage REST endpoint to recreate buckets. If
-        # storage REST is still cold from the restart, the call
-        # 502s and the reset bails. Run 26588671185 shard 1 hit
-        # this on both attempts (first try failed at ~31s, retry
-        # failed at ~11s with a 502 after Restarting containers).
-        # The fix is two-fold:
-        #   1. Bump the inter-attempt sleep from 15s → 30s.
-        #   2. Add a THIRD attempt — sometimes the storage REST
-        #      sidecar takes ~45s to come up on a heavily-loaded
-        #      runner.
         run: |
-          for attempt in 1 2 3; do
-            if supabase db reset --local; then
-              echo "db reset succeeded on attempt $attempt"
-              exit 0
-            fi
-            if [ "$attempt" = "3" ]; then
-              echo "::error::supabase db reset failed on all 3 attempts"
-              exit 1
-            fi
-            echo "::warning::supabase db reset attempt $attempt failed; waiting 30s for sidecars and retrying"
-            sleep 30
-          done
-      # `supabase db reset` restarts the edge runtime sidecar mid-flight.
-      # If a Playwright spec hits an Edge Function URL before the
-      # restart settles, the request 502s ("Bad Gateway" — kong routed
-      # but the upstream is still cold). Wait again for both the
-      # storage REST + edge runtime endpoints before letting tests
-      # run. Mirrors the pre-reset wait above. Run 26581301842
-      # shard 3 saw 4 clip-public-track tests fail with 502 because of
-      # this gap.
-      - name: Wait for stack sidecars (post-reset)
-        run: |
-          for endpoint in \
-            "http://127.0.0.1:54321/storage/v1/bucket" \
-            "http://127.0.0.1:54321/functions/v1/refresh-tokens"; do
-            for i in $(seq 1 30); do
-              code=$(curl -sS -o /dev/null -w "%{http_code}" -X POST "$endpoint" || echo 000)
-              if [ "$code" != "000" ]; then
-                echo "ready post-reset: $endpoint -> $code"
-                break
-              fi
-              echo "wait post-reset: $endpoint (attempt $i)"
-              sleep 2
-            done
-            if [ "$code" = "000" ]; then
-              echo "::error::$endpoint never came back after db reset"
-              exit 1
-            fi
-          done
+          DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
+          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
+          # Fail loudly here if the seed didn't land the pinned user the
+          # e2e suite signs in as, rather than letting every downstream
+          # spec fail with a confusing auth error.
+          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'")
+          if [ "$seeded" != "1" ]; then
+            echo "::error::seed.sql ran but the pinned seed user is missing — the suite cannot sign in"
+            exit 1
+          fi
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
       - name: Cache Playwright browsers
@@ -725,7 +695,7 @@ jobs:
             # unset so paywall-wire.spec.ts still exercises the 429.
             echo "PUBLIC_BYPASS_PAYWALL=true"
           } > ../web/.env
-      - name: Run Playwright suite (shard ${{ matrix.shard }}/10)
+      - name: Run Playwright suite (shard ${{ matrix.shard }}/14)
         working-directory: apps/web
         run: pnpm exec playwright test --config=tests-e2e/playwright.config.ts --shard=${{ matrix.shard }}/14
       - name: Upload Playwright report on failure
