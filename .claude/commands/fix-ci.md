@@ -1,6 +1,6 @@
 ---
 description: Fix a failing CI job / Playwright shard from a GitHub Actions run. Root-causes the failure, fixes it without coding around it (no retry/timeout/skip band-aids), reproduces locally where possible, and lands coverage so the failure can't return silently.
-argument-hint: <GitHub Actions run URL or run ID> [optional: which job/shard, if known]
+argument-hint: "<GitHub Actions run URL or run ID> [optional: which job/shard, if known]"
 ---
 
 Fix the failing CI run `$ARGUMENTS`. Find the real cause, fix it at the root, add coverage, and stop before pushing.
