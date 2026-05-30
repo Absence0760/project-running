@@ -52,7 +52,7 @@ Tables: `clubs`, `club_members`, `events`, `event_attendees`, `event_exceptions`
 Narrow client-side unions in `apps/web/src/lib/types.ts`:
 
 - `ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member'`
-- `RsvpStatus = 'going' | 'maybe' | 'declined'`
+- `RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted'`
 - `MembershipStatus = 'active' | 'pending'`
 - `JoinPolicy = 'open' | 'request' | 'invite'`
 - `RecurrenceFreq = 'weekly' | 'biweekly' | 'monthly'`
