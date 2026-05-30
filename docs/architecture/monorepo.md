@@ -365,7 +365,7 @@ Svelte 5 runes syntax (`$state`, `$derived`, `$effect`, `$props`) is used throug
 
 ## CI/CD
 
-Full pipeline defined in `.github/workflows/ci.yml`. Eleven jobs run on every PR + push to `main`:
+Full pipeline defined in `.github/workflows/ci.yml`. Twelve jobs run on every PR + push to `main`:
 
 | Job | Runner | What it does |
 |---|---|---|
@@ -373,13 +373,14 @@ Full pipeline defined in `.github/workflows/ci.yml`. Eleven jobs run on every PR
 | `parity-types` | ubuntu-latest | `supabase start` → `npm run gen:types:check` |
 | `parity-matrix` | ubuntu-latest | `dart run scripts/check_parity_matrix.dart` — keeps `docs/product/parity.md` honest |
 | `build-watch-wear` | ubuntu-latest | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |
+| `build-firmware` | ubuntu-latest | `cargo build` + clippy + host tests of `apps/custom_watch` (Rust + Embassy, `thumbv7em-none-eabihf`) |
 | `build-mobile-android` | ubuntu-latest | `flutter build appbundle` |
 | `twin-parity` | ubuntu-latest | `diff -rq apps/mobile_android/lib apps/mobile_ios/lib` + `test/` |
 | `schema-codegen-drift` | ubuntu-latest | re-run both generators, fail if working tree dirty |
 | `api-client-integration` | ubuntu-latest | `packages/api_client` integration suite against local Supabase |
 | `edge-functions` | ubuntu-latest | Deno test for every function in `apps/backend/supabase/functions/` |
 | `pgtap-rls` | ubuntu-latest | `supabase test db` for the pgtap RLS suite |
-| `e2e-web` | ubuntu-latest | Playwright sharded 4-way over `apps/web/tests-e2e/` |
+| `e2e-web` | ubuntu-latest | Playwright sharded 14-way over `apps/web/tests-e2e/` |
 
 iOS builds + Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag, not on PR. See [releasing.md](../ops/releasing.md) for the release-time pipeline.
 

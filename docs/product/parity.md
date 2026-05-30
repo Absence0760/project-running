@@ -229,7 +229,7 @@ See [docs/features/clubs.md](../features/clubs.md). No features.md section yet �
 
 ## Social — following + activity feed
 
-Strava-style follow graph; layered on top of (but independent of) the clubs/events social model. See [`docs/architecture/decisions.md § 31`](../architecture/decisions.md) once written, and roadmap § Competitor-parity backlog.
+Strava-style follow graph; layered on top of (but independent of) the clubs/events social model. See [`decisions.md § 31`](../architecture/decisions.md#31-following-graph-is-its-own-social-layer-profiles-are-public-by-default), and roadmap § Competitor-parity backlog.
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|

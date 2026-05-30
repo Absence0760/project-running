@@ -494,7 +494,10 @@ dependencies:
 **Android** — add to `AndroidManifest.xml`:
 ```xml
 <uses-permission android:name="android.permission.health.READ_EXERCISE"/>
+<uses-permission android:name="android.permission.health.READ_DISTANCE"/>
+<uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
 <uses-permission android:name="android.permission.health.WRITE_EXERCISE"/>
+<uses-permission android:name="android.permission.health.WRITE_DISTANCE"/>
 ```
 
 ---

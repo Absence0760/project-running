@@ -189,12 +189,9 @@ Email confirmations and rate limits are configured in the same dashboard.
 
 ## Pro-tier checks
 
-`subscription_tier` is read from `user_profiles` and exposed as `auth.user?.subscription_tier`. Two helpers wrap the gating:
+Tier gating is owned by [paywall.md](paywall.md), not this doc — see it for the tier model, the `is_pro()` RPC, the per-tier coach daily caps, the `features.ts` / `<ProGate>` client gate, and the `BYPASS_PAYWALL` local-dev flag (with its exact `NODE_ENV` + local-Supabase-URL guards — do not copy a looser version of that flag from memory).
 
-- Server side: the `is_pro()` SQL RPC (no args, gates internally on `auth.uid()`), used by `/api/coach/+server.ts` to resolve the per-tier daily cap (free: 2/day, pro: 10/day). The earlier `is_user_pro(uuid)` variant was dropped in migration `20260516_001_drop_is_user_pro.sql` — it took a user-id parameter and let any authenticated caller probe another user's tier.
-- Client side: `apps/web/src/lib/features.ts` reads the tier and exposes `isLocked(featureName)`. `<ProGate feature="..." />` renders an upsell when locked.
-
-For local development, set `BYPASS_PAYWALL=true` in `apps/web/.env.local` to skip every tier check server-side without flipping `subscription_tier` in the database.
+The one auth-relevant note: `subscription_tier` is read from `user_profiles` and exposed as `auth.user?.subscription_tier`, and `/api/coach/+server.ts` calls the no-arg `is_pro()` RPC (which gates internally on `auth.uid()`). The earlier `is_user_pro(uuid)` variant was dropped in migration `20260516_001_drop_is_user_pro.sql` because the user-id parameter let any authenticated caller probe another user's tier.
 
 ---
 

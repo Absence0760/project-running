@@ -73,21 +73,7 @@ run-app/                          # Monorepo root
 
 ### Melos workspace config
 
-```yaml
-# melos.yaml
-name: run-app
-packages:
-  - apps/**
-  - packages/**
-command:
-  bootstrap:
-    usePubspecOverrides: true
-scripts:
-  test:       melos exec -- flutter test
-  analyze:    melos exec -- flutter analyze
-  build:ios:  melos exec --scope="mobile_ios" -- flutter build ipa
-  build:android: melos exec --scope="mobile_android" -- flutter build appbundle
-```
+`melos.yaml` at the repo root defines the Dart/Flutter workspace. The canonical walkthrough (including the Melos 7 caveat that `melos run <script>` is broken, so the workspace uses `melos exec` instead) lives in [monorepo.md § Melos workspace config](monorepo.md#melos-workspace-config).
 
 ---
 
@@ -574,21 +560,7 @@ High-level sequence on the phone. The full detail — filter chain, auto-pause g
 
 Tests and analysis run via Melos scripts — see [testing.md](../testing/testing.md) for how to run the suite locally, what's covered today, and the patterns used to make platform-channel-heavy code unit-testable.
 
-`.github/workflows/ci.yml` runs eleven jobs on every PR + push to `main`. The same eleven gate the build; there's no PR-only vs. push-only split:
-
-| Job | What it checks |
-|---|---|
-| `test-packages` | `flutter test` on `run_recorder` + `mobile_android` |
-| `parity-types` | `supabase start` → `npm run gen:types:check` (TS row-types match migrations) |
-| `parity-matrix` | `dart run scripts/check_parity_matrix.dart` (cells in [parity.md](../product/parity.md) match code) |
-| `build-watch-wear` | Gradle build of `apps/watch_wear` (Compose-for-Wear smoke) |
-| `build-mobile-android` | `flutter build appbundle` |
-| `twin-parity` | `diff -rq apps/mobile_android/{lib,test} apps/mobile_ios/{lib,test}` |
-| `schema-codegen-drift` | re-runs both row-type generators, fails if working tree dirty |
-| `api-client-integration` | `packages/api_client` integration suite against local Supabase |
-| `edge-functions` | Deno test for each function under `apps/backend/supabase/functions/` |
-| `pgtap-rls` | `supabase test db` for the pgtap RLS suite |
-| `e2e-web` | Playwright sharded 4-way across `apps/web/tests-e2e/` |
+`.github/workflows/ci.yml` runs twelve jobs on every PR + push to `main` (no PR-only vs. push-only split): `test-packages`, `parity-types`, `parity-matrix`, `build-watch-wear`, `build-firmware`, `build-mobile-android`, `twin-parity`, `schema-codegen-drift`, `api-client-integration`, `edge-functions`, `pgtap-rls`, and `e2e-web` (Playwright sharded 14-way). The per-job breakdown lives in [monorepo.md § CI/CD](monorepo.md#cicd); `ci.yml` itself is the source of truth.
 
 iOS builds and Edge Function deploys run from `.github/workflows/release-ios.yml` and `release-backend.yml` on tag push — not on PR. See [releasing.md](../ops/releasing.md).
 
