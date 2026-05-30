@@ -2,20 +2,20 @@
 
 How the backend evolves from a single Supabase project to a two-service architecture (Supabase + Go) that supports live spectator tracking, training intelligence, and hundreds of thousands of users.
 
-> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, and `strava_event` job kinds plus the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.threkir.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
+> **Status as of May 2026:** the two-service architecture below is partly live. The Go worker (`apps/job_worker/`) is deployed on Fly.io and drains the `map_match`, `token_refresh`, `strava_event`, and `photo_process` job kinds plus the `POST /v1/export` and `POST /v1/premium/*` endpoints. The live-spectator WebSocket hub (`apps/job_worker/internal/livehub/`) is code-complete and awaits a Fly deploy + DNS flip (`live.threkir.com`); clients fall back to Supabase Realtime when `PUBLIC_LIVE_HUB_URL` / `LIVE_HUB_URL` is unset. Three Edge Functions (`refresh-tokens`, `strava-webhook`, `export-data`) have been superseded by the worker but are kept deployed as the rollback path. The narrative below predates these landings and describes the design intent; treat as plan-of-record, not current state.
 
 ---
 
-## Current state
+## Starting point (Phase 1 MVP)
 
-The MVP backend is a single Supabase project:
+The plan below starts from the Phase 1 backend: a single Supabase project. (For where things stand *now* — the Go worker is live and several pieces below have shipped — see the status banner above.)
 
 - **Postgres** — runs, routes, integrations, user profiles
 - **Auth** — Apple Sign-In, Google Sign-In
 - **Storage** — GPX files, data exports, avatars
 - **Edge Functions** — Strava sync, parkrun import, token refresh, data export
 
-This is the right choice for Phase 1. It handles CRUD, auth, and storage with zero ops. The issues below become real at scale — they don't need fixing today, but the architecture should anticipate them.
+This was the right choice for Phase 1: it handles CRUD, auth, and storage with zero ops. The issues below become real at scale — they didn't need fixing on day one, but the architecture anticipated them, and the May 2026 landings (Go worker + job queue + live hub) are the first tranche of this plan made real.
 
 ---
 
@@ -507,30 +507,36 @@ create table fitness_snapshots (
 
 ---
 
-## Monorepo structure (after all services)
+## Monorepo structure (as built)
+
+The Go service shipped as a **top-level `apps/job_worker/`**, not nested under `apps/backend/`. The single binary serves both background jobs and the HTTP/WS endpoints (live hub, data export, premium, Strava webhook). Authoritative layout is the cheat-sheet in the root [`CLAUDE.md`](../../CLAUDE.md); the backend-relevant slice:
 
 ```
 run-app/
 ├── apps/
-│   ├── mobile_ios/          # Flutter iOS
-│   ├── mobile_android/      # Flutter Android
-│   ├── watch_ios/           # Native Swift
-│   ├── watch_wear/          # Flutter Wear OS
-│   ├── web/                 # SvelteKit
-│   └── backend/
-│       ├── supabase/        # Postgres schema, Edge Functions
-│       └── go-service/      # Go real-time + background jobs + premium
-│           ├── cmd/server/
-│           ├── internal/
-│           │   ├── ws/           # WebSocket hub
-│           │   ├── jobs/         # Background job handlers
-│           │   ├── strava/       # Strava API client
-│           │   ├── premium/      # Training plans, VO2 max, recovery
-│           │   └── auth/         # JWT validation
-│           ├── go.mod
-│           ├── Dockerfile
-│           └── fly.toml
-├── packages/                # Shared Dart packages
+│   ├── mobile_android/      # Flutter (Android) — canonical mobile target
+│   ├── mobile_ios/          # Flutter (iOS) — lib/ + test/ byte-identical to mobile_android
+│   ├── watch_wear/          # Native Kotlin + Compose-for-Wear (Wear OS)
+│   ├── watch_ios/           # Native SwiftUI (watchOS)
+│   ├── custom_watch/        # Rust + Embassy firmware (ultra-watch research)
+│   ├── web/                 # SvelteKit 2 + Svelte 5
+│   ├── backend/
+│   │   └── supabase/        # Postgres schema, migrations, Edge Functions, seed.sql
+│   └── job_worker/          # Go service — background jobs + real-time + premium HTTP
+│       ├── main.go
+│       ├── internal/
+│       │   ├── livehub/         # live spectator WS hub (+ Redis backend, privacy clip, JWT auth)
+│       │   ├── stravahook/      # Strava webhook ingest endpoint
+│       │   ├── dataexport/      # POST /v1/export (CSV / GPX-zip)
+│       │   ├── premium/         # Pro-only VO2max / race-predictor / recovery / plan endpoints
+│       │   ├── exif/            # photo EXIF scrub
+│       │   ├── matcher*.go      # map-match (OSRM) handler
+│       │   └── handler_*.go     # job dispatch: map_match, token_refresh, strava_event, photo_process
+│       ├── go.mod
+│       ├── Dockerfile
+│       ├── fly.toml
+│       └── osrm/                # OSRM sidecar config
+├── packages/                # Shared Dart: core_models, api_client, run_recorder, gpx_parser, ui_kit
 └── docs/
 ```
 
@@ -552,4 +558,4 @@ Map tile costs are minimal — MapTiler has a generous free tier, and Protomaps 
 
 ---
 
-*Last updated: April 2026*
+*Last updated: May 2026*
