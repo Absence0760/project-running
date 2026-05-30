@@ -146,7 +146,7 @@ export function isMastersAge(age: number | null | undefined): boolean {
  * target pace for the goal race.
  *
  * Optional `gender` parameter applies the female-specific calibration —
- * see [decisions.md § 76](../docs/architecture/decisions.md#76) and the
+ * see [decisions.md § 76](docs/architecture/decisions.md#76-training-pace-derivation-applies-a-3-female-specific-calibration-to-the-daniels-curve) and the
  * `FEMALE_PACE_CALIBRATION` constant above for the rationale.
  */
 export function pacesFromGoalPace(
