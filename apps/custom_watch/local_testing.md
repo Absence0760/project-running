@@ -142,7 +142,7 @@ For hardware-less integration testing of peripheral-touching code, the long-term
 
 ## CI parity
 
-The CI workflow at `.github/workflows/ci.yml` has a `build-firmware` job (per [decisions.md § 80](../../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)) that runs on every PR:
+The CI workflow at `.github/workflows/ci.yml` has a `build-firmware` job (per [decisions.md § 80](../../docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)) that runs on every PR:
 
 ```
 rustup show                                            # installs toolchain per rust-toolchain.toml

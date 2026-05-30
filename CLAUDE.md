@@ -8,46 +8,46 @@ The docs are organised by concern, not by platform. Start with whichever is clos
 
 | If the task is... | Start with |
 |---|---|
-| Anything at all, first time in a session | [docs/architecture.md](docs/architecture.md) — the map |
-| Adding / changing a feature | [docs/roadmap.md](docs/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
-| Checking which platforms a feature ships on | [docs/parity.md](docs/parity.md) — feature × platform matrix, single source of truth for drift |
-| Touching the database or a client row type | [docs/schema_codegen.md](docs/schema_codegen.md) — generators + CI drift check |
-| Touching a jsonb metadata key | [docs/metadata.md](docs/metadata.md) — the registry of known keys |
-| Touching a user setting / preference | [docs/settings.md](docs/settings.md) — universal + per-device prefs registry |
-| Touching the recording pipeline | [docs/run_recording.md](docs/run_recording.md) — state machine, filters, auto-pause |
-| Touching the web auth flow | [docs/web_app_auth.md](docs/web_app_auth.md) |
+| Anything at all, first time in a session | [docs/architecture/architecture.md](docs/architecture/architecture.md) — the map |
+| Adding / changing a feature | [docs/product/roadmap.md](docs/product/roadmap.md) — what's shipped, what's planned, and the unphased competitor-parity backlog |
+| Checking which platforms a feature ships on | [docs/product/parity.md](docs/product/parity.md) — feature × platform matrix, single source of truth for drift |
+| Touching the database or a client row type | [docs/architecture/schema_codegen.md](docs/architecture/schema_codegen.md) — generators + CI drift check |
+| Touching a jsonb metadata key | [docs/backend/metadata.md](docs/backend/metadata.md) — the registry of known keys |
+| Touching a user setting / preference | [docs/backend/settings.md](docs/backend/settings.md) — universal + per-device prefs registry |
+| Touching the recording pipeline | [docs/features/run_recording.md](docs/features/run_recording.md) — state machine, filters, auto-pause |
+| Touching the web auth flow | [docs/features/web_app_auth.md](docs/features/web_app_auth.md) |
 | Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |
-| Understanding an end-to-end user journey | [docs/flows.md](docs/flows.md) — sign-in, record, sync, spectator |
-| Adding a test | [docs/testing.md](docs/testing.md) — what's covered, patterns, how to run |
-| Manually verifying a shipped feature | [docs/manual_testing.md](docs/manual_testing.md) — per-platform recipes for every shipped capability |
-| Running every feature locally (including stubbed payments) | [docs/local_testing_stubs.md](docs/local_testing_stubs.md) — Stripe test mode, RevenueCat sandbox, Apple/Play IAP, Ollama-for-Coach |
-| Adding mobile e2e tests in CI | [docs/mobile_e2e.md](docs/mobile_e2e.md) — Android integration_test on Ubuntu (~free), iOS on macOS (~$$), Firebase Test Lab pre-release |
-| Which features have e2e tests today + what dev accounts unblock the rest | [docs/e2e_dev_accounts.md](docs/e2e_dev_accounts.md) — coverage table + 11-item dev-account checklist (Google, Stripe, Anthropic, …) |
-| Keeping local dev isolated from prod | [docs/dev_prod_isolation.md](docs/dev_prod_isolation.md) — Vite + Playwright guard rules, the `ALLOW_PROD_URL_IN_DEV` override, what's enforced vs not |
-| Touching the clubs / events / social layer | [docs/clubs.md](docs/clubs.md) — surfaces, schema pointers, what's deferred |
-| Touching training plans (VDOT, Riegel, generator, week grid) | [docs/training.md](docs/training.md) — engine shape, pace derivation, what's deferred |
-| Implementing the live structured-workout execution loop | [docs/workout_execution.md](docs/workout_execution.md) — specced runner state machine + UI + persistence |
-| Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/integrations.md](docs/integrations.md) |
+| Understanding an end-to-end user journey | [docs/features/flows.md](docs/features/flows.md) — sign-in, record, sync, spectator |
+| Adding a test | [docs/testing/testing.md](docs/testing/testing.md) — what's covered, patterns, how to run |
+| Manually verifying a shipped feature | [docs/testing/manual_testing.md](docs/testing/manual_testing.md) — per-platform recipes for every shipped capability |
+| Running every feature locally (including stubbed payments) | [docs/testing/local_testing_stubs.md](docs/testing/local_testing_stubs.md) — Stripe test mode, RevenueCat sandbox, Apple/Play IAP, Ollama-for-Coach |
+| Adding mobile e2e tests in CI | [docs/testing/mobile_e2e.md](docs/testing/mobile_e2e.md) — Android integration_test on Ubuntu (~free), iOS on macOS (~$$), Firebase Test Lab pre-release |
+| Which features have e2e tests today + what dev accounts unblock the rest | [docs/testing/e2e_dev_accounts.md](docs/testing/e2e_dev_accounts.md) — coverage table + 11-item dev-account checklist (Google, Stripe, Anthropic, …) |
+| Keeping local dev isolated from prod | [docs/testing/dev_prod_isolation.md](docs/testing/dev_prod_isolation.md) — Vite + Playwright guard rules, the `ALLOW_PROD_URL_IN_DEV` override, what's enforced vs not |
+| Touching the clubs / events / social layer | [docs/features/clubs.md](docs/features/clubs.md) — surfaces, schema pointers, what's deferred |
+| Touching training plans (VDOT, Riegel, generator, week grid) | [docs/features/training.md](docs/features/training.md) — engine shape, pace derivation, what's deferred |
+| Implementing the live structured-workout execution loop | [docs/features/workout_execution.md](docs/features/workout_execution.md) — specced runner state machine + UI + persistence |
+| Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/features/integrations.md](docs/features/integrations.md) |
 | Running one of the apps locally | `apps/<app>/local_testing.md` — one per app (e.g. [apps/mobile_android/local_testing.md](apps/mobile_android/local_testing.md), [apps/backend/local_testing.md](apps/backend/local_testing.md)) |
-| Backend schema, RLS, RPCs, Storage buckets | [docs/api_database.md](docs/api_database.md) |
-| Setting up the monorepo / melos / workspaces | [docs/monorepo.md](docs/monorepo.md) |
-| "Why did you do it this way?" | [docs/decisions.md](docs/decisions.md) — ADR log |
-| "Should we build our own watch hardware?" | [docs/custom_watch/README.md](docs/custom_watch/README.md) — research baseline for an ultra-marathon watch (vision, competitive landscape, BOM, prototyping cost tiers, performance path, firmware architecture). Current default of not starting hardware work + the triggers that would change it are recorded in [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely). The 2026-05-28 §71 amendment permits owner-personal tier-1 bench-prototype work; the active firmware workspace lives at [apps/custom_watch/](apps/custom_watch/README.md) and the live parts shopping list at [docs/custom_watch/parts.md](docs/custom_watch/parts.md). Firmware language locked to Rust + Embassy per [§ 80](docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) |
-| House style (naming, comments, error handling) | [docs/conventions.md](docs/conventions.md) |
-| Cutting a release (tag conventions, secrets, rollback) | [docs/releasing.md](docs/releasing.md) |
-| Where each service runs in production / cost / DR / rollback | [docs/deployment.md](docs/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
-| Touching AWS infra (web hosting) | [infra/README.md](infra/README.md) — Terraform stacks (bootstrap, dns, github-oidc, modules/web-stack, envs/{prod,preview}), sops + KMS for runtime secrets, first-deploy walkthrough; see [decisions.md § 53](docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the rationale |
+| Backend schema, RLS, RPCs, Storage buckets | [docs/backend/api_database.md](docs/backend/api_database.md) |
+| Setting up the monorepo / melos / workspaces | [docs/architecture/monorepo.md](docs/architecture/monorepo.md) |
+| "Why did you do it this way?" | [docs/architecture/decisions.md](docs/architecture/decisions.md) — ADR log |
+| "Should we build our own watch hardware?" | [docs/custom_watch/README.md](docs/custom_watch/README.md) — research baseline for an ultra-marathon watch (vision, competitive landscape, BOM, prototyping cost tiers, performance path, firmware architecture). Current default of not starting hardware work + the triggers that would change it are recorded in [decisions.md § 71](docs/architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely). The 2026-05-28 §71 amendment permits owner-personal tier-1 bench-prototype work; the active firmware workspace lives at [apps/custom_watch/](apps/custom_watch/README.md) and the live parts shopping list at [docs/custom_watch/parts.md](docs/custom_watch/parts.md). Firmware language locked to Rust + Embassy per [§ 80](docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) |
+| House style (naming, comments, error handling) | [docs/architecture/conventions.md](docs/architecture/conventions.md) |
+| Cutting a release (tag conventions, secrets, rollback) | [docs/ops/releasing.md](docs/ops/releasing.md) |
+| Where each service runs in production / cost / DR / rollback | [docs/ops/deployment.md](docs/ops/deployment.md) — hub; per-service plans live alongside each `apps/<x>/deployment.md` |
+| Touching AWS infra (web hosting) | [infra/README.md](infra/README.md) — Terraform stacks (bootstrap, dns, github-oidc, modules/web-stack, envs/{prod,preview}), sops + KMS for runtime secrets, first-deploy walkthrough; see [decisions.md § 53](docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the rationale |
 | Deploying / rotating preview or prod (operator scripts) | [bin/README.md](bin/README.md) — wraps the AWS / sops / terraform sequences (`aws-preflight`, `deploy-preview`, `sops-init`, `secret-set`, `preview-status`, `lambda-logs`, `key-rotate`, `onboard-operator`, `disaster-recovery`) so first-deploy + rotation flows fit on a few commands. Read-only by default; mutating ones prompt or take `--auto-approve`. |
-| Adding a paywalled feature | [docs/paywall.md](docs/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
-| Running map tiles locally (no MapTiler quota burn) | [docs/protomaps_local_setup.md](docs/protomaps_local_setup.md) — `bin/protomaps-dev.sh start` boots a self-hosted tileserver-gl in Docker; web / mobile / Wear OS pick up the override via env vars. See [decisions.md § 68](docs/decisions.md#68-tile-rendering-honours-an-env-override-so-local-dev-can-use-self-hosted-protomaps-without-touching-prod-code-paths) for the design |
+| Adding a paywalled feature | [docs/features/paywall.md](docs/features/paywall.md) — tiers, feature registry, BYPASS_PAYWALL, RevenueCat |
+| Running map tiles locally (no MapTiler quota burn) | [docs/ops/protomaps_local_setup.md](docs/ops/protomaps_local_setup.md) — `bin/protomaps-dev.sh start` boots a self-hosted tileserver-gl in Docker; web / mobile / Wear OS pick up the override via env vars. See [decisions.md § 68](docs/architecture/decisions.md#68-tile-rendering-honours-an-env-override-so-local-dev-can-use-self-hosted-protomaps-without-touching-prod-code-paths) for the design |
 
-Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas). **Each non-web app's CLAUDE.md opens with a "Scope — read before writing code" section** that spells out what to build there vs. what to push to web first per [decisions.md § 24](docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive). Read it before adding a feature on a non-web client.
+Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas). **Each non-web app's CLAUDE.md opens with a "Scope — read before writing code" section** that spells out what to build there vs. what to push to web first per [decisions.md § 24](docs/architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive). Read it before adding a feature on a non-web client.
 - [apps/web/CLAUDE.md](apps/web/CLAUDE.md) — SvelteKit 2 + Svelte 5 runes; **canonical feature surface** for the whole product
 - [apps/mobile_android/CLAUDE.md](apps/mobile_android/CLAUDE.md) — most mature Flutter target; mirrors web + adds device-led capabilities
-- [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter; **`lib/` and `test/` are byte-identical to `mobile_android`** ([decisions.md § 39](docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)); platform-specific behaviour dispatches via `Platform.isIOS` inside the unified files
+- [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter; **`lib/` and `test/` are byte-identical to `mobile_android`** ([decisions.md § 39](docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)); platform-specific behaviour dispatches via `Platform.isIOS` inside the unified files
 - [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter); wrist-only complement, NOT a pocket-app mirror
 - [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional; wrist-only complement, NOT a pocket-app mirror
-- [apps/custom_watch/CLAUDE.md](apps/custom_watch/CLAUDE.md) — Rust + Embassy firmware for the ultra-marathon watch research effort; **research-tier, tier-1 bench prototype only**, see [decisions.md § 71](docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance). Strategy + BOM + cost tiers + parts list live at [docs/custom_watch/](docs/custom_watch/README.md)
+- [apps/custom_watch/CLAUDE.md](apps/custom_watch/CLAUDE.md) — Rust + Embassy firmware for the ultra-marathon watch research effort; **research-tier, tier-1 bench prototype only**, see [decisions.md § 71](docs/architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance). Strategy + BOM + cost tiers + parts list live at [docs/custom_watch/](docs/custom_watch/README.md)
 
 ## Audit commands
 
@@ -62,17 +62,17 @@ For security-sensitive, schema, or recording-stack changes — anything where a 
 Every non-trivial dev change goes through **review → unit tests → e2e tests** before it's done. The `/check` slash command runs the three relevant agents in parallel against the working diff and reports gaps:
 
 - `code-reviewer` — does the change honour project invariants? (same agent `/safe-edit` uses)
-- `test-gap-checker` — did the diff add unit tests + e2e tests where the rule says it should? Web e2e = Playwright (`apps/web/tests-e2e/`). Backend e2e = pgtap (`apps/backend/supabase/tests/`) or Deno tests next to the Edge Function. Mobile / watch have **no e2e equivalent** by design — see `docs/testing.md § What's not covered`.
+- `test-gap-checker` — did the diff add unit tests + e2e tests where the rule says it should? Web e2e = Playwright (`apps/web/tests-e2e/`). Backend e2e = pgtap (`apps/backend/supabase/tests/`) or Deno tests next to the Edge Function. Mobile / watch have **no e2e equivalent** by design — see `docs/testing/testing.md § What's not covered`.
 - `doc-hygiene-checker` — same as the Docs hygiene rule below.
 
 Cheaper than `/safe-edit` (single pass, no review-and-fix loop), advisory only — the user decides which findings to apply. Use it before every commit on a non-trivial change. Skip on typos / comment edits / dep bumps.
 
-The full rule + per-source-type test surface is in [`docs/conventions.md` § Test hygiene](docs/conventions.md#test-hygiene--review-then-unit-then-e2e).
+The full rule + per-source-type test surface is in [`docs/architecture/conventions.md` § Test hygiene](docs/architecture/conventions.md#test-hygiene--review-then-unit-then-e2e).
 
 ## Branches & PRs
 
 - `main` is the working branch. Commits land directly on `main` when the user has asked for the work; PRs to `main` are still the path for anything that needs review.
-- **Commit after each discrete piece of work** — don't batch a multi-step session into one mega-commit at the end. New module + tests is one commit; bug fix + pinning test is one commit; docs sweep is one commit (after the code commit it documents). Self-check: "I'll commit at the end after I verify" is a smell — commit each piece as you go. Tests for a piece go in the **same commit** as the piece. Full enumeration of "what counts as a piece" in [docs/conventions.md § Commit cadence](docs/conventions.md#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump).
+- **Commit after each discrete piece of work** — don't batch a multi-step session into one mega-commit at the end. New module + tests is one commit; bug fix + pinning test is one commit; docs sweep is one commit (after the code commit it documents). Self-check: "I'll commit at the end after I verify" is a smell — commit each piece as you go. Tests for a piece go in the **same commit** as the piece. Full enumeration of "what counts as a piece" in [docs/architecture/conventions.md § Commit cadence](docs/architecture/conventions.md#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump).
 - "Never commit without being asked" still applies: don't proactively commit speculative work, ad-hoc workstation tweaks, or partially-aborted attempts. Once the user has asked for a piece (or a sequence), the per-piece commit cadence above is implicitly authorized.
 - Never `git push` without an explicit ask. The commit is the deliverable; pushing is a separate ask.
 - Never amend or force-push without being asked.
@@ -85,9 +85,9 @@ The full rule + per-source-type test surface is in [`docs/conventions.md` § Tes
 Concretely, before you report a task as done:
 
 1. **Feature / behaviour change** — does any doc describe the old behaviour? Update it. Candidates: `roadmap.md`, `features.md`, `parity.md` (flip cells for every platform the change affects), `architecture.md`, the matching `apps/<app>/local_testing.md`, and the per-app CLAUDE.md.
-2. **Schema change** — regenerate both type files (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`). Update `api_database.md` if a column, index, or RLS policy moved. See [schema_codegen.md](docs/schema_codegen.md).
-3. **New convention or house rule** — add it to `docs/conventions.md`.
-4. **Non-obvious decision or trade-off** — append an entry to `docs/decisions.md`. One paragraph. Don't rewrite history entries.
+2. **Schema change** — regenerate both type files (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`). Update `api_database.md` if a column, index, or RLS policy moved. See [schema_codegen.md](docs/architecture/schema_codegen.md).
+3. **New convention or house rule** — add it to `docs/architecture/conventions.md`.
+4. **Non-obvious decision or trade-off** — append an entry to `docs/architecture/decisions.md`. One paragraph. Don't rewrite history entries.
 5. **Process / tooling change** — update `monorepo.md` (common tasks) and this file (if it's something a future session will hit as a gotcha).
 6. **Roadmap checkbox** — tick it in `roadmap.md` the moment the work merges, not weeks later.
 
@@ -107,10 +107,10 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 
 ### Schema and row types
 
-- **Every migration requires two regenerations.** TypeScript: `npm run gen:types`. Dart: `dart run scripts/gen_dart_models.dart`. Both outputs are committed. CI runs `gen:types:check` in the `parity-types` job and will fail PRs that skip it. See [docs/schema_codegen.md](docs/schema_codegen.md).
+- **Every migration requires two regenerations.** TypeScript: `npm run gen:types`. Dart: `dart run scripts/gen_dart_models.dart`. Both outputs are committed. CI runs `gen:types:check` in the `parity-types` job and will fail PRs that skip it. See [docs/architecture/schema_codegen.md](docs/architecture/schema_codegen.md).
 - **The Dart generator only understands `create table`, `alter table ... add column`, `alter table ... drop column`.** Everything else (indexes, functions, RLS, storage buckets, `$$...$$` bodies) is ignored. If you need a new SQL form, grow the parser in `scripts/gen_dart_models.dart` — don't hand-edit `db_rows.dart`.
 - **Narrow unions live client-side AND in CHECK constraints** — `RunSource`, `RouteSurface`, `IntegrationProvider`, `PreferredUnit`, `SubscriptionTier`, `ClubRole` are overlaid as TS unions in `apps/web/src/lib/types.ts` via `Omit & {...}` AND enforced by CHECK constraints (see `apps/backend/supabase/migrations/20260505_001_narrow_union_check_constraints.sql` for the first four, `20260429_001_subscription_paywall.sql` for `subscription_tier`, `20260428_001_role_permissions.sql` for `role`). The TS union and the CHECK must stay in lockstep — updating one without the other lets one client write a value the other rejects (postgres 23514 `check_violation`). The `parity-types` CI job runs `apps/web/scripts/check_constraint_unions.mjs` to fail PRs that drift; if you add a new union+CHECK pair, append it to the `PAIRS` array in that script. Dart treats these columns as raw `String` (no Dart enum to update), but invalid writes are still rejected at the DB. If you add a new value: update the migration, regenerate types, update the TS union.
-- **`runs.track` is not a column.** The GPS trace lives as a gzipped JSON file in the `runs` Storage bucket at `{user_id}/{run_id}.json.gz`; the row stores `track_url`. Never try to read `row.track` — it's `row.track_url` + a lazy download via `fetchTrack()`. See [docs/decisions.md](docs/decisions.md) for why.
+- **`runs.track` is not a column.** The GPS trace lives as a gzipped JSON file in the `runs` Storage bucket at `{user_id}/{run_id}.json.gz`; the row stores `track_url`. Never try to read `row.track` — it's `row.track_url` + a lazy download via `fetchTrack()`. See [docs/architecture/decisions.md](docs/architecture/decisions.md) for why.
 - **`Run.metadata` is a `jsonb` bag** with no schema. It currently holds `activity_type`, `steps`, `event` (parkrun), `position` (parkrun), `age_grade`, and — client-only — a synthesised `track_url` key stuck there by `_runFromRow` for convenience. If you add a new metadata key, write a roadmap note; there is no type-level protection on these.
 
 ### Styling and conventions
@@ -120,7 +120,7 @@ If you're unsure whether a doc change is warranted, err on the side of editing �
 - **Don't summarise what you just did** at the end of every response when the user can read the diff — keep end-of-turn text to 1–2 sentences (what changed, what's next).
 - **No preemptive abstractions.** Three similar lines is better than a premature helper. If a `bug fix` PR contains a refactor, split it.
 - **No backwards-compat shims**, no `// removed X` comments, no renamed-to-underscore-prefix unused variables. If something's unused, delete it.
-- **Layered resilience is a product contract.** Basics always work. Design every new feature so a failure at a higher layer (L4 auxiliary effect, L3 route overlay, L2 map, etc.) cannot break a lower one (L1 GPS/pedometer distance, L0 clock). Wrap each auxiliary effect (TTS, network ping, platform channel, third-party widget) in its own try/catch + `debugPrint` — never widen to a single outer catch, never swallow silently, and never let an auxiliary failure cancel a core `setState`. See [docs/conventions.md § Layered resilience](docs/conventions.md#layered-resilience) and the L0–L4 table in [docs/run_recording.md § Layering](docs/run_recording.md#layering) before touching the recording stack.
+- **Layered resilience is a product contract.** Basics always work. Design every new feature so a failure at a higher layer (L4 auxiliary effect, L3 route overlay, L2 map, etc.) cannot break a lower one (L1 GPS/pedometer distance, L0 clock). Wrap each auxiliary effect (TTS, network ping, platform channel, third-party widget) in its own try/catch + `debugPrint` — never widen to a single outer catch, never swallow silently, and never let an auxiliary failure cancel a core `setState`. See [docs/architecture/conventions.md § Layered resilience](docs/architecture/conventions.md#layered-resilience) and the L0–L4 table in [docs/features/run_recording.md § Layering](docs/features/run_recording.md#layering) before touching the recording stack.
 - **TS↔Dart parity helpers must stay in lockstep.** Several pure-logic modules exist on both web and mobile and must match — algorithm, edge cases, outputs, test counts. The pairs are: `training`, `segments`, `privacy`, `recurrence`, `pace_segments`, `training_load`, `fitness`, `rate_limit_errors`, `runner_handle`, plus the `track_projection.ts` ↔ `projectTrack` helper inside `track_preview.dart`. The `shared-library-syncer` agent (under `.claude/agents/`) detects divergence proactively after edits — invoke it whenever you touch one side of a pair.
 
 ## Layout cheat-sheet

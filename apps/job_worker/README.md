@@ -91,7 +91,7 @@ docker run --rm \
   job_worker:latest
 ```
 
-Deployment target is Fly.io per [`../../docs/roadmap.md`](../../docs/roadmap.md) §205. Sized for a single 256 MB VM in v1; horizontal-scale by replicating the same image — the SQL `for update skip locked` in `claim_next_job` makes that safe.
+Deployment target is Fly.io per [`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §205. Sized for a single 256 MB VM in v1; horizontal-scale by replicating the same image — the SQL `for update skip locked` in `claim_next_job` makes that safe.
 
 ## Map-matching engine
 
@@ -118,7 +118,7 @@ SUPABASE_URL="$API_URL" SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
 When `OSRM_URL` is unset the worker falls back to the passthrough.
 
 Roadmap-tracked engine evaluation (Valhalla Meili / GraphHopper) lives
-at [`../../docs/roadmap.md`](../../docs/roadmap.md) §515-531. The
+at [`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §515-531. The
 `Matcher` interface is stable; adding a new engine means adding a
 sibling to `internal/matcher_osrm.go` and another env-driven branch in
 `main.go`.

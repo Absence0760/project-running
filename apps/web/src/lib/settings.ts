@@ -17,7 +17,7 @@ import {
 ///   2. universal value (`user_settings.prefs`)
 ///   3. fallback supplied by the caller
 ///
-/// Known keys are registered in `docs/settings.md`. The pure overlay
+/// Known keys are registered in `docs/backend/settings.md`. The pure overlay
 /// helpers (`effective`, `LoadedSettings`, `PrefsBag`) live in
 /// `./settings_overlay`; the offline-first cache primitive lives in
 /// `./settings_cache`. Both are re-exported below so existing

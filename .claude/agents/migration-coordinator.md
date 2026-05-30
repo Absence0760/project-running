@@ -64,12 +64,12 @@ Re-run the guard after editing.
 
 Per `CLAUDE.md` "Docs hygiene", schema changes can require touching:
 
-- `docs/api_database.md` — if a column, index, or RLS policy moved
-- `docs/metadata.md` — if a `runs.metadata` jsonb key was added or its semantics changed
-- `docs/conventions.md` — if a new house rule was introduced
-- `docs/decisions.md` — if the change captures a non-obvious trade-off
-- `docs/schema_codegen.md` — if the generator pipeline itself changed
-- `docs/parity.md` — if the change unlocks a new feature row
+- `docs/backend/api_database.md` — if a column, index, or RLS policy moved
+- `docs/backend/metadata.md` — if a `runs.metadata` jsonb key was added or its semantics changed
+- `docs/architecture/conventions.md` — if a new house rule was introduced
+- `docs/architecture/decisions.md` — if the change captures a non-obvious trade-off
+- `docs/architecture/schema_codegen.md` — if the generator pipeline itself changed
+- `docs/product/parity.md` — if the change unlocks a new feature row
 
 Read the migration once more and report which of these you think need touching, with one-sentence justifications. Don't edit them yourself — let the parent (or the human) decide which apply.
 

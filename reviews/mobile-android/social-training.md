@@ -245,7 +245,7 @@ DateTime weekStartLocal(DateTime now) {
 }
 ```
 
-The `week_start_day` key (`'monday' | 'sunday'`) is registered in `docs/settings.md` and editable on the web settings page. `weekStartLocal()` always uses Monday regardless. A user who configures Sunday start will see: goal progress reset on Monday (not Sunday), a different week boundary than the web dashboard's mileage rollup, and the `period_summary_screen` (which has its own `periodStart` logic — also Monday-anchored) disagrees with the goal card.
+The `week_start_day` key (`'monday' | 'sunday'`) is registered in `docs/backend/settings.md` and editable on the web settings page. `weekStartLocal()` always uses Monday regardless. A user who configures Sunday start will see: goal progress reset on Monday (not Sunday), a different week boundary than the web dashboard's mileage rollup, and the `period_summary_screen` (which has its own `periodStart` logic — also Monday-anchored) disagrees with the goal card.
 
 `weekStartLocal()` is the documented "single source of truth for this week across goals, the history filter, and the dashboard summary cards." Fix it to accept the preference:
 
@@ -272,7 +272,7 @@ try {
 } catch (_) {}
 ```
 
-The convention (`docs/conventions.md § Isolate auxiliary effects`) requires `debugPrint` on catch, not a silent swallow. Without the log there is no way to detect a systematic failure (e.g. RLS regression on `runs` update) in production.
+The convention (`docs/architecture/conventions.md § Isolate auxiliary effects`) requires `debugPrint` on catch, not a silent swallow. Without the log there is no way to detect a systematic failure (e.g. RLS regression on `runs` update) in production.
 
 Fix:
 

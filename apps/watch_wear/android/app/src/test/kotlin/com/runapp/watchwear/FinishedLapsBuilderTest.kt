@@ -9,7 +9,7 @@ import org.junit.Test
 /// service's cumulative-mark laps into per-lap split rows for the
 /// post-run table.
 ///
-/// History: `docs/metadata.md` notes a Wear OS bug where
+/// History: `docs/backend/metadata.md` notes a Wear OS bug where
 /// `start_offset_s` was emitted as cumulative-AFTER instead of
 /// cumulative-BEFORE in `buildRunMetadata`. The fix was in the
 /// metadata builder, but the FinishedLap shape that builder reads

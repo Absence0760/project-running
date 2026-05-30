@@ -385,4 +385,4 @@ iOS background location keeps the process alive during an active `CLLocationMana
 Currently watch runs arriving when the user is not signed in are silently dropped after `WatchIngest.attach` is skipped. Should unauthed watch runs be queued locally (to `LocalRunStore`) and synced when the user signs in, or is the current behaviour (drop) acceptable for MVP?
 
 **Q5: Should the iOS paywall use StoreKit directly or RevenueCat?**
-Android uses RevenueCat (configured per `docs/paywall.md`). RevenueCat supports iOS. However, since the paywall is currently disabled (`isLocked()` returns `false`), this is not a blocking question for Phase 1 — but the answer affects whether `purchases_flutter` (RevenueCat's pub package) needs to be added to the iOS `pubspec.yaml`.
+Android uses RevenueCat (configured per `docs/features/paywall.md`). RevenueCat supports iOS. However, since the paywall is currently disabled (`isLocked()` returns `false`), this is not a blocking question for Phase 1 — but the answer affects whether `purchases_flutter` (RevenueCat's pub package) needs to be added to the iOS `pubspec.yaml`.

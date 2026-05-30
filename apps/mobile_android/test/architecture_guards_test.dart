@@ -62,8 +62,8 @@ void main() {
     });
 
     test('_onSnapshot updates L0/L1 stats before any L4 effect', () {
-      // Reason: the layering rule (docs/conventions.md § Layered
-      // resilience, docs/run_recording.md § Layering) says L0 (clock)
+      // Reason: the layering rule (docs/architecture/conventions.md § Layered
+      // resilience, docs/features/run_recording.md § Layering) says L0 (clock)
       // and L1 (GPS distance / pace) must not be broken by any L4
       // failure. Concretely: the mirror-field write + _statsNotifier
       // publish must complete before the first L4 try-block runs.
@@ -613,7 +613,7 @@ void main() {
         reason:
             'run_screen must read `widget.preferences.newRunsArePublic` '
             'to honour the user\'s privacy_default setting on save. '
-            'See decisions / docs/settings.md.',
+            'See decisions / docs/backend/settings.md.',
       );
       // Permissive regex to tolerate either the one-line form OR the
       // wrapped-method-chain form `await api\n  .saveRun(\n run,\n
@@ -664,7 +664,7 @@ void main() {
       // caller's user_id), so the failure is invisible until A
       // notices their runs missing — same shared-device contamination
       // pattern the foreground SyncService filter was added to prevent.
-      // See `docs/decisions.md § 67` for the owner-tag design.
+      // See `docs/architecture/decisions.md § 67` for the owner-tag design.
       final source = File('lib/background_sync.dart').readAsStringSync();
       expect(
         source,
@@ -2433,7 +2433,7 @@ void main() {
     test('no silent catch (_) {} sites in lib/', () {
       // Reason: audit/layered-resilience (May 2026) flagged 10
       // `catch (_) {}` sites in lib/. The layered-resilience contract
-      // in docs/conventions.md says every auxiliary catch must do
+      // in docs/architecture/conventions.md says every auxiliary catch must do
       // `catch (e) { debugPrint(...) }` so failures stay observable.
       // Silent swallows mask real regressions — a TTS init failure,
       // an integrations refresh that quietly returns nothing, a
@@ -2460,7 +2460,7 @@ void main() {
         offenders,
         isEmpty,
         reason: 'Silent catch (_) {} sites violate the layered-resilience '
-            'contract (docs/conventions.md). Replace with '
+            'contract (docs/architecture/conventions.md). Replace with '
             'catch (e) { debugPrint(\'...\'); } so failures stay '
             'observable. Found:\n  ${offenders.join('\n  ')}',
       );
@@ -3250,7 +3250,7 @@ void main() {
       final script = File('../../bin/protomaps-dev.sh');
       expect(script.existsSync(), isTrue,
           reason: 'bin/protomaps-dev.sh must exist as the documented '
-              'entry point in docs/protomaps_local_setup.md');
+              'entry point in docs/ops/protomaps_local_setup.md');
 
       // Permission bit — owner-exec is what makes
       // `bin/protomaps-dev.sh start` work without an explicit bash
@@ -3508,7 +3508,7 @@ void main() {
       //   4. `SyncService._trySync` consults
       //      `filterRunsForCurrentUser` before pushing.
       //
-      // See `docs/decisions.md § 67`.
+      // See `docs/architecture/decisions.md § 67`.
       final storeSrc =
           File('lib/local_run_store.dart').readAsStringSync();
       expect(

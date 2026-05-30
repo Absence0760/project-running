@@ -14,7 +14,7 @@ import '../lib/sync_service.dart';
 /// sign in, watch the queue drain. Plus the cross-user contamination
 /// guard on a shared device.
 ///
-/// See `docs/decisions.md § 67`.
+/// See `docs/architecture/decisions.md § 67`.
 
 class _SignInControllableApi extends ApiClient {
   String? _userId; // null until sign-in

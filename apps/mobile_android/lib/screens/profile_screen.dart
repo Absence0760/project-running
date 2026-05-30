@@ -16,7 +16,7 @@ import 'public_run_screen.dart';
 
 /// Page size for the followers / following tabs. Same value as the
 /// runs + routes screens — the convention is one consistent page size
-/// across surfaces (`docs/conventions.md § Pagination`).
+/// across surfaces (`docs/architecture/conventions.md § Pagination`).
 const int _kFollowsPageSize = 20;
 
 /// Public profile screen — mirrors the web `/u/[id]` page (decisions §31).

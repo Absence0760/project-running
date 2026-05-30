@@ -32,7 +32,7 @@ Pick zero or more from this list — a single change can hit several:
 - **Convention / house rule** — a new pattern that should apply to future code.
 - **Non-obvious decision / trade-off** — a deliberate choice with a reason worth recording.
 - **Process / tooling change** — npm script, CI step, generator, lint rule.
-- **Roadmap progress** — a checkbox on `docs/roadmap.md` is now done.
+- **Roadmap progress** — a checkbox on `docs/product/roadmap.md` is now done.
 - **Cross-platform parity shift** — a feature now exists or stops existing on a platform.
 - **Metadata jsonb key touched** — defer to `metadata-key-keeper` if available.
 
@@ -42,14 +42,14 @@ For each classification, list the docs that the rule says to touch:
 
 | Classification | Doc(s) to consider |
 |---|---|
-| Feature / behaviour | `docs/roadmap.md`, `docs/features.md`, `docs/parity.md`, `docs/architecture.md`, the relevant `apps/<app>/local_testing.md`, the per-app `apps/<app>/CLAUDE.md` |
-| Schema | `docs/api_database.md`, `docs/schema_codegen.md`, both regen outputs (`database.types.ts`, `db_rows.dart`, Kotlin `DbRows.kt`) |
-| Convention | `docs/conventions.md` |
-| Decision / trade-off | `docs/decisions.md` (append a numbered ADR — never rewrite history) |
-| Process / tooling | `docs/monorepo.md`, the repo-root `CLAUDE.md` if it's a session-level gotcha |
-| Roadmap progress | `docs/roadmap.md` (tick the box) |
-| Parity shift | `docs/parity.md` (flip the cell for every affected platform) |
-| Metadata jsonb | `docs/metadata.md` |
+| Feature / behaviour | `docs/product/roadmap.md`, `docs/product/features.md`, `docs/product/parity.md`, `docs/architecture/architecture.md`, the relevant `apps/<app>/local_testing.md`, the per-app `apps/<app>/CLAUDE.md` |
+| Schema | `docs/backend/api_database.md`, `docs/architecture/schema_codegen.md`, both regen outputs (`database.types.ts`, `db_rows.dart`, Kotlin `DbRows.kt`) |
+| Convention | `docs/architecture/conventions.md` |
+| Decision / trade-off | `docs/architecture/decisions.md` (append a numbered ADR — never rewrite history) |
+| Process / tooling | `docs/architecture/monorepo.md`, the repo-root `CLAUDE.md` if it's a session-level gotcha |
+| Roadmap progress | `docs/product/roadmap.md` (tick the box) |
+| Parity shift | `docs/product/parity.md` (flip the cell for every affected platform) |
+| Metadata jsonb | `docs/backend/metadata.md` |
 
 Don't dump the whole table back to the parent — only list the rows that match the diff's classifications.
 

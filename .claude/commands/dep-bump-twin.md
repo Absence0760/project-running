@@ -7,7 +7,7 @@ Mirror a Dependabot `chore(mobile/deps)` PR's `apps/mobile_android/pubspec.yaml`
 
 ## Why this exists
 
-Dependabot only tracks `apps/mobile_android/pubspec.yaml` (`.github/dependabot.yml` opens one entry there, not on iOS). `apps/mobile_ios/pubspec.yaml` is a manual mirror per [decisions.md §39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — only `name` and `description` may differ. If a Dependabot PR lands without the iOS mirror, the next `twin-parity` CI job fails on `main`.
+Dependabot only tracks `apps/mobile_android/pubspec.yaml` (`.github/dependabot.yml` opens one entry there, not on iOS). `apps/mobile_ios/pubspec.yaml` is a manual mirror per [decisions.md §39](../../docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase) — only `name` and `description` may differ. If a Dependabot PR lands without the iOS mirror, the next `twin-parity` CI job fails on `main`.
 
 This command does the mirror in one step so the user doesn't context-switch between the GitHub PR view and the iOS pubspec.
 

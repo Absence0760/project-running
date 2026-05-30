@@ -14,7 +14,7 @@ import org.junit.Test
 ///     `PUBLIC_TILE_URL_TEMPLATE` is set).
 ///   * Placeholder substitution for the dev template.
 ///
-/// See `docs/protomaps_local_setup.md` + `decisions.md § 68`.
+/// See `docs/ops/protomaps_local_setup.md` + `decisions.md § 68`.
 class TileUrlBuilderTest {
 
     @Test

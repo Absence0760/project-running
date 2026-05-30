@@ -64,7 +64,7 @@ npm run gen:types                       # writes apps/web/src/lib/database.types
 dart run scripts/gen_dart_models.dart   # writes packages/core_models/lib/src/generated/db_rows.dart
 ```
 
-`npm run gen:types:check` is the exact command CI runs in the `parity-types` job — use it to verify your committed types match the schema before pushing. Full reference in [schema_codegen.md](schema_codegen.md).
+`npm run gen:types:check` is the exact command CI runs in the `parity-types` job — use it to verify your committed types match the schema before pushing. Full reference in [schema_codegen.md](../../docs/architecture/schema_codegen.md).
 
 ---
 

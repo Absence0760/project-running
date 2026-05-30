@@ -96,7 +96,7 @@ Split across chunk boundaries too — the chunk loop wraps these two upserts.
 **Severity:** MED
 **File(s):** `packages/api_client/lib/src/api_client.dart:336`
 
-**Issue:** `_waypointToJson` serialises `w.timestamp?.toIso8601String()` without `.toUtc()`. GPS timestamps come from geolocator, which returns local-tz `DateTime` objects on Android. The stored track in Storage will contain entries like `"ts": "2026-04-21T09:15:00.000"`. The web `fetchTrack` uses `DateTime.tryParse(m['ts'])`, which on the browser (V8) parses a naive ISO string as _local_ browser time — correct only if the browser and Android phone happen to be in the same timezone. The `docs/api_database.md` canonical shape shows `"ts": "2025-04-05T08:00:00Z"` (UTC with Z).
+**Issue:** `_waypointToJson` serialises `w.timestamp?.toIso8601String()` without `.toUtc()`. GPS timestamps come from geolocator, which returns local-tz `DateTime` objects on Android. The stored track in Storage will contain entries like `"ts": "2026-04-21T09:15:00.000"`. The web `fetchTrack` uses `DateTime.tryParse(m['ts'])`, which on the browser (V8) parses a naive ISO string as _local_ browser time — correct only if the browser and Android phone happen to be in the same timezone. The `docs/backend/api_database.md` canonical shape shows `"ts": "2025-04-05T08:00:00Z"` (UTC with Z).
 
 **Evidence:**
 ```dart
@@ -127,7 +127,7 @@ static Map<String, dynamic> _waypointToJson(Waypoint w) => {
 **Severity:** MED
 **File(s):** `apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/RunViewModel.kt:689-699`
 
-**Issue:** The Wear OS watch writes `metadata.laps` with shape `{ number: int, at_ms: long, distance_m: double }`. The `docs/metadata.md` registry for `laps` (written by `run_recorder`) defines the shape as `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }`. The web reader (`run_detail_screen.dart`) and any future web lap display will find the watch-produced rows have different key names (`number` vs `index`, `at_ms` (milliseconds) vs `start_offset_s` (seconds)), causing the lap section to render blank or throw.
+**Issue:** The Wear OS watch writes `metadata.laps` with shape `{ number: int, at_ms: long, distance_m: double }`. The `docs/backend/metadata.md` registry for `laps` (written by `run_recorder`) defines the shape as `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }`. The web reader (`run_detail_screen.dart`) and any future web lap display will find the watch-produced rows have different key names (`number` vs `index`, `at_ms` (milliseconds) vs `start_offset_s` (seconds)), causing the lap section to render blank or throw.
 
 **Evidence:**
 ```kotlin
@@ -143,7 +143,7 @@ put("laps", buildJsonArray {
     }
 })
 ```
-The `docs/metadata.md` laps schema:
+The `docs/backend/metadata.md` laps schema:
 ```
 { index: int, start_offset_s: int, distance_m: double, duration_s: int }
 ```
@@ -168,7 +168,7 @@ put("laps", buildJsonArray {
     }
 })
 ```
-Also update `docs/metadata.md` to note Wear OS as a writer.
+Also update `docs/backend/metadata.md` to note Wear OS as a writer.
 
 **Risk if applied:** Watch runs already stored keep the old schema; those laps will remain blank on the detail screen. New watch runs will display correctly. No data loss.
 
@@ -212,7 +212,7 @@ Also apply to the `_pickDate` and `_pickTime` reconstructions (lines 77 and 94).
 **Severity:** LOW
 **File(s):** `apps/mobile_android/lib/settings_sync.dart:56-73`
 
-**Issue:** `SettingsSyncService.pushPreferredUnit()` writes only `preferred_unit` to the universal bag. `_applyUniversal` reads only `preferred_unit` back. The `docs/settings.md` registry lists 10 Universal or Universal-overridable keys that other clients (web, future iOS) both read and write: `default_activity_type`, `hr_zones`, `resting_hr_bpm`, `max_hr_bpm`, `date_of_birth`, `privacy_default`, `strava_auto_share`, `coach_personality`, `weekly_mileage_goal_m`, `week_start_day`. Android ignores all of them on sign-in. A user who sets `weekly_mileage_goal_m` on the web will not see their goal on Android's dashboard goal card.
+**Issue:** `SettingsSyncService.pushPreferredUnit()` writes only `preferred_unit` to the universal bag. `_applyUniversal` reads only `preferred_unit` back. The `docs/backend/settings.md` registry lists 10 Universal or Universal-overridable keys that other clients (web, future iOS) both read and write: `default_activity_type`, `hr_zones`, `resting_hr_bpm`, `max_hr_bpm`, `date_of_birth`, `privacy_default`, `strava_auto_share`, `coach_personality`, `weekly_mileage_goal_m`, `week_start_day`. Android ignores all of them on sign-in. A user who sets `weekly_mileage_goal_m` on the web will not see their goal on Android's dashboard goal card.
 
 **Evidence:**
 ```dart
@@ -243,7 +243,7 @@ void _applyUniversal(Map<String, dynamic> prefs) {
 **Severity:** LOW
 **File(s):** `apps/mobile_android/lib/strava_importer.dart:73,169`
 
-**Issue:** `StravaImporter` sets `externalId: activityId` where `activityId` is the raw string from the CSV `activity id` column (e.g. `"12345678"`). The server-side `strava-webhook` function (once its TODO `upsert` is implemented) is documented in `docs/api_database.md` as using `external_id = strava:{activity_id}` (namespaced). If both paths are ever live simultaneously, the same Strava activity would produce two rows — one with `external_id = "12345678"` from the Android ZIP importer and one with `external_id = "strava:12345678"` from the webhook — because the unique index would not match them.
+**Issue:** `StravaImporter` sets `externalId: activityId` where `activityId` is the raw string from the CSV `activity id` column (e.g. `"12345678"`). The server-side `strava-webhook` function (once its TODO `upsert` is implemented) is documented in `docs/backend/api_database.md` as using `external_id = strava:{activity_id}` (namespaced). If both paths are ever live simultaneously, the same Strava activity would produce two rows — one with `external_id = "12345678"` from the Android ZIP importer and one with `external_id = "strava:12345678"` from the webhook — because the unique index would not match them.
 
 The webhook function body today has only a `// TODO: Map to Run and upsert into runs table` comment, so this is not a live conflict yet, but the design contract is inconsistent.
 
@@ -254,7 +254,7 @@ final activityId = idIdx >= 0 ? row[idIdx].toString() : _uuid.v4();
 // ...
 externalId: stravaId,   // = "12345678"
 ```
-`docs/api_database.md` (strava-webhook section):
+`docs/backend/api_database.md` (strava-webhook section):
 > `external_id = strava:{activity_id}`
 
 **Cross-platform impact:** Once the strava-webhook TODO is implemented, duplicate rows will appear for any activity the user imported from a ZIP before also having the webhook active. Web and Android would both display the duplicate.
@@ -296,6 +296,6 @@ Verify the webhook's intended format before making this change — the webhook i
 - **`strava-webhook/index.ts` — Strava activity sync is a TODO.** The webhook receives activity events but does not map them to runs or upsert into the DB. Once this is implemented it must set `external_id = 'strava:{activity_id}'` and include `source`, `user_id`, `started_at`, `distance_m`, `duration_s` — otherwise it will produce incomplete rows. The web auditor should flag this; it is a server-side concern, not Android.
 - **`strava-import/index.ts` — backfill is a TODO.** The Edge Function stores tokens but does not fetch activity history. The `imported: 0` response hardcoded at line 46 confirms nothing is written to `runs`. Not an Android problem.
 - **`export-data/index.ts` — entirely stubbed.** All steps are `// TODO`. Not an Android problem.
-- **Web `+page.svelte` does not push any `metadata` keys.** `docs/metadata.md` acknowledges this. No Android impact from the absence, but a future "edit run" page on the web needs to handle all registered keys carefully to avoid clobbering Android-written metadata. Flag for the web auditor.
+- **Web `+page.svelte` does not push any `metadata` keys.** `docs/backend/metadata.md` acknowledges this. No Android impact from the absence, but a future "edit run" page on the web needs to handle all registered keys carefully to avoid clobbering Android-written metadata. Flag for the web auditor.
 - **`watch_ios` `SupabaseService.swift` under `#if DEBUG` only.** Production watch-iOS runs go through the phone proxy via `WCSession.transferFile`; the phone side (Android or iOS) does the actual Supabase write. The phone-side receive path on `mobile_ios` is scaffold-only (per `CLAUDE.md`). Until `mobile_ios` gains real Supabase auth, Apple Watch runs cannot sync. Not an Android bug.
-- **`metadata.steps` wire type is a known unverified issue.** `docs/metadata.md` explicitly flags this as `investigate`. Android writes it as `int` from `_steps` (Dart `int`). The web reader uses it as-is. The JSON wire format is an integer literal. No active bug observed in Android code; the investigation is a web/interop concern.
+- **`metadata.steps` wire type is a known unverified issue.** `docs/backend/metadata.md` explicitly flags this as `investigate`. Android writes it as `int` from `_steps` (Dart `int`). The web reader uses it as-is. The JSON wire format is an integer literal. No active bug observed in Android code; the investigation is a web/interop concern.

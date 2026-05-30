@@ -96,7 +96,7 @@ jobs:
   parity-matrix:
     name: Parity matrix drift
     # Lightweight markdown audit — runs the Dart script that walks
-    # docs/parity.md, asserts every row has 7 cells, uses only the
+    # docs/product/parity.md, asserts every row has 7 cells, uses only the
     # legal `✓ / ✗ / Partial / N/A` symbols, fails on the impossible
     # "iOS ahead of Android" state (decisions § 39), and flags any
     # `Partial` row missing a Notes explanation. Catches authoring

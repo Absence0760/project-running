@@ -98,7 +98,7 @@ android {
         // Protomaps tileserver-gl during dev so the watch doesn't
         // burn MapTiler quota on tile requests it'll never see in
         // production. Empty string ⇒ MapTiler path with the key
-        // above. See `docs/protomaps_local_setup.md` and
+        // above. See `docs/ops/protomaps_local_setup.md` and
         // `decisions.md § 68`. Set in `.env.local`.
         buildConfigField(
             "String", "PUBLIC_TILE_URL_TEMPLATE",

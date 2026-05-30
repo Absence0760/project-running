@@ -31,8 +31,8 @@ import { USER_A, USER_C_PRO } from '../fixtures/users';
  * — `isLocked()` returns `false` for every key, so /coach is reachable
  * by every signed-in user regardless of tier. The Pro tier is
  * delivered through behaviour changes inside the surface (higher
- * daily cap, wider context budget). See [docs/paywall.md] for the
- * current model and [docs/decisions.md § 23] for the rationale.
+ * daily cap, wider context budget). See [docs/features/paywall.md] for the
+ * current model and [docs/architecture/decisions.md § 23] for the rationale.
  */
 
 const TODAY = new Date().toISOString().slice(0, 10);

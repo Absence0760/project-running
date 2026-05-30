@@ -172,7 +172,7 @@ class SyncService with WidgetsBindingObserver {
     // reject every row, the queue would never drain, and B's "X
     // unsynced" badge would be stuck forever. Runs without the tag
     // (legacy, or saved when no provider was wired) adopt to the
-    // current user. See `docs/decisions.md § 67`.
+    // current user. See `docs/architecture/decisions.md § 67`.
     final unsynced = filterRunsForCurrentUser(allUnsynced, api.userId);
     final skippedForeignOwner = allUnsynced.length - unsynced.length;
     if (skippedForeignOwner > 0) {
@@ -339,7 +339,7 @@ class SyncService with WidgetsBindingObserver {
 ///
 /// A run with a `created_by_user_id` that names a different user is
 /// dropped from the push set — its rightful owner will see it on
-/// the queue when they sign back in. See `docs/decisions.md § 67`.
+/// the queue when they sign back in. See `docs/architecture/decisions.md § 67`.
 ///
 /// Pure helper — no state, no I/O. Public so background_sync (which
 /// runs in its own process and can't reach a SyncService instance)

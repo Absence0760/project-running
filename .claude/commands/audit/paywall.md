@@ -6,11 +6,11 @@ Audit every paywall-gated feature for missing or weak `is_pro` checks. Confirm `
 
 ## Goal
 
-Per `docs/paywall.md`: features in the Pro tier should refuse access for free users at the API boundary, not just hide a UI element. Hiding a button without RLS or a server-side gate means anyone who knows the schema can call the same RPC and get the feature.
+Per `docs/features/paywall.md`: features in the Pro tier should refuse access for free users at the API boundary, not just hide a UI element. Hiding a button without RLS or a server-side gate means anyone who knows the schema can call the same RPC and get the feature.
 
 ## What to check
 
-1. **Feature registry.** Read `docs/paywall.md` for the canonical list of paywalled features (training plans beyond N, advanced training-load views, AI Coach quotas, etc.). For each: identify the client-side gate (`<ProGate>` or equivalent), the server-side gate (RLS / RPC body / Edge Function), and confirm both exist.
+1. **Feature registry.** Read `docs/features/paywall.md` for the canonical list of paywalled features (training plans beyond N, advanced training-load views, AI Coach quotas, etc.). For each: identify the client-side gate (`<ProGate>` or equivalent), the server-side gate (RLS / RPC body / Edge Function), and confirm both exist.
 2. **Server-side gate is load-bearing.** Grep for `is_pro`, `subscription_tier`, `paywall`, `pro_only`. Trace where the check happens. **Hiding the UI is not a gate** — the API call must reject when called directly.
 3. **`BYPASS_PAYWALL` env.** Grep for `BYPASS_PAYWALL`. Verify it's:
    - Only honored in development (`import.meta.env.DEV` or equivalent)
@@ -30,11 +30,11 @@ For each: feature name, the missing or weak gate, the file:line of both client a
 
 ## Useful starting points
 
-- `docs/paywall.md` — feature registry + tier definitions
+- `docs/features/paywall.md` — feature registry + tier definitions
 - `apps/web/src/lib/components/ProGate.svelte` — the canonical client-side gate pattern
 - Edge Functions and RPC migrations that mention `is_pro`
 - `apps/backend/supabase/migrations/20260429_001_subscription_paywall.sql`
-- `docs/decisions.md` — search "subscription", "paywall", "tier"
+- `docs/architecture/decisions.md` — search "subscription", "paywall", "tier"
 
 ## Delegate to
 

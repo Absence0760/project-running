@@ -2,7 +2,7 @@
 
 How `apps/backend/` (the whole Supabase project — Postgres, Auth, Storage, Realtime, Edge Functions, pg_cron) runs in production.
 
-This file is the operational counterpart of [`apps/backend/CLAUDE.md`](CLAUDE.md) (which describes the schema + EF + helpers) and [`apps/backend/local_testing.md`](local_testing.md) (the local stack). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md). Tag-driven release mechanics live in [`docs/releasing.md`](../../docs/releasing.md).
+This file is the operational counterpart of [`apps/backend/CLAUDE.md`](CLAUDE.md) (which describes the schema + EF + helpers) and [`apps/backend/local_testing.md`](local_testing.md) (the local stack). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md). Tag-driven release mechanics live in [`docs/ops/releasing.md`](../../docs/ops/releasing.md).
 
 **Status: plan.** Local-only at the time of writing.
 
@@ -131,7 +131,7 @@ Triggered by tagging `backend@*`. The workflow at `.github/workflows/release-bac
 6. Loops over `supabase/functions/*/index.ts` and `supabase functions deploy` each.
 7. Creates a GitHub Release pointing at the tag with the migration manifest as a release note.
 
-Required GitHub Secrets (also listed in [releasing.md](../../docs/releasing.md)):
+Required GitHub Secrets (also listed in [releasing.md](../../docs/ops/releasing.md)):
 
 | Secret | Where to get it |
 |---|---|
@@ -143,7 +143,7 @@ Required GitHub Secrets (also listed in [releasing.md](../../docs/releasing.md))
 
 ## Data layout in production
 
-The schema is what local `supabase db reset` builds — see [api_database.md](../../docs/api_database.md) for the table-by-table reference.
+The schema is what local `supabase db reset` builds — see [api_database.md](../../docs/backend/api_database.md) for the table-by-table reference.
 
 **Storage buckets** (configured by migration `20260405_001_initial_schema.sql` and the photos / route-files migrations that came after):
 
@@ -151,10 +151,10 @@ The schema is what local `supabase db reset` builds — see [api_database.md](..
 |---|---|---|---|
 | `runs` | private | `{user_id}/{run_id}.json.gz`, `{user_id}/{run_id}.matched.json.gz` | owner-only via the `runs.user_id = auth.uid()` policy on the parent row |
 | `route-files` | private | `{user_id}/{route_id}.gpx` etc. | owner-only |
-| `run-photos` | private | `{user_id}/{run_id}/{photo_id}.jpg` | owner-only ([decisions.md § 36](../../docs/decisions.md#36-photos-on-runs-own-table--storage-bucket-visibility-tracks-the-parent-run)) |
+| `run-photos` | private | `{user_id}/{run_id}/{photo_id}.jpg` | owner-only ([decisions.md § 36](../../docs/architecture/decisions.md#36-photos-on-runs-own-table--storage-bucket-visibility-tracks-the-parent-run)) |
 | `avatars` | public | `{user_id}.{ext}` | anyone authenticated can SELECT, owner can write |
 
-`/share/run/[id]` and `/share/route/[id]` rendering anonymous tracks works through the `clip_track_for_user` RPC ([decisions.md § 33](../../docs/decisions.md#33-privacy-zones-server-side-clipping)) — the bucket itself stays private, the RPC returns clipped points to anon callers.
+`/share/run/[id]` and `/share/route/[id]` rendering anonymous tracks works through the `clip_track_for_user` RPC ([decisions.md § 33](../../docs/architecture/decisions.md#33-privacy-zones-server-side-clipping)) — the bucket itself stays private, the RPC returns clipped points to anon callers.
 
 ---
 
@@ -266,7 +266,7 @@ If a `backend@1.2.3` deploy broke a function, tag `backend@1.2.4` from a revert 
 
 ## Production readiness checklist
 
-Before flipping the row in [`docs/deployment.md`](../../docs/deployment.md) from "Plan" to "Live":
+Before flipping the row in [`docs/ops/deployment.md`](../../docs/ops/deployment.md) from "Plan" to "Live":
 
 - [ ] Pro tier active, billing alert set in Supabase dashboard
 - [ ] `eu-west-2` region (or whichever was picked) confirmed

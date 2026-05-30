@@ -20,7 +20,7 @@ const double _metresPerMile = 1609.344;
 ///
 /// This reduces noise but cannot correct systematic offset from the road
 /// (i.e. when GPS reports you 5 m off the centreline). The real fix is
-/// backend map matching — see docs/roadmap.md.
+/// backend map matching — see docs/product/roadmap.md.
 List<LatLng> smoothTrack(List<LatLng> points) {
   if (points.length < 5) return points;
   final out = List<LatLng>.from(points);
@@ -52,7 +52,7 @@ const _kOsmTileUrl =
 
 /// Build the raster-tile URL template. Resolution precedence:
 ///   1. `TILE_URL_TEMPLATE` override (local Protomaps tileserver-gl
-///      dev setup — see `docs/protomaps_local_setup.md`)
+///      dev setup — see `docs/ops/protomaps_local_setup.md`)
 ///   2. `MAPTILER_KEY` → MapTiler streets-v2-dark
 ///   3. OSM tiles as a last-resort fallback so the map isn\'t blank
 ///      on a dev setup with neither env var configured
@@ -165,7 +165,7 @@ class LiveRunMap extends StatefulWidget {
   /// silhouette at the supplied position. The host (`run_screen.dart`)
   /// computes it during a structured workout step via
   /// [`ghostPacerPosition`]; when no workout is active it stays null
-  /// and the marker is hidden. See `docs/workout_execution.md`
+  /// and the marker is hidden. See `docs/features/workout_execution.md`
   /// § Ghost pacer.
   final Waypoint? ghostPosition;
 

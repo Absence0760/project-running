@@ -445,7 +445,7 @@
 	// action on this page (Delete account, Restore from backup) uses
 	// the in-app ConfirmDialog. Native confirm looks like a phishing
 	// overlay on iOS Safari + violates the project's modal convention
-	// (docs/conventions.md § Web modals). The async dialog state is
+	// (docs/architecture/conventions.md § Web modals). The async dialog state is
 	// held in showUnlinkConfirm + pendingUnlink.
 	let showUnlinkConfirm = $state(false);
 	let pendingUnlink = $state<Identity | null>(null);

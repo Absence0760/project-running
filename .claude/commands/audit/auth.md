@@ -61,9 +61,9 @@ For each: file:line, the specific missing check, the worst-case blast radius (on
 - `apps/web/src/hooks.server.ts` — where `locals.supabase` / `locals.session` are populated
 - `apps/web/lambda/coach/` — production Lambda wrapper, plus its transport-agnostic core in `apps/web/src/lib/coach/`
 - `apps/backend/supabase/functions/` + `apps/backend/supabase/config.toml` — Edge Functions + their `verify_jwt` settings
-- `docs/web_app_auth.md` — the documented web auth flow
+- `docs/features/web_app_auth.md` — the documented web auth flow
 - `apps/backend/CLAUDE.md` — function-by-function notes
-- `docs/decisions.md` §33 (privacy-zone clipping), §53 (Lambda for coach) — relevant boundary ADRs
+- `docs/architecture/decisions.md` §33 (privacy-zone clipping), §53 (Lambda for coach) — relevant boundary ADRs
 - The recent `fix(backend): auth-guard refresh-tokens Edge Function` commit (b3373c6) — canonical pattern for retrofitting JWT verification
 
 ## Delegate to

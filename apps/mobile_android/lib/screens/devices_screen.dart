@@ -280,7 +280,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
 
 /// Spec for an override-eligible key. Mirrors the device (`D`) and
 /// universal-default-with-device-override (`UD`) entries in
-/// [docs/settings.md § Keys] — purely-universal keys (hr_zones, dob,
+/// [docs/backend/settings.md § Keys] — purely-universal keys (hr_zones, dob,
 /// weekly_mileage_goal_m, etc.) aren't exposed here because they have
 /// no device-scope semantics.
 ///
@@ -305,7 +305,7 @@ class OverrideKeySpec {
   });
 }
 
-/// The D + UD-scoped keys from docs/settings.md that admit a per-device
+/// The D + UD-scoped keys from docs/backend/settings.md that admit a per-device
 /// override. Keep in lockstep with `SettingsKeys` + the doc table.
 @visibleForTesting
 const overrideKeyRegistry = <OverrideKeySpec>[

@@ -107,7 +107,7 @@
 	let viewerGender = $state<CalorieGender>(null);
 	/// Map-matched track + status from run_matched_tracks. Populated on
 	/// mount in parallel with the main run fetch. Failure here is L4
-	/// (auxiliary) per docs/conventions.md § Layered resilience — the
+	/// (auxiliary) per docs/architecture/conventions.md § Layered resilience — the
 	/// raw track keeps rendering so the page always works.
 	let matchInfo = $state<RunMatchInfo | null>(null);
 	/// Latched while a re-match RPC is in flight so the button can't
@@ -263,7 +263,7 @@
 	/// web run-detail + mobile run-detail surfaces. The helper
 	/// applies the cross-formula female calibration when the
 	/// viewer's `user_profiles.gender` is `female` (see
-	/// `docs/decisions.md § 77`). Pre-fix this page hardcoded
+	/// `docs/architecture/decisions.md § 77`). Pre-fix this page hardcoded
 	/// `weight × distance` and ignored gender entirely — every
 	/// female runner was over-estimated by ~5%.
 	let runActivityType = $derived(
@@ -287,7 +287,7 @@
 	/// Structured-workout review. The recorder writes three keys on
 	/// `runs.metadata` after a planned workout: `plan_workout_id`,
 	/// `workout_step_results` (per-step planned-vs-actual), and
-	/// `workout_adherence`. See docs/metadata.md for the full shape.
+	/// `workout_adherence`. See docs/backend/metadata.md for the full shape.
 	interface WorkoutStepResult {
 		step_index: number;
 		kind: string;
@@ -629,14 +629,14 @@
 	});
 
 	/** Average heart rate. Watch apps (watch_ios, watch_wear) record this
-	 *  into `metadata.avg_bpm` during a run. See `docs/metadata.md`. */
+	 *  into `metadata.avg_bpm` during a run. See `docs/backend/metadata.md`. */
 	let avgBpm = $derived.by(() => {
 		const v = run?.metadata?.['avg_bpm'];
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
 
 	/** parkrun age-graded percentage (e.g. "54.23%"), set by the
-	 *  parkrun importer into metadata.age_grade. See docs/metadata.md. */
+	 *  parkrun importer into metadata.age_grade. See docs/backend/metadata.md. */
 	let ageGrade = $derived.by(() => {
 		const v = run?.metadata?.['age_grade'];
 		return typeof v === 'string' && v.trim() ? v.trim() : null;

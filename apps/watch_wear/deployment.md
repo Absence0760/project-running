@@ -2,7 +2,7 @@
 
 How `apps/watch_wear/` (native Kotlin + Compose-for-Wear) ships to the Google Play Store.
 
-Operational counterpart of [`apps/watch_wear/CLAUDE.md`](CLAUDE.md) and [`apps/watch_wear/local_testing.md`](local_testing.md). For tag-driven release mechanics see [`docs/releasing.md`](../../docs/releasing.md). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md).
+Operational counterpart of [`apps/watch_wear/CLAUDE.md`](CLAUDE.md) and [`apps/watch_wear/local_testing.md`](local_testing.md). For tag-driven release mechanics see [`docs/ops/releasing.md`](../../docs/ops/releasing.md). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md).
 
 **Status: plan.** App compiles and runs on emulator + real watches; no Play listing yet.
 
@@ -16,7 +16,7 @@ Wear OS apps **are** Android apps — the manifest declares `<uses-feature andro
 2. **Standalone APK in the same listing** — phone app and watch app share a `applicationId` and one Play listing.
 3. **Separate listing entirely** — different `applicationId`, watch app discoverable from the watch's own Play Store.
 
-We picked **#3** ([decisions.md § 15](../../docs/decisions.md#15-watch_wear-is-pure-kotlin--compose-for-wear-not-flutter)). The reasons:
+We picked **#3** ([decisions.md § 15](../../docs/architecture/decisions.md#15-watch_wear-is-pure-kotlin--compose-for-wear-not-flutter)). The reasons:
 
 - The watch app is native Kotlin while the phone app is Flutter. Bundling them would force the phone app's APK to ship a Kotlin runtime it doesn't need.
 - The Wear OS user can install the watch app **without** the phone app — common for users on iPhone with a Wear OS smartwatch (yes, this exists).
@@ -210,4 +210,4 @@ A Wear OS-specific edge: Google occasionally tightens Wear OS-specific guideline
 - [ ] First `watch_wear@*` tag built clean, AAB landed on Internal track
 - [ ] Internal smoke test on real watch (Pixel Watch / Galaxy Watch — emulator-only is not sufficient for haptics, BLE HR, tile freshness)
 - [ ] Sentry receiving events
-- [ ] [`docs/parity.md`](../../docs/parity.md) Wear OS column reflects shipped state
+- [ ] [`docs/product/parity.md`](../../docs/product/parity.md) Wear OS column reflects shipped state

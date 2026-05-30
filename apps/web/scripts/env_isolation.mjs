@@ -135,7 +135,7 @@ export function formatGuardError(result, { scope = 'vite' } = {}) {
 	lines.push('Power-user override (NOT for daily use):');
 	lines.push('  ALLOW_PROD_URL_IN_DEV=true');
 	lines.push('');
-	lines.push('See docs/dev_prod_isolation.md for the full policy.');
+	lines.push('See docs/testing/dev_prod_isolation.md for the full policy.');
 	lines.push(banner);
 	lines.push('');
 	return lines.join('\n');

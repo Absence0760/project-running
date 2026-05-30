@@ -12,11 +12,11 @@ Multi-step, read-only or edit-capable specialists. Most are invoked by a slash c
 |---|---|
 | [`code-reviewer`](agents/code-reviewer.md) | Reviews the working diff against `decisions.md` ADRs, the layering contract, twin invariant, paywall gates, fail-closed defaults, comment/abstraction discipline. Invoked by `/safe-edit` and `/check`. |
 | [`doc-hygiene-checker`](agents/doc-hygiene-checker.md) | Surveys the doc set listed in `CLAUDE.md § Docs hygiene` against the diff and reports which need updating. |
-| [`test-gap-checker`](agents/test-gap-checker.md) | Reads the working diff and reports missing unit / e2e coverage per `docs/conventions.md § Test hygiene`. |
+| [`test-gap-checker`](agents/test-gap-checker.md) | Reads the working diff and reports missing unit / e2e coverage per `docs/architecture/conventions.md § Test hygiene`. |
 | [`migration-coordinator`](agents/migration-coordinator.md) | Applies a new Supabase migration locally, runs both type generators, runs the CHECK ↔ TS-union guard. Invoked by `/safe-migration`. |
 | [`mobile-twin-mirror`](agents/mobile-twin-mirror.md) | Mirrors `apps/mobile_android/lib/`+`test/` edits into `apps/mobile_ios/` and verifies the byte-identical invariant (decisions §39). Run after every Dart edit. |
 | [`shared-library-syncer`](agents/shared-library-syncer.md) | Detects divergence on the documented TS↔Dart parity pairs (training, segments, privacy, recurrence, pace_segments, training_load, fitness, track_projection). |
-| [`metadata-key-keeper`](agents/metadata-key-keeper.md) | Verifies every `runs.metadata.<key>` access in a diff is documented in `docs/metadata.md`. |
+| [`metadata-key-keeper`](agents/metadata-key-keeper.md) | Verifies every `runs.metadata.<key>` access in a diff is documented in `docs/backend/metadata.md`. |
 | [`repo-security-auditor`](agents/repo-security-auditor.md) | Read-only security sweep. Knows the project's RLS / SECURITY DEFINER / Edge Function / Storage / XSS / paywall conventions. Backend for most `/audit/*` security commands. |
 | [`compliance-auditor`](agents/compliance-auditor.md) | Read-only auditor for GDPR / CCPA / DSAR / cookie-consent / regional-availability / accessibility posture. Backend for the compliance `/audit/*` commands. |
 | [`i18n-readiness-auditor`](agents/i18n-readiness-auditor.md) | Finds hard-coded English strings, en-US formatting, missing RTL, missing Accept-Language across web + mobile + watch. |
@@ -40,4 +40,4 @@ User-invocable slash commands. Most chain one or more agents.
 
 ## Modifying these
 
-When you add a new convention, ADR, or invariant, look here too — most agents read a specific section of `CLAUDE.md`, `docs/decisions.md`, or `docs/conventions.md`. If you add a new rule there, the relevant agent's prompt usually needs a corresponding update. Same goes for the agent list in the project's root `CLAUDE.md` and the agent description shown to the user.
+When you add a new convention, ADR, or invariant, look here too — most agents read a specific section of `CLAUDE.md`, `docs/architecture/decisions.md`, or `docs/architecture/conventions.md`. If you add a new rule there, the relevant agent's prompt usually needs a corresponding update. Same goes for the agent list in the project's root `CLAUDE.md` and the agent description shown to the user.

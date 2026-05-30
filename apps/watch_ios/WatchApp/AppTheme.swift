@@ -2,7 +2,7 @@ import SwiftUI
 
 /// App-wide color palette. "Dusk".
 /// Mirrors `packages/ui_kit/lib/src/theme/app_theme.dart`. Keep hex values in sync
-/// when either side changes — see docs/decisions.md.
+/// when either side changes — see docs/architecture/decisions.md.
 enum AppTheme {
     static let dusk = Color(red: 0x3A / 255, green: 0x2E / 255, blue: 0x5C / 255)
     static let duskDeep = Color(red: 0x24 / 255, green: 0x1B / 255, blue: 0x3D / 255)

@@ -5,7 +5,7 @@ import '../training.dart' show fmtPace;
 
 /// Post-run review surface for a structured workout. Reads the
 /// `workout_step_results` + `workout_adherence` keys on `runs.metadata`
-/// (registered in `docs/metadata.md`) and renders the planned-vs-actual
+/// (registered in `docs/backend/metadata.md`) and renders the planned-vs-actual
 /// table. Hidden when the keys are absent.
 ///
 /// Mirrors the web `/runs/[id]` "Workout" section so a runner sees the

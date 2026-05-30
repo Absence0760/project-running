@@ -50,7 +50,7 @@ export async function buildContext(
 		.order('started_at', { ascending: false })
 		.limit(runsLimit);
 	// Persona-hunt Round 2 finding Pro #3. `metadata` is a free-form
-	// jsonb bag (docs/metadata.md). Some keys are useful coaching
+	// jsonb bag (docs/backend/metadata.md). Some keys are useful coaching
 	// signal (activity_type, avg_bpm, workout_kind, etc.); many are
 	// not — `notes` (free-form, anything the runner typed), `event`
 	// + `position` (parkrun athlete + finishing place), raw `laps[]`
@@ -136,7 +136,7 @@ export async function buildContext(
 /// Keys on `runs.metadata` that the coach is allowed to see. Adding a
 /// key here is a deliberate decision — every key crosses a sub-
 /// processor boundary and must justify its coaching value. Audited
-/// against docs/metadata.md.
+/// against docs/backend/metadata.md.
 const COACH_METADATA_ALLOWLIST: ReadonlySet<string> = new Set([
 	'activity_type', // run / walk / hike / cycle — coach gates advice on this
 	'avg_bpm', // gated on health consent at the row level; HR zones use this

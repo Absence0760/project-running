@@ -10,7 +10,7 @@ import { expect, test } from '@playwright/test';
  * /dashboard on success, or surfaces the auth error inline.
  *
  * We can't drive the real Google / Apple OAuth flow without
- * developer accounts (see docs/e2e_dev_accounts.md). What we CAN
+ * developer accounts (see docs/testing/e2e_dev_accounts.md). What we CAN
  * pin is the post-OAuth callback behaviour:
  *
  *   1. The page mounts and shows "Signing you in..." while the

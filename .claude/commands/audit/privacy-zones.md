@@ -35,7 +35,7 @@ For each: file:line, the missing call or the broken gate, the surface it affects
 
 ## Useful starting points
 
-- `docs/decisions.md` §33 — the canonical contract
+- `docs/architecture/decisions.md` §33 — the canonical contract
 - `apps/web/src/lib/components/RunTrackPreview.svelte` — reference web implementation
 - `apps/mobile_android/lib/widgets/run_track_preview.dart` — reference mobile implementation
 - `apps/mobile_android/lib/screens/public_run_screen.dart` + `public_route_screen.dart` — the most recent fix

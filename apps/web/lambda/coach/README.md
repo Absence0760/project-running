@@ -1,6 +1,6 @@
 # Coach Lambda
 
-Production handler for `/api/coach/*`. Reaches the same `$lib/coach/handler` core that the SvelteKit dev route uses (see [`apps/web/CLAUDE.md`](../../CLAUDE.md) and [decisions.md § 53](../../../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)).
+Production handler for `/api/coach/*`. Reaches the same `$lib/coach/handler` core that the SvelteKit dev route uses (see [`apps/web/CLAUDE.md`](../../CLAUDE.md) and [decisions.md § 53](../../../../docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)).
 
 ## Layout
 

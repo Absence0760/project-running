@@ -3,7 +3,7 @@
 ## Scope
 - Files reviewed: 30 (9 Swift, 20 Kotlin, 1 generated Kotlin)
 - Focus: cross-platform sync correctness — row shape, track format, metadata, auth
-- Reviewer confidence: high — read every file in scope and cross-referenced against `packages/api_client`, `packages/core_models`, `apps/web/src/lib/data.ts`, `docs/api_database.md`, and `docs/metadata.md`
+- Reviewer confidence: high — read every file in scope and cross-referenced against `packages/api_client`, `packages/core_models`, `apps/web/src/lib/data.ts`, `docs/backend/api_database.md`, and `docs/backend/metadata.md`
 
 ## Summary
 
@@ -22,7 +22,7 @@ Four HIGH findings, three MED, and two LOW. The two most critical are: (1) both 
 - `apps/watch_ios/WatchApp/SupabaseService.swift:87` — `RunPayload.source = "app"` (DEBUG direct path)
 - `apps/watch_wear/android/app/src/main/kotlin/com/runapp/watchwear/SupabaseClient.kt:183` — `RunRow.COL_SOURCE to "app"`
 
-**Issue:** Every run recorded on either watch is inserted into the `runs` table with `source = 'app'`. The phone-side run recorder also writes `source = 'app'` (`run_screen.dart:735`). There is no `'watch'` value in the `RunSource` enum on Dart, in the web `RunSource` union (`apps/web/src/lib/types.ts:55-62`), or in the DB `source` values documented in `docs/api_database.md`. Any code that needs to distinguish "recorded on a phone" from "recorded on a watch" has no way to do so after the row is written. The `personal_records()` Postgres function (`apps/backend/supabase/migrations/20260406_001_database_functions.sql:34`) filters `source in ('app', 'strava', ...)` — watch runs will appear in personal-record calculations, which is correct, but the value `'app'` will mislead any future filter that interprets `'app'` as "phone-native recording". The source-filter chips on the web runs list (`/runs` page, `apps/web/src/routes/runs/+page.svelte:30-32`) and dashboard have a "Recorded" chip keyed to `source = 'app'` — watch runs will match it and be indistinguishable.
+**Issue:** Every run recorded on either watch is inserted into the `runs` table with `source = 'app'`. The phone-side run recorder also writes `source = 'app'` (`run_screen.dart:735`). There is no `'watch'` value in the `RunSource` enum on Dart, in the web `RunSource` union (`apps/web/src/lib/types.ts:55-62`), or in the DB `source` values documented in `docs/backend/api_database.md`. Any code that needs to distinguish "recorded on a phone" from "recorded on a watch" has no way to do so after the row is written. The `personal_records()` Postgres function (`apps/backend/supabase/migrations/20260406_001_database_functions.sql:34`) filters `source in ('app', 'strava', ...)` — watch runs will appear in personal-record calculations, which is correct, but the value `'app'` will mislead any future filter that interprets `'app'` as "phone-native recording". The source-filter chips on the web runs list (`/runs` page, `apps/web/src/routes/runs/+page.svelte:30-32`) and dashboard have a "Recorded" chip keyed to `source = 'app'` — watch runs will match it and be indistinguishable.
 
 **Cross-platform impact:** Phone, web, and any analytics that partition by `source` cannot distinguish watch-originated runs from phone-originated runs. Any future "recorded on watch" filter or badge is impossible to backfill correctly.
 

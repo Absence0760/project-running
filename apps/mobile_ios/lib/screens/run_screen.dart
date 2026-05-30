@@ -487,7 +487,7 @@ class _RunScreenState extends State<RunScreen> {
     } catch (e) {
       // Non-critical — leave the card hidden if the fetch fails. Log
       // so an upstream API rename doesn't surface only as a missing
-      // UI card. See docs/conventions.md § Layered resilience.
+      // UI card. See docs/architecture/conventions.md § Layered resilience.
       debugPrint('refresh upcoming-event card failed: $e');
     }
   }
@@ -1115,7 +1115,7 @@ class _RunScreenState extends State<RunScreen> {
               // throw here propagates as unhandled and can break the
               // _onSnapshot pipeline (L0/L1 freeze). Each auxiliary
               // effect owns its own try/catch + debugPrint; see
-              // docs/conventions.md § Layered resilience.
+              // docs/architecture/conventions.md § Layered resilience.
               Future<void>.delayed(const Duration(milliseconds: 180), () {
                 try {
                   HapticFeedback.heavyImpact();
@@ -1459,7 +1459,7 @@ class _RunScreenState extends State<RunScreen> {
     _hrStatusSub = null;
 
     // Structured-workout review trail. Three keys are registered in
-    // [docs/metadata.md]: plan_workout_id, workout_step_results,
+    // [docs/backend/metadata.md]: plan_workout_id, workout_step_results,
     // workout_adherence. The web run-detail "Workout" section reads
     // them to render a planned-vs-actual table. _activeWorkoutId
     // covers both the in-app "tap card → load runner" entry and the

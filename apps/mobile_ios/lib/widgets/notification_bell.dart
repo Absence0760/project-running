@@ -14,7 +14,7 @@ import '../screens/profile_screen.dart';
 /// The unread count is fetched on mount via
 /// `ApiClient.fetchUnreadNotificationCount`. Failures are swallowed
 /// (L4 — auxiliary effect, must not break the dashboard render
-/// per docs/conventions.md). When [api] has no signed-in user, the
+/// per docs/architecture/conventions.md). When [api] has no signed-in user, the
 /// bell renders empty — the dashboard's `if (api != null)` gate is
 /// the canonical signed-in check, but the widget is defensive.
 class NotificationBell extends StatefulWidget {

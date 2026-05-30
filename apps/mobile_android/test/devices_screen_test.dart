@@ -45,7 +45,7 @@ void main() {
   });
 
   group('overrideKeyRegistry', () {
-    test('covers exactly the D + UD scoped keys from docs/settings.md', () {
+    test('covers exactly the D + UD scoped keys from docs/backend/settings.md', () {
       // UD scope.
       final ud = [
         'preferred_unit',

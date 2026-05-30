@@ -9,7 +9,7 @@ import 'privacy.dart';
 /// Pushes live spectator pings while a recording is in progress.
 /// Throttled to one push every [_pingInterval], swallows network /
 /// auth errors via `debugPrint` so the recorder's L0/L1 stays
-/// untouched (see `docs/conventions.md § Layered resilience`).
+/// untouched (see `docs/architecture/conventions.md § Layered resilience`).
 ///
 /// Activated by the run screen when the user taps "Share live link";
 /// inactive otherwise so a private run doesn't write to the
@@ -29,7 +29,7 @@ import 'privacy.dart';
 ///   and Supabase Realtime fans out to the web spectator page.
 ///
 /// The fallback keeps the feature usable on every build pre-deploy
-/// and during a Fly.io outage. See `docs/followups.md § #13` for
+/// and during a Fly.io outage. See `docs/product/followups.md § #13` for
 /// the migration plan.
 ///
 /// Privacy-zone enforcement (decisions §33). The Supabase path is

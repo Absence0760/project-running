@@ -9,7 +9,7 @@ import '../lib/widgets/live_run_map.dart';
 ///  * The legacy MapTiler default (production path).
 ///  * The `TILE_URL_TEMPLATE` override that drives the local
 ///    Protomaps tileserver-gl dev setup. See
-///    `docs/protomaps_local_setup.md` + `decisions.md § 68`.
+///    `docs/ops/protomaps_local_setup.md` + `decisions.md § 68`.
 ///
 /// The widget itself can't run on the host JVM (it needs `flutter
 /// run` + a window), so the testable seam is this resolver.

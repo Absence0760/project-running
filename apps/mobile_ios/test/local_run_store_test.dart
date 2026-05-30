@@ -631,7 +631,7 @@ void main() {
   // run is stamped with `metadata.created_by_user_id` at save time.
   // The SyncService consults this tag during drain so User A's runs
   // can't accidentally sync under User B's account on a shared
-  // device. See `docs/decisions.md § 67`.
+  // device. See `docs/architecture/decisions.md § 67`.
   group('owner-tag stamping (created_by_user_id)', () {
     test('no provider set → run saved without the tag', () async {
       final store = LocalRunStore();

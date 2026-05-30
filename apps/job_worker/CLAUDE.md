@@ -8,7 +8,7 @@ rotation, replaces the `refresh-tokens` Edge Function), and
 `/v1/strava/webhook` endpoint, replaces the `strava-webhook` Edge
 Function). Data-export will land as an additional kind in
 `internal/worker.go`'s dispatch when that Edge Function moves per
-[`../../docs/roadmap.md`](../../docs/roadmap.md) §214.
+[`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §214.
 
 ## Scope — read before writing code
 
@@ -238,5 +238,5 @@ Stops on SIGINT / SIGTERM.
   uploads a valid gzipped JSON array (worker's `parseTrack` will fail
   on invalid bytes, which is the right behaviour — but a regression
   there would surface as queued jobs flipping to `failed`).
-- Updated [../../docs/roadmap.md](../../docs/roadmap.md) §515-531 with
+- Updated [../../docs/product/roadmap.md](../../docs/product/roadmap.md) §515-531 with
   the engine choice or wiring change.

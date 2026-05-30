@@ -12,17 +12,17 @@ Web routes audit — static-adapter compatibility, auth/route protection, code�
 ## Priority: high
 
 ### H1. `flows.md` documents a demo-login path that does not exist
-- **File(s)**: `docs/flows.md:24-50`
+- **File(s)**: `docs/features/flows.md:24-50`
 - **Category**: bug (doc lie about a real flow)
 - **Problem**: `flows.md` § "Sign in — web" describes a "Demo login" path (`auth.demoLogin(email)`) that bypasses OAuth and creates a mock session. That method does not exist in `auth.svelte.ts`, is not called from `login/+page.svelte`, and there is no such flow in the codebase. `web_app_auth.md` explicitly contradicts it ("There is no demo / mock login"). Any engineer reading `flows.md` first will implement dead integration tests against a fictitious entry-point.
 - **Evidence**:
   ```
-  // docs/flows.md:24
+  // docs/features/flows.md:24
   1. **Demo login** (local dev + preview deploys): bypasses OAuth, creates a mock session in
      `localStorage`, no Supabase round-trip. Entry point:
      `src/routes/login/+page.svelte` → `auth.demoLogin(email)`.
 
-  // docs/flows.md:50
+  // docs/features/flows.md:50
   - The demo login path does not produce a Supabase JWT, so any code that calls an Edge
     Function or a REST endpoint with `Authorization: Bearer <token>` will fail under demo login.
   ```
@@ -73,7 +73,7 @@ Web routes audit — static-adapter compatibility, auth/route protection, code�
 ### H3. Dashboard "This Week" uses Sunday-start; rest of app uses Monday-start
 - **File(s)**: `apps/web/src/routes/dashboard/+page.svelte:185-192`
 - **Category**: bug
-- **Problem**: The dashboard computes `weekStart` using `now.getDate() - now.getDay()`, where `getDay()` returns 0 for Sunday — so the week always starts on Sunday. `docs/settings.md:50` declares a `week_start_day` universal setting defaulting to `'monday'`. `runs/+page.svelte:46-49` explicitly comments "Monday-start week, matching Android's `weekStartLocal`". The mismatch means a Monday run can appear in "This Week" on the Runs page but not on the Dashboard stats card, and the week boundary jumps a day depending on which surface you look at.
+- **Problem**: The dashboard computes `weekStart` using `now.getDate() - now.getDay()`, where `getDay()` returns 0 for Sunday — so the week always starts on Sunday. `docs/backend/settings.md:50` declares a `week_start_day` universal setting defaulting to `'monday'`. `runs/+page.svelte:46-49` explicitly comments "Monday-start week, matching Android's `weekStartLocal`". The mismatch means a Monday run can appear in "This Week" on the Runs page but not on the Dashboard stats card, and the week boundary jumps a day depending on which surface you look at.
 - **Evidence**:
   ```typescript
   // dashboard/+page.svelte:185-187
@@ -98,7 +98,7 @@ Web routes audit — static-adapter compatibility, auth/route protection, code�
 ---
 
 ### H4. `training.md` documents wrong token budget for coach
-- **File(s)**: `docs/training.md:29`
+- **File(s)**: `docs/features/training.md:29`
 - **Category**: bug (doc lie about a real flow)
 - **Problem**: `training.md` states "Model: `claude-sonnet-4-5`, 1024 output tokens". The actual `TIER_LIMITS` in `api/coach/+server.ts` are `free: { maxTokens: 768 }` and `pro: { maxTokens: 2048 }`. The 1024 figure was the pre-tier single limit and is now wrong for both tiers. Anyone using this doc to estimate response quality or latency for either tier gets the wrong number.
 - **Evidence**:
@@ -110,7 +110,7 @@ Web routes audit — static-adapter compatibility, auth/route protection, code�
   };
   ```
   ```
-  // docs/training.md:29
+  // docs/features/training.md:29
   - Model: `claude-sonnet-4-5`, 1024 output tokens.
   ```
 - **Proposed change**:
@@ -181,12 +181,12 @@ Web routes audit — static-adapter compatibility, auth/route protection, code�
 ---
 
 ### M3. `flows.md` documents `supabase-server.ts` SSR client that doesn't exist in this codebase
-- **File(s)**: `docs/flows.md:49`
+- **File(s)**: `docs/features/flows.md:49`
 - **Category**: inconsistency (doc drift)
 - **Problem**: `flows.md` states "Watch out: `apps/web/src/lib/supabase.ts` is the browser client. `supabase-server.ts` is the SSR client." There is no `supabase-server.ts` in the repo. The web app is adapter-static; there is no SSR client. This note also warns about cookies bridging them, which is irrelevant for a static SPA.
 - **Evidence**:
   ```
-  // docs/flows.md:49-50
+  // docs/features/flows.md:49-50
   - `apps/web/src/lib/supabase.ts` is the browser client. `supabase-server.ts` is the SSR client.
     They do not share a session object — cookies bridge them.
   ```
@@ -345,7 +345,7 @@ Web routes audit — static-adapter compatibility, auth/route protection, code�
 ### L3. `explore` route is not in the sidebar `navItems`
 - **File(s)**: `apps/web/src/routes/+layout.svelte:38-46`
 - **Category**: inconsistency
-- **Problem**: `/explore` is a real route (public route discovery) referenced from `routes/+page.svelte` as a button and from `routes/[id]/+page.svelte` for back-nav. It is not listed in the sidebar `navItems` array, so there is no keyboard-accessible or visible top-level navigation entry for it. Users who don't know about the Routes page button can't discover it. `docs/web_app_auth.md` and the app CLAUDE.md both list it as a real feature.
+- **Problem**: `/explore` is a real route (public route discovery) referenced from `routes/+page.svelte` as a button and from `routes/[id]/+page.svelte` for back-nav. It is not listed in the sidebar `navItems` array, so there is no keyboard-accessible or visible top-level navigation entry for it. Users who don't know about the Routes page button can't discover it. `docs/features/web_app_auth.md` and the app CLAUDE.md both list it as a real feature.
 - **Evidence**: `navItems` in `+layout.svelte:38-46` lists: dashboard, runs, routes, plans, coach, clubs, settings. No explore entry.
 - **Proposed change**: This may be intentional (explore is a sub-feature of Routes). If it should remain accessible only from the Routes page, document that explicitly. If it should be top-level, add:
   ```diff

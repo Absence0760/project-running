@@ -2,7 +2,7 @@
 
 How `apps/mobile_ios/` ships to the Apple App Store, including the bundled `apps/watch_ios/` Apple Watch target.
 
-Operational counterpart of [`apps/mobile_ios/CLAUDE.md`](CLAUDE.md) and the byte-identical-twin convention with `apps/mobile_android/` ([decisions.md § 39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md). For tag-driven release mechanics see [`docs/releasing.md`](../../docs/releasing.md).
+Operational counterpart of [`apps/mobile_ios/CLAUDE.md`](CLAUDE.md) and the byte-identical-twin convention with `apps/mobile_android/` ([decisions.md § 39](../../docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md). For tag-driven release mechanics see [`docs/ops/releasing.md`](../../docs/ops/releasing.md).
 
 **Status: plan.** The Dart code is at parity with Android (same `lib/`, same `test/`); native iOS work + entitlements + a Mac runtime smoke run are the remaining gates.
 
@@ -102,7 +102,7 @@ Same shape as Android: `dev` and `production` build configurations, gated on `xc
 
 ### Production secrets via `dart_defines.json`
 
-The iOS toolchain doesn't accept Supabase's `sb_publishable_...` keys via inline `--dart-define=` — the underscores break Xcode's argument parsing ([decisions.md § 13](../../docs/decisions.md)). Instead the workflow writes a temporary `dart_defines.json`:
+The iOS toolchain doesn't accept Supabase's `sb_publishable_...` keys via inline `--dart-define=` — the underscores break Xcode's argument parsing ([decisions.md § 13](../../docs/architecture/decisions.md)). Instead the workflow writes a temporary `dart_defines.json`:
 
 ```json
 {
@@ -180,7 +180,7 @@ Triggered by tagging `mobile_ios@1.2.3`. The workflow at `.github/workflows/rele
 
 Lands the build in **TestFlight** (the equivalent of Play's Internal track). Promotion to App Store is manual through App Store Connect after a smoke test.
 
-The `release-ios.yml` workflow is currently a skeleton ([releasing.md](../../docs/releasing.md) notes the secrets are commented out). Uncomment once the Apple Developer team is set up + the certs exist.
+The `release-ios.yml` workflow is currently a skeleton ([releasing.md](../../docs/ops/releasing.md) notes the secrets are commented out). Uncomment once the Apple Developer team is set up + the certs exist.
 
 ---
 
@@ -286,5 +286,5 @@ Apple's appeal process is faster than Google's but still painful. Mitigations:
 - [ ] Watch target builds clean from `mobile_ios` scheme
 - [ ] First TestFlight build smoke-tested on a real device + a real Apple Watch
 - [ ] Sentry receiving symbolicated crash reports (dSYM upload script live)
-- [ ] [`docs/parity.md`](../../docs/parity.md) iOS column flips from Partial to ✓ once Mac-runtime parity is verified
-- [ ] [`docs/parity.md`](../../docs/parity.md) Apple Watch column updated as features pass review
+- [ ] [`docs/product/parity.md`](../../docs/product/parity.md) iOS column flips from Partial to ✓ once Mac-runtime parity is verified
+- [ ] [`docs/product/parity.md`](../../docs/product/parity.md) Apple Watch column updated as features pass review

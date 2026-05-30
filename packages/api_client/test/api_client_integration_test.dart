@@ -36,7 +36,7 @@ import 'package:test/test.dart';
 /// enough that the test would mostly assert "we called the methods
 /// in this order" rather than "the wire shape is correct" — i.e.
 /// re-implementing the methods inside the mock. Real Supabase is the
-/// authoritative fixture (cf. docs/testing.md "No mocks for databases
+/// authoritative fixture (cf. docs/testing/testing.md "No mocks for databases
 /// we control").
 const _testUrl = String.fromEnvironment('SUPABASE_TEST_URL');
 const _testAnonKey = String.fromEnvironment('SUPABASE_TEST_ANON_KEY');

@@ -31,7 +31,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 |---|---|
 | [/audit/twin-parity](twin-parity.md) | `apps/mobile_android` and `apps/mobile_ios` `lib/`+`test/` are byte-identical |
 | [/audit/schema-drift](schema-drift.md) | Generated TS/Dart row types match migrations + CHECK ↔ TS unions in lockstep |
-| [/audit/metadata-keys](metadata-keys.md) | Every `runs.metadata.<key>` access matches `docs/metadata.md` registry |
+| [/audit/metadata-keys](metadata-keys.md) | Every `runs.metadata.<key>` access matches `docs/backend/metadata.md` registry |
 | [/audit/architecture-guards](architecture-guards.md) | Run every architecture-guard test suite + summarize failures |
 | [/audit/layered-resilience](layered-resilience.md) | L0–L4 try/catch contract on the run-recording stack |
 
@@ -68,7 +68,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 - Every audit is **read-only by default**. The deliverable is a findings report, not a diff.
 - Findings are grouped by severity: **Critical / High / Medium / Low**.
 - Each command is a **self-contained prompt** — runnable from a fresh session with no prior context.
-- Cross-references decisions: paths follow `docs/decisions.md §<n>` so a finding can be traced to the rule it violates.
+- Cross-references decisions: paths follow `docs/architecture/decisions.md §<n>` so a finding can be traced to the rule it violates.
 
 ## Agent delegation
 

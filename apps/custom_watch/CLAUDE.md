@@ -3,24 +3,24 @@
 **Pure Rust + Embassy firmware** for an ultra-marathon-optimised wrist device
 research prototype. Targets the Nordic nRF52840 DK at tier 1. Not Flutter,
 not Kotlin, not Zephyr — see
-[../../docs/decisions.md § 80](../../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)
+[../../docs/architecture/decisions.md § 80](../../docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)
 for why.
 
 ## Scope — read before writing code
 
 **This is research-tier, owner-personal investigation. Not a product.** See
-[../../docs/decisions.md § 71](../../docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely)
+[../../docs/architecture/decisions.md § 71](../../docs/architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely)
 (the original deferral) and its 2026-05-28 amendment (permits tier-1 bench-
 prototype firmware code on owner-personal evenings-and-weekends, nothing
 more). Everything in this directory is **research scaffolding** — not a
 green-lit app SKU, not a roadmap line item, not customer-facing.
 
-**Long-term goal: [§ 92](../../docs/decisions.md#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) — "build the best watch ever".**
+**Long-term goal: [§ 92](../../docs/architecture/decisions.md#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) — "build the best watch ever".**
 The tier-1 scope above is a deliberate first-prototype compromise per the
-[§ 92 Resolution](../../docs/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise):
+[§ 92 Resolution](../../docs/architecture/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise):
 keep tier-1 costs down + get a working version first, with the
 understanding that tier-2 migrates to Apollo510B silicon per
-[§ 90](../../docs/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)
+[§ 90](../../docs/architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)
 and the full Phase 0–5 optimal road follows from there. **Tier-2+ decisions
 are governed by § 92's "optimal regardless of effort/scope" rule**, which
 supersedes § 86's "even at small margins" framing. If you're about to make
@@ -63,7 +63,7 @@ no longer applies.
   no `generated/db_rows.rs` exists yet and shouldn't until that sync
   ships.
 - Anything that pioneers a product feature not yet on web. Per
-  [`../../docs/decisions.md` § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive),
+  [`../../docs/architecture/decisions.md` § 24](../../docs/architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive),
   web is the canonical feature surface for the product. Firmware here
   is for *bench-prototype investigation of the hardware path*, not for
   proving out new product features (a novel recording-algorithm variant,

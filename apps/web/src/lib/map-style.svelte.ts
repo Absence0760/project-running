@@ -37,7 +37,7 @@ export function setMapStyle(s: MapStyle | null | undefined): void {
 /// `.env.local` pointing at a local Protomaps tileserver), the override
 /// wins outright and the user's style preference is ignored — local
 /// dev mode runs the whole app against a single self-hosted style. See
-/// `docs/protomaps_local_setup.md` + `decisions.md § 68` for why.
+/// `docs/ops/protomaps_local_setup.md` + `decisions.md § 68` for why.
 ///
 /// Tests pass `overrideUrl` directly; production reads from
 /// `import.meta.env.PUBLIC_TILE_STYLE_URL` at the call site (see

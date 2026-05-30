@@ -7,7 +7,7 @@ import 'run_snapshot.dart';
 /// through its steps, and emits [WorkoutExecEvent]s the run screen
 /// turns into audio cues and band updates.
 ///
-/// Spec: [docs/workout_execution.md](../../../../docs/workout_execution.md).
+/// Spec: [docs/features/workout_execution.md](../../../../docs/features/workout_execution.md).
 class WorkoutRunner {
   WorkoutRunner({required this.steps});
 
@@ -218,7 +218,7 @@ class WorkoutRunner {
   /// to zero and the previous step re-enters. No-op if there's no
   /// previous step or no snapshot to anchor on.
   ///
-  /// Spec: [docs/workout_execution.md § Rewind step](../../../../docs/workout_execution.md).
+  /// Spec: [docs/features/workout_execution.md § Rewind step](../../../../docs/features/workout_execution.md).
   /// Only one step deep — no rewind-of-rewind history.
   bool rewindStep() {
     if (_abandoned) return false;
@@ -434,7 +434,7 @@ class WorkoutStepResult {
     required this.status,
   });
 
-  /// JSON shape registered in `docs/metadata.md` under
+  /// JSON shape registered in `docs/backend/metadata.md` under
   /// `runs.metadata.workout_step_results`. Keep snake_case keys in sync
   /// with the TS reader on `apps/web/src/routes/runs/[id]/+page.svelte`.
   Map<String, dynamic> toJson() {

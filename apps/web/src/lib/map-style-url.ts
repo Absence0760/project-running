@@ -5,7 +5,7 @@
 /// is its testable arm.
 ///
 /// See `map-style.svelte.ts` for callers; see
-/// `docs/protomaps_local_setup.md` + `decisions.md § 68` for why the
+/// `docs/ops/protomaps_local_setup.md` + `decisions.md § 68` for why the
 /// override exists.
 
 export type MapStyle = 'streets' | 'satellite' | 'outdoors' | 'dark';

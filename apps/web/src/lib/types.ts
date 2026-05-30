@@ -38,7 +38,7 @@ export interface TrackPoint {
 	/// carry scalar `metadata.avg_bpm`. When every point has `bpm`
 	/// the run-detail zone breakdown computes real zones; otherwise
 	/// it falls back to a "No HR samples on this run" message. See
-	/// `docs/metadata.md`.
+	/// `docs/backend/metadata.md`.
 	bpm?: number;
 }
 

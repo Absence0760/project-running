@@ -49,7 +49,7 @@ test('fixture source parses to a valid RunSource', () => {
 });
 
 test('fixture metadata.activity_type is one of the registered values', () => {
-	// Match docs/metadata.md § activity_type.
+	// Match docs/backend/metadata.md § activity_type.
 	const allowed = new Set(['run', 'walk', 'hike', 'cycle']);
 	assert.ok(
 		allowed.has(fixture.expectedMetadata.activity_type),
@@ -63,7 +63,7 @@ test('fixture metadata.avg_bpm is a positive number', () => {
 });
 
 test('fixture laps use canonical per-lap-delta shape', () => {
-	// Per docs/metadata.md § laps: index (int), start_offset_s (int),
+	// Per docs/backend/metadata.md § laps: index (int), start_offset_s (int),
 	// distance_m (number), duration_s (int). start_offset_s of the first
 	// lap is 0 (cumulative-BEFORE), and subsequent laps' start_offset_s
 	// equals the running total of prior duration_s values.

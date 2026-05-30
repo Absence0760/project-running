@@ -12,7 +12,7 @@
 #
 # This is the dev path. The production migration to self-hosted
 # Protomaps (S3 + PMTiles via Range requests) is a separate decision —
-# see docs/decisions.md § 68 + docs/protomaps_local_setup.md.
+# see docs/architecture/decisions.md § 68 + docs/ops/protomaps_local_setup.md.
 #
 # Usage:
 #   bin/protomaps-dev.sh fetch              # downloads a PMTiles file
@@ -38,7 +38,7 @@
 #   (c) Provide your own .pmtiles file at $PROTOMAPS_HOME/world.pmtiles
 #       and point PMTILES_FILE at it.
 #
-# Read more in docs/protomaps_local_setup.md.
+# Read more in docs/ops/protomaps_local_setup.md.
 
 set -euo pipefail
 

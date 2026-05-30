@@ -18,9 +18,9 @@ This is why every ultra watch on the market uses Sharp MIP and every general-pur
 
 ### MCU: Ambiq Apollo510B vs Nordic nRF52 — ~25× active power
 
-The Ambiq Apollo family uses sub-threshold voltage design — it runs the silicon below the conventional threshold voltage, trading some max-clock speed for active current. The Apollo4 introduced this approach (~4 µA/MHz active, ~3 µA sleep with RTC); **Apollo510B** is the current production-target part per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) and improves on Apollo4 by another ~2× on the same workload (Cortex-M55 + Helium MVE @ 250 MHz, integrated BLE 5.4 network processor). The nRF52840 is roughly 50 µA/MHz active. That's a ~25× active-power difference at the chip level between nRF52840 and Apollo510B.
+The Ambiq Apollo family uses sub-threshold voltage design — it runs the silicon below the conventional threshold voltage, trading some max-clock speed for active current. The Apollo4 introduced this approach (~4 µA/MHz active, ~3 µA sleep with RTC); **Apollo510B** is the current production-target part per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) and improves on Apollo4 by another ~2× on the same workload (Cortex-M55 + Helium MVE @ 250 MHz, integrated BLE 5.4 network processor). The nRF52840 is roughly 50 µA/MHz active. That's a ~25× active-power difference at the chip level between nRF52840 and Apollo510B.
 
-Apollo4 family parts are what Fitbit Charge 6, Garmin Venu 3, and Huawei GT series moved to for exactly this reason; Apollo510B is the post-2025 generation. The nRF52840 is what you'd use for a bench prototype (because Zephyr and Embassy both support it first-class and the dev kit costs $50) and migrate away from for shipping silicon — see [§ 80](../decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) + [§ 92 Resolution](../decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise) for the tier-1 framing.
+Apollo4 family parts are what Fitbit Charge 6, Garmin Venu 3, and Huawei GT series moved to for exactly this reason; Apollo510B is the post-2025 generation. The nRF52840 is what you'd use for a bench prototype (because Zephyr and Embassy both support it first-class and the dev kit costs $50) and migrate away from for shipping silicon — see [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) + [§ 92 Resolution](../architecture/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise) for the tier-1 framing.
 
 ### GNSS: dual-band snapshot chip vs single-band always-on — 2 to 3× GPS power
 
@@ -74,7 +74,7 @@ These are the choices that occupy a disproportionate amount of online discussion
 
 **RTOS choice (Zephyr vs FreeRTOS vs RTIC vs bare-metal).** Within ±10% of each other for a sensible firmware. All of them sleep fine if you tell them to. Pick on tooling and ecosystem, not on perf.
 
-**Language choice (C vs Rust vs C++).** Within ±5%. Both `rustc` and `clang` compile through LLVM to the same instruction stream. The reason to pick Rust is memory safety and modern tooling — not performance. The reason to pick C is the larger driver ecosystem — not performance. (See [decisions.md §80](../decisions.md) for why this project picked Rust + Embassy anyway.)
+**Language choice (C vs Rust vs C++).** Within ±5%. Both `rustc` and `clang` compile through LLVM to the same instruction stream. The reason to pick Rust is memory safety and modern tooling — not performance. The reason to pick C is the larger driver ecosystem — not performance. (See [decisions.md §80](../architecture/decisions.md) for why this project picked Rust + Embassy anyway.)
 
 **Compiler choice (gcc vs clang vs IAR).** Within ±5%. The differences are real but small. Pick on which one your toolchain supports natively.
 
@@ -94,7 +94,7 @@ The architectural rules to internalise during tier 1:
 
 **Write everything DMA-driven and interrupt-driven from day one.** Polling is a habit that's painful to refactor out later. Async/await in Embassy makes this almost free; Zephyr's `k_work` patterns get there with discipline.
 
-**Design with a sensor-coprocessor split in mind**, even though the nRF52840 doesn't have a great one. Structure code so the always-on path (steps, HR, baro) is isolated from the screen-on path (UI, GPS). Then when you migrate to Apollo510B (production target per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)) or a discrete coprocessor, the boundary already exists.
+**Design with a sensor-coprocessor split in mind**, even though the nRF52840 doesn't have a great one. Structure code so the always-on path (steps, HR, baro) is isolated from the screen-on path (UI, GPS). Then when you migrate to Apollo510B (production target per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified)) or a discrete coprocessor, the boundary already exists.
 
 **Plan for partial display updates** even though the bench prototype probably doesn't need them. LVGL's dirty-region invalidation is the right pattern; Slint's reactive UI model gets you there for free.
 
@@ -108,7 +108,7 @@ When tier 1 is done and you've decided to push to tier 2, the migration looks ro
 
 | Subsystem | Tier 1 | Production target | Power impact |
 |---|---|---|---|
-| MCU | Nordic nRF52840 | Ambiq Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) | ~25× active-power improvement (Apollo4 → Apollo510B is another ~2× on top of Apollo4's ~12× vs nRF52840 — body text above derives this from 50 µA/MHz ÷ 4 µA/MHz = 12.5×) |
+| MCU | Nordic nRF52840 | Ambiq Apollo510B per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) | ~25× active-power improvement (Apollo4 → Apollo510B is another ~2× on top of Apollo4's ~12× vs nRF52840 — body text above derives this from 50 µA/MHz ÷ 4 µA/MHz = 12.5×) |
 | GNSS | u-blox MAX-M10S (single-band) | Sony CXD5610 (dual-band snapshot mode) | ~2× power, ~5× accuracy in foliage |
 | Display | Sharp MIP 1.3" breakout | Sharp MIP custom-cut to case | Same chip family, same draw |
 | Sensor coprocessor | None (main CPU does everything) | Apollo510B integrated 48 MHz BLE network processor or discrete BHI260 | ~2–3× always-on power |

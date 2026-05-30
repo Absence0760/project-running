@@ -45,7 +45,7 @@ class LocalRunStore extends ChangeNotifier {
   /// without the stamp (treated as untagged / adoptable). Production
   /// wires `() => apiClient?.userId` in `main.dart`.
   ///
-  /// See `docs/decisions.md § 67` for the owner-tag design.
+  /// See `docs/architecture/decisions.md § 67` for the owner-tag design.
   String? Function()? currentUserIdProvider;
 
   static const _inProgressFilename = 'in_progress.json';
@@ -102,7 +102,7 @@ class LocalRunStore extends ChangeNotifier {
   ///
   /// Used by [SyncService._drainPendingDeletes] to keep User A's
   /// queued deletes from being attempted under User B's session on a
-  /// shared device. See `docs/decisions.md § 67` for the parallel
+  /// shared device. See `docs/architecture/decisions.md § 67` for the parallel
   /// run owner-tag design.
   Set<String> pendingRemoteDeletesForUser(String? userId) {
     if (userId == null) return const <String>{};
@@ -162,7 +162,7 @@ class LocalRunStore extends ChangeNotifier {
     // time. Prevents the cross-user contamination bug on a shared
     // device — when User A records a run, signs out, and User B
     // signs in, the run still carries A's tag and the SyncService
-    // skips it during B's drain. See `docs/decisions.md § 67`.
+    // skips it during B's drain. See `docs/architecture/decisions.md § 67`.
     final ownerId = currentUserIdProvider?.call();
     if (ownerId != null && ownerId.isNotEmpty) {
       stamped = _withCreatedByUserId(stamped, ownerId);

@@ -47,7 +47,7 @@ class TileSource private constructor(context: Context) {
     /// so the tile layer can be omitted entirely when there's no key.
     // Tile rendering lights up when EITHER `PUBLIC_TILE_URL_TEMPLATE`
     // is set (local Protomaps dev path — see
-    // `docs/protomaps_local_setup.md`) OR `PUBLIC_MAPTILER_KEY` is
+    // `docs/ops/protomaps_local_setup.md`) OR `PUBLIC_MAPTILER_KEY` is
     // set (production path). Logic extracted as the file-level
     // [tileSourceEnabled] helper so the OR / blank-check semantics
     // is unit-testable independent of BuildConfig.
@@ -202,7 +202,7 @@ internal fun tileSourceEnabled(template: String, maptilerKey: String): Boolean {
 /// Build the raster-tile URL for a given (z, x, y). Honours the
 /// `PUBLIC_TILE_URL_TEMPLATE` BuildConfig override (used by the
 /// local Protomaps tileserver-gl dev setup — see
-/// `docs/protomaps_local_setup.md` + `decisions.md § 68`) and falls
+/// `docs/ops/protomaps_local_setup.md` + `decisions.md § 68`) and falls
 /// back to the MapTiler URL keyed by [maptilerKey].
 ///
 /// The template's `{z}`, `{x}`, `{y}` placeholders are substituted

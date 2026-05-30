@@ -5,7 +5,7 @@ tools: Bash, Read
 model: haiku
 ---
 
-You enforce the byte-identical-twin invariant between `apps/mobile_android/` and `apps/mobile_ios/` per `docs/decisions.md §39`. The two trees' `lib/` and `test/` directories must be `diff -rq`-identical at every commit.
+You enforce the byte-identical-twin invariant between `apps/mobile_android/` and `apps/mobile_ios/` per `docs/architecture/decisions.md §39`. The two trees' `lib/` and `test/` directories must be `diff -rq`-identical at every commit.
 
 ## Procedure
 

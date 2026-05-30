@@ -149,7 +149,7 @@ test('accepts a loopback PUBLIC_EXPORT_HUB_URL', () => {
 	assert.equal(r.ok, true);
 });
 
-test('docs/dev_prod_isolation.md lists every var the helper guards', () => {
+test('docs/testing/dev_prod_isolation.md lists every var the helper guards', () => {
 	// Reason: the doc and the KNOWN_ENV_VARS list in env_isolation.mjs
 	// drifted once (the doc was correct, the helper missed
 	// PUBLIC_LIVE_HUB_URL + PUBLIC_EXPORT_HUB_URL — both were real
@@ -169,14 +169,14 @@ test('docs/dev_prod_isolation.md lists every var the helper guards', () => {
 	assert.ok(helperVars.length >= 7, 'KNOWN_ENV_VARS unexpectedly small.');
 
 	const doc = readFileSync(
-		resolve(import.meta.dirname, '../../../docs/dev_prod_isolation.md'),
+		resolve(import.meta.dirname, '../../../docs/testing/dev_prod_isolation.md'),
 		'utf-8',
 	);
 	for (const v of helperVars) {
 		assert.match(
 			doc,
 			new RegExp(`\\b${v}\\b`),
-			`docs/dev_prod_isolation.md must mention ${v}. The helper guards it but the doc would silently underdescribe what dev → prod misconfig is caught.`,
+			`docs/testing/dev_prod_isolation.md must mention ${v}. The helper guards it but the doc would silently underdescribe what dev → prod misconfig is caught.`,
 		);
 	}
 });

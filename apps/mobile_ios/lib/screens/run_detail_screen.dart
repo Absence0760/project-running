@@ -57,7 +57,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   bool _loadingTrack = false;
   bool _trackFetchFailed = false;
   Route? _linkedRoute;
-  /// Map-match metadata + matched track. L4 per docs/conventions.md
+  /// Map-match metadata + matched track. L4 per docs/architecture/conventions.md
   /// § Layered resilience — the raw `run.track` keeps rendering on
   /// first paint; this lands in the background and the map widget
   /// switches to it when present. A failure here cannot break the
@@ -1020,7 +1020,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   List<Widget> _buildLaps(ThemeData theme, DistanceUnit unit) {
-    // Canonical per-lap shape (`docs/metadata.md` § laps):
+    // Canonical per-lap shape (`docs/backend/metadata.md` § laps):
     //   { index, start_offset_s, distance_m, duration_s }
     // `distance_m` and `duration_s` are the *per-lap* deltas, not the
     // cumulative totals — display each lap's own work, not running totals.

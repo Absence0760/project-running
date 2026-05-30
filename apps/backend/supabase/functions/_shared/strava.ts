@@ -6,7 +6,7 @@
 // both writers.
 //
 // Anything that touches `runs.metadata` keys here must be mirrored
-// in `docs/metadata.md` (the single source of truth for which keys
+// in `docs/backend/metadata.md` (the single source of truth for which keys
 // readers can rely on).
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.106.1';
@@ -158,7 +158,7 @@ export function isStravaRunFamily(sport: string | null | undefined): boolean {
 /// gzipped GPS track to Storage. Caller is responsible for dedupe.
 ///
 /// Note: `runs` has no `title` or `elevation_m` columns — both live on
-/// `metadata` per docs/metadata.md (matches the apps/web/src/lib/data.ts
+/// `metadata` per docs/backend/metadata.md (matches the apps/web/src/lib/data.ts
 /// saveRun writer used by the Strava + Garmin ZIP importers).
 export async function ingestActivity(
 	supabase: ReturnType<typeof createClient>,

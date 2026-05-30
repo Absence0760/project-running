@@ -562,7 +562,7 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     # because the static build inlines the page-data hydration script;
     # nonce-based tightening requires either switching off
     # adapter-static or injecting nonces via a CloudFront Function at
-    # the edge. Tracked as accepted risk in `docs/decisions.md` §70
+    # the edge. Tracked as accepted risk in `docs/architecture/decisions.md` §70
     # alongside the DOMPurify-as-last-line-of-defence story —
     # /audit/owasp May 2026 High #1.
     content_security_policy {

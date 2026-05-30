@@ -1,7 +1,7 @@
 /// Pure mapping from the universal `privacy_default` preference to the
 /// `runs.is_public` boolean for a newly-created run. Only `public` yields a
 /// public run; `followers` and `private` stay private — runs have no
-/// followers-only visibility tier (see docs/settings.md). Mirrors mobile
+/// followers-only visibility tier (see docs/backend/settings.md). Mirrors mobile
 /// `Preferences.newRunsArePublic` in apps/mobile_android/lib/preferences.dart
 /// — keep the two in lockstep.
 ///

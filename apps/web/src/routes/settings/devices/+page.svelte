@@ -228,7 +228,7 @@
 	}
 
 	/// Key-level editor. The catalogue below mirrors the D-scope and
-	/// UD-overridable keys from `docs/settings.md`. Each entry carries
+	/// UD-overridable keys from `docs/backend/settings.md`. Each entry carries
 	/// a typed value-editor shape the dialog renders into. U-scope
 	/// keys are deliberately excluded — you can't override a universal
 	/// value on a single device, so offering to do so would be a lie.

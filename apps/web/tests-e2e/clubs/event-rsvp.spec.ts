@@ -15,7 +15,7 @@ import { USER_A } from '../fixtures/users';
  * pkey component.
  *
  * Submit-my-time pins the picker → run-selection → leaderboard row
- * path documented in docs/clubs.md.
+ * path documented in docs/features/clubs.md.
  */
 
 const SYDNEY_RUN_CLUB_ID = 'c1111111-0000-0000-0000-000000000001';

@@ -6,7 +6,7 @@
  * `$env` virtual module, unavailable to `node --test` / `tsx --test`).
  *
  * Mirrors the mobile fix in
- * [decisions.md § 66](../../../docs/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches):
+ * [decisions.md § 66](../../../docs/architecture/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches):
  * each `add()` flushes the entry's compressed bytes to the underlying
  * `BlobWriter` and drops the JS-side copy, so peak heap is
  * `O(concurrency × avg-track-size)` rather than `O(total-archive-size)`.

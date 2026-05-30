@@ -7,7 +7,7 @@ Run a pre-tag readiness audit for one of the per-app release workflows. Report a
 
 ## Why this exists
 
-Every app ships on its own cadence via `<app>@<version>` tags ([docs/releasing.md](../../docs/releasing.md)). Cutting a tag triggers an irreversible publish (Play Internal, Lambda update, Supabase migrate, Fly deploy). A bad tag means rollback work — easy to avoid by checking the obvious gates first.
+Every app ships on its own cadence via `<app>@<version>` tags ([docs/ops/releasing.md](../../docs/ops/releasing.md)). Cutting a tag triggers an irreversible publish (Play Internal, Lambda update, Supabase migrate, Fly deploy). A bad tag means rollback work — easy to avoid by checking the obvious gates first.
 
 The gates are scattered (CI status, twin invariant, schema codegen, untracked work, doc drift, last-tag commit window) and the human-eyeball version is unreliable. This command runs them in one shot.
 
@@ -16,7 +16,7 @@ The gates are scattered (CI status, twin invariant, schema codegen, untracked wo
 **Right fit:** you're about to cut a release and want a single yes/no.
 
 **Wrong fit — refuse:**
-- Argument doesn't match a known app from [docs/releasing.md](../../docs/releasing.md).
+- Argument doesn't match a known app from [docs/ops/releasing.md](../../docs/ops/releasing.md).
 - The user is on a feature branch (not `main`) — explain that releases tag from `main`, ask whether to switch.
 
 ## Procedure
@@ -176,4 +176,4 @@ End with:
 
 - The whole thing should take under a minute. If a gate hangs (e.g. `gh run list` on a slow connection), skip it with a `⚠ skipped — <reason>` row rather than blocking the report.
 - `gh` is required for the CI-status check. If unavailable, fall back to a one-line note: "install `gh` to auto-check CI; manual: open the Actions tab and confirm green on the head commit".
-- This command does NOT replace [`docs/releasing.md`](../../docs/releasing.md). It's a pre-flight, not the release procedure itself.
+- This command does NOT replace [`docs/ops/releasing.md`](../../docs/ops/releasing.md). It's a pre-flight, not the release procedure itself.

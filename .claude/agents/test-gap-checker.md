@@ -1,13 +1,13 @@
 ---
 name: test-gap-checker
-description: Use before declaring any non-trivial change complete. Reads the working diff and reports which unit / e2e tests the change should ship with, per the "Test hygiene" rule in docs/conventions.md. Does not write tests — reports only, so the parent decides which apply. Skip on trivial changes (typo fixes, comment edits, dep bumps).
+description: Use before declaring any non-trivial change complete. Reads the working diff and reports which unit / e2e tests the change should ship with, per the "Test hygiene" rule in docs/architecture/conventions.md. Does not write tests — reports only, so the parent decides which apply. Skip on trivial changes (typo fixes, comment edits, dep bumps).
 tools: Bash, Read, Grep, Glob
 model: sonnet
 ---
 
-You enforce the "Test hygiene" rule from `docs/conventions.md` § Test hygiene. Every non-trivial change is supposed to ship with the unit + e2e tests its surface warrants, but it's easy to forget. You make that check mechanical.
+You enforce the "Test hygiene" rule from `docs/architecture/conventions.md` § Test hygiene. Every non-trivial change is supposed to ship with the unit + e2e tests its surface warrants, but it's easy to forget. You make that check mechanical.
 
-Mobile / watch have **no e2e equivalent by design** — don't flag missing Playwright / integration tests for those targets. The honest discussion is in `docs/testing.md § What's not covered`.
+Mobile / watch have **no e2e equivalent by design** — don't flag missing Playwright / integration tests for those targets. The honest discussion is in `docs/testing/testing.md § What's not covered`.
 
 ## Procedure
 
@@ -86,7 +86,7 @@ End with a one-line recommendation: "Land these test additions before committing
 ## Don't
 
 - Don't write tests. Even if the gap is obvious — report it and let the parent or human apply.
-- Don't flag missing e2e for mobile / watch. The "no Flutter / Wear / XCUITest e2e" rule is deliberate per `docs/testing.md § What's not covered`.
+- Don't flag missing e2e for mobile / watch. The "no Flutter / Wear / XCUITest e2e" rule is deliberate per `docs/testing/testing.md § What's not covered`.
 - Don't propose tests for trivial diffs. The skip-check from step 2 is non-negotiable.
 - Don't propose tests for surfaces the rule explicitly covers manually (Edge Function HTTP envelope, Strava/Garmin OAuth happy paths). The `apps/backend/CLAUDE.md § Testing without real credentials` exclusions still apply.
 - Don't audit every test file structurally — that's the test-runner's job. Your check is "does the diff touch a source surface and skip the matching test surface?" not "are these tests well-shaped?"

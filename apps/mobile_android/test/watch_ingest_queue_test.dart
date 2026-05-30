@@ -200,7 +200,7 @@ void main() {
       expect(run.metadata!['avg_bpm'], 145.0);
     });
 
-    test('laps array forwards verbatim per docs/metadata.md § laps', () {
+    test('laps array forwards verbatim per docs/backend/metadata.md § laps', () {
       // The canonical lap shape is per-lap deltas: `[{ index,
       // start_offset_s, distance_m, duration_s }]`. The decoder
       // forwards the array as-is so a watch sender that emits the

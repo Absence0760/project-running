@@ -1,6 +1,6 @@
 # infra/
 
-Terraform stacks for the AWS web hosting plan ([decisions.md § 53](../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). One module + per-env stacks for `prod` and `preview`, plus shared `dns` and `github-oidc` stacks. Runtime secrets via sops + AWS KMS.
+Terraform stacks for the AWS web hosting plan ([decisions.md § 53](../docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). One module + per-env stacks for `prod` and `preview`, plus shared `dns` and `github-oidc` stacks. Runtime secrets via sops + AWS KMS.
 
 For the operational walkthrough (cost, rollback, observability, DR), read [`apps/web/deployment.md`](../apps/web/deployment.md) — this file is the **how-to-apply** index.
 

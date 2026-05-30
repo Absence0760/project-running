@@ -24,7 +24,7 @@ The orchestrator tells you the platform. Map from target path if it doesn't:
 - **Outside `apps/{web,mobile_android,watch_wear,watch_ios}/`** — including `apps/mobile_ios/`, `apps/backend/`, `apps/job_worker/`, `packages/`, `infra/`, `docs/`. Refuse.
 - **`apps/mobile_ios/lib/` or `apps/mobile_ios/test/`** — byte-identical twin of `mobile_android`. Edits go in `mobile_android/`; the `mobile-twin-mirror` agent copies them across. If asked to edit `mobile_ios/`, redirect.
 - **watchOS on Linux** — Xcode + watchOS simulator are macOS-only. The orchestrator should have caught this, but defensively `uname -s` and refuse if Linux.
-- **Cross-invariant edits** — privacy zones (`clipTrackForUser`), paywall gates (`ProGate`, `effectiveTier`), L0–L4 layered resilience on the recording stack (`run_screen.dart`, `run_recorder/`, `live_run_map.dart`, `collapsible_panel.dart`), RLS / SECURITY DEFINER plumbing, jsonb metadata keys (`docs/metadata.md`). Stop and tell the user to use `/safe-edit` instead.
+- **Cross-invariant edits** — privacy zones (`clipTrackForUser`), paywall gates (`ProGate`, `effectiveTier`), L0–L4 layered resilience on the recording stack (`run_screen.dart`, `run_recorder/`, `live_run_map.dart`, `collapsible_panel.dart`), RLS / SECURITY DEFINER plumbing, jsonb metadata keys (`docs/backend/metadata.md`). Stop and tell the user to use `/safe-edit` instead.
 
 ## Common workflow (all platforms)
 
@@ -125,7 +125,7 @@ Plans, Feed, Guided runs, Settings are NOT in the sidebar — each lives in a co
 
 ### Page-local but consistently shaped (each page rolls its own CSS for these)
 
-- `.page` wrapper · padding `var(--space-xl) var(--space-2xl)` · list/detail pages uncapped, settings 64rem, single-form 40–48rem. See [`docs/conventions.md` § Web page padding](../../docs/conventions.md#web-page-padding).
+- `.page` wrapper · padding `var(--space-xl) var(--space-2xl)` · list/detail pages uncapped, settings 64rem, single-form 40–48rem. See [`docs/architecture/conventions.md` § Web page padding](../../docs/architecture/conventions.md#web-page-padding).
 - `.page-header` + `.toolbar`.
 - `.activity-group` + `.activity-btn.active` — segmented activity-type filter (Run / Walk / Ride / All with icon + label).
 - `.tabs` + `.tab.active` — bottom-border tab strip for sub-views over one entity.
@@ -239,7 +239,7 @@ $effect(() => {
 - **Don't stack two horizontal rails for one line of controls each.** When `.filter-row` carries chips AND an ancillary control (recap link, mode toggle, count badge), pair them via `display: flex; justify-content: space-between` — not two separate stacked rows.
 - **Don't merge multi-hundred-line pages for IA refactors.** Prefer visual grouping (section headers in nav, kicker labels, etc.) over collapsing 7 routes into 3 mega-pages. Same effect, zero e2e churn.
 - **Don't paint a footnote-grade text link where a primary action belongs.** "Full plan →" at 0.82rem text-color-link below a hero is wrong; promote to a button-grade CTA inside the hero.
-- **Don't read `$state` inside an `$effect` that writes the same `$state` without `untrack()`.** That creates a self-resetting loop: the write makes the effect dirty, the effect re-runs, the reset overwrites the user's input. See [`docs/conventions.md` § Svelte 5 `$effect`](../../docs/conventions.md#svelte-5-effect--never-read-state-you-write-in-the-same-effect).
+- **Don't read `$state` inside an `$effect` that writes the same `$state` without `untrack()`.** That creates a self-resetting loop: the write makes the effect dirty, the effect re-runs, the reset overwrites the user's input. See [`docs/architecture/conventions.md` § Svelte 5 `$effect`](../../docs/architecture/conventions.md#svelte-5-effect--never-read-state-you-write-in-the-same-effect).
 - **Don't use `<a href="...">` for in-page back navigation** when the user came from a snapshot-bearing parent. SvelteKit's soft-nav pushes a fresh history entry and `snapshot.restore` doesn't fire. Use `afterNavigate` to detect the source, `e.preventDefault()` in `onclick`, and `history.back()` so the captured snapshot is restored. See `/runs/[id]` and `/plans` for the canonical pattern.
 
 ### Patterns learned the hard way
@@ -294,7 +294,7 @@ Naming convention: `<Feature><Widget>` (`RunPhotos`, `FitnessCard`, `UpcomingEve
 
 ### Byte-identical twin invariant (critical)
 
-`apps/mobile_ios/lib/+test/` is **byte-identical** to `apps/mobile_android/lib/+test/`. See [decisions.md § 39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase).
+`apps/mobile_ios/lib/+test/` is **byte-identical** to `apps/mobile_android/lib/+test/`. See [decisions.md § 39](../../docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase).
 
 - Edit only `apps/mobile_android/lib/` and `apps/mobile_android/test/`. Never touch `apps/mobile_ios/lib/+test/` directly.
 - Platform-specific runtime behavior dispatches via `Platform.isAndroid` / `Platform.isIOS` inside the unified file. Never duplicate a screen file.
@@ -302,7 +302,7 @@ Naming convention: `<Feature><Widget>` (`RunPhotos`, `FitnessCard`, `UpcomingEve
 
 ### Layered resilience (do NOT touch without honoring)
 
-The L0–L4 try/catch contract in `docs/run_recording.md § Layering` is enforced by `architecture_guards_test.dart` (54 tests). Out of scope for polish:
+The L0–L4 try/catch contract in `docs/features/run_recording.md § Layering` is enforced by `architecture_guards_test.dart` (54 tests). Out of scope for polish:
 
 - `apps/mobile_android/lib/screens/run_screen.dart` (especially `_onSnapshot`).
 - `packages/run_recorder/` — state machine, GPS filter chain, snapshot emission.

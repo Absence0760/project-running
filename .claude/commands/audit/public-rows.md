@@ -15,7 +15,7 @@ The leak vectors here are subtle. Some columns are derived from the user's priva
    - **Public-safe** — distance, duration, started_at, route name, etc. Intended for sharing.
    - **Owner-only** — internal sync state, raw external API payloads (Strava response blobs in metadata), draft fields, IP addresses, device identifiers.
    - **Derived-private** — looks public but reveals private state (e.g. `runs.metadata.health_connect_record_id` outs which Health Connect record corresponds, leaking the user's import shape).
-3. **`runs.metadata` is jsonb** — every key in `docs/metadata.md` plus any registered-but-undocumented key needs the same classification. The whole jsonb travels with the row; you can't gate per-key in a SELECT policy.
+3. **`runs.metadata` is jsonb** — every key in `docs/backend/metadata.md` plus any registered-but-undocumented key needs the same classification. The whole jsonb travels with the row; you can't gate per-key in a SELECT policy.
 4. **Cross-table joins that surface private state.** A public `runs` row with `route_id` exposes the route id. If the corresponding route is private, can a viewer infer ownership / structure from the existence of the link? Same for `runs.club_id`, `runs.user_id` (always exposed but worth checking what `user_profiles` then exposes).
 5. **`user_profiles` exposure.** `display_name`, `avatar_url` are public-safe. `email`, `subscription_tier`, `apple_subscription_id`, etc. — verify the row's SELECT policy excludes columns that should stay private (Postgres-native column-level grants or a view that hides them).
 
@@ -37,8 +37,8 @@ For each: table.column (or `metadata.<key>`), what private state it reveals, the
 ## Useful starting points
 
 - `apps/backend/supabase/migrations/` — column lists per table
-- `docs/metadata.md` — the runs.metadata key registry
-- `docs/api_database.md` — documented public-vs-private intent
+- `docs/backend/metadata.md` — the runs.metadata key registry
+- `docs/backend/api_database.md` — documented public-vs-private intent
 - `apps/web/src/lib/data.ts` — `fetchPublicRun`, `fetchPublicRoute`, `fetchFeed` — what the app actually reads from public rows
 
 ## Delegate to

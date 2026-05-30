@@ -2,7 +2,7 @@
 
 How `apps/mobile_android/` ships to the Google Play Store.
 
-Operational counterpart of [`apps/mobile_android/CLAUDE.md`](CLAUDE.md) (stack, what's real, file layout) and [`apps/mobile_android/local_testing.md`](local_testing.md) (running it locally). For tag-driven release mechanics see [`docs/releasing.md`](../../docs/releasing.md). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md).
+Operational counterpart of [`apps/mobile_android/CLAUDE.md`](CLAUDE.md) (stack, what's real, file layout) and [`apps/mobile_android/local_testing.md`](local_testing.md) (running it locally). For tag-driven release mechanics see [`docs/ops/releasing.md`](../../docs/ops/releasing.md). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md).
 
 **Status: plan.** Local builds + tests pass; no Play listing exists yet.
 
@@ -269,4 +269,4 @@ Rare, but if it happens (usually for ToS violations the team didn't realise appl
 - [ ] First `mobile_android@*` tag built clean, AAB landed on Internal track
 - [ ] Internal smoke test passed (sign-in, record a run, view in history, sync to backend)
 - [ ] Sentry receiving events from a debug build
-- [ ] [`docs/parity.md`](../../docs/parity.md) Android column updated when promotion to Production happens
+- [ ] [`docs/product/parity.md`](../../docs/product/parity.md) Android column updated when promotion to Production happens

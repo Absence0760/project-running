@@ -68,7 +68,7 @@ test('pickAllowedRunMetadata — drops internal owner-only flags', () => {
 		activity_type: 'run',
 		created_by_user_id: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
 		recovered_from_crash: true,
-		// owner-only by docs/metadata.md classification
+		// owner-only by docs/backend/metadata.md classification
 	});
 	assert.deepEqual(out, { activity_type: 'run' });
 });

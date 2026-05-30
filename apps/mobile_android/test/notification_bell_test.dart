@@ -91,7 +91,7 @@ void main() {
 
     testWidgets('swallows fetch errors — does not crash the dashboard',
         (tester) async {
-      // L4 contract from docs/conventions.md § "Layered resilience" —
+      // L4 contract from docs/architecture/conventions.md § "Layered resilience" —
       // an auxiliary effect (the unread-fetch network call) must not
       // bring down the parent screen. A regression that re-threw the
       // exception would crash the dashboard build.

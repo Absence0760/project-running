@@ -1,6 +1,6 @@
 # Local testing — Wear OS app (native Kotlin + Compose-for-Wear)
 
-The Wear OS app is a **native Kotlin Android project**, not Flutter. See [CLAUDE.md](CLAUDE.md) and [decisions.md § 15](../../docs/decisions.md) for why.
+The Wear OS app is a **native Kotlin Android project**, not Flutter. See [CLAUDE.md](CLAUDE.md) and [decisions.md § 15](../../docs/architecture/decisions.md) for why.
 
 ---
 
@@ -98,7 +98,7 @@ cd apps/watch_wear/android
 ./gradlew assembleRelease      # release-signed with debug keys; same verify path
 ```
 
-JVM unit tests live under `apps/watch_wear/android/app/src/test/` (~86 `@Test` methods across 8 files — `SupabaseErrorClassificationTest`, `WatchRunPayloadFixtureTest`, `MercatorTilesTest`, `RouteMiniMapWiringTest`, `ActiveRunTileFormattersTest`, recording-side helpers, etc. — see [docs/testing.md](../../docs/testing.md) for what each pins). Run them with `./gradlew testDebugUnitTest`. There are no instrumented (`androidTest`) tests yet; for end-to-end coverage we still rely on `compileDebugKotlin` plus a real-device soak.
+JVM unit tests live under `apps/watch_wear/android/app/src/test/` (~86 `@Test` methods across 8 files — `SupabaseErrorClassificationTest`, `WatchRunPayloadFixtureTest`, `MercatorTilesTest`, `RouteMiniMapWiringTest`, `ActiveRunTileFormattersTest`, recording-side helpers, etc. — see [docs/testing/testing.md](../../docs/testing/testing.md) for what each pins). Run them with `./gradlew testDebugUnitTest`. There are no instrumented (`androidTest`) tests yet; for end-to-end coverage we still rely on `compileDebugKotlin` plus a real-device soak.
 
 ---
 

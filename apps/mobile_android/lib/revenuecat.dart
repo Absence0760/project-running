@@ -29,7 +29,7 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 /// successful purchase.
 
 /// Env keys read at startup. Mirror the names the deploy pipeline
-/// expects; documented in `docs/paywall.md` and the deploy plan.
+/// expects; documented in `docs/features/paywall.md` and the deploy plan.
 const _kAndroidKey = 'REVENUECAT_API_KEY_ANDROID';
 const _kIosKey = 'REVENUECAT_API_KEY_IOS';
 

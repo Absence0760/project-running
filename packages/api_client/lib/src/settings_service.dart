@@ -6,7 +6,7 @@ import 'api_client.dart';
 
 /// Registered key names for the `user_settings` / `user_device_settings` bags.
 ///
-/// Keep in sync with [docs/settings.md](../../../docs/settings.md). Using
+/// Keep in sync with [docs/backend/settings.md](../../../docs/backend/settings.md). Using
 /// these constants everywhere (instead of string literals) is how we avoid
 /// the class of bugs where one client writes `weeklyMileageGoal` and another
 /// reads `weekly_mileage_goal_m`.

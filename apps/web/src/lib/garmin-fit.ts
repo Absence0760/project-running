@@ -11,7 +11,7 @@
 
 import type { TrackPoint } from './types';
 
-/// Canonical per-lap shape registered in docs/metadata.md § laps. `index`
+/// Canonical per-lap shape registered in docs/backend/metadata.md § laps. `index`
 /// is 1-based; `start_offset_s` is the cumulative duration up to the START
 /// of this lap (first lap = 0); `distance_m` / `duration_s` are per-lap
 /// deltas, not cumulative. Mirrors the recorder's `lapsToCanonicalJson`.

@@ -75,7 +75,7 @@ test.describe('/clubs', () => {
 		// Runner owns three seeded clubs (Richmond Run Club / Tempo
 		// Tuesday / Friends of Jared). Empty state would mean either
 		// fetchMyClubs broke or the auth-race patched in /clubs/+page
-		// regressed (see docs/testing.md production-bugs § /clubs).
+		// regressed (see docs/testing/testing.md production-bugs § /clubs).
 		await page.goto('/clubs');
 
 		await expect(

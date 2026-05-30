@@ -6,7 +6,7 @@ Audit every layer that bounds runaway spend across the stack. The product can be
 
 ## Goal
 
-Per the deployment plan ([`docs/deployment.md`](../../../docs/deployment.md), [`apps/web/deployment.md`](../../../apps/web/deployment.md)) and the paywall plan ([`docs/paywall.md`](../../../docs/paywall.md)): a misconfigured deploy, a leaked credential, or an abusive user must not be able to run unbounded spend for hours before someone notices. The expected baseline is ~$70/mo at launch; a finding is anything that lets the bill exceed that by an order of magnitude before any alarm fires.
+Per the deployment plan ([`docs/ops/deployment.md`](../../../docs/ops/deployment.md), [`apps/web/deployment.md`](../../../apps/web/deployment.md)) and the paywall plan ([`docs/features/paywall.md`](../../../docs/features/paywall.md)): a misconfigured deploy, a leaked credential, or an abusive user must not be able to run unbounded spend for hours before someone notices. The expected baseline is ~$70/mo at launch; a finding is anything that lets the bill exceed that by an order of magnitude before any alarm fires.
 
 ## What to check
 
@@ -68,7 +68,7 @@ A buggy retry loop on a million devices is the same as a denial-of-wallet attack
 This audit's value depends on the docs being honest:
 
 - **`apps/web/deployment.md` § Cost projection** matches the actual configured tiers (Anthropic model name, free-tier dailyLimit value, Lambda concurrency).
-- **`docs/paywall.md`** free-tier dailyLimit value matches `TIER_LIMITS.free.dailyLimit` in code.
+- **`docs/features/paywall.md`** free-tier dailyLimit value matches `TIER_LIMITS.free.dailyLimit` in code.
 - **`infra/README.md` § Phase-0** does not still tell the user to set up billing alerts manually if they're now Terraformed.
 
 ## Report
@@ -89,9 +89,9 @@ For each finding: file:line + the concrete change. Don't apply fixes without exp
 - `infra/modules/web-stack/variables.tf` + `alarms.tf` — Lambda concurrency cap + throttle alarm
 - `infra/modules/web-stack/main.tf` — CloudFront + S3 + Lambda + log group config
 - `apps/backend/supabase/migrations/20260604_001_rate_limits.sql` + `20260605_001_rate_limits_tiered.sql` — DB-side rate limiter
-- `docs/deployment.md` § Cost ladder + § Observability — the cost projection these guards defend
+- `docs/ops/deployment.md` § Cost ladder + § Observability — the cost projection these guards defend
 - `apps/web/deployment.md` § Coach `/api/coach` specifics + § Cost projection — Lambda-specific spend math
-- `docs/paywall.md` — tier definitions
+- `docs/features/paywall.md` — tier definitions
 
 ## Delegate to
 

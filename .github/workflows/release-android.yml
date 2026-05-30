@@ -14,7 +14,7 @@ name: Release Android
 #                                 (grant the account "Release apps to testing
 #                                 tracks" on the Play Console)
 #
-# See docs/releasing.md for the end-to-end flow.
+# See docs/ops/releasing.md for the end-to-end flow.
 
 on:
   push:

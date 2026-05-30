@@ -33,7 +33,7 @@ For each: file:line, the source of the user-supplied text, the rendering site, t
 - `apps/web/src/lib/components/RunSocial.svelte` — comment rendering
 - `apps/web/src/routes/clubs/` — club + event content surfaces
 - `apps/mobile_android/lib/screens/coach_screen.dart` — `flutter_markdown` usage
-- `docs/decisions.md` — search "XSS", "sanitize", "DOMPurify"
+- `docs/architecture/decisions.md` — search "XSS", "sanitize", "DOMPurify"
 
 ## Delegate to
 

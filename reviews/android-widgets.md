@@ -313,7 +313,7 @@
   - final tol = 10;
   + final tol = s.toleranceSecPerKm;
   ```
-  Add `tolerance_sec_per_km` to `docs/metadata.md` under `workout_step_results` entries. Update `metadata_registry_test.dart` if it scans that key.
+  Add `tolerance_sec_per_km` to `docs/backend/metadata.md` under `workout_step_results` entries. Update `metadata_registry_test.dart` if it scans that key.
 - **Risk if applied**: Old `workout_step_results` JSON rows (written before this change) will not have the key; `fromMap` must default to 10 for missing entries. `(raw['tolerance_sec_per_km'] as num?)?.toInt() ?? 10` handles this.
 - **Verification**: `flutter test apps/mobile_android` passes. `workout_review_section_test.dart` tone-classification tests still pass (they currently use the default 10, so no change needed unless new tests are added for non-default tolerance).
 

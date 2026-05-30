@@ -37,7 +37,7 @@ The `migration-coordinator` agent automates this for an in-progress migration. R
 
 ## Useful starting points
 
-- `docs/schema_codegen.md` — the canonical workflow
+- `docs/architecture/schema_codegen.md` — the canonical workflow
 - `apps/web/scripts/check_constraint_unions.mjs` — the CI guard
 - `scripts/gen_dart_models.dart` — the Dart generator
 - `.claude/agents/migration-coordinator.md` — the diff-time agent

@@ -12,7 +12,7 @@ import {
 
 /**
  * Backup + restore for a user's runs, routes, and profile. See
- * `docs/backup_restore.md` for the on-disk format.
+ * `docs/ops/backup_restore.md` for the on-disk format.
  *
  * The archive keeps GPS tracks pre-gzipped so restore can upload them
  * straight into the `runs` Storage bucket without a re-encode step.
@@ -24,7 +24,7 @@ import {
  * still uses JSZip — the read path needs random access by name
  * (`zip.file('runs.json')`), which JSZip supports out of the box;
  * the write path was the heap hot-spot. Mirrors the mobile fix in
- * [decisions.md § 66](../../../docs/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
+ * [decisions.md § 66](../../../docs/architecture/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
  */
 
 export { BACKUP_FORMAT, BACKUP_VERSION };

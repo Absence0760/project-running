@@ -27,7 +27,7 @@ variable "extra_lambda_env" {
 }
 
 variable "monthly_budget_limit_usd" {
-  description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick something a few times the projected baseline (~$70/mo at launch per docs/deployment.md)."
+  description = "Hard ceiling for the AWS Budgets account-wide monthly cost alert (in USD). Notifications fire at 50 % ACTUAL, 100 % ACTUAL, and 100 % FORECASTED. Pick something a few times the projected baseline (~$70/mo at launch per docs/ops/deployment.md)."
   type        = number
   default     = 200
 }

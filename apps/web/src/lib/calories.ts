@@ -14,7 +14,7 @@
 // byte-for-byte in `apps/mobile_android/lib/calories.dart` (and the
 // iOS twin per the one-Dart-codebase rule).
 //
-// See `docs/decisions.md § 77` for the full formula choice + sources.
+// See `docs/architecture/decisions.md § 77` for the full formula choice + sources.
 
 /// Optional gender hint for the calorie estimate. Matches the
 /// `gender` column on `user_profiles`.

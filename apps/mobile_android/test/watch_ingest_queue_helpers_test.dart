@@ -129,7 +129,7 @@ void main() {
     });
 
     test('forwards a laps array verbatim into metadata', () {
-      // Reason: per docs/metadata.md § laps the canonical shape is
+      // Reason: per docs/backend/metadata.md § laps the canonical shape is
       // { index, start_offset_s, distance_m, duration_s }. Wear OS
       // already writes this shape; the watch ingest path must preserve
       // it byte-for-byte so a future watch sender that pipes through

@@ -26,7 +26,7 @@ import 'package:uuid/uuid.dart';
 /// **Lossy by design** — CSV is a summary format, the GPS track is
 /// not recoverable. To round-trip runs with their tracks intact, use
 /// the Full backup ZIP path (`BackupService`). See
-/// [decisions.md § 65](../../docs/decisions.md#65-csv-import-is-a-summary-path-not-a-replacement-for-the-backup-zip).
+/// [decisions.md § 65](../../docs/architecture/decisions.md#65-csv-import-is-a-summary-path-not-a-replacement-for-the-backup-zip).
 class CsvRunImporter {
   static const _uuid = Uuid();
 

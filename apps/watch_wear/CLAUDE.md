@@ -2,13 +2,13 @@
 
 **Pure Kotlin Wear OS app** using Jetpack Compose-for-Wear. **Not Flutter.**
 The Flutter build was removed when the team committed to Compose-for-Wear
-native UI (see [../../docs/decisions.md § 15](../../docs/decisions.md)).
+native UI (see [../../docs/architecture/decisions.md § 15](../../docs/architecture/decisions.md)).
 
 ## Scope — read before writing code
 
 **Web is the canonical feature surface; the watch is a wrist-only complement,
-not a parallel client.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
-and the live matrix at [../../docs/parity.md](../../docs/parity.md). Watch
+not a parallel client.** See [../../docs/architecture/decisions.md § 24](../../docs/architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)
+and the live matrix at [../../docs/product/parity.md](../../docs/product/parity.md). Watch
 columns in `parity.md` are `N/A` for almost everything by design — the watch
 is **not** trying to mirror web's feature surface.
 
@@ -33,7 +33,7 @@ is **not** trying to mirror web's feature surface.
 - A feature that doesn't exist on web yet. Same web-first rule as Android /
   iOS — you don't pioneer a feature on the watch.
 - A Flutter or React-Native UI layer. The decision to be native Kotlin +
-  Compose-for-Wear is in [§ 15](../../docs/decisions.md). Don't reintroduce
+  Compose-for-Wear is in [§ 15](../../docs/architecture/decisions.md). Don't reintroduce
   Flutter even for "shared code" reasons.
 - Hand-edits to `generated/DbRows.kt`. Schema changes regenerate it via
   `dart run scripts/gen_dart_models.dart` — see "Schema drift protection"
@@ -158,7 +158,7 @@ same drain path with a `syncing` UI flag for the spinner).
 `DataType.HEART_RATE_BPM` and exposes a `Flow<Int>` of live samples.
 `RunViewModel` collects into a list during recording, averages on stop,
 writes `avg_bpm` into `run.metadata` before upload. Behaviour matches
-`watch_ios`'s HealthKit integration — [docs/metadata.md](../../docs/metadata.md)
+`watch_ios`'s HealthKit integration — [docs/backend/metadata.md](../../docs/backend/metadata.md)
 registers the key.
 
 ## Running it locally
@@ -407,7 +407,7 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
   starred anything. Starring is done from web (`/routes` cards +
   `/routes/[id]` header) or mobile (`routes_screen.dart` trailing
   star, `route_detail_screen` AppBar star) — the watch is read-only
-  on this flag. See `docs/decisions.md § 44`.
+  on this flag. See `docs/architecture/decisions.md § 44`.
   `RoutesBridge.kt` adds a second inbound source: the paired phone's
   `WearRoutesBridge` pushes the user's starred subset to
   `/saved_routes` on the Wearable Data Layer whenever the phone's
@@ -416,7 +416,7 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
   push — run-start works without watch connectivity as long as the
   phone has wifi/LTE. Supabase `fetchRoutes` stays the canonical
   refresh when the watch *does* have its own network. See
-  `docs/decisions.md § 64`.
+  `docs/architecture/decisions.md § 64`.
   Selected waypoints flow via `ACTION_START` extras into
   `RunRecordingService.parseRouteWaypoints`, which calls
   `RouteMath.offRouteDistanceM` + `routeRemainingM` per GPS sample.
@@ -482,12 +482,12 @@ Examples of the extract-then-test pattern in this codebase:
 
 When you ship a refactor that adds a meaningfully complex branch, follow the same shape — the surface area that needs Robolectric is uncovered by design.
 
-The full file-by-file test coverage is documented in [../../docs/testing.md § apps/watch_wear/.../*Test.kt](../../docs/testing.md). Don't keep the count in sync by hand — the doc says "Counts here are point-in-time — they drift fast" and CI doesn't gate on the number.
+The full file-by-file test coverage is documented in [../../docs/testing/testing.md § apps/watch_wear/.../*Test.kt](../../docs/testing/testing.md). Don't keep the count in sync by hand — the doc says "Counts here are point-in-time — they drift fast" and CI doesn't gate on the number.
 
 ## Before reporting a task done
 
 - `./gradlew compileDebugKotlin` passes.
 - `./gradlew testDebugUnitTest` passes if you touched any of the extracted helpers or added a new one.
 - If you touched the `runs` schema or added a table to `_kotlinTables`, re-ran `dart run scripts/gen_dart_models.dart` and committed the regenerated Kotlin file.
-- Updated [../../docs/metadata.md](../../docs/metadata.md) if a new `metadata` key is written from this app.
-- Ticked the corresponding Wear OS box in [../../docs/roadmap.md](../../docs/roadmap.md).
+- Updated [../../docs/backend/metadata.md](../../docs/backend/metadata.md) if a new `metadata` key is written from this app.
+- Ticked the corresponding Wear OS box in [../../docs/product/roadmap.md](../../docs/product/roadmap.md).

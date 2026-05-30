@@ -2,7 +2,7 @@
 
 How the Go worker at `apps/job_worker/` and the OSRM map-matching engine at `apps/job_worker/osrm/` run in production.
 
-Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker contract, scope, error classification) and [`apps/job_worker/README.md`](README.md) (local dev recipe). For the cross-service overview see [`docs/deployment.md`](../../docs/deployment.md).
+Operational counterpart of [`apps/job_worker/CLAUDE.md`](CLAUDE.md) (worker contract, scope, error classification) and [`apps/job_worker/README.md`](README.md) (local dev recipe). For the cross-service overview see [`docs/ops/deployment.md`](../../docs/ops/deployment.md).
 
 **Status: plan.** The worker binary compiles, tests pass, OSRMMatcher is wired behind the `OSRM_URL` env switch, and the live spectator hub (HTTP + WebSocket) is wired into the same binary alongside `/health`. Neither app has been deployed. All config (fly.toml, env examples, secrets list, DNS) is ready — the remaining step is `flyctl deploy --remote-only` from an operator with `FLY_API_TOKEN`.
 
@@ -395,7 +395,7 @@ Fly Machines support cron-via-app. A separate `osrm-rebuilder` app runs once a w
 2. Runs the three OSRM passes against `/data/staging/`.
 3. Atomically renames `/data/staging/` → `/data/`. (Or symlinks, depending on what `osrm-routed` accepts at runtime.)
 4. Triggers a graceful restart of the `osrm` machine.
-5. Bumps `OSRMMatcher.AlgVersion` (the worker re-matches stale rows on next claim — see [decisions.md § 45](../../docs/decisions.md#45-server-side-map-matching-uses-osrm-not-valhalla-meili-or-graphhopper)).
+5. Bumps `OSRMMatcher.AlgVersion` (the worker re-matches stale rows on next claim — see [decisions.md § 45](../../docs/architecture/decisions.md#45-server-side-map-matching-uses-osrm-not-valhalla-meili-or-graphhopper)).
 
 Until that's wired, manual `make download && make build` + `flyctl ssh sftp` is the rebuild path. Note the cadence in this file each time it's done.
 
@@ -566,4 +566,4 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 - [ ] Health probe wired
 - [ ] Weekly rebuild cron designed (even if not yet implemented)
 - [ ] `release-osrm.yml` workflow merged
-- [ ] [`docs/parity.md`](../../docs/parity.md) "Server-side HMM map matching" row updated to reflect the live engine
+- [ ] [`docs/product/parity.md`](../../docs/product/parity.md) "Server-side HMM map matching" row updated to reflect the live engine

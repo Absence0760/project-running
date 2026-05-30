@@ -2,7 +2,7 @@
 //
 // Must produce byte-identical paces + phase labels for the same inputs. If
 // you change a number here, change it in training.ts and re-run both test
-// suites. See docs/training.md.
+// suites. See docs/features/training.md.
 
 import 'dart:math';
 

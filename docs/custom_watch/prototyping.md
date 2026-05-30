@@ -72,7 +72,7 @@ The DIY path here is "find an RF consultant on Upwork or via the Hackaday commun
 
 - Looks like a watch in a photo. Friends ask "is that a Garmin?"
 - 100% reliable GPS fix outdoors, ≥50% reliable fix under light foliage
-- ≥24hr GPS battery life (still well short of the 100hr target — that needs the Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) + custom battery shape, which is tier 3)
+- ≥24hr GPS battery life (still well short of the 100hr target — that needs the Apollo510B per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) + custom battery shape, which is tier 3)
 - Splashproof but not swimmable
 - Pairs with the app, syncs runs, displays course overlay
 
@@ -92,7 +92,7 @@ Indistinguishable from a real production watch unless you take it apart. Proper 
 | Sapphire crystal tooling | $15–30k |
 | Custom battery cell tooling (specific pouch shape) | $8–15k |
 | Button + gasket tooling | $10–20k |
-| Migration from nRF52840 to Ambiq Apollo510B per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) (firmware port, NDA paperwork, new toolchain) | $40–80k |
+| Migration from nRF52840 to Ambiq Apollo510B per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified) (firmware port, NDA paperwork, new toolchain) | $40–80k |
 | Migration from MAX-M10S to Sony CXD5610 (NDA, new firmware integration, RF re-tune) | $30–60k |
 | IPX7 certification testing | $5–10k per design iteration, expect 2–3 iterations |
 | Drop / vibration / thermal cycling certification | $15–30k |

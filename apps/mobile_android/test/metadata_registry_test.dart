@@ -1,11 +1,11 @@
 // Guard-rail: every `runs.metadata` key used anywhere in the mobile-side
-// Dart codebase must be registered in `docs/metadata.md`.
+// Dart codebase must be registered in `docs/backend/metadata.md`.
 //
 // `runs.metadata` is a jsonb bag with no type-level protection. Cross-client
 // drift (mobile writes `activity_type`, web reads `activityType`) is the
 // exact failure mode the registry was created to prevent. This test keeps
 // the registry and the code from diverging silently — if you add a key in
-// Dart without adding a row to `docs/metadata.md`, CI fails here.
+// Dart without adding a row to `docs/backend/metadata.md`, CI fails here.
 //
 // Scope: Dart-only. Equivalent tests should exist for TypeScript (web),
 // Kotlin (watch_wear), and Swift (watch_ios) — tracked as a TODO so the
@@ -29,10 +29,10 @@ const _exemptReferences = <String>{};
 
 void main() {
   test(
-    'every `runs.metadata` key referenced in Dart source is registered in docs/metadata.md',
+    'every `runs.metadata` key referenced in Dart source is registered in docs/backend/metadata.md',
     () {
       final registry = _parseRegistry(
-        File('../../docs/metadata.md').readAsStringSync(),
+        File('../../docs/backend/metadata.md').readAsStringSync(),
       );
 
       final roots = <Directory>[
@@ -69,7 +69,7 @@ void main() {
           ],
           '',
           'Either:',
-          '  1) Register the key in docs/metadata.md (preferred) — use '
+          '  1) Register the key in docs/backend/metadata.md (preferred) — use '
               'snake_case, describe the shape, writers, readers. See the '
               'top of that doc for the rule.',
           '  2) If the match is spurious (pattern matched a non-metadata '
@@ -89,7 +89,7 @@ void main() {
     'every registered metadata key is referenced in Dart source (dead-key check)',
     () {
       final registry = _parseRegistry(
-        File('../../docs/metadata.md').readAsStringSync(),
+        File('../../docs/backend/metadata.md').readAsStringSync(),
       );
 
       final referenced = <String>{};
@@ -109,7 +109,7 @@ void main() {
 
       // A registered key that no Dart client references may still be
       // legitimately written by the web / watches / an Edge Function. So
-      // we only flag keys declared in `docs/metadata.md` as being written
+      // we only flag keys declared in `docs/backend/metadata.md` as being written
       // BY a mobile-side writer but not actually referenced in Dart source
       // — a true dead key.
       //
@@ -120,7 +120,7 @@ void main() {
       final unused = registry.difference(referenced);
       // Intentionally NOT failing on unused — just surfacing so the next
       // session has a starting list. Converted to a hard failure once the
-      // writer column in docs/metadata.md is machine-readable.
+      // writer column in docs/backend/metadata.md is machine-readable.
       if (unused.isNotEmpty) {
         // Intentional: printed, not failed. Upgrade to `fail(...)` once
         // the writer column is structured enough to exclude non-Dart-only

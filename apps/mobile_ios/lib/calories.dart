@@ -2,7 +2,7 @@
 ///
 /// Persona-hunt Round 3 finding Woman #5. Dart twin of
 /// `apps/web/src/lib/calories.ts` — keep both in lockstep. See
-/// `docs/decisions.md § 77` for the formula choice + sources.
+/// `docs/architecture/decisions.md § 77` for the formula choice + sources.
 ///
 /// Pure functions, no Flutter / Supabase deps.
 

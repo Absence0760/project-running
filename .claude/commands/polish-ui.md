@@ -18,7 +18,7 @@ This is a cross-platform command. The target path tells the agent which platform
 
 Anything else (`apps/backend/`, `apps/job_worker/`, `packages/`, `infra/`, `docs/`) is out of scope — polish is for user-facing surfaces only.
 
-**Never edit `apps/mobile_ios/lib/` or `apps/mobile_ios/test/` directly.** Those files are byte-identical mirrors of `apps/mobile_android/`. Edits go in `mobile_android/`, then the `mobile-twin-mirror` agent copies them across. See [decisions.md § 39](../../docs/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase).
+**Never edit `apps/mobile_ios/lib/` or `apps/mobile_ios/test/` directly.** Those files are byte-identical mirrors of `apps/mobile_android/`. Edits go in `mobile_android/`, then the `mobile-twin-mirror` agent copies them across. See [decisions.md § 39](../../docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase).
 
 ## When to use this command
 

@@ -15,7 +15,7 @@ import kotlin.math.roundToInt
 /// computes the unmodified curve. The run-detail pages recompute with
 /// gender when the run is viewed there, so the only place the watch's
 /// estimate is the final word is its own PostRun summary — a few kcal of
-/// drift on a glanceable figure. See docs/decisions.md § 77.
+/// drift on a glanceable figure. See docs/architecture/decisions.md § 77.
 object RunCalories {
     /// Per-activity energy cost (kcal per kg per km). Mirrors
     /// ACTIVITY_KCAL_PER_KG_PER_KM in calories.ts. The watch only

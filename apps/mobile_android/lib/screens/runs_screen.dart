@@ -659,7 +659,7 @@ class _RunsScreenState extends State<RunsScreen> {
       // Stamp the queued failures with the current user so a sign-out
       // → other user sign-in cycle doesn't drain User A's pending
       // deletes under User B's session (RLS would reject every one
-      // and the queue would get stuck). See `docs/decisions.md § 67`
+      // and the queue would get stuck). See `docs/architecture/decisions.md § 67`
       // for the parallel run owner-tag design.
       await widget.runStore.markManyPendingRemoteDelete(
         failedIds,

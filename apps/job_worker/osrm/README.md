@@ -7,7 +7,7 @@ points at it.
 
 This is a **dev-only** harness. Production deployment (Fly.io / Cloud
 Run / dedicated VM) is its own decision and is tracked separately
-under [`docs/roadmap.md`](../../../docs/roadmap.md) §515-531.
+under [`docs/product/roadmap.md`](../../../docs/product/roadmap.md) §515-531.
 
 ## One-time setup
 

@@ -16,7 +16,7 @@ import 'package:uuid/uuid.dart';
 ///
 /// The previous behaviour silently dropped watch runs received before sign-in
 /// because the in-process `pending` buffer in WatchIngestBridge.swift was lost
-/// on app restart. See docs/decisions.md for the full rationale.
+/// on app restart. See docs/architecture/decisions.md for the full rationale.
 ///
 /// **Shared-device owner-tag (added 2026-05).** Each queued file carries
 /// the user_id who was most recently signed in on the phone — the
@@ -209,7 +209,7 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
   if (avgBpm is num) metadata['avg_bpm'] = avgBpm.toDouble();
   final activity = raw['activity_type'];
   if (activity is String) metadata['activity_type'] = activity;
-  // Lap splits: registered shape per `docs/metadata.md` § laps —
+  // Lap splits: registered shape per `docs/backend/metadata.md` § laps —
   // `[{ index, start_offset_s, distance_m, duration_s }]`. Forward
   // verbatim so a watch sender that follows the registry survives a
   // round-trip through the queue without losing the user's mid-run

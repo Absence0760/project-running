@@ -132,7 +132,7 @@ function genderPaceMultiplier(gender: TrainingGender | undefined): number {
 // back every 3rd week instead of every 4th. Pace bands are left on the
 // shared Daniels curve — no validated age×VDOT pace table exists, and
 // the harm being fixed here is recovery density, not pace. See
-// docs/decisions.md § masters-recovery-calibration.
+// docs/architecture/decisions.md § masters-recovery-calibration.
 const MASTERS_AGE = 50;
 
 export function isMastersAge(age: number | null | undefined): boolean {
@@ -146,7 +146,7 @@ export function isMastersAge(age: number | null | undefined): boolean {
  * target pace for the goal race.
  *
  * Optional `gender` parameter applies the female-specific calibration —
- * see [decisions.md § 76](../docs/decisions.md#76) and the
+ * see [decisions.md § 76](../docs/architecture/decisions.md#76) and the
  * `FEMALE_PACE_CALIBRATION` constant above for the rationale.
  */
 export function pacesFromGoalPace(
@@ -211,14 +211,14 @@ export function phaseFor(weekIndex: number, totalWeeks: number): PlanPhase {
 /**
  * Structured-workout descriptor stored in `plan_workouts.structure`. Tempo,
  * interval, and repetition workouts use this; easy/long/recovery/rest do
- * not. See `docs/training.md` for the shape spec.
+ * not. See `docs/features/training.md` for the shape spec.
  */
 export interface WorkoutStructure {
 	warmup?: { distance_m?: number; duration_s?: number; pace: 'easy' };
 	// A rep / recovery may be expressed by distance (distance_m) or by time
 	// (duration_s) — the runner reads whichever is present (distance wins).
 	// Walk-run (C25K / Galloway) sessions use duration-based reps with a
-	// 'walk' recovery; see docs/training.md § walk-run.
+	// 'walk' recovery; see docs/features/training.md § walk-run.
 	repeats?: {
 		count: number;
 		distance_m?: number;

@@ -13,9 +13,9 @@ import kotlinx.serialization.json.put
 /// Supabase or DataStore. The contract — keys, lap shape — is
 /// shared with the Flutter watch-ingest queue and the web row reader
 /// via `fixtures/watch_run_payload.json`. See ADR 40 in
-/// `docs/decisions.md`.
+/// `docs/architecture/decisions.md`.
 ///
-/// Lap shape is canonical per `docs/metadata.md` § laps:
+/// Lap shape is canonical per `docs/backend/metadata.md` § laps:
 /// `[{ index, start_offset_s, distance_m, duration_s }]` — per-lap
 /// deltas, not cumulative. The on-device `QueuedLap` is cumulative
 /// (`atMs`, `distanceM`); this function does the cumulative→delta
@@ -33,7 +33,7 @@ fun buildRunMetadata(
     // Mobile's delta-fetch path (`runs_screen._fetchRemote`) filters
     // on `metadata->>'last_modified_at' > since`. Without this stamp
     // the row is invisible to every refresh after the first full
-    // pull. See docs/metadata.md § last_modified_at.
+    // pull. See docs/backend/metadata.md § last_modified_at.
     put("last_modified_at", lastModifiedAtIso)
     if (laps.isNotEmpty()) {
         put("laps", buildJsonArray {

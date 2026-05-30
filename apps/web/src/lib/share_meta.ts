@@ -3,7 +3,7 @@
 /// files so unit tests can pin the wire shape without booting
 /// SvelteKit, and so the same builder can be used by the eventual
 /// per-run track-preview PNG renderer (server-side og:image, still
-/// pending per `docs/followups.md § #15`).
+/// pending per `docs/product/followups.md § #15`).
 ///
 /// Why not `formatDistance` from `units.svelte`: that helper reads
 /// the viewer's `preferred_unit` reactively, which is per-viewer

@@ -1,6 +1,6 @@
 # Local testing — iOS app (Flutter)
 
-The iOS app is a Flutter target at `apps/mobile_ios/`. **Its `lib/` and `test/` are byte-for-byte identical to `apps/mobile_android/`** (see the iOS / android `CLAUDE.md` files and [decisions.md](../../docs/decisions.md)). Editing happens in either copy and gets mirrored; running on iOS just means picking the iOS target. For shared instructions that aren't iOS-specific (test commands, Melos, etc.), prefer [`../mobile_android/local_testing.md`](../mobile_android/local_testing.md).
+The iOS app is a Flutter target at `apps/mobile_ios/`. **Its `lib/` and `test/` are byte-for-byte identical to `apps/mobile_android/`** (see the iOS / android `CLAUDE.md` files and [decisions.md](../../docs/architecture/decisions.md)). Editing happens in either copy and gets mirrored; running on iOS just means picking the iOS target. For shared instructions that aren't iOS-specific (test commands, Melos, etc.), prefer [`../mobile_android/local_testing.md`](../mobile_android/local_testing.md).
 
 ---
 
@@ -101,7 +101,7 @@ The iOS simulator doesn't have real GPS. To test run recording and route navigat
 2. In Simulator: **Features → Location → Freeway Drive** — simulates movement along a road
 3. In Simulator: **Features → Location → City Run** — simulates a running pace through a city
 
-Use **Freeway Drive** or **City Run** to test the live recording screen. Auto-pause is not a feature — moving time is derived from the GPS track at summary time (see [../../docs/decisions.md § 4](../../docs/decisions.md)). Off-route detection is implemented in `packages/run_recorder` but has no UI surface on iOS yet.
+Use **Freeway Drive** or **City Run** to test the live recording screen. Auto-pause is not a feature — moving time is derived from the GPS track at summary time (see [../../docs/architecture/decisions.md § 4](../../docs/architecture/decisions.md)). Off-route detection is implemented in `packages/run_recorder` but has no UI surface on iOS yet.
 
 ---
 

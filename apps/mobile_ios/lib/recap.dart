@@ -91,7 +91,7 @@ double _elevationOf(Run r) {
   // Run.metadata.elevation_m is the canonical key (jsonb).
   // audit/metadata-keys (May 2026) dropped the `elevation_gain_m`
   // fallback: no writer in the codebase ever set it, the key was
-  // not registered in docs/metadata.md, and the fallback branch was
+  // not registered in docs/backend/metadata.md, and the fallback branch was
   // dead code that confused dead-key audits.
   final m = r.metadata;
   if (m == null) return 0;

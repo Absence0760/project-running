@@ -140,7 +140,7 @@ class ApiClient {
   /// Send a password-reset email to [email]. The link in the email
   /// lands the user in the web app's `/auth/reset` page where they
   /// can pick a new password (mobile doesn't host the reset form —
-  /// see decisions / docs/flows.md). Idempotent + privacy-preserving:
+  /// see decisions / docs/features/flows.md). Idempotent + privacy-preserving:
   /// the underlying Supabase call returns success whether or not
   /// the email is registered, so the caller's UI should say something
   /// like "If that email is registered, we've sent a reset link."

@@ -1,16 +1,16 @@
 # Roadmap — custom_watch
 
-The big-picture sequencing for the ultra-marathon watch research effort. Separate from the main app's [`docs/roadmap.md`](../roadmap.md) because the watch has its own multi-tier hardware-investment sequence that doesn't map onto the main app's phased product roadmap. Read alongside [`competitive_landscape.md`](competitive_landscape.md) (strategic framing), [`prototyping.md`](prototyping.md) (the three cost tiers), and [`decisions.md § 71 / § 80 / § 81`](../decisions.md) for the locked decisions.
+The big-picture sequencing for the ultra-marathon watch research effort. Separate from the main app's [`docs/roadmap.md`](../product/roadmap.md) because the watch has its own multi-tier hardware-investment sequence that doesn't map onto the main app's phased product roadmap. Read alongside [`competitive_landscape.md`](competitive_landscape.md) (strategic framing), [`prototyping.md`](prototyping.md) (the three cost tiers), and [`decisions.md § 71 / § 80 / § 81`](../architecture/decisions.md) for the locked decisions.
 
 **This doc is live.** Update the per-tier checkboxes + status snapshot as work progresses; resolve open questions into `decisions.md` entries as they're decided.
 
 ## Status snapshot (2026-05-28)
 
-- **Long-term goal: [§ 92](../decisions.md#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) — build the best watch ever** (full Phase 0–5 optimal-road timeline in § 92's table). Tier-2+ decisions optimise for the tier-3 shipped product without effort or scope as valid counter-arguments.
-- **Tier 1 (bench prototype)**: workspace scaffolded; no parts ordered; no on-board verification yet. **Stays on nRF52840 per [§ 80](../decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)** — deliberate first-prototype compromise per the [§ 92 Resolution](../decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise) ("keep costs down and get a working version first").
-- **Tier 2 (wearable prototype)**: gated on the three [§ 71](../decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) triggers; not active. Migrates to Apollo510B silicon per [§ 90](../decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified); MCUboot lands per [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default); ANT+ Alliance per [§ 88](../decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3.
+- **Long-term goal: [§ 92](../architecture/decisions.md#92-custom-watch-decisions-optimise-for-tier-3-production-quality-period--scope-and-effort-are-not-constraints) — build the best watch ever** (full Phase 0–5 optimal-road timeline in § 92's table). Tier-2+ decisions optimise for the tier-3 shipped product without effort or scope as valid counter-arguments.
+- **Tier 1 (bench prototype)**: workspace scaffolded; no parts ordered; no on-board verification yet. **Stays on nRF52840 per [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance)** — deliberate first-prototype compromise per the [§ 92 Resolution](../architecture/decisions.md#resolution-2026-05-28--hybrid--92-long-term-goal---80-tier-1-preserved-as-deliberate-first-prototype-compromise) ("keep costs down and get a working version first").
+- **Tier 2 (wearable prototype)**: gated on the three [§ 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) triggers; not active. Migrates to Apollo510B silicon per [§ 90](../architecture/decisions.md#90-bom-refresh-2026-05-28--apollo510b--bmp581-swap-ins-supply-alternates-qualified); MCUboot lands per [§ 84](../architecture/decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default); ANT+ Alliance per [§ 88](../architecture/decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) Layer 3.
 - **Tier 3 (production-intent unit)**: gated on same triggers; not active. The full Phase 0–5 vision per § 92.
-- **Vector 1 (Connect IQ app)**: not started — runs parallel to tier-1 per [§ 87](../decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware).
+- **Vector 1 (Connect IQ app)**: not started — runs parallel to tier-1 per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware).
 - **Vector 2 (Wear OS app)**: `apps/watch_wear/` ships product features but isn't framed as a "Garmin alternative for sub-12hr runners" play.
 - **Vector 3 (ODM partnership)**: no vendor conversations; no outreach.
 
@@ -20,7 +20,7 @@ The big-picture sequencing for the ultra-marathon watch research effort. Separat
 
 **Budget.** ~$1–2k cash + 3–6 months of evenings/weekends.
 
-Per the [§ 71 2026-05-28 amendment](../decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely), this is owner-personal investigation only; tier 2+ remains gated on the original triggers.
+Per the [§ 71 2026-05-28 amendment](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely), this is owner-personal investigation only; tier 2+ remains gated on the original triggers.
 
 ### Per-step bring-up
 
@@ -36,11 +36,11 @@ Per [`apps/custom_watch/README.md`](../../apps/custom_watch/README.md), in order
 
 ### Power instrumentation
 
-Per [decisions.md § 83](../decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem): a Nordic Power Profiler Kit II (PPK2, ~$120) is part of the tier-1 bench-tools kit. Used **per-subsystem** (bare-MCU sleep, GPS active/sleep, HR AFE sample, display refresh) rather than whole-device — the DK's onboard J-Link + LEDs burn ~30 mA at idle and make whole-device readings useless as a baseline. The per-subsystem numbers project to tier-2 / tier-3 power (see [`performance_path.md`](performance_path.md)). DoD doesn't require hitting any specific number; these measurements inform tier-2 planning, they don't gate tier-1 completion.
+Per [decisions.md § 83](../architecture/decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem): a Nordic Power Profiler Kit II (PPK2, ~$120) is part of the tier-1 bench-tools kit. Used **per-subsystem** (bare-MCU sleep, GPS active/sleep, HR AFE sample, display refresh) rather than whole-device — the DK's onboard J-Link + LEDs burn ~30 mA at idle and make whole-device readings useless as a baseline. The per-subsystem numbers project to tier-2 / tier-3 power (see [`performance_path.md`](performance_path.md)). DoD doesn't require hitting any specific number; these measurements inform tier-2 planning, they don't gate tier-1 completion.
 
 ### Definition of Done
 
-Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end.
+Per [decisions.md § 82](../architecture/decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype): tier 1 is complete when **one real outdoor run produces a GPS+HR-tagged track that syncs to Supabase** from the bench prototype end-to-end.
 
 ## Tier 2 — wearable prototype (gated)
 
@@ -48,7 +48,7 @@ Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-out
 
 **Budget.** $15–40k DIY or $80–250k consultant-built + 9–18 months calendar.
 
-**Re-opening triggers** (per [§ 71](../decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely)):
+**Re-opening triggers** (per [§ 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely)):
 
 - [ ] **Trigger (a)** — app has a paying user base large enough to fund a parallel hardware effort.
 - [ ] **Trigger (b)** — an existing ODM (Mobvoi, Amazfit, Polar) approaches us about a white-label deal.
@@ -56,10 +56,10 @@ Per [decisions.md § 82](../decisions.md#82-tier-1-firmware-is-done-when-one-out
 
 ### Architectural obligations (must land before tier-2 prototype reaches a field tester)
 
-- [ ] **OTA via a production-grade dual-bank bootloader.** [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — MCUboot is the default candidate; the specific choice gets made at tier-2 design time but the obligation is fixed.
-- [ ] **PMTiles vector renderer running on the MCU.** [§ 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash) — multi-month firmware subproject (constrained subset of MapLibre's algorithm shape, port to Cortex-M4F + later Apollo4). 16 GB external SPI NAND flash committed in the BOM. Decision driven by [§ 86](../decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (end-state quality > engineering convenience).
+- [ ] **OTA via a production-grade dual-bank bootloader.** [§ 84](../architecture/decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — MCUboot is the default candidate; the specific choice gets made at tier-2 design time but the obligation is fixed.
+- [ ] **PMTiles vector renderer running on the MCU.** [§ 85](../architecture/decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash) — multi-month firmware subproject (constrained subset of MapLibre's algorithm shape, port to Cortex-M4F + later Apollo4). 16 GB external SPI NAND flash committed in the BOM. Decision driven by [§ 86](../architecture/decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (end-state quality > engineering convenience).
 
-### Vendor engagement (tiered per [§ 88](../decisions.md#88-vendor-engagement-is-tiered-across-project-maturity))
+### Vendor engagement (tiered per [§ 88](../architecture/decisions.md#88-vendor-engagement-is-tiered-across-project-maturity))
 
 **Layer 1 — active now (free public research, zero commercial commitment):**
 
@@ -92,7 +92,7 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 
 | Field | Value |
 |---|---|
-| Status | **Active, parallel to tier-1** per [§ 87](../decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) |
+| Status | **Active, parallel to tier-1** per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) |
 | Cost | A few weeks of Monkey C development |
 | Risk | Near zero — distributed via Garmin's own marketplace |
 | What it tests | Whether our software UX is meaningfully better than Garmin's first-party UI (the #1 complaint about Garmin) |
@@ -124,15 +124,15 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 
 | OQ | Topic | Resolved in |
 |---|---|---|
-| OQ1 + OQ2 | Tier-1 Definition of Done + kill criteria | [§ 82](../decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype) — one-outdoor-run DoD; explicitly no kill criteria |
-| OQ3 | Power-measurement methodology | [§ 83](../decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem) — Nordic PPK2, per-subsystem |
-| OQ4 | OTA architecture | [§ 84](../decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — tier-1 no OTA; tier-2 obligated to a dual-bank bootloader (MCUboot default) |
-| OQ5 | Map renderer + format | [§ 85](../decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash) — full PMTiles + on-MCU vector rendering + 16 GB external NAND |
-| OQ6 | Strategic-vector sequencing | [§ 87](../decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) — vector 1 (Connect IQ app) runs in parallel with tier-1 |
-| OQ7 | Vendor relationship pre-validation | [§ 88](../decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) — tiered: research now, NDA post-prototype, commercial at tier-2 |
-| OQ8 | User research with ultra runners | [§ 89](../decisions.md#89-skip-user-research-interviews-vector-1-install-rate-is-the-validation-channel) — skipped; vector-1 install rate is the validation channel |
+| OQ1 + OQ2 | Tier-1 Definition of Done + kill criteria | [§ 82](../architecture/decisions.md#82-tier-1-firmware-is-done-when-one-outdoor-run-syncs-end-to-end-to-supabase-from-the-bench-prototype) — one-outdoor-run DoD; explicitly no kill criteria |
+| OQ3 | Power-measurement methodology | [§ 83](../architecture/decisions.md#83-tier-1-power-measurement-uses-nordic-power-profiler-kit-ii-applied-per-subsystem) — Nordic PPK2, per-subsystem |
+| OQ4 | OTA architecture | [§ 84](../architecture/decisions.md#84-tier-1-firmware-ships-no-ota-tier-2-obligated-to-a-production-grade-dual-bank-bootloader-mcuboot-default) — tier-1 no OTA; tier-2 obligated to a dual-bank bootloader (MCUboot default) |
+| OQ5 | Map renderer + format | [§ 85](../architecture/decisions.md#85-map-renderer-full-pmtiles-vector-rendering-on-the-mcu--16-gb-external-nand-flash) — full PMTiles + on-MCU vector rendering + 16 GB external NAND |
+| OQ6 | Strategic-vector sequencing | [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) — vector 1 (Connect IQ app) runs in parallel with tier-1 |
+| OQ7 | Vendor relationship pre-validation | [§ 88](../architecture/decisions.md#88-vendor-engagement-is-tiered-across-project-maturity) — tiered: research now, NDA post-prototype, commercial at tier-2 |
+| OQ8 | User research with ultra runners | [§ 89](../architecture/decisions.md#89-skip-user-research-interviews-vector-1-install-rate-is-the-validation-channel) — skipped; vector-1 install rate is the validation channel |
 
-**Decision-making meta-principle:** [§ 86](../decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (custom_watch picks optimise for end-state product quality, even at small margins).
+**Decision-making meta-principle:** [§ 86](../architecture/decisions.md#86-custom-watch-decisions-optimise-for-end-state-product-performance-even-at-small-margins) (custom_watch picks optimise for end-state product quality, even at small margins).
 
 ## Smaller considerations
 
@@ -147,7 +147,7 @@ These are real but lower-leverage. Worth tracking; not blocking.
 
 ## Pinning
 
-- **Locked decisions:** [§ 71](../decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) (deferral + amendment), [§ 80](../decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) (firmware stack), [§ 81](../decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen) (input).
+- **Locked decisions:** [§ 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) (deferral + amendment), [§ 80](../architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance) (firmware stack), [§ 81](../architecture/decisions.md#81-custom-watch-input-is-5-physical-buttons-in-the-garmin-fenix-layout-no-touchscreen) (input).
 - **Active workspace:** [`apps/custom_watch/`](../../apps/custom_watch/README.md).
 - **Strategic / spec references:** [`vision.md`](vision.md), [`competitive_landscape.md`](competitive_landscape.md), [`bom.md`](bom.md), [`prototyping.md`](prototyping.md), [`performance_path.md`](performance_path.md), [`firmware.md`](firmware.md).
 - **Active checklist:** [`parts.md`](parts.md).

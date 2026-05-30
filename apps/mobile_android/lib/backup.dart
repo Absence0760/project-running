@@ -15,7 +15,7 @@ import 'local_route_store.dart';
 import 'local_run_store.dart';
 
 /// Full round-trip backup and restore for the signed-in user's data.
-/// See [docs/backup_restore.md](../../../docs/backup_restore.md) for the
+/// See [docs/ops/backup_restore.md](../../../docs/ops/backup_restore.md) for the
 /// archive layout. Format is identical to the web side — a backup made
 /// on either surface restores cleanly on the other.
 ///
@@ -75,7 +75,7 @@ class BackupService {
   /// added to the encoder as soon as it lands and its in-memory copy
   /// is dropped. Peak heap is roughly
   /// `_kTrackDownloadConcurrency × average-track-size`, regardless of
-  /// total run count. See [decisions.md § 66](../../../docs/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
+  /// total run count. See [decisions.md § 66](../../../docs/architecture/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
   Future<File> createBackup({
     required File outputFile,
     void Function(BackupProgress)? onProgress,

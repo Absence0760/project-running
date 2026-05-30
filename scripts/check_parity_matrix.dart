@@ -1,4 +1,4 @@
-// Parity-matrix audit. Walks `docs/parity.md`, parses every data row,
+// Parity-matrix audit. Walks `docs/product/parity.md`, parses every data row,
 // and fails on the drift patterns that come up most often:
 //
 //   1. Row column count wrong (not 7 = Feature + 5 platforms + Notes).
@@ -47,11 +47,11 @@ class _Issue {
 
   @override
   String toString() =>
-      'docs/parity.md:$lineNumber — [$rowFeature] $message';
+      'docs/product/parity.md:$lineNumber — [$rowFeature] $message';
 }
 
 void main(List<String> args) {
-  final path = args.isEmpty ? 'docs/parity.md' : args.first;
+  final path = args.isEmpty ? 'docs/product/parity.md' : args.first;
   final file = File(path);
   if (!file.existsSync()) {
     stderr.writeln('check_parity_matrix: $path not found.');

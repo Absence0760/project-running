@@ -125,7 +125,7 @@ data class UniversalSettings(
 internal val UNIVERSAL_ACTIVITY_TYPES = setOf("run", "walk", "hike", "cycle")
 
 /// Allowed values for `privacy_default`. Mirrors the editor on web +
-/// mobile (docs/settings.md: `'public' | 'followers' | 'private'`).
+/// mobile (docs/backend/settings.md: `'public' | 'followers' | 'private'`).
 /// Rogue / future / typo values fall back to null → DB default
 /// (`false`) wins on save.
 internal val UNIVERSAL_PRIVACY_DEFAULTS = setOf("public", "followers", "private")

@@ -1,5 +1,5 @@
 // Client-side expansion of the enum-recurrence model used by Phase 2 events.
-// See docs/decisions.md #10 — we deliberately avoided RFC 5545 RRULE in favour
+// See docs/architecture/decisions.md #10 — we deliberately avoided RFC 5545 RRULE in favour
 // of (freq, byday[], until, count). Expansion is cheap, idempotent, and runs
 // on every event-detail render; no need to materialise instances.
 

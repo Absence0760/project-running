@@ -1,12 +1,12 @@
 # mobile_ios — AI session notes
 
-> **Deferred.** The public landing page lists the iOS app as "Coming soon" and the team is not actively pushing it forward right now. The code stays in lockstep with `mobile_android` via the byte-identical-twin convention so this doesn't bit-rot, but **don't start net-new iOS-led work** (HealthKit, Apple Sign-In hardening, App Store submission prep, etc.) until the deferral is lifted. Twin-parity edits made on Android still need to be mirrored here in the same commit — that's mechanical and stays cheap. See [../../docs/parity.md](../../docs/parity.md) for the current per-feature state.
+> **Deferred.** The public landing page lists the iOS app as "Coming soon" and the team is not actively pushing it forward right now. The code stays in lockstep with `mobile_android` via the byte-identical-twin convention so this doesn't bit-rot, but **don't start net-new iOS-led work** (HealthKit, Apple Sign-In hardening, App Store submission prep, etc.) until the deferral is lifted. Twin-parity edits made on Android still need to be mirrored here in the same commit — that's mechanical and stays cheap. See [../../docs/product/parity.md](../../docs/product/parity.md) for the current per-feature state.
 
 Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/mobile_android/`.** Every screen, widget, library, and test is the same file. Platform-specific behaviour (Apple Sign-In vs Google, dotenv vs `--dart-define-from-file`, Apple Watch ingest vs Wear OS bridge, etc.) is dispatched at runtime via `Platform.isIOS` / `Platform.isAndroid` inside the unified files. The pubspec deltas are the package `name` / `description` and nothing else.
 
 ## Scope — read before writing code
 
-**Web is the canonical feature surface. This app mirrors web and adds iOS-only capabilities.** See [../../docs/decisions.md § 24](../../docs/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) and the live matrix at [../../docs/parity.md](../../docs/parity.md).
+**Web is the canonical feature surface. This app mirrors web and adds iOS-only capabilities.** See [../../docs/architecture/decisions.md § 24](../../docs/architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) and the live matrix at [../../docs/product/parity.md](../../docs/product/parity.md).
 
 **Build here:**
 
@@ -19,7 +19,7 @@ Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/m
 - An Android-only tile that has no iOS equivalent. The deliberately omitted set (already documented in `screens/settings_screen.dart`): BLE pairing UI, Strava ZIP import, backup/restore, advanced-GPS toggle, dark-mode toggle. Don't add these without a fresh decision.
 - New abstractions / DI frameworks. Match Android's `StatefulWidget + setState + ChangeNotifier` stack — verbatim. The iOS app is "structurally identical to mobile_android" by design (see "What 'done' means" below).
 - Direct `Supabase.instance.client.from(...)` calls in screens. Route through `packages/api_client`.
-- Comments, decision docs, READMEs. Conventions in [../../docs/conventions.md](../../docs/conventions.md) apply in full.
+- Comments, decision docs, READMEs. Conventions in [../../docs/architecture/conventions.md](../../docs/architecture/conventions.md) apply in full.
 
 ## Current state
 
@@ -88,7 +88,7 @@ See [local_testing.md](local_testing.md). You need an iOS simulator or a paired 
 
 See [deployment.md](deployment.md) — App Store Connect setup, distribution cert + provisioning profile, ASC API key, Apple Watch bundling, observability, rollback, DR. The Apple Watch app at `apps/watch_ios/` ships inside this app's IPA — no separate listing.
 
-The iOS Runner project uses Swift Package Manager + CocoaPods in hybrid mode (most plugins via SPM, `health` still via pods). Podfile pins `platform :ios, '15.0'`. Secrets for `flutter run` pass through `dart_defines.json` (gitignored) because inline `--dart-define=` flags break on the `sb_publishable_…` Supabase anon key format. Rationale: [../../docs/decisions.md § 13](../../docs/decisions.md).
+The iOS Runner project uses Swift Package Manager + CocoaPods in hybrid mode (most plugins via SPM, `health` still via pods). Podfile pins `platform :ios, '15.0'`. Secrets for `flutter run` pass through `dart_defines.json` (gitignored) because inline `--dart-define=` flags break on the `sb_publishable_…` Supabase anon key format. Rationale: [../../docs/architecture/decisions.md § 13](../../docs/architecture/decisions.md).
 
 ## Before reporting a task done
 

@@ -172,7 +172,7 @@ The actual gap: `CLAUDE.md` states at line 89 "There is no equivalent CI gate fo
 - CI's `parity-types` job runs `npm run gen:types:check` and fails the build if the committed TS file is out of sync with the schema. There is no equivalent CI gate for the Dart generator yet — rely on `dart analyze` to flag stale references in `packages/api_client`.
 + CI's `parity-types` job checks `database.types.ts`. The `schema-codegen-drift` job regenerates and diffs both `db_rows.dart` and `DbRows.kt` — all three are gated on PRs to `main`.
 ```
-Also update `docs/schema_codegen.md` which repeats the same claim at line 90.
+Also update `docs/architecture/schema_codegen.md` which repeats the same claim at line 90.
 
 ---
 
@@ -227,7 +227,7 @@ create trigger runs_updated_at before update on runs
 **File(s):** `apps/backend/supabase/migrations/20260413_001_public_runs.sql:19-29`
 **Issue:** The anon-read policy for public run tracks checks `runs.track_url = name` where `name` is the Storage object name. Both the Dart client and the Kotlin `SupabaseClient` store paths as `{user_id}/{run_id}.json.gz`. This matches the Storage object naming convention. The policy works correctly today. The risk is that if any future client stores the full URL (`https://.../storage/v1/object/runs/...`) rather than the relative path in `track_url`, the comparison fails silently and public tracks return 403. The `decisions.md` note on this (§2) acknowledges the `track_url` field but doesn't constrain its format.
 **Cross-platform impact:** Web and iOS share page. Would affect unauthenticated viewers of public runs.
-**Fix sketch:** Add a comment to the storage policy and to `docs/decisions.md` §2 specifying that `track_url` must store the relative path (no base URL prefix). Consider adding a CHECK constraint: `check (track_url not like 'http%')`.
+**Fix sketch:** Add a comment to the storage policy and to `docs/architecture/decisions.md` §2 specifying that `track_url` must store the relative path (no base URL prefix). Consider adding a CHECK constraint: `check (track_url not like 'http%')`.
 
 ---
 
@@ -340,7 +340,7 @@ After both runs: `git diff` on all three generated files produced **no output** 
 Issues in client code that are not backend schema or codegen problems:
 
 - `packages/api_client/lib/src/api_client.dart:82` — `run.track.isNotEmpty` will throw if `run.track` is null (not a list); a null-check is needed.
-- `apps/mobile_android/lib/screens/run_screen.dart` — `metadata['steps']` integer wire type unverified (flagged in `docs/metadata.md` as a known issue).
-- `apps/watch_ios/WatchApp/SupabaseService.swift` — native Swift Supabase client is not covered by the Dart generator and has no CI drift gate; metadata key usage is manually reconciled per `docs/metadata.md`.
+- `apps/mobile_android/lib/screens/run_screen.dart` — `metadata['steps']` integer wire type unverified (flagged in `docs/backend/metadata.md` as a known issue).
+- `apps/watch_ios/WatchApp/SupabaseService.swift` — native Swift Supabase client is not covered by the Dart generator and has no CI drift gate; metadata key usage is manually reconciled per `docs/backend/metadata.md`.
 - `apps/backend/supabase/functions/strava-import/index.ts:43-45` and `strava-webhook/index.ts:41-43` — both marked TODO; backfill and activity sync are unimplemented. Not a schema issue.
 - `apps/backend/supabase/functions/export-data/index.ts:17-21` — stub returning a placeholder URL; not a schema issue.

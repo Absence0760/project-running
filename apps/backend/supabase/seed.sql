@@ -69,7 +69,7 @@ ON CONFLICT (id) DO NOTHING;
 
 -- 2a. User settings — runner_context for the AI Coach. Without these the
 -- coach has nothing to ground HR / age / weekly-goal answers in. Keys
--- match `docs/settings.md` § Universal prefs registry.
+-- match `docs/backend/settings.md` § Universal prefs registry.
 INSERT INTO user_settings (user_id, prefs) VALUES (
   'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
   jsonb_build_object(
@@ -1640,7 +1640,7 @@ BEGIN
 
   -- (1) Insert one public + one private run for the seed user.
   -- Every owner-only metadata key the public_runs view denylists
-  -- (per docs/metadata.md classification + the 20260714_001 strip
+  -- (per docs/backend/metadata.md classification + the 20260714_001 strip
   -- additions) is included here so the assertion below can verify
   -- each one is actually scrubbed by the view. Keep this block in
   -- lockstep with the strip chain in the public_runs view migration.

@@ -77,7 +77,7 @@ class _SignInScreenState extends State<SignInScreen> {
       await widget.apiClient.sendPasswordResetEmail(email: email);
       if (!mounted) return;
       // Show the privacy-preserving copy via the canonical top-banner
-      // primitive (see docs/conventions.md § "Mobile in-app
+      // primitive (see docs/architecture/conventions.md § "Mobile in-app
       // notifications"). The architecture-guards test pins this to
       // catch a regression that reaches for ScaffoldMessenger.
       showTopBanner(

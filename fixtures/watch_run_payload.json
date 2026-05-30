@@ -1,5 +1,5 @@
 {
-  "_doc": "Canonical watch-run payload + expected row shape. Cross-platform contract for the watch-ingest path. ALL THREE platforms (Flutter ingest queue, Wear OS metadata encoder, web row reader) read this file in their respective tests and must agree on the shape. If you change a field, update all three tests in the same commit. The fields here are the union of what the Apple Watch sends via WCSession and what the Wear OS app produces directly. See docs/decisions.md ADR 40 + docs/metadata.md for the registry.",
+  "_doc": "Canonical watch-run payload + expected row shape. Cross-platform contract for the watch-ingest path. ALL THREE platforms (Flutter ingest queue, Wear OS metadata encoder, web row reader) read this file in their respective tests and must agree on the shape. If you change a field, update all three tests in the same commit. The fields here are the union of what the Apple Watch sends via WCSession and what the Wear OS app produces directly. See docs/architecture/decisions.md ADR 40 + docs/backend/metadata.md for the registry.",
 
   "payload": {
     "_doc": "The raw watch-run payload as it arrives at the Flutter ingest queue (the same shape Apple Watch writes to WCSession metadata + file).",
@@ -29,7 +29,7 @@
   },
 
   "expectedMetadata": {
-    "_doc": "The jsonb keys on runs.metadata after a watch run lands. Lap shape is canonical per docs/metadata.md § laps — `index` is 1-based (matches lap.number on both platforms), `start_offset_s` is the cumulative duration BEFORE this lap (so the first lap has 0), and `distance_m` + `duration_s` are per-lap deltas. `last_modified_at` is the ISO 8601 stamp the Wear OS encoder writes so mobile's delta-fetch path picks the row up; the Apple-Watch-via-WCSession path acquires it from LocalRunStore.save() instead, so the Flutter ingest test does not assert on this key.",
+    "_doc": "The jsonb keys on runs.metadata after a watch run lands. Lap shape is canonical per docs/backend/metadata.md § laps — `index` is 1-based (matches lap.number on both platforms), `start_offset_s` is the cumulative duration BEFORE this lap (so the first lap has 0), and `distance_m` + `duration_s` are per-lap deltas. `last_modified_at` is the ISO 8601 stamp the Wear OS encoder writes so mobile's delta-fetch path picks the row up; the Apple-Watch-via-WCSession path acquires it from LocalRunStore.save() instead, so the Flutter ingest test does not assert on this key.",
     "activity_type": "run",
     "avg_bpm": 152,
     "last_modified_at": "2026-04-15T07:30:30Z",

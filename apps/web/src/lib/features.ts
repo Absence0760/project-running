@@ -13,7 +13,7 @@ import { TIER_LIMITS } from './coach/types';
 ///   be but was flipped back to a budget model (free users get
 ///   `TIER_LIMITS.free.dailyLimit` messages/day, then see the
 ///   limit-bar; not a hard screen lock) per [decisions.md § 23]
-///   (../../../docs/decisions.md). The set is kept around so a future
+///   (../../../docs/architecture/decisions.md). The set is kept around so a future
 ///   Pro-only screen is a one-line addition.
 ///
 /// - **Pro perks** — benefits that aren't hidden behind a gate but
@@ -28,7 +28,7 @@ import { TIER_LIMITS } from './coach/types';
 ///      returning `{ error: 'pro_required', feature: '<key>' }` on 403.
 ///   4. Client-side: wrap the UI entry point with
 ///      `{#if !isLocked('key')} ... {:else} <ProGate feature="key" /> {/if}`
-///   5. Add the feature to `docs/paywall.md`.
+///   5. Add the feature to `docs/features/paywall.md`.
 
 export const GATED_FEATURES: Record<
 	string,

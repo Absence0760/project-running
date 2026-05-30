@@ -7,7 +7,7 @@ import '../training.dart' show fmtPace;
 
 /// Top-of-map overlay that surfaces the current [WorkoutRunner] step
 /// while the run screen is recording. Mirrors the spec in
-/// [docs/workout_execution.md](../../../../docs/workout_execution.md).
+/// [docs/features/workout_execution.md](../../../../docs/features/workout_execution.md).
 ///
 /// Reads through a [ValueListenable] of `_BandState` snapshots so we
 /// don't rebuild the whole run tree every GPS tick — the run screen

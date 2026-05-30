@@ -182,7 +182,7 @@
 	<p>
 		We use TLS in transit, AWS KMS for at-rest secrets, Postgres Row-Level Security to gate
 		every database read, and signed-URL controls on storage. Full architecture in the project
-		repository under <em>docs/architecture.md</em> and <em>docs/api_database.md</em>.
+		repository under <em>docs/architecture/architecture.md</em> and <em>docs/backend/api_database.md</em>.
 	</p>
 	<p>
 		If you discover a vulnerability, please email <a href="mailto:security@threkir.com">security@threkir.com</a>.

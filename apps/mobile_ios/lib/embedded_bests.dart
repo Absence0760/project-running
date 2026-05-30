@@ -9,7 +9,7 @@
 ///
 /// Same canonical distances + bracket midpoints the SQL trigger
 /// uses (the trigger's brackets are ±2% wide; the helper picks the
-/// midpoint distance per `docs/metadata.md` so a 5.05 km effort
+/// midpoint distance per `docs/backend/metadata.md` so a 5.05 km effort
 /// inside a long run is searched as 5000 m exactly).
 
 import 'package:core_models/core_models.dart';

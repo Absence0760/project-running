@@ -1,5 +1,5 @@
 {
-  "_doc": "Canonical phone→watch routes payload. Cross-platform contract for the WearRoutesBridge → RoutesBridge wire format. Two clients agree on the shape: the Flutter encoder (apps/mobile_android/lib/wear_routes_bridge.dart#encodeRoutesForWatch) writes this; the Kotlin parser (apps/watch_wear/.../RoutesBridge.kt#parseRoutesJson) reads it. Both tests load this file and must agree. If you change a field here, update both tests in the same commit. See docs/decisions.md § 64 for the design.",
+  "_doc": "Canonical phone→watch routes payload. Cross-platform contract for the WearRoutesBridge → RoutesBridge wire format. Two clients agree on the shape: the Flutter encoder (apps/mobile_android/lib/wear_routes_bridge.dart#encodeRoutesForWatch) writes this; the Kotlin parser (apps/watch_wear/.../RoutesBridge.kt#parseRoutesJson) reads it. Both tests load this file and must agree. If you change a field here, update both tests in the same commit. See docs/architecture/decisions.md § 64 for the design.",
 
   "input_routes": {
     "_doc": "The Route objects the phone-side encoder consumes. Mirrors the apps/mobile_android/lib/local_route_store.dart shape after isStarred filtering. Only starred routes ship; pin routes (offline-only) do NOT make it onto the wire.",

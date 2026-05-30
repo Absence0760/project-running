@@ -24,7 +24,7 @@ Files reviewed:
 - `apps/mobile_android/test/metadata_registry_test.dart`
 
 Reference commits read: `3d3ea75` (clubs offline resilience), `a3116ec` (extend pattern to 6 screens)
-Reference docs read: `docs/settings.md`, `docs/conventions.md`, `docs/flows.md`
+Reference docs read: `docs/backend/settings.md`, `docs/architecture/conventions.md`, `docs/features/flows.md`
 
 Date: 2026-04-21
 Auditor scope: mobile_android non-recording screens + shared UX widgets
@@ -33,7 +33,7 @@ Auditor scope: mobile_android non-recording screens + shared UX widgets
 
 The resilience migration from commits `3d3ea75` and `a3116ec` was applied correctly to the screens it targeted (clubs, plans, explore routes, event detail, club detail, plan detail). The shared `ErrorState` widget and `kBackendLoadTimeout` constant are well-factored. However, four screens that perform backend operations are not covered: `routes_screen.dart` (`_fetchRemoteRoutes`) has a silent-swallow catch with no `_error` state, `route_detail_screen.dart` (`_fetchReviews`) has the same shape, and `run_detail_screen.dart` (`_maybeFetchTrack`) has no timeout. None of these was included in the `a3116ec` migration scope, so the omission is a gap rather than a regression, but it is inconsistent with the project's stated resilience contract.
 
-Settings sync has a correctness bug: `audioCues`, `advancedGps`, `splitIntervalMetres`, and `targetPaceSecPerKm` are toggled locally but never pushed to `SettingsService`. The registry in `docs/settings.md` defines `voice_feedback_enabled`, `auto_pause_enabled`, and `auto_pause_speed_mps` as syncable; none of these are wired. Only `preferred_unit` is actually dual-written. This is not a pre-existing known gap — the settings screen claims sync via the subtitle "synced to your other devices" for the unit toggle specifically, but the remaining controls carry no such caveat and a user would reasonably expect them to roam.
+Settings sync has a correctness bug: `audioCues`, `advancedGps`, `splitIntervalMetres`, and `targetPaceSecPerKm` are toggled locally but never pushed to `SettingsService`. The registry in `docs/backend/settings.md` defines `voice_feedback_enabled`, `auto_pause_enabled`, and `auto_pause_speed_mps` as syncable; none of these are wired. Only `preferred_unit` is actually dual-written. This is not a pre-existing known gap — the settings screen claims sync via the subtitle "synced to your other devices" for the unit toggle specifically, but the remaining controls carry no such caveat and a user would reasonably expect them to roam.
 
 Several minor but concrete issues exist: a swallowed delete-error in `runs_screen.dart`, a `withOpacity` usage in `run_detail_screen.dart`, a `catch (_) {}` without a stack trace in `route_detail_screen.dart`, and the `_HeartRateTile` spinner can stay true forever if `pairedName()` throws.
 
@@ -127,7 +127,7 @@ Add `.timeout(kBackendLoadTimeout)` on the `fetchTrack` call. Add a retry button
 - `apps/mobile_android/lib/screens/settings_screen.dart:359-403`
 - `apps/mobile_android/lib/settings_sync.dart:56-63`
 
-`SettingsSyncService.pushPreferredUnit()` is the only push method. It is called from the "Use miles" toggle's `onChanged`. The other four settings controls (`audioCues`, `advancedGps`, `splitIntervalMetres`, `targetPaceSecPerKm`) call only into `prefs` (SharedPreferences) and never call any `settingsSync` method. The settings registry in `docs/settings.md` lists `voice_feedback_enabled`, `voice_feedback_interval_km`, `auto_pause_enabled`, and `auto_pause_speed_mps` as syncable (`D` or `UD`). Neither `audioCues` nor `advancedGps` map to any synced key today.
+`SettingsSyncService.pushPreferredUnit()` is the only push method. It is called from the "Use miles" toggle's `onChanged`. The other four settings controls (`audioCues`, `advancedGps`, `splitIntervalMetres`, `targetPaceSecPerKm`) call only into `prefs` (SharedPreferences) and never call any `settingsSync` method. The settings registry in `docs/backend/settings.md` lists `voice_feedback_enabled`, `voice_feedback_interval_km`, `auto_pause_enabled`, and `auto_pause_speed_mps` as syncable (`D` or `UD`). Neither `audioCues` nor `advancedGps` map to any synced key today.
 
 This means a user who configures audio cues or GPS mode on one Android device and signs in on a second Android device gets the defaults, not their settings. No error is surfaced — this silently fails to sync.
 
@@ -135,7 +135,7 @@ The fix has two parts:
 1. Add a `pushAudioCues()` method to `SettingsSyncService` that writes `voice_feedback_enabled` to the per-device bag, and call it from the toggle's `onChanged`.
 2. Add a `pushAdvancedGps()` method (or include it in the device bag) and call it from the Advanced GPS toggle.
 
-`splitIntervalMetres` and `targetPaceSecPerKm` have no registry entry in `docs/settings.md` — either add them or document that they are intentionally device-local.
+`splitIntervalMetres` and `targetPaceSecPerKm` have no registry entry in `docs/backend/settings.md` — either add them or document that they are intentionally device-local.
 
 ---
 

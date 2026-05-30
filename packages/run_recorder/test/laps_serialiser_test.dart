@@ -102,7 +102,7 @@ void main() {
 
     test('all laps carry the canonical key set, no extras', () {
       // Reason: silent-extra keys would drift away from
-      // docs/metadata.md and re-introduce the divergence the audit
+      // docs/backend/metadata.md and re-introduce the divergence the audit
       // already caught.
       final out = lapsToCanonicalJson([
         _lap(

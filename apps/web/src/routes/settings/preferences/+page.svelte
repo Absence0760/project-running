@@ -22,7 +22,7 @@
 	let saving = $state(false);
 	let saved = $state(false);
 
-	// Universal settings from docs/settings.md
+	// Universal settings from docs/backend/settings.md
 	let preferredUnit = $state<'km' | 'mi'>('km');
 	let paceFormat = $state<'min_per_km' | 'min_per_mi' | 'kph' | 'mph'>('min_per_km');
 	let defaultActivity = $state<'run' | 'walk' | 'hike' | 'cycle' | 'stroller'>('run');

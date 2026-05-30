@@ -2,7 +2,7 @@
 // functions that bypass the platform's `verify_jwt` gate
 // (`config.toml` pins `verify_jwt = false` for these three because
 // they authenticate themselves another way). These tests close the
-// "Edge Function HTTP envelope" gap from docs/testing.md — the pure
+// "Edge Function HTTP envelope" gap from docs/testing/testing.md — the pure
 // helpers in `_shared/webhook_security.ts` + `revenuecat-webhook/lib.ts`
 // are already covered (~33 deno tests); this file pins the WIRE-LEVEL
 // auth-rejection behaviour of the handlers that compose those helpers

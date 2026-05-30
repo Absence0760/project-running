@@ -16,7 +16,7 @@ import '../lib/social_service.dart';
 /// _enrichClubs / _enrichEvents pipelines, RSVP writes) is NOT covered
 /// here — `SocialService` resolves `Supabase.instance.client` inline,
 /// so testing those branches needs a DI seam refactor first. Tracked
-/// by the iceberg note in `docs/testing.md § What's not covered`.
+/// by the iceberg note in `docs/testing/testing.md § What's not covered`.
 
 ClubRow _row(String id, {int memberCount = 1}) => ClubRow(
       id: id,

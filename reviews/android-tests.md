@@ -3,7 +3,7 @@
 One high-confidence false-positive test (em-dash case never asserted), one architecture guard that passes even when the rule it encodes is partially violated, one test that duplicates private production code without an import seam, and several stale doc counts — no broken tests, no disabled tests, no skip markers.
 
 ## Scope
-- Files reviewed: 19 test files in `apps/mobile_android/test/` + cross-referenced production files in `apps/mobile_android/lib/`, `apps/mobile_android/CLAUDE.md`, `docs/testing.md`, `docs/conventions.md`
+- Files reviewed: 19 test files in `apps/mobile_android/test/` + cross-referenced production files in `apps/mobile_android/lib/`, `apps/mobile_android/CLAUDE.md`, `docs/testing/testing.md`, `docs/architecture/conventions.md`
 - Focus: outdated tests, broken/disabled tests, coverage holes, test quality, doc drift, architecture guards
 - Reviewer confidence: high — all test files read in full, all referenced production symbols verified against source
 
@@ -80,7 +80,7 @@ One high-confidence false-positive test (em-dash case never asserted), one archi
 - **Category**: duplication / maintenance risk
 - **Problem**: `_fitCrc` is a private top-level function in `run_share_card.dart`. Because it's private, the test copies it verbatim and wraps it in a `computeCrc` helper that does not exist in production. The test's comment says "Keep in sync." Manual sync is a maintenance failure mode. If `_fitCrc` in production is corrected (table entry change, shift-direction fix) without touching the test, the test continues to pass against the old algorithm. The production FIT files will be rejected by sports watches; the test will not catch it.
 
-  Additionally, `fit_export_test.dart` is not listed in `apps/mobile_android/CLAUDE.md` or `docs/testing.md`.
+  Additionally, `fit_export_test.dart` is not listed in `apps/mobile_android/CLAUDE.md` or `docs/testing/testing.md`.
 - **Evidence**:
   ```dart
   // fit_export_test.dart:3 — verbatim copy:
@@ -122,8 +122,8 @@ One high-confidence false-positive test (em-dash case never asserted), one archi
   - `test/fitness_card_test.dart` — 5 `testWidgets` calls
 - **Proposed change**:
   ```diff
-  - See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
-  + See [../../docs/testing.md](../../docs/testing.md) for how to run them and the patterns they use. Widget tests exist for `FitnessCard`, `WorkoutExecutionBand`, `WorkoutReviewSection`, and `PlanCalendar` (14 `testWidgets` calls total); all other screens and widgets are uncovered.
+  - See [../../docs/testing/testing.md](../docs/testing/testing.md) for how to run them and the patterns they use. No widget tests exist on this app — that's the biggest coverage gap.
+  + See [../../docs/testing/testing.md](../docs/testing/testing.md) for how to run them and the patterns they use. Widget tests exist for `FitnessCard`, `WorkoutExecutionBand`, `WorkoutReviewSection`, and `PlanCalendar` (14 `testWidgets` calls total); all other screens and widgets are uncovered.
   ```
 - **Risk if applied**: None.
 - **Verification**: Visual check only.
@@ -156,7 +156,7 @@ One high-confidence false-positive test (em-dash case never asserted), one archi
 ---
 
 ### M4. recurrence_test.dart and importer_external_id_test.dart are undocumented
-- **File(s)**: `apps/mobile_android/CLAUDE.md` (§ Tests), `docs/testing.md` (§ What's covered today)
+- **File(s)**: `apps/mobile_android/CLAUDE.md` (§ Tests), `docs/testing/testing.md` (§ What's covered today)
 - **Category**: doc drift
 - **Problem**: Two test files exist in `test/` but appear nowhere in the documentation index:
   - `recurrence_test.dart` — 8 tests for `lib/recurrence.dart` (weekly/biweekly/monthly `expandInstances`, `count` cap, `until` cap, non-recurring event)
@@ -168,19 +168,19 @@ One high-confidence false-positive test (em-dash case never asserted), one archi
   + - `recurrence_test.dart` — 8 tests: weekly / biweekly / monthly `expandInstances`, hour/minute local-tz preservation, `count` cap, `until` cap, non-recurring single-instance
   + - `importer_external_id_test.dart` — 2 tests: `StravaImporter` ZIP import produces `strava:<id>` prefix; source-text guard confirms `HealthConnectImporter` uses `healthconnect:<uuid>` prefix
   ```
-  Add the same entries to `docs/testing.md` under § What's covered today.
+  Add the same entries to `docs/testing/testing.md` under § What's covered today.
 - **Risk if applied**: None.
 - **Verification**: Visual check.
 
 ---
 
-### M5. docs/testing.md "What's covered today" is substantially stale
-- **File(s)**: `docs/testing.md:46`
+### M5. docs/testing/testing.md "What's covered today" is substantially stale
+- **File(s)**: `docs/testing/testing.md:46`
 - **Category**: doc drift
 - **Problem**: The summary line states "107 Dart unit tests in mobile_android (8 test files)" and "No widget tests, no integration tests, no golden tests yet." The actual state is 19 test files with at least 180 tests (17+13+23+20+8+18+9+15+8+17+3+6+11+5+20+2+2+8+3 = 188 counting all files), and widget tests do exist. The "8 test files" figure is roughly half the actual number. Sessions relying on this doc to understand coverage will have a distorted picture.
 
-  Additionally, the doc lists detailed breakdowns for only 8 of the 19 test files (`run_stats`, `local_run_store`, `period_summary`, `goals`, `route_simplify`, `ble_heart_rate`, `training`, and `local_run_store` for iOS). The following test files have no entry at all in `docs/testing.md`: `fitness_test.dart`, `hr_zones_test.dart`, `pace_segments_test.dart`, `plan_calendar_test.dart`, `workout_execution_band_test.dart`, `workout_review_section_test.dart`, `fitness_card_test.dart`, `metadata_registry_test.dart`, `architecture_guards_test.dart`, `recurrence_test.dart`, `importer_external_id_test.dart`, `fit_export_test.dart`.
-- **Proposed change**: Update the summary paragraph and add sections for the undocumented test files. The CLAUDE.md already has entries for most of these — copy that content into `docs/testing.md`. At minimum, update the summary line:
+  Additionally, the doc lists detailed breakdowns for only 8 of the 19 test files (`run_stats`, `local_run_store`, `period_summary`, `goals`, `route_simplify`, `ble_heart_rate`, `training`, and `local_run_store` for iOS). The following test files have no entry at all in `docs/testing/testing.md`: `fitness_test.dart`, `hr_zones_test.dart`, `pace_segments_test.dart`, `plan_calendar_test.dart`, `workout_execution_band_test.dart`, `workout_review_section_test.dart`, `fitness_card_test.dart`, `metadata_registry_test.dart`, `architecture_guards_test.dart`, `recurrence_test.dart`, `importer_external_id_test.dart`, `fit_export_test.dart`.
+- **Proposed change**: Update the summary paragraph and add sections for the undocumented test files. The CLAUDE.md already has entries for most of these — copy that content into `docs/testing/testing.md`. At minimum, update the summary line:
   ```diff
   - Total: **at least 161 tests across 12 documented files** — 107 Dart unit tests in mobile_android (8 test files), 17 in mobile_ios ...  No widget tests, no integration tests, no golden tests yet.
   + Total: **at least 350 tests across 20+ documented files** — ~188 Dart tests in mobile_android (19 test files, including 14 widget tests), 17 in mobile_ios, 37 in run_recorder, 2 in core_models, and 21 TypeScript unit tests in the web app. No integration tests, no golden tests yet.
@@ -248,7 +248,7 @@ One high-confidence false-positive test (em-dash case never asserted), one archi
 
 ## Coverage holes (informational — not assigned severities per the existing doc's own admission)
 
-`docs/testing.md § What's not covered` already documents these gaps accurately. The three most data-loss-risky uncovered paths that aren't acknowledged at all in either doc:
+`docs/testing/testing.md § What's not covered` already documents these gaps accurately. The three most data-loss-risky uncovered paths that aren't acknowledged at all in either doc:
 
 1. **`sync_service.dart` — no test for conflict resolution edge cases.** The architecture guard confirms `_lastModifiedOf` is called in `saveFromRemote`, but there is no test that actually creates a local-newer and remote-newer conflict and asserts the correct winner. A unit test using `LocalRunStore` with `overrideDirectory` and two `Run` objects with controlled `metadata.last_modified_at` values would close this.
 

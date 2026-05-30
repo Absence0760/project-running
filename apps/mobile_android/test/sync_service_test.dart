@@ -694,7 +694,7 @@ void main() {
   // ────────────────────────────────────────────────────────────────
   // Owner-tag filter — the load-bearing guard for the
   // record-without-an-account + sign-in-later flow on a shared
-  // device. See `docs/decisions.md § 67`.
+  // device. See `docs/architecture/decisions.md § 67`.
   group('filterRunsForCurrentUser (pure helper)', () {
     test('null current userId returns empty list', () {
       // SyncService doesn't call this path (it guards on

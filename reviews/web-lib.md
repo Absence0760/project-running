@@ -117,7 +117,7 @@ One-line summary: five confirmed bugs including two silent data-loss paths (`sav
 
 - **File(s)**: `apps/web/src/lib/strava-zip.ts:154`, `apps/web/src/lib/garmin-zip.ts:189-191`, `apps/web/src/lib/garmin-zip.ts:250`
 - **Category**: bug (violates the cross-platform coordination contract; `metadata.md` is enforced by CI on Android via `metadata_registry_test.dart`)
-- **Problem**: Four metadata keys are written by web importers and are not registered in `docs/metadata.md`:
+- **Problem**: Four metadata keys are written by web importers and are not registered in `docs/backend/metadata.md`:
   - `strava_id` — written by `strava-zip.ts:154`, used for dedupe at `strava-zip.ts:69`. The registry has `strava_activity_type` but not `strava_id`.
   - `garmin_id` — written by `garmin-zip.ts:189`, used for dedupe at `garmin-zip.ts:62`. Not registered.
   - `max_bpm` — written by `garmin-zip.ts:191`. Not registered (only `avg_bpm` is registered).
@@ -136,13 +136,13 @@ One-line summary: five confirmed bugs including two silent data-loss paths (`sav
   // garmin-zip.ts:187, 250
   source_file: displayName,
   ```
-- **Proposed change**: Add all four keys to the "Import provenance" section of `docs/metadata.md`, following the existing table format. Entries:
+- **Proposed change**: Add all four keys to the "Import provenance" section of `docs/backend/metadata.md`, following the existing table format. Entries:
   - `strava_id` | `string` (Strava activity id) | `strava-zip.ts` | `strava-zip.ts` (dedupe) | Optional
   - `garmin_id` | `string` (`<time_created>-<serial>`) | `garmin-zip.ts` | `garmin-zip.ts` (dedupe) | Optional
   - `max_bpm` | `number` | `garmin-zip.ts` | — | Optional
   - `source_file` | `string` (original filename) | `garmin-zip.ts` | — | Optional
 - **Risk if applied**: None — documentation only.
-- **Verification**: Grep `docs/metadata.md` for all four key names after adding them.
+- **Verification**: Grep `docs/backend/metadata.md` for all four key names after adding them.
 
 ---
 
@@ -199,7 +199,7 @@ One-line summary: five confirmed bugs including two silent data-loss paths (`sav
 
 - **File(s)**: `apps/web/src/lib/goals.ts:80-87`
 - **Category**: inconsistency
-- **Problem**: `periodStart` uses `(d.getDay() + 6) % 7` — Monday-start, correct by default. But `week_start_day` is a registered universal setting (`docs/settings.md`) with values `'monday' | 'sunday'`. A user who sets Sunday-start in `/settings/preferences` will see goal progress calculated against Monday-week boundaries, which is wrong. The Android counterpart (`goals.dart:weekStartLocal`) has the same hardcoded Monday-start and the same gap. Neither client reads `week_start_day` for goal evaluation.
+- **Problem**: `periodStart` uses `(d.getDay() + 6) % 7` — Monday-start, correct by default. But `week_start_day` is a registered universal setting (`docs/backend/settings.md`) with values `'monday' | 'sunday'`. A user who sets Sunday-start in `/settings/preferences` will see goal progress calculated against Monday-week boundaries, which is wrong. The Android counterpart (`goals.dart:weekStartLocal`) has the same hardcoded Monday-start and the same gap. Neither client reads `week_start_day` for goal evaluation.
 - **Evidence**:
   ```typescript
   // goals.ts:81-84

@@ -14,7 +14,7 @@ Fix the failing CI run `$ARGUMENTS`. Find the real cause, fix it at the root, ad
    - re-running until green
    If you catch yourself reaching for one of these, stop: you've found the symptom, not the cause.
 
-2. **Add coverage where the gap let the failure through.** Whatever broke, leave behind something that fails loudly and early next time — a pinning test for a code defect, an explicit assertion / health-gate for an infra step, a guard for a missing precondition. Coverage ships in the **same commit** as the fix (`docs/conventions.md` § Test hygiene).
+2. **Add coverage where the gap let the failure through.** Whatever broke, leave behind something that fails loudly and early next time — a pinning test for a code defect, an explicit assertion / health-gate for an infra step, a guard for a missing precondition. Coverage ships in the **same commit** as the fix (`docs/architecture/conventions.md` § Test hygiene).
 
 ## Procedure
 
@@ -57,7 +57,7 @@ Confirm the failure reproduces *before* the fix and is gone *after*. Capture the
 
 ### 6. Sweep docs
 
-If a doc describes the behaviour you changed (e.g. `docs/testing.md`'s CI-pipeline section describing how a job seeds/boots), update it in the same turn. (`[[feedback_doc_edits_sweep_for_staleness]]`, CLAUDE.md § Docs hygiene.)
+If a doc describes the behaviour you changed (e.g. `docs/testing/testing.md`'s CI-pipeline section describing how a job seeds/boots), update it in the same turn. (`[[feedback_doc_edits_sweep_for_staleness]]`, CLAUDE.md § Docs hygiene.)
 
 ### 7. Commit, don't push
 

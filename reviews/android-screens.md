@@ -3,7 +3,7 @@
 ## Scope
 - Files reviewed: 21 (`add_run_screen.dart`, `clubs_screen.dart`, `club_detail_screen.dart`, `dashboard_screen.dart`, `event_detail_screen.dart`, `explore_routes_screen.dart`, `home_screen.dart`, `import_screen.dart`, `onboarding_screen.dart`, `period_summary_screen.dart`, `plan_detail_screen.dart`, `plan_new_screen.dart`, `plans_screen.dart`, `route_detail_screen.dart`, `routes_screen.dart`, `run_detail_screen.dart`, `run_screen.dart`, `runs_screen.dart`, `settings_screen.dart`, `sign_in_screen.dart`, `workout_detail_screen.dart`)
 - Focus: bugs (mounted guards, leaked resources, silent swallows), layered-resilience violations, web↔Android feature drift, code↔docs drift, paywall consistency, dead screens, test coverage gaps
-- Reviewer confidence: high — every file read in full; cross-referenced against `docs/conventions.md`, `docs/run_recording.md`, `docs/workout_execution.md`, `docs/flows.md`, `docs/parity.md`, `docs/paywall.md`, `apps/mobile_android/CLAUDE.md`
+- Reviewer confidence: high — every file read in full; cross-referenced against `docs/architecture/conventions.md`, `docs/features/run_recording.md`, `docs/features/workout_execution.md`, `docs/features/flows.md`, `docs/product/parity.md`, `docs/features/paywall.md`, `apps/mobile_android/CLAUDE.md`
 
 ---
 
@@ -133,7 +133,7 @@
 ### H5. `_shareRun` silently swallows `makeRunPublic` errors
 - **File(s)**: `apps/mobile_android/lib/screens/run_detail_screen.dart:1241-1255`
 - **Category**: bug
-- **Problem**: `catch (_) {}` with no `debugPrint`. This violates `docs/conventions.md` ("never swallow silently") and hides network errors when marking a run public before sharing. The user shares a link but the web share page may refuse to render the private run.
+- **Problem**: `catch (_) {}` with no `debugPrint`. This violates `docs/architecture/conventions.md` ("never swallow silently") and hides network errors when marking a run public before sharing. The user shares a link but the web share page may refuse to render the private run.
 - **Evidence**:
   ```dart
   try {
@@ -180,7 +180,7 @@
 ### M1. Auto-pause setting subtitle is false — feature was removed from Android
 - **File(s)**: `apps/mobile_android/lib/screens/settings_screen.dart:1076-1085`
 - **Category**: inconsistency
-- **Problem**: The `SwitchListTile` for "Auto-pause" has subtitle `'Stops the clock when you stop moving. Moving time is also recomputed from the GPS trace at save time.'`. Per `docs/run_recording.md` and the `CLAUDE.md` notes, auto-pause was removed from Android. The switch may persist in preferences but the recording stack no longer honours it, so the subtitle description is actively misleading.
+- **Problem**: The `SwitchListTile` for "Auto-pause" has subtitle `'Stops the clock when you stop moving. Moving time is also recomputed from the GPS trace at save time.'`. Per `docs/features/run_recording.md` and the `CLAUDE.md` notes, auto-pause was removed from Android. The switch may persist in preferences but the recording stack no longer honours it, so the subtitle description is actively misleading.
 - **Evidence**:
   ```dart
   SwitchListTile(
@@ -199,7 +199,7 @@
 ### M2. No sign-up path on Android — new users cannot register
 - **File(s)**: `apps/mobile_android/lib/screens/sign_in_screen.dart` (entire file, 204 lines)
 - **Category**: inconsistency
-- **Problem**: The screen only handles sign-in (email+password, Google). There is no "Create account" route. `docs/parity.md` lists sign-up under "Auth" and marks it as implemented on web but does not explicitly mark Android — however `docs/flows.md` describes an Android sign-in sequence that implies accounts already exist. A user who installs the app cold with no account has no path forward except to use the web app first.
+- **Problem**: The screen only handles sign-in (email+password, Google). There is no "Create account" route. `docs/product/parity.md` lists sign-up under "Auth" and marks it as implemented on web but does not explicitly mark Android — however `docs/features/flows.md` describes an Android sign-in sequence that implies accounts already exist. A user who installs the app cold with no account has no path forward except to use the web app first.
 - **Evidence**: The file contains `_signInWithEmail`, `_signInWithGoogle`, and no `_signUp` or equivalent. The scaffold has no navigation to any registration screen.
 - **Proposed change**: Add a "Create account" text button below the sign-in form that navigates to a new `SignUpScreen` (email + password + confirm password → `ApiClient.signUp`). Alternatively, add an inline toggle that flips the form between Sign in and Create account modes — the web implementation (`apps/web/src/routes/login/+page.svelte`) is the reference.
 - **Risk if applied**: New screen needs widget tests; `ApiClient.signUp` must already exist (verify before implementing).
@@ -210,7 +210,7 @@
 ### M3. `plans_screen.dart` reads auth state via `Supabase.instance.client` instead of `ApiClient`
 - **File(s)**: `apps/mobile_android/lib/screens/plans_screen.dart:77`
 - **Category**: inconsistency
-- **Problem**: `final signedIn = Supabase.instance.client.auth.currentUser != null;` bypasses the `ApiClient` abstraction. `docs/flows.md` and `CLAUDE.md` designate `ApiClient` as the single auth façade for all mobile screens. If `ApiClient` ever wraps or overrides the session (e.g. for test injection or session refresh), this bypass will diverge.
+- **Problem**: `final signedIn = Supabase.instance.client.auth.currentUser != null;` bypasses the `ApiClient` abstraction. `docs/features/flows.md` and `CLAUDE.md` designate `ApiClient` as the single auth façade for all mobile screens. If `ApiClient` ever wraps or overrides the session (e.g. for test injection or session refresh), this bypass will diverge.
 - **Evidence**:
   ```dart
   // plans_screen.dart:77

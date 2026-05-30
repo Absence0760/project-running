@@ -274,7 +274,7 @@ export type RunMatchInfo = {
 /// Fetch the run_matched_tracks row for a run + lazily download the
 /// matched track when status='matched'. The owner-read RLS policy
 /// gates this — non-owners get an empty result and the caller falls
-/// back to the raw track. L4 per docs/conventions.md § Layered
+/// back to the raw track. L4 per docs/architecture/conventions.md § Layered
 /// resilience: the matched track is an enhancement on top of the
 /// raw track that already renders; a failure here must NOT break
 /// the run-detail page.
@@ -572,7 +572,7 @@ export async function saveRunAsRoute(
 /// Map the user's `privacy_default` preference to the `runs.is_public`
 /// boolean for a newly-created run. Only `public` yields a public run;
 /// `followers` and `private` stay private (runs have no followers-only
-/// visibility tier — see docs/settings.md). Mirrors mobile
+/// visibility tier — see docs/backend/settings.md). Mirrors mobile
 /// `Preferences.newRunsArePublic`. Web previously ignored this entirely
 /// (runs always landed at the `is_public default false`), so a runner who
 /// chose `public` still got private runs from web saves + imports
@@ -664,7 +664,7 @@ export async function saveRun(input: {
 
 	// elevation_m and title are not columns on `runs` (elevation_m lives on
 	// `routes`; title has no DB column). Merge both into metadata so they
-	// survive the round-trip. See docs/metadata.md for the registered keys.
+	// survive the round-trip. See docs/backend/metadata.md for the registered keys.
 	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
 	if (input.title) mergedMetadata.title = input.title;
 	if (input.elevation_m != null) mergedMetadata.elevation_m = input.elevation_m;
@@ -3244,7 +3244,7 @@ export interface PeopleSuggestion extends PublicProfile {
 /// public-runs count so the row's Follow toggle starts in the right
 /// state. Results are ranked by `public_runs_count` descending so a
 /// bot mass-creating dummy accounts can't push real runners off the
-/// top — anti-spam phase 1 of 3 in `docs/decisions.md § search ranking`.
+/// top — anti-spam phase 1 of 3 in `docs/architecture/decisions.md § search ranking`.
 ///
 /// `limit` caps the returned list. We fetch `limit * 3` candidates
 /// from the RPC (capped server-side at 200) so the rank step has more

@@ -186,7 +186,7 @@ data class FinishedLap(
 /// cumulative-vs-split distinction, and the bonus-row gate — is
 /// unit-testable without booting the ViewModel. The
 /// `start_offset_s = cumulative-BEFORE` shape is registered in
-/// `docs/metadata.md`; this helper feeds the FinishedLap shape that
+/// `docs/backend/metadata.md`; this helper feeds the FinishedLap shape that
 /// `WatchRunMetadata.buildRunMetadata` later writes through to the
 /// row's `metadata.laps` jsonb.
 internal fun buildFinishedLapsList(

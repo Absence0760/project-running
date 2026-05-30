@@ -2,7 +2,7 @@
 description: Verify the L0–L4 try/catch layered-resilience contract on the run-recording stack
 ---
 
-Verify the L0–L4 layered-resilience contract per `docs/conventions.md` § "Layered resilience" and the L0–L4 table in `docs/run_recording.md` § "Layering".
+Verify the L0–L4 layered-resilience contract per `docs/architecture/conventions.md` § "Layered resilience" and the L0–L4 table in `docs/features/run_recording.md` § "Layering".
 
 ## What this is
 
@@ -36,8 +36,8 @@ For each: file:line of the effect, the missing or incorrect wrap, the layer it c
 
 ## Useful starting points
 
-- `docs/conventions.md` § "Layered resilience"
-- `docs/run_recording.md` § "Layering" — the L0–L4 table
+- `docs/architecture/conventions.md` § "Layered resilience"
+- `docs/features/run_recording.md` § "Layering" — the L0–L4 table
 - `apps/mobile_android/lib/screens/run_screen.dart` — the highest-stakes file
 - `apps/mobile_android/CLAUDE.md` § "Hot-path exception"
 - `apps/mobile_android/test/architecture_guards_test.dart` — existing guards

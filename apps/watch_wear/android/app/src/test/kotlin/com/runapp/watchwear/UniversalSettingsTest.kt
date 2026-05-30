@@ -179,7 +179,7 @@ class UniversalSettingsTest {
 
     @Test
     fun `privacy allowlist matches the documented schema`() {
-        // docs/settings.md pins the editor as {public, followers,
+        // docs/backend/settings.md pins the editor as {public, followers,
         // private}. Drift here = bag values the wrist silently
         // ignores. If a future migration adds a value, extend both
         // this test and `UNIVERSAL_PRIVACY_DEFAULTS` together.

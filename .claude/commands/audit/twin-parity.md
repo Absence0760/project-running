@@ -2,7 +2,7 @@
 description: Verify apps/mobile_android and apps/mobile_ios lib/+test/ are byte-identical
 ---
 
-Verify the byte-identical-twin invariant between `apps/mobile_android/` and `apps/mobile_ios/` per `docs/decisions.md §39`.
+Verify the byte-identical-twin invariant between `apps/mobile_android/` and `apps/mobile_ios/` per `docs/architecture/decisions.md §39`.
 
 ## What to do
 
@@ -15,7 +15,7 @@ Verify the byte-identical-twin invariant between `apps/mobile_android/` and `app
 
 ## Pubspec deltas (allowed)
 
-Per `docs/decisions.md §39`, the only pubspec differences allowed are `name` and `description`. Run `diff apps/mobile_android/pubspec.yaml apps/mobile_ios/pubspec.yaml` and confirm any other delta is a violation.
+Per `docs/architecture/decisions.md §39`, the only pubspec differences allowed are `name` and `description`. Run `diff apps/mobile_android/pubspec.yaml apps/mobile_ios/pubspec.yaml` and confirm any other delta is a violation.
 
 ## Report format
 
@@ -29,6 +29,6 @@ Read-only by default. The `mobile-twin-mirror` agent is the canonical fixer; thi
 
 ## Useful starting points
 
-- `docs/decisions.md §39` — the invariant
+- `docs/architecture/decisions.md §39` — the invariant
 - `.claude/agents/mobile-twin-mirror.md` — the fixer agent
 - `apps/mobile_ios/CLAUDE.md` — twin-specific notes

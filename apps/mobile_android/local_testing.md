@@ -215,7 +215,7 @@ flutter test test/run_stats_test.dart
 flutter test --plain-name "speed clamp"
 ```
 
-See [testing.md](testing.md) for the complete testing reference — what's covered, how to add a new test, the `@visibleForTesting` / override-directory / synthetic-`Position` patterns, and what's still uncovered.
+See [testing.md](../../docs/testing/testing.md) for the complete testing reference — what's covered, how to add a new test, the `@visibleForTesting` / override-directory / synthetic-`Position` patterns, and what's still uncovered.
 
 ## Lint
 
@@ -227,7 +227,7 @@ melos run analyze
 
 ## Features
 
-The Android app supports the following. For a side-by-side view against Strava, Nike Run Club, Garmin Connect, and Komoot, see [competitors.md](competitors.md#whats-shipped-today-android).
+The Android app supports the following. For a side-by-side view against Strava, Nike Run Club, Garmin Connect, and Komoot, see [competitors.md](../../docs/product/competitors.md#whats-shipped-today-android).
 
 ### First launch
 
@@ -252,7 +252,7 @@ The activity type you pick on the idle screen genuinely changes how the run is r
 | Hike | Pace (min/km) | 0.7× | 1 km/mi | 3 m | 2 m | 6 m/s | Yes |
 
 - **GPS filter + Min move**: software movement thresholds — a new GPS fix is appended to the track only when it's more than `max(GPS filter, Min move)` metres from the last tracked point. Filters out jitter.
-- **Max speed**: corrupted GPS fixes implying faster than this are dropped (a single teleport can't inflate total distance). See [run_recording.md](run_recording.md#per-activity-tuning) for the full filter chain.
+- **Max speed**: corrupted GPS fixes implying faster than this are dropped (a single teleport can't inflate total distance). See [run_recording.md](../../docs/features/run_recording.md#per-activity-tuning) for the full filter chain.
 
 When you pick **Cycle**, the live stats overlay swaps Pace/Avg Pace for Speed/Avg Speed, the audio cue announces speed instead of pace, and split notifications fire every 5 km instead of every km. The history list and run detail screen also adapt — cycling rides show speed in their trailing column. All three Personal Bests cards (including "Longest run") are running-only — see the Dashboard section above.
 
@@ -285,7 +285,7 @@ Activity type is locked once you tap Start — it can't change mid-run.
 - **Monotonic clock** — elapsed time uses `Stopwatch`, so wall-clock jumps (NTP sync, DST, timezone change, manual time change) can't corrupt the duration.
 - **Speed clamp** — a single corrupt GPS fix implying a speed faster than the activity's maximum (see table) is discarded so it can't inflate total distance.
 
-See [run_recording.md](run_recording.md) for the architecture behind all of the above — state machine, filter chain, hardening gates, and tunable constants.
+See [run_recording.md](../../docs/features/run_recording.md) for the architecture behind all of the above — state machine, filter chain, hardening gates, and tunable constants.
 
 ### Routes
 
@@ -345,7 +345,7 @@ If `.env.local` is missing, empty, or the backend is unreachable, the app starts
 
 A few items remain out of scope for now:
 
-- **Strava live OAuth** — the ZIP import path is shipped; the OAuth flow that auto-syncs new activities still routes through the web app per [decisions.md § 41](../../docs/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns).
+- **Strava live OAuth** — the ZIP import path is shipped; the OAuth flow that auto-syncs new activities still routes through the web app per [decisions.md § 41](../../docs/architecture/decisions.md#41-oauth-tokens-are-stored-in-supabase-vault-not-as-plaintext-columns).
 - **Garmin live OAuth** — same shape as Strava: ZIP import works, live OAuth still web-only.
 - **Live race spectator** — see roadmap, the recording side ships but the active spectator screen on mobile is web-only today.
 

@@ -79,7 +79,7 @@ dart run scripts/gen_dart_models.dart   # packages/core_models/lib/src/generated
 
 CI's `parity-types` job checks `database.types.ts`. The `schema-codegen-drift` job regenerates and diffs both `db_rows.dart` and `DbRows.kt` — all three are gated on PRs to `main`.
 
-Details, troubleshooting, and drift-detection test recipe: [../../docs/schema_codegen.md](../../docs/schema_codegen.md).
+Details, troubleshooting, and drift-detection test recipe: [../../docs/architecture/schema_codegen.md](../../docs/architecture/schema_codegen.md).
 
 ## Migrations
 
@@ -334,4 +334,4 @@ Variables currently used:
 - If you added or changed an Edge Function: deploy-ability has not been tested locally. The user will notice on `main` deploy. Leave a note in the PR description about what you couldn't verify.
 - If you added a new env var: update `.env.example` and this file's "Variables currently used" list.
 - If you added a new function: update the table in the "Edge Functions" section above. Status column should be honest — stub, partial, or working.
-- If you changed `runs.metadata` key usage: update [../../docs/metadata.md](../../docs/metadata.md). The schema generators can't catch drift in there.
+- If you changed `runs.metadata` key usage: update [../../docs/backend/metadata.md](../../docs/backend/metadata.md). The schema generators can't catch drift in there.

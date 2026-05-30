@@ -33,9 +33,9 @@ export type RunSource =
   | 'parkrun'
   | 'race';
 ```
-Wait — those are present. However, `api_database.md` (the source-of-truth schema doc) lists two additional values: `healthkit` and `healthconnect`. Cross-checking more carefully: `types.ts` does include them. What it does NOT include is `'web'` or `'import'`. The `docs/api_database.md` source table lists `app | healthkit | healthconnect | strava | garmin | parkrun | race` — no `'web'` or `'import'`. The DB itself has no CHECK constraint. Android writes `'app'`, `'healthconnect'`, `'healthkit'`, `'strava'`, `'garmin'`, `'parkrun'`. The web never writes a `source` value at all (it does not create runs). So the union in `types.ts` is correctly scoped to what exists. This is confirmed good — see Confirmed-good.
+Wait — those are present. However, `api_database.md` (the source-of-truth schema doc) lists two additional values: `healthkit` and `healthconnect`. Cross-checking more carefully: `types.ts` does include them. What it does NOT include is `'web'` or `'import'`. The `docs/backend/api_database.md` source table lists `app | healthkit | healthconnect | strava | garmin | parkrun | race` — no `'web'` or `'import'`. The DB itself has no CHECK constraint. Android writes `'app'`, `'healthconnect'`, `'healthkit'`, `'strava'`, `'garmin'`, `'parkrun'`. The web never writes a `source` value at all (it does not create runs). So the union in `types.ts` is correctly scoped to what exists. This is confirmed good — see Confirmed-good.
 
-Actually re-examining: The real issue is `types.ts` does NOT include `'import'` but the doc only lists the seven values shown and none say `'import'`. The `RunSource` union is aligned with `api_database.md`. However: `docs/api_database.md` lists `race` as a source value, and the web `RunSource` type includes it. The `personal_records` RPC explicitly excludes `race` from PB computations (`source in ('app', 'strava', 'garmin', 'healthkit', 'healthconnect')`), so the web `fetchPersonalRecords` client-side implementation (which includes all sources without filtering) will include `race` source runs in PB calculations where the DB-side RPC would exclude them. This is a real divergence.
+Actually re-examining: The real issue is `types.ts` does NOT include `'import'` but the doc only lists the seven values shown and none say `'import'`. The `RunSource` union is aligned with `api_database.md`. However: `docs/backend/api_database.md` lists `race` as a source value, and the web `RunSource` type includes it. The `personal_records` RPC explicitly excludes `race` from PB computations (`source in ('app', 'strava', 'garmin', 'healthkit', 'healthconnect')`), so the web `fetchPersonalRecords` client-side implementation (which includes all sources without filtering) will include `race` source runs in PB calculations where the DB-side RPC would exclude them. This is a real divergence.
 
 **Revised finding:**
 
@@ -139,7 +139,7 @@ const { data: candidates } = await supabase
 ### `decisions.md` §2 "Known rough edges" lists public-track download as broken — it is not
 
 **Severity:** LOW
-**File(s):** `docs/decisions.md:32` (out of scope for this auditor; flagged for the implementer)
+**File(s):** `docs/architecture/decisions.md:32` (out of scope for this auditor; flagged for the implementer)
 **Issue:** `decisions.md` §2 states under "Known rough edges": *"public `/share/run/{id}` pages can't read tracks because the bucket is private with owner-only RLS"*. Migration `20260413_001_public_runs.sql` added a storage policy that allows anonymous download of tracks for `is_public = true` runs. The known-rough-edge note is stale. Leaving it in place risks future developers adding unnecessary workarounds.
 **Cross-platform impact:** None. Documentation drift only.
 **Fix sketch:** Delete the stale bullet from `decisions.md` §2.
@@ -172,7 +172,7 @@ The `user_profiles.subscription_tier` column has no CHECK constraint (per `api_d
 - **Public run/route RLS**: `makeRunPublic` calls `update({ is_public: true })` — passes through the "users own their runs" RLS correctly because it uses the authenticated client. Anonymous readers on the share page can SELECT the run via the "public runs are readable by anyone" policy.
 - **`fetchTrack` decompression**: correctly uses `DecompressionStream('gzip')` matching Android's `GZIPInputStream` / Kotlin `java.util.zip.GZIPInputStream`. Parsed as JSON array, matching the `[{lat, lng, ele, ts}]` track shape in `api_database.md`.
 - **`RunSource` union**: the seven values in `types.ts` (`app | healthkit | healthconnect | strava | garmin | parkrun | race`) match the `api_database.md` source table exactly. No undeclared values are written by the web (the web creates no runs).
-- **`updateRunMetadata` key discipline**: the function only writes `title` and `notes`, both of which are registered in `docs/metadata.md` as user-editable keys. No camelCase contamination — the keys are literally `'title'` and `'notes'` which are correct snake_case-compatible names.
+- **`updateRunMetadata` key discipline**: the function only writes `title` and `notes`, both of which are registered in `docs/backend/metadata.md` as user-editable keys. No camelCase contamination — the keys are literally `'title'` and `'notes'` which are correct snake_case-compatible names.
 - **No track uploads from the web**: the web does not upload GPS tracks. `saveRoute` stores waypoints as `jsonb` in the `routes` table, not in the `runs` Storage bucket. No path for accidental track-bucket writes from the web.
 - **`connectIntegration` provider discipline**: passes `provider` as-is from the caller; callers in the settings page pass values from the `IntegrationProvider` union (`'strava' | 'garmin' | 'parkrun' | 'runsignup'`).
 - **Coach endpoint data isolation**: `buildContext` creates a per-request Supabase client scoped to the caller's JWT (`Authorization: Bearer {access_token}`), so every data read in the coach endpoint goes through RLS scoped to the authenticated user. No cross-user data leakage.
@@ -182,4 +182,4 @@ The `user_profiles.subscription_tier` column has no CHECK constraint (per `api_d
 - `apps/mobile_android/lib/training_service.dart` also omits `source` from `createPlan` — same bug, different file. Out of scope for this auditor but the Android auditor should flag it.
 - `apps/mobile_android/lib/training_service.dart` `autoMatchRunToPlanWorkout` equivalent — same missing plan-status guard. Out of scope.
 - `apps/backend/supabase/functions/revenuecat-webhook/index.ts` — needs audit to confirm what value is written to `subscription_tier`. Out of scope for this web audit.
-- `docs/decisions.md:32` stale "known rough edges" bullet — this file is not in the web audit scope; update should be made by whoever handles docs cleanup.
+- `docs/architecture/decisions.md:32` stale "known rough edges" bullet — this file is not in the web audit scope; update should be made by whoever handles docs cleanup.

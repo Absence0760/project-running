@@ -37,7 +37,7 @@ The persistence layer is structurally sound: the sidecar sync-state file, the ne
 - `apps/mobile_android/lib/strava_importer.dart:169`
 - `apps/mobile_android/lib/health_connect_importer.dart:85`
 
-`docs/integrations.md` (§ Deduplication strategy) mandates:
+`docs/features/integrations.md` (§ Deduplication strategy) mandates:
 ```
 strava         → external_id = strava:{activity-id}
 healthconnect  → external_id = healthconnect:{hc-uuid}
@@ -204,11 +204,11 @@ Document this in a short comment above the `markManySynced` call so the next rea
 - `apps/mobile_android/lib/backup.dart:17`
 
 ```dart
-/// See [docs/backup_restore.md](../../../docs/backup_restore.md) for the
+/// See [docs/ops/backup_restore.md](../../docs/ops/backup_restore.md) for the
 /// archive layout.
 ```
 
-`docs/backup_restore.md` exists as an empty file (the `ls` shows it present but git status shows it as untracked/unknown). Even if non-empty, the doc reference in the Dart source will silently go stale. Either:
+`docs/ops/backup_restore.md` exists as an empty file (the `ls` shows it present but git status shows it as untracked/unknown). Even if non-empty, the doc reference in the Dart source will silently go stale. Either:
 - Remove the cross-reference and put the archive layout in the docstring itself (it is short: `manifest.json`, `runs.json`, `routes.json`, `profile.json`, `tracks/<id>.json.gz`).
 - Or keep the reference only if the file is fully written.
 
@@ -244,7 +244,7 @@ Note: CLAUDE.md marks `withOpacity` and similar deprecations as deliberate techn
 /// Saves each run locally, then batch-pushes to the cloud if signed in.
 ```
 
-This is a WHAT comment: it narrates what the code does, which the code already says. The function name and body are self-explanatory. Per `docs/conventions.md § Comments`: "never explain what well-named code already says." Delete both lines.
+This is a WHAT comment: it narrates what the code does, which the code already says. The function name and body are self-explanatory. Per `docs/architecture/conventions.md § Comments`: "never explain what well-named code already says." Delete both lines.
 
 (Noted because `import_screen.dart` was read as part of cross-referencing the importer callers. It is not in the formal scope, so the implementer should verify relevance before acting.)
 

@@ -15,7 +15,7 @@ import 'preferences.dart';
 /// keys onto local state; on user-initiated changes we push back to the
 /// cloud. The cloud is never the live read path for UI.
 ///
-/// Known keys are registered in [docs/settings.md](../../docs/settings.md).
+/// Known keys are registered in [docs/backend/settings.md](../../docs/backend/settings.md).
 class SettingsSyncService extends ChangeNotifier {
   SettingsSyncService({
     required this.preferences,

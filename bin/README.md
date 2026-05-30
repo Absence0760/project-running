@@ -22,7 +22,7 @@ All scripts source `bin/lib/common.sh` for the color helpers + `need_cmd` / `nee
 | AWS session expired | `bin/aws-login.sh` |
 | Debugging a Lambda response | `bin/lambda-logs.sh preview --tail` |
 | Dependabot left ghost CI runs | `bin/cancel-stale-runs.sh --apply` |
-| Local dev without burning the MapTiler quota | `bin/protomaps-dev.sh start` (then paste the printed env vars into each app's `.env.local`; full recipe at [`docs/protomaps_local_setup.md`](../docs/protomaps_local_setup.md), design at [decisions.md § 68](../docs/decisions.md#68-tile-rendering-honours-an-env-override-so-local-dev-can-use-self-hosted-protomaps-without-touching-prod-code-paths)) |
+| Local dev without burning the MapTiler quota | `bin/protomaps-dev.sh start` (then paste the printed env vars into each app's `.env.local`; full recipe at [`docs/ops/protomaps_local_setup.md`](../docs/ops/protomaps_local_setup.md), design at [decisions.md § 68](../docs/architecture/decisions.md#68-tile-rendering-honours-an-env-override-so-local-dev-can-use-self-hosted-protomaps-without-touching-prod-code-paths)) |
 
 ## Rare events
 
@@ -31,7 +31,7 @@ All scripts source `bin/lib/common.sh` for the color helpers + `need_cmd` / `nee
 | Adding a second human/role to the KMS key policy | `bin/onboard-operator.sh arn:aws:iam::…:role/Admin both` |
 | KMS key was destroyed + recreated, encrypted file is stuck on the old key | `bin/key-rotate.sh preview` |
 
-## Custom watch firmware (research-tier, [§ 71](../docs/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](../docs/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance))
+## Custom watch firmware (research-tier, [§ 71](../docs/architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](../docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance))
 
 Wrappers around `cargo` + `probe-rs` for the Rust + Embassy firmware at [`apps/custom_watch/`](../apps/custom_watch/README.md). All five `cd` into the workspace and forward extra args. Full walkthrough in [`apps/custom_watch/local_testing.md`](../apps/custom_watch/local_testing.md).
 

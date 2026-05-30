@@ -6,7 +6,7 @@ Run every architecture-guard test suite across the monorepo and summarize result
 
 ## What this is
 
-The project codifies non-obvious invariants as "architecture guard" tests — fast, source-level (regex / contains) assertions that catch regressions of optimizations and layering rules a linter wouldn't. They're documented in `docs/testing.md` and per-app CLAUDE.md notes.
+The project codifies non-obvious invariants as "architecture guard" tests — fast, source-level (regex / contains) assertions that catch regressions of optimizations and layering rules a linter wouldn't. They're documented in `docs/testing/testing.md` and per-app CLAUDE.md notes.
 
 When one fails, **read the `reason:` block in the test before rubber-stamping a fix** — the failure means a recent change reversed an invariant the codebase deliberately codified.
 
@@ -40,5 +40,5 @@ When one fails, **read the `reason:` block in the test before rubber-stamping a 
 ## Useful starting points
 
 - `apps/mobile_android/CLAUDE.md` § "Tests" — the full list of guard groups
-- `docs/testing.md` — the guard-test pattern
-- `docs/conventions.md` — the rules the guards enforce
+- `docs/testing/testing.md` — the guard-test pattern
+- `docs/architecture/conventions.md` — the rules the guards enforce

@@ -36,8 +36,8 @@ For each: function name, file:line, the missing check, what an attacker could do
 - `apps/backend/supabase/functions/` — every function
 - `apps/backend/supabase/config.toml` — per-function `verify_jwt` settings
 - `apps/backend/CLAUDE.md` — function-by-function notes
-- `docs/integrations.md` — third-party integration shapes (Strava OAuth, parkrun)
-- `docs/decisions.md` — search "Edge Function" for relevant ADRs
+- `docs/features/integrations.md` — third-party integration shapes (Strava OAuth, parkrun)
+- `docs/architecture/decisions.md` — search "Edge Function" for relevant ADRs
 - The recent `fix(backend): auth-guard refresh-tokens Edge Function` commit (b3373c6) — the canonical pattern to mirror
 
 ## Delegate to

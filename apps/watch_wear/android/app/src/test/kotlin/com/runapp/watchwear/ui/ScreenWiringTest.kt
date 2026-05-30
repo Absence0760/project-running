@@ -46,7 +46,7 @@ class ScreenWiringTest {
 
     @Test fun `PreRunScreen exposes the activity-type picker`() {
         // CompactChip cycles run → walk → hike → cycle. Pinned by
-        // `metadata.activity_type` in docs/metadata.md — losing the
+        // `metadata.activity_type` in docs/backend/metadata.md — losing the
         // picker would silently default every run to "run" regardless
         // of the user's choice. The pre-run screen receives the
         // current activityType + a setter callback; pin both.

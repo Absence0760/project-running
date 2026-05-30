@@ -52,7 +52,7 @@ After the agent returns, ask the user one focused question:
 
 If yes, apply only the proposed changes (no scope creep into adjacent unions). If no, end the turn — the user will handle it.
 
-Same offer for doc updates (`docs/api_database.md`, `docs/metadata.md`, `docs/parity.md`, `docs/decisions.md`, `docs/schema_codegen.md`, `docs/conventions.md`), in priority order. Each is opt-in.
+Same offer for doc updates (`docs/backend/api_database.md`, `docs/backend/metadata.md`, `docs/product/parity.md`, `docs/architecture/decisions.md`, `docs/architecture/schema_codegen.md`, `docs/architecture/conventions.md`), in priority order. Each is opt-in.
 
 ### 5. Hand off the commit
 

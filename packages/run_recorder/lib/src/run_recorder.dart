@@ -64,7 +64,7 @@ class LapSplit {
 }
 
 /// Serialise a list of in-memory [LapSplit]s into the canonical JSON shape
-/// documented in `docs/metadata.md` § laps:
+/// documented in `docs/backend/metadata.md` § laps:
 /// `[{ index: int, start_offset_s: int, distance_m: double, duration_s: int }]`.
 ///
 /// `start_offset_s` is the cumulative duration **up to the start of this

@@ -26,12 +26,12 @@
 
 <!-- Required before merge — see CLAUDE.md § Docs hygiene. -->
 
-- [ ] If this changes a user-visible feature on any platform, [`docs/parity.md`](../docs/parity.md) has been updated (row added / cells flipped / Notes explained).
-- [ ] If this changes a feature's spec, [`docs/features.md`](../docs/features.md) has been updated.
-- [ ] If this ticks or adds a roadmap item, [`docs/roadmap.md`](../docs/roadmap.md) has been updated in the same PR.
-- [ ] If this changes the database schema, both generated type files have been regenerated (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`) and committed — see [`docs/schema_codegen.md`](../docs/schema_codegen.md).
-- [ ] If this introduces a new convention, [`docs/conventions.md`](../docs/conventions.md) has been updated.
-- [ ] If this is a non-obvious trade-off, a one-paragraph entry has been appended to [`docs/decisions.md`](../docs/decisions.md).
+- [ ] If this changes a user-visible feature on any platform, [`docs/product/parity.md`](../docs/product/parity.md) has been updated (row added / cells flipped / Notes explained).
+- [ ] If this changes a feature's spec, [`docs/product/features.md`](../docs/product/features.md) has been updated.
+- [ ] If this ticks or adds a roadmap item, [`docs/product/roadmap.md`](../docs/product/roadmap.md) has been updated in the same PR.
+- [ ] If this changes the database schema, both generated type files have been regenerated (`npm run gen:types` + `dart run scripts/gen_dart_models.dart`) and committed — see [`docs/architecture/schema_codegen.md`](../docs/architecture/schema_codegen.md).
+- [ ] If this introduces a new convention, [`docs/architecture/conventions.md`](../docs/architecture/conventions.md) has been updated.
+- [ ] If this is a non-obvious trade-off, a one-paragraph entry has been appended to [`docs/architecture/decisions.md`](../docs/architecture/decisions.md).
 
 ## Test plan
 

@@ -20,7 +20,7 @@ import 'route_detail_screen.dart';
 import '../widgets/top_banner.dart';
 
 /// Page size for the cloud fetch + visible-list window. Same value as
-/// runs_screen — `docs/conventions.md § Pagination` makes consistency
+/// runs_screen — `docs/architecture/conventions.md § Pagination` makes consistency
 /// across surfaces a load-bearing rule.
 const int _kRoutesPageSize = 20;
 

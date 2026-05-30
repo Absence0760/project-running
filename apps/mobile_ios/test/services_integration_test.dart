@@ -24,7 +24,7 @@ const _seededFirstWeekId = 'a0aa0001-0000-0000-0000-000000000001';
 
 /// Wire-level integration tests for the Supabase-touching methods on
 /// `SocialService` and `TrainingService`. Closes priorities (3) + (4)
-/// of the docs/testing.md "What's not covered" follow-up list — both
+/// of the docs/testing/testing.md "What's not covered" follow-up list — both
 /// services previously resolved `Supabase.instance.client` inline
 /// with no DI seam, so the Supabase-touching methods (browse /
 /// fetch / RSVP / create-event / publish-template / etc.) had zero

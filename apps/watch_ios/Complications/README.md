@@ -2,7 +2,7 @@
 
 The complication source ships in this directory but the **Widget Extension target** that hosts it has to be added in Xcode by hand — `xcodebuild` can't synthesise a watchOS widget extension from a source-only diff. Without the target, `ActiveRunComplication.swift` won't build and the complication won't appear in the watch face customisation UI.
 
-This note is the one-time wiring. Once it's done, the complication ticks up in [`docs/roadmap.md` § Phase 2 → Glanceable tiles and complications](../../../docs/roadmap.md#glanceable-tiles-and-complications) and the matching cell in `docs/parity.md` flips from `✗` to `✓`.
+This note is the one-time wiring. Once it's done, the complication ticks up in [`docs/product/roadmap.md` § Phase 2 → Glanceable tiles and complications](../../../docs/product/roadmap.md#glanceable-tiles-and-complications) and the matching cell in `docs/product/parity.md` flips from `✗` to `✓`.
 
 ## What's already done in this PR
 
@@ -51,4 +51,4 @@ The complication doesn't poll on its own — every meaningful change comes from 
 
 ## Symmetry with Wear OS
 
-The Wear OS tile (`apps/watch_wear/.../tiles/ActiveRunTileService.kt`) ships the same shape: idle ↔ active, the same three numbers, the same formatting (km / min:ss/km, `formatElapsed` mirrored verbatim). When the wording or layout changes on one platform, the other follows in the same PR — see `docs/parity.md`.
+The Wear OS tile (`apps/watch_wear/.../tiles/ActiveRunTileService.kt`) ships the same shape: idle ↔ active, the same three numbers, the same formatting (km / min:ss/km, `formatElapsed` mirrored verbatim). When the wording or layout changes on one platform, the other follows in the same PR — see `docs/product/parity.md`.

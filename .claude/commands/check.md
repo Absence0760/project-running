@@ -36,8 +36,8 @@ If the diff is trivial (typo, comment, single-line dep bump, generated-file rege
 Send a single message with three Agent tool calls:
 
 - `code-reviewer` — prompt: "Review the working diff against this project's documented conventions. Output the strict format from your spec."
-- `test-gap-checker` — prompt: "Audit the working diff for missing unit + e2e test surface per docs/conventions.md § Test hygiene. Output the format from your spec."
-- `doc-hygiene-checker` — prompt: "Audit the working diff against docs/conventions.md § Docs hygiene. Output which docs need updating."
+- `test-gap-checker` — prompt: "Audit the working diff for missing unit + e2e test surface per docs/architecture/conventions.md § Test hygiene. Output the format from your spec."
+- `doc-hygiene-checker` — prompt: "Audit the working diff against docs/architecture/conventions.md § Docs hygiene. Output which docs need updating."
 
 Parallel because they're independent — all three only `git diff` + `Read` files.
 

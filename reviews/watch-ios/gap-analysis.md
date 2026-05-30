@@ -1,7 +1,7 @@
 # Review: apps/watch_ios/WatchApp/ — Phase 2 gap analysis
 
 ## Scope
-- Files reviewed: 8 Swift source files (`RunApp.swift`, `ContentView.swift`, `WorkoutManager.swift`, `LocationManager.swift`, `WatchConnectivityManager.swift`, `HealthKitManager.swift`, `RouteNavigator.swift`, `SupabaseService.swift`), plus `Info.plist`, `WatchApp.entitlements`; `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift`; `apps/mobile_ios/lib/main.dart`; `docs/roadmap.md` Phase 2 section; `apps/watch_wear/CLAUDE.md`; `reviews/data-sync-audit/watches.md`; `packages/core_models/lib/src/run_source.dart` + `run.g.dart`
+- Files reviewed: 8 Swift source files (`RunApp.swift`, `ContentView.swift`, `WorkoutManager.swift`, `LocationManager.swift`, `WatchConnectivityManager.swift`, `HealthKitManager.swift`, `RouteNavigator.swift`, `SupabaseService.swift`), plus `Info.plist`, `WatchApp.entitlements`; `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift`; `apps/mobile_ios/lib/main.dart`; `docs/product/roadmap.md` Phase 2 section; `apps/watch_wear/CLAUDE.md`; `reviews/data-sync-audit/watches.md`; `packages/core_models/lib/src/run_source.dart` + `run.g.dart`
 - Focus: feature parity with Phase 2 roadmap checkboxes and `apps/watch_wear/`, plus phone-watch integration correctness
 - Reviewer confidence: high — every file in scope read in full; cross-referenced against Dart core_models, api_client, and the prior data-sync-audit
 
@@ -126,7 +126,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
   - `locationManager.allowsBackgroundLocationUpdates = true` set in `WorkoutManager.init()`.
   - Simulator test: start a run, lock the watch face (click Digital Crown), wait 60 seconds, unlock — GPS track must have continued accumulating points.
   - `xcodebuild -project apps/watch_ios/WatchApp.xcodeproj -scheme WatchApp -destination 'platform=watchOS Simulator,name=Apple Watch Series 9' build` passes zero errors.
-  - Tick `[ ] Standalone workout session` in `docs/roadmap.md` Phase 2 once verified on device (this is a prerequisite, not the full checkbox — see H4 for checkpoint).
+  - Tick `[ ] Standalone workout session` in `docs/product/roadmap.md` Phase 2 once verified on device (this is a prerequisite, not the full checkbox — see H4 for checkpoint).
 - **Wear OS reference:** `GpsRecorder.kt` — `FusedLocationProviderClient` with `RunRecordingService` foreground service holds the Android equivalent.
 - **Size:** XS (one line + verification)
 - **Risk if applied:** None. This is a missing required call, not a behavior change to existing logic.
@@ -171,7 +171,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
   - Accepting recovery produces a `FinishedRun` with the recovered track that can be synced normally.
   - Discarding clears the checkpoint.
   - `xcodebuild` build passes.
-  - Tick `[ ] Standalone workout session` in `docs/roadmap.md` Phase 2 (this is the completing item for that checkbox once H1 is also done).
+  - Tick `[ ] Standalone workout session` in `docs/product/roadmap.md` Phase 2 (this is the completing item for that checkbox once H1 is also done).
 - **Wear OS reference:** `recording/CheckpointStore.kt`, `recording/TrackWriter.kt`.
 - **Size:** M (3–5 days)
 - **Risk if applied:** Moderate. UserDefaults writes on a background timer during recording — must use `weak self` capture and not block the main thread.
@@ -203,7 +203,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
   - When `currentPace` is set and a `targetPaceSecondsPerKm` is configured, `WKInterfaceDevice.current().play(.notification)` is called when pace exceeds the band.
   - Haptic fires at most once per 30 seconds per violation direction.
   - `xcodebuild` build passes.
-  - Tick `[ ] Haptic pace alerts` in `docs/roadmap.md` Phase 2.
+  - Tick `[ ] Haptic pace alerts` in `docs/product/roadmap.md` Phase 2.
 - **Wear OS reference:** Neither `RunWatchApp.kt` nor `RunViewModel.kt` implement haptic pace alerts — no direct port available; implement independently.
 - **Size:** S (1–2 days)
 
@@ -221,7 +221,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
   - Phone sends a route; `PreRunView` shows "Route loaded (N km)".
   - `RouteNavigator.update` correctly computes `deviationMetres` for a sample location off-route.
   - `xcodebuild` build passes.
-  - Tick `[ ] Route preview on watch face before starting` in `docs/roadmap.md`.
+  - Tick `[ ] Route preview on watch face before starting` in `docs/product/roadmap.md`.
 - **Wear OS reference:** Neither `watch_wear` nor `watch_ios` has this implemented — both are at zero.
 - **Size:** M (3–5 days — most complexity is in nearest-point-on-segment math and the phone-side push UI)
 
@@ -236,7 +236,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
   - On runs without a loaded route, the map is absent (guard on `routePoints.isEmpty`).
   - Canvas render is on main thread only; coordinate transforms are precomputed off main thread.
   - `xcodebuild` build passes.
-  - Tick `[ ] Live position on mini-map during run` in `docs/roadmap.md`.
+  - Tick `[ ] Live position on mini-map during run` in `docs/product/roadmap.md`.
 - **Wear OS reference:** Not implemented on either platform.
 - **Size:** M (3–5 days)
 
@@ -248,7 +248,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
 
 - **Why LOW:** Depends on M3 (route data on watch) and M4 has no dependency. The `RouteNavigator` skeleton is already present; once `update(currentLocation:)` is implemented in M3, this is just wiring `isOffRoute` to `WKInterfaceDevice.current().play(.failure)` and showing a "Recalculating..." label in `RunningView`.
 - **Files to touch:** `RouteNavigator.swift` — call `WKInterfaceDevice.current().play(.failure)` when transitioning from on-route to off-route (debounce to once per 30 seconds). `ContentView.swift RunningView` — add `if routeNavigator.isOffRoute { Text("Off route — recalculating") }`.
-- **Acceptance criteria:** `WKInterfaceDevice.current().play(.failure)` called on first off-route event after a 30-second cooldown. `xcodebuild` build passes. Tick `[ ] Off-route haptic + "recalculating" indicator` in `docs/roadmap.md`.
+- **Acceptance criteria:** `WKInterfaceDevice.current().play(.failure)` called on first off-route event after a 30-second cooldown. `xcodebuild` build passes. Tick `[ ] Off-route haptic + "recalculating" indicator` in `docs/product/roadmap.md`.
 - **Size:** XS (< 1 day — once M3 is done)
 
 ---
@@ -257,7 +257,7 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
 
 - **Why LOW:** Phase 2 checkbox, but WidgetKit complications require a separate Xcode target (`WatchApp Extension` or `Widget Extension`), entitlements (`com.apple.developer.widgetkit-extension`), and a `TimelineProvider` implementation. This is non-trivial plumbing with no runtime dependency on the core recording path.
 - **Files to touch:** Add a new `Complication` target to `WatchApp.xcodeproj`. Create `ComplicationProvider.swift` implementing `AppIntentTimelineProvider`. Share `WorkoutManager` state via App Groups (`group.com.runapp.watchapp`) with `UserDefaults(suiteName:)`. The complication reads pace + distance from the shared defaults, refreshed every 30 seconds during active recording.
-- **Acceptance criteria:** Complication appears in the watchOS complication picker; during an active run, pace and distance update within 30 seconds of actual values. `xcodebuild -scheme Complication` passes. Tick `[ ] watchOS complication: pace + distance` in `docs/roadmap.md`.
+- **Acceptance criteria:** Complication appears in the watchOS complication picker; during an active run, pace and distance update within 30 seconds of actual values. `xcodebuild -scheme Complication` passes. Tick `[ ] watchOS complication: pace + distance` in `docs/product/roadmap.md`.
 - **Wear OS reference:** Not implemented on Wear OS either (also unchecked in roadmap).
 - **Size:** M–L (3–10 days depending on WidgetKit familiarity)
 
@@ -280,8 +280,8 @@ The contract is coherent. The missing `activity_type` is a LOW issue already doc
 
 ## 7. Non-goals / "do not attempt"
 
-- **Rewrite in Flutter.** See `docs/decisions.md` §1. Direct access to `HKWorkoutSession`, `CLLocationManager`, and `WCSession` is the reason this is native Swift. Do not propose Flutter.
-- **Add Supabase anon key or auth credentials to the Release watch binary.** See `docs/decisions.md` §14. `SupabaseService.swift` is `#if DEBUG` only. Do not move it out of the debug guard.
+- **Rewrite in Flutter.** See `docs/architecture/decisions.md` §1. Direct access to `HKWorkoutSession`, `CLLocationManager`, and `WCSession` is the reason this is native Swift. Do not propose Flutter.
+- **Add Supabase anon key or auth credentials to the Release watch binary.** See `docs/architecture/decisions.md` §14. `SupabaseService.swift` is `#if DEBUG` only. Do not move it out of the debug guard.
 - **Add UIKit-on-watchOS.** The CLAUDE.md convention is SwiftUI-first; `WKInterfaceController` and the WatchKit ObjC layer are deprecated since watchOS 7. `WKInterfaceDevice.current().play(_:)` is an exception — it is not UIKit.
 - **Live race mode on watchOS.** This requires the Go service WebSocket endpoint (Phase 2 backend, not started). `RaceSessionClient.kt` on Wear OS is the reference. Do not start this until the Go service is deployed.
 - **Port `packages/run_recorder` to Swift.** The Dart package has lap markers, GPS filter chains, and off-route detection that the watchOS app would benefit from, but the port would be a multi-week effort and is explicitly out of scope per the watch-is-lean philosophy in the CLAUDE.md.

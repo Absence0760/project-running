@@ -10,7 +10,7 @@ import { USER_A, USER_B } from '../fixtures/users';
  * INSERT into run_kudos / run_comments / user_follows
  * (migration 20260528000001_notifications.sql) — recipient's bell
  * surfaces the unread on the next refresh-on-auth-ready (no realtime
- * subscription wired up yet, see docs/architecture.md).
+ * subscription wired up yet, see docs/architecture/architecture.md).
  *
  * Each test uses two browser contexts (one writer, one recipient) and
  * cleans up the engagement at the end so the seed state is preserved.

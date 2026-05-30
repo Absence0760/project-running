@@ -1,0 +1,446 @@
+# Conventions
+
+House rules for this codebase. Before you reach for "what's the idiomatic way to do this in Flutter / Svelte / Swift", check here — some defaults have been deliberately overridden. If you find code that violates a rule below, fix it as part of the surrounding change. If you find a rule that's wrong, edit this file and mention it in the PR.
+
+Rules are grouped by area below. (Section anchors are deep-linked from `CLAUDE.md` and the review agents, so the headings keep their exact wording.)
+
+**Code style** — [Comments](#comments) · [Naming](#naming) · [Logging](#logging)
+
+**Error handling & architecture** — [Error handling](#error-handling) · [Layered resilience](#layered-resilience) · [Pagination](#pagination--first-page--load-more) · [Dependency discipline](#dependency-discipline) · [Preemptive abstractions — don't](#preemptive-abstractions--dont) · [Backwards compatibility](#backwards-compatibility)
+
+**Bug & quality discipline** — [Fix bugs, don't code around them](#fix-bugs-dont-code-around-them) · [If you see something wrong, fix it](#if-you-see-something-wrong-fix-it)
+
+**Web UI** — [Page padding](#web-page-padding) · [Page titles & sidebar](#web-page-titles-and-sidebar-chrome) · [Material Symbols](#material-symbols-icons) · [Buttons](#web-buttons) · [Svelte 5 `$effect`](#svelte-5-effect--never-read-state-you-write-in-the-same-effect) · [Modals](#web-modals) · [List-page scroll](#web-list-pages--preserve-scroll-on-back-navigation)
+
+**Mobile & cross-platform** — [In-app notifications](#mobile-in-app-notifications--showtopbanner) · [Local-tz date strings](#local-tz-date-strings)
+
+**Testing** — [Testing](#testing) · [Test hygiene](#test-hygiene--review-then-unit-then-e2e)
+
+**Process** — [Commit & PR conventions](#commit-and-pr-conventions) · [Commit cadence](#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump) · [Docs hygiene](#docs-hygiene)
+
+**Integrations** — [Strava log keys](#strava-integration-log-keys) · [Exceptions](#exceptions)
+
+## Comments
+
+**Default is zero comments.** Write one only when the comment answers *why*, not *what*. Good reasons:
+
+- A hidden constraint or invariant that isn't visible from the types.
+- A workaround for a specific upstream bug (name it — "upstream: flutter_map#1234").
+- A surprising branch that a reader will otherwise assume is a mistake.
+- A `// generated` / `// do not edit` marker on files a script owns.
+
+Bad reasons (do not do these):
+
+- Narrating the code. `// set distance` above `distance = x`.
+- "Used by X" cross-references that rot.
+- Issue numbers / task IDs / PR links in source files — they belong in the commit message.
+- Multi-paragraph doc blocks on internal functions. If a function needs that much explanation, extract it.
+- `// TODO` without an owner and a concrete next step. A lone `// TODO: fix this` is noise.
+
+If you deleted code, do not leave a `// removed X because Y` stub behind. The commit history has that context.
+
+## Naming
+
+### Dart
+
+- Classes: `PascalCase`. Files: `snake_case.dart` (standard Dart style).
+- Private members: leading underscore. Don't mix public + private prefixed with `_`-to-mark-unused — just delete the unused thing.
+- Constants: `lowerCamelCase` for member-level (`static const defaultTimeout`), `SCREAMING_SNAKE` only for compile-time `const` at the library level if you really want the emphasis — prefer lowerCamelCase.
+- Generated column constants live on the row class: `RunRow.colStartedAt`, `RouteRow.colDistanceM`. Don't duplicate them at module level.
+- Booleans read as predicates: `isRecording`, `hasTrack`, `shouldAutoPause`. Not `recording`, `track`, `autoPause`.
+
+### TypeScript
+
+- Types / interfaces: `PascalCase`. Functions and variables: `camelCase`. Files: `kebab-case.ts` for new files unless colocating with an existing `snake_case.ts` pattern.
+- Database rows come from `database.types.ts`; use `Omit<RowType, 'field'> & { field: NarrowType }` to overlay narrow unions, never re-declare the row shape. See [schema_codegen.md](schema_codegen.md).
+- Svelte components: `PascalCase.svelte`.
+
+### Swift
+
+- Follow [Apple's API Design Guidelines](https://swift.org/documentation/api-design-guidelines/) — that's the canonical reference for the watch app.
+- `WorkoutManager`, `HealthKitManager`, `CheckpointStore` — one class per file, files named for the class.
+
+### SQL
+
+- Table names: plural, `snake_case` (`runs`, `routes`, `user_profiles`).
+- Column names: `snake_case`. Timestamp columns: `{verb}_at` (`created_at`, `started_at`, `last_sync_at`).
+- Primary keys: `id uuid primary key default gen_random_uuid()` unless the table references `auth.users(id)` directly.
+- Foreign keys: `{table}_id`, e.g. `route_id` on `runs`.
+- Migration files: `{YYYYMMDD}_{nnn}_{description}.sql`. The `nnn` is the ordinal within a day (`001`, `002`, ...).
+
+## Error handling
+
+### Where validation belongs
+
+- **System boundaries only.** User input, external API responses, file parsers, deserialisation of untrusted JSON. Validate once, then trust the types.
+- **Internal code does not defensively validate.** If a function takes a `Run run`, it trusts that `run.id` is non-empty because `Run` says so. Don't add `if (run.id.isEmpty)` checks inside internal layers — the type system is the contract.
+
+### How to fail
+
+- **Dart:** throw `Exception` / `StateError` / `ArgumentError` for truly exceptional conditions. Prefer returning `null` or a sum-type-style result for "expected miss" (e.g. `fetchRunById` returning `null` when the ID is unknown). Don't catch and swallow — if a caller can't handle it, let it propagate.
+- **TypeScript:** throw `Error` or a subclass at the boundary; return `null` / `{ ok: false, error }` shapes for expected failures within the app. Don't `catch (e) { console.log(e) }` and continue — either handle it meaningfully or let it propagate.
+- **Swift:** use `throws` + `Result` at API boundaries; `do/catch` only at the outermost view or service layer. `try?` is acceptable for best-effort reads where `nil` is a valid outcome.
+
+### What not to catch
+
+- `StateError` / `TypeError` / precondition failures — these are bugs. Let them crash in debug, let crash reporting catch them in release.
+- Every possible exception. A blanket `try { ... } catch (_) {}` is a bug in waiting.
+
+### Isolate auxiliary effects
+
+An **auxiliary effect** is anything non-essential to the core stats/state that can still throw: TTS announcements, network pings (race feed, analytics), platform channels (lock-screen notification, BLE), third-party sensor streams, route math against user-imported data. When multiple of these live in the same handler (`_onSnapshot` is the canonical example), they must not cascade into each other or into the core state update.
+
+Rules:
+
+- **Core state first, unconditionally.** The `setState` / state mutation that drives the visible numbers (elapsed, distance, pace) runs before any auxiliary block, with no try/catch around it. It's trusted — if it throws, that's a real bug and we want the crash.
+- **Each auxiliary effect in its own try/catch.** One per logical block. On catch, `debugPrint` and move on — never silently swallow to a lower level (no `catch (_) {}`), never re-throw from an auxiliary block into the core.
+- **Never widen to a single outer try/catch.** `try { setState(...); ping(); tts(); ... } catch (_) {}` hides which effect failed and lets a late effect cancel an earlier one's commit.
+- **Label the layer in a comment** when the intent isn't obvious (`// L4 — race ping`) so a later reader knows why the block is walled off.
+
+The run recorder is the reference — see `_onSnapshot` in `apps/mobile_android/lib/screens/run_screen.dart` and the L0–L4 table in [run_recording.md § Hardening § Layering](../features/run_recording.md#layering).
+
+## Layered resilience
+
+Design so a failure at a higher layer **cannot** break a lower one. "Basics always work" is a product contract, not a nice-to-have.
+
+The rule when adding any feature that touches a mature flow (recording, sync, auth, etc.):
+
+1. **Identify the layer.** What does your feature depend on? Stopwatch (L0), sensors (L1), network (L2), third-party widgets (L3), side-effects (L4). Put it at the highest layer that needs it — don't wire a new visual into the state that drives the clock.
+2. **Degrade, don't fail.** If the dependency is unavailable (GPS off, network dead, tile layer crashed), the layers below must still work. Provide a fallback (pedometer distance when GPS is absent, cached tiles when offline, typed errors that leave the recorder usable). Silent stalls and white screens are bugs.
+3. **Wrap risky subtrees.** User-facing surfaces that depend on complex third-party widgets (`flutter_map` is the prime example) need a release-mode `ErrorWidget.builder` override so a subtree crash replaces *only* that subtree, not the entire screen. Debug keeps the default red screen.
+
+The canonical write-up with the L0–L4 table and failure modes is [run_recording.md § Hardening § Layering](../features/run_recording.md#layering). Read it before touching the recording stack; copy the pattern when building the next "basics must always work" surface (e.g. sync, auth, navigation).
+
+## Logging
+
+No framework consensus yet — use the platform default:
+
+- Dart: `debugPrint` (or `print` in tests). Do not introduce a logging package without discussion.
+- TypeScript / SvelteKit: `console.log` / `console.warn` / `console.error`. Same rule.
+- Swift: `print` or `os.Logger` — `os.Logger` preferred for anything that will ship to device.
+
+If you're tempted to add structured logging / a log collector / log levels, stop — bring it to the user first. The app is not at the scale where that pays off.
+
+## Testing
+
+See [testing.md](../testing/testing.md) for the full reference — patterns, fixtures, what's covered, what's deliberately not covered. Short version for conventions:
+
+- **Pure functions first.** If logic can be extracted into a module-level function that takes primitives and returns primitives, do that and test it directly. `run_stats_test.dart` is the model.
+- **Dependency injection for filesystem / permissions / sensors.** `LocalRunStore` takes a `Directory` so tests can pass `Directory.systemTemp.createTempSync()`. Follow the same pattern for anything touching the platform.
+- **`@visibleForTesting` is the escape hatch.** If a test needs to poke at a private, mark the member `@visibleForTesting` and use it in tests. Don't make things public just to test them.
+- **No mocks for things we own.** Build a fake that implements the interface you need. Mock libraries (`mocktail`, `mockito`) are acceptable for third-party boundaries only.
+- **No database mocks.** Integration tests that touch Supabase should hit a real local instance (`supabase start`), not a mock client. Drift between a mock and the real schema is the bug we're trying to catch.
+- **SECURITY DEFINER + `vault.*` paths get inline DO-block assertions in `seed.sql`.** Edge Function CI doesn't deploy and exercise functions end-to-end, so contract tests for `check_rate_limit`, `get_integration_tokens` etc. live in `apps/backend/supabase/seed.sql` as `do $$ ... raise exception ... end $$` blocks. They run on every `supabase db reset` (locally) but not on production migrations — exactly the semantics we want for tests. Use `set_config('request.jwt.claim.role', ...)` / `request.jwt.claim.sub` to simulate auth contexts; clean up any test rows at the end of the block so the seed leaves no residue. See the trailing "Regression tests" section of `seed.sql` for the canonical shape.
+
+## Pagination — first page + Load more
+
+**Default to a bounded first page on any list that talks to the network or scans an unbounded store.** The shape we follow across web, mobile, and watch:
+
+- **Page size: 20.** Concrete enough to render fast on the slowest device, big enough that most users never tap Load more. Don't twiddle the value per screen — consistency across surfaces is more valuable than micro-tuning.
+- **Cursor over offset.** A row id or `started_at`/`created_at` value is stable against concurrent inserts and deletes; offset shifts a row out from under the user. The `before:` parameter on `ApiClient.getRuns` and the `(startedAt, id)` cursor on `fetchFollowingFeed` are the canonical shapes.
+- **`hasMore = lastPage.length == pageSize`.** That's the "out of pages" signal — no separate count query.
+- **A visible "Load more" footer**, not infinite scroll. Infinite scroll loses scroll position on back-navigation and surprises users on cellular. Reference implementations: `apps/web/src/routes/runs/+page.svelte`, `apps/web/src/routes/feed/+page.svelte`, `apps/mobile_android/lib/screens/runs_screen.dart` (helper: `shouldShowRunsLoadMore`), `apps/mobile_android/lib/screens/feed_screen.dart`.
+- **Reset paging on filter/sort change.** If the user narrows the view, drop back to page 1 — don't carry the previous depth. The pure helper for the visibility decision should take primitives so the boundary cases are unit-testable without mounting the screen.
+- **Two layers when the client has a local store.** The visible window caps how many cached rows render even when the store has more (`_visibleCount` on the runs screen); a separate `_remoteHasMore` flag drives the cloud cursor. Tap Load more → reveal local first, fetch from cloud only when the local cache is exhausted.
+- **Suppress the cloud branch when the active filter has already capped the searchable window.** The cloud cursor walks strictly older than the oldest local row, so when a date-range filter (`today` / `week` / `month` / `year`) has a `from` that the oldest local row already predates, no cloud page can match — hide the button. Reference: `shouldShowRunsLoadMore` in `apps/mobile_android/lib/screens/runs_screen.dart` takes a `filterCutoff` + `oldestLocalStartedAt` for exactly this case. Web's `/runs` sidesteps the issue by switching to full-fetch mode whenever `dateRange !== 'all'` — same outcome, different trade-off.
+
+Don't paginate when the bound is intrinsic and small (members of a club ≤ a few dozen, segments on a route ≤ tens, comments on a single run ≤ a handful). When in doubt, paginate — the cost of an unused Load-more button is zero, the cost of a 200-row first paint on a flaky cellular link is a frame drop and a power spike.
+
+## Dependency discipline
+
+- Don't add a dependency to solve a one-function problem. Write the function.
+- Don't add a dependency without checking that it's maintained. "Last updated 3 years ago" is a red flag; "no tests" is a red flag; "single maintainer on a personal account" is a red flag. Combine them and it's a veto.
+- `melos bootstrap` / `npm install` at the workspace root after changing `pubspec.yaml` / `package.json`. Commit the lockfile updates.
+
+### GitHub Actions: pin to commit SHAs, not tags
+
+Every `uses:` line in `.github/workflows/*.yml` pins the action to a 40-character commit SHA, with a trailing `# vN` comment for human readability:
+
+```yaml
+- uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+```
+
+Tag-based refs (`@v4`, `@main`) are mutable — the publisher can force-push a malicious version under the same tag and every workflow that uses it pulls the malicious code on the next run. SHAs are immutable. This applies to ALL workflows, not just secret-touching ones, because `actions/checkout@<sha>` runs with `GITHUB_TOKEN` and a malicious checkout step can read repo contents + write commits.
+
+When upgrading an action: resolve the new SHA via
+
+```bash
+git ls-remote https://github.com/<owner>/<repo>.git refs/tags/v5
+```
+
+and update both the SHA and the `# vN` comment together. Don't update one without the other.
+
+## Fix bugs, don't code around them
+
+When a test fails or a behaviour is wrong, fix the **root cause** in the code under test. Don't:
+
+- Soften an assertion to make the failing test pass while the bug stays in place ("the badge stays at `connecting` forever" → "assert the badge isn't `live`" leaves the user stuck on a confusing UI).
+- Catch an exception only to swallow it so a flaky path stops surfacing — find why the path is flaky.
+- Add a special case in a caller that mirrors a missing branch in the callee — fix the callee.
+- Inline-comment "TODO: real fix later" and ship — either fix it now or open a roadmap entry naming the symptom + the deadline.
+
+The opposite is also a rule: don't *over-fix*. A bug fix touches the bug; the surrounding cleanup belongs in a separate change ([preemptive abstractions — don't](#preemptive-abstractions--dont)).
+
+How to spot the "coded around" pattern in review:
+
+- A test was added with a negative assertion (`not.toContainText`, `not.toHaveClass`) where a positive one would say more. Negatives usually pin the *absence* of a leak; if the right user-facing outcome has a positive name (e.g. "shows a not-broadcasting state"), the test should pin that.
+- A test was rewritten with broader matchers (`/connecting|demo|loading|.*/i`) to absorb the bug's ambiguous output.
+- A comment explains why the workaround is OK; if the explanation is "the page sits at X forever, so we just check Y", the page should not sit at X forever.
+
+The `code-reviewer` agent (via `/safe-edit`) actively flags this pattern; the [coverage_snapshot.md](../testing/coverage_snapshot.md) gets bumped only when the underlying behaviour is correct, not when the test was rewritten to tolerate it.
+
+### Never adjust the test to hide an app bug
+
+A specific tightening of the rule above: when a test fails, the only acceptable resolution paths are
+
+1. **The test itself is broken** — wrong fixture (a column name, a missing required field, a unique-constraint collision with seed data), a typo, or a race in the test setup. Fix the test.
+2. **The app has a real bug or missing primitive.** Fix the app code. If the app needs a new affordance for the test to be able to wait deterministically (e.g. a `data-realtime-ready` attribute backed by a real readiness signal), add it in the app code — that affordance is a real API, not test scaffolding.
+
+There is no third option. These count as "papering over with the test" and are forbidden:
+
+- Bumping a Playwright `expect`/`toBeVisible` timeout to absorb a flake (`5_000` → `15_000` → `30_000`). The right fix is whatever's making the page take that long.
+- Adding `await page.waitForTimeout(N)` between two actions. The right fix is to wait on a real readiness signal (DOM node, state attribute, network response).
+- Bumping `--retries` (or relying on Playwright's `retries: 1` to mask a real flake) instead of finding the race.
+- `test.skip(…)` / `test.fixme(…)` / `test.fail(…)` against a real bug without an open follow-up that names what's broken and when it'll be fixed.
+- Loosening a strict assertion (`toHaveText('Race armed')` → `toContainText(/arm|connect|ready/i)`) to "absorb variance" — the variance IS the bug.
+- Replacing a network-level wait with a sleep "because the real signal is unreliable" — the real signal needs fixing.
+
+When you spot a candidate fix that fits one of those patterns, stop and surface the underlying issue. If you cannot fix the app issue in the same session, raise it explicitly — don't half-mask it via the test.
+
+## If you see something wrong, fix it
+
+A sibling rule to the one above. When you're working in a file and notice something **that doesn't look right, doesn't act correctly, or isn't optimal**, fix it in the same session. Don't walk past it on the grounds of "out of scope" — by the time anyone else looks, the broken thing will still be broken AND your touch in the file's git blame will look like a tacit endorsement.
+
+In scope to fix while you're there:
+
+- **Correctness**: a function with an off-by-one, a Boolean inverted, a comparison that's `>` when it should be `>=`.
+- **UX / behaviour**: a page that hangs on a state with no clear exit, a button that looks enabled when it's not, an error path that leaves the user nowhere to go.
+- **Performance footguns**: a hot-path render that calls `setState` from a per-second callback (see `apps/mobile_android/lib/screens/run_screen.dart` architecture guards), a Postgres query that's missing an obvious index it should have, an N+1 in a list page.
+- **Comments + names that lie**: a `// TODO: deprecated, remove` from 18 months ago that's still in use; a `userId` variable that's actually an `auth.users.id` while the codebase otherwise uses `auth.uid`; a comment whose described behaviour no longer matches the code below it.
+- **Documented invariants that the code is silently violating**: a missing privacy-zone clip on a non-owner view (`decisions.md §33`), an unqualified `is_run_visible_to(...)` call after the function moved to `private` schema (this session's `d39296f`), an Edge Function with no JWT check (`audit/edge-functions`).
+- **Test holes adjacent to the change**: if you're touching a function with no test and the test is one-line obvious, write it.
+
+Out of scope — leave it:
+
+- **Pure style preferences**: a different naming taste, a refactor that re-organises folders, an "I'd write this with a switch instead of an if-chain". Those go in a separate PR if at all (see [Preemptive abstractions — don't](#preemptive-abstractions--dont)).
+- **Working code you simply don't recognise**: read it before you decide it's wrong. The byte-identical-twin convention and the layered-resilience contract look unusual until you've absorbed the why.
+- **Things the user told you to skip explicitly.** Their call.
+
+The 30-second test for whether to fix in-scope: ask yourself "if a reviewer flagged this, would I agree it's a bug / mis-pattern?" If yes, fix it. If "it's a style thing", leave it.
+
+If the fix is genuinely too big for the current change, write a precise roadmap entry naming the symptom + a deadline + the file path. Don't leave inline `TODO:` markers without one.
+
+The `code-reviewer` agent applies the same lens during `/safe-edit` review: it surfaces "the diff is fine but I noticed X in the surrounding file" as a Low-severity finding, never higher, because forced-fix scope creep is its own problem.
+
+## Preemptive abstractions — don't
+
+Three similar lines is better than a premature helper. A "generic" wrapper written when only one caller exists is worse than the caller's own inline code. Extract when the third caller arrives, not before.
+
+Specifically:
+
+- Don't write a `BaseScreen<T>` until there are three screens that genuinely share the same lifecycle.
+- Don't write a `Store<T>` abstraction when `LocalRunStore` and `LocalRouteStore` are the only two stores in the codebase.
+- Don't build a plugin system for importers when `health_connect_importer.dart` and `strava_importer.dart` are the only two and they share ~zero code.
+- Don't refactor in a bug-fix PR. Split the refactor into its own change.
+
+## Backwards compatibility
+
+This is a pre-launch codebase with no shipped users. Backwards-compatibility shims are almost never warranted:
+
+- Don't keep a dead enum case "in case someone relies on it".
+- Don't rename a field and re-export the old name.
+- Don't leave a deprecated function alongside the new one with a `@deprecated` annotation unless the switchover is genuinely multi-PR.
+- Just change the code, run the build, fix the compile errors.
+
+When you genuinely need a migration (e.g. on-disk data format changing), write the migration, not a permanent dual-read path.
+
+## Web page padding
+
+Every top-level web page wraps its content in a `.page` div with `padding: var(--space-xl) var(--space-2xl)` (2rem vertical, 3rem horizontal) and is **left-aligned** — do not add `margin: 0 auto`. The constant `var(--space-2xl)` left gutter is the gap between the sidebar and the content; centering with `margin: 0 auto` makes that gap balloon on wide screens whenever the page sets a small `max-width`, and makes navigating between pages feel like the content is jumping around. List and detail pages **do not set `max-width`** — they fill the available width so card grids, week strips, and run lists use the full screen instead of stranding empty space on the right. Focused single-form pages may still cap narrow (40–48rem) and tabbed settings panes cap at 64rem so labelled rows don't stretch awkwardly; everything else stays uncapped. Keep the horizontal padding fixed and don't centre. Public layouts without the sidebar (`/`, `/login`, `/share/...`, `/clubs/join/[token]`, `/live/...`) are exempt because they don't share the chrome and centring is the right call there.
+
+## Web page titles and sidebar chrome
+
+Top-level sidebar-routed pages (`/dashboard`, `/runs`, `/routes`, `/explore`, `/clubs`, `/settings/*`) **don't carry an `<h1>` page-name title** — the sidebar nav already shows the active section, so a heading that reads "Dashboard" / "Runs" / etc. is redundant chrome. Action buttons and explanatory subtitles stay; the redundant heading goes. Detail pages (`/runs/[id]`, `/routes/[id]`, `/plans/[id]`) keep their `<h1>` because that heading is the *content* title (the run's name, the route's name) — not a page label. `/plans` is reachable only from the dashboard (Manage plans link) since most users keep one active plan and the dashboard is the daily-driver entry point.
+
+Sidebar palette is theme-aware via CSS variables in `app.css`: `--gradient-sidebar`, `--sidebar-text`, `--sidebar-text-muted`, `--sidebar-hover-bg`, `--sidebar-active-bg`, `--sidebar-active-text`, `--sidebar-border`, `--sidebar-logo`. Don't hardcode sidebar colours in `+layout.svelte` — flip the variable in the `:root` (light) or `:root[data-theme="dark"]` block instead. The light/dark sidebar gradients differ; the rest of the variables are derived from the same `--color-*` palette so most adjustments only need a one-line change.
+
+The sidebar is collapsible — there's a `menu` / `menu_open` icon button in `.sidebar-head` that toggles between full width (`var(--sidebar-width)`, ~15rem) and an icon-only rail (`var(--sidebar-collapsed-width)`, ~4.5rem). State persists in `localStorage` under the key `sidebar_collapsed` (`'1'` / `'0'`). When collapsed, `.nav-label` and `.user-details` are hidden via `visibility: hidden; width: 0`; the logo is `display: none` so the menu button stands alone on the rail. Don't add features that assume the sidebar is always expanded — width-sensitive content lives in `.main-content`, which has its own `margin-left` transition.
+
+## Material Symbols icons
+
+The web app loads Material Symbols Outlined as a webfont and renders icons via **font ligatures** — `<span class="material-symbols">close</span>`, `<span class="material-symbols">menu_open</span>`, etc. Ligatures only form when the icon name is the only text node inside the span, **with no surrounding whitespace**. That means `<span class="material-symbols">{cond ? 'menu' : 'menu_open'}</span>` works, but breaking the expression onto its own line — leaving newlines and indentation between the tags — makes the browser render the literal text `"menu_open"`. Keep dynamic icon names on the same line as their tags.
+
+## Mobile in-app notifications — `showTopBanner`
+
+On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical transient notification primitive is `showTopBanner(context, message, ...)` from `lib/widgets/top_banner.dart`. It renders a top-anchored pill via `Overlay`, auto-positions below an `AppBar` when one is present, and coalesces to a single banner at a time.
+
+**Don't call `ScaffoldMessenger.of(context).showSnackBar(...)` inside `lib/screens/` or `lib/widgets/`.** Material's floating SnackBar docks at the bottom of the screen, where it overlapped the Pause / Stop / Lap controls on the recording surface — a runner couldn't reach Stop without dismissing a snack first. Top-anchored eliminates that overlap on every screen and gives notifications a consistent shape app-wide. Two architecture-guard tests in `apps/mobile_android/test/architecture_guards_test.dart` (mirrored on iOS) fail any new `showSnackBar` or `ScaffoldMessenger.of(context)` use under those folders.
+
+If the notification has an action (e.g. "Settings" on the GPS-unavailable banner), pass `actionLabel:` + `onAction:`. Tapping the action runs the callback and dismisses the banner.
+
+## Local-tz date strings
+
+Don't use `new Date().toISOString().slice(0, 10)` to derive a "yyyy-mm-dd today" or "yyyy-mm-dd of week start" string. `toISOString()` formats in UTC, so in any positive-offset timezone it rolls the date back a day before midnight local — week boundaries snap to the wrong Monday and prev/next navigation jumps two periods at once. Use `formatISO(d)` (or `todayISO()`) from `apps/web/src/lib/training.ts` — both build the string from `getFullYear` / `getMonth` / `getDate`, which stay in local time. The same rule applies to Dart on the mobile side: call `DateTime.local()` and format the components yourself, don't go via UTC.
+
+## Web buttons
+
+Canonical button styles live in `apps/web/src/app.css` under the comma-separated `.btn, .btn-primary, .btn-secondary, .btn-outline, .btn-danger` selector, plus the `.btn-sm` size modifier. Every variant works standalone (e.g. `class="btn-primary"`) or with an explicit base (`class="btn btn-primary"`) — they pick up the same padding, font size, radius, and transition.
+
+**Don't redefine these classes in a page or component.** Local copies drift over time and the buttons stop matching across pages — exactly the problem the centralisation solved. If you need a one-off variant, give it a page-specific name (`.btn-google`, `.btn-save`, `.btn-ghost`, `.btn-connect`, ...) and let it extend the canonical class via the markup (`class="btn btn-primary btn-save"`). Avoid overriding the `padding` or `font-size` of the canonical classes — that's how drift starts.
+
+The `/settings/upgrade`, `/login`, and `/` (landing) surfaces deliberately ship larger marketing-CTA buttons; those override the canonical sizes via Svelte-scoped local rules and are documented exceptions, not the pattern.
+
+## Svelte 5 `$effect` — never read state you write in the same effect
+
+A `$effect` that both reads AND writes the same `$state` rune builds a self-trigger loop: the write changes the value, the effect's dep set marks it dirty, the effect re-runs, the write resets it. When the effect is a "reset on prop change" body (`if (open) { foo = parseInitial(); ...; const anchor = foo ?? today; ... }`), the read inside `?? today` adds `foo` to the dep set; any later code path that writes `foo` (e.g. a click handler) re-triggers the reset, silently erasing the user's input.
+
+Two fixes — pick by intent:
+
+- The body should run **only when the trigger prop changes**: `$effect(() => { if (!open) return; untrack(() => { ... }); })`. The reset reads (`foo ?? today`) are wrapped in `untrack` so they don't register as deps. `open` remains the sole signal.
+- The body should run **whenever any of its inputs change**: leave the deps as-is, but don't write back to a value the body reads — store the derived result in a separate `$state` or `$derived` so the cycle can't close.
+
+Reproduced concretely on `DateRangePicker.svelte` — a cell click set `pendingFrom`, the open-time `$effect` re-fired because it read `pendingFrom ?? today`, the reset wrote `pendingFrom = null`, and the chip never updated. The diagnostic giveaway: handler runs (verifiable with a `console.log`), state updates to the new value (also visible in the log), but the template re-renders to the prop-reset value.
+
+## Web modals
+
+Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.modal`, `.modal-header`, `.modal-close`, `.modal-body`, plus `.modal-wide` for the form-with-side-panel case and `.modal-narrow` for confirmation-style dialogs). Every dialog in the app uses this shape: a horizontally-centered card **anchored to a fixed top offset** (`top: 4rem`, `transform: translateX(-50%)`), on a 50%-opacity backdrop, with a header bar that holds the title + an `×` close button, and a scrollable body. The top-anchor is deliberate — vertically centring the card pinned its midpoint, so any content-height change inside (tab switch, list grow / shrink, autocomplete suggestions appearing) made the entire card visibly shift up or down. Anchoring the top edge keeps the header still while the body grows downward into the available `max-height: calc(100vh - 6rem)`. Side-drawer / right-rail variants are not the convention — when you find one (`apps/web/src/lib/components/WorkoutEditor.svelte` was the last holdout), convert it.
+
+**Markup contract:**
+
+```svelte
+{#if show}
+  <div class="modal-backdrop" onclick={close} role="presentation"></div>
+  <div class="modal" role="dialog" aria-modal="true" aria-label="...">
+    <header class="modal-header">
+      <h2>Title</h2>
+      <button class="modal-close" type="button" aria-label="Close" onclick={close}>
+        <span class="material-symbols">close</span>
+      </button>
+    </header>
+    <div class="modal-body">
+      …form / content / actions row at the bottom…
+    </div>
+  </div>
+{/if}
+```
+
+**Don't redefine `.modal*` classes in a page or component.** Pages that *host* the modal (e.g. `/clubs`, `/plans`, `/runs`, `/clubs/[slug]`, `/dashboard` for goals, `/settings/devices` for overrides) provide local CSS *only* for body-level layout (e.g. `.goal-editor-body { display: grid; gap: 0.9rem }`) — never the backdrop, card, header, or close button. Components that own their own modal (`WorkoutEditor`, `ImportRoute`, `ConfirmDialog`) follow the same rule.
+
+`ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
+
+## Web list pages — preserve scroll on back-navigation
+
+Any list page that links into a detail page (`/runs`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
+
+The shape is:
+
+```ts
+import type { Snapshot } from './$types';
+
+export const snapshot: Snapshot<{ /* the loaded list + any tab/filter not in localStorage */ }> = {
+  capture: () => ({ items, tab }),
+  restore: (s) => {
+    items = s.items;
+    tab = s.tab;
+    loading = false;     // skip the loading flash — we already have data
+  },
+};
+```
+
+Then guard the initial fetch in `onMount` so a restored list isn't immediately clobbered by a re-fetch:
+
+```ts
+onMount(() => {
+  if (items.length === 0) load();
+});
+```
+
+Capture the heaviest stateful arrays (the items list, pagination cursors), not derived values — derived state recomputes from restored inputs. Filters that already live in `localStorage` don't need to be in the snapshot.
+
+## Commit and PR conventions
+
+- Branch: `main` is the working branch. PRs to `main` are still the path for anything that needs review; direct commits to `main` are fine when the user has asked for a sequence of work and wants each piece individually landable.
+- Commits use conventional commit prefixes — `feat:`, `fix:`, `refactor:`, `docs:`, `chore:`, `build:`, `test:`, `ci:`. Scope optional: `feat(web): ...`, `fix(backend): ...`, `chore(android): ...`.
+- Commit message body: one short sentence focused on the *why*, not the *what* — the diff already says what.
+- No AI attribution of any kind. No `Co-Authored-By: Claude ...`, no "Generated with Claude Code" footer, no robot/sparkle emoji trailer. Re-read the message before `git commit` and strip these if a skill template tried to add them.
+- PR title: same format, short (< 70 chars). Body: 1–3 bullet summary + a test-plan checklist (the `pull-request` skill has the template).
+- Keep PRs focused. Unrelated cleanup → separate PR.
+- Don't amend published commits. Don't force-push without being asked. Hooks are there for a reason; don't `--no-verify`.
+- Never `git push` without being asked. The local commit is the deliverable; pushing is a separate ask.
+
+## Commit cadence — one piece, one commit (don't batch a session into one lump)
+
+Once the user has asked for work, commit **after each discrete piece** as you go. Don't accumulate ten changes across a session and stage them all into one mega-commit at the end. The user wants each piece individually reviewable, bisectable, and revertable; a 1000-line lump-commit defeats `git bisect` for the next regression hunt.
+
+**What counts as a discrete piece (one commit each):**
+
+- A new module + its unit tests — one commit.
+- A refactor of an existing module + the adjusted tests — separate commit from the new feature that motivated it.
+- A bug fix + the test pinning it — one commit, separate from any surrounding feature work.
+- A docs sweep (ADR + per-feature doc + per-app CLAUDE.md edits documenting the same code commit) — one commit, after the code commit it documents.
+- Wiring an existing helper into a new call site — separate commit from the helper itself.
+- An e2e test file added retroactively for an existing feature — its own commit.
+
+**Self-check:** if you catch yourself thinking "I'll commit at the end after I verify everything passes" — stop. Commit each piece as you go. The final verification is its own piece (or zero-changes, in which case just report green).
+
+**Authorization scope.** "Commit after each piece" is in tension with the older "never commit without being asked" rule. The reconciliation: once the user has asked for a piece of work (or a sequence — "do the punch list", "ship the cache module"), the per-piece-commit cadence is implicitly authorized. The "without being asked" rule still guards against proactively committing speculative work the user didn't ask for, ad-hoc workstation tweaks (port changes, dev-only env), or work that got partially aborted.
+
+Pairs with the "Test hygiene" section below — tests for a piece go in the **same commit** as the piece itself, not a follow-up commit.
+
+## Docs hygiene
+
+Every change that affects documented behaviour updates the docs **in the same turn as the code change**. See the root [`CLAUDE.md`](../../CLAUDE.md) § "Docs hygiene" for the full rule and checklist. Shortest version: if a doc describes the old behaviour, it is wrong the moment you change the code — fix it now, not later.
+
+## Test hygiene — review, then unit, then e2e
+
+Every non-trivial dev change goes through three gates before it's "done." Skipping any of them is allowed only when the change is trivial (typo, comment, single-property style change, dependency-version bump without behaviour change).
+
+1. **Review** — does the change make sense against the project's invariants? Use the `code-reviewer` agent or `/safe-edit` for security-sensitive / migration / recording-stack / parity-helper changes. For everyday work the in-session reviewer pass + `/check` is enough.
+2. **Unit tests** — pure logic, codecs, helpers, value classes, validation guards. The patterns are in [testing.md](../testing/testing.md). A change that adds or modifies a pure function should land with the test in the same diff. Bug fixes should land with a regression test that fails without the fix. **No mocks for things we own** still applies.
+3. **End-to-end tests — web and backend only.**
+   - **Web:** Playwright spec in [`apps/web/tests-e2e/`](../../apps/web/tests-e2e). Smoke + security + data-flow split. Sign-in / cross-user isolation / privacy clipping / CRUD round-trips are the load-bearing categories. Don't add an e2e test for a pure helper — that belongs as a unit test.
+   - **Backend:** pgtap in [`apps/backend/supabase/tests/`](../../apps/backend/supabase/tests) for RLS / SECURITY DEFINER / trigger / view contracts; Deno tests next to the Edge Function for security-critical helpers (HMAC, replay window, identity validation, tier transition). Inline DO-blocks in `seed.sql` are fine for SECURITY DEFINER + `vault.*` paths that need the same `request.jwt.claim.*` simulation.
+   - **Mobile / watch:** **no e2e equivalent** — Flutter `integration_test` is too slow + flaky on CI and the existing widget tests + cross-platform fixture tests already cover the high-blast paths. The honest discussion is in [testing.md § What's not covered](../testing/testing.md#whats-not-covered-honest).
+
+Use the `/check` command to run review + test-gap-checker + doc-hygiene-checker in parallel against the working diff. It reports gaps; the human decides what to apply. The `test-gap-checker` agent walks the diff, classifies each modified file, and flags missing test surface — it doesn't write tests, it just makes the gap visible.
+
+When a Playwright / pgtap test surfaces a real bug in the app code, fix the bug **first** (separate commit from the test), then make sure the test exists to catch regressions. The order matters: test-without-fix fails CI; fix-without-test means the next regression slips through silently.
+
+**The same-commit rule.** Tests for a piece of work go in the **same commit** as the piece — not a follow-up commit, not "I'll add tests next session." A bug fix lands with the pinning test in the same commit (the test is the bug's headstone — without it, the next regression slips through silently). A new module lands with its unit tests in the same commit. A new web route lands with at least one Playwright e2e in the same commit.
+
+**When a test genuinely isn't viable** (pure docs, runbook updates, infra blocked on credentials, orchestration code that pulls in SvelteKit virtual imports / Supabase / native plugins and would need heavyweight DI to unit-test), say so explicitly in the commit message — `no unit test viable; e2e covers it` is fine, silence isn't. Future you (and future code-reviewer agents) will read the message and either accept the trade-off or argue with it; either way the reasoning is recorded.
+
+## Strava integration log keys
+
+Strava is the only third-party integration whose state changes hit
+both the EF stack (`apps/backend/supabase/functions/strava-*`) and
+the Go service stack (`apps/job_worker/internal/handler_strava_*`,
+`stravahook/`). Cross-stack queries for "all Strava errors in the
+last hour" require a stable key vocabulary — otherwise a CloudWatch
+or Sentry filter has to or-of-aliases (`activity_id|activityId|...`),
+fragile and silently breaks the moment someone adds another spelling.
+
+Use these keys verbatim in every Strava log line and Sentry tag:
+
+| Key | Type | Notes |
+|---|---|---|
+| `strava.activity_id` | int64 | Strava's numeric activity id. Never `activityId`. |
+| `strava.owner_id` | int64 | Strava's athlete id. Never `ownerId`. |
+| `strava.status_code` | int | HTTP status from the Strava call. |
+| `strava.error_class` | enum | One of `auth`, `rate_limit`, `transient`, `permanent`, `parse`. |
+| `strava.endpoint` | string | `oauth_token`, `oauth_deauthorize`, `activities`, `streams`, `webhook`. |
+| `alert` | string | Tag for Sentry alerts: `strava_ingest_failure`, `strava_refresh_failure`, etc. |
+
+Don't log raw access / refresh tokens or vault secret labels — they
+embed the user UUID. The EFs that hit `vault.update_secret` strip
+the `integration_<provider>_<uuid>_<suffix>` pattern before logging.
+
+/audit/strava May 2026 Medium #8.
+
+## Exceptions
+
+Every rule here has escape hatches for the cases where it genuinely doesn't fit. If you're about to violate one of these rules:
+
+1. Confirm the escape is justified (not just "easier").
+2. Leave a one-line comment at the violation site explaining why (this is one of the few cases where a comment is the right answer).
+3. If the escape is a recurring pattern, either generalise the rule here or add a new subsection.

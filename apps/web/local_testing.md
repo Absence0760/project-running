@@ -1,6 +1,6 @@
 # Local testing — Web app (SvelteKit)
 
-The web app is a SvelteKit 2 + Svelte 5 project at `apps/web/`. The canonical package manager is **npm** via the root workspace ([decisions.md § 7](../../docs/decisions.md)) — that's what CI runs. The historical `apps/web/pnpm-lock.yaml` lets `pnpm` work locally too; either is fine, just don't mix in the same checkout.
+The web app is a SvelteKit 2 + Svelte 5 project at `apps/web/`. The canonical package manager is **npm** via the root workspace ([decisions.md § 7](../../docs/architecture/decisions.md)) — that's what CI runs. The historical `apps/web/pnpm-lock.yaml` lets `pnpm` work locally too; either is fine, just don't mix in the same checkout.
 
 ---
 

@@ -2,7 +2,7 @@
 description: Audit the AWS Terraform stacks under infra/ — IAM least-privilege, encryption, drift hygiene, cost + DR guardrails
 ---
 
-Audit the Terraform stacks at `infra/` against the AWS-hosting plan ([decisions.md § 53](../../../docs/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)).
+Audit the Terraform stacks at `infra/` against the AWS-hosting plan ([decisions.md § 53](../../../docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)).
 
 ## Goal
 
@@ -101,7 +101,7 @@ For each finding: file:line + the concrete change to make. Don't apply fixes wit
 - `infra/github-oidc/main.tf` — OIDC + deploy roles (this file has the highest blast-radius surface)
 - `infra/envs/{prod,preview}/main.tf` — root-module wiring
 - `apps/web/deployment.md` — what the architecture is supposed to look like; finding deltas against that doc IS a finding
-- `docs/decisions.md § 53` — the rationale + the architecture diagram pinned by this stack
+- `docs/architecture/decisions.md § 53` — the rationale + the architecture diagram pinned by this stack
 
 ## Delegate to
 

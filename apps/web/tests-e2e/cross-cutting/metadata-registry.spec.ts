@@ -7,18 +7,18 @@ import { readFileSync } from 'node:fs';
  * `metadata_registry_test.dart` (apps/mobile_android/test/).
  *
  * `runs.metadata` is a jsonb bag with no schema. The registry in
- * `docs/metadata.md` is the only thing keeping cross-platform writers
+ * `docs/backend/metadata.md` is the only thing keeping cross-platform writers
  * and readers in sync — when web writes a key the mobile reader
  * doesn't know about (or vice versa), data silently disappears at
  * the platform boundary.
  *
  * This test greps web TS / Svelte sources for every `metadata.X` /
  * `metadata['X']` / `metadata?.X` access and asserts each key is
- * documented in `docs/metadata.md`. Mirrors the mobile test so a key
+ * documented in `docs/backend/metadata.md`. Mirrors the mobile test so a key
  * added on either side without a doc update fails CI on both.
  */
 
-const DOCS_PATH = '../../docs/metadata.md';
+const DOCS_PATH = '../../docs/backend/metadata.md';
 
 // Keys we deliberately don't enforce — false positives from grep.
 // Matches the mobile test's allow-list shape.
@@ -56,7 +56,7 @@ function documentedKeys(): Set<string> {
 }
 
 test.describe('runs.metadata registry parity', () => {
-	test('every metadata key referenced in web source is documented in docs/metadata.md', () => {
+	test('every metadata key referenced in web source is documented in docs/backend/metadata.md', () => {
 		const referenced = repoMetadataKeys();
 		const docs = documentedKeys();
 
@@ -74,10 +74,10 @@ test.describe('runs.metadata registry parity', () => {
 		expect(
 			missing,
 			`These metadata keys are referenced in apps/web/src/ but not\n` +
-				`documented in docs/metadata.md. Adding a key to runs.metadata\n` +
+				`documented in docs/backend/metadata.md. Adding a key to runs.metadata\n` +
 				`without a doc entry creates cross-client drift — the mobile\n` +
 				`reader (or another web feature) won't know to expect it.\n\n` +
-				`Either (a) add the key to docs/metadata.md, or (b) if the grep\n` +
+				`Either (a) add the key to docs/backend/metadata.md, or (b) if the grep\n` +
 				`hit a false positive (a non-metadata jsonb property access\n` +
 				`that happens to live under a variable named "metadata"), add\n` +
 				`it to the ALLOW_LIST in this test.`

@@ -10,7 +10,7 @@ name: Release worker
 #                    to the runonward org.
 #
 # See apps/job_worker/deployment.md for the cross-cutting concerns
-# (sizing, secrets, observability, rollback, DR) and docs/releasing.md
+# (sizing, secrets, observability, rollback, DR) and docs/ops/releasing.md
 # for the tag conventions.
 
 on:

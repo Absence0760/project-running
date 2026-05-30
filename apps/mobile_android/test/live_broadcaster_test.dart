@@ -97,7 +97,7 @@ void main() {
       final api = _FakeApiClient()..errorToThrow = StateError('network down');
       final lb = LiveBroadcaster(api);
       lb.attach('run-1');
-      // Must not throw — L4 per docs/conventions.md § Layered resilience.
+      // Must not throw — L4 per docs/architecture/conventions.md § Layered resilience.
       await lb.pushPing(lat: 1, lng: 2);
       expect(api.callCount, 1);
     });
