@@ -365,7 +365,7 @@ Use route playback to test live run recording, auto-pause, and km splits. The st
 
 ## Android tech stack
 
-What's actually wired up in [apps/mobile_android](../apps/mobile_android):
+What's actually wired up in [apps/mobile_android/](.):
 
 | Concern | Package | Why |
 |---|---|---|
@@ -388,7 +388,7 @@ What's actually wired up in [apps/mobile_android](../apps/mobile_android):
 | Local persistence | JSON files via `path_provider` | One file per run / per route — no sqlite or hive. Plus a single `in_progress.json` rewritten every 10s during a recording for crash-safe recovery. |
 | Backend client | `supabase_flutter` (via shared `api_client` package) | Same backend as the web app |
 
-The two local stores ([`LocalRunStore`](../apps/mobile_android/lib/local_run_store.dart) and [`LocalRouteStore`](../apps/mobile_android/lib/local_route_store.dart)) are intentionally simple — JSON files in the app's documents directory. No sqlite, no Hive. The whole point is that `cat ~/runs/*.json` is debuggable and the offline-first behaviour falls out for free.
+The two local stores ([`LocalRunStore`](lib/local_run_store.dart) and [`LocalRouteStore`](lib/local_route_store.dart)) are intentionally simple — JSON files in the app's documents directory. No sqlite, no Hive. The whole point is that `cat ~/runs/*.json` is debuggable and the offline-first behaviour falls out for free.
 
 ---
 

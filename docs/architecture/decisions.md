@@ -1897,7 +1897,7 @@ Why this bar:
 
 What this does *not* require:
 
-- Hitting a power-budget target. Power measurement at tier-1 is a separate open question (see [`roadmap.md` OQ3](../custom_watch/roadmap.md#oq3-power-measurement-methodology)); we can't measure ultra-watch battery life on a DK regardless.
+- Hitting a power-budget target. Power measurement at tier-1 is a separate open question (see [`roadmap.md` OQ3](../custom_watch/roadmap.md#power-instrumentation)); we can't measure ultra-watch battery life on a DK regardless.
 - Apollo4 silicon, Sony GNSS, or any other tier-2+ migration. The nRF52840 + MAX-M10S combo on breadboard is the tier-1 target.
 - A finished UI. Showing current pace + distance on the MIP display is enough; full data-screen menus + watch faces come later.
 - Implementing OTA, vector maps, ANT+ pairing, sleep modes, or any other "would be nice" features. Strict tier-1 scope is GPS + HR + display + sync.

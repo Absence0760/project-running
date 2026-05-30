@@ -365,7 +365,7 @@ See [decisions.md §36](../architecture/decisions.md#36-photos-on-runs-own-table
 
 ## Privacy zones
 
-See [decisions.md §33](../architecture/decisions.md#33-privacy-zones-server-side-clipping).
+See [decisions.md §33](../architecture/decisions.md#33-privacy-zones-live-in-user_settings-clipping-is-client-side-nearby-leak-is-a-known-v1-gap).
 
 | Scenario | Steps | Pass |
 |---|---|---|

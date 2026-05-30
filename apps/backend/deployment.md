@@ -154,7 +154,7 @@ The schema is what local `supabase db reset` builds — see [api_database.md](..
 | `run-photos` | private | `{user_id}/{run_id}/{photo_id}.jpg` | owner-only ([decisions.md § 36](../../docs/architecture/decisions.md#36-photos-on-runs-own-table--storage-bucket-visibility-tracks-the-parent-run)) |
 | `avatars` | public | `{user_id}.{ext}` | anyone authenticated can SELECT, owner can write |
 
-`/share/run/[id]` and `/share/route/[id]` rendering anonymous tracks works through the `clip_track_for_user` RPC ([decisions.md § 33](../../docs/architecture/decisions.md#33-privacy-zones-server-side-clipping)) — the bucket itself stays private, the RPC returns clipped points to anon callers.
+`/share/run/[id]` and `/share/route/[id]` rendering anonymous tracks works through the `clip_track_for_user` RPC ([decisions.md § 33](../../docs/architecture/decisions.md#33-privacy-zones-live-in-user_settings-clipping-is-client-side-nearby-leak-is-a-known-v1-gap)) — the bucket itself stays private, the RPC returns clipped points to anon callers.
 
 ---
 

@@ -168,7 +168,7 @@ If the phone isn't reachable (out of range / not yet paired / not signed in), th
 
 Every run the Android app handles lives in `LocalRunStore` first. The store is the source of truth on device; Supabase is the source of truth across devices. Reconciliation between the two is the sync service's job.
 
-- **Push-side** is driven by `SyncService._trySync()`: take `LocalRunStore.unsyncedRuns`, run it through `filterRunsForCurrentUser(unsynced, api.userId)` (drops runs whose `metadata.created_by_user_id` names a *different* user — the shared-device owner-tag guard, see [decisions.md § 67](../architecture/decisions.md#67-runs-carry-an-owner-tag-in-metadata-so-shared-device-syncs-cant-cross-contaminate-accounts)), call `ApiClient.saveRunsBatch(filtered)`, mark synced on success. It's best-effort — failures arm an exponential backoff (60 s → 2 min → … capped at 30 min) but don't surface to the UI.
+- **Push-side** is driven by `SyncService._trySync()`: take `LocalRunStore.unsyncedRuns`, run it through `filterRunsForCurrentUser(unsynced, api.userId)` (drops runs whose `metadata.created_by_user_id` names a *different* user — the shared-device owner-tag guard, see [decisions.md § 67](../architecture/decisions.md#67-offline-saved-runs-carry-a-created_by_user_id-owner-tag--defends-shared-device-sign-out--sign-in)), call `ApiClient.saveRunsBatch(filtered)`, mark synced on success. It's best-effort — failures arm an exponential backoff (60 s → 2 min → … capped at 30 min) but don't surface to the UI.
 - **Pull-side** is driven manually from the History screen's "pull from cloud" button. `ApiClient.getRuns()` returns cloud runs, each gets passed to `LocalRunStore.saveFromRemote()`, which applies newer-wins conflict resolution against `metadata.last_modified_at`.
 
 ### Triggers for a push
@@ -224,7 +224,7 @@ The track-preservation step is specifically because cloud rows have empty `track
 
 ## Spectator live tracking
 
-**Status:** shipped on Supabase Realtime today; the WebSocket transport on the Go worker is code-complete and awaits a Fly deploy + DNS flip. The transport is selected by env at runtime — see "Switching transports" below. The pre-start share flow (mint `run_id` on share button so the link is stable across "share now → tap GO later") is live across web + mobile per [decisions.md § 25](../architecture/decisions.md#25-live-spectator-runs-on-supabase-realtime-with-a-go-websocket-hub-ready-to-flip).
+**Status:** shipped on Supabase Realtime today; the WebSocket transport on the Go worker is code-complete and awaits a Fly deploy + DNS flip. The transport is selected by env at runtime — see "Switching transports" below. The pre-start share flow (mint `run_id` on share button so the link is stable across "share now → tap GO later") is live across web + mobile per [decisions.md § 25](../architecture/decisions.md#25-live-spectator-tracking-uses-supabase-realtime-not-a-custom-websocket-service).
 
 ### Runtime sequence (default — Supabase Realtime)
 
