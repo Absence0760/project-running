@@ -330,20 +330,21 @@ jobs:
               exit 1
             fi
           done
-      # Seed over psql, not `supabase db reset` — see the e2e-web
-      # "Seed the database" step for why reset's mid-flight storage
-      # restart + health poll is a chronic flake. `supabase start`
-      # (2.84.2) applied the migrations; seeding over psql leaves the
-      # already-healthy storage sidecar untouched.
-      - name: Seed the database
+      # No `supabase db reset` here — see the e2e-web "Verify the seed
+      # loaded" step for why reset's mid-flight storage restart + health
+      # poll is a chronic flake. `supabase start` (above) already
+      # applied every migration AND ran seed.sql, so just assert the
+      # seed landed rather than re-running it (a second seed.sql pass
+      # collides on the fixed-id rows — runs_pkey).
+      - name: Verify the seed loaded
         working-directory: apps/backend
         run: |
           DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
-          # Keyed on email, not the seed UUID — the UUID trips gitleaks.
+          # Keyed on email (the login identity), not the seed UUID — the
+          # UUID's entropy trips gitleaks' generic-api-key rule.
           seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where email = 'runner@test.com'")
           if [ "$seeded" != "1" ]; then
-            echo "::error::seed.sql ran but the runner@test.com seed user is missing — the integration suite cannot sign in"
+            echo "::error::supabase start did not seed runner@test.com — the integration suite cannot sign in"
             exit 1
           fi
       - run: dart pub global activate melos
@@ -567,11 +568,11 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      # `supabase start` brings the stack up + applies every migration
-      # but does NOT run seed.sql on this pinned CLI (2.84.2). The e2e
-      # suite depends on the pinned UUIDs + seeded users, so the "Seed
-      # the database" step below loads seed.sql over psql once the
-      # stack is up.
+      # `supabase start` brings the stack up, applies every migration,
+      # AND runs seed.sql (the pinned 2.84.2 CLI seeds on start). The
+      # e2e suite depends on the seeded users, which are therefore in
+      # place once start returns — the "Verify the seed loaded" step
+      # below just asserts that, it does not re-seed.
       #
       # Per-attempt timeout + retry guards against transient slow
       # ghcr.io image pulls (CI run 26490131303 edge-functions: a
@@ -624,33 +625,30 @@ jobs:
               exit 1
             fi
           done
-      # `supabase start` (CLI 2.84.2, pinned above) applies every
-      # migration but does NOT run seed.sql, so we seed explicitly.
-      # We seed over psql against the DB port rather than via
-      # `supabase db reset`: reset recreates the DB and RESTARTS the
-      # storage + edge-runtime containers mid-flight, then polls
-      # /storage/v1/bucket until it answers. On a loaded runner that
-      # poll 502s / times out and the reset bails — a chronic flake
-      # fought with escalating retries that still failed all 3 reset
-      # attempts on shard 11 of run 26664782937 (earlier casualties:
-      # runs 26478978751, 26490131303, 26588671185, 26581301842).
-      # `supabase start` already brought storage up healthy; seeding
-      # over psql never touches or restarts it, so the flake can't
-      # occur. The end state is identical — reset's own seed phase is
-      # just `psql -f seed.sql` after the migrations it replays.
-      - name: Seed the database
+      # We do NOT run `supabase db reset` to seed. reset recreates the
+      # DB and RESTARTS the storage + edge-runtime containers mid-flight,
+      # then polls /storage/v1/bucket until it answers. On a loaded
+      # runner that poll 502s / times out and the reset bails — a chronic
+      # flake fought with escalating retries that still failed all 3
+      # reset attempts on shard 11 of run 26664782937 (earlier casualties:
+      # runs 26478978751, 26490131303, 26588671185, 26581301842). It
+      # turns out reset was never needed for seeding: `supabase start`
+      # (pinned 2.84.2) already applies every migration AND runs seed.sql,
+      # so the seeded state is in place once start returns. Re-running
+      # seed.sql here would collide on the fixed-id rows (runs_pkey), so
+      # this step only asserts the seed landed.
+      - name: Verify the seed loaded
         working-directory: apps/backend
         run: |
           DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
-          psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
-          # Fail loudly here if the seed didn't land the user the e2e
-          # suite signs in as, rather than letting every downstream spec
-          # fail with a confusing auth error. Keyed on the email (the
-          # login identity) rather than the seed UUID — the UUID's high
-          # entropy trips gitleaks' generic-api-key rule.
+          # Fail loudly here if start didn't seed the user the e2e suite
+          # signs in as, rather than letting every downstream spec fail
+          # with a confusing auth error. Keyed on the email (the login
+          # identity) rather than the seed UUID — the UUID's high entropy
+          # trips gitleaks' generic-api-key rule.
           seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where email = 'runner@test.com'")
           if [ "$seeded" != "1" ]; then
-            echo "::error::seed.sql ran but the runner@test.com seed user is missing — the suite cannot sign in"
+            echo "::error::supabase start did not seed runner@test.com — the suite cannot sign in"
             exit 1
           fi
       - name: Install workspace dependencies
