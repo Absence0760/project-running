@@ -39,7 +39,7 @@ Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/m
 | Background sync | `Workmanager().registerPeriodicTask` | iOS uses `BGTaskScheduler` via the same package |
 | Background GPS | Geolocator foreground service | `CLLocationManager.allowsBackgroundLocationUpdates` (Info.plist `UIBackgroundModes:location`) |
 | Health Connect / HealthKit | `health` package on Android Health Connect | Same package, HealthKit backend |
-| Onboarding permission | `Geolocator.requestPermission` (location-when-in-use) — same call on both |  |
+| Onboarding permission | `Geolocator.requestPermission` (location-when-in-use) | Same `Geolocator.requestPermission` call — no platform divergence |
 
 **Pubspec divergence:** only `name` and `description`. Every dependency, every version, the asset list, and `dev_dependencies` all match. Run `diff apps/mobile_android/pubspec.yaml apps/mobile_ios/pubspec.yaml` — should be exactly two lines.
 
