@@ -23,7 +23,7 @@ When you fill in a value, delete the `TODO:` markers so the auditor stops flaggi
 
 ## Quick links
 
-- `docs/decisions.md §33` — privacy-zone clipping (the SECURITY DEFINER `clip_track_for_user` RPC; mandatory for non-owner track render)
-- `docs/decisions.md §41` — OAuth tokens stored in Supabase Vault, not plaintext columns
+- `docs/architecture/decisions.md §33` — privacy-zone clipping (the SECURITY DEFINER `clip_track_for_user` RPC; mandatory for non-owner track render)
+- `docs/architecture/decisions.md §41` — OAuth tokens stored in Supabase Vault, not plaintext columns
 - `apps/backend/CLAUDE.md` — Edge Function inventory + per-function env vars
 - `apps/job_worker/CLAUDE.md` — Go service that owns `data-export` + `token-refresh` + `strava_event` + `live-hub`

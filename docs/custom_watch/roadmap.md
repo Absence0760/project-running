@@ -1,6 +1,6 @@
 # Roadmap — custom_watch
 
-The big-picture sequencing for the ultra-marathon watch research effort. Separate from the main app's [`docs/roadmap.md`](../product/roadmap.md) because the watch has its own multi-tier hardware-investment sequence that doesn't map onto the main app's phased product roadmap. Read alongside [`competitive_landscape.md`](competitive_landscape.md) (strategic framing), [`prototyping.md`](prototyping.md) (the three cost tiers), and [`decisions.md § 71 / § 80 / § 81`](../architecture/decisions.md) for the locked decisions.
+The big-picture sequencing for the ultra-marathon watch research effort. Separate from the main app's [`docs/product/roadmap.md`](../product/roadmap.md) because the watch has its own multi-tier hardware-investment sequence that doesn't map onto the main app's phased product roadmap. Read alongside [`competitive_landscape.md`](competitive_landscape.md) (strategic framing), [`prototyping.md`](prototyping.md) (the three cost tiers), and [`decisions.md § 71 / § 80 / § 81`](../architecture/decisions.md) for the locked decisions.
 
 **This doc is live.** Update the per-tier checkboxes + status snapshot as work progresses; resolve open questions into `decisions.md` entries as they're decided.
 
@@ -138,7 +138,7 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 
 These are real but lower-leverage. Worth tracking; not blocking.
 
-- **Privacy posture for the watch.** Watch records GPS, HR, biometrics. The rest of the product takes data minimization + retention + export seriously; the watch inherits nothing yet. Pull in the patterns from the main app (`docs/api_database.md`, `docs/dev_prod_isolation.md`) when tier 2 starts.
+- **Privacy posture for the watch.** Watch records GPS, HR, biometrics. The rest of the product takes data minimization + retention + export seriously; the watch inherits nothing yet. Pull in the patterns from the main app (`docs/backend/api_database.md`, `docs/testing/dev_prod_isolation.md`) when tier 2 starts.
 - **Tier-1 budget cap formalization.** § 71 amendment lifts the spend cap but doesn't say "tier-1 spend over $X requires re-asking." Easy to drift past $1–2k without noticing.
 - **Local-store overflow behaviour.** Tier-1 records to LittleFS — but how big does the local store get before we start dropping runs? Architectural choice; matters for ultra runners who go off-grid for days.
 - **Tier-1 development log + showcase plan.** Tier 1's stated deliverable is "knowledge + a credible technical story for ODM conversations." Without a written log + photos/video, that knowledge stays in your head. Suggested: `docs/custom_watch/tier1_log.md`, photographed at each milestone.
