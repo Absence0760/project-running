@@ -477,7 +477,7 @@ create table clubs (
 create table club_members (
   club_id     uuid references clubs on delete cascade not null,
   user_id     uuid references auth.users on delete cascade not null,
-  role        text not null default 'member',         -- 'owner' | 'admin' | 'member'
+  role        text not null default 'member',         -- 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member' (CHECK: club_members_role_check)
   joined_at   timestamptz default now(),
   primary key (club_id, user_id)
 );
@@ -527,7 +527,7 @@ create table club_posts (
 
 **`events.meet_lat` / `meet_lng` are column-revoked** from both `anon` and `authenticated` (migrations `20260723_001` / `20260806_001` / `20260818_001`) — a direct `select meet_lat, meet_lng from events` raises `42501`, because precise meeting coordinates would otherwise leak an organiser's home address to any signed-in non-member of a public club. The member-facing map pin + "Get directions" link on the event detail page reads them through `get_event_meet_point(p_event_id uuid) returns table(meet_lat, meet_lng)` (migration `20261027_001`): a `security definer` function that returns the coordinates only when `is_club_member(events.club_id)` and the point is set, and zero rows otherwise. EXECUTE is granted to `anon` + `authenticated` — the in-function membership check is the authorization gate, not the EXECUTE grant. Persona-hunt social-group #10.
 
-**Narrow unions** (client-side, no DB CHECK): `ClubRole = 'owner' | 'admin' | 'member'`, `RsvpStatus = 'going' | 'maybe' | 'declined'`. See `apps/web/src/lib/types.ts`.
+**Narrow unions**: `ClubRole = 'owner' | 'admin' | 'event_organiser' | 'race_director' | 'member'` (enforced by the `club_members_role_check` CHECK, migration `20260428_001`, and overlaid in `types.ts`); `RsvpStatus = 'going' | 'maybe' | 'declined' | 'waitlisted'` (client-side only, no DB CHECK — `event_attendees.status` predates the narrow-union convention). See `apps/web/src/lib/types.ts`.
 
 ---
 
