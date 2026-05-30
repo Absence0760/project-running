@@ -40,7 +40,7 @@ CI steps in this repo carry long comments documenting prior incidents (cited by 
 
 ### 4. Reproduce locally, then verify the fix locally
 
-Wherever the failure can be reproduced on this workstation, do it — it's the difference between a guess and a fix:
+Wherever the failure can be reproduced on this workstation, do it — it's the difference between a guess and a fix. **Reproduce against CI's *actual* conditions, not what a comment or doc claims** — match the pinned tool versions and default behaviour, and confirm the tool really does what the surrounding comment says (comments drift; a step that "applies migrations but doesn't seed" may in fact seed on the pinned CLI). If your repro only passes because you configured it to match a stale assumption, you've validated the assumption, not the fix.
 
 - Backend / e2e: drive the real local Supabase stack (`cd apps/backend && supabase …`, see `apps/backend/CLAUDE.md`). If you must cycle or wipe the user's local stack to get a faithful repro, first check it holds only standard seed data (the three `*@test.com` users) — if there's custom state, **ask before wiping**.
 - Web unit / Playwright: run the specific failing spec (`pnpm exec playwright test <file> --shard=…` mirrors CI; `pnpm test` for units).
