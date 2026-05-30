@@ -6,6 +6,8 @@ For a high-level view of where this fits in the repo see [architecture.md](archi
 
 ---
 
+**Contents:** [Components](#components) · [State machine](#state-machine) · [Data flow: recording a run](#data-flow-recording-a-run) · [Persistence and crash recovery](#persistence-and-crash-recovery) · [GPS pipeline](#gps-pipeline) · [Pause: manual only, moving time derived](#pause-manual-only-moving-time-derived) · [Hardening](#hardening) · [Background recording](#background-recording) · [Dependencies](#dependencies) · [Tunable constants](#tunable-constants) · [Known limitations](#known-limitations)
+
 ## Components
 
 | Layer | Code | Role |

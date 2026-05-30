@@ -1,5 +1,7 @@
 # Paywall
 
+**Contents:** [Current model: Pro subscription + optional donations](#current-model-pro-subscription--optional-donations) · [Tiers](#tiers) · [Pro gates and perks](#pro-gates-and-perks) · [Client-side `isPro()` helper](#client-side-ispro-helper) · [Adding a new gated feature](#adding-a-new-gated-feature) · [BYPASS_PAYWALL](#bypass_paywall) · [RevenueCat integration](#revenuecat-integration) · [One-off donation flow (user perspective)](#one-off-donation-flow-user-perspective) · [Payment flow (retained for future re-gating)](#payment-flow-retained-for-future-re-gating)
+
 ## Current model: Pro subscription + optional donations
 
 Every screen in the app is reachable by free users. The Pro tier

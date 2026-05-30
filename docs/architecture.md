@@ -2,6 +2,8 @@
 
 ---
 
+**Contents:** [Overview](#overview) · [Repository structure](#repository-structure) · [Layer diagram](#layer-diagram) · [Client apps](#client-apps) · [Shared packages](#shared-packages) · [Backend](#backend) · [External integrations](#external-integrations) · [Data flow: recording a run](#data-flow-recording-a-run) · [Data flow: importing a GPX route](#data-flow-importing-a-gpx-route) · [Tech stack](#tech-stack) · [CI/CD pipeline](#cicd-pipeline) · [Security considerations](#security-considerations)
+
 ## Overview
 
 A cross-platform running app targeting iOS, Android, Apple Watch, Wear OS, and a full desktop web app. Built on a Flutter monorepo for mobile and a SvelteKit web app, sharing a single Supabase backend and MapLibre GL JS for route planning and navigation.

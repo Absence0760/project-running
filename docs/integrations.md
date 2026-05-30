@@ -4,6 +4,8 @@ A reference for every external data source the app connects to, how each integra
 
 ---
 
+**Contents:** [Overview](#overview) · [Apple HealthKit](#apple-healthkit) · [Android Health Connect](#android-health-connect) · [Strava](#strava) · [parkrun](#parkrun) · [Garmin Connect](#garmin-connect) · [Race results (RunSignUp + general scraping)](#race-results-runsignup--general-scraping) · [Treadmills (BLE FTMS) — deferred](#treadmills-ble-ftms--deferred) · [The `health` Flutter package](#the-health-flutter-package) · [Deduplication strategy](#deduplication-strategy)
+
 ## Overview
 
 | Source | Type | Auth | Data | Phase |

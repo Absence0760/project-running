@@ -4,6 +4,8 @@ A step-by-step guide to bootstrapping the monorepo from scratch, understanding t
 
 ---
 
+**Contents:** [Prerequisites](#prerequisites) · [Initial setup](#initial-setup) · [Workspace structure](#workspace-structure) · [Melos workspace config](#melos-workspace-config) · [Web app package management](#web-app-package-management) · [Running each app locally](#running-each-app-locally) · [Environment variables](#environment-variables) · [Package dependency graph](#package-dependency-graph) · [Code style and lint](#code-style-and-lint) · [CI/CD](#cicd) · [Common tasks](#common-tasks)
+
 ## Prerequisites
 
 | Tool | Version | Install |

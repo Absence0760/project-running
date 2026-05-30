@@ -2,6 +2,24 @@
 
 House rules for this codebase. Before you reach for "what's the idiomatic way to do this in Flutter / Svelte / Swift", check here — some defaults have been deliberately overridden. If you find code that violates a rule below, fix it as part of the surrounding change. If you find a rule that's wrong, edit this file and mention it in the PR.
 
+Rules are grouped by area below. (Section anchors are deep-linked from `CLAUDE.md` and the review agents, so the headings keep their exact wording.)
+
+**Code style** — [Comments](#comments) · [Naming](#naming) · [Logging](#logging)
+
+**Error handling & architecture** — [Error handling](#error-handling) · [Layered resilience](#layered-resilience) · [Pagination](#pagination--first-page--load-more) · [Dependency discipline](#dependency-discipline) · [Preemptive abstractions — don't](#preemptive-abstractions--dont) · [Backwards compatibility](#backwards-compatibility)
+
+**Bug & quality discipline** — [Fix bugs, don't code around them](#fix-bugs-dont-code-around-them) · [If you see something wrong, fix it](#if-you-see-something-wrong-fix-it)
+
+**Web UI** — [Page padding](#web-page-padding) · [Page titles & sidebar](#web-page-titles-and-sidebar-chrome) · [Material Symbols](#material-symbols-icons) · [Buttons](#web-buttons) · [Svelte 5 `$effect`](#svelte-5-effect--never-read-state-you-write-in-the-same-effect) · [Modals](#web-modals) · [List-page scroll](#web-list-pages--preserve-scroll-on-back-navigation)
+
+**Mobile & cross-platform** — [In-app notifications](#mobile-in-app-notifications--showtopbanner) · [Local-tz date strings](#local-tz-date-strings)
+
+**Testing** — [Testing](#testing) · [Test hygiene](#test-hygiene--review-then-unit-then-e2e)
+
+**Process** — [Commit & PR conventions](#commit-and-pr-conventions) · [Commit cadence](#commit-cadence--one-piece-one-commit-dont-batch-a-session-into-one-lump) · [Docs hygiene](#docs-hygiene)
+
+**Integrations** — [Strava log keys](#strava-integration-log-keys) · [Exceptions](#exceptions)
+
 ## Comments
 
 **Default is zero comments.** Write one only when the comment answers *why*, not *what*. Good reasons:
