@@ -476,7 +476,7 @@ class _CoachScreenState extends State<CoachScreen> {
         'anchor_message_id': anchorId,
       });
 
-      final base = (dotenv.env['WEB_BASE_URL'] ?? 'https://app.runapp.com')
+      final base = (dotenv.env['WEB_BASE_URL'] ?? 'https://threkir.com')
           .replaceAll(RegExp(r'/$'), '');
       final uri = Uri.parse('$base/api/coach');
 

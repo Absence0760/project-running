@@ -73,7 +73,7 @@ WORKER_ID = "fly-${FLY_MACHINE_ID}"
 OSRM_URL = "http://osrm.internal:5000"
 # Comma-separated WS Origin allow-list. Anything not listed gets a 403 at
 # the WS handshake. Production clients: apps/web prod + preview.
-LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.threkir.com"
+LIVEHUB_ALLOWED_ORIGINS = "https://threkir.com,https://www.threkir.com,https://preview.threkir.com"
 
 [[services]]
 internal_port = 8080

@@ -8,7 +8,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 /// covers the *connect* half of the flow.
 ///
 /// Today the mobile clients defer OAuth to the web (`_connectStrava`
-/// in `settings_screen.dart` opens `https://run.app/settings/
+/// in `settings_screen.dart` opens `https://threkir.com/settings/
 /// integrations` in the browser). Once a native URL-scheme callback
 /// lands (e.g. `threkir://strava-callback`) the connect button can
 /// invoke [stravaAuthUrl] to build the authorize URL with a mobile-

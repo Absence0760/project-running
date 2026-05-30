@@ -73,16 +73,16 @@ void main() {
 
     test('URL-encodes the redirect_uri', () {
       final url = stravaAuthUrl(
-        redirectUri: 'https://run.app/settings/integrations',
+        redirectUri: 'https://threkir.com/settings/integrations',
         state: 's',
         keyOverride: 'cid',
       );
-      // The encoded form of "https://run.app/settings/integrations"
+      // The encoded form of "https://threkir.com/settings/integrations"
       // must round-trip through Uri.parse.
       final parsed = Uri.parse(url);
       expect(
         parsed.queryParameters['redirect_uri'],
-        'https://run.app/settings/integrations',
+        'https://threkir.com/settings/integrations',
       );
     });
   });

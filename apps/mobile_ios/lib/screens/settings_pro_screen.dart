@@ -31,7 +31,7 @@ class SettingsProScreen extends StatelessWidget {
     final supabase = Supabase.instance.client;
     final userId = supabase.auth.currentUser?.id;
     if (!isRevenueCatConfigured() || userId == null) {
-      await _openExternal(context, 'https://run.app/settings/upgrade');
+      await _openExternal(context, 'https://threkir.com/settings/upgrade');
       return;
     }
     final r = await startProCheckout(userId);
@@ -46,7 +46,7 @@ class SettingsProScreen extends StatelessWidget {
         showTopBanner(context, 'Purchase failed. Try again later.');
         break;
       case PurchaseResult.notConfigured:
-        await _openExternal(context, 'https://run.app/settings/upgrade');
+        await _openExternal(context, 'https://threkir.com/settings/upgrade');
         break;
     }
   }
@@ -88,7 +88,7 @@ class SettingsProScreen extends StatelessWidget {
     if (isRevenueCatConfigured() && userId != null) {
       url = await managementUrl(userId);
     }
-    final target = url ?? 'https://run.app/settings/upgrade';
+    final target = url ?? 'https://threkir.com/settings/upgrade';
     await _openExternal(context, target);
   }
 
@@ -138,7 +138,7 @@ class SettingsProScreen extends StatelessWidget {
               subtitle: const Text('One-off donation in your browser'),
               trailing: const Icon(Icons.open_in_new, size: 18),
               onTap: () =>
-                  _openExternal(context, 'https://run.app/settings/upgrade'),
+                  _openExternal(context, 'https://threkir.com/settings/upgrade'),
             ),
           ],
         ),

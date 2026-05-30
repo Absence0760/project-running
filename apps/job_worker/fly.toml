@@ -31,9 +31,9 @@ OSRM_URL = "http://osrm.internal:5000"
 # Live spectator hub WS upgrade origin allow-list. Comma-separated;
 # only requests whose Origin header matches one of these are allowed
 # to upgrade. The corresponding clients are `apps/web` (PUBLIC build
-# at https://run.app) and the preview env. Keep the list tight —
+# at https://threkir.com) and the preview env. Keep the list tight —
 # anything not listed gets a 403 at the WS handshake.
-LIVEHUB_ALLOWED_ORIGINS = "https://app.runapp.com,https://run.app,https://preview.threkir.com"
+LIVEHUB_ALLOWED_ORIGINS = "https://threkir.com,https://www.threkir.com,https://preview.threkir.com"
 
 # Fail-closed sentinel. With LIVEHUB_REQUIRE_AUTH=1, main.go refuses
 # to start the binary unless SUPABASE_JWT_SECRET + LIVEHUB_ALLOWED_ORIGINS

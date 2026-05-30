@@ -63,7 +63,7 @@ class BillingIssueBanner extends StatefulWidget {
 
 class _BillingIssueBannerState extends State<BillingIssueBanner>
     with WidgetsBindingObserver {
-  static const _manageUrl = 'https://run.app/settings/upgrade';
+  static const _manageUrl = 'https://threkir.com/settings/upgrade';
 
   String? _subscriptionTier;
   DateTime? _billingIssueAt;

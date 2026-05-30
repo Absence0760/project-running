@@ -818,7 +818,7 @@ class _RunScreenState extends State<RunScreen> {
     if (fromEnv.isNotEmpty) {
       return fromEnv.replaceAll(RegExp(r'/+$'), '');
     }
-    return 'https://app.runapp.com';
+    return 'https://threkir.com';
   }
 
   Future<void> _begin() async {

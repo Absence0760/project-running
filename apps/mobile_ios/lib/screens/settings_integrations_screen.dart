@@ -93,7 +93,7 @@ class _SettingsIntegrationsScreenState
     if (api == null) return;
 
     if (!isStravaConfigured()) {
-      await _openExternal('https://run.app/settings/integrations');
+      await _openExternal('https://threkir.com/settings/integrations');
       if (!mounted) return;
       showTopBanner(
         context,
