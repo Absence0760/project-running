@@ -340,9 +340,10 @@ jobs:
         run: |
           DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
-          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'")
+          # Keyed on email, not the seed UUID — the UUID trips gitleaks.
+          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where email = 'runner@test.com'")
           if [ "$seeded" != "1" ]; then
-            echo "::error::seed.sql ran but the pinned seed user is missing — the integration suite cannot sign in"
+            echo "::error::seed.sql ran but the runner@test.com seed user is missing — the integration suite cannot sign in"
             exit 1
           fi
       - run: dart pub global activate melos
@@ -642,12 +643,14 @@ jobs:
         run: |
           DB_URL=$(supabase status -o env | grep '^DB_URL=' | cut -d= -f2- | tr -d '"')
           psql "$DB_URL" -v ON_ERROR_STOP=1 -f supabase/seed.sql
-          # Fail loudly here if the seed didn't land the pinned user the
-          # e2e suite signs in as, rather than letting every downstream
-          # spec fail with a confusing auth error.
-          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890'")
+          # Fail loudly here if the seed didn't land the user the e2e
+          # suite signs in as, rather than letting every downstream spec
+          # fail with a confusing auth error. Keyed on the email (the
+          # login identity) rather than the seed UUID — the UUID's high
+          # entropy trips gitleaks' generic-api-key rule.
+          seeded=$(psql "$DB_URL" -tAc "select count(*) from auth.users where email = 'runner@test.com'")
           if [ "$seeded" != "1" ]; then
-            echo "::error::seed.sql ran but the pinned seed user is missing — the suite cannot sign in"
+            echo "::error::seed.sql ran but the runner@test.com seed user is missing — the suite cannot sign in"
             exit 1
           fi
       - name: Install workspace dependencies
