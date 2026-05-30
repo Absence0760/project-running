@@ -4,11 +4,15 @@ Complete reference for the Supabase backend: database schema, row-level security
 
 ---
 
+**Contents:** [Database schema](#database-schema) (Core: runs & routes · Social graph & feed · Clubs & events · Training & coaching · Profile, settings & devices · Fitness & analytics · Integrations & background jobs · Billing · Infrastructure) · [Row-level security](#row-level-security) · [Edge Functions](#edge-functions) · [REST API](#rest-api-supabase-auto-generated) · [Database functions (RPCs)](#database-functions-rpcs) · [Supabase Storage](#supabase-storage) · [Auth](#auth) · [Migrations](#migrations)
+
 ## Database schema
 
 All tables live in the `public` schema. Users are managed by `auth.users` (Supabase Auth) — no custom users table needed.
 
-### `runs`
+### Core: runs & routes
+
+#### `runs`
 
 Every recorded or imported run.
 
@@ -94,7 +98,7 @@ Granted to `anon` + `authenticated`. Every public-runs reader (`fetchPublicRun`,
 
 ---
 
-### `routes`
+#### `routes`
 
 Planned routes — imported from GPX/KML or built in the route builder.
 
@@ -137,7 +141,7 @@ create index idx_routes_user_starred on routes (user_id, updated_at desc) where 
 
 ---
 
-### `saved_routes`
+#### `saved_routes`
 
 Bookmarks. RouteExplorer's bookmark icon inserts a reference here rather than cloning the row, so the canonical route accumulates `run_count` instead of fragmenting across duplicates.
 
@@ -157,65 +161,7 @@ RLS: `"users manage their own saves"` (`for all using auth.uid() = user_id`). Th
 
 ---
 
-### `integrations`
-
-OAuth tokens and connection state for each external platform per user.
-
-```sql
-create table integrations (
-  id                       uuid primary key default gen_random_uuid(),
-  user_id                  uuid references auth.users not null,
-  provider                 text not null,            -- 'strava' | 'garmin' | 'parkrun' | 'runsignup'
-  access_token_secret_id   uuid references vault.secrets(id) on delete set null,
-  refresh_token_secret_id  uuid references vault.secrets(id) on delete set null,
-  token_expiry             timestamptz,
-  external_id              text,                     -- athlete ID on the provider
-  scope                    text,                     -- OAuth scopes granted
-  last_sync_at             timestamptz,
-  sync_cursor              text,                     -- pagination cursor for backfill
-  created_at               timestamptz default now(),
-  updated_at               timestamptz default now(),
-  unique (user_id, provider)
-);
-```
-
-**Tokens live in Supabase Vault, not on the row.** OAuth access / refresh
-tokens are encrypted at rest by Supabase Vault (libsodium, project-managed
-master key with built-in rotation). The `integrations` row carries only
-UUID references into `vault.secrets`. Never `select access_token from
-integrations` — that column was dropped in migration `20260603_001`.
-
-To read or write tokens, call the SECURITY DEFINER helpers:
-
-- `get_integration_tokens(p_user_id, p_provider)` returns
-  `(access_token text, refresh_token text, token_expiry timestamptz)`.
-  Service role bypasses the owner check; everyone else can only read
-  their own.
-- `set_integration_tokens(p_user_id, p_provider, p_access, p_refresh, p_expiry)`
-  upserts the row + creates / updates the vault secrets in place
-  (so `access_token_secret_id` stays stable across token refreshes).
-
----
-
-### `rate_limits`
-
-Per-user fixed-window counters that gate Edge Function endpoints. Read/written exclusively through the `check_rate_limit` SECURITY DEFINER function — never direct SELECT/INSERT.
-
-```sql
-create table rate_limits (
-  user_id        uuid not null,
-  bucket         text not null,           -- e.g. 'parkrun-import'
-  window_start   timestamptz not null,    -- floor(epoch / window) * window
-  count          integer not null default 0,
-  primary key (user_id, bucket, window_start)
-);
-```
-
-`check_rate_limit(p_user_id, p_bucket, p_max, p_window_seconds) returns table(allowed bool, retry_after_seconds int)` — atomic increment-and-check; even denied calls increment, but the user just stays at ceiling+N until the window rolls (no extra punishment). Cron job `cleanup-stale-rate-limits` deletes rows older than 24 h hourly. RLS is enabled with no policies so direct REST access returns zero rows; the EF helper bypasses RLS via the SECURITY DEFINER grant.
-
----
-
-### `route_reviews`
+#### `route_reviews`
 
 User ratings and comments on public routes. One review per user per route.
 
@@ -236,7 +182,55 @@ create index route_reviews_route on route_reviews (route_id, created_at desc);
 
 ---
 
-### `run_kudos` / `run_comments`
+#### `run_matched_tracks`
+
+Per-run map-match output state. One row per run, populated by a trigger when `runs.track_url` lands or changes.
+
+```sql
+create table run_matched_tracks (
+  run_id uuid primary key references runs(id) on delete cascade,
+  status text not null default 'pending',
+  matched_track_url text,
+  attempts smallint not null default 0,
+  matched_at timestamptz,
+  algorithm text,
+  algorithm_version text,
+  error_message text,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  constraint run_matched_tracks_status_check
+    check (status in ('pending', 'matched', 'failed', 'skipped'))
+);
+
+create index run_matched_tracks_pending
+  on run_matched_tracks (created_at)
+  where status = 'pending';
+```
+
+- **`status`**: narrow union `pending | matched | failed | skipped`. Trigger inserts `pending`; the worker writes `matched` / `failed`. `skipped` is reserved for runs the worker decides not to match (too short, too noisy).
+- **RLS**: owner read only — owner of the parent run can SELECT, nobody can INSERT / UPDATE / DELETE through the API. The Go matching worker authenticates with the service role key and bypasses RLS.
+- **Reset on re-upload**: when `runs.track_url` is updated to a different value, the trigger resets the row back to `pending` (clears `matched_track_url`, `attempts`, `matched_at`, `error_message`, `algorithm` / `algorithm_version`) and stamps `source_track_url` with `NEW.track_url` so the matcher re-processes against the fresh data.
+- **`source_track_url`** (added in migration `20260611_001`): the `runs.track_url` value the row's match output is tagged against. Set by the trigger on every insert and every reset. The Go worker reads this at job start, runs the matcher, then PATCHes the row conditionally on `?source_track_url=eq.<value>`. A re-upload landing between read and write changes `source_track_url`, the conditional PATCH affects 0 rows, the worker discards its stale result and the fresh job (already queued by the trigger) produces the right answer. Closes the re-upload race at the DB level — no application-side attempts-CAS needed.
+
+### Social graph & feed
+
+#### `user_follows`
+
+Asymmetric follow graph. One row per `(follower, followee)` pair; CHECK blocks self-follow; cascading deletes on both sides. RLS: anyone authenticated can SELECT (graph is public); only the follower can INSERT or DELETE their own row. See `decisions.md § 31`.
+
+```sql
+create table user_follows (
+  follower_id  uuid references auth.users(id) on delete cascade not null,
+  followee_id  uuid references auth.users(id) on delete cascade not null,
+  followed_at  timestamptz not null default now(),
+  primary key (follower_id, followee_id),
+  constraint user_follows_no_self_follow check (follower_id <> followee_id)
+);
+```
+
+Indexes: `(follower_id, followed_at desc)` for "people I follow," `(followee_id, followed_at desc)` for "my followers." The activity feed query (`fetchFollowingFeed`) resolves the followee set first, then queries `runs` filtered by `user_id IN (...)` and `is_public = true`.
+
+#### `run_kudos` / `run_comments`
 
 Engagement on runs (decisions §32). Visibility tracks the parent run's RLS via an EXISTS subquery, so engagement on a private run is invisible to anyone but the owner.
 
@@ -261,7 +255,7 @@ create table run_comments (
 
 Threading is one level deep, enforced by the INSERT policy: `parent_comment_id is null OR (the parent's parent_comment_id is null)`. The depth check delegates to the SECURITY DEFINER helper `_run_comment_parent_is_top_level(uuid)` because PostgreSQL's RLS planner flags any policy that selects from its own table as recursive — even when the runtime path is acyclic — and would otherwise return `infinite recursion detected in policy for relation "run_comments"` on every authenticated INSERT (fixed in `20260529_001`). Run owner can DELETE any comment on their run for moderation; otherwise authors edit / delete their own. The `run_comments_set_updated_at` BEFORE-UPDATE trigger keeps `updated_at` honest so consumers can tell edited comments apart.
 
-### `run_photos`
+#### `run_photos`
 
 Photos attached to a run (decisions §36). Metadata in Postgres, bytes in the **private** `run-photos` Storage bucket at `{owner_id}/{photo_id}.{ext}` (migration `20260712_001` flipped the bucket public flag; the previous "public-read with policy gate" model didn't actually work — Supabase routes public-bucket reads through an unauthenticated CDN endpoint that bypasses RLS on `storage.objects`). Visibility tracks the parent run via EXISTS — same shape as `run_kudos` / `run_comments` — and is now properly enforced by the storage SELECT policy from `20260705_001`. Clients access bytes via `createSignedUrl(s)` with a 1-hour TTL.
 
@@ -281,7 +275,7 @@ create table run_photos (
 
 In v1 `owner_id` is enforced to equal `runs.user_id` at INSERT time; the column is kept distinct so a future club-photo feature can opt in via a migration without restructuring. Run owner OR photo owner can DELETE (moderation primitive matching the run-comments shape). Storage policies gate SELECT on `is_run_visible_to(rp.run_id, auth.uid())` (joining through `run_photos`) and INSERT/DELETE on the per-user folder. The bucket is private; clients use signed URLs with a 1 h TTL. **EXIF stripping** is two-layered: the `job_worker` `photo_process` handler re-encodes uploads server-side to drop metadata, and the mobile clients additionally strip the EXIF/XMP APP1 segment *before* upload (`apps/mobile_android/lib/exif_strip.dart`, persona family-club #52) so a geotagged original never sits in the bucket during the async-worker window. Web still relies on the server worker alone. **Event gallery (#49, migration `20261025_001`):** `event_id` + `event_instance_start` tag a photo to an event occurrence; a `for select` policy makes event-tagged photos readable by anyone who can read the event (the `exists (… from events …)` subquery inherits the events RLS), so the gallery aggregates attendees' photos even across private runs. The INSERT policy additionally requires the uploader can see the tagged event.
 
-### `notifications`
+#### `notifications`
 
 Inbox rows for the social loop (decisions §38). Materialised by `after insert` (kudos / comments / follows / club posts / completed runs) and `after insert or update` (event RSVPs) SECURITY DEFINER triggers on `run_kudos`, `run_comments`, `user_follows`, `event_attendees`, `club_posts`, and `runs` so the notification lands in the same transaction as the source write.
 
@@ -309,7 +303,7 @@ Two indexes for the read path: `(user_id, created_at desc)` for the list view, a
 
 RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them. `notify_event_rsvp` fires for the event's `created_by` only and only when `status = 'going'`; Maybe / Declined intentionally produce no inbox row.
 
-### `direct_messages`
+#### `direct_messages`
 
 ```sql
 create table direct_messages (
@@ -325,7 +319,7 @@ create table direct_messages (
 
 1:1 direct messages (very-social persona #55, migration `20261026_001`). A "thread" is the unordered participant pair — no separate threads table; indexes use `least/greatest(sender_id, recipient_id)` so A→B and B→A share a symmetric thread index. RLS: each participant reads their own threads; **INSERT is gated on `not is_blocked_either_way(sender, recipient)` AND an existing follow in either direction** — a plain `user_blocks` subquery would be hidden from the sender by that table's owner-read RLS, so the SECURITY DEFINER helper is load-bearing here, not a convenience. The recipient marks read (UPDATE); either party deletes. A `message` notification fires to the recipient only on the first unread message of a burst (the trigger checks for an existing unread from the same sender) so an active thread doesn't flood the bell. Deferred: realtime delivery, a non-follower "message requests" inbox, mobile.
 
-### `segments` / `segment_efforts`
+#### `segments` / `segment_efforts`
 
 Segments + leaderboards (decisions §37). v1 segments are slices of a *saved route* — `(route_id, start_distance_m, end_distance_m)` — not arbitrary geometry. Visibility on both tables tracks the parent route via EXISTS.
 
@@ -359,71 +353,17 @@ Anyone who can read the parent route can create a segment (Strava-style communit
 
 ---
 
-### `user_profiles`
+#### `reports`
 
-Supplementary user data not stored in `auth.users`. As of `20260521_001_user_follows.sql` profiles are world-readable to authenticated users (the new `"profiles are readable by anyone authenticated"` policy is additive to the existing self-only `"users own their profile"`). This is required for follow / feed / club-member rendering and was a latent bug fix — pre-migration, all cross-user enrichment queries silently returned empty rows. See `docs/architecture/decisions.md § 31` for the trade-off.
+User-submitted reports against a profile, club, or route. Polymorphic via `(target_kind, target_id)` where `target_kind ∈ {'user', 'club', 'route'}`. Reason is constrained to `{'spam', 'harassment', 'inappropriate', 'impersonation', 'other'}`; status is `{'pending', 'reviewed', 'dismissed'}`. A partial-unique index `reports_no_duplicate_pending` enforces one pending report per (reporter, target) pair — once status flips to reviewed/dismissed the same reporter can re-file if the target reoffends.
 
-`subscription_tier` and `subscription_at` are write-protected against user-JWT writers. The catch-all `users own their profile` policy was split into per-command policies in `20260624_001_lock_subscription_tier_to_service_role.sql`, and a `BEFORE UPDATE` trigger (`lock_subscription_columns`) raises 42501 (`insufficient_privilege`) on any tier-column change whose JWT role isn't `service_role`. Direct SQL (migrations + seed) bypasses the trigger because no JWT context is set. The only legitimate runtime writer is the `revenuecat-webhook` Edge Function (service-role).
+Inserts go through the `submit_report(p_target_kind, p_target_id, p_reason, p_notes)` SECURITY DEFINER RPC, which validates the target row exists, rejects self-reports on `target_kind='user'`, rate-limits via the shared `enforce_create_rate_limit` helper at 10/hour per reporter, and surfaces duplicate-pending as a 23505 with a "you already have a pending report" hint. RLS hides others' reports from each user — the only way to *read* `reports` cross-user is via service_role, which is intentional: reports are pending evidence, not public attribution.
 
-```sql
-create table user_profiles (
-  id                       uuid primary key references auth.users,
-  display_name             text,
-  avatar_url               text,
-  parkrun_number           text,                                -- e.g. 'A123456' (world-readable)
-  preferred_unit           text default 'km',                   -- 'km' | 'mi'
-  subscription_tier        text default 'free',                 -- 'free' | 'pro' | 'lifetime' (world-readable)
-  subscription_at          timestamptz,
-  gender                   text,                                -- 'male' | 'female' | 'nonbinary' | null
-  date_of_birth            date,
-  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach
-  health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB persistence
-  created_at               timestamptz default now()
-);
--- CHECK constraint enforces subscription_tier ∈ ('free','pro','lifetime') —
--- migration 20260429_001_subscription_paywall.sql backfills any pre-existing
--- 'premium' values to 'pro'. Keep this list in lockstep with the
--- SubscriptionTier TS union in apps/web/src/lib/types.ts.
---
--- `coach_consent_at` and `health_data_consent_at` were added in
--- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
--- audit/gdpr (2026-05-25). Both nullable; NULL = consent not yet
--- given. The /api/coach handler refuses to fan out to Anthropic
--- when coach_consent_at is null; the Preferences page refuses to
--- persist gender / DOB when health_data_consent_at is null and the
--- consent checkbox is unticked. Withdrawal under Art 7(3) nulls
--- the consent timestamp AND clears the associated fields atomically.
-```
+There is no admin UI yet — v1 moderation happens in Supabase Studio against the `reports` table. The deferred admin queue, auto-hide-after-N, and reputation-weighted reports are tracked in [roadmap.md § Anti-spam / moderation](../product/roadmap.md#anti-spam--moderation--whats-shipped-whats-deferred). Migration `20260908_001_user_reports.sql`. Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e tests).
 
-### `clone_plan_template(template_id uuid, new_start_date date)`
+### Clubs & events
 
-SECURITY DEFINER RPC for plan-template adoption (decisions §35). Verifies the caller can SELECT the template (own plan or club member of the template's `club_id`), then duplicates `training_plans` + `plan_weeks` + `plan_workouts` into a new user-owned plan anchored at `new_start_date`. All workout `scheduled_date` values are shifted by the date offset between the template's `start_date` and the new start date. The new plan's `parent_template_id` points back at the template; `is_template = false` and `status = 'active'`. Returns the new plan's id. Granted to `authenticated`.
-
-### `clip_track_for_user(target_user_id uuid, points jsonb)`
-
-SECURITY DEFINER RPC for privacy-zone clipping (decisions §33). Reads `user_settings.prefs.privacy_zones` for the target user, walks the input points dropping in-zone leading + trailing entries, and returns the contiguous middle as jsonb. Zones never leave the database. Granted to `anon` + `authenticated` so anonymous `/share/run/[id]` and `/share/route/[id]` viewers also receive clipped output. Input is capped at 50 000 points (raise on overflow) to bound the residual dense-grid probe attack. Returns input unchanged when the target user has no zones configured. Helpers `privacy_distance_m(lat1, lng1, lat2, lng2)` and `privacy_in_any_zone(lat, lng, zones_json)` are exposed in the same migration but used only internally by the RPC.
-
-### `clip_route_for_viewer(p_route_id uuid)`
-
-SECURITY DEFINER RPC for the routes equivalent of `clip_track_for_user` (decisions §33, migration `20260625_001`). Self-contained: caller passes only the route id. Looks up the row internally, applies the same visibility gate as the routes SELECT policies (owner / public / club member; raises `42501` otherwise so private-route reads are loud), and returns either the unclipped `waypoints` (owner) or the clipped output (non-owner, delegated to `clip_track_for_user` so the zone walk has one implementation). Granted to `anon` + `authenticated`. Anon callers can only read `is_public = true` routes — private-route reads from anon raise `42501`. Routes carry waypoints inline (no Storage indirection like runs) so this is a straight RPC rather than an Edge Function.
-
-### `user_follows`
-
-Asymmetric follow graph. One row per `(follower, followee)` pair; CHECK blocks self-follow; cascading deletes on both sides. RLS: anyone authenticated can SELECT (graph is public); only the follower can INSERT or DELETE their own row. See `decisions.md § 31`.
-
-```sql
-create table user_follows (
-  follower_id  uuid references auth.users(id) on delete cascade not null,
-  followee_id  uuid references auth.users(id) on delete cascade not null,
-  followed_at  timestamptz not null default now(),
-  primary key (follower_id, followee_id),
-  constraint user_follows_no_self_follow check (follower_id <> followee_id)
-);
-```
-
-Indexes: `(follower_id, followed_at desc)` for "people I follow," `(followee_id, followed_at desc)` for "my followers." The activity feed query (`fetchFollowingFeed`) resolves the followee set first, then queries `runs` filtered by `user_id IN (...)` and `is_public = true`.
-
-### `clubs` / `club_members` / `events` / `event_attendees` / `club_posts`
+#### `clubs` / `club_members` / `events` / `event_attendees` / `club_posts`
 
 The social layer. See `docs/features/clubs.md` for surfaces and `docs/product/roadmap.md § Clubs and events` for phasing. Added in `20260416_001_clubs_and_events.sql`.
 
@@ -531,7 +471,32 @@ create table club_posts (
 
 ---
 
-### `user_coach_usage`
+#### `event_results`
+
+Per-instance event leaderboard. `finisher_status` ∈ `'finished' | 'dnf' | 'dns'`; `rank` is recomputed by `recompute_event_ranks` (called by trigger on insert/update/delete and by the race-mode auto-finalize path). Migration `20260424_001_event_results.sql`; rank tooling and approval grants in `20260428_001_role_permissions.sql`.
+
+The table is **account-optional** (migration `20261028_001_event_results_account_optional.sql`, persona #43): the PK is a surrogate `id` and `user_id` is nullable so an organiser can bulk-import chip-timing results for finishers with no account, identified by `bib` + `finisher_name`. Two plain `UNIQUE` constraints — `(event_id, instance_start, user_id)` and `(event_id, instance_start, bib)` — keep one result per account/bib per instance (SQL NULL-distinctness means account rows never collide on bib and vice-versa) and double as the `onConflict` arbiters for the self-submit and bulk-import upserts. A CHECK forces every row to identify its finisher by an account OR a bib + name. INSERT is permitted to the row owner (`event_results_insert_self`) OR a club event-organiser (`event_results_insert_organiser`); the leaderboard read surface `event_results_redacted` exposes `id` + `bib` + `finisher_name` (public race data) while keeping `run_id` / `age_grade_pct` / `note` owner-only.
+
+#### `event_result_claims`
+
+Lets a registered runner claim a bib-only imported result under organiser approval (migration `20261030_001_event_result_claims.sql`, persona #43; rationale in `decisions.md § 95`). Columns: `id`, `result_id` → `event_results(id)`, `claimant_id` → `auth.users(id)`, `status` ∈ `'pending' | 'approved' | 'rejected'`, `created_at`, `decided_by`, `decided_at`; `unique (result_id, claimant_id)`. RLS SELECT: a claimant sees their own claims, an event-organiser sees claims against results on events they run. There are **no** client write policies — both writes go through SECURITY DEFINER RPCs (EXECUTE granted to `authenticated` only):
+
+- `claim_event_result(p_result_id uuid)` — caller claims a bib-only row. Refuses already-claimed rows, events the caller can't see, and claimants who already hold a result for that `(event, instance)`; re-requesting after a rejection re-opens the claim.
+- `decide_event_result_claim(p_claim_id uuid, p_approve boolean)` — organiser-only. Approval sets `event_results.user_id` to the claimant (re-validating that the row is still bib-only and the claimant has no existing result for the instance) and auto-rejects competing pending claims on the same row.
+
+#### `race_sessions` / `race_pings`
+
+Live race mode (Wear OS-led, decisions per roadmap §227). `race_sessions` is the per-instance state machine (`armed → running → finished | cancelled`); `race_pings` is the append-only telemetry stream (lat/lng/distance_m/elapsed_s/bpm) the watch posts during the session. Race-director / event-organiser permissions are checked by `is_race_director(uuid)` / `is_event_organiser(uuid)` SECURITY DEFINER functions. Migration `20260425_001_race_sessions.sql`. Stale pings are purged by the `cleanup-stale-live-run-pings` cron (see [§ pg_cron schedules](#pg_cron-schedules)).
+
+### Training & coaching
+
+#### `training_plans` / `plan_weeks` / `plan_workouts`
+
+Generated training plans + week phasing + scheduled workouts. Owner-only RLS, deep cascading on plan delete. Plans can be cloned from a club-shared template via `clone_plan_template` (decisions §35); workouts link back to the run that completed them via `plan_workouts.completed_run_id`. Migrations `20260419_001_training_plans.sql` (schema), `20260420_001_plan_workouts_workout_kind.sql`, `20260421_001_plan_workouts_structure.sql`, `20260524_001_plan_template_sharing.sql`, `20260510_001_plan_workout_completion.sql`. Engine + week-grid UI: [docs/features/training.md](../features/training.md). Live execution: [docs/features/workout_execution.md](../features/workout_execution.md).
+
+**`training_plans.notes` on club templates** (`is_template = true` AND `club_id` is set): when a member adopts a template via `clone_plan_template`, the template's `notes` field is copied verbatim onto the new plan. On a private (owner-only) plan, `notes` is the runner's own free-text scratchpad. On a club template it becomes member-readable — anyone in the club who can `select * from training_plans where is_template = true and club_id = <X>` sees it. **Public-template-safe** is the documented contract: don't write a runner-private note onto a template. The publish flow (`publishPlanAsTemplate` in `data.ts`) explicitly nulls `vdot` and `current_5k_seconds` per migration `20260721_001`; a future tightening could add `notes` to that null-list, but until a template author writes a private note in production we keep the field carryable for legitimate "warm-up note" content.
+
+#### `user_coach_usage`
 
 Daily usage tracking for the AI Coach. One row per user per day, incremented by the coach endpoint on every message. The daily limit prevents runaway API costs.
 
@@ -551,7 +516,7 @@ create table user_coach_usage (
 
 ---
 
-### `coach_messages`
+#### `coach_messages`
 
 Per-account chat history for the AI Coach. One row per message authored by either the runner (`role = 'user'`) or the LLM (`role = 'assistant'`), scoped to a `(user_id, plan_id)` thread. `plan_id` is nullable so the "no active plan" thread is distinguishable from per-plan threads. Replaces an earlier localStorage-only persistence that didn't survive a sign-in on a different device.
 
@@ -585,24 +550,49 @@ Realtime: published on `supabase_realtime` so a client that reloads mid-stream p
 
 ---
 
-### `monthly_funding`
+### Profile, settings & devices
 
-Monthly funding tracker for the donate page's progress bar. One row per month, keyed by the first of the month (e.g. `'2026-05-01'`). Updated by the project owner when donations land. Publicly readable — the whole point is transparency.
+#### `user_profiles`
 
-Write path: service role only. RLS is enabled with a single `select` policy (`using (true)`); there are no INSERT/UPDATE/DELETE policies by design. All writes go through direct SQL or a service-role context (e.g. a webhook or admin script). No client-side write policy will be added.
+Supplementary user data not stored in `auth.users`. As of `20260521_001_user_follows.sql` profiles are world-readable to authenticated users (the new `"profiles are readable by anyone authenticated"` policy is additive to the existing self-only `"users own their profile"`). This is required for follow / feed / club-member rendering and was a latent bug fix — pre-migration, all cross-user enrichment queries silently returned empty rows. See `docs/architecture/decisions.md § 31` for the trade-off.
+
+`subscription_tier` and `subscription_at` are write-protected against user-JWT writers. The catch-all `users own their profile` policy was split into per-command policies in `20260624_001_lock_subscription_tier_to_service_role.sql`, and a `BEFORE UPDATE` trigger (`lock_subscription_columns`) raises 42501 (`insufficient_privilege`) on any tier-column change whose JWT role isn't `service_role`. Direct SQL (migrations + seed) bypasses the trigger because no JWT context is set. The only legitimate runtime writer is the `revenuecat-webhook` Edge Function (service-role).
 
 ```sql
-create table monthly_funding (
-  month             date primary key,
-  amount_received   numeric(10,2) not null default 0,
-  donor_count       integer not null default 0,
-  updated_at        timestamptz not null default now()
+create table user_profiles (
+  id                       uuid primary key references auth.users,
+  display_name             text,
+  avatar_url               text,
+  parkrun_number           text,                                -- e.g. 'A123456' (world-readable)
+  preferred_unit           text default 'km',                   -- 'km' | 'mi'
+  subscription_tier        text default 'free',                 -- 'free' | 'pro' | 'lifetime' (world-readable)
+  subscription_at          timestamptz,
+  gender                   text,                                -- 'male' | 'female' | 'nonbinary' | null
+  date_of_birth            date,
+  coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach
+  health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB persistence
+  created_at               timestamptz default now()
 );
+-- CHECK constraint enforces subscription_tier ∈ ('free','pro','lifetime') —
+-- migration 20260429_001_subscription_paywall.sql backfills any pre-existing
+-- 'premium' values to 'pro'. Keep this list in lockstep with the
+-- SubscriptionTier TS union in apps/web/src/lib/types.ts.
+--
+-- `coach_consent_at` and `health_data_consent_at` were added in
+-- 20260921_001_user_profiles_gdpr_consent_timestamps.sql per
+-- audit/gdpr (2026-05-25). Both nullable; NULL = consent not yet
+-- given. The /api/coach handler refuses to fan out to Anthropic
+-- when coach_consent_at is null; the Preferences page refuses to
+-- persist gender / DOB when health_data_consent_at is null and the
+-- consent checkbox is unticked. Withdrawal under Art 7(3) nulls
+-- the consent timestamp AND clears the associated fields atomically.
 ```
 
----
+#### `user_settings` / `user_device_settings`
 
-### `device_tokens`
+Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/backend/settings.md](settings.md) for the registered key catalogue.
+
+#### `device_tokens`
 
 Push-notification device tokens. One row per (user, device). Prepared in
 migration `20260506_001_device_tokens.sql` for the Phase 4b Clubs push
@@ -634,42 +624,9 @@ service-role key to fan out. A trigger touches `updated_at` on update.
 
 ---
 
-### `fitness_snapshots`
+### Fitness & analytics
 
-Time-series store for Pro-tier training-load metrics (VDOT, VO2 max,
-ATL, CTL, TSB). Prepared in migration `20260507_001_fitness_snapshots.sql`.
-No endpoint writes to it yet — the Pro tier today unlocks "unlimited AI
-Coach" and "priority processing" (see `decisions.md § 23`); the
-recovery-advisor / race-predictor features that will consume this table
-are tracked under `roadmap.md § Phase 3 — Premium tier`.
-
-```sql
-create table fitness_snapshots (
-  id                     uuid primary key default gen_random_uuid(),
-  user_id                uuid not null references auth.users(id) on delete cascade,
-  computed_at            timestamptz not null default now(),
-  vdot                   numeric(5, 2),
-  vo2_max                numeric(5, 2),
-  acute_load             numeric(8, 2),
-  chronic_load           numeric(8, 2),
-  training_stress_bal    numeric(8, 2),
-  qualifying_run_count   integer not null default 0,
-  source                 text not null default 'server'
-                          check (source in ('server', 'client')),
-  notes                  text,
-  created_at             timestamptz not null default now()
-);
-```
-
-Index `fitness_snapshots_user_time` on `(user_id, computed_at desc)`
-covers both the "latest snapshot" + "time window" read shapes. RLS:
-users see and write their own rows; the server-side recompute job
-writes via service role. RPC `latest_fitness_snapshot()` exists as a
-single-round-trip convenience for dashboard cards.
-
----
-
-### `personal_records`
+#### `personal_records`
 
 Cache table for per-distance PBs (`1_mile` / `5k` / `10k` / `half_marathon` /
 `marathon`; the mile bracket was added in `20261021_001`). Backed by triggers on `runs` so reads are a single indexed
@@ -707,68 +664,88 @@ the leaderboard UI lands.
 
 ---
 
-### `live_run_pings`
+#### `fitness_snapshots`
 
-Ephemeral per-sample GPS feed for the `/live/{run_id}` spectator page.
-Shipped in migration `20260509_001_live_run_pings.sql`.
+Time-series store for Pro-tier training-load metrics (VDOT, VO2 max,
+ATL, CTL, TSB). Prepared in migration `20260507_001_fitness_snapshots.sql`.
+No endpoint writes to it yet — the Pro tier today unlocks "unlimited AI
+Coach" and "priority processing" (see `decisions.md § 23`); the
+recovery-advisor / race-predictor features that will consume this table
+are tracked under `roadmap.md § Phase 3 — Premium tier`.
 
 ```sql
-create table live_run_pings (
-  id            bigserial primary key,
-  run_id        uuid not null references runs(id) on delete cascade,
-  user_id       uuid not null references auth.users(id) on delete cascade,
-  at            timestamptz not null default now(),
-  lat           double precision not null,
-  lng           double precision not null,
-  ele           double precision,
-  elapsed_s     integer,
-  distance_m    double precision,
-  bpm           integer
+create table fitness_snapshots (
+  id                     uuid primary key default gen_random_uuid(),
+  user_id                uuid not null references auth.users(id) on delete cascade,
+  computed_at            timestamptz not null default now(),
+  vdot                   numeric(5, 2),
+  vo2_max                numeric(5, 2),
+  acute_load             numeric(8, 2),
+  chronic_load           numeric(8, 2),
+  training_stress_bal    numeric(8, 2),
+  qualifying_run_count   integer not null default 0,
+  source                 text not null default 'server'
+                          check (source in ('server', 'client')),
+  notes                  text,
+  created_at             timestamptz not null default now()
 );
 ```
 
-- Added to `supabase_realtime` publication so change streams fan out to
-  subscribed browsers.
-- RLS: `select` when the parent run is public or owned by the caller;
-  `insert` / `delete` restricted to `auth.uid() = user_id` and (for
-  insert) a live run owned by the caller.
-- Recorder contract: one row per GPS sample (3–10 s cadence), delete
-  on finish. `cleanup_stale_live_run_pings()` (callable via service
-  role) wipes rows older than 4 hours as a safety net.
+Index `fitness_snapshots_user_time` on `(user_id, computed_at desc)`
+covers both the "latest snapshot" + "time window" read shapes. RLS:
+users see and write their own rows; the server-side recompute job
+writes via service role. RPC `latest_fitness_snapshot()` exists as a
+single-round-trip convenience for dashboard cards.
 
 ---
 
-### `run_matched_tracks`
+#### `mv_weekly_mileage`
 
-Per-run map-match output state. One row per run, populated by a trigger when `runs.track_url` lands or changes.
+Materialized view that pre-aggregates `runs` into `(user_id, week_start) → (total_distance_m, run_count)` so the `weekly_mileage` RPC and the dashboard's "This Week" card stay sub-millisecond as the runs table grows. Refreshed every five minutes by the `refresh-mv-weekly-mileage` pg_cron job (`refresh materialized view concurrently` — non-blocking thanks to the `mv_weekly_mileage_pk` unique index). Migrations: created in the seed-route + index pass, refresh schedule in `20260602_001_mv_weekly_mileage_refresh.sql`, EXECUTE revoke in `20260517_001_mv_weekly_mileage_revoke.sql` (callers go through the RPC, not direct SELECT).
+
+### Integrations & background jobs
+
+#### `integrations`
+
+OAuth tokens and connection state for each external platform per user.
 
 ```sql
-create table run_matched_tracks (
-  run_id uuid primary key references runs(id) on delete cascade,
-  status text not null default 'pending',
-  matched_track_url text,
-  attempts smallint not null default 0,
-  matched_at timestamptz,
-  algorithm text,
-  algorithm_version text,
-  error_message text,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  constraint run_matched_tracks_status_check
-    check (status in ('pending', 'matched', 'failed', 'skipped'))
+create table integrations (
+  id                       uuid primary key default gen_random_uuid(),
+  user_id                  uuid references auth.users not null,
+  provider                 text not null,            -- 'strava' | 'garmin' | 'parkrun' | 'runsignup'
+  access_token_secret_id   uuid references vault.secrets(id) on delete set null,
+  refresh_token_secret_id  uuid references vault.secrets(id) on delete set null,
+  token_expiry             timestamptz,
+  external_id              text,                     -- athlete ID on the provider
+  scope                    text,                     -- OAuth scopes granted
+  last_sync_at             timestamptz,
+  sync_cursor              text,                     -- pagination cursor for backfill
+  created_at               timestamptz default now(),
+  updated_at               timestamptz default now(),
+  unique (user_id, provider)
 );
-
-create index run_matched_tracks_pending
-  on run_matched_tracks (created_at)
-  where status = 'pending';
 ```
 
-- **`status`**: narrow union `pending | matched | failed | skipped`. Trigger inserts `pending`; the worker writes `matched` / `failed`. `skipped` is reserved for runs the worker decides not to match (too short, too noisy).
-- **RLS**: owner read only — owner of the parent run can SELECT, nobody can INSERT / UPDATE / DELETE through the API. The Go matching worker authenticates with the service role key and bypasses RLS.
-- **Reset on re-upload**: when `runs.track_url` is updated to a different value, the trigger resets the row back to `pending` (clears `matched_track_url`, `attempts`, `matched_at`, `error_message`, `algorithm` / `algorithm_version`) and stamps `source_track_url` with `NEW.track_url` so the matcher re-processes against the fresh data.
-- **`source_track_url`** (added in migration `20260611_001`): the `runs.track_url` value the row's match output is tagged against. Set by the trigger on every insert and every reset. The Go worker reads this at job start, runs the matcher, then PATCHes the row conditionally on `?source_track_url=eq.<value>`. A re-upload landing between read and write changes `source_track_url`, the conditional PATCH affects 0 rows, the worker discards its stale result and the fresh job (already queued by the trigger) produces the right answer. Closes the re-upload race at the DB level — no application-side attempts-CAS needed.
+**Tokens live in Supabase Vault, not on the row.** OAuth access / refresh
+tokens are encrypted at rest by Supabase Vault (libsodium, project-managed
+master key with built-in rotation). The `integrations` row carries only
+UUID references into `vault.secrets`. Never `select access_token from
+integrations` — that column was dropped in migration `20260603_001`.
 
-### `jobs`
+To read or write tokens, call the SECURITY DEFINER helpers:
+
+- `get_integration_tokens(p_user_id, p_provider)` returns
+  `(access_token text, refresh_token text, token_expiry timestamptz)`.
+  Service role bypasses the owner check; everyone else can only read
+  their own.
+- `set_integration_tokens(p_user_id, p_provider, p_access, p_refresh, p_expiry)`
+  upserts the row + creates / updates the vault secrets in place
+  (so `access_token_secret_id` stays stable across token refreshes).
+
+---
+
+#### `jobs`
 
 Generic Postgres-backed job queue. First tenant is map matching (`kind = 'map_match'`) but the same table will host the strava-webhook / token-refresh / data-export workers when those move off Edge Functions per `roadmap.md §214`.
 
@@ -813,46 +790,77 @@ create unique index jobs_dedupe_map_match
 - **Concurrency**: `claim_next_job` uses `for update skip locked` so multiple workers can drain in parallel without thrashing each other on the same row.
 - **Partial indexes**: the `jobs_queued` and `jobs_running` indexes are partial so queue size scales with the *active* set, not the cumulative job count. The `jobs_dedupe_map_match` index is also partial — once a job finishes, its row is no longer in the unique constraint, so a re-match becomes possible.
 
-### `user_settings` / `user_device_settings`
+#### `live_run_pings`
 
-Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/backend/settings.md](settings.md) for the registered key catalogue.
+Ephemeral per-sample GPS feed for the `/live/{run_id}` spectator page.
+Shipped in migration `20260509_001_live_run_pings.sql`.
 
-### `training_plans` / `plan_weeks` / `plan_workouts`
+```sql
+create table live_run_pings (
+  id            bigserial primary key,
+  run_id        uuid not null references runs(id) on delete cascade,
+  user_id       uuid not null references auth.users(id) on delete cascade,
+  at            timestamptz not null default now(),
+  lat           double precision not null,
+  lng           double precision not null,
+  ele           double precision,
+  elapsed_s     integer,
+  distance_m    double precision,
+  bpm           integer
+);
+```
 
-Generated training plans + week phasing + scheduled workouts. Owner-only RLS, deep cascading on plan delete. Plans can be cloned from a club-shared template via `clone_plan_template` (decisions §35); workouts link back to the run that completed them via `plan_workouts.completed_run_id`. Migrations `20260419_001_training_plans.sql` (schema), `20260420_001_plan_workouts_workout_kind.sql`, `20260421_001_plan_workouts_structure.sql`, `20260524_001_plan_template_sharing.sql`, `20260510_001_plan_workout_completion.sql`. Engine + week-grid UI: [docs/features/training.md](../features/training.md). Live execution: [docs/features/workout_execution.md](../features/workout_execution.md).
+- Added to `supabase_realtime` publication so change streams fan out to
+  subscribed browsers.
+- RLS: `select` when the parent run is public or owned by the caller;
+  `insert` / `delete` restricted to `auth.uid() = user_id` and (for
+  insert) a live run owned by the caller.
+- Recorder contract: one row per GPS sample (3–10 s cadence), delete
+  on finish. `cleanup_stale_live_run_pings()` (callable via service
+  role) wipes rows older than 4 hours as a safety net.
 
-**`training_plans.notes` on club templates** (`is_template = true` AND `club_id` is set): when a member adopts a template via `clone_plan_template`, the template's `notes` field is copied verbatim onto the new plan. On a private (owner-only) plan, `notes` is the runner's own free-text scratchpad. On a club template it becomes member-readable — anyone in the club who can `select * from training_plans where is_template = true and club_id = <X>` sees it. **Public-template-safe** is the documented contract: don't write a runner-private note onto a template. The publish flow (`publishPlanAsTemplate` in `data.ts`) explicitly nulls `vdot` and `current_5k_seconds` per migration `20260721_001`; a future tightening could add `notes` to that null-list, but until a template author writes a private note in production we keep the field carryable for legitimate "warm-up note" content.
+---
 
-### `event_results`
+### Billing
 
-Per-instance event leaderboard. `finisher_status` ∈ `'finished' | 'dnf' | 'dns'`; `rank` is recomputed by `recompute_event_ranks` (called by trigger on insert/update/delete and by the race-mode auto-finalize path). Migration `20260424_001_event_results.sql`; rank tooling and approval grants in `20260428_001_role_permissions.sql`.
+#### `monthly_funding`
 
-The table is **account-optional** (migration `20261028_001_event_results_account_optional.sql`, persona #43): the PK is a surrogate `id` and `user_id` is nullable so an organiser can bulk-import chip-timing results for finishers with no account, identified by `bib` + `finisher_name`. Two plain `UNIQUE` constraints — `(event_id, instance_start, user_id)` and `(event_id, instance_start, bib)` — keep one result per account/bib per instance (SQL NULL-distinctness means account rows never collide on bib and vice-versa) and double as the `onConflict` arbiters for the self-submit and bulk-import upserts. A CHECK forces every row to identify its finisher by an account OR a bib + name. INSERT is permitted to the row owner (`event_results_insert_self`) OR a club event-organiser (`event_results_insert_organiser`); the leaderboard read surface `event_results_redacted` exposes `id` + `bib` + `finisher_name` (public race data) while keeping `run_id` / `age_grade_pct` / `note` owner-only.
+Monthly funding tracker for the donate page's progress bar. One row per month, keyed by the first of the month (e.g. `'2026-05-01'`). Updated by the project owner when donations land. Publicly readable — the whole point is transparency.
 
-### `event_result_claims`
+Write path: service role only. RLS is enabled with a single `select` policy (`using (true)`); there are no INSERT/UPDATE/DELETE policies by design. All writes go through direct SQL or a service-role context (e.g. a webhook or admin script). No client-side write policy will be added.
 
-Lets a registered runner claim a bib-only imported result under organiser approval (migration `20261030_001_event_result_claims.sql`, persona #43; rationale in `decisions.md § 95`). Columns: `id`, `result_id` → `event_results(id)`, `claimant_id` → `auth.users(id)`, `status` ∈ `'pending' | 'approved' | 'rejected'`, `created_at`, `decided_by`, `decided_at`; `unique (result_id, claimant_id)`. RLS SELECT: a claimant sees their own claims, an event-organiser sees claims against results on events they run. There are **no** client write policies — both writes go through SECURITY DEFINER RPCs (EXECUTE granted to `authenticated` only):
+```sql
+create table monthly_funding (
+  month             date primary key,
+  amount_received   numeric(10,2) not null default 0,
+  donor_count       integer not null default 0,
+  updated_at        timestamptz not null default now()
+);
+```
 
-- `claim_event_result(p_result_id uuid)` — caller claims a bib-only row. Refuses already-claimed rows, events the caller can't see, and claimants who already hold a result for that `(event, instance)`; re-requesting after a rejection re-opens the claim.
-- `decide_event_result_claim(p_claim_id uuid, p_approve boolean)` — organiser-only. Approval sets `event_results.user_id` to the claimant (re-validating that the row is still bib-only and the claimant has no existing result for the instance) and auto-rejects competing pending claims on the same row.
+---
 
-### `reports`
+### Infrastructure
 
-User-submitted reports against a profile, club, or route. Polymorphic via `(target_kind, target_id)` where `target_kind ∈ {'user', 'club', 'route'}`. Reason is constrained to `{'spam', 'harassment', 'inappropriate', 'impersonation', 'other'}`; status is `{'pending', 'reviewed', 'dismissed'}`. A partial-unique index `reports_no_duplicate_pending` enforces one pending report per (reporter, target) pair — once status flips to reviewed/dismissed the same reporter can re-file if the target reoffends.
+#### `rate_limits`
 
-Inserts go through the `submit_report(p_target_kind, p_target_id, p_reason, p_notes)` SECURITY DEFINER RPC, which validates the target row exists, rejects self-reports on `target_kind='user'`, rate-limits via the shared `enforce_create_rate_limit` helper at 10/hour per reporter, and surfaces duplicate-pending as a 23505 with a "you already have a pending report" hint. RLS hides others' reports from each user — the only way to *read* `reports` cross-user is via service_role, which is intentional: reports are pending evidence, not public attribution.
+Per-user fixed-window counters that gate Edge Function endpoints. Read/written exclusively through the `check_rate_limit` SECURITY DEFINER function — never direct SELECT/INSERT.
 
-There is no admin UI yet — v1 moderation happens in Supabase Studio against the `reports` table. The deferred admin queue, auto-hide-after-N, and reputation-weighted reports are tracked in [roadmap.md § Anti-spam / moderation](../product/roadmap.md#anti-spam--moderation--whats-shipped-whats-deferred). Migration `20260908_001_user_reports.sql`. Pinned by `apps/backend/supabase/tests/reports_test.sql` (7 pgtap subtests) + `apps/web/tests-e2e/cross-cutting/reports.spec.ts` (2 e2e tests).
+```sql
+create table rate_limits (
+  user_id        uuid not null,
+  bucket         text not null,           -- e.g. 'parkrun-import'
+  window_start   timestamptz not null,    -- floor(epoch / window) * window
+  count          integer not null default 0,
+  primary key (user_id, bucket, window_start)
+);
+```
 
-### `race_sessions` / `race_pings`
+`check_rate_limit(p_user_id, p_bucket, p_max, p_window_seconds) returns table(allowed bool, retry_after_seconds int)` — atomic increment-and-check; even denied calls increment, but the user just stays at ceiling+N until the window rolls (no extra punishment). Cron job `cleanup-stale-rate-limits` deletes rows older than 24 h hourly. RLS is enabled with no policies so direct REST access returns zero rows; the EF helper bypasses RLS via the SECURITY DEFINER grant.
 
-Live race mode (Wear OS-led, decisions per roadmap §227). `race_sessions` is the per-instance state machine (`armed → running → finished | cancelled`); `race_pings` is the append-only telemetry stream (lat/lng/distance_m/elapsed_s/bpm) the watch posts during the session. Race-director / event-organiser permissions are checked by `is_race_director(uuid)` / `is_event_organiser(uuid)` SECURITY DEFINER functions. Migration `20260425_001_race_sessions.sql`. Stale pings are purged by the `cleanup-stale-live-run-pings` cron (see [§ pg_cron schedules](#pg_cron-schedules)).
+---
 
-### `mv_weekly_mileage`
-
-Materialized view that pre-aggregates `runs` into `(user_id, week_start) → (total_distance_m, run_count)` so the `weekly_mileage` RPC and the dashboard's "This Week" card stay sub-millisecond as the runs table grows. Refreshed every five minutes by the `refresh-mv-weekly-mileage` pg_cron job (`refresh materialized view concurrently` — non-blocking thanks to the `mv_weekly_mileage_pk` unique index). Migrations: created in the seed-route + index pass, refresh schedule in `20260602_001_mv_weekly_mileage_refresh.sql`, EXECUTE revoke in `20260517_001_mv_weekly_mileage_revoke.sql` (callers go through the RPC, not direct SELECT).
-
-### pg_cron schedules
+#### pg_cron schedules
 
 | Job | Schedule | What it does |
 |---|---|---|
@@ -1363,6 +1371,18 @@ SECURITY DEFINER. Pushes a claimed job back into the queue with a delay — the 
 ### `enqueue_run_rematch(p_run_id)`
 
 SECURITY DEFINER. Owner-only manual re-match trigger called by the "Re-match" button on `/runs/[id]`. Resets `run_matched_tracks` (status=pending, attempts=0, error_message=null, …) and inserts a fresh `map_match` row into `jobs`. Self-gates on `auth.uid() = run.user_id`; non-owner calls raise `42501`. Idempotent against in-flight jobs via `jobs_dedupe_map_match`. Migration `20260612_001_enqueue_run_rematch.sql`.
+
+### `clone_plan_template(template_id uuid, new_start_date date)`
+
+SECURITY DEFINER RPC for plan-template adoption (decisions §35). Verifies the caller can SELECT the template (own plan or club member of the template's `club_id`), then duplicates `training_plans` + `plan_weeks` + `plan_workouts` into a new user-owned plan anchored at `new_start_date`. All workout `scheduled_date` values are shifted by the date offset between the template's `start_date` and the new start date. The new plan's `parent_template_id` points back at the template; `is_template = false` and `status = 'active'`. Returns the new plan's id. Granted to `authenticated`.
+
+### `clip_track_for_user(target_user_id uuid, points jsonb)`
+
+SECURITY DEFINER RPC for privacy-zone clipping (decisions §33). Reads `user_settings.prefs.privacy_zones` for the target user, walks the input points dropping in-zone leading + trailing entries, and returns the contiguous middle as jsonb. Zones never leave the database. Granted to `anon` + `authenticated` so anonymous `/share/run/[id]` and `/share/route/[id]` viewers also receive clipped output. Input is capped at 50 000 points (raise on overflow) to bound the residual dense-grid probe attack. Returns input unchanged when the target user has no zones configured. Helpers `privacy_distance_m(lat1, lng1, lat2, lng2)` and `privacy_in_any_zone(lat, lng, zones_json)` are exposed in the same migration but used only internally by the RPC.
+
+### `clip_route_for_viewer(p_route_id uuid)`
+
+SECURITY DEFINER RPC for the routes equivalent of `clip_track_for_user` (decisions §33, migration `20260625_001`). Self-contained: caller passes only the route id. Looks up the row internally, applies the same visibility gate as the routes SELECT policies (owner / public / club member; raises `42501` otherwise so private-route reads are loud), and returns either the unclipped `waypoints` (owner) or the clipped output (non-owner, delegated to `clip_track_for_user` so the zone walk has one implementation). Granted to `anon` + `authenticated`. Anon callers can only read `is_public = true` routes — private-route reads from anon raise `42501`. Routes carry waypoints inline (no Storage indirection like runs) so this is a straight RPC rather than an Edge Function.
 
 ---
 
