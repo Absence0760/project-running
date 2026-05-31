@@ -114,17 +114,32 @@ def _check_add(args):
 
 def _check_commit(args):
     skip_next = False
+    saw_double_dash = False
+    has_pathspec = False
+    exempt = False
     for a in args:
         if skip_next:
             skip_next = False
             continue
         if a == "--":
-            break
+            saw_double_dash = True
+            continue
+        if saw_double_dash:
+            # Everything after `--` is a pathspec — the commit is scoped.
+            has_pathspec = True
+            continue
         if a == "--all":
             return ("`git commit --all` auto-stages every tracked modification, "
                     "including another session's. Stage your own paths explicitly "
                     "(`git add <path>`) and commit without --all.")
         if a.startswith("--"):
+            # These don't snapshot the working index the racy way, so a missing
+            # pathspec is fine for them (amend/merge-continuation/empty commits).
+            if a in ("--amend", "--no-edit", "--allow-empty",
+                     "--allow-empty-message"):
+                exempt = True
+            if a.startswith("--pathspec-from-file"):
+                has_pathspec = True
             if a in ("--message", "--file", "--reuse-message", "--reedit-message",
                      "--fixup", "--squash", "--author", "--date", "--template",
                      "--pathspec-from-file"):
@@ -140,6 +155,15 @@ def _check_commit(args):
             if cluster[-1] in ("m", "F", "C", "c"):
                 skip_next = True
             continue
+        # A bare positional token is a pathspec — the commit is scoped.
+        has_pathspec = True
+    if not has_pathspec and not exempt:
+        return ("`git commit` with no pathspec commits the ENTIRE staged index — in a "
+                "shared checkout that sweeps up whatever another Claude session has "
+                "staged (this has happened). Commit only your own paths: "
+                "`git commit -m \"…\" -- path/to/file ...` (a path-scoped commit "
+                "ignores anything else staged). Use --amend / --allow-empty if you "
+                "genuinely have no paths.")
     return None
 
 
