@@ -7,6 +7,7 @@
 	import { getUnit } from '$lib/format/units.svelte';
 	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
 	import { watchMapResize } from '$lib/routes/map_resize';
+	import { minMax } from '$lib/util/min_max';
 	import type { TrackPoint } from '$lib/types';
 	import {
 		buildPaceSegments,
@@ -661,12 +662,16 @@
 		trackCoords = track.map((p) => [p.lng, p.lat]);
 
 		if (trackCoords.length > 0) {
-			const lngs = trackCoords.map((c) => c[0]);
-			const lats = trackCoords.map((c) => c[1]);
-			trackBounds = [
-				[Math.min(...lngs), Math.min(...lats)],
-				[Math.max(...lngs), Math.max(...lats)]
-			];
+			// Reduce, don't spread: `Math.min(...lngs)` throws RangeError past
+			// ~110k args and an ultra track is ~180k points.
+			const lng = minMax(trackCoords.map((c) => c[0]));
+			const lat = minMax(trackCoords.map((c) => c[1]));
+			if (lng && lat) {
+				trackBounds = [
+					[lng.min, lat.min],
+					[lng.max, lat.max]
+				];
+			}
 		}
 
 		if (!mapConsented) return; // Wait for the user to tap "Load map".

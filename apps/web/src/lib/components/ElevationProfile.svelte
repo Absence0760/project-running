@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { formatDistance } from '$lib/format/units.svelte';
+	import { minMax } from '$lib/util/min_max';
 
 	/// `onhover` is fired with the elevations-index the user is
 	/// currently inspecting (null when the pointer leaves the chart).
@@ -27,8 +28,11 @@
 	let plotWidth = $derived(Math.max(containerWidth - padding.left - padding.right, 0));
 	let plotHeight = $derived(height - padding.top - padding.bottom);
 
-	let minEle = $derived(elevations.length > 0 ? Math.min(...elevations) : 0);
-	let maxEle = $derived(elevations.length > 0 ? Math.max(...elevations) : 100);
+	// `minMax` reduces instead of spreading: `Math.min(...elevations)` throws
+	// RangeError past ~110k args, and an ultra track is ~180k points.
+	let extent = $derived(minMax(elevations));
+	let minEle = $derived(extent?.min ?? 0);
+	let maxEle = $derived(extent?.max ?? 100);
 	let eleRange = $derived(Math.max(maxEle - minEle, 1));
 
 	/// Total elevation gain — sum of positive deltas across the
