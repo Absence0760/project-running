@@ -63,11 +63,19 @@ test('transactional-email sub-processor is resolved, not a TODO provider', () =>
 	);
 });
 
-test('the project-today sub-processor table carries no region TODO placeholder', () => {
-	// Belt-and-braces against the exact Critical: a `TODO: which region`
-	// style placeholder anywhere in the disclosure table.
-	assert.ok(
-		!/TODO:\s*which\s+region/i.test(subProcessors),
-		'sub-processors.md must not contain a "TODO: which region" placeholder.',
+test('the sub-processor table carries no unresolved region placeholder', () => {
+	// Belt-and-braces against the Critical: ANY TODO that gates a region
+	// value, however worded ("which region", "which API region", …). The
+	// pattern is deliberately loose around the middle so a word insertion
+	// can't slip a live placeholder past the guard. The Sentry row's
+	// "US (default) — verify project region" is intentionally NOT matched
+	// (it states a region + a verify action, no TODO keyword).
+	const offenders = subProcessors
+		.split('\n')
+		.filter((l) => /TODO/i.test(l) && /region/i.test(l));
+	assert.deepEqual(
+		offenders,
+		[],
+		`sub-processors.md still has TODO placeholder(s) gating a region:\n  ${offenders.join('\n  ')}`,
 	);
 });
