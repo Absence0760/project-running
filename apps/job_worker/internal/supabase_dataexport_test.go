@@ -823,16 +823,22 @@ func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T)
 		}
 	}
 
-	// Both DM directions queried.
-	if dmSentQ == "" || dmRecvQ == "" {
-		t.Errorf("direct_messages must be queried in both directions (sender_id + recipient_id); sent=%q recv=%q", dmSentQ, dmRecvQ)
-	}
-	// Both coaching directions queried.
-	if coachQ == "" || athleteQ == "" {
-		t.Errorf("coach_athletes must be queried as coach + as athlete; coach=%q athlete=%q", coachQ, athleteQ)
-	}
-	if eventResQ == "" {
-		t.Errorf("event_results must be queried for the subject")
+	// Each query must be scoped to the subject's own id — assert the
+	// full `<column>=eq.<uid>` filter, not just the column name, so the
+	// test can't pass with an empty or wrong user id (the TS twin in
+	// backup_spec.test.ts asserts the same).
+	for _, c := range []struct {
+		name, query, want string
+	}{
+		{"direct_messages (sent)", dmSentQ, "sender_id=eq.user-A"},
+		{"direct_messages (received)", dmRecvQ, "recipient_id=eq.user-A"},
+		{"coach_athletes (as coach)", coachQ, "coach_id=eq.user-A"},
+		{"coach_athletes (as athlete)", athleteQ, "athlete_id=eq.user-A"},
+		{"event_results", eventResQ, "user_id=eq.user-A"},
+	} {
+		if !strings.Contains(c.query, c.want) {
+			t.Errorf("%s must be filtered by %q (scoped to the subject); got query=%q", c.name, c.want, c.query)
+		}
 	}
 	// invite_token is a redeemable credential — it must never be in the
 	// coach_athletes select projection.
