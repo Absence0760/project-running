@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initial, hashHue } from '$lib/avatar';
+	import Avatar from '$lib/components/Avatar.svelte';
+	import { hashHue } from '$lib/avatar';
 	import {
 		searchPeople,
 		fetchSuggestedPeople,
@@ -173,17 +174,14 @@
 		<div class="grid">
 			{#each visible as person (person.id)}
 				<a class="person-row" href="/u/{person.id}">
-					<span
-						class="avatar"
-						style="--seed: {hashHue(person.id)}"
-						aria-hidden="true"
-					>
-						{#if person.avatar_url}
-							<img src={person.avatar_url} alt="" />
-						{:else}
-							{initial(person.display_name)}
-						{/if}
-					</span>
+					<Avatar
+						url={person.avatar_url}
+						name={person.display_name}
+						size="2.5rem"
+						font="1.05rem"
+						bg="seed"
+						seedHue={hashHue(person.id)}
+					/>
 					<div class="person-body">
 						<span class="person-name">{person.display_name ?? 'Runner'}</span>
 						<span class="person-meta">
@@ -316,25 +314,6 @@
 	.person-row:hover {
 		transform: translateY(-1px);
 		border-color: color-mix(in srgb, var(--color-primary) 35%, var(--color-border));
-	}
-	.avatar {
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 50%;
-		background: hsl(var(--seed, 260), 55%, 55%);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 700;
-		font-size: 1.05rem;
-		flex-shrink: 0;
-		overflow: hidden;
-	}
-	.avatar img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 	.person-body {
 		flex: 1;

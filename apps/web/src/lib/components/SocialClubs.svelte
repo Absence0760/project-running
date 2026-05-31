@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { hashHue } from '$lib/avatar';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -206,9 +207,14 @@
 			{#each visible as club (club.id)}
 				<a href="/clubs/{club.slug}" class="card">
 					<div class="card-header">
-						<div class="avatar" style="--seed: {hashHue(club.id)}" aria-hidden="true">
-							{(club.name[0] ?? '?').toUpperCase()}
-						</div>
+						<Avatar
+							name={club.name}
+							size="2.5rem"
+							font="1.1rem"
+							bg="seed"
+							sat={50}
+							seedHue={hashHue(club.id)}
+						/>
 						<div class="card-title">
 							<h3>
 									{club.name}
@@ -386,19 +392,6 @@
 		border-color: color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
 	}
 	.card-header { display: flex; align-items: center; gap: 0.75rem; }
-	.avatar {
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 50%;
-		background: hsl(var(--seed, 260), 50%, 55%);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 700;
-		font-size: 1.1rem;
-		flex-shrink: 0;
-	}
 	.card-title { flex: 1; min-width: 0; }
 	.card-title h3 {
 		font-size: 1.05rem;

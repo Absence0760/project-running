@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initial } from '$lib/avatar';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration } from '$lib/time';
 	import {
 		fetchSegmentsForRoute,
@@ -320,13 +320,12 @@
 												{/if}
 											</span>
 											<a href="/u/{entry.athlete.id}" class="athlete">
-												<span class="avatar-sm">
-													{#if entry.athlete.avatar_url}
-														<img src={entry.athlete.avatar_url} alt="" />
-													{:else}
-														{initial(entry.athlete.display_name)}
-													{/if}
-												</span>
+												<Avatar
+													url={entry.athlete.avatar_url}
+													name={entry.athlete.display_name}
+													size="1.6rem"
+													font="0.72rem"
+												/>
 												<span class="athlete-name">
 													{entry.athlete.display_name ?? 'Runner'}
 												</span>
@@ -572,23 +571,6 @@
 		flex: 1;
 		text-decoration: none;
 		color: inherit;
-	}
-	.avatar-sm {
-		width: 1.6rem;
-		height: 1.6rem;
-		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: white;
-		display: grid;
-		place-items: center;
-		font-size: 0.72rem;
-		font-weight: 700;
-		overflow: hidden;
-	}
-	.avatar-sm img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 	.athlete-name {
 		flex: 1;

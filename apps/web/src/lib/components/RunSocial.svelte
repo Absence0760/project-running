@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initial } from '$lib/avatar';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatRelativeTime } from '$lib/time';
 	import {
 		fetchKudosForRun,
@@ -149,13 +149,12 @@
 			{#each topLevel as comment (comment.id)}
 				<article class="comment">
 					<a href="/u/{comment.author_id}" class="comment-author">
-						<div class="avatar-sm">
-							{#if comment.author.avatar_url}
-								<img src={comment.author.avatar_url} alt="" />
-							{:else}
-								{initial(comment.author.display_name)}
-							{/if}
-						</div>
+						<Avatar
+							url={comment.author.avatar_url}
+							name={comment.author.display_name}
+							size="2rem"
+							font="0.85rem"
+						/>
 					</a>
 					<div class="comment-body">
 						<div class="comment-head">
@@ -186,13 +185,12 @@
 								{#each repliesByParent.get(comment.id) ?? [] as reply (reply.id)}
 									<div class="reply">
 										<a href="/u/{reply.author_id}" class="reply-author">
-											<div class="avatar-sm">
-												{#if reply.author.avatar_url}
-													<img src={reply.author.avatar_url} alt="" />
-												{:else}
-													{initial(reply.author.display_name)}
-												{/if}
-											</div>
+											<Avatar
+												url={reply.author.avatar_url}
+												name={reply.author.display_name}
+												size="2rem"
+												font="0.85rem"
+											/>
 										</a>
 										<div class="reply-body">
 											<div class="comment-head">
@@ -339,24 +337,7 @@
 		text-decoration: none;
 	}
 
-	.avatar-sm {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: white;
-		display: grid;
-		place-items: center;
-		font-size: 0.85rem;
-		font-weight: 700;
-		overflow: hidden;
-	}
 
-	.avatar-sm img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
 
 	.comment-body,
 	.reply-body {

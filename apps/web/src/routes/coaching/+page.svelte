@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initial } from '$lib/avatar';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import {
 		fetchMyAthletes,
 		fetchPendingCoachInvites,
@@ -160,7 +160,7 @@
 				<ul class="link-list">
 					{#each athletes as a (a.id)}
 						<li class="link-row">
-							<span class="avatar" aria-hidden="true">{initial(a.display_name)}</span>
+							<Avatar name={a.display_name} size="2.25rem" font="0.85rem" />
 							<div class="link-body">
 								<a class="link-name" href="/u/{a.user_id}">{a.display_name ?? 'Runner'}</a>
 								<span class="link-sub">Coaching since {sinceLabel(a.accepted_at)}</span>
@@ -187,7 +187,7 @@
 				<ul class="link-list">
 					{#each coaches as c (c.id)}
 						<li class="link-row">
-							<span class="avatar" aria-hidden="true">{initial(c.display_name)}</span>
+							<Avatar name={c.display_name} size="2.25rem" font="0.85rem" />
 							<div class="link-body">
 								<a class="link-name" href="/u/{c.user_id}">{c.display_name ?? 'Coach'}</a>
 								<span class="link-sub">Linked since {sinceLabel(c.accepted_at)}</span>
@@ -275,18 +275,6 @@
 	}
 	.pending-list .link-row {
 		border-style: dashed;
-	}
-	.avatar {
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: #fff;
-		display: grid;
-		place-items: center;
-		font-weight: 700;
-		font-size: 0.85rem;
-		flex-shrink: 0;
 	}
 	.pending-icon {
 		width: 2.25rem;

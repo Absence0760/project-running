@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime } from '$lib/time';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
@@ -683,13 +684,7 @@
 						{@const viewerFollowsRow = viewerFollows.has(p.id)}
 						<div class="person-row">
 							<a href="/u/{p.id}" class="person-main">
-								<div class="avatar-sm" aria-hidden="true">
-									{#if p.avatar_url}
-										<img src={p.avatar_url} alt="" />
-									{:else}
-										{(p.display_name?.[0] ?? '?').toUpperCase()}
-									{/if}
-								</div>
+								<Avatar url={p.avatar_url} name={p.display_name} size="2rem" font="0.85rem" />
 								<span class="person-name">{p.display_name ?? 'Runner'}</span>
 							</a>
 							{#if auth.loggedIn && !isViewer}
@@ -750,13 +745,7 @@
 						{@const viewerFollowsRow = viewerFollows.has(p.id)}
 						<div class="person-row">
 							<a href="/u/{p.id}" class="person-main">
-								<div class="avatar-sm" aria-hidden="true">
-									{#if p.avatar_url}
-										<img src={p.avatar_url} alt="" />
-									{:else}
-										{(p.display_name?.[0] ?? '?').toUpperCase()}
-									{/if}
-								</div>
+								<Avatar url={p.avatar_url} name={p.display_name} size="2rem" font="0.85rem" />
 								<span class="person-name">{p.display_name ?? 'Runner'}</span>
 							</a>
 							{#if auth.loggedIn && !isViewer}
@@ -880,13 +869,7 @@
 						<article class="entry">
 							<header class="entry-head">
 								<a href="/u/{entry.author.id}" class="author">
-									<div class="avatar-sm" aria-hidden="true">
-										{#if entry.author.avatar_url}
-											<img src={entry.author.avatar_url} alt="" />
-										{:else}
-											{(entry.author.display_name?.[0] ?? '?').toUpperCase()}
-										{/if}
-									</div>
+									<Avatar url={entry.author.avatar_url} name={entry.author.display_name} size="2rem" font="0.85rem" />
 									<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
 								</a>
 								<span class="when">{formatRelativeTime(entry.started_at)}</span>
@@ -1332,25 +1315,7 @@
 		}
 	}
 
-	.avatar-sm {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: white;
-		display: grid;
-		place-items: center;
-		font-size: 0.85rem;
-		font-weight: 700;
-		overflow: hidden;
-		flex-shrink: 0;
-	}
 
-	.avatar-sm img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
-	}
 
 	/* Empty-state card — same shape as /clubs, /routes, /runs. Card with
 	   icon (or brand mark) + h3 + explainer + CTA. */

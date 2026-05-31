@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime } from '$lib/time';
 	import {
 		fetchFollowingFeed,
@@ -223,13 +224,13 @@
 				<article class="entry">
 					<header class="entry-head">
 						<a href="/u/{entry.author.id}" class="author">
-							<div class="avatar-sm" aria-hidden="true">
-								{#if entry.author.avatar_url}
-									<img src={entry.author.avatar_url} alt="" />
-								{:else}
-									{(entry.author.display_name?.[0] ?? '?').toUpperCase()}
-								{/if}
-							</div>
+							<Avatar
+								url={entry.author.avatar_url}
+								name={entry.author.display_name}
+								size="1.75rem"
+								font="0.8rem"
+								bg="primary"
+							/>
 							<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
 						</a>
 						<span class="when">{formatRelativeTime(entry.started_at)}</span>
@@ -365,24 +366,6 @@
 		gap: 0.4rem;
 		text-decoration: none;
 		color: inherit;
-	}
-	.avatar-sm {
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: 50%;
-		background: var(--color-primary);
-		color: white;
-		font-weight: 700;
-		font-size: 0.8rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		overflow: hidden;
-	}
-	.avatar-sm img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 	.author-name {
 		font-weight: 600;

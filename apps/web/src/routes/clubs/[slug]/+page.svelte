@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { initial, hashHue } from '$lib/avatar';
+	import Avatar from '$lib/components/Avatar.svelte';
+	import { hashHue } from '$lib/avatar';
 	import { page } from '$app/stores';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
@@ -608,9 +609,7 @@
 		</a>
 
 		<div class="hero">
-			<div class="avatar-lg" style="--seed: {hashHue(club.id)}">
-				{initial(club.name)}
-			</div>
+			<Avatar name={club.name} size="4.5rem" font="2rem" bg="seed" seedHue={hashHue(club.id)} />
 			<div class="hero-text">
 				<div class="hero-title-row">
 					<h1>
@@ -755,9 +754,7 @@
 				<div class="pending-list">
 					{#each pending as p (p.user_id)}
 						<div class="pending-row">
-							<div class="avatar-sm" style="--seed: {hashHue(p.user_id)}">
-								{initial(p.display_name)}
-							</div>
+							<Avatar name={p.display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(p.user_id)} />
 							<div class="pending-info">
 								<strong>{p.display_name ?? 'Member'}</strong>
 								<span class="when">Requested {fmtRelative(p.joined_at ?? new Date().toISOString())}</span>
@@ -893,9 +890,7 @@
 						<article class="post">
 							<div class="post-author">
 								<a href="/u/{post.author_id}" class="author-link">
-									<div class="avatar-sm" style="--seed: {hashHue(post.author_id)}">
-										{initial(post.author_display_name)}
-									</div>
+									<Avatar name={post.author_display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(post.author_id)} />
 									<div>
 										<strong>{post.author_display_name ?? 'Member'}</strong>
 										<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
@@ -928,9 +923,7 @@
 										{#each expandedThreads[post.id] ?? [] as reply (reply.id)}
 											<div class="reply">
 												<a href="/u/{reply.author_id}" class="reply-author-link">
-													<div class="avatar-sm" style="--seed: {hashHue(reply.author_id)}">
-														{initial(reply.author_display_name)}
-													</div>
+													<Avatar name={reply.author_display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(reply.author_id)} />
 												</a>
 												<div class="reply-body">
 													<div class="reply-head">
@@ -1237,9 +1230,7 @@
 					{#each members as m (m.user_id)}
 						<div class="member">
 							<a href="/u/{m.user_id}" class="member-link">
-								<div class="avatar-sm" style="--seed: {hashHue(m.user_id)}" aria-hidden="true">
-									{initial(m.display_name)}
-								</div>
+								<Avatar name={m.display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(m.user_id)} />
 								<div class="member-name">
 									<strong>{m.display_name ?? 'Member'}</strong>
 									{#if m.role !== 'member' && (!isAdmin || m.role === 'owner' || m.user_id === club?.owner_id)}
@@ -1428,32 +1419,7 @@
 		margin-bottom: var(--space-lg);
 	}
 
-	.avatar-lg {
-		width: 4.5rem;
-		height: 4.5rem;
-		border-radius: 50%;
-		background: hsl(var(--seed, 260), 55%, 55%);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 700;
-		font-size: 2rem;
-	}
 
-	.avatar-sm {
-		width: 2.1rem;
-		height: 2.1rem;
-		border-radius: 50%;
-		background: hsl(var(--seed, 260), 50%, 55%);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 700;
-		font-size: 0.9rem;
-		flex-shrink: 0;
-	}
 
 	.hero-text h1 {
 		font-size: 1.6rem;

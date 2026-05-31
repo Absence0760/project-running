@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { initial, hashHue } from '$lib/avatar';
 	import { formatDuration as baseDuration } from '$lib/time';
 	import { page } from '$app/stores';
@@ -1201,9 +1202,7 @@
 					{#each eventPosts as p (p.id)}
 						<article class="post">
 							<div class="post-author">
-								<div class="avatar-sm" style="--seed: {hashHue(p.author_id)}">
-									{initial(p.author_display_name)}
-								</div>
+								<Avatar name={p.author_display_name} size="2rem" font="0.85rem" bg="seed" sat={50} seedHue={hashHue(p.author_id)} />
 								<div>
 									<strong>{p.author_display_name ?? 'Member'}</strong>
 									<span class="when">{fmtRelative(p.created_at ?? new Date().toISOString())}</span>
@@ -1299,9 +1298,7 @@
 					{#each results as r (rowKey(r))}
 						<li class="result" class:me={r.user_id !== null && r.user_id === myUserId} class:pending={!r.organiser_approved}>
 							<span class="rank">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
-							<div class="avatar-sm" style="--seed: {hashHue(rowKey(r))}">
-								{initial(r.display_name)}
-							</div>
+							<Avatar name={r.display_name} size="2rem" font="0.85rem" bg="seed" sat={50} seedHue={hashHue(rowKey(r))} />
 							<div class="res-info">
 								<strong>{r.display_name ?? 'Runner'}</strong>
 								{#if r.user_id !== null && r.user_id === myUserId}<span class="you">(you)</span>{/if}
@@ -1497,9 +1494,7 @@
 				<div class="attendees">
 					{#each attendees as a (a.user_id)}
 						<div class="attendee" class:maybe={a.status === 'maybe'} class:declined={a.status === 'declined'}>
-							<div class="avatar-sm" style="--seed: {hashHue(a.user_id)}">
-								{initial(a.display_name)}
-							</div>
+							<Avatar name={a.display_name} size="2rem" font="0.85rem" bg="seed" sat={50} seedHue={hashHue(a.user_id)} />
 							<div class="att-info">
 								<strong>{a.display_name ?? 'Member'}</strong>
 								<span class="status">{a.status}</span>
@@ -2044,18 +2039,6 @@
 		color: var(--color-text-tertiary);
 	}
 
-	.avatar-sm {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
-		background: hsl(var(--seed, 260), 50%, 55%);
-		color: white;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		font-weight: 700;
-		font-size: 0.85rem;
-	}
 
 	.error {
 		color: var(--color-danger);

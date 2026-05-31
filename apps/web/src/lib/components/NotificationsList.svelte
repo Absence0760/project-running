@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initial } from '$lib/avatar';
+	import Avatar from '$lib/components/Avatar.svelte';
 	import { goto } from '$app/navigation';
 	import {
 		fetchNotifications,
@@ -184,13 +184,12 @@
 			{#each visible as item (item.row.id)}
 				<li class="item-wrap" class:unread={item.row.read_at == null}>
 					<button class="item-main" type="button" onclick={() => open(item)}>
-						<span class="avatar-md">
-							{#if item.actor?.avatar_url}
-								<img src={item.actor.avatar_url} alt="" />
-							{:else}
-								{initial(item.actor?.display_name)}
-							{/if}
-						</span>
+						<Avatar
+							url={item.actor?.avatar_url}
+							name={item.actor?.display_name}
+							size="2.5rem"
+							font="0.95rem"
+						/>
 						<span class="body">
 							<span class="verb">{verbFor(item)}</span>
 							{#if item.comment_excerpt}
@@ -315,24 +314,6 @@
 		text-align: left;
 		font: inherit;
 		color: inherit;
-	}
-	.avatar-md {
-		flex-shrink: 0;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 50%;
-		background: var(--gradient-primary);
-		color: white;
-		display: grid;
-		place-items: center;
-		font-size: 0.95rem;
-		font-weight: 700;
-		overflow: hidden;
-	}
-	.avatar-md img {
-		width: 100%;
-		height: 100%;
-		object-fit: cover;
 	}
 	.body {
 		flex: 1;
