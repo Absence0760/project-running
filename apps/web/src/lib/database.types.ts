@@ -2588,6 +2588,8 @@ export type Database = {
       }
       discoverable_routes_in_bbox: {
         Args: {
+          p_dist_max?: number[]
+          p_dist_min?: number[]
           p_filter?: string
           p_limit?: number
           p_max_lat: number

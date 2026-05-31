@@ -167,6 +167,60 @@ test.describe('discoverable_routes_in_bbox p_filter (backend contract)', () => {
 			await admin.from('routes').delete().eq('id', friendRouteId);
 		}
 	});
+
+	test('distance bands filter to the selected windows in any combination', async () => {
+		const admin = getAdminClient();
+		const all = (
+			await admin.rpc('discoverable_routes_in_bbox', { ...VA_BBOX, p_filter: 'popular' })
+		).data as Pin[];
+
+		// Single band: every result falls in [4000, 6000).
+		const fiveK = (
+			await admin.rpc('discoverable_routes_in_bbox', {
+				...VA_BBOX,
+				p_filter: 'popular',
+				p_dist_min: [4000],
+				p_dist_max: [6000],
+			})
+		).data as Pin[];
+		for (const p of fiveK) {
+			expect(p.distance_m).toBeGreaterThanOrEqual(4000);
+			expect(p.distance_m).toBeLessThan(6000);
+		}
+		expect(fiveK.length).toBeLessThanOrEqual(all.length);
+
+		// Two bands OR together: the 5k∪10k result is exactly the union of
+		// each band taken alone (no double counting, no drops).
+		const tenK = (
+			await admin.rpc('discoverable_routes_in_bbox', {
+				...VA_BBOX,
+				p_filter: 'popular',
+				p_dist_min: [8000],
+				p_dist_max: [12000],
+			})
+		).data as Pin[];
+		const union = (
+			await admin.rpc('discoverable_routes_in_bbox', {
+				...VA_BBOX,
+				p_filter: 'popular',
+				p_dist_min: [4000, 8000],
+				p_dist_max: [6000, 12000],
+			})
+		).data as Pin[];
+		const expected = new Set([...fiveK, ...tenK].map((p) => p.id));
+		expect(new Set(union.map((p) => p.id))).toEqual(expected);
+
+		// Open-ended upper bound (ultra) via a NULL hi.
+		const ultra = (
+			await admin.rpc('discoverable_routes_in_bbox', {
+				...VA_BBOX,
+				p_filter: 'popular',
+				p_dist_min: [44500],
+				p_dist_max: [null],
+			})
+		).data as Pin[];
+		for (const p of ultra) expect(p.distance_m).toBeGreaterThanOrEqual(44500);
+	});
 });
 
 test.describe('Heatmap filter chips (web)', () => {
