@@ -1548,7 +1548,7 @@ export async function fetchPendingRequests(clubId: string): Promise<(ClubMember 
 })[]> {
 	const { data: rows } = await supabase
 		.from('club_members')
-		.select('*')
+		.select('club_id, user_id, role, status, joined_at')
 		.eq('club_id', clubId)
 		.eq('status', 'pending')
 		.order('joined_at', { ascending: true });
@@ -1632,7 +1632,11 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 })[]> {
 	const { data: members } = await supabase
 		.from('club_members')
-		.select('*')
+		// Enumerate columns rather than `*`: on a public club anyone can
+		// read this list, and `activity_waiver_ack_at` (when a member
+		// signed the liability waiver) is the member's own business, not
+		// public roster data.
+		.select('club_id, user_id, role, status, joined_at')
 		.eq('club_id', clubId)
 		.order('joined_at', { ascending: true });
 	if (!members) return [];
@@ -3754,7 +3758,12 @@ export interface RunPhoto {
 
 /// A photo in an event gallery — a `RunPhoto` plus the uploader's
 /// display name so the gallery can attribute each shot. (#49)
-export interface EventPhoto extends RunPhoto {
+///
+/// `run_id` is deliberately omitted: an event gallery is visible to
+/// anyone who can see the event (even when the underlying run is
+/// private), so surfacing the run's UUID would bridge a public event to
+/// a private run's id. The gallery never needs it.
+export interface EventPhoto extends Omit<RunPhoto, 'run_id'> {
 	uploader_name: string | null;
 }
 
@@ -3835,7 +3844,9 @@ export async function fetchEventPhotos(
 ): Promise<EventPhoto[]> {
 	const { data, error } = await supabase
 		.from('run_photos')
-		.select('*')
+		// Enumerate columns — `run_id` is NOT selected so a private run's
+		// UUID can't leak to an event viewer who can't see that run.
+		.select('id, owner_id, storage_path, thumb_512_path, caption, position_idx, created_at, event_id, event_instance_start')
 		.eq('event_id', eventId)
 		.eq('event_instance_start', instanceStart)
 		.order('created_at', { ascending: true })

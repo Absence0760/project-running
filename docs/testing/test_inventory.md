@@ -645,7 +645,7 @@ Pure-unit coverage for the value classes and helpers exposed by `lib/social_serv
 
 The Supabase-touching surface of `SocialService` (`browseClubs`, `fetchMyClubs`, the enrichment pipelines, RSVP writes, post creation) is NOT covered here — the class resolves `Supabase.instance.client` inline, so meaningful unit coverage of those branches needs a DI seam refactor (constructor-injected `SupabaseClient`, mirroring the `ApiClient.withClient` pattern). Tracked in [What's not covered](testing.md#whats-not-covered-honest).
 
-### `apps/backend/supabase/tests/rls_*.sql` — pgtap RLS suite (279 tests across 37 files)
+### `apps/backend/supabase/tests/rls_*.sql` — pgtap RLS suite (330 tests across 46 files)
 
 pgTAP tests against the highest-blast-radius RLS policies, run by `cd apps/backend && supabase test db --local`. Gated in CI by the `pgtap-rls` job. Each file is wrapped in `begin; ... rollback;` so it's idempotent against the running local DB; tests filter to fixture user_ids so they don't trip on `seed.sql` rows. Pattern: insert two test users into `auth.users`, then `set local role authenticated; set local "request.jwt.claims" = '{"sub":"<uuid>"}';` to switch identity. Anon paths use `set local role anon`.
 
