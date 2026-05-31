@@ -8,6 +8,8 @@ Browse [`agents/`](agents/) and [`commands/`](commands/) for the full list; the 
 
 Multi-step, read-only or edit-capable specialists. Most are invoked by a slash command in `commands/`, but a few are used directly (e.g. `mobile-twin-mirror`, `shared-library-syncer`).
 
+Agents are grouped into subfolders by role (Claude Code discovers them recursively and keys them by `name:`, so the folder is purely organizational): dev-workflow utilities sit flat in `agents/`, the GDPR/security/privacy/legal/i18n audit agents in [`agents/auditors/`](agents/auditors/), and the 19 `runner-*` persona bug-hunters (each exercises the app from one runner archetype) in [`agents/personas/`](agents/personas/). The table below lists the flat + auditor agents; browse `agents/personas/` for the persona roster.
+
 | Agent | What it does |
 |---|---|
 | [`code-reviewer`](agents/code-reviewer.md) | Reviews the working diff against `decisions.md` ADRs, the layering contract, twin invariant, paywall gates, fail-closed defaults, comment/abstraction discipline. Invoked by `/safe-edit` and `/check`. |
@@ -17,11 +19,11 @@ Multi-step, read-only or edit-capable specialists. Most are invoked by a slash c
 | [`mobile-twin-mirror`](agents/mobile-twin-mirror.md) | Mirrors `apps/mobile_android/lib/`+`test/` edits into `apps/mobile_ios/` and verifies the byte-identical invariant (decisions §39). Run after every Dart edit. |
 | [`shared-library-syncer`](agents/shared-library-syncer.md) | Detects divergence on the documented TS↔Dart parity pairs (training, segments, privacy, recurrence, pace_segments, training_load, fitness, track_projection). |
 | [`metadata-key-keeper`](agents/metadata-key-keeper.md) | Verifies every `runs.metadata.<key>` access in a diff is documented in `docs/backend/metadata.md`. |
-| [`repo-security-auditor`](agents/repo-security-auditor.md) | Read-only security sweep. Knows the project's RLS / SECURITY DEFINER / Edge Function / Storage / XSS / paywall conventions. Backend for most `/audit/*` security commands. |
-| [`compliance-auditor`](agents/compliance-auditor.md) | Read-only auditor for GDPR / CCPA / DSAR / cookie-consent / regional-availability / accessibility posture. Backend for the compliance `/audit/*` commands. |
-| [`i18n-readiness-auditor`](agents/i18n-readiness-auditor.md) | Finds hard-coded English strings, en-US formatting, missing RTL, missing Accept-Language across web + mobile + watch. |
-| [`app-store-privacy-auditor`](agents/app-store-privacy-auditor.md) | Verifies iOS Privacy Nutrition Labels + Play Data Safety + Wear OS + watchOS privacy disclosures match what the binaries actually do. |
-| [`intl-legal-doc-reviewer`](agents/intl-legal-doc-reviewer.md) | Pre-counsel pass on legal pages (ToS, Privacy, Cookie Notice, Refund) against GDPR / UK GDPR / LGPD / PIPEDA / Quebec Law 25 / Australian Privacy Act / PIPA / DPDPA + EU/UK/AU consumer law. **Not a substitute for a licensed attorney.** |
+| [`repo-security-auditor`](agents/auditors/repo-security-auditor.md) | Read-only security sweep. Knows the project's RLS / SECURITY DEFINER / Edge Function / Storage / XSS / paywall conventions. Backend for most `/audit/*` security commands. |
+| [`compliance-auditor`](agents/auditors/compliance-auditor.md) | Read-only auditor for GDPR / CCPA / DSAR / cookie-consent / regional-availability / accessibility posture. Backend for the compliance `/audit/*` commands. |
+| [`i18n-readiness-auditor`](agents/auditors/i18n-readiness-auditor.md) | Finds hard-coded English strings, en-US formatting, missing RTL, missing Accept-Language across web + mobile + watch. |
+| [`app-store-privacy-auditor`](agents/auditors/app-store-privacy-auditor.md) | Verifies iOS Privacy Nutrition Labels + Play Data Safety + Wear OS + watchOS privacy disclosures match what the binaries actually do. |
+| [`intl-legal-doc-reviewer`](agents/auditors/intl-legal-doc-reviewer.md) | Pre-counsel pass on legal pages (ToS, Privacy, Cookie Notice, Refund) against GDPR / UK GDPR / LGPD / PIPEDA / Quebec Law 25 / Australian Privacy Act / PIPA / DPDPA + EU/UK/AU consumer law. **Not a substitute for a licensed attorney.** |
 | [`ui-polisher`](agents/ui-polisher.md) | Redesigns a page / screen / component across web (SvelteKit), mobile (Flutter twin), Wear OS, watchOS. Invoked by `/polish-ui`. |
 
 ## Commands (`commands/`)
