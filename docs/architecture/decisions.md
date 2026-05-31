@@ -2442,6 +2442,18 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 101. Discovery routes are drawn on hover, not all at once (web)
+
+**Decided (2026-05-31):** the discovery map used to draw the full polyline of *every* nearby public route at zoom ≥ 12 (the `nearbyPublicRoutes` overlay) — a wall of overlapping lines. That overlay is removed. Routes are now represented by their dot + list row, and **only the route you're hovering draws its line** (Strava/Komoot-style preview). Hovering a dot *or* its list row reveals that one route's line + a cyan halo on its start dot and tints the matching list row — a **synchronized hover** across both surfaces.
+
+**Informed by UX research** on map list/marker interactions, which split cleanly into things users like and things they hate:
+- *Like:* synchronized hover (highlighting the row **and** its marker together — Baymard found 76% of sites get this wrong); hover as a preview of what a click gives; markers that stay clickable (AllTrails' most-cited complaint is "the map isn't clickable").
+- *Hate:* **flicker** — the single most common map-interaction complaint across every library (info windows flickering on mouseover, markers redrawing/jumping); accidental triggers; the map lurching.
+
+So the implementation is built explicitly against flicker: route geometry comes from the already-privacy-clipped `fetchRouteById` and is **cached per id** (a second hover never refetches), the draw is **async-guarded** (a slow fetch can't paint after the cursor moved on), re-hovering the same id is a **no-op**, clearing is **debounced (90 ms)** so crossing from a dot onto its line — or between adjacent rows — doesn't flash, and there is **no pan/fit on hover** (the map never lurches). Click paths are untouched (dot → popup, row → route, the previewed line itself → route), so **touch devices, which never fire hover, lose nothing** — they get the tap popup + the row link. Geometry is fetched per-route on demand rather than bulk-loaded, so the hover preview adds no per-viewport payload.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
