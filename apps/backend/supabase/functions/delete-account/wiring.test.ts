@@ -35,6 +35,27 @@ Deno.test('handler calls deauthorizeStrava before admin.deleteUser', () => {
 	);
 });
 
+Deno.test('handler calls deauthorizeGarmin before admin.deleteUser', () => {
+	// Garmin OAuth is deferred (no tokens today → deauthorizeGarmin
+	// no-ops to 'skipped'), but the call is wired + ordered like Strava
+	// so deletion revokes the grant the moment OAuth lands rather than
+	// silently forgetting Garmin (audit-findings 2026-05-30 High).
+	// Reason: the integrations row is needed for the token lookup, so it
+	// must run before the auth-row cascade — same constraint as Strava.
+	const deauth = SRC.indexOf('deauthorizeGarmin(adminClient, user.id)');
+	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
+	assert(
+		deauth !== -1,
+		'handler must call deauthorizeGarmin so the deletion sweep accounts ' +
+			'for Garmin OAuth once it ships (audit/gdpr Art 17)',
+	);
+	assert(
+		deauth < del,
+		'deauthorizeGarmin must run BEFORE admin.deleteUser; the integrations ' +
+			'row is needed to look up the Garmin access token',
+	);
+});
+
 Deno.test('handler calls deleteRevenueCatSubscriber before admin.deleteUser', () => {
 	const rc = SRC.indexOf('deleteRevenueCatSubscriber(user.id)');
 	const del = SRC.indexOf('adminClient.auth.admin.deleteUser(user.id)');
@@ -147,16 +168,18 @@ Deno.test('handler anonymises authored segments pre-cascade (audit/account-delet
 	assert(anon < del, 'anonymiseAuthoredSegments must run before admin.deleteUser');
 });
 
-Deno.test('handler builds a third_party_outcomes record from the three best-effort calls', () => {
+Deno.test('handler builds a third_party_outcomes record from the best-effort calls', () => {
 	// GDPR Art 17(2) evidence trail — each call's outcome must land
 	// in deletion_audit_log.third_party_outcomes via recordAudit's
-	// fifth argument.
-	const built = /const\s+thirdPartyOutcomes\s*:\s*ThirdPartyOutcomes\s*=\s*\{[^}]*strava_deauth[^}]*revenuecat_delete[^}]*fcm_remove[^}]*\}/m
+	// fifth argument. garmin_deauth is wired even though Garmin OAuth is
+	// deferred (it no-ops to 'skipped' today) so the deletion path can't
+	// silently forget Garmin once OAuth lands — audit-findings 2026-05-30.
+	const built = /const\s+thirdPartyOutcomes\s*:\s*ThirdPartyOutcomes\s*=\s*\{[^}]*strava_deauth[^}]*garmin_deauth[^}]*revenuecat_delete[^}]*fcm_remove[^}]*\}/m
 		.test(SRC);
 	assert(
 		built,
 		'handler must build a ThirdPartyOutcomes record from deauthorizeStrava + ' +
-			'deleteRevenueCatSubscriber + invalidatePushTokens results',
+			'deauthorizeGarmin + deleteRevenueCatSubscriber + invalidatePushTokens results',
 	);
 	// And recordAudit must receive it on every call site (verified by
 	// the count being ≥ 7 above + a spot-check below).

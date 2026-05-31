@@ -70,25 +70,31 @@ async function deletePrefix(
 // every failure shows up in Sentry / function logs so an operator
 // can replay the cleanup later if needed.
 
-async function deauthorizeStrava(
+// Look up the user's decrypted OAuth access token for `provider` and
+// call its revocation endpoint. Returns 'skipped' when there's no token
+// (the provider isn't connected). Shared by Strava + Garmin.
+//
+// Self-audit (May 2026): an earlier pass tried to read vault via
+// `adminClient.schema('vault').from('decrypted_secrets')`, which fails
+// with PGRST106 — PostgREST only exposes `public` + `graphql_public`
+// schemas. Use the get_integration_tokens SECURITY DEFINER RPC
+// (20260603_001), which returns the decrypted tokens to a service_role
+// caller for any user_id.
+async function deauthorizeOAuthProvider(
   adminClient: SupabaseClient,
   userId: string,
+  provider: 'strava' | 'garmin',
+  revoke: (accessToken: string) => Promise<Response>,
 ): Promise<ThirdPartyOutcome> {
-  // Self-audit (May 2026): the prior pass tried to read vault via
-  // `adminClient.schema('vault').from('decrypted_secrets')`, which
-  // fails with PGRST106 — PostgREST only exposes `public` +
-  // `graphql_public` schemas. Use the existing get_integration_tokens
-  // SECURITY DEFINER RPC (20260603_001), which returns the decrypted
-  // tokens to a service_role caller for any user_id.
   let accessToken: string | null = null;
   try {
     const { data, error } = await adminClient.rpc('get_integration_tokens', {
       p_user_id: userId,
-      p_provider: 'strava',
+      p_provider: provider,
     });
     if (error) {
       console.error(
-        'delete-account: strava token lookup failed:',
+        `delete-account: ${provider} token lookup failed:`,
         error.message,
       );
       return 'failed';
@@ -98,25 +104,62 @@ async function deauthorizeStrava(
     if (row?.access_token) accessToken = row.access_token;
   } catch (e) {
     console.error(
-      'delete-account: strava token lookup failed:',
+      `delete-account: ${provider} token lookup failed:`,
       e instanceof Error ? e.message : String(e),
     );
     return 'failed';
   }
   if (!accessToken) return 'skipped';
   try {
-    const r = await fetch(STRAVA_DEAUTHORIZE_URL, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
+    const r = await revoke(accessToken);
     return r.ok ? 'ok' : 'failed';
   } catch (e) {
     console.error(
-      'delete-account: strava deauthorize failed:',
+      `delete-account: ${provider} deauthorize failed:`,
       e instanceof Error ? e.message : String(e),
     );
     return 'failed';
   }
+}
+
+function deauthorizeStrava(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<ThirdPartyOutcome> {
+  return deauthorizeOAuthProvider(adminClient, userId, 'strava', (accessToken) =>
+    fetch(STRAVA_DEAUTHORIZE_URL, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }),
+  );
+}
+
+// Garmin live OAuth is deferred (bulk-.fit-import only today — no Garmin
+// OAuth tokens are ever stored; see docs/features/integrations.md
+// § Garmin Connect, Phase 3). This is wired into the deletion sweep so
+// the path explicitly accounts for Garmin and can't silently forget it
+// once OAuth lands (audit-findings 2026-05-30 High: "only Strava is
+// revoked"). Today the token lookup returns nothing → 'skipped'.
+//
+// We deliberately do NOT POST to a guessed revoke endpoint: Garmin's
+// grant-revocation API can't be confirmed until the OAuth program is
+// approved, and shipping a plausible-but-wrong URL would silently fail
+// to revoke exactly when it matters (deletion). So the revoke callback
+// fails closed — if a future OAuth integration ever stores a Garmin
+// token without also wiring the real revoke endpoint, deletion records
+// `garmin_deauth: 'failed'` (visible in the audit log) instead of a
+// false success. The endpoint must be supplied with that integration.
+function deauthorizeGarmin(
+  adminClient: SupabaseClient,
+  userId: string,
+): Promise<ThirdPartyOutcome> {
+  return deauthorizeOAuthProvider(adminClient, userId, 'garmin', () => {
+    throw new Error(
+      'Garmin OAuth grant revocation is not implemented — wire the verified ' +
+        'revoke endpoint with the Garmin OAuth integration ' +
+        '(docs/features/integrations.md § Garmin Connect, Phase 3)',
+    );
+  });
 }
 
 async function deleteRevenueCatSubscriber(userId: string): Promise<ThirdPartyOutcome> {
@@ -405,8 +448,20 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   // 17(2) evidence trail.
   // Order: do them BEFORE the auth-row cascade so the integrations
   // / device_tokens rows still exist for the lookups.
+  // Sentry (audit-findings 2026-05-30 High): no per-user purge call is
+  // made — and none is required. Neither the web hooks
+  // (apps/web/src/hooks.{client,server}.ts) nor the EF wrapper
+  // (functions/_shared/sentry.ts) ever calls `Sentry.setUser`, and
+  // `sendDefaultPii` is left at its `false` default, so error events are
+  // NOT keyed on the user's UUID. Any UUID that incidentally lands in an
+  // error message is covered by the existing `beforeSend` redaction +
+  // Sentry's DPA retention window (the audit's stated accepted
+  // alternative to a per-user purge). APNs likewise has no provider-side
+  // unregister API — passive revocation is handled + documented in
+  // invalidatePushTokens above.
   const thirdPartyOutcomes: ThirdPartyOutcomes = {
     strava_deauth: await deauthorizeStrava(adminClient, user.id),
+    garmin_deauth: await deauthorizeGarmin(adminClient, user.id),
     revenuecat_delete: await deleteRevenueCatSubscriber(user.id),
     fcm_remove: await invalidatePushTokens(adminClient, user.id),
   };

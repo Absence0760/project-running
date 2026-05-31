@@ -105,6 +105,7 @@ export type ThirdPartyOutcome = 'ok' | 'skipped' | 'failed';
 
 export interface ThirdPartyOutcomes {
 	strava_deauth: ThirdPartyOutcome;
+	garmin_deauth: ThirdPartyOutcome;
 	revenuecat_delete: ThirdPartyOutcome;
 	fcm_remove: ThirdPartyOutcome;
 }
