@@ -42,6 +42,7 @@ import { readJsonWithLimit } from '../_shared/body_limit.ts';
 import { checkRateLimit, ipBucketKey } from '../_shared/rate_limit.ts';
 import { withSentry } from '../_shared/sentry.ts';
 import * as Sentry from 'https://deno.land/x/sentry@8.40.0/index.mjs';
+import { sanitizeErrorForCapture } from '../_shared/sentry_scrub.ts';
 import { timingSafeEqual, validateFreshness } from '../_shared/webhook_security.ts';
 
 Deno.serve(withSentry('strava-webhook', async (req: Request) => {
@@ -283,8 +284,11 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 		// explicit tag so dashboards light up. The `withSentry`
 		// wrapper catches throws from the handler body; this
 		// `try/catch` swallows BEFORE the wrapper sees, so we need
-		// to capture explicitly.
-		Sentry.captureException(err instanceof Error ? err : new Error(String(err)), {
+		// to capture explicitly. Run through the shared sanitizer so a
+		// PostgREST error's row-bearing details/hint never reach Sentry
+		// (audit-findings 2026-05-30 High) — the same minimisation the
+		// withSentry catch + _shared captureException apply.
+		Sentry.captureException(sanitizeErrorForCapture(err), {
 			tags: { alert: 'strava_ingest_failure' },
 			extra: { activityId, userId },
 		});

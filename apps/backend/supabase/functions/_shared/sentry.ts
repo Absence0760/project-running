@@ -11,6 +11,7 @@
 ///   serve(withSentry('parkrun-import', async (req) => { ... }));
 
 import * as Sentry from 'https://deno.land/x/sentry@8.40.0/index.mjs';
+import { sanitizeErrorForCapture } from './sentry_scrub.ts';
 
 let _initialized = false;
 
@@ -25,6 +26,18 @@ function ensureInit(): boolean {
       ? 'production'
       : 'development',
     tracesSampleRate: 0.1,
+    // Data minimisation under the legitimate-interest basis (see
+    // sentry_scrub.ts): never attach default PII (IP, headers), and drop
+    // the request envelope (cookies / JWT / body / query) from any event
+    // that picks it up. The row-bearing PostgREST details/hint are
+    // stripped at capture time by sanitizeErrorForCapture below.
+    sendDefaultPii: false,
+    beforeSend: (event) => {
+      delete event.request;
+      delete event.user;
+      delete event.server_name;
+      return event;
+    },
   });
   _initialized = true;
   return true;
@@ -39,13 +52,14 @@ export function withSentry(
     try {
       return await handler(req);
     } catch (err) {
-      // Console path: log only the message string. Postgrest errors
-      // carry `details` + `hint` fields that can leak column names,
-      // constraint names, or partial row values into the log
-      // aggregator. Sentry below captures the full exception object
-      // for in-Sentry triage where the audit trail is access-gated;
-      // the console path is the broader-readable surface and stays
-      // narrow. /audit/all edge-functions Low.
+      // Both sinks stay narrow on row data. Postgrest errors carry
+      // `details` + `hint` fields that can leak column names, constraint
+      // names, or partial row values: the console path logs only the
+      // message string, and the Sentry path runs the error through
+      // sanitizeErrorForCapture (message + SQLSTATE only, details/hint
+      // dropped) — so neither sink exports the offending row to a
+      // third party. /audit/all edge-functions Low + audit-findings
+      // 2026-05-30 High (third-party-data-flows).
       console.error(
         `[${efName}] unhandled:`,
         err instanceof Error ? err.message : String(err),
@@ -53,7 +67,7 @@ export function withSentry(
       if (enabled) {
         Sentry.withScope((scope) => {
           scope.setTag('ef', efName);
-          Sentry.captureException(err);
+          Sentry.captureException(sanitizeErrorForCapture(err));
         });
         await Sentry.flush(2000);
       }
@@ -77,6 +91,6 @@ export function captureException(err: unknown, efName: string, ctx?: Record<stri
   Sentry.withScope((scope) => {
     scope.setTag('ef', efName);
     if (ctx) for (const [k, v] of Object.entries(ctx)) scope.setExtra(k, v);
-    Sentry.captureException(err);
+    Sentry.captureException(sanitizeErrorForCapture(err));
   });
 }
