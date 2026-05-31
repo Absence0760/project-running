@@ -430,8 +430,7 @@
 	.offline-banner {
 		position: fixed;
 		top: 0;
-		left: 0;
-		right: 0;
+		inset-inline: 0;
 		z-index: var(--z-toast, 100);
 		background: var(--color-warning, #b45309);
 		color: white;
@@ -461,10 +460,10 @@
 		padding: var(--space-md);
 		position: fixed;
 		top: 0;
-		left: 0;
+		inset-inline-start: 0;
 		bottom: 0;
 		z-index: var(--z-sidebar);
-		border-right: 1px solid var(--sidebar-border);
+		border-inline-end: 1px solid var(--sidebar-border);
 		transition: width var(--transition-base);
 	}
 
@@ -655,7 +654,7 @@
 	.nav-link.active::before {
 		content: '';
 		position: absolute;
-		left: calc(-1 * var(--space-md));
+		inset-inline-start: calc(-1 * var(--space-md));
 		top: 18%;
 		bottom: 18%;
 		width: 3px;
@@ -757,7 +756,7 @@
 	.popover {
 		position: fixed;
 		bottom: calc(var(--space-md) + 4.5rem);
-		left: var(--space-md);
+		inset-inline-start: var(--space-md);
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
@@ -842,13 +841,13 @@
 
 	.main-content {
 		flex: 1;
-		margin-left: var(--sidebar-width);
+		margin-inline-start: var(--sidebar-width);
 		min-height: 100vh;
-		transition: margin-left var(--transition-base);
+		transition: margin-inline-start var(--transition-base);
 	}
 
 	.app-shell.sidebar-collapsed .main-content {
-		margin-left: var(--sidebar-collapsed-width, 4.5rem);
+		margin-inline-start: var(--sidebar-collapsed-width, 4.5rem);
 	}
 
 	/* Hide labels and trim spacing when collapsed. Icons keep their
@@ -868,8 +867,7 @@
 	.sidebar.collapsed .profile-btn {
 		justify-content: center;
 		gap: 0;
-		padding-left: 0;
-		padding-right: 0;
+		padding-inline: 0;
 	}
 	/* On the narrow rail keep only the logo mark + nav icons + avatar +
 	   collapse-toggle. The bell would crowd the 4.5rem rail and its
@@ -925,7 +923,7 @@
 			width: var(--sidebar-collapsed-width, 4.5rem);
 		}
 		.main-content {
-			margin-left: var(--sidebar-collapsed-width, 4.5rem);
+			margin-inline-start: var(--sidebar-collapsed-width, 4.5rem);
 		}
 		.sidebar .nav-label,
 		.sidebar .user-details,
@@ -944,8 +942,7 @@
 		.sidebar .profile-btn {
 			justify-content: center;
 			gap: 0;
-			padding-left: 0;
-			padding-right: 0;
+			padding-inline: 0;
 		}
 		.sidebar .nav-link.active::before {
 			display: none;
@@ -961,7 +958,7 @@
 		/* The popover is anchored to the left edge — pin it inside the
 		   viewport so it doesn't clip when the rail is only 4.5rem. */
 		.popover {
-			left: calc(var(--sidebar-collapsed-width, 4.5rem) + var(--space-xs));
+			inset-inline-start: calc(var(--sidebar-collapsed-width, 4.5rem) + var(--space-xs));
 			min-width: 13rem;
 			max-width: calc(100vw - var(--sidebar-collapsed-width, 4.5rem) - var(--space-md));
 		}
