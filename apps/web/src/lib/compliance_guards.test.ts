@@ -79,3 +79,30 @@ test('the sub-processor table carries no unresolved region placeholder', () => {
 		`sub-processors.md still has TODO placeholder(s) gating a region:\n  ${offenders.join('\n  ')}`,
 	);
 });
+
+// Legal-page launch invariant (audit-findings 2026-05-30 High, gdpr):
+// these pages carry TODO placeholders (controller identity, Art 27 reps,
+// governing law) that only counsel + the registered legal entity can
+// fill. The draft/operative switch is the literal `<div class="draft-
+// banner">` element — while it's present the TODOs are an honest draft;
+// once it's removed the page is live and must contain none.
+const legalPages = [
+	{ name: 'Privacy Policy', file: ['apps', 'web', 'src', 'routes', 'privacy', '+page.svelte'] },
+	{ name: 'Terms of Service', file: ['apps', 'web', 'src', 'routes', 'terms', '+page.svelte'] },
+	{ name: 'Cookie Notice', file: ['apps', 'web', 'src', 'routes', 'cookie-notice', '+page.svelte'] },
+];
+for (const { name, file } of legalPages) {
+	test(`${name}: an operative (non-draft) page has no TODO placeholders`, () => {
+		const src = readFileSync(resolve(repoRoot, ...file), 'utf-8');
+		// The banner DIV (not the `.draft-banner` CSS rule) is the
+		// operative/draft switch; removing it publishes the page.
+		const isDraft = src.includes('<div class="draft-banner">');
+		if (isDraft) return; // honest placeholder state — allowed
+		assert.ok(
+			!/TODO/i.test(src),
+			`${name} has the draft banner removed (operative) but still contains TODO ` +
+				`placeholders — fill the controller identity / governing law / Art 27 ` +
+				`representative(s) before publishing, or restore the draft banner.`,
+		);
+	});
+}
