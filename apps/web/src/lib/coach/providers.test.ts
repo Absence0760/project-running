@@ -60,6 +60,30 @@ test('429 → rate-limit, surfaces upstream message', () => {
 	assert.match(out, /Slow down/);
 });
 
+test('403 geo-block → distinct region-unavailable message (not a generic upstream error)', () => {
+	const out = humaniseUpstreamError(
+		403,
+		JSON.stringify({ error: { message: 'Country, region, or territory not supported' } }),
+		'claude-opus-4-8',
+		REMOTE,
+	);
+	assert.match(out, /region/i);
+	assert.doesNotMatch(out, /^Coach upstream 403:/);
+	// Must not leak the configured provider/env.
+	assert.doesNotMatch(out, /OPENAI_API_KEY|ANTHROPIC_API_KEY/);
+});
+
+test('403 with a non-geo message keeps the upstream envelope', () => {
+	const out = humaniseUpstreamError(
+		403,
+		JSON.stringify({ error: { message: 'permission denied for resource' } }),
+		'gpt-4o',
+		REMOTE,
+	);
+	assert.match(out, /403/);
+	assert.match(out, /permission denied/);
+});
+
 test('Unrecognised status keeps the upstream-style envelope, capped to 300 chars', () => {
 	const longMessage = 'x'.repeat(500);
 	const out = humaniseUpstreamError(

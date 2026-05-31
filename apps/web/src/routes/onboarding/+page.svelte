@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { browser } from '$app/environment';
+	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -28,7 +30,12 @@
 	let displayName = $state('');
 
 	// ── Step 2: units ─────────────────────────────────────────
-	let preferredUnit = $state<'km' | 'mi'>('km');
+	// Seed from the visitor's locale (mi for US/GB/LR/MM, km otherwise)
+	// instead of hard-coding km — the user can still flip it on this step.
+	// audit-findings 2026-05-30 Medium [regional].
+	let preferredUnit = $state<'km' | 'mi'>(
+		browser ? defaultUnitForLocale(navigator.language) : 'km',
+	);
 
 	// ── Step 3: primary goal ──────────────────────────────────
 	let primaryGoal = $state<PrimaryGoal | null>(null);

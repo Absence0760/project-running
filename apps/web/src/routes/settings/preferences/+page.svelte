@@ -10,6 +10,7 @@
 	} from '$lib/settings/settings';
 	import { applyTheme, loadTheme, type Theme } from '$lib/settings/theme';
 	import { setUnit } from '$lib/format/units.svelte';
+	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
@@ -33,6 +34,10 @@
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(false);
+	// Canonical store is km (`voice_feedback_interval_km`); the field shows
+	// + accepts the user's unit so a mi-user entering 1 gets 1-mile splits,
+	// not 1 km. audit-findings 2026-05-30 Medium [regional].
+	const KM_PER_MI = 1.609344;
 	let voiceFeedbackIntervalKm = $state('1.0');
 	// Persona-hunt Round 3 finding Woman #2. Default true for back-
 	// compat — every existing account stays findable until they
@@ -101,7 +106,13 @@
 			setUnit(preferredUnit);
 			paceFormat = effective(settings, 'units_pace_format', 'min_per_km') ?? 'min_per_km';
 			defaultActivity = effective(settings, 'default_activity_type', 'run') ?? 'run';
-			weekStartDay = effective(settings, 'week_start_day', 'monday') ?? 'monday';
+			// New users have no stored week_start_day — fall back to the
+			// locale convention (Sunday-first for US/CA/…, Monday for ISO)
+			// instead of hard-coding Monday. audit-findings 2026-05-30
+			// Medium [regional].
+			weekStartDay =
+				effective(settings, 'week_start_day', defaultWeekStartForLocale(navigator.language)) ??
+				'monday';
 			mapStyle = effective(settings, 'map_style', 'streets') ?? 'streets';
 			setMapStyle(mapStyle);
 			privacyDefault = effective(settings, 'privacy_default', 'followers') ?? 'followers';
@@ -356,10 +367,24 @@
 				</label>
 				{#if voiceFeedbackEnabled}
 					<label>
-						<span class="label-text">Split interval (km)</span>
+						<span class="label-text">Split interval ({preferredUnit})</span>
+						<!-- min/max/step are in the displayed unit by design — a
+						     0.5–10 range reads as round numbers whether the user
+						     thinks in km or mi (a mi-user gets 0.5–10 mile splits,
+						     stored as the equivalent km). -->
 						<input
 							type="number"
-							bind:value={voiceFeedbackIntervalKm}
+							value={preferredUnit === 'mi'
+								? (parseFloat(voiceFeedbackIntervalKm) / KM_PER_MI).toFixed(1)
+								: voiceFeedbackIntervalKm}
+							oninput={(e) => {
+								const n = parseFloat(e.currentTarget.value);
+								if (Number.isFinite(n)) {
+									voiceFeedbackIntervalKm = (
+										preferredUnit === 'mi' ? n * KM_PER_MI : n
+									).toString();
+								}
+							}}
 							step="0.5"
 							min="0.5"
 							max="10"

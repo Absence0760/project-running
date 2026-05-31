@@ -218,6 +218,26 @@ export function humaniseUpstreamError(
 		);
 	}
 
+	// Anthropic / OpenAI return 403 for unsupported countries / regions
+	// (sanctions, not-yet-available jurisdictions). Surface a distinct,
+	// user-facing message instead of a generic upstream-failure bar so a
+	// geo-blocked runner understands it's a provider restriction, not a
+	// broken account. audit-findings 2026-05-30 Medium [regional].
+	if (status === 403) {
+		const looksGeo =
+			parsedMessage == null ||
+			/region|country|countries|unsupported|not\s+available|jurisdiction|location/i.test(
+				parsedMessage,
+			);
+		if (looksGeo) {
+			return (
+				'AI Coach isn’t available in your region yet — the AI provider ' +
+				'doesn’t serve your country. This is an upstream restriction, not your account.'
+			);
+		}
+		return `Coach upstream rejected the request (403): ${parsedMessage}`;
+	}
+
 	if (status === 429) {
 		return (
 			`Coach upstream is rate-limiting (429). ` +

@@ -218,5 +218,8 @@ export const COMPARE_SECTIONS: CompareSection[] = [
 export const COMPARE_HEADLINE = {
 	usPrice: 'Free',
 	stravaFreePrice: 'Free (limited)',
-	stravaProPrice: '$11.99/mo or $79.99/yr',
+	// Strava's published US pricing; their prices vary by country and we
+	// don't track them per-region, so it's explicitly labelled US to avoid
+	// implying a localized figure. audit-findings 2026-05-30 Medium [regional].
+	stravaProPrice: '$11.99/mo or $79.99/yr (US)',
 } as const;

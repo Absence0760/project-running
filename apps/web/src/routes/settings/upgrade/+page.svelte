@@ -145,6 +145,13 @@
 					<span class="price-amount">{priceLabel}</span>
 					<span class="price-period">/ month</span>
 				</p>
+				<!-- Honesty notes (audit-findings 2026-05-30 Medium [regional]):
+				     the amount is billed in USD (we don't FX-convert), and
+				     the payment processor can't serve every country. -->
+				<p class="tier-price-note">
+					Billed in US dollars. Availability depends on your country and payment
+					method — some regions can't be served by our payment processor.
+				</p>
 			</header>
 			<p class="tier-blurb">For runners who live in the app.</p>
 			<ul class="tier-features">
@@ -292,6 +299,12 @@
 		display: flex;
 		align-items: baseline;
 		gap: 0.25rem;
+	}
+	.tier-price-note {
+		margin: var(--space-2xs) 0 0;
+		font-size: 0.72rem;
+		line-height: 1.4;
+		color: var(--color-text-tertiary);
 	}
 	.price-amount {
 		font-size: 1.5rem;
