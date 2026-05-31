@@ -464,6 +464,19 @@ the `integration_<provider>_<uuid>_<suffix>` pattern before logging.
 
 /audit/strava May 2026 Medium #8.
 
+## Audit & review findings live in `reviews/`
+
+Findings from `/audit/*`, the `code-reviewer` agent, persona hunts, and ad-hoc
+reviews go in `reviews/` — gitignored local working notes, one file per audit
+area. They are **not** committed (only `reviews/README.md` is) because a
+point-in-time list of file:line findings rots the instant the code moves.
+
+When you fix an audit, flip each finding to `[x]` (with the commit hash) in its
+`reviews/` file in the *same commit* as the fix; keep deferred items as `[~]`
+with a reason (promote durable ones to `roadmap.md` / `followups.md`); and
+delete a file once every finding is resolved or its references have gone stale.
+Full lifecycle: [`reviews/README.md`](../../reviews/README.md).
+
 ## Exceptions
 
 Every rule here has escape hatches for the cases where it genuinely doesn't fit. If you're about to violate one of these rules:

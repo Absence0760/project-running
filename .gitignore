@@ -78,3 +78,7 @@ apps/backend/supabase/.temp/
 .claude/*.lock
 .claude/settings.local.json
 .claude/session-tasks.md
+
+# Audit / review working notes — local-only, not committed (see reviews/README.md)
+reviews/*
+!reviews/README.md

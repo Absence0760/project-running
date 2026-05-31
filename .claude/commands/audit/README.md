@@ -91,6 +91,14 @@ Diff-time enforcement is handled by complementary agents:
 
 These audit commands are for periodic broad sweeps and pre-deploy checks; the diff-time agents handle per-PR enforcement.
 
+## Where findings go
+
+Write findings to `reviews/` (gitignored working notes), one file per audit
+area — not to chat-only output and not to `docs/`. When you start fixing a
+finding, mark it `[x]` in its `reviews/` file in the same commit as the fix,
+and keep deferred items as `[~]` with a reason. Delete a `reviews/` file once
+it's spent or stale. Full lifecycle in [`reviews/README.md`](../../../reviews/README.md).
+
 ## When to run
 
 - **Before a release** — `/audit/all` once, fix Critical/High before tagging.
