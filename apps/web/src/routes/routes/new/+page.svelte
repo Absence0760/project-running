@@ -199,6 +199,39 @@
 	let endPoint = $state<{ lat: number; lng: number } | null>(null);
 	let startLabel = $state('');
 	let endLabel = $state('');
+	// Keyboard-accessible coordinate entry (WCAG 2.1.1): picking a
+	// start/end via the map is pointer-only, so these inputs let a
+	// keyboard user type lat/lng instead. audit-findings 2026-05-30 High.
+	let startLatInput = $state('');
+	let startLngInput = $state('');
+	let endLatInput = $state('');
+	let endLngInput = $state('');
+	let startCoordError = $state('');
+	let endCoordError = $state('');
+
+	function applyCoords(target: 'start' | 'end') {
+		const setErr = (msg: string) => {
+			if (target === 'start') startCoordError = msg;
+			else endCoordError = msg;
+		};
+		setErr('');
+		const latStr = target === 'start' ? startLatInput : endLatInput;
+		const lngStr = target === 'start' ? startLngInput : endLngInput;
+		const lat = Number(latStr);
+		const lng = Number(lngStr);
+		if (latStr.trim() === '' || lngStr.trim() === '' || Number.isNaN(lat) || Number.isNaN(lng)) {
+			setErr('Enter a numeric latitude and longitude.');
+			return;
+		}
+		if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+			setErr('Latitude must be -90..90 and longitude -180..180.');
+			return;
+		}
+		const point = { lat, lng };
+		const label = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
+		if (target === 'start') { startPoint = point; startLabel = label; }
+		else { endPoint = point; endLabel = label; }
+	}
 
 	let estimatedTime = $derived.by(() => {
 		if (distance === 0) return '';
@@ -515,6 +548,15 @@
 							</button>
 						{/if}
 					</div>
+					<!-- Keyboard alternative to map-tap (WCAG 2.1.1). -->
+					<form class="coord-entry" onsubmit={(e) => { e.preventDefault(); applyCoords('start'); }}>
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={startLatInput} aria-label="Start latitude" placeholder="lat" />
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={startLngInput} aria-label="Start longitude" placeholder="lng" />
+						<button type="submit" class="btn btn-sm btn-secondary">Set start</button>
+					</form>
+					{#if startCoordError}
+						<p class="coord-error" role="alert">{startCoordError}</p>
+					{/if}
 
 					<span class="section-label">End <span class="label-hint">(optional — defaults to start for loop)</span></span>
 					<div class="point-row">
@@ -535,6 +577,15 @@
 							</button>
 						{/if}
 					</div>
+					<!-- Keyboard alternative to map-tap (WCAG 2.1.1). -->
+					<form class="coord-entry" onsubmit={(e) => { e.preventDefault(); applyCoords('end'); }}>
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={endLatInput} aria-label="End latitude" placeholder="lat" />
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={endLngInput} aria-label="End longitude" placeholder="lng" />
+						<button type="submit" class="btn btn-sm btn-secondary">Set end</button>
+					</form>
+					{#if endCoordError}
+						<p class="coord-error" role="alert">{endCoordError}</p>
+					{/if}
 
 					<span class="section-label">Distance</span>
 					<div class="target-row">
@@ -1078,6 +1129,27 @@
 		font-size: 0.75rem;
 		color: var(--color-text-tertiary);
 		font-style: italic;
+	}
+	.coord-entry {
+		display: flex;
+		gap: var(--space-xs);
+		margin-bottom: var(--space-sm);
+	}
+	.coord-input {
+		inline-size: 4.5rem;
+		min-inline-size: 0;
+		flex: 1;
+		padding: var(--space-2xs) var(--space-xs);
+		font-size: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg);
+		color: var(--color-text);
+	}
+	.coord-error {
+		margin: 0 0 var(--space-sm);
+		font-size: 0.72rem;
+		color: var(--color-danger);
 	}
 
 	.point-btn {

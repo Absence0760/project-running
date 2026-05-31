@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime } from '$lib/format/time';
 	import { goto } from '$app/navigation';
@@ -548,12 +549,15 @@
 			</div>
 		</header>
 
-		<div class="tabs" role="tablist" aria-label="Profile sections">
+		<!-- tabindex=-1: keydown bubbles here from the focused tab; the tabs
+		     carry the roving tabindex. Satisfies a11y_interactive_supports_focus. -->
+		<div class="tabs" role="tablist" aria-label="Profile sections" tabindex={-1} onkeydown={handleTablistKeydown}>
 			<button
 				role="tab"
 				class="tab"
 				class:active={tab === 'runs'}
 				aria-selected={tab === 'runs'}
+				tabindex={tab === 'runs' ? 0 : -1}
 				onclick={() => setTab('runs')}
 			>
 				Runs
@@ -563,6 +567,7 @@
 				class="tab"
 				class:active={tab === 'followers'}
 				aria-selected={tab === 'followers'}
+				tabindex={tab === 'followers' ? 0 : -1}
 				onclick={() => setTab('followers')}
 			>
 				Followers
@@ -572,6 +577,7 @@
 				class="tab"
 				class:active={tab === 'following'}
 				aria-selected={tab === 'following'}
+				tabindex={tab === 'following' ? 0 : -1}
 				onclick={() => setTab('following')}
 			>
 				Following
@@ -582,6 +588,7 @@
 					class="tab"
 					class:active={tab === 'notifications'}
 					aria-selected={tab === 'notifications'}
+					tabindex={tab === 'notifications' ? 0 : -1}
 					onclick={() => setTab('notifications')}
 				>
 					Notifications

@@ -49,6 +49,33 @@ test.describe('/routes', () => {
 		await expect(page.locator('.route-card')).toHaveCount(myCount);
 	});
 
+	test('arrow keys navigate the tab strip and Tab is not trapped (WCAG 2.1.1)', async ({
+		page
+	}) => {
+		// audit-findings 2026-05-30 High [accessibility]: the tablist had
+		// no arrow-key navigation. Focus the active tab, ArrowRight should
+		// move to + activate the next tab; ArrowLeft back. A non-nav key
+		// (Tab) must pass through (the handler's nav-key guard).
+		await page.goto('/routes');
+		const mine = page.getByRole('tab', { name: 'My routes', exact: true });
+		const explore = page.getByRole('tab', { name: 'Explore', exact: true });
+		await mine.focus();
+		await expect(mine).toBeFocused();
+
+		await page.keyboard.press('ArrowRight');
+		await expect(explore).toBeFocused();
+		await expect(explore).toHaveClass(/active/);
+
+		await page.keyboard.press('ArrowLeft');
+		await expect(mine).toBeFocused();
+		await expect(mine).toHaveClass(/active/);
+
+		// Tab must not be swallowed by the tablist handler — focus leaves
+		// the tab (moves to the next focusable element).
+		await page.keyboard.press('Tab');
+		await expect(mine).not.toBeFocused();
+	});
+
 	test('Surface filter narrows by surface (road)', async ({ page }) => {
 		// Surface is a per-route enum (road / trail / mixed). The
 		// seed has multiple surfaces; selecting "road" should

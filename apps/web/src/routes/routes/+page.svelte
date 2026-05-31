@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
+	import { handleTablistKeydown } from '$lib/util/tablist';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { fetchRoutesWithError, setRouteStar } from '$lib/core/data';
@@ -269,12 +270,16 @@
 
 <div class="page">
 	<header class="page-header">
-		<div class="tabs" role="tablist" aria-label="Routes section">
+		<!-- tabindex=-1: keydown bubbles here from the focused tab; the
+		     tablist itself is never tab-stopped (the tabs carry the roving
+		     tabindex). Satisfies a11y_interactive_supports_focus. -->
+		<div class="tabs" role="tablist" aria-label="Routes section" tabindex={-1} onkeydown={handleTablistKeydown}>
 			<button
 				role="tab"
 				class="tab"
 				class:active={tab === 'mine'}
 				aria-selected={tab === 'mine'}
+				tabindex={tab === 'mine' ? 0 : -1}
 				onclick={() => setTab('mine')}
 			>
 				My routes
@@ -284,6 +289,7 @@
 				class="tab"
 				class:active={tab === 'explore'}
 				aria-selected={tab === 'explore'}
+				tabindex={tab === 'explore' ? 0 : -1}
 				onclick={() => setTab('explore')}
 			>
 				Explore
@@ -293,6 +299,7 @@
 				class="tab"
 				class:active={tab === 'heatmap'}
 				aria-selected={tab === 'heatmap'}
+				tabindex={tab === 'heatmap' ? 0 : -1}
 				onclick={() => setTab('heatmap')}
 			>
 				Heatmap

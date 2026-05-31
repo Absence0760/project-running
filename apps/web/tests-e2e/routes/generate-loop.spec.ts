@@ -582,4 +582,25 @@ test.describe('/routes/new — generate-loop (mocked OSRM)', () => {
 
 		await expect(page.getByRole('button', { name: /Save Route/ })).toBeDisabled();
 	});
+
+	test('keyboard coordinate entry sets the start point without a map tap (WCAG 2.1.1)', async ({
+		page
+	}) => {
+		// audit-findings 2026-05-30 High [accessibility]: picking a start
+		// was pointer-only. A keyboard user types lat/lng + Set start.
+		await page.getByRole('button', { name: /Generate a route by distance/ }).click();
+
+		await page.getByLabel('Start latitude').fill(String(FIELD_START.lat));
+		await page.getByLabel('Start longitude').fill(String(FIELD_START.lng));
+		await page.getByRole('button', { name: 'Set start' }).click();
+
+		// The start label now reflects the typed coordinate (no map click).
+		await expect(page.locator('.point-set').first()).toContainText('37.6519, -77.3611');
+
+		// Invalid input surfaces an accessible error instead of setting a point.
+		await page.getByLabel('End latitude').fill('999');
+		await page.getByLabel('End longitude').fill('0');
+		await page.getByRole('button', { name: 'Set end' }).click();
+		await expect(page.locator('.coord-error[role="alert"]')).toBeVisible();
+	});
 });

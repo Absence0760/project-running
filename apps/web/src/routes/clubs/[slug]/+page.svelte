@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { hashHue } from '$lib/format/avatar';
 	import { page } from '$app/stores';
@@ -767,12 +768,15 @@
 			</section>
 		{/if}
 
-		<div class="tabs" role="tablist" aria-label="Club sections">
+		<!-- tabindex=-1: keydown bubbles here from the focused tab; the tabs
+		     carry the roving tabindex. Satisfies a11y_interactive_supports_focus. -->
+		<div class="tabs" role="tablist" aria-label="Club sections" tabindex={-1} onkeydown={handleTablistKeydown}>
 			<button
 				role="tab"
 				class="tab"
 				class:active={tab === 'feed'}
 				aria-selected={tab === 'feed'}
+				tabindex={tab === 'feed' ? 0 : -1}
 				onclick={() => setTab('feed')}
 			>
 				Feed{posts.length ? ` (${posts.length})` : ''}
@@ -782,6 +786,7 @@
 				class="tab"
 				class:active={tab === 'events'}
 				aria-selected={tab === 'events'}
+				tabindex={tab === 'events' ? 0 : -1}
 				onclick={() => setTab('events')}
 			>
 				Events{upcoming.length ? ` (${upcoming.length})` : ''}
@@ -791,6 +796,7 @@
 				class="tab"
 				class:active={tab === 'members'}
 				aria-selected={tab === 'members'}
+				tabindex={tab === 'members' ? 0 : -1}
 				onclick={() => setTab('members')}
 			>
 				Members ({club.member_count})
@@ -800,6 +806,7 @@
 				class="tab"
 				class:active={tab === 'routes'}
 				aria-selected={tab === 'routes'}
+				tabindex={tab === 'routes' ? 0 : -1}
 				onclick={() => setTab('routes')}
 			>
 				Routes{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
@@ -809,6 +816,7 @@
 				class="tab"
 				class:active={tab === 'templates'}
 				aria-selected={tab === 'templates'}
+				tabindex={tab === 'templates' ? 0 : -1}
 				onclick={() => setTab('templates')}
 			>
 				Templates{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
