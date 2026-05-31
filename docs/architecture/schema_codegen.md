@@ -213,7 +213,7 @@ cd apps/web && npm run check
 Expect errors like:
 
 ```
-src/lib/mock-data.ts:20:55 - Property 'distance_m' does not exist on type 'Run'.
+src/lib/core/mock-data.ts:20:55 - Property 'distance_m' does not exist on type 'Run'.
 ```
 
 ```bash

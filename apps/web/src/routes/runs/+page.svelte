@@ -18,7 +18,11 @@
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
 	let sourceFilter = $state<RunSource | 'all'>('all');
-	let activityFilter = $state<string>('run');
+	// Default to all activities, consistent with the source filter. A
+	// run-only default hid a walk-/cycle-/hike-only user's entire history
+	// behind a filter they never set — their first view of /runs was the
+	// "No runs match these filters" dead-end (persona-hunt R5, casual).
+	let activityFilter = $state<string>('all');
 	type SortKey = 'newest' | 'oldest' | 'longest' | 'fastest';
 	let sortKey = $state<SortKey>('newest');
 	type DateRange = 'today' | 'week' | 'month' | 'year' | 'all' | 'custom';

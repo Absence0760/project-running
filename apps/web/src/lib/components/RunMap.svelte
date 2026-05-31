@@ -696,7 +696,7 @@
 		});
 		// Resize-on-container-change wiring — catches the
 		// flex-mismeasure-at-mount + SplitPane-drag bugs. See
-		// `$lib/map_resize`.
+		// `$lib/routes/map_resize`.
 		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');

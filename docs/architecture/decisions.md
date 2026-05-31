@@ -26,7 +26,7 @@ Wear OS originally shipped as Flutter on the assumption that Compose interop was
 
 A 10 km run has ~3,300 GPS points ≈ 265 KB of jsonb per row. At 10 K active users with 200 runs/year that's ~500 GB of database storage, and every dashboard query scans rows bloated with tracks that the dashboard never needs. Moving to object storage (`runs` bucket, path `{user_id}/{run_id}.json.gz`, gzipped) cut per-row size by ~99 %, eliminated jsonb column bloat on the dashboard query path, and let bulk importers (Strava, Health Connect) stay on the $25/month Supabase Pro tier instead of needing Team.
 
-**Shape:** `runs.track_url` column points at the Storage object. Clients lazy-load the track on demand via `ApiClient.fetchTrack` (Dart) or `fetchTrack` in `apps/web/src/lib/data.ts` (TS). The dashboard list view never touches Storage.
+**Shape:** `runs.track_url` column points at the Storage object. Clients lazy-load the track on demand via `ApiClient.fetchTrack` (Dart) or `fetchTrack` in `apps/web/src/lib/core/data.ts` (TS). The dashboard list view never touches Storage.
 
 **Trade-off:** One extra round trip per run detail view (download + gunzip + JSON parse). Acceptable — detail views are rare compared to dashboard loads.
 
@@ -140,7 +140,7 @@ Schema + RLS details in `api_database.md`, surfaces in `clubs.md`, phased rollou
 
 ## 11. Training paces are goal-pace multipliers, not Daniels table lookups
 
-**Decided:** April 2026 · `apps/web/src/lib/training.ts#pacesFromGoalPace`
+**Decided:** April 2026 · `apps/web/src/lib/training/training.ts#pacesFromGoalPace`
 
 The full Daniels training-pace model derives pace for each intensity zone from VDOT via the same implicit equation used to *compute* VDOT — there's no closed-form inverse. Real implementations use a published table of ~60 VDOT values × 5 zones. For v1 we anchor the five zones (easy / marathon / tempo / interval / repetition) on the runner's goal pace with fixed multipliers (1.22, 1.06, 0.97, 0.9, 0.85). Across the 3:00-5:00/km goal band these land within ~5 s/km of the Daniels tables, which is well inside the tolerance band a plan runner expects — most runners cannot actually hit a 1-second pace window, and the target bands we emit carry `±5-30s` tolerances anyway.
 
@@ -413,11 +413,11 @@ The spectator page at `/live/{run_id}` streams a runner's in-progress GPS trace 
 
 **Decided:** April 2026 · captured after the `fmtKm` / `fmtPace` move.
 
-`apps/web/src/lib/training.ts` is unit-tested under `tsx --test` (see [testing.md](../testing/testing.md)). The runtime is plain Node — Svelte's runes (`$state`, `$derived`, `$effect`) are compile-time syntax provided by the Vite plugin, so importing any `*.svelte.ts` module from a tested file blows up at module-load with `ReferenceError: $state is not defined`. We hit this when the unit-aware `fmtKm` / `fmtPace` formatters were first added to `training.ts` and re-imported `getUnit()` from `units.svelte.ts`.
+`apps/web/src/lib/training/training.ts` is unit-tested under `tsx --test` (see [testing.md](../testing/testing.md)). The runtime is plain Node — Svelte's runes (`$state`, `$derived`, `$effect`) are compile-time syntax provided by the Vite plugin, so importing any `*.svelte.ts` module from a tested file blows up at module-load with `ReferenceError: $state is not defined`. We hit this when the unit-aware `fmtKm` / `fmtPace` formatters were first added to `training.ts` and re-imported `getUnit()` from `units.svelte.ts`.
 
 **Decision:** unit-aware formatters live in `units.svelte.ts` (alongside the reactive `unit` signal); pure-TS modules don't import them. Svelte components that need them write a second import line. The two clusters never cross.
 
-**Trade-off:** an extra import line in every Svelte component that wants `fmtKm` instead of one tidy "everything from `$lib/training`". Worth it — keeps the pure logic file testable without pulling in vitest + the Svelte plugin just to test two formatters.
+**Trade-off:** an extra import line in every Svelte component that wants `fmtKm` instead of one tidy "everything from `$lib/training/training`". Worth it — keeps the pure logic file testable without pulling in vitest + the Svelte plugin just to test two formatters.
 
 **Don't re-litigate unless:** we adopt vitest with `@sveltejs/vite-plugin-svelte` (which natively transforms runes for tests), at which point the constraint disappears and a single export point is fine again.
 
@@ -999,7 +999,7 @@ Routes carry `waypoints` inline so route surfaces hit `TrackPreview` directly; r
 
 Mobile (Android + iOS via the byte-identical Dart codebase) has rendered the run-detail trace as a six-bucket pace heatmap with a three-band age fade since `feat(android): draw NRC-style pace heatmap on the live + detail track` (Apr 21). Web kept a single indigo→lavender gradient on `RunMap.svelte` until now — same run, different colour story on each platform.
 
-`apps/web/src/lib/pace_segments.ts` is a 1:1 TS port of `apps/mobile_android/lib/widgets/pace_segments.dart` — same colour ramp (`#EF4444 → #22D3EE`), same alpha bands (0.55 / 0.80 / 1.0), same activity-scaled m/s breakpoints. `RunMap.svelte` takes a new optional `activity` prop; when set AND the track carries per-point timestamps, the trace renders as a MapLibre `line` layer with data-driven `'line-color': ['get', 'color']` over the existing dark casing. Routes (which never carry timestamps) and historical imports without `ts` fall through to the legacy single-line render path so nothing regresses.
+`apps/web/src/lib/segments/pace_segments.ts` is a 1:1 TS port of `apps/mobile_android/lib/widgets/pace_segments.dart` — same colour ramp (`#EF4444 → #22D3EE`), same alpha bands (0.55 / 0.80 / 1.0), same activity-scaled m/s breakpoints. `RunMap.svelte` takes a new optional `activity` prop; when set AND the track carries per-point timestamps, the trace renders as a MapLibre `line` layer with data-driven `'line-color': ['get', 'color']` over the existing dark casing. Routes (which never carry timestamps) and historical imports without `ts` fall through to the legacy single-line render path so nothing regresses.
 
 **Why mirror the buckets exactly:** the heatmap is the visual identity of the run — having the same fast-cyan mid-section on the same run on the phone and the laptop is the whole point of the alignment exercise. Drifting either side's breakpoints by even one m/s produces visibly different colour bands at the same speed, which would let the parity drift back over time.
 
@@ -1013,7 +1013,7 @@ The original `TrackPreview` projection — both the web SVG component and the Da
 
 Fix: scale `(maxLng - minLng)` by `cos(midLat)` before computing the bounding box, then apply the same `lngScale` factor when projecting each point's `lng` offset. Equirectangular projection at the route's mid-latitude. The viewBox-fit logic stays unchanged so `preserveAspectRatio="xMidYMid meet"` (web) and the `Size.infinite` painter (mobile) still render at the requested aspect.
 
-The projection lives in pure helpers — `projectTrack` in `apps/web/src/lib/track_projection.ts` and `apps/mobile_android/lib/widgets/track_preview.dart` — so the math can be unit-tested without rendering. Both suites assert that a 100 m × 100 m loop at 51 °N renders square within 2 %.
+The projection lives in pure helpers — `projectTrack` in `apps/web/src/lib/routes/track_projection.ts` and `apps/mobile_android/lib/widgets/track_preview.dart` — so the math can be unit-tested without rendering. Both suites assert that a 100 m × 100 m loop at 51 °N renders square within 2 %.
 
 **Trade-off:** equirectangular at one latitude is still wrong for multi-degree routes where the mid-latitude isn't representative — a marathon-distance trip from London to Paris would still distort. Acceptable for thumbnail rendering: the bounding box of any single run is small enough that one `cos(midLat)` value is accurate to within sub-pixel tolerance at thumbnail scale. A proper Mercator projection would solve the multi-degree case but adds complexity we don't need until we ship a "city-to-city" feature.
 
@@ -1090,7 +1090,7 @@ IAM role (s3:PutObject on artifacts bucket, cloudfront:CreateInvalidation,
 
 ## 54. Fix `thresholdPaceSecPerKmFromVdot` formula
 
-The original `thresholdPaceSecPerKmFromVdot` in `apps/web/src/lib/fitness.ts` (and its Dart twin in `apps/mobile_android/lib/fitness.dart`) computed T-pace via a hand-fit cubic-quadratic-linear-constant:
+The original `thresholdPaceSecPerKmFromVdot` in `apps/web/src/lib/training/fitness.ts` (and its Dart twin in `apps/mobile_android/lib/fitness.dart`) computed T-pace via a hand-fit cubic-quadratic-linear-constant:
 
 ```
 mps = 0.0003 × VDOT³ - 0.021 × VDOT² + 0.6 × VDOT + 2.0
@@ -1444,7 +1444,7 @@ The risks section of `competitors.md` flags map tile costs at scale: MapTiler ha
 
 Three env vars opt into the local path. When unset, every code path falls back to MapTiler — production is unaffected.
 
-- **Web** — `PUBLIC_TILE_STYLE_URL` (MapLibre style.json URL). Implemented in `apps/web/src/lib/map-style-url.ts` (pure `buildMapStyleUrl`) + `map-style.svelte.ts` (`mapStyleUrlFromEnv` reads `import.meta.env`). Every map component imports the env-aware variant.
+- **Web** — `PUBLIC_TILE_STYLE_URL` (MapLibre style.json URL). Implemented in `apps/web/src/lib/routes/map-style-url.ts` (pure `buildMapStyleUrl`) + `map-style.svelte.ts` (`mapStyleUrlFromEnv` reads `import.meta.env`). Every map component imports the env-aware variant.
 - **Mobile (Android + iOS twin)** — `TILE_URL_TEMPLATE` (`{z}/{x}/{y}` template). Implemented as the file-level `resolveTileUrl(env)` in `apps/mobile_android/lib/widgets/live_run_map.dart`.
 - **Wear OS** — `PUBLIC_TILE_URL_TEMPLATE` BuildConfig field (BuildConfig because the value is baked at compile time, not loaded at runtime). Implemented as file-level `buildTileUrl(z, x, y, template, maptilerKey, styleSlug)` in `apps/watch_wear/.../ui/TileSource.kt`. The `TileSource.enabled` flag now lights up when EITHER the dev override OR the MapTiler key is set, so a dev session without a MapTiler key still gets tiles.
 
@@ -1553,7 +1553,7 @@ Trade-offs:
 
 - **Cache scope is per-user, per-device** for the device bag, per-user for the universal bag. Sign-out drops nothing automatically; if a different user signs in on the same device they read their own cache (which starts empty until their first load). The previous user's rows stay on disk until that user signs back in — acceptable because they only contain settings, not run data, and the rows are keyed so cross-user reads are impossible.
 - **Server is still authoritative.** The cache is a read-through + write-through mirror, not a source of truth. A cross-device concurrent edit during an offline window is resolved at queue-drain time by the same read-merge-write that already protects online writes (see decisions §… on the original `applyPrefsChanges` lift).
-- **Web doesn't get this layer.** Web sessions are a single tab on a browser with always-on connectivity assumptions, and the existing `apps/web/src/lib/settings.ts` doesn't currently need the queue. The contract on `SettingsService` is mobile-aware (the default `SettingsCache` is a no-op) so server-side tests + the web's TS port don't pay for the abstraction.
+- **Web doesn't get this layer.** Web sessions are a single tab on a browser with always-on connectivity assumptions, and the existing `apps/web/src/lib/settings/settings.ts` doesn't currently need the queue. The contract on `SettingsService` is mobile-aware (the default `SettingsCache` is a no-op) so server-side tests + the web's TS port don't pay for the abstraction.
 - **Cache wire format is JSON.** No migration required when a new prefs key joins the registry — `applyPrefsChanges` round-trips it.
 - **`load()` never rethrows on a signed-in caller**, even when both the cache and the server are unavailable. It returns with empty bags + `isServerHydrated = false`. A signed-in user who first opens the app offline gets a usable Settings screen — writes apply to in-memory + cache and queue for the next successful drain. Pre-fix the cache-miss + server-fail path threw, forcing every bag-backed tile into the disabled "Sign in to edit profile-level settings" state even though the user *was* signed in.
 
@@ -1631,7 +1631,7 @@ Persona-hunt Round 3 finding Privacy #4. Pre-fix the cookie-consent banner ignor
 Behaviour:
 
 - **Client banner (`CookieConsentBanner.svelte`)**: on mount, if `navigator.globalPrivacyControl === true` AND the local choice is still pending, auto-call `consent.set('rejected')` and never show the banner. The "rejected" choice persists to localStorage + the cookie, so future loads see a consistent state without needing GPC to be re-read.
-- **Server gate (`isConsentGiven(request)` in `apps/web/src/lib/consent_cookie.ts`)**: short-circuits to `false` when `Sec-GPC: 1` is present, regardless of what the cookie says. A user who once accepted but later flipped their browser-level GPC toggle has withdrawn consent; the gate honours the new signal immediately, not on next manual visit.
+- **Server gate (`isConsentGiven(request)` in `apps/web/src/lib/settings/consent_cookie.ts`)**: short-circuits to `false` when `Sec-GPC: 1` is present, regardless of what the cookie says. A user who once accepted but later flipped their browser-level GPC toggle has withdrawn consent; the gate honours the new signal immediately, not on next manual visit.
 
 Why this exact shape:
 
@@ -1694,7 +1694,7 @@ Neither honoured gender. The standard sport-science observation is that female r
 
 What we changed:
 
-- New shared pure helper `estimateRunCalories({ distanceM, weightKg?, activityKcalPerKgPerKm?, gender? })` in `apps/web/src/lib/calories.ts` ↔ `apps/mobile_android/lib/calories.dart` (byte-identical iOS twin). Both surfaces now route through it so the formula is in lockstep.
+- New shared pure helper `estimateRunCalories({ distanceM, weightKg?, activityKcalPerKgPerKm?, gender? })` in `apps/web/src/lib/runs/calories.ts` ↔ `apps/mobile_android/lib/calories.dart` (byte-identical iOS twin). Both surfaces now route through it so the formula is in lockstep.
 - Activity coefficient defaults to the run value (1.0) — drop-in compatible with the web's previous formula. Web now also accepts an activity argument and threads `metadata.activity_type` through, so walks / hikes / cycle no longer get the run multiplier silently applied.
 - Body weight falls back to `DEFAULT_BODY_WEIGHT_KG = 70` (median for an adult runner) when `user_settings.prefs.body_weight_kg` is unset. The "(est)" suffix on the label keeps the fallback honest — runners who care about precision see the cue + set their real weight in Settings → Preferences.
 - Gender calibration: `female` multiplies the output by `0.95`. `male` / `null` / `nonbinary` use the unmodified curve. Same `user_profiles.gender` column the training-pace calibration (§76) and segments leaderboards already use.
@@ -1767,7 +1767,7 @@ Mobile (Flutter Android + iOS twin) follows per the canonical-surface rule (deci
 
 ## 79. Web prefs use a localStorage write-through cache + offline-drain queue, mirroring the mobile `SettingsCache` (§72)
 
-The web `loadSettings` / `updateUniversal` / `updateDevice` API is fronted by `LocalStoragePrefsCache` (`apps/web/src/lib/settings_cache.ts`). It's a direct port of the mobile `SettingsCache` abstract (`packages/api_client/lib/src/settings_service.dart`) and its `SharedPrefsSettingsCache` implementation (`apps/mobile_android/lib/settings_cache.dart`) — same key scoping, same `PendingChange` shape, same `applyPrefsChanges` merge rule.
+The web `loadSettings` / `updateUniversal` / `updateDevice` API is fronted by `LocalStoragePrefsCache` (`apps/web/src/lib/settings/settings_cache.ts`). It's a direct port of the mobile `SettingsCache` abstract (`packages/api_client/lib/src/settings_service.dart`) and its `SharedPrefsSettingsCache` implementation (`apps/mobile_android/lib/settings_cache.dart`) — same key scoping, same `PendingChange` shape, same `applyPrefsChanges` merge rule.
 
 **The pattern:**
 

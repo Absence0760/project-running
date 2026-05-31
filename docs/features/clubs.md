@@ -79,7 +79,7 @@ The enrichment fields are joined client-side in `data.ts` rather than through a 
 
 ### Recurrence expansion
 
-Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`. Cancelled occurrences (`event_exceptions` rows) are filtered out of the picker client-side — `expandInstances` itself is pure and doesn't know about exceptions, so the event-detail page subtracts the cancelled `instance_start`s.
+Recurring events are stored as a single row (`recurrence_freq`, `recurrence_byday[]`, `recurrence_until`, `recurrence_count`). `apps/web/src/lib/social/recurrence.ts#expandInstances` walks the pattern client-side and returns the next N instance datetimes within a window. Per-instance attendee counts and RSVPs are queried by `instance_start` (which is ISO — the same value `expandInstances` returns). Monthly recurrence uses the day-of-month of `starts_at` and ignores `byday`. Cancelled occurrences (`event_exceptions` rows) are filtered out of the picker client-side — `expandInstances` itself is pure and doesn't know about exceptions, so the event-detail page subtracts the cancelled `instance_start`s.
 
 ### Live race mode
 
@@ -115,7 +115,7 @@ Organisers can turn an event instance into a live, server-coordinated race: ever
 `runs.event_id` is a convenience FK added by the same migration — stamped when a user picks a run from the Submit-my-time flow, so the run-detail page can back-link to the event it was part of. The column is nullable and not required for a run's existence.
 
 Clients:
-- Web: `apps/web/src/lib/data.ts#fetchEventResults / submitEventResult / removeEventResult / fetchRecentRunsForPicker`. Results card lives on `/clubs/[slug]/events/[id]` under the RSVP / updates section; a `Submit my time` button opens a run picker with the user's 20 most recent runs plus explicit "Record DNF" / "Record DNS" options.
+- Web: `apps/web/src/lib/core/data.ts#fetchEventResults / submitEventResult / removeEventResult / fetchRecentRunsForPicker`. Results card lives on `/clubs/[slug]/events/[id]` under the RSVP / updates section; a `Submit my time` button opens a run picker with the user's 20 most recent runs plus explicit "Record DNF" / "Record DNS" options.
 - Android: `SocialService.fetchEventResults / submitEventResult / removeEventResult / fetchRecentRuns` + `_ResultsSection` / `_SubmitTimeSheet` on `event_detail_screen.dart`.
 
 ### Realtime

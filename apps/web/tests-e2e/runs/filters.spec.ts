@@ -44,9 +44,9 @@ test.describe('/runs — filters', () => {
 			);
 		});
 		// Clear runs_filters_v1 so each test starts at the page defaults
-		// (today + run + newest + all sources). Without this a leftover
-		// filter from a previous test in the same context can break the
-		// "default state" assumption.
+		// (today + all activities + newest + all sources). Without this a
+		// leftover filter from a previous test in the same context can
+		// break the "default state" assumption.
 		await context.addInitScript(() => {
 			localStorage.removeItem('runs_filters_v1');
 		});
@@ -97,6 +97,23 @@ test.describe('/runs — filters', () => {
 	});
 
 	test.describe('Activity-type filter', () => {
+		test('defaults to All so a non-run user is not hidden on first load', async ({
+			page
+		}) => {
+			// Persona-hunt R5 (casual): the activity filter used to default
+			// to 'run', so a walk-/cycle-/hike-only user's first view of
+			// /runs was the empty "No runs match these filters" dead-end.
+			// The default now matches the source filter — everything shown.
+			// beforeEach cleared runs_filters_v1 and never touched the
+			// activity group, so this reflects the cold-load default.
+			await expect(
+				page.getByRole('button', { name: 'All', exact: true })
+			).toHaveAttribute('aria-pressed', 'true');
+			await expect(
+				page.getByRole('button', { name: 'Run', exact: true })
+			).toHaveAttribute('aria-pressed', 'false');
+		});
+
 		test('All shows everything', async ({ page }) => {
 			await page.getByRole('button', { name: 'All', exact: true }).click();
 			// Switching activity to 'all' transitions fetchMode from

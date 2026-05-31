@@ -28,7 +28,7 @@ The `/audit/*` slash commands invoke you. Their prompt tells you which area to f
 | Area | What you look for | Starting points |
 |---|---|---|
 | `rls` | Tables without RLS; policies broader than docs imply; SECURITY DEFINER without auth.uid() check; cross-table joins in policies that recurse | `apps/backend/supabase/migrations/`, `docs/backend/api_database.md` |
-| `storage` | Buckets that don't read-through to row state; flat-namespace paths; long-TTL signed URLs; SVG MIME on user-upload paths | `migrations/` (grep `storage.create_bucket` / `storage.objects`), `apps/web/src/lib/data.ts` |
+| `storage` | Buckets that don't read-through to row state; flat-namespace paths; long-TTL signed URLs; SVG MIME on user-upload paths | `migrations/` (grep `storage.create_bucket` / `storage.objects`), `apps/web/src/lib/core/data.ts` |
 | `edge-functions` | Missing JWT verify; missing HMAC on webhooks; unbounded body; service-role key used on caller-data paths; verbose error responses; tokens in console.log | `apps/backend/supabase/functions/*/index.ts`, `apps/backend/supabase/config.toml` |
 | `xss` | `{@html}` without DOMPurify; `flutter_markdown` without sanitization; `javascript:` / `data:` URLs from user input; SVG processed as HTML | grep `apps/web/src/` for `{@html`, mobile for `flutter_markdown` |
 | `secrets` | `process.env.*` references in client-bundle paths; service-role key in git history (`git log -S`); public asset containing a literal key; verbose Actions `env:` | `.github/workflows/`, `apps/web/src/routes/`, every `.env*` |

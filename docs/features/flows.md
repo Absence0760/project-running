@@ -45,7 +45,7 @@ Every protected route relies on a root-layout `$effect` that calls `goto('/login
 
 ### Watch out
 
-- `apps/web/src/lib/supabase.ts` is the only Supabase client. It is a browser-side client (`createBrowserClient` from `@supabase/ssr`). There is no SSR client; the app is fully static (`adapter-static` with `fallback: index.html`). The JWT lives in `localStorage`.
+- `apps/web/src/lib/core/supabase.ts` is the only Supabase client. It is a browser-side client (`createBrowserClient` from `@supabase/ssr`). There is no SSR client; the app is fully static (`adapter-static` with `fallback: index.html`). The JWT lives in `localStorage`.
 
 ---
 

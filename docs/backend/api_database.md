@@ -590,7 +590,7 @@ create table user_profiles (
 
 #### `user_settings` / `user_device_settings`
 
-Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/backend/settings.md](settings.md) for the registered key catalogue.
+Settings registry. `user_settings.prefs` is a single jsonb bag keyed off `user_id` for **universal** preferences (notification opt-ins, privacy zones, units carry-overs from the legacy `user_profiles` columns). `user_device_settings` keys on `(user_id, device_id)` for **per-device** overrides (push subscription endpoint per browser, sound on/off per watch, etc.). RLS owner-only on both. Migration `20260422_001_user_settings.sql`. The TypeScript helpers `loadSettings()` + `effective<T>()` in `apps/web/src/lib/settings/settings.ts` resolve a per-key value as `device_override ?? user_value ?? default`. See [docs/backend/settings.md](settings.md) for the registered key catalogue.
 
 #### `device_tokens`
 
@@ -1292,7 +1292,7 @@ select * from routes_intersecting_track(
 
 ### `search_public_routes(q text, max_results int)`
 
-Full-text search over `name` (using the `routes_name_search` GIN index over `to_tsvector('english', name)`) restricted to `is_public = true`. Granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Used by `RouteExplorer.svelte` via `apps/web/src/lib/data.ts:searchPublicRoutes`.
+Full-text search over `name` (using the `routes_name_search` GIN index over `to_tsvector('english', name)`) restricted to `is_public = true`. Granted to `anon` + `authenticated` so the `/routes` Explore tab works without sign-in. Used by `RouteExplorer.svelte` via `apps/web/src/lib/core/data.ts:searchPublicRoutes`.
 
 ### `popular_route_tags(tag_limit int)`
 
@@ -1448,7 +1448,7 @@ supabase.auth.onAuthStateChange.listen((data) {
 ### SvelteKit auth (web)
 
 ```typescript
-// apps/web/src/lib/supabase-server.ts
+// apps/web/src/lib/core/supabase-server.ts
 import { createServerClient } from '@supabase/ssr';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import type { Cookies } from '@sveltejs/kit';

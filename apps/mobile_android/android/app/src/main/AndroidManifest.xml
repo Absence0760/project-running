@@ -47,6 +47,37 @@
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
                      android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+
+    <!-- ── Transitive plugin permissions made explicit ────────────────
+         The permissions below are injected into the merged manifest by
+         plugin AARs, not requested directly by app code. Surfacing them
+         in this source-controlled manifest (suppressed or annotated)
+         keeps the permission set the operator sees here in lockstep
+         with the binary — otherwise they are invisible until the APK is
+         built and the Play Data Safety form silently drifts.
+         audit/app-store-privacy (2026-05-30) Critical. -->
+
+    <!-- androidx.biometric (pulled transitively) ships USE_BIOMETRIC +
+         USE_FINGERPRINT. This app has no biometric / fingerprint auth
+         surface — secure storage uses the Android Keystore without a
+         biometric prompt — so strip them rather than disclose an unused
+         capability. tools:node="remove" deletes them at merge time. -->
+    <uses-permission android:name="android.permission.USE_BIOMETRIC"
+                     tools:node="remove" />
+    <uses-permission android:name="android.permission.USE_FINGERPRINT"
+                     tools:node="remove" />
+
+    <!-- workmanager (androidx.work) injects RECEIVE_BOOT_COMPLETED so
+         its boot receiver can re-schedule the hourly background-sync
+         task after a device reboot. registerBackgroundSync() in
+         main.dart also re-registers the task on every app launch, so
+         this only buys boot-time resume without the user reopening the
+         app. Kept because that resume is genuine product behaviour;
+         declared here so it is visible to the Play Data Safety form,
+         which must disclose it (App activity → background sync at
+         boot). -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
     <application
         android:label="Threkir"
         android:name="${applicationName}"

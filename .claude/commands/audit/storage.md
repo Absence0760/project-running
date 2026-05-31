@@ -31,7 +31,7 @@ File:line for each finding, plus a concrete reproduction path (curl with anon ke
 ## Useful starting points
 
 - `apps/backend/supabase/migrations/` — grep for `storage`, `create_bucket`, `storage.objects`
-- `apps/web/src/lib/data.ts` — `fetchTrackByPath`, `addRunPhoto`, avatar upload helpers
+- `apps/web/src/lib/core/data.ts` — `fetchTrackByPath`, `addRunPhoto`, avatar upload helpers
 - `packages/api_client/lib/src/api_client.dart` — Dart equivalents
 - `docs/backend/api_database.md` — documented Storage layout
 - `apps/backend/CLAUDE.md` — backend-specific notes

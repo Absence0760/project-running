@@ -112,7 +112,7 @@ Each platform has its own dotenv-style convention; renaming all three to one nam
 
 ## How the apps consume the override
 
-### Web (`apps/web/src/lib/map-style.svelte.ts` + `map-style-url.ts`)
+### Web (`apps/web/src/lib/routes/map-style.svelte.ts` + `map-style-url.ts`)
 
 The reactive `getMapStyle()` / `setMapStyle(...)` signal still drives the user's chosen style in production. `mapStyleUrl()` accepts an optional `overrideUrl` arg that wins outright — `mapStyleUrlFromEnv(...)` reads `import.meta.env.PUBLIC_TILE_STYLE_URL` and threads it in. Every `RunMap.svelte` / `PrivacyZonePicker.svelte` / `RouteHeatmap.svelte` / live-event spectator imports `mapStyleUrlFromEnv` and gets the dev override for free.
 

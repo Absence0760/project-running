@@ -157,7 +157,7 @@ Native in-app OAuth via `flutter_web_auth_2` — Chrome Custom Tabs on Android, 
 Operational pre-requisites:
 - The `threkir://strava-callback` URI must be allow-listed in the Strava developer console **and** in `STRAVA_ALLOWED_REDIRECTS` on the Edge Function.
 - Falls back to the web browser hand-off on builds where the client ID is unconfigured (matches the existing `url_launcher` path used before native OAuth shipped).
-- `lib/strava.dart` mirrors `apps/web/src/lib/strava.ts` and is unit-tested (7 tests on URL building + configured-state checks).
+- `lib/strava.dart` mirrors `apps/web/src/lib/integrations/strava.ts` and is unit-tested (7 tests on URL building + configured-state checks).
 
 ### Webhook (real-time sync)
 
@@ -354,7 +354,7 @@ OAuth 2.0, identical pattern to Strava.
 
 Two paths today, both unblocked:
 
-**Web — bulk FIT import.** `/settings/integrations` ships a "Bulk import from a Garmin export" card that accepts either a single `.fit` file (Garmin Connect → activity → "Export Original") or the full `.zip` from `Garmin → Account Management → Request Your Data`. Implementation in `apps/web/src/lib/garmin-zip.ts` + `garmin-fit.ts`; FIT decoding uses `fit-file-parser` and is dynamic-imported so the binary decoder is only fetched when a user picks a file. Dedupes within a single import on the FIT `file_id` message (`time_created-serial_number`) with a `started_at|distance_m` composite fallback for `.gpx` / `.tcx` originals inside the bundle. Across imports, the FIT path also persists `runs.external_id = garmin:{file_id}` (via `garminExternalId`) so a later re-import — or a future Garmin OAuth path — is blocked by the per-user `external_id` unique index, not just the in-session set (#18).
+**Web — bulk FIT import.** `/settings/integrations` ships a "Bulk import from a Garmin export" card that accepts either a single `.fit` file (Garmin Connect → activity → "Export Original") or the full `.zip` from `Garmin → Account Management → Request Your Data`. Implementation in `apps/web/src/lib/integrations/garmin-zip.ts` + `garmin-fit.ts`; FIT decoding uses `fit-file-parser` and is dynamic-imported so the binary decoder is only fetched when a user picks a file. Dedupes within a single import on the FIT `file_id` message (`time_created-serial_number`) with a `started_at|distance_m` composite fallback for `.gpx` / `.tcx` originals inside the bundle. Across imports, the FIT path also persists `runs.external_id = garmin:{file_id}` (via `garminExternalId`) so a later re-import — or a future Garmin OAuth path — is blocked by the per-user `external_id` unique index, not just the in-session set (#18).
 
 **Mobile — HealthKit / Health Connect.** Garmin Connect mobile app syncs to HealthKit (iOS) and Health Connect (Android) automatically. Users who install Garmin Connect alongside your app will have their Garmin runs available via the HealthKit/Health Connect import with no extra work.
 

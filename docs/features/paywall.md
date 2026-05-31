@@ -7,7 +7,7 @@
 Every screen in the app is reachable by free users. The Pro tier
 changes **behaviour inside the surfaces**, not access to them — there
 is no Pro-only screen. `PRO_ONLY_FEATURES` in
-`apps/web/src/lib/features.ts` is empty today, so `isLocked()` returns
+`apps/web/src/lib/settings/features.ts` is empty today, so `isLocked()` returns
 `false` for every key. The infrastructure (`<ProGate>` component,
 `isLocked()` helper, `GATED_FEATURES` registry) is kept so a future
 Pro-only screen is a one-line addition. See [decisions.md § 23]
@@ -94,7 +94,7 @@ they don't call through `isLocked()`. Add a key to
 
 ## Client-side `isPro()` helper
 
-`apps/web/src/lib/features.ts` exports `isPro()` — reads the auth
+`apps/web/src/lib/settings/features.ts` exports `isPro()` — reads the auth
 store's cached `user_profiles.subscription_tier` and returns true for
 `pro` / `lifetime`. Use it for conditional UI flourishes (a "Pro"
 badge, a higher-cap label next to the coach input). Never use it as
@@ -104,7 +104,7 @@ server-side with the `is_pro()` RPC.
 ## Adding a new gated feature
 
 1. **Register the feature.** Add an entry to `GATED_FEATURES` in
-   `apps/web/src/lib/features.ts`:
+   `apps/web/src/lib/settings/features.ts`:
    ```ts
    training_plans: {
      label: 'Training Plans',
@@ -143,7 +143,7 @@ server-side with the `is_pro()` RPC.
      <ActualFeatureComponent />
    {/if}
    ```
-   Import `isLocked` from `$lib/features` and `ProGate` from
+   Import `isLocked` from `$lib/settings/features` and `ProGate` from
    `$lib/components/ProGate.svelte`.
 
 4. **Android gate.** In the Flutter app, read the tier from the
@@ -193,7 +193,7 @@ your own `.env.local` if you need it.
 
 ### Client — `PUBLIC_BYPASS_PAYWALL` for `isLocked()`
 
-`apps/web/src/lib/features.ts::isLocked()` already returns `false` for
+`apps/web/src/lib/settings/features.ts::isLocked()` already returns `false` for
 every key today because `PRO_ONLY_FEATURES` is empty, so this client
 bypass is dormant infrastructure. It stays in place so that the
 moment a new key lands in `PRO_ONLY_FEATURES`, local devs can flip
@@ -248,7 +248,7 @@ secrets (`supabase secrets set REVENUECAT_WEBHOOK_SECRET=whsec_...`).
 ### Client → RevenueCat SDK
 
 **Web (shipped)**: `@revenuecat/purchases-js` is wired via
-`apps/web/src/lib/revenuecat.ts`. `/settings/upgrade` "Get Pro" button
+`apps/web/src/lib/billing/revenuecat.ts`. `/settings/upgrade` "Get Pro" button
 calls `Purchases.purchase(...)` with the Supabase user id as the
 `appUserId`. The `managementURL` on `CustomerInfo` backs the
 "Manage subscription" button. Env-gated by `PUBLIC_REVENUECAT_WEB_API_KEY`;

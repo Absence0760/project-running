@@ -13,7 +13,7 @@ You are **read-only**. Reporting is the deliverable.
 
 The app gets one piece of localisation right out of the box: `preferred_unit` (`km` / `mi`) is a first-class user setting, plumbed through:
 
-- Web: `apps/web/src/lib/units.svelte.ts` is the reactive signal + formatters
+- Web: `apps/web/src/lib/format/units.svelte.ts` is the reactive signal + formatters
 - Mobile: `apps/mobile_android/lib/preferences.dart` + every formatter in `run_stats.dart`
 
 Distance unit conversion is *not* a finding. Everything else is.
@@ -22,7 +22,7 @@ Distance unit conversion is *not* a finding. Everything else is.
 
 ### Web (SvelteKit)
 
-1. **Hard-coded English strings.** Walk `apps/web/src/lib/components/`, `apps/web/src/routes/`, `apps/web/src/lib/data.ts`. Every user-facing literal in a Svelte component (`>...<` between tags), every button label, every error message, every aria-label, every page title. Today none are wrapped in any `t()` / `_('...')` / message-format helper — confirm and quantify (rough line count, sample locations).
+1. **Hard-coded English strings.** Walk `apps/web/src/lib/components/`, `apps/web/src/routes/`, `apps/web/src/lib/core/data.ts`. Every user-facing literal in a Svelte component (`>...<` between tags), every button label, every error message, every aria-label, every page title. Today none are wrapped in any `t()` / `_('...')` / message-format helper — confirm and quantify (rough line count, sample locations).
 2. **Page metadata.** `<title>` tags, `<meta name="description">`, OpenGraph tags. Per-route via `+page.ts` or `+page.svelte`. Audit `apps/web/src/routes/+layout.svelte` + the per-route entries under `apps/web/src/routes/og/`.
 3. **Date / time formatting.** Grep for hand-rolled formatters: `Intl.DateTimeFormat`, `.toLocaleDateString`, `.toLocaleTimeString`, hard-coded `dd/mm/yyyy` strings, `formatDate(...)` helpers. Verify every render uses the user's locale or at least UTC + `Intl`.
 4. **Number formatting.** `.toLocaleString` vs hand-rolled `String(n)`. Pace `5:30` is a non-localisable convention; that's fine. Distance `5.21 km` — the decimal separator (`.` vs `,`) should follow locale. Audit `paceFormat` / `distanceFormat` callers.

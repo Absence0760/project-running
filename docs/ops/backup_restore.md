@@ -107,7 +107,7 @@ as their DB rows.
 ## Where it's wired today
 
 - **Web** → `/settings/account` → "Download full backup" + "Restore from
-  backup". Implemented in `apps/web/src/lib/backup.ts`. Uses `JSZip`.
+  backup". Implemented in `apps/web/src/lib/backup/backup.ts`. Uses `JSZip`.
   Both paths require an authenticated session — there's no local
   persistence to stage into.
 - **Mobile Android** → Settings → "Full backup" / "Restore from backup".

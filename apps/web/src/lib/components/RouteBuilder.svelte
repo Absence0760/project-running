@@ -1697,7 +1697,7 @@
 		// Auto-resize on any container dimension change. Catches the
 		// initial-mount mismeasurement (flex children don't always
 		// have their final rect at mount) AND any later SplitPane
-		// drag. See `$lib/map_resize` for the why.
+		// drag. See `$lib/routes/map_resize` for the why.
 		stopResizeWatch = watchMapResize(mapContainer, map);
 
 		// Single load handler for all map setup

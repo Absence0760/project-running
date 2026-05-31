@@ -157,12 +157,12 @@ Editor components (`RunEditor`, `PlanEditor`, `ClubEditor`, `EventEditor`, `Work
 
 Modal hosts the editor; on `oncreated` it typically `goto('/{base}/' + id)`. Standalone `/new` routes are thin wrappers around the same editor — never duplicate.
 
-### Date helpers in `$lib/mock-data`
+### Date helpers in `$lib/core/mock-data`
 
 - `formatDate(iso)` → "12 May 2026" (en-GB).
 - `formatDateShort(iso)` → "12 May".
-- Re-exports from `$lib/units.svelte`: `formatPace`, `formatPaceNoSuffix`, `formatDistance` (reactive to `preferred_unit`).
-- No global `relativeDate()`. `/feed` has a private `fmtRelative()` — lift to `$lib/mock-data` only if more than one page needs it.
+- Re-exports from `$lib/format/units.svelte`: `formatPace`, `formatPaceNoSuffix`, `formatDistance` (reactive to `preferred_unit`).
+- No global `relativeDate()`. `/feed` has a private `fmtRelative()` — lift to `$lib/core/mock-data` only if more than one page needs it.
 
 ### URL state pattern (no shared helper)
 

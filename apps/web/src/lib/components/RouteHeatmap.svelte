@@ -34,7 +34,7 @@
 	let pointerOnMap = $state(false);
 
 	// --- Search ---
-	// Uses `$lib/geocoding.searchPlaces`, which transparently picks
+	// Uses `$lib/routes/geocoding.searchPlaces`, which transparently picks
 	// MapTiler when its key is set and falls back to Nominatim
 	// (OSM's free geocoder) otherwise. Either path lets the user
 	// pan the map to a named place — works whether or not we have

@@ -80,3 +80,39 @@ test('the unit-test glob recurses into lib subfolders', () => {
 		`.github/workflows/ci.yml must run the recursive glob '${RECURSIVE}'.`,
 	);
 });
+
+test('every $lib/<segment> reference in src resolves to a real lib folder or root module', () => {
+	// First path segment after `$lib/` must be an existing subfolder of src/lib
+	// or one of the root modules. Catches stale references (imports AND comments)
+	// left behind when a module moves into a topical subfolder.
+	const entries = readdirSync(libRoot, { withFileTypes: true });
+	const valid = new Set<string>();
+	for (const e of entries) {
+		if (e.isDirectory()) valid.add(e.name);
+		else if (e.isFile() && !e.name.endsWith('.test.ts') && !e.name.endsWith('.d.ts')) {
+			valid.add(e.name.endsWith('.ts') ? e.name.slice(0, -3) : e.name);
+		}
+	}
+
+	const srcRoot = resolve(libRoot, '..');
+	const files = readdirSync(srcRoot, { recursive: true, withFileTypes: true })
+		.filter((e) => e.isFile() && /\.(ts|svelte|js)$/.test(e.name))
+		.map((e) => resolve(e.parentPath ?? (e as unknown as { path: string }).path, e.name));
+
+	const offenders: string[] = [];
+	for (const file of files) {
+		const text = readFileSync(file, 'utf-8');
+		for (const m of text.matchAll(/\$lib\/([\w.-]+)/g)) {
+			if (!valid.has(m[1])) {
+				offenders.push(`${file.replace(srcRoot, 'src')}: $lib/${m[1]}`);
+			}
+		}
+	}
+
+	assert.deepEqual(
+		[...new Set(offenders)],
+		[],
+		`Stale $lib reference(s) — the first path segment doesn't match a src/lib ` +
+			`subfolder or root module (a module probably moved):\n  ${[...new Set(offenders)].join('\n  ')}`,
+	);
+});

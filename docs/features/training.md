@@ -54,7 +54,7 @@ Plan + event creation flows intentionally stay on mobile (unlike clubs, where we
 | `/plans/[id]/workouts/[wid]` | Workout detail: target distance / pace / tolerance, structured intervals laid out step-by-step, tailored "how to run it" advice per kind. |
 | `/dashboard` | Hosts the "Today's workout" card (or a promo card if no active plan). |
 
-## Engine: `apps/web/src/lib/training.ts`
+## Engine: `apps/web/src/lib/training/training.ts`
 
 Pure TypeScript, no deps, 100% tested under `src/lib/training.test.ts` (20 tests, run with `npx tsx --test src/lib/training.test.ts`).
 
@@ -76,7 +76,7 @@ Migration: `apps/backend/supabase/migrations/20260419_001_training_plans.sql`. T
 
 - `training_plans` — one per user-plan; `vdot`, `goal_distance_m`, `goal_time_seconds`, `status`, `current_5k_seconds`. Partial unique index enforces **one active plan per user**; `createTrainingPlan` auto-completes the previous active plan on insert.
 - `plan_weeks` — 8–16 rows per plan; `phase`, `target_volume_m`, `notes`, `week_index`.
-- `plan_workouts` — ~4–6 rows per week; `kind`, target distance / duration / pace / tolerance, free-form `structure jsonb` for intervals. Completion is encoded by **two** fields: `completed_run_id` (set by the auto-matcher when a tracked run lands) and `manually_completed` (boolean, set by the calendar editor's "Mark as done" when the user ran without recording). Read sites should treat the workout as done if either is truthy — the shared helper is `isWorkoutCompleted(wo)` in `apps/web/src/lib/training.ts`.
+- `plan_workouts` — ~4–6 rows per week; `kind`, target distance / duration / pace / tolerance, free-form `structure jsonb` for intervals. Completion is encoded by **two** fields: `completed_run_id` (set by the auto-matcher when a tracked run lands) and `manually_completed` (boolean, set by the calendar editor's "Mark as done" when the user ran without recording). Read sites should treat the workout as done if either is truthy — the shared helper is `isWorkoutCompleted(wo)` in `apps/web/src/lib/training/training.ts`.
 
 ### `plan_workouts.structure` shape
 
@@ -126,5 +126,5 @@ Distinct from the AI Coach chat above: a human coach links to an athlete via a s
 - **Structured-interval execution on the Android run screen** — specced in [workout_execution.md](workout_execution.md), no code yet; `plan_workouts.structure` is the handoff.
 - **Paste-a-template import** — markdown table → weeks/workouts.
 - **Export as markdown / JSON** — round-trips through the paste path above.
-- **Dart port of the engine** — *Shipped in Phase 3 Android port* via `apps/mobile_android/lib/training.dart` with 17 mirror tests in `test/training_test.dart`. Must stay in sync with `apps/web/src/lib/training.ts`; any change to pace multipliers, phase breakdown, or mileage fractions requires updating both files and re-running both test suites.
+- **Dart port of the engine** — *Shipped in Phase 3 Android port* via `apps/mobile_android/lib/training.dart` with 17 mirror tests in `test/training_test.dart`. Must stay in sync with `apps/web/src/lib/training/training.ts`; any change to pace multipliers, phase breakdown, or mileage fractions requires updating both files and re-running both test suites.
 - **Premium gating** — the plans surface is free in v1. A later Stripe migration gates whichever features turn out to need it.

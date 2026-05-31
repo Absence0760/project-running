@@ -32,7 +32,7 @@ For each: file:line, the policy/function name, what's missing, the worst-case bl
 - `apps/backend/supabase/seed.sql` — any seed-time RLS adjustments
 - `docs/backend/api_database.md` — the documented surface (compare against reality)
 - `docs/architecture/decisions.md` §33 (privacy-zone clipping), §37 (segments), §38 (notifications) — RLS intent for those features
-- `apps/web/src/lib/data.ts` — every web-side query, useful to cross-check what the policies enable
+- `apps/web/src/lib/core/data.ts` — every web-side query, useful to cross-check what the policies enable
 
 ## Delegate to
 

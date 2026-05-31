@@ -96,7 +96,7 @@ export const mockPersonalRecords = [
 
 // Formatters were moved to `lib/format/units.svelte.ts` so they can honor the
 // user's `preferred_unit` setting reactively. Re-exported here to avoid
-// breaking the many existing importers from `$lib/mock-data`.
+// breaking the many existing importers from `$lib/core/mock-data`.
 export { formatPace, formatSpeed, formatDistance, formatPaceNoSuffix } from '../format/units.svelte';
 
 export function sourceLabel(source: RunSource): string {

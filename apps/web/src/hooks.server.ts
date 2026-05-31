@@ -29,7 +29,7 @@ import { isConsentGiven } from "$lib/settings/consent_cookie";
 //      Lambda logs) and skips the Sentry call.
 //
 // The cookie is written by the client-side consent module
-// ($lib/consent.svelte). When the user accepts, the cookie ships
+// ($lib/settings/consent.svelte). When the user accepts, the cookie ships
 // on the next request; when they reset, it's cleared. Requests
 // before the banner is interacted with have no cookie and are
 // excluded.

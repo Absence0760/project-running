@@ -16,7 +16,7 @@ import type { TrackPoint } from '$lib/types';
 // serves it straight from S3, same edge cache as the rest of the
 // static site.
 //
-// SVG is built by the pure helper in `$lib/og_route_image`; resvg-js
+// SVG is built by the pure helper in `$lib/share/og_route_image`; resvg-js
 // renders to PNG bytes here. Track polyline comes from the
 // `clip_track_for_user` SECURITY DEFINER RPC (same path
 // fetchPublicRoute uses for non-owner viewers) so privacy zones are

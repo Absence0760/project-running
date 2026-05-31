@@ -252,7 +252,7 @@
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
 	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
 	/// Estimated calories — routes through the shared pure helper
-	/// `apps/web/src/lib/calories.ts` (mirrored byte-for-byte in
+	/// `apps/web/src/lib/runs/calories.ts` (mirrored byte-for-byte in
 	/// the Dart twin) so the formula stays in lockstep across the
 	/// web run-detail + mobile run-detail surfaces. The helper
 	/// applies the cross-formula female calibration when the

@@ -33,12 +33,12 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `default_activity_type` | `'run' \| 'walk' \| 'hike' \| 'cycle'` | UD | `run` | Pre-selected activity on the watch/phone start screen. |
 | `hr_zones` | `{ z1: int, z2: int, z3: int, z4: int, z5: int }` | U | — | HR zone upper bounds in bpm. Used by training plan pace derivation + post-run zone split. |
 | `resting_hr_bpm` | `int` | U | — | Resting heart rate. Feeds VDOT estimate if a recent race isn't available. |
-| `max_hr_bpm` | `int` | U | — | Max heart rate override. If absent, we fall back to Tanaka `208 − 0.7 × age` (from `date_of_birth`), then a 190-bpm default. See `apps/web/src/lib/hr_zones.ts` / `apps/mobile_android/lib/hr_zones.dart`. |
+| `max_hr_bpm` | `int` | U | — | Max heart rate override. If absent, we fall back to Tanaka `208 − 0.7 × age` (from `date_of_birth`), then a 190-bpm default. See `apps/web/src/lib/training/hr_zones.ts` / `apps/mobile_android/lib/hr_zones.dart`. |
 | `date_of_birth` | `YYYY-MM-DD` | U | — | Used for age-based HR max + age-grade calculation. Also gates name-search discoverability: a declared minor (under 18) is hard-excluded from `search_user_profiles` regardless of `discoverable_in_search` (migration `20261017_001`). |
 | `privacy_default` | `'public' \| 'followers' \| 'private'` | U | `followers` (unset fallback) / `private` (wizard pre-selection) | Default visibility of new runs; per-run override still wins. The onboarding wizard pre-selects `private`; honoured on every run-creation + import path, failing closed to private. Full behaviour in [§ privacy_default detail](#privacy_default-detail). |
 | `strava_auto_share` | `bool` | U | `false` | Auto-push every new run to Strava (requires connected integration). |
 | `discoverable_in_search` | `bool` | U | `true` | When `false`, this user is excluded from People-tab name search (`search_user_profiles` RPC — migration `20261015_001`). The user remains reachable by direct profile URL and via share-page unfurls; this only gates name-string discovery. Persona-hunt Round 3 finding Woman #2. A declared minor (`date_of_birth` under 18) is excluded regardless of this pref — migration `20261017_001`, Round 4 finding family-club #1. |
-| `trusted_contacts` | `TrustedContact[]` | U | `[]` | Array of `{ name, phone?, email?, relationship? }` rows (max 5). Scaffold for the planned overdue-run / panic-button surface — no delivery logic ships with this key. Pure shape lives in `apps/web/src/lib/trusted_contacts.ts` ↔ `apps/mobile_android/lib/trusted_contacts.dart`. Persona-hunt Round 3 finding Woman #4. |
+| `trusted_contacts` | `TrustedContact[]` | U | `[]` | Array of `{ name, phone?, email?, relationship? }` rows (max 5). Scaffold for the planned overdue-run / panic-button surface — no delivery logic ships with this key. Pure shape lives in `apps/web/src/lib/social/trusted_contacts.ts` ↔ `apps/mobile_android/lib/trusted_contacts.dart`. Persona-hunt Round 3 finding Woman #4. |
 | `primary_goal` | `'general_fitness' \| 'weight_loss' \| '5k' \| '10k' \| 'half_marathon' \| 'marathon'` | U | — | Set by the post-signup `/onboarding` wizard (step 3). Drives the planned post-onboarding plan suggestion ("create a 10K plan?"). Distance values map 1:1 to `training.ts#GoalEvent`. See `docs/architecture/decisions.md § 78`. |
 | `coach_personality` | `'supportive' \| 'drill_sergeant' \| 'analytical'` | U | `supportive` | Tone preset for the Claude coach chat. |
 | `voice_feedback_enabled` | `bool` | D | `false` | Speak pace/distance callouts during a run. Device-scoped because mic/speaker availability differs. |
@@ -101,14 +101,14 @@ Default visibility of new runs. Per-run override still wins. **Onboarding wizard
   settings screens edit the full universal + device registry (profile,
   HR, pace, privacy, coach, map style, auto-pause, weekly goal, coach
   personality, Strava auto-share).
-- **Web**: [`apps/web/src/lib/settings.ts`](../../apps/web/src/lib/settings.ts).
+- **Web**: [`apps/web/src/lib/settings/settings.ts`](../../apps/web/src/lib/settings/settings.ts).
   Device ID is minted once in `localStorage` (key `run_app.device_id`). The
   account page at `/settings/account` dual-writes `preferred_unit` to both
   `user_profiles.preferred_unit` (legacy column) and the universal bag, and
   owns the editor for `default_activity_type` + `week_start_day`.
 
   **Offline behaviour**: a `LocalStoragePrefsCache`
-  ([`apps/web/src/lib/settings_cache.ts`](../../apps/web/src/lib/settings_cache.ts))
+  ([`apps/web/src/lib/settings/settings_cache.ts`](../../apps/web/src/lib/settings/settings_cache.ts))
   fronts every `loadSettings` / `updateUniversal` / `updateDevice` call —
   the web mirror of the mobile pattern above. `loadSettings` returns the
   cached bags synchronously when both are populated and fires a

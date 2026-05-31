@@ -39,7 +39,7 @@ For each: table.column (or `metadata.<key>`), what private state it reveals, the
 - `apps/backend/supabase/migrations/` — column lists per table
 - `docs/backend/metadata.md` — the runs.metadata key registry
 - `docs/backend/api_database.md` — documented public-vs-private intent
-- `apps/web/src/lib/data.ts` — `fetchPublicRun`, `fetchPublicRoute`, `fetchFeed` — what the app actually reads from public rows
+- `apps/web/src/lib/core/data.ts` — `fetchPublicRun`, `fetchPublicRoute`, `fetchFeed` — what the app actually reads from public rows
 
 ## Delegate to
 
