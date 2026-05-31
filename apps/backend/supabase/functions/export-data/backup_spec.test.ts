@@ -14,10 +14,13 @@ const TEST_UID = '00000000-0000-0000-0000-000000000abc';
 
 Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	const specs = buildBackupSpecs(TEST_UID);
-	// 24 entries matches the Go worker's spec list (May 2026 +
-	// reports_against_me); a regression that drops one of these is a
-	// silent Art 15 completeness gap.
-	assertEquals(specs.length, 24, `expected 24 specs, got ${specs.length}`);
+	// 29 entries matches the Go worker's spec list (May 2026 +
+	// reports_against_me + the 2026-05-30 Critical batch:
+	// direct_messages × 2 directions, coach_athletes × 2 directions,
+	// event_results); a regression that drops one of these is a silent
+	// Art 20 completeness gap. Keep in lockstep with the Go worker's
+	// `FetchExportPersonalDataTables` spec list.
+	assertEquals(specs.length, 29, `expected 29 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -44,9 +47,66 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'user_coach_usage.json',
 		'reports.json',
 		'reports_against_me.json',
+		'direct_messages_sent.json',
+		'direct_messages_received.json',
+		'coaching_as_coach.json',
+		'coaching_as_athlete.json',
+		'event_results.json',
 	]) {
 		assertEquals(entries.has(expected), true, `missing entry: ${expected}`);
 	}
+});
+
+Deno.test('direct_messages exported in both directions (GDPR Art 20)', () => {
+	// audit/data-export-completeness (2026-05-30) Critical. Private 1:1
+	// message bodies are the densest comms PII in the app; an export
+	// that omitted them would be a wilful Art 20 failure. Both the
+	// sent (sender_id) and received (recipient_id) sides are the
+	// subject's own correspondence and must ship.
+	const specs = buildBackupSpecs(TEST_UID);
+	const sent = specs.find((s) => s.entry === 'direct_messages_sent.json');
+	const received = specs.find((s) => s.entry === 'direct_messages_received.json');
+	assertExists(sent);
+	assertExists(received);
+	assertEquals(sent.table, 'direct_messages');
+	assertEquals(received.table, 'direct_messages');
+	assertEquals(sent.filter, `sender_id=eq.${TEST_UID}`);
+	assertEquals(received.filter, `recipient_id=eq.${TEST_UID}`);
+});
+
+Deno.test('coach_athletes exported both ways without the invite_token credential', () => {
+	// audit/data-export-completeness (2026-05-30) Critical. The
+	// subject's coaching links (as coach and as athlete) are their own
+	// data and must ship, but `invite_token` is a redeemable credential
+	// — anyone holding it can claim the link — so the narrow select
+	// must omit it, mirroring the integrations vault-column exclusion.
+	const specs = buildBackupSpecs(TEST_UID);
+	const asCoach = specs.find((s) => s.entry === 'coaching_as_coach.json');
+	const asAthlete = specs.find((s) => s.entry === 'coaching_as_athlete.json');
+	assertExists(asCoach);
+	assertExists(asAthlete);
+	assertEquals(asCoach.filter, `coach_id=eq.${TEST_UID}`);
+	assertEquals(asAthlete.filter, `athlete_id=eq.${TEST_UID}`);
+	for (const spec of [asCoach, asAthlete]) {
+		assertEquals(spec.table, 'coach_athletes');
+		assertEquals(
+			spec.select.includes('invite_token'),
+			false,
+			'invite_token is a redeemable credential and must never ship in the export',
+		);
+		assertEquals(spec.select.includes('status'), true);
+		assertEquals(spec.select.includes('accepted_at'), true);
+	}
+});
+
+Deno.test('event_results exported for the subject (GDPR Art 20)', () => {
+	// audit/data-export-completeness (2026-05-30) Critical. Per-user
+	// race finish times, ranks, DNF/DNS flags, and age-grade are
+	// health-adjacent performance records the subject is entitled to.
+	const results = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'event_results.json');
+	assertExists(results);
+	assertEquals(results.table, 'event_results');
+	assertEquals(results.filter, `user_id=eq.${TEST_UID}`);
 });
 
 Deno.test('integrations spec redacts vault columns via narrow select', () => {

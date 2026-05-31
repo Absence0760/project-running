@@ -1298,6 +1298,37 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			filter: "target_kind=eq.user&target_id=eq." + userID,
 			sel:    "id,target_kind,target_id,reason,status,notes,created_at,resolved_at",
 		},
+		// direct_messages — private 1:1 conversations, both directions
+		// (messages the user sent and messages they received). `body`
+		// ships verbatim: it is the subject's own correspondence.
+		// audit/data-export-completeness (2026-05-30) Critical.
+		{
+			name: "direct_messages_sent.json", table: "direct_messages",
+			filter: "sender_id=eq." + userID, sel: "*",
+		},
+		{
+			name: "direct_messages_received.json", table: "direct_messages",
+			filter: "recipient_id=eq." + userID, sel: "*",
+		},
+		// coach_athletes — the subject's coaching relationships, as coach
+		// and as athlete. `invite_token` is a redeemable credential
+		// (anyone holding it can claim the link), so the projection omits
+		// it — same rationale as integrations' vault columns.
+		// audit/data-export-completeness (2026-05-30) Critical.
+		{
+			name: "coaching_as_coach.json", table: "coach_athletes",
+			filter: "coach_id=eq." + userID,
+			sel:    "id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at",
+		},
+		{
+			name: "coaching_as_athlete.json", table: "coach_athletes",
+			filter: "athlete_id=eq." + userID,
+			sel:    "id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at",
+		},
+		// event_results — the subject's own race finish records (time,
+		// rank, DNF/DNS, age-grade). Health-adjacent performance data.
+		// audit/data-export-completeness (2026-05-30) Critical.
+		{name: "event_results.json", table: "event_results", filter: uidEq, sel: "*"},
 	}
 
 	out := make(map[string][]map[string]interface{}, len(specs))

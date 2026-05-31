@@ -773,3 +773,72 @@ func TestFetchExportPersonalDataTables_IncludesAuditCompletenessTables(t *testin
 		}
 	}
 }
+
+// audit/data-export-completeness (2026-05-30) Critical pinned three
+// tables missing from the Art 20 export: direct_messages (private 1:1
+// comms, both directions), coach_athletes (coaching links, both
+// directions), and event_results (own race finish records). Each must
+// appear in the manifest when the subject has rows; coach_athletes
+// must NOT leak the redeemable invite_token credential.
+func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T) {
+	var dmSentQ, dmRecvQ, coachQ, athleteQ, eventResQ string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		query := r.URL.RawQuery
+		switch {
+		case strings.Contains(path, "/rest/v1/direct_messages") && strings.Contains(query, "sender_id="):
+			dmSentQ = query
+			_, _ = w.Write([]byte(`[{"id":"dm1","body":"hi"}]`))
+		case strings.Contains(path, "/rest/v1/direct_messages") && strings.Contains(query, "recipient_id="):
+			dmRecvQ = query
+			_, _ = w.Write([]byte(`[{"id":"dm2","body":"yo"}]`))
+		case strings.Contains(path, "/rest/v1/coach_athletes") && strings.Contains(query, "coach_id="):
+			coachQ = query
+			_, _ = w.Write([]byte(`[{"id":"ca1","status":"active"}]`))
+		case strings.Contains(path, "/rest/v1/coach_athletes") && strings.Contains(query, "athlete_id="):
+			athleteQ = query
+			_, _ = w.Write([]byte(`[{"id":"ca2","status":"pending"}]`))
+		case strings.Contains(path, "/rest/v1/event_results"):
+			eventResQ = query
+			_, _ = w.Write([]byte(`[{"event_id":"e1","rank":3,"duration_s":1500}]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{
+		"direct_messages_sent.json",
+		"direct_messages_received.json",
+		"coaching_as_coach.json",
+		"coaching_as_athlete.json",
+		"event_results.json",
+	} {
+		if rows, ok := out[key]; !ok || len(rows) == 0 {
+			t.Errorf("%s must appear in the export manifest with at least one row — audit/data-export-completeness (2026-05-30) Critical; got out=%v", key, extraTableKeys(out))
+		}
+	}
+
+	// Both DM directions queried.
+	if dmSentQ == "" || dmRecvQ == "" {
+		t.Errorf("direct_messages must be queried in both directions (sender_id + recipient_id); sent=%q recv=%q", dmSentQ, dmRecvQ)
+	}
+	// Both coaching directions queried.
+	if coachQ == "" || athleteQ == "" {
+		t.Errorf("coach_athletes must be queried as coach + as athlete; coach=%q athlete=%q", coachQ, athleteQ)
+	}
+	if eventResQ == "" {
+		t.Errorf("event_results must be queried for the subject")
+	}
+	// invite_token is a redeemable credential — it must never be in the
+	// coach_athletes select projection.
+	for _, q := range []string{coachQ, athleteQ} {
+		if strings.Contains(q, "invite_token") {
+			t.Errorf("coach_athletes select must omit the redeemable invite_token credential; got %q", q)
+		}
+	}
+}

@@ -97,6 +97,40 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: `target_kind=eq.user&target_id=eq.${userId}`,
 			select: 'id,target_kind,target_id,reason,status,notes,created_at,resolved_at',
 		},
+		// direct_messages — private 1:1 conversations, both directions.
+		// `body` is the subject's own correspondence and ships verbatim.
+		// audit/data-export-completeness (2026-05-30) Critical.
+		{
+			entry: 'direct_messages_sent.json',
+			table: 'direct_messages',
+			filter: `sender_id=eq.${userId}`,
+			select: '*',
+		},
+		{
+			entry: 'direct_messages_received.json',
+			table: 'direct_messages',
+			filter: `recipient_id=eq.${userId}`,
+			select: '*',
+		},
+		// coach_athletes — coaching relationships as coach + as athlete.
+		// `invite_token` is a redeemable credential; the narrow select
+		// omits it (same rationale as integrations' vault columns).
+		// audit/data-export-completeness (2026-05-30) Critical.
+		{
+			entry: 'coaching_as_coach.json',
+			table: 'coach_athletes',
+			filter: `coach_id=eq.${userId}`,
+			select: 'id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at',
+		},
+		{
+			entry: 'coaching_as_athlete.json',
+			table: 'coach_athletes',
+			filter: `athlete_id=eq.${userId}`,
+			select: 'id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at',
+		},
+		// event_results — own race finish records (time, rank, DNF/DNS,
+		// age-grade). audit/data-export-completeness (2026-05-30) Critical.
+		{ entry: 'event_results.json', table: 'event_results', filter: uidEq, select: '*' },
 	];
 }
 
