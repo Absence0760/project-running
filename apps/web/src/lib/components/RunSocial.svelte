@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { initial } from '$lib/avatar';
 	import { formatRelativeTime } from '$lib/time';
 	import {
 		fetchKudosForRun,
@@ -100,9 +101,6 @@
 	}
 
 
-	function initial(name: string | null): string {
-		return (name?.[0] ?? '?').toUpperCase();
-	}
 
 	let topLevel = $derived(comments.filter((c) => c.parent_comment_id == null));
 	let repliesByParent = $derived.by(() => {

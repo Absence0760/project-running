@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { initial } from '$lib/avatar';
 	import { goto } from '$app/navigation';
 	import {
 		fetchNotifications,
@@ -145,9 +146,6 @@
 		});
 	}
 
-	function initial(name: string | null | undefined): string {
-		return (name?.[0] ?? '?').toUpperCase();
-	}
 </script>
 
 <div class="wrap">

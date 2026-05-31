@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { initial } from '$lib/avatar';
 	import { formatDuration } from '$lib/time';
 	import {
 		fetchSegmentsForRoute,
@@ -158,9 +159,6 @@
 		return formatDuration(Math.round(s));
 	}
 
-	function initial(name: string | null): string {
-		return (name?.[0] ?? '?').toUpperCase();
-	}
 </script>
 
 <div class="segments-panel">

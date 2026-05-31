@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { initial, hashHue } from '$lib/avatar';
 	import {
 		searchPeople,
 		fetchSuggestedPeople,
@@ -96,15 +97,7 @@
 		suggestions = suggestions.map((r) => (r.id === id ? { ...r, viewer_follows } : r));
 	}
 
-	function initialFor(name: string | null): string {
-		return (name?.[0] ?? '?').toUpperCase();
-	}
 
-	function hueFor(id: string): number {
-		let h = 0;
-		for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-		return Math.abs(h) % 360;
-	}
 </script>
 
 <div class="people">
@@ -182,13 +175,13 @@
 				<a class="person-row" href="/u/{person.id}">
 					<span
 						class="avatar"
-						style="--seed: {hueFor(person.id)}"
+						style="--seed: {hashHue(person.id)}"
 						aria-hidden="true"
 					>
 						{#if person.avatar_url}
 							<img src={person.avatar_url} alt="" />
 						{:else}
-							{initialFor(person.display_name)}
+							{initial(person.display_name)}
 						{/if}
 					</span>
 					<div class="person-body">

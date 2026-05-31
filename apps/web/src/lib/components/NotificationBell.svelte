@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { initial } from '$lib/avatar';
 	import {
 		fetchNotifications,
 		markNotificationRead,
@@ -186,9 +187,6 @@
 		});
 	}
 
-	function initial(name: string | null | undefined): string {
-		return (name?.[0] ?? '?').toUpperCase();
-	}
 
 	function handleEsc(e: KeyboardEvent) {
 		if (e.key === 'Escape' && open) {

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { hashHue } from '$lib/avatar';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { browseClubs, fetchMyClubs, searchClubs } from '$lib/data';
@@ -77,11 +78,6 @@
 		goto(`/clubs/${club.slug}`);
 	}
 
-	function hashHue(id: string): number {
-		let h = 0;
-		for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-		return Math.abs(h) % 360;
-	}
 </script>
 
 <div class="clubs-panel">

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { initial, hashHue } from '$lib/avatar';
 	import { formatDuration as baseDuration } from '$lib/time';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
@@ -884,15 +885,7 @@
 		return `${Math.floor(hr / 24)}d ago`;
 	}
 
-	function initial(name: string | null | undefined): string {
-		return (name?.trim()?.[0] ?? '?').toUpperCase();
-	}
 
-	function hashHue(id: string): number {
-		let h = 0;
-		for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-		return Math.abs(h) % 360;
-	}
 </script>
 
 {#if loading}

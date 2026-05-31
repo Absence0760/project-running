@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { initial, hashHue } from '$lib/avatar';
 	import { page } from '$app/stores';
 	import { goto, afterNavigate } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
@@ -554,15 +555,7 @@
 		return new Date(iso).toLocaleDateString();
 	}
 
-	function initial(name: string | null | undefined): string {
-		return (name?.trim()?.[0] ?? '?').toUpperCase();
-	}
 
-	function hashHue(id: string): number {
-		let h = 0;
-		for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-		return Math.abs(h) % 360;
-	}
 </script>
 
 {#if loading}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { initial } from '$lib/avatar';
 	import {
 		fetchMyAthletes,
 		fetchPendingCoachInvites,
@@ -95,9 +96,6 @@
 		}
 	}
 
-	function initial(name: string | null): string {
-		return name?.[0]?.toUpperCase() ?? '?';
-	}
 
 	function sinceLabel(iso: string | null): string {
 		if (!iso) return '';

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { initial } from '$lib/avatar';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -87,9 +88,6 @@
 		});
 	}
 
-	function initial(name: string | null): string {
-		return (name?.[0] ?? '?').toUpperCase();
-	}
 </script>
 
 <svelte:head><title>Messages — Threkir</title></svelte:head>
