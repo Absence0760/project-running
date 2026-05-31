@@ -4053,10 +4053,18 @@ export async function fetchClubsInBbox(bbox: {
 	return data as ClubPin[];
 }
 
-/// Discoverable public routes inside the viewport bbox. "Discoverable"
-/// = featured OR has run_count > 0 (someone has actually run this
-/// route at least once). Returns the start_point for each route so
-/// the heatmap can drop a pin there.
+/// Discoverable public routes inside the viewport bbox. The lens is
+/// chosen by `filter`:
+///   • 'popular'     (default) — featured OR run_count > 0.
+///   • 'featured'    — admin-curated only.
+///   • 'friends'     — public routes created by users you follow.
+///   • 'hidden_gems' — un-run public routes past a >=1km sanity floor.
+/// Returns the start_point for each route so the map can drop a pin
+/// there. Mirrors the `p_filter` branch in
+/// 20261113_001_discoverable_routes_filter.sql — keep the union in
+/// lockstep with the RPC's CASE arms.
+export type DiscoverFilter = 'popular' | 'featured' | 'friends' | 'hidden_gems';
+
 export interface DiscoverableRoutePin {
 	id: string;
 	name: string;
@@ -4076,6 +4084,7 @@ export async function fetchDiscoverableRoutesInBbox(bbox: {
 	maxLng: number;
 	maxLat: number;
 	limit?: number;
+	filter?: DiscoverFilter;
 }): Promise<DiscoverableRoutePin[]> {
 	const { data, error } = await supabase.rpc('discoverable_routes_in_bbox', {
 		p_min_lng: bbox.minLng,
@@ -4083,6 +4092,7 @@ export async function fetchDiscoverableRoutesInBbox(bbox: {
 		p_max_lng: bbox.maxLng,
 		p_max_lat: bbox.maxLat,
 		p_limit: bbox.limit ?? 100,
+		p_filter: bbox.filter ?? 'popular',
 	});
 	if (error || !data) {
 		console.warn('fetchDiscoverableRoutesInBbox failed', error);

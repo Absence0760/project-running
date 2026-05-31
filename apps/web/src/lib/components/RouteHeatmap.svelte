@@ -11,6 +11,8 @@
 		nearbyPublicRoutes,
 		fetchClubsInBbox,
 		fetchDiscoverableRoutesInBbox,
+		type DiscoverFilter,
+		type DiscoverableRoutePin,
 	} from '$lib/core/data';
 	import { formatDistance } from '$lib/format/units.svelte';
 	import { searchPlaces, type PlaceSearchResult } from '$lib/routes/geocoding';
@@ -91,6 +93,22 @@
 	let showHeatmapLayer = $state(true);
 	let clubPinsCount = $state(0);
 	let routePinsCount = $state(0);
+
+	// Route-discovery lens. The chip bar swaps which routes the pin
+	// layer fetches (popular / featured / friends / hidden gems) so the
+	// map stops being one undifferentiated blob and becomes a route
+	// browser. Mirrors the RPC's p_filter arms — see data.ts.
+	let routeFilter = $state<DiscoverFilter>('popular');
+	const FILTERS: { id: DiscoverFilter; label: string; hint: string }[] = [
+		{ id: 'popular', label: 'Popular', hint: 'Routes people actually run' },
+		{ id: 'friends', label: 'Friends', hint: 'Routes from people you follow' },
+		{ id: 'featured', label: 'Featured', hint: 'Hand-picked routes' },
+		{ id: 'hidden_gems', label: 'Hidden gems', hint: 'Quiet routes nobody has run yet' },
+	];
+	// The viewport's discoverable routes, kept as state so the list
+	// panel (and the count chip) render straight off the same fetch
+	// the map pins use.
+	let routePins = $state<DiscoverableRoutePin[]>([]);
 
 	onMount(() => {
 		const prefersDark =
@@ -366,7 +384,20 @@
 						0.6, 'rgba(178, 24, 43, 0.75)',
 						1.0, 'rgba(178, 24, 43, 0.9)',
 					],
-					'heatmap-opacity': 0.85,
+					// Fade the heat as the user zooms in to pick a route.
+					// At city/region scale the density blob is the honest
+					// "where do people run" signal; once you're close enough
+					// that the route pins + polylines carry the detail, a
+					// full-strength blob just muddies them. Dims from 0.85
+					// down to 0.25 across zoom 11→16.
+					'heatmap-opacity': [
+						'interpolate',
+						['linear'],
+						['zoom'],
+						11, 0.85,
+						14, 0.4,
+						16, 0.25,
+					],
 				},
 			});
 			// First fetch fires on mount in parallel with the style load
@@ -610,10 +641,11 @@
 		};
 		const [clubs, routes] = await Promise.all([
 			fetchClubsInBbox(bbox),
-			fetchDiscoverableRoutesInBbox(bbox),
+			fetchDiscoverableRoutesInBbox({ ...bbox, filter: routeFilter }),
 		]);
 		clubPinsCount = clubs.length;
 		routePinsCount = routes.length;
+		routePins = routes;
 		const clubSrc = map.getSource(CLUB_PINS_SOURCE) as
 			| maplibregl.GeoJSONSource
 			| undefined;
@@ -677,6 +709,14 @@
 			'visibility',
 			showHeatmapLayer ? 'visible' : 'none',
 		);
+	});
+	// Re-fetch the discoverable-route pins whenever the lens changes.
+	// `routeFilter` is referenced directly so the dependency is explicit
+	// rather than relying on the read inside refreshPins's async body.
+	$effect(() => {
+		routeFilter;
+		if (!map || !mapLoaded) return;
+		void refreshPins();
 	});
 
 	/// Fetch + render clickable public-route polylines for the current
@@ -809,6 +849,25 @@
 				{/each}
 			</ul>
 		{/if}
+	</div>
+
+	<div class="filter-bar" role="group" aria-label="Route discovery filter" data-testid="heatmap-filters">
+		{#each FILTERS as f (f.id)}
+			<button
+				type="button"
+				class="filter-chip"
+				class:active={routeFilter === f.id}
+				aria-pressed={routeFilter === f.id}
+				title={f.hint}
+				data-filter={f.id}
+				onclick={() => (routeFilter = f.id)}
+			>
+				{f.label}
+				{#if routeFilter === f.id}
+					<span class="filter-chip-count" aria-hidden="true">{routePinsCount}</span>
+				{/if}
+			</button>
+		{/each}
 	</div>
 
 	<aside
@@ -956,6 +1015,64 @@
 	}
 	.search-results li button:hover {
 		background: var(--color-surface-hover);
+	}
+	/*
+	 * Route-discovery filter chips. Pinned top-center, just below the
+	 * search box. Horizontally scrollable so narrow viewports don't
+	 * wrap the row. This is the primary control for the discovery
+	 * surface — the lens that decides which routes the map pins +
+	 * list panel show.
+	 */
+	.filter-bar {
+		position: absolute;
+		top: calc(var(--space-md) + 3rem);
+		left: 50%;
+		transform: translateX(-50%);
+		z-index: 2;
+		display: flex;
+		gap: 0.4rem;
+		max-width: calc(100% - 2rem);
+		overflow-x: auto;
+		padding: 0.15rem;
+		scrollbar-width: none;
+	}
+	.filter-bar::-webkit-scrollbar {
+		display: none;
+	}
+	.filter-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		white-space: nowrap;
+		padding: 0.35rem 0.75rem;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		box-shadow: var(--shadow-md);
+		cursor: pointer;
+		transition: color var(--transition-fast), background var(--transition-fast),
+			border-color var(--transition-fast);
+	}
+	.filter-chip:hover {
+		color: var(--color-text);
+		border-color: var(--color-primary);
+	}
+	.filter-chip.active {
+		color: var(--color-on-primary, #fff);
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+	}
+	.filter-chip-count {
+		font-size: 0.7rem;
+		font-variant-numeric: tabular-nums;
+		background: rgba(255, 255, 255, 0.25);
+		border-radius: 999px;
+		padding: 0.02rem 0.35rem;
+		min-width: 1.2rem;
+		text-align: center;
 	}
 	/*
 	 * Legend is a single info-icon button when collapsed — same
