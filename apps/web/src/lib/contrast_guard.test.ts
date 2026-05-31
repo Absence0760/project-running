@@ -47,9 +47,20 @@ function tokenIn(block: string, name: string): string {
 function block(startMarker: string): string {
 	const start = css.indexOf(startMarker);
 	assert.ok(start >= 0, `app.css is missing the "${startMarker}" block`);
-	// Grab a generous window; the token regex only matches the first hit,
-	// and every block declares the tokens once near its top.
-	return css.slice(start, start + 2000);
+	// Return the WHOLE rule by walking from its first `{` to the matching
+	// `}` (brace-balanced — handles the nested `:root` inside the dark
+	// `@media`). A fixed-size window used to truncate the block, so a large
+	// declaration near the top of `:root` (e.g. the non-Latin font-family
+	// fallback list) could push the colour tokens out of view and the
+	// guard would mis-report them as "missing".
+	const open = css.indexOf('{', start);
+	assert.ok(open >= 0, `app.css "${startMarker}" block has no opening brace`);
+	let depth = 0;
+	for (let i = open; i < css.length; i++) {
+		if (css[i] === '{') depth++;
+		else if (css[i] === '}' && --depth === 0) return css.slice(start, i + 1);
+	}
+	throw new assert.AssertionError({ message: `app.css "${startMarker}" block is unterminated` });
 }
 
 const TEXT_TOKENS = ['color-text', 'color-text-secondary', 'color-text-tertiary'];
