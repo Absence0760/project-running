@@ -333,7 +333,7 @@
 	.tile-actions {
 		position: absolute;
 		top: 0.4rem;
-		right: 0.4rem;
+		inset-inline-end: 0.4rem;
 		display: flex;
 		gap: 0.25rem;
 		opacity: 0;

@@ -550,7 +550,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.4rem;
-		text-align: left;
+		text-align: start;
 		background: transparent;
 		border: none;
 		padding: 0;
@@ -602,7 +602,7 @@
 		color: var(--color-primary);
 		background: var(--color-primary-light);
 		border-radius: 999px;
-		margin-left: 0.5rem;
+		margin-inline-start: 0.5rem;
 	}
 	.star-btn {
 		background: transparent;

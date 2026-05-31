@@ -492,7 +492,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-sm);
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	.add-btn {
@@ -522,7 +522,7 @@
 			display: none;
 		}
 		.toolbar-actions {
-			margin-left: 0;
+			margin-inline-start: 0;
 			width: 100%;
 			justify-content: flex-end;
 		}

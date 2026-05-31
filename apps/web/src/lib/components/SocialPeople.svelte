@@ -231,7 +231,7 @@
 	}
 	.search-wrap > .material-symbols:first-child {
 		position: absolute;
-		left: 0.75rem;
+		inset-inline-start: 0.75rem;
 		color: var(--color-text-tertiary);
 		pointer-events: none;
 		font-size: 1.1rem;
@@ -262,7 +262,7 @@
 
 	.search-clear {
 		position: absolute;
-		right: 0.5rem;
+		inset-inline-end: 0.5rem;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;

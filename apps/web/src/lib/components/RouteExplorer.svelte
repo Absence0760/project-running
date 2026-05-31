@@ -666,7 +666,7 @@
 
 	.route-info {
 		padding: var(--space-md) var(--space-lg);
-		padding-right: 3rem;
+		padding-inline-end: 3rem;
 	}
 
 	h3 {
@@ -703,7 +703,7 @@
 	.save-btn {
 		position: absolute;
 		bottom: var(--space-md);
-		right: var(--space-md);
+		inset-inline-end: var(--space-md);
 		background: none;
 		border: none;
 		color: var(--color-text-tertiary);
@@ -766,7 +766,7 @@
 	.featured-badge {
 		position: absolute;
 		top: 0.5rem;
-		right: 0.5rem;
+		inset-inline-end: 0.5rem;
 		background: var(--color-primary);
 		color: white;
 		width: 1.6rem;

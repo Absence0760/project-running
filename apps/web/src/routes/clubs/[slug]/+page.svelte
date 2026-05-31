@@ -1610,8 +1610,8 @@
 
 	.replies {
 		margin-top: 0.6rem;
-		padding-left: 0.6rem;
-		border-left: 2px solid var(--color-border);
+		padding-inline-start: 0.6rem;
+		border-inline-start: 2px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
@@ -1782,7 +1782,7 @@
 	}
 
 	.icon-btn {
-		margin-left: auto;
+		margin-inline-start: auto;
 		background: none;
 		border: none;
 		color: var(--color-text-tertiary);
@@ -2105,7 +2105,7 @@
 	.route-remove {
 		position: absolute;
 		top: 0.5rem;
-		right: 0.5rem;
+		inset-inline-end: 0.5rem;
 		display: grid;
 		place-items: center;
 		width: 2rem;

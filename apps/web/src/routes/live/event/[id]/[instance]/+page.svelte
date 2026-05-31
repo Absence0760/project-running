@@ -792,7 +792,7 @@
 		.runner .elapsed {
 			grid-area: stats;
 			display: inline;
-			margin-right: var(--space-sm);
+			margin-inline-end: var(--space-sm);
 		}
 	}
 
@@ -817,7 +817,7 @@
 		.runner .elapsed {
 			grid-area: stats;
 			display: inline;
-			margin-right: var(--space-sm);
+			margin-inline-end: var(--space-sm);
 		}
 	}
 </style>

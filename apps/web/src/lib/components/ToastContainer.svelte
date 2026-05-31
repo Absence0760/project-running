@@ -28,7 +28,7 @@
 	.toast-container {
 		position: fixed;
 		bottom: var(--space-lg);
-		right: var(--space-lg);
+		inset-inline-end: var(--space-lg);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);

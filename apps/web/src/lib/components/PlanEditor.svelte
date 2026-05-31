@@ -707,7 +707,7 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		text-align: left;
+		text-align: start;
 		width: 100%;
 		color: inherit;
 		font: inherit;
@@ -728,7 +728,7 @@
 	}
 	.week-km {
 		color: var(--color-text);
-		text-align: right;
+		text-align: end;
 		font-variant-numeric: tabular-nums;
 		white-space: nowrap;
 	}

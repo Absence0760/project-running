@@ -120,7 +120,7 @@
 		background: none;
 		border: none;
 		padding: 0.7rem 0.25rem;
-		margin-right: 1rem;
+		margin-inline-end: 1rem;
 		font-size: 0.95rem;
 		color: var(--color-text-secondary);
 		border-bottom: 2px solid transparent;

@@ -207,7 +207,7 @@
 	.popover {
 		position: absolute;
 		top: calc(100% + 0.3rem);
-		left: 0;
+		inset-inline-start: 0;
 		z-index: 60;
 		min-width: 100%;
 		max-width: 22rem;
@@ -226,7 +226,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.05rem;
-		text-align: left;
+		text-align: start;
 		background: transparent;
 		border: none;
 		font: inherit;

@@ -262,7 +262,7 @@
 		display: inline-block;
 		width: 0.85em;
 		height: 0.85em;
-		margin-right: 0.35em;
+		margin-inline-end: 0.35em;
 		border: 2px solid color-mix(in srgb, currentColor 40%, transparent);
 		border-top-color: currentColor;
 		border-radius: 50%;

@@ -375,7 +375,7 @@
 	.byday-row .hint {
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
-		margin-right: 0.25rem;
+		margin-inline-end: 0.25rem;
 	}
 	.byday-chip {
 		background: transparent;

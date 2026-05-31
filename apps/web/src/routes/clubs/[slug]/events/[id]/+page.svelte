@@ -1835,7 +1835,7 @@
 		font: inherit;
 		font-weight: 600;
 		font-size: 0.92rem;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		transition: background var(--transition-fast), border-color var(--transition-fast), color var(--transition-fast);
 	}
@@ -2316,7 +2316,7 @@
 		border-radius: var(--radius-md);
 		cursor: pointer;
 		font-size: 0.85rem;
-		text-align: left;
+		text-align: start;
 	}
 	.run-option:hover { border-color: var(--color-primary); }
 	.picker-actions {
@@ -2338,7 +2338,7 @@
 	}
 	.import-errors {
 		margin: var(--space-sm) 0 0;
-		padding-left: 1.1rem;
+		padding-inline-start: 1.1rem;
 		color: var(--color-danger);
 		font-size: 0.85rem;
 	}

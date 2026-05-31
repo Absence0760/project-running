@@ -1087,14 +1087,14 @@
 		display: flex;
 		flex-direction: column;
 		background: var(--color-bg-secondary);
-		border-right: 1px solid var(--color-border);
+		border-inline-end: 1px solid var(--color-border);
 		min-height: 0;
 		overflow: hidden;
 		transition: flex-basis var(--transition-fast);
 	}
 	.sidebar.collapsed {
 		flex-basis: 0;
-		border-right: none;
+		border-inline-end: none;
 	}
 	.sidebar-header {
 		display: flex;
@@ -1120,7 +1120,7 @@
 		background: transparent;
 		border: 1px solid transparent;
 		border-radius: var(--radius-md);
-		text-align: left;
+		text-align: start;
 		color: inherit;
 		font: inherit;
 		cursor: pointer;
@@ -1292,7 +1292,7 @@
 	.bubble-actions {
 		display: flex; gap: 0.15rem;
 		opacity: 0; transition: opacity var(--transition-fast);
-		margin-top: 0.4rem; margin-left: -0.2rem;
+		margin-top: 0.4rem; margin-inline-start: -0.2rem;
 	}
 	.bubble:hover .bubble-actions, .bubble:focus-within .bubble-actions { opacity: 1; }
 	.bubble-action {
@@ -1348,7 +1348,7 @@
 	.md :global(pre) :global(code) { background: transparent; padding: 0; font-size: 0.85em; }
 	.md :global(a) { color: var(--color-primary); text-decoration: underline; }
 	.md :global(blockquote) {
-		border-left: 3px solid var(--color-border); padding-left: 0.8rem;
+		border-inline-start: 3px solid var(--color-border); padding-inline-start: 0.8rem;
 		margin: 0.4rem 0; color: var(--color-text-secondary);
 	}
 
@@ -1363,7 +1363,7 @@
 	.primer { color: var(--color-text-secondary); }
 	.suggestions { display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.6rem; }
 	.suggest {
-		text-align: left; background: var(--color-bg-secondary);
+		text-align: start; background: var(--color-bg-secondary);
 		border: 1px solid var(--color-border); padding: 0.45rem 0.7rem;
 		border-radius: var(--radius-md); color: inherit; font: inherit; cursor: pointer;
 	}
@@ -1397,7 +1397,7 @@
 	.tier-pro { background: rgba(79, 70, 229, 0.12); color: var(--color-primary); }
 	.tier-free { background: var(--color-bg-tertiary); color: var(--color-text-secondary); }
 	.cache-note { font-size: 0.72rem; color: var(--color-text-tertiary); }
-	.save-icon { font-size: 0.85rem; line-height: 1; vertical-align: -2px; margin-right: 0.15rem; }
+	.save-icon { font-size: 0.85rem; line-height: 1; vertical-align: -2px; margin-inline-end: 0.15rem; }
 	.limit-bar {
 		display: flex; align-items: center; gap: 0.5rem;
 		padding: var(--space-sm) var(--space-md);

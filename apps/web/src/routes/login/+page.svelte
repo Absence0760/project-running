@@ -563,7 +563,7 @@
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
 		margin-bottom: var(--space-md);
-		text-align: left;
+		text-align: start;
 	}
 	.info {
 		background: var(--color-bg-secondary);
@@ -573,7 +573,7 @@
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
 		margin-bottom: var(--space-md);
-		text-align: left;
+		text-align: start;
 	}
 
 	.login-buttons {
@@ -621,7 +621,7 @@
 		border-radius: 9999px;
 		background: rgba(255, 255, 255, 0.18);
 		color: rgba(255, 255, 255, 0.9);
-		margin-left: 0.4rem;
+		margin-inline-start: 0.4rem;
 	}
 
 	:global(html[data-theme='dark']) .btn-apple {
@@ -654,7 +654,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		text-align: left;
+		text-align: start;
 	}
 
 	input[type='email'],
@@ -738,7 +738,7 @@
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 		line-height: 1.4;
-		text-align: left;
+		text-align: start;
 		margin-top: var(--space-2xs);
 	}
 	.signup-check input[type='checkbox'] {

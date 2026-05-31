@@ -311,7 +311,7 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		text-align: left;
+		text-align: start;
 		font: inherit;
 		color: inherit;
 	}

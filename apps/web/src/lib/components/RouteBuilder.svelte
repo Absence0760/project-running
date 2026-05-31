@@ -1899,7 +1899,7 @@
 	.search-box {
 		position: absolute;
 		top: 12px;
-		left: 12px;
+		inset-inline-start: 12px;
 		z-index: 10;
 		width: 320px;
 	}
@@ -1976,7 +1976,7 @@
 		padding: 10px 14px;
 		border: none;
 		background: none;
-		text-align: left;
+		text-align: start;
 		font-size: 0.85rem;
 		cursor: pointer;
 		color: var(--color-text);
@@ -2026,7 +2026,7 @@
 	.shortcuts-hint {
 		position: absolute;
 		bottom: 12px;
-		left: 12px;
+		inset-inline-start: 12px;
 		z-index: 10;
 		display: flex;
 		gap: 12px;

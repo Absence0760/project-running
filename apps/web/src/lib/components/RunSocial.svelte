@@ -367,7 +367,7 @@
 	}
 
 	.icon-btn {
-		margin-left: auto;
+		margin-inline-start: auto;
 		background: none;
 		border: none;
 		color: var(--color-text-tertiary);
@@ -402,8 +402,8 @@
 
 	.replies {
 		margin-top: var(--space-sm);
-		padding-left: var(--space-md);
-		border-left: 2px solid var(--color-border);
+		padding-inline-start: var(--space-md);
+		border-inline-start: 2px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);

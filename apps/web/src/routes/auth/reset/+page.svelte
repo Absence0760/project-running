@@ -235,7 +235,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-sm);
-		text-align: left;
+		text-align: start;
 	}
 	.reset-form input {
 		padding: 0.7rem var(--space-md);
@@ -283,7 +283,7 @@
 		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
-		text-align: left;
+		text-align: start;
 		margin-bottom: var(--space-md);
 	}
 
@@ -292,7 +292,7 @@
 		border: 1px solid var(--color-border);
 		padding: var(--space-md);
 		border-radius: var(--radius-md);
-		text-align: left;
+		text-align: start;
 		margin-bottom: var(--space-md);
 	}
 	.error-block p {

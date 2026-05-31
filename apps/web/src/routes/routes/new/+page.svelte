@@ -777,7 +777,7 @@
 		width: 100%;
 		height: 100%;
 		flex-shrink: 0;
-		border-right: 1px solid var(--color-border);
+		border-inline-end: 1px solid var(--color-border);
 		padding: var(--space-lg) var(--space-lg) var(--space-xl);
 		overflow-y: auto;
 		background: var(--color-surface);
@@ -1010,7 +1010,7 @@
 		transition: all var(--transition-fast);
 	}
 	.style-btn:not(:last-child) {
-		border-right: 1px solid var(--color-border);
+		border-inline-end: 1px solid var(--color-border);
 	}
 	.style-btn.active {
 		background: var(--color-primary);
@@ -1144,7 +1144,7 @@
 		font-weight: 700;
 		font-size: 0.9rem;
 		min-width: 4rem;
-		text-align: right;
+		text-align: end;
 	}
 	.target-presets {
 		display: flex;
@@ -1255,12 +1255,12 @@
 		 * AppBar's search box is centered up top — bottom-left is
 		 * the empty corner. */
 		bottom: var(--space-md);
-		left: var(--space-md);
+		inset-inline-start: var(--space-md);
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
 		align-items: flex-start;
-		text-align: left;
+		text-align: start;
 		gap: var(--space-xs);
 		padding: var(--space-md) var(--space-lg);
 		background: color-mix(in srgb, var(--color-surface) 92%, transparent);
@@ -1482,7 +1482,7 @@
 		.sidebar {
 			width: 100%;
 			max-height: 60vh;
-			border-right: none;
+			border-inline-end: none;
 			border-top: 1px solid var(--color-border);
 		}
 		.map-area {

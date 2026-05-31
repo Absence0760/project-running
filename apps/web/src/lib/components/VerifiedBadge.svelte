@@ -58,7 +58,7 @@
 		justify-content: center;
 		color: #2563eb;
 		vertical-align: middle;
-		margin-left: 4px;
+		margin-inline-start: 4px;
 		line-height: 0;
 	}
 	.verified-badge svg {

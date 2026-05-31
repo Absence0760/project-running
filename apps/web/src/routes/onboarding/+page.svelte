@@ -577,7 +577,7 @@
 		background: var(--color-bg);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
-		text-align: left;
+		text-align: start;
 		color: var(--color-text);
 		font-size: 0.95rem;
 		cursor: pointer;

@@ -290,8 +290,8 @@
 		content: '';
 		position: absolute;
 		top: 0;
-		left: 0;
-		right: 0;
+		inset-inline-start: 0;
+		inset-inline-end: 0;
 		height: 3px;
 	}
 	.stat-card:nth-child(1)::before { background: linear-gradient(90deg, #4F46E5, #7C3AED); }

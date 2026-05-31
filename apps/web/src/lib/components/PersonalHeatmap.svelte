@@ -252,7 +252,7 @@
 	.heat-status {
 		position: absolute;
 		top: var(--space-md);
-		left: var(--space-md);
+		inset-inline-start: var(--space-md);
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
@@ -307,7 +307,7 @@
 	.heat-legend {
 		position: absolute;
 		top: var(--space-md);
-		left: var(--space-md);
+		inset-inline-start: var(--space-md);
 		max-width: 14rem;
 		padding: var(--space-sm) var(--space-md);
 		background: var(--color-surface);

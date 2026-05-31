@@ -165,8 +165,8 @@
 		padding: var(--space-lg) var(--space-2xl);
 		position: absolute;
 		top: 0;
-		left: 0;
-		right: 0;
+		inset-inline-start: 0;
+		inset-inline-end: 0;
 		z-index: 10;
 	}
 
@@ -358,8 +358,8 @@
 		width: 3.5rem;
 		height: 3.5rem;
 		border-radius: var(--radius-lg);
-		margin-left: auto;
-		margin-right: auto;
+		margin-inline-start: auto;
+		margin-inline-end: auto;
 	}
 
 	.feature:nth-child(1) .feature-icon {

@@ -104,7 +104,7 @@
 		width: 14rem;
 		flex-shrink: 0;
 		padding: var(--space-xl) var(--space-lg);
-		border-right: 1px solid var(--color-border);
+		border-inline-end: 1px solid var(--color-border);
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;

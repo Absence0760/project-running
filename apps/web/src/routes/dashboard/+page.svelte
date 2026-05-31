@@ -1586,7 +1586,7 @@
 		flex-direction: column;
 		align-items: flex-end;
 		gap: var(--space-2xs);
-		text-align: right;
+		text-align: end;
 		flex-shrink: 0;
 	}
 	.plan-hero-week {
@@ -1662,7 +1662,7 @@
 		border-radius: var(--radius-lg);
 		color: inherit;
 		font: inherit;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
 	}
@@ -1831,7 +1831,7 @@
 		padding: var(--space-md) var(--space-lg);
 		background: var(--color-surface);
 		border: 1px solid color-mix(in srgb, var(--color-primary) 40%, var(--color-border));
-		border-left: 3px solid var(--color-primary);
+		border-inline-start: 3px solid var(--color-primary);
 		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
@@ -1985,9 +1985,9 @@
 		gap: var(--space-sm);
 		box-shadow: var(--shadow-sm);
 	}
-	.readiness-card.readiness-high { border-left: 4px solid var(--color-success); }
-	.readiness-card.readiness-moderate { border-left: 4px solid var(--color-warning); }
-	.readiness-card.readiness-low { border-left: 4px solid var(--color-danger); }
+	.readiness-card.readiness-high { border-inline-start: 4px solid var(--color-success); }
+	.readiness-card.readiness-moderate { border-inline-start: 4px solid var(--color-warning); }
+	.readiness-card.readiness-low { border-inline-start: 4px solid var(--color-danger); }
 	.readiness-head {
 		display: flex;
 		justify-content: space-between;
@@ -2136,7 +2136,7 @@
 	}
 	.goal-card {
 		display: block;
-		text-align: left;
+		text-align: start;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
@@ -2287,7 +2287,7 @@
 		justify-content: flex-end;
 		gap: var(--space-xs);
 	}
-	.goal-editor-actions .btn-danger { margin-right: auto; }
+	.goal-editor-actions .btn-danger { margin-inline-end: auto; }
 
 	/* Stat cards: quiet family. The old per-card rainbow `::before` is
 	   gone; cards share the same surface treatment so the eye reads the
@@ -2312,7 +2312,7 @@
 	}
 	.stat-card-button {
 		font: inherit;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		color: inherit;
 	}
@@ -2336,7 +2336,7 @@
 		font-size: 0.85rem;
 		font-weight: 600;
 		color: var(--color-text-tertiary);
-		margin-left: var(--space-2xs);
+		margin-inline-start: var(--space-2xs);
 	}
 	.streak-active .stat-value { color: var(--color-warning); }
 	.stat-sub {
@@ -2426,14 +2426,14 @@
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 		font-variant-numeric: tabular-nums;
-		text-align: right;
+		text-align: end;
 	}
 	.zone-pct {
 		font-size: 0.9rem;
 		font-weight: 700;
 		color: var(--color-text);
 		font-variant-numeric: tabular-nums;
-		text-align: right;
+		text-align: end;
 	}
 	.intensity-foot {
 		margin: var(--space-md) 0 0;
@@ -2537,7 +2537,7 @@
 
 	.pr-table { width: 100%; border-collapse: collapse; }
 	.pr-table th {
-		text-align: left;
+		text-align: start;
 		font-size: 0.72rem;
 		font-weight: 600;
 		color: var(--color-text-tertiary);
@@ -2671,7 +2671,7 @@
 		}
 		.plan-hero-position {
 			align-items: flex-start;
-			text-align: left;
+			text-align: start;
 			flex-direction: row;
 			gap: var(--space-sm);
 			flex-wrap: wrap;
@@ -2698,7 +2698,7 @@
 		.goals-empty-card {
 			flex-direction: column;
 			align-items: flex-start;
-			text-align: left;
+			text-align: start;
 		}
 		.intensity-empty {
 			flex-direction: column;

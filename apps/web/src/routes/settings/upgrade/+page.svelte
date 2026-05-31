@@ -266,7 +266,7 @@
 	.tier-flag {
 		position: absolute;
 		top: -0.6rem;
-		right: var(--space-lg);
+		inset-inline-end: var(--space-lg);
 		background: var(--color-primary);
 		color: white;
 		font-size: 0.7rem;
@@ -377,7 +377,7 @@
 		margin: var(--space-sm) 0;
 		padding: 0.75rem 1rem;
 		background: var(--color-success-light);
-		border-left: 3px solid var(--color-success);
+		border-inline-start: 3px solid var(--color-success);
 		border-radius: var(--radius-md);
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);

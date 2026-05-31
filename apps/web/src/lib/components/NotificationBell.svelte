@@ -337,7 +337,7 @@
 	.badge {
 		position: absolute;
 		top: -2px;
-		right: -2px;
+		inset-inline-end: -2px;
 		min-width: 1rem;
 		height: 1rem;
 		padding: 0 var(--space-xs);
@@ -363,7 +363,7 @@
 	}
 	.popover {
 		position: absolute;
-		left: calc(100% + 0.5rem);
+		inset-inline-start: calc(100% + 0.5rem);
 		/* Anchor the popover's TOP edge to the bell so it hangs downward.
 		   Earlier the bell lived in the sidebar footer and the popover
 		   anchored bottom: 0 — fine when the bell sat near the bottom of
@@ -383,8 +383,8 @@
 	}
 	@media (max-width: 50rem) {
 		.popover {
-			left: 0;
-			right: 0;
+			inset-inline-start: 0;
+			inset-inline-end: 0;
 			/* Mobile: bell still at the top of the sidebar / rail; drop
 			   the popover below it so the body content stays visible. */
 			top: calc(100% + 0.5rem);
@@ -429,7 +429,7 @@
 		background: transparent;
 		border: none;
 		cursor: pointer;
-		text-align: left;
+		text-align: start;
 		font: inherit;
 		color: inherit;
 		position: relative;
@@ -471,7 +471,7 @@
 	.unread-dot {
 		position: absolute;
 		top: 0.85rem;
-		right: 0.7rem;
+		inset-inline-end: 0.7rem;
 		width: 0.5rem;
 		height: 0.5rem;
 		border-radius: 50%;

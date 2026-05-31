@@ -222,7 +222,7 @@
 	.timeline::before {
 		content: '';
 		position: absolute;
-		left: 1.15rem;
+		inset-inline-start: 1.15rem;
 		top: 0.85rem;
 		bottom: 0.85rem;
 		width: 2px;

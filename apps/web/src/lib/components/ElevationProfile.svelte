@@ -302,7 +302,7 @@
 		gap: 0;
 	}
 	.tt-cell-right {
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 	.tt-label {
 		font-size: 0.65rem;

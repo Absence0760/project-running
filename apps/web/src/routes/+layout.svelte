@@ -576,7 +576,7 @@
 		border: none;
 		background: none;
 		width: 100%;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		position: relative;
 	}
@@ -686,7 +686,7 @@
 		background: none;
 		border-radius: var(--radius-md);
 		cursor: pointer;
-		text-align: left;
+		text-align: start;
 		transition:
 			background var(--transition-fast),
 			border-color var(--transition-fast);
@@ -820,7 +820,7 @@
 		border: none;
 		background: none;
 		width: 100%;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		text-decoration: none;
 		transition: background var(--transition-fast);

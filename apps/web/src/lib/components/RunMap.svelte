@@ -824,7 +824,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-md);
-		text-align: left;
+		text-align: start;
 	}
 	.run-map-consent-card h2 { margin: 0 0 var(--space-sm); font-size: 1.1rem; }
 	.run-map-consent-card p {
@@ -837,7 +837,7 @@
 	.replay-btn {
 		position: absolute;
 		bottom: 12px;
-		left: 12px;
+		inset-inline-start: 12px;
 		z-index: 10;
 		display: flex;
 		align-items: center;

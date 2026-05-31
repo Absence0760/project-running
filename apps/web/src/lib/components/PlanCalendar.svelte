@@ -275,7 +275,7 @@
 		box-shadow: 0 0 0 1px var(--color-primary);
 	}
 	.cell.has-workout {
-		border-left: 3px solid var(--kind);
+		border-inline-start: 3px solid var(--kind);
 		cursor: pointer;
 		transition: transform var(--transition-fast), box-shadow var(--transition-fast);
 	}
@@ -311,7 +311,7 @@
 	.check {
 		position: absolute;
 		bottom: 0.3rem;
-		right: 0.3rem;
+		inset-inline-end: 0.3rem;
 		font-family: 'Material Symbols Outlined';
 		font-size: 0.95rem;
 		color: var(--color-success);

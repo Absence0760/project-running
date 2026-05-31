@@ -561,7 +561,7 @@
 
 	.integration-card.connected {
 		border-color: var(--color-secondary);
-		border-left: 3px solid var(--color-secondary);
+		border-inline-start: 3px solid var(--color-secondary);
 	}
 
 	.integration-icon {

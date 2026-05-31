@@ -89,7 +89,7 @@
 		font-size: 11px;
 	}
 	.reached {
-		margin-left: auto;
+		margin-inline-start: auto;
 		color: var(--text-muted, #6b7280);
 	}
 	input[type='range'] {

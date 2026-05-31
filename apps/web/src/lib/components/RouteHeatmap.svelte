@@ -946,7 +946,7 @@
 	}
 	.search-results li button {
 		width: 100%;
-		text-align: left;
+		text-align: start;
 		padding: 0.5rem 0.75rem;
 		background: transparent;
 		border: 0;
@@ -967,7 +967,7 @@
 	.legend {
 		position: absolute;
 		top: var(--space-md);
-		left: var(--space-md);
+		inset-inline-start: var(--space-md);
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-xs);
@@ -1016,7 +1016,7 @@
 	.legend-pulse {
 		position: absolute;
 		top: 4px;
-		right: 4px;
+		inset-inline-end: 4px;
 		width: 8px;
 		height: 8px;
 		background: var(--color-primary);
@@ -1100,7 +1100,7 @@
 		border: 2px solid #0f172a;
 	}
 	.legend-count {
-		margin-left: auto;
+		margin-inline-start: auto;
 		font-size: 0.7rem;
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;

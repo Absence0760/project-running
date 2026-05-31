@@ -197,7 +197,7 @@
 		color: var(--color-text-secondary);
 		background: var(--color-bg-secondary);
 	}
-	.cmp-table th.feature-col { text-align: left; }
+	.cmp-table th.feature-col { text-align: start; }
 	.cmp-table tbody td {
 		padding: var(--space-sm) var(--space-md);
 		border-top: 1px solid var(--color-border);
@@ -265,7 +265,7 @@
 			align-items: center;
 			justify-content: flex-start;
 			gap: 0.5rem;
-			text-align: left;
+			text-align: start;
 			padding: 0.15rem 0;
 		}
 		.cmp-table tbody td.cell::before {

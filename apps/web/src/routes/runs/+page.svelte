@@ -881,7 +881,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-sm);
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	@media (max-width: 50rem) {
@@ -889,7 +889,7 @@
 			display: none;
 		}
 		.toolbar-actions {
-			margin-left: 0;
+			margin-inline-start: 0;
 			width: 100%;
 			justify-content: flex-end;
 		}
@@ -1162,7 +1162,7 @@
 	   stat grid doesn't reflow. */
 	.run-card.selecting {
 		position: relative;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		font: inherit;
 		color: inherit;
@@ -1174,7 +1174,7 @@
 	   the checkbox sits — inset the date so the box doesn't overlap it.
 	   With a map preview the date row is below the thumbnail and needs
 	   no inset. */
-	.run-card.selecting:not(.has-map) .run-top { padding-left: var(--space-xl); }
+	.run-card.selecting:not(.has-map) .run-top { padding-inline-start: var(--space-xl); }
 	.run-card.selecting.selected {
 		border-color: var(--color-primary);
 		box-shadow: 0 0 0 2px var(--color-primary-light), var(--shadow-md);
@@ -1182,7 +1182,7 @@
 	.select-box {
 		position: absolute;
 		top: var(--space-sm);
-		left: var(--space-sm);
+		inset-inline-start: var(--space-sm);
 		z-index: 2;
 		display: inline-flex;
 		align-items: center;

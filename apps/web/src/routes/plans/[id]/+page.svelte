@@ -677,7 +677,7 @@
 	.hero-edit .material-symbols {
 		font-size: 1rem;
 		vertical-align: -2px;
-		margin-right: 0.2rem;
+		margin-inline-end: 0.2rem;
 	}
 	.hero-chips {
 		display: flex;
@@ -844,7 +844,7 @@
 		border-radius: var(--radius-lg);
 		color: inherit;
 		font: inherit;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
 	}
@@ -1018,7 +1018,7 @@
 		color: inherit;
 		width: 100%;
 		min-height: 2.75rem;
-		text-align: left;
+		text-align: start;
 		background: transparent;
 		border: none;
 		padding: 0;
@@ -1060,7 +1060,7 @@
 	.day .check {
 		position: absolute;
 		top: 0.3rem;
-		right: 0.3rem;
+		inset-inline-end: 0.3rem;
 		color: var(--color-success);
 		font-size: 1rem;
 	}
@@ -1128,7 +1128,7 @@
 	}
 	.rules-card ul {
 		margin: 0;
-		padding-left: 1.1rem;
+		padding-inline-start: 1.1rem;
 	}
 	.rules-card li {
 		margin-bottom: 0.2rem;

@@ -538,7 +538,7 @@
 		background: none;
 		border: none;
 		padding: 0.6rem 0.2rem;
-		margin-right: 1rem;
+		margin-inline-end: 1rem;
 		font-size: 0.95rem;
 		color: var(--color-text-secondary);
 		border-bottom: 2px solid transparent;
@@ -664,7 +664,7 @@
 	.star-btn {
 		position: absolute;
 		top: 0.5rem;
-		right: 0.5rem;
+		inset-inline-end: 0.5rem;
 		width: 2.25rem;
 		height: 2.25rem;
 		display: inline-flex;
@@ -763,7 +763,7 @@
 	}
 	.search-wrap > .material-symbols:first-child {
 		position: absolute;
-		left: 0.75rem;
+		inset-inline-start: 0.75rem;
 		color: var(--color-text-tertiary);
 		pointer-events: none;
 		font-size: 1.1rem;
@@ -794,7 +794,7 @@
 	}
 	.search-clear {
 		position: absolute;
-		right: 0.5rem;
+		inset-inline-end: 0.5rem;
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
@@ -874,7 +874,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-sm);
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 	.toolbar-actions .btn {
 		display: inline-flex;
@@ -985,7 +985,7 @@
 	   rails rather than three crammed ones. */
 	@media (max-width: 50rem) {
 		.toolbar-actions {
-			margin-left: 0;
+			margin-inline-start: 0;
 			width: 100%;
 			justify-content: flex-end;
 		}

@@ -845,7 +845,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		box-shadow: var(--shadow-md);
-		text-align: left;
+		text-align: start;
 	}
 	.map-consent-card h2 { margin: 0 0 var(--space-sm); font-size: 1.1rem; }
 	.map-consent-card p { margin: 0 0 var(--space-md); line-height: 1.5; color: var(--color-text-secondary); font-size: 0.92rem; }

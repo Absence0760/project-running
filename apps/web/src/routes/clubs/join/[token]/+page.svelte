@@ -178,7 +178,7 @@
 		border-radius: var(--radius-md);
 		margin: 0 0 var(--space-md);
 		font-size: 0.88rem;
-		text-align: left;
+		text-align: start;
 	}
 
 	.invite-actions {

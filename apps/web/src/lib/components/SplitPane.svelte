@@ -159,8 +159,8 @@
 		position: absolute;
 		top: 0;
 		bottom: 0;
-		left: -4px;
-		right: -4px;
+		inset-inline-start: -4px;
+		inset-inline-end: -4px;
 	}
 
 	.split-divider:hover,

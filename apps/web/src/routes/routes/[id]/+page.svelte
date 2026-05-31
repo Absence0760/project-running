@@ -1038,7 +1038,7 @@
 	}
 
 	.review-date {
-		margin-left: var(--space-sm);
+		margin-inline-start: var(--space-sm);
 		font-size: 0.75rem;
 		color: var(--color-text-tertiary);
 	}

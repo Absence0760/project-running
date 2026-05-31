@@ -547,7 +547,7 @@
 		padding: 0.6rem 0.85rem;
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
-		border-left: 3px solid var(--seg-color, var(--color-text-tertiary));
+		border-inline-start: 3px solid var(--seg-color, var(--color-text-tertiary));
 	}
 	.step-warmup   { --seg-color: color-mix(in srgb, var(--color-text-secondary) 55%, transparent); }
 	.step-work     { --seg-color: var(--kind-tint); }

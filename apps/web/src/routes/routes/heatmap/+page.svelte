@@ -44,8 +44,8 @@
 		position: fixed;
 		top: 0;
 		bottom: 0;
-		left: var(--sidebar-width, 0);
-		right: 0;
+		inset-inline-start: var(--sidebar-width, 0);
+		inset-inline-end: 0;
 		overflow: hidden;
 		/* Layout column transition mirror so the heatmap re-flows
 		 * smoothly when the user collapses/expands the sidebar. */
@@ -53,6 +53,6 @@
 	}
 	/* Match the sidebar-collapsed offset so we don't lag behind. */
 	:global(.app-shell.sidebar-collapsed) .heatmap-root {
-		left: var(--sidebar-collapsed-width, 4.5rem);
+		inset-inline-start: var(--sidebar-collapsed-width, 4.5rem);
 	}
 </style>

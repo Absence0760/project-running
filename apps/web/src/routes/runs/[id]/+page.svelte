@@ -1522,7 +1522,7 @@
 	}
 	.loading-map {
 		min-height: 0;
-		border-right: 1px solid var(--color-border);
+		border-inline-end: 1px solid var(--color-border);
 	}
 	.loading-stats {
 		padding: var(--space-xl);
@@ -1559,7 +1559,7 @@
 	}
 	@media (max-width: 900px) {
 		.loading-grid { grid-template-columns: 1fr; grid-template-rows: 40vh 1fr; }
-		.loading-map { border-right: none; border-bottom: 1px solid var(--color-border); }
+		.loading-map { border-inline-end: none; border-bottom: 1px solid var(--color-border); }
 		.loading-key-stats { grid-template-columns: repeat(2, 1fr); }
 	}
 	.not-found {
@@ -1806,7 +1806,7 @@
 	.match-pill {
 		position: absolute;
 		top: 12px;
-		left: 12px;
+		inset-inline-start: 12px;
 		display: inline-flex;
 		align-items: center;
 		gap: 0.35rem;
@@ -1831,7 +1831,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		margin-left: 0.4rem;
+		margin-inline-start: 0.4rem;
 		padding: 0.15rem 0.45rem;
 		border-radius: 999px;
 		background: transparent;
@@ -1855,7 +1855,7 @@
 
 	.segment-card {
 		position: absolute;
-		left: 12px;
+		inset-inline-start: 12px;
 		bottom: 12px;
 		min-width: 16rem;
 		max-width: calc(100% - 24px);
@@ -2133,7 +2133,7 @@
 	}
 
 	.splits-table th {
-		text-align: left;
+		text-align: start;
 		font-size: 0.7rem;
 		font-weight: 500;
 		color: var(--color-text-tertiary);
@@ -2213,7 +2213,7 @@
 	}
 
 	.workout-table th {
-		text-align: left;
+		text-align: start;
 		font-size: 0.7rem;
 		font-weight: 500;
 		color: var(--color-text-tertiary);
@@ -2225,7 +2225,7 @@
 
 	.workout-table th.num,
 	.workout-table td.num {
-		text-align: right;
+		text-align: end;
 		font-variant-numeric: tabular-nums;
 	}
 
@@ -2339,7 +2339,7 @@
 		line-height: 1.5;
 		background: var(--color-bg-secondary);
 		border-radius: var(--radius-md);
-		border-left: 3px solid var(--color-primary);
+		border-inline-start: 3px solid var(--color-primary);
 	}
 
 	.action-btns {
