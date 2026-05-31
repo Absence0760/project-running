@@ -1,5 +1,12 @@
 :root {
-	font-family: 'Inter', system-ui, -apple-system, sans-serif;
+	/* Inter covers Latin/Greek/Cyrillic; non-Latin glyphs fall through to
+	   system-ui (per-glyph) and then to broad cross-platform Noto families
+	   so Arabic / Hebrew / CJK render with a real face instead of tofu when
+	   the OS default is sparse (audit-findings 2026-05-30 High, i18n W-11). */
+	font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto,
+		'Noto Sans', 'Noto Sans Arabic', 'Noto Sans Hebrew', 'Noto Sans CJK SC',
+		'Noto Sans CJK JP', 'Noto Sans CJK KR', 'Apple Color Emoji',
+		'Segoe UI Emoji', sans-serif;
 
 	/* Colors — Cream + petrol + terracotta. Light-mode palette swaps the
 	   old purple primary for a deep teal that complements the cream
