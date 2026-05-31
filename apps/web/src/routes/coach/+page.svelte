@@ -76,14 +76,13 @@
 		if (!auth.user || coachConsentSaving) return;
 		coachConsentSaving = true;
 		coachConsentError = '';
-		const nowIso = new Date().toISOString();
 		try {
-			const { error } = await supabase
-				.from('user_profiles')
-				.update({ coach_consent_at: nowIso })
-				.eq('id', auth.user.id);
+			// Server-stamped, first-stamp-wins: record_coach_consent() sets
+			// now() on the server (not a client-chosen, backdatable value)
+			// and direct writes to coach_consent_at are blocked at the DB.
+			const { data, error } = await supabase.rpc('record_coach_consent');
 			if (error) throw new Error(error.message);
-			coachConsentAt = nowIso;
+			coachConsentAt = (data as string | null) ?? new Date().toISOString();
 		} catch (e) {
 			coachConsentError = (e as Error).message ?? 'Failed to record consent.';
 		} finally {

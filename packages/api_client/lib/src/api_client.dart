@@ -1684,18 +1684,17 @@ class ApiClient {
     return DateTime.tryParse(raw as String);
   }
 
-  /// Record the GDPR Art 6(1)(a) coach-consent acceptance on the signed-
-  /// in user's `user_profiles` row. Returns the timestamp the server
-  /// observed. Idempotent — re-running just re-stamps the column.
+  /// Record the GDPR Art 6(1)(a) coach-consent acceptance for the signed-
+  /// in user via the `record_coach_consent()` SECURITY DEFINER RPC, which
+  /// stamps the SERVER's now() first-stamp-wins (not a client-chosen,
+  /// backdatable value) and is the only sanctioned writer — direct writes
+  /// to `coach_consent_at` are blocked at the DB. Returns the effective
+  /// (original-if-already-set) timestamp.
   Future<DateTime?> recordCoachConsent() async {
-    final viewerId = _client.auth.currentUser?.id;
-    if (viewerId == null) return null;
-    final nowIso = DateTime.now().toUtc().toIso8601String();
-    await _client
-        .from('user_profiles')
-        .update({'coach_consent_at': nowIso})
-        .eq('id', viewerId);
-    return DateTime.parse(nowIso);
+    if (_client.auth.currentUser?.id == null) return null;
+    final res = await _client.rpc('record_coach_consent');
+    if (res is! String) return null;
+    return DateTime.tryParse(res);
   }
 
   /// Self-read of the full `user_profiles` row, including

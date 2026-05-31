@@ -58,7 +58,7 @@ COPPA (US) sets the floor at 13 *for verifiable parental consent* on services di
 - Marketing copy emphasises distance + pace + training plan vocabulary — adult/teen-runner audience.
 - We do not enrol schools or youth clubs.
 
-We accordingly do not need COPPA's verifiable parental-consent mechanism, but we should still avoid collecting personal data from anyone we have actual knowledge is under 13. The 16+ signup confirmation handles this for direct signups; the gap is when a parent creates a shared device and a child uses it. The Privacy Policy must clearly state we do not knowingly collect data from under-13s and provide a parental-deletion request channel.
+We accordingly do not need COPPA's verifiable parental-consent mechanism, but we should still avoid collecting personal data from anyone we have actual knowledge is under our 16 minimum (which subsumes COPPA's under-13 floor). The 16+ signup confirmation handles this for direct signups; the gap is when a parent creates a shared device and a child uses it. The Privacy Policy § 8 now states this consistently: the floor is 16+, we don't knowingly collect from anyone under 16, and there's a parental-deletion channel (`privacy@threkir.com`) — aligned with the enforced signup gate (audit-findings 2026-05-30 Medium, age-gate inconsistency closed).
 
 ## Enforcement caveats
 

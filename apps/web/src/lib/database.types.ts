@@ -2802,6 +2802,7 @@ export type Database = {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined
       }
+      record_coach_consent: { Args: never; Returns: string }
       redeem_coach_invite: { Args: { token: string }; Returns: string }
       refresh_personal_records_for_user: {
         Args: { p_user_id: string }

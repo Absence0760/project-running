@@ -166,11 +166,12 @@
 
 	<h2>8. Children</h2>
 	<p>
-		Threkir is not directed to children under 13. We require all users to confirm they are
-		16 or older at signup; that age is the most conservative threshold across EU member states
-		(GDPR Art 8). If you believe a child under 13 has provided personal data to us, please email
-		<a href="mailto:privacy@threkir.com">privacy@threkir.com</a> and we will delete the
-		account.
+		Threkir requires all users to confirm they are <strong>16 or older</strong> at signup — the
+		most conservative age-of-consent threshold across EU member states (GDPR Art 8) — and is not
+		directed to anyone under that age (which includes children under 13 for US COPPA purposes). We
+		do not knowingly collect personal data from anyone under 16. If you believe someone under 16
+		has provided personal data to us, please email
+		<a href="mailto:privacy@threkir.com">privacy@threkir.com</a> and we will delete the account.
 	</p>
 
 	<h2>9. Cookies + similar technologies</h2>
