@@ -185,6 +185,26 @@ test('RouteTrackPreview routes non-owner fetches through clip_route_for_viewer',
 	);
 });
 
+test('track-preview thumbnails gate the MapTiler static map on consent', () => {
+	// Reason: both previews render on anon surfaces (public /clubs/[slug],
+	// /u/[id], feed), and MapTiler's static-map endpoint logs the requester
+	// IP per fetch — an ePrivacy/GDPR third-party request before consent.
+	// The MapTiler `buildStaticMapUrl` branch must sit behind a
+	// `consent.accepted ?` ternary (the self-hosted local override is
+	// exempt). audit/cookie-consent.
+	for (const file of [
+		'src/lib/components/RouteTrackPreview.svelte',
+		'src/lib/components/RunTrackPreview.svelte',
+	]) {
+		const source = read(file);
+		assert.match(
+			source,
+			/consent\.accepted\s*\?[\s\S]*buildStaticMapUrl/,
+			`${file} must gate buildStaticMapUrl behind a consent.accepted ternary — otherwise it fires a MapTiler request (logging the visitor IP) before consent on anon surfaces.`,
+		);
+	}
+});
+
 test('fetchClippedRouteForViewer fails closed on RPC error', () => {
 	// Reason: same as clipTrackForUser. Returning the input on RPC
 	// error would defeat the helper. The empty-input early-return is

@@ -29,6 +29,7 @@
 	import TrackPreview from './TrackPreview.svelte';
 	import { fetchTrackByPath, fetchClippedTrackForRun } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { consent } from '$lib/settings/consent.svelte';
 	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/routes/static_map';
 
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
@@ -173,12 +174,19 @@
 				h: 140,
 				styleUrl: PUBLIC_TILE_STYLE_URL,
 			}) ??
-			buildStaticMapUrl(points, {
-				w: 220,
-				h: 140,
-				style: 'streets-v2',
-				key: PUBLIC_MAPTILER_KEY,
-			})}
+			// MapTiler logs the requester IP per static-map fetch and this
+			// preview renders on anon surfaces (public /u/[id], feed). Hold
+			// the third-party request until consent; fall through to the
+			// SVG below until then. Local self-hosted override is exempt.
+			// audit/cookie-consent.
+			(consent.accepted
+				? buildStaticMapUrl(points, {
+						w: 220,
+						h: 140,
+						style: 'streets-v2',
+						key: PUBLIC_MAPTILER_KEY,
+					})
+				: null)}
 		{#if mapUrl}
 			<!-- Static-map background mirroring RouteTrackPreview. Real
 				 tiles read better than a bare SVG line on cards. Falls

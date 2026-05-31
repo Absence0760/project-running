@@ -49,6 +49,14 @@
 		}
 	}
 
+	// Single accept/reject rather than per-purpose toggles is deliberate:
+	// today there is exactly one consent-gated purpose — third-party
+	// services (MapTiler tiles on anon surfaces, Sentry) all ride this one
+	// choice. A granular CNIL/ICO-style per-purpose UI is only required
+	// once a second, independently-rejectable vendor exists; add the
+	// toggles then (audit/cookie-consent). Until then one binary choice
+	// maps 1:1 to the one purpose, so per-purpose granularity would be
+	// theatre.
 	function accept() {
 		consent.set('accepted');
 		dismissed = true;

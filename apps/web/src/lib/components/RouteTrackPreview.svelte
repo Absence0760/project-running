@@ -20,6 +20,7 @@
 	import TrackPreview from './TrackPreview.svelte';
 	import { fetchClippedRouteForViewer } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { consent } from '$lib/settings/consent.svelte';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
@@ -113,12 +114,20 @@
 				h: 140,
 				styleUrl: PUBLIC_TILE_STYLE_URL,
 			}) ??
-			buildStaticMapUrl(points, {
-				w: 220,
-				h: 140,
-				style: 'streets-v2',
-				key: PUBLIC_MAPTILER_KEY,
-			})}
+			// MapTiler's static-map endpoint logs the requester IP per
+			// fetch, and this preview renders on anon surfaces (e.g. a
+			// public /clubs/[slug]). Hold the third-party request until
+			// consent; until then fall through to the bare SVG below.
+			// The self-hosted local tile override above is exempt — no
+			// third party. audit/cookie-consent.
+			(consent.accepted
+				? buildStaticMapUrl(points, {
+						w: 220,
+						h: 140,
+						style: 'streets-v2',
+						key: PUBLIC_MAPTILER_KEY,
+					})
+				: null)}
 		{#if mapUrl}
 			<!-- Static map background: shows the route polyline overlaid
 			     on real tiles (roads, parks, water) so users can scan a
