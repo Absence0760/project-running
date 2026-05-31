@@ -232,10 +232,10 @@
 			class="popover"
 			role="dialog"
 			tabindex="-1"
-			aria-label="Notifications"
+			aria-labelledby="notif-popover-heading"
 		>
 			<header class="popover-head">
-				<h3>Notifications</h3>
+				<h3 id="notif-popover-heading">Notifications</h3>
 				{#if notificationStore.unreadCount > 0}
 					<button class="link-btn" type="button" onclick={handleMarkAll}>
 						Mark all read

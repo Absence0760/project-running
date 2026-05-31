@@ -2257,7 +2257,9 @@
 		font-size: 0.9rem;
 		font-family: inherit;
 	}
-	.input:focus {
+	/* :focus-visible (not :focus) so the ring only shows for keyboard
+	   intent, not on every mouse click — WCAG 2.4.11. */
+	.input:focus-visible {
 		outline: 2px solid color-mix(in srgb, var(--color-primary) 40%, transparent);
 		outline-offset: 1px;
 		border-color: var(--color-primary);

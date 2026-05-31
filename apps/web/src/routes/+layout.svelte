@@ -285,7 +285,13 @@
 	     branch so SSR + anon-first-paint serves the real page body
 	     instead of the spinner. The auth guard above redirects anon
 	     viewers on protected paths to /login. -->
-	<slot />
+	<!-- These are long content pages (legal text, feature compares). With
+	     no signed-in shell they'd otherwise lack the skip link + <main>
+	     landmark that the shell branch below provides — WCAG 2.4.1. -->
+	<a href="#main-content" class="skip-link">Skip to main content</a>
+	<main id="main-content">
+		<slot />
+	</main>
 {:else if auth.loading}
 	<div class="loading-screen">
 		<span class="loading-text">Loading...</span>
