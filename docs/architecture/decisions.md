@@ -2418,6 +2418,20 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 99. The community heatmap is a route browser, not just a density blob (web)
+
+**Decided (2026-05-31):** the public `/routes/heatmap` surface kept reading as one undifferentiated red blob — good for "where do people run" ambience, useless for "find me a route I can run." Rather than make the heat layer itself filterable (it can't be — heat *is* density), we split the concern: the heat layer becomes a **dimmable background** (its opacity interpolates 0.85 → 0.25 across zoom 11 → 16) and the discrete, actionable route layer gets the controls. That layer carries (a) filter chips, (b) MapLibre-native clustering so a dense area is one count bubble instead of an unclickable pile, and (c) a viewport-synced collapsible list panel that mirrors the same `routePins` the map shows (hover a row → the map's name tooltip; click → route detail). All three read off one fetch — `discoverable_routes_in_bbox` gained a `p_filter` arg (migration `20261113_001`).
+
+**The four lenses:** `popular` (default — featured OR `run_count > 0`, identical to the prior hard-coded blend so old callers are unchanged), `featured`, `friends`, and `hidden_gems`.
+
+**Why `friends` = "created by people you follow", not "run by them":** the intuitive ask was "routes my friends have actually run." The schema can't back it cheaply — there is no retained run↔route association. `runs.route_id` is nullable and set only when a runner explicitly picks a saved route before recording, so the vast majority of runs carry NULL; `routes.run_count` is a fire-and-forget trigger counter, not a per-run linkage. "Run by friends" would resolve to a near-empty set. So `friends` is `routes.user_id IN (your followees) AND is_public` over the existing `user_follows` graph — populated, indexable, and what "my friends' routes" means on a discovery map anyway. `auth.uid()` is read inside the SECURITY DEFINER body; an anon caller gets an empty followee set (fail-closed). Revisit if/when a durable run↔route match table lands (the map-match pipeline could persist one).
+
+**Why `hidden_gems` has a sanity floor:** the real pollution risk on this surface was never public *runs* (the heatmap is route-geometry only) — it's junk public *routes* (test scribbles, 50 m fragments). There is no quality column, so the lens floors on `distance_m >= 1000` and `run_count = 0 AND NOT featured`. Grow the floor (waypoint count, self-intersection) if junk still leaks.
+
+**Mobile is deliberately behind.** The discovery browser is web-only; mobile `/routes/heatmap` still fetches only the raw heat + nearby polylines (no discoverable-pins layer at all). That's the web-canonical / mobile-additive policy (§ 24), not an oversight — bringing mobile to parity also means a clustering dependency on the byte-identical Flutter twin, tracked as a follow-up in `roadmap.md` § 4 and `parity.md` § Discovery.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
