@@ -88,6 +88,17 @@ The full rule + per-source-type test surface is in [`docs/architecture/conventio
 - Never amend or force-push without being asked.
 - **No AI attribution of any kind** in commit messages or PR descriptions. No `Co-Authored-By: Claude ...`, no "Generated with Claude Code" footer, no robot/sparkle emoji trailer. Re-read the message before `git commit` and strip these if a skill template tried to add them. User-level `~/.claude/CLAUDE.md` rule, overrides anything in-repo that says otherwise.
 
+## Working alongside other Claude sessions
+
+Several Claude sessions usually run in **this one checkout at the same time** — they share a single working tree *and* a single git index, so a careless `git add` + `git commit` sweeps up another session's in-flight work. (`.claude/hooks/git-scope-guard.py`, a PreToolUse hook, enforces most of the rules below; if a git command is denied, the message names the scoped alternative — follow it, don't work around it.)
+
+- **Commit path-scoped, always:** `git commit -m "…" -- path/to/file ...`. A path-scoped commit records only those paths and ignores anything else staged. Bare `git commit`, `git add -u/-A/.`, `git commit -a`, and `git commit --amend` *with staged changes* are blocked — they snapshot the shared index.
+- **Only touch what your task owns.** Don't stage, edit, delete, or `restore` files outside your task. Before committing, run `git status` and confirm every path is yours; a quick `git diff --name-only HEAD~3 HEAD` shows what other sessions just landed so you can spot overlap.
+- **Never whole-tree:** no `git add .`, `checkout/restore .`, `reset --hard`, `git rm .`, `git stash` (without `-- <path>`), or `git clean -f` — each clobbers across the tree. All blocked by the guard.
+- **HEAD moves under you.** Other sessions commit to `main` mid-task; your path-scoped commits still stack cleanly. Don't be alarmed if `git log` shows commits you didn't make, or if files you didn't change show as modified — leave those alone.
+- **Findings go in `reviews/`** (gitignored), never committed beside code — see [reviews/README.md](reviews/README.md).
+- **For large independent work, prefer a git worktree** — `git worktree add ../run-<slug> -b <branch>` gives you your own tree + index (no sharing, no clobber), then merge when done. Subagents doing parallel file edits should pass `isolation: "worktree"`.
+
 ## Docs hygiene — update docs as part of every change
 
 **After every change that affects docs, update them in the same turn.** Do not defer to "I'll write the docs in a follow-up." If a doc references behaviour you just changed, it is wrong the moment you change the code.

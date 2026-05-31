@@ -86,3 +86,7 @@ reviews/*
 # ad-hoc locations so they can't be accidentally committed from the repo root.
 persona-round*/
 audit-findings-*.md
+
+# Python bytecode cache (the .claude/hooks/*.py guards + their tests)
+__pycache__/
+*.pyc
