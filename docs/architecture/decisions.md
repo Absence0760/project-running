@@ -2432,6 +2432,16 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 ---
 
+## 100. Discovery is a results-sidebar layout with race-distance band filters (web)
+
+**Decided (2026-05-31):** the first cut of the discovery browser (§ 99) hung the controls — search, lens chips, legend, list panel — as separate floating cards over the map, which overlapped each other and the canvas, and offered no distance filtering. Two changes:
+
+**Layout: results sidebar beside the map, not floating over it.** The component is now a flex row — a fixed-width sidebar (search + a **Filters** popover + the scrollable results list) next to a `flex: 1` map. Side-by-side is the runner-app-standard discovery layout (AllTrails / Komoot / Strava) and structurally eliminates overlap: the only thing floating on the map is its own MapLibre nav controls + a sidebar-collapse handle. Collapsing the sidebar fires an explicit `map.resize()` because the canvas width changes. The lens chips, the distance bands, and the heat/clubs layer toggles all live inside the Filters popover (opened from a button next to the search) with an active-filter count badge + Reset, so the default view is just search + list + map.
+
+**Race-distance bands.** Runners search by race distance, so the discovery filter is 5K / 10K / Half / Marathon / Ultra, multi-select, combinable with the lens. Rather than encode band keys in SQL, the client owns the windows (`apps/web/src/lib/routes/distance_bands.ts`, the single source of truth) and passes them to `discoverable_routes_in_bbox` as two **parallel bound arrays** `p_dist_min[]` / `p_dist_max[]` (migration `20261114_001`); a route matches if it falls in ANY band (`unnest(min, max)` + `EXISTS`), so any permutation works, and a NULL upper bound is open-ended (ultra). Filtering is server-side so the per-viewport 100-route cap applies *after* the distance filter — a client-side filter would hide marathons that exist beyond the first 100 popular routes. Windows are tolerant (a "5K" is rarely exactly 5.00 km) with gaps between bands (a 15 km route is no race distance and matches nothing); `bandForDistance` badges each list row. The bands are web-only logic — no Dart twin — so they are not a TS↔Dart parity pair.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
