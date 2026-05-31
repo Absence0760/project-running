@@ -13,7 +13,9 @@ path-scoped alternative; everything else is allowed through untouched.
 
 Blocked:
   git add -A / --all / -u / --update / .          (stages the whole tree)
+  git commit (no pathspec)                         (commits the whole staged index)
   git commit -a / -am / --all                      (auto-stages tracked edits)
+  git commit --amend with staged changes           (folds the index into HEAD)
   git stash [push|save] without `-- <path>`        (stashes the whole tree)
   git stash clear                                  (drops every stash entry)
   git reset --hard                                 (discards all working edits)
@@ -21,13 +23,16 @@ Blocked:
   git rm . (or :/, *)                              (removes the whole tree)
   git clean -f                                     (deletes untracked files)
 
-Allowed: git add <path>, git commit -m, git commit -- <path>,
-git restore -- <path>, git stash push -- <path>, and all read-only git.
+Allowed: git add <path>, git commit -m "…" -- <path>, git commit --allow-empty,
+git commit --amend (pure reword, nothing staged), git restore -- <path>,
+git stash push -- <path>, and all read-only git.
 """
 
 import json
+import os
 import re
 import shlex
+import subprocess
 import sys
 
 PATHSPEC_ALL = {".", "*", "./", ":/", ":/.", ":/*"}
@@ -113,11 +118,29 @@ def _check_add(args):
     return None
 
 
+def _has_staged_changes():
+    """True if the shared index has staged changes. Fail-open (False) if git
+    can't be queried — the guard should never wedge a command on uncertainty."""
+    repo = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    try:
+        # `diff --cached --quiet` exits 1 when there are staged changes, 0 when
+        # clean. `-C <repo>` makes it independent of the hook's cwd.
+        result = subprocess.run(
+            ["git", "-C", repo, "diff", "--cached", "--quiet"],
+            capture_output=True, timeout=5,
+        )
+        return result.returncode == 1
+    except Exception:
+        return False
+
+
 def _check_commit(args):
     skip_next = False
     saw_double_dash = False
     has_pathspec = False
-    exempt = False
+    is_amend = False
+    allow_empty = False
+    no_edit = False
     for a in args:
         if skip_next:
             skip_next = False
@@ -134,11 +157,12 @@ def _check_commit(args):
                     "including another session's. Stage your own paths explicitly "
                     "(`git add <path>`) and commit without --all.")
         if a.startswith("--"):
-            # These don't snapshot the working index the racy way, so a missing
-            # pathspec is fine for them (amend/merge-continuation/empty commits).
-            if a in ("--amend", "--no-edit", "--allow-empty",
-                     "--allow-empty-message"):
-                exempt = True
+            if a == "--amend":
+                is_amend = True
+            if a in ("--allow-empty", "--allow-empty-message"):
+                allow_empty = True
+            if a == "--no-edit":
+                no_edit = True
             if a.startswith("--pathspec-from-file"):
                 has_pathspec = True
             if a in ("--message", "--file", "--reuse-message", "--reedit-message",
@@ -158,14 +182,32 @@ def _check_commit(args):
             continue
         # A bare positional token is a pathspec — the commit is scoped.
         has_pathspec = True
-    if not has_pathspec and not exempt:
-        return ("`git commit` with no pathspec commits the ENTIRE staged index — in a "
-                "shared checkout that sweeps up whatever another Claude session has "
-                "staged (this has happened). Commit only your own paths: "
-                "`git commit -m \"…\" -- path/to/file ...` (a path-scoped commit "
-                "ignores anything else staged). Use --amend / --allow-empty if you "
-                "genuinely have no paths.")
-    return None
+
+    if has_pathspec or allow_empty:
+        return None
+    if is_amend:
+        # Amend folds the whole staged index into the previous commit. With
+        # nothing staged it's a pure message reword (safe); with staged changes
+        # in a shared checkout it absorbs another session's files AND rewrites a
+        # shared commit. Block only the dangerous case.
+        if _has_staged_changes():
+            return ("`git commit --amend` with staged changes folds the ENTIRE staged "
+                    "index into the previous commit — in a shared checkout that absorbs "
+                    "another session's staged files (and rewrites a shared commit). "
+                    "Unstage what isn't yours, or scope it: "
+                    "`git commit --amend -- path/to/file ...`. A pure reword with "
+                    "nothing staged is allowed.")
+        return None
+    if no_edit:
+        # Merge / cherry-pick continuation (`git commit --no-edit`) — no pathspec
+        # is normal there; not the racy bare-commit case.
+        return None
+    return ("`git commit` with no pathspec commits the ENTIRE staged index — in a "
+            "shared checkout that sweeps up whatever another Claude session has "
+            "staged (this has happened). Commit only your own paths: "
+            "`git commit -m \"…\" -- path/to/file ...` (a path-scoped commit "
+            "ignores anything else staged). Use --allow-empty if you genuinely have "
+            "no paths.")
 
 
 def _check_stash(args):
