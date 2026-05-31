@@ -80,12 +80,19 @@ export async function hashUserIdForAudit(
 
 // ─── result codes (mirror the deletion_audit_log CHECK) ───
 
+// Keep in lockstep with the deletion_audit_log result CHECK
+// (20260917_001 + 20261111_001). Each saga step that can fail before the
+// auth-row cascade has its own code so the Art 17(2) trail says which step
+// failed (audit-findings 2026-05-30 Medium).
 export type DeletionAuditResult =
 	| 'ok'
 	| 'storage_drain_failed'
 	| 'auth_delete_failed'
 	| 'reports_cleanup_failed'
-	| 'vault_cleanup_failed';
+	| 'vault_cleanup_failed'
+	| 'jobs_drain_failed'
+	| 'rate_limits_drain_failed'
+	| 'segments_anonymise_failed';
 
 // ─── per-third-party outcome record (lands in deletion_audit_log.third_party_outcomes) ───
 

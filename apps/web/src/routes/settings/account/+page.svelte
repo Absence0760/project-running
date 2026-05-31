@@ -894,6 +894,8 @@
 	message="This permanently deletes your account, all runs, routes, tracks, club memberships, and preferences. This cannot be undone. Download a backup first if you want to keep your data."
 	confirmLabel="Delete my account"
 	danger
+	requireText={auth.user?.email ?? 'DELETE'}
+	requireTextLabel={`Type your email (${auth.user?.email ?? 'DELETE'}) to confirm`}
 	onconfirm={handleDeleteAccount}
 	oncancel={() => (showDeleteAccount = false)}
 />

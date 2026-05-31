@@ -511,7 +511,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     await recordAudit(
       adminClient,
       user.id,
-      'reports_cleanup_failed',
+      'jobs_drain_failed',
       `jobs drain: ${jobsDrain.reason}`.slice(0, 200),
       thirdPartyOutcomes,
     );
@@ -528,7 +528,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     await recordAudit(
       adminClient,
       user.id,
-      'reports_cleanup_failed',
+      'rate_limits_drain_failed',
       `rate_limits drain: ${rl.reason}`.slice(0, 200),
       thirdPartyOutcomes,
     );
@@ -545,7 +545,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     await recordAudit(
       adminClient,
       user.id,
-      'reports_cleanup_failed',
+      'segments_anonymise_failed',
       `segments anonymise: ${segs.reason}`.slice(0, 200),
       thirdPartyOutcomes,
     );

@@ -10,6 +10,13 @@
 		danger?: boolean;
 		onconfirm: () => void;
 		oncancel: () => void;
+		/// When set, the confirm button stays disabled until the user types
+		/// this exact string (case-insensitive, trimmed) into a challenge
+		/// input. Used for irreversible actions (e.g. account deletion —
+		/// Apple 5.1.1 / data-loss confirmation) so a stray click can't
+		/// trigger them.
+		requireText?: string;
+		requireTextLabel?: string;
 		/// Forwarded to the rendered backdrop element so e2e specs
 		/// can target a specific confirm dialog (e.g. distinguishing
 		/// share-confirm-dialog from delete-confirm-dialog on the
@@ -27,12 +34,45 @@
 		danger = false,
 		onconfirm,
 		oncancel,
+		requireText,
+		requireTextLabel,
 		'data-testid': testId,
 	}: Props = $props();
+
+	let challenge = $state('');
+	// Reset the challenge whenever the dialog reopens so a prior entry
+	// can't carry over.
+	$effect(() => {
+		if (!open) challenge = '';
+	});
+	const challengeMet = $derived(
+		!requireText || challenge.trim().toLowerCase() === requireText.trim().toLowerCase(),
+	);
+
+	function handleConfirm() {
+		if (!challengeMet) return;
+		onconfirm();
+	}
 </script>
 
 <Modal {open} {title} narrow onclose={oncancel} bodyClass="confirm-body" data-testid={testId}>
 	<p>{message}</p>
+	{#if requireText}
+		<label class="challenge">
+			<span class="challenge-label">
+				{requireTextLabel ?? `Type "${requireText}" to confirm`}
+			</span>
+			<input
+				type="text"
+				class="challenge-input"
+				bind:value={challenge}
+				autocomplete="off"
+				autocapitalize="off"
+				spellcheck="false"
+				data-testid="confirm-challenge-input"
+			/>
+		</label>
+	{/if}
 	<div class="actions">
 		<button type="button" class="btn btn-secondary" onclick={oncancel}>
 			{cancelLabel}
@@ -42,7 +82,8 @@
 			class="btn"
 			class:btn-primary={!danger}
 			class:btn-danger={danger}
-			onclick={onconfirm}
+			disabled={!challengeMet}
+			onclick={handleConfirm}
 		>
 			{confirmLabel}
 		</button>
@@ -66,5 +107,22 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: 0.5rem;
+	}
+	.challenge {
+		display: flex;
+		flex-direction: column;
+		gap: 0.35rem;
+	}
+	.challenge-label {
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+	}
+	.challenge-input {
+		padding: var(--space-xs) var(--space-sm);
+		font-size: 0.9rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		background: var(--color-bg);
+		color: var(--color-text);
 	}
 </style>

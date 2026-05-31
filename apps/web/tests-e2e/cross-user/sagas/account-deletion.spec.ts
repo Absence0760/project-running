@@ -55,19 +55,21 @@ test.describe('saga: account deletion via /settings/account', () => {
 	test.describe.configure({ timeout: 90_000 });
 
 	let user: SagaUser;
+	// A second user so the relational tables (DMs, blocks, coaching links)
+	// have a counterpart; only `user` is deleted.
+	let other: SagaUser;
 	let plantedRunId: string | null = null;
 
 	test.beforeAll(async () => {
-		[user] = await createSagaUsers(1, {
-			displayNames: ['Saga Self-Delete']
+		[user, other] = await createSagaUsers(2, {
+			displayNames: ['Saga Self-Delete', 'Saga Other']
 		});
 	});
 
 	test.afterAll(async () => {
-		// If the test passed, the user is already gone — deleteSagaUsers
-		// is a no-op (and tolerates a missing row). If the test failed
-		// part-way, this still cleans up.
-		await deleteSagaUsers([user]);
+		// If the test passed, `user` is already gone — deleteSagaUsers is a
+		// no-op (and tolerates a missing row). `other` is always cleaned up.
+		await deleteSagaUsers([user, other]);
 	});
 
 	test('owner deletes their own account → all rows + Storage objects gone', async ({
@@ -130,6 +132,38 @@ test.describe('saga: account deletion via /settings/account', () => {
 			target_id: plantedRunId,
 		});
 
+		// audit-findings 2026-05-30 Medium: the saga must also exercise the
+		// relational personal-data tables. These all FK to auth.users with
+		// ON DELETE CASCADE on the deleted user's side, so they must vanish
+		// when `user` is deleted. (event_exceptions.cancelled_by is ON
+		// DELETE SET NULL by design and event_result_claims needs an event
+		// fixture — both are covered by the per-table cascade tests + the
+		// data-export suite.)
+		// Assert each seed insert actually lands — without the error check
+		// a NOT NULL / FK slip would silently skip the row and the cascade
+		// assertion below would pass trivially (false green).
+		const dmSeed = await admin.from('direct_messages').insert({
+			sender_id: user.id,
+			recipient_id: other.id,
+			body: 'saga: DM must cascade on delete-account'
+		});
+		expect(dmSeed.error, 'direct_messages seed must insert').toBeNull();
+
+		const blockSeed = await admin.from('user_blocks').insert({
+			blocker_id: user.id,
+			blocked_id: other.id
+		});
+		expect(blockSeed.error, 'user_blocks seed must insert').toBeNull();
+
+		const coachSeed = await admin.from('coach_athletes').insert({
+			coach_id: user.id,
+			athlete_id: other.id,
+			status: 'active',
+			// invite_token is NOT NULL with no default (20261102_001).
+			invite_token: `saga-cascade-${user.id}`
+		});
+		expect(coachSeed.error, 'coach_athletes seed must insert').toBeNull();
+
 		// 2) Drive the UI flow.
 		const ctx = await browser.newContext({
 			storageState: user.storageStatePath
@@ -158,9 +192,15 @@ test.describe('saga: account deletion via /settings/account', () => {
 			await expect(
 				page.getByRole('heading', { name: /Delete your account\?/ })
 			).toBeVisible({ timeout: 5_000 });
-			await page
-				.getByRole('button', { name: /Delete my account/ })
-				.click();
+
+			// Re-entry challenge (audit-findings 2026-05-30 Medium / Apple
+			// 5.1.1): the confirm button is disabled until the user types
+			// their email. Verify it's disabled, then type to enable.
+			const confirmBtn = page.getByRole('button', { name: /Delete my account/ });
+			await expect(confirmBtn).toBeDisabled();
+			await page.getByTestId('confirm-challenge-input').fill(user.email);
+			await expect(confirmBtn).toBeEnabled();
+			await confirmBtn.click();
 
 			const ef = await efPromise;
 			expect(
@@ -236,6 +276,26 @@ test.describe('saga: account deletion via /settings/account', () => {
 			notes.data ?? [],
 			'notifications must cascade — actor + target metadata'
 		).toEqual([]);
+
+		// audit-findings 2026-05-30 Medium: the relational tables must
+		// cascade off the deleted user's FK column too.
+		const dms = await admin
+			.from('direct_messages')
+			.select('id')
+			.eq('sender_id', user.id);
+		expect(dms.data ?? [], 'direct_messages must cascade on sender delete').toEqual([]);
+
+		const blocks = await admin
+			.from('user_blocks')
+			.select('blocker_id')
+			.eq('blocker_id', user.id);
+		expect(blocks.data ?? [], 'user_blocks must cascade on blocker delete').toEqual([]);
+
+		const coaching = await admin
+			.from('coach_athletes')
+			.select('id')
+			.eq('coach_id', user.id);
+		expect(coaching.data ?? [], 'coach_athletes must cascade on coach delete').toEqual([]);
 
 		// Mark plantedRunId as cleaned so the afterAll doesn't re-attempt.
 		plantedRunId = null;
