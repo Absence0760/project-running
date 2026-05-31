@@ -36,6 +36,15 @@ Every item below is one of: (a) blocked on an external credential / account, (b)
 - [ ] **iOS verification** — Mac-only. The byte-identical Dart codebase already supports every Android feature (decisions §39); `parity.md` cells stay ✗/Partial *by design* until simulator/device-verified. Gates: `Runner.entitlements` (HealthKit + Sign-in-with-Apple), `pod install`, the Apple Developer Sign-in-with-Apple Services ID + APNs setup. Info.plist is already complete.
 - [ ] **Apple Watch** — Xcode / watchOS device required: route-nav visuals, ultra-length stress test, live race participant, complication target (Widget Extension), activity types, lap markers, hold-to-stop, TTS cues, pedometer, GPS self-heal, indoor mode, route picker, BLE pairing UI — each wired in Xcode + verified on a simulator or paired device.
 
+## Internationalisation framework (sized project, not started)
+
+Surfaced by the 2026-05-30 i18n-readiness audit. RTL *layout* is already complete web-wide (logical CSS properties + dir switch), and two standalone items shipped — the non-Latin font fallback (`app.css`) and the coach "reply in the runner's language" instruction. The remaining work is one coherent project, not piecemeal fixes:
+
+- [ ] **Web string framework** (W-1, ~1-2 wk) — extract ~35 components + ~40 routes of English literals into a message catalog + a small runtime (e.g. an `m['key']` lookup keyed off a locale signal that also drives `<html dir>`), then translate. Currency: `/compare` competitor prices + `formatPrice` are hard-coded USD (W-2) — fold into the same locale pass.
+- [ ] **Mobile (Flutter) localisation** (M-1/M-2/M-3) — add `flutter_localizations` + `intl` + ARB files; replace the ~473 `Text()` literals + English month-name lists; drive TTS language off the locale instead of `en-US`/`Locale.US`.
+- [ ] **Watch localisation** (WR-1, WOS-1) — Wear Compose string resources + watchOS `Localizable.strings`.
+- [ ] **Guided-run scripts** (S-1) — per-locale `GUIDED_RUN_LIBRARY` script sets.
+
 ## Competitor-parity backlog (needs product green-light)
 
 From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carried from the roadmap table:
