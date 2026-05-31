@@ -174,6 +174,29 @@ Deno.test('reports_against_me spec uses two-param filter + narrow projection', (
 	assertEquals(rep.select.includes('reporter_id'), false);
 });
 
+Deno.test('no reports-target (against-me) spec leaks reporter_id in its select', () => {
+	// audit-findings 2026-05-30 Medium [security/edge-functions]: the
+	// only redaction backstop for the other party's reporter_id is the
+	// select column list. Guard that EVERY spec which targets the user as
+	// a report SUBJECT (target_kind=eq.user) omits reporter_id — so a
+	// future copy-paste that adds another against-me table can't leak it.
+	const offenders = buildBackupSpecs(TEST_UID)
+		.filter((s) => s.table === 'reports' && s.filter.includes('target_kind=eq.user'))
+		.filter((s) => s.select === '*' || s.select.includes('reporter_id'));
+	assertEquals(offenders.length, 0, `against-me reports spec leaks reporter_id: ${offenders.map((o) => o.entry).join(', ')}`);
+});
+
+Deno.test('filter values are URL-encoded (raw filter is interpolated into the REST URL)', () => {
+	// index.ts builds the PostgREST URL as `...?select=...&${spec.filter}`,
+	// so any non-URL-safe character in the id must already be encoded in
+	// the filter. UUIDs encode to themselves; a value with a reserved char
+	// must come back percent-encoded. audit-findings 2026-05-30 Medium.
+	const specs = buildBackupSpecs('a b&c#d');
+	const sent = specs.find((s) => s.entry === 'direct_messages_sent.json');
+	assertExists(sent);
+	assertEquals(sent.filter, 'sender_id=eq.a%20b%26c%23d');
+});
+
 Deno.test('summariseJobsByKind aggregates raw rows', () => {
 	const rows = [
 		{ kind: 'map_match' },

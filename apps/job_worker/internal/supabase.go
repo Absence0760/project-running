@@ -1197,7 +1197,13 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		filter string // querystring KV (e.g. "user_id=eq.<uid>")
 		sel    string // select clause; "*" to include every column
 	}
-	uidEq := "user_id=eq." + userID
+	// The filter is appended to the URL verbatim below (unlike `select`,
+	// which goes through url.Values), so the value must be encoded here.
+	// QueryEscape renders space as `+`, which PostgREST decodes back to
+	// space — functionally identical to the EF for any DB lookup.
+	// audit-findings 2026-05-30 Medium.
+	uid := url.QueryEscape(userID)
+	uidEq := "user_id=eq." + uid
 	specs := []spec{
 		// coach_messages — full chat transcripts with the assistant.
 		// Densest single PII corpus outside GPS tracks.
@@ -1227,16 +1233,16 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// run_comments authored by the user.
 		{
 			name: "run_comments.json", table: "run_comments",
-			filter: "author_id=eq." + userID, sel: "*",
+			filter: "author_id=eq." + uid, sel: "*",
 		},
 		// run_photos metadata. The image bytes themselves are bundled
 		// under `photos/` by BuildBackupZip via DownloadPhoto, keyed off
 		// each row's `storage_path` (audit-findings 2026-05-30 High).
-		{name: "run_photos.json", table: "run_photos", filter: "owner_id=eq." + userID, sel: "*"},
+		{name: "run_photos.json", table: "run_photos", filter: "owner_id=eq." + uid, sel: "*"},
 		// segment_efforts — performance history.
 		{name: "segment_efforts.json", table: "segment_efforts", filter: uidEq, sel: "*"},
 		// gear + run_gear — owner-private inventory + join.
-		{name: "gear.json", table: "gear", filter: "owner_id=eq." + userID, sel: "*"},
+		{name: "gear.json", table: "gear", filter: "owner_id=eq." + uid, sel: "*"},
 		// run_gear is filled below by a two-step fetch (PostgREST
 		// `in.()` takes a literal value list, not a SQL subselect —
 		// the self-audit caught the malformed query that this entry
@@ -1253,11 +1259,11 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// user_follows (both directions).
 		{
 			name: "following.json", table: "user_follows",
-			filter: "follower_id=eq." + userID, sel: "*",
+			filter: "follower_id=eq." + uid, sel: "*",
 		},
 		{
 			name: "followers.json", table: "user_follows",
-			filter: "followee_id=eq." + userID, sel: "*",
+			filter: "followee_id=eq." + uid, sel: "*",
 		},
 		// event_attendees — RSVPs.
 		{name: "event_attendees.json", table: "event_attendees", filter: uidEq, sel: "*"},
@@ -1285,7 +1291,7 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// out of scope of THIS subject's export.
 		{
 			name: "reports.json", table: "reports",
-			filter: "reporter_id=eq." + userID, sel: "*",
+			filter: "reporter_id=eq." + uid, sel: "*",
 		},
 		// reports filed AGAINST the user (target_kind='user'). GDPR
 		// Art 15(1)(c) gives the data subject the right to know
@@ -1297,7 +1303,7 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		{
 			name:   "reports_against_me.json",
 			table:  "reports",
-			filter: "target_kind=eq.user&target_id=eq." + userID,
+			filter: "target_kind=eq.user&target_id=eq." + uid,
 			sel:    "id,target_kind,target_id,reason,status,notes,created_at,resolved_at",
 		},
 		// direct_messages — private 1:1 conversations, both directions
@@ -1306,11 +1312,11 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// audit/data-export-completeness (2026-05-30) Critical.
 		{
 			name: "direct_messages_sent.json", table: "direct_messages",
-			filter: "sender_id=eq." + userID, sel: "*",
+			filter: "sender_id=eq." + uid, sel: "*",
 		},
 		{
 			name: "direct_messages_received.json", table: "direct_messages",
-			filter: "recipient_id=eq." + userID, sel: "*",
+			filter: "recipient_id=eq." + uid, sel: "*",
 		},
 		// coach_athletes — the subject's coaching relationships, as coach
 		// and as athlete. `invite_token` is a redeemable credential
@@ -1319,12 +1325,12 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// audit/data-export-completeness (2026-05-30) Critical.
 		{
 			name: "coaching_as_coach.json", table: "coach_athletes",
-			filter: "coach_id=eq." + userID,
+			filter: "coach_id=eq." + uid,
 			sel:    "id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at",
 		},
 		{
 			name: "coaching_as_athlete.json", table: "coach_athletes",
-			filter: "athlete_id=eq." + userID,
+			filter: "athlete_id=eq." + uid,
 			sel:    "id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at",
 		},
 		// event_results — the subject's own race finish records (time,
@@ -1338,26 +1344,26 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// subject's claimant_id. audit-findings (2026-05-30) High.
 		{
 			name: "event_result_claims.json", table: "event_result_claims",
-			filter: "claimant_id=eq." + userID, sel: "*",
+			filter: "claimant_id=eq." + uid, sel: "*",
 		},
 		// user_blocks — the subject's own block list (who they blocked +
 		// why). audit-findings (2026-05-30) High.
 		{
 			name: "user_blocks.json", table: "user_blocks",
-			filter: "blocker_id=eq." + userID, sel: "*",
+			filter: "blocker_id=eq." + uid, sel: "*",
 		},
 		// club_posts — club-feed posts the subject authored.
 		// audit-findings (2026-05-30) High.
 		{
 			name: "club_posts.json", table: "club_posts",
-			filter: "author_id=eq." + userID, sel: "*",
+			filter: "author_id=eq." + uid, sel: "*",
 		},
 		// event_exceptions — recurring-event instance cancellations the
 		// subject made (cancelled_by + reason). audit-findings
 		// (2026-05-30) High.
 		{
 			name: "event_exceptions.json", table: "event_exceptions",
-			filter: "cancelled_by=eq." + userID, sel: "*",
+			filter: "cancelled_by=eq." + uid, sel: "*",
 		},
 	}
 
@@ -1418,7 +1424,7 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		jq := url.Values{}
 		jq.Set("select", "kind")
 		u := c.BaseURL + "/rest/v1/jobs?" + jq.Encode() +
-			"&payload->>user_id=eq." + userID
+			"&payload->>user_id=eq." + uid
 		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil); err == nil {
 			if body, err := c.do(ctx, req); err == nil {
 				var rows []struct {

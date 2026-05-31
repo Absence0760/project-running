@@ -17,7 +17,11 @@ export interface BackupTableSpec {
 /// `apps/job_worker/internal/supabase.go` + audit/data-export-
 /// completeness May 2026 High.
 export function buildBackupSpecs(userId: string): BackupTableSpec[] {
-	const uidEq = `user_id=eq.${userId}`;
+	// index.ts interpolates `spec.filter` verbatim into the REST URL
+	// (unlike `select`, which goes through encoding), so the value must
+	// be encoded here. audit-findings 2026-05-30 Medium.
+	const uid = encodeURIComponent(userId);
+	const uidEq = `user_id=eq.${uid}`;
 	return [
 		{ entry: 'coach_messages.json', table: 'coach_messages', filter: uidEq, select: '*' },
 		{ entry: 'notifications.json', table: 'notifications', filter: uidEq, select: '*' },
@@ -43,17 +47,17 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'run_comments.json',
 			table: 'run_comments',
-			filter: `author_id=eq.${userId}`,
+			filter: `author_id=eq.${uid}`,
 			select: '*',
 		},
 		{
 			entry: 'run_photos.json',
 			table: 'run_photos',
-			filter: `owner_id=eq.${userId}`,
+			filter: `owner_id=eq.${uid}`,
 			select: '*',
 		},
 		{ entry: 'segment_efforts.json', table: 'segment_efforts', filter: uidEq, select: '*' },
-		{ entry: 'gear.json', table: 'gear', filter: `owner_id=eq.${userId}`, select: '*' },
+		{ entry: 'gear.json', table: 'gear', filter: `owner_id=eq.${uid}`, select: '*' },
 		{ entry: 'fitness_snapshots.json', table: 'fitness_snapshots', filter: uidEq, select: '*' },
 		{ entry: 'personal_records.json', table: 'personal_records', filter: uidEq, select: '*' },
 		{
@@ -67,13 +71,13 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'following.json',
 			table: 'user_follows',
-			filter: `follower_id=eq.${userId}`,
+			filter: `follower_id=eq.${uid}`,
 			select: '*',
 		},
 		{
 			entry: 'followers.json',
 			table: 'user_follows',
-			filter: `followee_id=eq.${userId}`,
+			filter: `followee_id=eq.${uid}`,
 			select: '*',
 		},
 		{ entry: 'event_attendees.json', table: 'event_attendees', filter: uidEq, select: '*' },
@@ -86,7 +90,7 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'reports.json',
 			table: 'reports',
-			filter: `reporter_id=eq.${userId}`,
+			filter: `reporter_id=eq.${uid}`,
 			select: '*',
 		},
 		// reports_against_me — Art 15(1)(c) recipient disclosure with
@@ -94,7 +98,7 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'reports_against_me.json',
 			table: 'reports',
-			filter: `target_kind=eq.user&target_id=eq.${userId}`,
+			filter: `target_kind=eq.user&target_id=eq.${uid}`,
 			select: 'id,target_kind,target_id,reason,status,notes,created_at,resolved_at',
 		},
 		// direct_messages — private 1:1 conversations, both directions.
@@ -103,13 +107,13 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'direct_messages_sent.json',
 			table: 'direct_messages',
-			filter: `sender_id=eq.${userId}`,
+			filter: `sender_id=eq.${uid}`,
 			select: '*',
 		},
 		{
 			entry: 'direct_messages_received.json',
 			table: 'direct_messages',
-			filter: `recipient_id=eq.${userId}`,
+			filter: `recipient_id=eq.${uid}`,
 			select: '*',
 		},
 		// coach_athletes — coaching relationships as coach + as athlete.
@@ -119,13 +123,13 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'coaching_as_coach.json',
 			table: 'coach_athletes',
-			filter: `coach_id=eq.${userId}`,
+			filter: `coach_id=eq.${uid}`,
 			select: 'id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at',
 		},
 		{
 			entry: 'coaching_as_athlete.json',
 			table: 'coach_athletes',
-			filter: `athlete_id=eq.${userId}`,
+			filter: `athlete_id=eq.${uid}`,
 			select: 'id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at',
 		},
 		// event_results — own race finish records (time, rank, DNF/DNS,
@@ -136,21 +140,21 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'event_result_claims.json',
 			table: 'event_result_claims',
-			filter: `claimant_id=eq.${userId}`,
+			filter: `claimant_id=eq.${uid}`,
 			select: '*',
 		},
 		// user_blocks — the subject's own block list. High.
 		{
 			entry: 'user_blocks.json',
 			table: 'user_blocks',
-			filter: `blocker_id=eq.${userId}`,
+			filter: `blocker_id=eq.${uid}`,
 			select: '*',
 		},
 		// club_posts — club-feed posts the subject authored. High.
 		{
 			entry: 'club_posts.json',
 			table: 'club_posts',
-			filter: `author_id=eq.${userId}`,
+			filter: `author_id=eq.${uid}`,
 			select: '*',
 		},
 		// event_exceptions — recurring-event instance cancellations the
@@ -158,7 +162,7 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{
 			entry: 'event_exceptions.json',
 			table: 'event_exceptions',
-			filter: `cancelled_by=eq.${userId}`,
+			filter: `cancelled_by=eq.${uid}`,
 			select: '*',
 		},
 	];
