@@ -57,6 +57,11 @@ CASES = [
     ("git restore -- foo.ts", "allow"),
     ("git stash", "deny"),
     ("git stash push -- foo.ts", "allow"),
+    ("git rm -r --cached .", "deny"),
+    ("git rm .", "deny"),
+    ("git rm reviews/old.md", "allow"),
+    ("git rm -r reviews/data-sync-audit", "allow"),
+    ("git rm --cached reviews/old.md", "allow"),
     ("git clean -fd", "deny"),
     # Read-only / unrelated — never blocked.
     ("git status", "allow"),

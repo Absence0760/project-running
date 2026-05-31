@@ -18,6 +18,7 @@ Blocked:
   git stash clear                                  (drops every stash entry)
   git reset --hard                                 (discards all working edits)
   git checkout/restore . (or :/, *) — no pathspec  (discards across the tree)
+  git rm . (or :/, *)                              (removes the whole tree)
   git clean -f                                     (deletes untracked files)
 
 Allowed: git add <path>, git commit -m, git commit -- <path>,
@@ -212,6 +213,25 @@ def _check_discard(name, args):
     return None
 
 
+def _check_rm(args):
+    after_dd = False
+    paths = []
+    for a in args:
+        if a == "--":
+            after_dd = True
+            continue
+        if not after_dd and a.startswith("-"):
+            continue
+        paths.append(a)
+    for p in paths:
+        if p in PATHSPEC_ALL:
+            return ("`git rm %s` removes every tracked file under the repo root from "
+                    "the index (and the working tree, unless --cached) — that stages "
+                    "deletions across another session's work too. Name the specific "
+                    "paths: `git rm path/to/file ...`." % p)
+    return None
+
+
 def _check_clean(args):
     forced = "--force" in args or any(
         a.startswith("-") and not a.startswith("--") and "f" in a[1:] for a in args
@@ -230,6 +250,7 @@ CHECKS = {
     "reset": _check_reset,
     "checkout": lambda a: _check_discard("checkout", a),
     "restore": lambda a: _check_discard("restore", a),
+    "rm": _check_rm,
     "clean": _check_clean,
 }
 
