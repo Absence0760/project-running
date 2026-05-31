@@ -156,3 +156,61 @@ test.describe('/live/event/[id]/[instance]', () => {
 		}
 	});
 });
+
+// audit-findings 2026-05-30 High [cookie-consent]: this event spectator
+// page is anon-accessible and MapTiler logs the requester IP per tile
+// fetch, so the map must NOT mount before consent — mirroring the
+// already-gated /live/[id] sibling. Run as an anon visitor with no prior
+// consent stored so the per-page "Load map" veil is the only path.
+test.describe('/live/event/[id]/[instance] — MapTiler consent gate', () => {
+	test.use({ storageState: { cookies: [], origins: [] } });
+
+	test('anon visitor sees a Load-map veil; map only mounts after opting in', async ({
+		page
+	}) => {
+		const startsAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+		const eventId = await insertEvent({
+			club_id: SYDNEY_RUN_CLUB_ID,
+			created_by: USER_A.id,
+			title: `e2e live-event consent ${Date.now()}`,
+			starts_at: startsAt
+		});
+
+		try {
+			await insertRaceSession({
+				event_id: eventId,
+				instance_start: startsAt,
+				status: 'running',
+				started_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+				started_by: USER_A.id
+			});
+			await insertRacePings({
+				event_id: eventId,
+				instance_start: startsAt,
+				runners: [
+					{
+						user_id: USER_B.id,
+						points: [
+							{ lat: OUT_OF_ZONE_LAT, lng: OUT_OF_ZONE_LNG, distance_m: 3_500, elapsed_s: 600 }
+						]
+					}
+				]
+			});
+
+			await page.goto(`/live/event/${eventId}/${encodeURIComponent(startsAt)}`);
+
+			// Pings exist, so the map WOULD render — but without consent the
+			// veil shows and the MapLibre container is never mounted (no
+			// MapTiler tile fetch, hence no IP leak).
+			const loadMap = page.getByRole('button', { name: 'Load map' });
+			await expect(loadMap).toBeVisible({ timeout: 10_000 });
+			await expect(page.locator('.race-map')).toHaveCount(0);
+
+			// Opting in mounts the map.
+			await loadMap.click();
+			await expect(page.locator('.race-map')).toHaveCount(1);
+		} finally {
+			await deleteRaceState(eventId, startsAt);
+		}
+	});
+});

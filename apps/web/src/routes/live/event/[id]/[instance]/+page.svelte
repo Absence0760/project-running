@@ -21,6 +21,7 @@
 	import type { EventWithMeta } from '$lib/types';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { formatDistance, fmtPace } from '$lib/format/units.svelte';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 
 	let eventId = $derived($page.params.id as string);
 	let instance = $derived(decodeURIComponent($page.params.instance as string));
@@ -174,9 +175,18 @@
 	}
 
 	onMount(async () => {
+		// Honour the global banner choice; the "Load map" button is the
+		// per-page acceptance path when the banner hasn't been answered.
+		if (hasAcceptedConsent()) mapConsented = true;
 		await load();
 		subscribe();
 	});
+
+	function loadMapNow() {
+		mapConsented = true;
+		// The map container only mounts once `mapConsented` flips, so the
+		// init $effect re-runs on the next tick with a live container.
+	}
 
 	onDestroy(() => {
 		if (channel) supabase.removeChannel(channel);
@@ -249,6 +259,11 @@
 	let stopResizeWatch: (() => void) | null = null;
 	let map: maplibregl.Map | null = null;
 	let mapReady = $state(false);
+	// audit/cookie-consent: this event spectator page is anon-accessible,
+	// and MapTiler logs the requester IP per tile fetch — so MapLibre must
+	// not init before consent is recorded (matches the /live/[id] sibling).
+	// Gated on the global banner choice OR an explicit per-page "Load map".
+	let mapConsented = $state(false);
 	let didFitBounds = false;
 
 	function buildPositionsGeoJSON(): GeoJSON.FeatureCollection<GeoJSON.Point, { user_id: string; color: string; label: string }> {
@@ -362,7 +377,7 @@
 	}
 
 	$effect(() => {
-		if (!mapContainer || map || pings.length === 0) return;
+		if (!mapConsented || !mapContainer || map || pings.length === 0) return;
 		const first = pings[0];
 		map = new maplibregl.Map({
 			container: mapContainer,
@@ -452,9 +467,33 @@
 
 			<aside class="map-side">
 				{#if pings.length > 0}
-					<div class="map-card">
-						<div bind:this={mapContainer} class="race-map"></div>
-					</div>
+					{#if mapConsented}
+						<div class="map-card">
+							<div bind:this={mapContainer} class="race-map"></div>
+						</div>
+					{:else}
+						<!--
+							audit/cookie-consent: MapTiler logs the requester IP per
+							tile fetch. Anonymous spectators must opt in before the
+							map mounts (ePrivacy / GDPR) — a "Load map" tap is the
+							affirmative act. Mirrors /live/[id].
+						-->
+						<div class="map-card map-consent-veil">
+							<div class="map-consent-card">
+								<h2>Map disabled until you load it</h2>
+								<p>
+									Loading the map sends your IP address to <strong>MapTiler</strong>,
+									our tile provider in Switzerland. Tap <strong>Load map</strong>
+									below to continue. Your choice is remembered only for this page
+									session — the global setting lives in our
+									<a href="/cookie-notice">cookie notice</a>.
+								</p>
+								<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+									Load map
+								</button>
+							</div>
+						</div>
+					{/if}
 				{:else}
 					<div class="map-card map-card-empty">
 						<span class="material-symbols">map</span>
@@ -692,6 +731,26 @@
 		width: 100%;
 		height: 100%;
 		min-height: 24rem;
+	}
+	.map-consent-veil {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-lg);
+	}
+	.map-consent-card {
+		max-width: 30rem;
+		text-align: start;
+	}
+	.map-consent-card h2 {
+		margin: 0 0 var(--space-sm);
+		font-size: 1.1rem;
+	}
+	.map-consent-card p {
+		margin: 0 0 var(--space-md);
+		line-height: 1.5;
+		color: var(--color-text-secondary);
+		font-size: 0.92rem;
 	}
 
 	.runners {
