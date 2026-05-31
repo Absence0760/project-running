@@ -71,7 +71,8 @@
 	.cta {
 		flex-shrink: 0;
 		padding: var(--space-xs) var(--space-md);
-		background: var(--color-danger, #c1413f);
+		/* WCAG AA: white on --color-danger was 3.06:1 in dark; -strong is 6.06:1. */
+		background: var(--color-danger-strong, #B0392C);
 		color: white;
 		border: none;
 		border-radius: var(--radius-sm);

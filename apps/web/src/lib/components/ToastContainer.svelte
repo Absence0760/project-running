@@ -49,11 +49,15 @@
 		color: var(--color-text);
 	}
 	.toast-success {
-		background: var(--color-success);
+		/* WCAG 2.2 AA: white on --color-success was 3.28:1 (light) /
+		   2.22:1 (dark). --color-success-strong is 5.13:1. */
+		background: var(--color-success-strong);
 		color: white;
 	}
 	.toast-error {
-		background: var(--color-danger);
+		/* WCAG 2.2 AA: white on --color-danger was 3.06:1 in dark mode.
+		   --color-danger-strong is 6.06:1 in both themes. */
+		background: var(--color-danger-strong);
 		color: white;
 	}
 	@keyframes slide-in {

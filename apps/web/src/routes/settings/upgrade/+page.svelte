@@ -305,7 +305,8 @@
 		color: var(--color-text-secondary);
 	}
 	.pro-badge {
-		background: var(--color-success);
+		/* WCAG AA: white on --color-success was 3.28/2.22:1; -strong is 5.13:1. */
+		background: var(--color-success-strong);
 		color: white;
 		font-size: 0.7rem;
 		font-weight: 700;

@@ -432,7 +432,9 @@
 		top: 0;
 		inset-inline: 0;
 		z-index: var(--z-toast, 100);
-		background: var(--color-warning, #b45309);
+		/* WCAG 2.2 AA: white on --color-warning (#E6A96B) was 2.05:1.
+		   --color-warning-strong (#9A5B0A) is 5.42:1. */
+		background: var(--color-warning-strong, #9A5B0A);
 		color: white;
 		padding: 0.5rem var(--space-md);
 		font-size: 0.85rem;

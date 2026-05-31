@@ -14,6 +14,15 @@
 	--color-warning: #E6A96B;
 	--color-success: #4A9F5A;
 	--color-success-light: rgba(74, 159, 90, 0.10);
+	/* "-strong" variants are dark enough for WHITE text at WCAG 2.2 AA
+	   (>=4.5:1) — used only as solid status backgrounds (toasts, the
+	   offline banner). The base tokens above stay tuned for accent /
+	   border / icon use on light surfaces. Theme-independent: each is
+	   already dark in both light and dark mode.
+	   white-on contrast: success 5.13, danger 6.06, warning 5.42. */
+	--color-success-strong: #2E7D32;
+	--color-danger-strong: #B0392C;
+	--color-warning-strong: #9A5B0A;
 
 	--color-accent-orange: #F2A07B;
 	--color-accent-pink: #E8B89A;

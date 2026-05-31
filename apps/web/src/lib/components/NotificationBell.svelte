@@ -343,7 +343,9 @@
 		padding: 0 var(--space-xs);
 		display: inline-grid;
 		place-items: center;
-		background: var(--color-danger);
+		/* WCAG AA: 0.62rem bold white on --color-danger was 3.06:1 in dark
+		   (normal-text threshold applies at this size); -strong is 6.06:1. */
+		background: var(--color-danger-strong);
 		color: white;
 		font-size: 0.62rem;
 		font-weight: 700;

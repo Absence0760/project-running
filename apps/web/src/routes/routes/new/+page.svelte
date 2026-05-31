@@ -1358,7 +1358,8 @@
 		max-width: 28rem;
 		padding: var(--space-sm) var(--space-md);
 		border-radius: var(--radius-md);
-		background: var(--color-danger);
+		/* WCAG AA: white on --color-danger was 3.06:1 in dark; -strong is 6.06:1. */
+		background: var(--color-danger-strong);
 		color: white;
 		box-shadow: var(--shadow-lg);
 		font-size: 0.9rem;
@@ -1367,7 +1368,8 @@
 	   dropped. Visually distinct from a hard failure so the user
 	   doesn't think their work was lost. */
 	.routing-error.routing-warning {
-		background: var(--color-warning, #b45309);
+		/* WCAG AA: white on --color-warning was 2.05:1; -strong is 5.42:1. */
+		background: var(--color-warning-strong, #9A5B0A);
 	}
 	.routing-error-text {
 		flex: 1;

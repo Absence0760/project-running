@@ -67,6 +67,37 @@ const THEMES: Array<{ label: string; marker: string }> = [
 	{ label: 'dark ([data-theme="dark"])', marker: ':root[data-theme="dark"]' },
 ];
 
+// Solid status surfaces (toasts, the offline banner) render WHITE text on
+// the "-strong" status tokens. The base --color-success / --color-danger /
+// --color-warning shipped at 2.05-3.28:1 with white (accessibility audit
+// 2026-05-30 High); the "-strong" variants must clear AA. They live once
+// in :root and are theme-independent (already dark in both themes).
+test('solid status "-strong" tokens meet WCAG AA with white text', () => {
+	const root = block(':root {');
+	const WHITE = '#FFFFFF';
+	const STRONG = ['color-success-strong', 'color-danger-strong', 'color-warning-strong'];
+	for (const name of STRONG) {
+		const hex = tokenIn(root, name);
+		const ratio = contrastRatio(WHITE, hex);
+		assert.ok(
+			ratio >= AA_NORMAL,
+			`white on --${name} (${hex}) is ${ratio.toFixed(2)}:1; WCAG AA requires >=${AA_NORMAL}:1 for the solid status surfaces that use it.`,
+		);
+	}
+	// Pin theme-independence: a dark-mode override would shadow the
+	// AA-checked :root value with an unchecked one, so the dark blocks
+	// must NOT redefine these tokens.
+	for (const marker of ['@media (prefers-color-scheme: dark)', ':root[data-theme="dark"]']) {
+		const b = block(marker);
+		for (const name of STRONG) {
+			assert.ok(
+				!b.includes(`--${name}:`),
+				`--${name} must not be redefined in the ${marker} block — it is AA-checked only in :root and must stay theme-independent.`,
+			);
+		}
+	}
+});
+
 for (const { label, marker } of THEMES) {
 	test(`text tokens meet WCAG AA on every surface — ${label}`, () => {
 		const b = block(marker);
