@@ -111,6 +111,13 @@
 	// panel (and the count chip) render straight off the same fetch
 	// the map pins use.
 	let routePins = $state<DiscoverableRoutePin[]>([]);
+	// Side list panel — the textual, scrollable twin of the map pins.
+	// Default-open so the discovery surface reads as a browser, not a
+	// bare map. Collapsible for users who want the full canvas.
+	let listOpen = $state(true);
+	const activeFilterLabel = $derived(
+		FILTERS.find((f) => f.id === routeFilter)?.label ?? '',
+	);
 
 	onMount(() => {
 		const prefersDark =
@@ -1008,6 +1015,57 @@
 			</div>
 		{/if}
 	</aside>
+
+		<aside
+			class="route-list"
+			class:collapsed={!listOpen}
+			data-testid="heatmap-list"
+			aria-label="Routes in view"
+		>
+			<button
+				type="button"
+				class="route-list-toggle"
+				onclick={() => (listOpen = !listOpen)}
+				aria-expanded={listOpen}
+			>
+				<span class="material-symbols">{listOpen ? 'right_panel_close' : 'list'}</span>
+				<span class="route-list-toggle-text">
+					<strong>{routePinsCount}</strong>
+					{routePinsCount === 1 ? 'route' : 'routes'}
+					<span class="route-list-toggle-lens">· {activeFilterLabel}</span>
+				</span>
+			</button>
+			{#if listOpen}
+				<ul class="route-list-items">
+					{#each routePins as r (r.id)}
+						<li>
+							<a
+								class="route-list-row"
+								class:featured={r.featured}
+								href="/routes/{r.id}"
+								data-sveltekit-preload-data="hover"
+								data-route-id={r.id}
+								onmouseenter={() => openHoverTip([r.lng, r.lat], r.name)}
+								onmouseleave={closeHoverTip}
+							>
+								<span class="route-list-name">
+									{#if r.featured}<span class="route-list-star" title="Featured">★</span>{/if}
+									{r.name}
+								</span>
+								<span class="route-list-meta">
+									{formatDistance(r.distance_m)}{#if r.surface} · {r.surface}{/if}{#if r.run_count > 0}
+										· {r.run_count} run{r.run_count === 1 ? '' : 's'}{/if}
+								</span>
+							</a>
+						</li>
+					{:else}
+						<li class="route-list-empty">
+							No routes here yet. Pan the map or try another lens.
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</aside>
 </div>
 
 <style>
@@ -1449,5 +1507,101 @@
 	:global(.heatmap-hover-tip .maplibregl-popup-tip) {
 		border-top-color: var(--color-border);
 		border-bottom-color: var(--color-border);
+	}
+
+	/*
+	 * Viewport-synced route list — the scrollable, textual twin of the
+	 * map pins. Docked to the right edge below the MapLibre nav controls
+	 * (top:5.25rem clears them). Renders straight off `routePins`, so it
+	 * tracks every pan / lens change the pins do. Hovering a row pops the
+	 * same name tooltip the map uses, tying the two surfaces together.
+	 */
+	.route-list {
+		position: absolute;
+		top: 5.25rem;
+		bottom: var(--space-md);
+		inset-inline-end: var(--space-md);
+		z-index: 2;
+		width: 17rem;
+		max-width: calc(100% - 2rem);
+		display: flex;
+		flex-direction: column;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		overflow: hidden;
+	}
+	.route-list.collapsed {
+		bottom: auto;
+		width: auto;
+	}
+	.route-list-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.55rem 0.75rem;
+		background: var(--color-surface);
+		border: 0;
+		border-bottom: 1px solid var(--color-border);
+		color: var(--color-text);
+		font-size: 0.85rem;
+		cursor: pointer;
+		text-align: start;
+		flex-shrink: 0;
+	}
+	.route-list.collapsed .route-list-toggle {
+		border-bottom: 0;
+	}
+	.route-list-toggle .material-symbols {
+		font-size: 1.2rem;
+		color: var(--color-text-secondary);
+	}
+	.route-list-toggle-text strong {
+		font-variant-numeric: tabular-nums;
+	}
+	.route-list-toggle-lens {
+		color: var(--color-text-tertiary);
+	}
+	.route-list-items {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		overflow-y: auto;
+		flex: 1 1 auto;
+	}
+	.route-list-row {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+		padding: 0.5rem 0.75rem;
+		text-decoration: none;
+		color: var(--color-text);
+		border-bottom: 1px solid var(--color-border);
+	}
+	.route-list-row:hover {
+		background: var(--color-surface-hover);
+	}
+	.route-list-row.featured {
+		border-inline-start: 3px solid #facc15;
+	}
+	.route-list-name {
+		font-size: 0.85rem;
+		font-weight: 600;
+		line-height: 1.25;
+	}
+	.route-list-star {
+		color: #facc15;
+	}
+	.route-list-meta {
+		font-size: 0.74rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.route-list-empty {
+		padding: 1rem 0.75rem;
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+		list-style: none;
 	}
 </style>

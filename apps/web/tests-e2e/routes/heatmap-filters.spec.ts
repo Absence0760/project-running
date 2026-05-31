@@ -283,3 +283,60 @@ test.describe('Heatmap route-pin clustering (web)', () => {
 		}
 	});
 });
+
+test.describe('Heatmap route list panel (web)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	async function flyToVA(page: import('@playwright/test').Page) {
+		await page.evaluate(async () => {
+			type MapHandle = {
+				flyTo: (o: { center: [number, number]; zoom: number }) => void;
+				once: (event: string, cb: () => void) => void;
+			};
+			const m = (window as unknown as { __heatmapMap?: MapHandle }).__heatmapMap;
+			if (!m) return;
+			await new Promise<void>((resolve) => {
+				m.once('moveend', () => resolve());
+				m.flyTo({ center: [-78, 38], zoom: 7 });
+			});
+		});
+		await page.waitForTimeout(900);
+	}
+
+	test('list mirrors the lens and a row navigates to the route', async ({ page }) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+		await flyToVA(page);
+
+		const list = page.getByTestId('heatmap-list');
+		await expect(list).toBeVisible();
+		const rows = list.locator('.route-list-row');
+		// Default popular lens: 6 VA routes.
+		await expect(rows).toHaveCount(6, { timeout: 6000 });
+
+		// Switching to Featured narrows the list to the 3 featured routes.
+		await page.getByTestId('heatmap-filters').locator('[data-filter="featured"]').click();
+		await expect(rows).toHaveCount(3, { timeout: 6000 });
+
+		// A row links to its route detail and navigates client-side.
+		const href = await rows.first().getAttribute('href');
+		expect(href).toMatch(/^\/routes\/[0-9a-f-]+$/);
+		await rows.first().click();
+		await expect(page).toHaveURL(/\/routes\/[0-9a-f-]+$/);
+	});
+
+	test('the panel collapses + restores', async ({ page }) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+		await flyToVA(page);
+
+		const list = page.getByTestId('heatmap-list');
+		await expect(list.locator('.route-list-items')).toBeVisible();
+		await list.locator('.route-list-toggle').click();
+		await expect(list.locator('.route-list-items')).toHaveCount(0);
+		await list.locator('.route-list-toggle').click();
+		await expect(list.locator('.route-list-items')).toBeVisible();
+	});
+});
