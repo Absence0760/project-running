@@ -82,3 +82,7 @@ apps/backend/supabase/.temp/
 # Audit / review working notes — local-only, not committed (see reviews/README.md)
 reviews/*
 !reviews/README.md
+# Safety net: stray finding artifacts belong in reviews/, but catch the legacy /
+# ad-hoc locations so they can't be accidentally committed from the repo root.
+persona-round*/
+audit-findings-*.md
