@@ -131,6 +131,36 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// event_results — own race finish records (time, rank, DNF/DNS,
 		// age-grade). audit/data-export-completeness (2026-05-30) Critical.
 		{ entry: 'event_results.json', table: 'event_results', filter: uidEq, select: '*' },
+		// event_result_claims — the subject's own result claims (status +
+		// who decided). audit-findings (2026-05-30) High.
+		{
+			entry: 'event_result_claims.json',
+			table: 'event_result_claims',
+			filter: `claimant_id=eq.${userId}`,
+			select: '*',
+		},
+		// user_blocks — the subject's own block list. High.
+		{
+			entry: 'user_blocks.json',
+			table: 'user_blocks',
+			filter: `blocker_id=eq.${userId}`,
+			select: '*',
+		},
+		// club_posts — club-feed posts the subject authored. High.
+		{
+			entry: 'club_posts.json',
+			table: 'club_posts',
+			filter: `author_id=eq.${userId}`,
+			select: '*',
+		},
+		// event_exceptions — recurring-event instance cancellations the
+		// subject made. High.
+		{
+			entry: 'event_exceptions.json',
+			table: 'event_exceptions',
+			filter: `cancelled_by=eq.${userId}`,
+			select: '*',
+		},
 	];
 }
 

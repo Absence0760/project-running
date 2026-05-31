@@ -124,6 +124,10 @@ func (b *dataexportBackend) DownloadRawTrackBytes(ctx context.Context, path stri
 	return b.client.DownloadRawTrackBytes(ctx, path)
 }
 
+func (b *dataexportBackend) DownloadPhoto(ctx context.Context, path string) ([]byte, string, error) {
+	return b.client.DownloadPhoto(ctx, path)
+}
+
 func (b *dataexportBackend) FetchExportPersonalDataTables(ctx context.Context, userID string) (map[string][]map[string]interface{}, error) {
 	return b.client.FetchExportPersonalDataTables(ctx, userID)
 }

@@ -14,13 +14,15 @@ const TEST_UID = '00000000-0000-0000-0000-000000000abc';
 
 Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	const specs = buildBackupSpecs(TEST_UID);
-	// 29 entries matches the Go worker's spec list (May 2026 +
+	// 33 entries matches the Go worker's spec list (May 2026 +
 	// reports_against_me + the 2026-05-30 Critical batch:
 	// direct_messages × 2 directions, coach_athletes × 2 directions,
-	// event_results); a regression that drops one of these is a silent
-	// Art 20 completeness gap. Keep in lockstep with the Go worker's
-	// `FetchExportPersonalDataTables` spec list.
-	assertEquals(specs.length, 29, `expected 29 specs, got ${specs.length}`);
+	// event_results + the 2026-05-30 High batch: event_result_claims,
+	// user_blocks, club_posts, event_exceptions); a regression that
+	// drops one of these is a silent Art 20 completeness gap. Keep in
+	// lockstep with the Go worker's `FetchExportPersonalDataTables`
+	// spec list.
+	assertEquals(specs.length, 33, `expected 33 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -52,6 +54,10 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'coaching_as_coach.json',
 		'coaching_as_athlete.json',
 		'event_results.json',
+		'event_result_claims.json',
+		'user_blocks.json',
+		'club_posts.json',
+		'event_exceptions.json',
 	]) {
 		assertEquals(entries.has(expected), true, `missing entry: ${expected}`);
 	}

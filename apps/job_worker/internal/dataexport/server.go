@@ -37,6 +37,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"path"
 	"sort"
 	"strings"
 	"time"
@@ -105,12 +106,14 @@ type Backend interface {
 	// `routes` selection the mobile / web backup writers do.
 	FetchExportRoutes(ctx context.Context, userID string) ([]ExportRoute, error)
 
-	// FetchExportProfile returns the user's profile via the
-	// `get_my_profile` SECURITY DEFINER RPC. Column-level revokes
-	// on `subscription_tier` / `parkrun_number` / `subscription_at`
-	// (migration 20260707_001) require this path rather than a
-	// direct table select. Returns nil + nil error when the row
-	// is absent (new account).
+	// FetchExportProfile returns the user's profile via a direct
+	// service-role select on `user_profiles` (NOT `get_my_profile`,
+	// which keys on auth.uid() and would return empty for the
+	// service-role worker). The column-level revokes on
+	// `subscription_tier` / `parkrun_number` / `subscription_at`
+	// (migration 20260707_001) are scoped to `authenticated`;
+	// service_role keeps full column access. Returns nil + nil error
+	// when the row is absent (new account).
 	FetchExportProfile(ctx context.Context, userID string) (map[string]interface{}, error)
 
 	// FetchUserSettingsPrefs returns the user's `user_settings.prefs`
@@ -126,6 +129,14 @@ type Backend interface {
 	// track is missing — the run row still ships, just without a
 	// `tracks/{id}.json.gz` entry.
 	DownloadRawTrackBytes(ctx context.Context, path string) ([]byte, error)
+
+	// DownloadPhoto pulls the raw bytes (+ Content-Type) of a
+	// run-photos Storage object. The Art 20 export bundles the photo
+	// files themselves, not just their metadata rows (audit-findings
+	// 2026-05-30 High). Returns a non-nil error when the object is
+	// missing or the fetch fails; the builder tolerates that per-photo
+	// and ships the zip without the failed entry.
+	DownloadPhoto(ctx context.Context, path string) ([]byte, string, error)
 
 	// FetchExportPersonalDataTables bundles every additional table
 	// the audit/data-export-completeness pass added to the export
@@ -361,7 +372,7 @@ func (s *Server) handle(w http.ResponseWriter, r *http.Request) {
 			UserID:        userID,
 			ExportedFrom:  "go-service",
 			ExtraTables:   extras,
-		}, s.Backend.DownloadRawTrackBytes)
+		}, s.Backend.DownloadRawTrackBytes, s.Backend.DownloadPhoto)
 		if err != nil {
 			s.log().Error("dataexport: backup zip build failed", "err", err, "user_id", userID)
 			http.Error(w, `{"error":"export_build_failed"}`, http.StatusInternalServerError)
@@ -646,6 +657,12 @@ type BuildBackupZipInput struct {
 // form so restore is a byte-for-byte upload.
 type RawTrackFetcher func(ctx context.Context, path string) ([]byte, error)
 
+// PhotoFetcher pulls the raw bytes (+ Content-Type) for a run-photos
+// Storage object. Sibling of RawTrackFetcher; the backup format
+// archives the photo files under `photos/` so an Art 20 export carries
+// the images themselves, not just `run_photos.json` metadata.
+type PhotoFetcher func(ctx context.Context, path string) ([]byte, string, error)
+
 // BackupFormatVersion is the manifest's `version` field. Bump only
 // when the on-disk shape changes incompatibly; readers reject
 // versions above the one they know.
@@ -663,7 +680,7 @@ const BackupFormatName = "run-app-backup"
 // web. Track download failures are silently swallowed — the row
 // stays in the manifest, the `tracks/...` entry is omitted, the
 // zip ships.
-func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher RawTrackFetcher) ([]byte, error) {
+func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher RawTrackFetcher, photoFetcher PhotoFetcher) ([]byte, error) {
 	var buf bytes.Buffer
 	zw := zip.NewWriter(&buf)
 
@@ -805,12 +822,57 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		}
 	}
 
-	// manifest last so the counts include the actual tracks +
-	// extra tables that made it in.
+	// Photos — the image bytes themselves, archived under `photos/`
+	// so the Art 20 export carries the subject's run photos and not
+	// just the `run_photos.json` metadata (audit-findings 2026-05-30
+	// High). Rows come from the already-fetched run_photos extra
+	// table; each `storage_path` is `{owner_id}/{photo_id}.ext` and we
+	// keep the basename (`{photo_id}.ext`) as the zip entry so the
+	// extension/content survives. Download failures are tolerated
+	// per-photo — the metadata row already shipped; the zip closes
+	// without the missing image (same contract as tracks).
+	photosAdded := 0
+	if photoFetcher != nil && in.ExtraTables != nil {
+		for _, row := range in.ExtraTables["run_photos.json"] {
+			sp, _ := row["storage_path"].(string)
+			if sp == "" {
+				continue
+			}
+			// Defence in depth alongside the run_photos_storage_path_shape
+			// CHECK (migration 20260622): only fetch a canonical,
+			// non-absolute Storage key so a malformed row can't feed
+			// `..`/`/etc/...` into the service-role downloader's URL or
+			// land a traversal entry name in the zip (mirrors the track
+			// loop's path-shape assertion).
+			if sp != path.Clean(sp) || strings.HasPrefix(sp, "/") || strings.Contains(sp, "..") {
+				continue
+			}
+			body, _, err := photoFetcher(ctx, sp)
+			if err != nil || len(body) == 0 {
+				continue
+			}
+			header := &zip.FileHeader{
+				Name:   "photos/" + path.Base(sp),
+				Method: zip.Store, // JPEG/PNG are already compressed
+			}
+			fw, err := zw.CreateHeader(header)
+			if err != nil {
+				return nil, err
+			}
+			if _, err := fw.Write(body); err != nil {
+				return nil, err
+			}
+			photosAdded++
+		}
+	}
+
+	// manifest last so the counts include the actual tracks + photos
+	// + extra tables that made it in.
 	counts := map[string]interface{}{
 		"runs":   len(in.Runs),
 		"routes": len(in.Routes),
 		"tracks": tracksAdded,
+		"photos": photosAdded,
 	}
 	for k, v := range extraCounts {
 		counts[k] = v

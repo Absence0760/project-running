@@ -11,6 +11,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -21,16 +23,16 @@ import (
 const testJWTSecret = "test-jwt-secret"
 
 type fakeBackend struct {
-	denied        bool
-	retryAfter    int
-	rateErr       error
-	runs          []ExportRun
-	runsErr       error
-	trackByPath   map[string][]TrackPoint
-	uploads       []uploadCall
-	uploadErr     error
-	signedURL     string
-	signURLErr    error
+	denied      bool
+	retryAfter  int
+	rateErr     error
+	runs        []ExportRun
+	runsErr     error
+	trackByPath map[string][]TrackPoint
+	uploads     []uploadCall
+	uploadErr   error
+	signedURL   string
+	signURLErr  error
 	// Backup-format extras (format=backup only).
 	routes        []ExportRoute
 	routesErr     error
@@ -43,6 +45,9 @@ type fakeBackend struct {
 	// audit/data-export-completeness extras (format=backup only).
 	extraTables    map[string][]map[string]interface{}
 	extraTablesErr error
+	// run-photos bytes (format=backup only) — keyed by storage_path.
+	photoBytes map[string][]byte
+	photoErr   map[string]error
 }
 
 type uploadCall struct {
@@ -106,6 +111,19 @@ func (f *fakeBackend) DownloadRawTrackBytes(_ context.Context, path string) ([]b
 		}
 	}
 	return f.rawTrackBytes[path], nil
+}
+
+func (f *fakeBackend) DownloadPhoto(_ context.Context, path string) ([]byte, string, error) {
+	if f.photoErr != nil {
+		if err, ok := f.photoErr[path]; ok {
+			return nil, "", err
+		}
+	}
+	b, ok := f.photoBytes[path]
+	if !ok {
+		return nil, "", fmt.Errorf("photo not found: %s", path)
+	}
+	return b, "image/jpeg", nil
 }
 
 func signTestToken(t *testing.T, sub string, expDelta int) string {
@@ -577,7 +595,7 @@ func TestBuildBackupZip_ProducesValidArchive(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, Routes: routes, Profile: profile, SettingsPrefs: prefs,
 		UserID: "uid", ExportedFrom: "test",
-	}, fetcher)
+	}, fetcher, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -678,7 +696,7 @@ func TestBuildBackupZip_PartialTrackFailureDoesNotSinkArchive(t *testing.T) {
 
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "uid", ExportedFrom: "test",
-	}, fetcher)
+	}, fetcher, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -709,6 +727,85 @@ func TestBuildBackupZip_PartialTrackFailureDoesNotSinkArchive(t *testing.T) {
 	}
 }
 
+func TestBuildBackupZip_BundlesRunPhotoBytes(t *testing.T) {
+	// audit-findings 2026-05-30 High: the Art 20 export must carry the
+	// photo bytes, not just `run_photos.json` metadata. The rows come in
+	// via ExtraTables; each storage_path's bytes land under `photos/`.
+	good := "uid/photo-good.jpg"
+	bad := "uid/photo-bad.jpg"
+	imgBytes := []byte{0xFF, 0xD8, 0xFF, 0xE0, 0x00, 0x10} // JPEG magic-ish
+	extras := map[string][]map[string]interface{}{
+		"run_photos.json": {
+			{"id": "photo-good", "storage_path": good, "caption": "hi"},
+			{"id": "photo-bad", "storage_path": bad},
+			{"id": "photo-none"},                                        // no storage_path → skipped silently
+			{"id": "photo-evil", "storage_path": "../../../etc/passwd"}, // traversal → skipped before fetch
+			{"id": "photo-abs", "storage_path": "/etc/passwd"},          // absolute → skipped before fetch
+		},
+	}
+	photoFetcher := func(_ context.Context, p string) ([]byte, string, error) {
+		// A malformed/traversal path must be rejected BEFORE it reaches
+		// the service-role downloader — the fetcher fails the test if
+		// asked to download one.
+		if p != path.Clean(p) || strings.HasPrefix(p, "/") || strings.Contains(p, "..") {
+			t.Errorf("photoFetcher must not be called with a non-canonical path: %q", p)
+		}
+		if p == good {
+			return imgBytes, "image/jpeg", nil
+		}
+		return nil, "", errors.New("synthetic photo download failure")
+	}
+
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, photoFetcher)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zr, _ := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	entries := map[string][]byte{}
+	var manifest map[string]any
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		b, _ := io.ReadAll(rc)
+		rc.Close()
+		entries[f.Name] = b
+		if f.Name == "manifest.json" {
+			_ = json.Unmarshal(b, &manifest)
+		}
+	}
+	// The good photo's bytes are archived verbatim under its basename.
+	got, ok := entries["photos/photo-good.jpg"]
+	if !ok {
+		t.Fatalf("photos/photo-good.jpg missing; entries=%v", keysOf(entries))
+	}
+	if !bytes.Equal(got, imgBytes) {
+		t.Errorf("photo bytes mismatch: got %v want %v", got, imgBytes)
+	}
+	// The failed download is omitted, not fatal.
+	if _, ok := entries["photos/photo-bad.jpg"]; ok {
+		t.Errorf("failed photo should be absent")
+	}
+	// Metadata row still ships regardless of byte-download outcome.
+	if _, ok := entries["run_photos.json"]; !ok {
+		t.Errorf("run_photos.json metadata should still ship")
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["photos"] != float64(1) {
+		t.Errorf("counts[photos]=%v (want 1)", counts["photos"])
+	}
+}
+
+func keysOf(m map[string][]byte) []string {
+	ks := make([]string, 0, len(m))
+	for k := range m {
+		ks = append(ks, k)
+	}
+	sort.Strings(ks)
+	return ks
+}
+
 func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
 	// Path-shape assertion: a malformed track_url (legacy / corrupt
 	// row) must not feed an unconstrained string into the
@@ -724,7 +821,7 @@ func TestBuildBackupZip_TrackUrlShapeMismatchSkipsTrack(t *testing.T) {
 	}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "uid", ExportedFrom: "test",
-	}, fetcher)
+	}, fetcher, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -744,7 +841,7 @@ func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T)
 		UserID: "uid", ExportedFrom: "test",
 	}, func(_ context.Context, _ string) ([]byte, error) {
 		return nil, errors.New("must not be called")
-	})
+	}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -757,7 +854,7 @@ func TestBuildBackupZip_EmptyInputProducesValidManifestOnlyArchive(t *testing.T)
 func TestBuildBackupZip_NilProfileSerialisesAsNull(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test", Profile: nil,
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -967,11 +1064,11 @@ func TestBuildBackupZip_PathTraversalAttemptIsBlocked(t *testing.T) {
 	traversalAttempts := []string{
 		"../../../etc/passwd",
 		"/etc/passwd",
-		"other-user/run-1.json.gz",       // wrong owner prefix
-		"uid/../other-user/r-1.json.gz",  // dot-dot mid-string
-		"uid/run-1.json",                  // wrong suffix
-		"uid//run-1.json.gz",              // double slash
-		"uid/r-1.json.gz/extra",           // suffix-after-suffix
+		"other-user/run-1.json.gz",      // wrong owner prefix
+		"uid/../other-user/r-1.json.gz", // dot-dot mid-string
+		"uid/run-1.json",                // wrong suffix
+		"uid//run-1.json.gz",            // double slash
+		"uid/r-1.json.gz/extra",         // suffix-after-suffix
 	}
 	for _, attempt := range traversalAttempts {
 		t.Run(attempt, func(t *testing.T) {
@@ -987,7 +1084,7 @@ func TestBuildBackupZip_PathTraversalAttemptIsBlocked(t *testing.T) {
 			}
 			body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 				Runs: runs, UserID: "uid", ExportedFrom: "test",
-			}, fetcher)
+			}, fetcher, nil)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -1038,7 +1135,7 @@ func TestBuildBackupZip_ManyRoutesAndTracksScale(t *testing.T) {
 	start := time.Now()
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, Routes: routes, UserID: "uid", ExportedFrom: "test",
-	}, fetcher)
+	}, fetcher, nil)
 	elapsed := time.Since(start)
 	if err != nil {
 		t.Fatal(err)
@@ -1081,7 +1178,7 @@ func TestBuildBackupZip_RouteWithNilPointerFieldsRoundTrips(t *testing.T) {
 	}}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Routes: routes, UserID: "uid", ExportedFrom: "test",
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1126,7 +1223,7 @@ func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
 	}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: runs, UserID: "new-uid", ExportedFrom: "test",
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1150,7 +1247,7 @@ func TestBuildBackupZip_StripsUserIdFromRuns(t *testing.T) {
 func TestBuildBackupZip_ManifestExportedFromIsPreserved(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "go-service-test",
-	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil })
+	}, func(_ context.Context, _ string) ([]byte, error) { return nil, nil }, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1228,7 +1325,7 @@ func TestBuildBackupZip_ExtraTablesAppearAsZipEntries(t *testing.T) {
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		Runs: nil, Routes: nil, UserID: "uid", ExportedFrom: "test",
 		ExtraTables: extras,
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1287,7 +1384,7 @@ func TestBuildBackupZip_ExtraTablesContentIsPreservedAsArray(t *testing.T) {
 	}
 	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
 		UserID: "uid", ExportedFrom: "test", ExtraTables: extras,
-	}, nil)
+	}, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

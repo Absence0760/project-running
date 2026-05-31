@@ -1093,18 +1093,19 @@ type exportRouteRow struct {
 	UpdatedAt   *string                `json:"updated_at,omitempty"`
 }
 
-// FetchExportProfile reads the user's profile via the
-// `get_my_profile` SECURITY DEFINER RPC. Column-level revokes on
+// FetchExportProfile reads the user's profile with a direct
+// service-role select on `user_profiles`, NOT via `get_my_profile()`.
+// The RPC keys on `auth.uid()`, which is empty for a service-role
+// caller, so it would return an empty profile for the export worker
+// (audit-findings 2026-05-30 High — this path was flagged to confirm
+// it doesn't silently strand the profile section; it doesn't, because
+// it never calls the RPC). The column-level revokes on
 // `subscription_tier` / `parkrun_number` / `subscription_at`
-// (migration 20260707_001) require this path rather than a direct
-// table select. Returns nil + nil when no row exists yet.
+// (migration 20260707_001) are scoped to `authenticated`; `service_role`
+// retains full column access, so the direct select below returns
+// `parkrun_number` + `date_of_birth` fine. Returns nil + nil when no
+// row exists yet.
 func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) (map[string]interface{}, error) {
-	// `get_my_profile` reads `auth.uid()` from the JWT; service-role
-	// has no auth.uid() so we pass `p_user_id` for the explicit
-	// path. Schema: the function signature is `get_my_profile()` —
-	// **but** for service-role we need to read directly since the
-	// RPC trusts JWT claims. Fall back to a direct select that
-	// excludes the column-restricted fields the export doesn't need.
 	q := url.Values{}
 	q.Set("id", "eq."+userID)
 	// audit/data-export-completeness (May 2026): `birth_year` was
@@ -1228,8 +1229,9 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			name: "run_comments.json", table: "run_comments",
 			filter: "author_id=eq." + userID, sel: "*",
 		},
-		// run_photos metadata. Storage objects are deferred (see
-		// audit Medium re: run-photos bucket walk).
+		// run_photos metadata. The image bytes themselves are bundled
+		// under `photos/` by BuildBackupZip via DownloadPhoto, keyed off
+		// each row's `storage_path` (audit-findings 2026-05-30 High).
 		{name: "run_photos.json", table: "run_photos", filter: "owner_id=eq." + userID, sel: "*"},
 		// segment_efforts — performance history.
 		{name: "segment_efforts.json", table: "segment_efforts", filter: uidEq, sel: "*"},
@@ -1329,6 +1331,34 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// rank, DNF/DNS, age-grade). Health-adjacent performance data.
 		// audit/data-export-completeness (2026-05-30) Critical.
 		{name: "event_results.json", table: "event_results", filter: uidEq, sel: "*"},
+		// event_result_claims — the subject's own "this result is me"
+		// claims (status + decision). `decided_by` belongs to the
+		// organiser who ruled on it, so the projection keeps it (it's a
+		// recipient disclosure under Art 15(1)(c)) but the filter is the
+		// subject's claimant_id. audit-findings (2026-05-30) High.
+		{
+			name: "event_result_claims.json", table: "event_result_claims",
+			filter: "claimant_id=eq." + userID, sel: "*",
+		},
+		// user_blocks — the subject's own block list (who they blocked +
+		// why). audit-findings (2026-05-30) High.
+		{
+			name: "user_blocks.json", table: "user_blocks",
+			filter: "blocker_id=eq." + userID, sel: "*",
+		},
+		// club_posts — club-feed posts the subject authored.
+		// audit-findings (2026-05-30) High.
+		{
+			name: "club_posts.json", table: "club_posts",
+			filter: "author_id=eq." + userID, sel: "*",
+		},
+		// event_exceptions — recurring-event instance cancellations the
+		// subject made (cancelled_by + reason). audit-findings
+		// (2026-05-30) High.
+		{
+			name: "event_exceptions.json", table: "event_exceptions",
+			filter: "cancelled_by=eq." + userID, sel: "*",
+		},
 	}
 
 	out := make(map[string][]map[string]interface{}, len(specs))

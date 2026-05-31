@@ -848,3 +848,63 @@ func TestFetchExportPersonalDataTables_IncludesCriticalCommsTables(t *testing.T)
 		}
 	}
 }
+
+// audit-findings (2026-05-30) High pinned four more tables missing from
+// the Art 20 export: event_result_claims (own result claims),
+// user_blocks (own block list), club_posts (own authored posts), and
+// event_exceptions (own instance cancellations). Each must appear when
+// the subject has rows, scoped to the subject's own id column.
+func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
+	var claimsQ, blocksQ, postsQ, exceptionsQ string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		path := r.URL.Path
+		query := r.URL.RawQuery
+		switch {
+		case strings.Contains(path, "/rest/v1/event_result_claims"):
+			claimsQ = query
+			_, _ = w.Write([]byte(`[{"id":"rc1","status":"approved"}]`))
+		case strings.Contains(path, "/rest/v1/user_blocks"):
+			blocksQ = query
+			_, _ = w.Write([]byte(`[{"blocker_id":"user-A","blocked_id":"user-B"}]`))
+		case strings.Contains(path, "/rest/v1/club_posts"):
+			postsQ = query
+			_, _ = w.Write([]byte(`[{"id":"cp1","body":"hello club"}]`))
+		case strings.Contains(path, "/rest/v1/event_exceptions"):
+			exceptionsQ = query
+			_, _ = w.Write([]byte(`[{"event_id":"e1","reason":"weather"}]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{
+		"event_result_claims.json",
+		"user_blocks.json",
+		"club_posts.json",
+		"event_exceptions.json",
+	} {
+		if rows, ok := out[key]; !ok || len(rows) == 0 {
+			t.Errorf("%s must appear in the export manifest with at least one row — audit-findings (2026-05-30) High; got out=%v", key, extraTableKeys(out))
+		}
+	}
+
+	// Each query must be scoped to the subject's own id column (matching
+	// the TS twin in backup_spec.test.ts).
+	for _, c := range []struct {
+		name, query, want string
+	}{
+		{"event_result_claims", claimsQ, "claimant_id=eq.user-A"},
+		{"user_blocks", blocksQ, "blocker_id=eq.user-A"},
+		{"club_posts", postsQ, "author_id=eq.user-A"},
+		{"event_exceptions", exceptionsQ, "cancelled_by=eq.user-A"},
+	} {
+		if !strings.Contains(c.query, c.want) {
+			t.Errorf("%s must be filtered by %q (scoped to the subject); got query=%q", c.name, c.want, c.query)
+		}
+	}
+}
