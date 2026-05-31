@@ -422,3 +422,93 @@ test.describe('Heatmap results sidebar (web)', () => {
 		await expect(sidebar).toBeVisible();
 	});
 });
+
+test.describe('Heatmap hover-to-preview (web)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	// LineString features currently drawn in the route-preview source.
+	function lineCount(page: import('@playwright/test').Page) {
+		return page.evaluate(() => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return -1;
+			return m
+				.querySourceFeatures('heatmap-routes')
+				.filter((f: { geometry?: { type?: string } }) => f.geometry?.type === 'LineString')
+				.length;
+		});
+	}
+
+	test('routes stay hidden until a row is hovered, then the line + row sync', async ({
+		page,
+	}) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+		await flyToVA(page);
+
+		// Nothing is drawn by default — the route lines are hidden.
+		expect(await lineCount(page)).toBe(0);
+
+		const rows = page.getByTestId('discover-list').locator('.result-row');
+		await expect(rows).toHaveCount(6, { timeout: 6000 });
+		const first = rows.first();
+		await first.hover();
+
+		// The row picks up the synchronized-highlight class...
+		await expect(first).toHaveClass(/hovered/);
+		// ...and the map draws that one route's line + a halo on its dot.
+		await expect.poll(() => lineCount(page), { timeout: 5000 }).toBeGreaterThanOrEqual(1);
+		const halo = await page.evaluate(
+			() =>
+				(window as unknown as { __heatmapMap?: any }).__heatmapMap.querySourceFeatures(
+					'heatmap-route-hl',
+				).length,
+		);
+		expect(halo).toBeGreaterThanOrEqual(1);
+
+		// Moving off the row clears the preview (debounced).
+		await page.mouse.move(2, 2);
+		await expect(first).not.toHaveClass(/hovered/);
+		await expect.poll(() => lineCount(page), { timeout: 5000 }).toBe(0);
+	});
+
+	test('hovering a map dot previews its line and highlights its row', async ({ page }) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+
+		// Fly to a single route (zoom 14 → its pin is an un-clustered leaf)
+		// and project its dot to page coordinates.
+		const screen = await page.evaluate(async ([lng, lat]) => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return null;
+			await new Promise<void>((r) => {
+				m.once('moveend', () => r());
+				m.flyTo({ center: [lng, lat], zoom: 14 });
+			});
+			const deadline = Date.now() + 4000;
+			while (Date.now() < deadline) {
+				const p = m.project([lng, lat]);
+				if (
+					m.queryRenderedFeatures([p.x, p.y], { layers: ['heatmap-route-pins-layer'] })
+						.length > 0
+				)
+					break;
+				await new Promise<void>((r) => setTimeout(r, 150));
+			}
+			const p = m.project([lng, lat]);
+			const rect = m.getContainer().getBoundingClientRect();
+			return { x: rect.left + p.x, y: rect.top + p.y };
+		}, [-77.452, 37.5311]); // Belle Isle (seed)
+		expect(screen, '__heatmapMap dev hook must be present').toBeTruthy();
+		if (!screen) return;
+
+		await page.mouse.move(screen.x, screen.y);
+		// The dot hover draws the route line...
+		await expect.poll(() => lineCount(page), { timeout: 5000 }).toBeGreaterThanOrEqual(1);
+		// ...and the matching list row is highlighted (synchronized hover).
+		await expect(
+			page.getByTestId('discover-list').locator('.result-row.hovered'),
+		).toHaveCount(1, { timeout: 5000 });
+	});
+});

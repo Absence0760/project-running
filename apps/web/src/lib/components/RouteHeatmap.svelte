@@ -8,7 +8,7 @@
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import {
 		fetchHeatmapPoints,
-		nearbyPublicRoutes,
+		fetchRouteById,
 		fetchClubsInBbox,
 		fetchDiscoverableRoutesInBbox,
 		type DiscoverFilter,
@@ -16,7 +16,6 @@
 	} from '$lib/core/data';
 	import { formatDistance } from '$lib/format/units.svelte';
 	import { searchPlaces, type PlaceSearchResult } from '$lib/routes/geocoding';
-	import type { Route } from '$lib/types';
 	import {
 		DISTANCE_BANDS,
 		bandForDistance,
@@ -64,25 +63,27 @@
 	// Debounce key for moveend → fetch. We don't want to fire a new
 	// PostGIS query on every pixel of a drag.
 	let pendingFetch: ReturnType<typeof setTimeout> | null = null;
-	let pendingRoutesFetch: ReturnType<typeof setTimeout> | null = null;
 	let pendingPinsFetch: ReturnType<typeof setTimeout> | null = null;
 
 	const HEATMAP_SOURCE = 'heatmap-pts';
 	const HEATMAP_LAYER = 'heatmap-layer';
+	// Routes are not drawn by default — only the single route currently
+	// hovered (from its map dot or its list row) gets its line drawn here.
+	// Hiding the rest keeps the map readable; revealing one on hover is
+	// the Strava/Komoot-style preview. See the hover handlers below.
 	const ROUTES_SOURCE = 'heatmap-routes';
 	const ROUTES_LAYER_CASING = 'heatmap-routes-casing';
 	const ROUTES_LAYER = 'heatmap-routes-line';
+	// A halo ring placed at the hovered route's start dot so a list-row
+	// hover visibly points at its dot on the map (synchronized hover).
+	const ROUTE_HL_SOURCE = 'heatmap-route-hl';
+	const ROUTE_HL_LAYER = 'heatmap-route-hl-layer';
 	const CLUB_PINS_SOURCE = 'heatmap-clubs';
 	const CLUB_PINS_LAYER = 'heatmap-clubs-layer';
 	const ROUTE_PINS_SOURCE = 'heatmap-route-pins';
 	const ROUTE_PINS_LAYER = 'heatmap-route-pins-layer';
 	const ROUTE_CLUSTER_LAYER = 'heatmap-route-pins-cluster';
 	const ROUTE_CLUSTER_COUNT_LAYER = 'heatmap-route-pins-cluster-count';
-	/// Minimum zoom at which we overlay individual public routes as
-	/// clickable polylines. Below this the heatmap density is the
-	/// honest signal — too many routes drawn over a large viewport
-	/// is visual noise + pulls way more polylines than necessary.
-	const ROUTES_OVERLAY_MIN_ZOOM = 12;
 
 	// Discoverable-pin layer toggles. Both default-on; the user can
 	// hide either via the legend popover.
@@ -116,6 +117,17 @@
 	// The results sidebar. Default-open so the surface reads as a route
 	// browser; collapsible to reclaim the full map canvas.
 	let sidebarOpen = $state(true);
+
+	// Hover-to-preview state. `hoveredRouteId` drives the synchronized
+	// highlight on BOTH surfaces (the list row tints + the map draws that
+	// one route's line + halo). $state so the row class reacts.
+	let hoveredRouteId = $state<string | null>(null);
+	// id → [lng,lat][] geometry cache so re-hovering a route never refetches
+	// (refetch-on-hover is the classic source of map flicker).
+	const geomCache = new Map<string, [number, number][]>();
+	// Debounce clearing the preview so moving the cursor between a dot and
+	// its line — or between adjacent rows — doesn't flash the line off/on.
+	let clearTimer: ReturnType<typeof setTimeout> | null = null;
 
 	const activeFilterLabel = $derived(
 		FILTERS.find((f) => f.id === routeFilter)?.label ?? '',
@@ -234,11 +246,10 @@
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: cachedFeatures },
 			});
-			// Clickable public-route overlay. Only visible at zoom >=
-			// ROUTES_OVERLAY_MIN_ZOOM so the heatmap stays the dominant
-			// signal at city + region scales. Subtle outline + cyan line
-			// — matches the trace-casing colour scheme on /runs/[id] so
-			// users recognise it as a route.
+			// The hovered route's line. Empty until a dot / list row is
+			// hovered; no minzoom, so a preview shows at whatever zoom
+			// you're at. Dark casing + cyan line matches the trace
+			// styling on /runs/[id] so users recognise it as a route.
 			map.addSource(ROUTES_SOURCE, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: [] },
@@ -248,16 +259,14 @@
 				id: ROUTES_LAYER_CASING,
 				type: 'line',
 				source: ROUTES_SOURCE,
-				minzoom: ROUTES_OVERLAY_MIN_ZOOM,
-				paint: { 'line-color': '#1e293b', 'line-width': 6, 'line-opacity': 0.4 },
+				paint: { 'line-color': '#1e293b', 'line-width': 7, 'line-opacity': 0.45 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.addLayer({
 				id: ROUTES_LAYER,
 				type: 'line',
 				source: ROUTES_SOURCE,
-				minzoom: ROUTES_OVERLAY_MIN_ZOOM,
-				paint: { 'line-color': '#22d3ee', 'line-width': 3 },
+				paint: { 'line-color': '#22d3ee', 'line-width': 4 },
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.on('click', ROUTES_LAYER, (e) => {
@@ -265,12 +274,35 @@
 				const id = f?.properties?.route_id as string | undefined;
 				if (id) void goto(`/routes/${id}`);
 			});
-			// Pointer cursor over a route so the affordance is discoverable.
+			// Moving the cursor onto the previewed line keeps it alive
+			// (cancels the pending clear) so the line stays clickable.
 			map.on('mouseenter', ROUTES_LAYER, () => {
+				if (clearTimer) {
+					clearTimeout(clearTimer);
+					clearTimer = null;
+				}
 				if (map) map.getCanvas().style.cursor = 'pointer';
 			});
 			map.on('mouseleave', ROUTES_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';
+				scheduleClear();
+			});
+			// Halo ring drawn under the hovered route's start dot, so a
+			// list-row hover visibly points at its dot on the map.
+			map.addSource(ROUTE_HL_SOURCE, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: ROUTE_HL_LAYER,
+				type: 'circle',
+				source: ROUTE_HL_SOURCE,
+				paint: {
+					'circle-radius': 16,
+					'circle-color': 'rgba(34, 211, 238, 0.16)',
+					'circle-stroke-color': '#22d3ee',
+					'circle-stroke-width': 2,
+				},
 			});
 			// Discoverable-pin layers (clubs + featured/popular routes).
 			// Both default-on; toggleable via the legend popover. Each
@@ -438,13 +470,14 @@
 				map.getCanvas().style.cursor = 'pointer';
 				const f = e.features?.[0];
 				if (!f) return;
+				const id = f.properties?.id as string | undefined;
 				const name = (f.properties?.name as string) ?? '';
 				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-				openHoverTip(coords, name);
+				if (id) previewRoute(id, coords, name);
 			});
 			map.on('mouseleave', ROUTE_PINS_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';
-				closeHoverTip();
+				scheduleClear();
 			});
 
 			// Standard MapLibre heatmap paint — interpolated by intensity
@@ -507,15 +540,12 @@
 			// covers that path) AND to pick up any bounds drift between
 			// the constructor's centre/zoom and the first painted frame.
 			refresh();
-			refreshRoutes();
 			refreshPins();
 		});
 
 		map.on('moveend', () => {
 			if (pendingFetch) clearTimeout(pendingFetch);
 			pendingFetch = setTimeout(refresh, 350);
-			if (pendingRoutesFetch) clearTimeout(pendingRoutesFetch);
-			pendingRoutesFetch = setTimeout(refreshRoutes, 350);
 			if (pendingPinsFetch) clearTimeout(pendingPinsFetch);
 			pendingPinsFetch = setTimeout(refreshPins, 350);
 		});
@@ -540,8 +570,8 @@
 		map?.remove();
 		map = null;
 		if (pendingFetch) clearTimeout(pendingFetch);
-		if (pendingRoutesFetch) clearTimeout(pendingRoutesFetch);
 		if (pendingPinsFetch) clearTimeout(pendingPinsFetch);
+		if (clearTimer) clearTimeout(clearTimer);
 		if (searchTimeout) clearTimeout(searchTimeout);
 	});
 
@@ -830,71 +860,74 @@
 		requestAnimationFrame(() => map?.resize());
 	});
 
-	/// Fetch + render clickable public-route polylines for the current
-	/// viewport. Only fires when the map is zoomed in enough that the
-	/// overlay would be readable (and the polyline count manageable).
-	/// Uses the existing nearbyPublicRoutes RPC which already returns
-	/// Route shape with waypoints — no new migration required.
-	async function refreshRoutes() {
-		if (!map || !mapLoaded) return;
-		const src = map.getSource(ROUTES_SOURCE) as
-			| maplibregl.GeoJSONSource
-			| undefined;
-		if (!src) return;
-		if (map.getZoom() < ROUTES_OVERLAY_MIN_ZOOM) {
-			// Above the threshold the overlay is hidden anyway, but
-			// clear stale data so re-zoom-in shows fresh routes.
-			src.setData({ type: 'FeatureCollection', features: [] });
-			return;
-		}
-		const c = map.getCenter();
-		const b = map.getBounds();
-		// Radius = half-diagonal of the viewport, capped at 25 km so a
-		// fully zoomed-out city view doesn't ask for everything.
-		const halfDiag = haversineM(
-			b.getNorth(),
-			b.getWest(),
-			c.lat,
-			c.lng,
-		);
-		const radiusM = Math.min(Math.max(halfDiag, 1000), 25_000);
-		try {
-			const routes = await nearbyPublicRoutes({
-				lat: c.lat,
-				lng: c.lng,
-				radiusM,
-				limit: 50,
-			});
-			const features: GeoJSON.Feature[] = routes
-				.filter((r: Route) => r.waypoints && r.waypoints.length >= 2)
-				.map((r: Route) => ({
-					type: 'Feature',
-					properties: { route_id: r.id, name: r.name },
-					geometry: {
-						type: 'LineString',
-						coordinates: r.waypoints.map((w) => [w.lng, w.lat]),
-					},
-				}));
-			src.setData({ type: 'FeatureCollection', features });
-		} catch (e) {
-			console.warn('heatmap routes refresh failed', e);
-		}
+	// ─────────────── Hover-to-preview a single route ───────────────
+	//
+	// Routes aren't drawn by default; hovering a map dot OR its list row
+	// reveals that one route's line + a halo on its dot, and tints the
+	// matching list row (synchronized hover — the pattern research shows
+	// users like). Engineered against the classic map-flicker failure
+	// modes users hate: geometry is cached so a second hover never
+	// refetches, the draw is async-guarded so a stale fetch can't paint
+	// after you've moved on, re-hovering the same id is a no-op, and
+	// clearing is debounced so crossing between a dot and its line (or
+	// adjacent rows) doesn't flash. Touch devices don't fire hover — they
+	// fall back to the dot popup (tap) + the row link, so nothing is lost.
+
+	function setSourceData(id: string, data: GeoJSON.FeatureCollection) {
+		(map?.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 	}
 
-	function haversineM(
-		lat1: number,
-		lng1: number,
-		lat2: number,
-		lng2: number,
-	): number {
-		const R = 6371000;
-		const toRad = (d: number) => (d * Math.PI) / 180;
-		const dLat = toRad(lat2 - lat1);
-		const dLng = toRad(lng2 - lng1);
-		const a =
-			Math.sin(dLat / 2) ** 2 +
-			Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
-		return 2 * R * Math.asin(Math.sqrt(a));
+	function previewRoute(id: string, coords: [number, number], name: string) {
+		if (clearTimer) {
+			clearTimeout(clearTimer);
+			clearTimer = null;
+		}
+		if (hoveredRouteId === id) return; // already shown — no churn, no flicker
+		hoveredRouteId = id;
+		openHoverTip(coords, name);
+		setSourceData(ROUTE_HL_SOURCE, {
+			type: 'FeatureCollection',
+			features: [
+				{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: coords } },
+			],
+		});
+		void drawRouteLine(id);
+	}
+
+	async function drawRouteLine(id: string) {
+		let coords = geomCache.get(id);
+		if (!coords) {
+			const route = await fetchRouteById(id);
+			// The cursor may have moved on while the fetch was in flight.
+			if (hoveredRouteId !== id) return;
+			if (!route?.waypoints || route.waypoints.length < 2) return;
+			coords = route.waypoints.map((w) => [w.lng, w.lat] as [number, number]);
+			geomCache.set(id, coords);
+		}
+		if (hoveredRouteId !== id) return;
+		setSourceData(ROUTES_SOURCE, {
+			type: 'FeatureCollection',
+			features: [
+				{
+					type: 'Feature',
+					properties: { route_id: id },
+					geometry: { type: 'LineString', coordinates: coords },
+				},
+			],
+		});
+	}
+
+	function scheduleClear() {
+		if (clearTimer) clearTimeout(clearTimer);
+		clearTimer = setTimeout(clearPreview, 90);
+	}
+
+	function clearPreview() {
+		clearTimer = null;
+		hoveredRouteId = null;
+		closeHoverTip();
+		setSourceData(ROUTES_SOURCE, { type: 'FeatureCollection', features: [] });
+		setSourceData(ROUTE_HL_SOURCE, { type: 'FeatureCollection', features: [] });
 	}
 
 	async function refresh() {
@@ -1048,11 +1081,12 @@
 					<a
 						class="result-row"
 						class:featured={r.featured}
+						class:hovered={hoveredRouteId === r.id}
 						href="/routes/{r.id}"
 						data-sveltekit-preload-data="hover"
 						data-route-id={r.id}
-						onmouseenter={() => openHoverTip([r.lng, r.lat], r.name)}
-						onmouseleave={closeHoverTip}
+						onmouseenter={() => previewRoute(r.id, [r.lng, r.lat], r.name)}
+						onmouseleave={scheduleClear}
 					>
 						<span class="result-name">
 							{#if r.featured}<span class="result-star" title="Featured">★</span>{/if}
@@ -1376,8 +1410,16 @@
 		color: var(--color-text);
 		border-bottom: 1px solid var(--color-border);
 	}
-	.result-row:hover {
+	.result-row:hover,
+	.result-row.hovered {
 		background: var(--color-surface-hover);
+	}
+	/* Hovering the dot on the map tints + accents its row (and vice
+	 * versa) — the synchronized hover that ties the two surfaces. Uses
+	 * an inset box-shadow so it layers over the featured gold border
+	 * instead of clobbering it. */
+	.result-row.hovered {
+		box-shadow: inset 3px 0 0 var(--color-primary);
 	}
 	.result-row.featured {
 		border-inline-start: 3px solid #facc15;
