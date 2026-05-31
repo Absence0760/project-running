@@ -20,7 +20,7 @@
 	} from '$lib/data';
 	import type { EventWithMeta } from '$lib/types';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
-	import { formatDistance } from '$lib/units.svelte';
+	import { formatDistance, fmtPace } from '$lib/units.svelte';
 
 	let eventId = $derived($page.params.id as string);
 	let instance = $derived(decodeURIComponent($page.params.instance as string));
@@ -219,12 +219,6 @@
 		return p.elapsed_s / (p.distance_m / 1000);
 	}
 
-	function formatPace(secPerKm: number | null): string {
-		if (secPerKm === null) return '—';
-		const m = Math.floor(secPerKm / 60);
-		const s = Math.round(secPerKm % 60);
-		return `${m}:${s.toString().padStart(2, '0')}/km`;
-	}
 
 	function nameFor(key: string): string {
 		return profiles.get(key)?.display_name ?? 'Runner';
@@ -448,7 +442,7 @@
 								</span>
 								<span class="name">{nameFor(p.user_id)}</span>
 								<span class="dist">{formatDistance(p.distance_m ?? 0)}</span>
-								<span class="pace">{formatPace(paceSecPerKm(p))}</span>
+								<span class="pace">{fmtPace(paceSecPerKm(p))}</span>
 								<span class="elapsed">{formatDuration(p.elapsed_s ?? 0)}</span>
 							</li>
 						{/each}

@@ -47,7 +47,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { expandInstances, describeRecurrence } from '$lib/recurrence';
-	import { formatDistance, getUnit } from '$lib/units.svelte';
+	import { formatDistance, getUnit, fmtPace } from '$lib/units.svelte';
 	import { env } from '$env/dynamic/public';
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/finisher_certificate';
@@ -868,12 +868,6 @@
 		});
 	}
 
-	function fmtPace(sec: number | null): string {
-		if (!sec) return '';
-		const m = Math.floor(sec / 60);
-		const s = sec % 60;
-		return `${m}:${String(s).padStart(2, '0')} /km`;
-	}
 
 	function fmtRelative(iso: string): string {
 		const diff = Date.now() - new Date(iso).getTime();

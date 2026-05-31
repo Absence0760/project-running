@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { fmtPace } from '$lib/units.svelte';
 	import { env } from '$env/dynamic/public';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
@@ -345,12 +346,6 @@
 		}
 	}
 
-	function formatPaceSec(s: number | null): string {
-		if (s == null || !Number.isFinite(s) || s <= 0) return '—';
-		const m = Math.floor(s / 60);
-		const sec = Math.round(s % 60);
-		return `${m}:${sec.toString().padStart(2, '0')}/km`;
-	}
 
 	function paceDeltaLabel(s: WorkoutStepResult): string {
 		if (s.actual_pace_sec_per_km == null) return '—';
@@ -1343,7 +1338,7 @@
 										{formatDistance(s.actual_distance_m)}
 									{/if}
 								</td>
-								<td class="num">{formatPaceSec(s.actual_pace_sec_per_km)}</td>
+								<td class="num">{fmtPace(s.actual_pace_sec_per_km)}</td>
 								<td class="num pace-delta pace-delta-{paceDeltaClass(s)}">
 									{s.status === 'skipped' ? 'skip' : paceDeltaLabel(s)}
 								</td>

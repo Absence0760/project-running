@@ -5,7 +5,7 @@
 	import { fetchRuns } from '$lib/data';
 	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/recap';
 	import { buildRecapShareSvg } from '$lib/recap_share_image';
-	import { fmtKm, getUnit } from '$lib/units.svelte';
+	import { fmtKm, getUnit, fmtPace } from '$lib/units.svelte';
 	import type { Run } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
@@ -39,14 +39,6 @@
 		return `${m}m`;
 	}
 
-	function fmtPace(secPerKm: number | null): string {
-		if (secPerKm == null) return '—';
-		const unit = getUnit();
-		const secPerUnit = unit === 'mi' ? secPerKm * 1.609344 : secPerKm;
-		const m = Math.floor(secPerUnit / 60);
-		const s = Math.round(secPerUnit % 60);
-		return `${m}:${String(s).padStart(2, '0')} /${unit}`;
-	}
 
 	function fmtWeekStart(iso: string): string {
 		const d = new Date(iso + 'T00:00:00');
