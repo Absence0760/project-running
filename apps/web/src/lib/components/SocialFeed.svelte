@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatRelativeTime } from '$lib/time';
 	import {
 		fetchFollowingFeed,
 		fetchEngagementSummaries,
@@ -144,21 +145,6 @@
 		return formatPace(duration_s, distance_m);
 	}
 
-	function fmtRelative(iso: string): string {
-		const ms = Date.now() - new Date(iso).getTime();
-		const mins = Math.floor(ms / 60_000);
-		if (mins < 1) return 'just now';
-		if (mins < 60) return `${mins}m ago`;
-		const hrs = Math.floor(mins / 60);
-		if (hrs < 24) return `${hrs}h ago`;
-		const days = Math.floor(hrs / 24);
-		if (days < 30) return `${days}d ago`;
-		return new Date(iso).toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-		});
-	}
 </script>
 
 <div class="social-feed">
@@ -246,7 +232,7 @@
 							</div>
 							<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
 						</a>
-						<span class="when">{fmtRelative(entry.started_at)}</span>
+						<span class="when">{formatRelativeTime(entry.started_at)}</span>
 					</header>
 					<a class="entry-body" href="/runs/{entry.id}">
 						{#if entry.track_url}

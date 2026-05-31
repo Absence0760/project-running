@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatRelativeTime } from '$lib/time';
 	import {
 		fetchKudosForRun,
 		giveKudos,
@@ -98,21 +99,6 @@
 		}
 	}
 
-	function fmtRelative(iso: string): string {
-		const ms = Date.now() - new Date(iso).getTime();
-		const mins = Math.floor(ms / 60_000);
-		if (mins < 1) return 'just now';
-		if (mins < 60) return `${mins}m ago`;
-		const hrs = Math.floor(mins / 60);
-		if (hrs < 24) return `${hrs}h ago`;
-		const days = Math.floor(hrs / 24);
-		if (days < 30) return `${days}d ago`;
-		return new Date(iso).toLocaleDateString(undefined, {
-			month: 'short',
-			day: 'numeric',
-			year: 'numeric',
-		});
-	}
 
 	function initial(name: string | null): string {
 		return (name?.[0] ?? '?').toUpperCase();
@@ -178,7 +164,7 @@
 							<a href="/u/{comment.author_id}" class="comment-author-link">
 								<strong>{comment.author.display_name ?? 'Runner'}</strong>
 							</a>
-							<span class="when">{fmtRelative(comment.created_at)}</span>
+							<span class="when">{formatRelativeTime(comment.created_at)}</span>
 							{#if auth.user?.id === comment.author_id || isOwn}
 								<button
 									class="icon-btn"
@@ -215,7 +201,7 @@
 												<a href="/u/{reply.author_id}" class="comment-author-link">
 													<strong>{reply.author.display_name ?? 'Runner'}</strong>
 												</a>
-												<span class="when">{fmtRelative(reply.created_at)}</span>
+												<span class="when">{formatRelativeTime(reply.created_at)}</span>
 												{#if auth.user?.id === reply.author_id || isOwn}
 													<button
 														class="icon-btn"
