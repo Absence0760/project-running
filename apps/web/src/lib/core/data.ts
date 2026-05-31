@@ -4,6 +4,7 @@
 import { supabase } from './supabase';
 import { loadSettings, effective } from '../settings/settings';
 import { privacyDefaultToIsPublic } from '../social/run_visibility';
+import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
 import type {
 	Run,
 	Route,
@@ -4085,7 +4086,12 @@ export async function fetchDiscoverableRoutesInBbox(bbox: {
 	maxLat: number;
 	limit?: number;
 	filter?: DiscoverFilter;
+	/// Selected race-distance bands. Empty / omitted = no distance
+	/// filter. Ranges are resolved via `bandsToRanges` so the band
+	/// numbers stay owned by `distance_bands.ts`.
+	bands?: DistanceBandKey[];
 }): Promise<DiscoverableRoutePin[]> {
+	const ranges = bandsToRanges(bbox.bands ?? []);
 	const { data, error } = await supabase.rpc('discoverable_routes_in_bbox', {
 		p_min_lng: bbox.minLng,
 		p_min_lat: bbox.minLat,
@@ -4093,6 +4099,10 @@ export async function fetchDiscoverableRoutesInBbox(bbox: {
 		p_max_lat: bbox.maxLat,
 		p_limit: bbox.limit ?? 100,
 		p_filter: bbox.filter ?? 'popular',
+		p_dist_min: ranges.min ?? undefined,
+		// Postgres accepts NULL elements (open-ended ultra bound); the
+		// generated arg type is number[], so cast past the null.
+		p_dist_max: (ranges.max ?? undefined) as number[] | undefined,
 	});
 	if (error || !data) {
 		console.warn('fetchDiscoverableRoutesInBbox failed', error);
