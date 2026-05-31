@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(17);
+select plan(19);
 
 -- ── Fixture: a free user, a pro user, a lifetime user ──
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
@@ -201,6 +201,40 @@ select results_eq(
        where id = '00000000-0000-0000-0000-00000000f001' $$,
   $$ values ('free'::text) $$,
   'free user remained free after self-upgrade attempt'
+);
+
+-- ── billing_issue_at write-lock (20260729_001; must survive the
+--    20261107_001 session_user-hardening rewrite — see
+--    20261112_001) ──
+-- Plant a renewal-failure flag as a privileged direct-SQL caller (the
+-- webhook EF's service_role path is what writes it in production). The
+-- trigger only gates non-service-role UPDATEs, so clear the role GUCs
+-- first or the planting UPDATE trips its own guard.
+set local "request.jwt.claim.role" = '';
+set local "request.jwt.claims" = '';
+update user_profiles set billing_issue_at = now() - interval '1 hour'
+  where id = '00000000-0000-0000-0000-00000000f001';
+
+-- 13. A normal user CANNOT clear their own billing_issue_at to suppress
+--     the dunning banner (the column lost its guard once; pin it).
+set local role authenticated;
+set local "request.jwt.claim.role" = 'authenticated';
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-00000000f001","role":"authenticated"}';
+select throws_ok(
+  $$ update user_profiles set billing_issue_at = null
+       where id = '00000000-0000-0000-0000-00000000f001' $$,
+  '42501',
+  null,
+  'user cannot clear their own billing_issue_at via UPDATE'
+);
+
+-- 14. Sanity: the flag survived the suppression attempt.
+reset role;
+select isnt(
+  (select billing_issue_at from user_profiles
+     where id = '00000000-0000-0000-0000-00000000f001'),
+  null,
+  'billing_issue_at remained set after the clear attempt'
 );
 
 select * from finish();
