@@ -213,3 +213,73 @@ test.describe('Heatmap filter chips (web)', () => {
 		});
 	});
 });
+
+test.describe('Heatmap route-pin clustering (web)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('a dense pile of route pins collapses into one cluster bubble', async ({ page }) => {
+		const admin = getAdminClient();
+		// Four featured (→ visible under the default 'popular' lens)
+		// public routes packed within ~50m of (9,49), a spot no seed
+		// route touches, so they must cluster into a single bubble.
+		const ids = [0, 1, 2, 3].map(() => crypto.randomUUID());
+		try {
+			await admin.from('routes').insert(
+				ids.map((id, i) => ({
+					id,
+					user_id: USER_A.id,
+					name: `cluster fixture ${i}`,
+					distance_m: 4000,
+					is_public: true,
+					featured: true,
+					surface: 'road',
+					waypoints: [
+						{ lng: 9.0 + i * 0.0004, lat: 49.0 + i * 0.0004 },
+						{ lng: 9.001 + i * 0.0004, lat: 49.001 + i * 0.0004 },
+					],
+				})),
+			);
+
+			await page.goto('/routes/heatmap');
+			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+			await page.waitForTimeout(1000);
+
+			const result = await page.evaluate(async () => {
+				type MapHandle = {
+					flyTo: (o: { center: [number, number]; zoom: number }) => void;
+					once: (event: string, cb: () => void) => void;
+					getLayer: (id: string) => unknown;
+					querySourceFeatures: (
+						id: string,
+					) => Array<{ properties?: Record<string, unknown> }>;
+				};
+				const m = (window as unknown as { __heatmapMap?: MapHandle }).__heatmapMap;
+				if (!m) return { ok: false, maxCount: 0, hasClusterLayer: false };
+				await new Promise<void>((resolve) => {
+					m.once('moveend', () => resolve());
+					m.flyTo({ center: [9, 49], zoom: 12 });
+				});
+				// Give the GeoJSON source a beat to (re)cluster after the
+				// bbox refresh lands the four fixtures.
+				await new Promise((r) => setTimeout(r, 1200));
+				const feats = m.querySourceFeatures('heatmap-route-pins');
+				let maxCount = 0;
+				for (const f of feats) {
+					const c = Number(f.properties?.point_count ?? 0);
+					if (c > maxCount) maxCount = c;
+				}
+				return {
+					ok: true,
+					maxCount,
+					hasClusterLayer: !!m.getLayer('heatmap-route-pins-cluster'),
+				};
+			});
+
+			expect(result.ok, '__heatmapMap dev hook must be present').toBe(true);
+			expect(result.hasClusterLayer, 'cluster layer must be registered').toBe(true);
+			expect(result.maxCount, 'four packed pins form one cluster').toBeGreaterThanOrEqual(2);
+		} finally {
+			await admin.from('routes').delete().in('id', ids);
+		}
+	});
+});

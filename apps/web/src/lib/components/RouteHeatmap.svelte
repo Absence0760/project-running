@@ -80,6 +80,8 @@
 	const CLUB_PINS_LAYER = 'heatmap-clubs-layer';
 	const ROUTE_PINS_SOURCE = 'heatmap-route-pins';
 	const ROUTE_PINS_LAYER = 'heatmap-route-pins-layer';
+	const ROUTE_CLUSTER_LAYER = 'heatmap-route-pins-cluster';
+	const ROUTE_CLUSTER_COUNT_LAYER = 'heatmap-route-pins-cluster-count';
 	/// Minimum zoom at which we overlay individual public routes as
 	/// clickable polylines. Below this the heatmap density is the
 	/// honest signal — too many routes drawn over a large viewport
@@ -289,14 +291,81 @@
 				closeHoverTip();
 			});
 
+			// Cluster the route pins so a dense area reads as one count
+			// bubble instead of an unclickable pile of overlapping dots.
+			// clusterMaxZoom stops clustering once you're zoomed in far
+			// enough that individual pins are distinct + tappable.
 			map.addSource(ROUTE_PINS_SOURCE, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: [] },
+				cluster: true,
+				clusterRadius: 50,
+				clusterMaxZoom: 14,
+			});
+			// Cluster bubble + count. Sized by how many routes it holds.
+			map.addLayer({
+				id: ROUTE_CLUSTER_LAYER,
+				type: 'circle',
+				source: ROUTE_PINS_SOURCE,
+				filter: ['has', 'point_count'],
+				paint: {
+					'circle-color': '#F2A07B',
+					'circle-opacity': 0.92,
+					'circle-stroke-color': '#0f172a',
+					'circle-stroke-width': 2,
+					'circle-radius': [
+						'step',
+						['get', 'point_count'],
+						14,
+						10, 18,
+						25, 24,
+					],
+				},
+			});
+			map.addLayer({
+				id: ROUTE_CLUSTER_COUNT_LAYER,
+				type: 'symbol',
+				source: ROUTE_PINS_SOURCE,
+				filter: ['has', 'point_count'],
+				layout: {
+					'text-field': ['get', 'point_count_abbreviated'],
+					'text-font': ['Noto Sans Regular'],
+					'text-size': 12,
+				},
+				paint: { 'text-color': '#0f172a' },
+			});
+			// Click a cluster → zoom to the point where it breaks apart.
+			map.on('click', ROUTE_CLUSTER_LAYER, async (e) => {
+				const f = e.features?.[0];
+				const clusterId = f?.properties?.cluster_id as number | undefined;
+				if (clusterId == null || !map) return;
+				const src = map.getSource(ROUTE_PINS_SOURCE) as
+					| maplibregl.GeoJSONSource
+					| undefined;
+				if (!src) return;
+				try {
+					const zoom = await src.getClusterExpansionZoom(clusterId);
+					const coords = (f!.geometry as GeoJSON.Point).coordinates as [number, number];
+					map.easeTo({ center: coords, zoom });
+				} catch {
+					// Expansion-zoom lookup can fail mid-tile-load; the next
+					// click after the source settles succeeds. No-op here.
+				}
+			});
+			map.on('mouseenter', ROUTE_CLUSTER_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = 'pointer';
+			});
+			map.on('mouseleave', ROUTE_CLUSTER_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = '';
 			});
 			map.addLayer({
 				id: ROUTE_PINS_LAYER,
 				type: 'circle',
 				source: ROUTE_PINS_SOURCE,
+				// Only the unclustered (leaf) pins — clusters are handled by
+				// the layers above, so the click/popup handler never fires
+				// on a cluster.
+				filter: ['!', ['has', 'point_count']],
 				paint: {
 					// Brand orange — same as the route-list thumbnails so
 					// the colour reads as "this is a route" across the
@@ -696,11 +765,14 @@
 	});
 	$effect(() => {
 		if (!map || !mapLoaded) return;
-		map.setLayoutProperty(
+		const vis = showRoutePins ? 'visible' : 'none';
+		for (const id of [
 			ROUTE_PINS_LAYER,
-			'visibility',
-			showRoutePins ? 'visible' : 'none',
-		);
+			ROUTE_CLUSTER_LAYER,
+			ROUTE_CLUSTER_COUNT_LAYER,
+		]) {
+			map.setLayoutProperty(id, 'visibility', vis);
+		}
 	});
 	$effect(() => {
 		if (!map || !mapLoaded) return;
