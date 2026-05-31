@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/data';
+	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/core/data';
 	import {
 		isWorkoutCompleted,
 		WORKOUT_KIND_LABEL,
 		type WorkoutKind,
 		type WorkoutStructure
-	} from '$lib/training';
-	import { getUnit } from '$lib/units.svelte';
+	} from '$lib/training/training';
+	import { getUnit } from '$lib/format/units.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import Modal from './Modal.svelte';
 

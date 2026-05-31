@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 /**
  * /compare — public marketing comparison vs Strava Free + Pro.
  *
- * Data source: apps/web/src/lib/compare_features.ts:
+ * Data source: apps/web/src/lib/settings/compare_features.ts:
  *   - COMPARE_SECTIONS — array of CompareSection (title + rows).
  *   - COMPARE_HEADLINE — pricing strings used in the hero cards.
  *

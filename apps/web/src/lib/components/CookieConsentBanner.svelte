@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { consent } from '$lib/consent.svelte';
+	import { consent } from '$lib/settings/consent.svelte';
 
 	// `mounted` gates the banner so it's NEVER in the prerendered HTML.
 	// Without this, the static build ships with `consent.pending = true`

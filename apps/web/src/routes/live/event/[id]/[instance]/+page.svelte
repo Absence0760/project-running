@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { formatDuration as baseDuration } from '$lib/time';
+	import { formatDuration as baseDuration } from '$lib/format/time';
 	import { page } from '$app/stores';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl, getMapStyle } from '$lib/map-style.svelte';
-	import { watchMapResize } from '$lib/map_resize';
-	import { supabase } from '$lib/supabase';
+	import { mapStyleUrlFromEnv as mapStyleUrl, getMapStyle } from '$lib/routes/map-style.svelte';
+	import { watchMapResize } from '$lib/routes/map_resize';
+	import { supabase } from '$lib/core/supabase';
 	import {
 		fetchRecentRacePings,
 		fetchRaceSession,
@@ -17,10 +17,10 @@
 		type RacePingRow,
 		type RaceSessionRow,
 		type EventResultWithUser
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import type { EventWithMeta } from '$lib/types';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
-	import { formatDistance, fmtPace } from '$lib/units.svelte';
+	import { formatDistance, fmtPace } from '$lib/format/units.svelte';
 
 	let eventId = $derived($page.params.id as string);
 	let instance = $derived(decodeURIComponent($page.params.instance as string));

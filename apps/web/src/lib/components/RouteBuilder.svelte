@@ -7,7 +7,7 @@
 	// Single source of truth for the OSRM endpoint — env-overridable via
 	// PUBLIC_OSRM_URL so a self-hosted backend can replace the public
 	// demo server without code edits.
-	import { OSRM_BASE_URL, assertOsrmConfiguredForProd } from '$lib/routing';
+	import { OSRM_BASE_URL, assertOsrmConfiguredForProd } from '$lib/routes/routing';
 	import {
 		DEFAULT_SCALE_FACTOR,
 		NEAR_POINT_M,
@@ -17,12 +17,12 @@
 		isValidTargetDistance,
 		isWithinAcceptBand,
 		selectLoopAnchors,
-	} from '$lib/route_loop';
-	import { formatDistance, getUnit } from '$lib/units.svelte';
-	import { searchPlaces } from '$lib/geocoding';
+	} from '$lib/routes/route_loop';
+	import { formatDistance, getUnit } from '$lib/format/units.svelte';
+	import { searchPlaces } from '$lib/routes/geocoding';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { watchMapResize } from '$lib/map_resize';
-	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/elevation';
+	import { watchMapResize } from '$lib/routes/map_resize';
+	import { fetchElevations, sampleCoordinates, calculateElevationGain } from '$lib/routes/elevation';
 	import {
 		closestPointDistanceM,
 		formatWaypointRanges,
@@ -33,7 +33,7 @@
 		qualityWarning,
 		validateRouteQuality,
 		type RoutedSegment,
-	} from '$lib/routing_quality';
+	} from '$lib/routes/routing_quality';
 	import type { TrackPoint } from '$lib/types';
 
 	let {
@@ -433,7 +433,7 @@
 		versionAtStart: number,
 	): Promise<TrackPoint[]> {
 		// audit/third-party-data-flows: refuse to ship waypoints to the
-		// community OSRM endpoint in prod. The helper in $lib/routing.ts
+		// community OSRM endpoint in prod. The helper in $lib/routes/routing.ts
 		// asserts on its own; this component builds URLs inline (custom
 		// retry / batching) and bypasses those helpers, so we re-assert
 		// at every call site that issues OSRM fetches.

@@ -10,7 +10,7 @@
 		endCoachLink,
 		type CoachAthleteLink,
 		type PendingCoachInvite
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 

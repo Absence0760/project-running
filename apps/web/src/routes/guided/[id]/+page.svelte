@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
-	import { findGuidedRun } from '$lib/guided_runs';
+	import { findGuidedRun } from '$lib/training/guided_runs';
 
 	let id = $derived($page.params.id ?? '');
 	let run = $derived(findGuidedRun(id));

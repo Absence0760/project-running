@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { redeemCoachInvite } from '$lib/data';
+	import { redeemCoachInvite } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 
 	let token = $derived($page.params.token as string);

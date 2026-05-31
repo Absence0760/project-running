@@ -24,12 +24,12 @@
 
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
 
-import { lookupSharedRun } from '../../../src/lib/share_run_lookup';
+import { lookupSharedRun } from '../../../src/lib/share/share_run_lookup';
 import {
 	buildShareRunMeta,
 	type ShareRunMeta,
-} from '../../../src/lib/share_run_meta';
-import { injectShareRunMeta } from '../../../src/lib/share_run_spa_shell';
+} from '../../../src/lib/share/share_run_meta';
+import { injectShareRunMeta } from '../../../src/lib/share/share_run_spa_shell';
 
 // SPA-shell HTML embedded at build time by lambda/share-run/build.mjs.
 // The bundler substitutes `__SPA_SHELL_HTML__` with the contents of

@@ -11,15 +11,15 @@ You enforce the "TS↔Dart parity helper" invariant. Several pure-logic modules 
 
 | Web (TypeScript) | Mobile (Dart) | Mirror test pair |
 |---|---|---|
-| `apps/web/src/lib/training.ts` | `apps/mobile_android/lib/training.dart` | `training.test.ts` ↔ `test/training_test.dart` |
-| `apps/web/src/lib/segments.ts` | `apps/mobile_android/lib/segments.dart` | `segments.test.ts` ↔ `test/segments_test.dart` |
-| `apps/web/src/lib/privacy.ts` | `apps/mobile_android/lib/privacy.dart` | `privacy.test.ts` ↔ `test/privacy_test.dart` |
-| `apps/web/src/lib/recurrence.ts` | `apps/mobile_android/lib/recurrence.dart` | `recurrence.test.ts` ↔ `test/recurrence_test.dart` |
-| `apps/web/src/lib/pace_segments.ts` | `apps/mobile_android/lib/widgets/pace_segments.dart` | `pace_segments.test.ts` ↔ `test/pace_segments_test.dart` |
-| `apps/web/src/lib/training_load.ts` | `apps/mobile_android/lib/training_load.dart` | `training_load.test.ts` ↔ `test/training_load_test.dart` |
-| `apps/web/src/lib/fitness.ts` | `apps/mobile_android/lib/fitness.dart` | `fitness.test.ts` ↔ `test/fitness_test.dart` |
-| `apps/web/src/lib/track_projection.ts` | `projectTrack` helper inside `apps/mobile_android/lib/widgets/track_preview.dart` | `track_projection.test.ts` ↔ `test/track_preview_test.dart` |
-| `apps/web/src/lib/rate_limit_errors.ts` | `apps/mobile_android/lib/rate_limit_errors.dart` | `rate_limit_errors.test.ts` ↔ `test/rate_limit_errors_test.dart` |
+| `apps/web/src/lib/training/training.ts` | `apps/mobile_android/lib/training.dart` | `training/training.test.ts` ↔ `test/training_test.dart` |
+| `apps/web/src/lib/segments/segments.ts` | `apps/mobile_android/lib/segments.dart` | `segments/segments.test.ts` ↔ `test/segments_test.dart` |
+| `apps/web/src/lib/routes/privacy.ts` | `apps/mobile_android/lib/privacy.dart` | `routes/privacy.test.ts` ↔ `test/privacy_test.dart` |
+| `apps/web/src/lib/social/recurrence.ts` | `apps/mobile_android/lib/recurrence.dart` | `social/recurrence.test.ts` ↔ `test/recurrence_test.dart` |
+| `apps/web/src/lib/segments/pace_segments.ts` | `apps/mobile_android/lib/widgets/pace_segments.dart` | `segments/pace_segments.test.ts` ↔ `test/pace_segments_test.dart` |
+| `apps/web/src/lib/training/training_load.ts` | `apps/mobile_android/lib/training_load.dart` | `training/training_load.test.ts` ↔ `test/training_load_test.dart` |
+| `apps/web/src/lib/training/fitness.ts` | `apps/mobile_android/lib/fitness.dart` | `training/fitness.test.ts` ↔ `test/fitness_test.dart` |
+| `apps/web/src/lib/routes/track_projection.ts` | `projectTrack` helper inside `apps/mobile_android/lib/widgets/track_preview.dart` | `routes/track_projection.test.ts` ↔ `test/track_preview_test.dart` |
+| `apps/web/src/lib/util/rate_limit_errors.ts` | `apps/mobile_android/lib/rate_limit_errors.dart` | `util/rate_limit_errors.test.ts` ↔ `test/rate_limit_errors_test.dart` |
 
 The mobile_android side is the byte-identical twin source — `apps/mobile_ios/` mirrors it automatically (handled by `mobile-twin-mirror`), so you only compare web ↔ android.
 

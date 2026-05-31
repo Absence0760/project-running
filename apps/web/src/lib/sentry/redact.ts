@@ -41,7 +41,7 @@ export function redactBreadcrumb<
 		b.data!.url = redactUrl(u);
 	}
 	// `console` breadcrumbs carry the log message in `message` and
-	// `data.arguments`. apps/web/src/lib/data.ts logs Storage paths via
+	// `data.arguments`. apps/web/src/lib/core/data.ts logs Storage paths via
 	// console.warn on delete-failure paths; redact any occurrence of a
 	// signed-URL substring.
 	if (b.category === 'console' && typeof b.message === 'string') {

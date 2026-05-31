@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { hashHue } from '$lib/avatar';
+	import { hashHue } from '$lib/format/avatar';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { browseClubs, fetchMyClubs, searchClubs } from '$lib/data';
+	import { browseClubs, fetchMyClubs, searchClubs } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';

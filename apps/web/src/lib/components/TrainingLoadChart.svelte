@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { TrainingLoadPoint } from '$lib/training_load';
+	import type { TrainingLoadPoint } from '$lib/training/training_load';
 
 	interface Props {
 		points: TrainingLoadPoint[];

@@ -91,7 +91,7 @@ jobs:
         run: npm run check:check-constraints --workspace=apps/web
       - name: Web TS unit tests
         working-directory: apps/web
-        run: npx tsx --test src/lib/*.test.ts
+        run: npx tsx --test 'src/lib/**/*.test.ts'
 
   parity-matrix:
     name: Parity matrix drift

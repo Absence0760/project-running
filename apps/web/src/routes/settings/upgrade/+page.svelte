@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { formatPrice } from '$lib/format_price';
+	import { formatPrice } from '$lib/format/format_price';
 	import {
 		startProCheckout,
 		managementUrl,
 		isRevenueCatConfigured,
-	} from '$lib/revenuecat';
+	} from '$lib/billing/revenuecat';
 
 	// External donation link. One-off donations are intentionally routed
 	// through an external provider so the app doesn't have to own a payment

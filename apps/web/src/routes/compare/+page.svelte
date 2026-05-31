@@ -3,7 +3,7 @@
 		COMPARE_SECTIONS,
 		COMPARE_HEADLINE,
 		type FeatureSupport,
-	} from '$lib/compare_features';
+	} from '$lib/settings/compare_features';
 
 	function cellLabel(v: FeatureSupport): string {
 		return v === 'yes' ? 'Yes' : v === 'no' ? 'No' : 'Partial';

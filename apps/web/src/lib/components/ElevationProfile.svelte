@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { formatDistance } from '$lib/units.svelte';
+	import { formatDistance } from '$lib/format/units.svelte';
 
 	/// `onhover` is fired with the elevations-index the user is
 	/// currently inspecting (null when the pointer leaves the chart).

@@ -3,9 +3,9 @@
 	import maplibregl from 'maplibre-gl';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
-	import { watchMapResize } from '$lib/map_resize';
-	import type { PrivacyZone } from '$lib/privacy';
+	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import { watchMapResize } from '$lib/routes/map_resize';
+	import type { PrivacyZone } from '$lib/routes/privacy';
 
 	interface Props {
 		oncreated: (zone: PrivacyZone) => void;

@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatDuration } from '$lib/time';
-	import { fetchRunsOnRoute } from '$lib/data';
+	import { formatDuration } from '$lib/format/time';
+	import { fetchRunsOnRoute } from '$lib/core/data';
 	
 	import {
 		qualifyingAttempts,
 		summariseHistory,
 		formatSignedDelta,
 		type RouteHistoryRun,
-	} from '$lib/route_history';
+	} from '$lib/routes/route_history';
 
 	interface Props {
 		currentRunId: string;

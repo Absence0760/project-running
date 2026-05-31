@@ -7,7 +7,7 @@ import {
 	redactEventSignedUrls,
 	type SentryEventWithSpans,
 } from "$lib/sentry/redact";
-import { hasAcceptedConsent } from "$lib/consent.svelte";
+import { hasAcceptedConsent } from "$lib/settings/consent.svelte";
 
 const dsn = env.PUBLIC_SENTRY_DSN ?? "";
 const release = env.PUBLIC_APP_RELEASE || "dev";

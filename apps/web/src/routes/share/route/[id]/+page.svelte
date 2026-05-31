@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatDistance } from '$lib/mock-data';
-	import { fetchRouteById } from '$lib/data';
+	import { formatDistance } from '$lib/core/mock-data';
+	import { fetchRouteById } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
-	import { buildRouteShareDescription, buildRouteShareTitle } from '$lib/share_meta';
+	import { buildRouteShareDescription, buildRouteShareTitle } from '$lib/share/share_meta';
 	import type { Route, TrackPoint } from '$lib/types';
 
 	let { data } = $props();

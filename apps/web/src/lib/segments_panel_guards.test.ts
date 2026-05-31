@@ -158,10 +158,10 @@ test('data.ts re-exports the moved constants from segments.ts', () => {
 	// moved out of data.ts into the pure segments module so unit tests
 	// can import them without dragging in $env. Existing callers still
 	// reach for the data.ts path — keep the re-export so they compile.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	assert.match(
 		source,
-		/export \{[^}]*SEGMENT_AGE_BANDS[^}]*\}\s*from\s*'\.\/segments'/,
+		/export \{[^}]*SEGMENT_AGE_BANDS[^}]*\}\s*from\s*'\.\.\/segments\/segments'/,
 		'data.ts must re-export SEGMENT_AGE_BANDS from segments',
 	);
 });

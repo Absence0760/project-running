@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { parseRouteFile, type ImportedRoute } from '$lib/import';
-	import { saveRoute } from '$lib/data';
-	import { formatDistance } from '$lib/mock-data';
+	import { parseRouteFile, type ImportedRoute } from '$lib/integrations/import';
+	import { saveRoute } from '$lib/core/data';
+	import { formatDistance } from '$lib/core/mock-data';
 	import { goto } from '$app/navigation';
 	import Modal from './Modal.svelte';
 

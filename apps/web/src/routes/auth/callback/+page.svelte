@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
 
 	let error = $state('');

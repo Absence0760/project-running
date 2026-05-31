@@ -1,18 +1,18 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatDistance } from '$lib/mock-data';
-	import { getUnit } from '$lib/units.svelte';
+	import { formatDistance } from '$lib/core/mock-data';
+	import { getUnit } from '$lib/format/units.svelte';
 	import {
 		searchPublicRoutes,
 		nearbyPublicRoutes,
 		fetchPopularRouteTags,
 		bookmarkRoute,
 		unbookmarkRoute,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import type { Route } from '$lib/types';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import RouteTrackPreview from './RouteTrackPreview.svelte';
 
 	let routes = $state<Route[]>([]);

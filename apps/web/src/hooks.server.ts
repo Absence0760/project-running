@@ -2,7 +2,7 @@ import * as Sentry from "@sentry/sveltekit";
 import type { Handle, HandleServerError } from "@sveltejs/kit";
 import { dev } from "$app/environment";
 import { env } from "$env/dynamic/private";
-import { isConsentGiven } from "$lib/consent_cookie";
+import { isConsentGiven } from "$lib/settings/consent_cookie";
 
 // audit/cookie-consent + audit/third-party-data-flows (May 2026)
 // flagged that server-side Sentry initialised + intercepted every

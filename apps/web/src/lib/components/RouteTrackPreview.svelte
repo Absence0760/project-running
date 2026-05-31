@@ -18,12 +18,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import TrackPreview from './TrackPreview.svelte';
-	import { fetchClippedRouteForViewer } from '$lib/data';
+	import { fetchClippedRouteForViewer } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
-	import { buildStaticMapUrl, buildLocalStaticMapUrl } from '$lib/static_map';
+	import { buildStaticMapUrl, buildLocalStaticMapUrl } from '$lib/routes/static_map';
 
 	let {
 		routeId,

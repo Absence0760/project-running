@@ -1,6 +1,6 @@
 import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
-import { lookupSharedRun } from '$lib/share_run_lookup';
+import { lookupSharedRun } from '$lib/share/share_run_lookup';
 
 // Per-request SSR via apps/web/lambda/share-run in production —
 // CloudFront routes /share/run/* to the Lambda Function URL, which

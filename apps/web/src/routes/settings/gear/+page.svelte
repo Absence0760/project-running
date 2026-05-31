@@ -11,8 +11,8 @@
 		setDefaultGear,
 		type GearKind,
 		type GearWithDistance,
-	} from '$lib/data';
-	import { getUnit } from '$lib/units.svelte';
+	} from '$lib/core/data';
+	import { getUnit } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';

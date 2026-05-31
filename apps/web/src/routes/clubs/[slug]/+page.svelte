@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { hashHue } from '$lib/avatar';
+	import { hashHue } from '$lib/format/avatar';
 	import { page } from '$app/stores';
 	import { goto, afterNavigate } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		fetchClubBySlug,
@@ -29,8 +29,8 @@
 		createClubPost,
 		deleteClubPost,
 		deleteClub
-	} from '$lib/data';
-	import { formatDistance } from '$lib/mock-data';
+	} from '$lib/core/data';
+	import { formatDistance } from '$lib/core/mock-data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RouteTrackPreview from '$lib/components/RouteTrackPreview.svelte';
 	import type { Route, TrainingPlan } from '$lib/types';
@@ -536,7 +536,7 @@
 	}
 
 	function fmtKm(m: number | null | undefined): string {
-		// Defers to the unit-aware formatter in $lib/units.svelte so a
+		// Defers to the unit-aware formatter in $lib/format/units.svelte so a
 		// km → mi preference flip on /settings/preferences re-renders
 		// every distance string on this page. The previous local
 		// implementation hardcoded " km" — the audit caught it.

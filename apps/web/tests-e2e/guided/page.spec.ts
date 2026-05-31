@@ -5,7 +5,7 @@ import { USER_A } from '../fixtures/users';
 /**
  * /guided + /guided/[id] — guided audio run library.
  *
- * Library: apps/web/src/lib/guided_runs.ts → GUIDED_RUN_LIBRARY,
+ * Library: apps/web/src/lib/training/guided_runs.ts → GUIDED_RUN_LIBRARY,
  * with three runs today: easy-30, tempo-builder-25, first-timer-15.
  * The detail page calls findGuidedRun(id) and renders the full cue
  * script. Anon-readable. The actual playback only happens on mobile —

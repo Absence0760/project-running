@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { formatDuration, formatRelativeTime } from '$lib/time';
+	import { formatDuration, formatRelativeTime } from '$lib/format/time';
 	import { goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import {
 		fetchPublicProfile,
 		fetchPublicRunsByUser,
@@ -23,9 +23,9 @@
 		type FeedEntry,
 		type ProfileSummary,
 		type PublicProfile,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	
-	import { formatDistance, formatPace } from '$lib/units.svelte';
+	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunShareView from '$lib/components/RunShareView.svelte';

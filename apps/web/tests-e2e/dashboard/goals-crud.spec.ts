@@ -25,7 +25,7 @@ import { USER_A } from '../fixtures/users';
  *
  * Cleanup: clear the user-scoped localStorage key in afterEach so the
  * planted goals do not survive into the next spec. Goals are
- * localStorage-only (see lib/goals.ts) — no Supabase rows to scrub.
+ * localStorage-only (see lib/training/goals.ts) — no Supabase rows to scrub.
  */
 
 const GOAL_KEY = `run_app.goals_v1:${USER_A.id}`;

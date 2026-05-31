@@ -32,7 +32,7 @@ test('saveRunAsRoute routes through summarizeRouteFromTrack', () => {
 	// into the route_simplify module so it could be unit-tested. If
 	// a future edit reaches for the raw simplifyTrack + manual loop
 	// again, the regression test surface evaporates.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	assert.match(
 		source,
 		/summarizeRouteFromTrack/,

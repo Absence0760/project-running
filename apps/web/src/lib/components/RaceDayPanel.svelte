@@ -6,9 +6,9 @@
 		negativeSplitPacing,
 		raceChecklist,
 		fmtSplitTime,
-	} from '$lib/race_day';
-	import { riegelPredict } from '$lib/training';
-	import { fmtKm, getUnit } from '$lib/units.svelte';
+	} from '$lib/runs/race_day';
+	import { riegelPredict } from '$lib/training/training';
+	import { fmtKm, getUnit } from '$lib/format/units.svelte';
 	import type { Run } from '$lib/types';
 
 	interface Props {

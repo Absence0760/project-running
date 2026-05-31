@@ -2,8 +2,8 @@
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { fetchRuns } from '$lib/data';
-	import { formatISO } from '$lib/training';
+	import { fetchRuns } from '$lib/core/data';
+	import { formatISO } from '$lib/training/training';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import type { Run } from '$lib/types';
 

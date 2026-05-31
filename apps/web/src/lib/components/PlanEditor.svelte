@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createTrainingPlan, fetchActivePlanOverview } from '$lib/data';
+	import { createTrainingPlan, fetchActivePlanOverview } from '$lib/core/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import {
 		GOAL_DISTANCES_M,
@@ -9,16 +9,16 @@
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
 		formatISO,
-	} from '$lib/training';
+	} from '$lib/training/training';
 	import type {
 		GoalEvent,
 		GeneratedPlan,
 		WorkoutKind,
 		TrainingGender,
-	} from '$lib/training';
+	} from '$lib/training/training';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { supabase } from '$lib/supabase';
-	import { fmtKm, fmtPace, getUnit } from '$lib/units.svelte';
+	import { supabase } from '$lib/core/supabase';
+	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
 
 	// Persona-hunt Round 3 finding Woman #3. Pull the runner's gender
 	// off user_profiles so generatePlan can apply the gender-aware

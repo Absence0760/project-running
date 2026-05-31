@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-import { isInAnyZone } from '../../src/lib/privacy';
+import { isInAnyZone } from '../../src/lib/routes/privacy';
 import { insertRun, deleteRun } from '../fixtures/simulate';
 import { USER_A, USER_B } from '../fixtures/users';
 

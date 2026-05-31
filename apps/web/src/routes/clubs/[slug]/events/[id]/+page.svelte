@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { initial, hashHue } from '$lib/avatar';
-	import { formatDuration as baseDuration } from '$lib/time';
+	import { initial, hashHue } from '$lib/format/avatar';
+	import { formatDuration as baseDuration } from '$lib/format/time';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import {
 		fetchEventById,
@@ -43,17 +43,17 @@
 		type RaceSessionRow,
 		type EventException,
 		type EventPhoto
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
-	import { expandInstances, describeRecurrence } from '$lib/recurrence';
-	import { formatDistance, getUnit, fmtPace } from '$lib/units.svelte';
+	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
+	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { env } from '$env/dynamic/public';
-	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/static_map';
-	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/finisher_certificate';
-	import { rasterizeSvgToPng, downloadBlob } from '$lib/svg_raster';
-	import { parseChipTimingCsv, type ParsedResultRow } from '$lib/event_results_csv';
+	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/routes/static_map';
+	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
+	import { rasterizeSvgToPng, downloadBlob } from '$lib/format/svg_raster';
+	import { parseChipTimingCsv, type ParsedResultRow } from '$lib/runs/event_results_csv';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type {
 		EventWithMeta,

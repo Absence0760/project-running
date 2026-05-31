@@ -1,7 +1,7 @@
 import { browser } from '$app/environment';
-import { supabase } from '$lib/supabase';
-import { dropUserCache } from '$lib/settings';
-import { setUnit } from '$lib/units.svelte';
+import { supabase } from '$lib/core/supabase';
+import { dropUserCache } from '$lib/settings/settings';
+import { setUnit } from '$lib/format/units.svelte';
 
 interface User {
 	id: string;

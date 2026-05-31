@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { buildCanonicalLaps, garminExternalId, fitCadenceToSpm } from './garmin-fit';
+import { buildCanonicalLaps, garminExternalId, fitCadenceToSpm } from './integrations/garmin-fit';
 
 test('fitCadenceToSpm — doubles per-foot RPM for foot sports', () => {
 	// FIT reports running cadence per foot; the runner-facing spm is ×2.

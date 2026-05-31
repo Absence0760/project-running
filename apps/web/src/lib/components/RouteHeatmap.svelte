@@ -4,16 +4,16 @@
 	import maplibregl from 'maplibre-gl';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
-	import { watchMapResize } from '$lib/map_resize';
+	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import { watchMapResize } from '$lib/routes/map_resize';
 	import {
 		fetchHeatmapPoints,
 		nearbyPublicRoutes,
 		fetchClubsInBbox,
 		fetchDiscoverableRoutesInBbox,
-	} from '$lib/data';
-	import { formatDistance } from '$lib/units.svelte';
-	import { searchPlaces, type PlaceSearchResult } from '$lib/geocoding';
+	} from '$lib/core/data';
+	import { formatDistance } from '$lib/format/units.svelte';
+	import { searchPlaces, type PlaceSearchResult } from '$lib/routes/geocoding';
 	import type { Route } from '$lib/types';
 
 	let mapEl: HTMLDivElement;

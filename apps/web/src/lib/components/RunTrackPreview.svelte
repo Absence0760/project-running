@@ -27,9 +27,9 @@
 	import { onMount } from 'svelte';
 	import { env } from '$env/dynamic/public';
 	import TrackPreview from './TrackPreview.svelte';
-	import { fetchTrackByPath, fetchClippedTrackForRun } from '$lib/data';
+	import { fetchTrackByPath, fetchClippedTrackForRun } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/static_map';
+	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/routes/static_map';
 
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';

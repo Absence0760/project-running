@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { featureLabel, featureDescription } from '$lib/features';
+	import { featureLabel, featureDescription } from '$lib/settings/features';
 
 	interface Props {
 		feature: string;

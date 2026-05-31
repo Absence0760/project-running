@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatDistance } from '$lib/mock-data';
-	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/data';
+	import { formatDistance } from '$lib/core/mock-data';
+	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
+	import { fetchRouteById, getRouteReviews, upsertRouteReview, updateRouteTags, setRoutePublic, setRouteStar } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
@@ -11,7 +11,7 @@
 	import SegmentsPanel from '$lib/components/SegmentsPanel.svelte';
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
-	import { interpolateAlongRoute } from '$lib/route_geometry';
+	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();

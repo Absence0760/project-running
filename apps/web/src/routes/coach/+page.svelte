@@ -3,10 +3,10 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import CoachChat from '$lib/components/CoachChat.svelte';
-	import { fetchActivePlanOverview, fetchMyPlans } from '$lib/data';
+	import { fetchActivePlanOverview, fetchMyPlans } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { supabase } from '$lib/supabase';
-	import { GUIDED_RUN_LIBRARY, type GuidedRun } from '$lib/guided_runs';
+	import { supabase } from '$lib/core/supabase';
+	import { GUIDED_RUN_LIBRARY, type GuidedRun } from '$lib/training/guided_runs';
 	import type { TrainingPlan } from '$lib/types';
 
 	let plans = $state<TrainingPlan[]>([]);

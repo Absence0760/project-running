@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { createManualRun, fetchRoutes } from '$lib/data';
-	import { loadSettings, effective } from '$lib/settings';
-	import { privacyDefaultToIsPublic } from '$lib/run_visibility';
-	import { supabase } from '$lib/supabase';
+	import { createManualRun, fetchRoutes } from '$lib/core/data';
+	import { loadSettings, effective } from '$lib/settings/settings';
+	import { privacyDefaultToIsPublic } from '$lib/social/run_visibility';
+	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { getUnit } from '$lib/units.svelte';
+	import { getUnit } from '$lib/format/units.svelte';
 	import type { Route } from '$lib/types';
 
 	interface Props {

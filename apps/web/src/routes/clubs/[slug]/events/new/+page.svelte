@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
-	import { fetchClubBySlug } from '$lib/data';
+	import { fetchClubBySlug } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
 	import type { ClubWithMeta } from '$lib/types';

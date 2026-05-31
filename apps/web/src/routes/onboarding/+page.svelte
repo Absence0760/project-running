@@ -1,22 +1,22 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { updateUniversal } from '$lib/settings';
+	import { updateUniversal } from '$lib/settings/settings';
 	import {
 		isPushSupported,
 		pushPermission,
 		subscribeToPush,
 		getCurrentSubscription,
-	} from '$lib/push';
+	} from '$lib/util/push';
 	import {
 		ONBOARDING_TOTAL_STEPS,
 		PRIMARY_GOAL_KEY,
 		PRIMARY_GOAL_LABELS,
 		PRIMARY_GOAL_VALUES,
 		type PrimaryGoal,
-	} from '$lib/onboarding';
+	} from '$lib/settings/onboarding';
 
 	/// Step state. Bounded 1..ONBOARDING_TOTAL_STEPS. Persona-hunt
 	/// new-runner finding-area #1: a Garmin-style step-by-step is

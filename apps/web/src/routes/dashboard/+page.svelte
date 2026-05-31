@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { formatDate, formatDateShort, formatDuration } from '$lib/time';
+	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatDate, formatDateShort, formatDuration } from '$lib/format/time';
 	import {
 		fetchRuns,
 		fetchWeeklyMileage,
@@ -12,21 +12,21 @@
 		fetchFitnessSnapshots,
 		insertFitnessSnapshot,
 		type FitnessSnapshotRow,
-	} from '$lib/data';
-	import { computeSnapshot, recoveryAdvice, isReturningFromLayoff } from '$lib/fitness';
-	import { computeRunStreaks } from '$lib/streaks';
-	import { computeReadiness } from '$lib/readiness';
-	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training_load';
+	} from '$lib/core/data';
+	import { computeSnapshot, recoveryAdvice, isReturningFromLayoff } from '$lib/training/fitness';
+	import { computeRunStreaks } from '$lib/runs/streaks';
+	import { computeReadiness } from '$lib/training/readiness';
+	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
-	import { WORKOUT_KIND_LABEL } from '$lib/training';
+	import { WORKOUT_KIND_LABEL } from '$lib/training/training';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import type { PlanWorkout } from '$lib/types';
-	import { loadSettings, peekCachedSettings, effective, updateUniversal } from '$lib/settings';
-	import { relativeAge } from '$lib/pr_recency';
-	import type { LoadedSettings } from '$lib/settings';
-	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/units.svelte';
+	import { loadSettings, peekCachedSettings, effective, updateUniversal } from '$lib/settings/settings';
+	import { relativeAge } from '$lib/runs/pr_recency';
+	import type { LoadedSettings } from '$lib/settings/settings';
+	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		loadGoals,
@@ -35,7 +35,7 @@
 		newGoalId,
 		periodLabel,
 		type RunGoal,
-	} from '$lib/goals';
+	} from '$lib/training/goals';
 	import type { Run, RunSource, ActivePlanOverview } from '$lib/types';
 
 	let runs = $state<Run[]>([]);

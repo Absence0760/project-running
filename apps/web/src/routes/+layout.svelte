@@ -12,8 +12,8 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { initTheme } from '$lib/theme';
-	import { setMapStyle, type MapStyle } from '$lib/map-style.svelte';
+	import { initTheme } from '$lib/settings/theme';
+	import { setMapStyle, type MapStyle } from '$lib/routes/map-style.svelte';
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
 	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -59,7 +59,7 @@
 		if (!browser || !uid) return;
 		(async () => {
 			try {
-				const { loadSettings, effective } = await import('$lib/settings');
+				const { loadSettings, effective } = await import('$lib/settings/settings');
 				const settings = await loadSettings(uid);
 				const ms = effective<MapStyle>(settings, 'map_style');
 				setMapStyle(ms);

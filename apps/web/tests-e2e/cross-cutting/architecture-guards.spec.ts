@@ -212,7 +212,7 @@ test.describe('architecture guards', () => {
 		// Fix at any failing call site is "enumerate columns via
 		// `CLUB_SELECT_COLS` / `EVENT_SELECT_COLS` from data.ts", or
 		// for nested embeds use `clubs(${CLUB_SELECT_COLS})`.
-		const data = readFileSync('src/lib/data.ts', 'utf-8');
+		const data = readFileSync('src/lib/core/data.ts', 'utf-8');
 		// Strip block + line comments so doc strings can mention the
 		// pattern without false-positive.
 		const stripped = data

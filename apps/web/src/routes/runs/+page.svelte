@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { formatDate, formatDuration } from '$lib/time';
-	import { fetchRuns, deleteRuns } from '$lib/data';
+	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatDate, formatDuration } from '$lib/format/time';
+	import { fetchRuns, deleteRuns } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -12,7 +12,7 @@
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import type { Run, RunSource } from '$lib/types';
-	import { formatElevation } from '$lib/units.svelte';
+	import { formatElevation } from '$lib/format/units.svelte';
 	import type { Snapshot } from './$types';
 
 	let runs = $state<Run[]>([]);

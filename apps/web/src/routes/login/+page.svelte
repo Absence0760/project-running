@@ -4,8 +4,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { supabase } from '$lib/supabase';
-	import { checkSignUpGates } from '$lib/auth_gates';
+	import { supabase } from '$lib/core/supabase';
+	import { checkSignUpGates } from '$lib/core/auth_gates';
 
 	let error = $state('');
 	let info = $state('');

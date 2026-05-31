@@ -6,7 +6,7 @@
 		deleteRunPhoto,
 		updateRunPhotoCaption,
 		type RunPhoto,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';

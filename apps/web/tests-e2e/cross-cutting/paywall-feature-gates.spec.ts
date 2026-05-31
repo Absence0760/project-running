@@ -27,7 +27,7 @@ import { USER_A, USER_C_PRO } from '../fixtures/users';
  *   6. /settings/upgrade as Pro user — "Active" badge visible, "Manage
  *      subscription" CTA visible, "Get Pro" CTA absent.
  *
- * `PRO_ONLY_FEATURES` in `apps/web/src/lib/features.ts` is empty today
+ * `PRO_ONLY_FEATURES` in `apps/web/src/lib/settings/features.ts` is empty today
  * — `isLocked()` returns `false` for every key, so /coach is reachable
  * by every signed-in user regardless of tier. The Pro tier is
  * delivered through behaviour changes inside the surface (higher

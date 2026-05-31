@@ -2,7 +2,7 @@ import type { RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
-import { buildRunCountByRouteId, buildSitemap, composeEntries } from '$lib/sitemap';
+import { buildRunCountByRouteId, buildSitemap, composeEntries } from '$lib/share/sitemap';
 
 // Build-time sitemap. `adapter-static` runs this once during the
 // production build because of `prerender = true`; the resulting

@@ -8,10 +8,10 @@
 		markAllNotificationsRead,
 		deleteNotification,
 		type NotificationView,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { fmtKm } from '$lib/units.svelte';
+	import { fmtKm } from '$lib/format/units.svelte';
 
 	let items = $state<NotificationView[]>([]);
 	let loading = $state(true);

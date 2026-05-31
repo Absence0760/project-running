@@ -6,7 +6,7 @@ import { getAdminClient } from '../fixtures/local-supabase';
  * Cookie-consent banner on every page until accepted/rejected.
  *
  * Spec is at apps/web/src/lib/components/CookieConsentBanner.svelte;
- * persistence is in apps/web/src/lib/consent.svelte.ts under the
+ * persistence is in apps/web/src/lib/settings/consent.svelte.ts under the
  * localStorage key `cookie_consent` with shape:
  *   { choice: 'accepted' | 'rejected', timestamp: number }
  *

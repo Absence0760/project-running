@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatISO } from '$lib/training';
+	import { formatISO } from '$lib/training/training';
 	import { goto, afterNavigate } from '$app/navigation';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import {
 		fetchMyClubs,
 		fetchClubTemplates,
 		clonePlanTemplate,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { TrainingPlan } from '$lib/types';
 

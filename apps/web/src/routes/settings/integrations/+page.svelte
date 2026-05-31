@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchIntegrations, connectIntegration, disconnectIntegration } from '$lib/data';
+	import { fetchIntegrations, connectIntegration, disconnectIntegration } from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import {
 		stravaAuthUrl,
@@ -12,9 +12,9 @@
 		storeStravaOAuthState,
 		syncStrava,
 		isStravaConfigured,
-	} from '$lib/strava';
-	import { importStravaZip, type StravaZipProgress } from '$lib/strava-zip';
-	import { importGarminBundle, type GarminZipProgress } from '$lib/garmin-zip';
+	} from '$lib/integrations/strava';
+	import { importStravaZip, type StravaZipProgress } from '$lib/integrations/strava-zip';
+	import { importGarminBundle, type GarminZipProgress } from '$lib/integrations/garmin-zip';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 
 	interface IntegrationUI {

@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { hashHue } from '$lib/avatar';
+	import { hashHue } from '$lib/format/avatar';
 	import {
 		searchPeople,
 		fetchSuggestedPeople,
 		followUser,
 		unfollowUser,
 		type PeopleSuggestion,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 

@@ -37,30 +37,34 @@ src/
                     # NotificationsList (the inbox body — All / Unread tabs, per-row dismiss, bulk Mark-all-read; mounted under the Notifications tab on /u/[id] when isSelf).
                     # SocialFeed, SocialPeople, SocialClubs — the three tab panels of /social. SocialPeople is the only top-level surface for finding other runners (name search + suggested-from-clubs). decisions §54.
     stores/         # auth.svelte.ts (Supabase Auth store), toast.svelte.ts (toast notifications), notifications.svelte.ts (unread badge for the sidebar bell — decisions §38)
-    data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
+    # Loose lib modules are grouped into topical subfolders: core/ (data + supabase client),
+    # training/ routes/ segments/ social/ integrations/ backup/ share/ settings/ runs/ format/ util/ billing/.
+    # Only types.ts + database.types.ts stay at the lib root (gen:types writes database.types.ts there; the
+    # twin parity-pair paths in docs/architecture/conventions.md + shared-library-syncer.md track the new locations).
+    core/data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
     types.ts        # Run, Route, Integration type overlays on generated DB types
     database.types.ts  # Generated Supabase types (regenerate after migrations)
-    supabase.ts     # Supabase client init
-    mock-data.ts    # Fallback data when Supabase is empty
-    units.svelte.ts # Reactive km/mi preference signal + unit-aware formatters (distance/pace/elevation)
-    time.ts         # Pure, locale/unit-independent time formatters (formatRelativeTime, formatDuration, formatDate, formatDateShort) — unit-tested in time.test.ts. NOT in mock-data.ts (which is fallback data only).
-    map-style.svelte.ts  # Reactive map-style preference signal (used by RunMap)
-    settings.ts     # `loadSettings()` + `effective<T>()` helpers over user_settings + user_device_settings. Now offline-first via settings_cache.ts (cache-first read, write-through, drain-on-refresh pending queue, sign-out drop). Mirrors mobile SettingsService — decisions §72 / §79.
-    settings_cache.ts  # `LocalStoragePrefsCache` + `InMemoryPrefsCache` (test seam) + pure `applyPrefsChanges`. User- + device-scoped keys (`settings_cache_universal_<userId>`, `..._device_<userId>_<deviceId>`, `..._pending_<userId>_<deviceId>`). 40-test contract in `settings_cache.test.ts`.
-    theme.ts        # light/dark/auto theme toggle, persisted in localStorage
-    training.ts     # VDOT, Riegel, plan generator, week phasing
-    training.test.ts  # node:test suite for the training engine — `npx tsx --test`
-    strava-zip.ts   # Strava bulk-export ZIP importer (parses CSV + per-activity GPX/TCX)
-    garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
-    garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
-    push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
-    privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
+    core/supabase.ts     # Supabase client init
+    core/mock-data.ts    # Fallback data when Supabase is empty
+    format/units.svelte.ts # Reactive km/mi preference signal + unit-aware formatters (distance/pace/elevation)
+    format/time.ts         # Pure, locale/unit-independent time formatters (formatRelativeTime, formatDuration, formatDate, formatDateShort) — unit-tested in time.test.ts. NOT in mock-data.ts (which is fallback data only).
+    routes/map-style.svelte.ts  # Reactive map-style preference signal (used by RunMap)
+    settings/settings.ts     # `loadSettings()` + `effective<T>()` helpers over user_settings + user_device_settings. Now offline-first via settings_cache.ts (cache-first read, write-through, drain-on-refresh pending queue, sign-out drop). Mirrors mobile SettingsService — decisions §72 / §79.
+    settings/settings_cache.ts  # `LocalStoragePrefsCache` + `InMemoryPrefsCache` (test seam) + pure `applyPrefsChanges`. User- + device-scoped keys (`settings_cache_universal_<userId>`, `..._device_<userId>_<deviceId>`, `..._pending_<userId>_<deviceId>`). 40-test contract in `settings_cache.test.ts`.
+    settings/theme.ts        # light/dark/auto theme toggle, persisted in localStorage
+    training/training.ts     # VDOT, Riegel, plan generator, week phasing
+    training/training.test.ts  # node:test suite for the training engine — `npx tsx --test`
+    integrations/strava-zip.ts   # Strava bulk-export ZIP importer (parses CSV + per-activity GPX/TCX)
+    integrations/garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
+    integrations/garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
+    util/push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
+    routes/privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
     coach/          # Transport-agnostic core for the /api/coach handler. handler.ts (entry), providers.ts (Anthropic + OpenAI streaming), context.ts (builds the runner profile + plan + recent-runs JSON dump), types.ts, system_prompt.ts. Wrapped twice — once by src/routes/api/coach/+server.ts (SvelteKit dev), once by apps/web/lambda/coach/src/index.ts (production AWS Lambda). Decisions §53.
-    training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.
-    segments.ts     # Pure compute for segment efforts — haversine cumulative distance + timestamp interpolation. 8 unit tests. Used by RunSegmentEfforts on /runs/[id] for client-side auto-effort generation. Decisions §37.
-    pace_segments.ts  # NRC-style pace heatmap helpers (`paceBucketForSpeed`, `ageBandFor`, `buildPaceSegments`, `hasTrackTimestamps`). TS port of `apps/mobile_android/lib/widgets/pace_segments.dart` — keep in lockstep. Mounted via the `activity` prop on `RunMap.svelte` (run-detail + share-run); routes never carry timestamps so they fall through to the legacy single line. 11 unit tests in `pace_segments.test.ts`.
-    track_projection.ts  # Pure projection helper for the SVG track-preview thumbnails (`projectTrack` with cos(midLat) longitude correction so a square loop renders square at any latitude). Mirrors the `projectTrack` helper in `apps/mobile_android/lib/widgets/track_preview.dart` — keep in lockstep. Used by `TrackPreview.svelte` and `RunTrackPreview.svelte`. 4 unit tests in `track_projection.test.ts`. See [decisions.md § 51](../../docs/architecture/decisions.md).
-    route_history.ts  # "Past efforts on this route" panel data (10 unit tests in route_history.test.ts). Mounted on /routes/[id] under the map.
+    training/training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.
+    segments/segments.ts     # Pure compute for segment efforts — haversine cumulative distance + timestamp interpolation. 8 unit tests. Used by RunSegmentEfforts on /runs/[id] for client-side auto-effort generation. Decisions §37.
+    segments/pace_segments.ts  # NRC-style pace heatmap helpers (`paceBucketForSpeed`, `ageBandFor`, `buildPaceSegments`, `hasTrackTimestamps`). TS port of `apps/mobile_android/lib/widgets/pace_segments.dart` — keep in lockstep. Mounted via the `activity` prop on `RunMap.svelte` (run-detail + share-run); routes never carry timestamps so they fall through to the legacy single line. 11 unit tests in `pace_segments.test.ts`.
+    routes/track_projection.ts  # Pure projection helper for the SVG track-preview thumbnails (`projectTrack` with cos(midLat) longitude correction so a square loop renders square at any latitude). Mirrors the `projectTrack` helper in `apps/mobile_android/lib/widgets/track_preview.dart` — keep in lockstep. Used by `TrackPreview.svelte` and `RunTrackPreview.svelte`. 4 unit tests in `track_projection.test.ts`. See [decisions.md § 51](../../docs/architecture/decisions.md).
+    routes/route_history.ts  # "Past efforts on this route" panel data (10 unit tests in route_history.test.ts). Mounted on /routes/[id] under the map.
   routes/
     +layout.svelte  # App shell with collapsible sidebar (state persisted in localStorage as `sidebar_collapsed`). Sidebar shape: Dashboard · History · Routes · Coach · Social (5 items).
     social/         # Top-level social hub. ARIA tab strip (Feed default, People, Clubs) with ?tab= URL state. Hosts the SocialFeed + SocialPeople + SocialClubs components.

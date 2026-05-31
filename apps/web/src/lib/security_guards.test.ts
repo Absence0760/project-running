@@ -124,7 +124,7 @@ test('fetchRouteById is owner-aware (bare-table first, public_routes view fallba
 	// is_starred and conditionally nulls club_id) and overlay
 	// fetchClippedRouteForViewer so the polyline respects the runner's
 	// privacy zones. See migration 20260703_001_public_routes_view.sql.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	const fnMatch = source.match(
 		/export async function fetchRouteById[\s\S]*?^}/m,
 	);
@@ -190,7 +190,7 @@ test('fetchClippedRouteForViewer fails closed on RPC error', () => {
 	// error would defeat the helper. The empty-input early-return is
 	// not relevant here (the helper takes only an id), so we only
 	// assert that the error branch returns [].
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	const fnMatch = source.match(
 		/export async function fetchClippedRouteForViewer[\s\S]*?^}/m,
 	);
@@ -212,7 +212,7 @@ test('public-runs readers go through the public_runs view', () => {
 	// routes/events. The public_runs view (migration 20260626_001)
 	// strips these. Every public-runs reader must read from the view,
 	// not the base table.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 
 	// Slice the source between two known landmarks per function. Each
 	// helper ends well before the next public-export so we can scan a
@@ -267,7 +267,7 @@ test('clipTrackForUser fails closed on RPC error', () => {
 	// viewers instead of leaking the full track. The empty-input
 	// early-return is fine — it returns the empty input which is the
 	// same shape as `[]`.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	const fnMatch = source.match(
 		/export async function clipTrackForUser[\s\S]*?^}/m,
 	);
@@ -406,13 +406,13 @@ test('BYPASS_PAYWALL gate requires three independent conditions', () => {
 });
 
 test('Client PUBLIC_BYPASS_PAYWALL gate requires three independent conditions', () => {
-	// Reason: the client-side bypass in `$lib/features.ts::bypassEnabled`
+	// Reason: the client-side bypass in `$lib/settings/features.ts::bypassEnabled`
 	// mirrors the server gate in `/api/coach/+server.ts`. Loosening any
 	// one of (vite dev, local Supabase URL, literal 'true' env var) to
 	// `||` re-opens the gate in production builds — a vendored
 	// PUBLIC_BYPASS_PAYWALL=true env in a misbuilt artefact would
 	// silently unlock Pro screens for free users.
-	const source = read('src/lib/features.ts');
+	const source = read('src/lib/settings/features.ts');
 	const block = source.match(/function bypassEnabled\([\s\S]*?\n\}/);
 	assert.ok(block, 'Could not locate bypassEnabled() in features.ts.');
 	const body = block![0];
@@ -478,12 +478,12 @@ test('run-photo delete sites sweep BOTH storage_path and thumb_512_path', () => 
 	// select" refactor can't quietly reintroduce the orphan.
 	const sources: Array<{ path: string; functionRe: RegExp; label: string }> = [
 		{
-			path: 'src/lib/data.ts',
+			path: 'src/lib/core/data.ts',
 			functionRe: /export async function deleteRun\(id: string\)[\s\S]*?\n\}/,
 			label: 'deleteRun (web)',
 		},
 		{
-			path: 'src/lib/data.ts',
+			path: 'src/lib/core/data.ts',
 			functionRe: /export async function deleteRunPhoto\(photoId: string\)[\s\S]*?\n\}/,
 			label: 'deleteRunPhoto (web)',
 		},
@@ -1036,7 +1036,7 @@ test('isLocked() fails closed on unknown tier (default = locked)', () => {
 	// the gate stays armed until the profile lands. Pinned because a
 	// subtle refactor (e.g. checking `auth.user.tier === 'free'`)
 	// inverts to "default unlocked" when `auth.user` is null.
-	const source = read('src/lib/features.ts');
+	const source = read('src/lib/settings/features.ts');
 	const block = source.match(/export function isLocked[\s\S]*?\n\}/);
 	assert.ok(block, 'Could not locate isLocked() in features.ts.');
 	assert.match(
@@ -1521,10 +1521,10 @@ test('createClub + saveRoute + submitReport all translate P0001 via the shared h
 	// in one place + behaves identically across clubs / routes / reports.
 	// Twin path on Dart is enforced by mobile_android's architecture-guard
 	// suite.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	assert.match(
 		source,
-		/import\s+\{\s*rateLimitErrorMessage\s*\}\s+from\s+['"]\.\/rate_limit_errors['"]/,
+		/import\s+\{\s*rateLimitErrorMessage\s*\}\s+from\s+['"]\.\.\/util\/rate_limit_errors['"]/,
 		'data.ts must import rateLimitErrorMessage from ./rate_limit_errors.',
 	);
 	// Slice each function body and assert the helper appears with the
@@ -1909,7 +1909,7 @@ test('routing helpers refuse to fall back to router.project-osrm.org in prod', (
 	// fallback meant a missing env var silently shipped user waypoints
 	// + IPs to a community endpoint with no DPA. assertOsrmConfiguredForProd
 	// throws when dev=false and the env var resolves to the demo URL.
-	const source = read('src/lib/routing.ts');
+	const source = read('src/lib/routes/routing.ts');
 	assert.match(
 		source,
 		/export function assertOsrmConfiguredForProd/,
@@ -2041,7 +2041,7 @@ test('Nominatim fallback uses a reachable contact email (no protomaps placeholde
 	// reach the operator on abuse / takedown. The previous value
 	// (`protomaps-dev@localhost`) was a placeholder copied from a
 	// different project and violates the policy.
-	const source = read('src/lib/geocoding_math.ts');
+	const source = read('src/lib/routes/geocoding_math.ts');
 	assert.ok(
 		!source.includes('protomaps-dev@localhost'),
 		'geocoding_math.ts must not retain the protomaps-dev placeholder email.',
@@ -2063,7 +2063,7 @@ test('fetchRunGear enumerates only public-safe columns on the gear join', () => 
 	// run if the underlying `gear` RLS ever drifts. Pin the
 	// enumerated allowlist to prevent the column set from regressing
 	// back to `*`.
-	const source = read('src/lib/data.ts');
+	const source = read('src/lib/core/data.ts');
 	assert.match(
 		source,
 		/PUBLIC_GEAR_COLUMNS\s*=\s*['"]id,\s*kind,\s*name,\s*brand,\s*model['"]/,
@@ -2089,7 +2089,7 @@ test('backup restore strips server-managed profile fields', () => {
 	// happy-path behaviour — a future writer that drops it won't see a
 	// failed test, just a silent restore regression.
 	for (const path of [
-		'src/lib/backup.ts',
+		'src/lib/backup/backup.ts',
 		'../mobile_android/lib/backup.dart',
 		'../mobile_ios/lib/backup.dart',
 	]) {

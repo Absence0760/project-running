@@ -2,12 +2,12 @@
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fetchPlan, fetchMyClubs, fetchRuns, publishPlanAsTemplate } from '$lib/data';
+	import { fetchPlan, fetchMyClubs, fetchRuns, publishPlanAsTemplate } from '$lib/core/data';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
 	import RaceDayPanel from '$lib/components/RaceDayPanel.svelte';
-	import { daysUntilRace } from '$lib/race_day';
+	import { daysUntilRace } from '$lib/runs/race_day';
 	import type { Run } from '$lib/types';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -18,8 +18,8 @@
 		WORKOUT_KIND_LABEL,
 		parseISO,
 		todayISO
-	} from '$lib/training';
-	import { fmtKm, fmtPace } from '$lib/units.svelte';
+	} from '$lib/training/training';
+	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import type { TrainingPlan, PlanWeek, PlanWorkout, ClubWithMeta } from '$lib/types';
 
 	let id = $derived($page.params.id as string);

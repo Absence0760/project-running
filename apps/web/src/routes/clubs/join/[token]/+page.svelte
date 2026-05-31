@@ -2,8 +2,8 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { joinClubByToken } from '$lib/data';
-	import { supabase } from '$lib/supabase';
+	import { joinClubByToken } from '$lib/core/data';
+	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
 
 	let token = $derived($page.params.token as string);

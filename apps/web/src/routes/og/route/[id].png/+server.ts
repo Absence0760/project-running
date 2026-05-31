@@ -2,8 +2,8 @@ import type { EntryGenerator, RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { Resvg } from '@resvg/resvg-js';
-import { buildRouteOgSvg } from '$lib/og_route_image';
-import { fetchClippedRouteForViewer } from '$lib/data';
+import { buildRouteOgSvg } from '$lib/share/og_route_image';
+import { fetchClippedRouteForViewer } from '$lib/core/data';
 import type { TrackPoint } from '$lib/types';
 
 // Build-time per-route og:image PNG renderer. adapter-static prerenders

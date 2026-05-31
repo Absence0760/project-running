@@ -4,15 +4,15 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { getUnit } from '$lib/units.svelte';
-	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
-	import { watchMapResize } from '$lib/map_resize';
+	import { getUnit } from '$lib/format/units.svelte';
+	import { getMapStyle, mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import { watchMapResize } from '$lib/routes/map_resize';
 	import type { TrackPoint } from '$lib/types';
 	import {
 		buildPaceSegments,
 		hasTrackTimestamps,
 		type ActivityKind,
-	} from '$lib/pace_segments';
+	} from '$lib/segments/pace_segments';
 
 	/// Segment-detail callback. When set, clicks anywhere on the map
 	/// snap to the nearest track point, compute a small window (±150 m
@@ -86,7 +86,7 @@
 		requireExplicitConsent = false,
 	}: Props = $props();
 
-	import { hasAcceptedConsent } from '$lib/consent.svelte';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	// Drives the placeholder ↔ map swap when `requireExplicitConsent`
 	// is true. Defaults to true on the implicit-consent path so the
 	// existing authenticated callers (/runs/[id], /routes/[id], etc.)

@@ -2,9 +2,9 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { formatDistance } from '$lib/mock-data';
-	import { getUnit } from '$lib/units.svelte';
-	import { fetchRoutesWithError, setRouteStar } from '$lib/data';
+	import { formatDistance } from '$lib/core/mock-data';
+	import { getUnit } from '$lib/format/units.svelte';
+	import { fetchRoutesWithError, setRouteStar } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';

@@ -20,7 +20,7 @@ import { USER_A } from '../fixtures/users';
  *      one we set in `metadata.title`. This confirms the row landed
  *      with a working metadata payload.
  *
- * The restore path is `apps/web/src/lib/backup.ts:restoreBackup` —
+ * The restore path is `apps/web/src/lib/backup/backup.ts:restoreBackup` —
  * it `upsert`s by `id`, so deterministic UUIDs make the cleanup
  * trivial even when the test is interrupted.
  *
@@ -259,7 +259,7 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 		page
 	}) => {
 		// `restoreBackup` throws `Not a valid backup — missing manifest.json`
-		// (apps/web/src/lib/backup.ts:154). The account page catches this
+		// (apps/web/src/lib/backup/backup.ts:154). The account page catches this
 		// and renders it in the .error-text banner. Pin the exact copy
 		// so an end-user troubleshooting a malformed export gets a
 		// consistent error to search for.
@@ -293,7 +293,7 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 	}) => {
 		// Guards against importing some-other-app's backup ZIP by
 		// accident. `restoreBackup` throws `Unexpected format: <value>`
-		// (apps/web/src/lib/backup.ts:157). The check is
+		// (apps/web/src/lib/backup/backup.ts:157). The check is
 		// `manifest.format !== 'run-app-backup'`, so any other string
 		// (a sibling product's slug, an empty string, a typo) hits the
 		// same branch — pin one representative case.

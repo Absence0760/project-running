@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { formatDate, formatDuration } from '$lib/time';
-	import { fetchPublicRun, fetchClippedTrackForRun, fetchTrackByPath } from '$lib/data';
+	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatDate, formatDuration } from '$lib/format/time';
+	import { fetchPublicRun, fetchClippedTrackForRun, fetchTrackByPath } from '$lib/core/data';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';

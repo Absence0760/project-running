@@ -13,7 +13,7 @@
  *   - explicit `refresh()` after the bell popover or /notifications
  *     page modifies state
  */
-import { fetchUnreadNotificationCount } from '$lib/data';
+import { fetchUnreadNotificationCount } from '$lib/core/data';
 import { auth } from './auth.svelte';
 
 class NotificationStore {

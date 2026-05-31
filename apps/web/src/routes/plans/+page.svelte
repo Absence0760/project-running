@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatDuration } from '$lib/time';
-	import { formatDateShort } from '$lib/time';
+	import { formatDuration } from '$lib/format/time';
+	import { formatDateShort } from '$lib/format/time';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
+	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/core/data';
 	
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';

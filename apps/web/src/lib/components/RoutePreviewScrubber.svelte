@@ -17,7 +17,7 @@
 	to `RunMap`'s `previewLngLat` prop.
 -->
 <script lang="ts">
-	import { formatDistance } from '$lib/units.svelte';
+	import { formatDistance } from '$lib/format/units.svelte';
 	interface Props {
 		totalDistanceM: number;
 		fraction: number;

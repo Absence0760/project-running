@@ -4,10 +4,10 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/map-style.svelte';
-	import { watchMapResize } from '$lib/map_resize';
-	import { fetchRuns, fetchTrackByPath } from '$lib/data';
-	import { buildHeatCells, heatBounds, toHeatGeoJSON, MAX_CELL_WEIGHT } from '$lib/run_heatmap';
+	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
+	import { watchMapResize } from '$lib/routes/map_resize';
+	import { fetchRuns, fetchTrackByPath } from '$lib/core/data';
+	import { buildHeatCells, heatBounds, toHeatGeoJSON, MAX_CELL_WEIGHT } from '$lib/routes/run_heatmap';
 	import type { TrackPoint } from '$lib/types';
 
 	// Cap the number of tracks downloaded so a runner with thousands of

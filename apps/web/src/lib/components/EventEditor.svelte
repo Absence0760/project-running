@@ -1,9 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatISO } from '$lib/training';
-	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/data';
-	import { WEEKDAY_CHOICES } from '$lib/recurrence';
-	import { formatDistance, getUnit } from '$lib/units.svelte';
+	import { formatISO } from '$lib/training/training';
+	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/core/data';
+	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
+	import { formatDistance, getUnit } from '$lib/format/units.svelte';
 	import type { Route, RecurrenceFreq, Weekday } from '$lib/types';
 
 	// Conversion factor for the unit label / pace target. The form

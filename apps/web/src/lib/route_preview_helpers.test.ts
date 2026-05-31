@@ -12,7 +12,7 @@ import { strict as assert } from 'node:assert';
 // block into a re-exportable module, and `tsx --test` will route
 // through svelte-package's resolver. For test purposes we point at
 // the same .svelte file — the named exports are visible.
-import { buildStaticMapUrl, downsampleForPreview } from './static_map';
+import { buildStaticMapUrl, downsampleForPreview } from './routes/static_map';
 
 const KEY = 'test-key-123';
 

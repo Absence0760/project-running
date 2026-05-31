@@ -4,33 +4,33 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
-	import { downloadFile } from '$lib/gpx';
-	import { fetchRuns } from '$lib/data';
+	import { downloadFile } from '$lib/routes/gpx';
+	import { fetchRuns } from '$lib/core/data';
 	import {
 		createBackup,
 		restoreBackup,
 		type BackupProgress,
 		type RestoreProgress,
 		type RestoreResult,
-	} from '$lib/backup';
+	} from '$lib/backup/backup';
 	import {
 		isPushSupported,
 		pushPermission,
 		subscribeToPush,
 		unsubscribeFromPush,
 		getCurrentSubscription,
-	} from '$lib/push';
-	import { cloudExport } from '$lib/cloud_export';
+	} from '$lib/util/push';
+	import { cloudExport } from '$lib/backup/cloud_export';
 	import {
 		MAX_TRUSTED_CONTACTS,
 		TRUSTED_CONTACTS_KEY,
 		hasReachableChannel,
 		normaliseTrustedContacts,
 		type TrustedContact,
-	} from '$lib/trusted_contacts';
-	import { updateUniversal } from '$lib/settings';
+	} from '$lib/social/trusted_contacts';
+	import { updateUniversal } from '$lib/settings/settings';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');

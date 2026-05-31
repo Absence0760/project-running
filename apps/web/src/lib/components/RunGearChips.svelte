@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchRunGear, fetchMyGear, setRunGear, type Gear, type GearWithDistance } from '$lib/data';
+	import { fetchRunGear, fetchMyGear, setRunGear, type Gear, type GearWithDistance } from '$lib/core/data';
 	import Modal from '$lib/components/Modal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 

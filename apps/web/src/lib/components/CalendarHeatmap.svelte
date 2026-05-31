@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { Run } from '$lib/types';
-	import { formatISO } from '$lib/training';
-	import { fmtKm } from '$lib/units.svelte';
+	import { formatISO } from '$lib/training/training';
+	import { fmtKm } from '$lib/format/units.svelte';
 
 	let { runs = [] }: { runs: Run[] } = $props();
 

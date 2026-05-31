@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { formatDuration, formatRelativeTime } from '$lib/time';
+	import { formatDuration, formatRelativeTime } from '$lib/format/time';
 	import {
 		fetchFollowingFeed,
 		fetchEngagementSummaries,
@@ -9,9 +9,9 @@
 		rescindKudos,
 		FEED_WINDOW_DAYS,
 		type FeedEntry,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	
-	import { formatDistance, formatPace } from '$lib/units.svelte';
+	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
@@ -59,7 +59,7 @@
 			return;
 		}
 		const { count } = await (
-			await import('$lib/supabase')
+			await import('$lib/core/supabase')
 		).supabase
 			.from('user_follows')
 			.select('followee_id', { count: 'exact', head: true })

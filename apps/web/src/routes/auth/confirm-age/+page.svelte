@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import {
 		SIGNUP_GATE_ERROR_ADULT,
 		SIGNUP_GATE_ERROR_TERMS,
 		checkSignUpGates,
-	} from '$lib/auth_gates';
+	} from '$lib/core/auth_gates';
 
 	// Post-OAuth fallback gate. Reached from /auth/callback when the
 	// user's user_profiles row is missing `age_confirmed_at` or

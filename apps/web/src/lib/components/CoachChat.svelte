@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { renderCoachMarkdown } from '$lib/coach/markdown';
-	import { supabase } from '$lib/supabase';
-	import { fmtKm } from '$lib/units.svelte';
+	import { supabase } from '$lib/core/supabase';
+	import { fmtKm } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
 	import { TIER_LIMITS } from '$lib/coach/types';

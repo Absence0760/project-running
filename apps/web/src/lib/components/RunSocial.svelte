@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { formatRelativeTime } from '$lib/time';
+	import { formatRelativeTime } from '$lib/format/time';
 	import {
 		fetchKudosForRun,
 		giveKudos,
@@ -11,7 +11,7 @@
 		deleteRunComment,
 		type RunKudosSummary,
 		type RunCommentWithAuthor,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 

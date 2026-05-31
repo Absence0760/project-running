@@ -6,7 +6,7 @@
 		buildRunShareTitle,
 		formatKmStable,
 		formatDateStable,
-	} from '$lib/share_meta';
+	} from '$lib/share/share_meta';
 
 	let { data } = $props();
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { GUIDED_RUN_LIBRARY } from '$lib/guided_runs';
+	import { GUIDED_RUN_LIBRARY } from '$lib/training/guided_runs';
 
 	function fmtMinutes(seconds: number): string {
 		const m = Math.round(seconds / 60);

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { initial, hashHue } from '$lib/avatar';
+	import { initial, hashHue } from '$lib/format/avatar';
 
 	type BgMode = 'gradient' | 'primary' | 'seed';
 

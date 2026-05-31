@@ -6,11 +6,11 @@
 		markNotificationRead,
 		markAllNotificationsRead,
 		type NotificationView,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fmtKm } from '$lib/units.svelte';
+	import { fmtKm } from '$lib/format/units.svelte';
 
 	let open = $state(false);
 	let loading = $state(false);

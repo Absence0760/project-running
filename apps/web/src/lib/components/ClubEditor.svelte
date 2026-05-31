@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { createClub } from '$lib/data';
-	import { geocodePlace } from '$lib/geocoding';
+	import { createClub } from '$lib/core/data';
+	import { geocodePlace } from '$lib/routes/geocoding';
 	import type { JoinPolicy } from '$lib/types';
 
 	interface Props {

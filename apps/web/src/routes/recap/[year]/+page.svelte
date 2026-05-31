@@ -2,10 +2,10 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchRuns } from '$lib/data';
-	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/recap';
-	import { buildRecapShareSvg } from '$lib/recap_share_image';
-	import { fmtKm, getUnit, fmtPace } from '$lib/units.svelte';
+	import { fetchRuns } from '$lib/core/data';
+	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
+	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
+	import { fmtKm, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import type { Run } from '$lib/types';
 
 	let runs = $state<Run[]>([]);

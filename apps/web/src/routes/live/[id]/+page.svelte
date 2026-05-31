@@ -4,19 +4,19 @@
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
-	import { mapStyleUrlFromEnv } from '$lib/map-style.svelte';
-	import { watchMapResize } from '$lib/map_resize';
-	import { formatPace, formatDistance } from '$lib/mock-data';
-	import { formatDuration } from '$lib/time';
-	import { supabase } from '$lib/supabase';
-	import { hasAcceptedConsent } from '$lib/consent.svelte';
+	import { mapStyleUrlFromEnv } from '$lib/routes/map-style.svelte';
+	import { watchMapResize } from '$lib/routes/map_resize';
+	import { formatPace, formatDistance } from '$lib/core/mock-data';
+	import { formatDuration } from '$lib/format/time';
+	import { supabase } from '$lib/core/supabase';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import {
 		isLiveHubConfigured,
 		fetchLiveSnapshot,
 		openLiveWebSocket,
 		type LivePing,
-	} from '$lib/live_hub';
-	import { runnerHandle, shouldRevealDisplayName } from '$lib/runner_handle';
+	} from '$lib/runs/live_hub';
+	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
 
 	// audit/cookie-consent (2026-05-25): MapTiler tile fetches log
 	// requester IPs per tile, so initialising MapLibre before consent

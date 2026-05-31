@@ -1,21 +1,21 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { supabase } from '$lib/supabase';
+	import { supabase } from '$lib/core/supabase';
 	import {
 		loadSettings,
 		updateUniversal,
 		effective,
 		type LoadedSettings,
-	} from '$lib/settings';
-	import { applyTheme, loadTheme, type Theme } from '$lib/theme';
-	import { setUnit } from '$lib/units.svelte';
-	import { setMapStyle } from '$lib/map-style.svelte';
-	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/privacy';
+	} from '$lib/settings/settings';
+	import { applyTheme, loadTheme, type Theme } from '$lib/settings/theme';
+	import { setUnit } from '$lib/format/units.svelte';
+	import { setMapStyle } from '$lib/routes/map-style.svelte';
+	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { consent } from '$lib/consent.svelte';
+	import { consent } from '$lib/settings/consent.svelte';
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import Modal from './Modal.svelte';
-	import { updatePlanMeta } from '$lib/data';
+	import { updatePlanMeta } from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type { TrainingPlan } from '$lib/types';
 

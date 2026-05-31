@@ -5,7 +5,7 @@ import { USER_A } from '../fixtures/users';
 /**
  * /settings/upgrade — currency localisation of the Pro price.
  *
- * The price is built by apps/web/src/lib/format_price.ts using
+ * The price is built by apps/web/src/lib/format/format_price.ts using
  * Intl.NumberFormat against navigator.language. A user in en-US sees
  * $9.99; en-GB sees £9.99; de-DE sees 9,99 €. The format_price.test.ts
  * unit-test covers the helper in isolation; this spec proves the

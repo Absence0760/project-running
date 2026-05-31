@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { initial } from '$lib/avatar';
+	import { initial } from '$lib/format/avatar';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -11,7 +11,7 @@
 		markDmThreadRead,
 		type DmThread,
 		type DirectMessage
-	} from '$lib/data';
+	} from '$lib/core/data';
 
 	let ready = $state(false);
 	let threads = $state<DmThread[]>([]);

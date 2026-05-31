@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { PlanWorkout } from '$lib/types';
-	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training';
-	import { fmtKm } from '$lib/units.svelte';
+	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training/training';
+	import { fmtKm } from '$lib/format/units.svelte';
 
 	type Props = {
 		startDate: string;

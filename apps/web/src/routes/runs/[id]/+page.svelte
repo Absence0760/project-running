@@ -1,11 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { fmtPace } from '$lib/units.svelte';
+	import { fmtPace } from '$lib/format/units.svelte';
 	import { env } from '$env/dynamic/public';
 	import RunMap, { type SelectedSegment } from '$lib/components/RunMap.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
-	import { interpolateAlongRoute } from '$lib/route_geometry';
-	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/static_map';
+	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
+	import { buildLocalStaticMapUrl, buildStaticMapUrl } from '$lib/routes/static_map';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	const PUBLIC_TILE_STYLE_URL = env.PUBLIC_TILE_STYLE_URL ?? '';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
@@ -15,8 +15,8 @@
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
 	import RouteHistory from '$lib/components/RouteHistory.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
-	import { formatPace, formatSpeed, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
-	import { formatDate, formatDuration } from '$lib/time';
+	import { formatPace, formatSpeed, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
+	import { formatDate, formatDuration } from '$lib/format/time';
 	import {
 		fetchRunById,
 		deleteRun,
@@ -30,22 +30,22 @@
 		enqueueRunRematch,
 		type RunMatchInfo,
 		type RouteMatchCandidate,
-	} from '$lib/data';
+	} from '$lib/core/data';
 	import type { PlanWorkout } from '$lib/types';
-	import { toRunGpx, downloadFile } from '$lib/gpx';
-	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/run_stats';
-	import { defaultZoneCutoffs } from '$lib/hr_zones';
+	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
+	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/runs/run_stats';
+	import { defaultZoneCutoffs } from '$lib/training/hr_zones';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
-	import { isInAnyZone, PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/privacy';
+	import { isInAnyZone, PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import {
 		estimateRunCalories,
 		ACTIVITY_KCAL_PER_KG_PER_KM,
 		type CalorieGender,
-	} from '$lib/calories';
-	import { supabase } from '$lib/supabase';
+	} from '$lib/runs/calories';
+	import { supabase } from '$lib/core/supabase';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
@@ -158,7 +158,7 @@
 		try {
 			const uid = auth.user?.id;
 			if (uid) {
-				const { loadSettings, effective } = await import('$lib/settings');
+				const { loadSettings, effective } = await import('$lib/settings/settings');
 				const settings = await loadSettings(uid);
 				const zones = effective<Record<string, number>>(settings, 'hr_zones');
 				if (zones) {
@@ -417,7 +417,7 @@
 		let intersectsZone = false;
 		let hasZones = false;
 		try {
-			const { loadSettings, effective } = await import('$lib/settings');
+			const { loadSettings, effective } = await import('$lib/settings/settings');
 			const settings = await loadSettings(auth.user.id);
 			const zones =
 				effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];

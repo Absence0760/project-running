@@ -7,8 +7,8 @@ import { USER_A } from '../fixtures/users';
 /**
  * /dashboard — offline-first universal-prefs cache (decisions §79).
  *
- * Pins three properties of `apps/web/src/lib/settings.ts` +
- * `apps/web/src/lib/settings_cache.ts`:
+ * Pins three properties of `apps/web/src/lib/settings/settings.ts` +
+ * `apps/web/src/lib/settings/settings_cache.ts`:
  *
  *   1. A successful loadSettings populates localStorage under the
  *      user-scoped `settings_cache_universal_<userId>` key with the

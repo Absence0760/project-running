@@ -5,11 +5,11 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
-	import { toGpx, toKml, downloadFile } from '$lib/gpx';
-	import { saveRoute } from '$lib/data';
-	import { pickSavePolyline } from '$lib/route_save_polyline';
+	import { toGpx, toKml, downloadFile } from '$lib/routes/gpx';
+	import { saveRoute } from '$lib/core/data';
+	import { pickSavePolyline } from '$lib/routes/route_save_polyline';
 	import { showToast } from '$lib/stores/toast.svelte';
-	import { distanceInPreferred, getUnit } from '$lib/units.svelte';
+	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
 	import { env } from '$env/dynamic/public';
 
 	// True when the local Protomaps tile-style override is set —

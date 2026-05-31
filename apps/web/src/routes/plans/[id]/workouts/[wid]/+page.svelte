@@ -3,12 +3,12 @@
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchWorkout, markWorkoutCompleted } from '$lib/data';
-	import { fmtHms, isWorkoutCompleted, WORKOUT_KIND_LABEL } from '$lib/training';
-	import { fmtKm, fmtPace } from '$lib/units.svelte';
+	import { fetchWorkout, markWorkoutCompleted } from '$lib/core/data';
+	import { fmtHms, isWorkoutCompleted, WORKOUT_KIND_LABEL } from '$lib/training/training';
+	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import type { PlanWorkout } from '$lib/types';
-	import type { WorkoutStructure } from '$lib/training';
+	import type { WorkoutStructure } from '$lib/training/training';
 
 	let planId = $derived($page.params.id as string);
 	let wid = $derived($page.params.wid as string);

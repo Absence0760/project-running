@@ -2,8 +2,8 @@ import type { EntryGenerator, RequestHandler } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { Resvg } from '@resvg/resvg-js';
-import { buildRunOgSvg } from '$lib/og_run_image';
-import { lookupSharedRun } from '$lib/share_run_lookup';
+import { buildRunOgSvg } from '$lib/share/og_run_image';
+import { lookupSharedRun } from '$lib/share/share_run_lookup';
 
 // Per-run og:image PNG renderer. Prerendered at build time — the
 // share-run Lambda owns the HTML head injection at request time

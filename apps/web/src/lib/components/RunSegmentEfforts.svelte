@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatDuration } from '$lib/time';
+	import { formatDuration } from '$lib/format/time';
 	import {
 		fetchEffortsForRun,
 		computeSegmentEffortsForRun,
 		fetchRoutesIntersectingTrack,
 		type SegmentEffortWithSegment,
-	} from '$lib/data';
-	import { pickAutoEffortRoute } from '$lib/auto_segment_effort';
-	import { distanceInPreferred } from '$lib/units.svelte';
+	} from '$lib/core/data';
+	import { pickAutoEffortRoute } from '$lib/segments/auto_segment_effort';
+	import { distanceInPreferred } from '$lib/format/units.svelte';
 	import type { TrackPoint } from '$lib/types';
 
 	function trackLengthM(pts: TrackPoint[]): number {
