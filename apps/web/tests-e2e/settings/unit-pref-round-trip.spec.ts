@@ -25,6 +25,13 @@ import { USER_A } from '../fixtures/users';
  * suffix AND the numerically-correct value. A regression that
  * converted only the newest run, OR that cached the formatted
  * string at insert time, fails here.
+ *
+ * The planted runs are dated earlier this year, so the spec uses the
+ * "This year" date range rather than "All time": "All time" flips the
+ * list into paginated browse mode (PAGE_SIZE most-recent only), which
+ * drops older runs in a busy DB, whereas any narrower range fetches the
+ * full set and filters client-side — so both planted runs are always
+ * present regardless of how many other runs the shared test DB holds.
  */
 
 // Two runs with round-number distances in each unit system. 5000 m
@@ -76,7 +83,7 @@ test.describe('/runs — unit pref round-trip', () => {
 	test.beforeAll(async () => {
 		// Plant two runs spanning the date window that /runs's default
 		// "Date range" filter ("Today") would hide. The spec changes
-		// the filter to "All time" so both surface. Distances chosen
+		// the filter to "This year" so both surface. Distances chosen
 		// so the formatted strings are deterministic (5.00 / 3.11 /
 		// 10.00 / 6.21).
 		runIdA = await insertRun({
@@ -108,7 +115,7 @@ test.describe('/runs — unit pref round-trip', () => {
 		// ── Step 1: pref = km, both runs show km ──────────────────
 		await setPref(USER_A.id, 'km');
 		await page.goto('/runs');
-		await page.getByLabel('Date range').selectOption('all');
+		await page.getByLabel('Date range').selectOption('year');
 
 		const rowA = page.locator(`a[href="/runs/${runIdA}"]`);
 		const rowB = page.locator(`a[href="/runs/${runIdB}"]`);
@@ -133,7 +140,7 @@ test.describe('/runs — unit pref round-trip', () => {
 		// mi-mode must render in mi with the correct converted value.
 		await setPref(USER_A.id, 'mi');
 		await page.goto('/runs');
-		await page.getByLabel('Date range').selectOption('all');
+		await page.getByLabel('Date range').selectOption('year');
 		await expect(rowA).toBeVisible({ timeout: 10_000 });
 		await expect(rowB).toBeVisible();
 
@@ -163,7 +170,7 @@ test.describe('/runs — unit pref round-trip', () => {
 		// stay stuck at mi values.
 		await setPref(USER_A.id, 'km');
 		await page.goto('/runs');
-		await page.getByLabel('Date range').selectOption('all');
+		await page.getByLabel('Date range').selectOption('year');
 		await expect(rowA).toBeVisible({ timeout: 10_000 });
 
 		await expect(rowA.locator('.run-stat-value').first()).toHaveText(
