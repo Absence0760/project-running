@@ -12,6 +12,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { accountLabel } from '$lib/format/account_label';
 	import { initTheme } from '$lib/settings/theme';
 	import { setMapStyle, type MapStyle } from '$lib/routes/map-style.svelte';
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
@@ -329,15 +330,15 @@
 						onclick={() => (showLogoutModal = true)}
 						aria-haspopup="menu"
 						aria-expanded={showLogoutModal}
-						aria-label="{auth.user.display_name ?? auth.user.email} — profile and sign out"
-						title={sidebarCollapsed ? auth.user.display_name ?? auth.user.email : undefined}
+						aria-label="{accountLabel(auth.user.display_name)} — profile and sign out"
+						title={sidebarCollapsed ? accountLabel(auth.user.display_name) : undefined}
 						bind:this={profileBtnEl}
 					>
 						<div class="user-avatar">
 							{auth.user.display_name?.[0]?.toUpperCase() ?? '?'}
 						</div>
 						<div class="user-details">
-							<span class="user-name">{auth.user.display_name ?? auth.user.email}</span>
+							<span class="user-name">{accountLabel(auth.user.display_name)}</span>
 							<span class="user-email">{auth.user.email}</span>
 						</div>
 						<span class="profile-chevron material-symbols" aria-hidden="true">unfold_more</span>
@@ -385,7 +386,7 @@
 					{auth.user?.display_name?.[0]?.toUpperCase() ?? '?'}
 				</div>
 				<div class="popover-info">
-					<span class="popover-name">{auth.user?.display_name ?? 'Account'}</span>
+					<span class="popover-name">{accountLabel(auth.user?.display_name)}</span>
 					<span class="popover-email">{auth.user?.email}</span>
 				</div>
 			</div>
