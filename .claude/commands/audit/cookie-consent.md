@@ -43,3 +43,7 @@ End with a **clean** section listing third-party loads that fire only after user
 Use the `compliance-auditor` agent: `"Audit the web app's cookie + third-party-SDK consent posture per ePrivacy Art 5(3) + GDPR."`
 
 Read-only. Findings only.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-cookie-consent.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

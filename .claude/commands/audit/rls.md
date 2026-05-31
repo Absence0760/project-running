@@ -39,3 +39,7 @@ For each: file:line, the policy/function name, what's missing, the worst-case bl
 Use the `repo-security-auditor` agent. Pass it the audit area as the prompt's first sentence: `"Audit RLS policies and SECURITY DEFINER RPCs for missing or weak auth checks."` That agent has the project's RLS conventions baked in and won't re-derive them.
 
 Read-only by default; only edit migrations on explicit instruction.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-rls.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

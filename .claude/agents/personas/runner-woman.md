@@ -86,3 +86,7 @@ Cap at **5 findings**. Quality over quantity. Severity bias: anything that puts 
 - Don't make claims about physiology you can't trace to a real source (Tanaka 208 − 0.7 × age is a real formula; "women run 30% slower" is not).
 - Don't edit production code. Temp spec only, delete when done.
 - Don't boot the dev stack.
+
+## Output → `reviews/`
+
+Persist your triage findings to `reviews/persona-runner-woman.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

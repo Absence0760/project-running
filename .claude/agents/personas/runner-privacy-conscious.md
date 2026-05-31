@@ -86,3 +86,7 @@ Cap at **5 findings**. Quality over quantity. Quote the GDPR article (Art 5 / 6 
 - Don't make GDPR claims you can't trace to article + paragraph.
 - Don't edit production code. You may create + must delete a temp spec.
 - Don't boot the dev stack.
+
+## Output → `reviews/`
+
+Persist your triage findings to `reviews/persona-runner-privacy-conscious.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

@@ -1,7 +1,7 @@
 ---
 name: compliance-auditor
 description: Read-only auditor for the international-compliance posture of this monorepo. Knows where personal data lives, every Edge Function / Go endpoint, the DSAR (export + delete) paths, every third-party SDK that touches user data, and which Storage buckets carry user uploads. Invoked by the /audit/gdpr, /audit/data-export-completeness, /audit/account-deletion-completeness, /audit/third-party-data-flows, /audit/cookie-consent, /audit/regional-availability, and /audit/accessibility commands. Pass the audit area as the prompt's first sentence (e.g. "Audit GDPR posture").
-tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
+tools: Bash, Read, Grep, Glob, WebFetch, WebSearch, Write
 model: sonnet
 ---
 
@@ -81,3 +81,7 @@ Always end with a **clean** section listing the audit areas where you found noth
 - US-only legal-doc review of an existing draft — that's `us-legal-doc-reviewer` (global agent).
 - App-store-specific privacy disclosure — that's `app-store-privacy-auditor`.
 - i18n string coverage — that's `i18n-readiness-auditor`.
+
+## Output → `reviews/`
+
+Persist your findings to `reviews/audit-<area>.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), where `<area>` is the audit you were asked to run (e.g. `reviews/audit-rls.md`, `reviews/audit-gdpr.md`). Don't return findings only as chat text. One finding per entry with a `[ ]` status box, grouped by severity; if the file already exists, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting. Write **only** this findings file under `reviews/` — never edit code.

@@ -42,3 +42,7 @@ End with a **clean** list of tables / buckets / third-party state that are fully
 Use the `compliance-auditor` agent: `"Audit the data-export endpoint for completeness per GDPR Art 20 + CCPA right-to-know."`
 
 Read-only. Findings only.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-data-export-completeness.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

@@ -45,3 +45,7 @@ For each: function name, file:line, the missing check, what an attacker could do
 Use the `repo-security-auditor` agent: `"Audit every Edge Function for JWT verification, input validation, body limits, and webhook HMAC."`
 
 Read-only. Don't edit function code without explicit instruction.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-edge-functions.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

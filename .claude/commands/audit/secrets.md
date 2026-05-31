@@ -40,3 +40,7 @@ For each: the literal env var or filename, where it's referenced, what should ch
 Use the `repo-security-auditor` agent: `"Audit for server-only secrets that may have leaked into a client bundle, public asset, or git history."`
 
 Read-only. Recommendations only — never paste a found key into the report. Identify by name + location.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-secrets.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

@@ -42,3 +42,7 @@ When one fails, **read the `reason:` block in the test before rubber-stamping a 
 - `apps/mobile_android/CLAUDE.md` § "Tests" — the full list of guard groups
 - `docs/testing/testing.md` — the guard-test pattern
 - `docs/architecture/conventions.md` — the rules the guards enforce
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-architecture-guards.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

@@ -71,3 +71,7 @@ For each: file:line, the specific missing check, the worst-case blast radius (on
 Use the `repo-security-auditor` agent: `"Audit every server-side trust boundary for caller-identity verification before doing work on user data."`
 
 Read-only. Findings only.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-auth.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

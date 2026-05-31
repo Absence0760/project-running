@@ -38,3 +38,7 @@ The Dart-side `metadata_registry_test.dart` already enforces "no unknown writes"
 - `apps/mobile_android/test/metadata_registry_test.dart` — the existing CI guard for Dart
 - `.claude/agents/metadata-key-keeper.md` — the diff-time agent
 - `CLAUDE.md` § "Run.metadata is a jsonb bag" — the convention
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-metadata-keys.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

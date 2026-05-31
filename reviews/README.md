@@ -12,9 +12,14 @@ should not live in version control.
 ## Where findings go
 
 - **All audit / review findings land here**, one Markdown file per audit area
-  or run — e.g. `reviews/web-lib.md`, `reviews/data-sync-audit/backend.md`,
-  `reviews/<persona>-<date>.md`. Don't scatter findings into chat-only output
-  or into `docs/` (docs describe how things *are*, not a list of open bugs).
+  or run. Don't scatter findings into chat-only output or into `docs/` (docs
+  describe how things *are*, not a list of open bugs).
+- **Naming convention** (every `.claude/commands/audit/*` and
+  `.claude/agents/{auditors,personas}/*` writes here):
+  - `/audit/<name>` and the auditor agents → `reviews/audit-<name>.md`
+    (e.g. `reviews/audit-rls.md`, `reviews/audit-gdpr.md`)
+  - persona hunts → `reviews/persona-<name>.md`
+    (e.g. `reviews/persona-runner-woman.md`)
 - Group related runs in a subfolder (`reviews/<audit-name>/...`) when one audit
   spans several areas.
 

@@ -61,7 +61,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 
 ## Audit commands
 
-Project-curated slash commands for security / privacy / invariant audits live under `.claude/commands/audit/`. Invoke as `/audit/<name>` (e.g. `/audit/rls`, `/audit/privacy-zones`). `/audit/all` runs the full sweep in parallel. Each is read-only — they report findings, they don't fix without confirmation. See [`.claude/commands/audit/README.md`](.claude/commands/audit/README.md) for the index + when to run each.
+Project-curated slash commands for security / privacy / invariant audits live under `.claude/commands/audit/`. Invoke as `/audit/<name>` (e.g. `/audit/rls`, `/audit/privacy-zones`). `/audit/all` runs the full sweep in parallel. Each is read-only on the codebase — they report findings, they don't fix without confirmation. **Findings are persisted to `reviews/`** (gitignored working notes — `reviews/audit-<name>.md` for audits, `reviews/persona-<name>.md` for persona hunts; lifecycle in [`reviews/README.md`](reviews/README.md)), not just chat. See [`.claude/commands/audit/README.md`](.claude/commands/audit/README.md) for the index + when to run each.
 
 ## /safe-edit — coder ↔ reviewer loop for non-trivial changes
 

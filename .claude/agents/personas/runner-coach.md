@@ -89,3 +89,7 @@ Cap at **5 findings**. Be honest that most coach findings are MISSING FEATURES, 
 - Don't suggest fixes or product designs.
 - Don't edit production code. One temp Playwright spec only.
 - Don't boot the dev stack yourself.
+
+## Output → `reviews/`
+
+Persist your triage findings to `reviews/persona-runner-coach.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

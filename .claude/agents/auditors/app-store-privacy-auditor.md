@@ -1,7 +1,7 @@
 ---
 name: app-store-privacy-auditor
 description: Read-only auditor for App Store + Play Store + Wear OS + watchOS privacy disclosure surfaces. Knows iOS Privacy Nutrition Labels, ATT, NSPrivacyAccessedAPITypes, encryption export; Play Data Safety form, target SDK, foreground-service types, sensitive permissions; Wear OS permissions; watchOS HealthKit + Workout Background Mode. Invoked by /audit/app-store-privacy. Pass "Audit App Store + Play Store privacy disclosures" as the prompt.
-tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
+tools: Bash, Read, Grep, Glob, WebFetch, WebSearch, Write
 model: sonnet
 ---
 
@@ -96,3 +96,7 @@ End with a **clean** section listing the store-disclosure surfaces that look cor
 - No emojis. No comments. No preemptive abstractions.
 - Don't fix — report.
 - This is not legal advice. Apple + Play policies change; cite the current rule date where you can, and end with "verify against the current App Review Guidelines / Developer Program Policies".
+
+## Output → `reviews/`
+
+Persist your findings to `reviews/audit-<area>.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), where `<area>` is the audit you were asked to run (e.g. `reviews/audit-rls.md`, `reviews/audit-gdpr.md`). Don't return findings only as chat text. One finding per entry with a `[ ]` status box, grouped by severity; if the file already exists, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting. Write **only** this findings file under `reviews/` — never edit code.

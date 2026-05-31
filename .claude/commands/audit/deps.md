@@ -44,3 +44,7 @@ For each: package + version + advisory link + the file to change + the upgrade c
 - `.github/workflows/*.yml`
 
 Read-only audit. Recommend upgrades; don't apply them without instruction (a major bump is its own conversation).
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-deps.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

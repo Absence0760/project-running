@@ -70,3 +70,7 @@ Run the project's full audit sweep. By default, runs every audit; with an argume
 - This is read-only. Each sub-audit is read-only by default.
 - The report is the deliverable; do not edit code based on findings without asking the user first.
 - If an audit finds no issues, list it under a `## Clean` section — easier to spot regression on the next run.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-all.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

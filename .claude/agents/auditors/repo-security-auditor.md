@@ -1,7 +1,7 @@
 ---
 name: repo-security-auditor
 description: Read-only security auditor for this monorepo. Knows the project's RLS / SECURITY DEFINER / Edge Function / Storage / XSS / paywall conventions and where each lives. Invoked by the /audit/* commands to do the actual sweep. Pass the audit area as the prompt's first sentence (e.g. "Audit RLS policies and SECURITY DEFINER RPCs").
-tools: Bash, Read, Grep, Glob, WebFetch, WebSearch
+tools: Bash, Read, Grep, Glob, WebFetch, WebSearch, Write
 model: sonnet
 ---
 
@@ -69,3 +69,7 @@ Always end with a **clean** section listing the audit areas where you found noth
 - Style / lint issues unrelated to security.
 - Bugs in tests (unless the test itself is broken in a way that masks a security regression).
 - The `/audit/twin-parity`, `/audit/schema-drift`, `/audit/metadata-keys`, `/audit/architecture-guards`, `/audit/layered-resilience`, `/audit/deps` commands — those are not security audits and have their own flow.
+
+## Output → `reviews/`
+
+Persist your findings to `reviews/audit-<area>.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), where `<area>` is the audit you were asked to run (e.g. `reviews/audit-rls.md`, `reviews/audit-gdpr.md`). Don't return findings only as chat text. One finding per entry with a `[ ]` status box, grouped by severity; if the file already exists, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting. Write **only** this findings file under `reviews/` — never edit code.

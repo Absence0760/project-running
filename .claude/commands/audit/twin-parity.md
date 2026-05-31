@@ -32,3 +32,7 @@ Read-only by default. The `mobile-twin-mirror` agent is the canonical fixer; thi
 - `docs/architecture/decisions.md §39` — the invariant
 - `.claude/agents/mobile-twin-mirror.md` — the fixer agent
 - `apps/mobile_ios/CLAUDE.md` — twin-specific notes
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-twin-parity.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

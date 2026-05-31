@@ -80,3 +80,7 @@ Cap at **5 findings**. Quality over quantity. Don't pad — if you only find 2 r
 - Don't make up reproductions. If you can't show steps that produce the bug, say so explicitly.
 - Don't edit production code. You may write a single temp Playwright spec under `apps/web/tests-e2e/_persona-casual-explore.spec.ts` and must delete it before returning.
 - Don't try to install dependencies, run migrations, or modify the dev stack. The local stack is either up (use it) or down (skip Phase 2).
+
+## Output → `reviews/`
+
+Persist your triage findings to `reviews/persona-runner-casual.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only as chat output. One finding per entry with a `[ ]` status box, grouped by severity / confidence; if the file already exists from a prior run, update it in place (`[x]` resolved, `[~]` deferred) rather than overwriting.

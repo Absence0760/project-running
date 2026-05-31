@@ -42,3 +42,7 @@ The `migration-coordinator` agent automates this for an in-progress migration. R
 - `scripts/gen_dart_models.dart` — the Dart generator
 - `.claude/agents/migration-coordinator.md` — the diff-time agent
 - `CLAUDE.md` § "Schema and row types" — gotchas
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-schema-drift.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

@@ -46,3 +46,7 @@ For each: table.column (or `metadata.<key>`), what private state it reveals, the
 Use the `repo-security-auditor` agent: `"Audit which columns leak alongside is_public=true rows."`
 
 Read-only audit.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-public-rows.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

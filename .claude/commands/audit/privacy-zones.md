@@ -47,3 +47,7 @@ For each: file:line, the missing call or the broken gate, the surface it affects
 Use the `repo-security-auditor` agent: `"Audit every track / waypoint render site for privacy-zone clipping coverage per decisions §33."`
 
 Read-only audit. Don't patch a leak without flagging it for the user first.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-privacy-zones.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

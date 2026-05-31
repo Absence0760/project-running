@@ -40,3 +40,7 @@ For each: file:line, the source of the user-supplied text, the rendering site, t
 Use the `repo-security-auditor` agent: `"Audit user-content rendering paths for XSS — {@html}, flutter_markdown, sanitization sinks."`
 
 Read-only. Report findings; don't patch without confirmation.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-xss.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.

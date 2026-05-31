@@ -36,3 +36,7 @@ End with **clean** — what's already localised correctly (units; surfaces that 
 Use the `i18n-readiness-auditor` agent: `"Audit i18n readiness across web (SvelteKit) + mobile (Flutter) + wear (Compose-for-Wear) + watchOS (SwiftUI) + server."`
 
 Read-only. Don't propose an i18n library (`paraglide` vs `sveltekit-i18n` etc.) — that's a separate decision.
+
+## Output → `reviews/`
+
+Persist the findings to `reviews/audit-i18n-readiness.md` (gitignored working notes — see [`reviews/README.md`](../../../reviews/README.md)), not only to chat. One finding per entry with a `[ ]` status box, grouped by severity. If that file already exists from a prior run, update it in place — flip resolved findings to `[x]` (with the fix commit) and keep `[~]` deferred items — instead of overwriting. The audit is otherwise read-only on the codebase; writing this one findings file is the allowed exception.
