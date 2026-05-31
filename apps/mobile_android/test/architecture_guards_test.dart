@@ -2241,6 +2241,49 @@ void main() {
             'targetSdk must be >= 35 (Play Console floor). Found $pin.',
       );
     });
+
+    test('unused biometric permissions are stripped at merge time', () {
+      // audit/app-store-privacy (2026-05-30) Critical: androidx.biometric
+      // (transitive) injects USE_BIOMETRIC + USE_FINGERPRINT into the
+      // merged manifest, but the app has no biometric auth surface. They
+      // must be removed with tools:node="remove" so the binary's
+      // permission set matches the Play Data Safety form. A regression
+      // that drops the remove directive silently reintroduces an
+      // undisclosed sensitive permission.
+      final file = File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      for (final perm in ['USE_BIOMETRIC', 'USE_FINGERPRINT']) {
+        expect(
+          RegExp(
+            'android.permission.$perm"[\\s\\S]{0,80}tools:node="remove"',
+          ).hasMatch(body),
+          isTrue,
+          reason: '$perm must be declared with tools:node="remove" — it '
+              'is injected transitively and the app uses no biometric '
+              'auth, so it must not reach the binary undisclosed.',
+        );
+      }
+    });
+
+    test('RECEIVE_BOOT_COMPLETED is declared explicitly for disclosure', () {
+      // audit/app-store-privacy (2026-05-30) Critical: workmanager
+      // injects RECEIVE_BOOT_COMPLETED. It is a real (boot-resume of
+      // background sync) capability we keep, so it must be visible in
+      // the source manifest — otherwise the operator filling the Play
+      // Data Safety form can't see it. Pin its explicit declaration.
+      final file = File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      expect(
+        body,
+        contains(
+            '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />'),
+        reason: 'RECEIVE_BOOT_COMPLETED must be declared explicitly so it '
+            'is visible to the Play Data Safety form rather than only '
+            'appearing in the merged binary via workmanager.',
+      );
+    });
   });
 
   group('Restore purchases (Apple/Play subscription policy)', () {
