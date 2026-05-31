@@ -36,12 +36,21 @@ declare
     ''
   );
 begin
-  -- Trusted: the REST service role (by JWT role) and genuine
-  -- privileged DB connections (by session_user, which PostgREST cannot
-  -- forge). Everything else — authenticated, anon, any caller whose
-  -- role claim parsed empty over REST — gets the gate.
+  -- Trusted callers:
+  --   * REST service role — by JWT role, the only in-band signal inside
+  --     a SECURITY DEFINER function (current_user is masked to owner).
+  --   * Genuine direct-SQL (migrations + seed) — they reach here with an
+  --     EMPTY role claim, but so could a forged REST request, so we
+  --     additionally require a privileged session_user. PostgREST
+  --     authenticates every request as the `authenticator` login role
+  --     (then set-roles to authenticated/anon/service_role), so an
+  --     end-user request can never present session_user=postgres. The
+  --     empty-role-AND-privileged-session pair is what makes this both
+  --     forgery-proof over REST and still settable under direct SQL.
+  -- The old bypass trusted ANY empty role claim regardless of session;
+  -- that's the hole this closes.
   if v_role = 'service_role'
-     or session_user in ('postgres', 'supabase_admin') then
+     or (v_role = '' and session_user in ('postgres', 'supabase_admin')) then
     return new;
   end if;
 
