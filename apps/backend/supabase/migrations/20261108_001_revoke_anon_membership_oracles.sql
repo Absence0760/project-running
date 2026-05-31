@@ -1,0 +1,20 @@
+-- audit-findings 2026-05-30 Low [security/rls] — `is_blocked_either_way`
+-- carries an `anon` EXECUTE grant it never needed. Supabase grants
+-- EXECUTE on every new function to anon + authenticated by default; this
+-- one was never explicitly revoked. It has no non-test caller (the
+-- web/mobile clients reach blocking through authenticated paths, and the
+-- one pgtap that exercises it runs as `authenticated`), so leaving anon
+-- able to probe whether two users have a block relationship is pure
+-- defence-in-depth gap. Drop the anon grant; authenticated keeps it.
+--
+-- NOT actioned (companion findings re-evaluated to false positives):
+--   * get_event_meet_point — the audit flagged its anon grant as noise,
+--     but the function is deliberately anon-callable: public-event-page
+--     spectators call it and the in-function membership gate returns no
+--     rows for non-members (anon is never a member → always null, no
+--     leak). `get_event_meet_point_test.sql` pins that anon-executes-
+--     gets-null contract; revoking anon would break it.
+--   * clip_track_for_user — still has a live authenticated browser
+--     caller (apps/web/src/lib/core/data.ts `clipTrackForUser`);
+--     restricting it to service_role needs a server-endpoint refactor.
+revoke all on function is_blocked_either_way(uuid, uuid) from anon;
