@@ -7,20 +7,30 @@
 -- dropped. The clip-public-track Edge Function derives the path
 -- directly from user_id + runId, so the column has no legitimate
 -- consumer on the view.
+--
+-- 20261105_001 re-added a boolean `has_track` (derived from
+-- `track_url IS NOT NULL`) so the feed / profile map-thumbnail gate has a
+-- safe signal. The view now references track_url internally to compute
+-- that boolean, but must never EXPOSE the path column — the two assertions
+-- below pin both halves of that contract.
 
 begin;
 
-select plan(2);
+select plan(3);
 
 select hasnt_column(
   'public_runs', 'track_url',
   'public_runs view must not expose track_url — see audit/storage (2026-05-25)'
 );
 
--- Defence: even a future view that re-adds the column under a
--- different name would defeat the test above. Assert the underlying
--- view definition does not reference runs.track_url anywhere. The
--- definition lives in pg_catalog.pg_views.
+select has_column(
+  'public_runs', 'has_track',
+  'public_runs exposes the boolean has_track existence signal (20261105_001)'
+);
+
+-- Assert the underlying view definition still exists. (It now references
+-- track_url in the has_track predicate; that derives a boolean only and
+-- never selects the path column — pinned by hasnt_column above.)
 select isnt(
   (
     select view_definition

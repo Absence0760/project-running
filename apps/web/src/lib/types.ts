@@ -51,6 +51,12 @@ export type Run = Omit<RunRow, 'source' | 'metadata'> & {
 	source: RunSource;
 	metadata: Record<string, unknown> | null;
 	track: TrackPoint[] | null;
+	// View-only boolean from `public_runs` (migration 20261105_001):
+	// whether a GPS trace exists, without exposing the Storage path. Set on
+	// rows read through the public view (feed, profile); absent on owner
+	// reads from the base table (use `track_url != null` there). Drives the
+	// feed / profile map-thumbnail gate.
+	has_track?: boolean;
 };
 
 export type Route = Omit<RouteRow, 'waypoints' | 'surface'> & {

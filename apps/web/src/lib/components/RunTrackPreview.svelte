@@ -60,8 +60,19 @@
 	const shouldClip = $derived(
 		ownerUserId != null && ownerUserId !== viewerId,
 	);
+	// The non-owner clip path fetches by `runId` (the EF derives the Storage
+	// path server-side), so it never needs `trackUrl` — public-view callers
+	// (feed, profile) have no track_url to pass since `public_runs` dropped
+	// it. Key the cache + the load gate on whichever input that path uses:
+	// runId when clipping, trackUrl for the owner's direct read.
 	const cacheKey = $derived(
-		trackUrl == null ? null : `${shouldClip ? 'clip' : 'raw'}:${trackUrl}`,
+		shouldClip
+			? runId == null
+				? null
+				: `clip:${runId}`
+			: trackUrl == null
+				? null
+				: `raw:${trackUrl}`,
 	);
 
 	let el: HTMLDivElement;
@@ -69,7 +80,7 @@
 	let attempted = $state(false);
 
 	onMount(() => {
-		if (!trackUrl || !cacheKey) return;
+		if (!cacheKey) return;
 		// Hit cache synchronously if we've fetched this one before in
 		// this session — common when the user scrolls up / re-enters the
 		// list page.
@@ -95,7 +106,7 @@
 	});
 
 	async function load() {
-		if (!trackUrl || !cacheKey || attempted) return;
+		if (!cacheKey || attempted) return;
 		attempted = true;
 		try {
 			let track: TrackPoint[];
@@ -109,6 +120,12 @@
 				}
 				track = (await fetchClippedTrackForRun(runId)) as TrackPoint[];
 			} else {
+				if (!trackUrl) {
+					// Owner read needs the direct Storage path; without it
+					// there's nothing to fetch.
+					cacheSet(cacheKey, null);
+					return;
+				}
 				track = (await fetchTrackByPath(trackUrl)) as TrackPoint[];
 			}
 			// Treat a track that never moves more than ~5 m total as

@@ -625,11 +625,12 @@
 				<div class="run-grid">
 					{#each runs as r (r.id)}
 						<button type="button" class="run-card" onclick={() => (openRunId = r.id)}>
-							{#if r.track_url}
+							{#if r.has_track}
 								<div class="run-map-placeholder">
+									<!-- public_runs dropped track_url; clip path fetches by runId. -->
 									<RunTrackPreview
 										runId={r.id}
-										trackUrl={r.track_url}
+										trackUrl={null}
 										ownerUserId={userId}
 									/>
 								</div>
@@ -875,11 +876,12 @@
 								<span class="when">{formatRelativeTime(entry.started_at)}</span>
 							</header>
 							<button type="button" class="entry-body" onclick={() => (openRunId = entry.id)}>
-								{#if entry.track_url}
+								{#if entry.has_track}
 									<div class="entry-map">
+										<!-- public_runs dropped track_url; clip path fetches by runId. -->
 										<RunTrackPreview
 											runId={entry.id}
-											trackUrl={entry.track_url}
+											trackUrl={null}
 											ownerUserId={entry.author.id}
 										/>
 									</div>
@@ -1071,7 +1073,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-sm);
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	.btn-follow {
@@ -1125,7 +1127,7 @@
 		background: none;
 		border: none;
 		padding: 0.6rem 0.2rem;
-		margin-right: 1rem;
+		margin-inline-end: 1rem;
 		font-size: 0.95rem;
 		color: var(--color-text-secondary);
 		border-bottom: 2px solid transparent;
@@ -1182,7 +1184,7 @@
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 		transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-		text-align: left;
+		text-align: start;
 		font: inherit;
 		color: inherit;
 		cursor: pointer;
@@ -1426,7 +1428,7 @@
 	}
 
 	.window-hint {
-		margin-left: auto;
+		margin-inline-start: auto;
 		font-size: 0.8rem;
 		color: var(--color-text-tertiary);
 		font-weight: 500;
@@ -1437,7 +1439,7 @@
 			display: none;
 		}
 		.window-hint {
-			margin-left: 0;
+			margin-inline-start: 0;
 		}
 	}
 
@@ -1504,7 +1506,7 @@
 		color: inherit;
 		background: transparent;
 		border: 0;
-		text-align: left;
+		text-align: start;
 		cursor: pointer;
 		flex: 1;
 	}
@@ -1724,7 +1726,7 @@
 			font-size: 1.4rem;
 		}
 		.head-actions {
-			margin-left: 0;
+			margin-inline-start: 0;
 			width: 100%;
 		}
 		.btn-follow {

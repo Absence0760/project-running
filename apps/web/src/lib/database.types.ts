@@ -2338,6 +2338,7 @@ export type Database = {
           distance_m: number | null
           duration_s: number | null
           event_id: string | null
+          has_track: boolean | null
           id: string | null
           is_public: boolean | null
           metadata: Json | null
@@ -2351,6 +2352,7 @@ export type Database = {
           distance_m?: number | null
           duration_s?: number | null
           event_id?: never
+          has_track?: never
           id?: string | null
           is_public?: boolean | null
           metadata?: never
@@ -2364,6 +2366,7 @@ export type Database = {
           distance_m?: number | null
           duration_s?: number | null
           event_id?: never
+          has_track?: never
           id?: string | null
           is_public?: boolean | null
           metadata?: never

@@ -139,3 +139,69 @@ test.describe('feed journey', () => {
 		});
 	});
 });
+
+/**
+ * Feed map-thumbnail regression (persona-hunt R5, very-social Critical).
+ *
+ * `public_runs` dropped `track_url` (20260924_001), but SocialFeed still
+ * gated the map preview on `entry.track_url`, so it was permanently
+ * undefined and NO feed card ever rendered a map. 20261105_001 re-added a
+ * boolean `has_track`; the feed now gates on that and the non-owner clip
+ * path fetches by runId. Plant a followee public run carrying a track_url
+ * (→ has_track=true) and assert the card renders the `.entry-map` slot.
+ * The track bytes aren't uploaded, so RunTrackPreview shows its
+ * placeholder inside the slot — but the slot rendering is the gate the
+ * bug broke. Hermetic: plants + deletes its own run via the admin client.
+ */
+test.describe('feed map thumbnail', () => {
+	test.use({ storageState: USER_B.storageStatePath });
+
+	let trackRunId: string | null = null;
+
+	test.beforeEach(async () => {
+		const admin = getAdminClient();
+		await admin
+			.from('user_follows')
+			.upsert(
+				{ follower_id: USER_B.id, followee_id: USER_A.id },
+				{ onConflict: 'follower_id,followee_id' }
+			);
+		const { data: row, error } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+				duration_s: 2100,
+				distance_m: 6200,
+				source: 'app',
+				is_public: true,
+				metadata: { activity_type: 'run' }
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		trackRunId = (row as { id: string }).id;
+		// track_url must match the canonical {user_id}/{run_id}.json.gz shape
+		// (runs_track_url_path_shape CHECK, migration 20260621_001). Setting it
+		// makes has_track=true on public_runs; the bytes aren't uploaded.
+		const { error: upErr } = await admin
+			.from('runs')
+			.update({ track_url: `${USER_A.id}/${trackRunId}.json.gz` })
+			.eq('id', trackRunId);
+		if (upErr) throw upErr;
+	});
+
+	test.afterEach(async () => {
+		if (trackRunId) {
+			await getAdminClient().from('runs').delete().eq('id', trackRunId);
+			trackRunId = null;
+		}
+	});
+
+	test('a followee run with a track renders the feed map slot', async ({ page }) => {
+		await page.goto('/feed');
+		// At least one card surfaces the .entry-map slot now that the gate
+		// is has_track (pre-fix: gated on the dropped track_url → always 0).
+		await expect(page.locator('.entry-map').first()).toBeVisible({ timeout: 10_000 });
+	});
+});

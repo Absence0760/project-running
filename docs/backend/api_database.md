@@ -91,6 +91,7 @@ when `bpm` is absent.
 - nulls `route_id` / `event_id` when the joined route or event isn't itself public (via SECURITY DEFINER helpers `is_public_route_by_id` / `is_public_event_by_id`),
 - restricts to `is_public = true`,
 - omits `updated_at` — same signal as `metadata.last_modified_at` (already stripped); leaks last-edit / last-sync timestamps to anyone with the share link (`20260807_001`).
+- omits `track_url` (the `{user_id}/{run_id}.json.gz` Storage path — dropped `20260924_001` for defence-in-depth so a future Storage-RLS loosening can't re-open direct download from a leaked path) but exposes a derived boolean `has_track` (`track_url IS NOT NULL`, `20261105_001`) so the feed / `/u/[id]` map-thumbnail gate has a safe existence signal without the path. Non-owner thumbnails fetch the clipped trace by `run_id` through the `clip-public-track` Edge Function, which derives the path itself.
 
 **`source` is intentionally kept** in the view: `RunShareView.svelte` renders it as a source badge ("Strava", "Garmin", "parkrun") so a follower can tell where the run came from. The trade-off is provider-context disclosure (a Strava-tagged badge implies the user has a Strava account) vs. UX recognisability — UX wins because the user opted into sharing. If you ever drop the badge, also drop `r.source` from the view.
 

@@ -236,11 +236,13 @@
 						<span class="when">{formatRelativeTime(entry.started_at)}</span>
 					</header>
 					<a class="entry-body" href="/runs/{entry.id}">
-						{#if entry.track_url}
+						{#if entry.has_track}
 							<div class="entry-map">
+								<!-- public_runs dropped track_url; the non-owner clip
+								     path fetches by runId via clip-public-track. -->
 								<RunTrackPreview
 									runId={entry.id}
-									trackUrl={entry.track_url}
+									trackUrl={null}
 									ownerUserId={entry.author.id}
 								/>
 							</div>
@@ -378,7 +380,7 @@
 	.entry-body {
 		display: flex;
 		flex-direction: column;
-		text-align: left;
+		text-align: start;
 		background: transparent;
 		border: none;
 		padding: 0;
