@@ -24,6 +24,19 @@ test('system prompt declares the <CONTEXT> boundary', () => {
 	);
 });
 
+test('system prompt instructs the coach to reply in the runner’s language', () => {
+	// audit-findings 2026-05-30 High [i18n] (W-12 / S-2): the coach is
+	// the one always-on free-text surface; without a respond-in-language
+	// instruction a non-English runner gets English replies regardless of
+	// how they write. Pin the instruction so a prompt edit can't silently
+	// drop it.
+	assert.match(
+		COACH_SYSTEM_PROMPT,
+		/reply in the same language|respond entirely in that language/i,
+		'system prompt must tell the coach to answer in the runner’s own language',
+	);
+});
+
 test('system prompt refuses persona-switch / system-impersonation', () => {
 	// Companion to the CONTEXT boundary — protects against turns
 	// where the user (or a replayed assistant turn) claims to be
