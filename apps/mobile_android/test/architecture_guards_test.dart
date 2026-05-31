@@ -3260,10 +3260,10 @@ void main() {
       // doesn't behave differently from another. See
       // `decisions.md § 68`.
 
-      // Web (TypeScript): map-style-url.ts uses `.trim()` +
+      // Web (TypeScript): routes/map-style-url.ts uses `.trim()` +
       // length check.
       final webSrc =
-          File('../web/src/lib/map-style-url.ts').readAsStringSync();
+          File('../web/src/lib/routes/map-style-url.ts').readAsStringSync();
       expect(webSrc, contains('.trim()'),
           reason: 'web builder must trim the override before length-checking — '
               'otherwise whitespace in .env.local silently disables MapTiler');
