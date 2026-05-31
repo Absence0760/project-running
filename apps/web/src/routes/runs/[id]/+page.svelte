@@ -14,15 +14,8 @@
 	import RunSegmentEfforts from '$lib/components/RunSegmentEfforts.svelte';
 	import RouteHistory from '$lib/components/RouteHistory.svelte';
 	import SplitPane from '$lib/components/SplitPane.svelte';
-	import {
-		formatDuration,
-		formatPace,
-		formatSpeed,
-		formatDistance,
-		formatDate,
-		sourceLabel,
-		sourceColor,
-	} from '$lib/mock-data';
+	import { formatPace, formatSpeed, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
+	import { formatDate, formatDuration } from '$lib/time';
 	import {
 		fetchRunById,
 		deleteRun,

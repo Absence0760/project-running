@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { formatRelativeTime } from '$lib/time';
+	import { formatDuration, formatRelativeTime } from '$lib/time';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/supabase';
 	import {
@@ -23,7 +23,7 @@
 		type ProfileSummary,
 		type PublicProfile,
 	} from '$lib/data';
-	import { formatDuration } from '$lib/mock-data';
+	
 	import { formatDistance, formatPace } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';

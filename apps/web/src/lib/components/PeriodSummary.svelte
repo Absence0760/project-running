@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
-	import {
-		formatDistance,
-		formatDuration,
-		formatPace,
-		formatDate,
-		sourceLabel,
-		sourceColor,
-	} from '$lib/mock-data';
+	import { formatDistance, formatPace, sourceLabel, sourceColor } from '$lib/mock-data';
+	import { formatDate, formatDuration } from '$lib/time';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatISO } from '$lib/training';
 	import type { Run } from '$lib/types';

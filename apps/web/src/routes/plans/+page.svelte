@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatDateShort } from '$lib/time';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/data';
-	import { formatDateShort } from '$lib/mock-data';
+	
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';

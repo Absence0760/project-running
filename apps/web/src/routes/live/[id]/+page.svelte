@@ -6,7 +6,8 @@
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv } from '$lib/map-style.svelte';
 	import { watchMapResize } from '$lib/map_resize';
-	import { formatDuration, formatPace, formatDistance } from '$lib/mock-data';
+	import { formatPace, formatDistance } from '$lib/mock-data';
+	import { formatDuration } from '$lib/time';
 	import { supabase } from '$lib/supabase';
 	import { hasAcceptedConsent } from '$lib/consent.svelte';
 	import {

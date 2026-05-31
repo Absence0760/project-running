@@ -1,15 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import {
-		formatDuration,
-		formatPace,
-		formatDistance,
-		formatDate,
-		formatDateShort,
-		sourceLabel,
-		sourceColor,
-	} from '$lib/mock-data';
+	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
+	import { formatDate, formatDateShort, formatDuration } from '$lib/time';
 	import {
 		fetchRuns,
 		fetchWeeklyMileage,

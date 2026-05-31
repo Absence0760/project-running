@@ -24,3 +24,29 @@ export function formatRelativeTime(iso: string, now: number = Date.now()): strin
 		year: 'numeric',
 	});
 }
+
+/** Duration as `H:MM:SS` (>= 1h) or `M:SS`. */
+export function formatDuration(seconds: number): string {
+	const h = Math.floor(seconds / 3600);
+	const m = Math.floor((seconds % 3600) / 60);
+	const s = seconds % 60;
+	if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+	return `${m}:${String(s).padStart(2, '0')}`;
+}
+
+/** Localized `D Mon YYYY` date (visitor locale). */
+export function formatDate(iso: string): string {
+	return new Date(iso).toLocaleDateString(undefined, {
+		day: 'numeric',
+		month: 'short',
+		year: 'numeric',
+	});
+}
+
+/** Localized `D Mon` date, no year (visitor locale). */
+export function formatDateShort(iso: string): string {
+	return new Date(iso).toLocaleDateString(undefined, {
+		day: 'numeric',
+		month: 'short',
+	});
+}

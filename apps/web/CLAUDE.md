@@ -42,7 +42,8 @@ src/
     database.types.ts  # Generated Supabase types (regenerate after migrations)
     supabase.ts     # Supabase client init
     mock-data.ts    # Fallback data when Supabase is empty
-    units.svelte.ts # Reactive km/mi preference signal + formatters
+    units.svelte.ts # Reactive km/mi preference signal + unit-aware formatters (distance/pace/elevation)
+    time.ts         # Pure, locale/unit-independent time formatters (formatRelativeTime, formatDuration, formatDate, formatDateShort) — unit-tested in time.test.ts. NOT in mock-data.ts (which is fallback data only).
     map-style.svelte.ts  # Reactive map-style preference signal (used by RunMap)
     settings.ts     # `loadSettings()` + `effective<T>()` helpers over user_settings + user_device_settings. Now offline-first via settings_cache.ts (cache-first read, write-through, drain-on-refresh pending queue, sign-out drop). Mirrors mobile SettingsService — decisions §72 / §79.
     settings_cache.ts  # `LocalStoragePrefsCache` + `InMemoryPrefsCache` (test seam) + pure `applyPrefsChanges`. User- + device-scoped keys (`settings_cache_universal_<userId>`, `..._device_<userId>_<deviceId>`, `..._pending_<userId>_<deviceId>`). 40-test contract in `settings_cache.test.ts`.

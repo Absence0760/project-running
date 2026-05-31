@@ -1,13 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import {
-		formatDuration,
-		formatPace,
-		formatDistance,
-		formatDate,
-		sourceLabel,
-		sourceColor,
-	} from '$lib/mock-data';
+	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/mock-data';
+	import { formatDate, formatDuration } from '$lib/time';
 	import { fetchRuns, deleteRuns } from '$lib/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { formatRelativeTime } from '$lib/time';
+	import { formatDuration, formatRelativeTime } from '$lib/time';
 	import {
 		fetchFollowingFeed,
 		fetchEngagementSummaries,
@@ -9,7 +9,7 @@
 		FEED_WINDOW_DAYS,
 		type FeedEntry,
 	} from '$lib/data';
-	import { formatDuration } from '$lib/mock-data';
+	
 	import { formatDistance, formatPace } from '$lib/units.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
