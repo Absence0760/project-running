@@ -4,7 +4,7 @@ import {
 	COACH_BODY_LIMIT_BYTES,
 	checkBodyByteLimit,
 	decodeLambdaBody,
-} from './coach/body';
+} from './body';
 
 test('decodeLambdaBody — plain ASCII body under the cap passes', () => {
 	const result = decodeLambdaBody('{"hello":"world"}', false);

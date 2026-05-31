@@ -68,6 +68,33 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 - Foreign keys: `{table}_id`, e.g. `route_id` on `runs`.
 - Migration files: `{YYYYMMDD}_{nnn}_{description}.sql`. The `nnn` is the ordinal within a day (`001`, `002`, ...).
 
+## `apps/web/src/lib` organisation
+
+Loose modules are grouped into topical subfolders so the lib root doesn't
+become a flat dumping ground: `core/` (Supabase queries + client),
+`training/`, `routes/`, `segments/`, `social/`, `integrations/`, `backup/`,
+`share/`, `settings/`, `runs/`, `format/`, `util/`, `billing/`.
+
+- **A new lib module goes in the matching subfolder**, never loose at the
+  root. The only production modules allowed at the lib root are `types.ts`
+  (the Run/Route/… overlays) and the generated `database.types.ts` — `gen:types`
+  writes the latter there and the path is hard-coded in
+  `apps/backend/package.json`. Don't move either.
+- **Tests co-locate with their module** (`routes/static_map.ts` →
+  `routes/route_preview_helpers.test.ts`). Cross-cutting guard tests that read
+  several source files by path (`security_guards.test.ts`,
+  `contrast_guard.test.ts`, …) and tests of the two root modules stay at the
+  lib root.
+- **Import across folders with the `$lib/<folder>/<stem>` alias**, not deep
+  relative `../../` chains; siblings within a folder use `./`.
+- When a **TS↔Dart parity helper** moves, update its path in the
+  `shared-library-syncer` agent table and the reference in this file in the
+  same change — they're how the lockstep convention is found.
+
+`src/lib/lib_structure_guards.test.ts` enforces all of the above (root
+cleanliness, parity-path existence, and the recursive `src/lib/**/*.test.ts`
+unit-test glob) so the structure can't silently erode.
+
 ## Error handling
 
 ### Where validation belongs

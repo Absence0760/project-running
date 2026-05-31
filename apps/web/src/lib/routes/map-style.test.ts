@@ -12,7 +12,7 @@ import {
 	buildMapStyleUrl,
 	OSM_FALLBACK_STYLE_URL,
 	resolveStyleOverride,
-} from './routes/map-style-url';
+} from './map-style-url';
 
 test('no override + light mode → MapTiler streets-v2', () => {
 	const url = buildMapStyleUrl('streets', 'KEY', false);
