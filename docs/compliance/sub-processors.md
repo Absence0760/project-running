@@ -11,9 +11,9 @@ Every external service that touches user data. This is both:
 
 | Provider | What we send | Region | Lawful basis (claimed) | DPA / SCC | User opt-out |
 |---|---|---|---|---|---|
-| **Supabase** | All Postgres + Auth + Storage data | TODO: which region? | Contract (Art 6(1)(b)) | <https://supabase.com/legal/dpa> | Account deletion |
+| **Supabase** | All Postgres + Auth + Storage data | `eu-west-2` (London) — per `apps/backend/deployment.md` | Contract (Art 6(1)(b)) | <https://supabase.com/legal/dpa> | Account deletion |
 | **AWS** (S3, CloudFront, Lambda, KMS, Route 53, Fly→peering) | Web bundle, run-export Storage objects, CloudFront access logs, KMS-encrypted sops secrets | us-east-1 (primary), edge worldwide | Contract | <https://aws.amazon.com/compliance/data-protection/> | Account deletion |
-| **Fly.io** (job_worker + OSRM) | Map-match jobs (run tracks transit through), strava-webhook payloads, data-export job state | TODO: which Fly region? | Contract | <https://fly.io/legal/dpa/> | None practical (server-side only) |
+| **Fly.io** (job_worker + OSRM) | Map-match jobs (run tracks transit through), strava-webhook payloads, data-export job state | `lhr` (London) — per `apps/job_worker/fly.toml` + `osrm/fly.toml` `primary_region` | Contract | <https://fly.io/legal/dpa/> | None practical (server-side only) |
 | **MapTiler** | Viewport bbox + request IP per tile fetch | EU + global edge | Legitimate interest (essential map rendering) | <https://www.maptiler.com/privacy-policy/> | None practical (web functionality depends on it) |
 | **Anthropic** (AI Coach primary) | Coach prompt incl. last-N runs, plan, HR pills, weekly goal | us-east-1 | Consent (user opens the Coach) | <https://www.anthropic.com/legal/data-processing-addendum> | Don't use the Coach |
 | **OpenAI** (Coach fallback when `COACH_PROVIDER=openai`) | Same as Anthropic | TODO: which API region? | Consent | <https://openai.com/policies/data-processing-addendum> | Don't use the Coach |
@@ -30,7 +30,9 @@ Every external service that touches user data. This is both:
 | **Apple** (Sign-In, scaffolded) | ID token validation; relay email if user chose private relay | Global | Consent | <https://www.apple.com/legal/privacy/> | Don't use Apple sign-in |
 | **FCM** (Firebase Cloud Messaging, when push wired) | Push token + push payload | Global | Consent (user enables notifications) | <https://firebase.google.com/support/privacy> | Disable notifications |
 | **APNs** (Apple Push Notification service, when push wired) | Same | Global | Consent | Apple DPA | Disable notifications |
-| **Supabase Auth's email provider** (TODO: which? Resend / Postmark / in-house) | User email + auth event content (confirm-signup, password-reset) | TODO | Contract | TODO | None (mandatory transactional emails) |
+| **Supabase Auth transactional email** | User email + auth event content (confirm-signup, password-reset) | Same as Supabase (`eu-west-2`) — see verify note | Contract | Covered by the Supabase DPA above | None (mandatory transactional emails) |
+
+**Transactional-email verify note (audit/third-party-data-flows + audit/gdpr 2026-05-30 Critical):** `supabase/config.toml` declares no custom `[auth.email.smtp]` block, so confirm-signup / password-reset mail is sent by Supabase's own managed email service — a Supabase sub-processor, covered by the Supabase DPA already linked above, not a separate Resend / Postmark / in-house provider. **Before publishing, the operator must confirm the production project's dashboard (Auth → Emails → SMTP Settings) has no custom SMTP host configured.** If a custom SMTP provider *is* set there, add it as its own row with that provider's region + DPA — the dashboard setting is invisible to this repo.
 
 ## Sub-sub-processors
 
