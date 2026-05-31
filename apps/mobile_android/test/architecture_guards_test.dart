@@ -2008,6 +2008,50 @@ void main() {
             'Metadata-name mismatch is an App Review rejection cause.',
       );
     });
+
+    test('Runner.entitlements declares the HealthKit capability', () {
+      // audit/app-store-privacy (2026-05-30) Critical. The phone app
+      // calls HealthKit at runtime (the `health` plugin, via the shared
+      // lib/) and Info.plist carries the Share/Update usage strings, but
+      // there was no Runner.entitlements declaring
+      // com.apple.developer.healthkit. Without it App Store Connect
+      // validation rejects the IPA and any HealthKit call crashes.
+      // Auto-skips on the Android twin (no ios/ folder).
+      final file = File('ios/Runner/Runner.entitlements');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      final keyIdx = body.indexOf('com.apple.developer.healthkit</key>');
+      expect(
+        keyIdx,
+        greaterThanOrEqualTo(0),
+        reason: 'Runner.entitlements must declare '
+            'com.apple.developer.healthkit — the health plugin needs it '
+            'and removing it reintroduces an App Store reject + a '
+            'runtime crash on the first HealthKit call.',
+      );
+      expect(
+        body.substring(keyIdx).contains('<true/>'),
+        isTrue,
+        reason: 'com.apple.developer.healthkit must be set <true/>.',
+      );
+    });
+
+    test('Xcode project wires CODE_SIGN_ENTITLEMENTS to the entitlements file',
+        () {
+      // The entitlement only reaches the binary if the Runner target's
+      // build configs point CODE_SIGN_ENTITLEMENTS at it. Pin both
+      // halves so a future pbxproj rewrite can't silently drop it.
+      final file = File('ios/Runner.xcodeproj/project.pbxproj');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      expect(
+        body,
+        contains('CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements;'),
+        reason: 'The Runner target build configs must set '
+            'CODE_SIGN_ENTITLEMENTS = Runner/Runner.entitlements; — '
+            'otherwise the HealthKit capability never reaches the binary.',
+      );
+    });
   });
 
   group('Android phone manifest', () {
