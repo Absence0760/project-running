@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Run } from '$lib/types';
+	import { formatISO } from '$lib/training';
 	import { fmtKm } from '$lib/units.svelte';
 
 	let { runs = [] }: { runs: Run[] } = $props();
@@ -41,8 +42,7 @@
 				// Format as local yyyy-mm-dd — `toISOString` gives the UTC
 				// date, which cuts the heatmap by the wrong day for any
 				// viewer not on UTC near midnight.
-				const pad = (n: number) => String(n).padStart(2, '0');
-				const dateStr = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+				const dateStr = formatISO(date);
 				result.push({
 					date: dateStr,
 					col: w,

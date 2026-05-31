@@ -8,6 +8,7 @@
 		generatePlan,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
+		formatISO,
 	} from '$lib/training';
 	import type {
 		GoalEvent,
@@ -159,8 +160,7 @@
 		const d = new Date();
 		d.setDate(d.getDate() + 7);
 		d.setDate(d.getDate() + ((7 - d.getDay()) % 7));
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+		return formatISO(d);
 	}
 
 	let goalDistance = $derived(
@@ -268,8 +268,7 @@
 
 	function todayIso(): string {
 		const d = new Date();
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+		return formatISO(d);
 	}
 
 	async function proceedWithCreate() {

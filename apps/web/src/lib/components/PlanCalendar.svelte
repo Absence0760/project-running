@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { PlanWorkout } from '$lib/types';
-	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO } from '$lib/training';
+	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training';
 	import { fmtKm } from '$lib/units.svelte';
 
 	type Props = {
@@ -69,9 +69,7 @@
 	};
 
 	function isoFor(year: number, month: number, day: number): string {
-		const mm = String(month + 1).padStart(2, '0');
-		const dd = String(day).padStart(2, '0');
-		return `${year}-${mm}-${dd}`;
+		return formatISO(new Date(year, month, day));
 	}
 
 	let grid = $derived.by<Cell[]>(() => {

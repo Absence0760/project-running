@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatISO } from '$lib/training';
 	import { goto, afterNavigate } from '$app/navigation';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import {
@@ -47,8 +48,7 @@
 		// schedule generator assumes.
 		const offset = (8 - d.getDay()) % 7;
 		d.setDate(d.getDate() + (offset === 0 ? 7 : offset));
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+		return formatISO(d);
 	}
 
 	onMount(async () => {

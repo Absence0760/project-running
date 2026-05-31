@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatISO } from '$lib/training';
 	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/data';
 	import { WEEKDAY_CHOICES } from '$lib/recurrence';
 	import { formatDistance, getUnit } from '$lib/units.svelte';
@@ -56,8 +57,7 @@
 	function defaultDate(): string {
 		const d = new Date();
 		d.setDate(d.getDate() + 1);
-		const pad = (n: number) => String(n).padStart(2, '0');
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+		return formatISO(d);
 	}
 
 	onMount(async () => {
