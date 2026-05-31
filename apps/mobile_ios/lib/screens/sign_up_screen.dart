@@ -1,10 +1,14 @@
 import 'dart:io' show Platform;
 
 import 'package:api_client/api_client.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
+import 'package:url_launcher/url_launcher.dart';
+
+import '../widgets/top_banner.dart';
 
 /// Email/password account-creation screen with Google + Apple OAuth.
 ///
@@ -35,10 +39,30 @@ class _SignUpScreenState extends State<SignUpScreen> {
   /// must clear both.
   bool _acceptTerms = false;
 
+  // GDPR Art 7(2): the consent request must let the user read the Terms +
+  // Privacy Policy before accepting, so the label carries tappable links.
+  late final TapGestureRecognizer _termsTap = TapGestureRecognizer()
+    ..onTap = () => _openLegal('terms');
+  late final TapGestureRecognizer _privacyTap = TapGestureRecognizer()
+    ..onTap = () => _openLegal('privacy');
+
+  Future<void> _openLegal(String path) async {
+    final url = 'https://threkir.com/$path';
+    try {
+      final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      if (!ok && mounted) showTopBanner(context, 'Could not open $url');
+    } catch (e) {
+      debugPrint('sign_up: opening $url failed: $e');
+      if (mounted) showTopBanner(context, 'Could not open $url');
+    }
+  }
+
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _termsTap.dispose();
+    _privacyTap.dispose();
     super.dispose();
   }
 
@@ -261,8 +285,29 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     : (v) => setState(() => _acceptTerms = v ?? false),
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
-                title: const Text(
-                  'I accept the Terms of Service and Privacy Policy',
+                title: Text.rich(
+                  TextSpan(
+                    children: [
+                      const TextSpan(text: 'I accept the '),
+                      TextSpan(
+                        text: 'Terms of Service',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                        recognizer: _termsTap,
+                      ),
+                      const TextSpan(text: ' and '),
+                      TextSpan(
+                        text: 'Privacy Policy',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.primary,
+                          decoration: TextDecoration.underline,
+                        ),
+                        recognizer: _privacyTap,
+                      ),
+                    ],
+                  ),
                 ),
               ),
               const SizedBox(height: 16),

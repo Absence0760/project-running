@@ -105,6 +105,31 @@ void main() {
       expect(find.byType(Checkbox), findsNWidgets(2));
     });
 
+    testWidgets('Terms + Privacy in the accept label are tappable link spans',
+        (tester) async {
+      // GDPR Art 7(2): the consent label must let the user open the Terms
+      // + Privacy Policy before accepting.
+      await _pump(tester, _FakeApiClient());
+      final richTexts = tester.widgetList<RichText>(find.byType(RichText));
+      final linkSpans = <TextSpan>[];
+      for (final rt in richTexts) {
+        rt.text.visitChildren((span) {
+          if (span is TextSpan && span.recognizer != null) linkSpans.add(span);
+          return true;
+        });
+      }
+      expect(
+        linkSpans.any((s) => s.text == 'Terms of Service'),
+        isTrue,
+        reason: 'Terms of Service must be a tappable span',
+      );
+      expect(
+        linkSpans.any((s) => s.text == 'Privacy Policy'),
+        isTrue,
+        reason: 'Privacy Policy must be a tappable span',
+      );
+    });
+
     testWidgets('signUp blocked when age gate is unchecked', (tester) async {
       // GDPR Art 8 — users under 16 require parental consent in the
       // EU. A regression that let the API call fire without the
