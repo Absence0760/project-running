@@ -660,7 +660,7 @@
 			{/if}
 		{/if}
 
-		{#if identityError}<p class="error-text">{identityError}</p>{/if}
+		{#if identityError}<p class="error-text" role="alert">{identityError}</p>{/if}
 	</section>
 
 	<!-- Password -->
@@ -681,7 +681,7 @@
 				<input type="password" autocomplete="new-password" bind:value={confirmPassword} />
 			</label>
 		</div>
-		{#if passwordError}<p class="error-text">{passwordError}</p>{/if}
+		{#if passwordError}<p class="error-text" role="alert">{passwordError}</p>{/if}
 		{#if passwordStatus}<p class="ok-text">{passwordStatus}</p>{/if}
 		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword}>
 			{passwordSaving ? 'Saving...' : 'Save Password'}
@@ -831,7 +831,7 @@
 				{#if restoreResult.warnings.length > 0}<br /><small>{restoreResult.warnings.length} warnings (see console).</small>{/if}
 			</p>
 		{/if}
-		{#if restoreError}<p class="error-text">Restore failed: {restoreError}</p>{/if}
+		{#if restoreError}<p class="error-text" role="alert">Restore failed: {restoreError}</p>{/if}
 	</section>
 
 	<!-- Data Export -->

@@ -32,6 +32,10 @@ test.describe('/login', () => {
 		// We don't assert the error copy — it may shift; the URL
 		// behaviour is the security contract.
 		await expect(page).toHaveURL(/\/login/);
+
+		// WCAG 4.1.3 (audit-findings 2026-05-30 High): the error must be
+		// announced to assistive tech, so the banner carries role="alert".
+		await expect(page.locator('.error[role="alert"]')).toBeVisible({ timeout: 5_000 });
 	});
 
 	test('sign-up: ?signup=1 → fill form → land on /dashboard with a fresh user', async ({

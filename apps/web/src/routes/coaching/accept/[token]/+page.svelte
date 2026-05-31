@@ -73,7 +73,7 @@
 			<section class="invite-card">
 				<p class="kicker">Hmm</p>
 				<h1>Invite problem</h1>
-				<p class="error">{errorMsg}</p>
+				<p class="error" role="alert">{errorMsg}</p>
 				<p class="muted">
 					This invite link may have been revoked, already redeemed, or you may already
 					be linked to this coach. Ask them to share a fresh one.

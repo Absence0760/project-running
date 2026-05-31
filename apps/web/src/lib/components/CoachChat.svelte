@@ -37,6 +37,9 @@
 	}
 
 	let messages = $state<Msg[]>([]);
+	/// Set to the coach's completed reply when a stream finishes, so a
+	/// visually-hidden aria-live region announces it once (WCAG 4.1.3).
+	let liveAnnouncement = $state('');
 	/// True once `loadThread` has finished its fetch. Gates the empty-
 	/// state primer so saved threads don't render the welcome / suggestion
 	/// block for a frame on reload before the rows arrive.
@@ -578,6 +581,10 @@
 				const cur = messages[assistantIdx];
 				if (cur) messages[assistantIdx] = { ...cur, id };
 			}
+			// Announce the completed reply to assistive tech exactly once
+			// (WCAG 4.1.3), via the visually-hidden polite region — not
+			// the streaming log, which would interrupt per token.
+			liveAnnouncement = messages[assistantIdx]?.content ?? '';
 			const cache = parsed.cache as Record<string, number> | undefined;
 			if (cache) {
 				lastCache = {
@@ -895,7 +902,17 @@
 			</div>
 		{/if}
 
-		<div class="scroll" bind:this={scrollEl}>
+		<!-- Visually-hidden polite live region: announces the coach's
+		     completed reply once, set on the SSE `done` event. Kept
+		     separate from the streaming log so per-token DOM churn doesn't
+		     fire hundreds of interruptions. WCAG 4.1.3. -->
+		<div class="visually-hidden" aria-live="polite" role="status">{liveAnnouncement}</div>
+
+		<!-- role="log" marks this as an append-only message log, but live
+		     announcements are handled by the visually-hidden region above
+		     (NOT here, where per-token streaming would interrupt on every
+		     token and echo the user's own message). WCAG 4.1.3. -->
+		<div class="scroll" bind:this={scrollEl} role="log" aria-live="off">
 			{#if threadLoaded && messages.length === 0}
 				<div class="primer">
 					<p>

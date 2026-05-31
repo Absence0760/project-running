@@ -195,10 +195,10 @@
 			<p class="subtitle">{subtitle}</p>
 
 			{#if error}
-				<div class="error">{error}</div>
+				<div class="error" role="alert">{error}</div>
 			{/if}
 			{#if info}
-				<div class="info">{info}</div>
+				<div class="info" role="status" aria-live="polite">{info}</div>
 			{/if}
 
 			{#if !isReset}

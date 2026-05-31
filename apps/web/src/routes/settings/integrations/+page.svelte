@@ -324,7 +324,7 @@
 				<input type="file" accept=".zip,application/zip" onchange={handleZipSelect} hidden />
 			</label>
 			{#if zipError}
-				<p class="zip-error">{zipError}</p>
+				<p class="zip-error" role="alert">{zipError}</p>
 			{/if}
 			{#if zipProgress}
 				<div class="zip-progress">
@@ -377,7 +377,7 @@
 				<input type="file" accept=".fit,.zip,application/octet-stream,application/zip" onchange={handleGarminSelect} hidden />
 			</label>
 			{#if garminError}
-				<p class="zip-error">{garminError}</p>
+				<p class="zip-error" role="alert">{garminError}</p>
 			{/if}
 			{#if garminProgress}
 				<div class="zip-progress">

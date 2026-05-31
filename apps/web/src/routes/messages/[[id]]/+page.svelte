@@ -152,7 +152,7 @@
 							{/each}
 						{/if}
 					</div>
-					{#if sendError}<p class="send-error">{sendError}</p>{/if}
+					{#if sendError}<p class="send-error" role="alert">{sendError}</p>{/if}
 					<div class="composer">
 						<textarea
 							bind:value={draft}

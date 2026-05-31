@@ -717,7 +717,7 @@
 		</div>
 
 		{#if error}
-			<p class="error">{error}</p>
+			<p class="error" role="alert">{error}</p>
 		{/if}
 
 		{#if isAdmin && (club.join_policy === 'invite' || club.invite_token)}

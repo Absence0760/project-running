@@ -106,7 +106,7 @@
 				<p class="subtitle">Choose a new password for <strong>{auth.user.email}</strong>.</p>
 
 				{#if error}
-					<div class="error">{error}</div>
+					<div class="error" role="alert">{error}</div>
 				{/if}
 
 				<form class="reset-form" onsubmit={handleSubmit}>
