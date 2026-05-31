@@ -17,23 +17,19 @@
 	import { formatDistance } from '$lib/format/units.svelte';
 	import { searchPlaces, type PlaceSearchResult } from '$lib/routes/geocoding';
 	import type { Route } from '$lib/types';
+	import {
+		DISTANCE_BANDS,
+		bandForDistance,
+		type DistanceBandKey,
+	} from '$lib/routes/distance_bands';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
 	let stopResizeWatch: (() => void) | null = null;
-	/// The "Where people run" legend defaults to compact (info icon
-	/// only) so it doesn't eat real estate. Click to expand. The
-	/// May 2026 real-estate pass surfaced that the 18rem-wide
-	/// card-style legend was the second-biggest waste of canvas
-	/// after the page padding.
-	let legendExpanded = $state(false);
 	let loading = $state(false);
 	let lastUpdated = $state<Date | null>(null);
 	let mapLoaded = false;
 	let cachedFeatures: GeoJSON.Feature[] = [];
-	/// True while the cursor is over the map. The legend fades out so
-	/// it doesn't obstruct the area the user is inspecting.
-	let pointerOnMap = $state(false);
 
 	// --- Search ---
 	// Uses `$lib/routes/geocoding.searchPlaces`, which transparently picks
@@ -107,17 +103,43 @@
 		{ id: 'featured', label: 'Featured', hint: 'Hand-picked routes' },
 		{ id: 'hidden_gems', label: 'Hidden gems', hint: 'Quiet routes nobody has run yet' },
 	];
-	// The viewport's discoverable routes, kept as state so the list
-	// panel (and the count chip) render straight off the same fetch
-	// the map pins use.
+	// The viewport's discoverable routes, kept as state so the results
+	// list (and the count) render straight off the same fetch the map
+	// pins use.
 	let routePins = $state<DiscoverableRoutePin[]>([]);
-	// Side list panel — the textual, scrollable twin of the map pins.
-	// Default-open so the discovery surface reads as a browser, not a
-	// bare map. Collapsible for users who want the full canvas.
-	let listOpen = $state(true);
+
+	// Selected race-distance bands (5k / 10k / half / marathon / ultra),
+	// multi-select. Empty = no distance filter. Combines with the lens.
+	let selectedBands = $state<DistanceBandKey[]>([]);
+	// Advanced-filters panel (lens + distance + layers) under the search.
+	let filtersOpen = $state(false);
+	// The results sidebar. Default-open so the surface reads as a route
+	// browser; collapsible to reclaim the full map canvas.
+	let sidebarOpen = $state(true);
+
 	const activeFilterLabel = $derived(
 		FILTERS.find((f) => f.id === routeFilter)?.label ?? '',
 	);
+	// Count of non-default filters, shown as a badge on the Filters
+	// button: a non-popular lens counts as one, plus each distance band.
+	const activeFilterCount = $derived(
+		(routeFilter !== 'popular' ? 1 : 0) + selectedBands.length,
+	);
+	const bandSummary = $derived(
+		DISTANCE_BANDS.filter((b) => selectedBands.includes(b.key))
+			.map((b) => b.label)
+			.join(' / '),
+	);
+
+	function toggleBand(key: DistanceBandKey) {
+		selectedBands = selectedBands.includes(key)
+			? selectedBands.filter((k) => k !== key)
+			: [...selectedBands, key];
+	}
+	function resetFilters() {
+		routeFilter = 'popular';
+		selectedBands = [];
+	}
 
 	onMount(() => {
 		const prefersDark =
@@ -717,7 +739,7 @@
 		};
 		const [clubs, routes] = await Promise.all([
 			fetchClubsInBbox(bbox),
-			fetchDiscoverableRoutesInBbox({ ...bbox, filter: routeFilter }),
+			fetchDiscoverableRoutesInBbox({ ...bbox, filter: routeFilter, bands: selectedBands }),
 		]);
 		clubPinsCount = clubs.length;
 		routePinsCount = routes.length;
@@ -789,13 +811,23 @@
 			showHeatmapLayer ? 'visible' : 'none',
 		);
 	});
-	// Re-fetch the discoverable-route pins whenever the lens changes.
-	// `routeFilter` is referenced directly so the dependency is explicit
-	// rather than relying on the read inside refreshPins's async body.
+	// Re-fetch the discoverable-route pins whenever the lens or the
+	// distance bands change. Both are referenced directly so the
+	// dependency is explicit rather than relying on the reads inside
+	// refreshPins's async body.
 	$effect(() => {
 		routeFilter;
+		selectedBands;
 		if (!map || !mapLoaded) return;
 		void refreshPins();
+	});
+	// The map shares the row with the sidebar, so collapsing / expanding
+	// it changes the canvas width — MapLibre needs an explicit resize or
+	// it renders at the stale width until the next pan.
+	$effect(() => {
+		sidebarOpen;
+		if (!map) return;
+		requestAnimationFrame(() => map?.resize());
 	});
 
 	/// Fetch + render clickable public-route polylines for the current
@@ -895,242 +927,297 @@
 	}
 </script>
 
-<div
-	class="heatmap-wrap"
-	role="region"
-	aria-label="Public route heatmap"
-	onpointerenter={() => (pointerOnMap = true)}
-	onpointerleave={() => (pointerOnMap = false)}
->
-	<div bind:this={mapEl} class="map"></div>
-
-	<div class="search-box" data-testid="heatmap-search">
-		<input
-			bind:this={searchInput}
-			bind:value={searchQuery}
-			oninput={onSearchInput}
-			onfocusout={() => setTimeout(() => (showResults = false), 200)}
-			onfocusin={() => {
-				if (searchResults.length > 0) showResults = true;
-			}}
-			type="text"
-			placeholder="Search for a place…"
-			aria-label="Search for a place to centre the heatmap on"
-		/>
-		{#if showResults}
-			<ul class="search-results">
-				{#each searchResults as result (result.lat + ':' + result.lng)}
-					<li>
-						<button onmousedown={() => selectSearchResult(result)}>
-							{result.name}
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</div>
-
-	<div class="filter-bar" role="group" aria-label="Route discovery filter" data-testid="heatmap-filters">
-		{#each FILTERS as f (f.id)}
-			<button
-				type="button"
-				class="filter-chip"
-				class:active={routeFilter === f.id}
-				aria-pressed={routeFilter === f.id}
-				title={f.hint}
-				data-filter={f.id}
-				onclick={() => (routeFilter = f.id)}
-			>
-				{f.label}
-				{#if routeFilter === f.id}
-					<span class="filter-chip-count" aria-hidden="true">{routePinsCount}</span>
-				{/if}
-			</button>
-		{/each}
-	</div>
-
-	<aside
-		class="legend"
-		class:expanded={legendExpanded}
-		class:dimmed={pointerOnMap && !legendExpanded}
-		data-testid="heatmap-legend"
-	>
-		<button
-			type="button"
-			class="legend-toggle"
-			onclick={() => (legendExpanded = !legendExpanded)}
-			aria-expanded={legendExpanded}
-			aria-label={legendExpanded ? 'Collapse legend' : 'Show legend'}
-		>
-			<span class="material-symbols">{legendExpanded ? 'close' : 'info'}</span>
-			{#if loading && !legendExpanded}
-				<span class="legend-pulse" aria-hidden="true"></span>
-			{/if}
-		</button>
-		{#if legendExpanded}
-			<div class="legend-body">
-				<strong>Where people run</strong>
-				<p>
-					Warmer cells = more public routes pass through here. Pan to
-					explore; the layer refreshes after each move. Zoom in to see
-					individual routes — click any line to open it.
-				</p>
-
-				<!-- Layer toggles. Each independently flips the matching
-					 MapLibre layer's `visibility` via a $effect above.
-					 The count chip after each label surfaces "how much
-					 stuff is in your current viewport" — useful signal
-					 when panning a region with no clubs or no popular
-					 routes. -->
-				<div class="legend-toggles" role="group" aria-label="Map layers">
-					<label class="legend-row">
-						<input type="checkbox" bind:checked={showHeatmapLayer} />
-						<span class="legend-swatch legend-swatch-heat" aria-hidden="true"></span>
-						<span>Heatmap density</span>
-					</label>
-					<label class="legend-row">
-						<input type="checkbox" bind:checked={showRoutePins} />
-						<span class="legend-swatch legend-swatch-route" aria-hidden="true"></span>
-						<span>Popular &amp; featured routes</span>
-						<span class="legend-count">{routePinsCount}</span>
-					</label>
-					<label class="legend-row">
-						<input type="checkbox" bind:checked={showClubPins} />
-						<span class="legend-swatch legend-swatch-club" aria-hidden="true"></span>
-						<span>Clubs</span>
-						<span class="legend-count">{clubPinsCount}</span>
-					</label>
-				</div>
-
-				{#if loading}
-					<p class="muted"><em>Updating…</em></p>
-				{:else if lastUpdated}
-					<p class="muted">
-						Updated {lastUpdated.toLocaleTimeString([], {
-							hour: '2-digit',
-							minute: '2-digit',
-						})}
-					</p>
-				{/if}
+<div class="discover" class:collapsed={!sidebarOpen}>
+	<aside class="discover-sidebar" data-testid="discover-sidebar" aria-label="Route discovery">
+		<div class="sidebar-search" data-testid="heatmap-search">
+			<div class="search-input-row">
+				<input
+					bind:this={searchInput}
+					bind:value={searchQuery}
+					oninput={onSearchInput}
+					onfocusout={() => setTimeout(() => (showResults = false), 200)}
+					onfocusin={() => {
+						if (searchResults.length > 0) showResults = true;
+					}}
+					type="text"
+					placeholder="Search a place…"
+					aria-label="Search for a place to centre the map on"
+				/>
+				<button
+					type="button"
+					class="filters-btn"
+					class:active={filtersOpen}
+					data-testid="filters-button"
+					aria-expanded={filtersOpen}
+					onclick={() => (filtersOpen = !filtersOpen)}
+				>
+					<span class="material-symbols">tune</span>
+					<span class="filters-btn-text">Filters</span>
+					{#if activeFilterCount > 0}
+						<span class="filters-badge">{activeFilterCount}</span>
+					{/if}
+				</button>
 			</div>
-		{/if}
-	</aside>
-
-		<aside
-			class="route-list"
-			class:collapsed={!listOpen}
-			data-testid="heatmap-list"
-			aria-label="Routes in view"
-		>
-			<button
-				type="button"
-				class="route-list-toggle"
-				onclick={() => (listOpen = !listOpen)}
-				aria-expanded={listOpen}
-			>
-				<span class="material-symbols">{listOpen ? 'right_panel_close' : 'list'}</span>
-				<span class="route-list-toggle-text">
-					<strong>{routePinsCount}</strong>
-					{routePinsCount === 1 ? 'route' : 'routes'}
-					<span class="route-list-toggle-lens">· {activeFilterLabel}</span>
-				</span>
-			</button>
-			{#if listOpen}
-				<ul class="route-list-items">
-					{#each routePins as r (r.id)}
+			{#if showResults}
+				<ul class="search-results">
+					{#each searchResults as result (result.lat + ':' + result.lng)}
 						<li>
-							<a
-								class="route-list-row"
-								class:featured={r.featured}
-								href="/routes/{r.id}"
-								data-sveltekit-preload-data="hover"
-								data-route-id={r.id}
-								onmouseenter={() => openHoverTip([r.lng, r.lat], r.name)}
-								onmouseleave={closeHoverTip}
-							>
-								<span class="route-list-name">
-									{#if r.featured}<span class="route-list-star" title="Featured">★</span>{/if}
-									{r.name}
-								</span>
-								<span class="route-list-meta">
-									{formatDistance(r.distance_m)}{#if r.surface} · {r.surface}{/if}{#if r.run_count > 0}
-										· {r.run_count} run{r.run_count === 1 ? '' : 's'}{/if}
-								</span>
-							</a>
-						</li>
-					{:else}
-						<li class="route-list-empty">
-							No routes here yet. Pan the map or try another lens.
+							<button onmousedown={() => selectSearchResult(result)}>
+								{result.name}
+							</button>
 						</li>
 					{/each}
 				</ul>
 			{/if}
-		</aside>
+		</div>
+
+		{#if filtersOpen}
+			<div class="filters-panel" data-testid="filters-panel">
+				<div class="filter-group">
+					<span class="filter-group-label">Show</span>
+					<div class="chip-row" role="group" aria-label="Route lens" data-testid="lens-chips">
+						{#each FILTERS as f (f.id)}
+							<button
+								type="button"
+								class="chip"
+								class:active={routeFilter === f.id}
+								aria-pressed={routeFilter === f.id}
+								title={f.hint}
+								data-filter={f.id}
+								onclick={() => (routeFilter = f.id)}>{f.label}</button>
+						{/each}
+					</div>
+				</div>
+				<div class="filter-group">
+					<span class="filter-group-label">Distance</span>
+					<div class="chip-row" role="group" aria-label="Race distance" data-testid="band-chips">
+						{#each DISTANCE_BANDS as b (b.key)}
+							<button
+								type="button"
+								class="chip"
+								class:active={selectedBands.includes(b.key)}
+								aria-pressed={selectedBands.includes(b.key)}
+								data-band={b.key}
+								onclick={() => toggleBand(b.key)}>{b.label}</button>
+						{/each}
+					</div>
+				</div>
+				<div class="filter-group">
+					<span class="filter-group-label">Map layers</span>
+					<div class="layer-toggles">
+						<label class="layer-row">
+							<input type="checkbox" bind:checked={showHeatmapLayer} />
+							<span>Heat</span>
+						</label>
+						<label class="layer-row">
+							<input type="checkbox" bind:checked={showClubPins} />
+							<span>Clubs</span>
+							<span class="layer-count">{clubPinsCount}</span>
+						</label>
+					</div>
+				</div>
+				{#if activeFilterCount > 0}
+					<button type="button" class="filters-reset" onclick={resetFilters}>
+						Reset filters
+					</button>
+				{/if}
+			</div>
+		{/if}
+
+		<div class="results-header">
+			<span class="results-count">
+				<strong>{routePinsCount}</strong>
+				{routePinsCount === 1 ? 'route' : 'routes'}
+			</span>
+			<span class="results-lens">
+				{activeFilterLabel}{#if selectedBands.length > 0} · {bandSummary}{/if}
+			</span>
+			{#if loading}
+				<span class="results-spinner" aria-label="Updating" title="Updating…"></span>
+			{:else if lastUpdated}
+				<span class="results-updated">
+					{lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+				</span>
+			{/if}
+		</div>
+
+		<ul class="results-list" data-testid="discover-list">
+			{#each routePins as r (r.id)}
+				{@const band = bandForDistance(r.distance_m)}
+				<li>
+					<a
+						class="result-row"
+						class:featured={r.featured}
+						href="/routes/{r.id}"
+						data-sveltekit-preload-data="hover"
+						data-route-id={r.id}
+						onmouseenter={() => openHoverTip([r.lng, r.lat], r.name)}
+						onmouseleave={closeHoverTip}
+					>
+						<span class="result-name">
+							{#if r.featured}<span class="result-star" title="Featured">★</span>{/if}
+							{r.name}
+						</span>
+						<span class="result-meta">
+							{#if band}<span class="result-band">{band.label}</span>{/if}
+							<span>{formatDistance(r.distance_m)}</span>
+							{#if r.surface}<span>· {r.surface}</span>{/if}
+							{#if r.run_count > 0}<span>· {r.run_count} run{r.run_count === 1 ? '' : 's'}</span>{/if}
+						</span>
+					</a>
+				</li>
+			{:else}
+				<li class="results-empty">
+					No routes here yet. Pan the map, zoom out, or change the filters.
+				</li>
+			{/each}
+		</ul>
+	</aside>
+
+	<div class="discover-map-wrap">
+		<button
+			type="button"
+			class="sidebar-toggle"
+			data-testid="sidebar-toggle"
+			onclick={() => (sidebarOpen = !sidebarOpen)}
+			aria-label={sidebarOpen ? 'Hide route list' : 'Show route list'}
+			aria-expanded={sidebarOpen}
+		>
+			<span class="material-symbols">{sidebarOpen ? 'chevron_left' : 'chevron_right'}</span>
+		</button>
+		<div bind:this={mapEl} class="map"></div>
+	</div>
 </div>
 
 <style>
-	.heatmap-wrap {
-		position: relative;
-		/* Flex-column container so the map child can `flex: 1` to
-		 * fill the leftover height. Previously `display: block` +
-		 * `.map { position: absolute; inset: 0 }` worked when the
-		 * heatmap was the only sibling, but a flex parent with a
-		 * single flex:1 child is the more predictable layout
-		 * primitive — MapLibre gets a concrete computed height
-		 * before its constructor reads `clientHeight`.
-		 *
-		 * The May 2026 user-reported bug ("popup lands far below
-		 * the map") was a stale-projection symptom rooted here:
-		 * the map's getBoundingClientRect disagreed with offsetTop
-		 * by ~413 px under the old absolute-positioned layout. The
-		 * flex chain produces a single coherent rect. */
+	.discover {
 		display: flex;
-		flex-direction: column;
+		flex-direction: row;
 		height: 100%;
-		min-height: 24rem;
+		min-height: 28rem;
+		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
 	}
+	/* Results sidebar — search + filters + the scrollable route list.
+	 * Sits beside the map (not over it) so nothing overlaps. */
+	.discover-sidebar {
+		display: flex;
+		flex-direction: column;
+		width: 23rem;
+		max-width: 40%;
+		flex-shrink: 0;
+		min-height: 0;
+		background: var(--color-surface);
+		border-inline-end: 1px solid var(--color-border);
+	}
+	.discover.collapsed .discover-sidebar {
+		display: none;
+	}
+	.discover-map-wrap {
+		position: relative;
+		flex: 1 1 auto;
+		min-width: 0;
+		display: flex;
+	}
 	.map {
 		flex: 1 1 auto;
+		min-width: 0;
 		min-height: 0;
-		width: 100%;
 	}
-	.search-box {
+	/* Collapse handle floating on the map's leading edge. */
+	.sidebar-toggle {
 		position: absolute;
-		top: var(--space-md);
-		/* Top-center: legend is top-left, MapLibre controls are
-		 * top-right. The search box gets the empty middle slot so
-		 * it doesn't fight either. */
-		left: 50%;
-		transform: translateX(-50%);
-		width: min(22rem, calc(100% - 16rem));
+		top: 50%;
+		inset-inline-start: 0;
+		transform: translateY(-50%);
 		z-index: 2;
-	}
-	.search-box input {
-		width: 100%;
-		padding: 0.5rem 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 48px;
+		padding: 0;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
+		border-inline-start: 0;
+		border-start-end-radius: var(--radius-md);
+		border-end-end-radius: var(--radius-md);
 		box-shadow: var(--shadow-md);
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+	.sidebar-toggle:hover {
+		color: var(--color-text);
+	}
+
+	/* Search row: place-search input + the Filters toggle button. */
+	.sidebar-search {
+		padding: var(--space-md);
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.search-input-row {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.search-input-row input {
+		flex: 1 1 auto;
+		min-width: 0;
+		padding: 0.5rem 0.75rem;
+		background: var(--color-bg-secondary);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
 		font-size: 0.9rem;
 		color: var(--color-text);
 	}
-	.search-box input:focus {
+	.search-input-row input:focus {
 		outline: 2px solid var(--color-accent);
 		outline-offset: 1px;
 	}
+	.filters-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		flex-shrink: 0;
+		padding: 0.4rem 0.7rem;
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+	}
+	.filters-btn:hover,
+	.filters-btn.active {
+		color: var(--color-primary);
+		border-color: var(--color-primary);
+	}
+	.filters-btn .material-symbols {
+		font-size: 1.1rem;
+	}
+	.filters-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.1rem;
+		height: 1.1rem;
+		padding: 0 0.3rem;
+		font-size: 0.7rem;
+		font-weight: 700;
+		color: var(--color-on-primary, #fff);
+		background: var(--color-primary);
+		border-radius: 999px;
+	}
 	.search-results {
-		margin: 0;
+		margin: 0.5rem 0 0;
 		padding: 0;
 		list-style: none;
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-md);
-		margin-top: 0.25rem;
-		max-height: 16rem;
+		max-height: 14rem;
 		overflow-y: auto;
 	}
 	.search-results li button {
@@ -1146,216 +1233,207 @@
 	.search-results li button:hover {
 		background: var(--color-surface-hover);
 	}
-	/*
-	 * Route-discovery filter chips. Pinned top-center, just below the
-	 * search box. Horizontally scrollable so narrow viewports don't
-	 * wrap the row. This is the primary control for the discovery
-	 * surface — the lens that decides which routes the map pins +
-	 * list panel show.
-	 */
-	.filter-bar {
-		position: absolute;
-		top: calc(var(--space-md) + 3rem);
-		left: 50%;
-		transform: translateX(-50%);
-		z-index: 2;
+
+	/* Advanced filters: lens + race-distance bands + map layers. */
+	.filters-panel {
 		display: flex;
+		flex-direction: column;
+		gap: var(--space-md);
+		padding: var(--space-md);
+		border-bottom: 1px solid var(--color-border);
+		flex-shrink: 0;
+	}
+	.filter-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.45rem;
+	}
+	.filter-group-label {
+		font-size: 0.7rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-tertiary);
+	}
+	.chip-row {
+		display: flex;
+		flex-wrap: wrap;
 		gap: 0.4rem;
-		max-width: calc(100% - 2rem);
-		overflow-x: auto;
-		padding: 0.15rem;
-		scrollbar-width: none;
 	}
-	.filter-bar::-webkit-scrollbar {
-		display: none;
-	}
-	.filter-chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		white-space: nowrap;
-		padding: 0.35rem 0.75rem;
-		font-size: 0.82rem;
+	.chip {
+		padding: 0.3rem 0.7rem;
+		font-size: 0.8rem;
 		font-weight: 600;
+		white-space: nowrap;
 		color: var(--color-text-secondary);
-		background: var(--color-surface);
+		background: var(--color-bg-secondary);
 		border: 1px solid var(--color-border);
 		border-radius: 999px;
-		box-shadow: var(--shadow-md);
 		cursor: pointer;
 		transition: color var(--transition-fast), background var(--transition-fast),
 			border-color var(--transition-fast);
 	}
-	.filter-chip:hover {
+	.chip:hover {
 		color: var(--color-text);
 		border-color: var(--color-primary);
 	}
-	.filter-chip.active {
+	.chip.active {
 		color: var(--color-on-primary, #fff);
 		background: var(--color-primary);
 		border-color: var(--color-primary);
 	}
-	.filter-chip-count {
-		font-size: 0.7rem;
-		font-variant-numeric: tabular-nums;
-		background: rgba(255, 255, 255, 0.25);
-		border-radius: 999px;
-		padding: 0.02rem 0.35rem;
-		min-width: 1.2rem;
-		text-align: center;
-	}
-	/*
-	 * Legend is a single info-icon button when collapsed — same
-	 * footprint as MapLibre's controls. Click expands to a 16rem
-	 * description card. The collapsed state keeps real estate
-	 * available for the heatmap canvas; users opt in when they
-	 * want context.
-	 */
-	.legend {
-		position: absolute;
-		top: var(--space-md);
-		inset-inline-start: var(--space-md);
+	.layer-toggles {
 		display: flex;
-		flex-direction: column;
-		gap: var(--space-xs);
-		transition: opacity 180ms ease;
-		/* Pointer events: the button needs them; in dimmed mode the
-		 * outer .legend is set to `none` so map clicks pass through.
-		 * The button re-enables them on the button itself via the
-		 * default browser style — when dimmed the button is
-		 * non-interactive too, restored on hover (see :hover below). */
+		gap: 1rem;
 	}
-	.legend.dimmed {
-		opacity: 0.35;
-		pointer-events: none;
-	}
-	.legend.dimmed:hover {
-		opacity: 1;
-		pointer-events: auto;
-	}
-	.legend-toggle {
-		position: relative;
-		display: flex;
+	.layer-row {
+		display: inline-flex;
 		align-items: center;
-		justify-content: center;
-		width: 36px;
-		height: 36px;
-		padding: 0;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-md);
-		color: var(--color-text-secondary);
-		cursor: pointer;
-		transition: color var(--transition-fast),
-			border-color var(--transition-fast);
-	}
-	.legend-toggle:hover {
-		color: var(--color-text);
-		border-color: var(--color-primary);
-	}
-	.legend-toggle .material-symbols {
-		font-size: 1.25rem;
-	}
-	/* Pulsing dot while the heatmap is fetching new points — same
-	 * "I'm working" signal the legend used to communicate in its
-	 * full state, now bound to the collapsed icon. */
-	.legend-pulse {
-		position: absolute;
-		top: 4px;
-		inset-inline-end: 4px;
-		width: 8px;
-		height: 8px;
-		background: var(--color-primary);
-		border-radius: 50%;
-		animation: pulse 1.4s ease-in-out infinite;
-	}
-	@keyframes pulse {
-		0%, 100% { opacity: 0.4; transform: scale(0.85); }
-		50% { opacity: 1; transform: scale(1.1); }
-	}
-	.legend-body {
-		max-width: 16rem;
-		padding: var(--space-md) var(--space-lg);
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-md);
-		font-size: 0.85rem;
-		color: var(--color-text);
-	}
-	.legend-body strong {
-		display: block;
-		margin-bottom: 0.4rem;
-	}
-	.legend-body p {
-		margin: 0 0 0.3rem 0;
-		color: var(--color-text-secondary);
-	}
-	.muted {
-		color: var(--color-text-tertiary) !important;
-	}
-
-	/*
-	 * Layer toggle rows. Each is a label wrapping a checkbox + a
-	 * coloured swatch + a name + an optional count chip. The swatch
-	 * mirrors the actual layer colour (heatmap warm-red, route
-	 * orange, club teal) so the legend doubles as a colour key.
-	 */
-	.legend-toggles {
-		display: flex;
-		flex-direction: column;
-		gap: 0.4rem;
-		margin: var(--space-sm) 0;
-		padding: var(--space-sm) 0;
-		border-top: 1px solid var(--color-border);
-		border-bottom: 1px solid var(--color-border);
-	}
-	.legend-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
+		gap: 0.35rem;
 		font-size: 0.8rem;
 		color: var(--color-text);
 		cursor: pointer;
 		user-select: none;
 	}
-	.legend-row input[type='checkbox'] {
+	.layer-row input[type='checkbox'] {
 		margin: 0;
 		accent-color: var(--color-primary);
 	}
-	.legend-swatch {
-		display: inline-block;
-		width: 14px;
-		height: 14px;
-		border-radius: 50%;
+	.layer-count {
+		font-size: 0.7rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.filters-reset {
+		align-self: flex-start;
+		padding: 0.3rem 0.6rem;
+		font-size: 0.78rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		background: transparent;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		cursor: pointer;
+	}
+	.filters-reset:hover {
+		color: var(--color-text);
+		border-color: var(--color-primary);
+	}
+
+	/* Results header + scrollable list (the textual twin of the pins). */
+	.results-header {
+		display: flex;
+		align-items: baseline;
+		gap: 0.5rem;
+		padding: 0.6rem var(--space-md);
+		border-bottom: 1px solid var(--color-border);
 		flex-shrink: 0;
+		font-size: 0.82rem;
 	}
-	.legend-swatch-heat {
-		background: radial-gradient(
-			circle,
-			rgba(178, 24, 43, 0.9) 0%,
-			rgba(178, 24, 43, 0.3) 100%
-		);
+	.results-count strong {
+		font-variant-numeric: tabular-nums;
 	}
-	.legend-swatch-route {
-		background: #f2a07b;
-		border: 2px solid #facc15;
+	.results-lens {
+		color: var(--color-text-tertiary);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
-	.legend-swatch-club {
-		background: #7fb3c2;
-		border: 2px solid #0f172a;
-	}
-	.legend-count {
+	.results-updated {
 		margin-inline-start: auto;
 		font-size: 0.7rem;
 		color: var(--color-text-tertiary);
 		font-variant-numeric: tabular-nums;
-		background: var(--color-bg-secondary);
-		padding: 0.05rem 0.4rem;
+	}
+	.results-spinner {
+		margin-inline-start: auto;
+		width: 10px;
+		height: 10px;
+		border: 2px solid var(--color-border);
+		border-top-color: var(--color-primary);
+		border-radius: 50%;
+		animation: spin 0.8s linear infinite;
+	}
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+	.results-list {
+		margin: 0;
+		padding: 0;
+		list-style: none;
+		overflow-y: auto;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+	.result-row {
+		display: flex;
+		flex-direction: column;
+		gap: 0.2rem;
+		padding: 0.6rem var(--space-md);
+		text-decoration: none;
+		color: var(--color-text);
+		border-bottom: 1px solid var(--color-border);
+	}
+	.result-row:hover {
+		background: var(--color-surface-hover);
+	}
+	.result-row.featured {
+		border-inline-start: 3px solid #facc15;
+	}
+	.result-name {
+		font-size: 0.88rem;
+		font-weight: 600;
+		line-height: 1.25;
+	}
+	.result-star {
+		color: #facc15;
+	}
+	.result-meta {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.75rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.result-band {
+		font-weight: 700;
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+		padding: 0.02rem 0.4rem;
 		border-radius: 999px;
-		min-width: 1.5rem;
-		text-align: center;
+	}
+	.results-empty {
+		padding: 1.25rem var(--space-md);
+		font-size: 0.82rem;
+		color: var(--color-text-tertiary);
+	}
+
+	/* Narrow viewports: stack the sidebar above the map as a top sheet. */
+	@media (max-width: 40rem) {
+		.discover {
+			flex-direction: column;
+		}
+		.discover-sidebar {
+			width: auto;
+			max-width: none;
+			max-height: 55%;
+			border-inline-end: 0;
+			border-bottom: 1px solid var(--color-border);
+		}
+		.sidebar-toggle {
+			top: 0;
+			inset-inline-start: 50%;
+			transform: translateX(-50%);
+			width: 48px;
+			height: 22px;
+			border: 1px solid var(--color-border);
+			border-top: 0;
+			border-radius: 0 0 var(--radius-md) var(--radius-md);
+		}
 	}
 
 	/*
@@ -1509,99 +1587,4 @@
 		border-bottom-color: var(--color-border);
 	}
 
-	/*
-	 * Viewport-synced route list — the scrollable, textual twin of the
-	 * map pins. Docked to the right edge below the MapLibre nav controls
-	 * (top:5.25rem clears them). Renders straight off `routePins`, so it
-	 * tracks every pan / lens change the pins do. Hovering a row pops the
-	 * same name tooltip the map uses, tying the two surfaces together.
-	 */
-	.route-list {
-		position: absolute;
-		top: 5.25rem;
-		bottom: var(--space-md);
-		inset-inline-end: var(--space-md);
-		z-index: 2;
-		width: 17rem;
-		max-width: calc(100% - 2rem);
-		display: flex;
-		flex-direction: column;
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		box-shadow: var(--shadow-md);
-		overflow: hidden;
-	}
-	.route-list.collapsed {
-		bottom: auto;
-		width: auto;
-	}
-	.route-list-toggle {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.55rem 0.75rem;
-		background: var(--color-surface);
-		border: 0;
-		border-bottom: 1px solid var(--color-border);
-		color: var(--color-text);
-		font-size: 0.85rem;
-		cursor: pointer;
-		text-align: start;
-		flex-shrink: 0;
-	}
-	.route-list.collapsed .route-list-toggle {
-		border-bottom: 0;
-	}
-	.route-list-toggle .material-symbols {
-		font-size: 1.2rem;
-		color: var(--color-text-secondary);
-	}
-	.route-list-toggle-text strong {
-		font-variant-numeric: tabular-nums;
-	}
-	.route-list-toggle-lens {
-		color: var(--color-text-tertiary);
-	}
-	.route-list-items {
-		margin: 0;
-		padding: 0;
-		list-style: none;
-		overflow-y: auto;
-		flex: 1 1 auto;
-	}
-	.route-list-row {
-		display: flex;
-		flex-direction: column;
-		gap: 0.15rem;
-		padding: 0.5rem 0.75rem;
-		text-decoration: none;
-		color: var(--color-text);
-		border-bottom: 1px solid var(--color-border);
-	}
-	.route-list-row:hover {
-		background: var(--color-surface-hover);
-	}
-	.route-list-row.featured {
-		border-inline-start: 3px solid #facc15;
-	}
-	.route-list-name {
-		font-size: 0.85rem;
-		font-weight: 600;
-		line-height: 1.25;
-	}
-	.route-list-star {
-		color: #facc15;
-	}
-	.route-list-meta {
-		font-size: 0.74rem;
-		color: var(--color-text-tertiary);
-		font-variant-numeric: tabular-nums;
-	}
-	.route-list-empty {
-		padding: 1rem 0.75rem;
-		font-size: 0.8rem;
-		color: var(--color-text-tertiary);
-		list-style: none;
-	}
 </style>

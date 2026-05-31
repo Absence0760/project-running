@@ -159,9 +159,8 @@ test.describe('Heatmap pin layers (web)', () => {
 		await page.waitForTimeout(1500);
 
 		// Pan to Virginia so the bbox refresh definitely lands on
-		// the seeded pins. The world-view default (0,30 @ zoom 2)
-		// SHOULD also catch them, but at low zooms the bbox numbers
-		// can drift across the dateline and the RPC returns 0.
+		// the seeded pins. Zoom 6 (not 7) so all six VA routes — which
+		// span ~4° of longitude — stay inside the sidebar-narrowed map.
 		await page.evaluate(async () => {
 			type MapHandle = {
 				flyTo: (o: { center: [number, number]; zoom: number }) => void;
@@ -171,28 +170,28 @@ test.describe('Heatmap pin layers (web)', () => {
 			if (!m) return;
 			await new Promise<void>((resolve) => {
 				m.once('moveend', () => resolve());
-				m.flyTo({ center: [-78, 38], zoom: 7 });
+				m.flyTo({ center: [-78, 37.9], zoom: 6 });
 			});
 		});
 		await page.waitForTimeout(800);
 
-		// Open the legend to read the count chips.
-		await page.getByRole('button', { name: /show legend/i }).click();
-		const routesRow = page.locator('.legend-row', { hasText: 'Popular' });
-		const clubsRow = page.locator('.legend-row', { hasText: 'Clubs' });
-		await expect(routesRow).toBeVisible();
-		await expect(clubsRow).toBeVisible();
-
+		// The route count lives in the results-header; the club count in
+		// the Filters panel's Clubs layer toggle.
 		const routesCount = parseInt(
-			(await routesRow.locator('.legend-count').textContent()) ?? '0',
+			(await page.locator('.results-count strong').textContent()) ?? '0',
 			10,
 		);
-		const clubsCount = parseInt(
-			(await clubsRow.locator('.legend-count').textContent()) ?? '0',
-			10,
-		);
-		// Seed: 3 featured VA routes + 3 popular VA routes = 6; 8 VA clubs.
+		// Seed: 3 featured VA routes + 3 popular VA routes = 6.
 		expect(routesCount, 'route pins in VA viewport').toBeGreaterThanOrEqual(6);
+
+		await page.getByTestId('filters-button').click();
+		const clubsRow = page.locator('.layer-row', { hasText: 'Clubs' });
+		await expect(clubsRow).toBeVisible();
+		const clubsCount = parseInt(
+			(await clubsRow.locator('.layer-count').textContent()) ?? '0',
+			10,
+		);
+		// Seed: 8 VA clubs.
 		expect(clubsCount, 'club pins in VA viewport').toBeGreaterThanOrEqual(8);
 	});
 
@@ -200,14 +199,13 @@ test.describe('Heatmap pin layers (web)', () => {
 		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		await page.waitForTimeout(1200);
-		await page.getByRole('button', { name: /show legend/i }).click();
+		await page.getByTestId('filters-button').click();
 
-		// Toggling the clubs row should flip the layer's visibility.
-		// We can't read the MapLibre layer state directly in a Playwright
-		// test without a hook, but the legend checkbox state is the
-		// observable contract; if the binding works, the layer follows.
+		// Toggling the Clubs layer checkbox should flip the layer's
+		// visibility. The checkbox state is the observable contract; if
+		// the binding works, the MapLibre layer follows it via the $effect.
 		const clubsCheckbox = page
-			.locator('.legend-row', { hasText: 'Clubs' })
+			.locator('.layer-row', { hasText: 'Clubs' })
 			.getByRole('checkbox');
 		await expect(clubsCheckbox).toBeChecked();
 		await clubsCheckbox.uncheck();

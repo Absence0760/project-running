@@ -48,6 +48,27 @@ type Pin = {
 	distance_m: number;
 };
 
+/// Pan the discovery map to Virginia, where the seeded routes live, and
+/// wait for the post-move bbox refresh to land.
+async function flyToVA(page: import('@playwright/test').Page) {
+	await page.evaluate(async () => {
+		type MapHandle = {
+			flyTo: (o: { center: [number, number]; zoom: number }) => void;
+			once: (event: string, cb: () => void) => void;
+		};
+		const m = (window as unknown as { __heatmapMap?: MapHandle }).__heatmapMap;
+		if (!m) return;
+		await new Promise<void>((resolve) => {
+			m.once('moveend', () => resolve());
+			// Zoom 6 (not 7): the sidebar narrows the map, so a tighter
+			// zoom clips the easternmost / westernmost of the six VA
+			// routes (they span ~4° of longitude) out of the viewport.
+			m.flyTo({ center: [-78, 37.9], zoom: 6 });
+		});
+	});
+	await page.waitForTimeout(900);
+}
+
 test.describe('discoverable_routes_in_bbox p_filter (backend contract)', () => {
 	test('featured lens returns only featured routes, a subset of popular', async () => {
 		const admin = getAdminClient();
@@ -223,48 +244,70 @@ test.describe('discoverable_routes_in_bbox p_filter (backend contract)', () => {
 	});
 });
 
-test.describe('Heatmap filter chips (web)', () => {
+test.describe('Heatmap filters popover (web)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('chip bar swaps the lens and the count tracks the RPC', async ({ page }) => {
+	async function open(page: import('@playwright/test').Page) {
 		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
-		await page.waitForTimeout(1200);
+		await page.waitForTimeout(1100);
+		await flyToVA(page);
+	}
 
-		// Pan to Virginia where the seeded routes live.
-		await page.evaluate(async () => {
-			type MapHandle = {
-				flyTo: (o: { center: [number, number]; zoom: number }) => void;
-				once: (event: string, cb: () => void) => void;
-			};
-			const m = (window as unknown as { __heatmapMap?: MapHandle }).__heatmapMap;
-			if (!m) return;
-			await new Promise<void>((resolve) => {
-				m.once('moveend', () => resolve());
-				m.flyTo({ center: [-78, 38], zoom: 7 });
-			});
-		});
-		await page.waitForTimeout(900);
+	test('the Filters button opens the panel; the lens swaps the result set', async ({
+		page,
+	}) => {
+		await open(page);
 
-		const filterBar = page.getByTestId('heatmap-filters');
-		await expect(filterBar).toBeVisible();
+		const count = page.locator('.results-count strong');
+		await expect(count).toHaveText('6', { timeout: 6000 }); // popular VA
 
-		// Popular is the default lens.
-		const popularChip = filterBar.locator('[data-filter="popular"]');
-		const featuredChip = filterBar.locator('[data-filter="featured"]');
+		// Filters panel is closed until the button is pressed.
+		await expect(page.getByTestId('filters-panel')).toHaveCount(0);
+		await page.getByTestId('filters-button').click();
+		const panel = page.getByTestId('filters-panel');
+		await expect(panel).toBeVisible();
+
+		const popularChip = panel.locator('[data-filter="popular"]');
+		const featuredChip = panel.locator('[data-filter="featured"]');
 		await expect(popularChip).toHaveAttribute('aria-pressed', 'true');
-		await expect(featuredChip).toHaveAttribute('aria-pressed', 'false');
 
-		// Seed VA: popular = 6 (3 featured + 3 run_count>0).
-		await expect(popularChip.locator('.filter-chip-count')).toHaveText('6');
-
-		// Switch to Featured: active state + count both move (→ 3).
+		// Featured lens → 3 routes, and the Filters button badge shows 1
+		// active (non-default) filter.
 		await featuredChip.click();
 		await expect(featuredChip).toHaveAttribute('aria-pressed', 'true');
-		await expect(popularChip).toHaveAttribute('aria-pressed', 'false');
-		await expect(featuredChip.locator('.filter-chip-count')).toHaveText('3', {
-			timeout: 5000,
-		});
+		await expect(count).toHaveText('3', { timeout: 6000 });
+		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('1');
+	});
+
+	test('race-distance bands filter the results in any combination', async ({ page }) => {
+		await open(page);
+		await page.getByTestId('filters-button').click();
+		const bands = page.getByTestId('band-chips');
+		const count = page.locator('.results-count strong');
+
+		// VA popular distances: 4200, 4800, 6300, 6500, 7200, 10200.
+		// 5K window [4000,6000) → 2.
+		await bands.locator('[data-band="5k"]').click();
+		await expect(count).toHaveText('2', { timeout: 6000 });
+		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('1');
+
+		// Add 10K [8000,12000) → union is 3 (the 10200 route joins).
+		await bands.locator('[data-band="10k"]').click();
+		await expect(count).toHaveText('3', { timeout: 6000 });
+		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('2');
+
+		// Every surviving row carries a 5K or 10K band badge.
+		const badges = page.locator('.results-list .result-band');
+		await expect(badges).toHaveCount(3);
+		for (const t of await badges.allTextContents()) {
+			expect(['5K', '10K']).toContain(t);
+		}
+
+		// Reset clears the lens + bands back to the default 6.
+		await page.locator('.filters-reset').click();
+		await expect(count).toHaveText('6', { timeout: 6000 });
+		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveCount(0);
 	});
 });
 
@@ -338,24 +381,8 @@ test.describe('Heatmap route-pin clustering (web)', () => {
 	});
 });
 
-test.describe('Heatmap route list panel (web)', () => {
+test.describe('Heatmap results sidebar (web)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
-
-	async function flyToVA(page: import('@playwright/test').Page) {
-		await page.evaluate(async () => {
-			type MapHandle = {
-				flyTo: (o: { center: [number, number]; zoom: number }) => void;
-				once: (event: string, cb: () => void) => void;
-			};
-			const m = (window as unknown as { __heatmapMap?: MapHandle }).__heatmapMap;
-			if (!m) return;
-			await new Promise<void>((resolve) => {
-				m.once('moveend', () => resolve());
-				m.flyTo({ center: [-78, 38], zoom: 7 });
-			});
-		});
-		await page.waitForTimeout(900);
-	}
 
 	test('list mirrors the lens and a row navigates to the route', async ({ page }) => {
 		await page.goto('/routes/heatmap');
@@ -363,14 +390,15 @@ test.describe('Heatmap route list panel (web)', () => {
 		await page.waitForTimeout(1100);
 		await flyToVA(page);
 
-		const list = page.getByTestId('heatmap-list');
+		const list = page.getByTestId('discover-list');
 		await expect(list).toBeVisible();
-		const rows = list.locator('.route-list-row');
+		const rows = list.locator('.result-row');
 		// Default popular lens: 6 VA routes.
 		await expect(rows).toHaveCount(6, { timeout: 6000 });
 
 		// Switching to Featured narrows the list to the 3 featured routes.
-		await page.getByTestId('heatmap-filters').locator('[data-filter="featured"]').click();
+		await page.getByTestId('filters-button').click();
+		await page.getByTestId('lens-chips').locator('[data-filter="featured"]').click();
 		await expect(rows).toHaveCount(3, { timeout: 6000 });
 
 		// A row links to its route detail and navigates client-side.
@@ -380,17 +408,17 @@ test.describe('Heatmap route list panel (web)', () => {
 		await expect(page).toHaveURL(/\/routes\/[0-9a-f-]+$/);
 	});
 
-	test('the panel collapses + restores', async ({ page }) => {
+	test('the sidebar collapses + restores', async ({ page }) => {
 		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		await page.waitForTimeout(1100);
 		await flyToVA(page);
 
-		const list = page.getByTestId('heatmap-list');
-		await expect(list.locator('.route-list-items')).toBeVisible();
-		await list.locator('.route-list-toggle').click();
-		await expect(list.locator('.route-list-items')).toHaveCount(0);
-		await list.locator('.route-list-toggle').click();
-		await expect(list.locator('.route-list-items')).toBeVisible();
+		const sidebar = page.getByTestId('discover-sidebar');
+		await expect(sidebar).toBeVisible();
+		await page.getByTestId('sidebar-toggle').click();
+		await expect(sidebar).toBeHidden();
+		await page.getByTestId('sidebar-toggle').click();
+		await expect(sidebar).toBeVisible();
 	});
 });
