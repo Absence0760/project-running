@@ -61,7 +61,7 @@ dependencies:
   # latter introduced. The reactive (Stream-first) API is also a better
   # fit for the long-lived "subscribe to one notification stream" shape
   # of an HR strap. /audit/all 2026-05-07.
-  flutter_reactive_ble: ^5.4.2
+  flutter_reactive_ble: ^5.5.0
   image_picker: ^1.1.2
   url_launcher: ^6.3.1
   # Native OAuth for the in-app Strava connect flow. On Android the
@@ -80,7 +80,7 @@ dependencies:
   # the existing "open web /settings/upgrade" fallback and never
   # initialises the SDK. Mirrors the web's
   # `apps/web/src/lib/revenuecat.ts` pattern.
-  purchases_flutter: ^10.0.0
+  purchases_flutter: ^10.2.0
   # Crash reporting + breadcrumb trail for production builds. Init in
   # lib/main.dart's runZonedGuarded so unhandled errors land tagged with
   # the build's versionName; off when SENTRY_DSN is unset (dev / debug).
