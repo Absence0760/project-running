@@ -2,6 +2,14 @@
           xmlns:tools="http://schemas.android.com/tools">
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- ACCESS_BACKGROUND_LOCATION: needed to keep recording a run's GPS
+         trace when the screen locks / the app is backgrounded. Requested
+         at runtime with an in-app rationale, NOT at first launch — see
+         `lib/background_location_nudge.dart` (shouldNudgeBackgroundLocation
+         + run_screen._maybeNudgeBackgroundLocation), which deep-links to
+         app settings only after foreground location is granted. The Play
+         Console "prominent disclosure" form must reference this flow.
+         (audit-findings 2026-05-30 Medium — Play human-review aid.) -->
     <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACTIVITY_RECOGNITION" />

@@ -4,6 +4,7 @@ Operating docs that back the project's international-launch posture. The `/audit
 
 | Doc | What it answers |
 |---|---|
+| [data-subject-rights.md](data-subject-rights.md) | How each GDPR right is satisfied + the Art 18/21 manual operator SOP |
 | [retention.md](retention.md) | How long do we keep each personal-data category? When does auto-deletion fire? |
 | [sub-processors.md](sub-processors.md) | Every external service that touches user data — input to the Privacy Policy + GDPR Art 30 Record of Processing Activities |
 | [dpia.md](dpia.md) | GDPR Art 35 Data Protection Impact Assessment for live-location + heart-rate tracking |
