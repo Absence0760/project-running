@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatDuration } from '$lib/time';
 	import { formatDateShort } from '$lib/time';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -89,13 +90,7 @@
 	];
 
 	function goalTime(p: TrainingPlan): string {
-		if (!p.goal_time_seconds) return 'Finish';
-		const h = Math.floor(p.goal_time_seconds / 3600);
-		const m = Math.floor((p.goal_time_seconds % 3600) / 60);
-		const s = p.goal_time_seconds % 60;
-		return h > 0
-			? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
-			: `${m}:${String(s).padStart(2, '0')}`;
+		return p.goal_time_seconds ? formatDuration(p.goal_time_seconds) : 'Finish';
 	}
 
 	/// Local-tz midnight, mirrors how `fetchActivePlanOverview` computes

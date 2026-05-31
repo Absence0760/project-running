@@ -434,13 +434,6 @@
 		return `${m}m`;
 	}
 
-	function fmtHms(seconds: number): string {
-		const h = Math.floor(seconds / 3600);
-		const m = Math.floor((seconds % 3600) / 60);
-		const s = seconds % 60;
-		if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
-		return `${m}:${String(s).padStart(2, '0')}`;
-	}
 
 	function fmtRaceDate(iso: string): string {
 		const d = planMidnight(iso);
@@ -588,7 +581,7 @@
 							{#if planOverview.plan.goal_time_seconds}
 								<span>
 									<span class="material-symbols">timer</span>
-									{fmtHms(planOverview.plan.goal_time_seconds)}
+									{formatDuration(planOverview.plan.goal_time_seconds)}
 								</span>
 							{/if}
 							<span>

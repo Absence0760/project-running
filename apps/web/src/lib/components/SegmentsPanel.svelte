@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { formatDuration } from '$lib/time';
 	import {
 		fetchSegmentsForRoute,
 		fetchSegmentLeaderboardTiered,
@@ -154,12 +155,7 @@
 	}
 
 	function fmtTime(s: number): string {
-		const total = Math.round(s);
-		const h = Math.floor(total / 3600);
-		const m = Math.floor((total % 3600) / 60);
-		const sec = total % 60;
-		if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
-		return `${m}:${String(sec).padStart(2, '0')}`;
+		return formatDuration(Math.round(s));
 	}
 
 	function initial(name: string | null): string {
