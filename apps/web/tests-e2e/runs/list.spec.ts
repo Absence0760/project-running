@@ -494,9 +494,9 @@ test.describe('/runs', () => {
 	}) => {
 		await page.goto('/runs');
 		await switchRunsToAllTime(page);
-		// Activity is a button group with aria-pressed; Run is the
-		// default but clicking it explicitly proves the toggle works
-		// from any starting state.
+		// Activity is a button group with aria-pressed. The default is
+		// "All" (see filters.spec.ts); clicking Run explicitly proves the
+		// toggle narrows to runs from any starting state.
 		await page.getByRole('button', { name: 'Run', exact: true }).click();
 		await expect(page.locator('.run-card').first()).toBeVisible({
 			timeout: 10_000

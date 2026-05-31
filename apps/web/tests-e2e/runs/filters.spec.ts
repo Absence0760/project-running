@@ -91,8 +91,14 @@ test.describe('/runs — filters', () => {
 			await expect(page.locator('.run-card').first()).toBeVisible();
 			const narrowed = await page.locator('.run-card').count();
 			await page.getByLabel('Source').selectOption('all');
-			const all = await page.locator('.run-card').count();
-			expect(all).toBeGreaterThan(narrowed);
+			// With the all-activities default, the all-sources view is
+			// paginated; toggling back from a narrowed source crosses the
+			// full→paginated fetch boundary, so the list refetches (briefly
+			// empty). Poll until it settles above the narrowed count rather
+			// than reading mid-refetch.
+			await expect
+				.poll(async () => page.locator('.run-card').count())
+				.toBeGreaterThan(narrowed);
 		});
 	});
 
@@ -848,11 +854,17 @@ test.describe('/runs — filters', () => {
 		}) => {
 			const allCount = await page.locator('.run-card').count();
 			await page.getByLabel('Source').selectOption('parkrun');
-			const parkrunCount = await page.locator('.run-card').count();
-			expect(parkrunCount).toBeLessThan(allCount);
+			// The all-broad default is paginated; narrowing to one source
+			// crosses into full-fetch mode and back, so each toggle refetches
+			// (briefly empty). Poll for the settled count instead of reading
+			// synchronously mid-refetch.
+			await expect
+				.poll(async () => page.locator('.run-card').count())
+				.toBeLessThan(allCount);
 			await page.getByLabel('Source').selectOption('all');
-			const restored = await page.locator('.run-card').count();
-			expect(restored).toBe(allCount);
+			await expect
+				.poll(async () => page.locator('.run-card').count())
+				.toBe(allCount);
 		});
 	});
 });
