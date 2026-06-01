@@ -780,7 +780,26 @@
 				<div class="empty" data-testid="runs-empty-filtered">
 					<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
 					<p class="empty-text">No runs match these filters.</p>
-					<p class="empty-hint">Try widening the date range or clearing the activity / source.</p>
+					<p class="empty-hint">
+						You have runs — they're just outside this date range or activity / source.
+					</p>
+					<div class="empty-actions">
+						<button
+							type="button"
+							class="btn btn-outline"
+							data-testid="runs-empty-show-all"
+							onclick={() => {
+								dateRange = 'all';
+								sourceFilter = 'all';
+								activityFilter = 'all';
+							}}
+						>
+							Show all runs
+						</button>
+						<button type="button" class="btn btn-primary" onclick={() => (showRunModal = true)}>
+							Add a run
+						</button>
+					</div>
 				</div>
 			{/if}
 		{/if}
@@ -1106,6 +1125,13 @@
 		font-size: 0.85rem;
 		color: var(--color-text-tertiary);
 		max-width: 28rem;
+	}
+	.empty-actions {
+		display: flex;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		justify-content: center;
+		margin-top: var(--space-md);
 	}
 
 	.load-more-row {

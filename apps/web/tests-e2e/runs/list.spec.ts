@@ -167,6 +167,31 @@ test.describe('/runs', () => {
 		await page.getByLabel('Date range').selectOption('all');
 	});
 
+	test('filtered-empty state offers a one-tap "Show all runs" escape', async ({
+		page
+	}) => {
+		// A sparse user opening /runs on a non-run day lands on the
+		// default "today" filter with their (older) runs hidden — the
+		// dead-end the round-5 casual persona hit. The filtered-empty
+		// branch must give a way out, not just "try widening the range".
+		// Seed runs are March-April 2026 so real-wall-clock "today" is
+		// empty; force the default filter first.
+		await page.addInitScript(() => localStorage.removeItem('runs_filters_v1'));
+		await page.goto('/runs');
+
+		const filteredEmpty = page.getByTestId('runs-empty-filtered');
+		await expect(filteredEmpty).toBeVisible({ timeout: 10_000 });
+
+		await page.getByTestId('runs-empty-show-all').click();
+
+		// Clearing to All-time reveals the real history.
+		await expect(page.locator('.run-card').first()).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByLabel('Date range')).toHaveValue('all');
+
+		// Restore default so later tests don't inherit All-time.
+		await page.getByLabel('Date range').selectOption('today');
+	});
+
 	test('Source filter narrows to parkrun-only rows (5 seeded parkruns)', async ({
 		page
 	}) => {
