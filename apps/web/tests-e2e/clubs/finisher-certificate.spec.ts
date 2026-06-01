@@ -78,6 +78,28 @@ test.describe('/clubs/[slug]/events/[id] — finisher certificate', () => {
 		expect(download.suggestedFilename()).toMatch(/^threkir-certificate-.*\.png$/);
 	});
 
+	test('surfaces an error toast when rasterization fails', async ({ page }) => {
+		// Force canvas.toBlob to yield null, the exact branch svg_raster.ts
+		// rejects on. Before the fix the rejection was swallowed and the user
+		// saw nothing; persona round-5 runner-event-organizer (#44).
+		await page.addInitScript(() => {
+			HTMLCanvasElement.prototype.toBlob = function (callback: BlobCallback) {
+				callback(null);
+			};
+		});
+
+		await page.goto(`/clubs/richmond-run-club/events/${eventId}`);
+		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
+
+		const certBtn = page.getByRole('button', { name: 'Certificate' }).first();
+		await expect(certBtn).toBeVisible({ timeout: 10_000 });
+		await certBtn.click();
+
+		await expect(page.getByText('Could not generate the certificate. Please try again.')).toBeVisible({
+			timeout: 10_000
+		});
+	});
+
 	test('no certificate button while the result is unapproved', async ({ page }) => {
 		await getAdminClient()
 			.from('event_results')
