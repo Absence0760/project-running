@@ -170,8 +170,10 @@
 		<span>
 			<span class="field-label toggle-label">Make this run public</span>
 			<span class="field-hint">
-				Public runs appear in your followers' feed and on your profile. Defaults to
-				your visibility preference in Settings.
+				This is the only visibility choice — there's no followers-only tier.
+				Checked: anyone can see the run on your public profile and in the feed.
+				Unchecked: private, visible only to you. Starts from your Settings
+				default until you change it here.
 			</span>
 		</span>
 	</label>
