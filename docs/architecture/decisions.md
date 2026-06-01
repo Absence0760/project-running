@@ -2468,6 +2468,16 @@ Route geometry for the preview comes from the existing `fetchRouteById` (already
 
 ---
 
+## 103. The density heat layer is off by default, and only fetched when on
+
+**Decided (2026-05-31):** the heat layer (§ 99 made it a dimmable background) is now **off by default** on both web and mobile. At any zoom where you can read individual routes, the heat traces each route's densified path and reads as "the route is already shown" — which fights the hidden-until-hover/tap model (§ 101/§ 102) and was the top user complaint ("I still see the route without hovering"). It's now opt-in via Filters → Heat; the default discovery view is basemap + clustered dots + reveal-on-interaction.
+
+**And it's not fetched until enabled.** `heatmap_points_in_bbox` densifies up to 200 routes into ~5k points server-side per call; doing that on every pan only to hide the result is pure waste. The web `refresh()` and the mobile `_refresh()` skip the heat fetch entirely while the layer is off, and fetch on demand when it's turned on (and on pan only while on). So the default view costs zero heat compute / bandwidth no matter how dense the seed data gets — which, with the discovery RPCs all being bbox-windowed + capped (100 pins / 200 densified routes per call), keeps the heatmap fast as more public routes land in a city.
+
+Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-returned on `!mapLoaded` *before* reading their toggle `$state`, so Svelte never tracked it and the effect never re-ran when the toggle flipped (the layer never actually showed/hid; the toggle-tests missed it because they only checked the checkbox state). The fix is to read the reactive value before the readiness guard.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
