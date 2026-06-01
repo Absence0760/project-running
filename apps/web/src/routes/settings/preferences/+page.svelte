@@ -234,22 +234,31 @@
 			);
 			return;
 		}
-		const consentNowIso = new Date().toISOString();
+		if (healthDataConsent && healthDataConsentAt == null) {
+			// Grant — stamp the consent timestamp server-side via a
+			// SECURITY DEFINER RPC (first-stamp-wins) so the record can't be
+			// backdated by a client-supplied value. A direct write of
+			// health_data_consent_at is now rejected by the lock trigger
+			// (migration 20261118_001). Do this before the demographic write
+			// so consent is on record before gender / DOB persist.
+			const { data: stampedAt, error: consentErr } =
+				await supabase.rpc('grant_health_data_consent');
+			if (consentErr) {
+				showToast(`Save failed: ${consentErr.message}`, 'error');
+				saving = false;
+				return;
+			}
+			if (stampedAt) healthDataConsentAt = stampedAt as string;
+		}
 		const profileUpdate: Record<string, unknown> = {
 			preferred_unit: preferredUnit,
 			gender: (healthDataConsent && gender) ? gender : null,
 			date_of_birth: (healthDataConsent && dateOfBirth) ? dateOfBirth : null,
 		};
-		if (healthDataConsent) {
-			// Stamp consent timestamp on the first acceptance so the row
-			// records the moment of the affirmative act. Idempotent on
-			// subsequent saves — we only set it when it's still null.
-			if (healthDataConsentAt == null) {
-				profileUpdate.health_data_consent_at = consentNowIso;
-				healthDataConsentAt = consentNowIso;
-			}
-		} else {
+		if (!healthDataConsent) {
 			// Withdrawal — null all three fields atomically per Art 7(3).
+			// The lock trigger permits a direct null write (withdrawal),
+			// only the non-null grant is RPC-gated.
 			profileUpdate.health_data_consent_at = null;
 			healthDataConsentAt = null;
 		}

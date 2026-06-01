@@ -234,7 +234,17 @@
 			if (dateOfBirth) profileUpdate.date_of_birth = dateOfBirth;
 			if (healthDataConsent) {
 				profileUpdate.gender = gender || null;
-				profileUpdate.health_data_consent_at = new Date().toISOString();
+				// health_data_consent_at is stamped server-side by the RPC
+				// below (migration 20261118_001) — a direct write of it is
+				// rejected by the lock trigger, so it's NOT in profileUpdate.
+			}
+
+			// Stamp Art 9 consent server-side first (first-stamp-wins), then
+			// the bag + profile writes. The RPC is the only path that can
+			// set health_data_consent_at to a non-null value.
+			if (healthDataConsent) {
+				const { error: consentErr } = await supabase.rpc('grant_health_data_consent');
+				if (consentErr) throw consentErr;
 			}
 
 			// Issue both writes in parallel — the bag write doesn't

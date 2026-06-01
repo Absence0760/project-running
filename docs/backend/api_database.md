@@ -587,6 +587,16 @@ create table user_profiles (
 -- persist gender / DOB when health_data_consent_at is null and the
 -- consent checkbox is unticked. Withdrawal under Art 7(3) nulls
 -- the consent timestamp AND clears the associated fields atomically.
+--
+-- BOTH consent timestamps are server-stamped + tamper-resistant. The
+-- GRANT path goes through a SECURITY DEFINER RPC that stamps the
+-- server's now() (first-stamp-wins): record_coach_consent()
+-- (20261110_001) and grant_health_data_consent() (20261118_001). The
+-- shared lock_consent_columns BEFORE-UPDATE trigger blocks a direct
+-- end-user write that SETS either timestamp to a non-null value, so a
+-- client can't backdate or forge the affirmative act. A direct NULL
+-- write (the Art 7(3) withdrawal) stays allowed for health-data
+-- consent; coach consent is one-way (cleared only on account deletion).
 ```
 
 #### `user_settings` / `user_device_settings`

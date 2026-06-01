@@ -2680,6 +2680,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      grant_health_data_consent: { Args: never; Returns: string }
       heatmap_points_in_bbox: {
         Args: {
           p_max_lat: number
