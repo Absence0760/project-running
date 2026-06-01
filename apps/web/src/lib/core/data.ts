@@ -40,6 +40,7 @@ import { nextInstanceAfter } from '../social/recurrence';
 import { rateLimitErrorMessage } from '../util/rate_limit_errors';
 import type { ParsedResultRow } from '../runs/event_results_csv';
 import { applyRunMetadataPatch, normalisePlanWorkoutNotes } from './data_normalise';
+import { bucketWeeklyMileage } from './weekly_mileage';
 import { chunk, mergeFeedPages, FEED_FOLLOWEE_CHUNK } from '../social/feed_merge';
 import {
 	assignCompetitionRanks,
@@ -63,24 +64,45 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	// `/tmp/data-isolation-audit/client-realtime.md` M2.
 	const userId = auth.user?.id;
 	if (!userId) return [];
-	let q = supabase
-		.from('runs')
-		.select('*')
-		.eq('user_id', userId)
-		.order('started_at', { ascending: false });
+	const build = () =>
+		supabase
+			.from('runs')
+			.select('*')
+			.eq('user_id', userId)
+			.order('started_at', { ascending: false });
+
+	let rows: any[];
 	if (opts?.limit != null) {
 		const from = opts.offset ?? 0;
-		const to = from + opts.limit - 1;
-		q = q.range(from, to);
+		const { data, error } = await build().range(from, from + opts.limit - 1);
+		if (error || !data) return [];
+		rows = data;
+	} else {
+		// No explicit limit means "every run". PostgREST caps an unbounded
+		// SELECT at 1000 rows, which silently dropped the oldest activities
+		// of a high-volume history (a 1,500-run Strava migrant lost ~500)
+		// across recap / heatmap / dashboard / account / runs. Page through
+		// instead so nothing is truncated; the safety ceiling logs rather
+		// than dropping silently. Theme C (strava-migration / pro).
+		const PAGE = 1000;
+		const SAFETY_MAX = 50_000;
+		rows = [];
+		for (let from = 0; from < SAFETY_MAX; from += PAGE) {
+			const { data, error } = await build().range(from, from + PAGE - 1);
+			if (error || !data) break;
+			rows.push(...data);
+			if (data.length < PAGE) break;
+		}
+		if (rows.length >= SAFETY_MAX) {
+			console.warn(`fetchRuns reached the ${SAFETY_MAX}-row ceiling; older runs may be omitted`);
+		}
 	}
-	const { data, error } = await q;
-	if (error || !data) return [];
 	// Defensive narrow on read: the DB CHECK constraint stops bad
 	// `source` values at write time, but historical rows imported before
 	// the constraint or rows from a future client whose new value
 	// hasn't propagated to this build need a fallback. parseRunSource
 	// coerces unknowns to 'app'.
-	return data.map((r: any) => ({
+	return rows.map((r: any) => ({
 		...r,
 		source: parseRunSource(r.source),
 		track: null,
@@ -1134,29 +1156,21 @@ export async function deleteRoute(id: string): Promise<void> {
 export async function fetchWeeklyMileage() {
 	const { data: { user } } = await supabase.auth.getUser();
 	if (!user) return [];
+	// Only the last ~12 weeks are charted, so window the query by date
+	// rather than `.limit(2000)` ascending — that cap returned a >2000-run
+	// user's OLDEST 2000 runs, so the chart showed ancient weeks. A 14-week
+	// window (12 + a 2-week buffer for partial edges) is bounded and recent.
+	const windowStart = new Date();
+	windowStart.setDate(windowStart.getDate() - 14 * 7);
 	const { data: runs } = await supabase
 		.from('runs')
 		.select('started_at, distance_m')
 		.eq('user_id', user.id)
-		.order('started_at', { ascending: true })
-		.limit(2000);
+		.gte('started_at', windowStart.toISOString())
+		.order('started_at', { ascending: true });
 
 	if (!runs || runs.length === 0) return [];
-
-	// Group by ISO week. Keep distance in metres so render-time
-	// formatting can honor the user's preferred unit.
-	const weeks = new Map<string, number>();
-	for (const run of runs) {
-		const d = new Date(run.started_at);
-		const weekStart = new Date(d);
-		weekStart.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday-start, matches goals.ts
-		const key = weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-		weeks.set(key, (weeks.get(key) ?? 0) + run.distance_m);
-	}
-
-	return Array.from(weeks.entries())
-		.slice(-12)
-		.map(([week, distance_m]) => ({ week, distance_m: Math.round(distance_m) }));
+	return bucketWeeklyMileage(runs);
 }
 
 export async function fetchPersonalRecords() {
@@ -1761,43 +1775,39 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	const ids = events.map((e) => e.id);
 	const userId = auth.user?.id;
 
-	// "Going" count on the next instance of each event.
-	const countsPromise: Promise<Array<[string, number]>> = Promise.all(
-		ids.map(
-			(id) =>
-				supabase
-					.from('event_attendees')
-					.select('event_id', { count: 'exact' })
-					.eq('event_id', id)
-					.eq('status', 'going')
-					.eq('instance_start', nextMap.get(id) as string)
-					.then((res) => [id, res.count ?? 0] as [string, number])
-		)
-	);
-	const rsvpPromise: Promise<Array<[string, RsvpStatus | null]>> = userId
-		? Promise.all(
-				ids.map(
-					(id) =>
-						supabase
-							.from('event_attendees')
-							.select('status')
-							.eq('event_id', id)
-							.eq('user_id', userId)
-							.eq('instance_start', nextMap.get(id) as string)
-							.maybeSingle()
-							.then(
-								(res) => [id, (res.data?.status ?? null) as RsvpStatus | null] as [
-									string,
-									RsvpStatus | null
-								]
-						)
-				)
-		  )
-		: Promise.resolve([] as Array<[string, RsvpStatus | null]>);
+	// One round-trip each for the going-counts and the viewer's RSVPs,
+	// then aggregate per-event client-side — previously this fanned out to
+	// 2×N queries (one per event for the count, one per event for the RSVP),
+	// so a club events list issued dozens of round-trips. Each event's count
+	// is scoped to ITS next instance, so we fetch the going rows + their
+	// instance_start and tally only the ones that match `nextMap`.
+	const countsPromise = supabase
+		.from('event_attendees')
+		.select('event_id, instance_start')
+		.in('event_id', ids)
+		.eq('status', 'going');
+	const rsvpPromise = userId
+		? supabase
+				.from('event_attendees')
+				.select('event_id, status, instance_start')
+				.in('event_id', ids)
+				.eq('user_id', userId)
+		: Promise.resolve({ data: [] as { event_id: string; status: string; instance_start: string }[] });
 
-	const [countRows, rsvpRows] = await Promise.all([countsPromise, rsvpPromise]);
-	const counts = new Map<string, number>(countRows);
-	const rsvps = new Map<string, RsvpStatus | null>(rsvpRows);
+	const [countRes, rsvpRes] = await Promise.all([countsPromise, rsvpPromise]);
+
+	const counts = new Map<string, number>();
+	for (const row of (countRes.data ?? []) as { event_id: string; instance_start: string }[]) {
+		if (row.instance_start === nextMap.get(row.event_id)) {
+			counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
+		}
+	}
+	const rsvps = new Map<string, RsvpStatus | null>();
+	for (const row of (rsvpRes.data ?? []) as { event_id: string; status: string; instance_start: string }[]) {
+		if (row.instance_start === nextMap.get(row.event_id)) {
+			rsvps.set(row.event_id, (row.status ?? null) as RsvpStatus | null);
+		}
+	}
 
 	return events.map((e) => ({
 		...normaliseEvent(e),
