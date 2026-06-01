@@ -142,6 +142,52 @@ test.describe('/social?tab=feed — feed surface', () => {
 		}
 	});
 
+	test('feed card shows the run title when present', async ({ page }) => {
+		// persona round-5 (runner-very-social): the title/caption is the
+		// social hook. A titled run must surface that title on its feed
+		// card, not just the author + stats. Plant a run with a unique
+		// title and assert it renders.
+		const admin = getAdminClient();
+		const TITLE = `5am PR attempt ${Date.now()}`;
+		const { data: row, error } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date(Date.now() - 20 * 60 * 1000).toISOString(),
+				duration_s: 1500,
+				distance_m: 6000,
+				source: 'app',
+				is_public: true,
+				metadata: { activity_type: 'run', title: TITLE }
+			})
+			.select('id')
+			.single();
+		if (error) throw error;
+		const titledId = (row as { id: string }).id;
+		try {
+			await page.goto('/social?tab=feed');
+			await expect(page.locator('article').first()).toBeVisible({
+				timeout: 10_000
+			});
+			await expect(page.locator('.entry-title', { hasText: TITLE })).toBeVisible({
+				timeout: 10_000
+			});
+		} finally {
+			await admin.from('runs').delete().eq('id', titledId);
+		}
+	});
+
+	test('untitled run renders no empty title element', async ({ page }) => {
+		// The beforeEach plants a run with NO title. Assert the feed shows
+		// at least one card but renders zero `.entry-title` nodes, so an
+		// untitled run doesn't leave an empty heading on the card.
+		await page.goto('/social?tab=feed');
+		await expect(page.locator('article').first()).toBeVisible({
+			timeout: 10_000
+		});
+		await expect(page.locator('.entry-title')).toHaveCount(0);
+	});
+
 	test('private run from a followed user does not appear', async ({ page }) => {
 		// `fetchFollowingFeed` filters `is_public = true`. A regression
 		// that loosened the visibility predicate (or routed through the
