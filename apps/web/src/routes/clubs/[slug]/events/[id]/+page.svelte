@@ -51,7 +51,7 @@
 	import { expandInstances, describeRecurrence } from '$lib/social/recurrence';
 	import { formatDistance, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import { env } from '$env/dynamic/public';
-	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/routes/static_map';
+	import { buildStaticMarkerMapUrl, mapsDirectionsUrl, geoUri } from '$lib/routes/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
 	import { rasterizeSvgToPng, downloadBlob } from '$lib/format/svg_raster';
 	import { parseChipTimingCsv, resultsToCsv, type ParsedResultRow } from '$lib/runs/event_results_csv';
@@ -73,6 +73,18 @@
 	// Meetup coordinates, members-only via the get_event_meet_point RPC
 	// (the raw columns are revoked from clients). Persona social-group #10.
 	let meetPoint = $state<{ lat: number; lng: number } | null>(null);
+	// On Android, a `geo:` link hands off to the user's native maps app
+	// (Google Maps, Waze, Organic Maps…); the universal https URL is the
+	// safe fallback for desktop / iOS browsers (persona round-5
+	// social-group). Set client-side — the page is statically prerendered.
+	let isAndroid = $state(false);
+	let directionsHref = $derived(
+		meetPoint
+			? isAndroid
+				? geoUri(meetPoint.lat, meetPoint.lng, event?.meet_label ?? undefined)
+				: mapsDirectionsUrl(meetPoint.lat, meetPoint.lng)
+			: '',
+	);
 	let meetMapUrl = $derived(
 		meetPoint
 			? buildStaticMarkerMapUrl(meetPoint.lat, meetPoint.lng, {
@@ -629,6 +641,7 @@
 	let realtimeReady = $state(false);
 
 	onMount(async () => {
+		isAndroid = /Android/i.test(navigator.userAgent);
 		// Wait for auth.user before loading. The event page derives
 		// `isAdmin` from `club.viewer_role` which is fetched against
 		// the caller's identity; if `auth.user` hasn't resolved when
@@ -1065,7 +1078,7 @@
 						{#if meetMapUrl}
 							<a
 								class="meet-map"
-								href={mapsDirectionsUrl(meetPoint.lat, meetPoint.lng)}
+								href={directionsHref}
 								target="_blank"
 								rel="noopener noreferrer"
 								aria-label="Open the meeting point in maps"
@@ -1075,7 +1088,7 @@
 						{/if}
 						<a
 							class="btn btn-secondary meet-directions"
-							href={mapsDirectionsUrl(meetPoint.lat, meetPoint.lng)}
+							href={directionsHref}
 							target="_blank"
 							rel="noopener noreferrer"
 						>
