@@ -9,6 +9,8 @@
 		type LoadedSettings,
 	} from '$lib/settings/settings';
 	import { applyTheme, loadTheme, type Theme } from '$lib/settings/theme';
+	import { m, currentLocale, setLocale } from '$lib/i18n/store.svelte';
+	import { SUPPORTED_LOCALES, LOCALE_LABELS, type Locale } from '$lib/i18n/locale';
 	import { setUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
@@ -55,6 +57,20 @@
 		applyTheme(next);
 	}
 
+	// Language — per-browser like theme (localStorage, applied via the
+	// i18n runtime which also updates <html lang/dir>). Not synced through
+	// the cross-device settings bag: the web app has no per-request SSR, so
+	// detection is client-side and the same localStorage key the runtime
+	// reads on first mount is the source of truth (decisions §108). Options
+	// show each language's own endonym so it's findable in any current UI
+	// language.
+	let language = $state<Locale>('en');
+
+	function changeLanguage(next: Locale) {
+		language = next;
+		void setLocale(next);
+	}
+
 	// When the user picks a distance unit, snap the pace format to the
 	// matching min-per-unit choice. Skip if they've explicitly chosen a
 	// speed format (kph/mph) — that's a deliberate non-pace selection.
@@ -96,6 +112,9 @@
 	onMount(async () => {
 		// Theme is local-only so it's available even before the bag loads.
 		theme = loadTheme();
+		// Language was already negotiated + applied by the app shell's
+		// initLocale on first mount; reflect the active value in the picker.
+		language = currentLocale();
 
 		// `auth.svelte.ts` flips loading=false before the async fetchUser
 		// resolves, so a hard reload lands here with auth.user still
@@ -311,6 +330,19 @@
 		<section class="card">
 			<h2>Units & Display</h2>
 			<div class="form-grid">
+				<label>
+					<span class="label-text">{m('prefs.language')}</span>
+					<select
+						value={language}
+						onchange={(e) => changeLanguage(e.currentTarget.value as Locale)}
+						aria-label={m('prefs.language')}
+						data-testid="language-select"
+					>
+						{#each SUPPORTED_LOCALES as loc}
+							<option value={loc}>{LOCALE_LABELS[loc]}</option>
+						{/each}
+					</select>
+				</label>
 				<div class="field">
 					<span class="label-text">Distance Unit</span>
 					<div class="toggle-row" role="group" aria-label="Distance Unit">

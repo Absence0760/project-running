@@ -19,4 +19,5 @@ export const messages = {
 	'shell.coaching': 'Treinamento',
 	'shell.settings': 'Configurações',
 	'shell.signOut': 'Sair',
+	'prefs.language': 'Idioma',
 } satisfies Messages;

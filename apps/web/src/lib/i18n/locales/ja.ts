@@ -18,4 +18,5 @@ export const messages = {
 	'shell.coaching': 'コーチング',
 	'shell.settings': '設定',
 	'shell.signOut': 'サインアウト',
+	'prefs.language': '言語',
 } satisfies Messages;

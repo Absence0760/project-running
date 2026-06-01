@@ -27,4 +27,7 @@ export const en = {
 	'shell.coaching': 'Coaching',
 	'shell.settings': 'Settings',
 	'shell.signOut': 'Sign out',
+
+	// Settings → Preferences
+	'prefs.language': 'Language',
 } satisfies Record<string, string>;

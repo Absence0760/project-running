@@ -19,4 +19,5 @@ export const messages = {
 	'shell.coaching': 'Coaching',
 	'shell.settings': 'Paramètres',
 	'shell.signOut': 'Se déconnecter',
+	'prefs.language': 'Langue',
 } satisfies Messages;

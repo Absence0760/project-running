@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { USER_A } from '../fixtures/users';
 
 /**
  * i18n foundation — client-side locale negotiation.
@@ -43,5 +44,32 @@ test.describe('i18n locale negotiation', () => {
 		await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 		await expect(page.locator('a.skip-link').first()).toHaveText('Skip to main content');
 		await context.close();
+	});
+});
+
+test.describe('i18n language picker (settings → preferences)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('picking a language translates the chrome and persists across reload', async ({ page }) => {
+		await page.goto('/settings/preferences');
+		// Seeded user is an English (en-GB) browser → English chrome.
+		await expect(page.locator('.nav-label').first()).toHaveText('Dashboard');
+
+		await page.locator('[data-testid="language-select"]').selectOption('de');
+
+		// The whole app shell re-renders from the same reactive signal.
+		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+		await expect(page.locator('.nav-label').first()).toHaveText('Übersicht');
+
+		// Persisted to localStorage → survives a reload (initLocale reads it
+		// back before the browser-language negotiation).
+		await page.reload();
+		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+		await expect(page.locator('.nav-label').first()).toHaveText('Übersicht');
+
+		// Restore so the shared storage state doesn't leak a non-English
+		// locale into later specs sharing this context.
+		await page.locator('[data-testid="language-select"]').selectOption('en');
+		await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 	});
 });
