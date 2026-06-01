@@ -17,6 +17,7 @@ import { parseRouteFile, type ImportedRoute } from './import';
 import { saveRun, addRunPhoto } from '../core/data';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { buildStravaDedupeSet } from './strava-zip-dedupe';
+import { gunzipBlob } from '../util/gunzip';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
 
@@ -155,26 +156,29 @@ async function importOne(
 		if (entry && (isPlain || isGzWrapped)) {
 			let blob = await entry.async('blob');
 			let innerName = filename.split('/').pop()!;
+			let canParse = true;
 			if (isGzWrapped) {
-				try {
-					const gz = await blob.arrayBuffer();
-					const ds = new (globalThis as { DecompressionStream: typeof DecompressionStream })
-						.DecompressionStream('gzip');
-					const stream = new Response(gz).body!.pipeThrough(ds);
-					blob = await new Response(stream).blob();
+				const inflated = await gunzipBlob(blob);
+				if (inflated) {
+					blob = inflated;
 					innerName = innerName.replace(/\.gz$/i, '');
-				} catch (_) {
-					// Decompression failed — leave the row trackless
-					// rather than throw. The CSV row still imports.
-					return;
+				} else {
+					// Decompression failed (e.g. no DecompressionStream on
+					// old Safari) — import the CSV row trackless rather than
+					// dropping it. An early return here would skip saveRun
+					// while the caller still counts the row as imported
+					// (the phantom-import bug).
+					canParse = false;
 				}
 			}
-			const synthetic = new File([blob], innerName);
-			try {
-				const routes = await parseRouteFile(synthetic);
-				if (routes.length > 0) track = routes[0].waypoints;
-			} catch (_) {
-				// Fallthrough — keep row without track.
+			if (canParse) {
+				const synthetic = new File([blob], innerName);
+				try {
+					const routes = await parseRouteFile(synthetic);
+					if (routes.length > 0) track = routes[0].waypoints;
+				} catch (_) {
+					// Fallthrough — keep row without track.
+				}
 			}
 		}
 	}
