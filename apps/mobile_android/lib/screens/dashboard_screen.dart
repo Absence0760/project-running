@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import '../goals.dart';
 import '../local_route_store.dart';
@@ -145,18 +146,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Future<void> _newGoal() => showGoalEditorSheet(
-        context,
-        preferences: widget.preferences,
-        settingsSync: widget.settingsSync,
-      );
+  /// audit/accessibility — WCAG 4.1.3 (Status Messages). The goal grid
+  /// updates via `setState` without moving focus, so a TalkBack user
+  /// gets no feedback that a goal was created / removed.
+  /// `SemanticsService.announce` pushes a one-shot live-region message
+  /// (mirrors `run_screen._announceA11yState`). Best-effort.
+  void _announceA11yState(String message) {
+    try {
+      SemanticsService.announce(message, TextDirection.ltr);
+    } catch (e) {
+      debugPrint('SemanticsService.announce failed: $e');
+    }
+  }
 
-  Future<void> _editGoal(RunGoal goal) => showGoalEditorSheet(
-        context,
-        preferences: widget.preferences,
-        settingsSync: widget.settingsSync,
-        existing: goal,
-      );
+  Future<void> _newGoal() async {
+    final msg = await showGoalEditorSheet(
+      context,
+      preferences: widget.preferences,
+      settingsSync: widget.settingsSync,
+    );
+    if (msg != null) _announceA11yState(msg);
+  }
+
+  Future<void> _editGoal(RunGoal goal) async {
+    final msg = await showGoalEditorSheet(
+      context,
+      preferences: widget.preferences,
+      settingsSync: widget.settingsSync,
+      existing: goal,
+    );
+    if (msg != null) _announceA11yState(msg);
+  }
 
   String get _weekStartDay =>
       widget.settingsSync?.service?.effective<String>(SettingsKeys.weekStartDay) ??

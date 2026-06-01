@@ -647,7 +647,12 @@ private fun PreRunScreen(
                     // share this vertical band — wider pills (e.g.
                     // 130 dp) bump into the sign-out icon on names
                     // like "Battersea Park Out & Back".
-                    modifier = Modifier.widthIn(max = 90.dp),
+                    modifier = Modifier
+                        .widthIn(max = 90.dp)
+                        .semantics {
+                            contentDescription =
+                                "Route $selectedRouteName selected, tap to change"
+                        },
                 )
             }
         }
@@ -722,7 +727,16 @@ private fun PreRunScreen(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 22.dp, bottom = 36.dp)
-                .widthIn(max = 56.dp),
+                .widthIn(max = 56.dp)
+                // The label is a single abbreviated word ("Run"); without
+                // this a TalkBack user can't tell it's a cycle control or
+                // what it does. Spell out the action + current value.
+                .semantics {
+                    contentDescription =
+                        "Activity type, currently " +
+                        activityType.replaceFirstChar { it.uppercase() } +
+                        ", tap to change"
+                },
         )
         if (authed && !routeSelected) {
             // Bottom-centre Route picker chip — only when no route
@@ -743,7 +757,10 @@ private fun PreRunScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 14.dp)
-                    .widthIn(max = 100.dp),
+                    .widthIn(max = 100.dp)
+                    .semantics {
+                        contentDescription = "Choose a route, none selected"
+                    },
             )
         } else if (!authed) {
             // Replaces the Route chip with Sign-in when unauthed.
@@ -761,7 +778,10 @@ private fun PreRunScreen(
                 colors = translucentChip,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(bottom = 14.dp),
+                    .padding(bottom = 14.dp)
+                    .semantics {
+                        contentDescription = "Sign in to sync your runs"
+                    },
             )
         }
         CompactChip(
@@ -779,7 +799,16 @@ private fun PreRunScreen(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(end = 22.dp, bottom = 36.dp)
-                .widthIn(max = 56.dp),
+                .widthIn(max = 56.dp)
+                .semantics {
+                    contentDescription = if (targetPaceSecPerKm == null) {
+                        "Target pace, off, tap to set"
+                    } else {
+                        "Target pace, currently " +
+                            formatPace(targetPaceSecPerKm.toDouble()) +
+                            " per kilometre, tap to change"
+                    }
+                },
         )
 
         // Top side icon buttons, mirroring the bottom Activity / Pace

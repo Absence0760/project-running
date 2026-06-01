@@ -107,5 +107,79 @@ void main() {
       expect(find.text('New goal'), findsNothing);
       expect(prefs.goals, isEmpty);
     });
+
+    testWidgets('resolves to "Goal saved" after a successful save',
+        (tester) async {
+      final prefs = await _makePrefs();
+      String? result;
+      await tester.binding.setSurfaceSize(const Size(400, 900));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () async {
+                  result = await showGoalEditorSheet(ctx, preferences: prefs);
+                },
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      final distanceField = find.ancestor(
+        of: find.textContaining('km'),
+        matching: find.byType(TextField),
+      );
+      await tester.enterText(distanceField.first, '10');
+      await tester.ensureVisible(find.text('Save'));
+      await tester.tap(find.text('Save'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(result, 'Goal saved');
+    });
+
+    testWidgets('resolves to "Goal deleted" when an existing goal is removed',
+        (tester) async {
+      final prefs = await _makePrefs();
+      final goal = RunGoal(
+        id: 'g1',
+        period: GoalPeriod.week,
+        distanceMetres: 20000,
+      );
+      await prefs.upsertGoal(goal);
+      String? result;
+      await tester.binding.setSurfaceSize(const Size(400, 900));
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: Builder(
+              builder: (ctx) => TextButton(
+                onPressed: () async {
+                  result = await showGoalEditorSheet(
+                    ctx,
+                    preferences: prefs,
+                    existing: goal,
+                  );
+                },
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.ensureVisible(find.text('Delete'));
+      await tester.tap(find.text('Delete'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 800));
+      expect(result, 'Goal deleted');
+      expect(prefs.goals, isEmpty);
+    });
   });
 }

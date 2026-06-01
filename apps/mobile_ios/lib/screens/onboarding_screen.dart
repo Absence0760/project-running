@@ -122,6 +122,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    // WCAG 2.3.3 — honour the OS "reduce motion" setting: collapse the
+    // page-indicator width tween to an instant swap when animations
+    // are disabled.
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -194,7 +198,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: List.generate(_pageCount, (i) {
                 return AnimatedContainer(
-                  duration: const Duration(milliseconds: 200),
+                  duration:
+                      reduceMotion ? Duration.zero : const Duration(milliseconds: 200),
                   margin: const EdgeInsets.symmetric(horizontal: 4),
                   width: i == _page ? 24 : 8,
                   height: 8,

@@ -72,6 +72,37 @@ void main() {
       expect(find.byType(AnimatedContainer), findsNWidgets(4));
     });
 
+    testWidgets('page-indicator animates over 200ms by default (WCAG 2.3.3)',
+        (tester) async {
+      final prefs = await _makePrefs();
+      await _pump(tester, prefs: prefs);
+      final dots = tester
+          .widgetList<AnimatedContainer>(find.byType(AnimatedContainer));
+      for (final d in dots) {
+        expect(d.duration, const Duration(milliseconds: 200));
+      }
+    });
+
+    testWidgets(
+        'page-indicator collapses to instant swap under reduce-motion '
+        '(WCAG 2.3.3)', (tester) async {
+      final prefs = await _makePrefs();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: MediaQuery(
+            data: const MediaQueryData(disableAnimations: true),
+            child: OnboardingScreen(preferences: prefs, onDone: () {}),
+          ),
+        ),
+      );
+      final dots = tester
+          .widgetList<AnimatedContainer>(find.byType(AnimatedContainer));
+      expect(dots, isNotEmpty);
+      for (final d in dots) {
+        expect(d.duration, Duration.zero);
+      }
+    });
+
     testWidgets('tapping Next advances to the second page', (tester) async {
       final prefs = await _makePrefs();
       await _pump(tester, prefs: prefs);

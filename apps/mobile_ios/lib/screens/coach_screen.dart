@@ -1500,6 +1500,7 @@ class _Dot extends StatefulWidget {
 
 class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
   late final AnimationController _c;
+  bool _started = false;
 
   @override
   void initState() {
@@ -1508,9 +1509,6 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 600),
     );
-    Future.delayed(Duration(milliseconds: widget.delayMs), () {
-      if (mounted) _c.repeat(reverse: true);
-    });
   }
 
   @override
@@ -1519,19 +1517,35 @@ class _DotState extends State<_Dot> with SingleTickerProviderStateMixin {
     super.dispose();
   }
 
+  Widget _dot(Color color) => Container(
+        width: 6,
+        height: 6,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    // WCAG 2.3.3 (Animation from Interactions) — honour the OS
+    // "reduce motion" setting: render a static dot instead of the
+    // repeating fade so a vestibular-sensitive user isn't subjected
+    // to the looping typing indicator.
+    final reduceMotion = MediaQuery.maybeOf(context)?.disableAnimations ?? false;
+    if (reduceMotion) {
+      if (_c.isAnimating) _c.stop();
+      return _dot(cs.onSurfaceVariant);
+    }
+    if (!_started) {
+      _started = true;
+      Future.delayed(Duration(milliseconds: widget.delayMs), () {
+        if (!mounted) return;
+        if (MediaQuery.maybeOf(context)?.disableAnimations ?? false) return;
+        _c.repeat(reverse: true);
+      });
+    }
     return FadeTransition(
       opacity: Tween<double>(begin: 0.3, end: 1).animate(_c),
-      child: Container(
-        width: 6,
-        height: 6,
-        decoration: BoxDecoration(
-          color: cs.onSurfaceVariant,
-          shape: BoxShape.circle,
-        ),
-      ),
+      child: _dot(cs.onSurfaceVariant),
     );
   }
 }

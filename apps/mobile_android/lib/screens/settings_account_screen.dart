@@ -154,26 +154,58 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   }
 
   Future<void> _deleteAccount() async {
+    // Re-entry challenge mirroring the web ConfirmDialog `requireText`
+    // gate: the user must type their email (or "DELETE" when offline /
+    // no email) before the Delete button enables. Apple 5.1.1 +
+    // data-loss confirmation — a stray tap can't trigger an
+    // irreversible server-side wipe.
+    final email = widget.apiClient?.userEmail ?? '';
+    final challengeTarget = email.isEmpty ? 'DELETE' : email;
+    final challengeCtl = TextEditingController();
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete account?'),
-        content: const Text(
-          'This permanently removes your runs, routes, and profile from the '
-          'server. Local device data is kept unless you sign in as a new '
-          'user. This cannot be undone.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
-          ),
-        ],
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setInner) {
+          final met = challengeCtl.text.trim().toLowerCase() ==
+              challengeTarget.trim().toLowerCase();
+          return AlertDialog(
+            title: const Text('Delete account?'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'This permanently removes your runs, routes, and profile '
+                  'from the server. Local device data is kept unless you sign '
+                  'in as a new user. This cannot be undone.',
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: challengeCtl,
+                  autocorrect: false,
+                  enableSuggestions: false,
+                  decoration: InputDecoration(
+                    labelText: email.isEmpty
+                        ? 'Type "DELETE" to confirm'
+                        : 'Type your email ($email) to confirm',
+                  ),
+                  onChanged: (_) => setInner(() {}),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+                onPressed: met ? () => Navigator.pop(ctx, true) : null,
+                child: const Text('Delete'),
+              ),
+            ],
+          );
+        },
       ),
     );
     if (confirm != true) return;

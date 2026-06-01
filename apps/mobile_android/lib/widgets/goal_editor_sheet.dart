@@ -18,14 +18,20 @@ import '../settings_sync.dart';
 ///
 /// The function name is kept (`showGoalEditorSheet`) so call sites
 /// don't churn; the surface inside is unchanged.
-Future<void> showGoalEditorSheet(
+///
+/// Resolves to a short screen-reader status message (`Goal saved` /
+/// `Goal deleted`) when the sheet committed a change, or null when the
+/// user backed out — the dashboard pushes it through
+/// `SemanticsService.announce` so a TalkBack user hears the result
+/// (WCAG 4.1.3).
+Future<String?> showGoalEditorSheet(
   BuildContext context, {
   required Preferences preferences,
   SettingsSyncService? settingsSync,
   RunGoal? existing,
 }) {
-  return Navigator.of(context).push<void>(
-    MaterialPageRoute<void>(
+  return Navigator.of(context).push<String>(
+    MaterialPageRoute<String>(
       fullscreenDialog: true,
       builder: (_) => Scaffold(
         appBar: AppBar(
@@ -376,7 +382,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     // Mirror the *single* weekly distance goal into the universal bag
     // so it roams to web/iOS. Other shapes stay client-only.
     await widget.settingsSync?.pushWeeklyDistanceGoal();
-    if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context, 'Goal saved');
   }
 
   Future<void> _delete() async {
@@ -384,7 +390,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     if (id == null) return;
     await widget.preferences.removeGoal(id);
     await widget.settingsSync?.pushWeeklyDistanceGoal();
-    if (mounted) Navigator.pop(context);
+    if (mounted) Navigator.pop(context, 'Goal deleted');
   }
 
   int? _parsePace(String s) {

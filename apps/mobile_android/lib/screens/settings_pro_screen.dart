@@ -114,6 +114,23 @@ class SettingsProScreen extends StatelessWidget {
               ),
               onTap: () => _startProCheckout(context),
             ),
+            // Honesty note mirroring web /settings/upgrade (audit-findings
+            // 2026-05-30 Medium [regional]). The $9.99 figure is the USD
+            // list price; until a RevenueCat project is provisioned the
+            // store-localised price isn't available, so we disclose the
+            // billing currency + regional availability rather than imply a
+            // local-currency amount. See followups.md § Mobile.
+            Padding(
+              padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+              child: Text(
+                'Billed in US dollars. Availability depends on your country '
+                'and payment method — some regions can\'t be served by our '
+                'payment processor.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ),
             ListTile(
               leading: const Icon(Icons.restore),
               title: const Text('Restore purchases'),

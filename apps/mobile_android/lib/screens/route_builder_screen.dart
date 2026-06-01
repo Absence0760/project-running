@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
@@ -214,6 +215,35 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   /// Run OSRM through every waypoint + update derived fields
   /// (polyline / distance / elevation / overlap). Pure side-effect
+  /// audit/accessibility — WCAG 4.1.3 (Status Messages). Pin
+  /// placement / undo / clear / loop-close mutate the route silently
+  /// from a screen-reader's view: the distance + waypoint count live
+  /// in a `_StatusPill` that updates via `setState` without focus, so
+  /// TalkBack never reads the change. `SemanticsService.announce`
+  /// pushes a one-shot live-region message. Best-effort: a platform
+  /// throw must not break the builder — wrap in try / catch (mirrors
+  /// `run_screen._announceA11yState`).
+  void _announceA11yState(String message) {
+    try {
+      SemanticsService.announce(message, TextDirection.ltr);
+    } catch (e) {
+      debugPrint('SemanticsService.announce failed: $e');
+    }
+  }
+
+  /// Spoken summary of the current route after a mutation settles —
+  /// "3 points, 2.40 km" / "Route cleared".
+  void _announceRouteState() {
+    if (_waypoints.isEmpty) {
+      _announceA11yState('Route cleared');
+      return;
+    }
+    final n = _waypoints.length;
+    _announceA11yState(
+      '$n point${n == 1 ? '' : 's'}, ${formatDistanceForPref(_distanceM)}',
+    );
+  }
+
   /// helper called from every mutator (_onMapTap, _undo, drag commit,
   /// snap-to-start close).
   Future<void> _rerouteThrough(List<cm.Waypoint> waypoints) async {
@@ -226,6 +256,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _distanceM = straightLineDistance(waypoints);
         _overlapSpans = const [];
       });
+      _announceRouteState();
       unawaited(_refreshElevation());
       return;
     }
@@ -239,6 +270,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _elevationGainM = 0;
         _overlapSpans = const [];
       });
+      _announceRouteState();
       return;
     }
     // Bump the generation on entry; the captured snapshot is the
@@ -269,6 +301,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         _overlapSpans = detectOverlapSpans(routed.coordinates);
         _routing = false;
       });
+      _announceRouteState();
       // Web-parity soft warning: per-segment routing means a
       // single unreachable waypoint falls back to a straight line
       // for that segment but the rest of the polyline stays
