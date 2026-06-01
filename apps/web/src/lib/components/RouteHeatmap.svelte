@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import maplibregl from 'maplibre-gl';
+	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
@@ -24,6 +25,7 @@
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
+	let geolocate: maplibregl.GeolocateControl | null = null;
 	let stopResizeWatch: (() => void) | null = null;
 	let loading = $state(false);
 	let lastUpdated = $state<Date | null>(null);
@@ -178,12 +180,12 @@
 		map = new maplibregl.Map({
 			container: mapEl,
 			style: mapStyleUrl(PUBLIC_MAPTILER_KEY, prefersDark),
-			// World view by default. We try to geolocate immediately
-			// after mount; if the user grants permission, flyTo the
-			// real position. If they deny / aren't asked yet / the
-			// API isn't available, the global view shows the spread
-			// of points across the dataset — strictly better than the
-			// previous "everyone starts in London" default.
+			// World view by default. On load we auto-trigger the
+			// GeolocateControl; if the user grants permission it recentres
+			// on the real position and drops the user-location dot. If they
+			// deny / aren't asked yet / the API isn't available, the global
+			// view shows the spread of points across the dataset — strictly
+			// better than the previous "everyone starts in London" default.
 			center: [0, 30],
 			zoom: 2,
 		});
@@ -219,46 +221,37 @@
 		if (import.meta.env.DEV && typeof window !== 'undefined') {
 			(window as unknown as { __heatmapMap?: unknown }).__heatmapMap = map;
 		}
-		// Background-fetch the user's location + recentre. Browsers
-		// prompt for permission on the first call; deny / unavailable
-		// just leaves the world view, which is the right "no idea
-		// where you are" baseline. The 5 s timeout is the same we
-		// use elsewhere — long enough for a real GPS lock on a
-		// laptop, short enough that the page doesn't feel stuck.
-		if (typeof navigator !== 'undefined' && navigator.geolocation) {
-			navigator.geolocation.getCurrentPosition(
-				(pos) => {
-					map?.flyTo({
-						center: [pos.coords.longitude, pos.coords.latitude],
-						zoom: 12,
-						essential: true,
-					});
-				},
-				() => {
-					// Silent: world view is the fallback by design.
-				},
-				{ timeout: 5000 },
-			);
-		}
-
 		map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 		// "Locate me" button. Built-in MapLibre primitive — no
 		// MapTiler key needed, so this is the always-available
 		// navigation affordance even on a Protomaps-only dev setup
-		// where the search box is dormant.
-		map.addControl(
-			new maplibregl.GeolocateControl({
-				positionOptions: { enableHighAccuracy: true, timeout: 5000 },
-				trackUserLocation: false,
-				showAccuracyCircle: true,
-				showUserLocation: true,
-			}),
-			'top-right',
-		);
+		// where the search box is dormant. Kept in a ref so the load
+		// handler can auto-trigger it: triggering the control (not a
+		// bare getCurrentPosition) is what renders the user-location
+		// dot + accuracy circle, so the dot shows on first paint
+		// instead of only after the button is pressed.
+		geolocate = new maplibregl.GeolocateControl({
+			positionOptions: { enableHighAccuracy: true, timeout: 5000 },
+			trackUserLocation: false,
+			showAccuracyCircle: true,
+			showUserLocation: true,
+		});
+		map.addControl(geolocate, 'top-right');
 
 		map.on('load', () => {
 			if (!map) return;
 			mapLoaded = true;
+			// Auto-locate on first paint. Triggering the GeolocateControl
+			// (rather than a bare getCurrentPosition) recentres the map AND
+			// renders the user-location dot + accuracy circle, so the dot is
+			// visible immediately instead of only after the button is
+			// pressed. trackUserLocation is false, so this is a one-shot
+			// fix-and-recentre. Denied / unavailable leaves the world view —
+			// the "no idea where you are" baseline. Guard on the API so the
+			// trigger is skipped where geolocation is absent.
+			if (typeof navigator !== 'undefined' && navigator.geolocation) {
+				geolocate?.trigger();
+			}
 			map.addSource(HEATMAP_SOURCE, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: cachedFeatures },

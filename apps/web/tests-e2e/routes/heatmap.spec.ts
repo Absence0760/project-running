@@ -184,3 +184,32 @@ test.describe('/routes — Heatmap tab', () => {
 		await expect(page.locator('button.tab.active')).toHaveCount(1);
 	});
 });
+
+test.describe('/routes/heatmap — auto-locate on load', () => {
+	// Granting geolocation + a fixed position lets the GeolocateControl
+	// resolve a fix the moment the page auto-triggers it on load.
+	test.use({
+		storageState: USER_A.storageStatePath,
+		permissions: ['geolocation'],
+		geolocation: { latitude: 37.5407, longitude: -77.436 },
+	});
+
+	test('user-location dot renders without pressing the locate button', async ({
+		page,
+	}) => {
+		// Regression: the dot used to appear only after the user clicked
+		// the "locate me" button, because the on-load geolocation was a
+		// bare getCurrentPosition that just recentred the map. The dot is
+		// owned by the GeolocateControl, so we now trigger the control
+		// itself on load — which renders `.maplibregl-user-location-dot`.
+		// We never touch `.maplibregl-ctrl-geolocate` in this test; the
+		// dot must show on its own.
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({
+			timeout: 15_000,
+		});
+		await expect(page.locator('.maplibregl-user-location-dot')).toBeVisible({
+			timeout: 15_000,
+		});
+	});
+});
