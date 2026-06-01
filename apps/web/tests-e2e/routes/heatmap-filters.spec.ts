@@ -404,7 +404,7 @@ test.describe('Heatmap route-pin clustering (web)', () => {
 test.describe('Heatmap results sidebar (web)', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('list mirrors the lens and a row navigates to the route', async ({ page }) => {
+	test('list mirrors the lens; a row keeps it and the View link navigates', async ({ page }) => {
 		await page.goto('/routes/heatmap');
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		await page.waitForTimeout(1100);
@@ -424,10 +424,19 @@ test.describe('Heatmap results sidebar (web)', () => {
 		await expect.poll(() => rows.count(), { timeout: 6000 }).toBeLessThanOrEqual(popularRows);
 		expect(await rows.count()).toBeGreaterThanOrEqual(1);
 
-		// A row links to its route detail and navigates client-side.
-		const href = await rows.first().getAttribute('href');
+		// Clicking a row keeps it on the map — it must NOT navigate. A
+		// mis-click can no longer yank you off the discovery surface.
+		const firstLi = list.locator('.result-li').first();
+		await firstLi.locator('.result-row').click();
+		await expect(page).toHaveURL(/\/routes\/heatmap/);
+		await expect(firstLi.locator('.result-row')).toHaveClass(/kept/);
+		await expect(page.getByTestId('clear-pins')).toBeVisible();
+
+		// The explicit "View route" link is the only navigation.
+		const view = firstLi.getByTestId('result-view');
+		const href = await view.getAttribute('href');
 		expect(href).toMatch(/^\/routes\/[0-9a-f-]+$/);
-		await rows.first().click();
+		await view.click();
 		await expect(page).toHaveURL(/\/routes\/[0-9a-f-]+$/);
 	});
 
@@ -687,9 +696,13 @@ test.describe('Heatmap cluster list (web)', () => {
 			)
 			.toBeGreaterThanOrEqual(1);
 
-		// Each row links to its route detail.
-		const href = await rows.first().getAttribute('href');
+		// Each row carries an explicit "View" link to its route detail,
+		// and clicking the row body keeps it (no navigation).
+		const href = await rows.first().locator('.cluster-route-view').getAttribute('href');
 		expect(href).toMatch(/^\/routes\/[0-9a-f-]+$/);
+		await rows.first().locator('.cluster-route-main').click();
+		await expect(page).toHaveURL(/\/routes\/heatmap/);
+		await expect(rows.first()).toHaveClass(/kept/);
 	});
 
 	test('zoomed past clustering, overlapping pins still list (no arbitrary pick)', async ({
@@ -763,8 +776,8 @@ test.describe('Heatmap keep-on-map / pin (web)', () => {
 		expect(await pinnedLineCount(page)).toBe(0);
 		await expect(page.getByTestId('clear-pins')).toHaveCount(0);
 
-		await first.locator('.result-pin').click();
-		await expect(first.locator('.result-pin')).toHaveClass(/active/);
+		await first.locator('.result-row').click();
+		await expect(first.locator('.result-row')).toHaveClass(/kept/);
 		await expect.poll(() => pinnedLineCount(page), { timeout: 6000 }).toBeGreaterThanOrEqual(1);
 		await expect(page.getByTestId('clear-pins')).toBeVisible();
 

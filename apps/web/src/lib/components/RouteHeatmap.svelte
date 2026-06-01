@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { goto } from '$app/navigation';
 	import maplibregl from 'maplibre-gl';
 	import { env } from '$env/dynamic/public';
 	const PUBLIC_MAPTILER_KEY = env.PUBLIC_MAPTILER_KEY ?? '';
@@ -282,8 +281,11 @@
 				layout: { 'line-join': 'round', 'line-cap': 'round' },
 			});
 			map.on('click', ROUTE_PINNED_LAYER, (e) => {
+				// A click on a route never navigates — it toggles "keep on
+				// map". Clicking a kept line removes it. Navigation is always
+				// the explicit "View route" link (sidebar row / overlap popup).
 				const id = e.features?.[0]?.properties?.route_id as string | undefined;
-				if (id) void goto(`/routes/${id}`);
+				if (id) void togglePin(id);
 			});
 			map.on('mouseenter', ROUTE_PINNED_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = 'pointer';
@@ -317,7 +319,7 @@
 			map.on('click', ROUTES_LAYER, (e) => {
 				const f = e.features?.[0];
 				const id = f?.properties?.route_id as string | undefined;
-				if (id) void goto(`/routes/${id}`);
+				if (id) void togglePin(id);
 			});
 			// Moving the cursor onto the previewed line keeps it alive
 			// (cancels the pending clear) so the line stays clickable.
@@ -530,20 +532,22 @@
 				},
 			});
 			map.on('click', ROUTE_PINS_LAYER, (e) => {
-				const f = e.features?.[0];
-				if (!f || !map) return;
-				const id = f.properties?.id as string | undefined;
-				if (!id) return;
-				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-				openRoutePopup(coords, {
-					id,
-					name: (f.properties?.name as string) ?? 'Route',
-					featured: !!f.properties?.featured,
-					distance_m: (f.properties?.distance_m as number) ?? 0,
-					elevation_m: (f.properties?.elevation_m as number) ?? null,
-					surface: (f.properties?.surface as string) ?? '',
-					run_count: (f.properties?.run_count as number) ?? 0,
-				});
+				// Clicking a dot keeps that route's line on the map (toggle) —
+				// it never navigates. To open the detail page, use the "View
+				// route" link on the matching sidebar row (or the overlap
+				// popup when several routes share a start). When several pins
+				// stack under the click, defer to the overlap list rather than
+				// keeping an arbitrary one.
+				if (!map) return;
+				const hits = map.queryRenderedFeatures(e.point, { layers: [ROUTE_PINS_LAYER] });
+				const ids = new Set<string>();
+				for (const h of hits) {
+					const hid = h.properties?.id as string | undefined;
+					if (hid) ids.add(hid);
+				}
+				if (ids.size > 1) return; // hover already surfaces the overlap list
+				const id = e.features?.[0]?.properties?.id as string | undefined;
+				if (id) void togglePin(id);
 			});
 			map.on('mouseenter', ROUTE_PINS_LAYER, (e) => {
 				if (!map) return;
@@ -756,21 +760,6 @@
 			.setLngLat(coords)
 			.setHTML(html)
 			.addTo(map);
-		// Delegated handler for a route popup's "Keep on map" button (the
-		// only popup that carries data-keep-id). togglePin flips pinnedIds
-		// synchronously, so the label can update right after.
-		currentPopup.getElement().addEventListener('click', (ev) => {
-			const btn = (ev.target as HTMLElement).closest('[data-keep-id]') as
-				| HTMLElement
-				| null;
-			if (!btn?.dataset.keepId) return;
-			ev.preventDefault();
-			const id = btn.dataset.keepId;
-			void togglePin(id);
-			const pinned = pinnedIds.has(id);
-			btn.textContent = pinned ? 'Kept ✓' : 'Keep on map';
-			btn.classList.toggle('active', pinned);
-		});
 	}
 
 	interface ClubPopupData {
@@ -802,63 +791,6 @@
 					data-sveltekit-preload-data="hover">
 					View club &rarr;
 				</a>
-			</div>
-		`;
-		openPopupRaw(coords, html);
-	}
-
-	interface RoutePopupData {
-		id: string;
-		name: string;
-		featured: boolean;
-		distance_m: number;
-		elevation_m: number | null;
-		surface: string;
-		run_count: number;
-	}
-	function openRoutePopup(coords: [number, number], d: RoutePopupData) {
-		const stats: string[] = [];
-		stats.push(
-			`<span class="pin-stat"><span class="pin-stat-icon">📏</span>${escapeHtml(formatDistance(d.distance_m))}</span>`,
-		);
-		if (d.elevation_m != null && d.elevation_m > 0) {
-			stats.push(
-				`<span class="pin-stat"><span class="pin-stat-icon">⛰</span>${Math.round(d.elevation_m)} m</span>`,
-			);
-		}
-		if (d.surface) {
-			stats.push(
-				`<span class="pin-stat"><span class="pin-stat-icon">🛣</span>${escapeHtml(d.surface)}</span>`,
-			);
-		}
-		if (d.run_count > 0) {
-			stats.push(
-				`<span class="pin-stat"><span class="pin-stat-icon">🏃</span>${d.run_count} run${d.run_count === 1 ? '' : 's'}</span>`,
-			);
-		}
-		const star = d.featured
-			? '<span class="pin-popup-star" title="Featured">★</span>'
-			: '';
-		const html = `
-			<div class="pin-popup pin-popup-route ${d.featured ? 'pin-popup-featured' : ''}">
-				<div class="pin-popup-head">
-					${star}
-					<div class="pin-popup-titleblock">
-						<span class="pin-popup-title">${escapeHtml(d.name)}</span>
-						${d.featured ? '<span class="pin-popup-badge">Featured route</span>' : ''}
-					</div>
-				</div>
-				<div class="pin-popup-stats">${stats.join('')}</div>
-				<div class="pin-popup-actions">
-					<a class="pin-popup-action" href="/routes/${escapeHtml(d.id)}"
-						data-sveltekit-preload-data="hover">
-						View route &rarr;
-					</a>
-					<button type="button" class="pin-popup-keep ${pinnedIds.has(d.id) ? 'active' : ''}"
-						data-keep-id="${escapeHtml(d.id)}">
-						${pinnedIds.has(d.id) ? 'Kept ✓' : 'Keep on map'}
-					</button>
-				</div>
 			</div>
 		`;
 		openPopupRaw(coords, html);
@@ -1192,12 +1124,18 @@
 				]
 					.filter(Boolean)
 					.join(' · ');
-				return `<a class="cluster-route" href="/routes/${escapeHtml(r.id)}"
+				const kept = pinnedIds.has(r.id);
+				return `<div class="cluster-route ${kept ? 'kept' : ''}"
 					data-route-id="${escapeHtml(r.id)}" data-lng="${r.lng}" data-lat="${r.lat}"
-					data-name="${escapeHtml(r.name)}" data-sveltekit-preload-data="hover">
-					<span class="cluster-route-name">${star}${escapeHtml(r.name)}</span>
-					<span class="cluster-route-meta">${escapeHtml(meta)}</span>
-				</a>`;
+					data-name="${escapeHtml(r.name)}" role="button" tabindex="0"
+					title="${kept ? 'Kept on map — click to remove' : 'Click to keep on map'}">
+					<span class="cluster-route-main">
+						<span class="cluster-route-name">${star}${escapeHtml(r.name)}</span>
+						<span class="cluster-route-meta">${escapeHtml(meta)}</span>
+					</span>
+					<a class="cluster-route-view" href="/routes/${escapeHtml(r.id)}"
+						data-sveltekit-preload-data="hover" title="Open route page">View &rarr;</a>
+				</div>`;
 			})
 			.join('');
 		const more =
@@ -1245,6 +1183,20 @@
 				row.dataset.name ?? '',
 				false,
 			);
+		});
+		// Delegated: clicking a row keeps that route (toggle). The "View"
+		// link is left alone so it navigates to the detail page.
+		el.addEventListener('click', (ev) => {
+			const target = ev.target as HTMLElement;
+			if (target.closest('.cluster-route-view')) return;
+			const row = target.closest('[data-route-id]') as HTMLElement | null;
+			if (!row?.dataset.routeId) return;
+			ev.preventDefault();
+			const id = row.dataset.routeId;
+			void togglePin(id);
+			const kept = pinnedIds.has(id);
+			row.classList.toggle('kept', kept);
+			row.title = kept ? 'Kept on map — click to remove' : 'Click to keep on map';
 		});
 	}
 
@@ -1406,17 +1358,26 @@
 			{#each routePins as r (r.id)}
 				{@const band = bandForDistance(r.distance_m)}
 				<li class="result-li" class:pinned={pinnedIds.has(r.id)}>
-					<a
+					<button
+						type="button"
 						class="result-row"
 						class:featured={r.featured}
 						class:hovered={hoveredRouteId === r.id}
-						href="/routes/{r.id}"
-						data-sveltekit-preload-data="hover"
+						class:kept={pinnedIds.has(r.id)}
 						data-route-id={r.id}
+						aria-pressed={pinnedIds.has(r.id)}
+						title={pinnedIds.has(r.id)
+							? 'Kept on map — click to remove'
+							: 'Click to keep this route on the map'}
 						onmouseenter={() => previewRoute(r.id, [r.lng, r.lat], r.name)}
 						onmouseleave={scheduleClear}
+						onclick={() => void togglePin(r.id)}
 					>
 						<span class="result-name">
+							{#if pinnedIds.has(r.id)}<span
+									class="result-kept material-symbols"
+									title="Kept on map">push_pin</span
+								>{/if}
 							{#if r.featured}<span class="result-star" title="Featured">★</span>{/if}
 							{r.name}
 						</span>
@@ -1426,18 +1387,16 @@
 							{#if r.surface}<span>· {r.surface}</span>{/if}
 							{#if r.run_count > 0}<span>· {r.run_count} run{r.run_count === 1 ? '' : 's'}</span>{/if}
 						</span>
-					</a>
-					<button
-						type="button"
-						class="result-pin"
-						class:active={pinnedIds.has(r.id)}
-						data-pin-id={r.id}
-						aria-pressed={pinnedIds.has(r.id)}
-						title={pinnedIds.has(r.id) ? 'Unpin from map' : 'Keep on map'}
-						onclick={() => void togglePin(r.id)}
-					>
-						<span class="material-symbols">push_pin</span>
 					</button>
+					<a
+						class="result-view"
+						href="/routes/{r.id}"
+						data-sveltekit-preload-data="hover"
+						data-testid="result-view"
+						title="Open route page"
+					>
+						View<span class="material-symbols">arrow_forward</span>
+					</a>
 				</li>
 			{:else}
 				<li class="results-empty">
@@ -1745,47 +1704,59 @@
 		align-items: stretch;
 		border-bottom: 1px solid var(--color-border);
 	}
+	/* The row body is a button: clicking it keeps the route on the map
+	 * (toggle). Reset the native button chrome so it reads as a list row. */
 	.result-row {
 		flex: 1 1 auto;
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
+		align-items: flex-start;
 		gap: 0.2rem;
 		padding: 0.6rem var(--space-md);
-		text-decoration: none;
+		text-align: start;
+		font: inherit;
 		color: var(--color-text);
+		background: transparent;
+		border: 0;
+		cursor: pointer;
+		appearance: none;
 	}
 	.result-row:hover,
 	.result-row.hovered {
 		background: var(--color-surface-hover);
 	}
-	/* Pin ("keep on map") toggle at the trailing edge of each row. */
-	.result-pin {
+	/* A kept route gets a violet left rail + a filled pin glyph in the name
+	 * so the list mirrors the violet line drawn on the map. */
+	.result-row.kept {
+		box-shadow: inset 3px 0 0 #8b5cf6;
+	}
+	.result-kept {
+		font-size: 0.95rem;
+		color: #8b5cf6;
+		font-variation-settings: 'FILL' 1;
+		vertical-align: -0.15em;
+		margin-inline-end: 0.1rem;
+	}
+	/* "View route" link at the trailing edge — the only navigation. */
+	.result-view {
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
-		justify-content: center;
-		width: 2.25rem;
-		padding: 0;
-		background: transparent;
-		border: 0;
+		gap: 0.1rem;
+		padding: 0 var(--space-sm);
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-decoration: none;
+		color: var(--color-primary);
 		border-inline-start: 1px solid var(--color-border);
-		color: var(--color-text-tertiary);
-		cursor: pointer;
 		transition: color var(--transition-fast), background var(--transition-fast);
 	}
-	.result-pin:hover {
-		color: var(--color-text);
+	.result-view:hover {
 		background: var(--color-surface-hover);
 	}
-	.result-pin.active {
-		color: #8b5cf6;
-	}
-	.result-pin .material-symbols {
-		font-size: 1.1rem;
-	}
-	.result-pin.active .material-symbols {
-		font-variation-settings: 'FILL' 1;
+	.result-view .material-symbols {
+		font-size: 1rem;
 	}
 	.results-clear-pins {
 		margin-inline-start: auto;
@@ -1918,24 +1889,6 @@
 		font-size: 0.72rem;
 		color: var(--color-text-tertiary);
 	}
-	:global(.heatmap-pin-popup .pin-popup-star) {
-		color: #facc15;
-		font-size: 1.2rem;
-		line-height: 1;
-		flex-shrink: 0;
-	}
-	:global(.heatmap-pin-popup .pin-popup-badge) {
-		display: inline-block;
-		font-size: 0.65rem;
-		font-weight: 700;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: #facc15;
-		background: rgba(250, 204, 21, 0.12);
-		padding: 0.05rem 0.4rem;
-		border-radius: 999px;
-		align-self: flex-start;
-	}
 	/* Avatar — circle 32px. Image OR initials fallback. */
 	:global(.heatmap-pin-popup .pin-avatar) {
 		display: inline-flex;
@@ -1957,25 +1910,6 @@
 		color: var(--color-text-secondary);
 		margin-bottom: 0.5rem;
 	}
-	/* Route stats — icon + value chips on one row. */
-	:global(.heatmap-pin-popup .pin-popup-stats) {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.4rem 0.8rem;
-		margin-bottom: 0.6rem;
-	}
-	:global(.heatmap-pin-popup .pin-stat) {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		font-size: 0.78rem;
-		color: var(--color-text-secondary);
-		font-variant-numeric: tabular-nums;
-	}
-	:global(.heatmap-pin-popup .pin-stat-icon) {
-		font-size: 0.85rem;
-		opacity: 0.7;
-	}
 	:global(.heatmap-pin-popup .pin-popup-action) {
 		display: inline-flex;
 		align-items: center;
@@ -1993,33 +1927,6 @@
 	}
 	:global(.heatmap-pin-popup .pin-popup-action:hover) {
 		background: var(--color-primary-light);
-	}
-	/* Route popup actions row: View route + Keep on map side by side. */
-	:global(.heatmap-pin-popup .pin-popup-actions) {
-		display: flex;
-		gap: 0.4rem;
-	}
-	:global(.heatmap-pin-popup .pin-popup-actions .pin-popup-action) {
-		width: auto;
-		flex: 1 1 auto;
-	}
-	:global(.heatmap-pin-popup .pin-popup-keep) {
-		flex-shrink: 0;
-		font-size: 0.8rem;
-		font-weight: 600;
-		color: #8b5cf6;
-		background: transparent;
-		border: 1px solid #8b5cf6;
-		border-radius: var(--radius-sm);
-		padding: 0.4rem 0.6rem;
-		cursor: pointer;
-	}
-	:global(.heatmap-pin-popup .pin-popup-keep:hover) {
-		background: rgba(139, 92, 246, 0.12);
-	}
-	:global(.heatmap-pin-popup .pin-popup-keep.active) {
-		background: #8b5cf6;
-		color: #fff;
 	}
 
 	/* Hover tooltip — small, no border, no close button. Closes on
@@ -2073,17 +1980,43 @@
 		max-height: 16rem;
 		overflow-y: auto;
 	}
+	/* Row = keep-on-click target; the trailing View link is the only
+	 * navigation. Lay them out side by side. */
 	:global(.heatmap-cluster-popup .cluster-route) {
 		display: flex;
-		flex-direction: column;
-		gap: 0.1rem;
+		align-items: center;
+		gap: 0.4rem;
 		padding: 0.4rem 0.5rem;
 		border-radius: var(--radius-sm);
-		text-decoration: none;
 		color: var(--color-text);
+		cursor: pointer;
 	}
 	:global(.heatmap-cluster-popup .cluster-route:hover) {
 		background: var(--color-surface-hover);
+	}
+	:global(.heatmap-cluster-popup .cluster-route-main) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		flex: 1 1 auto;
+		min-width: 0;
+	}
+	:global(.heatmap-cluster-popup .cluster-route.kept) {
+		box-shadow: inset 3px 0 0 #8b5cf6;
+	}
+	:global(.heatmap-cluster-popup .cluster-route.kept .cluster-route-name) {
+		color: #8b5cf6;
+	}
+	:global(.heatmap-cluster-popup .cluster-route-view) {
+		flex-shrink: 0;
+		font-size: 0.72rem;
+		font-weight: 600;
+		text-decoration: none;
+		color: var(--color-primary);
+		white-space: nowrap;
+	}
+	:global(.heatmap-cluster-popup .cluster-route-view:hover) {
+		text-decoration: underline;
 	}
 	:global(.heatmap-cluster-popup .cluster-route-name) {
 		font-size: 0.85rem;

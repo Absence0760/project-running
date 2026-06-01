@@ -278,7 +278,7 @@ test.describe('Heatmap pin popup (click flow)', () => {
 		}, { lng: target[0], lat: target[1] });
 	}
 
-	test('clicking a route pin opens a popup with View action that navigates',
+	test('clicking a route pin keeps it on the map (no navigation); the row View link navigates',
 		async ({ page }) => {
 			await page.goto('/routes/heatmap');
 			await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
@@ -291,17 +291,21 @@ test.describe('Heatmap pin popup (click flow)', () => {
 
 			// Real click — MapLibre's queryRenderedFeatures only resolves
 			// for actual pointer events, not synthetic fire('click').
+			// Clicking a route dot keeps it on the map; it must NOT navigate
+			// and must NOT open a navigable route popup.
 			await page.mouse.click(screen.x, screen.y);
+			await expect(page.getByTestId('clear-pins')).toBeVisible({ timeout: 5_000 });
+			await expect(page).toHaveURL(/\/routes\/heatmap/);
+			await expect(page.locator('.heatmap-pin-popup .pin-popup-action')).toHaveCount(0);
 
-			const popup = page.locator('.heatmap-pin-popup');
-			await expect(popup).toBeVisible({ timeout: 5_000 });
-			await expect(popup.getByText(/Belle Isle/i)).toBeVisible();
-			// Elevation chip must render — the elevation_m has to be carried
-			// onto the rendered pin feature (Belle Isle seed = 70 m).
-			await expect(popup).toContainText('70 m');
-			const view = popup.getByRole('link', { name: /view route/i });
-			await expect(view).toBeVisible();
-			await view.click();
+			// The matching sidebar row reflects the kept state; its explicit
+			// "View route" link is the only path to the detail page.
+			const keptLi = page
+				.getByTestId('discover-list')
+				.locator('.result-li:has(.result-row.kept)')
+				.first();
+			await expect(keptLi).toBeVisible();
+			await keptLi.getByTestId('result-view').click();
 			await page.waitForURL(/\/routes\/[\da-f-]{36}/, { timeout: 10_000 });
 		});
 
@@ -347,7 +351,9 @@ test.describe('Heatmap pin popup (click flow)', () => {
 		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
 		await page.waitForTimeout(1200);
 
-		const target: [number, number] = [-77.452, 37.5311];
+		// Route dots now keep-on-click (no popup), so drive this against the
+		// club pin — the one surface that still opens a `.heatmap-pin-popup`.
+		const target: [number, number] = [-77.436, 37.5407]; // Richmond Run Club
 		const screen = await flyAndProjectPin(page, target);
 		expect(screen).toBeTruthy();
 		if (!screen) return;
