@@ -826,6 +826,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     color: theme.colorScheme.outline,
                   ),
                 ),
+                if (_disciplineLabel != null) ...[
+                  const SizedBox(width: 8),
+                  Icon(Icons.terrain, size: 16, color: theme.colorScheme.outline),
+                  const SizedBox(width: 4),
+                  Text(
+                    _disciplineLabel!,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.outline,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -981,6 +992,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             const Divider(),
           ],
 
+          // Running Dynamics — Garmin HRM-Pro / Run pod metrics off an
+          // imported FIT session (persona round-5 garmin F2).
+          if (_buildRunningDynamics(theme).isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+              child: Text('Running Dynamics', style: theme.textTheme.titleMedium),
+            ),
+            ..._buildRunningDynamics(theme),
+            const Divider(),
+          ],
+
           // Best efforts — auto-detect fastest 1k, 1mi, 5k, 10k, HM, M
           if (run.track.length >= 2) ...[
             ..._buildBestEfforts(theme, unit),
@@ -1061,6 +1083,22 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return const [];
   }
 
+  // Garmin FIT discipline (sub_sport) — trail / treadmill / track / road —
+  // capitalised for a header chip beside the activity type. Null when the
+  // import carried no informative sub_sport.
+  String? get _disciplineLabel {
+    final raw = run.metadata?['sub_sport'];
+    if (raw is! String || raw.isEmpty) return null;
+    return raw[0].toUpperCase() + raw.substring(1);
+  }
+
+  // Garmin Running Dynamics off an imported FIT session — only the
+  // sub-fields the watch recorded are present.
+  Map<String, dynamic>? get _runningDynamics {
+    final rd = run.metadata?['running_dynamics'];
+    return rd is Map ? Map<String, dynamic>.from(rd) : null;
+  }
+
   List<Widget> _buildLaps(ThemeData theme, DistanceUnit unit) {
     // Canonical per-lap shape (`docs/backend/metadata.md` § laps):
     //   { index, start_offset_s, distance_m, duration_s }
@@ -1083,6 +1121,29 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         ),
       );
     }).toList();
+  }
+
+  List<Widget> _buildRunningDynamics(ThemeData theme) {
+    final rd = _runningDynamics;
+    if (rd == null) return const [];
+    final rows = <Widget>[];
+    void addRow(String label, Object? value, String suffix) {
+      if (value is! num) return;
+      final formatted = label == 'Stride length'
+          ? value.toStringAsFixed(2)
+          : value.toString();
+      rows.add(ListTile(
+        dense: true,
+        title: Text(label),
+        trailing: Text('$formatted $suffix', style: theme.textTheme.titleMedium),
+      ));
+    }
+
+    addRow('Vertical oscillation', rd['vertical_oscillation_mm'], 'mm');
+    addRow('Ground contact', rd['gct_ms'], 'ms');
+    addRow('Stride length', rd['stride_length_m'], 'm');
+    addRow('Avg power', rd['power_w'], 'W');
+    return rows;
   }
 
   /// Moving time — elapsed with stops excluded, derived from the GPS track.

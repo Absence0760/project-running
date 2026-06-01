@@ -132,6 +132,40 @@ void main() {
       expect(find.text('Age grade'), findsOneWidget);
       expect(find.text('55.42%'), findsOneWidget);
     });
+
+    testWidgets('renders the Garmin discipline chip from sub_sport',
+        (tester) async {
+      final run = _run(metadata: {'activity_type': 'run', 'sub_sport': 'trail'});
+      await _pump(tester, run);
+      expect(find.text('Trail'), findsOneWidget);
+    });
+
+    testWidgets('renders a Running Dynamics block from running_dynamics',
+        (tester) async {
+      final run = _run(metadata: {
+        'activity_type': 'run',
+        'running_dynamics': {
+          'vertical_oscillation_mm': 8.4,
+          'gct_ms': 240,
+          'stride_length_m': 1.18,
+          'power_w': 290,
+        },
+      });
+      await _pump(tester, run);
+      expect(find.text('Running Dynamics'), findsOneWidget);
+      expect(find.text('Vertical oscillation'), findsOneWidget);
+      expect(find.text('8.4 mm'), findsOneWidget);
+      expect(find.text('240 ms'), findsOneWidget);
+      expect(find.text('1.18 m'), findsOneWidget);
+      expect(find.text('290 W'), findsOneWidget);
+    });
+
+    testWidgets('omits the Running Dynamics block when the key is absent',
+        (tester) async {
+      final run = _run(metadata: {'activity_type': 'run'});
+      await _pump(tester, run);
+      expect(find.text('Running Dynamics'), findsNothing);
+    });
   });
 
   // ─────────── Settings propagation: bodyWeightKg → calorie text ───────────
