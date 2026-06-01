@@ -37,6 +37,13 @@
 	let dateOfBirth = $state('');
 	let restingHr = $state('');
 	let maxHr = $state('');
+	// Date of birth is Art 9 demographic data — its persistence is gated
+	// on explicit health-data consent, mirroring the Demographics section
+	// of /settings/preferences. Without this, the account page was an
+	// unguarded second write path for DOB into user_settings.prefs
+	// (the DB lock trigger only protects user_profiles.health_data_consent_at).
+	let healthDataConsent = $state(false);
+	let healthDataConsentAt = $state<string | null>(null);
 	let saving = $state(false);
 	let saved = $state(false);
 	let exporting = $state(false);
@@ -166,6 +173,15 @@
 				p[TRUSTED_CONTACTS_KEY] as TrustedContact[] | null | undefined,
 			);
 		}
+		const { data: prof } = await supabase
+			.from('user_profiles')
+			.select('health_data_consent_at')
+			.eq('id', auth.user.id)
+			.maybeSingle();
+		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
+		// Pre-tick the box if consent is already on record so a user can
+		// edit DOB / HR without re-consenting on every visit.
+		healthDataConsent = healthDataConsentAt != null;
 		await loadIdentities();
 		await refreshPushState();
 	});
@@ -220,19 +236,55 @@
 		if (!auth.user) return;
 		saving = true;
 		saved = false;
-		const { error: profileError } = await supabase.from('user_profiles').update({
+
+		// Date of birth is consent-gated. Fail loudly rather than silently
+		// dropping it, mirroring /settings/preferences.
+		if (dateOfBirth && !healthDataConsent) {
+			showToast(
+				'To save your date of birth, tick the health-data consent ' +
+					'checkbox under Date of Birth.',
+				'error',
+			);
+			saving = false;
+			return;
+		}
+		if (healthDataConsent && healthDataConsentAt == null) {
+			// Grant — stamp the consent timestamp server-side via the
+			// SECURITY DEFINER RPC (first-stamp-wins; a direct write of
+			// health_data_consent_at is rejected by the lock trigger,
+			// migration 20261118_001).
+			const { data: stampedAt, error: consentErr } =
+				await supabase.rpc('grant_health_data_consent');
+			if (consentErr) {
+				showToast(`Save failed: ${consentErr.message}`, 'error');
+				saving = false;
+				return;
+			}
+			if (stampedAt) healthDataConsentAt = stampedAt as string;
+		}
+
+		const profileUpdate: Record<string, unknown> = {
 			display_name: displayName || null,
 			parkrun_number: parkrunNumber || null,
-		}).eq('id', auth.user.id);
+		};
+		if (!healthDataConsent && healthDataConsentAt != null) {
+			// Withdrawal — null the consent timestamp (the lock trigger
+			// permits a direct null write); DOB is cleared from prefs below.
+			profileUpdate.health_data_consent_at = null;
+			healthDataConsentAt = null;
+		}
+		const { error: profileError } = await supabase.from('user_profiles')
+			.update(profileUpdate).eq('id', auth.user.id);
 		if (profileError) {
 			showToast(`Save failed: ${profileError.message}`, 'error');
 			saving = false;
 			return;
 		}
 
-		// Persist DOB + HR into user_settings.prefs.
+		// Persist DOB + HR into user_settings.prefs. DOB only when consented;
+		// on withdrawal it is explicitly nulled so the stored value is cleared.
 		const prefs: Record<string, unknown> = {};
-		if (dateOfBirth) prefs.date_of_birth = dateOfBirth;
+		prefs.date_of_birth = healthDataConsent && dateOfBirth ? dateOfBirth : null;
 		if (restingHr) prefs.resting_hr_bpm = parseInt(restingHr, 10) || null;
 		if (maxHr) prefs.max_hr_bpm = parseInt(maxHr, 10) || null;
 		if (Object.keys(prefs).length > 0) {
@@ -558,7 +610,7 @@
 			</label>
 			<label>
 				<span class="label-text">Date of Birth</span>
-				<input type="date" bind:value={dateOfBirth} />
+				<input type="date" bind:value={dateOfBirth} disabled={!healthDataConsent} />
 			</label>
 			<label>
 				<span class="label-text">Resting HR (bpm)</span>
@@ -569,6 +621,21 @@
 				<input type="number" bind:value={maxHr} placeholder="e.g. 190 (blank = 208 − 0.7 × age)" min="100" max="230" />
 			</label>
 		</div>
+		<label class="consent-checkbox">
+			<input type="checkbox" bind:checked={healthDataConsent} />
+			<span>
+				I consent to Threkir storing my date of birth as health-related
+				data, used to personalise training paces, heart-rate zones, and
+				age-graded results. You can withdraw this any time.
+			</span>
+		</label>
+		{#if healthDataConsentAt}
+			<p class="section-desc consent-recorded">
+				Consent recorded on {new Date(healthDataConsentAt).toLocaleDateString()}.
+				Unticking the box and saving withdraws consent and clears your stored
+				date of birth.
+			</p>
+		{/if}
 		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
 			{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
 		</button>
@@ -951,6 +1018,9 @@
 
 	input:disabled { opacity: 0.6; cursor: not-allowed; }
 	.section-desc { font-size: 0.85rem; color: var(--color-text-secondary); margin-bottom: var(--space-md); line-height: 1.5; }
+	.consent-checkbox { display: flex; gap: var(--space-sm); align-items: flex-start; font-size: 0.9rem; line-height: 1.45; margin-bottom: var(--space-md); }
+	.consent-checkbox input { margin-top: 0.2rem; flex-shrink: 0; width: auto; }
+	.consent-recorded { font-size: 0.8rem; }
 	.btn-save { width: auto; }
 	.btn-row { display: flex; gap: var(--space-sm); flex-wrap: wrap; }
 
