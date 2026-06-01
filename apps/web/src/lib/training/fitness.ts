@@ -50,15 +50,27 @@ export function isReturningFromLayoff(runs: Run[], nowMs: number = Date.now()): 
 	return latest - prev >= kLayoffResetDays * dayMs;
 }
 
+/// Minimum qualifying-run distance (metres) for fitness math. Lowered from
+/// 3 km to 1.5 km so a comeback / new runner rebuilding at 1-2 km per outing
+/// still gets a fitness + volume signal instead of an empty Fitness card
+/// forever (persona round-5 runner-comeback). 1.5 km paired with the 5-min
+/// duration floor below means a qualifying run is a sustained effort of at
+/// least ~3:20/km — noisy 1 km all-out sprints (which would inflate the
+/// VDOT ceiling, since `currentVdot` takes the max over runs) stay excluded,
+/// and a true sprint is also caught by `vdotFromRun`'s own 1 km / 2 min gate.
+/// We deliberately did NOT drop to 1 km: the gap between 1 and 1.5 km is
+/// where short all-out efforts produce the most VDOT inflation.
+const MIN_QUALIFYING_DISTANCE_M = 1500;
+
 /// Qualifying runs for fitness math: source is an actual recording or
-/// reliable import, distance is >= 3 km (shorter runs are too noisy),
-/// duration / distance both sane. Indoor / treadmill runs are excluded —
-/// their distance is belt-/estimate-derived, not measured, so feeding it to
-/// VDOT inflates the runner's fitness ceiling (#16).
+/// reliable import, distance is >= MIN_QUALIFYING_DISTANCE_M, duration / distance
+/// both sane. Indoor / treadmill runs are excluded — their distance is
+/// belt-/estimate-derived, not measured, so feeding it to VDOT inflates the
+/// runner's fitness ceiling (#16).
 export function qualifyingRuns(runs: Run[]): Run[] {
 	return runs.filter(
 		(r) =>
-			r.distance_m >= 3000 &&
+			r.distance_m >= MIN_QUALIFYING_DISTANCE_M &&
 			r.duration_s >= 300 &&
 			(r.metadata as Record<string, unknown> | null)?.indoor !== true &&
 			(r.source === 'app' ||

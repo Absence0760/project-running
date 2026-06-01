@@ -44,10 +44,19 @@ const NOW = Date.parse('2026-04-30T07:00:00Z');
 
 // ─────────────── qualifyingRuns ───────────────
 
-test('qualifyingRuns — drops sub-3km runs (too noisy for VDOT)', () => {
+test('qualifyingRuns — drops sub-1.5km runs (too noisy for VDOT)', () => {
 	const longEnough = r({ started_at: '2026-04-01T07:00:00Z', distance_m: 5000, duration_s: 1500 });
-	const tooShort = r({ started_at: '2026-04-02T07:00:00Z', distance_m: 2000, duration_s: 600 });
+	const tooShort = r({ started_at: '2026-04-02T07:00:00Z', distance_m: 1000, duration_s: 360 });
 	assert.deepEqual(qualifyingRuns([longEnough, tooShort]), [longEnough]);
+});
+
+// Persona round-5 runner-comeback: a runner rebuilding at 1.5-2 km/run must
+// still see a fitness signal. The old 3 km floor hid them entirely; the new
+// 1.5 km floor (paired with the 5-min duration gate) admits a sustained short
+// run while still rejecting noisy 1 km all-out efforts.
+test('qualifyingRuns — admits a sustained 1.5-2km comeback run', () => {
+	const comeback = r({ started_at: '2026-04-01T07:00:00Z', distance_m: 1800, duration_s: 600 });
+	assert.deepEqual(qualifyingRuns([comeback]), [comeback]);
 });
 
 test('qualifyingRuns — drops sub-5min runs (sprint efforts)', () => {

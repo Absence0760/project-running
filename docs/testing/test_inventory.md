@@ -355,7 +355,7 @@ Pure-function tests for `parseBleHeartRateMeasurement` in `lib/ble_heart_rate.da
 - Truncated payload returns null
 - Single-byte payload returns null
 
-### `apps/mobile_android/test/training_test.dart` — 18 tests
+### `apps/mobile_android/test/training_test.dart` — 21 tests
 
 Dart mirror of `apps/web/src/lib/training.test.ts`. The Dart engine (`lib/training.dart`) must produce the same paces and phase assignments as the TypeScript engine for the same inputs. Covers the same functions:
 
@@ -432,7 +432,7 @@ Pure-parser coverage for `RouteParser` (GPX/KML/TCX/GeoJSON) and `FitParser`. GP
 
 Regression for the `RunSource.watch` enum-map regen. Constructs a `Run` with `source: RunSource.watch`, asserts `toJson()['source'] == 'watch'` and `fromJson({'source': 'watch'}).source == RunSource.watch`. Existed to catch the crash that would otherwise hit `_$RunSourceEnumMap[instance.source]!` on any serialisation of a watch-originated run.
 
-### `apps/web/src/lib/training.test.ts` — 29 tests
+### `apps/web/src/lib/training.test.ts` — 32 tests
 
 TypeScript unit tests for the training plan engine, written against Node's `node:test` API (no test runner dependency). Run with `npx tsx --test src/lib/training.test.ts` from `apps/web`.
 
@@ -586,9 +586,9 @@ Mirror of `apps/mobile_android/test/recurrence_test.dart`. Pure tests for `lib/r
 
 Mirror of `apps/mobile_android/test/goals_test.dart`. Pure tests for `lib/goals.ts`. `periodStart` / `periodEnd` cover Monday-default + Sunday-override week anchoring, month start = 1st, week end = start + 7 days, December → January wrap. `formatPaceSecPerKm` covers em-dash for non-positive / non-finite, m:ss/km formatting with zero-padded seconds, half-up rounding. `evaluateGoal` covers empty list = 0%, runs outside the period excluded, distance target accumulation + complete-on-hit, pace target excluding cycling rides from the distance-weighted average, pace target with no qualifying runs reporting 0% + em-dash currentLabel, lower-is-better partial progress, time + runCount targets, multi-target complete-only-when-every-hit, `overallPercent` as the mean of target percents, and zero / negative targets being filtered out of the targets list. `newGoalId` covers uniqueness across 100 calls. `loadGoals` / `saveGoals` cover empty when no data, save / load round-trip preservation, per-user keying isolating two users on the same browser, null userId returns empty, the legacy unscoped-key migration on first load (with the legacy key removed afterwards), accepting both legacy camelCase and canonical snake_case wire shapes, and corrupt-JSON returning empty.
 
-### `apps/web/src/lib/fitness.test.ts` — 26 tests
+### `apps/web/src/lib/fitness.test.ts` — 27 tests
 
-Mirror of `apps/mobile_android/test/fitness_test.dart`. Pure tests for `lib/fitness.ts`. `qualifyingRuns` covers sub-3km / sub-5min drop, every recognised `source` accepted plus a non-recognised value rejected. `vdotFromRun` covers sub-1km / sub-2min returning null, ~50 for a 20-min 5k, ~54 for a 3-hour marathon, faster pace → higher VDOT. `currentVdot` covers picking the best in-window qualifying run and ignoring runs older than 90 days. `vo2MaxFromVdot` is identity passthrough. `thresholdPaceSecPerKmFromVdot` covers null in / null out, VDOT 50 in the 240-260 s/km band, and higher VDOT yielding a faster threshold (catches the formula bug fixed during this pass — see [decisions.md § 54](../architecture/decisions.md#54-fix-thresholdpacesecperkmfromvdot-formula)). `runTss` covers the sub-100m / sub-30s / zero-threshold returning 0, threshold pace = 100 TSS at 1 hour (Coggan reference), and faster-than-threshold raising TSS faster than linearly. `trainingLoad` covers null inputs / no qualifying runs all-null, non-null curves with at least one qualifying run, TSB rises during a 14-day taper. `computeSnapshot` covers the rollup contract + empty input. `recoveryAdvice` covers null inputs, sub-10 CTL → consistency-building advice, and the five-band TSB ladder producing five distinct strings.
+Mirror of `apps/mobile_android/test/fitness_test.dart`. Pure tests for `lib/fitness.ts`. `qualifyingRuns` covers sub-1.5km / sub-5min drop (floor lowered from 3 km so comeback runners rebuilding at 1.5-2 km/run still get a fitness signal — persona round-5), a sustained 1.5-2 km comeback run admitted, every recognised `source` accepted plus a non-recognised value rejected. `vdotFromRun` covers sub-1km / sub-2min returning null, ~50 for a 20-min 5k, ~54 for a 3-hour marathon, faster pace → higher VDOT. `currentVdot` covers picking the best in-window qualifying run and ignoring runs older than 90 days. `vo2MaxFromVdot` is identity passthrough. `thresholdPaceSecPerKmFromVdot` covers null in / null out, VDOT 50 in the 240-260 s/km band, and higher VDOT yielding a faster threshold (catches the formula bug fixed during this pass — see [decisions.md § 54](../architecture/decisions.md#54-fix-thresholdpacesecperkmfromvdot-formula)). `runTss` covers the sub-100m / sub-30s / zero-threshold returning 0, threshold pace = 100 TSS at 1 hour (Coggan reference), and faster-than-threshold raising TSS faster than linearly. `trainingLoad` covers null inputs / no qualifying runs all-null, non-null curves with at least one qualifying run, TSB rises during a 14-day taper. `computeSnapshot` covers the rollup contract + empty input. `recoveryAdvice` covers null inputs, sub-10 CTL → consistency-building advice, and the five-band TSB ladder producing five distinct strings.
 
 ### `apps/web/src/lib/coach/types.test.ts` — 4 tests
 

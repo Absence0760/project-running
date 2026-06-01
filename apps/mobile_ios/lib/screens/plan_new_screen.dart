@@ -383,6 +383,17 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               _pacePill(theme, 'Rep', p.paces.repetition),
             ],
           ),
+          if (p.pacesAreFallback) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Estimated paces — add a recent run or a goal time for '
+              'personalised targets.',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: theme.colorScheme.onSurface,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
           if (p.vdot != null) ...[
             const SizedBox(height: 8),
             Text('Daniels VDOT: ${p.vdot!.toStringAsFixed(1)}',

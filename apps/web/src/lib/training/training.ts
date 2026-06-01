@@ -44,6 +44,16 @@ export function defaultPlanWeeks(goal: GoalEvent): number {
 	return goal === 'custom' ? 12 : DEFAULT_PLAN_WEEKS[goal];
 }
 
+/// Default week count for a beginner C25K walk-run plan. The continuous-run
+/// default (`defaultPlanWeeks('distance_5k')` = 8) is one week shorter than
+/// the `WALK_RUN_PROGRESSION` table, so feeding it to the walk-run generator
+/// drops the final graduation week (the single continuous run). Callers that
+/// build a beginner plan should size `weeks` from this, not `defaultPlanWeeks`.
+/// Persona round-5 runner-new.
+export function walkRunDefaultWeeks(): number {
+	return WALK_RUN_PROGRESSION.length;
+}
+
 // ─────────────────────── VDOT (Daniels) ───────────────────────
 
 /**
@@ -167,12 +177,54 @@ export function pacesFromGoalPace(
 	};
 }
 
+/// The conservative goal pace (sec/km) used when the runner gave us neither a
+/// recent race nor a goal time. ~10:00/km — slow enough that the derived easy
+/// pace won't injure a returning runner, but it's a placeholder, not a
+/// personalised number. `resolveTrainingPacesWithMeta` flags when it's in play
+/// so the caller can disclose it instead of presenting it as real. Persona
+/// round-5 runner-comeback.
+const FALLBACK_GOAL_PACE_SEC_PER_KM = 600;
+
+/**
+ * Resolve the runner's training paces plus whether they came from a real
+ * fitness anchor or the conservative fallback. Priority: an explicit recent 5k
+ * time (use Riegel to predict goal-distance pace) → a goal time on the target
+ * distance (use directly) → fall back to a conservative "10:00/km as goal" so
+ * the plan still generates for someone without any race history.
+ *
+ * `isFallback` is true only in that last case. The numbers are always usable
+ * (the plan generates regardless); the flag exists so the wizard can label the
+ * preview "estimated — add a recent run for personalised paces" rather than
+ * presenting a placeholder as a confident prescription. Persona round-5
+ * runner-comeback.
+ */
+export function resolveTrainingPacesWithMeta(input: {
+	goalDistanceM: number;
+	goalTimeSec?: number | null;
+	recent5kSec?: number | null;
+	gender?: TrainingGender;
+}): { paces: TrainingPaces; isFallback: boolean } {
+	let goalPaceSecPerKm: number;
+	let isFallback = false;
+	if (input.recent5kSec) {
+		const predicted = riegelPredict(5000, input.recent5kSec, input.goalDistanceM);
+		goalPaceSecPerKm = predicted / (input.goalDistanceM / 1000);
+	} else if (input.goalTimeSec) {
+		goalPaceSecPerKm = input.goalTimeSec / (input.goalDistanceM / 1000);
+	} else {
+		goalPaceSecPerKm = FALLBACK_GOAL_PACE_SEC_PER_KM;
+		isFallback = true;
+	}
+	return { paces: pacesFromGoalPace(goalPaceSecPerKm, input.gender ?? null), isFallback };
+}
+
 /**
  * Resolve the runner's training paces from whichever anchor they gave us.
  * Priority: an explicit recent 5k time (use Riegel to predict goal-distance
  * pace) → a goal time on the target distance (use directly) → fall back to a
  * conservative "10:00/km as goal" so the plan still generates for someone
- * without any race history.
+ * without any race history. Thin wrapper over `resolveTrainingPacesWithMeta`
+ * for callers that don't need the fallback flag.
  */
 export function resolveTrainingPaces(input: {
 	goalDistanceM: number;
@@ -180,16 +232,7 @@ export function resolveTrainingPaces(input: {
 	recent5kSec?: number | null;
 	gender?: TrainingGender;
 }): TrainingPaces {
-	let goalPaceSecPerKm: number;
-	if (input.recent5kSec) {
-		const predicted = riegelPredict(5000, input.recent5kSec, input.goalDistanceM);
-		goalPaceSecPerKm = predicted / (input.goalDistanceM / 1000);
-	} else if (input.goalTimeSec) {
-		goalPaceSecPerKm = input.goalTimeSec / (input.goalDistanceM / 1000);
-	} else {
-		goalPaceSecPerKm = 600;
-	}
-	return pacesFromGoalPace(goalPaceSecPerKm, input.gender ?? null);
+	return resolveTrainingPacesWithMeta(input).paces;
 }
 
 // ─────────────────────── Phase schedule ───────────────────────
@@ -282,6 +325,11 @@ export interface GeneratedPlan {
 	vdot: number | null;
 	endDate: string; // ISO date
 	goalDistanceM: number;
+	/// True when `paces` are the conservative 10:00/km fallback (no recent
+	/// race, no goal time) rather than derived from real fitness. The plan
+	/// is still valid; the caller should disclose the paces are estimated.
+	/// Persona round-5 runner-comeback.
+	pacesAreFallback: boolean;
 }
 
 /**
@@ -296,7 +344,7 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 			? input.goalDistanceM!
 			: GOAL_DISTANCES_M[input.goalEvent];
 	const totalWeeks = input.weeks ?? defaultPlanWeeks(input.goalEvent);
-	const paces = resolveTrainingPaces({
+	const { paces, isFallback: pacesAreFallback } = resolveTrainingPacesWithMeta({
 		goalDistanceM,
 		goalTimeSec: input.goalTimeSec,
 		recent5kSec: input.recent5kSec,
@@ -311,7 +359,7 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 	const startDate = parseISO(input.startDate);
 
 	if (input.beginnerWalkRun) {
-		return generateWalkRunPlan(input, goalDistanceM, paces, vdot, startDate);
+		return generateWalkRunPlan(input, goalDistanceM, paces, vdot, startDate, pacesAreFallback);
 	}
 
 	const weeks: GeneratedWeek[] = [];
@@ -354,7 +402,8 @@ export function generatePlan(input: GeneratePlanInput): GeneratedPlan {
 		paces,
 		vdot,
 		endDate: formatISO(endDate),
-		goalDistanceM
+		goalDistanceM,
+		pacesAreFallback
 	};
 }
 
@@ -430,9 +479,17 @@ function generateWalkRunPlan(
 	goalDistanceM: number,
 	paces: TrainingPaces,
 	vdot: number | null,
-	startDate: Date
+	startDate: Date,
+	pacesAreFallback: boolean
 ): GeneratedPlan {
-	const totalWeeks = input.weeks ?? WALK_RUN_PROGRESSION.length;
+	// Never run fewer weeks than the progression has stages — truncating it
+	// drops the final graduation week (the single continuous run), which is
+	// the whole point of a C25K plan. A default 5k plan arrives here with
+	// weeks=8 (defaultPlanWeeks('distance_5k')) against a 9-stage table, so
+	// without this floor the graduation week silently vanishes. Persona
+	// round-5 runner-new. A longer request is honoured (the table's last
+	// stage repeats for the extra weeks via the index clamp in walkRunWorkout).
+	const totalWeeks = Math.max(input.weeks ?? WALK_RUN_PROGRESSION.length, WALK_RUN_PROGRESSION.length);
 	// Beginners train 3 days/week; respect a lower request but cap at 3.
 	const runDays = Math.max(1, Math.min(input.daysPerWeek, 3));
 	// Spread run days across Mon/Wed/Fri-style offsets.
@@ -470,7 +527,14 @@ function generateWalkRunPlan(
 			workouts
 		});
 	}
-	return { weeks, paces, vdot, endDate: formatISO(addDays(startDate, totalWeeks * 7 - 1)), goalDistanceM };
+	return {
+		weeks,
+		paces,
+		vdot,
+		endDate: formatISO(addDays(startDate, totalWeeks * 7 - 1)),
+		goalDistanceM,
+		pacesAreFallback
+	};
 }
 
 function peakVolumeKm(
