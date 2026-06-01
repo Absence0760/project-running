@@ -220,6 +220,27 @@ test.describe('/share/run/[id] — anon', () => {
 		await expect(page.locator('.share-logo')).toBeVisible();
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
 	});
+
+	test('zero-photo run shows no empty Photos card to an anon viewer', async ({ page }) => {
+		// RunPhotos renders nothing for a non-owner when the run has no
+		// photos (persona round-5, runner-casual): an empty "Photos" card
+		// reading "No photos on this run." was noise on a public share.
+		// The seeded RUNNER_PUBLIC_RUN_ID has no run_photos rows, so the
+		// non-owner photos surface should be absent entirely.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+
+		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText('No photos on this run.')).toHaveCount(0);
+		await expect(page.getByRole('heading', { name: 'Photos' })).toHaveCount(0);
+	});
 });
 
 test.describe('/share/run/[id] — authed non-owner', () => {
@@ -247,5 +268,27 @@ test.describe('/share/run/[id] — authed non-owner', () => {
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
 		await expect(page.locator('.kudos-btn')).toBeVisible();
 		await expect(page.locator('form.composer textarea')).toBeVisible();
+	});
+
+	test('authed non-owner sees no empty Photos card on a zero-photo run', async ({
+		page
+	}) => {
+		// Same as the anon case: an authed-but-non-owner viewer is not
+		// canManage, so RunPhotos renders nothing when the run has no
+		// photos (persona round-5, runner-casual). The seeded run has no
+		// run_photos rows.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+
+		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByText('No photos on this run.')).toHaveCount(0);
+		await expect(page.getByRole('heading', { name: 'Photos' })).toHaveCount(0);
 	});
 });

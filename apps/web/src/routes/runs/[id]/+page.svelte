@@ -1254,9 +1254,7 @@
 			<RunGearChips runId={run.id} runOwnerId={run.user_id} />
 		</section>
 
-		<section class="section">
-			<RunPhotos runId={run.id} runOwnerId={run.user_id} />
-		</section>
+		<RunPhotos runId={run.id} runOwnerId={run.user_id} wrapperClass="section" />
 
 		{#if run.route_id}
 			<section class="section">
