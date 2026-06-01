@@ -64,6 +64,12 @@
 		paceFormat = next === 'mi' ? 'min_per_mi' : 'min_per_km';
 	}
 
+	// Measured resting + max HR. max_hr_bpm overrides the Tanaka
+	// 208 − 0.7 × age estimate for HR-zone derivation — the reason a
+	// beta-blocked runner whose formula HR-max is wrong needs to set it.
+	let restingHr = $state('');
+	let maxHr = $state('');
+
 	// HR zones
 	let z1 = $state('');
 	let z2 = $state('');
@@ -124,6 +130,9 @@
 				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
 			).toString();
 			discoverableInSearch = effective(settings, 'discoverable_in_search', true) ?? true;
+
+			restingHr = (effective<number>(settings, 'resting_hr_bpm') ?? '')?.toString() ?? '';
+			maxHr = (effective<number>(settings, 'max_hr_bpm') ?? '')?.toString() ?? '';
 
 			const zones = effective<Record<string, number>>(settings, 'hr_zones');
 			if (zones) {
@@ -193,6 +202,9 @@
 		} else {
 			changes.weekly_mileage_goal_m = null;
 		}
+
+		changes.resting_hr_bpm = restingHr ? parseInt(restingHr, 10) || null : null;
+		changes.max_hr_bpm = maxHr ? parseInt(maxHr, 10) || null : null;
 
 		if (z1 || z2 || z3 || z4 || z5) {
 			changes.hr_zones = {
@@ -401,6 +413,21 @@
 		<!-- Heart Rate Zones -->
 		<section class="card" id="heart-rate-zones">
 			<h2>Heart Rate Zones</h2>
+			<p class="section-desc">
+				Your measured resting and max heart rate. A measured max HR overrides the
+				age-based estimate (208 − 0.7 × age) we'd otherwise use — set it if a
+				medication like a beta-blocker makes the formula wrong for you.
+			</p>
+			<div class="form-grid">
+				<label>
+					<span class="label-text">Resting HR (bpm)</span>
+					<input type="number" bind:value={restingHr} min="30" max="120" placeholder="e.g. 55" />
+				</label>
+				<label>
+					<span class="label-text">Max HR (bpm)</span>
+					<input type="number" bind:value={maxHr} min="100" max="230" placeholder="e.g. 185" />
+				</label>
+			</div>
 			<p class="section-desc">Upper bound in bpm for each zone. Leave blank if you don't know.</p>
 			<div class="form-grid zones">
 				<label><span class="label-text">Z1 (recovery)</span><input type="number" bind:value={z1} placeholder="130" /></label>

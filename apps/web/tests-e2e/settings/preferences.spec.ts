@@ -246,6 +246,51 @@ test.describe('/settings/preferences', () => {
 		).toBeVisible({ timeout: 5_000 });
 	});
 
+	test('Resting + Max HR inputs render and round-trip through save', async ({
+		page
+	}) => {
+		// resting_hr_bpm + max_hr_bpm are universal prefs mobile already
+		// exposes (settings_preferences_screen.dart). Web is the canonical
+		// surface so it must offer them too — a beta-blocked runner whose
+		// formula HR-max is wrong has no other way to set a measured max.
+		// Pin: both inputs render under the HR section, persist through the
+		// same Save handler as every other pref, and survive reload. The
+		// clear-to-null path matters (an empty input must NOT write 0).
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const resting = page
+			.locator('label', { has: page.getByText('Resting HR (bpm)', { exact: true }) })
+			.locator('input');
+		const max = page
+			.locator('label', { has: page.getByText('Max HR (bpm)', { exact: true }) })
+			.locator('input');
+		await expect(resting).toBeVisible({ timeout: 10_000 });
+		await expect(max).toBeVisible();
+
+		await resting.fill('48');
+		await max.fill('182');
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
+			timeout: 5_000
+		});
+
+		await page.reload();
+		await expect(resting).toHaveValue('48');
+		await expect(max).toHaveValue('182');
+
+		// Clearing both must round-trip to unset (null), not 0.
+		await resting.fill('');
+		await max.fill('');
+		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
+			timeout: 5_000
+		});
+		await page.reload();
+		await expect(resting).toHaveValue('');
+		await expect(max).toHaveValue('');
+	});
+
 	test('theme toggle: Dark applies html[data-theme] + survives reload', async ({
 		page
 	}) => {
