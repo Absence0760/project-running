@@ -765,6 +765,9 @@
 	/// in one doesn't cancel the other.
 	async function refreshPins() {
 		if (!map || !mapLoaded) return;
+		// The discovery pins are the always-relevant fetch, so the status
+		// (spinner + "Updated") tracks this, not the opt-in heat fetch.
+		loading = true;
 		const b = map.getBounds();
 		const bbox = {
 			minLng: b.getWest(),
@@ -813,23 +816,27 @@
 				geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
 			})),
 		});
+		lastUpdated = new Date();
+		loading = false;
 	}
 
 	// Layer-visibility toggles. MapLibre's `setLayoutProperty(...,
 	// 'visibility', 'visible'|'none')` is the cheap way to flip a
 	// layer — no source-data mutation needed. Wired to the legend
 	// checkboxes below via a reactive $effect.
+	// Read the toggle's reactive value FIRST, before the map-readiness
+	// guard — otherwise the effect early-returns on the (mapLoaded=false)
+	// first run without ever reading the $state, so Svelte never tracks
+	// it and the effect won't re-run when the user flips the toggle.
 	$effect(() => {
+		const visible = showClubPins;
 		if (!map || !mapLoaded) return;
-		map.setLayoutProperty(
-			CLUB_PINS_LAYER,
-			'visibility',
-			showClubPins ? 'visible' : 'none',
-		);
+		map.setLayoutProperty(CLUB_PINS_LAYER, 'visibility', visible ? 'visible' : 'none');
 	});
 	$effect(() => {
+		const visible = showRoutePins;
 		if (!map || !mapLoaded) return;
-		const vis = showRoutePins ? 'visible' : 'none';
+		const vis = visible ? 'visible' : 'none';
 		for (const id of [
 			ROUTE_PINS_LAYER,
 			ROUTE_CLUSTER_LAYER,
@@ -839,12 +846,13 @@
 		}
 	});
 	$effect(() => {
+		const visible = showHeatmapLayer;
 		if (!map || !mapLoaded) return;
-		map.setLayoutProperty(
-			HEATMAP_LAYER,
-			'visibility',
-			showHeatmapLayer ? 'visible' : 'none',
-		);
+		map.setLayoutProperty(HEATMAP_LAYER, 'visibility', visible ? 'visible' : 'none');
+		// Populate the heat the first time it's turned on (refresh() is a
+		// no-op while the layer is off, so the points aren't fetched until
+		// here). Re-runs on every toggle; only fetches when going on.
+		if (visible) void refresh();
 	});
 	// Re-fetch the discoverable-route pins whenever the lens or the
 	// distance bands change. Both are referenced directly so the
@@ -936,9 +944,13 @@
 	}
 
 	async function refresh() {
-		if (!map) return;
+		// Heat is opt-in (off by default). When the layer is hidden, skip
+		// the fetch entirely — densifying up to 5k points server-side then
+		// throwing them away is pure wasted compute. The visibility effect
+		// calls this when the user turns Heat on, and moveend re-runs it
+		// only while it's on.
+		if (!map || !showHeatmapLayer) return;
 		const b = map.getBounds();
-		loading = true;
 		try {
 			const pts = await fetchHeatmapPoints({
 				minLng: b.getWest(),
@@ -956,11 +968,8 @@
 				const src = map.getSource(HEATMAP_SOURCE) as maplibregl.GeoJSONSource | undefined;
 				src?.setData({ type: 'FeatureCollection', features });
 			}
-			lastUpdated = new Date();
 		} catch (e) {
 			console.error('heatmap refresh failed', e);
-		} finally {
-			loading = false;
 		}
 	}
 </script>

@@ -561,3 +561,45 @@ test.describe('Discovery scenario testbed (Denver seed)', () => {
 		expect(maxCount).toBeGreaterThanOrEqual(3);
 	});
 });
+
+test.describe('Heatmap compute hygiene (web)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	function heatPointCount(page: import('@playwright/test').Page) {
+		return page.evaluate(() => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return -1;
+			return m.querySourceFeatures('heatmap-pts').length;
+		});
+	}
+
+	test('heat density is opt-in: not fetched until the layer is enabled', async ({
+		page,
+	}) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+		// Belle Isle (Richmond) at street zoom — a route runs right here, so
+		// the heat would densify into the viewport once it's enabled.
+		await page.evaluate(async () => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return;
+			await new Promise<void>((r) => {
+				m.once('moveend', () => r());
+				m.flyTo({ center: [-77.45, 37.53], zoom: 13 });
+			});
+		});
+		await page.waitForTimeout(900);
+
+		// Default view: heat is off → the points are never fetched, so the
+		// source is empty (no wasted server densification per pan).
+		expect(await heatPointCount(page)).toBe(0);
+
+		// Enable Heat in the Filters panel → the points fetch on demand.
+		await page.getByTestId('filters-button').click();
+		const heat = page.locator('.layer-row', { hasText: 'Heat' }).getByRole('checkbox');
+		await expect(heat).not.toBeChecked();
+		await heat.check();
+		await expect.poll(() => heatPointCount(page), { timeout: 6000 }).toBeGreaterThan(0);
+	});
+});
