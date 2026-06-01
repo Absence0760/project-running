@@ -17,6 +17,7 @@
 		WorkoutKind,
 		TrainingGender,
 	} from '$lib/training/training';
+	import { isSundayIso, nextSundayIso } from '$lib/training/plan_start';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
@@ -176,6 +177,24 @@
 		return formatISO(d);
 	}
 
+	// The generator hard-anchors day 0 of the start week to the Sunday long
+	// run (rest=Mon, quality=Tue/Thu). A non-Sunday start silently shifts
+	// every day-role, so the long run lands on a weekday. The <input
+	// type="date"> can't restrict to Sundays, so snap the chosen date
+	// forward to the upcoming Sunday on change — the reactive preview then
+	// regenerates from the aligned date, keeping what the user sees in sync
+	// with what's saved. (Persona round-5 intermediate.)
+	let startSnapped = $state(false);
+	function alignStartToSunday() {
+		if (!startDate) return;
+		if (isSundayIso(startDate)) {
+			startSnapped = false;
+			return;
+		}
+		startDate = nextSundayIso(startDate);
+		startSnapped = true;
+	}
+
 	let goalDistance = $derived(
 		goalEvent === 'custom' ? 10_000 : GOAL_DISTANCES_M[goalEvent]
 	);
@@ -267,6 +286,17 @@
 				'Plan start date is in the past. Pick today or a future date so the plan starts at week 1, not week 0.';
 			return;
 		}
+		// Defensive backstop: onchange snaps the date to a Sunday, but if a
+		// non-Sunday slipped through (keyboard entry that didn't fire
+		// onchange), snap now and re-show the preview rather than persisting
+		// a misaligned plan. The reactive preview regenerates from the
+		// aligned date, so ask the user to submit once more.
+		if (startDate && !isSundayIso(startDate)) {
+			alignStartToSunday();
+			error =
+				'Start date moved to the next Sunday so the schedule lines up. Review the preview and submit again.';
+			return;
+		}
 		busy = true;
 		error = null;
 		try {
@@ -350,8 +380,12 @@
 					type="date"
 					bind:value={startDate}
 					min={todayIso()}
+					onchange={alignStartToSunday}
 					required
 				/>
+				{#if startSnapped}
+					<span class="field-note">Moved to the next Sunday so week 1 lines up with the schedule.</span>
+				{/if}
 			</label>
 
 			<label>
@@ -597,6 +631,13 @@
 		font-weight: 400;
 		color: var(--color-text-tertiary);
 		font-size: 0.8rem;
+	}
+	.field-note {
+		display: block;
+		margin-top: var(--space-2xs);
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+		font-weight: 400;
 	}
 	input[type='text'],
 	input[type='date'],
