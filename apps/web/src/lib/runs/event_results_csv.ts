@@ -176,3 +176,49 @@ export function parseChipTimingCsv(text: string, eventDistanceM: number): Parsed
 	if (rows.length === 0 && errors.length === 0) errors.push('No result rows found.');
 	return { rows, errors };
 }
+
+export interface ExportResultRow {
+	bib: string | null;
+	finisherName: string | null;
+	durationS: number;
+	distanceM: number;
+	finisherStatus: 'finished' | 'dnf' | 'dns';
+	rank: number | null;
+}
+
+// Seconds → "H:MM:SS" (or "M:SS" under an hour) so the exported time column
+// round-trips back through `parseDurationToSeconds` on re-import.
+function formatDurationCsv(totalS: number): string {
+	const s = Math.max(0, Math.round(totalS));
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const sec = s % 60;
+	const pad = (n: number) => String(n).padStart(2, '0');
+	return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${m}:${pad(sec)}`;
+}
+
+function escapeCsvField(value: string): string {
+	return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+}
+
+// Serialise finisher results to a CSV whose headers are a subset the importer
+// (`parseChipTimingCsv`) recognises, so an exported sheet re-imports cleanly.
+// `rank` is included for human readers / external tooling — the importer
+// ignores unknown columns. DNF/DNS rows carry a blank time, matching how the
+// importer treats a non-finished status.
+export function resultsToCsv(rows: ExportResultRow[]): string {
+	const header = ['rank', 'bib', 'name', 'time', 'distance m', 'status'];
+	const lines = [header.join(',')];
+	for (const r of rows) {
+		const cells = [
+			r.rank == null ? '' : String(r.rank),
+			r.bib ?? '',
+			r.finisherName ?? '',
+			r.finisherStatus === 'finished' ? formatDurationCsv(r.durationS) : '',
+			String(Math.round(r.distanceM)),
+			r.finisherStatus,
+		];
+		lines.push(cells.map(escapeCsvField).join(','));
+	}
+	return lines.join('\r\n');
+}

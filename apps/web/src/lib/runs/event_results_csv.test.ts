@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parseChipTimingCsv, parseDurationToSeconds } from './event_results_csv';
+import { parseChipTimingCsv, parseDurationToSeconds, resultsToCsv } from './event_results_csv';
 
 const D = 10000; // event distance fallback (10k)
 
@@ -140,4 +140,37 @@ test('a finished row with a blank time is rejected (no silent zero)', () => {
 	const { rows, errors } = parseChipTimingCsv('bib,name,time\n101,Alice,\n', D);
 	assert.equal(rows.length, 0);
 	assert.ok(errors.some((e) => e.includes('Row 2') && e.includes('unparseable')));
+});
+
+test('resultsToCsv emits a recognised header + escapes fields with commas/quotes', () => {
+	const csv = resultsToCsv([
+		{ bib: '1', finisherName: 'Alice, "Ace"', durationS: 3661, distanceM: 10000, finisherStatus: 'finished', rank: 1 },
+	]);
+	const lines = csv.split('\r\n');
+	assert.equal(lines[0], 'rank,bib,name,time,distance m,status');
+	assert.equal(lines[1], '1,1,"Alice, ""Ace""",1:01:01,10000,finished');
+});
+
+test('resultsToCsv blanks the time for DNF/DNS and tolerates null bib/name/rank', () => {
+	const csv = resultsToCsv([
+		{ bib: null, finisherName: null, durationS: 0, distanceM: 5000, finisherStatus: 'dnf', rank: null },
+		{ bib: '7', finisherName: 'Bob', durationS: 1500, distanceM: 5000, finisherStatus: 'finished', rank: 2 },
+	]);
+	const lines = csv.split('\r\n');
+	assert.equal(lines[1], ',,,,5000,dnf');
+	assert.equal(lines[2], '2,7,Bob,25:00,5000,finished');
+});
+
+test('resultsToCsv output round-trips through parseChipTimingCsv', () => {
+	const csv = resultsToCsv([
+		{ bib: '101', finisherName: 'Alice Anon', durationS: 1440, distanceM: 10000, finisherStatus: 'finished', rank: 1 },
+		{ bib: '102', finisherName: 'Bob Bibonly', durationS: 1620, distanceM: 10000, finisherStatus: 'finished', rank: 2 },
+		{ bib: '103', finisherName: 'Carol DNF', durationS: 0, distanceM: 10000, finisherStatus: 'dnf', rank: null },
+	]);
+	const { rows, errors } = parseChipTimingCsv(csv, D);
+	assert.deepEqual(errors, []);
+	assert.equal(rows.length, 3);
+	assert.deepEqual(rows[0], { bib: '101', finisherName: 'Alice Anon', durationS: 1440, distanceM: 10000, finisherStatus: 'finished' });
+	assert.equal(rows[2].finisherStatus, 'dnf');
+	assert.equal(rows[2].durationS, 0);
 });

@@ -21,6 +21,7 @@
 		fetchClubTemplates,
 		setPlanIsTemplate,
 		approveMember,
+		bulkApproveMembers,
 		rejectMember,
 		removeMember,
 		setMemberRole,
@@ -426,6 +427,24 @@
 		await load();
 	}
 
+	let approvingAll = $state(false);
+	async function approveAll() {
+		if (!club || pending.length === 0 || approvingAll) return;
+		approvingAll = true;
+		try {
+			await bulkApproveMembers(
+				club.id,
+				pending.map((p) => p.user_id)
+			);
+			await load();
+			showToast('Approved all pending requests.');
+		} catch (e: unknown) {
+			showToast(`Failed to approve all: ${e instanceof Error ? e.message : e}`, 'error');
+		} finally {
+			approvingAll = false;
+		}
+	}
+
 	async function reject(userId: string) {
 		if (!club) return;
 		await rejectMember(club.id, userId);
@@ -751,6 +770,16 @@
 				<div class="admin-card-title">
 					<span class="material-symbols" aria-hidden="true">hourglass_top</span>
 					<strong>Pending requests ({pending.length})</strong>
+					{#if pending.length > 1}
+						<button
+							class="btn-secondary btn-sm approve-all"
+							type="button"
+							onclick={approveAll}
+							disabled={approvingAll}
+						>
+							{approvingAll ? 'Approving…' : 'Approve all'}
+						</button>
+					{/if}
 				</div>
 				<div class="pending-list">
 					{#each pending as p (p.user_id)}
@@ -1521,6 +1550,10 @@
 		align-items: center;
 		gap: 0.4rem;
 		margin-bottom: 0.6rem;
+	}
+
+	.approve-all {
+		margin-left: auto;
 	}
 
 	.policy-chip {
