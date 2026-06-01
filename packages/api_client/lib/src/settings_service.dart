@@ -42,6 +42,7 @@ class SettingsKeys {
 
   // Device (D)
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';
+  static const voiceFeedbackVerbosity = 'voice_feedback_verbosity';
   static const voiceFeedbackIntervalKm = 'voice_feedback_interval_km';
   static const hapticFeedbackEnabled = 'haptic_feedback_enabled';
   static const keepScreenOn = 'keep_screen_on';

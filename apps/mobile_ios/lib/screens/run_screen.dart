@@ -240,6 +240,11 @@ class _RunScreenState extends State<RunScreen> {
   // preference is untouched (round-5 social-group).
   bool _paceCuesMuted = false;
 
+  // False when the user picked minimal voice feedback — suppresses the
+  // chatty in-rep progress + pace-drift cues (round-5 older).
+  bool get _voiceVerbose =>
+      widget.preferences.voiceFeedbackVerbosity != 'minimal';
+
   // Off-route
   double? _offRouteDistance;
   bool _offRouteWarned = false;
@@ -416,12 +421,15 @@ class _RunScreenState extends State<RunScreen> {
                 .announceWorkoutStepTransition(e.step, widget.preferences.unit));
       }
     } else if (e is StepProgressEvent) {
-      if (widget.preferences.audioCues) {
+      // Chatty in-rep progress ("halfway", "fifty metres to go") — dropped
+      // in minimal voice-feedback mode (round-5 older).
+      if (widget.preferences.audioCues && _voiceVerbose) {
         _ttsCue('announceWorkoutStepProgress',
             () => widget.audioCues.announceWorkoutStepProgress(e.step, e.kind));
       }
     } else if (e is PaceDriftEvent) {
-      if (widget.preferences.audioCues) {
+      // Pace-drift nudge — also dropped in minimal mode.
+      if (widget.preferences.audioCues && _voiceVerbose) {
         _ttsCue('announceWorkoutPaceDrift',
             () => widget.audioCues.announceWorkoutPaceDrift(e));
       }

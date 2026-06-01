@@ -173,6 +173,10 @@ class SettingsSyncService extends ChangeNotifier {
     if (dat is String && dat.isNotEmpty && dat != preferences.defaultActivityType) {
       preferences.setDefaultActivityType(dat);
     }
+    final vfv = prefs[SettingsKeys.voiceFeedbackVerbosity];
+    if (vfv is String && vfv.isNotEmpty && vfv != preferences.voiceFeedbackVerbosity) {
+      preferences.setVoiceFeedbackVerbosity(vfv);
+    }
     // Body weight in kg — drives the run-detail calorie estimate.
     // null / non-positive clears the local cache so the calorie path
     // falls through to its documented 70 kg default.

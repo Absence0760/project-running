@@ -36,6 +36,9 @@
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(false);
+	// 'full' (default) speaks every cue; 'minimal' drops the chatty in-rep
+	// progress + pace-drift nudges on the recording clients (round-5 older).
+	let voiceFeedbackVerbosity = $state('full');
 	// Canonical store is km (`voice_feedback_interval_km`); the field shows
 	// + accepts the user's unit so a mi-user entering 1 gets 1-mile splits,
 	// not 1 km. audit-findings 2026-05-30 Medium [regional].
@@ -148,6 +151,8 @@
 			coachPersonality = effective(settings, 'coach_personality', 'supportive') ?? 'supportive';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
 			voiceFeedbackEnabled = effective(settings, 'voice_feedback_enabled', false) ?? false;
+			voiceFeedbackVerbosity =
+				effective<string>(settings, 'voice_feedback_verbosity', 'full') ?? 'full';
 			voiceFeedbackIntervalKm = (
 				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
 			).toString();
@@ -216,6 +221,7 @@
 			coach_personality: coachPersonality,
 			strava_auto_share: stravaAutoShare,
 			voice_feedback_enabled: voiceFeedbackEnabled,
+			voice_feedback_verbosity: voiceFeedbackVerbosity,
 			voice_feedback_interval_km: parseFloat(voiceFeedbackIntervalKm) || 1.0,
 			discoverable_in_search: discoverableInSearch,
 		};
@@ -421,6 +427,13 @@
 					<span>Spoken split announcements (mobile + watch)</span>
 				</label>
 				{#if voiceFeedbackEnabled}
+					<label>
+						<span class="label-text">Cue detail</span>
+						<select bind:value={voiceFeedbackVerbosity}>
+							<option value="full">Full — every cue</option>
+							<option value="minimal">Minimal — skip mid-rep & pace-drift nudges</option>
+						</select>
+					</label>
 					<label>
 						<span class="label-text">Split interval ({preferredUnit})</span>
 						<!-- min/max/step are in the displayed unit by design — a

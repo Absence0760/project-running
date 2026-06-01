@@ -514,4 +514,28 @@ void main() {
       }
     });
   });
+
+  group('Preferences.voiceFeedbackVerbosity', () {
+    setUp(() => TestWidgetsFlutterBinding.ensureInitialized());
+
+    test('defaults to full', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      expect(prefs.voiceFeedbackVerbosity, 'full');
+    });
+
+    test('setVoiceFeedbackVerbosity persists and round-trips', () async {
+      SharedPreferences.setMockInitialValues({});
+      final prefs = Preferences();
+      await prefs.init();
+      await prefs.setVoiceFeedbackVerbosity('minimal');
+      expect(prefs.voiceFeedbackVerbosity, 'minimal');
+
+      // A fresh instance over the same store hydrates the saved value.
+      final reloaded = Preferences();
+      await reloaded.init();
+      expect(reloaded.voiceFeedbackVerbosity, 'minimal');
+    });
+  });
 }

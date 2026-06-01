@@ -42,6 +42,7 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `primary_goal` | `'general_fitness' \| 'weight_loss' \| '5k' \| '10k' \| 'half_marathon' \| 'marathon'` | U | — | Set by the post-signup `/onboarding` wizard (step 3). Drives the planned post-onboarding plan suggestion ("create a 10K plan?"). Distance values map 1:1 to `training.ts#GoalEvent`. See `docs/architecture/decisions.md § 78`. |
 | `coach_personality` | `'supportive' \| 'drill_sergeant' \| 'analytical'` | U | `supportive` | Tone preset for the Claude coach chat. |
 | `voice_feedback_enabled` | `bool` | D | `false` | Speak pace/distance callouts during a run. Device-scoped because mic/speaker availability differs. |
+| `voice_feedback_verbosity` | `string` | U | `full` | `full` speaks every cue; `minimal` suppresses the chatty in-rep progress + pace-drift nudges. Universal so the choice roams across devices. |
 | `voice_feedback_interval_km` | `double` | D | `1.0` | Interval in km between spoken callouts. |
 | `haptic_feedback_enabled` | `bool` | D | `true` | Vibration on lap + pace-zone changes. Watches only. |
 | `keep_screen_on` | `bool` | D | `true` | Disable OS auto-dim while the running screen is visible. Phones only; watches use ambient mode. |

@@ -700,6 +700,21 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 await widget.settingsSync?.pushAudioCues();
               },
             ),
+            if (prefs.audioCues)
+              SwitchListTile(
+                title: const Text('Minimal voice cues'),
+                subtitle: const Text(
+                  'Skip the chatty mid-rep and pace-drift nudges',
+                ),
+                value: prefs.voiceFeedbackVerbosity == 'minimal',
+                onChanged: (v) async {
+                  final value = v ? 'minimal' : 'full';
+                  await prefs.setVoiceFeedbackVerbosity(value);
+                  await widget.settingsSync?.updateUniversal(
+                    <String, dynamic>{SettingsKeys.voiceFeedbackVerbosity: value},
+                  );
+                },
+              ),
             ListTile(
               title: const Text('Split interval'),
               subtitle: Text(

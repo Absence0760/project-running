@@ -174,6 +174,10 @@ class Preferences extends ChangeNotifier {
   // Drives the run screen's initial activity selection. One of
   // 'run', 'walk', 'cycle', 'hike'. Empty / unknown = 'run'.
   static const _kDefaultActivityType = 'default_activity_type';
+  // Voice-feedback verbosity: 'full' (default) speaks every cue;
+  // 'minimal' suppresses the chatty in-rep progress + pace-drift nudges
+  // while keeping start / finish / split / step-transition (round-5 older).
+  static const _kVoiceFeedbackVerbosity = 'voice_feedback_verbosity';
   // Mirrors the device-scoped `keep_screen_on` settings-bag key.
   // Defaults true so existing users keep the wakelock-on-during-run
   // behaviour they're used to.
@@ -235,6 +239,7 @@ class Preferences extends ChangeNotifier {
   int _splitIntervalMetres = 0;
   String _deviceId = '';
   String _defaultActivityType = 'run';
+  String _voiceFeedbackVerbosity = 'full';
   bool _keepScreenOn = true;
   bool _writeToHealthConnect = false;
   ThemeMode _themeMode = ThemeMode.dark;
@@ -256,6 +261,10 @@ class Preferences extends ChangeNotifier {
   /// `default_activity_type` settings-bag key so the choice roams
   /// across devices. One of 'run', 'walk', 'cycle', 'hike'.
   String get defaultActivityType => _defaultActivityType;
+
+  /// 'full' (default) or 'minimal'. In 'minimal' the chatty in-rep
+  /// progress + pace-drift voice cues are suppressed.
+  String get voiceFeedbackVerbosity => _voiceFeedbackVerbosity;
 
   /// Whether the run screen should hold a wakelock while recording.
   /// Mirrors the device-scoped `keep_screen_on` settings-bag key.
@@ -388,6 +397,8 @@ class Preferences extends ChangeNotifier {
     _splitIntervalMetres = _prefs.getInt(_kSplitIntervalMetres) ?? 0;
     _defaultActivityType =
         _prefs.getString(_kDefaultActivityType) ?? 'run';
+    _voiceFeedbackVerbosity =
+        _prefs.getString(_kVoiceFeedbackVerbosity) ?? 'full';
     _keepScreenOn = _prefs.getBool(_kKeepScreenOn) ?? true;
     _themeMode = _themeModeFromString(_prefs.getString(_kThemeMode));
     final bw = _prefs.getDouble(_kBodyWeightKg);
@@ -470,6 +481,12 @@ class Preferences extends ChangeNotifier {
   Future<void> setDefaultActivityType(String v) async {
     _defaultActivityType = v;
     await _prefs.setString(_kDefaultActivityType, v);
+    notifyListeners();
+  }
+
+  Future<void> setVoiceFeedbackVerbosity(String v) async {
+    _voiceFeedbackVerbosity = v;
+    await _prefs.setString(_kVoiceFeedbackVerbosity, v);
     notifyListeners();
   }
 
