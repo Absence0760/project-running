@@ -76,7 +76,6 @@ export interface RunningDynamics {
 	gct_ms?: number;
 	stride_length_m?: number;
 	power_w?: number;
-	lr_balance_pct?: number;
 }
 
 interface RawFitSessionDynamics {
@@ -88,8 +87,6 @@ interface RawFitSessionDynamics {
 	step_length?: unknown;
 	avg_power?: unknown;
 	power?: unknown;
-	avg_left_right_balance?: unknown;
-	left_right_balance?: unknown;
 }
 
 function finitePositive(v: unknown): number | null {
@@ -102,9 +99,10 @@ function finitePositive(v: unknown): number | null {
 /// vertical oscillation + step length in mm (lengthUnit only rescales
 /// position/altitude/distance), stance time in ms, power in W. Step length
 /// is converted mm → m to match the rest of the app's metre convention.
-/// `avg_left_right_balance` decodes to a 0–100 percentage; some files emit
-/// the raw packed byte (high bit = "right" flag) instead, so values outside
-/// 0–100 are dropped rather than guessed at.
+/// L/R balance is intentionally not captured: fit-file-parser decodes the
+/// session `left_right_balance` field as an enum string ('0' | 'mask' |
+/// 'right'), not the numeric percentage, so there is no reliable number to
+/// store — adding it back needs a parser that surfaces the raw 0–100 value.
 export function buildRunningDynamics(
 	session: RawFitSessionDynamics | null | undefined,
 ): RunningDynamics | null {
@@ -118,10 +116,6 @@ export function buildRunningDynamics(
 	if (step != null) out.stride_length_m = Math.round(step) / 1000;
 	const power = finitePositive(session.avg_power ?? session.power);
 	if (power != null) out.power_w = Math.round(power);
-	const balance = session.avg_left_right_balance ?? session.left_right_balance;
-	if (typeof balance === 'number' && Number.isFinite(balance) && balance >= 0 && balance <= 100) {
-		out.lr_balance_pct = Math.round(balance * 10) / 10;
-	}
 	return Object.keys(out).length > 0 ? out : null;
 }
 

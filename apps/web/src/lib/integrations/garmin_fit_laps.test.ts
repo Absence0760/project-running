@@ -125,14 +125,12 @@ test('buildRunningDynamics — projects the fields a Running pod recorded', () =
 		avg_stance_time: 245.6,
 		avg_step_length: 1180,
 		avg_power: 312,
-		avg_left_right_balance: 49.7,
 	});
 	assert.deepEqual(rd, {
 		vertical_oscillation_mm: 8.4,
 		gct_ms: 246,
 		stride_length_m: 1.18,
 		power_w: 312,
-		lr_balance_pct: 49.7,
 	});
 });
 
@@ -141,7 +139,7 @@ test('buildRunningDynamics — only populates fields the file actually carried',
 	assert.deepEqual(rd, { power_w: 280 });
 	// No sentinel zeros / nulls for the fields the watch never recorded.
 	assert.equal('vertical_oscillation_mm' in rd!, false);
-	assert.equal('lr_balance_pct' in rd!, false);
+	assert.equal('power_w' in rd!, true);
 });
 
 test('buildRunningDynamics — falls back to per-record field names', () => {
@@ -154,8 +152,6 @@ test('buildRunningDynamics — drops out-of-range / non-finite values', () => {
 	assert.equal(buildRunningDynamics({}), null);
 	assert.equal(buildRunningDynamics(null), null);
 	assert.equal(buildRunningDynamics(undefined), null);
-	// Packed left_right_balance byte (>100) is dropped rather than guessed.
-	assert.equal(buildRunningDynamics({ avg_left_right_balance: 178 }), null);
 	// Non-positive / non-finite metrics are ignored.
 	assert.equal(buildRunningDynamics({ avg_power: 0, avg_vertical_oscillation: -1 }), null);
 	assert.equal(buildRunningDynamics({ avg_power: Number.NaN }), null);
