@@ -2036,6 +2036,32 @@ void main() {
       );
     });
 
+    test('Runner.entitlements declares the Sign in with Apple capability', () {
+      // audit/app-store-privacy (2026-05-31) Critical. sign_in_screen.dart
+      // calls the Apple ID credential APIs at runtime on iOS, but the
+      // entitlement was missing — App Store Connect rejects an IPA whose
+      // signed binary uses an OAuth capability with no provisioned
+      // entitlement. Auto-skips on the Android twin (no ios/ folder).
+      final file = File('ios/Runner/Runner.entitlements');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      final keyIdx = body.indexOf('com.apple.developer.applesignin</key>');
+      expect(
+        keyIdx,
+        greaterThanOrEqualTo(0),
+        reason: 'Runner.entitlements must declare '
+            'com.apple.developer.applesignin — Sign in with Apple is '
+            'rendered on the iOS sign-in screen and the App Store rejects '
+            'the upload without the matching entitlement.',
+      );
+      expect(
+        body.substring(keyIdx).contains('<string>Default</string>'),
+        isTrue,
+        reason: 'com.apple.developer.applesignin must carry the Default '
+            'capability string.',
+      );
+    });
+
     test('Xcode project wires CODE_SIGN_ENTITLEMENTS to the entitlements file',
         () {
       // The entitlement only reaches the binary if the Runner target's
