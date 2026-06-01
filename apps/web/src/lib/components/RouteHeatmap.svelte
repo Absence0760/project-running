@@ -835,58 +835,72 @@
 	async function refreshPins() {
 		if (!map || !mapLoaded) return;
 		// The discovery pins are the always-relevant fetch, so the status
-		// (spinner + "Updated") tracks this, not the opt-in heat fetch.
+		// (spinner + "Updated") tracks this, not the opt-in heat fetch. The
+		// try/finally guarantees the spinner clears even if a fetch / setData
+		// throws (e.g. a source removed mid-teardown).
 		loading = true;
-		const b = map.getBounds();
-		const bbox = {
-			minLng: b.getWest(),
-			minLat: b.getSouth(),
-			maxLng: b.getEast(),
-			maxLat: b.getNorth(),
-		};
-		const [clubs, routes] = await Promise.all([
-			fetchClubsInBbox(bbox),
-			fetchDiscoverableRoutesInBbox({ ...bbox, filter: routeFilter, bands: selectedBands }),
-		]);
-		clubPinsCount = clubs.length;
-		routePinsCount = routes.length;
-		routePins = routes;
-		const clubSrc = map.getSource(CLUB_PINS_SOURCE) as
-			| maplibregl.GeoJSONSource
-			| undefined;
-		clubSrc?.setData({
-			type: 'FeatureCollection',
-			features: clubs.map((c) => ({
-				type: 'Feature',
-				properties: {
-					id: c.id,
-					name: c.name,
-					slug: c.slug,
-					member_count: c.member_count,
-				},
-				geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
-			})),
-		});
-		const routeSrc = map.getSource(ROUTE_PINS_SOURCE) as
-			| maplibregl.GeoJSONSource
-			| undefined;
-		routeSrc?.setData({
-			type: 'FeatureCollection',
-			features: routes.map((r) => ({
-				type: 'Feature',
-				properties: {
-					id: r.id,
-					name: r.name,
-					featured: r.featured,
-					distance_m: r.distance_m,
-					surface: r.surface,
-					run_count: r.run_count,
-				},
-				geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
-			})),
-		});
-		lastUpdated = new Date();
-		loading = false;
+		try {
+			const b = map.getBounds();
+			const bbox = {
+				minLng: b.getWest(),
+				minLat: b.getSouth(),
+				maxLng: b.getEast(),
+				maxLat: b.getNorth(),
+			};
+			const [clubs, routes] = await Promise.all([
+				fetchClubsInBbox(bbox),
+				fetchDiscoverableRoutesInBbox({ ...bbox, filter: routeFilter, bands: selectedBands }),
+			]);
+			clubPinsCount = clubs.length;
+			routePinsCount = routes.length;
+			routePins = routes;
+			const clubSrc = map.getSource(CLUB_PINS_SOURCE) as
+				| maplibregl.GeoJSONSource
+				| undefined;
+			clubSrc?.setData({
+				type: 'FeatureCollection',
+				features: clubs.map((c) => ({
+					type: 'Feature',
+					properties: {
+						id: c.id,
+						name: c.name,
+						slug: c.slug,
+						member_count: c.member_count,
+						// The club popup reads these — they have to be on the
+						// rendered feature, not just the fetched row.
+						avatar_url: c.avatar_url,
+						location_label: c.location_label,
+					},
+					geometry: { type: 'Point', coordinates: [c.lng, c.lat] },
+				})),
+			});
+			const routeSrc = map.getSource(ROUTE_PINS_SOURCE) as
+				| maplibregl.GeoJSONSource
+				| undefined;
+			routeSrc?.setData({
+				type: 'FeatureCollection',
+				features: routes.map((r) => ({
+					type: 'Feature',
+					properties: {
+						id: r.id,
+						name: r.name,
+						featured: r.featured,
+						distance_m: r.distance_m,
+						// The route popup's elevation chip reads this off the
+						// rendered feature.
+						elevation_m: r.elevation_m,
+						surface: r.surface,
+						run_count: r.run_count,
+					},
+					geometry: { type: 'Point', coordinates: [r.lng, r.lat] },
+				})),
+			});
+			lastUpdated = new Date();
+		} catch (e) {
+			console.warn('heatmap pins refresh failed', e);
+		} finally {
+			loading = false;
+		}
 	}
 
 	// Layer-visibility toggles. MapLibre's `setLayoutProperty(...,

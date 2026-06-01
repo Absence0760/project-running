@@ -296,6 +296,9 @@ test.describe('Heatmap pin popup (click flow)', () => {
 			const popup = page.locator('.heatmap-pin-popup');
 			await expect(popup).toBeVisible({ timeout: 5_000 });
 			await expect(popup.getByText(/Belle Isle/i)).toBeVisible();
+			// Elevation chip must render — the elevation_m has to be carried
+			// onto the rendered pin feature (Belle Isle seed = 70 m).
+			await expect(popup).toContainText('70 m');
 			const view = popup.getByRole('link', { name: /view route/i });
 			await expect(view).toBeVisible();
 			await view.click();
@@ -318,6 +321,9 @@ test.describe('Heatmap pin popup (click flow)', () => {
 			await expect(popup).toBeVisible({ timeout: 5_000 });
 			await expect(popup.getByText(/Richmond Run Club/i)).toBeVisible();
 			await expect(popup.getByRole('link', { name: /view club/i })).toBeVisible();
+			// Location subtitle must render — location_label has to be on the
+			// rendered pin feature (Richmond Run Club seed = Richmond, VA).
+			await expect(popup.locator('.pin-popup-location')).toBeVisible();
 		});
 
 	test('popup mounts with finite translate3d (not collapsed to map origin)',
