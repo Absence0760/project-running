@@ -13,7 +13,12 @@
 		insertFitnessSnapshot,
 		type FitnessSnapshotRow,
 	} from '$lib/core/data';
-	import { computeSnapshot, recoveryAdvice, isReturningFromLayoff } from '$lib/training/fitness';
+	import {
+		computeSnapshot,
+		recoveryAdvice,
+		isReturningFromLayoff,
+		isReturningFromGap,
+	} from '$lib/training/fitness';
 	import { computeRunStreaks } from '$lib/runs/streaks';
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
@@ -61,6 +66,15 @@
 	let upcomingEvent = $state<Awaited<ReturnType<typeof fetchNextRsvpedEvent>>>(null);
 	let fitnessHistory = $state<FitnessSnapshotRow[]>([]);
 	let liveSnap = $derived(computeSnapshot(runs));
+
+	// Welcome-back surface (persona round-5 comeback): a returning runner
+	// who opens the dashboard after a long gap should be met warmly, not
+	// with a cold near-empty grid. `isReturningFromLayoff` covers the
+	// already-back case (a recent run after a gap); this covers the
+	// not-yet-back case — historical runs exist but the most recent is
+	// older than the layoff threshold, so they're still mid-gap on the day
+	// they reopen the app.
+	let isReturningRunner = $derived(isReturningFromGap(runs));
 
 	// HR prefs feed both the TRIMP-eligible flag and the stress score.
 	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
@@ -565,6 +579,15 @@
 		<div class="skeleton-block skeleton-block-tall"></div>
 		<div class="skeleton-block"></div>
 	{:else}
+		{#if isReturningRunner}
+			<section class="welcome-back-card">
+				<span class="material-symbols welcome-back-icon" aria-hidden="true">waving_hand</span>
+				<div class="welcome-back-body">
+					<h2>Welcome back</h2>
+					<p>Let's ease in. Your old PBs are still here whenever you're ready.</p>
+				</div>
+			</section>
+		{/if}
 		{#if planOverview && planPosition}
 			{@const t = planOverview.todayWorkout}
 			{@const todayDone = t != null && (t.manually_completed === true || t.completed_run_id != null)}
@@ -2087,6 +2110,44 @@
 		transition: background var(--transition-fast);
 	}
 	.link-btn:hover { background: var(--color-primary-light); }
+
+	.welcome-back-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-lg);
+		padding: var(--space-lg) var(--space-xl);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--color-primary) 12%, var(--color-surface)) 0%,
+			var(--color-surface) 70%
+		);
+		border: 1px solid color-mix(in srgb, var(--color-primary) 30%, var(--color-border));
+		border-radius: var(--radius-xl);
+	}
+	.welcome-back-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+		color: var(--color-primary);
+		font-size: 1.5rem;
+		flex-shrink: 0;
+	}
+	.welcome-back-body { flex: 1; min-width: 0; }
+	.welcome-back-body h2 {
+		margin: 0 0 var(--space-2xs);
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--color-text);
+	}
+	.welcome-back-body p {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-muted);
+	}
 
 	/* Goals empty state — full card surface to mirror the plan-promo
 	   peer when both are absent. Icon + heading + explainer + primary

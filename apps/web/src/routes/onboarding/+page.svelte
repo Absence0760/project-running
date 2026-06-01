@@ -201,24 +201,35 @@
 				const w = parseFloat(bodyWeightKg);
 				if (Number.isFinite(w) && w > 0) bagChanges.body_weight_kg = w;
 			}
-			// DOB persists in the prefs bag too — same dual-storage
-			// pattern as Settings → Preferences. Gender + DOB on the
-			// user_profiles row need the explicit Art 9 consent.
+			// DOB mirrors into the prefs bag only under health consent —
+			// the bag copy feeds the coach/leaderboard read paths, which
+			// are Art 9 surfaces. The minor-exclusion floor reads the
+			// user_profiles column written below, not the bag, so the
+			// child-safety write doesn't depend on this mirror.
 			if (healthDataConsent && dateOfBirth) {
 				bagChanges.date_of_birth = dateOfBirth;
 			}
 			// 2. user_profiles columns: display_name, preferred_unit
 			// (dual-write for the cross-user readable surfaces),
-			// gender + DOB + health_data_consent_at (Art 9 gated),
-			// onboarded_at.
+			// gender + DOB + health_data_consent_at, onboarded_at.
 			const profileUpdate: Record<string, unknown> = {
 				preferred_unit: preferredUnit,
 				onboarded_at: new Date().toISOString(),
 			};
 			if (displayName.trim()) profileUpdate.display_name = displayName.trim();
+			// DOB writes to user_profiles whenever supplied, NOT only under
+			// Art 9 consent (persona round-5 family-club): the under-18
+			// minor-exclusion floor in search_user_profiles keys off this
+			// column, so consent-gating it left a child who declined the
+			// health-data checkbox with a NULL DOB and fully discoverable.
+			// Storing a date of birth to enforce a minor-safety
+			// discoverability floor is a child-protection purpose distinct
+			// from the Art 9(2)(a) explicit consent needed to USE that DOB
+			// for health calibration + age-banded leaderboards — which
+			// stays gated below via gender + health_data_consent_at.
+			if (dateOfBirth) profileUpdate.date_of_birth = dateOfBirth;
 			if (healthDataConsent) {
 				profileUpdate.gender = gender || null;
-				profileUpdate.date_of_birth = dateOfBirth || null;
 				profileUpdate.health_data_consent_at = new Date().toISOString();
 			}
 
@@ -351,6 +362,9 @@
 				<label class="field">
 					<span class="label-text">Date of birth (optional)</span>
 					<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} />
+					<span class="field-note">
+						Used to keep under-18 accounts out of public people-search. Adding age calibration to your pace, HR zones, and leaderboards still needs the consent below.
+					</span>
 				</label>
 				<label class="field">
 					<span class="label-text">Body weight (optional, kg)</span>
@@ -360,7 +374,7 @@
 					<label class="consent-row">
 						<input type="checkbox" bind:checked={healthDataConsent} />
 						<span>
-							I consent to Threkir storing my gender and date of birth to power the gender + age-band segment leaderboards and the calibrated pace + calorie estimates (GDPR Art 9(2)(a)). I can withdraw consent in Settings any time.
+							I consent to Threkir using my gender and date of birth to power the gender + age-band segment leaderboards and the calibrated pace + calorie estimates (GDPR Art 9(2)(a)). I can withdraw consent in Settings any time.
 						</span>
 					</label>
 				{/if}
@@ -547,6 +561,7 @@
 
 	.field { display: flex; flex-direction: column; gap: 0.35rem; }
 	.label-text { font-size: 0.85rem; color: var(--color-text-secondary); font-weight: 500; }
+	.field-note { font-size: 0.78rem; color: var(--color-text-tertiary); line-height: 1.45; }
 	.field input, .field select {
 		padding: 0.6rem 0.7rem;
 		border: 1px solid var(--color-border);

@@ -62,6 +62,29 @@ export function isReturningFromLayoff(runs: Run[], nowMs: number = Date.now()): 
 /// where short all-out efforts produce the most VDOT inflation.
 const MIN_QUALIFYING_DISTANCE_M = 1500;
 
+/// Whether the runner is mid-gap returning: they have at least one run
+/// in their history but the most recent is older than `gapDays`. This is
+/// the inverse case to `isReturningFromLayoff` — that one fires once a
+/// recent run follows a gap (they're already back), this one fires while
+/// the gap is still open (they're reopening the app cold). Drives the
+/// gentle "Welcome back" surface on the dashboard so a long-absent runner
+/// isn't met with an empty-looking grid. Persona round-5 comeback. Counts
+/// every run (not just qualifying ones) — any logged activity proves prior
+/// history, and a treadmill / short run shouldn't read as "never ran".
+export function isReturningFromGap(
+	runs: Run[],
+	gapDays = 60,
+	nowMs: number = Date.now(),
+): boolean {
+	let latest = -Infinity;
+	for (const r of runs) {
+		const t = new Date(r.started_at).getTime();
+		if (Number.isFinite(t) && t <= nowMs && t > latest) latest = t;
+	}
+	if (!Number.isFinite(latest)) return false;
+	return nowMs - latest >= gapDays * 24 * 3600_000;
+}
+
 /// Qualifying runs for fitness math: source is an actual recording or
 /// reliable import, distance is >= MIN_QUALIFYING_DISTANCE_M, duration / distance
 /// both sane. Indoor / treadmill runs are excluded — their distance is
