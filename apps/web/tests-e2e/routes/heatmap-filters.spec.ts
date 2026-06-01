@@ -512,3 +512,52 @@ test.describe('Heatmap hover-to-preview (web)', () => {
 		).toHaveCount(1, { timeout: 5000 });
 	});
 });
+
+test.describe('Discovery scenario testbed (Denver seed)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	const DENVER = {
+		p_min_lng: -105.12,
+		p_min_lat: 39.64,
+		p_max_lng: -104.94,
+		p_max_lat: 39.78,
+		p_limit: 100,
+	};
+
+	test('friends lens surfaces a followee-owned seed route; popular hides it', async () => {
+		const runner = await getUserClient({ email: USER_A.email, password: USER_A.password });
+		const friends = (
+			await runner.rpc('discoverable_routes_in_bbox', { ...DENVER, p_filter: 'friends' })
+		).data as Array<{ name: string }>;
+		// Alex (a runner-followee) owns this un-run route — friends-only.
+		expect(friends.map((r) => r.name)).toContain("Alex's Confluence Loop");
+		const popular = (
+			await runner.rpc('discoverable_routes_in_bbox', { ...DENVER, p_filter: 'popular' })
+		).data as Array<{ name: string }>;
+		expect(popular.map((r) => r.name)).not.toContain("Alex's Confluence Loop");
+	});
+
+	test('routes sharing an exact start collapse into one cluster bubble', async ({ page }) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+
+		const maxCount = await page.evaluate(async () => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return -1;
+			await new Promise<void>((r) => {
+				m.once('moveend', () => r());
+				m.flyTo({ center: [-105.0, 39.74], zoom: 13 });
+			});
+			await new Promise<void>((r) => setTimeout(r, 1500));
+			let mx = 0;
+			for (const f of m.querySourceFeatures('heatmap-route-pins')) {
+				const c = Number(f.properties?.point_count ?? 0);
+				if (c > mx) mx = c;
+			}
+			return mx;
+		});
+		// Group A: three Wash Park routes share the identical start coord.
+		expect(maxCount).toBeGreaterThanOrEqual(3);
+	});
+});

@@ -819,6 +819,107 @@ INSERT INTO user_follows (follower_id, followee_id) VALUES
   ('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890')
 ON CONFLICT DO NOTHING;
 
+-- ───────────────── Discovery scenario testbed (Denver) ─────────────────
+--
+-- A dense cluster of public routes around Denver, CO — deliberately
+-- far from the Virginia demo routes (so the VA-based e2e counts are
+-- untouched) — built to exercise every route-discovery edge case the
+-- map browser has to handle:
+--
+--   Group A — three routes share the EXACT same start point
+--             (Wash Park, 39.7400/-105.0000): overlapping start dots
+--             must collapse into one cluster bubble.
+--   Group B — three routes share the EXACT same end point
+--             (Confluence, 39.7600/-105.0200): the hover-preview lines
+--             converge even though the start dots are spread out.
+--   Group C — three routes start within ~30 m of each other (City
+--             Park): cluster at city zoom, separate when you zoom in.
+--   Group D — three loop variations share BOTH start and end
+--             (Sloan Lake, 39.7300/-105.0550): every endpoint overlaps.
+--   Group E — a marathon + an ultra so the distance-band filter has
+--             long-distance data here too.
+--   Group F — one route owned by alex (a runner-followee) so the
+--             `friends` lens lights up in this area.
+--
+-- Distances are spread across the 5K/10K/Half/Marathon/Ultra bands and
+-- the lens states (featured / run_count>0 / un-run hidden gem) are set
+-- by the UPDATEs below, so every filter permutation returns something.
+INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
+-- Group A: identical start (39.7400, -105.0000)
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Wash Park 5K Loop',
+  '[{"lat":39.7400,"lng":-105.0000,"ele":1600},{"lat":39.7410,"lng":-104.9980,"ele":1602},{"lat":39.7420,"lng":-105.0000,"ele":1605},{"lat":39.7410,"lng":-105.0020,"ele":1603},{"lat":39.7400,"lng":-105.0000,"ele":1600}]',
+  5000, 20, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Wash Park 10K Spur',
+  '[{"lat":39.7400,"lng":-105.0000,"ele":1600},{"lat":39.7440,"lng":-105.0050,"ele":1610},{"lat":39.7460,"lng":-105.0080,"ele":1618},{"lat":39.7480,"lng":-105.0100,"ele":1625}]',
+  10000, 40, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Wash Park Half Adventure',
+  '[{"lat":39.7400,"lng":-105.0000,"ele":1600},{"lat":39.7500,"lng":-105.0100,"ele":1640},{"lat":39.7600,"lng":-105.0200,"ele":1680},{"lat":39.7700,"lng":-105.0300,"ele":1720}]',
+  21000, 130, 'trail', true),
+-- Group B: identical end (39.7600, -105.0200)
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Cherry Creek to Confluence',
+  '[{"lat":39.7400,"lng":-105.0500,"ele":1590},{"lat":39.7480,"lng":-105.0380,"ele":1600},{"lat":39.7550,"lng":-105.0280,"ele":1610},{"lat":39.7600,"lng":-105.0200,"ele":1615}]',
+  4800, 25, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Highline Canal Finish',
+  '[{"lat":39.7700,"lng":-105.0400,"ele":1620},{"lat":39.7660,"lng":-105.0320,"ele":1618},{"lat":39.7620,"lng":-105.0250,"ele":1616},{"lat":39.7600,"lng":-105.0200,"ele":1615}]',
+  9500, 35, 'trail', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'City Park Sprint to Confluence',
+  '[{"lat":39.7450,"lng":-105.0300,"ele":1605},{"lat":39.7520,"lng":-105.0250,"ele":1610},{"lat":39.7570,"lng":-105.0220,"ele":1613},{"lat":39.7600,"lng":-105.0200,"ele":1615}]',
+  5500, 18, 'road', true),
+-- Group C: close (~30 m apart) starts near (39.7445, -104.9500)
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'City Park North',
+  '[{"lat":39.7445,"lng":-104.9500,"ele":1580},{"lat":39.7470,"lng":-104.9450,"ele":1585},{"lat":39.7460,"lng":-104.9400,"ele":1588}]',
+  5800, 22, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'City Park East',
+  '[{"lat":39.7447,"lng":-104.9498,"ele":1580},{"lat":39.7480,"lng":-104.9460,"ele":1586},{"lat":39.7500,"lng":-104.9420,"ele":1590}]',
+  10000, 30, 'mixed', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'City Park South',
+  '[{"lat":39.7443,"lng":-104.9502,"ele":1580},{"lat":39.7420,"lng":-104.9460,"ele":1584},{"lat":39.7400,"lng":-104.9420,"ele":1588}]',
+  15000, 60, 'trail', true),
+-- Group D: shared start AND end loops (39.7300, -105.0550)
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Sloan Lake Loop CW',
+  '[{"lat":39.7300,"lng":-105.0550,"ele":1610},{"lat":39.7330,"lng":-105.0520,"ele":1612},{"lat":39.7340,"lng":-105.0560,"ele":1614},{"lat":39.7320,"lng":-105.0580,"ele":1612},{"lat":39.7300,"lng":-105.0550,"ele":1610}]',
+  5000, 15, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Sloan Lake Loop CCW',
+  '[{"lat":39.7300,"lng":-105.0550,"ele":1610},{"lat":39.7320,"lng":-105.0580,"ele":1612},{"lat":39.7340,"lng":-105.0560,"ele":1614},{"lat":39.7330,"lng":-105.0520,"ele":1612},{"lat":39.7300,"lng":-105.0550,"ele":1610}]',
+  5200, 15, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Sloan Lake Double',
+  '[{"lat":39.7300,"lng":-105.0550,"ele":1610},{"lat":39.7350,"lng":-105.0500,"ele":1616},{"lat":39.7370,"lng":-105.0560,"ele":1620},{"lat":39.7330,"lng":-105.0600,"ele":1615},{"lat":39.7300,"lng":-105.0550,"ele":1610}]',
+  10400, 35, 'trail', true),
+-- Group E: long-distance band coverage
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Denver Marathon Route',
+  '[{"lat":39.7200,"lng":-105.0000,"ele":1600},{"lat":39.7050,"lng":-105.0250,"ele":1640},{"lat":39.6950,"lng":-105.0400,"ele":1680},{"lat":39.6900,"lng":-105.0500,"ele":1700}]',
+  42000, 320, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Front Range 50K',
+  '[{"lat":39.7100,"lng":-105.0100,"ele":1640},{"lat":39.6900,"lng":-105.0400,"ele":1850},{"lat":39.6700,"lng":-105.0700,"ele":2100},{"lat":39.6500,"lng":-105.1000,"ele":2400}]',
+  50000, 900, 'trail', true),
+-- Group F: a followee-owned route (alex) for the `friends` lens
+('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Alex''s Confluence Loop',
+  '[{"lat":39.7550,"lng":-105.0250,"ele":1610},{"lat":39.7580,"lng":-105.0220,"ele":1614},{"lat":39.7560,"lng":-105.0280,"ele":1612},{"lat":39.7550,"lng":-105.0250,"ele":1610}]',
+  8000, 24, 'road', true);
+
+-- Lens states for the Denver testbed (see groups above). Featured +
+-- run_count>0 → 'popular'; run_count=0 & not featured → 'hidden_gems';
+-- Alex's route (run_count 0, not featured) only surfaces under 'friends'.
+UPDATE routes SET featured = true, featured_at = now()
+  WHERE name IN (
+    'Wash Park 10K Spur',
+    'City Park Sprint to Confluence',
+    'City Park East',
+    'Sloan Lake Loop CCW',
+    'Denver Marathon Route'
+  );
+UPDATE routes SET run_count = 6 WHERE name = 'Wash Park 5K Loop';
+UPDATE routes SET run_count = 4 WHERE name = 'Cherry Creek to Confluence';
+UPDATE routes SET run_count = 2 WHERE name = 'Highline Canal Finish';
+UPDATE routes SET run_count = 1 WHERE name = 'City Park North';
+UPDATE routes SET run_count = 3 WHERE name = 'Sloan Lake Loop CW';
+-- Keep the two exact-overlap groups (A: Wash Park, D: Sloan Lake) fully
+-- popular so all three pins in each group show — and therefore cluster —
+-- under the default lens. Un-run hidden-gem variety lives on City Park
+-- South, Front Range 50K, and Alex's Confluence Loop instead.
+UPDATE routes SET run_count = 1 WHERE name = 'Wash Park Half Adventure';
+UPDATE routes SET run_count = 1 WHERE name = 'Sloan Lake Double';
+
 -- ─────────────────────── e2e fixtures ───────────────────────
 --
 -- Additions for the Playwright e2e suite (apps/web/tests-e2e/).
