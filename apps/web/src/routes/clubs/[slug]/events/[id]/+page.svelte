@@ -531,6 +531,7 @@
 			downloadBlob(blob, `threkir-certificate-${safe}.png`);
 		} catch (e) {
 			console.error('certificate generation failed', e);
+			showToast('Could not generate the certificate. Please try again.', 'error');
 		} finally {
 			certBusy = null;
 		}
