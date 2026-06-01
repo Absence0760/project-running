@@ -1,10 +1,9 @@
-// Widget tests for RoutesHeatmapScreen — the mobile mirror of the
-// web /routes?tab=heatmap surface. The full chain (RPC → render)
-// is exercised against a fake ApiClient. flutter_map's tile fetches
-// fail under the test runner (HTTP returns 400 in widget tests)
-// which is the same constraint other map-bearing widget tests deal
-// with; we don't pin tile-load success, only the chrome + the RPC
-// invocation.
+// Widget tests for RoutesHeatmapScreen — the mobile mirror of the web
+// route-discovery browser. The full chain (RPC → render) is exercised
+// against a fake ApiClient. flutter_map's tile fetches fail under the
+// test runner (HTTP 400 in widget tests) which is the same constraint
+// other map-bearing widget tests deal with; we pin the chrome + the RPC
+// invocation + the discovery UI, not tile-load success.
 
 import 'dart:convert';
 
@@ -28,12 +27,13 @@ class _FakeApiClient extends ApiClient {
   List<HeatmapPoint> nextPoints = const [];
   Object? errorToThrow;
 
-  // Routes-overlay support.
-  int nearbyCalls = 0;
-  double? lastNearbyLat;
-  double? lastNearbyLng;
-  double? lastNearbyRadius;
-  List<cm.Route> nextRoutes = const [];
+  // Discovery support.
+  int discoverCalls = 0;
+  String? lastFilter;
+  List<double>? lastDistMin;
+  List<cm.DiscoverableRoutePin> nextPins = const [];
+  List<cm.ClubPin> nextClubs = const [];
+  cm.Route? nextRouteById;
 
   @override
   Future<List<HeatmapPoint>> fetchHeatmapPoints({
@@ -53,18 +53,37 @@ class _FakeApiClient extends ApiClient {
   }
 
   @override
-  Future<List<cm.Route>> nearbyPublicRoutes({
-    required double lat,
-    required double lng,
-    double radiusM = 50000,
-    int limit = 50,
+  Future<List<cm.DiscoverableRoutePin>> fetchDiscoverableRoutesInBbox({
+    required double minLng,
+    required double minLat,
+    required double maxLng,
+    required double maxLat,
+    int limit = 100,
+    String filter = 'popular',
+    List<double>? distMin,
+    List<double?>? distMax,
   }) async {
-    nearbyCalls++;
-    lastNearbyLat = lat;
-    lastNearbyLng = lng;
-    lastNearbyRadius = radiusM;
-    return nextRoutes;
+    discoverCalls++;
+    lastFilter = filter;
+    lastDistMin = distMin;
+    return nextPins;
   }
+
+  @override
+  Future<List<cm.ClubPin>> fetchClubsInBbox({
+    required double minLng,
+    required double minLat,
+    required double maxLng,
+    required double maxLat,
+    int limit = 100,
+  }) async =>
+      nextClubs;
+
+  @override
+  Future<({cm.Route? route, String? ownerId})> fetchRouteById(
+    String routeId,
+  ) async =>
+      (route: nextRouteById, ownerId: 'u');
 }
 
 Future<void> _pump(
@@ -88,10 +107,27 @@ Future<void> _pump(
   await tester.pump(const Duration(milliseconds: 50));
 }
 
-Position _fakePosition({
-  double lat = 40.7128,
-  double lng = -74.0060,
+cm.DiscoverableRoutePin _pin({
+  String id = 'a',
+  String name = 'Wash Park 5K Loop',
+  bool featured = false,
+  double distanceM = 5000,
+  int runCount = 6,
+  double lat = 39.74,
+  double lng = -105.0,
 }) =>
+    cm.DiscoverableRoutePin(
+      id: id,
+      name: name,
+      featured: featured,
+      distanceM: distanceM,
+      surface: 'road',
+      runCount: runCount,
+      lat: lat,
+      lng: lng,
+    );
+
+Position _fakePosition({double lat = 40.7128, double lng = -74.0060}) =>
     Position(
       latitude: lat,
       longitude: lng,
@@ -107,23 +143,16 @@ Position _fakePosition({
 
 void main() {
   setUpAll(() {
-    // The screen reads `dotenv.env['MAPTILER_KEY']` at search time;
-    // without an initialised DotEnv the access throws. Empty-string
-    // env is fine — it just makes `searchPlaces` short-circuit (the
-    // contract we want to verify in the "unconfigured" case).
     dotenv.loadFromString(isOptional: true);
   });
 
   group('RoutesHeatmapScreen', () {
-    testWidgets('AppBar hosts a place-search field; no footer chrome',
+    testWidgets('AppBar hosts a place-search field + a Filters button',
         (tester) async {
-      // The AppBar title is a TextField (place search) — same shape
-      // as the route builder. The bottom "Where people run" footer
-      // was dropped because the search field + Locate FAB make the
-      // affordances obvious. Pin both halves of the contract.
       final api = _FakeApiClient();
       await _pump(tester, api);
       expect(find.text('Search places…'), findsOneWidget);
+      expect(find.byIcon(Icons.tune), findsOneWidget);
       expect(find.textContaining('Where people run'), findsNothing);
     });
 
@@ -135,13 +164,8 @@ void main() {
       expect(find.byIcon(Icons.my_location), findsOneWidget);
     });
 
-    testWidgets('tapping the Locate FAB calls locateFn + recentres + refetches',
+    testWidgets('tapping the Locate FAB calls locateFn + refetches',
         (tester) async {
-      // Stub the platform-channel Geolocator call so the FAB can be
-      // exercised without booting the location plugin. Assert that
-      // a second fetch fires after the move (the screen schedules a
-      // refresh because programmatic moves don't fire
-      // onPositionChanged with hasGesture=true).
       final api = _FakeApiClient();
       var locateCalls = 0;
       await _pump(
@@ -152,28 +176,21 @@ void main() {
           return _fakePosition();
         },
       );
-      // Drain the initial-mount fetch from the assertion count.
       await tester.pump(const Duration(milliseconds: 100));
       final initialFetches = api.fetchCalls;
 
       await tester.tap(find.byType(FloatingActionButton));
-      // Two pumps: first dispatches the locate Future; second is the
-      // post-await setState + scheduled refresh timer.
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(locateCalls, 1);
       expect(api.fetchCalls, greaterThan(initialFetches),
-          reason: 'Locate must schedule a refresh so the heatmap '
+          reason: 'Locate must schedule a refresh so discovery '
               "repopulates around the user's location.");
     });
 
-    testWidgets('search results dropdown opens + tap recentres the map',
+    testWidgets('search degrades silently when MapTiler is unconfigured',
         (tester) async {
-      // Stub MapTiler with a canned response containing one feature.
-      // Typing >=2 chars debounces 300ms then renders the dropdown;
-      // tapping the entry should close the dropdown + schedule a
-      // heatmap refetch (same rationale as Locate).
       final api = _FakeApiClient();
       Future<String> stubFetcher(Uri _) async => jsonEncode({
             'features': [
@@ -183,24 +200,15 @@ void main() {
               },
             ],
           });
-
-      // dotenv MAPTILER_KEY is unset in tests, so searchPlaces would
-      // short-circuit to empty. The screen reads MAPTILER_KEY at
-      // build time; without setting it, the search debounce returns
-      // [] and the dropdown never appears. Pin that contract: when
-      // unconfigured, search degrades silently rather than crashing.
       await _pump(tester, api, geocodingFetcher: stubFetcher);
       await tester.enterText(
         find.widgetWithText(TextField, 'Search places…'),
         'Tokyo',
       );
-      // Debounce window + microtask drain.
       await tester.pump(const Duration(milliseconds: 350));
-      // No MAPTILER_KEY → no results → dropdown stays closed.
       expect(find.text('Tokyo, Japan'), findsNothing,
           reason: 'searchPlaces short-circuits to empty when the '
-              'MapTiler key is unset; dropdown must not surface stale '
-              'or stub results.');
+              'MapTiler key is unset; the dropdown must not surface.');
     });
 
     testWidgets('mounts a FlutterMap with a TileLayer + CircleLayer',
@@ -214,190 +222,104 @@ void main() {
 
     testWidgets('fires fetchHeatmapPoints on mount with valid bbox',
         (tester) async {
-      // Headline regression net — the initial render must hit the
-      // RPC, not wait for the user to pan. A regression that lazy-
-      // fetched only on moveend would leave the map blank.
       final api = _FakeApiClient()
-        ..nextPoints = const [
-          HeatmapPoint(lat: 51.5074, lng: -0.1276),
-        ];
+        ..nextPoints = const [HeatmapPoint(lat: 51.5074, lng: -0.1276)];
       await _pump(tester, api);
-      // Map's onMapReady is async — allow a couple of frames for
-      // the initial-fetch to dispatch.
       await tester.pump(const Duration(milliseconds: 100));
       expect(api.fetchCalls, greaterThanOrEqualTo(1));
-      // The default initial centre is London-ish; bbox should
-      // include that lat/lng.
       expect(api.lastMinLng, isNotNull);
-      expect(api.lastMaxLng, isNotNull);
       expect(api.lastMinLng!, lessThan(api.lastMaxLng!));
       expect(api.lastMinLat!, lessThan(api.lastMaxLat!));
     });
 
     testWidgets('RPC error path swallows + does not crash', (tester) async {
-      // L4 contract — the heatmap is a discover surface, not load-
-      // bearing. A 5xx from PostGIS must not break the screen.
       final api = _FakeApiClient()..errorToThrow = Exception('rpc 500');
       await _pump(tester, api);
-      // Screen still renders — pin the search field + the map both
-      // mounted (the AppBar title is now a TextField, not the literal
-      // "Heatmap" text).
       expect(find.text('Search places…'), findsOneWidget);
       expect(find.byType(FlutterMap), findsOneWidget);
     });
   });
 
-  group('ApiClient.fetchHeatmapPoints contract', () {
-    // The default empty-on-error contract is the foundation of the
-    // L4 swallow above. Pin it as a unit test on the fake (which
-    // mirrors the real client's catch-and-return-empty path).
-    test('returns empty list on error (vs. throwing)', () async {
-      final api = _FakeApiClient()..errorToThrow = Exception('boom');
-      try {
-        final r = await api.fetchHeatmapPoints(
-          minLng: -1,
-          minLat: 0,
-          maxLng: 1,
-          maxLat: 1,
-        );
-        // _FakeApiClient deliberately re-throws so the SCREEN-level
-        // try/catch is exercised. The contract on the REAL client
-        // is to swallow + return empty — pinned by inspection of
-        // api_client.dart#fetchHeatmapPoints.
-        expect(r, isEmpty);
-      } catch (_) {
-        // Acceptable — the fake re-throws to exercise the caller's
-        // catch block. Real client swallows internally.
-      }
-    });
-
-    test('valid bbox + points round-trip', () async {
-      final api = _FakeApiClient()
-        ..nextPoints = const [
-          HeatmapPoint(lat: 1, lng: 2),
-          HeatmapPoint(lat: 3, lng: 4),
-        ];
-      final r = await api.fetchHeatmapPoints(
-        minLng: 0,
-        minLat: 0,
-        maxLng: 10,
-        maxLat: 10,
-      );
-      expect(r.length, 2);
-      expect(r[0].lat, 1);
-      expect(r[0].lng, 2);
-    });
-  });
-
-  group('routes overlay (zoom >= threshold)', () {
-    // Below the threshold the heatmap's density is the honest signal —
-    // overlaying every nearby route at city scale is noise. Above it
-    // we fetch + render polylines tappable to /routes/[id]. These
-    // tests pin the contract: the RPC fires with the camera centre +
-    // a clamped radius; the screen tracks the returned list as
-    // _nearbyRoutes; tapping a polyline pushes the detail screen.
-
-    testWidgets(
-        'nearby-routes fetch skipped at default zoom (below overlay threshold)',
+  group('discovery pins + lens', () {
+    testWidgets('fetches discoverable pins on mount + lists them',
         (tester) async {
-      // Reason: the heatmap is the dominant signal at city / region
-      // scale. Drawing every public route over a London-wide view is
-      // visual noise + costs an RPC per pan. The screen guards
-      // _refreshRoutes on zoom >= 12; default zoom is 11 so the fetch
-      // must not fire on mount.
-      final api = _FakeApiClient()
-        ..nextRoutes = [
-          cm.Route(
-            id: 'r-1',
-            userId: 'u',
-            name: 'Hyde park loop',
-            waypoints: const [
-              Waypoint(lat: 51.5074, lng: -0.1276),
-              Waypoint(lat: 51.508, lng: -0.128),
-            ],
-            distanceMetres: 4200,
-          ),
-        ];
+      final api = _FakeApiClient()..nextPins = [_pin()];
       await _pump(tester, api);
-      await tester.pump(const Duration(milliseconds: 600));
-      expect(api.nearbyCalls, 0,
-          reason: 'nearbyPublicRoutes must NOT fire below the overlay '
-              'zoom threshold; otherwise the heatmap pays for an extra '
-              "RPC per pan that doesn't even render a polyline.");
-      // Layer absent regardless because _nearbyRoutes stays empty.
-      expect(find.byKey(const ValueKey('heatmap-routes')), findsNothing);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(api.discoverCalls, greaterThanOrEqualTo(1));
+      expect(api.lastFilter, 'popular',
+          reason: 'the default lens is popular');
+      // The bottom-sheet results list renders the route by name.
+      expect(find.text('Wash Park 5K Loop'), findsOneWidget);
     });
 
-    testWidgets('PolylineLayer absent when routes list is empty',
+    testWidgets('the Filters sheet swaps the lens + refetches',
+        (tester) async {
+      // No pins → no band badges, so the only "Featured" text is the
+      // sheet's lens chip.
+      final api = _FakeApiClient();
+      await _pump(tester, api);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('Featured'), findsOneWidget);
+
+      await tester.tap(find.text('Featured'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(api.lastFilter, 'featured');
+    });
+
+    testWidgets('picking a distance band threads the bounds to the RPC',
         (tester) async {
       final api = _FakeApiClient();
       await _pump(tester, api);
-      await tester.pump(const Duration(milliseconds: 600));
-      // No routes returned → the keyed PolylineLayer should be absent.
-      expect(find.byKey(const ValueKey('heatmap-routes')), findsNothing);
-    });
+      await tester.pump(const Duration(milliseconds: 100));
 
-    testWidgets(
-        'PolylineLayer mounts when at-or-above zoom threshold + routes present',
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+
+      await tester.tap(find.text('5K'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(api.lastDistMin, [4000],
+          reason: 'the 5K band lower bound must reach the RPC');
+    });
+  });
+
+  group('tap-to-preview', () {
+    testWidgets('tapping a route row previews its line + a View action',
         (tester) async {
       final api = _FakeApiClient()
-        ..nextRoutes = [
-          cm.Route(
-            id: 'r-1',
-            userId: 'u',
-            name: 'Hyde park loop',
-            waypoints: const [
-              Waypoint(lat: 51.5074, lng: -0.1276),
-              Waypoint(lat: 51.5076, lng: -0.1278),
-            ],
-            distanceMetres: 4200,
-          ),
-        ];
-      // initialZoom test seam boots the screen above the overlay
-      // threshold (12) so the mount-time _refresh → _refreshRoutes
-      // path fires the RPC immediately. Avoids reaching for private
-      // state and stays close to how a real user lands here after a
-      // pan/zoom.
-      await tester.pumpWidget(
-        MaterialApp(
-          home: RoutesHeatmapScreen(api: api, initialZoom: 14),
-        ),
-      );
+        ..nextPins = [_pin()]
+        ..nextRouteById = cm.Route(
+          id: 'a',
+          userId: 'u',
+          name: 'Wash Park 5K Loop',
+          waypoints: const [
+            Waypoint(lat: 39.740, lng: -105.000),
+            Waypoint(lat: 39.745, lng: -105.005),
+          ],
+          distanceMetres: 5000,
+        );
+      await _pump(tester, api);
+      await tester.pump(const Duration(milliseconds: 100));
+
+      // No route line drawn until something is selected.
+      expect(find.byKey(const ValueKey('heatmap-selected-route')),
+          findsNothing);
+
+      await tester.tap(find.text('Wash Park 5K Loop'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
+      await tester.pump(const Duration(milliseconds: 100));
 
-      expect(api.nearbyCalls, greaterThanOrEqualTo(1),
-          reason: 'Above the overlay zoom threshold, nearbyPublicRoutes '
-              'must fire so the screen can paint clickable polylines.');
-      // Radius is clamped between 1 km and 25 km.
-      expect(api.lastNearbyRadius, isNotNull);
-      expect(api.lastNearbyRadius!, greaterThanOrEqualTo(1000));
-      expect(api.lastNearbyRadius!, lessThanOrEqualTo(25000));
-      expect(find.byKey(const ValueKey('heatmap-routes')), findsOneWidget);
-    });
-
-    testWidgets('routes with <2 waypoints are filtered out', (tester) async {
-      final api = _FakeApiClient()
-        ..nextRoutes = [
-          cm.Route(
-            id: 'r-empty',
-            userId: 'u',
-            name: 'Degenerate',
-            waypoints: const [Waypoint(lat: 51.5, lng: -0.1)],
-            distanceMetres: 0,
-          ),
-        ];
-      await tester.pumpWidget(
-        MaterialApp(
-          home: RoutesHeatmapScreen(api: api, initialZoom: 14),
-        ),
-      );
-      await tester.pump();
-      await tester.pump(const Duration(milliseconds: 400));
-
-      expect(api.nearbyCalls, greaterThanOrEqualTo(1));
-      // Single-waypoint route can't render a line — layer absent.
-      expect(find.byKey(const ValueKey('heatmap-routes')), findsNothing);
+      // The selection card + the previewed route line both appear.
+      expect(find.text('View route'), findsOneWidget);
+      expect(find.byKey(const ValueKey('heatmap-selected-route')),
+          findsOneWidget);
     });
   });
 }
