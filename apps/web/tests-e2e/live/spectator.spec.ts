@@ -84,6 +84,57 @@ test.describe('/live/[id] — anon spectator', () => {
 		}
 	});
 
+	test('crew joining mid-run hydrates the full backlog on load, not just the latest point', async ({
+		page
+	}) => {
+		// Persona round-5 runner-ultra. A crew member opening the page
+		// late in a long run must see the whole traversed course
+		// hydrated at load — the page replays every retained ping in
+		// chronological order, so the headline stats land on the LAST
+		// ping's totals (proving the full ordered backlog was ingested,
+		// not a single most-recent snapshot). The Supabase Realtime
+		// path is exercised here (no PUBLIC_LIVE_HUB_URL in the test
+		// env); the Go-hub path replays the same history server-side
+		// over the WS on connect.
+		const startedAt = new Date(Date.now() - 90 * 60 * 1000).toISOString();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: startedAt,
+			distance_m: 20_000,
+			duration_s: 7_200,
+			is_public: true
+		});
+		try {
+			// A spread of ordered points so the backlog is unambiguous —
+			// the final point is the only one that yields a 12.50 km /
+			// 1:15:00 readout, so seeing it proves the whole history
+			// hydrated rather than an early/snapshot point.
+			const lat0 = -37.82;
+			const lng0 = 144.97;
+			const points = Array.from({ length: 8 }, (_, i) => ({
+				lat: lat0 - i * 0.002,
+				lng: lng0 + i * 0.002,
+				distance_m: (i + 1) * 1_500,
+				elapsed_s: (i + 1) * 562
+			}));
+			await insertLivePings({ run_id: runId, user_id: USER_A.id, points });
+
+			await page.goto(`/live/${runId}`);
+
+			await expect(page.locator('.live-badge')).toHaveClass(/active/, {
+				timeout: 10_000
+			});
+			// Last point: 8 * 1500 = 12000 m → 12.00 km; 8 * 562 = 4496 s
+			// → 1:14:56. The first point would read 1.50 km / 9:22, so
+			// these assertions fail if only the snapshot/first point
+			// hydrated.
+			await expect(page.locator('.live-stat-value').first()).toContainText('12');
+			await expect(page.locator('.live-stat-value').nth(1)).toContainText('1:14:56');
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
 	test('finished run: saved totals render with "Finished" badge', async ({ page }) => {
 		const startedAt = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
 		const runId = await insertRun({

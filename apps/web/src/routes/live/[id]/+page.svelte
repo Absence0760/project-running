@@ -111,21 +111,21 @@
 
 	async function hydrateBacklog() {
 		if (isLiveHubConfigured()) {
+			// On the Go-hub path the full ping history is replayed over
+			// the WS on connect (server.go `handleSubscribe` sends up to
+			// HistoryRingSize buffered pings before streaming new ones),
+			// so the trace is populated by `subscribeLive` — we must NOT
+			// also seed a point from the snapshot or the first point
+			// double-renders. The snapshot is fetched only to decide
+			// whether the room has any data yet, which gates the demo
+			// fallback. Persona round-5 runner-ultra: a crew opening the
+			// page mid-run sees the whole traversed course, not one dot.
 			// Forward the viewer's Supabase JWT so the Go authorizer
 			// accepts the request on private runs (public runs work
 			// either way). /audit/livehub May 2026 C1.
 			const sess = (await supabase.auth.getSession()).data.session;
 			const snap = await fetchLiveSnapshot(data.id, sess?.access_token ?? null);
-			if (snap) {
-				pushPing({
-					lat: snap.lat,
-					lng: snap.lng,
-					distance_m: snap.distance_m ?? null,
-					elapsed_s: snap.elapsed_s ?? null,
-				});
-				return true;
-			}
-			return false;
+			return snap != null;
 		}
 		const { data: rows, error } = await supabase
 			.from('live_run_pings')

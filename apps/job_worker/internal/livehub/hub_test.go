@@ -255,6 +255,55 @@ func TestHub_SubscriberCapRejects(t *testing.T) {
 	}
 }
 
+// Persona round-5 runner-ultra — the history ring must cover a full
+// 24h ultra at the 5s push cadence so a crew joining late replays the
+// whole traversed course, not just the most recent few hours.
+func TestHub_HistoryCoversLongUltra(t *testing.T) {
+	h := NewHub()
+	// 24h at one push per 5s = 17280 pings, exactly the ring size.
+	const dayPings = 24 * 60 * 60 / 5
+	if dayPings != HistoryRingSize {
+		t.Fatalf("expected ring (%d) to hold a 24h/5s session (%d pings)", HistoryRingSize, dayPings)
+	}
+	for i := 0; i < dayPings; i++ {
+		h.Publish("ultra", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+	}
+	got := h.History("ultra", 0)
+	if len(got) != dayPings {
+		t.Fatalf("History len = %d, want %d (the full 24h session)", len(got), dayPings)
+	}
+	// Chronological order, oldest first — the first ping of the run is
+	// still present (not rolled off) and the last is the most recent.
+	if got[0].DistanceM != 0 {
+		t.Fatalf("oldest ping DistanceM = %v, want 0", got[0].DistanceM)
+	}
+	if got[len(got)-1].DistanceM != float64(dayPings-1) {
+		t.Fatalf("newest ping DistanceM = %v, want %d", got[len(got)-1].DistanceM, dayPings-1)
+	}
+}
+
+// Past the 24h ceiling the oldest pings roll off but order + the
+// newest tail are preserved — the ring is a bounded most-recent
+// window, not unbounded growth.
+func TestHub_HistoryRollsOffPastCap(t *testing.T) {
+	h := NewHub()
+	const extra = 100
+	for i := 0; i < HistoryRingSize+extra; i++ {
+		h.Publish("ultra", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+	}
+	got := h.History("ultra", 0)
+	if len(got) != HistoryRingSize {
+		t.Fatalf("History len = %d, want %d (capped)", len(got), HistoryRingSize)
+	}
+	// The first `extra` pings rolled off; oldest retained is #extra.
+	if got[0].DistanceM != float64(extra) {
+		t.Fatalf("oldest retained DistanceM = %v, want %d", got[0].DistanceM, extra)
+	}
+	if got[len(got)-1].DistanceM != float64(HistoryRingSize+extra-1) {
+		t.Fatalf("newest DistanceM = %v, want %d", got[len(got)-1].DistanceM, HistoryRingSize+extra-1)
+	}
+}
+
 // audit/livehub C2 + M4 — idle-room GC drops stale rooms.
 func TestHub_RunGCDropsIdleRoom(t *testing.T) {
 	h := NewHub()
