@@ -20,6 +20,7 @@ import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { buildStravaDedupeSet } from './strava-zip-dedupe';
 import { gunzipBlob } from '../util/gunzip';
 import { classifyStravaMember } from './strava-zip-classify';
+import { indexHeader, type HeaderIndex } from './strava-zip-header';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
 
@@ -240,43 +241,6 @@ async function importOne(
 }
 
 // --- CSV parsing ---
-
-interface HeaderIndex {
-	id: number;
-	name: number;
-	type: number;
-	stravaType: number;
-	date: number;
-	filename: number;
-	distance: number;
-	movingTime: number;
-	elevation: number;
-	avgHr: number;
-	media: number;
-}
-
-function indexHeader(header: string[]): HeaderIndex {
-	const find = (...names: string[]) => {
-		for (const n of names) {
-			const i = header.findIndex((h) => h.trim().toLowerCase() === n.toLowerCase());
-			if (i >= 0) return i;
-		}
-		return -1;
-	};
-	return {
-		id: find('Activity ID'),
-		name: find('Activity Name'),
-		type: find('Activity Type'),
-		stravaType: find('Activity Type'),
-		date: find('Activity Date'),
-		filename: find('Filename'),
-		distance: find('Distance', 'Distance (km)'),
-		movingTime: find('Moving Time', 'Moving Time (seconds)'),
-		elevation: find('Elevation Gain', 'Elevation Gain (m)'),
-		avgHr: find('Average Heart Rate'),
-		media: find('Media'),
-	};
-}
 
 /// Minimal CSV parser — handles quoted fields with embedded commas and
 /// double-quote escapes (`""`). That's the shape Strava emits; we
