@@ -11,6 +11,8 @@
 /// labels when we first wired the preference in.
 
 import type { PreferredUnit } from '../types';
+import { currentLocale } from '../i18n/store.svelte';
+import { formatDecimal, formatInteger } from './number';
 
 const METRES_PER_MILE = 1609.344;
 
@@ -30,14 +32,15 @@ export function setUnit(u: PreferredUnit | null | undefined): void {
 /// metric distances render in metres; sub-mile imperial distances
 /// render in yards for parity with how runners read race distances.
 export function formatDistance(metres: number): string {
+	const loc = currentLocale();
 	if (unit.value === 'mi') {
 		const miles = metres / METRES_PER_MILE;
-		if (miles >= 1) return `${miles.toFixed(2)} mi`;
+		if (miles >= 1) return `${formatDecimal(miles, 2, loc)} mi`;
 		const yards = Math.round(metres * 1.09361);
-		return `${yards} yd`;
+		return `${formatInteger(yards, loc)} yd`;
 	}
-	if (metres >= 1000) return `${(metres / 1000).toFixed(2)} km`;
-	return `${Math.round(metres)} m`;
+	if (metres >= 1000) return `${formatDecimal(metres / 1000, 2, loc)} km`;
+	return `${formatInteger(Math.round(metres), loc)} m`;
 }
 
 /// Pace label: "m:ss" with the appropriate per-unit suffix baked in
@@ -80,13 +83,14 @@ export function distanceInPreferred(metres: number): { value: number; unit: 'km'
 /// required beyond what every run already carries).
 export function formatSpeed(seconds: number, metres: number): string {
 	if (seconds === 0 || metres === 0) return '--';
+	const loc = currentLocale();
 	const mPerSec = metres / seconds;
 	if (unit.value === 'mi') {
 		const mph = mPerSec * 2.23694;
-		return `${mph.toFixed(1)} mph`;
+		return `${formatDecimal(mph, 1, loc)} mph`;
 	}
 	const kmh = mPerSec * 3.6;
-	return `${kmh.toFixed(1)} km/h`;
+	return `${formatDecimal(kmh, 1, loc)} km/h`;
 }
 
 /// Compact distance — `XX.X km` / `XX.X mi`. Used by training plan
@@ -94,8 +98,9 @@ export function formatSpeed(seconds: number, metres: number): string {
 /// digit count rather than the more flexible `formatDistance`.
 export function fmtKm(metres: number | null | undefined, digits = 1): string {
 	if (metres == null) return '—';
-	if (unit.value === 'mi') return `${(metres / METRES_PER_MILE).toFixed(digits)} mi`;
-	return `${(metres / 1000).toFixed(digits)} km`;
+	const loc = currentLocale();
+	if (unit.value === 'mi') return `${formatDecimal(metres / METRES_PER_MILE, digits, loc)} mi`;
+	return `${formatDecimal(metres / 1000, digits, loc)} km`;
 }
 
 const FEET_PER_METRE = 3.28084;
@@ -108,8 +113,9 @@ const FEET_PER_METRE = 3.28084;
 /// sub-metre precision on cumulative gain is GPS-noise floor.
 export function formatElevation(metres: number | null | undefined): string {
 	if (metres == null) return '—';
-	if (unit.value === 'mi') return `${Math.round(metres * FEET_PER_METRE)} ft`;
-	return `${Math.round(metres)} m`;
+	const loc = currentLocale();
+	if (unit.value === 'mi') return `${formatInteger(Math.round(metres * FEET_PER_METRE), loc)} ft`;
+	return `${formatInteger(Math.round(metres), loc)} m`;
 }
 
 /// Plan-surface pace formatter. Input is always seconds-per-km (the

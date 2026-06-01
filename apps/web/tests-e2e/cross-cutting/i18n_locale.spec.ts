@@ -72,4 +72,25 @@ test.describe('i18n language picker (settings → preferences)', () => {
 		await page.locator('[data-testid="language-select"]').selectOption('en');
 		await expect(page.locator('html')).toHaveAttribute('lang', 'en');
 	});
+
+	test('distance numbers follow the locale decimal separator (W-15)', async ({ page }) => {
+		// Seed run "Tempo on Belle Isle" is 6500 m → 6.50 km / 6,50 km. The
+		// run-detail page is filter-independent (unlike the date-filtered
+		// /runs list), so the distance is deterministically present.
+		const runUrl = '/runs/a1000001-0000-0000-0000-000000000001';
+		await page.goto(runUrl);
+		await expect(page.getByText('6.50 km').first()).toBeVisible();
+
+		await page.goto('/settings/preferences');
+		await page.locator('[data-testid="language-select"]').selectOption('de');
+		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
+
+		await page.goto(runUrl);
+		// German formats the same distance with a comma decimal separator.
+		await expect(page.getByText('6,50 km').first()).toBeVisible();
+		await expect(page.getByText('6.50 km')).toHaveCount(0);
+
+		await page.goto('/settings/preferences');
+		await page.locator('[data-testid="language-select"]').selectOption('en');
+	});
 });
