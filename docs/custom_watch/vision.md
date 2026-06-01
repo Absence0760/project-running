@@ -46,7 +46,7 @@ Top row is *our* target; everything below is a shipping competitor. The first fo
 | COROS Vertix 2 / 2S | ~140hr / ~118hr | 1.4" MIP | Dual-band | $700 | UI is better than Garmin; map UX still weak |
 | Suunto Vertical | ~85hr (Performance mode) | 1.4" MIP | Dual-band | $700 | Smallest software ecosystem of the three |
 | Polar Grit X2 Pro | ~140hr (eco) / ~40hr (full GPS) | 1.39" AMOLED | Dual-band | ~$750 | AMOLED caps true 100mi battery; smaller map + accessory ecosystem |
-| Amazfit T-Rex 3 Pro | ~116hr (max-battery) / ~38hr (accurate) | AMOLED | Dual-band | ~$280 | Budget brand; GNSS / data-trust + accessory ecosystem weaker, big headline battery |
+| Amazfit T-Rex 3 Pro | ~116hr (low-power mode) / ~38hr (dual-band accurate) | AMOLED (3000-nit) | Dual-band | ~$400 | Strong *value*, not better: GPS good-but-behind Fenix, flaky offline routing, thinner analytics + ecosystem. Its 116hr headline is a stripped mode — real dual-band battery (~38hr) is *below* the MIP flagships |
 | Apple Watch Ultra 2 | ~12hr (workout, normal-power) | AMOLED | Dual-band | $800 | Battery life makes it a non-starter for 100mi |
 
 > **Important caveat on battery numbers.** Vendor "GPS hours" figures are almost always quoted for the *best-case* mode — typically single-band GPS only, no music, no maps loaded, no HR active. Switching to multi-band / all-systems GNSS (the configuration ultra runners actually want, for foliage and canyon accuracy) typically cuts the figure by 40–60%. The Garmin Fenix 7X Solar at "89hr GPS" drops to ~36hr in the multi-band-with-music configuration most runners actually use. Verify mode-for-mode before comparing, and treat the figures above as headline marketing numbers, not as what you'd see on the wrist during a 100-miler.

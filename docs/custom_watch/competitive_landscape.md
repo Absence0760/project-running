@@ -15,9 +15,9 @@ The watches we'd be measured against, with their best-case advertised numbers. T
 | COROS Vertix 2 / 2S | ~140hr / ~118hr | 1.4" MIP | Dual-band | $700 |
 | Suunto Vertical | ~85hr (Performance mode) | 1.4" MIP | Dual-band | $700 |
 | Polar Grit X2 Pro | ~140hr (eco) / ~40hr (full) | 1.39" AMOLED | Dual-band | ~$750 |
-| Amazfit T-Rex 3 Pro | ~116hr (max-battery) / ~38hr (accurate) | AMOLED | Dual-band | ~$280 |
+| Amazfit T-Rex 3 Pro | ~116hr (low-power) / ~38hr (dual-band accurate) | AMOLED | Dual-band | ~$400 |
 
-Headline numbers are best-case single-band; multi-band-with-music typically drops them 40–60%. Treat them as marketing, not as what you'd see on the wrist during a 100-miler. The analysis below assumes the buyer knows this. The two AMOLED entrants make the battery thesis concrete: Polar is premium hardware but its AMOLED panel caps real full-GPS life around 40hr (fine for a fast 100k, short for a slow 100-miler), while Amazfit hits a big headline number cheaply but trails the flagships on GNSS-algorithm maturity, accessory ecosystem, and brand trust — the same hard-to-cross moats covered next. The deep fault analysis below stays on Garmin and COROS, the two incumbents whose customers we'd actually be converting.
+Headline numbers are best-case single-band; multi-band-with-music typically drops them 40–60%. Treat them as marketing, not as what you'd see on the wrist during a 100-miler. The analysis below assumes the buyer knows this. The two AMOLED entrants make the battery thesis concrete: Polar is premium hardware but its AMOLED panel caps real full-GPS life around 40hr (fine for a fast 100k, short for a slow 100-miler), while Amazfit's headline 116hr is a stripped low-power mode — its dual-band accurate battery is only ~38hr, *below* the MIP flagships — and it trails them on GNSS-algorithm maturity, offline routing, accessory ecosystem, and brand trust, the same hard-to-cross moats covered next. It's a strong *value* watch (~$400 vs $700–1,000), not a better one. The deep fault analysis below stays on Garmin and COROS, the two incumbents whose customers we'd actually be converting.
 
 ## What you literally cannot beat them on
 
