@@ -3,6 +3,8 @@
 	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import { fetchRuns, deleteRuns } from '$lib/core/data';
+	import { loadSettings, effective } from '$lib/settings/settings';
+	import { periodStart } from '$lib/training/goals';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -30,6 +32,11 @@
 	// streams in pages of PAGE_SIZE so a heavy account doesn't
 	// pull thousands of rows on first paint.
 	let dateRange = $state<DateRange>('today');
+
+	/// First day of the week for the "Week" filter, mirroring the
+	/// dashboard's `week_start_day` pref so the run list and the
+	/// dashboard agree on where the week begins. Default `monday`.
+	let weekStartDay = $state<'monday' | 'sunday'>('monday');
 
 	const PAGE_SIZE = 50;
 	let loadingMore = $state(false);
@@ -134,14 +141,11 @@
 				d.setHours(0, 0, 0, 0);
 				return { from: d, to: null };
 			}
-			case 'week': {
-				// Monday-start week, matching Android's `weekStartLocal`.
-				const d = new Date(now);
-				d.setHours(0, 0, 0, 0);
-				const dow = (d.getDay() + 6) % 7; // 0 = Mon
-				d.setDate(d.getDate() - dow);
-				return { from: d, to: null };
-			}
+			case 'week':
+				// Honour the user's `week_start_day` pref so the run list and
+				// the dashboard agree on where the week begins. Shares the
+				// pure `periodStart` helper that backs the dashboard goal card.
+				return { from: periodStart('week', now, weekStartDay), to: null };
 			case 'month': {
 				const d = new Date(now);
 				d.setHours(0, 0, 0, 0);
@@ -310,6 +314,21 @@
 		hasMore = more.length === PAGE_SIZE;
 		loadingMore = false;
 	}
+
+	let settingsLoadedFor = $state<string | null>(null);
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!uid || settingsLoadedFor === uid) return;
+		settingsLoadedFor = uid;
+		loadSettings(uid)
+			.then((settings) => {
+				const wsd = effective<string>(settings, 'week_start_day');
+				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
+			})
+			.catch(() => {
+				/* leave the monday default — the filter still works */
+			});
+	});
 
 	$effect(() => {
 		// Don't fetch before the auth store has hydrated. fetchRuns
