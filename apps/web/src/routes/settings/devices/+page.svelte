@@ -243,7 +243,7 @@
 			| { kind: 'enum'; options: Array<{ value: string; label: string }> };
 	}
 
-	const overridableKeys: KeyEditor[] = [
+	const overridableKeys = $derived<KeyEditor[]>([
 		// Device-scope (D) — per-browser / per-device only.
 		{ key: 'voice_feedback_enabled', label: m('settingsDevices.keyVoiceFeedback'), shape: { kind: 'bool' } },
 		{
@@ -304,7 +304,7 @@
 				],
 			},
 		},
-	];
+	]);
 
 	let addingForDevice = $state<string | null>(null);
 	let addKey = $state<string>('voice_feedback_enabled');

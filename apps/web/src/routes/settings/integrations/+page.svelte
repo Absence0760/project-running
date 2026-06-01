@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
 	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -22,18 +23,21 @@
 	interface IntegrationUI {
 		provider: string;
 		name: string;
-		description: string;
 		icon: string;
 		connected: boolean;
 		lastSync: string | null;
 		loading: boolean;
 	}
 
+	// Static shape only (brand name + icon). The translatable description is
+	// NOT stored here — it's rendered reactively in the template via m() so it
+	// tracks locale changes (storing it in the integrations $state below would
+	// capture one locale at init).
 	const providers: Omit<IntegrationUI, 'connected' | 'lastSync' | 'loading'>[] = [
-		{ provider: 'strava', name: 'Strava', description: m('settingsIntegrations.stravaDescription'), icon: 'directions_run' },
-		{ provider: 'parkrun', name: 'parkrun', description: m('settingsIntegrations.parkrunDescription'), icon: 'emoji_events' },
-		{ provider: 'garmin', name: 'Garmin Connect', description: m('settingsIntegrations.garminDescription'), icon: 'watch' },
-		{ provider: 'healthkit', name: 'Apple HealthKit', description: m('settingsIntegrations.healthkitDescription'), icon: 'favorite' },
+		{ provider: 'strava', name: 'Strava', icon: 'directions_run' },
+		{ provider: 'parkrun', name: 'parkrun', icon: 'emoji_events' },
+		{ provider: 'garmin', name: 'Garmin Connect', icon: 'watch' },
+		{ provider: 'healthkit', name: 'Apple HealthKit', icon: 'favorite' },
 	];
 
 	let integrations = $state<IntegrationUI[]>(
@@ -270,7 +274,7 @@
 					</div>
 					<div class="integration-info">
 						<h3>{integration.name}</h3>
-						<p>{integration.description}</p>
+						<p>{m(`settingsIntegrations.${integration.provider}Description` as MessageKey)}</p>
 						{#if integration.connected && integration.lastSync}
 							<span class="last-sync">
 								{m('settingsIntegrations.lastSynced', { date: new Date(integration.lastSync).toLocaleDateString(activeFormatLocale(), {

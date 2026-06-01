@@ -263,22 +263,25 @@
 		return out;
 	});
 
-	const sources: { value: RunSource | 'all'; label: string }[] = [
+	// $derived (not plain const) so the m() labels recompute when the locale
+	// changes — a top-level const would call m() once at init, capture the
+	// pre-load locale, and never update (the live-switch + async-chunk race).
+	const sources = $derived<{ value: RunSource | 'all'; label: string }[]>([
 		{ value: 'all', label: m('runs.sourceAll') },
 		{ value: 'app', label: m('runs.sourceRecorded') },
 		{ value: 'strava', label: 'Strava' },
 		{ value: 'parkrun', label: 'parkrun' },
 		{ value: 'healthkit', label: 'HealthKit' },
-	];
+	]);
 
-	const activities: { value: string; label: string; icon: string }[] = [
+	const activities = $derived<{ value: string; label: string; icon: string }[]>([
 		{ value: 'all', label: m('runs.activityAll'), icon: 'apps' },
 		{ value: 'run', label: m('runs.activityRun'), icon: 'directions_run' },
 		{ value: 'walk', label: m('runs.activityWalk'), icon: 'directions_walk' },
 		{ value: 'cycle', label: m('runs.activityCycle'), icon: 'directions_bike' },
 		{ value: 'hike', label: m('runs.activityHike'), icon: 'terrain' },
 		{ value: 'stroller', label: m('runs.activityStroller'), icon: 'child_friendly' },
-	];
+	]);
 
 	/// Monotonic generation counter. Every loadInitial() captures the
 	/// current value before its async fetch and discards its result if

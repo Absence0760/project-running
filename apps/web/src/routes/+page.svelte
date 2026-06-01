@@ -12,7 +12,7 @@
 
 	const showLanding = $derived(!browser || (!auth.loading && !auth.loggedIn));
 
-	const apps = [
+	const apps = $derived([
 		{
 			icon: 'android',
 			name: 'Android',
@@ -45,7 +45,7 @@
 			tagline: 'SvelteKit',
 			body: m('landing.appWebBody')
 		}
-	];
+	]);
 </script>
 
 <svelte:head>

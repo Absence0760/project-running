@@ -630,15 +630,14 @@
 	 * Mobile-recorded runs stamp the activity into `metadata.activity_type`.
 	 * Map to a human label + Material Symbols icon.
 	 */
-	const activityMeta: Record<
-		string,
-		{ label: string; icon: string }
-	> = {
+	// $derived so the m() labels track locale changes (a plain const captures
+	// the locale once at init and never updates).
+	const activityMeta = $derived<Record<string, { label: string; icon: string }>>({
 		run: { label: m('runDetail.activityRun'), icon: 'directions_run' },
 		walk: { label: m('runDetail.activityWalk'), icon: 'directions_walk' },
 		cycle: { label: m('runDetail.activityCycle'), icon: 'directions_bike' },
 		hike: { label: m('runDetail.activityHike'), icon: 'terrain' },
-	};
+	});
 
 	let activity = $derived.by(() => {
 		const key = run?.metadata?.['activity_type'];
@@ -722,13 +721,13 @@
 	/// `hr_zones`, falling back to sensible defaults keyed off max
 	/// HR). When it doesn't, the panel reports "No HR samples on this
 	/// run" instead of rendering fake percentages.
-	const zoneDefs = [
+	const zoneDefs = $derived([
 		{ zone: m('runDetail.zone1'), label: m('runDetail.zoneRecovery'), color: '#90CAF9' },
 		{ zone: m('runDetail.zone2'), label: m('runDetail.zoneEasy'), color: '#4CAF50' },
 		{ zone: m('runDetail.zone3'), label: m('runDetail.zoneAerobic'), color: '#FFC107' },
 		{ zone: m('runDetail.zone4'), label: m('runDetail.zoneThreshold'), color: '#FF9800' },
 		{ zone: m('runDetail.zone5'), label: m('runDetail.zoneMax'), color: '#F44336' },
-	];
+	]);
 
 	/// Per-point BPM samples paired with their timestamps so the zone
 	/// breakdown can be time-weighted instead of sample-count-weighted.

@@ -35,7 +35,7 @@
 		unsetFields = checks;
 	});
 
-	const sections: Section[] = [
+	const sections = $derived<Section[]>([
 		{
 			label: m('settingsLayout.sectionProfile'),
 			tabs: [
@@ -58,7 +58,7 @@
 				{ href: '/settings/licenses', label: m('settingsLayout.tabLicenses'), icon: 'description' },
 			],
 		},
-	];
+	]);
 </script>
 
 <svelte:head>
