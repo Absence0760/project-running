@@ -17,15 +17,21 @@ values
   ('00000000-0000-0000-0000-000000c0ac02', 'authenticated', 'authenticated',
    'b@coach.local', '', now(), now());
 
-set local role authenticated;
-set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000c0ac01"}';
-
+-- Seed the thread as the privileged writer (pgtap runs as postgres,
+-- bypassing RLS) — the assistant turn mirrors how the real coach
+-- handler persists it via a service_role client. Since migration
+-- 20261122_001 (XSS audit H1) an authenticated client can only insert
+-- its own role='user' turns, so the assistant row can no longer be
+-- seeded under `set local role authenticated`.
 insert into coach_messages (id, user_id, role, content)
 values
   ('cccccccc-cccc-cccc-cccc-cccccccccc01',
    '00000000-0000-0000-0000-000000c0ac01', 'user', 'I have a knee niggle.'),
   ('cccccccc-cccc-cccc-cccc-cccccccccc02',
    '00000000-0000-0000-0000-000000c0ac01', 'assistant', 'Take 2 days off.');
+
+set local role authenticated;
+set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000c0ac01"}';
 
 -- 1. Owner can read their own conversation.
 select results_eq(
