@@ -109,13 +109,18 @@ func NewHub() *Hub {
 // enough that a stuck spectator doesn't grow unbounded memory.
 const subBufferSize = 8
 
-// Per-room history ring-buffer capacity. At a 5s mobile-recorder push
-// cadence, 5000 pings covers the last ~7 hours of broadcast — enough
-// for a crew rolling up at mile 60 of a 100-mile race to see the
-// course traversed so far. Memory: 5000 × ~80 B = ~400 KB per room.
-// A 50-hour ultra exceeds this and only the most recent ~7h are
-// retained; that's the trade. Persona-hunt Round 3 finding Ultra #1.
-const HistoryRingSize = 5000
+// Per-room history ring-buffer capacity. At the LiveBroadcaster's 5s
+// push cadence one hour is 720 pings, so 17280 pings covers a full
+// 24h broadcast — long enough that a crew rolling up late in a 12-24h
+// ultra still replays the whole traversed course, not just the most
+// recent few hours. Memory: 17280 × ~80 B ≈ 1.4 MB per room, allocated
+// lazily on first publish and bounded per-session (one room per
+// run_id, GC'd after IdleRoomTTL), so the worst case is roughly
+// (concurrent live runs) × 1.4 MB rather than anything unbounded.
+// Past 24h the oldest pings roll off; that's the trade. Persona-hunt
+// Round 3 finding Ultra #1; raised for 12-24h ultras in round-5
+// runner-ultra.
+const HistoryRingSize = 17280
 
 type room struct {
 	mu         sync.Mutex
