@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import { en } from './locales/en';
 import { CATALOGUE_LOADERS } from './catalogues';
 import { interpolate } from './interpolate';
+import { setActiveFormatLocale } from '$lib/format/time';
 import type { Messages, MessageKey } from './messages';
 import {
 	DEFAULT_LOCALE,
@@ -28,6 +29,10 @@ export function m(key: MessageKey, params?: Record<string, string | number>): st
 }
 
 function applyDocumentLocale(next: Locale): void {
+	// Keep the pure date/time formatters (time.ts) in sync with the active
+	// locale (W-12). Done outside the browser gate so it tracks even in
+	// non-DOM contexts.
+	setActiveFormatLocale(next);
 	if (!browser) return;
 	try {
 		localStorage.setItem('locale', next);

@@ -1,6 +1,28 @@
 // Pure time/date formatting helpers shared across web surfaces.
 // No runes here (plain `.ts`) so the helpers are unit-testable via `tsx --test`.
 
+// The active UI locale, pushed in by the i18n runtime (store.svelte.ts
+// calls setActiveFormatLocale on every locale change). Date helpers
+// default to it, and call sites that format inline pass activeFormatLocale()
+// to toLocaleDateString instead of `undefined` — so dates follow the
+// picker, not just the browser locale (i18n-readiness W-12). Kept a plain
+// module variable rather than a rune so time.ts stays tsx-testable and
+// importable from non-Svelte code; the trade-off is that dates rendered
+// via these helpers re-localise on the next render/navigation rather than
+// the instant of an in-place switch (the relative-time call sites pass
+// currentLocale() directly for live reactivity). `undefined` until the
+// runtime sets it (SSR/prerender + tests), which means the host default —
+// the prior behaviour.
+let activeLocale: string | undefined;
+
+export function setActiveFormatLocale(locale: string | undefined): void {
+	activeLocale = locale;
+}
+
+export function activeFormatLocale(): string | undefined {
+	return activeLocale;
+}
+
 // Memoised Intl.RelativeTimeFormat instances (construction is relatively
 // expensive and these run per feed/notification row). Keyed by
 // locale + numeric mode.
@@ -31,7 +53,11 @@ function rtf(locale: string | undefined, numeric: 'always' | 'auto'): Intl.Relat
  * `locale` defaults to the runtime default — callers that follow the i18n
  * picker pass `currentLocale()`.
  */
-export function formatRelativeTime(iso: string, now: number = Date.now(), locale?: string): string {
+export function formatRelativeTime(
+	iso: string,
+	now: number = Date.now(),
+	locale: string | undefined = activeLocale,
+): string {
 	const date = new Date(iso);
 	const ms = now - date.getTime();
 	const mins = Math.floor(ms / 60_000);
@@ -58,18 +84,18 @@ export function formatDuration(seconds: number): string {
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-/** Localized `D Mon YYYY` date (visitor locale). */
-export function formatDate(iso: string): string {
-	return new Date(iso).toLocaleDateString(undefined, {
+/** Localized `D Mon YYYY` date in the active UI locale (W-12). */
+export function formatDate(iso: string, locale: string | undefined = activeLocale): string {
+	return new Date(iso).toLocaleDateString(locale, {
 		day: 'numeric',
 		month: 'short',
 		year: 'numeric',
 	});
 }
 
-/** Localized `D Mon` date, no year (visitor locale). */
-export function formatDateShort(iso: string): string {
-	return new Date(iso).toLocaleDateString(undefined, {
+/** Localized `D Mon` date, no year, in the active UI locale (W-12). */
+export function formatDateShort(iso: string, locale: string | undefined = activeLocale): string {
+	return new Date(iso).toLocaleDateString(locale, {
 		day: 'numeric',
 		month: 'short',
 	});

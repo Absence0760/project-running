@@ -1,6 +1,12 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { formatRelativeTime, formatDuration, formatDate, formatDateShort } from './time';
+import {
+	formatRelativeTime,
+	formatDuration,
+	formatDate,
+	formatDateShort,
+	setActiveFormatLocale,
+} from './time';
 
 const NOW = Date.parse('2026-05-30T12:00:00Z');
 
@@ -61,4 +67,21 @@ test('formatDate / formatDateShort — render the date, short omits the year', (
 	const iso = '2026-03-14T08:00:00Z';
 	assert.match(formatDate(iso), /2026/);
 	assert.doesNotMatch(formatDateShort(iso), /2026/);
+});
+
+test('formatDate/formatDateShort follow the active format locale set by the runtime (W-12)', () => {
+	const iso = '2026-03-14T08:00:00Z';
+	try {
+		setActiveFormatLocale('de');
+		assert.match(formatDate(iso), /Mär/, 'German short month');
+		assert.match(formatDateShort(iso), /Mär/);
+		// relative-time's 30-day fallback follows it too
+		assert.match(formatRelativeTime(iso, Date.parse('2026-06-01T00:00:00Z')), /Mär/);
+		setActiveFormatLocale('en');
+		assert.match(formatDate(iso), /Mar/);
+		// an explicit locale argument still overrides the active default
+		assert.match(formatDate(iso, 'de'), /Mär/);
+	} finally {
+		setActiveFormatLocale(undefined); // reset so other tests see the host default
+	}
 });
