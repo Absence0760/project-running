@@ -2478,6 +2478,18 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 ---
 
+## 104. The per-run og:image PNG renders at request time in the share-run Lambda, not at build time (persona round-5 very-social)
+
+**Decided (2026-05-31, persona-hunt round-5 very-social):** `/og/run/<id>.png` moved from an adapter-static build-time prerender (with a 50k-run cap) to request-time rendering. The share-run Lambda (persona Casual #4) already owned `/share/run/<id>` HTML at request time; it now also matches `/og/run/<id>.png` and renders the card via a shared `renderRunOgPng` helper (`apps/web/src/lib/share/og_run_png.ts`) that both the Lambda and the SvelteKit dev endpoint call. A new CloudFront `/og/run/*` behaviour routes the path to the Lambda; the SvelteKit endpoint is `prerender = false`.
+
+**Why:** under adapter-static, a prerendered image only exists for run ids known at the last build. A run created after that build — or beyond the 50k cap — had no PNG, so social unfurls of a fresh share showed a broken/missing image even though the HTML head (Lambda-rendered) was correct. Generating on demand makes the image exist for any id, regardless of build cadence — closing the same gap for the PNG that Casual #4 closed for the HTML.
+
+**Trade-off — packaging the native rasteriser.** `@resvg/resvg-js` is a native `.node` addon; esbuild can't inline it. The original authors deferred the PNG-in-Lambda work for exactly this reason. The fix keeps the loader + the `@resvg/resvg-js-linux-arm64-gnu` package external in `build.mjs` and copies both into the zip's `node_modules` (the Lambda is arm64). The build fails fast with the explicit `npm install --cpu=arm64 --os=linux` command if the arm64 package isn't resolvable on the build host. A missing/private/deleted run renders a generic branded card at **HTTP 200**, never a 404 — a broken unfurl image is the bug being fixed. The operator verification step is logged in `docs/product/followups.md`.
+
+**Don't re-litigate unless** the Lambda cold-start cost of loading @resvg becomes a problem (then split the PNG into its own function, or pre-warm), or the card needs the run polyline (then route through `clip_track_for_user` like the route og:image, never a raw Storage read — same privacy posture as § 33). The `/og/route/<id>.png` endpoint still prerenders at build time with a 5k cap; it carries the identical gap and is a candidate for the same treatment if a route-share persona surfaces it.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -62,7 +62,7 @@ test('share-run Lambda Cache-Control caps the public→private flip window at ~5
 	);
 });
 
-test('og/run/[id].png prerendered handler uses the same 5-min TTL', () => {
+test('og/run/[id].png request-time handler uses the same 5-min TTL', () => {
 	const src = read(
 		__dirname,
 		'..',
@@ -76,17 +76,99 @@ test('og/run/[id].png prerendered handler uses the same 5-min TTL', () => {
 		src,
 		/max-age=300, s-maxage=300, stale-while-revalidate=60/,
 		'og/run/[id].png must use the same 5-min TTL as the share-run ' +
-			'Lambda. The PNG is prerendered to a static file at build ' +
-			'time, so this Cache-Control header is what S3 serves and ' +
-			'what CloudFront caches against — the per-edge TTL ceiling.',
+			'Lambda — the Cache-Control header CloudFront caches against.',
 	);
 	assert.doesNotMatch(
 		src,
 		/max-age=3600/,
-		'The 1h TTL on the prerendered og.png was the actual privacy ' +
-			'hole — a run flipped private would still surface its ' +
-			'previous unfurl image for up to an hour. Persona-hunt ' +
-			'Round 3 finding Privacy #3.',
+		'The 1h TTL on the og.png was the actual privacy hole — a run ' +
+			'flipped private would still surface its previous unfurl ' +
+			'image for up to an hour. Persona-hunt Round 3 finding ' +
+			'Privacy #3.',
+	);
+});
+
+test('og/run/[id].png is request-time (prerender = false), not build-time', () => {
+	const src = read(
+		__dirname,
+		'..',
+		'routes',
+		'og',
+		'run',
+		'[id].png',
+		'+server.ts',
+	);
+	// Under adapter-static a prerendered route only exists for ids
+	// known at build time, so a run created after the last build would
+	// 404 and its social unfurl would show a broken image. The fix
+	// pins this endpoint to request-time rendering. Persona-hunt
+	// round-5 finding very-social.
+	assert.match(
+		src,
+		/export const prerender = false/,
+		'og/run/[id].png must render at request time so runs created ' +
+			'after the last build still get an og:image. A `prerender = ' +
+			'true` here regresses to the build-time-only 404.',
+	);
+});
+
+test('share-run Lambda serves the og:image PNG path with a 200 fallback', () => {
+	const src = read(
+		__dirname,
+		'..',
+		'..',
+		'lambda',
+		'share-run',
+		'src',
+		'index.ts',
+	);
+	// The Lambda owns /og/run/<id>.png in prod (CloudFront routes it
+	// here). It must match the path and render via the shared helper.
+	assert.match(
+		src,
+		/\\\/og\\\/run\\\//,
+		'The share-run Lambda must match /og/run/<id>.png — CloudFront ' +
+			'routes that path to it. Persona-hunt round-5 very-social.',
+	);
+	assert.match(
+		src,
+		/renderRunOgPng/,
+		'The Lambda must render the PNG via the shared renderRunOgPng ' +
+			'helper so dev + prod produce the same card + fallback.',
+	);
+	// The PNG handler returns 200 even for a missing run — the renderer
+	// falls back to a generic branded card. A 404 here would break the
+	// unfurl image, which is the exact bug being fixed.
+	assert.match(
+		src,
+		/statusCode: 200,\s*headers: \{\s*'content-type': 'image\/png'/,
+		'The PNG path must return HTTP 200 (generic fallback card for ' +
+			'private / deleted runs), never a 404 — a broken unfurl ' +
+			'image is the bug. Persona-hunt round-5 very-social.',
+	);
+});
+
+test('CloudFront routes /og/run/* to the share-run Lambda', () => {
+	const tf = read(
+		__dirname,
+		'..',
+		'..',
+		'..',
+		'..',
+		'infra',
+		'modules',
+		'web-stack',
+		'main.tf',
+	);
+	// Without this behaviour the PNG falls through to the S3 default
+	// origin, which only has build-time-prerendered files — the
+	// original 404. Persona-hunt round-5 very-social.
+	assert.match(
+		tf,
+		/path_pattern\s*=\s*"\/og\/run\/\*"[\s\S]*?target_origin_id\s*=\s*"lambda-share-run"/,
+		'CloudFront must route /og/run/* to the share-run Lambda so ' +
+			'runs created after the last build get a request-time ' +
+			'og:image. Persona-hunt round-5 very-social.',
 	);
 });
 

@@ -1,42 +1,63 @@
 # Share-run Lambda
 
-Production handler for `/share/run/*` (per-run SPA-shell HTML with
-OG tags). CloudFront routes that path to this Lambda's Function URL.
+Production handler for two per-run share surfaces, both routed to this
+Lambda's Function URL by CloudFront:
 
-Persona-hunt finding Casual #4: pre-fix, the route was prerendered at
-build time via `adapter-static`. Any public run created between
-builds served the SPA-shell fallback `<head>` (generic title) so
-Slack / FB / X / LinkedIn unfurls of a brand-new run showed the
-homepage card. Widening the prerender cap was a workaround; the real
-fix is per-request SSR via this Lambda — every URL gets the right
-per-run head, regardless of build cadence.
+- `/share/run/<id>` — per-run SPA-shell HTML with OG tags
+- `/og/run/<id>.png` — per-run og:image PNG
 
-## Scope: HTML only
+Persona-hunt finding Casual #4 (HTML) + round-5 very-social (PNG):
+pre-fix, both routes were prerendered at build time via
+`adapter-static`. Any public run created between builds served the
+SPA-shell fallback `<head>` (generic title) AND a 404 for the
+og:image, so Slack / FB / X / LinkedIn unfurls of a brand-new run
+showed the homepage card with a broken image. Widening the prerender
+cap was a workaround; the real fix is per-request SSR via this Lambda
+— every URL gets the right per-run head AND a matching image,
+regardless of build cadence.
 
-`/og/run/<id>.png` is intentionally NOT served by this Lambda. The
-PNG renderer (`@resvg/resvg-js`) ships a native arm64 binary that
-would need a Lambda Layer or `--arch=arm64 --platform=linux` build-
-time install to run in the Lambda runtime — a deployment slice of
-its own. Instead, `/og/run/<id>.png` stays adapter-static-prerendered
-on the S3 origin with a 50k cap (covers the realistic worldwide
-user base for months). For runs beyond the cap, the og:image returns
-404 and crawlers degrade to text-only unfurls — but the per-run
-title + description (from THIS Lambda) still land correctly. The
-text fix is the critical-path fix; the missing image is cosmetic.
+## og:image PNG (round-5 very-social)
 
-The SvelteKit dev-server still owns `/share/run/*` under `npm run
-dev` (see `src/routes/share/run/[id]/+page.ts`) so local dev doesn't
-need the Lambda standing up.
+`/og/run/<id>.png` is rendered at request time by `handlePng` in
+`src/index.ts`, which calls the shared `renderRunOgPng` helper
+(`src/lib/share/og_run_png.ts`) — the same helper the SvelteKit dev
+endpoint uses. A run that can't be loaded (private / deleted / never
+existed) renders a generic branded card and returns **HTTP 200**, so
+a social unfurl never breaks with a 404 image.
+
+The renderer (`@resvg/resvg-js`) is a native addon. esbuild can't
+inline a `.node` binary, so `build.mjs` keeps the loader package + the
+arm64 native binary external and copies both into the zip's
+`node_modules`. The Lambda runs on **arm64** (`architectures =
+["arm64"]` in `infra/modules/web-stack/main.tf`), so the build host
+must have `@resvg/resvg-js-linux-arm64-gnu` resolvable.
+
+**Operator / CI note:** on a linux/x64 build host (incl. GitHub
+Actions `ubuntu-latest`), `npm ci` downloads optional deps for other
+platforms by default, so the arm64 package is normally present. If
+`build.mjs` fails with a missing-`@resvg/resvg-js-linux-arm64-gnu`
+error, install it explicitly before building the zip:
+
+```bash
+npm install --workspace=apps/web --cpu=arm64 --os=linux @resvg/resvg-js-linux-arm64-gnu
+```
+
+The SvelteKit dev-server still owns `/share/run/*` and
+`/og/run/*.png` under `npm run dev` (see
+`src/routes/share/run/[id]/+page.ts` and
+`src/routes/og/run/[id].png/+server.ts`) so local dev doesn't need
+the Lambda standing up.
 
 ## Layout
 
 ```
-src/index.ts      Lambda Function URL handler.
+src/index.ts      Lambda Function URL handler (HTML + PNG routing).
 build.mjs         esbuild bundler — produces dist/index.mjs + share-run.zip.
                   Reads apps/web/build/index.html (built by `npm run build`)
                   and embeds the SPA shell as a string constant so the
                   Lambda can inject OG tags + serve the same bundle the
-                  static-rendered routes load.
+                  static-rendered routes load. Copies the @resvg loader +
+                  arm64 native binary into dist/node_modules before zipping.
 dist/             generated (gitignored)
 ```
 
@@ -65,12 +86,14 @@ against anon-readable views.
 
 ## Caching
 
-Responses set `Cache-Control: public, max-age=3600` so CloudFront
-caches each `/share/run/<id>` for an hour. A crawler storm against a
-single share URL costs one Lambda invocation per cache window, not
-per crawler. The 1h TTL means a private→public visibility flip takes
-up to an hour to propagate; acceptable trade for the cache savings
-on a feature that's overwhelmingly read-heavy.
+Responses set `Cache-Control: public, max-age=300, s-maxage=300,
+stale-while-revalidate=60` so CloudFront caches each `/share/run/<id>`
+and `/og/run/<id>.png` for ~5 min. A crawler storm against a single
+share URL costs one Lambda invocation per cache window, not per
+crawler. The 5-min TTL (down from the original 1h) caps how long a
+public→private visibility flip stays visible on the unfurl —
+persona-hunt Round 3 finding Privacy #3. The CloudFront `share_run`
+cache policy's `default_ttl`/`max_ttl` are pinned to 300 to match.
 
 ## Why this isn't part of the coach Lambda
 

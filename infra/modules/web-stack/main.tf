@@ -403,16 +403,19 @@ resource "aws_lambda_permission" "cloudfront_invoke" {
   }
 }
 
-# ─────────────── Share-run Lambda (persona-hunt Casual #4) ───────────────
+# ─── Share-run Lambda (persona-hunt Casual #4 + round-5 very-social) ───
 #
-# Per-request SSR handler for /share/run/<id> + /og/run/<id>.png.
-# Pre-fix, both routes were prerendered at build time via
+# Per-request SSR handler for /share/run/<id> (HTML) + /og/run/<id>.png
+# (PNG). Pre-fix, both routes were prerendered at build time via
 # adapter-static; any public run created post-build served the SPA-
-# shell fallback `<head>` so Slack / FB / X / LinkedIn unfurls of a
-# brand-new run showed the homepage card. This Lambda fetches the run
-# + display name at request time so every URL gets the right OG data,
-# regardless of build cadence. See apps/web/lambda/share-run/README.md
-# for the bundle shape + lifecycle.
+# shell fallback `<head>` and a 404 og:image, so Slack / FB / X /
+# LinkedIn unfurls of a brand-new run showed the homepage card with a
+# broken image. This Lambda fetches the run + display name at request
+# time so every URL gets the right OG head AND a rendered image,
+# regardless of build cadence. The PNG path falls back to a generic
+# branded card (HTTP 200) for private / deleted runs so an unfurl
+# never breaks. See apps/web/lambda/share-run/README.md for the
+# bundle shape + lifecycle.
 #
 # Reuses the existing `aws_iam_role.lambda` execution role + CloudWatch
 # log group naming so the operator surface stays uniform with the coach
@@ -797,10 +800,8 @@ resource "aws_cloudfront_distribution" "this" {
 
   # Share-run Lambda: per-request SSR for share-link HTML so brand-
   # new runs unfurl with the right per-run head, regardless of build
-  # cadence. /og/run/<id>.png stays adapter-static-prerendered (with
-  # a 50k cap) on the S3 origin because @resvg's native arm64 binary
-  # is a deployment slice of its own. Persona-hunt finding Casual #4.
-  # See apps/web/lambda/share-run/README.md.
+  # cadence. Persona-hunt finding Casual #4. See
+  # apps/web/lambda/share-run/README.md.
   ordered_cache_behavior {
     path_pattern               = "/share/run/*"
     target_origin_id           = "lambda-share-run"
@@ -808,6 +809,26 @@ resource "aws_cloudfront_distribution" "this" {
     allowed_methods            = ["GET", "HEAD", "OPTIONS"]
     cached_methods             = ["GET", "HEAD"]
     compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_run.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_run.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Per-run og:image PNG, same Lambda. Pre-fix this stayed adapter-
+  # static-prerendered on S3 with a 50k cap, so a run created after
+  # the last build (or beyond the cap) 404'd and its social unfurl
+  # showed a broken image. Routing /og/run/* to the share-run Lambda
+  # renders the card at request time for ANY id (with a generic
+  # branded fallback for private / deleted runs). compress is off:
+  # the body is already-compressed PNG bytes. Persona-hunt round-5
+  # finding very-social.
+  ordered_cache_behavior {
+    path_pattern               = "/og/run/*"
+    target_origin_id           = "lambda-share-run"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = false
     cache_policy_id            = aws_cloudfront_cache_policy.share_run.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_run.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
