@@ -1277,9 +1277,20 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// health + location data; absent before audit/data-export-
 		// completeness (2026-05-25).
 		{name: "race_pings.json", table: "race_pings", filter: uidEq, sel: "*"},
+		// user_settings — the universal (per-user) prefs bag: privacy
+		// zones, HR settings, date-of-birth, week-start, units, and
+		// every other preference. The dataexport server also surfaces
+		// this as `profile.json`'s `settings_prefs` field via the
+		// separate FetchUserSettingsPrefs call, but the EF rollback
+		// path has no profile.json — so the spec list now carries
+		// user_settings too, keeping both export paths in lockstep and
+		// giving the subject a self-describing `user_settings.json`.
+		// It's the subject's own data, so the full prefs ship
+		// unredacted. persona round-5 privacy / GDPR Art 20.
+		{name: "user_settings.json", table: "user_settings", filter: uidEq, sel: "*"},
 		// user_device_settings — per-device behavioural prefs +
-		// last-seen-at. Distinct from user_settings.prefs (in the
-		// manifest already). Added per audit/data-export-completeness
+		// last-seen-at. Distinct from user_settings (the per-user bag
+		// above). Added per audit/data-export-completeness
 		// (2026-05-25).
 		{name: "user_device_settings.json", table: "user_device_settings", filter: uidEq, sel: "*"},
 		// user_coach_usage — daily message_count behavioural log.

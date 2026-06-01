@@ -14,15 +14,15 @@ const TEST_UID = '00000000-0000-0000-0000-000000000abc';
 
 Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	const specs = buildBackupSpecs(TEST_UID);
-	// 33 entries matches the Go worker's spec list (May 2026 +
+	// 34 entries matches the Go worker's spec list (May 2026 +
 	// reports_against_me + the 2026-05-30 Critical batch:
 	// direct_messages × 2 directions, coach_athletes × 2 directions,
 	// event_results + the 2026-05-30 High batch: event_result_claims,
-	// user_blocks, club_posts, event_exceptions); a regression that
-	// drops one of these is a silent Art 20 completeness gap. Keep in
-	// lockstep with the Go worker's `FetchExportPersonalDataTables`
-	// spec list.
-	assertEquals(specs.length, 33, `expected 33 specs, got ${specs.length}`);
+	// user_blocks, club_posts, event_exceptions + the persona round-5
+	// addition: user_settings); a regression that drops one of these
+	// is a silent Art 20 completeness gap. Keep in lockstep with the
+	// Go worker's `FetchExportPersonalDataTables` spec list.
+	assertEquals(specs.length, 34, `expected 34 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -45,6 +45,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'saved_routes.json',
 		'route_reviews.json',
 		'race_pings.json',
+		'user_settings.json',
 		'user_device_settings.json',
 		'user_coach_usage.json',
 		'reports.json',
@@ -113,6 +114,23 @@ Deno.test('event_results exported for the subject (GDPR Art 20)', () => {
 	assertExists(results);
 	assertEquals(results.table, 'event_results');
 	assertEquals(results.filter, `user_id=eq.${TEST_UID}`);
+});
+
+Deno.test('user_settings exported for the subject, owner-scoped, unredacted (GDPR Art 20)', () => {
+	// persona round-5 privacy / GDPR Art 20. The universal per-user
+	// prefs bag (privacy zones, HR settings, date-of-birth, week-start,
+	// units, …) is the subject's own data and must ship in full. The
+	// Go worker also folds it into profile.json's settings_prefs, but
+	// the EF rollback path has no profile.json — so the spec entry is
+	// what gets it into the EF export. Scoped to user_id, select '*',
+	// no redactor (only cross-user identifiers get projected out, and
+	// user_settings has none).
+	const us = buildBackupSpecs(TEST_UID).find((s) => s.entry === 'user_settings.json');
+	assertExists(us);
+	assertEquals(us.table, 'user_settings');
+	assertEquals(us.filter, `user_id=eq.${TEST_UID}`);
+	assertEquals(us.select, '*');
+	assertEquals(us.redact, undefined);
 });
 
 Deno.test('integrations spec redacts vault columns via narrow select', () => {

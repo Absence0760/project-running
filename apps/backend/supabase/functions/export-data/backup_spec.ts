@@ -85,6 +85,16 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		{ entry: 'saved_routes.json', table: 'saved_routes', filter: uidEq, select: '*' },
 		{ entry: 'route_reviews.json', table: 'route_reviews', filter: uidEq, select: '*' },
 		{ entry: 'race_pings.json', table: 'race_pings', filter: uidEq, select: '*' },
+		// user_settings — the universal (per-user) prefs bag: privacy
+		// zones, HR settings, date-of-birth, week-start, units, and
+		// every other preference. The Go worker also surfaces this as
+		// `profile.json`'s `settings_prefs` field, but the EF rollback
+		// path has no profile.json, so without this spec entry the EF
+		// export omitted the user's settings entirely — a persona
+		// round-5 GDPR Art 20 gap. It's the subject's own data, so the
+		// full prefs ship unredacted. persona round-5 privacy /
+		// GDPR Art 20.
+		{ entry: 'user_settings.json', table: 'user_settings', filter: uidEq, select: '*' },
 		{ entry: 'user_device_settings.json', table: 'user_device_settings', filter: uidEq, select: '*' },
 		{ entry: 'user_coach_usage.json', table: 'user_coach_usage', filter: uidEq, select: '*' },
 		{
