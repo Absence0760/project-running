@@ -241,6 +241,32 @@ test('track-preview thumbnails gate the MapTiler static map on consent', () => {
 	}
 });
 
+test('interactive MapTiler maps gate maplibregl init on consent (authed surfaces too)', () => {
+	// Reason: audit/gdpr (2026-05-31) High — RunMap + PersonalHeatmap
+	// initialised MapTiler on authenticated surfaces (/runs/[id],
+	// /routes/[id], /runs/heatmap) without checking consent, on the
+	// theory that a signed-in session is "implicit consent". That is not
+	// a lawful basis under ePrivacy Art 5(3). Both components must guard
+	// `new maplibregl.Map` behind a `mapConsented` flag that is seeded
+	// from `hasAcceptedConsent()`, not unconditionally true.
+	for (const file of [
+		'src/lib/components/RunMap.svelte',
+		'src/lib/components/PersonalHeatmap.svelte',
+	]) {
+		const source = read(file);
+		assert.match(
+			source,
+			/hasAcceptedConsent/,
+			`${file} must import + consult hasAcceptedConsent() so the map does not auto-init before the cookie banner is accepted.`,
+		);
+		assert.doesNotMatch(
+			source,
+			/\$state\(\s*true\s*\)[^\n]*mapConsented|mapConsented\s*=\s*\$state\(\s*true\s*\)/,
+			`${file} must not hard-code mapConsented to true — seed it from hasAcceptedConsent() instead.`,
+		);
+	}
+});
+
 test('fetchClippedRouteForViewer fails closed on RPC error', () => {
 	// Reason: same as clipTrackForUser. Returning the input on RPC
 	// error would defeat the helper. The empty-input early-return is

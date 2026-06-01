@@ -8,6 +8,7 @@
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { fetchRuns, fetchTrackByPath } from '$lib/core/data';
 	import { buildHeatCells, heatBounds, toHeatGeoJSON, MAX_CELL_WEIGHT } from '$lib/routes/run_heatmap';
+	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import type { TrackPoint } from '$lib/types';
 
 	// Cap the number of tracks downloaded so a runner with thousands of
@@ -30,6 +31,13 @@
 	let trackCount = $state(0);
 	let totalWithTracks = $state(0);
 	let empty = $state(false);
+	// MapTiler logs the requester IP per tile fetch, so we never
+	// instantiate maplibregl before the user has accepted the cookie
+	// banner — including on this authenticated surface (audit/gdpr May
+	// 2026 High: "implicit consent" for signed-in users is not a lawful
+	// basis under ePrivacy Art 5(3)). Starts true only if consent is
+	// already on record this session.
+	let mapConsented = $state(hasAcceptedConsent());
 
 	async function downloadTracks(paths: string[]): Promise<TrackPoint[][]> {
 		const out: TrackPoint[][] = [];
@@ -106,7 +114,13 @@
 	let pendingData: GeoJSON.FeatureCollection<GeoJSON.Point, { weight: number }> | null = null;
 	let pendingBounds: [[number, number], [number, number]] | null = null;
 
-	onMount(() => {
+	function loadMapNow() {
+		mapConsented = true;
+		initMap();
+	}
+
+	function initMap() {
+		if (map) return;
 		const prefersDark =
 			typeof window !== 'undefined' &&
 			window.matchMedia('(prefers-color-scheme: dark)').matches;
@@ -193,6 +207,12 @@
 		});
 
 		void build();
+	}
+
+	onMount(() => {
+		// Only auto-init when consent is already on record; otherwise wait
+		// for the "Load map" tap in the consent card below.
+		if (mapConsented) initMap();
 	});
 
 	onDestroy(() => {
@@ -208,7 +228,27 @@
 <div class="heat-wrap" role="region" aria-label="Personal run heatmap">
 	<div bind:this={mapEl} class="map" data-testid="personal-heatmap-map"></div>
 
-	{#if loading}
+	{#if !mapConsented}
+		<!--
+			audit/gdpr (2026-05-31) High: MapTiler logs the requester IP
+			per tile fetch. We don't auto-load the map on this signed-in
+			surface — "Load map" is the affirmative act under ePrivacy
+			Art 5(3) / GDPR Art 6(1)(a).
+		-->
+		<div class="heat-consent" data-testid="personal-heatmap-consent">
+			<div class="heat-consent-card">
+				<strong>Map disabled until you load it</strong>
+				<p>
+					Loading the heatmap sends your IP address to <strong>MapTiler</strong>,
+					our tile provider. Tap <strong>Load map</strong> to continue, or see our
+					<a href="/cookie-notice">cookie notice</a> for details.
+				</p>
+				<button type="button" class="btn btn-primary" onclick={loadMapNow}>
+					Load map
+				</button>
+			</div>
+		</div>
+	{:else if loading}
 		<div class="heat-status" data-testid="personal-heatmap-loading">
 			<span class="spinner" aria-hidden="true"></span>
 			{#if trackCount > 0}
@@ -277,6 +317,35 @@
 		to {
 			transform: rotate(360deg);
 		}
+	}
+	.heat-consent {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-xl);
+		background: var(--color-bg-secondary);
+		z-index: 3;
+	}
+	.heat-consent-card {
+		max-width: 28rem;
+		text-align: center;
+		padding: var(--space-lg) var(--space-xl);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md);
+		color: var(--color-text);
+	}
+	.heat-consent-card strong {
+		display: block;
+		margin-bottom: var(--space-sm);
+		font-size: 1.1rem;
+	}
+	.heat-consent-card p {
+		margin: 0 0 var(--space-md);
+		color: var(--color-text-secondary);
 	}
 	.heat-empty {
 		position: absolute;

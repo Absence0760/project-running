@@ -88,11 +88,14 @@
 	}: Props = $props();
 
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
-	// Drives the placeholder ↔ map swap when `requireExplicitConsent`
-	// is true. Defaults to true on the implicit-consent path so the
-	// existing authenticated callers (/runs/[id], /routes/[id], etc.)
-	// keep their auto-init behaviour.
-	let mapConsented = $state(!requireExplicitConsent);
+	// Drives the placeholder ↔ map swap. MapTiler logs the requester IP
+	// per tile fetch, so we never auto-instantiate maplibregl before the
+	// user has accepted the cookie banner — on authenticated surfaces too
+	// (audit/gdpr May 2026 High: "implicit consent" for signed-in users
+	// is not a lawful basis under ePrivacy Art 5(3)). Anon callers
+	// (`requireExplicitConsent`) always start gated; authed callers start
+	// gated unless consent is already on record this session.
+	let mapConsented = $state(requireExplicitConsent ? false : hasAcceptedConsent());
 
 	const prefersDark = typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -655,10 +658,10 @@
 	let trackBounds: maplibregl.LngLatBoundsLike | undefined;
 
 	onMount(() => {
-		// Honour the global banner choice when an explicit-consent
-		// caller is on an anon surface — saves the user a second tap
-		// after they've already accepted in the cookie banner.
-		if (requireExplicitConsent && hasAcceptedConsent()) mapConsented = true;
+		// Honour the global banner choice on every surface: if the user
+		// has already accepted the cookie banner, auto-init the map
+		// (consent is on record) and skip the per-view "Load map" tap.
+		if (hasAcceptedConsent()) mapConsented = true;
 		trackCoords = track.map((p) => [p.lng, p.lat]);
 
 		if (trackCoords.length > 0) {

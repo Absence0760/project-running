@@ -53,3 +53,45 @@ test.describe('/runs/heatmap — signed-in seed user', () => {
 		});
 	});
 });
+
+test.describe('/runs/heatmap — signed-in, consent NOT accepted', () => {
+	// The persisted USER_A storageState bakes accepted consent; clear it
+	// before each navigation so we exercise the not-yet-consented path.
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test.beforeEach(async ({ context }) => {
+		await context.addInitScript(() => {
+			localStorage.removeItem('cookie_consent');
+		});
+	});
+
+	test('gates the MapTiler map behind a Load-map tap (no auto-init before consent)', async ({
+		page
+	}) => {
+		await page.goto('/runs/heatmap');
+
+		// The consent card must show; the map must NOT auto-initialise
+		// (MapTiler would log the IP per tile fetch before consent).
+		const card = page.getByTestId('personal-heatmap-consent');
+		await expect(card).toBeVisible({ timeout: 10_000 });
+		await expect(page.getByTestId('personal-heatmap-legend')).toHaveCount(0);
+		await expect(page.getByTestId('personal-heatmap-loading')).toHaveCount(0);
+		const beforeInit = await page.evaluate(
+			() => (window as { __personalHeatmap?: unknown }).__personalHeatmap ?? null
+		);
+		expect(beforeInit).toBeNull();
+
+		// Tapping Load map is the affirmative act — the map initialises.
+		await page.getByRole('button', { name: 'Load map' }).click();
+		await expect(card).toHaveCount(0);
+		await expect(page.getByTestId('personal-heatmap-map')).toBeVisible();
+		await expect(page.getByTestId('personal-heatmap-loading')).toHaveCount(0, {
+			timeout: 20_000
+		});
+		await expect(
+			page
+				.getByTestId('personal-heatmap-legend')
+				.or(page.getByTestId('personal-heatmap-empty'))
+		).toBeVisible();
+	});
+});
