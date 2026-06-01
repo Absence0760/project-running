@@ -2454,6 +2454,20 @@ So the implementation is built explicitly against flicker: route geometry comes 
 
 ---
 
+## 102. Mobile route-discovery is the web browser adapted for touch, not a literal port
+
+**Decided (2026-05-31):** the web discovery browser (§§ 99–101) shipped on mobile (`apps/mobile_android/lib/screens/routes_heatmap_screen.dart` + its iOS twin), but the touch + small-screen constraints force three deliberate adaptations rather than a 1:1 copy:
+
+1. **Layout: bottom sheets, not a sidebar.** A phone can't show a persistent results sidebar beside the map, so the results list lives in a `DraggableScrollableSheet` and the filters live in a `showModalBottomSheet` opened from an AppBar Filters button (with an active-count badge). The lens + race-distance band chips are the same set as web.
+
+2. **Interaction: tap-to-preview, not hover.** Touch has no hover, so the web hover-preview becomes a tap: tapping a route's pin *or* its list row selects it — drawing that one route's line + a halo on its start dot and switching the sheet to a route card with a "View route" action. A second tap (the card's action) navigates. This mirrors web's pin-popup flow and keeps the "lines hidden until you ask for one" decluttering (§ 101). Selecting from the list pans the map to the route; selecting a pin doesn't (it's already on screen).
+
+3. **Clustering: pure Dart, no new dependency.** flutter_map has no native marker clustering (web gets it free from MapLibre). Rather than add a clustering package to the byte-identical twin, `lib/heatmap_clustering.dart` does a greedy pixel-proximity merge at the current zoom via an injected projector — clusters break apart as you zoom in, same behaviour, zero new deps, unit-testable. `lib/distance_bands.dart` is the Dart twin of `distance_bands.ts` (a new TS↔Dart parity pair). The two `discoverable_routes_in_bbox` / `clubs_in_bbox` Dart fetchers route through `api_client` like every other Supabase call.
+
+Route geometry for the preview comes from the existing `fetchRouteById` (already privacy-clipped). This is the web-canonical → mobile-additive flow of § 24 working as intended: build on web, then mirror with platform-appropriate UX.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
