@@ -55,14 +55,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 	// assume the seed baseline (notably the km-based plans tests), so snapshot
 	// the mutated rows in beforeEach and restore them in afterEach — leaving
 	// the user pristine regardless of which fields the wizard touched.
-	let savedProfile: { display_name: string | null; preferred_unit: string | null; onboarded_at: string | null } | null = null;
+	let savedProfile: { display_name: string | null; preferred_unit: string | null; onboarded_at: string | null; date_of_birth: string | null } | null = null;
 	let savedPrefs: Record<string, unknown> | null = null;
 
 	test.beforeEach(async () => {
 		const admin = getAdminClient();
 		const { data: prof } = await admin
 			.from('user_profiles')
-			.select('display_name, preferred_unit, onboarded_at')
+			.select('display_name, preferred_unit, onboarded_at, date_of_birth')
 			.eq('id', USER_A.id)
 			.single();
 		savedProfile = prof ?? null;
@@ -84,6 +84,7 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 				onboarded_at: savedProfile?.onboarded_at ?? new Date().toISOString(),
 				display_name: savedProfile?.display_name ?? null,
 				preferred_unit: savedProfile?.preferred_unit ?? 'km',
+				date_of_birth: savedProfile?.date_of_birth ?? null,
 			})
 			.eq('id', USER_A.id);
 		if (savedPrefs) {
@@ -231,5 +232,57 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 				preferred_unit: 'mi',
 			})
 			.eq('id', USER_A.id);
+	});
+
+	test('DOB entered without the health-data consent still writes user_profiles.date_of_birth (family-club minor-exclusion floor)', async ({
+		page,
+	}) => {
+		// persona round-5 family-club: the under-18 minor-exclusion in
+		// search_user_profiles keys off user_profiles.date_of_birth. The
+		// onboarding DOB used to be Art 9-consent-gated, so a child who
+		// declined the health-data checkbox kept a NULL DOB and stayed
+		// fully discoverable. The fix decouples the DOB column write (a
+		// child-safety floor) from the Art 9 consent (which still gates
+		// gender + the consent timestamp). This pins that a DOB supplied
+		// WITHOUT ticking consent lands on the column anyway.
+		test.setTimeout(45_000);
+		await page.goto('/onboarding');
+
+		// Step 1 — display name
+		await page.getByLabel('Display name').fill('DOB No Consent');
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 2 — units
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 3 — goal
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 4 — about you: fill DOB, leave the consent checkbox UNticked.
+		await expect(
+			page.getByRole('heading', { name: /A bit about you/i })
+		).toBeVisible();
+		await page.getByLabel(/Date of birth/i).fill('2010-06-15');
+		// Do NOT tick the consent row.
+		await page.getByRole('button', { name: 'Continue' }).click();
+
+		// Step 5 — privacy
+		await page.getByRole('radio', { name: /Private/i }).click();
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 6 — notifications
+		await page.getByRole('button', { name: 'Continue' }).click();
+		// Step 7 — finish
+		await page.getByRole('button', { name: 'Open dashboard' }).click();
+		await page.waitForURL(/\/dashboard/, { timeout: 20_000 });
+
+		const admin = getAdminClient();
+		const { data } = await admin
+			.from('user_profiles')
+			.select('date_of_birth, health_data_consent_at, gender')
+			.eq('id', USER_A.id)
+			.maybeSingle();
+		// DOB persisted despite no consent — the safety floor has its input.
+		expect(data?.date_of_birth).toBe('2010-06-15');
+		// Art 9 fields stay null without the consent tick.
+		expect(data?.health_data_consent_at).toBeNull();
+		expect(data?.gender).toBeNull();
 	});
 });
