@@ -281,3 +281,50 @@ func TestConfigureRedis_RejectsBad(t *testing.T) {
 		t.Fatal("bogus URL must error")
 	}
 }
+
+// The Redis path is what production runs, so its history retention must
+// match the in-memory Hub's (TestHub_HistoryCoversLongUltra). Publish a
+// full 24h/5s session and assert History returns it all, in order.
+func TestRedisHub_HistoryCoversLongUltra(t *testing.T) {
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+	const dayPings = 24 * 60 * 60 / 5
+	if dayPings != HistoryRingSize {
+		t.Fatalf("expected ring (%d) to hold a 24h/5s session (%d pings)", HistoryRingSize, dayPings)
+	}
+	for i := 0; i < dayPings; i++ {
+		hub.Publish("ultra", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+	}
+	got := hub.History("ultra", 0)
+	if len(got) != dayPings {
+		t.Fatalf("History len = %d, want %d (the full 24h session)", len(got), dayPings)
+	}
+	if got[0].DistanceM != 0 {
+		t.Fatalf("oldest ping DistanceM = %v, want 0", got[0].DistanceM)
+	}
+	if got[len(got)-1].DistanceM != float64(dayPings-1) {
+		t.Fatalf("newest ping DistanceM = %v, want %d", got[len(got)-1].DistanceM, dayPings-1)
+	}
+}
+
+// Past the cap the oldest LPUSH/LTRIM entries roll off but order + the
+// newest tail are preserved — mirrors TestHub_HistoryRollsOffPastCap on
+// the Redis transport.
+func TestRedisHub_HistoryRollsOffPastCap(t *testing.T) {
+	hub, _, teardown := newRedisTestHub(t)
+	defer teardown()
+	const extra = 100
+	for i := 0; i < HistoryRingSize+extra; i++ {
+		hub.Publish("ultra", Ping{Lat: 1, Lng: 1, DistanceM: float64(i)})
+	}
+	got := hub.History("ultra", 0)
+	if len(got) != HistoryRingSize {
+		t.Fatalf("History len = %d, want %d (capped)", len(got), HistoryRingSize)
+	}
+	if got[0].DistanceM != float64(extra) {
+		t.Fatalf("oldest retained DistanceM = %v, want %d", got[0].DistanceM, extra)
+	}
+	if got[len(got)-1].DistanceM != float64(HistoryRingSize+extra-1) {
+		t.Fatalf("newest DistanceM = %v, want %d", got[len(got)-1].DistanceM, HistoryRingSize+extra-1)
+	}
+}

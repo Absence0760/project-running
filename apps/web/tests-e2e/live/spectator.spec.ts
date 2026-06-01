@@ -106,9 +106,9 @@ test.describe('/live/[id] — anon spectator', () => {
 		});
 		try {
 			// A spread of ordered points so the backlog is unambiguous —
-			// the final point is the only one that yields a 12.50 km /
-			// 1:15:00 readout, so seeing it proves the whole history
-			// hydrated rather than an early/snapshot point.
+			// the final point (8 × 1500 m = 12.00 km, 8 × 562 s = 1:14:56)
+			// is the only one that yields that readout, so seeing it proves
+			// the whole history hydrated rather than an early/snapshot point.
 			const lat0 = -37.82;
 			const lng0 = 144.97;
 			const points = Array.from({ length: 8 }, (_, i) => ({
