@@ -482,9 +482,14 @@
 
 	async function handleSaveAsRoute() {
 		if (!run?.track || run.track.length < 2) return;
+		// The chosen name is persisted to the DB (routes.name), so the
+		// fallback is the run's ISO date rather than an English-prefixed,
+		// locale-formatted string — a non-English user shouldn't end up
+		// with an English route name baked into their data. They can still
+		// rename it in the prompt below.
 		const defaultName =
 			((run.metadata as Record<string, unknown> | null)?.title as string) ||
-			`Route from ${new Date(run.started_at).toLocaleDateString()}`;
+			new Date(run.started_at).toISOString().slice(0, 10);
 		const name = window.prompt('Name this route', defaultName);
 		if (!name || !name.trim()) return;
 		try {

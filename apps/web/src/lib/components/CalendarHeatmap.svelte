@@ -4,7 +4,8 @@
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { bucketRunsByLocalDay } from './calendar_heatmap';
 
-	let { runs = [] }: { runs: Run[] } = $props();
+	let { runs = [], weekStartDay = 'sunday' }: { runs: Run[]; weekStartDay?: 'monday' | 'sunday' } =
+		$props();
 
 	const weeks = 20;
 	const cellSize = 14;
@@ -18,15 +19,22 @@
 
 	let maxDistance = $derived(Math.max(...dayMap.values(), 1));
 
+	// `getDay()` is 0 = Sunday … 6 = Saturday. Map it to a row index that
+	// honours the user's `week_start_day`: row 0 is their chosen first day.
+	function rowFor(day: number): number {
+		return weekStartDay === 'monday' ? (day + 6) % 7 : day;
+	}
+
 	// Generate grid: 20 weeks x 7 days
 	let cells = $derived.by(() => {
 		const result: { date: string; col: number; row: number; distance: number }[] = [];
 		const today = new Date();
 		const dayOfWeek = today.getDay(); // 0 = Sunday
 
-		// Start from (weeks) weeks ago, aligned to Sunday
+		// Start from (weeks) weeks ago, aligned to the user's week start so
+		// the grid's last column ends on the current (partial) week.
 		const start = new Date(today);
-		start.setDate(today.getDate() - (weeks * 7) + (7 - dayOfWeek));
+		start.setDate(today.getDate() - weeks * 7 + (7 - rowFor(dayOfWeek)));
 		start.setHours(0, 0, 0, 0);
 
 		for (let w = 0; w < weeks; w++) {
@@ -42,7 +50,7 @@
 				result.push({
 					date: dateStr,
 					col: w,
-					row: d,
+					row: rowFor(date.getDay()),
 					distance: dayMap.get(dateStr) ?? 0
 				});
 			}
@@ -66,7 +74,21 @@
 		return `${label}: ${fmtKm(distance)}`;
 	}
 
-	const dayLabels = ['Sun', '', 'Tue', '', 'Thu', '', 'Sat'];
+	// Short weekday names in the runtime locale, ordered to start on the
+	// user's `week_start_day`. 2024-01-07 is a Sunday, so adding the row
+	// index (offset for a Monday start) walks the week in display order.
+	// Only alternate rows are labelled to keep the column legible.
+	let dayLabels = $derived.by(() => {
+		const fmt = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
+		const sundayBase = new Date(2024, 0, 7);
+		const startOffset = weekStartDay === 'monday' ? 1 : 0;
+		return Array.from({ length: 7 }, (_, row) => {
+			if (row % 2 === 1) return '';
+			const d = new Date(sundayBase);
+			d.setDate(sundayBase.getDate() + startOffset + row);
+			return fmt.format(d);
+		});
+	});
 	const svgWidth = weeks * totalSize + 30;
 	const svgHeight = 7 * totalSize + 4;
 </script>
