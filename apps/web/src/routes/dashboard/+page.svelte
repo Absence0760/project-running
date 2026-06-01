@@ -693,7 +693,7 @@
 				<div>
 					<span class="today-label">TRAINING PLANS</span>
 					<h3>Pick a goal race and we'll schedule the weeks</h3>
-					<p>5K, 10K, half or full — VDOT-anchored paces, phases, step-back weeks.</p>
+					<p>5K, 10K, half or full — a week-by-week plan with paces matched to your fitness and easy weeks built in.</p>
 				</div>
 				<span class="material-symbols">chevron_right</span>
 			</a>
