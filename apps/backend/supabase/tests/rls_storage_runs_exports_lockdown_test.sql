@@ -20,7 +20,7 @@
 
 begin;
 
-select plan(4);
+select plan(5);
 
 -- 1. anon CANNOT execute approve_event_result.
 select is(
@@ -70,6 +70,27 @@ select ok(
       and qual ilike '%exports%'
   ),
   'runs SELECT policy excludes exports/ sub-prefix (signed-URL-only path; 20260816_001)'
+);
+
+-- 5. The owner SELECT policy is a deny-list ([2] <> 'exports'), so ANY
+--    future object written at a depth-2 subdir other than exports/
+--    (e.g. {uid}/matched/foo, {uid}/heartrate/bar) would be silently
+--    owner-readable with no policy change. Tracks live at depth 1
+--    ({uid}/{run_id}.json.gz) and matched tracks at depth 1
+--    ({uid}/{run_id}.matched.json.gz), so the only legitimate depth-2
+--    prefix today is exports/. Assert nothing else exists — a new
+--    writer that introduces one must come back here and decide whether
+--    it should be reachable via the session JWT or signed-URL-only.
+select is(
+  (
+    select count(*)::int from storage.objects
+     where bucket_id = 'runs'
+       and array_length(storage.foldername(name), 1) >= 2
+       and (storage.foldername(name))[2] <> 'exports'
+  ),
+  0,
+  'runs bucket has NO depth-2 subdir other than exports/ — the owner '
+  'SELECT deny-list would silently grant read to any new one'
 );
 
 select * from finish();
