@@ -2,6 +2,7 @@
 	import type { Run } from '$lib/types';
 	import { formatISO } from '$lib/training/training';
 	import { fmtKm } from '$lib/format/units.svelte';
+	import { bucketRunsByLocalDay } from './calendar_heatmap';
 
 	let { runs = [] }: { runs: Run[] } = $props();
 
@@ -10,15 +11,10 @@
 	const cellGap = 3;
 	const totalSize = cellSize + cellGap;
 
-	// Build a map of date -> total distance
-	let dayMap = $derived.by(() => {
-		const map = new Map<string, number>();
-		for (const run of runs) {
-			const day = run.started_at.slice(0, 10);
-			map.set(day, (map.get(day) ?? 0) + run.distance_m);
-		}
-		return map;
-	});
+	// Build a map of local-day date -> total distance. Keys must match the
+	// grid cell keys below (`formatISO(date)`, also local) — keying by the
+	// UTC `started_at.slice(0,10)` would land evening runs on the wrong cell.
+	let dayMap = $derived(bucketRunsByLocalDay(runs));
 
 	let maxDistance = $derived(Math.max(...dayMap.values(), 1));
 
