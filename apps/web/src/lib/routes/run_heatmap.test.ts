@@ -4,6 +4,7 @@ import {
 	buildHeatCells,
 	heatBounds,
 	toHeatGeoJSON,
+	toTrackLinesGeoJSON,
 	DEFAULT_GRID_DEG,
 	MAX_CELL_WEIGHT,
 } from './run_heatmap';
@@ -111,4 +112,56 @@ test('toHeatGeoJSON emits one weighted point feature per cell', () => {
 		assert.equal(f.geometry.coordinates.length, 2);
 		assert.ok(typeof f.properties.weight === 'number' && f.properties.weight >= 1);
 	}
+});
+
+test('toTrackLinesGeoJSON emits one LineString per track in [lng,lat] order', () => {
+	const fc = toTrackLinesGeoJSON([
+		[
+			{ lat: 1, lng: 2 },
+			{ lat: 3, lng: 4 },
+		],
+		[
+			{ lat: 5, lng: 6 },
+			{ lat: 7, lng: 8 },
+			{ lat: 9, lng: 10 },
+		],
+	]);
+	assert.equal(fc.type, 'FeatureCollection');
+	assert.equal(fc.features.length, 2);
+	assert.equal(fc.features[0].geometry.type, 'LineString');
+	// [lng, lat] order — GeoJSON convention.
+	assert.deepEqual(fc.features[0].geometry.coordinates, [
+		[2, 1],
+		[4, 3],
+	]);
+	assert.equal(fc.features[1].geometry.coordinates.length, 3);
+});
+
+test('toTrackLinesGeoJSON drops invalid points and skips sub-2-point tracks', () => {
+	const fc = toTrackLinesGeoJSON([
+		// One valid point left after filtering → no feature.
+		[
+			{ lat: NaN, lng: 0 },
+			{ lat: 45, lng: 9 },
+		] as never,
+		// Two valid points survive the filter → one feature.
+		[
+			{ lat: 200, lng: 0 },
+			{ lat: 10, lng: 20 },
+			{ lat: 11, lng: 21 },
+		] as never,
+		[], // empty → no feature
+	]);
+	assert.equal(fc.features.length, 1);
+	assert.deepEqual(fc.features[0].geometry.coordinates, [
+		[20, 10],
+		[21, 11],
+	]);
+});
+
+test('toTrackLinesGeoJSON returns an empty collection for empty input', () => {
+	assert.deepEqual(toTrackLinesGeoJSON([]), {
+		type: 'FeatureCollection',
+		features: [],
+	});
 });

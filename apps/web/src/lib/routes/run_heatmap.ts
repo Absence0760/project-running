@@ -108,3 +108,31 @@ export function toHeatGeoJSON(
 		})),
 	};
 }
+
+/// GeoJSON FeatureCollection of LineStrings — one per track — for the
+/// line layer that fades in as the heatmap fades out at high zoom
+/// (Strava-style: heat cloud zoomed out, the runner's actual paths
+/// zoomed in). Invalid / out-of-range points are dropped; a track left
+/// with fewer than two points contributes no feature. Owner-only
+/// surface, so these are the runner's own un-clipped tracks.
+export function toTrackLinesGeoJSON(
+	tracks: ReadonlyArray<ReadonlyArray<HeatLatLng>>,
+): GeoJSON.FeatureCollection<GeoJSON.LineString> {
+	const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
+	for (const track of tracks) {
+		if (!track) continue;
+		const coordinates: [number, number][] = [];
+		for (const p of track) {
+			if (!isFinitePoint(p)) continue;
+			coordinates.push([p.lng, p.lat]);
+		}
+		if (coordinates.length >= 2) {
+			features.push({
+				type: 'Feature',
+				properties: {},
+				geometry: { type: 'LineString', coordinates },
+			});
+		}
+	}
+	return { type: 'FeatureCollection', features };
+}

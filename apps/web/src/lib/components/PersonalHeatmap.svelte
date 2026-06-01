@@ -8,7 +8,7 @@
 	import { mapStyleUrlFromEnv as mapStyleUrl } from '$lib/routes/map-style.svelte';
 	import { watchMapResize } from '$lib/routes/map_resize';
 	import { fetchRuns, fetchTrackByPath } from '$lib/core/data';
-	import { buildHeatCells, heatBounds, toHeatGeoJSON, MAX_CELL_WEIGHT } from '$lib/routes/run_heatmap';
+	import { buildHeatCells, heatBounds, toHeatGeoJSON, toTrackLinesGeoJSON, MAX_CELL_WEIGHT } from '$lib/routes/run_heatmap';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
 	import type { TrackPoint } from '$lib/types';
 
@@ -22,6 +22,14 @@
 
 	const SOURCE = 'personal-heat-src';
 	const LAYER = 'personal-heat-layer';
+	const LINE_SOURCE = 'personal-lines-src';
+	const LINE_LAYER = 'personal-lines-layer';
+	// Crossfade window (zoom levels): the heat cloud is fully opaque up to
+	// FADE_MIN, then dissolves to nothing by FADE_MAX while the track lines
+	// fade in over the same band — heatmaps thin out when you zoom in, so
+	// past street level the precise paths read better than a fading blob.
+	const FADE_MIN = 13;
+	const FADE_MAX = 15.5;
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -87,9 +95,12 @@
 				return;
 			}
 			const data = toHeatGeoJSON(cells);
+			const lines = toTrackLinesGeoJSON(tracks);
 			if (map && mapLoaded) {
 				const src = map.getSource(SOURCE) as maplibregl.GeoJSONSource | undefined;
 				src?.setData(data);
+				const lineSrc = map.getSource(LINE_SOURCE) as maplibregl.GeoJSONSource | undefined;
+				lineSrc?.setData(lines);
 				const b = heatBounds(cells);
 				if (b) {
 					try {
@@ -100,6 +111,7 @@
 				}
 			} else {
 				pendingData = data;
+				pendingLines = lines;
 				pendingBounds = heatBounds(cells);
 			}
 		} catch (e) {
@@ -113,6 +125,7 @@
 	// When the data resolves before the style's `load` fires, stash it
 	// and apply on load.
 	let pendingData: GeoJSON.FeatureCollection<GeoJSON.Point, { weight: number }> | null = null;
+	let pendingLines: GeoJSON.FeatureCollection<GeoJSON.LineString> | null = null;
 	let pendingBounds: [[number, number], [number, number]] | null = null;
 
 	function loadMapNow() {
@@ -195,7 +208,51 @@
 						0.6, 'rgba(245, 158, 11, 0.75)',
 						1.0, 'rgba(239, 68, 68, 0.9)',
 					],
-					'heatmap-opacity': 0.85,
+					// Fade the heat cloud out as the track lines fade in, so
+					// zooming past street level reveals the precise paths
+					// instead of a dissolving blob.
+					'heatmap-opacity': [
+						'interpolate',
+						['linear'],
+						['zoom'],
+						FADE_MIN, 0.85,
+						FADE_MAX, 0,
+					],
+				},
+			});
+
+			// Track-line layer — the high-zoom half of the crossfade.
+			// Drawn above the heat layer (invisible until ~FADE_MIN) so
+			// once the cloud dissolves the runner sees their actual routes.
+			map.addSource(LINE_SOURCE, {
+				type: 'geojson',
+				data: pendingLines ?? { type: 'FeatureCollection', features: [] },
+			});
+			map.addLayer({
+				id: LINE_LAYER,
+				type: 'line',
+				source: LINE_SOURCE,
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+				paint: {
+					'line-color': prefersDark ? '#818CF8' : '#4F46E5',
+					'line-width': [
+						'interpolate',
+						['linear'],
+						['zoom'],
+						12, 1.5,
+						16, 3,
+						18, 4,
+					],
+					// Mirror image of the heatmap fade: invisible until
+					// FADE_MIN, ramps in by FADE_MAX. Semi-transparent so
+					// repeated routes visibly stack.
+					'line-opacity': [
+						'interpolate',
+						['linear'],
+						['zoom'],
+						FADE_MIN, 0,
+						FADE_MAX, 0.55,
+					],
 				},
 			});
 			if (pendingBounds) {

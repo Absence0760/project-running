@@ -44,6 +44,54 @@ test.describe('/runs/heatmap — signed-in seed user', () => {
 		await expect(legend.or(empty)).toBeVisible();
 	});
 
+	test('crossfades from a heat cloud (zoomed out) to track lines (zoomed in)', async ({
+		page
+	}) => {
+		await page.goto('/runs/heatmap');
+		await expect(page.getByTestId('personal-heatmap-map')).toBeVisible();
+		await expect(page.getByTestId('personal-heatmap-loading')).toHaveCount(0, {
+			timeout: 20_000
+		});
+		// The seed user owns mapped runs, so data must resolve to the legend.
+		await expect(page.getByTestId('personal-heatmap-legend')).toBeVisible();
+
+		const state = await page.evaluate(() => {
+			type MiniMap = {
+				getLayer(id: string): unknown;
+				getPaintProperty(layer: string, prop: string): unknown;
+				getSource(id: string):
+					| { serialize?(): { data?: { features?: unknown[] } } }
+					| undefined;
+			};
+			const map = (window as { __personalHeatmap?: MiniMap }).__personalHeatmap;
+			if (!map) return null;
+			const lineSrc = map.getSource('personal-lines-src');
+			const data = lineSrc?.serialize?.().data;
+			return {
+				hasHeatLayer: !!map.getLayer('personal-heat-layer'),
+				hasLineLayer: !!map.getLayer('personal-lines-layer'),
+				heatOpacity: map.getPaintProperty('personal-heat-layer', 'heatmap-opacity'),
+				lineOpacity: map.getPaintProperty('personal-lines-layer', 'line-opacity'),
+				lineFeatureCount: Array.isArray(data?.features) ? data!.features!.length : 0
+			};
+		});
+
+		expect(state).not.toBeNull();
+		// Both halves of the crossfade are present.
+		expect(state!.hasHeatLayer).toBe(true);
+		expect(state!.hasLineLayer).toBe(true);
+		// The line layer is actually fed the runner's own tracks.
+		expect(state!.lineFeatureCount).toBeGreaterThan(0);
+		// Both opacities must be zoom-interpolated expressions (the
+		// crossfade), not the old constant `heatmap-opacity: 0.85` — that
+		// constant is exactly what made the heat dissolve with nothing
+		// taking its place when zooming in.
+		expect(Array.isArray(state!.heatOpacity)).toBe(true);
+		expect((state!.heatOpacity as unknown[])[0]).toBe('interpolate');
+		expect(Array.isArray(state!.lineOpacity)).toBe(true);
+		expect((state!.lineOpacity as unknown[])[0]).toBe('interpolate');
+	});
+
 	test('Heatmap link on the runs page navigates here', async ({ page }) => {
 		await page.goto('/runs');
 		await page.getByRole('link', { name: 'Heatmap' }).click();
