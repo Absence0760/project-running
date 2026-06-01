@@ -156,6 +156,11 @@ class RunRecorder {
   // Rate-limits the "fix dropped for accuracy" log. An always-bad stream
   // would otherwise spam at ~1 Hz for the entire run.
   DateTime? _lastAccuracyDropLogAt;
+  // True while the latest fix was rejected by the accuracy gate, so distance
+  // has stalled. Surfaced on every snapshot as [RunSnapshot.weakGps] so the
+  // run screen can show a "distance paused" banner instead of looking frozen.
+  // Set on a dropped fix, cleared the moment a fix passes the gate.
+  bool _weakGps = false;
   // Remembered so the retry loop can re-open the position stream with the
   // same accuracy setting the caller passed to [prepare].
   LocationAccuracy _locationAccuracy = LocationAccuracy.high;
@@ -381,6 +386,7 @@ class RunRecorder {
     _laps.clear();
     _lastTrackedPosition = null;
     _lastTrackedPositionAt = null;
+    _weakGps = false;
     _recording = true;
     _paused = false;
 
@@ -471,6 +477,11 @@ class RunRecorder {
   @visibleForTesting
   Waypoint? get debugCurrentWaypoint => _currentWaypoint;
 
+  /// Test-only: whether the latest fix was rejected by the accuracy gate
+  /// (drives [RunSnapshot.weakGps] / the "distance paused" banner).
+  @visibleForTesting
+  bool get debugWeakGps => _weakGps;
+
   /// Test-only: rolling-pace computed from the trailing ~200 m of track.
   /// Returns null when the track is too short or timestamps are missing —
   /// matches the contract documented on [RunSnapshot.currentPaceSecondsPerKm].
@@ -520,6 +531,7 @@ class RunRecorder {
     if (_paused) return;
 
     if (pos.accuracy > _accuracyGateMetres) {
+      _weakGps = true;
       final now = DateTime.now();
       final last = _lastAccuracyDropLogAt;
       if (last == null ||
@@ -533,6 +545,7 @@ class RunRecorder {
       }
       return;
     }
+    _weakGps = false;
 
     // Always refresh the raw current position so the blue dot updates on
     // every valid fix, independent of the track-append threshold. This
@@ -641,6 +654,7 @@ class RunRecorder {
       track: _trackView,
       offRouteDistanceMetres: offRoute,
       routeRemainingMetres: remaining,
+      weakGps: _weakGps,
     ));
   }
 

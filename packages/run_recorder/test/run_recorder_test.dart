@@ -87,6 +87,40 @@ void main() {
       expect(r.debugTrack.length, 1);
     });
 
+    test('accuracy-gate drop sets weakGps; a good fix clears it', () {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      expect(r.debugWeakGps, isFalse,
+          reason: 'a clean fix must not raise the weak-GPS flag');
+      r.debugInjectPosition(
+        makePosition(metresEast: 10, secondsFromStart: 3, accuracy: 50),
+      );
+      expect(r.debugWeakGps, isTrue,
+          reason: 'a fix above the accuracy gate stalls distance — flag it');
+      r.debugInjectPosition(
+        makePosition(metresEast: 12, secondsFromStart: 6, accuracy: 8),
+      );
+      expect(r.debugWeakGps, isFalse,
+          reason: 'a fix back within the gate clears the weak-GPS flag');
+    });
+
+    test('weakGps surfaces on the emitted snapshot', () async {
+      final r = RunRecorder()..debugPrepareWithoutStream();
+      final received = <RunSnapshot>[];
+      final sub = r.snapshots.listen(received.add);
+      r.begin();
+      r.debugInjectPosition(makePosition(metresEast: 0, secondsFromStart: 0));
+      r.debugInjectPosition(
+        makePosition(metresEast: 10, secondsFromStart: 3, accuracy: 50),
+      );
+      // The dropped fix doesn't emit; the 1 s timer carries the flag forward.
+      await Future.delayed(const Duration(milliseconds: 1200));
+      await sub.cancel();
+      await r.stop();
+      expect(received.last.weakGps, isTrue);
+    });
+
     test('default accuracy gate accepts realistic ~15m GPS fixes', () {
       // Regression guard: an earlier Advanced-GPS path tightened the gate to
       // 10m, which silently rejected almost every real-world fix (phones

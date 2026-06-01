@@ -46,6 +46,9 @@
          per-device; the workout session + its distance record need these. -->
     <uses-permission android:name="android.permission.health.WRITE_EXERCISE" />
     <uses-permission android:name="android.permission.health.WRITE_DISTANCE" />
+    <!-- BLE chest-strap HR captured during a run flows back to Health
+         Connect alongside the workout (persona round-5). -->
+    <uses-permission android:name="android.permission.health.WRITE_HEART_RATE" />
 
     <!-- Bluetooth LE for chest-strap HR monitors. Android 12+ (API 31)
          replaced legacy BLUETOOTH / BLUETOOTH_ADMIN / ACCESS_FINE_LOCATION

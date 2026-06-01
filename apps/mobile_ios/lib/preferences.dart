@@ -188,6 +188,10 @@ class Preferences extends ChangeNotifier {
   // delta-fetch path in RunsScreen so refreshes only pull rows modified
   // since, instead of re-paging the entire history every time.
   static const _kRunsLastFetchedAt = 'runs_last_fetched_at';
+
+  static const _kBatteryOptHintShown = 'battery_opt_hint_shown';
+
+  static const _kNotifDeniedHintShown = 'notif_denied_hint_shown';
   // Stable per-install identifier used to scope `user_device_settings`
   // rows. Minted on first launch and never rotated — rotating would
   // orphan the device's row and lose per-device preferences.
@@ -340,6 +344,29 @@ class Preferences extends ChangeNotifier {
 
   Future<void> setRunsLastFetchedAt(DateTime when) async {
     await _prefs.setString(_kRunsLastFetchedAt, when.toIso8601String());
+  }
+
+  /// Whether the one-time OEM battery-optimisation hint has been shown. Many
+  /// Android OEMs (Samsung Stamina, Xiaomi MIUI, OnePlus) kill the recording
+  /// foreground service unless the app is exempted from battery optimisation,
+  /// which silently drops a long run. We surface a single dismissible hint
+  /// before the first long run; this flag keeps it from nagging afterward.
+  bool get batteryOptHintShown =>
+      _prefs.getBool(_kBatteryOptHintShown) ?? false;
+
+  Future<void> setBatteryOptHintShown() async {
+    await _prefs.setBool(_kBatteryOptHintShown, true);
+  }
+
+  /// Whether the one-time "notifications are off, the live run notification
+  /// won't show" hint has been surfaced. Denying POST_NOTIFICATIONS on
+  /// Android 13+ silently no-ops the lock-screen stats; this flag keeps the
+  /// disclosure from repeating on every run.
+  bool get notifDeniedHintShown =>
+      _prefs.getBool(_kNotifDeniedHintShown) ?? false;
+
+  Future<void> setNotifDeniedHintShown() async {
+    await _prefs.setBool(_kNotifDeniedHintShown, true);
   }
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers
