@@ -12,6 +12,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
+import '../backend_timeout.dart';
+import '../widgets/error_state.dart';
 import '../widgets/route_track_preview.dart';
 import 'explore_routes_screen.dart';
 import 'routes_heatmap_screen.dart';
@@ -86,6 +88,10 @@ class RoutesScreen extends StatefulWidget {
 
 class RoutesScreenState extends State<RoutesScreen> {
   bool _syncing = false;
+  // Set when the initial remote fetch fails or times out. Only surfaced as a
+  // full ErrorState when there are no cached routes to fall back on — a stale
+  // cache still renders, with the failure shown as a banner instead.
+  bool _fetchError = false;
   List<cm.Route> _bookmarks = const [];
 
   /// How many merged rows the list reveals. Resets to one page when
@@ -142,18 +148,24 @@ class RoutesScreenState extends State<RoutesScreen> {
   Future<void> _fetchRemoteRoutes() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
-    setState(() => _syncing = true);
+    setState(() {
+      _syncing = true;
+      _fetchError = false;
+    });
     try {
       // Initial sync pulls only the first page — older routes flow in
       // through Load more. Cap mirrors `_kRoutesPageSize` so a returning
       // user sees the same shape as the web `/routes` first paint.
-      final remote = await api.getRoutes(limit: _kRoutesPageSize);
+      final remote = await api
+          .getRoutes(limit: _kRoutesPageSize)
+          .timeout(kBackendLoadTimeout);
       await widget.routeStore.saveBatch(remote);
       if (!mounted) return;
       setState(() => _remoteHasMore = remote.length == _kRoutesPageSize);
     } catch (e) {
       debugPrint('Fetch routes failed: $e');
       if (mounted) {
+        setState(() => _fetchError = true);
         showTopBanner(context, 'Could not sync routes — working offline');
       }
     } finally {
@@ -203,10 +215,12 @@ class RoutesScreenState extends State<RoutesScreen> {
       final cursor = owned.isEmpty || owned.last.createdAt == null
           ? DateTime.now()
           : owned.last.createdAt!;
-      final remote = await api.getRoutes(
-        limit: _kRoutesPageSize,
-        before: cursor,
-      );
+      final remote = await api
+          .getRoutes(
+            limit: _kRoutesPageSize,
+            before: cursor,
+          )
+          .timeout(kBackendLoadTimeout);
       await widget.routeStore.saveBatch(remote);
       if (!mounted) return;
       setState(() {
@@ -662,7 +676,13 @@ class RoutesScreenState extends State<RoutesScreen> {
     final emptyAfterFilter =
         mergedRoutes.isNotEmpty && filtered.isEmpty;
 
-    final body = mergedRoutes.isEmpty
+    final body = mergedRoutes.isEmpty && _fetchError && !_syncing
+        ? ErrorState(
+            message: "Couldn't load your routes. Check your connection "
+                'and try again.',
+            onRetry: _fetchRemoteRoutes,
+          )
+        : mergedRoutes.isEmpty
           ? Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24),

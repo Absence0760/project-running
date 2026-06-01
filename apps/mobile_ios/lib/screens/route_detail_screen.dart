@@ -147,7 +147,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       final clipped = await api.clipRouteForViewer(widget.route.id);
       if (!mounted) return;
       setState(() => _displayWaypoints = clipped);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('clipRouteForViewer failed for ${widget.route.id}: $e');
       if (mounted) setState(() => _displayWaypoints = const []);
     }
   }
@@ -159,8 +160,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       final saved = await api.isRouteBookmarked(widget.route.id);
       if (!mounted) return;
       setState(() => _bookmarked = saved);
-    } catch (_) {
+    } catch (e) {
       // Best-effort; the toggle still falls through.
+      debugPrint('isRouteBookmarked failed for ${widget.route.id}: $e');
     }
   }
 
@@ -202,7 +204,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 reviews.length;
         _loadingReviews = false;
       });
-    } catch (_) {
+    } catch (e) {
+      debugPrint('getRouteReviews failed for ${widget.route.id}: $e');
       if (mounted) {
         setState(() {
           _loadingReviews = false;
@@ -1363,7 +1366,8 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
       await api.updateRouteTags(widget.route.id, next);
       setState(() { _tags = next; _saving = false; });
       widget.onChange(next);
-    } catch (_) {
+    } catch (e) {
+      debugPrint('updateRouteTags (remove) failed for ${widget.route.id}: $e');
       setState(() => _saving = false);
     }
   }
