@@ -154,31 +154,92 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
 -- the matching files. Until then these runs show "No GPS track for
 -- this run" on /runs/[id]; with the tracks uploaded they render
 -- real polylines on the map.
-INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, track_url, metadata) VALUES
+-- `route_id` links each run to the public route it was run on (resolved
+-- by name, unique per user) so /routes/[id]'s "past efforts" panel and
+-- the run↔route association are real, not orphaned.
+INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, route_id, track_url, metadata) VALUES
   -- Belle Isle + Pipeline Loop tempo run, Richmond
   ('a1000001-0000-0000-0000-000000000001'::uuid,
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '2026-05-15 07:30:00+00', 2280, 6500.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Belle Isle + Pipeline Loop' LIMIT 1),
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000001.json.gz',
     '{"activity_type":"run","title":"Tempo on Belle Isle","avg_bpm":158,"steps":7900}'::jsonb),
   -- UVA Rotunda Loop easy run, Charlottesville
   ('a1000001-0000-0000-0000-000000000002'::uuid,
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '2026-05-12 18:00:00+00', 1620, 4200.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'UVA Rotunda Loop (Charlottesville)' LIMIT 1),
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000002.json.gz',
     '{"activity_type":"run","title":"UVA loop after work","avg_bpm":146,"steps":5400}'::jsonb),
   -- Mount Vernon Trail long run, Arlington
   ('a1000001-0000-0000-0000-000000000003'::uuid,
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '2026-05-10 06:45:00+00', 3720, 10200.0, 'app', false,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Mount Vernon Trail North (Arlington)' LIMIT 1),
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000003.json.gz',
     '{"activity_type":"run","title":"Sunday long along the Potomac","avg_bpm":152,"steps":12800}'::jsonb),
   -- Mill Mountain Star Climb hill workout, Roanoke
   ('a1000001-0000-0000-0000-000000000004'::uuid,
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     '2026-05-08 08:00:00+00', 2580, 7200.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Mill Mountain Star Climb (Roanoke)' LIMIT 1),
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000004.json.gz',
     '{"activity_type":"run","title":"Star climb hill reps","avg_bpm":165,"steps":8800}'::jsonb);
+
+-- More run history built from the SAME real public routes that show up
+-- on the heatmap + Explore tab. Two are first efforts on the public
+-- routes that previously had none (Norfolk Botanical Garden, VA Beach
+-- Boardwalk); the other four are repeat efforts on routes that already
+-- have a run, so /routes/[id] gets a populated "past efforts on this
+-- route" panel and the dashboard has a fuller week. Unlike the four
+-- rows above, these set `route_id` (resolved by name — unique per
+-- user) so the run↔route link the route-detail history reads is real.
+-- Tracks are uploaded by scripts/seed-run-tracks.mjs (matching UUIDs);
+-- until `npm run dev:db:seed-tracks` runs they show "No GPS track".
+INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, route_id, track_url, metadata) VALUES
+  -- Norfolk Botanical Garden Loop — first effort on this public route
+  ('a1000001-0000-0000-0000-000000000005'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-22 07:15:00+00', 1680, 4800.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Norfolk Botanical Garden Loop' LIMIT 1),
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000005.json.gz',
+    '{"activity_type":"run","title":"Botanical Garden shakeout","avg_bpm":148,"steps":6100}'::jsonb),
+  -- VA Beach Boardwalk Out & Back — first effort on this public route
+  ('a1000001-0000-0000-0000-000000000006'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-19 06:50:00+00', 1980, 6300.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'VA Beach Boardwalk Out & Back' LIMIT 1),
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000006.json.gz',
+    '{"activity_type":"run","title":"Boardwalk sunrise miles","avg_bpm":150,"steps":7700}'::jsonb),
+  -- Belle Isle + Pipeline Loop — repeat tempo (faster than the 05-15 one)
+  ('a1000001-0000-0000-0000-000000000007'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-29 07:20:00+00', 2160, 6500.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Belle Isle + Pipeline Loop' LIMIT 1),
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000007.json.gz',
+    '{"activity_type":"run","title":"Belle Isle tempo (repeat)","avg_bpm":161,"steps":7850}'::jsonb),
+  -- UVA Rotunda Loop — repeat easy evening run
+  ('a1000001-0000-0000-0000-000000000008'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-25 18:10:00+00', 1560, 4200.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'UVA Rotunda Loop (Charlottesville)' LIMIT 1),
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000008.json.gz',
+    '{"activity_type":"run","title":"Evening UVA loop","avg_bpm":145,"steps":5300}'::jsonb),
+  -- Mount Vernon Trail North — repeat long run (kept private like the first)
+  ('a1000001-0000-0000-0000-000000000009'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-24 06:40:00+00', 3540, 10200.0, 'app', false,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Mount Vernon Trail North (Arlington)' LIMIT 1),
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-000000000009.json.gz',
+    '{"activity_type":"run","title":"Potomac long run","avg_bpm":150,"steps":12700}'::jsonb),
+  -- Mill Mountain Star Climb — repeat hill session
+  ('a1000001-0000-0000-0000-00000000000a'::uuid,
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    '2026-05-17 08:10:00+00', 2640, 7200.0, 'app', true,
+    (SELECT id FROM routes WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND name = 'Mill Mountain Star Climb (Roanoke)' LIMIT 1),
+    'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-00000000000a.json.gz',
+    '{"activity_type":"run","title":"Mill Mountain hill reps","avg_bpm":166,"steps":8950}'::jsonb);
 
 -- Star three of the seeded routes so the watch picker shows a
 -- realistic "what I run weekly" rotation out of the box. Without
