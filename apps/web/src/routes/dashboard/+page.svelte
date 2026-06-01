@@ -51,6 +51,16 @@
 	let hiddenPrs = $state<string[]>([]);
 	let showHiddenPrs = $state(false);
 	let visiblePrs = $derived(personalRecords.filter((pr) => !hiddenPrs.includes(pr.key)));
+
+	// A returning runner whose every shown PR predates their break can find
+	// the all-time records demoralising. Flag when all visible PRs are >12
+	// months old so the section can frame them as past form (round-5 older
+	// / comeback). Pairs with isReturningRunner below.
+	const PR_STALE_MS = 365 * 24 * 60 * 60 * 1000;
+	let allPrsStale = $derived(
+		visiblePrs.length > 0 &&
+			visiblePrs.every((pr) => Date.now() - new Date(pr.date).getTime() > PR_STALE_MS),
+	);
 	let hiddenPrRows = $derived(personalRecords.filter((pr) => hiddenPrs.includes(pr.key)));
 	let planOverview = $state<ActivePlanOverview | null>(null);
 	let loading = $state(true);
@@ -981,7 +991,7 @@
 						>
 							<span class="fitness-label">CTL (fitness)</span>
 							<span class="fitness-value">{liveSnap.chronicLoad.toFixed(0)}</span>
-							<span class="fitness-unit">42-day avg TSS</span>
+							<span class="fitness-unit">42-day load</span>
 						</div>
 						<div
 							class="fitness-metric"
@@ -991,7 +1001,7 @@
 							<span class="fitness-value">
 								{liveSnap.acuteLoad != null ? liveSnap.acuteLoad.toFixed(0) : '—'}
 							</span>
-							<span class="fitness-unit">7-day avg TSS</span>
+							<span class="fitness-unit">7-day load</span>
 						</div>
 						<div
 							class="fitness-metric"
@@ -1007,7 +1017,7 @@
 									? (liveSnap.trainingStressBal > 0 ? '+' : '') + liveSnap.trainingStressBal.toFixed(0)
 									: '—'}
 							</span>
-							<span class="fitness-unit">CTL − ATL</span>
+							<span class="fitness-unit">fitness − fatigue</span>
 						</div>
 					{/if}
 				</div>
@@ -1125,6 +1135,12 @@
 			<section class="card">
 				<h2>Personal Records</h2>
 				{#if visiblePrs.length > 0}
+					{#if isReturningRunner && allPrsStale}
+						<p class="pr-stale-note">
+							These are your pre-break records — they reflect past form, not where
+							you are now. Hide any that feel out of reach with ×.
+						</p>
+					{/if}
 					<table class="pr-table">
 						<thead>
 							<tr>
@@ -1203,11 +1219,18 @@
 							</a>
 						{/each}
 					</div>
+				{:else if sourceFilter === 'all'}
+					<p class="empty-text">
+						Record your first run, add one manually, or import your history
+						to get started.
+					</p>
+					<div class="recent-empty-actions">
+						<a class="btn btn-primary btn-sm" href="/runs/new">Add a run</a>
+						<a class="btn btn-outline btn-sm" href="/settings/integrations">Import from Strava / Garmin</a>
+					</div>
 				{:else}
 					<p class="empty-text">
-						{sourceFilter === 'all'
-							? 'Record your first run or import from Strava / Garmin to get started.'
-							: `No ${sources.find((s) => s.value === sourceFilter)?.label ?? sourceFilter} runs yet.`}
+						No {sources.find((s) => s.value === sourceFilter)?.label ?? sourceFilter} runs yet.
 					</p>
 				{/if}
 			</section>
@@ -1433,6 +1456,22 @@
 	.empty-text {
 		color: var(--color-text-tertiary);
 		font-size: 0.85rem;
+	}
+	.recent-empty-actions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-sm);
+		margin-top: var(--space-md);
+	}
+	.pr-stale-note {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		line-height: 1.45;
+		margin: 0 0 var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		background: var(--color-bg-tertiary);
+		border-inline-start: 3px solid var(--color-primary);
+		border-radius: var(--radius-sm);
 	}
 
 	/* Skeleton loader — replaces the silent &nbsp; with structured
