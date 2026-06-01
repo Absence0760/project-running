@@ -4472,46 +4472,7 @@ export async function deleteSegment(segmentId: string): Promise<void> {
 export { SEGMENT_AGE_BANDS, type SegmentAgeBand, type SegmentGenderFilter } from '../segments/segments';
 
 /**
- * Leaderboard for a segment — efforts ascending by time, joined to
- * the author profile so the UI can render avatars + names. Ranks are
- * 1-based standard competition (ties share a rank; next distinct time
- * skips to its natural ordinal position).
- *
- * v1 (filter-less) is preserved for callers that haven't opted into
- * tiering. v2 calls go through fetchSegmentLeaderboardTiered which
- * routes to the new RPC (migration 20260829_001) — gender + age
- * band filtering happens server-side so the demographic data stays
- * off the wire when it doesn't need to.
- */
-export async function fetchSegmentLeaderboard(
-	segmentId: string,
-	limit = 50,
-): Promise<SegmentLeaderboardEntry[]> {
-	const { data: efforts, error } = await supabase
-		.from('segment_efforts')
-		.select('*')
-		.eq('segment_id', segmentId)
-		.order('time_seconds', { ascending: true })
-		.limit(limit);
-	if (error || !efforts || efforts.length === 0) return [];
-
-	const userIds = Array.from(new Set(efforts.map((e) => e.user_id)));
-	const { data: profiles } = await supabase
-		.from('user_profiles')
-		.select('id, display_name, avatar_url')
-		.in('id', userIds);
-	const byId = new Map<string, PublicProfile>();
-	for (const p of profiles ?? []) byId.set(p.id, p);
-
-	return assignCompetitionRanks(efforts as SegmentEffort[]).map(({ row, rank }) => ({
-		effort: row,
-		athlete: byId.get(row.user_id) ?? { id: row.user_id, display_name: null, avatar_url: null },
-		rank,
-	}));
-}
-
-/**
- * v2 tiered leaderboard. Calls the `segment_leaderboard_tiered` RPC
+ * Tiered leaderboard for a segment. Calls the `segment_leaderboard_tiered` RPC
  * which joins user_profiles server-side and applies gender / age-band
  * filters. Pass `null` for "all" on a filter. Ranks are computed
  * client-side from the returned order (1-based standard competition —

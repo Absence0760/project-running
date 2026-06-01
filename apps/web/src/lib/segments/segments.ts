@@ -102,9 +102,9 @@ function timestampAtDistance(
  * times share the lower rank; the next distinct time skips to its
  * natural ordinal position. Example: times [10, 10, 15] → [1, 1, 3].
  *
- * Pure — used by both v1 (`fetchSegmentLeaderboard`) and v2
- * (`fetchSegmentLeaderboardTiered`) leaderboard fetchers. Mirrors the
- * `assignCompetitionRanks` helper in `apps/mobile_android/lib/segments.dart`.
+ * Pure — used by the `fetchSegmentLeaderboardTiered` leaderboard fetcher.
+ * Mirrors the `assignCompetitionRanks` helper in
+ * `apps/mobile_android/lib/segments.dart`.
  *
  * Caller must pass items pre-sorted ascending by `time_seconds`.
  */
