@@ -3,7 +3,7 @@
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime, activeFormatLocale } from '$lib/format/time';
-	import { currentLocale } from '$lib/i18n/store.svelte';
+	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
 	import {
@@ -87,12 +87,12 @@
 	let feedLoadingMore = $state(false);
 	let kudosBusy = $state<Set<string>>(new Set());
 	let activityFilter = $state<string>('all');
-	const FEED_ACTIVITIES: { value: string; label: string; icon: string }[] = [
-		{ value: 'all', label: 'All', icon: 'apps' },
-		{ value: 'run', label: 'Run', icon: 'directions_run' },
-		{ value: 'walk', label: 'Walk', icon: 'directions_walk' },
-		{ value: 'cycle', label: 'Cycle', icon: 'directions_bike' },
-		{ value: 'hike', label: 'Hike', icon: 'terrain' },
+	const FEED_ACTIVITIES: { value: string; label: () => string; icon: string }[] = [
+		{ value: 'all', label: () => m('profile.activityAll'), icon: 'apps' },
+		{ value: 'run', label: () => m('profile.activityRun'), icon: 'directions_run' },
+		{ value: 'walk', label: () => m('profile.activityWalk'), icon: 'directions_walk' },
+		{ value: 'cycle', label: () => m('profile.activityCycle'), icon: 'directions_bike' },
+		{ value: 'hike', label: () => m('profile.activityHike'), icon: 'terrain' },
 	];
 	let followsAnyone = $derived(following.length > 0);
 
@@ -130,7 +130,7 @@
 			followersHasMore = more.length === FOLLOW_PAGE_SIZE;
 			hydrateViewerFollows();
 		} catch (e) {
-			showToast(`Could not load more followers: ${e}`, 'error');
+			showToast(m('profile.loadMoreFollowersError', { error: String(e) }), 'error');
 		} finally {
 			followersLoadingMore = false;
 		}
@@ -148,7 +148,7 @@
 			followingHasMore = more.length === FOLLOW_PAGE_SIZE;
 			hydrateViewerFollows();
 		} catch (e) {
-			showToast(`Could not load more: ${e}`, 'error');
+			showToast(m('profile.loadMoreError', { error: String(e) }), 'error');
 		} finally {
 			followingLoadingMore = false;
 		}
@@ -211,7 +211,7 @@
 			feedExhausted = feedEntries.length < 20;
 			feedEngagement = await fetchEngagementSummaries(feedEntries.map((e) => e.id));
 		} catch (e) {
-			showToast(`Could not load feed: ${e}`, 'error');
+			showToast(m('profile.loadFeedError', { error: String(e) }), 'error');
 		} finally {
 			feedLoading = false;
 			feedLoaded = true;
@@ -238,7 +238,7 @@
 			// Without this catch the explicit "load more" scroll
 			// trigger silently swallowed network errors and the user
 			// scrolled forever waiting for entries that never arrived.
-			showToast(`Could not load more: ${e}`, 'error');
+			showToast(m('profile.loadMoreError', { error: String(e) }), 'error');
 		} finally {
 			feedLoadingMore = false;
 		}
@@ -269,7 +269,7 @@
 				});
 			}
 		} catch (e) {
-			showToast(`Could not update kudos: ${e}`, 'error');
+			showToast(m('profile.updateKudosError', { error: String(e) }), 'error');
 		} finally {
 			const next = new Set(kudosBusy);
 			next.delete(runId);
@@ -298,7 +298,7 @@
 				};
 			}
 		} catch (e) {
-			showToast(`Could not update follow: ${e}`, 'error');
+			showToast(m('profile.updateFollowError', { error: String(e) }), 'error');
 		} finally {
 			busy = false;
 		}
@@ -320,9 +320,9 @@
 				viewer_follows: false,
 				follower_count: Math.max(profile.follower_count - (profile.viewer_follows ? 1 : 0), 0),
 			};
-			showToast(`Blocked ${profile.display_name ?? 'this runner'}`, 'success');
+			showToast(m('profile.blockedToast', { name: profile.display_name ?? m('profile.thisRunner') }), 'success');
 		} catch (e) {
-			showToast(`Could not block: ${e}`, 'error');
+			showToast(m('profile.blockError', { error: String(e) }), 'error');
 		} finally {
 			blockBusy = false;
 		}
@@ -334,9 +334,9 @@
 		try {
 			await unblockUser(profile.id);
 			viewerHasBlocked = false;
-			showToast(`Unblocked ${profile.display_name ?? 'this runner'}`, 'success');
+			showToast(m('profile.unblockedToast', { name: profile.display_name ?? m('profile.thisRunner') }), 'success');
 		} catch (e) {
-			showToast(`Could not unblock: ${e}`, 'error');
+			showToast(m('profile.unblockError', { error: String(e) }), 'error');
 		} finally {
 			blockBusy = false;
 		}
@@ -364,7 +364,7 @@
 			if (wasFollowing) rollback.add(targetId);
 			else rollback.delete(targetId);
 			viewerFollows = rollback;
-			showToast(`Could not update follow: ${e}`, 'error');
+			showToast(m('profile.updateFollowError', { error: String(e) }), 'error');
 		} finally {
 			const done = new Set(rowBusy);
 			done.delete(targetId);
@@ -405,7 +405,7 @@
 
 	async function shareProfile() {
 		const url = new URL(`/u/${userId}`, location.origin).toString();
-		const title = profile?.display_name ?? 'Runner';
+		const title = profile?.display_name ?? m('profile.runnerFallback');
 		// Try the OS share sheet first (mobile + Safari desktop). Fall
 		// back to clipboard copy on everything else.
 		try {
@@ -419,21 +419,21 @@
 		}
 		try {
 			await navigator.clipboard.writeText(url);
-			showToast('Profile link copied', 'success');
+			showToast(m('profile.linkCopied'), 'success');
 		} catch {
-			showToast('Could not copy link', 'error');
+			showToast(m('profile.copyLinkError'), 'error');
 		}
 	}
 </script>
 
 <svelte:head>
-	<title>{profile?.display_name ?? 'Runner'} — Threkir</title>
+	<title>{profile?.display_name ?? m('profile.runnerFallback')} — Threkir</title>
 </svelte:head>
 
 <div class="page">
 	<button type="button" class="back-link" onclick={goBack}>
 		<span class="material-symbols" aria-hidden="true">arrow_back</span>
-		Back
+		{m('profile.back')}
 	</button>
 
 	{#if loading}
@@ -444,16 +444,15 @@
 				<span class="skel skel-line skel-w-40"></span>
 			</div>
 		</div>
-		<p class="sr-only" role="status">Loading profile…</p>
+		<p class="sr-only" role="status">{m('profile.loadingProfile')}</p>
 	{:else if !profile}
 		<div class="empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">person_off</span>
-			<h3>Profile not found</h3>
+			<h3>{m('profile.notFoundTitle')}</h3>
 			<p class="empty-text">
-				This runner doesn't exist or their profile isn't visible. They may have deleted their
-				account.
+				{m('profile.notFoundText')}
 			</p>
-			<a href="/dashboard" class="btn btn-primary">Back to dashboard</a>
+			<a href="/dashboard" class="btn btn-primary">{m('profile.backToDashboard')}</a>
 		</div>
 	{:else}
 		<header class="profile-head">
@@ -465,19 +464,19 @@
 				{/if}
 			</div>
 			<div class="profile-info">
-				<h1>{profile.display_name ?? 'Runner'}</h1>
+				<h1>{profile.display_name ?? m('profile.runnerFallback')}</h1>
 				<div class="counts">
 					<button class="count" type="button" onclick={() => setTab('runs')}>
 						<span class="count-num">{runs.length}</span>
-						<span class="count-label">Runs</span>
+						<span class="count-label">{m('profile.tabRuns')}</span>
 					</button>
 					<button class="count" type="button" onclick={() => setTab('followers')}>
 						<span class="count-num">{profile.follower_count}</span>
-						<span class="count-label">Followers</span>
+						<span class="count-label">{m('profile.tabFollowers')}</span>
 					</button>
 					<button class="count" type="button" onclick={() => setTab('following')}>
 						<span class="count-num">{profile.following_count}</span>
-						<span class="count-label">Following</span>
+						<span class="count-label">{m('profile.tabFollowing')}</span>
 					</button>
 				</div>
 			</div>
@@ -488,29 +487,29 @@
 						type="button"
 						disabled={busy}
 						onclick={toggleFollow}
-						aria-label={profile.viewer_follows ? 'Unfollow' : 'Follow'}
+						aria-label={profile.viewer_follows ? m('profile.unfollow') : m('profile.follow')}
 					>
 						<span class="material-symbols" aria-hidden="true">
 							{profile.viewer_follows ? 'check' : 'person_add'}
 						</span>
-						<span>{profile.viewer_follows ? 'Following' : 'Follow'}</span>
+						<span>{profile.viewer_follows ? m('profile.following') : m('profile.follow')}</span>
 					</button>
 					<a
 						class="btn btn-outline btn-message"
 						href={`/messages/${userId}`}
-						aria-label="Message"
-						title="Message"
+						aria-label={m('profile.message')}
+						title={m('profile.message')}
 					>
 						<span class="material-symbols" aria-hidden="true">chat_bubble</span>
-						<span>Message</span>
+						<span>{m('profile.message')}</span>
 					</a>
 				{/if}
 				<button
 					class="btn btn-outline btn-icon-only"
 					type="button"
 					onclick={shareProfile}
-					aria-label="Share profile"
-					title="Share profile"
+					aria-label={m('profile.shareProfile')}
+					title={m('profile.shareProfile')}
 				>
 					<span class="material-symbols" aria-hidden="true">share</span>
 				</button>
@@ -519,8 +518,8 @@
 						class="btn btn-outline btn-icon-only"
 						type="button"
 						onclick={() => (showReportDialog = true)}
-						aria-label="Report this profile"
-						title="Report this profile"
+						aria-label={m('profile.reportProfile')}
+						title={m('profile.reportProfile')}
 					>
 						<span class="material-symbols" aria-hidden="true">flag</span>
 					</button>
@@ -530,8 +529,8 @@
 						type="button"
 						disabled={blockBusy}
 						onclick={() => (viewerHasBlocked ? unblock() : (showBlockConfirm = true))}
-						aria-label={viewerHasBlocked ? 'Unblock this profile' : 'Block this profile'}
-						title={viewerHasBlocked ? 'Unblock this profile' : 'Block this profile'}
+						aria-label={viewerHasBlocked ? m('profile.unblockProfile') : m('profile.blockProfile')}
+						title={viewerHasBlocked ? m('profile.unblockProfile') : m('profile.blockProfile')}
 						aria-pressed={viewerHasBlocked}
 					>
 						<span class="material-symbols" aria-hidden="true">block</span>
@@ -541,8 +540,8 @@
 					<a
 						href="/settings"
 						class="btn btn-outline btn-icon-only"
-						aria-label="Edit profile"
-						title="Edit profile"
+						aria-label={m('profile.editProfile')}
+						title={m('profile.editProfile')}
 					>
 						<span class="material-symbols" aria-hidden="true">edit</span>
 					</a>
@@ -552,7 +551,7 @@
 
 		<!-- tabindex=-1: keydown bubbles here from the focused tab; the tabs
 		     carry the roving tabindex. Satisfies a11y_interactive_supports_focus. -->
-		<div class="tabs" role="tablist" aria-label="Profile sections" tabindex={-1} onkeydown={handleTablistKeydown}>
+		<div class="tabs" role="tablist" aria-label={m('profile.sectionsLabel')} tabindex={-1} onkeydown={handleTablistKeydown}>
 			<button
 				role="tab"
 				class="tab"
@@ -561,7 +560,7 @@
 				tabindex={tab === 'runs' ? 0 : -1}
 				onclick={() => setTab('runs')}
 			>
-				Runs
+				{m('profile.tabRuns')}
 			</button>
 			<button
 				role="tab"
@@ -571,7 +570,7 @@
 				tabindex={tab === 'followers' ? 0 : -1}
 				onclick={() => setTab('followers')}
 			>
-				Followers
+				{m('profile.tabFollowers')}
 			</button>
 			<button
 				role="tab"
@@ -581,7 +580,7 @@
 				tabindex={tab === 'following' ? 0 : -1}
 				onclick={() => setTab('following')}
 			>
-				Following
+				{m('profile.tabFollowing')}
 			</button>
 			{#if isSelf}
 				<button
@@ -592,7 +591,7 @@
 					tabindex={tab === 'notifications' ? 0 : -1}
 					onclick={() => setTab('notifications')}
 				>
-					Notifications
+					{m('profile.tabNotifications')}
 					{#if notificationStore.unreadCount > 0}
 						<span class="tab-badge">{notificationStore.unreadCount}</span>
 					{/if}
@@ -605,27 +604,25 @@
 				<div class="empty-card">
 					{#if isSelf}
 						<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
-						<h3>You haven't shared a run yet</h3>
+						<h3>{m('profile.runsEmptySelfTitle')}</h3>
 						<p class="empty-text">
-							Public runs from your history show up here. Record a run on mobile or import one
-							from Strava, Garmin, or a GPX file.
+							{m('profile.runsEmptySelfText')}
 						</p>
 						<div class="empty-actions">
 							<a href="/runs" class="btn btn-primary">
 								<span class="material-symbols" aria-hidden="true">history</span>
-								Open run history
+								{m('profile.openRunHistory')}
 							</a>
 							<a href="/settings?tab=integrations" class="btn btn-outline">
 								<span class="material-symbols" aria-hidden="true">sync</span>
-								Connect an integration
+								{m('profile.connectIntegration')}
 							</a>
 						</div>
 					{:else}
 						<span class="material-symbols empty-icon" aria-hidden="true">directions_run</span>
-						<h3>No public runs yet</h3>
+						<h3>{m('profile.runsEmptyTitle')}</h3>
 						<p class="empty-text">
-							{profile.display_name ?? 'This runner'} hasn't shared a public run. Follow them to see
-							private runs in your feed when they do.
+							{m('profile.runsEmptyTextPrefix', { name: profile.display_name ?? m('profile.thisRunnerCap') })}
 						</p>
 					{/if}
 				</div>
@@ -650,15 +647,15 @@
 								<div class="run-stats">
 									<div class="run-stat">
 										<span class="run-stat-value">{formatDistance(r.distance_m)}</span>
-										<span class="run-stat-label section-label">Distance</span>
+										<span class="run-stat-label section-label">{m('profile.statDistance')}</span>
 									</div>
 									<div class="run-stat">
 										<span class="run-stat-value">{formatDuration(r.duration_s)}</span>
-										<span class="run-stat-label section-label">Time</span>
+										<span class="run-stat-label section-label">{m('profile.statTime')}</span>
 									</div>
 									<div class="run-stat">
 										<span class="run-stat-value">{pace(r.distance_m, r.duration_s)}</span>
-										<span class="run-stat-label section-label">Pace</span>
+										<span class="run-stat-label section-label">{m('profile.statPace')}</span>
 									</div>
 								</div>
 							</div>
@@ -670,19 +667,18 @@
 			{#if followers.length === 0}
 				<div class="empty-card">
 					<span class="material-symbols empty-icon" aria-hidden="true">group_add</span>
-					<h3>No followers yet</h3>
+					<h3>{m('profile.followersEmptyTitle')}</h3>
 					<p class="empty-text">
 						{#if isSelf}
-							When other runners follow you, they'll show up here and see your public runs in
-							their feed.
+							{m('profile.followersEmptySelfText')}
 						{:else}
-							{profile.display_name ?? 'This runner'} hasn't picked up any followers yet.
+							{m('profile.followersEmptyTextPrefix', { name: profile.display_name ?? m('profile.thisRunnerCap') })}
 						{/if}
 					</p>
 					{#if isSelf}
 						<a href="/clubs" class="btn btn-primary">
 							<span class="material-symbols" aria-hidden="true">groups</span>
-							Find a club
+							{m('profile.findClub')}
 						</a>
 					{/if}
 				</div>
@@ -694,7 +690,7 @@
 						<div class="person-row">
 							<a href="/u/{p.id}" class="person-main">
 								<Avatar url={p.avatar_url} name={p.display_name} size="2rem" font="0.85rem" />
-								<span class="person-name">{p.display_name ?? 'Runner'}</span>
+								<span class="person-name">{p.display_name ?? m('profile.runnerFallback')}</span>
 							</a>
 							{#if auth.loggedIn && !isViewer}
 								<button
@@ -703,14 +699,14 @@
 									disabled={rowBusy.has(p.id)}
 									onclick={() => toggleRowFollow(p.id)}
 									aria-label={viewerFollowsRow
-										? `Unfollow ${p.display_name ?? 'runner'}`
-										: `Follow ${p.display_name ?? 'runner'}`}
+										? m('profile.unfollowName', { name: p.display_name ?? m('profile.runnerLower') })
+										: m('profile.followName', { name: p.display_name ?? m('profile.runnerLower') })}
 								>
 									<span class="material-symbols" aria-hidden="true">
 										{viewerFollowsRow ? 'check' : 'person_add'}
 									</span>
 									<span class="toggle-label">
-										{viewerFollowsRow ? 'Following' : 'Follow'}
+										{viewerFollowsRow ? m('profile.following') : m('profile.follow')}
 									</span>
 								</button>
 							{/if}
@@ -720,7 +716,7 @@
 				{#if followersHasMore}
 					<div class="load-more">
 						<button class="btn btn-outline" onclick={loadMoreFollowers} disabled={followersLoadingMore}>
-							{followersLoadingMore ? 'Loading…' : 'Load more'}
+							{followersLoadingMore ? m('profile.loadingShort') : m('profile.loadMore')}
 						</button>
 					</div>
 				{/if}
@@ -730,20 +726,19 @@
 				<div class="empty-card">
 					<span class="material-symbols empty-icon" aria-hidden="true">person_search</span>
 					<h3>
-						{isSelf ? 'Not following anyone yet' : 'Not following anyone'}
+						{isSelf ? m('profile.followingEmptySelfTitle') : m('profile.followingEmptyTitle')}
 					</h3>
 					<p class="empty-text">
 						{#if isSelf}
-							Follow other runners to see their public runs in your feed. Browse a club's Members
-							tab or open a public run to find someone to follow.
+							{m('profile.followingEmptySelfText')}
 						{:else}
-							{profile.display_name ?? 'This runner'} hasn't followed anyone yet.
+							{m('profile.followingEmptyTextPrefix', { name: profile.display_name ?? m('profile.thisRunnerCap') })}
 						{/if}
 					</p>
 					{#if isSelf}
 						<a href="/clubs" class="btn btn-primary">
 							<span class="material-symbols" aria-hidden="true">groups</span>
-							Browse clubs
+							{m('profile.browseClubs')}
 						</a>
 					{/if}
 				</div>
@@ -755,7 +750,7 @@
 						<div class="person-row">
 							<a href="/u/{p.id}" class="person-main">
 								<Avatar url={p.avatar_url} name={p.display_name} size="2rem" font="0.85rem" />
-								<span class="person-name">{p.display_name ?? 'Runner'}</span>
+								<span class="person-name">{p.display_name ?? m('profile.runnerFallback')}</span>
 							</a>
 							{#if auth.loggedIn && !isViewer}
 								<button
@@ -764,14 +759,14 @@
 									disabled={rowBusy.has(p.id)}
 									onclick={() => toggleRowFollow(p.id)}
 									aria-label={viewerFollowsRow
-										? `Unfollow ${p.display_name ?? 'runner'}`
-										: `Follow ${p.display_name ?? 'runner'}`}
+										? m('profile.unfollowName', { name: p.display_name ?? m('profile.runnerLower') })
+										: m('profile.followName', { name: p.display_name ?? m('profile.runnerLower') })}
 								>
 									<span class="material-symbols" aria-hidden="true">
 										{viewerFollowsRow ? 'check' : 'person_add'}
 									</span>
 									<span class="toggle-label">
-										{viewerFollowsRow ? 'Following' : 'Follow'}
+										{viewerFollowsRow ? m('profile.following') : m('profile.follow')}
 									</span>
 								</button>
 							{/if}
@@ -781,30 +776,30 @@
 				{#if followingHasMore}
 					<div class="load-more">
 						<button class="btn btn-outline" onclick={loadMoreFollowing} disabled={followingLoadingMore}>
-							{followingLoadingMore ? 'Loading…' : 'Load more'}
+							{followingLoadingMore ? m('profile.loadingShort') : m('profile.loadMore')}
 						</button>
 					</div>
 				{/if}
 			{/if}
 		{:else if tab === 'feed' && isSelf}
 			<div class="feed-toolbar">
-				<div class="activity-group" role="group" aria-label="Activity type">
+				<div class="activity-group" role="group" aria-label={m('profile.activityTypeLabel')}>
 					{#each FEED_ACTIVITIES as act}
 						<button
 							class="activity-btn"
 							class:active={activityFilter === act.value}
 							onclick={() => (activityFilter = act.value)}
-							title={act.label}
-							aria-label={act.label}
+							title={act.label()}
+							aria-label={act.label()}
 							aria-pressed={activityFilter === act.value}
 							type="button"
 						>
 							<span class="material-symbols" aria-hidden="true">{act.icon}</span>
-							<span class="activity-label">{act.label}</span>
+							<span class="activity-label">{act.label()}</span>
 						</button>
 					{/each}
 				</div>
-				<span class="window-hint">Last {FEED_WINDOW_DAYS} days</span>
+				<span class="window-hint">{m('profile.lastDays', { days: FEED_WINDOW_DAYS })}</span>
 			</div>
 
 			{#if feedLoading && !feedLoaded}
@@ -835,39 +830,37 @@
 						</div>
 					{/each}
 				</div>
-				<p class="sr-only" role="status">Loading feed…</p>
+				<p class="sr-only" role="status">{m('profile.loadingFeed')}</p>
 			{:else if feedEntries.length === 0}
 				<div class="empty-card">
 					{#if !followsAnyone}
 						<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
-						<h3>Your feed is empty</h3>
+						<h3>{m('profile.feedEmptyTitle')}</h3>
 						<p class="empty-text">
-							Follow other runners to see their public runs here. Visit a club's Members tab or
-							open a public run to find a profile to follow.
+							{m('profile.feedEmptyText')}
 						</p>
 						<a href="/clubs" class="btn btn-primary">
 							<span class="material-symbols" aria-hidden="true">groups</span>
-							Browse clubs
+							{m('profile.browseClubs')}
 						</a>
 					{:else if activityFilter !== 'all'}
 						<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-						<h3>No matches</h3>
+						<h3>{m('profile.feedNoMatchesTitle')}</h3>
 						<p class="empty-text">
-							Nothing matches the current filter in the last {FEED_WINDOW_DAYS} days.
+							{m('profile.feedNoMatchesText', { days: FEED_WINDOW_DAYS })}
 						</p>
 						<button
 							class="btn btn-primary"
 							type="button"
 							onclick={() => (activityFilter = 'all')}
 						>
-							Clear filters
+							{m('profile.clearFilters')}
 						</button>
 					{:else}
 						<span class="material-symbols empty-icon" aria-hidden="true">schedule</span>
-						<h3>No recent activity</h3>
+						<h3>{m('profile.feedNoActivityTitle')}</h3>
 						<p class="empty-text">
-							Nobody you follow has logged a public run in the last {FEED_WINDOW_DAYS} days. Older
-							runs are still on each runner's profile.
+							{m('profile.feedNoActivityText', { days: FEED_WINDOW_DAYS })}
 						</p>
 					{/if}
 				</div>
@@ -879,7 +872,7 @@
 							<header class="entry-head">
 								<a href="/u/{entry.author.id}" class="author">
 									<Avatar url={entry.author.avatar_url} name={entry.author.display_name} size="2rem" font="0.85rem" />
-									<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
+									<span class="author-name">{entry.author.display_name ?? m('profile.runnerFallback')}</span>
 								</a>
 								<span class="when">{formatRelativeTime(entry.started_at, undefined, currentLocale())}</span>
 							</header>
@@ -898,15 +891,15 @@
 									<div class="stats">
 										<div class="stat">
 											<span class="stat-num">{formatDistance(entry.distance_m)}</span>
-											<span class="stat-label">Distance</span>
+											<span class="stat-label">{m('profile.statDistance')}</span>
 										</div>
 										<div class="stat">
 											<span class="stat-num">{formatDuration(entry.duration_s)}</span>
-											<span class="stat-label">Time</span>
+											<span class="stat-label">{m('profile.statTime')}</span>
 										</div>
 										<div class="stat">
 											<span class="stat-num">{pace(entry.distance_m, entry.duration_s)}</span>
-											<span class="stat-label">Pace</span>
+											<span class="stat-label">{m('profile.statPace')}</span>
 										</div>
 									</div>
 								</div>
@@ -918,7 +911,7 @@
 									type="button"
 									disabled={kudosBusy.has(entry.id)}
 									onclick={() => toggleKudos(entry.id)}
-									aria-label={eng.viewer_has_kudos ? 'Rescind kudos' : 'Give kudos'}
+									aria-label={eng.viewer_has_kudos ? m('profile.rescindKudos') : m('profile.giveKudos')}
 								>
 									<span class="material-symbols" aria-hidden="true">
 										{eng.viewer_has_kudos ? 'favorite' : 'favorite_border'}
@@ -929,7 +922,7 @@
 									class="comment-pill"
 									type="button"
 									onclick={() => (openRunId = entry.id)}
-									aria-label="View comments"
+									aria-label={m('profile.viewComments')}
 								>
 									<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
 									<span>{eng.comment_count}</span>
@@ -942,7 +935,7 @@
 				{#if !feedExhausted}
 					<div class="load-more">
 						<button class="btn btn-outline" onclick={loadMoreFeed} disabled={feedLoadingMore}>
-							{feedLoadingMore ? 'Loading…' : 'Load more'}
+							{feedLoadingMore ? m('profile.loadingShort') : m('profile.loadMore')}
 						</button>
 					</div>
 				{/if}
@@ -953,7 +946,7 @@
 	{/if}
 </div>
 
-<Modal open={openRunId !== null} onclose={() => (openRunId = null)} title="Run" wide>
+<Modal open={openRunId !== null} onclose={() => (openRunId = null)} title={m('profile.runModalTitle')} wide>
 	{#if openRunId}
 		{#key openRunId}
 			<RunShareView runId={openRunId} compact />
@@ -971,10 +964,10 @@
 
 <ConfirmDialog
 	open={showBlockConfirm}
-	title="Block {profile?.display_name ?? 'this runner'}?"
-	message="They won't be able to follow you, give kudos to your runs, or comment on them. Any existing follow between you in either direction will be cleared. You can unblock from this page at any time."
-	confirmLabel="Block"
-	cancelLabel="Cancel"
+	title={m('profile.blockConfirmTitle', { name: profile?.display_name ?? m('profile.thisRunner') })}
+	message={m('profile.blockConfirmMessage')}
+	confirmLabel={m('profile.blockConfirmLabel')}
+	cancelLabel={m('profile.cancel')}
 	danger
 	onconfirm={confirmBlock}
 	oncancel={() => (showBlockConfirm = false)}

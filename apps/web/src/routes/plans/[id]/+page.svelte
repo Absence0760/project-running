@@ -21,6 +21,7 @@
 		todayISO
 	} from '$lib/training/training';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import type { WeekStart } from '$lib/format/calendar';
 	import type { TrainingPlan, PlanWeek, PlanWorkout, ClubWithMeta } from '$lib/types';
@@ -54,17 +55,17 @@
 	/// so SvelteKit's own forward navigations inside this page don't
 	/// overwrite the source.
 	let backHref = $state('/plans');
-	let backLabel = $state('All plans');
+	let backLabel = $state(m('planDetail.backAllPlans'));
 	let cameFromKnownParent = $state(false);
 	afterNavigate(({ from }) => {
 		if (cameFromKnownParent || !from) return;
 		if (from.url.pathname === '/dashboard') {
 			backHref = '/dashboard';
-			backLabel = 'Dashboard';
+			backLabel = m('planDetail.backDashboard');
 			cameFromKnownParent = true;
 		} else if (from.url.pathname === '/plans') {
 			backHref = '/plans';
-			backLabel = 'All plans';
+			backLabel = m('planDetail.backAllPlans');
 			cameFromKnownParent = true;
 		}
 	});
@@ -127,12 +128,12 @@
 		if (!plan || !publishingTo) return;
 		try {
 			await publishPlanAsTemplate(plan.id, publishingTo);
-			showToast('Plan published as a club template. Your personal plan is unchanged.');
+			showToast(m('planDetail.publishSuccess'));
 			publishingTo = '';
 			// No reload needed — the source plan stayed put. The new
 			// template lives on the club's Templates tab.
 		} catch (e) {
-			showToast(`Failed to publish: ${e}`, 'error');
+			showToast(m('planDetail.publishFailed', { error: String(e) }), 'error');
 		}
 	}
 
@@ -189,21 +190,21 @@
 		let raceState: 'upcoming' | 'today' | 'past';
 		if (t < start) {
 			const d = Math.round((start.getTime() - t.getTime()) / dayMs);
-			relation = d === 1 ? 'Starts tomorrow' : `Starts in ${d} days`;
+			relation = d === 1 ? m('planDetail.startsTomorrow') : m('planDetail.startsInDays', { d });
 			raceState = 'upcoming';
 		} else if (t > end) {
-			relation = 'Race day past';
+			relation = m('planDetail.raceDayPast');
 			raceState = 'past';
 		} else {
 			const d = Math.round((end.getTime() - t.getTime()) / dayMs);
 			if (d === 0) {
-				relation = 'Race day';
+				relation = m('planDetail.raceDay');
 				raceState = 'today';
 			} else if (d === 1) {
-				relation = 'Race tomorrow';
+				relation = m('planDetail.raceTomorrow');
 				raceState = 'upcoming';
 			} else {
-				relation = `Race in ${d} days`;
+				relation = m('planDetail.raceInDays', { d });
 				raceState = 'upcoming';
 			}
 		}
@@ -233,8 +234,16 @@
 	};
 
 	function dayOfWeek(iso: string): string {
-		const names = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-		return names[parseISO(iso).getDay()];
+		const keys = [
+			'planDetail.dowSun',
+			'planDetail.dowMon',
+			'planDetail.dowTue',
+			'planDetail.dowWed',
+			'planDetail.dowThu',
+			'planDetail.dowFri',
+			'planDetail.dowSat'
+		] as const;
+		return m(keys[parseISO(iso).getDay()]);
 	}
 
 	function fmtRaceDate(iso: string): string {
@@ -247,13 +256,13 @@
 		const dow = dayOfWeek(wo.scheduled_date);
 		const kind = WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ?? wo.kind;
 		const dist = wo.target_distance_m != null ? `, ${fmtKm(wo.target_distance_m)}` : '';
-		const done = isWorkoutCompleted(wo) ? ', completed' : '';
+		const done = isWorkoutCompleted(wo) ? m('planDetail.ariaCompletedSuffix') : '';
 		return `${dow}: ${kind}${dist}${done}`;
 	}
 </script>
 
 {#if loading}
-	<div class="page" aria-busy="true" aria-label="Loading plan">
+	<div class="page" aria-busy="true" aria-label={m('planDetail.loadingPlan')}>
 		<div class="back-skel skeleton-shimmer"></div>
 		<div class="hero-skel skeleton-shimmer"></div>
 		<div class="today-skel skeleton-shimmer"></div>
@@ -269,9 +278,9 @@
 		</a>
 		<div class="empty">
 			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-			<h3>Plan not found</h3>
-			<p>This plan may have been deleted, or you may not have access to it.</p>
-			<a href="/plans" class="btn btn-primary">Back to your plans</a>
+			<h3>{m('planDetail.notFoundTitle')}</h3>
+			<p>{m('planDetail.notFoundBody')}</p>
+			<a href="/plans" class="btn btn-primary">{m('planDetail.backToYourPlans')}</a>
 		</div>
 	</div>
 {:else}
@@ -283,18 +292,18 @@
 
 		<header class="hero" class:race-today={planPosition?.raceState === 'today'}>
 			<div class="hero-body">
-				<span class="hero-eyebrow">Training plan</span>
+				<span class="hero-eyebrow">{m('planDetail.heroEyebrow')}</span>
 				<div class="hero-title-row">
 					<h1>{plan.name}</h1>
 					{#if isOwner && !plan.is_template}
 						<button
 							type="button"
 							class="btn btn-outline btn-sm hero-edit"
-							aria-label="Edit plan name, goal time, and rules"
+							aria-label={m('planDetail.editPlanAria')}
 							onclick={() => (editingPlanMeta = true)}
 						>
 							<span class="material-symbols">edit</span>
-							Edit plan
+							{m('planDetail.editPlan')}
 						</button>
 					{/if}
 				</div>
@@ -302,13 +311,13 @@
 					{#if plan.parent_template_id}
 						<a class="chip chip-link" href="/plans/{plan.parent_template_id}">
 							<span class="material-symbols">link</span>
-							Cloned from a template
+							{m('planDetail.clonedFromTemplate')}
 						</a>
 					{/if}
 					{#if plan.is_template && plan.club_id}
 						<span class="chip">
 							<span class="material-symbols">groups</span>
-							Club template
+							{m('planDetail.clubTemplate')}
 						</span>
 					{/if}
 				</div>
@@ -340,7 +349,7 @@
 			<div class="hero-position">
 				{#if planPosition}
 					<span class="week-pill">
-						Week {planPosition.weekIndex} <em>of {planPosition.totalWeeks}</em>
+						{m('planDetail.weekPillPrefix', { n: planPosition.weekIndex })} <em>{m('planDetail.weekPillOf', { total: planPosition.totalWeeks })}</em>
 					</span>
 					<span
 						class="relation-pill"
@@ -354,7 +363,7 @@
 					class="progress-ring"
 					style="background: {progressGradient}"
 					role="progressbar"
-					aria-label="Workout completion"
+					aria-label={m('planDetail.workoutCompletionAria')}
 					aria-valuemin="0"
 					aria-valuemax="100"
 					aria-valuenow={pct}
@@ -378,7 +387,7 @@
 
 		{#if Array.isArray(plan.rules) && plan.rules.length > 0}
 			<aside class="rules-card">
-				<h3>Rules</h3>
+				<h3>{m('planDetail.rulesTitle')}</h3>
 				<ul>
 					{#each plan.rules as r}
 						<li>{r}</li>
@@ -401,7 +410,7 @@
 				<button
 					class="today-link"
 					type="button"
-					aria-label="Edit today's workout: {WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind}"
+					aria-label={m('planDetail.editTodayWorkoutAria', { kind: WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind })}
 					onclick={() => (editing = todayWorkout)}
 				>
 					<div class="today-icon" class:done={isWorkoutCompleted(todayWorkout)}>
@@ -414,7 +423,7 @@
 						{/if}
 					</div>
 					<div class="today-body">
-						<span class="today-label">Today</span>
+						<span class="today-label">{m('planDetail.today')}</span>
 						<span class="today-kind">
 							{WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind}
 						</span>
@@ -426,7 +435,7 @@
 								<span>@ {fmtPace(todayWorkout.target_pace_sec_per_km)}</span>
 							{/if}
 							{#if isWorkoutCompleted(todayWorkout)}
-								<span class="today-done">Completed</span>
+								<span class="today-done">{m('planDetail.completed')}</span>
 							{/if}
 						</div>
 						{#if todayWorkout.notes}
@@ -441,14 +450,14 @@
 				<button
 					class="today-link"
 					type="button"
-					aria-label="Edit next workout"
+					aria-label={m('planDetail.editNextWorkoutAria')}
 					onclick={() => (editing = nextWorkout)}
 				>
 					<div class="today-icon">
 						<span class="material-symbols">event_upcoming</span>
 					</div>
 					<div class="today-body">
-						<span class="today-label">Next up</span>
+						<span class="today-label">{m('planDetail.nextUp')}</span>
 						<span class="today-kind">
 							{WORKOUT_KIND_LABEL[nextWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? nextWorkout.kind}
 						</span>
@@ -472,8 +481,8 @@
 						<span class="material-symbols">emoji_events</span>
 					</div>
 					<div class="today-body">
-						<span class="today-label">Race day</span>
-						<span class="today-kind">Go and run it.</span>
+						<span class="today-label">{m('planDetail.raceDay')}</span>
+						<span class="today-kind">{m('planDetail.goAndRunIt')}</span>
 					</div>
 				</div>
 			</section>
@@ -484,10 +493,10 @@
 						<span class="material-symbols">self_improvement</span>
 					</div>
 					<div class="today-body">
-						<span class="today-label">Today</span>
-						<span class="today-kind">Rest day</span>
+						<span class="today-label">{m('planDetail.today')}</span>
+						<span class="today-kind">{m('planDetail.restDay')}</span>
 						<div class="today-meta">
-							<span>No workout scheduled — recover and roll into tomorrow.</span>
+							<span>{m('planDetail.restDayHint')}</span>
 						</div>
 					</div>
 				</div>
@@ -496,9 +505,9 @@
 
 		{#if !plan.is_template && adminClubs.length > 0 && plan.user_id === auth.user?.id}
 			<section class="publish-row">
-				<span class="publish-label">Publish as a club template:</span>
-				<select bind:value={publishingTo} aria-label="Club to publish to">
-					<option value="">— pick a club —</option>
+				<span class="publish-label">{m('planDetail.publishLabel')}</span>
+				<select bind:value={publishingTo} aria-label={m('planDetail.clubToPublishAria')}>
+					<option value="">{m('planDetail.pickAClub')}</option>
 					{#each adminClubs as c (c.id)}
 						<option value={c.id}>{c.name}</option>
 					{/each}
@@ -509,13 +518,13 @@
 					disabled={!publishingTo}
 					onclick={publishAsTemplate}
 				>
-					Publish
+					{m('planDetail.publish')}
 				</button>
 			</section>
 		{/if}
 
 		<section class="calendar-section">
-			<h2 class="section-title">Calendar</h2>
+			<h2 class="section-title">{m('planDetail.calendar')}</h2>
 			<PlanCalendar
 				startDate={plan.start_date}
 				endDate={plan.end_date}
@@ -527,7 +536,7 @@
 		</section>
 
 		<section class="weeks">
-			<h2 class="section-title">Week by week</h2>
+			<h2 class="section-title">{m('planDetail.weekByWeek')}</h2>
 			{#each weeks as w (w.id)}
 				{@const weekWorkouts = workoutsByWeek.get(w.id) ?? []}
 				{@const weekActive = weekWorkouts.filter((x) => x.kind !== 'rest')}
@@ -542,14 +551,14 @@
 				>
 					<header class="week-header">
 						<div class="week-ident">
-							<span class="week-num">Week {w.week_index + 1}</span>
+							<span class="week-num">{m('planDetail.weekNum', { n: w.week_index + 1 })}</span>
 							<span class="week-phase">
 								{PHASE_LABEL[w.phase as keyof typeof PHASE_LABEL] ?? w.phase}
 							</span>
 						</div>
 						<div class="week-stats">
 							<span class="week-progress">
-								{weekDone}<em> / {weekActive.length}</em> done
+								{weekDone}<em> / {weekActive.length}</em> {m('planDetail.done')}
 							</span>
 							<span class="week-volume">{fmtKm(w.target_volume_m, 0)}</span>
 						</div>
@@ -594,8 +603,8 @@
 		<a class="coach-link" href="/coach?plan={plan.id}">
 			<span class="material-symbols">sports</span>
 			<div class="coach-link-body">
-				<strong>Ask the coach about this plan</strong>
-				<span>Should I run today? Am I on track? Why this week's long run?</span>
+				<strong>{m('planDetail.coachLinkTitle')}</strong>
+				<span>{m('planDetail.coachLinkSubtitle')}</span>
 			</div>
 			<span class="material-symbols arrow">chevron_right</span>
 		</a>

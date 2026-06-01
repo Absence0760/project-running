@@ -32,6 +32,7 @@
 		type TrustedContact,
 	} from '$lib/social/trusted_contacts';
 	import { updateUniversal } from '$lib/settings/settings';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let displayName = $state(auth.user?.display_name ?? '');
 	let parkrunNumber = $state(auth.user?.parkrun_number ?? '');
@@ -96,12 +97,14 @@
 			trustedContacts = cleaned;
 			showToast(
 				cleaned.length === 0
-					? 'Trusted contacts cleared.'
-					: `${cleaned.length} trusted contact${cleaned.length === 1 ? '' : 's'} saved.`,
+					? m('settingsAccount.contactsCleared')
+					: cleaned.length === 1
+						? m('settingsAccount.contactSavedOne')
+						: m('settingsAccount.contactsSaved', { n: cleaned.length }),
 				'success',
 			);
 		} catch (e) {
-			showToast(`Save failed: ${(e as Error).message}`, 'error');
+			showToast(m('settingsAccount.saveFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			trustedContactsSaving = false;
 		}
@@ -116,7 +119,7 @@
 		parkrunImporting = true;
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not signed in');
+			if (!session) throw new Error(m('settingsAccount.notSignedIn'));
 			const url = `${PUBLIC_SUPABASE_URL}/functions/v1/parkrun-import`;
 			const resp = await fetch(url, {
 				method: 'POST',
@@ -134,12 +137,14 @@
 			const imported = (body.imported as number) ?? 0;
 			showToast(
 				imported > 0
-					? `Imported ${imported} parkrun result${imported === 1 ? '' : 's'}.`
-					: 'No new parkrun results since last import.',
+					? imported === 1
+						? m('settingsAccount.parkrunImportedOne')
+						: m('settingsAccount.parkrunImported', { n: imported })
+					: m('settingsAccount.parkrunNoneNew'),
 				'success',
 			);
 		} catch (err) {
-			showToast(`parkrun import failed: ${(err as Error).message}`, 'error');
+			showToast(m('settingsAccount.parkrunImportFailed', { error: (err as Error).message }), 'error');
 		} finally {
 			parkrunImporting = false;
 		}
@@ -205,9 +210,9 @@
 		try {
 			await subscribeToPush();
 			await refreshPushState();
-			showToast('Notifications enabled on this device.', 'success');
+			showToast(m('settingsAccount.notificationsEnabled'), 'success');
 		} catch (e) {
-			showToast(`Could not enable notifications: ${(e as Error).message}`, 'error');
+			showToast(m('settingsAccount.notificationsEnableFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			pushBusy = false;
 		}
@@ -218,14 +223,14 @@
 		try {
 			await unsubscribeFromPush();
 			await refreshPushState();
-			showToast('Notifications disabled on this device.', 'success');
+			showToast(m('settingsAccount.notificationsDisabled'), 'success');
 		} catch (e) {
 			// Symmetrical to handleEnablePush above — surface failures
 			// rather than letting them propagate uncaught. Pre-fix, a
 			// network drop / Service Worker hiccup on disable left the
 			// user looking at a non-changing toggle with no feedback.
 			showToast(
-				`Could not disable notifications: ${(e as Error).message}`,
+				m('settingsAccount.notificationsDisableFailed', { error: (e as Error).message }),
 				'error',
 			);
 		} finally {
@@ -242,8 +247,7 @@
 		// dropping it, mirroring /settings/preferences.
 		if (dateOfBirth && !healthDataConsent) {
 			showToast(
-				'To save your date of birth, tick the health-data consent ' +
-					'checkbox under Date of Birth.',
+				m('settingsAccount.dobConsentRequired'),
 				'error',
 			);
 			saving = false;
@@ -257,7 +261,7 @@
 			const { data: stampedAt, error: consentErr } =
 				await supabase.rpc('grant_health_data_consent');
 			if (consentErr) {
-				showToast(`Save failed: ${consentErr.message}`, 'error');
+				showToast(m('settingsAccount.saveFailed', { error: consentErr.message }), 'error');
 				saving = false;
 				return;
 			}
@@ -277,7 +281,7 @@
 		const { error: profileError } = await supabase.from('user_profiles')
 			.update(profileUpdate).eq('id', auth.user.id);
 		if (profileError) {
-			showToast(`Save failed: ${profileError.message}`, 'error');
+			showToast(m('settingsAccount.saveFailed', { error: profileError.message }), 'error');
 			saving = false;
 			return;
 		}
@@ -301,26 +305,26 @@
 				updated_at: new Date().toISOString(),
 			});
 			if (settingsError) {
-				showToast(`Save failed: ${settingsError.message}`, 'error');
+				showToast(m('settingsAccount.saveFailed', { error: settingsError.message }), 'error');
 				saving = false;
 				return;
 			}
 		}
 		saved = true;
 		saving = false;
-		showToast('Profile saved.', 'success');
+		showToast(m('settingsAccount.profileSaved'), 'success');
 		setTimeout(() => (saved = false), 2000);
 	}
 
 	async function handleSavePassword() {
-		if (newPassword.length < 6) { passwordError = 'Password must be at least 6 characters.'; return; }
-		if (newPassword !== confirmPassword) { passwordError = 'Passwords do not match.'; return; }
+		if (newPassword.length < 6) { passwordError = m('settingsAccount.passwordTooShort'); return; }
+		if (newPassword !== confirmPassword) { passwordError = m('settingsAccount.passwordsMismatch'); return; }
 		passwordSaving = true; passwordError = null; passwordStatus = null;
 		const { error } = await supabase.auth.updateUser({ password: newPassword });
 		passwordSaving = false;
 		if (error) { passwordError = error.message; }
 		else {
-			passwordStatus = 'Password saved. You can now sign in with your email on any device.';
+			passwordStatus = m('settingsAccount.passwordSaved');
 			newPassword = ''; confirmPassword = '';
 			setTimeout(() => (passwordStatus = null), 5000);
 		}
@@ -362,7 +366,7 @@
 			const ts = new Date().toISOString().replace(/[:.]/g, '-');
 			downloadFile(JSON.stringify(runs, null, 2), `runs-${ts}.json`, 'application/json');
 		} catch (e) {
-			showToast(`Export failed: ${(e as Error).message}`, 'error');
+			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			exportingJson = false;
 		}
@@ -386,11 +390,11 @@
 			// a download tab, then auto-closes after the GET completes.
 			window.open(res.url, '_blank', 'noopener');
 			showToast(
-				`Export ready (${res.count} runs). The download tab will close once the file lands.`,
+				m('settingsAccount.exportReady', { count: res.count }),
 				'success',
 			);
 		} catch (e) {
-			showToast(`Export failed: ${(e as Error).message}`, 'error');
+			showToast(m('settingsAccount.exportFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			exportingGpx = false;
 		}
@@ -406,7 +410,7 @@
 			a.href = url; a.download = `run-app-backup-${ts}.zip`;
 			document.body.appendChild(a); a.click(); a.remove();
 			URL.revokeObjectURL(url);
-		} catch (e) { showToast(`Backup failed: ${(e as Error).message}`, 'error'); }
+		} catch (e) { showToast(m('settingsAccount.backupFailed', { error: (e as Error).message }), 'error'); }
 		finally { backingUp = false; backupProgress = null; }
 	}
 
@@ -453,7 +457,7 @@
 	const LINKABLE_PROVIDERS = ['google', 'apple'] as const;
 	type LinkableProvider = (typeof LINKABLE_PROVIDERS)[number];
 	const PROVIDER_LABEL: Record<string, string> = {
-		email: 'Email & password',
+		get email() { return m('settingsAccount.emailPasswordLabel'); },
 		google: 'Google',
 		apple: 'Apple',
 	};
@@ -471,7 +475,7 @@
 			if (error) throw error;
 			identities = (data?.identities ?? []) as unknown as Identity[];
 		} catch (e) {
-			identityError = (e as Error).message ?? 'Failed to load sign-in methods.';
+			identityError = (e as Error).message ?? m('settingsAccount.identitiesLoadFailed');
 		} finally {
 			identitiesLoading = false;
 		}
@@ -488,7 +492,7 @@
 			// Successful path navigates away to the OAuth provider. If we
 			// reach here without redirect, surface a generic failure.
 		} catch (e) {
-			identityError = (e as Error).message ?? `Could not link ${PROVIDER_LABEL[provider]}.`;
+			identityError = (e as Error).message ?? m('settingsAccount.linkFailed', { provider: PROVIDER_LABEL[provider] });
 			linkingProvider = null;
 		}
 	}
@@ -505,7 +509,7 @@
 
 	function unlinkProvider(identity: Identity) {
 		if (identities.length <= 1) {
-			identityError = 'You need at least one sign-in method. Link another before unlinking this one.';
+			identityError = m('settingsAccount.needOneMethod');
 			return;
 		}
 		pendingUnlink = identity;
@@ -528,10 +532,10 @@
 				identity as unknown as Parameters<typeof supabase.auth.unlinkIdentity>[0]
 			);
 			if (error) throw error;
-			showToast(`${label} sign-in unlinked.`);
+			showToast(m('settingsAccount.unlinked', { provider: label }));
 			await loadIdentities();
 		} catch (e) {
-			identityError = (e as Error).message ?? `Could not unlink ${label}.`;
+			identityError = (e as Error).message ?? m('settingsAccount.unlinkFailed', { provider: label });
 		} finally {
 			unlinkingProvider = null;
 		}
@@ -548,7 +552,7 @@
 		deleting = true;
 		try {
 			const { data: { session } } = await supabase.auth.getSession();
-			if (!session) throw new Error('Not signed in');
+			if (!session) throw new Error(m('settingsAccount.notSignedIn'));
 			const resp = await fetch(
 				`${PUBLIC_SUPABASE_URL}/functions/v1/delete-account`,
 				{
@@ -566,7 +570,7 @@
 			await auth.logout();
 			goto('/login');
 		} catch (e) {
-			showToast(`Account deletion failed: ${(e as Error).message}`, 'error');
+			showToast(m('settingsAccount.deleteFailed', { error: (e as Error).message }), 'error');
 		} finally {
 			deleting = false;
 		}
@@ -575,28 +579,27 @@
 
 <div class="page">
 	<header class="page-head">
-		<p class="kicker">Settings</p>
-		<h1>Account</h1>
+		<p class="kicker">{m('shell.settings')}</p>
+		<h1>{m('settingsAccount.title')}</h1>
 		<p class="tagline">
-			Your identity, sign-in methods, notifications, backups, and the controls for
-			leaving — everything that's about you, not how you record.
+			{m('settingsAccount.tagline')}
 		</p>
 	</header>
 
 	<!-- Profile -->
 	<section class="card">
-		<h2>Profile</h2>
+		<h2>{m('settingsAccount.profileHeading')}</h2>
 		<div class="form-grid">
 			<label>
-				<span class="label-text">Display Name</span>
+				<span class="label-text">{m('settingsAccount.displayName')}</span>
 				<input type="text" bind:value={displayName} />
 			</label>
 			<label>
-				<span class="label-text">Email</span>
+				<span class="label-text">{m('settingsAccount.email')}</span>
 				<input type="email" value={auth.user?.email ?? ''} disabled />
 			</label>
 			<label>
-				<span class="label-text">parkrun Athlete Number</span>
+				<span class="label-text">{m('settingsAccount.parkrunNumber')}</span>
 				<input type="text" bind:value={parkrunNumber} placeholder="A123456" />
 				{#if parkrunNumber && parkrunNumber.trim().length > 0}
 					<button
@@ -605,53 +608,48 @@
 						onclick={handleParkrunImport}
 						disabled={parkrunImporting}
 					>
-						{parkrunImporting ? 'Importing…' : 'Pull latest parkrun results'}
+						{parkrunImporting ? m('settingsAccount.importing') : m('settingsAccount.pullParkrun')}
 					</button>
 				{/if}
 			</label>
 			<label>
-				<span class="label-text">Date of Birth</span>
+				<span class="label-text">{m('settingsAccount.dateOfBirth')}</span>
 				<input type="date" bind:value={dateOfBirth} disabled={!healthDataConsent} />
 			</label>
 			<label>
-				<span class="label-text">Resting HR (bpm)</span>
-				<input type="number" bind:value={restingHr} placeholder="e.g. 52" min="30" max="120" />
+				<span class="label-text">{m('settingsAccount.restingHr')}</span>
+				<input type="number" bind:value={restingHr} placeholder={m('settingsAccount.restingHrPlaceholder')} min="30" max="120" />
 			</label>
 			<label>
-				<span class="label-text">Max HR (bpm)</span>
-				<input type="number" bind:value={maxHr} placeholder="e.g. 190 (blank = 208 − 0.7 × age)" min="100" max="230" />
+				<span class="label-text">{m('settingsAccount.maxHr')}</span>
+				<input type="number" bind:value={maxHr} placeholder={m('settingsAccount.maxHrPlaceholder')} min="100" max="230" />
 			</label>
 		</div>
 		<label class="consent-checkbox">
 			<input type="checkbox" bind:checked={healthDataConsent} />
 			<span>
-				I consent to Threkir storing my date of birth as health-related
-				data, used to personalise training paces, heart-rate zones, and
-				age-graded results. You can withdraw this any time.
+				{m('settingsAccount.healthConsentLabel')}
 			</span>
 		</label>
 		{#if healthDataConsentAt}
 			<p class="section-desc consent-recorded">
-				Consent recorded on {new Date(healthDataConsentAt).toLocaleDateString()}.
-				Unticking the box and saving withdraws consent and clears your stored
-				date of birth.
+				{m('settingsAccount.consentRecorded', { date: new Date(healthDataConsentAt).toLocaleDateString() })}
 			</p>
 		{/if}
 		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
-			{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Profile'}
+			{saving ? m('settingsAccount.saving') : saved ? m('settingsAccount.savedDone') : m('settingsAccount.saveProfile')}
 		</button>
 	</section>
 
 	<!-- Sign-in methods -->
 	<section class="card">
-		<h2>Sign-in Methods</h2>
+		<h2>{m('settingsAccount.signinMethodsHeading')}</h2>
 		<p class="section-desc">
-			Methods you can use to sign in to this account. Linking another method opens an OAuth
-			redirect just like signing in. You need at least one method linked at all times.
+			{m('settingsAccount.signinMethodsDesc')}
 		</p>
 
 		{#if identitiesLoading}
-			<p class="muted">Loading…</p>
+			<p class="muted">{m('shell.loading')}</p>
 		{:else}
 			<ul class="identity-list">
 				{#each identities as id (id.identity_id)}
@@ -679,9 +677,9 @@
 							{#if email}<span class="identity-meta">{email}</span>{/if}
 							{#if id.created_at}
 								<span class="identity-meta">
-									Linked {new Date(id.created_at).toLocaleDateString(activeFormatLocale(), {
+									{m('settingsAccount.linkedOn', { date: new Date(id.created_at).toLocaleDateString(activeFormatLocale(), {
 										year: 'numeric', month: 'short', day: 'numeric',
-									})}
+									}) })}
 								</span>
 							{/if}
 						</div>
@@ -690,10 +688,10 @@
 							onclick={() => unlinkProvider(id)}
 							disabled={unlinkingProvider === id.provider || identities.length <= 1}
 							title={identities.length <= 1
-								? 'Link another method first — you need at least one to sign in.'
+								? m('settingsAccount.unlinkBlockedTitle')
 								: ''}
 						>
-							{unlinkingProvider === id.provider ? 'Unlinking…' : 'Unlink'}
+							{unlinkingProvider === id.provider ? m('settingsAccount.unlinking') : m('settingsAccount.unlink')}
 						</button>
 					</li>
 				{/each}
@@ -721,7 +719,7 @@
 									<path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
 								</svg>
 							{/if}
-							<span>{busy ? `Linking ${label}…` : `Link ${label}`}</span>
+							<span>{busy ? m('settingsAccount.linkingProvider', { provider: label }) : m('settingsAccount.linkProvider', { provider: label })}</span>
 						</button>
 					{/each}
 				</div>
@@ -733,52 +731,48 @@
 
 	<!-- Password -->
 	<section class="card">
-		<h2>Sign-in Password</h2>
+		<h2>{m('settingsAccount.passwordHeading')}</h2>
 		<p class="section-desc">
-			Set or change the password for signing in with your email. If you signed up via Google
-			or Apple, set one here to enable email+password sign-in on devices that don't support
-			social login (e.g. the Wear OS watch app).
+			{m('settingsAccount.passwordDesc')}
 		</p>
 		<div class="form-grid">
 			<label>
-				<span class="label-text">New Password</span>
-				<input type="password" autocomplete="new-password" bind:value={newPassword} placeholder="At least 6 characters" />
+				<span class="label-text">{m('settingsAccount.newPassword')}</span>
+				<input type="password" autocomplete="new-password" bind:value={newPassword} placeholder={m('settingsAccount.newPasswordPlaceholder')} />
 			</label>
 			<label>
-				<span class="label-text">Confirm Password</span>
+				<span class="label-text">{m('settingsAccount.confirmPassword')}</span>
 				<input type="password" autocomplete="new-password" bind:value={confirmPassword} />
 			</label>
 		</div>
 		{#if passwordError}<p class="error-text" role="alert">{passwordError}</p>{/if}
 		{#if passwordStatus}<p class="ok-text">{passwordStatus}</p>{/if}
 		<button class="btn btn-primary btn-save" onclick={handleSavePassword} disabled={passwordSaving || !newPassword || !confirmPassword}>
-			{passwordSaving ? 'Saving...' : 'Save Password'}
+			{passwordSaving ? m('settingsAccount.saving') : m('settingsAccount.savePassword')}
 		</button>
 	</section>
 
 	<!-- Safety — trusted contacts. Persona-hunt Round 3 Woman #4. -->
 	<section class="card">
-		<h2>Safety</h2>
+		<h2>{m('settingsAccount.safetyHeading')}</h2>
 		<p class="section-desc">
-			Designate one or more trusted contacts. The scaffold stores the list with your
-			account so the planned "overdue run" + panic-button surfaces have somewhere to
-			send notifications. Up to {MAX_TRUSTED_CONTACTS}.
+			{m('settingsAccount.safetyDesc', { max: MAX_TRUSTED_CONTACTS })}
 		</p>
 		<div class="contact-list">
 			{#each trustedContacts as contact, idx (idx)}
 				<div class="contact-row">
 					<div class="contact-fields">
 						<label class="field">
-							<span class="label-text">Name</span>
+							<span class="label-text">{m('settingsAccount.contactName')}</span>
 							<input
 								type="text"
-								placeholder="e.g. Alex Chen"
+								placeholder={m('settingsAccount.contactNamePlaceholder')}
 								bind:value={contact.name}
 								maxlength="80"
 							/>
 						</label>
 						<label class="field">
-							<span class="label-text">Phone</span>
+							<span class="label-text">{m('settingsAccount.contactPhone')}</span>
 							<input
 								type="tel"
 								placeholder="+1 555 123 4567"
@@ -787,7 +781,7 @@
 							/>
 						</label>
 						<label class="field">
-							<span class="label-text">Email</span>
+							<span class="label-text">{m('settingsAccount.email')}</span>
 							<input
 								type="email"
 								placeholder="alex@example.com"
@@ -796,10 +790,10 @@
 							/>
 						</label>
 						<label class="field">
-							<span class="label-text">Relationship</span>
+							<span class="label-text">{m('settingsAccount.contactRelationship')}</span>
 							<input
 								type="text"
-								placeholder="partner / parent / run buddy"
+								placeholder={m('settingsAccount.contactRelationshipPlaceholder')}
 								bind:value={contact.relationship}
 								maxlength="40"
 							/>
@@ -807,7 +801,7 @@
 					</div>
 					{#if !hasReachableChannel(contact) && contact.name?.trim()}
 						<p class="warn-text">
-							Add a phone or email so we have a way to reach them.
+							{m('settingsAccount.contactNeedsChannel')}
 						</p>
 					{/if}
 					<button
@@ -815,7 +809,7 @@
 						class="btn btn-outline btn-sm"
 						onclick={() => removeTrustedContact(idx)}
 					>
-						Remove
+						{m('settingsAccount.remove')}
 					</button>
 				</div>
 			{/each}
@@ -828,7 +822,7 @@
 				disabled={trustedContacts.length >= MAX_TRUSTED_CONTACTS}
 			>
 				<span class="material-symbols">person_add</span>
-				Add contact
+				{m('settingsAccount.addContact')}
 			</button>
 			<button
 				type="button"
@@ -836,40 +830,36 @@
 				onclick={saveTrustedContacts}
 				disabled={trustedContactsSaving}
 			>
-				{trustedContactsSaving ? 'Saving...' : 'Save contacts'}
+				{trustedContactsSaving ? m('settingsAccount.saving') : m('settingsAccount.saveContacts')}
 			</button>
 		</div>
 	</section>
 
 	<!-- Notifications -->
 	<section class="card">
-		<h2>Notifications</h2>
+		<h2>{m('settingsAccount.notificationsHeading')}</h2>
 		{#if !pushSupported}
 			<p class="section-desc">
-				This browser doesn't support web push, or this build was deployed without
-				a <code>PUBLIC_VAPID_PUBLIC_KEY</code>. Notifications are off.
+				{m('settingsAccount.pushUnsupportedPrefix')}<code>PUBLIC_VAPID_PUBLIC_KEY</code>{m('settingsAccount.pushUnsupportedSuffix')}
 			</p>
 		{:else if pushPermissionState === 'denied'}
 			<p class="section-desc">
-				Notifications are blocked at the browser level. Re-enable them in your
-				browser's site settings, then come back and toggle on.
+				{m('settingsAccount.pushBlocked')}
 			</p>
 		{:else}
 			<p class="section-desc">
-				Get a system notification when a club event you're attending is starting,
-				when a race goes live, or when an admin posts an update. Per-device — each
-				browser / phone toggles independently.
+				{m('settingsAccount.pushDesc')}
 			</p>
 			<div class="btn-row">
 				{#if pushSubscribed}
 					<button class="btn btn-outline" onclick={handleDisablePush} disabled={pushBusy}>
 						<span class="material-symbols">notifications_off</span>
-						{pushBusy ? 'Updating...' : 'Disable notifications'}
+						{pushBusy ? m('settingsAccount.updating') : m('settingsAccount.disableNotifications')}
 					</button>
 				{:else}
 					<button class="btn btn-primary" onclick={handleEnablePush} disabled={pushBusy}>
 						<span class="material-symbols">notifications_active</span>
-						{pushBusy ? 'Enabling...' : 'Enable notifications'}
+						{pushBusy ? m('settingsAccount.enabling') : m('settingsAccount.enableNotifications')}
 					</button>
 				{/if}
 			</div>
@@ -878,69 +868,65 @@
 
 	<!-- Backup & Restore -->
 	<section class="card">
-		<h2>Backup & Restore</h2>
+		<h2>{m('settingsAccount.backupHeading')}</h2>
 		<p class="section-desc">
-			Full backup includes every run with its GPS trace, your routes, profile, and preferences.
+			{m('settingsAccount.backupDesc')}
 		</p>
 		<div class="btn-row">
 			<button class="btn btn-primary" onclick={handleBackup} disabled={backingUp || restoring}>
 				<span class="material-symbols">archive</span>
-				{backingUp ? (backupProgress ? `${backupProgress.stage}...` : 'Backing up...') : 'Download full backup'}
+				{backingUp ? (backupProgress ? `${backupProgress.stage}...` : m('settingsAccount.backingUp')) : m('settingsAccount.downloadBackup')}
 			</button>
 			<button class="btn btn-outline" onclick={() => restoreFileInput.click()} disabled={backingUp || restoring}>
 				<span class="material-symbols">unarchive</span>
-				{restoring ? (restoreProgress ? `${restoreProgress.stage}...` : 'Restoring...') : 'Restore from backup'}
+				{restoring ? (restoreProgress ? `${restoreProgress.stage}...` : m('settingsAccount.restoring')) : m('settingsAccount.restoreBackup')}
 			</button>
 			<input bind:this={restoreFileInput} type="file" accept=".zip" onchange={handleRestoreFile} style="display: none" />
 		</div>
 		{#if restoreResult}
 			<p class="ok-text">
-				Restored {restoreResult.runsImported} runs, {restoreResult.tracksUploaded} tracks, {restoreResult.routesImported} routes.
-				{#if restoreResult.warnings.length > 0}<br /><small>{restoreResult.warnings.length} warnings (see console).</small>{/if}
+				{m('settingsAccount.restoreResult', { runs: restoreResult.runsImported, tracks: restoreResult.tracksUploaded, routes: restoreResult.routesImported })}
+				{#if restoreResult.warnings.length > 0}<br /><small>{m('settingsAccount.restoreWarnings', { n: restoreResult.warnings.length })}</small>{/if}
 			</p>
 		{/if}
-		{#if restoreError}<p class="error-text" role="alert">Restore failed: {restoreError}</p>{/if}
+		{#if restoreError}<p class="error-text" role="alert">{m('settingsAccount.restoreFailed', { error: restoreError })}</p>{/if}
 	</section>
 
 	<!-- Data Export -->
 	<section class="card">
-		<h2>Data Export</h2>
+		<h2>{m('settingsAccount.dataExportHeading')}</h2>
 		<p class="section-desc">
-			CSV for spreadsheet analysis, or a single <code>runs.json</code> for scripts —
-			same row shape as the <code>runs.json</code> inside a Full backup. No GPS traces in either;
-			use Full backup for a lossless copy.
+			{m('settingsAccount.dataExportDescPrefix')}<code>runs.json</code>{m('settingsAccount.dataExportDescBetween')}<code>runs.json</code>{m('settingsAccount.dataExportDescSuffix')}
 		</p>
 		<div class="btn-row">
 			<button class="btn btn-outline" onclick={handleExportCsv} disabled={exporting || exportingJson || exportingGpx}>
 				<span class="material-symbols">download</span>
-				{exporting ? 'Exporting...' : 'Export All Runs (CSV)'}
+				{exporting ? m('settingsAccount.exporting') : m('settingsAccount.exportCsv')}
 			</button>
 			<button class="btn btn-outline" onclick={handleExportJson} disabled={exporting || exportingJson || exportingGpx}>
 				<span class="material-symbols">code</span>
-				{exportingJson ? 'Exporting...' : 'Export All Runs (JSON)'}
+				{exportingJson ? m('settingsAccount.exporting') : m('settingsAccount.exportJson')}
 			</button>
 			<button
 				class="btn btn-outline"
 				onclick={handleCloudGpxExport}
 				disabled={exporting || exportingJson || exportingGpx}
-				title="Server-built GPX zip with full GPS + HR tracks. Imports into Strava, Garmin, Komoot, etc."
+				title={m('settingsAccount.cloudExportTitle')}
 			>
 				<span class="material-symbols">cloud_download</span>
-				{exportingGpx ? 'Building zip...' : 'Cloud export (GPX zip)'}
+				{exportingGpx ? m('settingsAccount.buildingZip') : m('settingsAccount.cloudExport')}
 			</button>
 		</div>
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
-			<strong>Cloud export</strong> builds a server-side zip with one
-			GPX file per run (including HR extensions), bypassing browser
-			memory limits. Free tier: 2 exports per hour; Pro: 8.
+			<strong>{m('settingsAccount.cloudExportFootnotePrefix')}</strong>{m('settingsAccount.cloudExportFootnoteSuffix')}
 		</p>
 	</section>
 
 	<ConfirmDialog
 		open={showRestoreConfirm}
-		title="Restore from backup"
-		message={`Restore from "${pendingRestoreFile?.name ?? ''}"? This adds or overwrites runs matching IDs in the backup.`}
-		confirmLabel="Restore"
+		title={m('settingsAccount.restoreConfirmTitle')}
+		message={m('settingsAccount.restoreConfirmMessage', { file: pendingRestoreFile?.name ?? '' })}
+		confirmLabel={m('settingsAccount.restoreConfirmLabel')}
 		onconfirm={confirmRestore}
 		oncancel={cancelRestore}
 		danger
@@ -948,31 +934,31 @@
 
 	<!-- Danger zone -->
 	<section class="card card-danger">
-		<h2 class="danger-heading">Danger Zone</h2>
-		<p class="section-desc">Permanently delete your account and all associated data. This cannot be undone.</p>
+		<h2 class="danger-heading">{m('settingsAccount.dangerZoneHeading')}</h2>
+		<p class="section-desc">{m('settingsAccount.dangerZoneDesc')}</p>
 		<button class="btn btn-danger" onclick={() => (showDeleteAccount = true)} disabled={deleting}>
-			{deleting ? 'Deleting...' : 'Delete Account'}
+			{deleting ? m('settingsAccount.deleting') : m('settingsAccount.deleteAccount')}
 		</button>
 	</section>
 </div>
 
 <ConfirmDialog
 	open={showDeleteAccount}
-	title="Delete your account?"
-	message="This permanently deletes your account, all runs, routes, tracks, club memberships, and preferences. This cannot be undone. Download a backup first if you want to keep your data."
-	confirmLabel="Delete my account"
+	title={m('settingsAccount.deleteConfirmTitle')}
+	message={m('settingsAccount.deleteConfirmMessage')}
+	confirmLabel={m('settingsAccount.deleteConfirmLabel')}
 	danger
 	requireText={auth.user?.email ?? 'DELETE'}
-	requireTextLabel={`Type your email (${auth.user?.email ?? 'DELETE'}) to confirm`}
+	requireTextLabel={m('settingsAccount.deleteRequireTextLabel', { email: auth.user?.email ?? 'DELETE' })}
 	onconfirm={handleDeleteAccount}
 	oncancel={() => (showDeleteAccount = false)}
 />
 
 <ConfirmDialog
 	open={showUnlinkConfirm}
-	title="Unlink {pendingUnlink ? (PROVIDER_LABEL[pendingUnlink.provider] ?? pendingUnlink.provider) : ''}?"
-	message="You won't be able to sign in with this method until you link it again. Other linked sign-in methods will keep working."
-	confirmLabel="Unlink"
+	title={m('settingsAccount.unlinkConfirmTitle', { provider: pendingUnlink ? (PROVIDER_LABEL[pendingUnlink.provider] ?? pendingUnlink.provider) : '' })}
+	message={m('settingsAccount.unlinkConfirmMessage')}
+	confirmLabel={m('settingsAccount.unlink')}
 	danger
 	onconfirm={confirmUnlink}
 	oncancel={() => {

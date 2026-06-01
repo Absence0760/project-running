@@ -8,6 +8,7 @@
 	import { fetchRoutesWithError, setRouteStar } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import ImportRoute from '$lib/components/ImportRoute.svelte';
 	import RouteExplorer from '$lib/components/RouteExplorer.svelte';
 	import RouteHeatmap from '$lib/components/RouteHeatmap.svelte';
@@ -211,7 +212,12 @@
 			await setRouteStar(routeId, next);
 		} catch (e) {
 			routes = routes.map((r) => (r.id === routeId ? { ...r, is_starred: !next } : r));
-			showToast(`Could not ${next ? 'star' : 'unstar'} route: ${e}`, 'error');
+			showToast(
+				next
+					? m('routesPage.starError', { error: String(e) })
+					: m('routesPage.unstarError', { error: String(e) }),
+				'error',
+			);
 		}
 	}
 
@@ -261,7 +267,7 @@
 </script>
 
 <svelte:head>
-	<title>Routes — Threkir</title>
+	<title>{m('routesPage.pageTitle')} — Threkir</title>
 </svelte:head>
 
 {#if showImport}
@@ -273,7 +279,7 @@
 		<!-- tabindex=-1: keydown bubbles here from the focused tab; the
 		     tablist itself is never tab-stopped (the tabs carry the roving
 		     tabindex). Satisfies a11y_interactive_supports_focus. -->
-		<div class="tabs" role="tablist" aria-label="Routes section" tabindex={-1} onkeydown={handleTablistKeydown}>
+		<div class="tabs" role="tablist" aria-label={m('routesPage.sectionLabel')} tabindex={-1} onkeydown={handleTablistKeydown}>
 			<button
 				role="tab"
 				class="tab"
@@ -282,7 +288,7 @@
 				tabindex={tab === 'mine' ? 0 : -1}
 				onclick={() => setTab('mine')}
 			>
-				My routes
+				{m('routesPage.tabMine')}
 			</button>
 			<button
 				role="tab"
@@ -292,7 +298,7 @@
 				tabindex={tab === 'explore' ? 0 : -1}
 				onclick={() => setTab('explore')}
 			>
-				Explore
+				{m('routesPage.tabExplore')}
 			</button>
 			<button
 				role="tab"
@@ -302,7 +308,7 @@
 				tabindex={tab === 'heatmap' ? 0 : -1}
 				onclick={() => setTab('heatmap')}
 			>
-				Heatmap
+				{m('routesPage.tabHeatmap')}
 			</button>
 		</div>
 	</header>
@@ -326,33 +332,31 @@
 					</div>
 				{/each}
 			</div>
-			<p class="sr-only" role="status">Loading your routes…</p>
+			<p class="sr-only" role="status">{m('routesPage.loadingRoutes')}</p>
 		{:else if fetchError}
 			<div class="error-banner" role="alert">
 				<span class="material-symbols" aria-hidden="true">error</span>
 				<div>
-					<strong>Couldn't load your routes.</strong>
+					<strong>{m('routesPage.loadError')}</strong>
 					<span class="error-detail">{fetchError}</span>
 				</div>
-				<button class="btn btn-outline" onclick={load}>Retry</button>
+				<button class="btn btn-outline" onclick={load}>{m('routesPage.retry')}</button>
 			</div>
 		{:else if routes.length === 0}
 			<div class="empty-card">
 				<span class="material-symbols empty-icon" aria-hidden="true">route</span>
-				<h3>No saved routes yet</h3>
+				<h3>{m('routesPage.emptyTitle')}</h3>
 				<p class="empty-text">
-					Build a route on the map, import one from a GPX/TCX file, or save
-					one from a recorded run. Starred routes appear on your paired Wear OS
-					watch.
+					{m('routesPage.emptyText')}
 				</p>
 				<div class="empty-actions">
 					<a href="/routes/new" class="btn btn-primary">
 						<span class="material-symbols" aria-hidden="true">add</span>
-						Build a route
+						{m('routesPage.buildRoute')}
 					</a>
 					<button class="btn btn-outline" type="button" onclick={() => (showImport = true)}>
 						<span class="material-symbols" aria-hidden="true">upload_file</span>
-						Import file
+						{m('routesPage.importFile')}
 					</button>
 					<button
 						class="btn btn-outline"
@@ -360,7 +364,7 @@
 						onclick={() => setTab('explore')}
 					>
 						<span class="material-symbols" aria-hidden="true">explore</span>
-						Browse community routes
+						{m('routesPage.browseCommunity')}
 					</button>
 				</div>
 			</div>
@@ -376,15 +380,15 @@
 					<input
 						type="text"
 						class="search-input"
-						placeholder="Search routes by name…"
+						placeholder={m('routesPage.searchPlaceholder')}
 						bind:value={search}
-						aria-label="Search routes"
+						aria-label={m('routesPage.searchLabel')}
 					/>
 					{#if search}
 						<button
 							type="button"
 							class="search-clear"
-							aria-label="Clear search"
+							aria-label={m('routesPage.clearSearch')}
 							onclick={() => (search = '')}
 						>
 							<span class="material-symbols" aria-hidden="true">close</span>
@@ -392,25 +396,25 @@
 					{/if}
 				</div>
 				<div class="select-group">
-					<select bind:value={surfaceFilter} class="toolbar-select" aria-label="Surface">
-						<option value="any">Any surface</option>
-						<option value="road">Road</option>
-						<option value="trail">Trail</option>
-						<option value="mixed">Mixed</option>
+					<select bind:value={surfaceFilter} class="toolbar-select" aria-label={m('routesPage.surfaceLabel')}>
+						<option value="any">{m('routesPage.surfaceAny')}</option>
+						<option value="road">{m('routesPage.surfaceRoad')}</option>
+						<option value="trail">{m('routesPage.surfaceTrail')}</option>
+						<option value="mixed">{m('routesPage.surfaceMixed')}</option>
 					</select>
-					<select bind:value={distanceFilter} class="toolbar-select" aria-label="Distance">
-						<option value="any">Any distance</option>
+					<select bind:value={distanceFilter} class="toolbar-select" aria-label={m('routesPage.distanceLabel')}>
+						<option value="any">{m('routesPage.distanceAny')}</option>
 						<option value="lt5">&lt; 5 {distanceUnitLabel}</option>
 						<option value="5to10">5–10 {distanceUnitLabel}</option>
 						<option value="10to20">10–20 {distanceUnitLabel}</option>
 						<option value="gt20">20+ {distanceUnitLabel}</option>
 					</select>
-					<select bind:value={sortKey} class="toolbar-select" aria-label="Sort">
-						<option value="newest">Newest first</option>
-						<option value="longest">Longest</option>
-						<option value="shortest">Shortest</option>
-						<option value="most_run">Most-run</option>
-						<option value="az">A–Z</option>
+					<select bind:value={sortKey} class="toolbar-select" aria-label={m('routesPage.sortLabel')}>
+						<option value="newest">{m('routesPage.sortNewest')}</option>
+						<option value="longest">{m('routesPage.sortLongest')}</option>
+						<option value="shortest">{m('routesPage.sortShortest')}</option>
+						<option value="most_run">{m('routesPage.sortMostRun')}</option>
+						<option value="az">{m('routesPage.sortAz')}</option>
 					</select>
 					<button
 						type="button"
@@ -418,47 +422,47 @@
 						class:active={starredOnly}
 						onclick={() => (starredOnly = !starredOnly)}
 						aria-pressed={starredOnly}
-						aria-label={starredOnly ? 'Show all routes' : 'Show starred routes only'}
-						title="Starred routes sync to your paired watch"
+						aria-label={starredOnly ? m('routesPage.showAll') : m('routesPage.showStarredOnly')}
+						title={m('routesPage.starredSyncTitle')}
 					>
 						<span class="material-symbols" aria-hidden="true">star</span>
-						Starred
+						{m('routesPage.starred')}
 					</button>
 				</div>
 				<div class="toolbar-actions">
 					<button class="btn btn-outline btn-sm" type="button" onclick={() => (showImport = true)}>
 						<span class="material-symbols" aria-hidden="true">upload_file</span>
-						Import
+						{m('routesPage.import')}
 					</button>
 					<a href="/routes/new" class="btn btn-primary btn-sm">
 						<span class="material-symbols" aria-hidden="true">add</span>
-						New route
+						{m('routesPage.newRoute')}
 					</a>
 				</div>
 			</div>
 
 			<div class="filter-meta">
 				<span>
-					{filteredRoutes.length} of {routes.length}
-					{routes.length === 1 ? 'route' : 'routes'}
-					{#if filtersActive}<span class="meta-sep"> · </span>filtered{/if}
+					{routes.length === 1
+						? m('routesPage.routeCountSingular', { shown: filteredRoutes.length, total: routes.length })
+						: m('routesPage.routeCountPlural', { shown: filteredRoutes.length, total: routes.length })}
+					{#if filtersActive}<span class="meta-sep"> · </span>{m('routesPage.filtered')}{/if}
 				</span>
 				{#if filtersActive}
-					<button type="button" class="link-btn" onclick={clearFilters}>Clear filters</button>
+					<button type="button" class="link-btn" onclick={clearFilters}>{m('routesPage.clearFilters')}</button>
 				{/if}
 			</div>
 
 			{#if filteredRoutes.length === 0}
 				<div class="empty-card">
 					<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-					<h3>No routes match these filters</h3>
+					<h3>{m('routesPage.noMatchTitle')}</h3>
 					<p class="empty-text">
-						Try widening the surface or distance bucket, clear the search
-						box, or turn off the starred-only filter.
+						{m('routesPage.noMatchText')}
 					</p>
 					<div class="empty-actions">
 						<button type="button" class="btn btn-primary" onclick={clearFilters}>
-							Clear filters
+							{m('routesPage.clearFilters')}
 						</button>
 					</div>
 				</div>
@@ -482,11 +486,11 @@
 										class="star-btn"
 										class:starred={route.is_starred}
 										title={route.is_starred
-											? 'Unstar route (removes from watch)'
-											: 'Star route (shows on watch)'}
+											? m('routesPage.unstarTitle')
+											: m('routesPage.starTitle')}
 										aria-label={route.is_starred
-											? `Unstar ${route.name ?? 'route'}`
-											: `Star ${route.name ?? 'route'} — shows on paired watch`}
+											? m('routesPage.unstarRouteLabel', { name: route.name ?? m('routesPage.routeFallback') })
+											: m('routesPage.starRouteLabel', { name: route.name ?? m('routesPage.routeFallback') })}
 										aria-pressed={route.is_starred}
 										onclick={(e) => toggleStar(e, route.id)}
 									>
@@ -500,7 +504,7 @@
 									<span>{formatDistance(route.distance_m)}</span>
 									{#if route.elevation_m}
 										<span class="meta-sep">&middot;</span>
-										<span>{route.elevation_m} m elev</span>
+										<span>{m('routesPage.elevation', { m: route.elevation_m })}</span>
 									{/if}
 									<span class="meta-sep">&middot;</span>
 									<span class="surface-tag">{route.surface}</span>

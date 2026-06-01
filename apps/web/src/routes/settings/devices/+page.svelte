@@ -12,6 +12,7 @@
 		getCurrentSubscription,
 	} from '$lib/util/push';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 
@@ -68,9 +69,9 @@
 			await subscribeToPush();
 			await refreshPushState();
 			await refreshCurrentDeviceRow();
-			showToast('Notifications enabled on this device.', 'success');
+			showToast(m('settingsDevices.pushEnabledToast'), 'success');
 		} catch (e) {
-			showToast(`Could not enable notifications: ${(e as Error).message}`, 'error');
+			showToast(m('settingsDevices.pushEnableFailedToast', { message: (e as Error).message }), 'error');
 		} finally {
 			pushBusy = false;
 		}
@@ -82,7 +83,7 @@
 			await unsubscribeFromPush();
 			await refreshPushState();
 			await refreshCurrentDeviceRow();
-			showToast('Notifications disabled on this device.', 'success');
+			showToast(m('settingsDevices.pushDisabledToast'), 'success');
 		} finally {
 			pushBusy = false;
 		}
@@ -121,7 +122,7 @@
 			.eq('user_id', auth.user.id)
 			.eq('device_id', deviceId);
 		if (error) {
-			showToast(`Rename failed: ${error.message}`, 'error');
+			showToast(m('settingsDevices.renameFailedToast', { message: error.message }), 'error');
 			return;
 		}
 		devices = devices.map((d) =>
@@ -203,7 +204,7 @@
 
 	function formatPrefValue(v: unknown): string {
 		if (v === null || v === undefined) return '—';
-		if (typeof v === 'boolean') return v ? 'on' : 'off';
+		if (typeof v === 'boolean') return v ? m('settingsDevices.valueOn') : m('settingsDevices.valueOff');
 		if (typeof v === 'object') return JSON.stringify(v);
 		return String(v);
 	}
@@ -244,60 +245,60 @@
 
 	const overridableKeys: KeyEditor[] = [
 		// Device-scope (D) — per-browser / per-device only.
-		{ key: 'voice_feedback_enabled', label: 'Voice feedback (TTS)', shape: { kind: 'bool' } },
+		{ key: 'voice_feedback_enabled', label: m('settingsDevices.keyVoiceFeedback'), shape: { kind: 'bool' } },
 		{
 			key: 'voice_feedback_interval_km',
-			label: 'Voice interval',
+			label: m('settingsDevices.keyVoiceInterval'),
 			shape: { kind: 'number', min: 0.1, max: 10, step: 0.1, unit: 'km' },
 		},
-		{ key: 'haptic_feedback_enabled', label: 'Haptic feedback', shape: { kind: 'bool' } },
-		{ key: 'keep_screen_on', label: 'Keep screen on', shape: { kind: 'bool' } },
+		{ key: 'haptic_feedback_enabled', label: m('settingsDevices.keyHapticFeedback'), shape: { kind: 'bool' } },
+		{ key: 'keep_screen_on', label: m('settingsDevices.keyKeepScreenOn'), shape: { kind: 'bool' } },
 		// Universal-with-device-override (UD).
 		{
 			key: 'preferred_unit',
-			label: 'Preferred unit',
+			label: m('settingsDevices.keyPreferredUnit'),
 			shape: {
 				kind: 'enum',
 				options: [
-					{ value: 'km', label: 'Kilometres' },
-					{ value: 'mi', label: 'Miles' },
+					{ value: 'km', label: m('settingsDevices.unitKilometres') },
+					{ value: 'mi', label: m('settingsDevices.unitMiles') },
 				],
 			},
 		},
 		{
 			key: 'default_activity_type',
-			label: 'Default activity',
+			label: m('settingsDevices.keyDefaultActivity'),
 			shape: {
 				kind: 'enum',
 				options: [
-					{ value: 'run', label: 'Run' },
-					{ value: 'walk', label: 'Walk' },
-					{ value: 'hike', label: 'Hike' },
-					{ value: 'cycle', label: 'Cycle' },
+					{ value: 'run', label: m('settingsDevices.activityRun') },
+					{ value: 'walk', label: m('settingsDevices.activityWalk') },
+					{ value: 'hike', label: m('settingsDevices.activityHike') },
+					{ value: 'cycle', label: m('settingsDevices.activityCycle') },
 				],
 			},
 		},
 		{
 			key: 'map_style',
-			label: 'Map style',
+			label: m('settingsDevices.keyMapStyle'),
 			shape: {
 				kind: 'enum',
 				options: [
-					{ value: 'streets', label: 'Streets' },
-					{ value: 'satellite', label: 'Satellite' },
-					{ value: 'outdoors', label: 'Outdoors' },
-					{ value: 'dark', label: 'Dark' },
+					{ value: 'streets', label: m('settingsDevices.mapStreets') },
+					{ value: 'satellite', label: m('settingsDevices.mapSatellite') },
+					{ value: 'outdoors', label: m('settingsDevices.mapOutdoors') },
+					{ value: 'dark', label: m('settingsDevices.mapDark') },
 				],
 			},
 		},
 		{
 			key: 'units_pace_format',
-			label: 'Pace format',
+			label: m('settingsDevices.keyPaceFormat'),
 			shape: {
 				kind: 'enum',
 				options: [
-					{ value: 'min_per_km', label: 'Minutes per km' },
-					{ value: 'min_per_mi', label: 'Minutes per mile' },
+					{ value: 'min_per_km', label: m('settingsDevices.paceMinPerKm') },
+					{ value: 'min_per_mi', label: m('settingsDevices.paceMinPerMi') },
 					{ value: 'kph', label: 'km/h' },
 					{ value: 'mph', label: 'mph' },
 				],
@@ -372,11 +373,10 @@
 
 <div class="page">
 	<header class="page-head">
-		<p class="kicker">Settings</p>
-		<h1>Devices</h1>
+		<p class="kicker">{m('shell.settings')}</p>
+		<h1>{m('settingsDevices.title')}</h1>
 		<p class="tagline">
-			Every app and browser that's ever signed into your account. Override universal
-			preferences per device, or reset one that's gone stale.
+			{m('settingsDevices.tagline')}
 		</p>
 	</header>
 
@@ -392,15 +392,13 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading devices…</p>
+		<p class="sr-only" role="status">{m('settingsDevices.loadingDevices')}</p>
 	{:else if devices.length === 0}
 		<section class="card empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">devices_other</span>
-			<h3>No devices registered yet</h3>
+			<h3>{m('settingsDevices.emptyTitle')}</h3>
 			<p class="empty-text">
-				Each app or browser session registers itself the first time it signs in and
-				saves a preference. Open the app on your phone or watch and this list will
-				populate.
+				{m('settingsDevices.emptyText')}
 			</p>
 		</section>
 	{:else}
@@ -418,7 +416,7 @@
 							<input
 								type="text"
 								class="device-label-input"
-								aria-label="Device label"
+								aria-label={m('settingsDevices.deviceLabelAria')}
 								value={d.label ?? ''}
 								placeholder={platformLabel(d.platform)}
 								onblur={(e) => renameDevice(d.device_id, (e.currentTarget as HTMLInputElement).value)}
@@ -427,38 +425,40 @@
 								}}
 							/>
 							{#if d.device_id === currentDeviceId}
-								<span class="current-badge">This device</span>
+								<span class="current-badge">{m('settingsDevices.thisDevice')}</span>
 							{/if}
 						</div>
 						<div class="device-meta">
 							<span>{platformLabel(d.platform)}</span>
 							<span class="sep">&middot;</span>
-							<span>Last seen {formatDate(d.last_seen_at)}</span>
+							<span>{m('settingsDevices.lastSeen', { date: formatDate(d.last_seen_at) })}</span>
 							<span class="sep">&middot;</span>
 							<button
 								type="button"
 								class="override-link"
 								onclick={() => toggleExpand(d.device_id)}
 							>
-								{overrideCount(d.prefs)} pref override{overrideCount(d.prefs) === 1 ? '' : 's'}
+								{overrideCount(d.prefs) === 1
+									? m('settingsDevices.overrideCountOne', { count: overrideCount(d.prefs) })
+									: m('settingsDevices.overrideCountOther', { count: overrideCount(d.prefs) })}
 								<span class="material-symbols chev">
 									{expanded === d.device_id ? 'expand_less' : 'expand_more'}
 								</span>
 							</button>
 							{#if d.device_id !== currentDeviceId && hasPushSubscription(d.prefs)}
 								<span class="sep">&middot;</span>
-								<span class="push-state" title="This device is subscribed to push notifications">
+								<span class="push-state" title={m('settingsDevices.pushOnTitle')}>
 									<span class="material-symbols">notifications_active</span>
-									Push on
+									{m('settingsDevices.pushOn')}
 								</span>
 							{/if}
 						</div>
 						{#if d.device_id === currentDeviceId}
 							<div class="device-push" data-testid="device-push-row">
 								{#if !pushSupported}
-									<span class="push-hint">Push not supported on this browser / build.</span>
+									<span class="push-hint">{m('settingsDevices.pushNotSupported')}</span>
 								{:else if pushPermissionState === 'denied'}
-									<span class="push-hint">Notifications blocked at the browser level.</span>
+									<span class="push-hint">{m('settingsDevices.pushBlocked')}</span>
 								{:else if pushSubscribed}
 									<button
 										type="button"
@@ -467,7 +467,7 @@
 										disabled={pushBusy}
 									>
 										<span class="material-symbols">notifications_off</span>
-										{pushBusy ? 'Updating…' : 'Disable push'}
+										{pushBusy ? m('settingsDevices.pushUpdating') : m('settingsDevices.disablePush')}
 									</button>
 								{:else}
 									<button
@@ -477,7 +477,7 @@
 										disabled={pushBusy}
 									>
 										<span class="material-symbols">notifications_active</span>
-										{pushBusy ? 'Enabling…' : 'Enable push'}
+										{pushBusy ? m('settingsDevices.pushEnabling') : m('settingsDevices.enablePush')}
 									</button>
 								{/if}
 							</div>
@@ -491,10 +491,10 @@
 										<button
 											type="button"
 											class="override-clear"
-											title="Clear this override"
+											title={m('settingsDevices.clearOverrideTitle')}
 											onclick={() => clearOverride(d.device_id, k)}
 										>
-											Clear
+											{m('settingsDevices.clear')}
 										</button>
 									</li>
 								{/each}
@@ -504,7 +504,7 @@
 										class="override-add-btn"
 										onclick={() => openAddDialog(d.device_id)}
 									>
-										+ Add override
+										+ {m('settingsDevices.addOverride')}
 									</button>
 								</li>
 							</ul>
@@ -514,8 +514,8 @@
 						class="remove-btn"
 						onclick={() => (confirmingRemove = d.device_id)}
 						title={d.device_id === currentDeviceId
-							? 'Reset this device (wipes local cache and re-registers)'
-							: 'Remove device'}
+							? m('settingsDevices.resetDeviceTitle')
+							: m('settingsDevices.removeDeviceTitle')}
 					>
 						<span class="material-symbols">
 							{d.device_id === currentDeviceId ? 'refresh' : 'close'}
@@ -529,11 +529,11 @@
 
 <ConfirmDialog
 	open={confirmingRemove !== null}
-	title={confirmingRemove === currentDeviceId ? 'Reset this device?' : 'Remove device'}
+	title={confirmingRemove === currentDeviceId ? m('settingsDevices.resetConfirmTitle') : m('settingsDevices.removeConfirmTitle')}
 	message={confirmingRemove === currentDeviceId
-		? 'Wipes the per-device preferences for this browser, clears the local device id, and reloads. Universal preferences stay put.'
-		: 'Remove this device and its per-device preferences? This cannot be undone.'}
-	confirmLabel={confirmingRemove === currentDeviceId ? 'Reset' : 'Remove'}
+		? m('settingsDevices.resetConfirmMessage')
+		: m('settingsDevices.removeConfirmMessage')}
+	confirmLabel={confirmingRemove === currentDeviceId ? m('settingsDevices.resetConfirmLabel') : m('settingsDevices.removeConfirmLabel')}
 	danger
 	onconfirm={() => { if (confirmingRemove) removeDevice(confirmingRemove); }}
 	oncancel={() => (confirmingRemove = null)}
@@ -541,7 +541,7 @@
 
 <Modal
 	open={addingForDevice != null}
-	title="Add override"
+	title={m('settingsDevices.addOverride')}
 	narrow
 	onclose={() => (addingForDevice = null)}
 	bodyClass="add-dialog-body"
@@ -549,7 +549,7 @@
 	{#if addingForDevice}
 		{@const ed = currentEditor()}
 			<label class="field">
-				<span class="field-label">Key</span>
+				<span class="field-label">{m('settingsDevices.fieldKey')}</span>
 				<select bind:value={addKey} class="input">
 					{#each overridableKeys as k}
 						<option value={k.key}>{k.label} — {k.key}</option>
@@ -557,13 +557,13 @@
 				</select>
 			</label>
 			<label class="field">
-				<span class="field-label">Value</span>
+				<span class="field-label">{m('settingsDevices.fieldValue')}</span>
 				{#if ed.shape.kind === 'bool'}
 					<div class="toggle-row">
 						<button type="button" class="toggle-btn" class:active={addValueBool === true}
-							onclick={() => (addValueBool = true)}>On</button>
+							onclick={() => (addValueBool = true)}>{m('settingsDevices.toggleOn')}</button>
 						<button type="button" class="toggle-btn" class:active={addValueBool === false}
-							onclick={() => (addValueBool = false)}>Off</button>
+							onclick={() => (addValueBool = false)}>{m('settingsDevices.toggleOff')}</button>
 					</div>
 				{:else if ed.shape.kind === 'number'}
 					<div class="unit-row">
@@ -586,14 +586,13 @@
 				{/if}
 			</label>
 			<p class="dialog-hint">
-				Writes to <code>user_device_settings.prefs.{addKey}</code>. On mobile
-				clients this value will override the universal setting for this device only.
+				{m('settingsDevices.dialogHintPrefix')}<code>user_device_settings.prefs.{addKey}</code>{m('settingsDevices.dialogHintSuffix')}
 			</p>
 			<div class="dialog-actions">
 				<button type="button" class="btn btn-outline btn-sm" onclick={() => (addingForDevice = null)}>
-					Cancel
+					{m('settingsDevices.cancel')}
 				</button>
-				<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>Save</button>
+				<button type="button" class="btn btn-primary btn-sm" onclick={commitAddOverride}>{m('settingsDevices.save')}</button>
 			</div>
 	{/if}
 </Modal>

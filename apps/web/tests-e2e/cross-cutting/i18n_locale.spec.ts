@@ -110,17 +110,19 @@ test.describe('i18n language picker (settings → preferences)', () => {
 	});
 
 	test('inline dates follow the locale (W-12)', async ({ page }) => {
-		// Belle Isle run is 2026-05-15 → "May 15, 2026" / "15. Mai 2026".
+		// Belle Isle run is 2026-05-15. The browser is en-GB, so the en
+		// catalogue keeps GB date conventions → "15 May 2026" (day-first);
+		// German → "15. Mai 2026".
 		const runUrl = '/runs/a1000001-0000-0000-0000-000000000001';
 		await page.goto(runUrl);
-		await expect(page.getByText(/May 15, 2026/).first()).toBeVisible();
+		await expect(page.getByText(/15 May 2026/).first()).toBeVisible();
 
 		await page.goto('/settings/preferences');
 		await page.locator('[data-testid="language-select"]').selectOption('de');
 		await page.goto(runUrl);
 		// German month name proves the date helper picked up the locale.
 		await expect(page.getByText(/Mai 2026/).first()).toBeVisible();
-		await expect(page.getByText(/May 15, 2026/)).toHaveCount(0);
+		await expect(page.getByText(/15 May 2026/)).toHaveCount(0);
 
 		await page.goto('/settings/preferences');
 		await page.locator('[data-testid="language-select"]').selectOption('en');

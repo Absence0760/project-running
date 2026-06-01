@@ -5,7 +5,8 @@
 	import { afterNavigate, goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { fetchMyPlans, deletePlan, updatePlanStatus } from '$lib/core/data';
-	
+	import { m } from '$lib/i18n/store.svelte';
+
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import PlanEditor from '$lib/components/PlanEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -68,12 +69,12 @@
 		}
 	};
 
-	const eventLabels: Record<string, string> = {
-		distance_5k: '5K',
-		distance_10k: '10K',
-		distance_half: 'Half marathon',
-		distance_full: 'Marathon',
-		custom: 'Custom'
+	const eventLabels: Record<string, () => string> = {
+		distance_5k: () => '5K',
+		distance_10k: () => '10K',
+		distance_half: () => m('plansPage.eventHalf'),
+		distance_full: () => m('plansPage.eventFull'),
+		custom: () => m('plansPage.eventCustom')
 	};
 
 	const statusIcon: Record<PlanStatus, string> = {
@@ -82,15 +83,21 @@
 		abandoned: 'cancel'
 	};
 
-	const statusFilters: { value: StatusFilter; label: string; icon: string }[] = [
-		{ value: 'all', label: 'All', icon: 'apps' },
-		{ value: 'active', label: 'Active', icon: 'play_circle' },
-		{ value: 'completed', label: 'Completed', icon: 'check_circle' },
-		{ value: 'abandoned', label: 'Abandoned', icon: 'cancel' }
+	function statusLabel(s: PlanStatus): string {
+		if (s === 'active') return m('plansPage.statusActive');
+		if (s === 'completed') return m('plansPage.statusCompleted');
+		return m('plansPage.statusAbandoned');
+	}
+
+	const statusFilters: { value: StatusFilter; label: () => string; icon: string }[] = [
+		{ value: 'all', label: () => m('plansPage.filterAll'), icon: 'apps' },
+		{ value: 'active', label: () => m('plansPage.filterActive'), icon: 'play_circle' },
+		{ value: 'completed', label: () => m('plansPage.filterCompleted'), icon: 'check_circle' },
+		{ value: 'abandoned', label: () => m('plansPage.filterAbandoned'), icon: 'cancel' }
 	];
 
 	function goalTime(p: TrainingPlan): string {
-		return p.goal_time_seconds ? formatDuration(p.goal_time_seconds) : 'Finish';
+		return p.goal_time_seconds ? formatDuration(p.goal_time_seconds) : m('plansPage.goalFinish');
 	}
 
 	/// Local-tz midnight, mirrors how `fetchActivePlanOverview` computes
@@ -149,14 +156,14 @@
 		const dayMs = 86_400_000;
 		if (today < start) {
 			const d = Math.round((start.getTime() - today.getTime()) / dayMs);
-			return d === 1 ? 'Starts tomorrow' : `Starts in ${d} days`;
+			return d === 1 ? m('plansPage.startsTomorrow') : m('plansPage.startsInDays', { d });
 		}
-		if (today.getTime() === end.getTime()) return 'Race day';
-		if (today > end) return 'Ended';
+		if (today.getTime() === end.getTime()) return m('plansPage.raceDay');
+		if (today > end) return m('plansPage.ended');
 		const d = Math.round((end.getTime() - today.getTime()) / dayMs);
-		if (d === 0) return 'Race day';
-		if (d === 1) return '1 day to go';
-		return `${d} days to go`;
+		if (d === 0) return m('plansPage.raceDay');
+		if (d === 1) return m('plansPage.oneDayToGo');
+		return m('plansPage.daysToGo', { d });
 	}
 
 	let filteredPlans = $derived.by(() => {
@@ -217,27 +224,27 @@
 </script>
 
 <svelte:head>
-	<title>Training plans — Threkir</title>
+	<title>{m('plansPage.headTitle')}</title>
 </svelte:head>
 
 <div class="page">
 	<a href="/dashboard" class="back-link" onclick={handleBack}>
-		<span class="material-symbols">arrow_back</span> Dashboard
+		<span class="material-symbols">arrow_back</span> {m('plansPage.backDashboard')}
 	</a>
 	<header class="page-header">
 		<div class="toolbar">
-			<div class="activity-group" role="group" aria-label="Filter plans by status">
+			<div class="activity-group" role="group" aria-label={m('plansPage.filterGroupLabel')}>
 				{#each statusFilters as f}
 					<button
 						class="activity-btn"
 						class:active={statusFilter === f.value}
 						onclick={() => (statusFilter = f.value)}
-						aria-label={f.label}
+						aria-label={f.label()}
 						aria-pressed={statusFilter === f.value}
 						type="button"
 					>
 						<span class="material-symbols">{f.icon}</span>
-						<span class="activity-label">{f.label}</span>
+						<span class="activity-label">{f.label()}</span>
 						{#if counts[f.value] > 0}
 							<span class="count-pill">{counts[f.value]}</span>
 						{/if}
@@ -248,7 +255,7 @@
 			<div class="toolbar-actions">
 				<button class="add-btn" type="button" onclick={() => (showPlanModal = true)}>
 					<span class="material-symbols">add</span>
-					New plan
+					{m('plansPage.newPlan')}
 				</button>
 			</div>
 		</div>
@@ -272,19 +279,17 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading training plans…</p>
+		<p class="sr-only" role="status">{m('plansPage.loadingPlans')}</p>
 	{:else if plans.length === 0}
 		<section class="empty">
 			<span class="material-symbols empty-icon" aria-hidden="true">calendar_month</span>
-			<h2>No plans yet.</h2>
+			<h2>{m('plansPage.emptyTitle')}</h2>
 			<p class="empty-lead">
-				Goal-race plans, 8–16 weeks, with easy / long / tempo / interval / marathon-pace
-				sessions built around a Daniels-style pace engine. Your active plan drives the
-				today's-workout card on the dashboard.
+				{m('plansPage.emptyLead')}
 			</p>
 			<button class="btn-primary" type="button" onclick={() => (showPlanModal = true)}>
 				<span class="material-symbols">add</span>
-				Create your first plan
+				{m('plansPage.createFirst')}
 			</button>
 		</section>
 	{:else}
@@ -299,17 +304,17 @@
 						<h3>{p.name}</h3>
 						<span class="badge status-{p.status}">
 							<span class="material-symbols">{statusIcon[p.status] ?? 'help'}</span>
-							{p.status}
+							{statusLabel(p.status)}
 						</span>
 					</div>
 
 					<div class="hero">
 						<div class="hero-metric">
-							<span class="section-label">Goal</span>
-							<span class="hero-value">{eventLabels[p.goal_event] ?? p.goal_event}</span>
+							<span class="section-label">{m('plansPage.heroGoal')}</span>
+							<span class="hero-value">{eventLabels[p.goal_event]?.() ?? p.goal_event}</span>
 						</div>
 						<div class="hero-metric">
-							<span class="section-label">Target</span>
+							<span class="section-label">{m('plansPage.heroTarget')}</span>
 							<span class="hero-value">{goalTime(p)}</span>
 						</div>
 						{#if p.vdot}
@@ -327,14 +332,16 @@
 						</span>
 						<span class="meta-item">
 							<span class="material-symbols">view_week</span>
-							{total} {total === 1 ? 'week' : 'weeks'} · {p.days_per_week} days/week
+							{total === 1
+								? m('plansPage.metaWeeksSingular', { days: p.days_per_week })
+								: m('plansPage.metaWeeksPlural', { total, days: p.days_per_week })}
 						</span>
 					</div>
 
 					{#if isActive && week != null && pct != null}
-						<div class="progress" aria-label="Plan progress">
+						<div class="progress" aria-label={m('plansPage.progressLabel')}>
 							<div class="progress-head">
-								<span class="progress-week">Week {week} of {total}</span>
+								<span class="progress-week">{m('plansPage.weekOf', { week, total })}</span>
 								<span class="progress-when">{timeRelation(p)}</span>
 							</div>
 							<div
@@ -357,7 +364,7 @@
 								onclick={(e) => {
 									e.preventDefault();
 									abandon(p);
-								}}>Abandon</button
+								}}>{m('plansPage.abandon')}</button
 							>
 						{:else}
 							<button
@@ -366,7 +373,7 @@
 								onclick={(e) => {
 									e.preventDefault();
 									remove(p);
-								}}>Delete</button
+								}}>{m('plansPage.delete')}</button
 							>
 						{/if}
 					</div>
@@ -377,9 +384,9 @@
 		{#if filteredPlans.length === 0}
 			<div class="filter-empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-				<p class="empty-text">No {statusFilter} plans.</p>
+				<p class="empty-text">{m('plansPage.noFilteredPlans', { status: statusFilter })}</p>
 				<button class="link-btn" type="button" onclick={() => (statusFilter = 'all')}>
-					Show all plans
+					{m('plansPage.showAllPlans')}
 				</button>
 			</div>
 		{/if}
@@ -388,17 +395,17 @@
 
 <ConfirmDialog
 	open={confirmTarget !== null}
-	title={confirmAction === 'abandon' ? 'Abandon plan' : 'Delete plan'}
+	title={confirmAction === 'abandon' ? m('plansPage.abandonTitle') : m('plansPage.deleteTitle')}
 	message={confirmAction === 'abandon'
-		? `Abandon "${confirmTarget?.name}"? You can create a new plan after.`
-		: `Delete "${confirmTarget?.name}"? All weeks and workouts will be removed.`}
-	confirmLabel={confirmAction === 'abandon' ? 'Abandon' : 'Delete'}
+		? m('plansPage.abandonMessage', { name: confirmTarget?.name ?? '' })
+		: m('plansPage.deleteMessage', { name: confirmTarget?.name ?? '' })}
+	confirmLabel={confirmAction === 'abandon' ? m('plansPage.abandon') : m('plansPage.delete')}
 	onconfirm={handleConfirmAction}
 	oncancel={cancelConfirm}
 	danger
 />
 
-<Modal open={showPlanModal} title="New plan" wide onclose={() => (showPlanModal = false)}>
+<Modal open={showPlanModal} title={m('plansPage.newPlan')} wide onclose={() => (showPlanModal = false)}>
 	<PlanEditor oncreated={handlePlanCreated} oncancel={() => (showPlanModal = false)} />
 </Modal>
 

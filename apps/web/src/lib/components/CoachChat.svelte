@@ -7,6 +7,7 @@
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
 	import { TIER_LIMITS } from '$lib/coach/types';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
 	interface Props {
@@ -147,7 +148,7 @@
 		);
 		if (err) {
 			console.error('[coach] archive failed', err);
-			error = 'Could not start a new conversation — please try again.';
+			error = t('coachChat.errorArchive');
 			return;
 		}
 		messages = [];
@@ -186,7 +187,7 @@
 	}
 
 	function titleFromMessage(content: string | null): string {
-		if (!content) return 'Untitled';
+		if (!content) return t('coachChat.untitled');
 		const trimmed = content.replace(/\s+/g, ' ').trim();
 		if (trimmed.length <= 48) return trimmed;
 		return trimmed.slice(0, 47).trimEnd() + '…';
@@ -194,7 +195,7 @@
 
 	let activeThreadTitle = $derived.by(() => {
 		const firstUser = messages.find((m) => m.role === 'user');
-		return firstUser ? titleFromMessage(firstUser.content) : 'New conversation';
+		return firstUser ? titleFromMessage(firstUser.content) : t('coachChat.newConversation');
 	});
 
 	async function viewArchive(archivedAt: string) {
@@ -247,9 +248,9 @@
 		const now = new Date();
 		const diffMs = now.getTime() - d.getTime();
 		const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-		if (diffDays === 0) return 'Today';
-		if (diffDays === 1) return 'Yesterday';
-		if (diffDays < 7) return `${diffDays} days ago`;
+		if (diffDays === 0) return t('coachChat.today');
+		if (diffDays === 1) return t('coachChat.yesterday');
+		if (diffDays < 7) return t('coachChat.daysAgo', { n: diffDays });
 		return d.toLocaleDateString(activeFormatLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 	}
 
@@ -356,19 +357,21 @@
 		contextSummary = { planName, planWeeks, runCount, hrZonesLoaded, weeklyGoalMetres };
 	}
 
-	const PLAN_SUGGESTIONS = [
-		'Should I run tomorrow or take a rest day?',
-		'Am I on track for my goal time?',
-		"Why does this week's long run matter?",
-		"What should I focus on for today's workout?"
-	];
-	const NO_PLAN_SUGGESTIONS = [
-		'How was my last run?',
-		'What pace should my easy runs be?',
-		"I haven't run in a week — what should I do?",
-		'What is a tempo run?'
-	];
-	let suggestions = $derived(hasPlan ? PLAN_SUGGESTIONS : NO_PLAN_SUGGESTIONS);
+	let suggestions = $derived(
+		hasPlan
+			? [
+					t('coachChat.suggestPlanRestDay'),
+					t('coachChat.suggestPlanGoalTime'),
+					t('coachChat.suggestPlanLongRun'),
+					t('coachChat.suggestPlanTodayWorkout')
+				]
+			: [
+					t('coachChat.suggestNoPlanLastRun'),
+					t('coachChat.suggestNoPlanEasyPace'),
+					t('coachChat.suggestNoPlanWeekOff'),
+					t('coachChat.suggestNoPlanTempo')
+				]
+	);
 
 	// Markdown rendering hoisted to $lib/coach/markdown so the DOMPurify
 	// hook registers exactly once at module load.
@@ -462,7 +465,7 @@
 			let session = (await supabase.auth.getSession()).data.session;
 			let token = session?.access_token;
 			if (!token) {
-				error = 'Please sign in first.';
+				error = t('coachChat.errorSignInFirst');
 				return;
 			}
 
@@ -493,16 +496,16 @@
 					// body is empty.
 					error = (typeof j.error === 'string' && j.error.length > 0)
 						? j.error
-						: 'Your session expired. Please sign in again.';
+						: t('coachChat.errorSessionExpired');
 				} else if (res.status === 404) {
-					error = 'Coach runs as a server endpoint. This deploy uses the static adapter — switch to a server deploy (Vercel/Node) and set ANTHROPIC_API_KEY to enable chat.';
+					error = t('coachChat.errorServerEndpoint');
 				} else if (res.status === 429) {
 					usedToday = j.used ?? dailyLimit;
 					if (typeof j.tier === 'string') tier = j.tier;
 					if (typeof j.limit === 'number') dailyLimit = j.limit;
-					error = j.message ?? `Daily limit reached (${dailyLimit} messages). Come back tomorrow!`;
+					error = j.message ?? t('coachChat.errorDailyLimit', { count: dailyLimit });
 				} else {
-					error = j.error ?? `Coach error (${res.status})`;
+					error = j.error ?? t('coachChat.errorGeneric', { status: res.status });
 				}
 				// Roll back the placeholders.
 				messages = messages.slice(0, opts.userText ? assistantIdx - 1 : assistantIdx);
@@ -516,7 +519,7 @@
 			// user-actionable string; full detail goes to console for
 			// triage. Audit/coach May 2026 Low #16.
 			console.error('[coach] transport error', e);
-			error = 'Could not reach the Coach. Check your connection and try again.';
+			error = t('coachChat.errorTransport');
 			messages = messages.slice(0, opts.userText ? assistantIdx - 1 : assistantIdx);
 		} finally {
 			busy = false;
@@ -599,7 +602,7 @@
 				};
 			}
 		} else if (event === 'error') {
-			error = (parsed.message as string) ?? 'stream failed';
+			error = (parsed.message as string) ?? t('coachChat.errorStreamFailed');
 		}
 	}
 
@@ -743,14 +746,14 @@
 				class="header-btn primary-btn"
 				onclick={() => (messages.length > 0 && viewingArchiveAt == null) ? (showArchiveConfirm = true) : (viewingArchiveAt && backToActive())}
 				disabled={messages.length === 0 && viewingArchiveAt == null}
-				title="Archive the current conversation and start a fresh one"
+				title={t('coachChat.newChatTitle')}
 			>
 				<span class="material-symbols">add</span>
-				New chat
+				{t('coachChat.newChat')}
 			</button>
 		</div>
 
-		<nav class="thread-list" aria-label="Conversations">
+		<nav class="thread-list" aria-label={t('coachChat.conversations')}>
 			<button
 				type="button"
 				class="thread-row"
@@ -758,7 +761,7 @@
 				onclick={() => viewingArchiveAt && backToActive()}
 			>
 				<span class="thread-title">{activeThreadTitle}</span>
-				<span class="thread-meta">Active{messages.length > 0 ? ` · ${messages.length}` : ''}</span>
+				<span class="thread-meta">{t('coachChat.active')}{messages.length > 0 ? ` · ${messages.length}` : ''}</span>
 			</button>
 			{#each archives as a (a.archived_at)}
 				<div
@@ -774,8 +777,8 @@
 					<button
 						type="button"
 						class="thread-delete"
-						title="Delete forever"
-						aria-label="Delete archive"
+						title={t('coachChat.deleteForever')}
+						aria-label={t('coachChat.deleteArchive')}
 						onclick={(e) => deleteArchive(a.archived_at, e)}
 					>
 						<span class="material-symbols">close</span>
@@ -793,8 +796,8 @@
 						type="button"
 						class="sidebar-toggle"
 						onclick={() => (sidebarOpen = !sidebarOpen)}
-						title={sidebarOpen ? 'Hide conversations' : 'Show conversations'}
-						aria-label={sidebarOpen ? 'Hide conversations' : 'Show conversations'}
+						title={sidebarOpen ? t('coachChat.hideConversations') : t('coachChat.showConversations')}
+						aria-label={sidebarOpen ? t('coachChat.hideConversations') : t('coachChat.showConversations')}
 						aria-expanded={sidebarOpen}
 					>
 						<span class="material-symbols">{sidebarOpen ? 'menu_open' : 'menu'}</span>
@@ -802,56 +805,56 @@
 							<span class="sidebar-toggle-count">{archives.length + 1}</span>
 						{/if}
 					</button>
-					Coach
+					{t('coachChat.coach')}
 					<span class="sub">
-						· Second opinion on your {hasPlan ? 'plan and runs' : 'recent runs'}. Not medical advice.
+						· {hasPlan ? t('coachChat.subWithPlan') : t('coachChat.subNoPlan')}
 					</span>
 				</h3>
 				{#if contextSummary}
 					{@const c = contextSummary}
 					{@const planOptions = [
-						{ value: '', label: 'No plan', sub: 'recent runs only' },
+						{ value: '', label: t('coachChat.noPlan'), sub: t('coachChat.recentRunsOnly') },
 						...plans.map((p) => ({
 							value: p.id,
 							label: p.name,
 							sub:
 								p.status === 'active'
-									? 'Active plan'
+									? t('coachChat.activePlan')
 									: p.status === 'completed'
-										? 'Completed'
+										? t('coachChat.completed')
 										: p.status,
 						})),
 					]}
 					{@const runOptions = RUN_LIMIT_OPTIONS.map((n) => ({
 						value: String(n),
-						label: `Last ${n}`,
+						label: t('coachChat.lastN', { n }),
 					}))}
-					<div class="context-strip" title="What the coach has loaded for this conversation. Click an editable chip to change it.">
+					<div class="context-strip" title={t('coachChat.contextStripTitle')}>
 						{#if onPlanChange && plans.length > 0}
 							<ChipDropdown
 								value={planId ?? ''}
 								options={planOptions}
 								onChange={onPlanChange}
 								icon="calendar_month"
-								ariaLabel="Plan context"
-								title="Switch which plan grounds the coach's answers"
+								ariaLabel={t('coachChat.planContext')}
+								title={t('coachChat.planContextTitle')}
 								suffix={c.planWeeks ? `· ${c.planWeeks}w` : undefined}
 							/>
 						{:else if c.planName}
-							<span class="chip" title="Plan loaded for this conversation">
+							<span class="chip" title={t('coachChat.planLoaded')}>
 								<span class="material-symbols">calendar_month</span>
 								{c.planName}{#if c.planWeeks}<span class="chip-meta"> · {c.planWeeks}w</span>{/if}
 							</span>
 						{:else}
-							<span class="chip chip-muted" title="No active plan; coach is grounded in recent runs only">
+							<span class="chip chip-muted" title={t('coachChat.noActivePlanTitle')}>
 								<span class="material-symbols">calendar_month</span>
-								No plan
+								{t('coachChat.noPlan')}
 							</span>
 						{/if}
 						{#if c.runCount === 0}
-							<span class="chip chip-muted" title="No runs available to feed the coach">
+							<span class="chip chip-muted" title={t('coachChat.noRunsTitle')}>
 								<span class="material-symbols">directions_run</span>
-								No runs
+								{t('coachChat.noRuns')}
 							</span>
 						{:else}
 							<ChipDropdown
@@ -859,15 +862,15 @@
 								options={runOptions}
 								onChange={(v) => (runsLimit = parseInt(v, 10))}
 								icon="directions_run"
-								ariaLabel="Recent runs to include"
-								title="How many recent runs to feed the coach"
+								ariaLabel={t('coachChat.recentRunsAria')}
+								title={t('coachChat.recentRunsTitle')}
 							/>
 						{/if}
 						{#if c.hrZonesLoaded}
 							<a
 								class="chip chip-link"
 								href="/settings/preferences#heart-rate-zones"
-								title="HR zones loaded from your settings — tap to edit"
+								title={t('coachChat.hrZonesLoadedTitle')}
 							>
 								<span class="material-symbols">monitor_heart</span>
 							</a>
@@ -875,7 +878,7 @@
 							<a
 								class="chip chip-muted chip-link"
 								href="/settings/preferences#heart-rate-zones"
-								title="No HR zones set — tap to add them so the coach can interpret intensity"
+								title={t('coachChat.noHrZonesTitle')}
 							>
 								<span class="material-symbols">monitor_heart</span>
 							</a>
@@ -884,7 +887,7 @@
 							<a
 								class="chip chip-link"
 								href="/settings/preferences#weekly-mileage-goal"
-								title="Weekly mileage goal — tap to edit"
+								title={t('coachChat.weeklyGoalTitle')}
 							>
 								<span class="material-symbols">flag</span>
 								{fmtKm(c.weeklyGoalMetres)}
@@ -898,10 +901,10 @@
 		{#if viewingArchiveAt}
 			<div class="archive-banner">
 				<span class="material-symbols">history</span>
-				<span>Viewing archive · {formatArchiveDate(viewingArchiveAt)} · read-only</span>
+				<span>{t('coachChat.viewingArchive')} · {formatArchiveDate(viewingArchiveAt)} · {t('coachChat.readOnly')}</span>
 				<button type="button" class="header-btn" onclick={backToActive}>
 					<span class="material-symbols">arrow_back</span>
-					Back to active
+					{t('coachChat.backToActive')}
 				</button>
 			</div>
 		{/if}
@@ -921,9 +924,9 @@
 				<div class="primer">
 					<p>
 						{#if hasPlan}
-							Ask about today's workout, your pace, or how recent runs compare to plan.
+							{t('coachChat.primerWithPlan')}
 						{:else}
-							Ask about your recent runs, easy-run pacing, or training basics.
+							{t('coachChat.primerNoPlan')}
 						{/if}
 					</p>
 					<div class="suggestions">
@@ -940,14 +943,14 @@
 							<textarea bind:value={editingDraft} rows="3"></textarea>
 							<div class="edit-actions">
 								<button type="button" class="btn-primary" onclick={commitEdit} disabled={!editingDraft.trim()}>
-									Save & resend
+									{t('coachChat.saveAndResend')}
 								</button>
-								<button type="button" class="header-btn" onclick={cancelEdit}>Cancel</button>
+								<button type="button" class="header-btn" onclick={cancelEdit}>{t('coachChat.cancel')}</button>
 							</div>
 						</div>
 					{:else if m.role === 'assistant'}
 						{#if !m.content && awaitingAssistant && i === messages.length - 1}
-							<div class="typing-dots" aria-label="Coach is thinking">
+							<div class="typing-dots" aria-label={t('coachChat.coachThinking')}>
 								<span></span><span></span><span></span>
 							</div>
 						{:else}
@@ -962,8 +965,8 @@
 							<button
 								type="button"
 								class="bubble-action"
-								title="Copy to clipboard"
-								aria-label="Copy"
+								title={t('coachChat.copyToClipboard')}
+								aria-label={t('coachChat.copy')}
 								onclick={() => copyMessage(m.content)}
 							>
 								<span class="material-symbols">content_copy</span>
@@ -972,8 +975,8 @@
 								<button
 									type="button"
 									class="bubble-action"
-									title="Regenerate this reply"
-									aria-label="Regenerate"
+									title={t('coachChat.regenerateTitle')}
+									aria-label={t('coachChat.regenerate')}
 									onclick={() => regenerate(m.id!)}
 								>
 									<span class="material-symbols">refresh</span>
@@ -982,8 +985,8 @@
 									type="button"
 									class="bubble-action"
 									class:active={m.reaction === 'up'}
-									title="Helpful"
-									aria-label="Thumbs up"
+									title={t('coachChat.helpful')}
+									aria-label={t('coachChat.thumbsUp')}
 									aria-pressed={m.reaction === 'up'}
 									onclick={() => reactTo(m.id!, 'up')}
 								>
@@ -993,8 +996,8 @@
 									type="button"
 									class="bubble-action"
 									class:active={m.reaction === 'down'}
-									title="Not useful"
-									aria-label="Thumbs down"
+									title={t('coachChat.notUseful')}
+									aria-label={t('coachChat.thumbsDown')}
 									aria-pressed={m.reaction === 'down'}
 									onclick={() => reactTo(m.id!, 'down')}
 								>
@@ -1004,8 +1007,8 @@
 								<button
 									type="button"
 									class="bubble-action"
-									title="Edit and resend"
-									aria-label="Edit"
+									title={t('coachChat.editAndResend')}
+									aria-label={t('coachChat.edit')}
 									onclick={() => startEdit(m.id!, m.content)}
 								>
 									<span class="material-symbols">edit</span>
@@ -1017,7 +1020,7 @@
 			{/each}
 			{#if awaitingAssistant && messages[messages.length - 1]?.role === 'user'}
 				<div class="bubble">
-					<div class="typing-dots" aria-label="Coach is thinking">
+					<div class="typing-dots" aria-label={t('coachChat.coachThinking')}>
 						<span></span><span></span><span></span>
 					</div>
 				</div>
@@ -1033,7 +1036,7 @@
 		{:else if limitReached}
 			<div class="limit-bar">
 				<span class="material-symbols">schedule</span>
-				You've used all {dailyLimit} messages for today.{#if tier === 'free'} Upgrade to Pro for a higher daily cap, or come back tomorrow!{:else} Come back tomorrow!{/if}
+				{t('coachChat.limitReached', { count: dailyLimit })}{#if tier === 'free'} {t('coachChat.limitUpgrade')}{:else} {t('coachChat.limitComeBack')}{/if}
 			</div>
 		{:else}
 			<form
@@ -1045,7 +1048,7 @@
 			>
 				<textarea
 					bind:this={composerEl}
-					placeholder={busy ? 'Type your next question while the coach replies…' : 'Ask about today, pace, adherence… (Shift+Enter for newline)'}
+					placeholder={busy ? t('coachChat.composerBusy') : t('coachChat.composerIdle')}
 					bind:value={draft}
 					oninput={autoGrowComposer}
 					onkeydown={onComposerKeydown}
@@ -1053,7 +1056,7 @@
 					maxlength="600"
 				></textarea>
 				<button type="submit" class="btn-primary" disabled={busy || !draft.trim()}>
-					{busy ? '…' : 'Send'}
+					{busy ? '…' : t('coachChat.send')}
 				</button>
 			</form>
 		{/if}
@@ -1062,18 +1065,18 @@
 				{#if tier === 'pro'}
 					<span class="tier-badge tier-pro">Pro</span>
 				{:else if tier === 'free'}
-					<span class="tier-badge tier-free">Free</span>
+					<span class="tier-badge tier-free">{t('coachChat.tierFree')}</span>
 				{/if}
-				{remaining} of {dailyLimit} messages remaining today{#if tier === 'pro'} · priority context window{/if}
+				{t('coachChat.messagesRemaining', { remaining, total: dailyLimit })}{#if tier === 'pro'} · {t('coachChat.priorityContext')}{/if}
 			</span>
 			{#if lastCache && (lastCache.read > 0 || lastCache.create > 0)}
 				<span class="cache-note">
-					Cache: read {lastCache.read} · wrote {lastCache.create} · in {lastCache.in} · out {lastCache.out}
+					{t('coachChat.cacheNote', { read: lastCache.read, wrote: lastCache.create, in: lastCache.in, out: lastCache.out })}
 				</span>
 			{:else if messages.length > 0}
-				<span class="cache-note" title="Saved to your account and synced across devices.">
+				<span class="cache-note" title={t('coachChat.syncedTitle')}>
 					<span class="material-symbols save-icon">cloud_done</span>
-					Synced
+					{t('coachChat.synced')}
 				</span>
 			{/if}
 		</div>
@@ -1081,9 +1084,9 @@
 
 	<ConfirmDialog
 		open={showArchiveConfirm}
-		title="Start a new conversation?"
-		message="Your current chat will be moved to History so you can view it later. The composer resets to a fresh thread."
-		confirmLabel="Start new"
+		title={t('coachChat.confirmTitle')}
+		message={t('coachChat.confirmMessage')}
+		confirmLabel={t('coachChat.confirmStart')}
 		onconfirm={archiveCurrentThread}
 		oncancel={() => (showArchiveConfirm = false)}
 	/>

@@ -12,6 +12,7 @@
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
@@ -68,7 +69,7 @@
 			showReviewForm = false;
 			reviewComment = '';
 		} catch (e) {
-			showToast(`Failed to submit review: ${e}`, 'error');
+			showToast(m('routeDetail.reviewSubmitFailed', { error: `${e}` }), 'error');
 		}
 	}
 
@@ -95,7 +96,7 @@
 			route.tags = updated;
 			tagDraft = '';
 		} catch (e) {
-			showToast(`Could not save tag: ${e}`, 'error');
+			showToast(m('routeDetail.tagSaveFailed', { error: `${e}` }), 'error');
 		} finally {
 			tagsSaving = false;
 		}
@@ -109,7 +110,7 @@
 			await updateRouteTags(route.id, updated);
 			route.tags = updated;
 		} catch (e) {
-			showToast(`Could not remove tag: ${e}`, 'error');
+			showToast(m('routeDetail.tagRemoveFailed', { error: `${e}` }), 'error');
 		} finally {
 			tagsSaving = false;
 		}
@@ -124,7 +125,12 @@
 			await setRouteStar(route.id, next);
 		} catch (e) {
 			route.is_starred = !next;
-			showToast(`Could not ${next ? 'star' : 'unstar'} route: ${e}`, 'error');
+			showToast(
+				next
+					? m('routeDetail.starFailed', { error: `${e}` })
+					: m('routeDetail.unstarFailed', { error: `${e}` }),
+				'error',
+			);
 		}
 	}
 
@@ -159,9 +165,9 @@
 			try {
 				await setRoutePublic(route.id, true);
 				route = { ...route, is_public: true };
-				showToast('Route is now public so the link works.', 'info');
+				showToast(m('routeDetail.madePublicForLink'), 'info');
 			} catch (e) {
-				showToast(`Couldn't make public: ${e}`, 'error');
+				showToast(m('routeDetail.makePublicFailed', { error: `${e}` }), 'error');
 				return;
 			}
 		}
@@ -179,7 +185,7 @@
 		route = { ...route, is_public: next };
 		try {
 			await setRoutePublic(route.id, next);
-			showToast(next ? 'Route is now public.' : 'Route is private again.', 'success');
+			showToast(next ? m('routeDetail.nowPublic') : m('routeDetail.nowPrivate'), 'success');
 			// If we just made it private, clearing any prior share link
 			// below the button avoids surfacing a dead URL.
 			if (!next) {
@@ -189,7 +195,7 @@
 		} catch (e) {
 			// Roll back on failure so the UI matches reality.
 			route = { ...route, is_public: !next };
-			showToast(`Couldn't update visibility: ${e}`, 'error');
+			showToast(m('routeDetail.visibilityUpdateFailed', { error: `${e}` }), 'error');
 		}
 	}
 
@@ -268,7 +274,8 @@
 	// because document.referrer is unreliable across browsers and gets
 	// stripped by some Referrer-Policy configurations.
 	let backHref = $state('/routes');
-	let backLabel = $state('Routes');
+	let fromExploreNav = $state(false);
+	let backLabel = $derived(fromExploreNav ? m('routeDetail.backExplore') : m('routeDetail.backRoutes'));
 	onMount(() => {
 		const fromParam = new URLSearchParams(window.location.search).get('from');
 		const ref = typeof document !== 'undefined' ? document.referrer : '';
@@ -278,7 +285,7 @@
 			(ref && new URL(ref, window.location.origin).search.includes('tab=explore'));
 		if (fromExplore) {
 			backHref = '/routes?tab=explore';
-			backLabel = 'Explore';
+			fromExploreNav = true;
 		}
 	});
 </script>
@@ -288,12 +295,12 @@
 {:else if !route}
 	<div class="route-detail">
 		<a href="/routes" class="back-link page-back">
-			<span class="material-symbols">arrow_back</span> Routes
+			<span class="material-symbols">arrow_back</span> {m('routeDetail.backRoutes')}
 		</a>
 		<div class="not-found">
-			<h1>Route not found</h1>
-			<p>This route may have been deleted, or you may not have access to it.</p>
-			<a href="/routes" class="btn btn-primary">Back to your routes</a>
+			<h1>{m('routeDetail.notFoundTitle')}</h1>
+			<p>{m('routeDetail.notFoundBody')}</p>
+			<a href="/routes" class="btn btn-primary">{m('routeDetail.backToRoutes')}</a>
 		</div>
 	</div>
 {:else}
@@ -319,8 +326,8 @@
 								type="button"
 								class="star-btn"
 								class:starred={route.is_starred}
-								title={route.is_starred ? 'Unstar route' : 'Star route — shows on watch'}
-								aria-label={route.is_starred ? 'Unstar route' : 'Star route'}
+								title={route.is_starred ? m('routeDetail.unstarRoute') : m('routeDetail.starRouteHint')}
+								aria-label={route.is_starred ? m('routeDetail.unstarRoute') : m('routeDetail.starRoute')}
 								onclick={toggleStar}
 							>
 								<span class="material-symbols">star</span>
@@ -336,12 +343,12 @@
 					<div class="key-stats">
 						<div class="key-stat">
 							<span class="key-stat-value">{formatDistance(route.distance_m)}</span>
-							<span class="key-stat-label">Distance</span>
+							<span class="key-stat-label">{m('routeDetail.statDistance')}</span>
 						</div>
 						{#if route.elevation_m != null && route.elevation_m > 0}
 							<div class="key-stat">
 								<span class="key-stat-value">{route.elevation_m} m</span>
-								<span class="key-stat-label">Elevation gain</span>
+								<span class="key-stat-label">{m('routeDetail.statElevationGain')}</span>
 							</div>
 						{/if}
 						<div class="key-stat key-stat-activity">
@@ -351,21 +358,21 @@
 								</span>
 								{route.surface}
 							</span>
-							<span class="key-stat-label">Surface</span>
+							<span class="key-stat-label">{m('routeDetail.statSurface')}</span>
 						</div>
 						{#if route.run_count > 0}
 							<div class="key-stat">
 								<span class="key-stat-value">{route.run_count}</span>
-								<span class="key-stat-label">Runs logged</span>
+								<span class="key-stat-label">{m('routeDetail.statRunsLogged')}</span>
 							</div>
 						{/if}
 						{#if route.featured}
 							<div class="key-stat key-stat-activity">
 								<span class="key-stat-value">
 									<span class="material-symbols" style="color: #facc15">star</span>
-									Featured
+									{m('routeDetail.statFeatured')}
 								</span>
-								<span class="key-stat-label">Status</span>
+								<span class="key-stat-label">{m('routeDetail.statStatus')}</span>
 							</div>
 						{/if}
 					</div>
@@ -378,7 +385,7 @@
 								<span class="tag-chip">
 									{t}
 									{#if isOwner}
-										<button type="button" class="tag-x" aria-label="Remove tag {t}" onclick={() => removeTag(t)}>×</button>
+										<button type="button" class="tag-x" aria-label={m('routeDetail.removeTag', { tag: t })} onclick={() => removeTag(t)}>×</button>
 									{/if}
 								</span>
 							{/each}
@@ -387,7 +394,7 @@
 									<input
 										type="text"
 										bind:value={tagDraft}
-										placeholder="add tag"
+										placeholder={m('routeDetail.addTagPlaceholder')}
 										maxlength="24"
 										disabled={tagsSaving}
 									/>
@@ -404,22 +411,22 @@
 							class="btn btn-outline btn-sm"
 							onclick={togglePublic}
 							title={route.is_public
-								? 'Public — tap to make private'
-								: 'Private — tap to make public'}
+								? m('routeDetail.publicToggleHint')
+								: m('routeDetail.privateToggleHint')}
 						>
 							<span class="material-symbols">
 								{route.is_public ? 'public' : 'public_off'}
 							</span>
-							{route.is_public ? 'Public' : 'Private'}
+							{route.is_public ? m('routeDetail.public') : m('routeDetail.private')}
 						</button>
 					{/if}
-					<button class="btn btn-primary btn-sm" onclick={handleShare}>Share</button>
+					<button class="btn btn-primary btn-sm" onclick={handleShare}>{m('routeDetail.share')}</button>
 					{#if !isOwner && auth.user}
 						<button
 							class="btn btn-outline btn-sm"
 							onclick={() => (showReportDialog = true)}
-							aria-label="Report this route"
-							title="Report this route"
+							aria-label={m('routeDetail.reportRoute')}
+							title={m('routeDetail.reportRoute')}
 						>
 							<span class="material-symbols" aria-hidden="true">flag</span>
 						</button>
@@ -431,7 +438,7 @@
 				<div class="share-bar">
 					<input type="text" readonly value={shareLink} />
 					<button class="btn btn-outline btn-sm" onclick={copyShareLink}>
-						{shareCopied ? 'Copied!' : 'Copy'}
+						{shareCopied ? m('routeDetail.copied') : m('routeDetail.copy')}
 					</button>
 				</div>
 			{/if}
@@ -446,7 +453,7 @@
 				 above the page fold. -->
 			{#if displayWaypoints.length > 1}
 				<section class="section preview-section">
-					<h2>Preview</h2>
+					<h2>{m('routeDetail.previewHeading')}</h2>
 					<RoutePreviewScrubber
 						totalDistanceM={route.distance_m}
 						fraction={scrubFraction}
@@ -458,12 +465,12 @@
 
 			{#if route.elevation_m != null && route.elevation_m > 0}
 				<section class="section">
-					<h2>Elevation</h2>
+					<h2>{m('routeDetail.elevationHeading')}</h2>
 					<div class="elev-grid">
 						<div class="elev-tile">
 							<span class="elev-label">
 								<span class="material-symbols">trending_up</span>
-								Gain
+								{m('routeDetail.elevGain')}
 							</span>
 							<span class="elev-value">
 								{(hasElevationData ? elevationStats.gain : route.elevation_m)} m
@@ -473,21 +480,21 @@
 							<div class="elev-tile">
 								<span class="elev-label">
 									<span class="material-symbols">trending_down</span>
-									Loss
+									{m('routeDetail.elevLoss')}
 								</span>
 								<span class="elev-value">{elevationStats.loss} m</span>
 							</div>
 							<div class="elev-tile">
 								<span class="elev-label">
 									<span class="material-symbols">terrain</span>
-									Max
+									{m('routeDetail.elevMax')}
 								</span>
 								<span class="elev-value">{elevationStats.max} m</span>
 							</div>
 							<div class="elev-tile">
 								<span class="elev-label">
 									<span class="material-symbols">vertical_align_bottom</span>
-									Min
+									{m('routeDetail.elevMin')}
 								</span>
 								<span class="elev-value">{elevationStats.min} m</span>
 							</div>
@@ -518,14 +525,14 @@
 			<section class="section">
 				<div class="reviews-header">
 					<h2>
-						Reviews
+						{m('routeDetail.reviewsHeading')}
 						{#if avgRating}
-							<span class="avg-rating">({avgRating} / 5)</span>
+							<span class="avg-rating">{m('routeDetail.avgRating', { rating: avgRating })}</span>
 						{/if}
 					</h2>
 					{#if auth.loggedIn}
 						<button class="btn btn-outline btn-sm" onclick={() => showReviewForm = !showReviewForm}>
-							{showReviewForm ? 'Cancel' : 'Rate'}
+							{showReviewForm ? m('routeDetail.cancel') : m('routeDetail.rate')}
 						</button>
 					{/if}
 				</div>
@@ -545,16 +552,16 @@
 						</div>
 						<textarea
 							bind:value={reviewComment}
-							placeholder="Comment (optional)"
+							placeholder={m('routeDetail.commentPlaceholder')}
 							class="review-textarea"
 							rows="2"
 						></textarea>
-						<button class="btn btn-primary btn-sm" onclick={submitReview}>Submit</button>
+						<button class="btn btn-primary btn-sm" onclick={submitReview}>{m('routeDetail.submit')}</button>
 					</div>
 				{/if}
 
 				{#if reviews.length === 0}
-					<p class="no-reviews">No reviews yet</p>
+					<p class="no-reviews">{m('routeDetail.noReviews')}</p>
 				{:else}
 					{#each reviews as review}
 						<div class="review-card">
@@ -592,7 +599,7 @@
 				{:else}
 					<div class="map-placeholder">
 						<span class="material-symbols">map</span>
-						<p>No waypoint data available</p>
+						<p>{m('routeDetail.noWaypointData')}</p>
 					</div>
 				{/if}
 			</main>

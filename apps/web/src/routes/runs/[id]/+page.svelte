@@ -47,6 +47,7 @@
 		type CalorieGender,
 	} from '$lib/runs/calories';
 	import { supabase } from '$lib/core/supabase';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 
 	let { data: pageData } = $props();
@@ -248,10 +249,10 @@
 			await linkRunToRoute(run.id, candidate.id);
 			run = { ...run, route_id: candidate.id };
 			suggestedRoute = null;
-			showToast(`Linked to ${candidate.name}`, 'success');
+			showToast(m('runDetail.linkedToRoute', { name: candidate.name }), 'success');
 		} catch (e) {
 			console.error(e);
-			showToast('Could not link route', 'error');
+			showToast(m('runDetail.linkRouteFailed'), 'error');
 		}
 	}
 
@@ -307,7 +308,7 @@
 			: 0,
 	);
 	let calorieLabel = $derived(
-		bodyWeightKg ? 'Calories kcal' : 'Calories kcal (est)',
+		bodyWeightKg ? m('runDetail.caloriesLabel') : m('runDetail.caloriesEstLabel'),
 	);
 
 	/// Structured-workout review. The recorder writes three keys on
@@ -360,19 +361,19 @@
 	function stepLabel(s: WorkoutStepResult): string {
 		switch (s.kind) {
 			case 'warmup':
-				return 'Warmup';
+				return m('runDetail.stepWarmup');
 			case 'cooldown':
-				return 'Cooldown';
+				return m('runDetail.stepCooldown');
 			case 'steady':
-				return 'Steady';
+				return m('runDetail.stepSteady');
 			case 'rep':
 				return s.rep_index && s.rep_total
-					? `Rep ${s.rep_index}/${s.rep_total}`
-					: 'Rep';
+					? m('runDetail.stepRepNumbered', { index: s.rep_index, total: s.rep_total })
+					: m('runDetail.stepRep');
 			case 'recovery':
 				return s.rep_index && s.rep_total
-					? `Recovery ${s.rep_index}/${s.rep_total - 1}`
-					: 'Recovery';
+					? m('runDetail.stepRecoveryNumbered', { index: s.rep_index, total: s.rep_total - 1 })
+					: m('runDetail.stepRecovery');
 			default:
 				return s.kind;
 		}
@@ -382,7 +383,7 @@
 	function paceDeltaLabel(s: WorkoutStepResult): string {
 		if (s.actual_pace_sec_per_km == null) return '—';
 		const d = s.actual_pace_sec_per_km - s.target_pace_sec_per_km;
-		if (Math.abs(d) < 1) return 'on pace';
+		if (Math.abs(d) < 1) return m('runDetail.onPace');
 		const sign = d > 0 ? '+' : '−';
 		return `${sign}${Math.abs(Math.round(d))}s`;
 	}
@@ -436,7 +437,7 @@
 			}
 			editing = false;
 		} catch (e) {
-			showToast(`Save failed: ${e}`, 'error');
+			showToast(m('runDetail.saveFailed', { error: String(e) }), 'error');
 		}
 	}
 
@@ -452,7 +453,7 @@
 			await deleteRun(run.id);
 			goto('/runs');
 		} catch (e) {
-			showToast(`Delete failed: ${e}`, 'error');
+			showToast(m('runDetail.deleteFailed', { error: String(e) }), 'error');
 		}
 	}
 
@@ -499,9 +500,9 @@
 			await makeRunPublic(run.id);
 			const url = `${window.location.origin}/share/run/${run.id}`;
 			await navigator.clipboard.writeText(url);
-			showToast('Share link copied to clipboard', 'success');
+			showToast(m('runDetail.shareLinkCopied'), 'success');
 		} catch (e) {
-			showToast(`Share failed: ${e}`, 'error');
+			showToast(m('runDetail.shareFailed', { error: String(e) }), 'error');
 		}
 	}
 
@@ -515,7 +516,7 @@
 		const defaultName =
 			((run.metadata as Record<string, unknown> | null)?.title as string) ||
 			new Date(run.started_at).toISOString().slice(0, 10);
-		const name = window.prompt('Name this route', defaultName);
+		const name = window.prompt(m('runDetail.nameThisRoute'), defaultName);
 		if (!name || !name.trim()) return;
 		try {
 			const { id } = await saveRunAsRoute(
@@ -523,10 +524,10 @@
 				name.trim(),
 				run.track.map((p) => ({ lat: p.lat, lng: p.lng, ele: p.ele ?? null })),
 			);
-			showToast('Saved as route.', 'success');
+			showToast(m('runDetail.savedAsRoute'), 'success');
 			goto(`/routes/${id}`);
 		} catch (e) {
-			showToast(`Save failed: ${e}`, 'error');
+			showToast(m('runDetail.saveFailed', { error: String(e) }), 'error');
 		}
 	}
 
@@ -572,13 +573,13 @@
 				a.href = dataUrl;
 				a.download = fileName;
 				a.click();
-				showToast('Image saved.', 'success');
+				showToast(m('runDetail.imageSaved'), 'success');
 			}
 		} catch (e) {
 			const msg = (e as Error).message;
 			// User cancelling a Web Share sheet raises; that's fine.
 			if (!msg.includes('abort') && !msg.includes('cancel')) {
-				showToast(`Couldn't generate image: ${msg}`, 'error');
+				showToast(m('runDetail.imageGenerateFailed', { error: msg }), 'error');
 			}
 		} finally {
 			generatingImage = false;
@@ -597,10 +598,10 @@
 		try {
 			await enqueueRunRematch(run.id);
 			matchInfo = await fetchRunMatchedTrack(run.id);
-			showToast('Re-snapping to roads…', 'success');
+			showToast(m('runDetail.reSnapping'), 'success');
 		} catch (e) {
 			const msg = (e as Error).message ?? String(e);
-			showToast(`Re-match failed: ${msg}`, 'error');
+			showToast(m('runDetail.rematchFailed', { error: msg }), 'error');
 		} finally {
 			rematchBusy = false;
 		}
@@ -633,10 +634,10 @@
 		string,
 		{ label: string; icon: string }
 	> = {
-		run: { label: 'Run', icon: 'directions_run' },
-		walk: { label: 'Walk', icon: 'directions_walk' },
-		cycle: { label: 'Cycle', icon: 'directions_bike' },
-		hike: { label: 'Hike', icon: 'terrain' },
+		run: { label: m('runDetail.activityRun'), icon: 'directions_run' },
+		walk: { label: m('runDetail.activityWalk'), icon: 'directions_walk' },
+		cycle: { label: m('runDetail.activityCycle'), icon: 'directions_bike' },
+		hike: { label: m('runDetail.activityHike'), icon: 'terrain' },
 	};
 
 	let activity = $derived.by(() => {
@@ -722,11 +723,11 @@
 	/// HR). When it doesn't, the panel reports "No HR samples on this
 	/// run" instead of rendering fake percentages.
 	const zoneDefs = [
-		{ zone: 'Zone 1', label: 'Recovery', color: '#90CAF9' },
-		{ zone: 'Zone 2', label: 'Easy', color: '#4CAF50' },
-		{ zone: 'Zone 3', label: 'Aerobic', color: '#FFC107' },
-		{ zone: 'Zone 4', label: 'Threshold', color: '#FF9800' },
-		{ zone: 'Zone 5', label: 'Max', color: '#F44336' },
+		{ zone: m('runDetail.zone1'), label: m('runDetail.zoneRecovery'), color: '#90CAF9' },
+		{ zone: m('runDetail.zone2'), label: m('runDetail.zoneEasy'), color: '#4CAF50' },
+		{ zone: m('runDetail.zone3'), label: m('runDetail.zoneAerobic'), color: '#FFC107' },
+		{ zone: m('runDetail.zone4'), label: m('runDetail.zoneThreshold'), color: '#FF9800' },
+		{ zone: m('runDetail.zone5'), label: m('runDetail.zoneMax'), color: '#F44336' },
 	];
 
 	/// Per-point BPM samples paired with their timestamps so the zone
@@ -941,7 +942,7 @@
 
 {#if loading}
 	<div class="run-detail">
-		<div class="loading-grid" aria-busy="true" aria-label="Loading run">
+		<div class="loading-grid" aria-busy="true" aria-label={m('runDetail.loadingRun')}>
 			<div class="loading-map skeleton-shimmer"></div>
 			<div class="loading-stats">
 				<div class="skeleton-shimmer skeleton-title"></div>
@@ -960,12 +961,12 @@
 {:else if !run}
 	<div class="run-detail">
 		<a href="/runs" class="back-link page-back">
-			<span class="material-symbols">arrow_back</span> All runs
+			<span class="material-symbols">arrow_back</span> {m('runDetail.allRuns')}
 		</a>
 		<div class="not-found">
-			<h1>Run not found</h1>
-			<p>This run may have been deleted, or you may not have access to it.</p>
-			<a href="/runs" class="btn btn-primary">Back to your runs</a>
+			<h1>{m('runDetail.notFoundTitle')}</h1>
+			<p>{m('runDetail.notFoundBody')}</p>
+			<a href="/runs" class="btn btn-primary">{m('runDetail.backToRuns')}</a>
 		</div>
 	</div>
 {:else}
@@ -990,9 +991,9 @@
 		{:else}
 			<div class="map-empty">
 				<span class="material-symbols">map</span>
-				<p class="map-empty-title">No GPS track for this run</p>
+				<p class="map-empty-title">{m('runDetail.noGpsTrack')}</p>
 				<p class="map-empty-sub">
-					Imports from sources that don't carry GPS data (manual entries, some parkrun rows, HealthKit summaries) show stats only.
+					{m('runDetail.noGpsTrackSub')}
 				</p>
 			</div>
 		{/if}
@@ -1003,16 +1004,16 @@
 		     case is silent because the cleaner display speaks for
 		     itself. -->
 		{#if matchInfo && matchInfo.status !== 'matched'}
-			<aside class="match-pill match-pill-{matchInfo.status}" title="Map matching">
+			<aside class="match-pill match-pill-{matchInfo.status}" title={m('runDetail.mapMatching')}>
 				{#if matchInfo.status === 'pending'}
 					<span class="material-symbols">hourglass_top</span>
-					Snapping to roads…
+					{m('runDetail.snappingToRoads')}
 				{:else if matchInfo.status === 'skipped'}
 					<span class="material-symbols">block</span>
-					Not snapped (too few points)
+					{m('runDetail.notSnapped')}
 				{:else if matchInfo.status === 'failed'}
 					<span class="material-symbols">error</span>
-					Snap failed — showing raw track
+					{m('runDetail.snapFailed')}
 				{/if}
 				{#if run && auth.user?.id === run.user_id && matchInfo.status !== 'pending'}
 					<button
@@ -1020,10 +1021,10 @@
 						class="match-pill-action"
 						onclick={handleRematch}
 						disabled={rematchBusy}
-						title="Re-run the map matcher against the current track"
+						title={m('runDetail.rematchTitle')}
 					>
 						<span class="material-symbols">refresh</span>
-						{rematchBusy ? 'Queueing…' : 'Re-match'}
+						{rematchBusy ? m('runDetail.queueing') : m('runDetail.rematch')}
 					</button>
 				{/if}
 			</aside>
@@ -1035,10 +1036,10 @@
 		{#if selectedSegment}
 			<aside class="segment-card">
 				<header class="segment-card-head">
-					<span class="segment-eyebrow">SEGMENT</span>
+					<span class="segment-eyebrow">{m('runDetail.segmentEyebrow')}</span>
 					<button
 						class="segment-close"
-						aria-label="Close segment details"
+						aria-label={m('runDetail.closeSegmentDetails')}
 						onclick={() => (selectedSegment = null)}
 					>
 						<span class="material-symbols">close</span>
@@ -1046,18 +1047,18 @@
 				</header>
 				<div class="segment-grid">
 					<div class="segment-stat">
-						<span class="segment-stat-label">Distance</span>
+						<span class="segment-stat-label">{m('runDetail.distance')}</span>
 						<span class="segment-stat-value">{formatDistance(selectedSegment.distance_m)}</span>
 					</div>
 					{#if selectedSegment.duration_s != null}
 						<div class="segment-stat">
-							<span class="segment-stat-label">Time</span>
+							<span class="segment-stat-label">{m('runDetail.time')}</span>
 							<span class="segment-stat-value">{formatDuration(selectedSegment.duration_s)}</span>
 						</div>
 					{/if}
 					{#if selectedSegment.avg_pace_sec_per_km != null}
 						<div class="segment-stat">
-							<span class="segment-stat-label">Pace</span>
+							<span class="segment-stat-label">{m('runDetail.pace')}</span>
 							<span class="segment-stat-value">
 								{formatPace(selectedSegment.avg_pace_sec_per_km, 1000)}
 							</span>
@@ -1065,13 +1066,13 @@
 					{/if}
 					{#if selectedSegment.avg_bpm != null}
 						<div class="segment-stat">
-							<span class="segment-stat-label">Avg HR</span>
+							<span class="segment-stat-label">{m('runDetail.avgHr')}</span>
 							<span class="segment-stat-value">{selectedSegment.avg_bpm} bpm</span>
 						</div>
 					{/if}
 					{#if selectedSegment.ele_gain_m > 0 || selectedSegment.ele_loss_m > 0}
 						<div class="segment-stat">
-							<span class="segment-stat-label">Elev</span>
+							<span class="segment-stat-label">{m('runDetail.elev')}</span>
 							<span class="segment-stat-value">
 								{#if selectedSegment.ele_gain_m > 0}+{selectedSegment.ele_gain_m}m{/if}
 								{#if selectedSegment.ele_gain_m > 0 && selectedSegment.ele_loss_m > 0}
@@ -1093,7 +1094,7 @@
 	<aside class="stats-panel">
 		<a href="/runs" class="back-link panel-back" onclick={handleBack}>
 			<span class="material-symbols">arrow_back</span>
-			All runs
+			{m('runDetail.allRuns')}
 		</a>
 		<header class="detail-header">
 			<div class="detail-header-top">
@@ -1124,38 +1125,38 @@
 						</span>
 						<span class="meta-item visibility-chip" class:is-public={run.is_public}>
 							<span class="material-symbols">{run.is_public ? 'public' : 'lock'}</span>
-							{run.is_public ? 'Public' : 'Private'}
+							{run.is_public ? m('runDetail.public') : m('runDetail.private')}
 						</span>
 						{#if isDnf}
 							<span class="meta-item dnf-chip" data-testid="dnf-chip">
 								<span class="material-symbols">flag</span>
-								DNF
+								{m('runDetail.dnf')}
 							</span>
 						{/if}
 					</div>
 				</div>
 				{#if auth.loggedIn}
-					<div class="action-btns" role="toolbar" aria-label="Run actions">
+					<div class="action-btns" role="toolbar" aria-label={m('runDetail.runActions')}>
 						<button
 							class="icon-btn"
-							aria-label="Edit title and notes"
-							title="Edit"
+							aria-label={m('runDetail.editAria')}
+							title={m('runDetail.edit')}
 							onclick={startEdit}
 						>
 							<span class="material-symbols">edit</span>
 						</button>
 						<button
 							class="icon-btn"
-							aria-label={run.is_public ? 'Copy share link' : 'Make public and copy share link'}
-							title={run.is_public ? 'Copy share link' : 'Share link'}
+							aria-label={run.is_public ? m('runDetail.copyShareLink') : m('runDetail.makePublicCopyLink')}
+							title={run.is_public ? m('runDetail.copyShareLink') : m('runDetail.shareLink')}
 							onclick={handleShare}
 						>
 							<span class="material-symbols">share</span>
 						</button>
 						<button
 							class="icon-btn"
-							aria-label="Download GPX file"
-							title="Download GPX"
+							aria-label={m('runDetail.downloadGpxAria')}
+							title={m('runDetail.downloadGpx')}
 							onclick={handleDownloadGpx}
 							disabled={!run?.track || run.track.length < 2}
 						>
@@ -1163,8 +1164,8 @@
 						</button>
 						<button
 							class="icon-btn"
-							aria-label="Save this track as a reusable route"
-							title="Save as route"
+							aria-label={m('runDetail.saveAsRouteAria')}
+							title={m('runDetail.saveAsRoute')}
 							onclick={handleSaveAsRoute}
 							disabled={!run?.track || run.track.length < 2}
 						>
@@ -1172,8 +1173,8 @@
 						</button>
 						<button
 							class="icon-btn"
-							aria-label="Share as image"
-							title="Share as image"
+							aria-label={m('runDetail.shareAsImage')}
+							title={m('runDetail.shareAsImage')}
 							onclick={handleShareImage}
 							disabled={generatingImage}
 						>
@@ -1182,8 +1183,8 @@
 						<span class="action-divider" aria-hidden="true"></span>
 						<button
 							class="icon-btn danger"
-							aria-label="Delete run"
-							title="Delete"
+							aria-label={m('runDetail.deleteRunAria')}
+							title={m('runDetail.delete')}
 							onclick={handleDelete}
 						>
 							<span class="material-symbols">delete</span>
@@ -1205,44 +1206,41 @@
 			<div class="route-suggest-banner">
 				<span class="material-symbols">link</span>
 				<div class="route-suggest-body">
-					<div class="route-suggest-text">Looks like you ran <strong>{suggestedRoute.name}</strong></div>
-					<div class="route-suggest-sub">Link this run to that route?</div>
+					<div class="route-suggest-text">{m('runDetail.looksLikeYouRan')} <strong>{suggestedRoute.name}</strong></div>
+					<div class="route-suggest-sub">{m('runDetail.linkThisRunPrompt')}</div>
 				</div>
 				<div class="route-suggest-actions">
-					<button class="btn-sm btn-outline-sm" onclick={() => (suggestedRoute = null)}>Dismiss</button>
-					<button class="btn-sm btn-primary-sm" onclick={acceptSuggestedRoute}>Link</button>
+					<button class="btn-sm btn-outline-sm" onclick={() => (suggestedRoute = null)}>{m('runDetail.dismiss')}</button>
+					<button class="btn-sm btn-primary-sm" onclick={acceptSuggestedRoute}>{m('runDetail.link')}</button>
 				</div>
 			</div>
 		{/if}
 
 		{#if editing}
 			<div class="edit-form">
-				<input type="text" bind:value={editTitle} placeholder="Run title" class="edit-input" />
-				<textarea bind:value={editNotes} placeholder="Notes" class="edit-textarea" rows="2"></textarea>
+				<input type="text" bind:value={editTitle} placeholder={m('runDetail.runTitlePlaceholder')} class="edit-input" />
+				<textarea bind:value={editNotes} placeholder={m('runDetail.notesPlaceholder')} class="edit-textarea" rows="2"></textarea>
 				<label class="edit-dnf">
 					<input type="checkbox" bind:checked={editIsDnf} data-testid="dnf-toggle" />
 					<span>
-						<strong>Mark as DNF (did not finish)</strong>
+						<strong>{m('runDetail.markAsDnf')}</strong>
 						<span class="edit-dnf-hint">
-							Keeps this run out of personal-record scoring — useful when
-							you stopped short of the planned distance.
+							{m('runDetail.dnfHint')}
 						</span>
 					</span>
 				</label>
 				{#if run.is_public}
 					<p class="edit-public-hint">
-						Heads up: this run is public. Your title and notes are
-						visible to anyone with the share link.
+						{m('runDetail.editPublicHint')}
 					</p>
 				{:else}
 					<p class="edit-public-hint edit-public-hint-muted">
-						Notes stay private until you share this run. If you do,
-						anyone with the link can read them.
+						{m('runDetail.editPrivateHint')}
 					</p>
 				{/if}
 				<div class="edit-actions">
-					<button class="btn-sm btn-outline-sm" onclick={() => editing = false}>Cancel</button>
-					<button class="btn-sm btn-primary-sm" onclick={saveEdit}>Save</button>
+					<button class="btn-sm btn-outline-sm" onclick={() => editing = false}>{m('runDetail.cancel')}</button>
+					<button class="btn-sm btn-primary-sm" onclick={saveEdit}>{m('runDetail.save')}</button>
 				</div>
 			</div>
 		{/if}
@@ -1251,16 +1249,16 @@
 		<div class="key-stats">
 			<div class="key-stat">
 				<span class="key-stat-value">{formatDistance(run.distance_m)}</span>
-				<span class="key-stat-label">Distance</span>
+				<span class="key-stat-label">{m('runDetail.distance')}</span>
 			</div>
 			<div class="key-stat">
 				<span class="key-stat-value">{formatDuration(run.duration_s)}</span>
-				<span class="key-stat-label">Time</span>
+				<span class="key-stat-label">{m('runDetail.time')}</span>
 			</div>
 			{#if movingSeconds > 0 && movingSeconds !== run.duration_s}
 				<div class="key-stat">
 					<span class="key-stat-value">{formatDuration(movingSeconds)}</span>
-					<span class="key-stat-label">Moving</span>
+					<span class="key-stat-label">{m('runDetail.moving')}</span>
 				</div>
 			{/if}
 			<div class="key-stat">
@@ -1270,18 +1268,18 @@
 						run.distance_m
 					)}</span
 				>
-				<span class="key-stat-label">Avg Pace</span>
+				<span class="key-stat-label">{m('runDetail.avgPace')}</span>
 			</div>
 			<div class="key-stat">
 				<span class="key-stat-value">{formatSpeed(
 					movingSeconds > 0 ? movingSeconds : run.duration_s,
 					run.distance_m,
 				)}</span>
-				<span class="key-stat-label">Avg Speed</span>
+				<span class="key-stat-label">{m('runDetail.avgSpeed')}</span>
 			</div>
 			<div class="key-stat">
 				<span class="key-stat-value">{realElevationGain} m</span>
-				<span class="key-stat-label">Elevation</span>
+				<span class="key-stat-label">{m('runDetail.elevation')}</span>
 			</div>
 			{#if estimatedCalories > 0}
 				<div class="key-stat">
@@ -1292,25 +1290,25 @@
 			{#if totalSteps != null}
 				<div class="key-stat">
 					<span class="key-stat-value">{totalSteps.toLocaleString()}</span>
-					<span class="key-stat-label">Steps</span>
+					<span class="key-stat-label">{m('runDetail.steps')}</span>
 				</div>
 			{/if}
 			{#if avgCadence != null}
 				<div class="key-stat">
 					<span class="key-stat-value">{avgCadence}</span>
-					<span class="key-stat-label">Cadence spm</span>
+					<span class="key-stat-label">{m('runDetail.cadenceSpm')}</span>
 				</div>
 			{/if}
 			{#if avgBpm != null}
 				<div class="key-stat">
 					<span class="key-stat-value">{avgBpm}</span>
-					<span class="key-stat-label">Avg HR bpm</span>
+					<span class="key-stat-label">{m('runDetail.avgHrBpm')}</span>
 				</div>
 			{/if}
 			{#if ageGrade != null}
 				<div class="key-stat">
 					<span class="key-stat-value">{ageGrade}</span>
-					<span class="key-stat-label">Age grade</span>
+					<span class="key-stat-label">{m('runDetail.ageGrade')}</span>
 				</div>
 			{/if}
 			<!-- Parity filler. The auto-fit key-stats grid looks broken
@@ -1326,7 +1324,7 @@
 						<span class="material-symbols">{activity.icon}</span>
 						{activity.label}
 					</span>
-					<span class="key-stat-label">Activity</span>
+					<span class="key-stat-label">{m('runDetail.activity')}</span>
 				</div>
 			{/if}
 		</div>
@@ -1339,7 +1337,7 @@
 			 true (via the `previewLngLat` prop on RunMap above). -->
 		{#if hasMapTrack}
 			<section class="section preview-section">
-				<h2>Preview</h2>
+				<h2>{m('runDetail.preview')}</h2>
 				<RoutePreviewScrubber
 					totalDistanceM={run.distance_m}
 					fraction={scrubFraction}
@@ -1354,7 +1352,7 @@
 		     reads as a deceptive flat line. -->
 		{#if hasMapTrack}
 			<section class="section">
-				<h2>Elevation Profile</h2>
+				<h2>{m('runDetail.elevationProfile')}</h2>
 				<ElevationProfile
 				{elevations}
 				totalDistance={run.distance_m}
@@ -1371,7 +1369,7 @@
 
 		{#if run.route_id}
 			<section class="section">
-				<h2>Segments</h2>
+				<h2>{m('runDetail.segments')}</h2>
 				<RunSegmentEfforts
 					runId={run.id}
 					runOwnerId={run.user_id}
@@ -1380,7 +1378,7 @@
 				/>
 			</section>
 			<section class="section">
-				<h2>Route History</h2>
+				<h2>{m('runDetail.routeHistory')}</h2>
 				<RouteHistory
 					currentRunId={run.id}
 					routeId={run.route_id}
@@ -1395,7 +1393,7 @@
 		     but the runs RLS keeps engagement on private runs invisible to
 		     anyone but the owner. -->
 		<section class="section">
-			<h2>Activity</h2>
+			<h2>{m('runDetail.activity')}</h2>
 			<RunSocial runId={run.id} runOwnerId={run.user_id} />
 		</section>
 
@@ -1406,10 +1404,14 @@
 		{#if workoutStepResults.length > 0}
 			<section class="section workout-review">
 				<header class="workout-header">
-					<h2>Workout</h2>
+					<h2>{m('runDetail.workout')}</h2>
 					{#if workoutAdherence}
 						<span class="workout-adherence workout-adherence-{workoutAdherence}">
-							{workoutAdherence}
+							{workoutAdherence === 'completed'
+								? m('runDetail.adherenceCompleted')
+								: workoutAdherence === 'partial'
+									? m('runDetail.adherencePartial')
+									: m('runDetail.adherenceAbandoned')}
 						</span>
 					{/if}
 				</header>
@@ -1417,17 +1419,17 @@
 					<p class="workout-name">
 						{linkedWorkout.notes ?? linkedWorkout.kind}
 						<span class="workout-target">
-							· {formatDistance(linkedWorkout.target_distance_m ?? 0)} planned
+							· {m('runDetail.plannedDistance', { distance: formatDistance(linkedWorkout.target_distance_m ?? 0) })}
 						</span>
 					</p>
 				{/if}
 				<table class="workout-table">
 					<thead>
 						<tr>
-							<th>Step</th>
-							<th class="num">Plan</th>
-							<th class="num">Actual</th>
-							<th class="num">Pace</th>
+							<th>{m('runDetail.colStep')}</th>
+							<th class="num">{m('runDetail.colPlan')}</th>
+							<th class="num">{m('runDetail.colActual')}</th>
+							<th class="num">{m('runDetail.pace')}</th>
 							<th class="num">Δ</th>
 						</tr>
 					</thead>
@@ -1451,7 +1453,7 @@
 								</td>
 								<td class="num">{fmtPace(s.actual_pace_sec_per_km)}</td>
 								<td class="num pace-delta pace-delta-{paceDeltaClass(s)}">
-									{s.status === 'skipped' ? 'skip' : paceDeltaLabel(s)}
+									{s.status === 'skipped' ? m('runDetail.skip') : paceDeltaLabel(s)}
 								</td>
 							</tr>
 						{/each}
@@ -1466,14 +1468,14 @@
 		     laps (mobile parity, decisions §24). -->
 		{#if laps.length > 0}
 			<section class="section laps">
-				<h2>Laps</h2>
+				<h2>{m('runDetail.laps')}</h2>
 				<table class="splits-table laps-table">
 					<thead>
 						<tr>
-							<th>Lap</th>
-							<th>Distance</th>
-							<th>Time</th>
-							<th>Pace</th>
+							<th>{m('runDetail.lap')}</th>
+							<th>{m('runDetail.distance')}</th>
+							<th>{m('runDetail.time')}</th>
+							<th>{m('runDetail.pace')}</th>
 						</tr>
 					</thead>
 					<tbody>
@@ -1497,30 +1499,30 @@
 		     (round-5 garmin F2). -->
 		{#if hasRunningDynamics && runningDynamics}
 			<section class="section running-dynamics">
-				<h2>Running Dynamics</h2>
+				<h2>{m('runDetail.runningDynamics')}</h2>
 				<div class="key-stats">
 					{#if runningDynamics.vertical_oscillation_mm != null}
 						<div class="key-stat">
 							<span class="key-stat-value">{runningDynamics.vertical_oscillation_mm} mm</span>
-							<span class="key-stat-label">Vertical oscillation</span>
+							<span class="key-stat-label">{m('runDetail.verticalOscillation')}</span>
 						</div>
 					{/if}
 					{#if runningDynamics.gct_ms != null}
 						<div class="key-stat">
 							<span class="key-stat-value">{runningDynamics.gct_ms} ms</span>
-							<span class="key-stat-label">Ground contact</span>
+							<span class="key-stat-label">{m('runDetail.groundContact')}</span>
 						</div>
 					{/if}
 					{#if runningDynamics.stride_length_m != null}
 						<div class="key-stat">
 							<span class="key-stat-value">{runningDynamics.stride_length_m.toFixed(2)} m</span>
-							<span class="key-stat-label">Stride length</span>
+							<span class="key-stat-label">{m('runDetail.strideLength')}</span>
 						</div>
 					{/if}
 					{#if runningDynamics.power_w != null}
 						<div class="key-stat">
 							<span class="key-stat-value">{runningDynamics.power_w} W</span>
-							<span class="key-stat-label">Avg power</span>
+							<span class="key-stat-label">{m('runDetail.avgPower')}</span>
 						</div>
 					{/if}
 				</div>
@@ -1531,13 +1533,13 @@
 		{#if splits.length > 0}
 			{@const hasElevation = splits.some((s) => s.elevation_m != null)}
 			<section class="section">
-				<h2>Splits</h2>
+				<h2>{m('runDetail.splits')}</h2>
 				<table class="splits-table">
 					<thead>
 						<tr>
-							<th>Km</th>
-							<th>Pace</th>
-							{#if hasElevation}<th>Elev</th>{/if}
+							<th>{m('runDetail.km')}</th>
+							<th>{m('runDetail.pace')}</th>
+							{#if hasElevation}<th>{m('runDetail.elev')}</th>{/if}
 						</tr>
 					</thead>
 					<tbody>
@@ -1566,13 +1568,13 @@
 		     historical runs that only stored `metadata.avg_bpm` render
 		     the empty-state copy. -->
 		<section class="section">
-			<h2>Heart Rate Zones</h2>
+			<h2>{m('runDetail.heartRateZones')}</h2>
 			{#if hrZones.length > 0}
 				{#if bpmStats}
 					<div class="hr-stats">
-						<div class="hr-stat"><span class="hr-stat-label">Avg</span><span class="hr-stat-value">{bpmStats.avg}</span></div>
-						<div class="hr-stat"><span class="hr-stat-label">Min</span><span class="hr-stat-value">{bpmStats.min}</span></div>
-						<div class="hr-stat"><span class="hr-stat-label">Max</span><span class="hr-stat-value">{bpmStats.max}</span></div>
+						<div class="hr-stat"><span class="hr-stat-label">{m('runDetail.avg')}</span><span class="hr-stat-value">{bpmStats.avg}</span></div>
+						<div class="hr-stat"><span class="hr-stat-label">{m('runDetail.min')}</span><span class="hr-stat-value">{bpmStats.min}</span></div>
+						<div class="hr-stat"><span class="hr-stat-label">{m('runDetail.max')}</span><span class="hr-stat-value">{bpmStats.max}</span></div>
 					</div>
 				{/if}
 				<div class="hr-bar">
@@ -1598,19 +1600,17 @@
 				</div>
 				{#if zoneCutoffs == null && maxHrBpm == null}
 					<p class="hr-disclaimer">
-						Zones use an age-estimated max HR. On heart-rate medication
-						(e.g. beta-blockers) or if you've measured your max HR, set it in
-						<a href="/settings/account">Settings → Preferences</a> for accurate zones.
+						{m('runDetail.hrDisclaimerPrefix')}
+						<a href="/settings/account">{m('runDetail.hrDisclaimerLink')}</a>
+						{m('runDetail.hrDisclaimerSuffix')}
 					</p>
 				{/if}
 			{:else}
 				<p class="hr-empty">
 					{#if avgBpm != null}
-						Only the run's average heart rate was captured ({avgBpm}&nbsp;bpm).
-						A full zone distribution needs per-point samples, which the
-						recording apps will start writing alongside GPS soon.
+						{m('runDetail.hrAvgOnly', { bpm: avgBpm })}
 					{:else}
-						No heart-rate data on this run.
+						{m('runDetail.hrNoData')}
 					{/if}
 				</p>
 			{/if}
@@ -1624,9 +1624,9 @@
 
 <ConfirmDialog
 	open={showDeleteConfirm}
-	title="Delete run"
-	message="Delete this run? This cannot be undone."
-	confirmLabel="Delete"
+	title={m('runDetail.deleteDialogTitle')}
+	message={m('runDetail.deleteDialogMessage')}
+	confirmLabel={m('runDetail.delete')}
 	onconfirm={confirmDelete}
 	oncancel={() => showDeleteConfirm = false}
 	danger
@@ -1634,13 +1634,13 @@
 
 <ConfirmDialog
 	open={showShareConfirm}
-	title="Make this run public?"
+	title={m('runDetail.shareDialogTitle')}
 	message={shareConfirmIntersectsZone
-		? 'Sharing flips this run to public so anyone with the link can view it. This run starts or ends inside one of your privacy zones, so viewers will see a clipped track with the in-zone segments hidden.'
+		? m('runDetail.shareDialogMessageIntersects')
 		: shareConfirmHasZones
-			? 'Sharing flips this run to public so anyone with the link can view it. None of your privacy zones intersect this track, so the full track will be visible.'
-			: 'Sharing flips this run to public so anyone with the link can view it — including the start and end points of your run. You have no privacy zones set up. Consider adding one around your home before sharing.'}
-	confirmLabel="Make public & copy link"
+			? m('runDetail.shareDialogMessageNoIntersect')
+			: m('runDetail.shareDialogMessageNoZones')}
+	confirmLabel={m('runDetail.makePublicConfirm')}
 	onconfirm={proceedShare}
 	oncancel={() => (showShareConfirm = false)}
 	data-testid="share-confirm-dialog"
@@ -1677,15 +1677,15 @@
 		{/if}
 		<div class="share-card-stats">
 			<div class="share-stat">
-				<div class="share-stat-label">Distance</div>
+				<div class="share-stat-label">{m('runDetail.distance')}</div>
 				<div class="share-stat-value">{formatDistance(run.distance_m)}</div>
 			</div>
 			<div class="share-stat">
-				<div class="share-stat-label">Time</div>
+				<div class="share-stat-label">{m('runDetail.time')}</div>
 				<div class="share-stat-value">{formatDuration(run.duration_s)}</div>
 			</div>
 			<div class="share-stat">
-				<div class="share-stat-label">Pace</div>
+				<div class="share-stat-label">{m('runDetail.pace')}</div>
 				<div class="share-stat-value">
 					{formatPace(run.duration_s, run.distance_m)}
 				</div>

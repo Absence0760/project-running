@@ -32,7 +32,7 @@
 	import { relativeAge } from '$lib/runs/pr_recency';
 	import type { LoadedSettings } from '$lib/settings/settings';
 	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/format/units.svelte';
-	import { currentLocale } from '$lib/i18n/store.svelte';
+	import { currentLocale, m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		loadGoals,
@@ -263,6 +263,15 @@
 		{ value: 'parkrun', label: 'parkrun' },
 		{ value: 'healthkit', label: 'HealthKit' },
 	];
+	/// Locale-aware display label for a source chip. `sources[].label`
+	/// stays an English literal for the two translatable values ("All",
+	/// "Recorded") so the empty-state fallback keeps a stable string;
+	/// the chips + empty state route through here for the live locale.
+	function sourceChipLabel(label: string): string {
+		if (label === 'All') return m('dash.sourceAll');
+		if (label === 'Recorded') return m('dash.sourceRecorded');
+		return label;
+	}
 
 	onMount(async () => {
 		// Wait for the auth store to hydrate before reading user-scoped
@@ -415,13 +424,23 @@
 	/// relation). Inlined here rather than lifted to $lib so the only
 	/// other caller — the plan list — keeps owning its own copy until a
 	/// third surface needs them.
-	const GOAL_EVENT_LABEL: Record<string, string> = {
-		distance_5k: '5K',
-		distance_10k: '10K',
-		distance_half: 'Half marathon',
-		distance_full: 'Marathon',
-		custom: 'Custom',
-	};
+	/// Locale-aware goal-event label. 5K / 10K are language-neutral
+	/// race distances and stay verbatim; the rest route through the
+	/// message catalogue. Unknown events fall back to "Custom".
+	function goalEventLabel(event: string): string {
+		switch (event) {
+			case 'distance_5k':
+				return '5K';
+			case 'distance_10k':
+				return '10K';
+			case 'distance_half':
+				return m('dash.goalHalfMarathon');
+			case 'distance_full':
+				return m('dash.goalMarathon');
+			default:
+				return m('dash.goalCustom');
+		}
+	}
 	function planMidnight(iso: string): Date {
 		const [y, m, d] = iso.split('-').map(Number);
 		return new Date(y, (m ?? 1) - 1, d ?? 1);
@@ -453,21 +472,21 @@
 		let raceState: 'upcoming' | 'today' | 'past';
 		if (todayMs < startMs) {
 			const d = Math.round((startMs - todayMs) / dayMs);
-			relation = d === 1 ? 'Starts tomorrow' : `Starts in ${d} days`;
+			relation = d === 1 ? m('dash.planStartsTomorrow') : m('dash.planStartsInDays', { d });
 			raceState = 'upcoming';
 		} else if (todayMs > endMs) {
-			relation = 'Race day past';
+			relation = m('dash.raceDayPast');
 			raceState = 'past';
 		} else {
 			const d = Math.round((endMs - todayMs) / dayMs);
 			if (d === 0) {
-				relation = 'Race day';
+				relation = m('dash.raceDay');
 				raceState = 'today';
 			} else if (d === 1) {
-				relation = 'Race tomorrow';
+				relation = m('dash.raceTomorrow');
 				raceState = 'upcoming';
 			} else {
-				relation = `Race in ${d} days`;
+				relation = m('dash.raceInDays', { d });
 				raceState = 'upcoming';
 			}
 		}
@@ -591,7 +610,7 @@
 </script>
 
 <svelte:head>
-	<title>Dashboard — Threkir</title>
+	<title>{m('dash.pageTitle')} — Threkir</title>
 </svelte:head>
 
 <div class="page">
@@ -602,7 +621,7 @@
 		mileage cards; a literal "Dashboard" h1 above them would be
 		visual noise, so use the .visually-hidden utility.
 	-->
-	<h1 class="visually-hidden">Dashboard</h1>
+	<h1 class="visually-hidden">{m('dash.pageHeading')}</h1>
 	{#if loading}
 		<div class="skeleton-hero"></div>
 		<div class="skeleton-filter"></div>
@@ -620,8 +639,8 @@
 			<section class="welcome-back-card">
 				<span class="material-symbols welcome-back-icon" aria-hidden="true">waving_hand</span>
 				<div class="welcome-back-body">
-					<h2>Welcome back</h2>
-					<p>Let's ease in. Your old PBs are still here whenever you're ready.</p>
+					<h2>{m('dash.welcomeBackTitle')}</h2>
+					<p>{m('dash.welcomeBackBody')}</p>
 				</div>
 			</section>
 		{/if}
@@ -631,12 +650,12 @@
 			<section class="plan-hero" class:race-today={planPosition.raceState === 'today'}>
 				<header class="plan-hero-head">
 					<div class="plan-hero-ident">
-						<span class="plan-hero-label">Training plan</span>
+						<span class="plan-hero-label">{m('dash.trainingPlanLabel')}</span>
 						<h2 class="plan-hero-name">{planOverview.plan.name}</h2>
 						<div class="plan-hero-goal">
 							<span>
 								<span class="material-symbols">flag</span>
-								{GOAL_EVENT_LABEL[planOverview.plan.goal_event] ?? 'Custom'}
+								{goalEventLabel(planOverview.plan.goal_event)}
 							</span>
 							{#if planOverview.plan.goal_time_seconds}
 								<span>
@@ -652,7 +671,7 @@
 					</div>
 					<div class="plan-hero-position">
 						<span class="plan-hero-week">
-							Week {planPosition.weekIndex} <em>of {planPosition.totalWeeks}</em>
+							{m('dash.weekPrefix', { n: planPosition.weekIndex })} <em>{m('dash.weekOfSuffix', { total: planPosition.totalWeeks })}</em>
 						</span>
 						<span
 							class="plan-hero-relation"
@@ -671,7 +690,7 @@
 						aria-valuemin="0"
 						aria-valuemax="100"
 						aria-valuenow={planPosition.calendarPct}
-						aria-label="Calendar progress through plan"
+						aria-label={m('dash.calendarProgressAria')}
 					>
 						<span
 							class="plan-hero-progress-fill"
@@ -679,9 +698,9 @@
 						></span>
 					</div>
 					<span class="plan-hero-progress-meta">
-						{planPosition.calendarPct}% of calendar
+						{m('dash.pctOfCalendar', { pct: planPosition.calendarPct })}
 						<span class="plan-hero-progress-sep">·</span>
-						{planOverview.completionPct}% of workouts
+						{m('dash.pctOfWorkouts', { pct: planOverview.completionPct })}
 					</span>
 				</div>
 
@@ -703,7 +722,7 @@
 								{/if}
 							</div>
 							<div class="plan-hero-today-body">
-								<span class="plan-hero-today-label">Today</span>
+								<span class="plan-hero-today-label">{m('dash.today')}</span>
 								<span class="plan-hero-today-kind">
 									{WORKOUT_KIND_LABEL[t.kind as keyof typeof WORKOUT_KIND_LABEL] ?? t.kind}
 								</span>
@@ -715,7 +734,7 @@
 										<span>@ {fmtPace(t.target_pace_sec_per_km)}</span>
 									{/if}
 									{#if todayDone}
-										<span class="plan-hero-today-done">Completed</span>
+										<span class="plan-hero-today-done">{m('dash.completed')}</span>
 									{/if}
 								</div>
 							</div>
@@ -727,10 +746,10 @@
 								<span class="material-symbols">self_improvement</span>
 							</div>
 							<div class="plan-hero-today-body">
-								<span class="plan-hero-today-label">Today</span>
-								<span class="plan-hero-today-kind">Rest day</span>
+								<span class="plan-hero-today-label">{m('dash.today')}</span>
+								<span class="plan-hero-today-kind">{m('dash.restDay')}</span>
 								<span class="plan-hero-today-meta-quiet">
-									No workout scheduled — recover and roll into tomorrow.
+									{m('dash.noWorkoutScheduled')}
 								</span>
 							</div>
 						</div>
@@ -740,10 +759,10 @@
 				<footer class="plan-hero-actions">
 					<a class="btn btn-primary btn-sm plan-hero-cta" href="/plans/{planOverview.plan.id}">
 						<span class="material-symbols">calendar_month</span>
-						View full plan
+						{m('dash.viewFullPlan')}
 					</a>
 					<a class="plan-hero-manage" href="/plans">
-						Manage plans
+						{m('dash.managePlans')}
 						<span class="material-symbols">chevron_right</span>
 					</a>
 				</footer>
@@ -751,9 +770,9 @@
 		{:else if !planOverview}
 			<a class="plan-promo" href="/plans?new=1">
 				<div>
-					<span class="today-label">TRAINING PLANS</span>
-					<h3>Pick a goal race and we'll schedule the weeks</h3>
-					<p>5K, 10K, half or full — a week-by-week plan with paces matched to your fitness and easy weeks built in.</p>
+					<span class="today-label">{m('dash.trainingPlansKicker')}</span>
+					<h3>{m('dash.planPromoTitle')}</h3>
+					<p>{m('dash.planPromoBody')}</p>
 				</div>
 				<span class="material-symbols">chevron_right</span>
 			</a>
@@ -779,7 +798,7 @@
 					<span class="material-symbols">event</span>
 				</div>
 				<div class="event-body">
-					<span class="event-label">UPCOMING EVENT</span>
+					<span class="event-label">{m('dash.upcomingEventLabel')}</span>
 					<strong class="event-title">{upcomingEvent.title}</strong>
 					<span class="event-when">
 						{whenLabel}{#if upcomingEvent.meet_label} &middot; {upcomingEvent.meet_label}{/if}
@@ -803,13 +822,13 @@
 						class:active={sourceFilter === src.value}
 						onclick={() => (sourceFilter = src.value)}
 					>
-						{src.label}
+						{sourceChipLabel(src.label)}
 					</button>
 				{/each}
 			</div>
 			<a href="/recap/{new Date().getFullYear()}" class="recap-link">
 				<span class="material-symbols">auto_awesome</span>
-				View {new Date().getFullYear()} recap →
+				{m('dash.viewRecap', { year: new Date().getFullYear() })}
 			</a>
 		</div>
 		<div class="stat-grid">
@@ -818,35 +837,36 @@
 				class="stat-card stat-card-button"
 				onclick={() => (periodModal = { type: 'week', date: new Date() })}
 			>
-				<span class="stat-label">This Week</span>
+				<span class="stat-label">{m('dash.statThisWeek')}</span>
 				<span class="stat-value">{formatDistance(thisWeekDistance)}</span>
 				<span class="stat-sub">
-					{thisWeekActivityCount}
-					{thisWeekActivityCount === 1 ? 'activity' : 'activities'}
+					{thisWeekActivityCount === 1
+						? m('dash.activityCountOne', { n: thisWeekActivityCount })
+						: m('dash.activityCountOther', { n: thisWeekActivityCount })}
 					{#if thisWeekManualWorkouts.length > 0}
 						<span class="manual-hint">
-							incl. {thisWeekManualWorkouts.length} marked done
+							{m('dash.inclMarkedDone', { n: thisWeekManualWorkouts.length })}
 						</span>
 					{/if}
 				</span>
 			</button>
 			<div class="stat-card">
-				<span class="stat-label">Total Runs</span>
+				<span class="stat-label">{m('dash.statTotalRuns')}</span>
 				<span class="stat-value">{totalRuns}</span>
-				<span class="stat-sub">all sources</span>
+				<span class="stat-sub">{m('dash.allSources')}</span>
 			</div>
 			<div class="stat-card">
-				<span class="stat-label">Longest Run</span>
+				<span class="stat-label">{m('dash.statLongestRun')}</span>
 				<span class="stat-value">{formatDistance(longestRun)}</span>
-				<span class="stat-sub">all time</span>
+				<span class="stat-sub">{m('dash.allTime')}</span>
 			</div>
 			<div class="stat-card">
-				<span class="stat-label">This Week Vert</span>
+				<span class="stat-label">{m('dash.statThisWeekVert')}</span>
 				<span class="stat-value">{formatElevation(thisWeekVertMetres)}</span>
-				<span class="stat-sub">elevation gain</span>
+				<span class="stat-sub">{m('dash.elevationGain')}</span>
 			</div>
 			<div class="stat-card">
-				<span class="stat-label">This Week Pace</span>
+				<span class="stat-label">{m('dash.statThisWeekPace')}</span>
 				<span class="stat-value">
 					{thisWeekRuns.length > 0
 						? formatPace(
@@ -855,23 +875,25 @@
 							)
 						: '--'}
 				</span>
-				<span class="stat-sub">average</span>
+				<span class="stat-sub">{m('dash.average')}</span>
 			</div>
 			<div class="stat-card" class:streak-active={runStreaks.current > 0}>
-				<span class="stat-label">Streak</span>
+				<span class="stat-label">{m('dash.statStreak')}</span>
 				<span class="stat-value">
 					{runStreaks.current}
-					<span class="stat-unit">{runStreaks.current === 1 ? 'day' : 'days'}</span>
+					<span class="stat-unit">{runStreaks.current === 1 ? m('dash.dayUnit') : m('dash.daysUnit')}</span>
 				</span>
 				<span class="stat-sub">
 					{#if runStreaks.best > runStreaks.current}
-						best {runStreaks.best} {runStreaks.best === 1 ? 'day' : 'days'}
+						{runStreaks.best === 1
+							? m('dash.streakBestOne', { n: runStreaks.best })
+							: m('dash.streakBestOther', { n: runStreaks.best })}
 					{:else if runStreaks.current > 0}
-						all-time best
+						{m('dash.streakAllTimeBest')}
 					{:else if runStreaks.best > 0}
-						run today to restart it
+						{m('dash.streakRunToRestart')}
 					{:else}
-						run today to start one
+						{m('dash.streakRunToStart')}
 					{/if}
 				</span>
 			</div>
@@ -887,10 +909,10 @@
 		     up here without needing a separate card. -->
 		<section class="goals-section">
 			<header class="goals-header">
-				<h2>Goals</h2>
+				<h2>{m('dash.goalsTitle')}</h2>
 				{#if displayGoals.length > 0}
 					<button type="button" class="link-btn" onclick={openNewGoal}>
-						+ Add goal
+						{m('dash.addGoalLink')}
 					</button>
 				{/if}
 			</header>
@@ -898,15 +920,14 @@
 				<div class="goals-empty-card">
 					<span class="material-symbols goals-empty-icon" aria-hidden="true">flag</span>
 					<div class="goals-empty-body">
-						<h3>No goals set</h3>
+						<h3>{m('dash.noGoalsSet')}</h3>
 						<p>
-							Track weekly or monthly targets for distance, time, average pace,
-							or number of runs.
+							{m('dash.noGoalsBody')}
 						</p>
 					</div>
 					<button type="button" class="btn btn-primary" onclick={openNewGoal}>
 						<span class="material-symbols">add</span>
-						Add goal
+						{m('dash.addGoal')}
 					</button>
 				</div>
 			{:else}
@@ -928,7 +949,7 @@
 									{#if isDone}
 										<span class="goal-done-badge">
 											<span class="material-symbols">check_circle</span>
-											Done
+											{m('dash.doneBadge')}
 										</span>
 									{/if}
 									<span class="goal-overall">
@@ -956,7 +977,7 @@
 								{/each}
 							</ul>
 							{#if isSynthetic}
-								<p class="goal-card-footer">From Settings · Edit there</p>
+								<p class="goal-card-footer">{m('dash.fromSettingsEditThere')}</p>
 							{/if}
 						</button>
 					{/each}
@@ -978,7 +999,7 @@
 		{#if loadNow != null}
 			<section class="readiness-card readiness-{readiness.band}">
 				<div class="readiness-head">
-					<span class="readiness-label">Readiness</span>
+					<span class="readiness-label">{m('dash.readinessLabel')}</span>
 					<span class="readiness-band">{readiness.band}</span>
 				</div>
 				<div class="readiness-score">{readiness.score}</div>
@@ -1003,7 +1024,7 @@
 				<div class="fitness-row">
 					<div
 						class="fitness-metric"
-						title="VO₂ max — your aerobic engine: how much oxygen your body can use per minute. Higher is fitter."
+						title={m('dash.vo2maxTooltip')}
 					>
 						<span class="fitness-label">VO₂ max</span>
 						<span class="fitness-value">
@@ -1014,25 +1035,25 @@
 					{#if loadNow != null}
 						<div
 							class="fitness-metric"
-							title="Fitness (CTL) — your rolling 42-day training load. Builds slowly; this is your endurance base."
+							title={m('dash.ctlTooltip')}
 						>
-							<span class="fitness-label">CTL (fitness)</span>
+							<span class="fitness-label">{m('dash.ctlLabel')}</span>
 							<span class="fitness-value">{loadNow.ctl.toFixed(0)}</span>
-							<span class="fitness-unit">42-day load</span>
+							<span class="fitness-unit">{m('dash.ctlUnit')}</span>
 						</div>
 						<div
 							class="fitness-metric"
-							title="Fatigue (ATL) — your last 7 days of load. Rises fast after hard sessions and drops with rest."
+							title={m('dash.atlTooltip')}
 						>
-							<span class="fitness-label">ATL (fatigue)</span>
+							<span class="fitness-label">{m('dash.atlLabel')}</span>
 							<span class="fitness-value">{loadNow.atl.toFixed(0)}</span>
-							<span class="fitness-unit">7-day load</span>
+							<span class="fitness-unit">{m('dash.atlUnit')}</span>
 						</div>
 						<div
 							class="fitness-metric"
-							title="Form (TSB) — fitness minus fatigue. Positive means fresh and race-ready; negative means you're carrying fatigue."
+							title={m('dash.tsbTooltip')}
 						>
-							<span class="fitness-label">TSB (form)</span>
+							<span class="fitness-label">{m('dash.tsbLabel')}</span>
 							<span
 								class="fitness-value"
 								class:tsb-neg={loadNow.tsb < -10}
@@ -1040,7 +1061,7 @@
 							>
 								{(loadNow.tsb > 0 ? '+' : '') + loadNow.tsb.toFixed(0)}
 							</span>
-							<span class="fitness-unit">fitness − fatigue</span>
+							<span class="fitness-unit">{m('dash.tsbUnit')}</span>
 						</div>
 					{/if}
 				</div>
@@ -1070,11 +1091,11 @@
 		<!-- Mileage chart -->
 		<section class="card">
 			<div class="chart-header">
-				<h2>Mileage</h2>
+				<h2>{m('dash.mileageTitle')}</h2>
 				<div class="view-toggle">
-					<button class:active={mileageView === 'weekly'} onclick={() => (mileageView = 'weekly')}>Week</button>
-					<button class:active={mileageView === 'monthly'} onclick={() => (mileageView = 'monthly')}>Month</button>
-					<button class:active={mileageView === 'yearly'} onclick={() => (mileageView = 'yearly')}>Year</button>
+					<button class:active={mileageView === 'weekly'} onclick={() => (mileageView = 'weekly')}>{m('dash.viewWeek')}</button>
+					<button class:active={mileageView === 'monthly'} onclick={() => (mileageView = 'monthly')}>{m('dash.viewMonth')}</button>
+					<button class:active={mileageView === 'yearly'} onclick={() => (mileageView = 'yearly')}>{m('dash.viewYear')}</button>
 				</div>
 			</div>
 			<div class="chart">
@@ -1102,11 +1123,17 @@
 		     gzipped track is the eventual accuracy upgrade. -->
 		<section class="card intensity-card">
 			<div class="card-head">
-				<h2>Training intensity</h2>
+				<h2>{m('dash.trainingIntensityTitle')}</h2>
 				{#if hrZones && intensityBreakdown && intensityBreakdown.total > 0}
 					<span class="intensity-window">
-						Last {intensityWindow === '30d' ? '30 days' : intensityWindow === '90d' ? '90 days' : '12 months'}
-						· {intensityBreakdown.hrTrackedRuns} {intensityBreakdown.hrTrackedRuns === 1 ? 'run' : 'runs'} with HR
+						{intensityWindow === '30d'
+							? m('dash.windowLast30Days')
+							: intensityWindow === '90d'
+								? m('dash.windowLast90Days')
+								: m('dash.windowLast12Months')}
+						· {intensityBreakdown.hrTrackedRuns === 1
+							? m('dash.runsWithHrOne', { n: intensityBreakdown.hrTrackedRuns })
+							: m('dash.runsWithHrOther', { n: intensityBreakdown.hrTrackedRuns })}
 					</span>
 				{/if}
 			</div>
@@ -1114,22 +1141,22 @@
 				<div class="intensity-empty">
 					<span class="material-symbols intensity-empty-icon">favorite</span>
 					<div class="intensity-empty-body">
-						<strong>Set your HR zones to see intensity breakdown</strong>
-						<p>Configure z1–z5 thresholds in preferences and we'll classify your runs.</p>
+						<strong>{m('dash.setHrZonesTitle')}</strong>
+						<p>{m('dash.setHrZonesBody')}</p>
 					</div>
 					<a class="btn btn-primary btn-sm" href="/settings/preferences#heart-rate-zones">
-						Set zones
+						{m('dash.setZones')}
 					</a>
 				</div>
 			{:else if !intensityBreakdown || intensityBreakdown.total === 0}
 				<div class="intensity-empty">
 					<span class="material-symbols intensity-empty-icon">monitoring</span>
 					<div class="intensity-empty-body">
-						<strong>No HR data in this window</strong>
-						<p>Record a run with a chest strap or watch, or import from Strava / Garmin / HealthKit.</p>
+						<strong>{m('dash.noHrDataTitle')}</strong>
+						<p>{m('dash.noHrDataBody')}</p>
 					</div>
 					<a class="btn btn-secondary btn-sm" href="/settings/preferences#heart-rate-zones">
-						Review zones
+						{m('dash.reviewZones')}
 					</a>
 				</div>
 			{:else}
@@ -1148,7 +1175,7 @@
 					{/each}
 				</ul>
 				<p class="intensity-foot">
-					Total {fmtCompactDuration(zb.total)} · classified by each run's average HR.
+					{m('dash.intensityFoot', { total: fmtCompactDuration(zb.total) })}
 				</p>
 			{/if}
 		</section>
@@ -1156,20 +1183,19 @@
 		<div class="two-col">
 			<!-- Personal records -->
 			<section class="card">
-				<h2>Personal Records</h2>
+				<h2>{m('dash.personalRecordsTitle')}</h2>
 				{#if visiblePrs.length > 0}
 					{#if isReturningRunner && allPrsStale}
 						<p class="pr-stale-note">
-							These are your pre-break records — they reflect past form, not where
-							you are now. Hide any that feel out of reach with ×.
+							{m('dash.prStaleNote')}
 						</p>
 					{/if}
 					<table class="pr-table">
 						<thead>
 							<tr>
-								<th>Distance</th>
-								<th>Time</th>
-								<th>Date</th>
+								<th>{m('dash.prColDistance')}</th>
+								<th>{m('dash.prColTime')}</th>
+								<th>{m('dash.prColDate')}</th>
 								<th></th>
 							</tr>
 						</thead>
@@ -1186,8 +1212,8 @@
 										<button
 											type="button"
 											class="pr-hide"
-											title="Hide this record"
-											aria-label="Hide {pr.distance} record"
+											title={m('dash.hideRecordTitle')}
+											aria-label={m('dash.hideRecordAria', { distance: pr.distance })}
 											onclick={() => hidePr(pr.key)}>×</button
 										>
 									</td>
@@ -1196,9 +1222,9 @@
 						</tbody>
 					</table>
 				{:else if personalRecords.length === 0}
-					<p class="empty-text">Complete qualifying runs to see PRs</p>
+					<p class="empty-text">{m('dash.prEmptyNoRuns')}</p>
 				{:else}
-					<p class="empty-text">All records hidden.</p>
+					<p class="empty-text">{m('dash.prAllHidden')}</p>
 				{/if}
 				{#if hiddenPrRows.length > 0}
 					<button
@@ -1207,7 +1233,7 @@
 						onclick={() => (showHiddenPrs = !showHiddenPrs)}
 						aria-expanded={showHiddenPrs}
 					>
-						{showHiddenPrs ? 'Hide' : `Show ${hiddenPrRows.length} hidden`}
+						{showHiddenPrs ? m('dash.hideHidden') : m('dash.showHidden', { n: hiddenPrRows.length })}
 					</button>
 					{#if showHiddenPrs}
 						<ul class="pr-hidden-list">
@@ -1215,7 +1241,7 @@
 								<li>
 									<span>{pr.distance} · {formatDuration(pr.time_s)}</span>
 									<button type="button" class="pr-unhide" onclick={() => unhidePr(pr.key)}>
-										Unhide
+										{m('dash.unhide')}
 									</button>
 								</li>
 							{/each}
@@ -1226,7 +1252,7 @@
 
 			<!-- Recent runs -->
 			<section class="card">
-				<h2>Recent Runs</h2>
+				<h2>{m('dash.recentRunsTitle')}</h2>
 				{#if filteredRuns.length > 0}
 					<div class="run-list">
 						{#each filteredRuns.slice(0, 7) as run}
@@ -1244,16 +1270,17 @@
 					</div>
 				{:else if sourceFilter === 'all'}
 					<p class="empty-text">
-						Record your first run, add one manually, or import your history
-						to get started.
+						{m('dash.recentEmptyAll')}
 					</p>
 					<div class="recent-empty-actions">
-						<a class="btn btn-primary btn-sm" href="/runs/new">Add a run</a>
-						<a class="btn btn-outline btn-sm" href="/settings/integrations">Import from Strava / Garmin</a>
+						<a class="btn btn-primary btn-sm" href="/runs/new">{m('dash.addARun')}</a>
+						<a class="btn btn-outline btn-sm" href="/settings/integrations">{m('dash.importFromStravaGarmin')}</a>
 					</div>
 				{:else}
 					<p class="empty-text">
-						No {sources.find((s) => s.value === sourceFilter)?.label ?? sourceFilter} runs yet.
+						{m('dash.recentEmptyFiltered', {
+							source: sourceChipLabel(sources.find((s) => s.value === sourceFilter)?.label ?? sourceFilter),
+						})}
 					</p>
 				{/if}
 			</section>
@@ -1264,13 +1291,13 @@
 				<span class="material-symbols">sports</span>
 			</div>
 			<div class="coach-body">
-				<span class="today-label">ASK THE COACH</span>
-				<strong>Should I run today? How's my pace?</strong>
+				<span class="today-label">{m('dash.askTheCoachKicker')}</span>
+				<strong>{m('dash.coachPromoQuestion')}</strong>
 				<span class="coach-sub">
 					{#if planOverview}
-						Grounded in your plan and recent runs.
+						{m('dash.coachGroundedPlan')}
 					{:else}
-						Grounded in your recent runs.
+						{m('dash.coachGroundedRuns')}
 					{/if}
 				</span>
 			</div>
@@ -1294,7 +1321,7 @@
 
 <Modal
 	open={periodModal != null}
-	title="Period summary"
+	title={m('dash.periodSummaryTitle')}
 	wide
 	onclose={() => (periodModal = null)}
 >
@@ -1309,31 +1336,31 @@
 
 <Modal
 	open={showGoalEditor && editingGoal != null}
-	title="Edit goal"
+	title={m('dash.editGoalTitle')}
 	onclose={() => (showGoalEditor = false)}
 	bodyClass="goal-editor-body"
 >
 	{#if editingGoal}
 		{@const eg = editingGoal}
 		<label class="field">
-			<span class="field-label">Period</span>
+			<span class="field-label">{m('dash.fieldPeriod')}</span>
 			<div class="toggle-row">
 				<button
 					class="toggle-btn"
 					class:active={eg.period === 'week'}
 					type="button"
 					onclick={() => (editingGoal = { ...eg, period: 'week' })}
-				>Week</button>
+				>{m('dash.periodWeek')}</button>
 				<button
 					class="toggle-btn"
 					class:active={eg.period === 'month'}
 					type="button"
 					onclick={() => (editingGoal = { ...eg, period: 'month' })}
-				>Month</button>
+				>{m('dash.periodMonth')}</button>
 			</div>
 		</label>
 		<label class="field">
-			<span class="field-label">Distance ({preferredUnit})</span>
+			<span class="field-label">{m('dash.fieldDistance', { unit: preferredUnit })}</span>
 			<input
 				type="number"
 				min="0"
@@ -1354,7 +1381,7 @@
 			/>
 		</label>
 		<label class="field">
-			<span class="field-label">Time (minutes)</span>
+			<span class="field-label">{m('dash.fieldTimeMinutes')}</span>
 			<input
 				type="number"
 				min="0"
@@ -1373,7 +1400,7 @@
 		</label>
 		<label class="field">
 			<span class="field-label">
-				Avg pace (mm:ss / {preferredUnit === 'mi' ? 'mi' : 'km'})
+				{m('dash.fieldAvgPace', { unit: preferredUnit === 'mi' ? 'mi' : 'km' })}
 			</span>
 			<input
 				type="text"
@@ -1405,7 +1432,7 @@
 			/>
 		</label>
 		<label class="field">
-			<span class="field-label">Run count</span>
+			<span class="field-label">{m('dash.fieldRunCount')}</span>
 			<input
 				type="number"
 				min="0"
@@ -1423,20 +1450,19 @@
 			/>
 		</label>
 		<p class="goal-editor-hint">
-			Fill any subset. Blank = no target for that metric. Saving with
-			nothing filled deletes the goal.
+			{m('dash.goalEditorHint')}
 		</p>
 		<div class="goal-editor-actions">
 			{#if goals.some((x) => x.id === eg.id)}
 				<button type="button" class="btn btn-danger" onclick={() => deleteGoal(eg.id)}>
-					Delete
+					{m('dash.deleteButton')}
 				</button>
 			{/if}
 			<button type="button" class="btn btn-secondary" onclick={() => (showGoalEditor = false)}>
-				Cancel
+				{m('dash.cancelButton')}
 			</button>
 			<button type="button" class="btn btn-primary" onclick={() => commitGoal(eg)}>
-				Save
+				{m('dash.saveButton')}
 			</button>
 		</div>
 	{/if}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { m } from '$lib/i18n/store.svelte';
 	import { defaultUnitForLocale } from '$lib/format/locale_defaults';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
@@ -123,7 +124,7 @@
 			await subscribeToPush();
 			pushSubscribed = true;
 		} catch (e) {
-			showToast(`Could not enable notifications: ${(e as Error).message}`, 'error');
+			showToast(m('onboarding.pushEnableError', { message: (e as Error).message }), 'error');
 		} finally {
 			pushBusy = false;
 		}
@@ -178,7 +179,7 @@
 			if (error) throw error;
 			navigateToDashboard();
 		} catch (e) {
-			showToast(`Could not save: ${(e as Error).message}`, 'error');
+			showToast(m('onboarding.saveError', { message: (e as Error).message }), 'error');
 			saving = false;
 		}
 		// On success the navigation tears down the page; no need to
@@ -258,10 +259,10 @@
 			]);
 			if (profileResult.error) throw profileResult.error;
 
-			showToast('All set! Welcome aboard.', 'success');
+			showToast(m('onboarding.welcomeToast'), 'success');
 			navigateToDashboard();
 		} catch (e) {
-			showToast(`Could not save: ${(e as Error).message}`, 'error');
+			showToast(m('onboarding.saveError', { message: (e as Error).message }), 'error');
 			saving = false;
 		}
 		// On success the navigation tears down the page; no need to
@@ -270,14 +271,14 @@
 </script>
 
 <svelte:head>
-	<title>Welcome — Threkir</title>
+	<title>{m('onboarding.pageTitle')}</title>
 </svelte:head>
 
 <div class="onboarding-shell">
 	<header class="head">
 		<div class="brand">Threkir</div>
 		<button type="button" class="skip-all" onclick={skipOnboarding} disabled={saving}>
-			Skip onboarding
+			{m('onboarding.skipOnboarding')}
 		</button>
 	</header>
 
@@ -289,28 +290,28 @@
 
 	<main class="card">
 		{#if !ready}
-			<p class="loading-hint">Loading…</p>
+			<p class="loading-hint">{m('shell.loading')}</p>
 		{:else if step === 1}
 			<section aria-labelledby="step-1-title">
-				<h1 id="step-1-title">What should we call you?</h1>
+				<h1 id="step-1-title">{m('onboarding.step1Title')}</h1>
 				<p class="hint">
-					Your display name shows up on the runs + comments you share. You can change it any time in Settings.
+					{m('onboarding.step1Hint')}
 				</p>
 				<label class="field">
-					<span class="label-text">Display name</span>
+					<span class="label-text">{m('onboarding.displayNameLabel')}</span>
 					<input
 						type="text"
 						bind:value={displayName}
 						maxlength="60"
-						placeholder="e.g. Alex Chen"
+						placeholder={m('onboarding.displayNamePlaceholder')}
 					/>
 				</label>
 			</section>
 		{:else if step === 2}
 			<section aria-labelledby="step-2-title">
-				<h1 id="step-2-title">Kilometres or miles?</h1>
+				<h1 id="step-2-title">{m('onboarding.step2Title')}</h1>
 				<p class="hint">
-					Drives every distance + pace label in the app. You can switch any time in Settings → Preferences.
+					{m('onboarding.step2Hint')}
 				</p>
 				<div class="unit-toggle" role="radiogroup">
 					<button
@@ -321,8 +322,8 @@
 						aria-checked={preferredUnit === 'km'}
 						onclick={() => (preferredUnit = 'km')}
 					>
-						<span class="unit-name">Kilometres</span>
-						<span class="unit-sample">5.00 km · 5:30 /km</span>
+						<span class="unit-name">{m('onboarding.unitKm')}</span>
+						<span class="unit-sample">{m('onboarding.unitKmSample')}</span>
 					</button>
 					<button
 						type="button"
@@ -332,16 +333,16 @@
 						aria-checked={preferredUnit === 'mi'}
 						onclick={() => (preferredUnit = 'mi')}
 					>
-						<span class="unit-name">Miles</span>
-						<span class="unit-sample">3.11 mi · 8:51 /mi</span>
+						<span class="unit-name">{m('onboarding.unitMi')}</span>
+						<span class="unit-sample">{m('onboarding.unitMiSample')}</span>
 					</button>
 				</div>
 			</section>
 		{:else if step === 3}
 			<section aria-labelledby="step-3-title">
-				<h1 id="step-3-title">What's your main goal?</h1>
+				<h1 id="step-3-title">{m('onboarding.step3Title')}</h1>
 				<p class="hint">
-					Helps us suggest the right kind of training plan later. Not a commitment — change it any time.
+					{m('onboarding.step3Hint')}
 				</p>
 				<div class="goal-grid" role="radiogroup">
 					{#each PRIMARY_GOAL_VALUES as v}
@@ -360,44 +361,44 @@
 			</section>
 		{:else if step === 4}
 			<section aria-labelledby="step-4-title">
-				<h1 id="step-4-title">A bit about you</h1>
+				<h1 id="step-4-title">{m('onboarding.step4Title')}</h1>
 				<p class="hint">
-					Helps us calibrate pace targets, heart-rate zones, and calorie estimates. Every field is optional + you can change them in Settings.
+					{m('onboarding.step4Hint')}
 				</p>
 				<label class="field">
-					<span class="label-text">Gender (optional)</span>
+					<span class="label-text">{m('onboarding.genderLabel')}</span>
 					<select bind:value={gender}>
-						<option value="">Prefer not to say</option>
-						<option value="female">Female</option>
-						<option value="male">Male</option>
-						<option value="nonbinary">Non-binary</option>
+						<option value="">{m('onboarding.genderPreferNot')}</option>
+						<option value="female">{m('onboarding.genderFemale')}</option>
+						<option value="male">{m('onboarding.genderMale')}</option>
+						<option value="nonbinary">{m('onboarding.genderNonbinary')}</option>
 					</select>
 				</label>
 				<label class="field">
-					<span class="label-text">Date of birth (optional)</span>
+					<span class="label-text">{m('onboarding.dobLabel')}</span>
 					<input type="date" bind:value={dateOfBirth} max={new Date().toISOString().slice(0, 10)} />
 					<span class="field-note">
-						Used to keep under-18 accounts out of public people-search. Adding age calibration to your pace, HR zones, and leaderboards still needs the consent below.
+						{m('onboarding.dobNote')}
 					</span>
 				</label>
 				<label class="field">
-					<span class="label-text">Body weight (optional, kg)</span>
-					<input type="number" inputmode="decimal" min="20" max="250" step="0.1" bind:value={bodyWeightKg} placeholder="e.g. 70" />
+					<span class="label-text">{m('onboarding.weightLabel')}</span>
+					<input type="number" inputmode="decimal" min="20" max="250" step="0.1" bind:value={bodyWeightKg} placeholder={m('onboarding.weightPlaceholder')} />
 				</label>
 				{#if gender || dateOfBirth}
 					<label class="consent-row">
 						<input type="checkbox" bind:checked={healthDataConsent} />
 						<span>
-							I consent to Threkir using my gender and date of birth to power the gender + age-band segment leaderboards and the calibrated pace + calorie estimates (GDPR Art 9(2)(a)). I can withdraw consent in Settings any time.
+							{m('onboarding.healthConsent')}
 						</span>
 					</label>
 				{/if}
 			</section>
 		{:else if step === 5}
 			<section aria-labelledby="step-5-title">
-				<h1 id="step-5-title">Who can see your runs?</h1>
+				<h1 id="step-5-title">{m('onboarding.step5Title')}</h1>
 				<p class="hint">
-					Sets the default for every new run. You can override per-run before sharing, or change the default in Settings.
+					{m('onboarding.step5Hint')}
 				</p>
 				<div class="privacy-list" role="radiogroup">
 					<button
@@ -408,8 +409,8 @@
 						aria-checked={privacyDefault === 'private'}
 						onclick={() => (privacyDefault = 'private')}
 					>
-						<strong>Private</strong>
-						<span>Only you. Nothing in any feed, share page, or leaderboard.</span>
+						<strong>{m('onboarding.privacyPrivate')}</strong>
+						<span>{m('onboarding.privacyPrivateDesc')}</span>
 					</button>
 					<button
 						type="button"
@@ -419,8 +420,8 @@
 						aria-checked={privacyDefault === 'followers'}
 						onclick={() => (privacyDefault = 'followers')}
 					>
-						<strong>Followers</strong>
-						<span>People who follow you see new runs in their feed. Share links still work for anyone.</span>
+						<strong>{m('onboarding.privacyFollowers')}</strong>
+						<span>{m('onboarding.privacyFollowersDesc')}</span>
 					</button>
 					<button
 						type="button"
@@ -430,27 +431,27 @@
 						aria-checked={privacyDefault === 'public'}
 						onclick={() => (privacyDefault = 'public')}
 					>
-						<strong>Public</strong>
-						<span>Anyone with the link can see. Eligible for segment leaderboards.</span>
+						<strong>{m('onboarding.privacyPublic')}</strong>
+						<span>{m('onboarding.privacyPublicDesc')}</span>
 					</button>
 				</div>
 			</section>
 		{:else if step === 6}
 			<section aria-labelledby="step-6-title">
-				<h1 id="step-6-title">Notifications</h1>
+				<h1 id="step-6-title">{m('onboarding.step6Title')}</h1>
 				<p class="hint">
-					Push lets you know when someone gives kudos, comments, or follows. Per-device — each browser / phone toggles independently.
+					{m('onboarding.step6Hint')}
 				</p>
 				{#if !pushSupported}
 					<p class="not-available">
-						This browser doesn't support web push, or this build wasn't deployed with a notification key. You can enable later from Settings if your browser supports it.
+						{m('onboarding.pushUnsupported')}
 					</p>
 				{:else if pushPermission() === 'denied'}
 					<p class="not-available">
-						Notifications are blocked at the browser level. Re-enable them in your browser's site settings, then come back + toggle on from Settings.
+						{m('onboarding.pushBlocked')}
 					</p>
 				{:else if pushSubscribed}
-					<p class="success-text">Notifications enabled on this device. You're all set.</p>
+					<p class="success-text">{m('onboarding.pushEnabled')}</p>
 				{:else}
 					<button
 						type="button"
@@ -459,15 +460,15 @@
 						disabled={pushBusy}
 					>
 						<span class="material-symbols">notifications_active</span>
-						{pushBusy ? 'Enabling…' : 'Enable notifications'}
+						{pushBusy ? m('onboarding.pushEnabling') : m('onboarding.pushEnable')}
 					</button>
 				{/if}
 			</section>
 		{:else if step === 7}
 			<section aria-labelledby="step-7-title">
-				<h1 id="step-7-title">All set!</h1>
+				<h1 id="step-7-title">{m('onboarding.step7Title')}</h1>
 				<p class="hint">
-					Your account is ready. Open the dashboard to record your first run, or browse the app — everything you just answered is editable in Settings.
+					{m('onboarding.step7Hint')}
 				</p>
 			</section>
 		{/if}
@@ -476,7 +477,7 @@
 		<div class="nav-row">
 			{#if step > 1}
 				<button type="button" class="btn btn-outline" onclick={back} disabled={saving}>
-					Back
+					{m('onboarding.back')}
 				</button>
 			{:else}
 				<span></span>
@@ -484,16 +485,16 @@
 			<div class="nav-right">
 				{#if step !== 7 && step !== 1 && step !== 5 && step !== 2}
 					<button type="button" class="skip-step" onclick={skipStep} disabled={saving}>
-						Skip
+						{m('onboarding.skip')}
 					</button>
 				{/if}
 				{#if step < ONBOARDING_TOTAL_STEPS}
 					<button type="button" class="btn btn-primary" onclick={next} disabled={saving}>
-						Continue
+						{m('onboarding.continue')}
 					</button>
 				{:else}
 					<button type="button" class="btn btn-primary" onclick={finishAndExit} disabled={saving}>
-						{saving ? 'Saving…' : 'Open dashboard'}
+						{saving ? m('onboarding.saving') : m('onboarding.openDashboard')}
 					</button>
 				{/if}
 			</div>

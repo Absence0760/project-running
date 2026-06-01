@@ -30,9 +30,18 @@ export function m(key: MessageKey, params?: Record<string, string | number>): st
 
 function applyDocumentLocale(next: Locale): void {
 	// Keep the pure date/time formatters (time.ts) in sync with the active
-	// locale (W-12). Done outside the browser gate so it tracks even in
-	// non-DOM contexts.
-	setActiveFormatLocale(next);
+	// locale (W-12). The FORMAT locale is the full browser locale when it is
+	// a regional variant of the active catalogue locale (e.g. catalogue 'en'
+	// + browser 'en-GB' → format with 'en-GB' so dates read "20 Jun 2026",
+	// not the US "Jun 20, 2026"); otherwise the catalogue locale itself (an
+	// explicit picker choice like 'de' wins over an unrelated browser tag).
+	// Done outside the browser gate so it tracks even in non-DOM contexts.
+	let formatLocale: string = next;
+	if (browser && typeof navigator !== 'undefined' && navigator.language) {
+		const nav = navigator.language;
+		if (nav.toLowerCase().split('-')[0] === next) formatLocale = nav;
+	}
+	setActiveFormatLocale(formatLocale);
 	if (!browser) return;
 	try {
 		localStorage.setItem('locale', next);

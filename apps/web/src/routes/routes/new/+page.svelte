@@ -10,6 +10,7 @@
 	import { pickSavePolyline } from '$lib/routes/route_save_polyline';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { distanceInPreferred, getUnit } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import { env } from '$env/dynamic/public';
 
 	// True when the local Protomaps tile-style override is set —
@@ -175,14 +176,14 @@
 	}
 
 	function handleExportGpx() {
-		const name = routeName || 'Untitled Route';
+		const name = routeName || m('routeNew.untitledRoute');
 		const gpx = toGpx(name, coordinates, elevations);
 		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.gpx';
 		downloadFile(gpx, filename, 'application/gpx+xml');
 	}
 
 	function handleExportKml() {
-		const name = routeName || 'Untitled Route';
+		const name = routeName || m('routeNew.untitledRoute');
 		const kml = toKml(name, coordinates, elevations);
 		const filename = name.replace(/[^a-zA-Z0-9-_ ]/g, '').replace(/\s+/g, '_') + '.kml';
 		downloadFile(kml, filename, 'application/vnd.google-earth.kml+xml');
@@ -220,11 +221,11 @@
 		const lat = Number(latStr);
 		const lng = Number(lngStr);
 		if (latStr.trim() === '' || lngStr.trim() === '' || Number.isNaN(lat) || Number.isNaN(lng)) {
-			setErr('Enter a numeric latitude and longitude.');
+			setErr(m('routeNew.coordNumericError'));
 			return;
 		}
 		if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-			setErr('Latitude must be -90..90 and longitude -180..180.');
+			setErr(m('routeNew.coordRangeError'));
 			return;
 		}
 		const point = { lat, lng };
@@ -300,7 +301,7 @@
 		navigator.geolocation.getCurrentPosition(
 			(pos) => {
 				const point = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-				const label = 'My location';
+				const label = m('routeNew.myLocation');
 				if (target === 'start') { startPoint = point; startLabel = label; }
 				else { endPoint = point; endLabel = label; }
 			},
@@ -358,7 +359,7 @@
 
 	async function handleSaveRoute() {
 		if (!routeName.trim()) {
-			saveError = 'Give your route a name.';
+			saveError = m('routeNew.nameRequiredError');
 			return;
 		}
 		saving = true;
@@ -385,10 +386,10 @@
 			});
 
 			showSaveModal = false;
-			showToast('Route saved.', 'success');
+			showToast(m('routeNew.savedToast'), 'success');
 			goto(`/routes/${saved.id}`);
 		} catch (err) {
-			saveError = err instanceof Error ? err.message : 'Failed to save route';
+			saveError = err instanceof Error ? err.message : m('routeNew.saveFailedError');
 		} finally {
 			saving = false;
 		}
@@ -396,7 +397,7 @@
 </script>
 
 <svelte:head>
-	<title>Route Builder — Threkir</title>
+	<title>{m('routeNew.routeBuilder')} — Threkir</title>
 </svelte:head>
 
 <div class="builder-layout">
@@ -405,20 +406,20 @@
 	<aside class="sidebar">
 		<a href="/routes" class="back-link" onclick={handleBack}>
 			<span class="material-symbols">arrow_back</span>
-			My routes
+			{m('routeNew.myRoutes')}
 		</a>
 
 		<header class="sidebar-head">
-			<p class="kicker">New route</p>
-			<h1>Route Builder</h1>
+			<p class="kicker">{m('routeNew.newRoute')}</p>
+			<h1>{m('routeNew.routeBuilder')}</h1>
 			<p class="tagline">
-				Click the map to drop waypoints, snap to walkable paths, then save. The Surface toggle tags the saved route — it doesn't change the routing.
+				{m('routeNew.tagline')}
 			</p>
 		</header>
 
 		<div class="controls">
 			<fieldset class="control-group">
-				<legend class="section-label">Surface</legend>
+				<legend class="section-label">{m('routeNew.surface')}</legend>
 				<div class="mode-buttons">
 					<button
 						class="mode-btn"
@@ -426,7 +427,7 @@
 						onclick={() => (mode = 'road')}
 					>
 						<span class="material-symbols">directions_car</span>
-						Road
+						{m('routeNew.road')}
 					</button>
 					<button
 						class="mode-btn"
@@ -434,18 +435,18 @@
 						onclick={() => (mode = 'trail')}
 					>
 						<span class="material-symbols">forest</span>
-						Trail
+						{m('routeNew.trail')}
 					</button>
 				</div>
 			</fieldset>
 
 			<fieldset class="control-group">
-				<legend class="section-label">Map style</legend>
+				<legend class="section-label">{m('routeNew.mapStyle')}</legend>
 				<div class="style-toggle">
-					<button class="style-btn" class:active={currentMapStyle === 'streets'} onclick={() => handleMapStyle('streets')}>Streets</button>
+					<button class="style-btn" class:active={currentMapStyle === 'streets'} onclick={() => handleMapStyle('streets')}>{m('routeNew.streets')}</button>
 					{#if !tileOverrideActive}
-						<button class="style-btn" class:active={currentMapStyle === 'satellite'} onclick={() => handleMapStyle('satellite')}>Satellite</button>
-						<button class="style-btn" class:active={currentMapStyle === 'terrain'} onclick={() => handleMapStyle('terrain')}>Terrain</button>
+						<button class="style-btn" class:active={currentMapStyle === 'satellite'} onclick={() => handleMapStyle('satellite')}>{m('routeNew.satellite')}</button>
+						<button class="style-btn" class:active={currentMapStyle === 'terrain'} onclick={() => handleMapStyle('terrain')}>{m('routeNew.terrain')}</button>
 					{/if}
 				</div>
 			</fieldset>
@@ -457,11 +458,11 @@
 				</div>
 				<div class="builder-stat">
 					<span class="builder-stat-value">{elevation}</span>
-					<span class="builder-stat-label">m gain</span>
+					<span class="builder-stat-label">{m('routeNew.metresGain')}</span>
 				</div>
 				<div class="builder-stat">
 					<span class="builder-stat-value">{waypointCount}</span>
-					<span class="builder-stat-label">points</span>
+					<span class="builder-stat-label">{m('routeNew.points')}</span>
 				</div>
 			</div>
 
@@ -469,7 +470,7 @@
 				<div class="time-estimate">
 					<span class="time-value">{estimatedTime}</span>
 					<div class="pace-input">
-						<span class="pace-label">at</span>
+						<span class="pace-label">{m('routeNew.paceAt')}</span>
 						<input type="number" min="2" max="15" bind:value={paceMin} class="pace-num" />
 						<span>:</span>
 						<input type="number" min="0" max="59" bind:value={paceSec} class="pace-num" />
@@ -483,36 +484,36 @@
 				<div class="lap-info">
 					<div class="lap-badge">
 						<span class="material-symbols">loop</span>
-						{laps.count} {laps.count === 1 ? 'lap' : 'laps'}
+						{laps.count === 1 ? m('routeNew.lapCountOne', { count: laps.count }) : m('routeNew.lapCountOther', { count: laps.count })}
 					</div>
-					<span class="lap-detail">{lapDisp.value.toFixed(2)} {lapDisp.unit} per lap</span>
+					<span class="lap-detail">{m('routeNew.perLap', { distance: `${lapDisp.value.toFixed(2)} ${lapDisp.unit}` })}</span>
 				</div>
 			{/if}
 
 			<div class="elevation-preview">
-				<span class="section-label">Elevation profile</span>
+				<span class="section-label">{m('routeNew.elevationProfile')}</span>
 				{#if elevations.length >= 2}
 					<ElevationProfile {elevations} totalDistance={distance} />
 				{:else}
 					<div class="elevation-empty">
 						<span class="material-symbols">show_chart</span>
-						<span>Add waypoints to see the profile</span>
+						<span>{m('routeNew.elevationEmpty')}</span>
 					</div>
 				{/if}
 			</div>
 
-			<div class="toolbar-group" role="toolbar" aria-label="Waypoint actions">
-				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0 || builderBusy} onclick={handleUndo} title="Undo last waypoint (Ctrl+Z)">
+			<div class="toolbar-group" role="toolbar" aria-label={m('routeNew.waypointActions')}>
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0 || builderBusy} onclick={handleUndo} title={m('routeNew.undoTitle')}>
 					<span class="material-symbols">undo</span>
-					Undo
+					{m('routeNew.undo')}
 				</button>
-				<button class="btn btn-ghost btn-sm" disabled={waypointCount < 2 || builderBusy} onclick={handleOutAndBack} title="Mirror the route back to start">
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount < 2 || builderBusy} onclick={handleOutAndBack} title={m('routeNew.outAndBackTitle')}>
 					<span class="material-symbols">swap_horiz</span>
-					Out &amp; back
+					{m('routeNew.outAndBack')}
 				</button>
-				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0} onclick={handleClear} title="Clear all waypoints (Esc)">
+				<button class="btn btn-ghost btn-sm" disabled={waypointCount === 0} onclick={handleClear} title={m('routeNew.clearTitle')}>
 					<span class="material-symbols">delete</span>
-					Clear
+					{m('routeNew.clear')}
 				</button>
 			</div>
 
@@ -523,71 +524,71 @@
 			>
 				<span class="material-symbols">route</span>
 				<span class="target-btn-text">
-					{showDistanceTarget ? 'Hide distance target' : 'Generate a route by distance'}
+					{showDistanceTarget ? m('routeNew.hideDistanceTarget') : m('routeNew.generateByDistance')}
 				</span>
-				<span class="target-btn-sub">5k, 10k, half, full — or any distance</span>
+				<span class="target-btn-sub">{m('routeNew.distancePresetsHint')}</span>
 			</button>
 			{#if showDistanceTarget}
 				<div class="target-panel">
-					<span class="section-label">Start</span>
+					<span class="section-label">{m('routeNew.start')}</span>
 					<div class="point-row">
 						{#if startPoint}
 							<span class="point-set">{startLabel}</span>
 						{:else}
-							<span class="point-unset">Not set (uses map center)</span>
+							<span class="point-unset">{m('routeNew.startUnset')}</span>
 						{/if}
-						<button class="point-btn" onclick={() => useMyLocation('start')} aria-label="Use my location for start">
+						<button class="point-btn" onclick={() => useMyLocation('start')} aria-label={m('routeNew.useMyLocationStart')}>
 							<span class="material-symbols">my_location</span>
 						</button>
-						<button class="point-btn" class:active={pickingPoint === 'start'} onclick={() => pickOnMap('start')} aria-label="Pick start on map">
+						<button class="point-btn" class:active={pickingPoint === 'start'} onclick={() => pickOnMap('start')} aria-label={m('routeNew.pickStartOnMap')}>
 							<span class="material-symbols">pin_drop</span>
 						</button>
 						{#if startPoint}
-							<button class="point-btn" onclick={() => { startPoint = null; startLabel = ''; }} aria-label="Clear start">
+							<button class="point-btn" onclick={() => { startPoint = null; startLabel = ''; }} aria-label={m('routeNew.clearStart')}>
 								<span class="material-symbols">close</span>
 							</button>
 						{/if}
 					</div>
 					<!-- Keyboard alternative to map-tap (WCAG 2.1.1). -->
 					<form class="coord-entry" onsubmit={(e) => { e.preventDefault(); applyCoords('start'); }}>
-						<input class="coord-input" type="text" inputmode="decimal" bind:value={startLatInput} aria-label="Start latitude" placeholder="lat" />
-						<input class="coord-input" type="text" inputmode="decimal" bind:value={startLngInput} aria-label="Start longitude" placeholder="lng" />
-						<button type="submit" class="btn btn-sm btn-secondary">Set start</button>
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={startLatInput} aria-label={m('routeNew.startLatitude')} placeholder={m('routeNew.latPlaceholder')} />
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={startLngInput} aria-label={m('routeNew.startLongitude')} placeholder={m('routeNew.lngPlaceholder')} />
+						<button type="submit" class="btn btn-sm btn-secondary">{m('routeNew.setStart')}</button>
 					</form>
 					{#if startCoordError}
 						<p class="coord-error" role="alert">{startCoordError}</p>
 					{/if}
 
-					<span class="section-label">End <span class="label-hint">(optional — defaults to start for loop)</span></span>
+					<span class="section-label">{m('routeNew.end')} <span class="label-hint">{m('routeNew.endHint')}</span></span>
 					<div class="point-row">
 						{#if endPoint}
 							<span class="point-set">{endLabel}</span>
 						{:else}
-							<span class="point-unset">Same as start (loop)</span>
+							<span class="point-unset">{m('routeNew.endUnset')}</span>
 						{/if}
-						<button class="point-btn" onclick={() => useMyLocation('end')} aria-label="Use my location for end">
+						<button class="point-btn" onclick={() => useMyLocation('end')} aria-label={m('routeNew.useMyLocationEnd')}>
 							<span class="material-symbols">my_location</span>
 						</button>
-						<button class="point-btn" class:active={pickingPoint === 'end'} onclick={() => pickOnMap('end')} aria-label="Pick end on map">
+						<button class="point-btn" class:active={pickingPoint === 'end'} onclick={() => pickOnMap('end')} aria-label={m('routeNew.pickEndOnMap')}>
 							<span class="material-symbols">pin_drop</span>
 						</button>
 						{#if endPoint}
-							<button class="point-btn" onclick={() => { endPoint = null; endLabel = ''; }} aria-label="Clear end">
+							<button class="point-btn" onclick={() => { endPoint = null; endLabel = ''; }} aria-label={m('routeNew.clearEnd')}>
 								<span class="material-symbols">close</span>
 							</button>
 						{/if}
 					</div>
 					<!-- Keyboard alternative to map-tap (WCAG 2.1.1). -->
 					<form class="coord-entry" onsubmit={(e) => { e.preventDefault(); applyCoords('end'); }}>
-						<input class="coord-input" type="text" inputmode="decimal" bind:value={endLatInput} aria-label="End latitude" placeholder="lat" />
-						<input class="coord-input" type="text" inputmode="decimal" bind:value={endLngInput} aria-label="End longitude" placeholder="lng" />
-						<button type="submit" class="btn btn-sm btn-secondary">Set end</button>
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={endLatInput} aria-label={m('routeNew.endLatitude')} placeholder={m('routeNew.latPlaceholder')} />
+						<input class="coord-input" type="text" inputmode="decimal" bind:value={endLngInput} aria-label={m('routeNew.endLongitude')} placeholder={m('routeNew.lngPlaceholder')} />
+						<button type="submit" class="btn btn-sm btn-secondary">{m('routeNew.setEnd')}</button>
 					</form>
 					{#if endCoordError}
 						<p class="coord-error" role="alert">{endCoordError}</p>
 					{/if}
 
-					<span class="section-label">Distance</span>
+					<span class="section-label">{m('routeNew.distance')}</span>
 					<div class="target-row">
 						<input
 							type="range"
@@ -612,11 +613,13 @@
 					</div>
 					{#if builderBusy}
 						<button class="btn btn-outline" onclick={() => builder?.cancelGeneration()}>
-							Cancel generating…
+							{m('routeNew.cancelGenerating')}
 						</button>
 					{:else}
 						<button class="btn btn-secondary" onclick={handleGenerateLoop}>
-							Generate {targetDisplayValue.toFixed(1)} {unitLabel} {endPoint ? 'route' : 'loop'}
+							{endPoint
+								? m('routeNew.generateRoute', { distance: `${targetDisplayValue.toFixed(1)} ${unitLabel}` })
+								: m('routeNew.generateLoop', { distance: `${targetDisplayValue.toFixed(1)} ${unitLabel}` })}
 						</button>
 					{/if}
 				</div>
@@ -624,7 +627,7 @@
 
 			{#if pickingPoint}
 				<div class="pick-hint" role="status">
-					Click on the map to set the {pickingPoint} point
+					{pickingPoint === 'start' ? m('routeNew.pickHintStart') : m('routeNew.pickHintEnd')}
 				</div>
 			{/if}
 
@@ -634,14 +637,14 @@
 					disabled={waypointCount < 2 || builderBusy}
 					onclick={handleCalculateRoute}
 				>
-					{routed ? 'Recalculate' : 'Calculate Route'}
+					{routed ? m('routeNew.recalculate') : m('routeNew.calculateRoute')}
 				</button>
 				{#if routed}
 					<button
 						class="btn btn-outline btn-sm"
 						disabled={builderBusy}
 						onclick={handleUndoCalculate}
-						aria-label="Undo calculation"
+						aria-label={m('routeNew.undoCalculation')}
 					>
 						<span class="material-symbols">undo</span>
 					</button>
@@ -655,13 +658,13 @@
 					onclick={openSaveModal}
 				>
 					<span class="material-symbols" aria-hidden="true">save</span>
-					Save Route
+					{m('routeNew.saveRoute')}
 				</button>
 				<button
 					class="btn btn-outline btn-sm"
 					disabled={!routed || builderBusy}
 					onclick={handleExportGpx}
-					title="Export as GPX"
+					title={m('routeNew.exportGpx')}
 				>
 					GPX
 				</button>
@@ -669,7 +672,7 @@
 					class="btn btn-outline btn-sm"
 					disabled={!routed || builderBusy}
 					onclick={handleExportKml}
-					title="Export as KML"
+					title={m('routeNew.exportKml')}
 				>
 					KML
 				</button>
@@ -679,16 +682,16 @@
 		<details class="help" bind:open={showHelp}>
 			<summary>
 				<span class="material-symbols">keyboard</span>
-				Tips &amp; shortcuts
+				{m('routeNew.tipsShortcuts')}
 			</summary>
 			<ul>
-				<li><kbd>Click</kbd> map to drop a waypoint</li>
-				<li><kbd>Click</kbd> the green start marker to close a loop</li>
-				<li><kbd>Click</kbd> the route line to insert a mid-route point</li>
-				<li><kbd>Drag</kbd> a marker to reposition it</li>
-				<li><kbd>Right-click</kbd> a marker to delete</li>
-				<li><kbd>Ctrl</kbd>+<kbd>Z</kbd> undo last waypoint</li>
-				<li><kbd>Esc</kbd> clear everything</li>
+				<li><kbd>{m('routeNew.kbdClick')}</kbd> {m('routeNew.tipClickWaypoint')}</li>
+				<li><kbd>{m('routeNew.kbdClick')}</kbd> {m('routeNew.tipClickLoop')}</li>
+				<li><kbd>{m('routeNew.kbdClick')}</kbd> {m('routeNew.tipClickInsert')}</li>
+				<li><kbd>{m('routeNew.kbdDrag')}</kbd> {m('routeNew.tipDrag')}</li>
+				<li><kbd>{m('routeNew.kbdRightClick')}</kbd> {m('routeNew.tipRightClick')}</li>
+				<li><kbd>{m('routeNew.kbdCtrl')}</kbd>+<kbd>Z</kbd> {m('routeNew.tipUndo')}</li>
+				<li><kbd>{m('routeNew.kbdEsc')}</kbd> {m('routeNew.tipEsc')}</li>
 			</ul>
 		</details>
 	</aside>
@@ -708,8 +711,8 @@
 		{#if waypointCount === 0 && !pickingPoint}
 			<div class="canvas-empty" role="status">
 				<span class="material-symbols">add_location</span>
-				<h3>Click anywhere to start</h3>
-				<p>Drop waypoints to sketch your route. Hit <strong>Calculate route</strong> when you're ready to snap to walkable paths.</p>
+				<h3>{m('routeNew.canvasEmptyTitle')}</h3>
+				<p>{m('routeNew.canvasEmptyPrefix')} <strong>{m('routeNew.canvasEmptyCalculate')}</strong> {m('routeNew.canvasEmptySuffix')}</p>
 			</div>
 		{/if}
 
@@ -725,7 +728,7 @@
 				<div class="routing-error-text">{routingError}</div>
 				<button
 					class="routing-error-dismiss"
-					aria-label="Dismiss"
+					aria-label={m('routeNew.dismiss')}
 					onclick={() => (routingError = null)}
 				>
 					<span class="material-symbols">close</span>
@@ -737,26 +740,26 @@
 	</SplitPane>
 </div>
 
-<Modal open={showSaveModal} title="Save route" onclose={() => (showSaveModal = false)}>
+<Modal open={showSaveModal} title={m('routeNew.saveModalTitle')} onclose={() => (showSaveModal = false)}>
 	<form
 		class="save-form"
 		onsubmit={(e) => { e.preventDefault(); handleSaveRoute(); }}
 	>
 		<label class="field">
-			<span class="section-label">Name</span>
+			<span class="section-label">{m('routeNew.nameLabel')}</span>
 			<input
 				type="text"
-				placeholder="My Route"
+				placeholder={m('routeNew.namePlaceholder')}
 				bind:value={routeName}
 				required
 			/>
 		</label>
 
 		<label class="field">
-			<span class="section-label">Description <span class="label-hint">(optional)</span></span>
+			<span class="section-label">{m('routeNew.descriptionLabel')} <span class="label-hint">{m('routeNew.optionalHint')}</span></span>
 			<textarea
 				rows="3"
-				placeholder="Notes about the route — terrain, water stops, parking…"
+				placeholder={m('routeNew.descriptionPlaceholder')}
 				bind:value={routeDescription}
 			></textarea>
 		</label>
@@ -764,23 +767,23 @@
 		<div class="save-summary">
 			<div>
 				<span class="save-summary-value">{distanceDisp.value.toFixed(2)} {distanceDisp.unit}</span>
-				<span class="save-summary-label">Distance</span>
+				<span class="save-summary-label">{m('routeNew.distance')}</span>
 			</div>
 			<div>
 				<span class="save-summary-value">{elevation} m</span>
-				<span class="save-summary-label">Elevation</span>
+				<span class="save-summary-label">{m('routeNew.elevation')}</span>
 			</div>
 			<div>
-				<span class="save-summary-value">{mode === 'trail' ? 'Trail' : 'Road'}</span>
-				<span class="save-summary-label">Surface</span>
+				<span class="save-summary-value">{mode === 'trail' ? m('routeNew.trail') : m('routeNew.road')}</span>
+				<span class="save-summary-label">{m('routeNew.surface')}</span>
 			</div>
 		</div>
 
 		<label class="visibility">
 			<input type="checkbox" bind:checked={isPublic} />
 			<span>
-				<strong>Public</strong>
-				<span class="visibility-hint">Anyone with the link can view this route.</span>
+				<strong>{m('routeNew.public')}</strong>
+				<span class="visibility-hint">{m('routeNew.publicHint')}</span>
 			</span>
 		</label>
 
@@ -795,7 +798,7 @@
 				onclick={() => (showSaveModal = false)}
 				disabled={saving}
 			>
-				Cancel
+				{m('routeNew.cancel')}
 			</button>
 			<button
 				type="submit"
@@ -804,9 +807,9 @@
 			>
 				{#if saving}
 					<span class="btn-spinner" aria-hidden="true"></span>
-					Saving…
+					{m('routeNew.saving')}
 				{:else}
-					Save route
+					{m('routeNew.saveRouteModal')}
 				{/if}
 			</button>
 		</div>

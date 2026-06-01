@@ -8,6 +8,7 @@
 	import { supabase } from '$lib/core/supabase';
 	import { GUIDED_RUN_LIBRARY, type GuidedRun } from '$lib/training/guided_runs';
 	import type { TrainingPlan } from '$lib/types';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let plans = $state<TrainingPlan[]>([]);
 	let planId = $state<string | null>(null);
@@ -84,7 +85,7 @@
 			if (error) throw new Error(error.message);
 			coachConsentAt = (data as string | null) ?? new Date().toISOString();
 		} catch (e) {
-			coachConsentError = (e as Error).message ?? 'Failed to record consent.';
+			coachConsentError = (e as Error).message ?? m('coachPage.consentRecordError');
 		} finally {
 			coachConsentSaving = false;
 		}
@@ -139,8 +140,8 @@
 	}
 
 	function fmtMinutes(seconds: number): string {
-		const m = Math.round(seconds / 60);
-		return `${m} min`;
+		const mins = Math.round(seconds / 60);
+		return m('coachPage.minutesShort', { mins });
 	}
 
 	// Intensity is implicit in title + subtitle wording — keep the data
@@ -148,14 +149,14 @@
 	// and derive a hue locally for the rail's at-a-glance dot.
 	function intensityFor(g: GuidedRun): { label: string; tone: 'easy' | 'tempo' | 'mixed' } {
 		const s = (g.title + ' ' + g.subtitle).toLowerCase();
-		if (s.includes('run/walk')) return { label: 'Run/walk', tone: 'mixed' };
-		if (s.includes('tempo') || s.includes('interval')) return { label: 'Tempo', tone: 'tempo' };
-		return { label: 'Easy', tone: 'easy' };
+		if (s.includes('run/walk')) return { label: m('coachPage.intensityRunWalk'), tone: 'mixed' };
+		if (s.includes('tempo') || s.includes('interval')) return { label: m('coachPage.intensityTempo'), tone: 'tempo' };
+		return { label: m('coachPage.intensityEasy'), tone: 'easy' };
 	}
 </script>
 
 <svelte:head>
-	<title>Coach — Threkir</title>
+	<title>{m('coachPage.documentTitle')}</title>
 </svelte:head>
 
 <div class="page">
@@ -166,10 +167,10 @@
 		Visually-hidden h1 so screen-reader users navigating by
 		headings can identify the route.
 	-->
-	<h1 class="visually-hidden">AI Coach</h1>
+	<h1 class="visually-hidden">{m('coachPage.h1')}</h1>
 	<div class="chat-host">
 		{#if !coachConsentChecked || !loaded}
-			<p class="muted">Loading…</p>
+			<p class="muted">{m('shell.loading')}</p>
 		{:else if !coachConsentDecided}
 			<!--
 				GDPR Art 6(1)(a) first-use disclosure. Render-gates the
@@ -178,34 +179,28 @@
 				(2026-05-25).
 			-->
 			<div class="coach-consent" role="dialog" tabindex="-1" aria-labelledby="coach-consent-heading">
-				<h2 id="coach-consent-heading">Before you chat with Coach</h2>
+				<h2 id="coach-consent-heading">{m('coachPage.consentHeading')}</h2>
 				<p>
-					To give you grounded advice, Coach forwards a slice of your training
-					data to <strong>Anthropic</strong>, our AI model provider in the United
-					States. That slice includes:
+					{m('coachPage.consentIntroPrefix')}<strong>Anthropic</strong>{m('coachPage.consentIntroSuffix')}
 				</p>
 				<ul>
-					<li>Your date of birth, gender, and configured HR zones, if you've set them.</li>
-					<li>A window of your most recent runs (distance, duration, pace, HR).</li>
-					<li>The active training plan you have selected.</li>
-					<li>The chat messages you type here.</li>
+					<li>{m('coachPage.consentBulletProfile')}</li>
+					<li>{m('coachPage.consentBulletRuns')}</li>
+					<li>{m('coachPage.consentBulletPlan')}</li>
+					<li>{m('coachPage.consentBulletMessages')}</li>
 				</ul>
 				<p>
-					Anthropic processes the data on Threkir's behalf under their data-processing
-					terms; they do not train their models on Threkir customer data by default.
-					Full details — including transfer mechanism, retention, and your withdrawal
-					rights — are on our <a href="/privacy">privacy policy</a>.
+					{m('coachPage.consentTermsPrefix')}<a href="/privacy">{m('coachPage.consentPrivacyLink')}</a>{m('coachPage.consentTermsSuffix')}
 				</p>
 				<p>
-					Click <strong>I consent</strong> to continue. Click cancel to leave the page
-					with no data sent.
+					{m('coachPage.consentActionPrefix')}<strong>{m('coachPage.consentActionEmphasis')}</strong>{m('coachPage.consentActionSuffix')}
 				</p>
 				{#if coachConsentError}
 					<p class="coach-consent-error" role="alert">{coachConsentError}</p>
 				{/if}
 				<div class="coach-consent-actions">
 					<button type="button" class="btn btn-secondary" onclick={declineCoachConsent}>
-						Cancel
+						{m('coachPage.cancelButton')}
 					</button>
 					<button
 						type="button"
@@ -213,7 +208,7 @@
 						disabled={coachConsentSaving}
 						onclick={acceptCoachConsent}
 					>
-						{coachConsentSaving ? 'Recording consent…' : 'I consent — start Coach'}
+						{coachConsentSaving ? m('coachPage.consentSaving') : m('coachPage.consentAccept')}
 					</button>
 				</div>
 			</div>
@@ -226,12 +221,12 @@
 
 	<aside class="guided" aria-labelledby="guided-heading">
 		<header class="guided-head">
-			<p class="guided-eyebrow">Also for you</p>
-			<h2 id="guided-heading">Guided runs</h2>
-			<p class="guided-sub">Coach-voice scripted workouts — preview here, run on mobile.</p>
+			<p class="guided-eyebrow">{m('coachPage.guidedEyebrow')}</p>
+			<h2 id="guided-heading">{m('coachPage.guidedHeading')}</h2>
+			<p class="guided-sub">{m('coachPage.guidedSub')}</p>
 		</header>
 		{#if GUIDED_RUN_LIBRARY.length === 0}
-			<p class="guided-empty">No guided runs available yet. Check back soon.</p>
+			<p class="guided-empty">{m('coachPage.guidedEmpty')}</p>
 		{:else}
 			<ul class="guided-list">
 				{#each GUIDED_RUN_LIBRARY as g (g.id)}
@@ -247,21 +242,21 @@
 							</div>
 							<h3>{g.title}</h3>
 							<p class="guided-card-sub">{g.subtitle}</p>
-							<p class="guided-card-meta">{g.cues.length} cues</p>
+							<p class="guided-card-meta">{m('coachPage.cueCount', { count: g.cues.length })}</p>
 						</a>
 					</li>
 				{/each}
 			</ul>
 		{/if}
 		<a class="guided-all" href="/guided">
-			See the full library
+			{m('coachPage.seeFullLibrary')}
 			<span class="material-symbols">arrow_forward</span>
 		</a>
-		<div class="mobile-cta" aria-label="Run these on mobile">
+		<div class="mobile-cta" aria-label={m('coachPage.mobileCtaAria')}>
 			<span class="material-symbols mobile-cta-icon" aria-hidden="true">phone_iphone</span>
-			<p class="mobile-cta-title">Run these on mobile</p>
+			<p class="mobile-cta-title">{m('coachPage.mobileCtaTitle')}</p>
 			<p class="mobile-cta-sub">
-				Cues fire through your phone's TTS as you run. Free — no subscription needed.
+				{m('coachPage.mobileCtaSub')}
 			</p>
 		</div>
 	</aside>

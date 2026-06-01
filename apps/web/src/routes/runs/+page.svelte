@@ -15,6 +15,7 @@
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import type { Run, RunSource } from '$lib/types';
 	import { formatElevation } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Snapshot } from './$types';
 
 	let runs = $state<Run[]>([]);
@@ -213,13 +214,13 @@
 		deleting = false;
 		if (failed.length === 0) {
 			showToast(
-				`Deleted ${ids.length} run${ids.length === 1 ? '' : 's'}.`,
+				m(ids.length === 1 ? 'runs.deletedToastOne' : 'runs.deletedToastMany', { count: ids.length }),
 				'success',
 			);
 			exitSelectMode();
 		} else {
 			showToast(
-				`${ids.length - failed.length} deleted, ${failed.length} failed.`,
+				m('runs.deletedPartialToast', { deleted: ids.length - failed.length, failed: failed.length }),
 				'error',
 			);
 			selected = failedSet;
@@ -263,20 +264,20 @@
 	});
 
 	const sources: { value: RunSource | 'all'; label: string }[] = [
-		{ value: 'all', label: 'All Sources' },
-		{ value: 'app', label: 'Recorded' },
+		{ value: 'all', label: m('runs.sourceAll') },
+		{ value: 'app', label: m('runs.sourceRecorded') },
 		{ value: 'strava', label: 'Strava' },
 		{ value: 'parkrun', label: 'parkrun' },
 		{ value: 'healthkit', label: 'HealthKit' },
 	];
 
 	const activities: { value: string; label: string; icon: string }[] = [
-		{ value: 'all', label: 'All', icon: 'apps' },
-		{ value: 'run', label: 'Run', icon: 'directions_run' },
-		{ value: 'walk', label: 'Walk', icon: 'directions_walk' },
-		{ value: 'cycle', label: 'Cycle', icon: 'directions_bike' },
-		{ value: 'hike', label: 'Hike', icon: 'terrain' },
-		{ value: 'stroller', label: 'Stroller', icon: 'child_friendly' },
+		{ value: 'all', label: m('runs.activityAll'), icon: 'apps' },
+		{ value: 'run', label: m('runs.activityRun'), icon: 'directions_run' },
+		{ value: 'walk', label: m('runs.activityWalk'), icon: 'directions_walk' },
+		{ value: 'cycle', label: m('runs.activityCycle'), icon: 'directions_bike' },
+		{ value: 'hike', label: m('runs.activityHike'), icon: 'terrain' },
+		{ value: 'stroller', label: m('runs.activityStroller'), icon: 'child_friendly' },
 	];
 
 	/// Monotonic generation counter. Every loadInitial() captures the
@@ -450,8 +451,8 @@
 				: `${base}, ${d.getFullYear()}`;
 		};
 		if (customFrom && customTo) return `${fmt(customFrom)} – ${fmt(customTo)}`;
-		if (customFrom) return `From ${fmt(customFrom)}`;
-		return `Until ${fmt(customTo)}`;
+		if (customFrom) return m('runs.rangeFrom', { date: fmt(customFrom) });
+		return m('runs.rangeUntil', { date: fmt(customTo) });
 	}
 
 	async function handleRunCreated(run: { id: string }) {
@@ -463,7 +464,7 @@
 </script>
 
 <svelte:head>
-	<title>My runs — Threkir</title>
+	<title>{m('runs.pageTitle')}</title>
 </svelte:head>
 
 <div class="page">
@@ -473,10 +474,10 @@
 		page-header already shows the activity-type toolbar as the
 		visual primary surface.
 	-->
-	<h1 class="visually-hidden">Run history</h1>
+	<h1 class="visually-hidden">{m('runs.heading')}</h1>
 	<header class="page-header">
 		<div class="toolbar">
-			<div class="activity-group" role="group" aria-label="Activity type">
+			<div class="activity-group" role="group" aria-label={m('runs.activityTypeGroup')}>
 				{#each activities as act}
 					<button
 						class="activity-btn"
@@ -494,7 +495,7 @@
 			</div>
 
 			<div class="select-group">
-				<select bind:value={sourceFilter} class="toolbar-select" aria-label="Source">
+				<select bind:value={sourceFilter} class="toolbar-select" aria-label={m('runs.sourceLabel')}>
 					{#each sources as src}
 						<option value={src.value}>{src.label}</option>
 					{/each}
@@ -502,7 +503,7 @@
 				<select
 					bind:value={dateRange}
 					class="toolbar-select"
-					aria-label="Date range"
+					aria-label={m('runs.dateRangeLabel')}
 					onchange={() => {
 						if (dateRange === 'custom') {
 							// Clear any persisted bounds before opening the
@@ -521,29 +522,29 @@
 						}
 					}}
 				>
-					<option value="all">All time</option>
-					<option value="today">Today</option>
-					<option value="week">This week</option>
-					<option value="month">Last 30 days</option>
-					<option value="year">This year</option>
-					<option value="custom">Custom…</option>
+					<option value="all">{m('runs.rangeAllTime')}</option>
+					<option value="today">{m('runs.rangeToday')}</option>
+					<option value="week">{m('runs.rangeThisWeek')}</option>
+					<option value="month">{m('runs.rangeLast30Days')}</option>
+					<option value="year">{m('runs.rangeThisYear')}</option>
+					<option value="custom">{m('runs.rangeCustom')}</option>
 				</select>
-				<select bind:value={sortKey} class="toolbar-select" aria-label="Sort">
-					<option value="newest">Newest first</option>
-					<option value="oldest">Oldest first</option>
-					<option value="longest">Longest</option>
-					<option value="fastest">Fastest pace</option>
+				<select bind:value={sortKey} class="toolbar-select" aria-label={m('runs.sortLabel')}>
+					<option value="newest">{m('runs.sortNewest')}</option>
+					<option value="oldest">{m('runs.sortOldest')}</option>
+					<option value="longest">{m('runs.sortLongest')}</option>
+					<option value="fastest">{m('runs.sortFastest')}</option>
 				</select>
 			</div>
 
 			<div class="toolbar-actions">
 				{#if selecting}
-					<button class="link-btn" onclick={selectAllVisible} type="button">Select all</button>
-					<button class="link-btn" onclick={exitSelectMode} type="button">Done</button>
+					<button class="link-btn" onclick={selectAllVisible} type="button">{m('runs.selectAll')}</button>
+					<button class="link-btn" onclick={exitSelectMode} type="button">{m('runs.done')}</button>
 				{:else}
-					<a class="link-btn" href="/runs/heatmap">Heatmap</a>
-					<button class="link-btn" onclick={() => (selecting = true)} type="button">Select</button>
-					<button class="add-btn" type="button" onclick={() => (showRunModal = true)}>+ Add run</button>
+					<a class="link-btn" href="/runs/heatmap">{m('runs.heatmap')}</a>
+					<button class="link-btn" onclick={() => (selecting = true)} type="button">{m('runs.select')}</button>
+					<button class="add-btn" type="button" onclick={() => (showRunModal = true)}>{m('runs.addRunShort')}</button>
 				{/if}
 			</div>
 		</div>
@@ -560,7 +561,7 @@
 					type="button"
 					class="range-chip"
 					onclick={() => (showRangePicker = true)}
-					aria-label="Open date range picker"
+					aria-label={m('runs.openRangePicker')}
 				>
 					<span class="material-symbols">calendar_month</span>
 					{customRangeChipLabel()}
@@ -578,7 +579,7 @@
 						// inconsistent. Flip dateRange back so the
 						// dropdown matches the visible state.
 						dateRange = prevNonCustomRange;
-					}}>Clear</button>
+					}}>{m('runs.clear')}</button>
 			</div>
 		{/if}
 	</header>
@@ -610,7 +611,7 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading runs…</p>
+		<p class="sr-only" role="status">{m('runs.loadingRuns')}</p>
 	{:else}
 		<div class="run-list">
 			{#each filteredRuns as run}
@@ -667,7 +668,7 @@
 							<span class="material-symbols no-track-icon" aria-hidden="true">
 								map
 							</span>
-							<span class="no-track-label">No GPS track</span>
+							<span class="no-track-label">{m('runs.noGpsTrack')}</span>
 						{/if}
 					</div>
 					<div class="run-details">
@@ -680,24 +681,24 @@
 						<div class="run-stats">
 							<div class="run-stat">
 								<span class="run-stat-value">{formatDistance(run.distance_m)}</span>
-								<span class="run-stat-label section-label">Distance</span>
+								<span class="run-stat-label section-label">{m('runs.statDistance')}</span>
 							</div>
 							<div class="run-stat">
 								<span class="run-stat-value">{formatDuration(run.duration_s)}</span>
-								<span class="run-stat-label section-label">Time</span>
+								<span class="run-stat-label section-label">{m('runs.statTime')}</span>
 							</div>
 							<div class="run-stat">
 								<span class="run-stat-value"
 									>{formatPace(run.duration_s, run.distance_m)}</span
 								>
-								<span class="run-stat-label section-label">Pace</span>
+								<span class="run-stat-label section-label">{m('runs.statPace')}</span>
 							</div>
 							{#if typeof (run.metadata as Record<string, unknown> | null)?.elevation_m === 'number' && ((run.metadata as Record<string, unknown>).elevation_m as number) > 0}
 								<div class="run-stat">
 									<span class="run-stat-value"
 										>{formatElevation((run.metadata as Record<string, unknown>).elevation_m as number)}</span
 									>
-									<span class="run-stat-label section-label">Vert</span>
+									<span class="run-stat-label section-label">{m('runs.statVert')}</span>
 								</div>
 							{/if}
 						</div>
@@ -706,7 +707,7 @@
 								<span class="material-symbols">event</span>
 								<span class="run-event-text">
 									{run.metadata.event}{#if run.metadata.position}
-										&middot; Position {run.metadata.position}{/if}
+										&middot; {m('runs.position', { position: String(run.metadata.position) })}{/if}
 								</span>
 							</div>
 						{/if}
@@ -716,11 +717,11 @@
 		</div>
 
 		{#if selecting && selected.size > 0}
-			<div class="bulk-bar" role="toolbar" aria-label="Selection actions">
-				<span class="bulk-count">{selected.size} selected</span>
+			<div class="bulk-bar" role="toolbar" aria-label={m('runs.selectionActions')}>
+				<span class="bulk-count">{m('runs.selectedCount', { count: selected.size })}</span>
 				<div class="bulk-actions">
 					<button type="button" class="bulk-cancel" onclick={clearSelection}>
-						Clear
+						{m('runs.clear')}
 					</button>
 					<button
 						type="button"
@@ -729,7 +730,7 @@
 						onclick={() => (showBulkConfirm = true)}
 					>
 						<span class="material-symbols">delete</span>
-						{deleting ? 'Deleting…' : 'Delete'}
+						{deleting ? m('runs.deleting') : m('runs.delete')}
 					</button>
 				</div>
 			</div>
@@ -737,9 +738,9 @@
 
 		<ConfirmDialog
 			open={showBulkConfirm}
-			title="Delete {selected.size} run{selected.size === 1 ? '' : 's'}?"
-			message="This permanently removes the runs and their GPS tracks. Can't be undone."
-			confirmLabel="Delete"
+			title={m(selected.size === 1 ? 'runs.bulkConfirmTitleOne' : 'runs.bulkConfirmTitleMany', { count: selected.size })}
+			message={m('runs.bulkConfirmMessage')}
+			confirmLabel={m('runs.delete')}
 			danger
 			onconfirm={handleBulkDelete}
 			oncancel={() => (showBulkConfirm = false)}
@@ -753,7 +754,7 @@
 					disabled={loadingMore}
 					onclick={loadMore}
 				>
-					{loadingMore ? 'Loading…' : `Load ${PAGE_SIZE} more`}
+					{loadingMore ? m('shell.loading') : m('runs.loadMore', { count: PAGE_SIZE })}
 				</button>
 			</div>
 		{/if}
@@ -762,10 +763,10 @@
 			{#if runs.length === 0}
 				<div class="empty" data-testid="runs-empty-no-data">
 					<span class="material-symbols empty-icon" aria-hidden="true">directions_run</span>
-					<p class="empty-text">No runs yet.</p>
+					<p class="empty-text">{m('runs.emptyNoData')}</p>
 					<p class="empty-hint">
-						Record your first run on the app, or import from
-						<a href="/settings/integrations">Strava / Garmin</a>.
+						{m('runs.emptyNoDataHintPrefix')}
+						<a href="/settings/integrations">{m('runs.emptyNoDataHintLink')}</a>{m('runs.emptyNoDataHintSuffix')}
 					</p>
 					<button
 						type="button"
@@ -773,15 +774,15 @@
 						onclick={() => (showRunModal = true)}
 						style="margin-top: var(--space-md);"
 					>
-						Add a run
+						{m('runs.addRun')}
 					</button>
 				</div>
 			{:else}
 				<div class="empty" data-testid="runs-empty-filtered">
 					<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-					<p class="empty-text">No runs match these filters.</p>
+					<p class="empty-text">{m('runs.emptyFiltered')}</p>
 					<p class="empty-hint">
-						You have runs — they're just outside this date range or activity / source.
+						{m('runs.emptyFilteredHint')}
 					</p>
 					<div class="empty-actions">
 						<button
@@ -794,10 +795,10 @@
 								activityFilter = 'all';
 							}}
 						>
-							Show all runs
+							{m('runs.showAllRuns')}
 						</button>
 						<button type="button" class="btn btn-primary" onclick={() => (showRunModal = true)}>
-							Add a run
+							{m('runs.addRun')}
 						</button>
 					</div>
 				</div>
@@ -808,7 +809,7 @@
 
 <Modal
 	open={showRunModal}
-	title="Add a run"
+	title={m('runs.addRun')}
 	onclose={() => (showRunModal = false)}
 >
 	<RunEditor oncreated={handleRunCreated} oncancel={() => (showRunModal = false)} />

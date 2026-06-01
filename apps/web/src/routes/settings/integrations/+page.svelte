@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { m } from '$lib/i18n/store.svelte';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -29,10 +30,10 @@
 	}
 
 	const providers: Omit<IntegrationUI, 'connected' | 'lastSync' | 'loading'>[] = [
-		{ provider: 'strava', name: 'Strava', description: 'Sync activities automatically from your Strava account', icon: 'directions_run' },
-		{ provider: 'parkrun', name: 'parkrun', description: 'Import your complete parkrun history', icon: 'emoji_events' },
-		{ provider: 'garmin', name: 'Garmin Connect', description: 'Bulk-import .fit files (single activity or full Account Data export). Live OAuth needs Garmin developer-program approval.', icon: 'watch' },
-		{ provider: 'healthkit', name: 'Apple HealthKit', description: 'Will sync on-device once the iOS app ships (coming soon).', icon: 'favorite' },
+		{ provider: 'strava', name: 'Strava', description: m('settingsIntegrations.stravaDescription'), icon: 'directions_run' },
+		{ provider: 'parkrun', name: 'parkrun', description: m('settingsIntegrations.parkrunDescription'), icon: 'emoji_events' },
+		{ provider: 'garmin', name: 'Garmin Connect', description: m('settingsIntegrations.garminDescription'), icon: 'watch' },
+		{ provider: 'healthkit', name: 'Apple HealthKit', description: m('settingsIntegrations.healthkitDescription'), icon: 'favorite' },
 	];
 
 	let integrations = $state<IntegrationUI[]>(
@@ -73,11 +74,11 @@
 				const result = await completeStravaOAuth(params, $page.url.origin);
 				await refreshIntegrations();
 				showToast(
-					`Strava connected. ${result.imported} runs imported, ${result.skipped} already present.`,
+					m('settingsIntegrations.stravaConnected', { imported: result.imported, skipped: result.skipped }),
 					'success',
 				);
 			} catch (err) {
-				showToast(`Strava connect failed: ${err instanceof Error ? err.message : err}`, 'error');
+				showToast(m('settingsIntegrations.stravaConnectFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
 			} finally {
 				if (strava) strava.loading = false;
 				// Remove the OAuth params from history so a refresh is clean.
@@ -98,7 +99,7 @@
 
 		if (item.provider === 'strava') {
 			if (!isStravaConfigured()) {
-				showToast('Strava is not configured on this build (missing PUBLIC_STRAVA_CLIENT_ID).', 'error');
+				showToast(m('settingsIntegrations.stravaNotConfigured'), 'error');
 				return;
 			}
 			// OAuth 2.0 CSRF state. Mint, stash, then forward to Strava.
@@ -135,7 +136,7 @@
 			item.connected = false;
 			item.lastSync = null;
 			if (item.provider === 'strava') {
-				showToast('Strava disconnected.', 'success');
+				showToast(m('settingsIntegrations.stravaDisconnected'), 'success');
 			}
 		} catch (err) {
 			console.error('Integration disconnect failed:', err);
@@ -154,13 +155,15 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		zipError = '';
-		zipProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: 'Reading archive…' };
+		zipProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: m('settingsIntegrations.readingArchive') };
 		try {
 			const result = await importStravaZip(file, (p) => {
 				zipProgress = { ...p };
 			});
 			showToast(
-				`Strava zip import: ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
+				result.failed
+					? m('settingsIntegrations.stravaZipImportWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
+					: m('settingsIntegrations.stravaZipImport', { imported: result.imported, skipped: result.skipped }),
 				'success',
 			);
 		} catch (err) {
@@ -182,17 +185,19 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		garminError = '';
-		garminProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: 'Reading file…' };
+		garminProgress = { total: 0, imported: 0, skipped: 0, failed: 0, currentName: m('settingsIntegrations.readingFile') };
 		try {
 			const result = await importGarminBundle(file, (p) => {
 				garminProgress = { ...p };
 			});
 			showToast(
-				`Garmin import: ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
+				result.failed
+					? m('settingsIntegrations.garminImportWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
+					: m('settingsIntegrations.garminImport', { imported: result.imported, skipped: result.skipped }),
 				'success',
 			);
 			if (result.hrZonesImported) {
-				showToast('Imported your heart-rate zones from Garmin.', 'success');
+				showToast(m('settingsIntegrations.garminHrZonesImported'), 'success');
 			}
 		} catch (err) {
 			garminError = err instanceof Error ? err.message : String(err);
@@ -209,11 +214,13 @@
 			const result = await syncStrava();
 			await refreshIntegrations();
 			showToast(
-				`Strava sync complete. ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
+				result.failed
+					? m('settingsIntegrations.stravaSyncCompleteWithFailed', { imported: result.imported, skipped: result.skipped, failed: result.failed })
+					: m('settingsIntegrations.stravaSyncComplete', { imported: result.imported, skipped: result.skipped }),
 				'success',
 			);
 		} catch (err) {
-			showToast(`Strava sync failed: ${err instanceof Error ? err.message : err}`, 'error');
+			showToast(m('settingsIntegrations.stravaSyncFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
 		} finally {
 			item.loading = false;
 		}
@@ -222,11 +229,10 @@
 
 <div class="page">
 	<header class="page-head">
-		<p class="kicker">Settings</p>
-		<h1>Integrations</h1>
+		<p class="kicker">{m('shell.settings')}</p>
+		<h1>{m('settingsIntegrations.title')}</h1>
 		<p class="tagline">
-			Pull your runs in from Strava, parkrun, Garmin, and Apple HealthKit — or drop in
-			a bulk export zip if you'd rather not connect an account.
+			{m('settingsIntegrations.tagline')}
 		</p>
 	</header>
 
@@ -243,21 +249,19 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading integrations…</p>
+		<p class="sr-only" role="status">{m('settingsIntegrations.loading')}</p>
 	{:else}
 		{#if integrations.every((i) => !i.connected)}
 			<section class="card empty-card">
 				<span class="material-symbols empty-icon" aria-hidden="true">link</span>
-				<h3>No integrations connected</h3>
+				<h3>{m('settingsIntegrations.emptyTitle')}</h3>
 				<p class="empty-text">
-					Connect Strava, parkrun, or Garmin below to keep your runs flowing in
-					automatically. Or use the bulk-import cards if you'd rather drop in a
-					one-off export.
+					{m('settingsIntegrations.emptyText')}
 				</p>
 			</section>
 		{/if}
 		<section class="provider-section">
-			<h2>Available integrations</h2>
+			<h2>{m('settingsIntegrations.availableHeading')}</h2>
 			<div class="integration-list">
 			{#each integrations as integration, i}
 				<div class="integration-card" class:connected={integration.connected}>
@@ -269,19 +273,17 @@
 						<p>{integration.description}</p>
 						{#if integration.connected && integration.lastSync}
 							<span class="last-sync">
-								Last synced {new Date(integration.lastSync).toLocaleDateString(activeFormatLocale(), {
+								{m('settingsIntegrations.lastSynced', { date: new Date(integration.lastSync).toLocaleDateString(activeFormatLocale(), {
 									day: 'numeric',
 									month: 'short',
 									hour: '2-digit',
 									minute: '2-digit',
-								})}
+								}) })}
 							</span>
 						{/if}
 						{#if integration.connected && integration.provider === 'strava'}
 							<p class="sync-note">
-								Sync pulls the last 90 days from Strava. For your full
-								back-catalogue, use <strong>Bulk import from a Strava export</strong>
-								below — that's the only path that brings in older activities.
+								{m('settingsIntegrations.syncNotePrefix')}<strong>{m('settingsIntegrations.syncNoteBold')}</strong>{m('settingsIntegrations.syncNoteSuffix')}
 							</p>
 						{/if}
 					</div>
@@ -292,7 +294,7 @@
 								disabled={integration.loading}
 								onclick={() => handleSyncStrava(i)}
 							>
-								{integration.loading ? 'Syncing...' : 'Sync now'}
+								{integration.loading ? m('settingsIntegrations.syncing') : m('settingsIntegrations.syncNow')}
 							</button>
 						{/if}
 						<button
@@ -305,7 +307,7 @@
 							{#if integration.loading}
 								...
 							{:else}
-								{integration.connected ? 'Disconnect' : 'Connect'}
+								{integration.connected ? m('settingsIntegrations.disconnect') : m('settingsIntegrations.connect')}
 							{/if}
 						</button>
 					</div>
@@ -315,16 +317,14 @@
 		</section>
 
 		<section class="card bulk-import">
-			<h2>Bulk import from a Strava export</h2>
+			<h2>{m('settingsIntegrations.stravaBulkHeading')}</h2>
 			<p class="card-sub">
-				Import your full Strava history in one go. Download your data from
-				<a href="https://www.strava.com/athlete/delete_your_account" target="_blank" rel="noopener noreferrer"
-					>Strava → Settings → My Account → Download Your Data</a
-				>, then drop the zip here. Runs already imported from your connected
-				Strava account are skipped.
+				{m('settingsIntegrations.stravaBulkPrefix')}<a href="https://www.strava.com/athlete/delete_your_account" target="_blank" rel="noopener noreferrer"
+					>{m('settingsIntegrations.stravaBulkLink')}</a
+				>{m('settingsIntegrations.stravaBulkSuffix')}
 			</p>
 			<label class="zip-btn">
-				Choose Strava export zip
+				{m('settingsIntegrations.chooseStravaZip')}
 				<input type="file" accept=".zip,application/zip" onchange={handleZipSelect} hidden />
 			</label>
 			{#if zipError}
@@ -351,10 +351,9 @@
 						{#if zipProgress.total === 0}
 							{zipProgress.currentName ?? '…'}
 						{:else}
-							{zipProgress.imported + zipProgress.skipped + zipProgress.failed} /
-							{zipProgress.total} · {zipProgress.imported} imported ·
-							{zipProgress.skipped} skipped{zipProgress.failed
-								? ` · ${zipProgress.failed} failed`
+							{m('settingsIntegrations.progressDone', { done: zipProgress.imported + zipProgress.skipped + zipProgress.failed, total: zipProgress.total })} · {m('settingsIntegrations.progressImported', { imported: zipProgress.imported })} ·
+							{m('settingsIntegrations.progressSkipped', { skipped: zipProgress.skipped })}{zipProgress.failed
+								? ` · ${m('settingsIntegrations.progressFailed', { failed: zipProgress.failed })}`
 								: ''}
 							{#if zipProgress.currentName}
 								<br /><span class="zip-current">{zipProgress.currentName}</span>
@@ -366,18 +365,15 @@
 		</section>
 
 		<section class="card bulk-import">
-			<h2>Bulk import from a Garmin export</h2>
+			<h2>{m('settingsIntegrations.garminBulkHeading')}</h2>
 			<p class="card-sub">
-				Drop a single <code>.fit</code> file (Garmin Connect → activity → "Export Original")
-				or the <code>.zip</code> from
-				<a href="https://www.garmin.com/account/datamanagement/exportdata/" target="_blank" rel="noopener noreferrer"
-					>Garmin → Account Management → Request Your Data</a
-				>. We parse <code>.fit</code> and any user-uploaded <code>.gpx</code> /
-				<code>.tcx</code> originals inside the bundle. Already-imported runs (matched on
-				the FIT file id) are skipped.
+				{m('settingsIntegrations.garminBulkFrag1')}<code>.fit</code>{m('settingsIntegrations.garminBulkFrag2')}<code>.zip</code>{m('settingsIntegrations.garminBulkFrag3')}<a href="https://www.garmin.com/account/datamanagement/exportdata/" target="_blank" rel="noopener noreferrer"
+					>{m('settingsIntegrations.garminBulkLink')}</a
+				>{m('settingsIntegrations.garminBulkFrag4')}<code>.fit</code>{m('settingsIntegrations.garminBulkFrag5')}<code>.gpx</code> /
+				<code>.tcx</code>{m('settingsIntegrations.garminBulkFrag6')}
 			</p>
 			<label class="zip-btn">
-				Choose Garmin export
+				{m('settingsIntegrations.chooseGarminExport')}
 				<input type="file" accept=".fit,.zip,application/octet-stream,application/zip" onchange={handleGarminSelect} hidden />
 			</label>
 			{#if garminError}
@@ -404,10 +400,9 @@
 						{#if garminProgress.total === 0}
 							{garminProgress.currentName ?? '…'}
 						{:else}
-							{garminProgress.imported + garminProgress.skipped + garminProgress.failed} /
-							{garminProgress.total} · {garminProgress.imported} imported ·
-							{garminProgress.skipped} skipped{garminProgress.failed
-								? ` · ${garminProgress.failed} failed`
+							{m('settingsIntegrations.progressDone', { done: garminProgress.imported + garminProgress.skipped + garminProgress.failed, total: garminProgress.total })} · {m('settingsIntegrations.progressImported', { imported: garminProgress.imported })} ·
+							{m('settingsIntegrations.progressSkipped', { skipped: garminProgress.skipped })}{garminProgress.failed
+								? ` · ${m('settingsIntegrations.progressFailed', { failed: garminProgress.failed })}`
 								: ''}
 							{#if garminProgress.currentName}
 								<br /><span class="zip-current">{garminProgress.currentName}</span>
@@ -422,11 +417,11 @@
 
 <ConfirmDialog
 	open={confirmingDisconnect !== null}
-	title="Disconnect integration?"
+	title={m('settingsIntegrations.disconnectDialogTitle')}
 	message={confirmingDisconnect !== null
-		? `Disconnect ${integrations[confirmingDisconnect].name}? Stored tokens will be removed and automatic syncing will stop. You can reconnect at any time.`
+		? m('settingsIntegrations.disconnectDialogMessage', { name: integrations[confirmingDisconnect].name })
 		: ''}
-	confirmLabel="Disconnect"
+	confirmLabel={m('settingsIntegrations.disconnect')}
 	danger
 	onconfirm={performDisconnect}
 	oncancel={() => (confirmingDisconnect = null)}
