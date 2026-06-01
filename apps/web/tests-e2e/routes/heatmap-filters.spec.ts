@@ -626,3 +626,69 @@ test.describe('Heatmap compute hygiene (web)', () => {
 		await expect.poll(() => heatPointCount(page), { timeout: 6000 }).toBeGreaterThan(0);
 	});
 });
+
+test.describe('Heatmap cluster list (web)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('hovering an overlapping-start cluster lists its routes; a row previews', async ({
+		page,
+	}) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+
+		// Wash Park (Denver seed): 3 routes share the EXACT same start, so
+		// they always cluster and can't be zoomed apart — the list is the
+		// only way to reach them. Fly there and project the cluster bubble.
+		const screen = await page.evaluate(async ([lng, lat]) => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return null;
+			await new Promise<void>((r) => {
+				m.once('moveend', () => r());
+				m.flyTo({ center: [lng, lat], zoom: 13 });
+			});
+			const deadline = Date.now() + 4000;
+			while (Date.now() < deadline) {
+				const p = m.project([lng, lat]);
+				if (
+					m.queryRenderedFeatures([p.x, p.y], {
+						layers: ['heatmap-route-pins-cluster'],
+					}).length > 0
+				)
+					break;
+				await new Promise<void>((r) => setTimeout(r, 150));
+			}
+			const p = m.project([lng, lat]);
+			const rect = m.getContainer().getBoundingClientRect();
+			return { x: rect.left + p.x, y: rect.top + p.y };
+		}, [-105.0, 39.74]);
+		expect(screen, '__heatmapMap dev hook + a cluster must be present').toBeTruthy();
+		if (!screen) return;
+
+		await page.mouse.move(screen.x, screen.y);
+		const popup = page.locator('.heatmap-cluster-popup');
+		await expect(popup).toBeVisible({ timeout: 5000 });
+		const rows = popup.locator('.cluster-route');
+		await expect(rows).toHaveCount(3);
+
+		// Hovering a row previews that route's line on the map.
+		await rows.first().hover();
+		await expect
+			.poll(
+				() =>
+					page.evaluate(() => {
+						const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+						return m
+							.querySourceFeatures('heatmap-routes')
+							.filter((f: { geometry?: { type?: string } }) => f.geometry?.type === 'LineString')
+							.length;
+					}),
+				{ timeout: 5000 },
+			)
+			.toBeGreaterThanOrEqual(1);
+
+		// Each row links to its route detail.
+		const href = await rows.first().getAttribute('href');
+		expect(href).toMatch(/^\/routes\/[0-9a-f-]+$/);
+	});
+});

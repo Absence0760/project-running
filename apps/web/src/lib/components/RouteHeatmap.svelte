@@ -417,11 +417,46 @@
 					// click after the source settles succeeds. No-op here.
 				}
 			});
-			map.on('mouseenter', ROUTE_CLUSTER_LAYER, () => {
-				if (map) map.getCanvas().style.cursor = 'pointer';
+			map.on('mouseenter', ROUTE_CLUSTER_LAYER, async (e) => {
+				if (!map) return;
+				map.getCanvas().style.cursor = 'pointer';
+				if (clearTimer) {
+					clearTimeout(clearTimer);
+					clearTimer = null;
+				}
+				const f = e.features?.[0];
+				const clusterId = f?.properties?.cluster_id as number | undefined;
+				if (clusterId == null) return;
+				const src = map.getSource(ROUTE_PINS_SOURCE) as
+					| maplibregl.GeoJSONSource
+					| undefined;
+				if (!src) return;
+				const total = (f!.properties?.point_count as number) ?? 0;
+				const coords = (f!.geometry as GeoJSON.Point).coordinates as [number, number];
+				try {
+					const leaves = await src.getClusterLeaves(clusterId, 12, 0);
+					const routes: ClusterRoute[] = leaves.map((lf) => {
+						const p = (lf.properties ?? {}) as Record<string, unknown>;
+						const c = (lf.geometry as GeoJSON.Point).coordinates as [number, number];
+						return {
+							id: p.id as string,
+							name: (p.name as string) ?? 'Route',
+							featured: !!p.featured,
+							distance_m: (p.distance_m as number) ?? 0,
+							surface: (p.surface as string) ?? '',
+							run_count: (p.run_count as number) ?? 0,
+							lng: c[0],
+							lat: c[1],
+						};
+					});
+					openClusterPopup(coords, routes, total);
+				} catch {
+					// getClusterLeaves can fail mid-tile-load; harmless.
+				}
 			});
 			map.on('mouseleave', ROUTE_CLUSTER_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';
+				scheduleClear();
 			});
 			map.addLayer({
 				id: ROUTE_PINS_LAYER,
@@ -572,6 +607,8 @@
 		currentPopup = null;
 		hoverPopup?.remove();
 		hoverPopup = null;
+		clusterPopup?.remove();
+		clusterPopup = null;
 		map?.remove();
 		map = null;
 		if (pendingFetch) clearTimeout(pendingFetch);
@@ -890,14 +927,21 @@
 		(map?.getSource(id) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 	}
 
-	function previewRoute(id: string, coords: [number, number], name: string) {
+	function previewRoute(
+		id: string,
+		coords: [number, number],
+		name: string,
+		showTip = true,
+	) {
 		if (clearTimer) {
 			clearTimeout(clearTimer);
 			clearTimer = null;
 		}
 		if (hoveredRouteId === id) return; // already shown — no churn, no flicker
 		hoveredRouteId = id;
-		openHoverTip(coords, name);
+		// The cluster popup already names the route, so it skips the tip to
+		// avoid stacking a label on top of the popup at the same dot.
+		if (showTip) openHoverTip(coords, name);
 		setSourceData(ROUTE_HL_SOURCE, {
 			type: 'FeatureCollection',
 			features: [
@@ -939,8 +983,103 @@
 		clearTimer = null;
 		hoveredRouteId = null;
 		closeHoverTip();
+		clusterPopup?.remove();
+		clusterPopup = null;
 		setSourceData(ROUTES_SOURCE, { type: 'FeatureCollection', features: [] });
 		setSourceData(ROUTE_HL_SOURCE, { type: 'FeatureCollection', features: [] });
+	}
+
+	// When a cluster of overlapping start-pins is hovered, this lists the
+	// routes in it (you can't zoom apart pins that share a coordinate, so a
+	// list is the only way to reach them). Sticky via the same clear-timer
+	// the line preview uses; hovering a row previews that route's line,
+	// clicking opens it.
+	let clusterPopup: maplibregl.Popup | null = null;
+
+	interface ClusterRoute {
+		id: string;
+		name: string;
+		featured: boolean;
+		distance_m: number;
+		surface: string;
+		run_count: number;
+		lng: number;
+		lat: number;
+	}
+
+	function openClusterPopup(
+		coords: [number, number],
+		routes: ClusterRoute[],
+		total: number,
+	) {
+		if (!map) return;
+		clusterPopup?.remove();
+		const rowsHtml = routes
+			.map((r) => {
+				const star = r.featured
+					? '<span class="cluster-route-star" title="Featured">★</span>'
+					: '';
+				const meta = [
+					formatDistance(r.distance_m),
+					r.surface,
+					r.run_count > 0 ? `${r.run_count} run${r.run_count === 1 ? '' : 's'}` : '',
+				]
+					.filter(Boolean)
+					.join(' · ');
+				return `<a class="cluster-route" href="/routes/${escapeHtml(r.id)}"
+					data-route-id="${escapeHtml(r.id)}" data-lng="${r.lng}" data-lat="${r.lat}"
+					data-name="${escapeHtml(r.name)}" data-sveltekit-preload-data="hover">
+					<span class="cluster-route-name">${star}${escapeHtml(r.name)}</span>
+					<span class="cluster-route-meta">${escapeHtml(meta)}</span>
+				</a>`;
+			})
+			.join('');
+		const more =
+			total > routes.length
+				? `<div class="cluster-more">+${total - routes.length} more · zoom in to see all</div>`
+				: '';
+		const html = `<div class="cluster-popup">
+			<div class="cluster-popup-head">${total} routes start here</div>
+			<div class="cluster-popup-list">${rowsHtml}</div>
+			${more}
+		</div>`;
+		// Sync the map transform before projecting the lng/lat — same
+		// stale-transform guard openPopupRaw uses, or the popup can land
+		// at the map origin (top-left) instead of over the cluster.
+		map.resize();
+		clusterPopup = new maplibregl.Popup({
+			closeButton: false,
+			closeOnClick: false,
+			offset: 14,
+			maxWidth: '280px',
+			className: 'heatmap-cluster-popup',
+			focusAfterOpen: false,
+		})
+			.setLngLat(coords)
+			.setHTML(html)
+			.addTo(map);
+		const el = clusterPopup.getElement();
+		// Keep the popup + preview alive while the cursor is over it.
+		el.addEventListener('mouseenter', () => {
+			if (clearTimer) {
+				clearTimeout(clearTimer);
+				clearTimer = null;
+			}
+		});
+		el.addEventListener('mouseleave', () => scheduleClear());
+		// Delegated: hovering any row previews that route's line.
+		el.addEventListener('mouseover', (ev) => {
+			const row = (ev.target as HTMLElement).closest('[data-route-id]') as
+				| HTMLElement
+				| null;
+			if (!row?.dataset.routeId) return;
+			previewRoute(
+				row.dataset.routeId,
+				[parseFloat(row.dataset.lng ?? '0'), parseFloat(row.dataset.lat ?? '0')],
+				row.dataset.name ?? '',
+				false,
+			);
+		});
 	}
 
 	async function refresh() {
@@ -1641,6 +1780,69 @@
 	:global(.heatmap-hover-tip .maplibregl-popup-tip) {
 		border-top-color: var(--color-border);
 		border-bottom-color: var(--color-border);
+	}
+
+	/* Cluster list popup — the routes that share (or nearly share) a start
+	 * point, since overlapping pins can't be zoomed apart. Each row previews
+	 * its line on hover and opens the route on click. */
+	:global(.maplibregl-popup.heatmap-cluster-popup) {
+		max-width: 280px;
+	}
+	:global(.heatmap-cluster-popup .maplibregl-popup-content) {
+		background: var(--color-surface);
+		color: var(--color-text);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-lg);
+		padding: 0.4rem;
+	}
+	:global(.heatmap-cluster-popup .maplibregl-popup-tip) {
+		border-top-color: var(--color-border);
+		border-bottom-color: var(--color-border);
+	}
+	:global(.heatmap-cluster-popup .cluster-popup-head) {
+		padding: 0.3rem 0.5rem;
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--color-text-tertiary);
+	}
+	:global(.heatmap-cluster-popup .cluster-popup-list) {
+		max-height: 16rem;
+		overflow-y: auto;
+	}
+	:global(.heatmap-cluster-popup .cluster-route) {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		padding: 0.4rem 0.5rem;
+		border-radius: var(--radius-sm);
+		text-decoration: none;
+		color: var(--color-text);
+	}
+	:global(.heatmap-cluster-popup .cluster-route:hover) {
+		background: var(--color-surface-hover);
+	}
+	:global(.heatmap-cluster-popup .cluster-route-name) {
+		font-size: 0.85rem;
+		font-weight: 600;
+		line-height: 1.2;
+	}
+	:global(.heatmap-cluster-popup .cluster-route-star) {
+		color: #facc15;
+		margin-inline-end: 0.2rem;
+	}
+	:global(.heatmap-cluster-popup .cluster-route-meta) {
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	:global(.heatmap-cluster-popup .cluster-more) {
+		padding: 0.35rem 0.5rem 0.1rem;
+		font-size: 0.72rem;
+		font-style: italic;
+		color: var(--color-text-tertiary);
 	}
 
 </style>
