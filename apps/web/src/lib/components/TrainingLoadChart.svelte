@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import type { TrainingLoadPoint } from '$lib/training/training_load';
 
 	interface Props {
@@ -74,32 +75,31 @@
 
 <div class="training-load">
 	<header>
-		<h2>Fitness, Fatigue & Form</h2>
+		<h2>{t('trainingLoad.heading')}</h2>
 		<p class="hint">
 			{#if hasHr}
-				Computed from heart-rate-based TRIMP scores over the last {points.length} days.
+				{t('trainingLoad.hintTrimp', { n: points.length })}
 			{:else}
-				Volume-based estimate (no HR data yet — add resting + max HR in preferences and record runs
-				with a strap to upgrade to TRIMP).
+				{t('trainingLoad.hintVolume')}
 			{/if}
 		</p>
 	</header>
 
 	{#if points.length === 0}
-		<p class="empty">Record a few runs to see your fitness trend.</p>
+		<p class="empty">{t('trainingLoad.empty')}</p>
 	{:else}
 		<div class="legend">
 			<span class="key fitness">
 				<span class="swatch" aria-hidden="true"></span>
-				Fitness · {fmtNum(last?.ctl)}
+				{t('trainingLoad.fitness')} · {fmtNum(last?.ctl)}
 			</span>
 			<span class="key fatigue">
 				<span class="swatch" aria-hidden="true"></span>
-				Fatigue · {fmtNum(last?.atl)}
+				{t('trainingLoad.fatigue')} · {fmtNum(last?.atl)}
 			</span>
 			<span class="key form" class:positive={(last?.tsb ?? 0) >= 0}>
 				<span class="swatch" aria-hidden="true"></span>
-				Form · {fmtNum(last?.tsb)}
+				{t('trainingLoad.form')} · {fmtNum(last?.tsb)}
 			</span>
 		</div>
 
@@ -118,7 +118,7 @@
 				preserveAspectRatio="none"
 				class="chart-svg"
 				role="img"
-				aria-label="Training load chart — 90-day fitness (CTL), fatigue (ATL), and form (TSB) trends"
+				aria-label={t('trainingLoad.chartAriaLabel')}
 			>
 				<line
 					x1={PAD_L}
@@ -139,11 +139,11 @@
 
 		<p class="reading">
 			{#if last && last.tsb < -10}
-				Loaded up — push through and recover when you're ready.
+				{t('trainingLoad.readingLoaded')}
 			{:else if last && last.tsb > 10}
-				Tapered — a hard session won't break you.
+				{t('trainingLoad.readingTapered')}
 			{:else}
-				Balanced — easy day or hard day, your call.
+				{t('trainingLoad.readingBalanced')}
 			{/if}
 		</p>
 	{/if}

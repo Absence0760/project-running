@@ -13,6 +13,7 @@
 	import { notificationStore } from '$lib/stores/notifications.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { fmtKm } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let items = $state<NotificationView[]>([]);
 	let loading = $state(true);
@@ -57,7 +58,7 @@
 				row: { ...x.row, read_at: x.row.read_at ?? new Date().toISOString() },
 			}));
 		} catch (e) {
-			showToast(`Failed to mark all read: ${e}`, 'error');
+			showToast(m('notificationsList.markAllFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -70,7 +71,7 @@
 		try {
 			await deleteNotification(id);
 		} catch (e) {
-			showToast(`Failed to delete: ${e}`, 'error');
+			showToast(m('notificationsList.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 			await load();
 		}
 	}
@@ -101,39 +102,39 @@
 	}
 
 	function verbFor(item: NotificationView): string {
-		const name = item.actor?.display_name ?? 'Someone';
+		const name = item.actor?.display_name ?? m('notificationsList.someone');
 		const dist = item.run_distance_m
 			? fmtKm(item.run_distance_m)
-			: 'your run';
+			: m('notificationsList.yourRun');
 		switch (item.row.kind) {
 			case 'kudos':
-				return `${name} gave kudos to your ${dist}`;
+				return m('notificationsList.verbKudos', { name, dist });
 			case 'comment':
-				return `${name} commented on your ${dist}`;
+				return m('notificationsList.verbComment', { name, dist });
 			case 'comment_reply':
-				return `${name} replied to your comment`;
+				return m('notificationsList.verbCommentReply', { name });
 			case 'follow':
-				return `${name} started following you`;
+				return m('notificationsList.verbFollow', { name });
 			case 'event_rsvp':
 				return item.event_title
-					? `${name} RSVP'd Going to your event "${item.event_title}"`
-					: `${name} RSVP'd Going to your event`;
+					? m('notificationsList.verbEventRsvpTitled', { name, title: item.event_title })
+					: m('notificationsList.verbEventRsvp', { name });
 			case 'event_cancel':
 				return item.event_title
-					? `An occurrence of "${item.event_title}" was cancelled`
-					: 'An event occurrence you RSVP\'d to was cancelled';
+					? m('notificationsList.verbEventCancelTitled', { title: item.event_title })
+					: m('notificationsList.verbEventCancel');
 			case 'plan_update':
-				return `${name} updated your training plan`;
+				return m('notificationsList.verbPlanUpdate', { name });
 			case 'message':
-				return `${name} sent you a message`;
+				return m('notificationsList.verbMessage', { name });
 			case 'club_post':
 				return item.club_name
-					? `${name} posted in ${item.club_name}`
-					: `${name} posted in a club you're in`;
+					? m('notificationsList.verbClubPostNamed', { name, club: item.club_name })
+					: m('notificationsList.verbClubPost', { name });
 			case 'run_completed':
 				return item.run_distance_m
-					? `${name} completed a ${fmtKm(item.run_distance_m)} run`
-					: `${name} completed a run`;
+					? m('notificationsList.verbRunCompletedDist', { name, dist: fmtKm(item.run_distance_m) })
+					: m('notificationsList.verbRunCompleted', { name });
 		}
 	}
 
@@ -153,10 +154,10 @@
 	<header class="head">
 		<div class="filter-tabs">
 			<button class="filter" class:active={filter === 'all'} onclick={() => (filter = 'all')}>
-				All
+				{m('notificationsList.tabAll')}
 			</button>
 			<button class="filter" class:active={filter === 'unread'} onclick={() => (filter = 'unread')}>
-				Unread
+				{m('notificationsList.tabUnread')}
 				{#if notificationStore.unreadCount > 0}
 					<span class="filter-count">{notificationStore.unreadCount}</span>
 				{/if}
@@ -164,20 +165,20 @@
 		</div>
 		{#if items.some((x) => x.row.read_at == null)}
 			<button class="btn btn-outline btn-sm" type="button" onclick={handleMarkAll}>
-				Mark all read
+				{m('notificationsList.markAllRead')}
 			</button>
 		{/if}
 	</header>
 
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<p class="muted">{m('shell.loading')}</p>
 	{:else if visible.length === 0}
 		<div class="empty">
 			{#if filter === 'unread'}
-				<p>You're all caught up.</p>
+				<p>{m('notificationsList.allCaughtUp')}</p>
 			{:else}
-				<p>No notifications yet — kudos, comments, and new followers show up here.</p>
-				<a href="/social?tab=people" class="btn btn-primary">Find people</a>
+				<p>{m('notificationsList.emptyAll')}</p>
+				<a href="/social?tab=people" class="btn btn-primary">{m('notificationsList.findPeople')}</a>
 			{/if}
 		</div>
 	{:else}
@@ -202,7 +203,7 @@
 					<button
 						type="button"
 						class="dismiss"
-						aria-label="Dismiss"
+						aria-label={m('notificationsList.dismiss')}
 						onclick={(e) => remove(item.row.id, e)}
 					>
 						<span class="material-symbols">close</span>

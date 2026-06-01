@@ -2,6 +2,7 @@
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { GUIDED_RUN_LIBRARY } from '$lib/training/guided_runs';
+	import { m as t } from '$lib/i18n/store.svelte';
 
 	function fmtMinutes(seconds: number): string {
 		const m = Math.round(seconds / 60);
@@ -28,34 +29,30 @@
 </script>
 
 <svelte:head>
-	<title>Guided runs — Threkir</title>
-	<meta
-		name="description"
-		content="Coach-voice scripted workouts — pace cues, form reminders, intervals."
-	/>
+	<title>{t('guidedList.pageTitle')}</title>
+	<meta name="description" content={t('guidedList.metaDescription')} />
 </svelte:head>
 
 <div class="page">
 	{#if auth.loggedIn}
 		<a href="/coach" class="back-link" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to Coach
+			{t('guidedList.backToCoach')}
 		</a>
 	{/if}
 	<header class="hero">
-		<p class="kicker">Guided runs</p>
-		<h1>A coach in your ear, free.</h1>
+		<p class="kicker">{t('guidedList.kicker')}</p>
+		<h1>{t('guidedList.heroHeading')}</h1>
 		<p class="tagline">
-			Scripted coach-voice workouts. Cues fire at the right moments through your phone's TTS — no
-			subscription, no in-app purchase, and you don't need a fancy watch.
+			{t('guidedList.tagline')}
 		</p>
 		<p class="note">
 			<span class="material-symbols" aria-hidden="true">phone_iphone</span>
-			Open these on the mobile app to run them. The library here is a preview.
+			{t('guidedList.note')}
 		</p>
 	</header>
 
-	<section class="library" aria-label="Guided run library">
+	<section class="library" aria-label={t('guidedList.libraryLabel')}>
 		{#each GUIDED_RUN_LIBRARY as g (g.id)}
 			<a class="card" href="/guided/{g.id}">
 				<header>
@@ -65,7 +62,9 @@
 				<p class="subtitle">{g.subtitle}</p>
 				<p class="desc">{g.description}</p>
 				<div class="cue-count">
-					{g.cues.length} cues across the run
+					{g.cues.length === 1
+						? t('guidedList.cueCountOne', { n: g.cues.length })
+						: t('guidedList.cueCountMany', { n: g.cues.length })}
 				</div>
 			</a>
 		{/each}

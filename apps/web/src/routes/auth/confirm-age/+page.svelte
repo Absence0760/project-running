@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/i18n/store.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import {
 		SIGNUP_GATE_ERROR_ADULT,
@@ -38,7 +39,7 @@
 			if (rpcError) throw rpcError;
 			goto('/dashboard');
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Could not record consent.';
+			error = err instanceof Error ? err.message : m('confirmAge.recordConsentError');
 		} finally {
 			loading = false;
 		}
@@ -46,29 +47,28 @@
 </script>
 
 <svelte:head>
-	<title>Confirm your age — Threkir</title>
+	<title>{m('confirmAge.title')} — Threkir</title>
 </svelte:head>
 
 <div class="confirm-page">
 	<main class="card">
-		<h1>One more step</h1>
+		<h1>{m('confirmAge.heading')}</h1>
 		<p class="lede">
-			Before you start, please confirm a couple of things. We do this
-			once per account — it won't show again.
+			{m('confirmAge.lede')}
 		</p>
 
 		<form onsubmit={handleSubmit}>
 			<label class="check">
 				<input type="checkbox" bind:checked={confirmAdult} />
-				<span>I confirm I am 16 years of age or older.</span>
+				<span>{m('confirmAge.adultCheckbox')}</span>
 			</label>
 
 			<label class="check">
 				<input type="checkbox" bind:checked={acceptTerms} />
 				<span>
-					I have read and accept the
-					<a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a> and the
-					<a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+					{m('confirmAge.termsPrefix')}
+					<a href="/terms" target="_blank" rel="noopener noreferrer">{m('legal.termsOfService')}</a> {m('confirmAge.termsBetween')}
+					<a href="/privacy" target="_blank" rel="noopener noreferrer">{m('legal.privacyPolicy')}</a>{m('confirmAge.termsSuffix')}
 				</span>
 			</label>
 
@@ -81,18 +81,19 @@
 				class="btn btn-primary"
 				disabled={loading || !confirmAdult || !acceptTerms}
 			>
-				{loading ? 'Saving…' : 'Continue'}
+				{loading ? m('confirmAge.saving') : m('confirmAge.continue')}
 			</button>
 		</form>
 
 		<p class="fine">
-			These two confirmations stamp your account once and are
-			recorded on the server. Required values: {SIGNUP_GATE_ERROR_ADULT
-				.replace('Please confirm you are ', '')
-				.replace(' to continue.', '')} and
-			{SIGNUP_GATE_ERROR_TERMS
-				.replace('Please accept the ', '')
-				.replace(' to continue.', '')}.
+			{m('confirmAge.finePrefix')} {m('confirmAge.fineRequiredValues', {
+				adult: SIGNUP_GATE_ERROR_ADULT
+					.replace('Please confirm you are ', '')
+					.replace(' to continue.', ''),
+				terms: SIGNUP_GATE_ERROR_TERMS
+					.replace('Please accept the ', '')
+					.replace(' to continue.', ''),
+			})}
 		</p>
 	</main>
 </div>

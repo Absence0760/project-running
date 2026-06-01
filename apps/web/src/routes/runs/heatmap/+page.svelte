@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import PersonalHeatmap from '$lib/components/PersonalHeatmap.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let ready = $state(false);
 	onMount(async () => {
@@ -13,22 +14,22 @@
 </script>
 
 <svelte:head>
-	<title>Your run heatmap — Threkir</title>
+	<title>{m('runsHeatmap.pageTitle')}</title>
 </svelte:head>
 
 <div class="page">
 	<header class="page-head">
 		<div>
-			<h1>Your heatmap</h1>
-			<p class="sub">Everywhere you've run, mapped from your own GPS tracks.</p>
+			<h1>{m('runsHeatmap.heading')}</h1>
+			<p class="sub">{m('runsHeatmap.subtitle')}</p>
 		</div>
-		<a class="btn btn-outline" href="/runs">Back to runs</a>
+		<a class="btn btn-outline" href="/runs">{m('runsHeatmap.backToRuns')}</a>
 	</header>
 
 	{#if !ready}
-		<p class="muted">Loading…</p>
+		<p class="muted">{m('shell.loading')}</p>
 	{:else if !auth.user}
-		<p class="muted">Sign in to see your run heatmap.</p>
+		<p class="muted">{m('runsHeatmap.signInPrompt')}</p>
 	{:else}
 		<div class="map-host">
 			<PersonalHeatmap />

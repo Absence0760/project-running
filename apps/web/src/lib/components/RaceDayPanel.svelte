@@ -9,6 +9,7 @@
 	} from '$lib/runs/race_day';
 	import { riegelPredict } from '$lib/training/training';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 
 	interface Props {
@@ -57,40 +58,40 @@
 
 	let countdownLabel = $derived.by(() => {
 		if (daysOut < 0) return null;
-		if (daysOut === 0) return 'Race day';
-		if (daysOut === 1) return '1 day to go';
-		return `${daysOut} days to go`;
+		if (daysOut === 0) return m('raceDayPanel.raceDay');
+		if (daysOut === 1) return m('raceDayPanel.daysToGoOne');
+		return m('raceDayPanel.daysToGoMany', { n: daysOut });
 	});
 </script>
 
 {#if daysOut >= 0}
 	<section class="race-day-panel">
 		<header>
-			<span class="kicker">Race day</span>
+			<span class="kicker">{m('raceDayPanel.raceDay')}</span>
 			<h2>{countdownLabel}</h2>
 			{#if predictedSec != null}
 				<p class="prediction">
-					Predicted finish at <strong>{fmtSplitTime(predictedSec)}</strong>
-					for {fmtKm(distanceM, 1)}
+					{m('raceDayPanel.predictedFinishPrefix')} <strong>{fmtSplitTime(predictedSec)}</strong>
+					{m('raceDayPanel.predictedFinishFor')} {fmtKm(distanceM, 1)}
 				</p>
 			{/if}
 		</header>
 
 		{#if pacing}
 			<div class="pacing-section">
-				<div class="strategy-toggle" role="group" aria-label="Pacing strategy">
+				<div class="strategy-toggle" role="group" aria-label={m('raceDayPanel.pacingStrategy')}>
 					<button
 						type="button"
 						class="toggle-btn"
 						class:active={strategy === 'even'}
 						onclick={() => (strategy = 'even')}
-					>Even splits</button>
+					>{m('raceDayPanel.evenSplits')}</button>
 					<button
 						type="button"
 						class="toggle-btn"
 						class:active={strategy === 'negative'}
 						onclick={() => (strategy = 'negative')}
-					>Negative splits (-2%)</button>
+					>{m('raceDayPanel.negativeSplits')}</button>
 				</div>
 
 				<ol class="splits">

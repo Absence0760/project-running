@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, afterNavigate } from '$app/navigation';
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let cameFromClubs = $state(false);
 	afterNavigate(({ from }) => {
@@ -25,21 +26,20 @@
 </script>
 
 <svelte:head>
-	<title>Create a club — Threkir</title>
+	<title>{m('clubsNewPage.documentTitle')}</title>
 </svelte:head>
 
 <div class="page">
 	<a href="/social?tab=clubs" class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
-		Back to clubs
+		{m('clubsNewPage.backToClubs')}
 	</a>
 
 	<header class="page-header">
-		<p class="kicker">New club</p>
-		<h1>Create a club</h1>
+		<p class="kicker">{m('clubsNewPage.kicker')}</p>
+		<h1>{m('clubsNewPage.heading')}</h1>
 		<p class="tagline">
-			Set up a group for weekly long runs, a local chapter, or a training crew. Pick a visibility
-			and join policy — you can change either later from the club's admin settings.
+			{m('clubsNewPage.tagline')}
 		</p>
 	</header>
 

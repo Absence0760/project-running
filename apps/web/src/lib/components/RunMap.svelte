@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
@@ -768,13 +769,13 @@
 	the same page already, so a "view as table" toggle here would
 	be redundant.
 -->
-<div class="run-map-wrapper" role="region" aria-label="Run map">
+<div class="run-map-wrapper" role="region" aria-label={m('runMap.regionLabel')}>
 	{#if mapConsented}
 		<div bind:this={mapContainer} class="run-map" aria-hidden="true"></div>
 		{#if animatable}
 			<button class="replay-btn" onclick={() => animating ? stopAnimation() : startAnimation()}>
 				<span class="material-symbols">{animating ? 'stop' : 'play_arrow'}</span>
-				{animating ? 'Stop' : 'Replay'}
+				{animating ? m('runMap.stop') : m('runMap.replay')}
 			</button>
 		{/if}
 	{:else}
@@ -786,14 +787,12 @@
 		-->
 		<div class="run-map-consent">
 			<div class="run-map-consent-card">
-				<h2>Map disabled until you load it</h2>
+				<h2>{m('runMap.consentTitle')}</h2>
 				<p>
-					Loading the map sends your IP address to <strong>MapTiler</strong>,
-					our tile provider. Tap <strong>Load map</strong> to continue, or
-					see our <a href="/cookie-notice">cookie notice</a> for details.
+					{m('runMap.consentPrefix')}<strong>MapTiler</strong>{m('runMap.consentMiddle')}<strong>{m('runMap.loadMap')}</strong>{m('runMap.consentBeforeLink')}<a href="/cookie-notice">{m('runMap.cookieNotice')}</a>{m('runMap.consentSuffix')}
 				</p>
 				<button type="button" class="btn btn-primary" onclick={loadMapNow}>
-					Load map
+					{m('runMap.loadMap')}
 				</button>
 			</div>
 		</div>

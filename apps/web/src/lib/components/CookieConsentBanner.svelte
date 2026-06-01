@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { consent } from '$lib/settings/consent.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	// `mounted` gates the banner so it's NEVER in the prerendered HTML.
 	// Without this, the static build ships with `consent.pending = true`
@@ -72,18 +73,16 @@
 {#if mounted && consent.pending && !dismissed}
 	<div class="banner" role="dialog" aria-modal="false" aria-labelledby="cookie-title" aria-describedby="cookie-desc">
 		<div class="copy">
-			<strong id="cookie-title">Cookies + error monitoring</strong>
+			<strong id="cookie-title">{m('cookieConsent.title')}</strong>
 			<p id="cookie-desc">
-				We use a small number of cookies to keep you signed in (strictly necessary). With your
-				consent we also load <a href="https://sentry.io/legal/dpa/" target="_blank" rel="noopener noreferrer">Sentry</a>
-				to monitor errors so we can fix bugs faster. Map tiles, the AI Coach, and Storage
-				signed URLs only run when you use the relevant feature.
-				<a href="/cookie-notice">Learn more</a>.
+				{m('cookieConsent.descPrefix')} <a href="https://sentry.io/legal/dpa/" target="_blank" rel="noopener noreferrer">Sentry</a>
+				{m('cookieConsent.descSuffix')}
+				<a href="/cookie-notice">{m('cookieConsent.learnMore')}</a>.
 			</p>
 		</div>
 		<div class="actions">
-			<button type="button" class="btn btn-outline" onclick={reject}>Reject</button>
-			<button type="button" class="btn btn-primary" onclick={accept}>Accept</button>
+			<button type="button" class="btn btn-outline" onclick={reject}>{m('cookieConsent.reject')}</button>
+			<button type="button" class="btn btn-primary" onclick={accept}>{m('cookieConsent.accept')}</button>
 		</div>
 	</div>
 {/if}

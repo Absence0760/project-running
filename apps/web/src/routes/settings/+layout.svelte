@@ -3,6 +3,7 @@
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
+	import { m } from '$lib/i18n/store.svelte';
 
 	type Tab = { href: string; label: string; icon: string };
 	type Section = { label: string; tabs: Tab[] };
@@ -18,7 +19,7 @@
 	onMount(async () => {
 		if (!auth.user) return;
 		const checks: string[] = [];
-		if (!auth.user.display_name) checks.push('display name');
+		if (!auth.user.display_name) checks.push(m('settingsLayout.fieldDisplayName'));
 		try {
 			const { data } = await supabase
 				.from('user_settings')
@@ -26,8 +27,8 @@
 				.eq('user_id', auth.user.id)
 				.maybeSingle();
 			const p = (data?.prefs ?? {}) as Record<string, unknown>;
-			if (!p.body_weight_kg) checks.push('body weight (for calorie estimates)');
-			if (!p.privacy_default) checks.push('default visibility for new runs');
+			if (!p.body_weight_kg) checks.push(m('settingsLayout.fieldBodyWeight'));
+			if (!p.privacy_default) checks.push(m('settingsLayout.fieldPrivacyDefault'));
 		} catch (_) {
 			/* L4 — if the read fails, just don't surface the nudge. */
 		}
@@ -36,37 +37,37 @@
 
 	const sections: Section[] = [
 		{
-			label: 'Profile',
+			label: m('settingsLayout.sectionProfile'),
 			tabs: [
-				{ href: '/settings/account', label: 'Account', icon: 'person' },
-				{ href: '/settings/preferences', label: 'Preferences', icon: 'tune' },
+				{ href: '/settings/account', label: m('settingsLayout.tabAccount'), icon: 'person' },
+				{ href: '/settings/preferences', label: m('settingsLayout.tabPreferences'), icon: 'tune' },
 			],
 		},
 		{
-			label: 'Apps & data',
+			label: m('settingsLayout.sectionAppsData'),
 			tabs: [
-				{ href: '/settings/integrations', label: 'Integrations', icon: 'link' },
-				{ href: '/settings/devices', label: 'Devices', icon: 'devices' },
-				{ href: '/settings/gear', label: 'Gear', icon: 'directions_run' },
+				{ href: '/settings/integrations', label: m('settingsLayout.tabIntegrations'), icon: 'link' },
+				{ href: '/settings/devices', label: m('settingsLayout.tabDevices'), icon: 'devices' },
+				{ href: '/settings/gear', label: m('settingsLayout.tabGear'), icon: 'directions_run' },
 			],
 		},
 		{
-			label: 'Account & legal',
+			label: m('settingsLayout.sectionAccountLegal'),
 			tabs: [
-				{ href: '/settings/upgrade', label: 'Pro & support', icon: 'favorite' },
-				{ href: '/settings/licenses', label: 'Licenses', icon: 'description' },
+				{ href: '/settings/upgrade', label: m('settingsLayout.tabProSupport'), icon: 'favorite' },
+				{ href: '/settings/licenses', label: m('settingsLayout.tabLicenses'), icon: 'description' },
 			],
 		},
 	];
 </script>
 
 <svelte:head>
-	<title>Settings — Threkir</title>
+	<title>{m('settingsLayout.pageTitle')}</title>
 </svelte:head>
 
 <div class="settings-shell">
 	<nav class="settings-nav">
-		<h2>Settings</h2>
+		<h2>{m('shell.settings')}</h2>
 		{#each sections as section}
 			<div class="nav-section-label">{section.label}</div>
 			{#each section.tabs as tab}
@@ -86,8 +87,8 @@
 			<aside class="finish-setup">
 				<span class="material-symbols">info</span>
 				<div class="finish-setup-text">
-					<strong>Finish setting up</strong>
-					<span>You skipped {unsetFields.join(', ')} during onboarding. Fill them in below for better calibration + the right defaults.</span>
+					<strong>{m('settingsLayout.finishSetupTitle')}</strong>
+					<span>{m('settingsLayout.finishSetupBody', { fields: unsetFields.join(', ') })}</span>
 				</div>
 			</aside>
 		{/if}

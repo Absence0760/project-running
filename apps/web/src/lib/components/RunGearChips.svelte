@@ -4,6 +4,7 @@
 	import { fetchRunGear, fetchMyGear, setRunGear, type Gear, type GearWithDistance } from '$lib/core/data';
 	import Modal from '$lib/components/Modal.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		runId: string;
@@ -40,7 +41,7 @@
 			assigned = await fetchRunGear(runId);
 			editing = false;
 		} catch (e) {
-			showToast(`Save failed: ${(e as Error).message}`, 'error');
+			showToast(m('runGearChips.saveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			saving = false;
 		}
@@ -68,16 +69,16 @@
 		{/each}
 		{#if canManage}
 			<button class="edit-btn" onclick={openEditor}>
-				{assigned.length === 0 ? '+ Tag gear' : 'Edit'}
+				{assigned.length === 0 ? m('runGearChips.tagGear') : m('runGearChips.edit')}
 			</button>
 		{/if}
 	</div>
 {/if}
 
-<Modal open={editing} onclose={() => (editing = false)} title="Tag gear used on this run">
+<Modal open={editing} onclose={() => (editing = false)} title={m('runGearChips.modalTitle')}>
 	{#if myGear.length === 0}
 		<p class="muted">
-			You haven't registered any gear yet. Add some on the <a href="/settings/gear">Gear settings page</a>.
+			{m('runGearChips.emptyPrefix')}<a href="/settings/gear">{m('runGearChips.emptyLink')}</a>{m('runGearChips.emptySuffix')}
 		</p>
 	{:else}
 		<ul class="picker">
@@ -102,9 +103,9 @@
 		</ul>
 	{/if}
 	<footer class="footer">
-		<button class="btn-outline" onclick={() => (editing = false)}>Cancel</button>
+		<button class="btn-outline" onclick={() => (editing = false)}>{m('runGearChips.cancel')}</button>
 		<button class="btn-primary" onclick={save} disabled={saving}>
-			{saving ? 'Saving…' : 'Save'}
+			{saving ? m('runGearChips.saving') : m('runGearChips.save')}
 		</button>
 	</footer>
 </Modal>

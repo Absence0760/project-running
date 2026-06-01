@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let error = $state('');
 
@@ -68,10 +69,10 @@
 
 <div class="callback-page">
 	{#if error}
-		<p class="error">Authentication failed: {error}</p>
-		<a href="/login">Back to login</a>
+		<p class="error">{m('authCallback.failed', { error })}</p>
+		<a href="/login">{m('authCallback.backToLogin')}</a>
 	{:else}
-		<p>Signing you in...</p>
+		<p>{m('authCallback.signingIn')}</p>
 	{/if}
 </div>
 

@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { m } from '$lib/i18n/store.svelte';
+
 	const deps = [
 		{
 			name: 'SvelteKit',
@@ -111,11 +113,9 @@
 
 <div class="page">
 	<header class="page-header">
-		<h1>Open-source licenses</h1>
+		<h1>{m('licenseList.title')}</h1>
 		<p class="subtitle">
-			Threkir is built on a stack of open-source projects. Each one
-			below ships under a permissive licence; follow the links to read the
-			full text and source.
+			{m('licenseList.subtitle')}
 		</p>
 	</header>
 
@@ -133,7 +133,7 @@
 							aria-controls={`lic-text-${d.name.replace(/[^a-z0-9]/gi, '_')}`}
 							onclick={() => toggle(d.name)}
 						>
-							{expanded.has(d.name) ? 'Hide license' : 'View license'}
+							{expanded.has(d.name) ? m('licenseList.hideLicense') : m('licenseList.viewLicense')}
 						</button>
 					</div>
 					{#if expanded.has(d.name)}
@@ -147,28 +147,26 @@
 	</section>
 
 	<section class="card">
-		<h2>Map data</h2>
+		<h2>{m('licenseList.mapDataHeading')}</h2>
 		<p>
-			Map tiles courtesy of <a
+			{m('licenseList.mapDataPrefix')} <a
 				href="https://www.maptiler.com/"
 				target="_blank"
 				rel="noopener noreferrer">MapTiler</a
-			>, built on
+			>{m('licenseList.mapDataBuiltOn')}
 			<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer"
 				>OpenStreetMap</a
 			>
-			data © OpenStreetMap contributors (ODbL). Route snap-to-road / trail uses
+			{m('licenseList.mapDataBetween')}
 			<a href="https://project-osrm.org/" target="_blank" rel="noopener noreferrer">OSRM</a>
-			(BSD-2-Clause), also backed by OSM.
+			{m('licenseList.mapDataSuffix')}
 		</p>
 	</section>
 
 	<section class="card">
-		<h2>This project</h2>
+		<h2>{m('licenseList.thisProjectHeading')}</h2>
 		<p>
-			Threkir itself is a closed-source application. The open-source
-			components above are used under the terms of their respective licences;
-			this page is our notice of attribution.
+			{m('licenseList.thisProjectBody')}
 		</p>
 	</section>
 </div>

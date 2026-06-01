@@ -19,6 +19,7 @@
 		selectLoopAnchors,
 	} from '$lib/routes/route_loop';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import { searchPlaces } from '$lib/routes/geocoding';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { watchMapResize } from '$lib/routes/map_resize';
@@ -635,7 +636,7 @@
 
 			if (okSegments === 0) {
 				throw new Error(
-					'Routing service unavailable — no segments could be routed. The public OSRM demo server may be unreachable, or this region has poor pedestrian-graph coverage.'
+					t('routeBuilder.routingServiceUnavailable')
 				);
 			}
 			// Build the implicated-waypoint set from three diagnostics —
@@ -679,10 +680,22 @@
 					const wpList = formatWaypointRanges(failedWaypoints);
 					const wpClause =
 						failedWaypoints.length > 0
-							? ` Waypoint${failedWaypoints.length === 1 ? '' : 's'} ${wpList} couldn't snap to a path within ${OSRM_SNAP_RADIUS_M}m — using direct lines through those points.`
-							: ` ${failedSegments} segment${failedSegments === 1 ? '' : 's'} couldn't snap — using direct lines for those.`;
+							? ' ' +
+								t(
+									failedWaypoints.length === 1
+										? 'routeBuilder.waypointCouldntSnapOne'
+										: 'routeBuilder.waypointCouldntSnapMany',
+									{ list: wpList, radius: OSRM_SNAP_RADIUS_M },
+								)
+							: ' ' +
+								t(
+									failedSegments === 1
+										? 'routeBuilder.segmentCouldntSnapOne'
+										: 'routeBuilder.segmentCouldntSnapMany',
+									{ n: failedSegments },
+								);
 					onerror(
-						`Routed ${okSegments} of ${perSegment.length} segments.${wpClause} Drag the red markers closer to a road for a snapped route, or accept the direct lines.`,
+						`${t('routeBuilder.routedSegments', { ok: okSegments, total: perSegment.length })}${wpClause} ${t('routeBuilder.dragRedMarkersSuffix')}`,
 						'warning',
 					);
 				}
@@ -702,7 +715,7 @@
 					const warn = qualityWarning(quality);
 					if (warn) {
 						onerror(
-							`${warn} (Red markers highlight the implicated waypoints.)`,
+							`${warn} ${t('routeBuilder.redMarkersHighlight')}`,
 							'warning',
 						);
 					}
@@ -744,7 +757,7 @@
 					onerror(
 						err instanceof Error
 							? err.message
-							: 'Routing failed — the routing service is unreachable.',
+							: t('routeBuilder.routingFailed'),
 						'error',
 					);
 				}
@@ -1208,7 +1221,7 @@
 		const el = document.createElement('div');
 		el.className = `generation-endpoint generation-endpoint-${role}`;
 		el.setAttribute('data-testid', `generation-endpoint-${role}`);
-		el.title = role === 'start' ? 'Generate start' : 'Generate end';
+		el.title = role === 'start' ? t('routeBuilder.generateStart') : t('routeBuilder.generateEnd');
 		return new maplibregl.Marker({ element: el }).setLngLat(at).addTo(map);
 	}
 
@@ -1240,7 +1253,7 @@
 		// confusing "Routing service unavailable" error.
 		if (!startFrom && map.getZoom() < 6) {
 			onerror(
-				'Pan to your area and pick a start point first, or use "My location".',
+				t('routeBuilder.panAndPickStart'),
 				'error',
 			);
 			return false;
@@ -1418,10 +1431,10 @@
 			// the seed pattern; we surface that honestly instead of
 			// hiding it behind the success path.
 			if (bestDistance !== Infinity && !isWithinAcceptBand(targetDistanceM, bestDistance)) {
-				const direction = bestDistance > targetDistanceM ? 'longer' : 'shorter';
+				const longer = bestDistance > targetDistanceM;
 				const pct = Math.round((Math.abs(bestDistance - targetDistanceM) / targetDistanceM) * 100);
 				onerror(
-					`Generated ${formatDistance(bestDistance)} — ${pct}% ${direction} than your ${formatDistance(targetDistanceM)} target. The road network here couldn't get closer; try a different start point.`,
+					t(longer ? 'routeBuilder.generatedDistanceLonger' : 'routeBuilder.generatedDistanceShorter', { distance: formatDistance(bestDistance), pct, target: formatDistance(targetDistanceM) }),
 					'warning',
 				);
 			} else {
@@ -1436,7 +1449,7 @@
 		// service unavailable" was suppressed (suppressSoftWarnings)
 		// so we can surface a generation-specific message instead.
 		onerror(
-			`Couldn't generate a ${formatDistance(targetDistanceM)} loop here — try a larger distance, or move the start to a denser road area.`,
+			t('routeBuilder.couldntGenerateLoop', { target: formatDistance(targetDistanceM) }),
 			'error',
 		);
 		return false;
@@ -1616,7 +1629,7 @@
 		// modern browsers (localhost counts as secure). On `http://`
 		// over a LAN it'll be undefined — surface that explicitly.
 		if (!navigator.geolocation) {
-			showToast('Geolocation needs HTTPS (or localhost).', 'error');
+			showToast(t('routeBuilder.geolocationNeedsHttps'), 'error');
 			return;
 		}
 		// The previous handler had an empty error callback, so a
@@ -1633,12 +1646,12 @@
 				// the prototype interface).
 				const msg =
 					err.code === 1
-						? 'Location permission denied. Allow location for localhost in your browser to use this.'
+						? t('routeBuilder.locationPermissionDenied')
 						: err.code === 2
-							? "Couldn't determine your location."
+							? t('routeBuilder.locationUnavailable')
 							: err.code === 3
-								? "Location request timed out."
-								: "Couldn't get your location.";
+								? t('routeBuilder.locationTimedOut')
+								: t('routeBuilder.locationFailed');
 				showToast(msg, 'error');
 			},
 			{ timeout: 5000 },
@@ -1818,9 +1831,9 @@
 				onfocusout={() => setTimeout(() => (showResults = false), 200)}
 				onfocusin={() => { if (searchResults.length > 0) showResults = true; }}
 				type="text"
-				placeholder="Search for a place..."
+				placeholder={t('routeBuilder.searchPlaceholder')}
 			/>
-			<button class="locate-btn" onclick={goToMyLocation} title="Go to my location">
+			<button class="locate-btn" onclick={goToMyLocation} title={t('routeBuilder.goToMyLocation')}>
 				<span class="material-symbols">my_location</span>
 			</button>
 		</div>
@@ -1840,14 +1853,14 @@
 	{#if isRouting}
 		<div class="routing-indicator">
 			<div class="routing-spinner"></div>
-			Calculating route...
+			{t('routeBuilder.calculatingRoute')}
 		</div>
 	{/if}
 
 	<div class="shortcuts-hint">
-		<span><kbd>Ctrl</kbd>+<kbd>Z</kbd> Undo</span>
-		<span><kbd>Esc</kbd> Clear</span>
-		<span>Right-click marker to delete</span>
+		<span><kbd>Ctrl</kbd>+<kbd>Z</kbd> {t('routeBuilder.shortcutUndo')}</span>
+		<span><kbd>Esc</kbd> {t('routeBuilder.shortcutClear')}</span>
+		<span>{t('routeBuilder.shortcutRightClickDelete')}</span>
 	</div>
 
 	<div bind:this={mapContainer} class="map-container"></div>

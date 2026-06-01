@@ -12,6 +12,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fmtKm } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let open = $state(false);
 	let loading = $state(false);
@@ -107,7 +108,7 @@
 				row: { ...x.row, read_at: x.row.read_at ?? new Date().toISOString() },
 			}));
 		} catch (e) {
-			showToast(`Failed to mark all read: ${e}`, 'error');
+			showToast(m('notificationBell.markAllFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -137,51 +138,51 @@
 	}
 
 	function verbFor(item: NotificationView): string {
-		const name = item.actor?.display_name ?? 'Someone';
+		const name = item.actor?.display_name ?? m('notificationBell.someone');
 		const dist = item.run_distance_m
 			? fmtKm(item.run_distance_m)
-			: 'your run';
+			: m('notificationBell.yourRun');
 		switch (item.row.kind) {
 			case 'kudos':
-				return `${name} gave kudos to your ${dist}`;
+				return m('notificationBell.kudos', { name, dist });
 			case 'comment':
-				return `${name} commented on your ${dist}`;
+				return m('notificationBell.comment', { name, dist });
 			case 'comment_reply':
-				return `${name} replied to your comment`;
+				return m('notificationBell.commentReply', { name });
 			case 'follow':
-				return `${name} started following you`;
+				return m('notificationBell.follow', { name });
 			case 'event_rsvp':
 				return item.event_title
-					? `${name} RSVP'd Going to your event "${item.event_title}"`
-					: `${name} RSVP'd Going to your event`;
+					? m('notificationBell.eventRsvpTitled', { name, title: item.event_title })
+					: m('notificationBell.eventRsvp', { name });
 			case 'event_cancel':
 				return item.event_title
-					? `An occurrence of "${item.event_title}" was cancelled`
-					: 'An event occurrence you RSVP\'d to was cancelled';
+					? m('notificationBell.eventCancelTitled', { title: item.event_title })
+					: m('notificationBell.eventCancel');
 			case 'plan_update':
-				return `${name} updated your training plan`;
+				return m('notificationBell.planUpdate', { name });
 			case 'message':
-				return `${name} sent you a message`;
+				return m('notificationBell.message', { name });
 			case 'club_post':
 				return item.club_name
-					? `${name} posted in ${item.club_name}`
-					: `${name} posted in a club you're in`;
+					? m('notificationBell.clubPostNamed', { name, club: item.club_name })
+					: m('notificationBell.clubPost', { name });
 			case 'run_completed':
 				return item.run_distance_m
-					? `${name} completed a ${fmtKm(item.run_distance_m)} run`
-					: `${name} completed a run`;
+					? m('notificationBell.runCompletedDist', { name, dist: fmtKm(item.run_distance_m) })
+					: m('notificationBell.runCompleted', { name });
 		}
 	}
 
 	function fmtRelative(iso: string): string {
 		const ms = Date.now() - new Date(iso).getTime();
 		const mins = Math.floor(ms / 60_000);
-		if (mins < 1) return 'just now';
-		if (mins < 60) return `${mins}m ago`;
+		if (mins < 1) return m('notificationBell.justNow');
+		if (mins < 60) return m('notificationBell.minutesAgo', { n: mins });
 		const hrs = Math.floor(mins / 60);
-		if (hrs < 24) return `${hrs}h ago`;
+		if (hrs < 24) return m('notificationBell.hoursAgo', { n: hrs });
 		const days = Math.floor(hrs / 24);
-		if (days < 30) return `${days}d ago`;
+		if (days < 30) return m('notificationBell.daysAgo', { n: days });
 		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			month: 'short',
 			day: 'numeric',
@@ -205,11 +206,11 @@
 		class:active={open}
 		type="button"
 		aria-label={notificationStore.unreadCount > 0
-			? `Notifications, ${notificationStore.unreadCount} unread`
-			: 'Notifications'}
+			? m('notificationBell.bellUnread', { n: notificationStore.unreadCount })
+			: m('notificationBell.title')}
 		aria-expanded={open}
 		onclick={togglePanel}
-		title="Notifications"
+		title={m('notificationBell.title')}
 	>
 		<span class="bell-icon material-symbols">
 			{notificationStore.unreadCount > 0 ? 'notifications_active' : 'notifications'}
@@ -225,7 +226,7 @@
 		<button
 			class="popover-backdrop"
 			type="button"
-			aria-label="Close"
+			aria-label={m('notificationBell.close')}
 			onclick={() => (open = false)}
 		></button>
 		<div
@@ -236,18 +237,18 @@
 			aria-labelledby="notif-popover-heading"
 		>
 			<header class="popover-head">
-				<h3 id="notif-popover-heading">Notifications</h3>
+				<h3 id="notif-popover-heading">{m('notificationBell.title')}</h3>
 				{#if notificationStore.unreadCount > 0}
 					<button class="link-btn" type="button" onclick={handleMarkAll}>
-						Mark all read
+						{m('notificationBell.markAllRead')}
 					</button>
 				{/if}
 			</header>
 
 			{#if loading}
-				<p class="muted">Loading…</p>
+				<p class="muted">{m('shell.loading')}</p>
 			{:else if items.length === 0}
-				<p class="muted">Nothing yet — kudos, comments, and new followers show up here.</p>
+				<p class="muted">{m('notificationBell.empty')}</p>
 			{:else}
 				<ul class="list">
 					{#each items as item (item.row.id)}
@@ -284,7 +285,7 @@
 						href="/u/{auth.user.id}?tab=notifications"
 						onclick={() => (open = false)}
 					>
-						See all
+						{m('notificationBell.seeAll')}
 						<span class="material-symbols">chevron_right</span>
 					</a>
 				{/if}

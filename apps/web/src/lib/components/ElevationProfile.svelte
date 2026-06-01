@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { formatDistance } from '$lib/format/units.svelte';
 	import { minMax } from '$lib/util/min_max';
+	import { m } from '$lib/i18n/store.svelte';
 
 	/// `onhover` is fired with the elevations-index the user is
 	/// currently inspecting (null when the pointer leaves the chart).
@@ -165,15 +166,15 @@
 	<div class="tooltip-rail" class:visible={crosshair != null}>
 		{#if crosshair}
 			<span class="tt-cell">
-				<span class="tt-label">Distance</span>
+				<span class="tt-label">{m('elevationProfile.distance')}</span>
 				<span class="tt-value">{formatDistance(crosshair.distAtPoint)}</span>
 			</span>
 			<span class="tt-cell">
-				<span class="tt-label">Elevation</span>
+				<span class="tt-label">{m('elevationProfile.elevation')}</span>
 				<span class="tt-value">{Math.round(crosshair.ele)} m</span>
 			</span>
 			<span class="tt-cell">
-				<span class="tt-label">Gain so far</span>
+				<span class="tt-label">{m('elevationProfile.gainSoFar')}</span>
 				<span class="tt-value">
 					{(() => {
 						let g = 0;
@@ -186,9 +187,9 @@
 				</span>
 			</span>
 		{:else if elevations.length >= 2}
-			<span class="tt-hint">Tap or drag to inspect</span>
+			<span class="tt-hint">{m('elevationProfile.tapOrDragToInspect')}</span>
 			<span class="tt-cell tt-cell-right">
-				<span class="tt-label">Total gain</span>
+				<span class="tt-label">{m('elevationProfile.totalGain')}</span>
 				<span class="tt-value">{totalGain} m</span>
 			</span>
 		{/if}
@@ -201,7 +202,7 @@
 			class="elevation-svg"
 			preserveAspectRatio="none"
 			role="img"
-			aria-label="Elevation profile"
+			aria-label={m('elevationProfile.ariaLabel')}
 			onpointerdown={handlePointerDown}
 			onpointermove={(e) => {
 				handlePointerMove(e);
@@ -270,7 +271,7 @@
 				{/if}
 			{:else}
 				<text x={containerWidth / 2} y={height / 2} text-anchor="middle" class="empty-label">
-					No elevation data
+					{m('elevationProfile.noElevationData')}
 				</text>
 			{/if}
 		</svg>

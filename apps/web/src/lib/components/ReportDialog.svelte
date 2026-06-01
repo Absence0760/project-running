@@ -6,6 +6,8 @@
 		type ReportTargetKind,
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 
 	// `comment` reports route through the same submit_report RPC; the
 	// backend `p_target_kind` is plain text so the value passes through.
@@ -28,35 +30,39 @@
 
 	let { open, targetKind, targetId, targetLabel, onclose }: Props = $props();
 
-	const NOUNS: Record<ReportableKind, string> = {
-		user: 'profile',
-		club: 'club',
-		route: 'route',
-		comment: 'comment',
+	const NOUNS: Record<ReportableKind, MessageKey> = {
+		user: 'reportDialog.nounProfile',
+		club: 'reportDialog.nounClub',
+		route: 'reportDialog.nounRoute',
+		comment: 'reportDialog.nounComment',
 	};
 
-	const REASONS: { value: ReportReason; label: string; hint: string }[] = [
+	const REASONS: { value: ReportReason; label: MessageKey; hint: MessageKey }[] = [
 		{
 			value: 'spam',
-			label: 'Spam or promotion',
-			hint: 'Commercial pitches, link farms, repeated identical content.',
+			label: 'reportDialog.reasonSpamLabel',
+			hint: 'reportDialog.reasonSpamHint',
 		},
 		{
 			value: 'harassment',
-			label: 'Harassment or abuse',
-			hint: 'Targeted attacks, threats, hateful language.',
+			label: 'reportDialog.reasonHarassmentLabel',
+			hint: 'reportDialog.reasonHarassmentHint',
 		},
 		{
 			value: 'inappropriate',
-			label: 'Inappropriate content',
-			hint: 'Adult, violent, or otherwise off-topic for a running app.',
+			label: 'reportDialog.reasonInappropriateLabel',
+			hint: 'reportDialog.reasonInappropriateHint',
 		},
 		{
 			value: 'impersonation',
-			label: 'Impersonation',
-			hint: 'Pretending to be a specific real person, brand, or club.',
+			label: 'reportDialog.reasonImpersonationLabel',
+			hint: 'reportDialog.reasonImpersonationHint',
 		},
-		{ value: 'other', label: 'Other', hint: 'Tell us what’s wrong below.' },
+		{
+			value: 'other',
+			label: 'reportDialog.reasonOtherLabel',
+			hint: 'reportDialog.reasonOtherHint',
+		},
 	];
 
 	let reason = $state<ReportReason>('spam');
@@ -89,48 +95,47 @@
 				reason,
 				notes: notes.trim() || undefined,
 			});
-			showToast('Report submitted. Thanks for flagging.', 'success');
+			showToast(m('reportDialog.toastSubmitted'), 'success');
 			handleClose();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to submit report.';
+			error = e instanceof Error ? e.message : m('reportDialog.errorSubmitFailed');
 		} finally {
 			busy = false;
 		}
 	}
 </script>
 
-<Modal {open} title="Report this {targetNoun}" narrow onclose={handleClose} bodyClass="report-body">
+<Modal {open} title={m('reportDialog.title', { noun: m(targetNoun) })} narrow onclose={handleClose} bodyClass="report-body">
 	{#if targetLabel}
 		<p class="target">
-			You're reporting <strong>{targetLabel}</strong>. Reports are reviewed manually;
-			only you can see the reports you file.
+			{m('reportDialog.reportingPrefix')} <strong>{targetLabel}</strong>. {m('reportDialog.reviewedNotice')}
 		</p>
 	{:else}
 		<p class="target">
-			Reports are reviewed manually; only you can see the reports you file.
+			{m('reportDialog.reviewedNotice')}
 		</p>
 	{/if}
 
 	<fieldset>
-		<legend class="section-label">Reason</legend>
+		<legend class="section-label">{m('reportDialog.reasonLegend')}</legend>
 		{#each REASONS as r (r.value)}
 			<label class="radio">
 				<input type="radio" name="reason" value={r.value} bind:group={reason} />
 				<span>
-					<strong>{r.label}</strong>
-					<span class="hint">{r.hint}</span>
+					<strong>{m(r.label)}</strong>
+					<span class="hint">{m(r.hint)}</span>
 				</span>
 			</label>
 		{/each}
 	</fieldset>
 
 	<label class="notes-field">
-		<span class="section-label">Notes <span class="optional">optional</span></span>
+		<span class="section-label">{m('reportDialog.notesLabel')} <span class="optional">{m('reportDialog.notesOptional')}</span></span>
 		<textarea
 			bind:value={notes}
 			rows="3"
 			maxlength="600"
-			placeholder="Anything that would help a moderator understand the issue."
+			placeholder={m('reportDialog.notesPlaceholder')}
 		></textarea>
 	</label>
 
@@ -140,10 +145,10 @@
 
 	<div class="actions">
 		<button type="button" class="btn btn-secondary" onclick={handleClose} disabled={busy}>
-			Cancel
+			{m('reportDialog.cancel')}
 		</button>
 		<button type="button" class="btn btn-primary" onclick={handleSubmit} disabled={busy}>
-			{busy ? 'Submitting…' : 'Submit report'}
+			{busy ? m('reportDialog.submitting') : m('reportDialog.submit')}
 		</button>
 	</div>
 </Modal>

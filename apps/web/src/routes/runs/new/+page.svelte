@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto, afterNavigate } from '$app/navigation';
 	import RunEditor from '$lib/components/RunEditor.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let cameFromRuns = $state(false);
 	afterNavigate(({ from }) => {
@@ -24,21 +25,20 @@
 </script>
 
 <svelte:head>
-	<title>Add a run — Threkir</title>
+	<title>{m('runsNewPage.title')} — Threkir</title>
 </svelte:head>
 
 <div class="page">
 	<a href="/runs" class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
-		Back to runs
+		{m('runsNewPage.backToRuns')}
 	</a>
 
 	<header class="page-header">
-		<p class="kicker">New run</p>
-		<h1>Add a run</h1>
+		<p class="kicker">{m('runsNewPage.kicker')}</p>
+		<h1>{m('runsNewPage.title')}</h1>
 		<p class="tagline">
-			Manually log a run the app didn't record — a treadmill session, a chip-timed race,
-			or a trail run where GPS dropped out. Distance and duration are enough to start.
+			{m('runsNewPage.tagline')}
 		</p>
 	</header>
 

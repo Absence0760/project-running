@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { env } from '$env/dynamic/public';
@@ -225,7 +226,7 @@
 	});
 </script>
 
-<div class="heat-wrap" role="region" aria-label="Personal run heatmap">
+<div class="heat-wrap" role="region" aria-label={m('personalHeatmap.regionLabel')}>
 	<div bind:this={mapEl} class="map" data-testid="personal-heatmap-map"></div>
 
 	{#if !mapConsented}
@@ -237,14 +238,13 @@
 		-->
 		<div class="heat-consent" data-testid="personal-heatmap-consent">
 			<div class="heat-consent-card">
-				<strong>Map disabled until you load it</strong>
+				<strong>{m('personalHeatmap.consentTitle')}</strong>
 				<p>
-					Loading the heatmap sends your IP address to <strong>MapTiler</strong>,
-					our tile provider. Tap <strong>Load map</strong> to continue, or see our
-					<a href="/cookie-notice">cookie notice</a> for details.
+					{m('personalHeatmap.consentBodyPrefix')} <strong>MapTiler</strong>{m('personalHeatmap.consentBodyMid')} <strong>{m('personalHeatmap.loadMap')}</strong> {m('personalHeatmap.consentBodyBeforeLink')}
+					<a href="/cookie-notice">{m('personalHeatmap.cookieNoticeLink')}</a> {m('personalHeatmap.consentBodySuffix')}
 				</p>
 				<button type="button" class="btn btn-primary" onclick={loadMapNow}>
-					Load map
+					{m('personalHeatmap.loadMap')}
 				</button>
 			</div>
 		</div>
@@ -252,23 +252,23 @@
 		<div class="heat-status" data-testid="personal-heatmap-loading">
 			<span class="spinner" aria-hidden="true"></span>
 			{#if trackCount > 0}
-				Loading your runs… {trackCount}/{totalWithTracks}
+				{m('personalHeatmap.loadingProgress', { n: trackCount, total: totalWithTracks })}
 			{:else}
-				Loading your runs…
+				{m('personalHeatmap.loading')}
 			{/if}
 		</div>
 	{:else if empty}
 		<div class="heat-empty" data-testid="personal-heatmap-empty">
 			<span class="material-symbols">local_fire_department</span>
-			<strong>No mapped runs yet</strong>
-			<p>Record or import runs with GPS tracks and they'll light up here.</p>
+			<strong>{m('personalHeatmap.emptyTitle')}</strong>
+			<p>{m('personalHeatmap.emptyBody')}</p>
 		</div>
 	{:else}
 		<aside class="heat-legend" data-testid="personal-heatmap-legend">
-			<strong>Your heatmap</strong>
-			<p>{trackCount} mapped {trackCount === 1 ? 'run' : 'runs'} — brighter where you run most.</p>
+			<strong>{m('personalHeatmap.legendTitle')}</strong>
+			<p>{trackCount === 1 ? m('personalHeatmap.legendSummaryOne', { n: trackCount }) : m('personalHeatmap.legendSummaryMany', { n: trackCount })}</p>
 			<span class="legend-scale" aria-hidden="true"></span>
-			<span class="legend-scale-labels"><span>less</span><span>more</span></span>
+			<span class="legend-scale-labels"><span>{m('personalHeatmap.scaleLess')}</span><span>{m('personalHeatmap.scaleMore')}</span></span>
 		</aside>
 	{/if}
 </div>
