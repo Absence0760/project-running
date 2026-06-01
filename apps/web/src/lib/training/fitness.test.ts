@@ -11,6 +11,7 @@ import {
 	computeSnapshot,
 	recoveryAdvice,
 	isReturningFromLayoff,
+	isReturningFromGap,
 } from './fitness';
 import type { Run } from '../types';
 
@@ -333,4 +334,57 @@ test('isReturningFromLayoff — false when not currently active (gap is ongoing)
 		r({ started_at: '2026-03-21T07:00:00Z', distance_m: 10000, duration_s: 3000 }),
 	];
 	assert.equal(isReturningFromLayoff(runs, NOW), false);
+});
+
+// ─────────────── isReturningFromGap (welcome-back surface) ───────────────
+
+test('isReturningFromGap — false for no runs (a brand-new account is not "back")', () => {
+	assert.equal(isReturningFromGap([], 60, NOW), false);
+});
+
+test('isReturningFromGap — true when the only/most-recent run is older than the gap', () => {
+	// Most recent run was ~5 months ago — a long-absent runner reopening cold.
+	const runs = [
+		r({ started_at: '2025-09-01T07:00:00Z', distance_m: 10000, duration_s: 3000 }),
+		r({ started_at: '2025-11-30T07:00:00Z', distance_m: 8000, duration_s: 2400 }),
+	];
+	assert.equal(isReturningFromGap(runs, 60, NOW), true);
+});
+
+test('isReturningFromGap — false for an active runner (a recent run inside the window)', () => {
+	const runs = [
+		r({ started_at: '2026-02-01T07:00:00Z', distance_m: 10000, duration_s: 3000 }),
+		r({ started_at: '2026-04-20T07:00:00Z', distance_m: 8000, duration_s: 2400 }),
+	];
+	assert.equal(isReturningFromGap(runs, 60, NOW), false);
+});
+
+test('isReturningFromGap — counts non-qualifying runs (a logged treadmill walk still proves history)', () => {
+	// Short + indoor: excluded from VDOT math, but it still means the user
+	// has run before, so the welcome-back framing should fire on the gap.
+	const runs = [
+		r({
+			started_at: '2025-10-01T07:00:00Z',
+			distance_m: 1500,
+			duration_s: 600,
+			metadata: { indoor: true },
+		}),
+	];
+	assert.equal(isReturningFromGap(runs, 60, NOW), true);
+});
+
+test('isReturningFromGap — false right at the boundary, true just past it', () => {
+	const dayMs = 24 * 3600_000;
+	const exactly60 = r({
+		started_at: new Date(NOW - 60 * dayMs).toISOString(),
+		distance_m: 5000,
+		duration_s: 1800,
+	});
+	assert.equal(isReturningFromGap([exactly60], 60, NOW), true);
+	const fiftyNine = r({
+		started_at: new Date(NOW - 59 * dayMs).toISOString(),
+		distance_m: 5000,
+		duration_s: 1800,
+	});
+	assert.equal(isReturningFromGap([fiftyNine], 60, NOW), false);
 });

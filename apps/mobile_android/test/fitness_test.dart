@@ -227,6 +227,57 @@ void main() {
     });
   });
 
+  group('isReturningFromGap (welcome-back, round-5 comeback)', () {
+    final now = DateTime.utc(2026, 4, 30, 7);
+
+    test('false for no runs (a brand-new account is not "back")', () {
+      expect(isReturningFromGap(const [], now: now), isFalse);
+    });
+
+    test('true when the most-recent run is older than the gap', () {
+      final runs = [
+        _r(distance: 10000, durationS: 3000, startedAt: DateTime.utc(2025, 9, 1, 7)),
+        _r(distance: 8000, durationS: 2400, startedAt: DateTime.utc(2025, 11, 30, 7)),
+      ];
+      expect(isReturningFromGap(runs, now: now), isTrue);
+    });
+
+    test('false for an active runner with a recent run inside the window', () {
+      final runs = [
+        _r(distance: 10000, durationS: 3000, startedAt: DateTime.utc(2026, 2, 1, 7)),
+        _r(distance: 8000, durationS: 2400, startedAt: DateTime.utc(2026, 4, 20, 7)),
+      ];
+      expect(isReturningFromGap(runs, now: now), isFalse);
+    });
+
+    test('counts non-qualifying runs (a logged treadmill walk still proves history)', () {
+      final runs = [
+        _r(
+          distance: 1500,
+          durationS: 600,
+          startedAt: DateTime.utc(2025, 10, 1, 7),
+          metadata: const {'indoor': true},
+        ),
+      ];
+      expect(isReturningFromGap(runs, now: now), isTrue);
+    });
+
+    test('true exactly at the boundary, false just inside it', () {
+      final exactly60 = _r(
+        distance: 5000,
+        durationS: 1800,
+        startedAt: now.subtract(const Duration(days: 60)),
+      );
+      expect(isReturningFromGap([exactly60], now: now), isTrue);
+      final fiftyNine = _r(
+        distance: 5000,
+        durationS: 1800,
+        startedAt: now.subtract(const Duration(days: 59)),
+      );
+      expect(isReturningFromGap([fiftyNine], now: now), isFalse);
+    });
+  });
+
   group('computeSnapshot', () {
     test('hits the happy path on a varied run list', () {
       final now = DateTime.utc(2026, 5, 1);

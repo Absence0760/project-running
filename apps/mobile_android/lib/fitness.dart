@@ -251,6 +251,25 @@ bool isReturningFromLayoff(Iterable<Run> runs, {DateTime? now}) {
   return latest - prev >= kLayoffResetDays * dayMs;
 }
 
+/// Whether the runner is mid-gap returning: at least one run in their
+/// history but the most recent is older than [gapDays]. Inverse case to
+/// [isReturningFromLayoff] — that one fires once a recent run follows a
+/// gap (already back), this fires while the gap is still open (reopening
+/// the app cold). Drives the gentle "Welcome back" surface. Counts every
+/// run (not just qualifying ones) — any logged activity proves prior
+/// history. Mirrors fitness.ts. Persona round-5 comeback.
+bool isReturningFromGap(Iterable<Run> runs,
+    {int gapDays = 60, DateTime? now}) {
+  final nowMs = (now ?? DateTime.now()).millisecondsSinceEpoch;
+  var latest = -1 << 62;
+  for (final r in runs) {
+    final t = r.startedAt.millisecondsSinceEpoch;
+    if (t <= nowMs && t > latest) latest = t;
+  }
+  if (latest == -1 << 62) return false;
+  return nowMs - latest >= gapDays * 24 * 3600 * 1000;
+}
+
 /// Rule-based recovery advice from TSB + CTL. Mirrors the web's
 /// thresholds 1:1.
 String recoveryAdvice(double? tsb, double? ctl,
