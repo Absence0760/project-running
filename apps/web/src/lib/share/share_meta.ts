@@ -53,20 +53,23 @@ export function formatKmStable(metres: number | null | undefined): string {
 	return `${km.toFixed(digits)} km`;
 }
 
-/// "11 May 2026" — UTC + en-GB so the title is identical for every
-/// crawler / build environment / viewer locale. Node's ICU bundle
-/// returns the same string everywhere when both locale and
-/// timeZone are pinned.
+const STABLE_MONTHS = [
+	'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// "11 May 2026" — day, abbreviated-English month, year, in UTC. The
+/// unfurl / OG title must be identical for every crawler, build
+/// environment, and viewer (a Slack preview shouldn't change based on
+/// who triggered the scrape), so this deliberately ignores the viewer
+/// locale. The day-month-name-year form is unambiguous in every region
+/// (unlike numeric "5/11" vs "11/5") and is assembled by hand rather
+/// than via a hard-coded locale tag so the output never depends on a
+/// region's date ordering.
 export function formatDateStable(iso: string | null | undefined): string {
 	if (!iso) return '';
 	const d = new Date(iso);
 	if (Number.isNaN(d.getTime())) return '';
-	return d.toLocaleDateString('en-GB', {
-		day: 'numeric',
-		month: 'short',
-		year: 'numeric',
-		timeZone: 'UTC',
-	});
+	return `${d.getUTCDate()} ${STABLE_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
 export function buildRunShareTitle(

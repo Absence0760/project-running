@@ -36,7 +36,7 @@ test('formatKmStable — null/negative/non-finite returns empty', () => {
 
 // ---------------- formatDateStable ----------------
 
-test('formatDateStable — UTC en-GB shape', () => {
+test('formatDateStable — UTC day-month-year shape', () => {
 	assert.equal(formatDateStable('2026-05-11T00:00:00Z'), '11 May 2026');
 });
 

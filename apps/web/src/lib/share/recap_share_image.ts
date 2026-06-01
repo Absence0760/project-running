@@ -29,6 +29,16 @@ function fmtDuration(seconds: number): string {
 	return `${m}m`;
 }
 
+// The recap card is rendered in the viewer's own browser (offscreen
+// canvas → PNG), never served as a shared og:image, so it should follow
+// the runtime locale for grouped numbers rather than pinning en-US.
+// `navigator.language` when available, `undefined` (host default) when
+// running under the unit-test harness.
+function localeNumber(n: number): string {
+	const locale = typeof navigator !== 'undefined' ? navigator.language : undefined;
+	return new Intl.NumberFormat(locale).format(n);
+}
+
 function xmlEscape(s: string): string {
 	return s
 		.replace(/&/g, '&amp;')
@@ -52,7 +62,7 @@ function statCells(recap: YearInRunningRecap, unit: 'km' | 'mi'): StatCell[] {
 		},
 		{
 			label: 'Climbed',
-			value: `${Math.round(recap.totalElevationM).toLocaleString('en-US')} m`,
+			value: `${localeNumber(Math.round(recap.totalElevationM))} m`,
 		},
 		{
 			label: 'Active months',
