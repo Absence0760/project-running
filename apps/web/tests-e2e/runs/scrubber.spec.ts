@@ -85,37 +85,40 @@ test.describe('/runs/[id] — Preview scrubber marker', () => {
 			);
 			expect(inMap, 'marker must live under the map container').toBe(true);
 
-			// CRITICAL: the marker's wrapping element (the
-			// .maplibregl-marker div MapLibre creates around our `el`)
-			// gets `transform: translate(<x>px, <y>px)`. May 2026 fix
-			// switched the preview marker from MapLibre's `Marker`
-			// class to a manual-projection div (the Marker class's
-			// stale-projection cache was the root cause of the
-			// "stuck at top-left" symptom). The dot is now a plain
-			// `<div class="hover-marker">` whose `style.transform` is
-			// set directly from `map.project(lngLat)` — no MapLibre
-			// wrapper, no projection cache.
-			const transform = await marker.evaluate((el) => {
-				const target = el as HTMLElement;
-				return target.style.transform ?? '';
-			});
-
-			// Extract the first translate's pixel offsets.
-			const match = transform.match(/translate\(([\-\d.]+)px,\s*([\-\d.]+)px\)/);
+			// CRITICAL: read the COMPUTED transform, not the inline
+			// `style.transform`. The original "stuck at top-left" bug
+			// was a CSS pulse animation on `.hover-marker` that animated
+			// `transform: scale()`; CSS animations outrank inline styles
+			// in the cascade, so MapLibre's positioning
+			// `transform: translate(...)` was set on the element (inline
+			// style looked correct) but never rendered — the dot sat at
+			// the map origin and merely pulsed. Asserting the inline
+			// style would pass while the dot is visibly broken; only the
+			// resolved/computed matrix reflects what the user actually
+			// sees. The pulse now animates `box-shadow`, leaving the
+			// positioning transform intact.
+			const matrix = await marker.evaluate(
+				(el) => getComputedStyle(el).transform,
+			);
+			// Computed transform resolves to a matrix(a,b,c,d,tx,ty).
+			// tx/ty are the rendered pixel offsets from the map origin.
+			const match = matrix.match(
+				/matrix\(\s*[\-\d.]+,\s*[\-\d.]+,\s*[\-\d.]+,\s*[\-\d.]+,\s*([\-\d.]+),\s*([\-\d.]+)\s*\)/,
+			);
 			expect(
 				match,
-				`expected translate(...) in marker transform, got: "${transform}"`,
+				`expected a matrix(...) computed transform, got: "${matrix}"`,
 			).not.toBeNull();
 			if (!match) return;
 			const x = parseFloat(match[1]);
 			const y = parseFloat(match[2]);
 			expect(Number.isFinite(x), `x must be finite, got ${x}`).toBe(true);
 			expect(Number.isFinite(y), `y must be finite, got ${y}`).toBe(true);
-			// MapLibre projects (0,0) as the marker container's
-			// origin — top-left of the map div. The May 2026 bug was
-			// "circle stuck at the top-left of the map" caused by
-			// non-finite lngLat collapsing the translate3d to (0,0).
-			// Any non-trivial offset rules that class of bug out.
+			// MapLibre projects the map origin (top-left of the map div)
+			// to (0,0). The bug pinned the dot there. Any non-trivial
+			// offset rules that class of bug out — and because we read
+			// the computed matrix, an animation that clobbers the
+			// positioning transform would surface here as (0,0).
 			expect(x).toBeGreaterThan(50);
 			expect(y).toBeGreaterThan(50);
 

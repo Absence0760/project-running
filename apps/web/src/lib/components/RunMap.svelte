@@ -249,12 +249,10 @@
 			return;
 		}
 		const p = track[idx];
-		// Defensive (same reasoning as renderPreviewMarker): if the
-		// track row carries non-finite or missing lat/lng, MapLibre's
-		// `translate3d` projector silently collapses to (0,0) and the
-		// marker sticks to the map div's top-left corner. Bail before
-		// `setLngLat` so the marker is cleanly absent rather than
-		// stuck in the corner.
+		// If the track row carries non-finite or missing lat/lng,
+		// MapLibre projects it to (0,0) and the marker sticks to the
+		// map div's top-left corner. Bail before `setLngLat` so the
+		// marker is cleanly absent rather than stuck in the corner.
 		if (
 			!p ||
 			!Number.isFinite(p.lng) ||
@@ -264,9 +262,6 @@
 			hoverMarker = undefined;
 			return;
 		}
-		// Same defensive resize as renderPreviewMarker — see comment
-		// there for the stale-projection rationale.
-		map.resize();
 		const at: [number, number] = [p.lng, p.lat];
 		if (!hoverMarker) {
 			const el = document.createElement('div');
@@ -284,79 +279,33 @@
 
 	/// Separate handle for the scrubber preview marker so it can
 	/// coexist with the hover-marker without one stealing the other's
-	/// MapLibre instance.
-	// Manual-projection preview marker. The MapLibre `Marker` class
-	// uses an internal projection cache that gets stale when the
-	// container size changes mid-session — the user repeatedly
-	// reported the dot stuck at the top-left of the map even after
-	// the NaN guard + `map.resize()` defensive calls.
-	//
-	// Bypassing the Marker class: we maintain a regular `<div>` as
-	// a child of `.maplibregl-canvas-container` and position it via
-	// `map.project([lng, lat])` directly. The `move` event fires
-	// on every render frame during pan/zoom; subscribing keeps the
-	// dot pinned to the route line through any map interaction.
-	let previewMarkerEl: HTMLDivElement | undefined;
-	let previewLastLngLat: [number, number] | null = null;
-	let previewMoveHandler: (() => void) | undefined;
-
-	function ensurePreviewMarkerEl(): HTMLDivElement | undefined {
-		if (!map) return undefined;
-		if (previewMarkerEl?.isConnected) return previewMarkerEl;
-		const host =
-			(map.getCanvasContainer() as HTMLElement | null) ??
-			(map.getContainer() as HTMLElement | null);
-		if (!host) return undefined;
-		const el = document.createElement('div');
-		el.className = 'hover-marker';
-		el.setAttribute('data-testid', 'route-preview-runner');
-		el.style.position = 'absolute';
-		el.style.top = '0';
-		el.style.left = '0';
-		el.style.willChange = 'transform';
-		el.style.pointerEvents = 'none';
-		el.style.zIndex = '5';
-		host.appendChild(el);
-		previewMarkerEl = el;
-		return el;
-	}
-
-	function repositionPreviewMarker(): void {
-		if (!map || !previewMarkerEl || !previewLastLngLat) return;
-		const pt = map.project(previewLastLngLat);
-		if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
-			previewMarkerEl.style.display = 'none';
-			return;
-		}
-		previewMarkerEl.style.display = '';
-		// Center the 12×12 dot on the projected pixel.
-		previewMarkerEl.style.transform = `translate(${pt.x - 6}px, ${pt.y - 6}px)`;
-	}
+	/// MapLibre instance. Positioned via the standard MapLibre
+	/// `Marker`, which keeps the dot pinned to the route line through
+	/// any pan/zoom for free. Twin of the `previewPosition` marker on
+	/// Flutter's `LiveRunMap`.
+	let previewMarker: maplibregl.Marker | undefined;
 
 	function renderPreviewMarker(lngLat: [number, number] | null): void {
 		if (!map) return;
-		// Filter NaN / non-finite coordinates defensively.
+		// A null / non-finite position projects to (0,0) and pins the
+		// dot to the map's top-left corner — drop it instead.
 		if (
 			lngLat == null ||
 			!Number.isFinite(lngLat[0]) ||
 			!Number.isFinite(lngLat[1])
 		) {
-			previewMarkerEl?.remove();
-			previewMarkerEl = undefined;
-			previewLastLngLat = null;
-			if (previewMoveHandler) {
-				map.off('move', previewMoveHandler);
-				previewMoveHandler = undefined;
-			}
+			previewMarker?.remove();
+			previewMarker = undefined;
 			return;
 		}
-		previewLastLngLat = lngLat;
-		ensurePreviewMarkerEl();
-		if (!previewMoveHandler) {
-			previewMoveHandler = repositionPreviewMarker;
-			map.on('move', previewMoveHandler);
+		if (!previewMarker) {
+			const el = document.createElement('div');
+			el.className = 'hover-marker';
+			el.setAttribute('data-testid', 'route-preview-runner');
+			previewMarker = new maplibregl.Marker({ element: el }).setLngLat(lngLat).addTo(map);
+		} else {
+			previewMarker.setLngLat(lngLat);
 		}
-		repositionPreviewMarker();
 	}
 
 	$effect(() => {
@@ -749,12 +698,8 @@
 	onDestroy(() => {
 		cancelAnimationFrame(animationFrame);
 		stopResizeWatch?.();
-		if (previewMoveHandler && map) {
-			map.off('move', previewMoveHandler);
-			previewMoveHandler = undefined;
-		}
-		previewMarkerEl?.remove();
-		previewMarkerEl = undefined;
+		previewMarker?.remove();
+		previewMarker = undefined;
 		map?.remove();
 	});
 </script>
@@ -883,22 +828,29 @@
 		box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.4), 0 2px 6px rgba(0, 0, 0, 0.35);
 	}
 
-	/* Linked-cursor marker (chart hover → map). Same accent as the
-	   segment pin so the visual language stays consistent, but slightly
-	   smaller + pulsing so the user can tell it's the chart's pointer,
-	   not a manually-selected segment. */
+	/* Linked-cursor marker (chart hover → map) + route-preview scrubber
+	   dot. Same accent as the segment pin so the visual language stays
+	   consistent, but slightly smaller + pulsing so the user can tell
+	   it's a cursor, not a manually-selected segment.
+
+	   The pulse animates `box-shadow`, NOT `transform`: MapLibre's
+	   Marker positions this element by writing `transform: translate(...)`
+	   onto it, and a CSS animation on `transform` outranks that inline
+	   style in the cascade — which collapsed the dot to the map's
+	   top-left corner. Pulsing the ring keeps the positioning transform
+	   untouched. */
 	:global(.hover-marker) {
 		width: 12px;
 		height: 12px;
 		border-radius: 50%;
 		background: var(--color-primary, #3b82f6);
 		border: 2px solid white;
-		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3), 0 1px 4px rgba(0, 0, 0, 0.3);
+		box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 1px 4px rgba(0, 0, 0, 0.3);
 		pointer-events: none;
 		animation: hover-marker-pulse 1.6s ease-in-out infinite;
 	}
 	@keyframes hover-marker-pulse {
-		0%, 100% { transform: scale(1); }
-		50% { transform: scale(1.25); }
+		0%, 100% { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.35), 0 1px 4px rgba(0, 0, 0, 0.3); }
+		50% { box-shadow: 0 0 0 7px rgba(59, 130, 246, 0.12), 0 1px 4px rgba(0, 0, 0, 0.3); }
 	}
 </style>
