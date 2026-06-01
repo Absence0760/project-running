@@ -27,9 +27,11 @@ function defineConfig() {
 			},
 			inlineStyleThreshold: 0,
 			prerender: {
-				// /og/{run,route}/[id].png and /share/{run,route}/[id] are
+				// /og/route/[id].png and /share/{run,route}/[id] are
 				// marked prerenderable but discover their ids via entries()
-				// against Supabase at build time. CI builds run without
+				// against Supabase at build time. (/og/run/[id].png is now
+				// prerender=false — it renders at request time in the
+				// share-run Lambda; see decisions §104.) CI builds run without
 				// Supabase credentials so entries() returns []; @sveltejs/kit
 				// 2.60 turned that into a hard error. The runtime fallback
 				// (adapter-static's index.html SPA route) handles unbuilt
