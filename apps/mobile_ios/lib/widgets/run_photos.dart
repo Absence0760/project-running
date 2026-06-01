@@ -74,7 +74,12 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
   // re-sign so a screen kept in the foreground past the TTL doesn't
   // start showing broken images.
   final Map<String, _SignedEntry> _signedUrls = <String, _SignedEntry>{};
-  static const int _signedUrlTtlSeconds = 60 * 60;
+  // 15 min: a signed URL minted while a run was public stays valid for
+  // its full TTL at the Storage layer even after the run flips private,
+  // so a shorter TTL shrinks that revocation gap. Kept well above the
+  // 5-min refresh-ahead window below so a render never lands on a URL
+  // that expires before the bytes arrive.
+  static const int _signedUrlTtlSeconds = 15 * 60;
   // Refresh anything older than (TTL - 5 min) so a render mid-fetch
   // never lands on a URL that expires before the image bytes arrive.
   static const int _signedUrlRefreshAheadSeconds = 5 * 60;

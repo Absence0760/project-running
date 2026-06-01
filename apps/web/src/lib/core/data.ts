@@ -3833,10 +3833,12 @@ const PHOTO_MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 // `run-photos` is a private bucket (migration 20260712_001 — closed the
 // public-CDN bypass on the visibility gate). Signed URLs carry their own
-// TTL; an hour is comfortable for a gallery render and short enough that
-// a run flipped from public → private won't keep serving stale bytes
-// long after the visibility change.
-const PHOTO_SIGNED_URL_TTL_S = 60 * 60;
+// TTL that the Storage layer honours independently of the SELECT policy,
+// so a URL minted while a run was public stays valid for its whole TTL
+// even after the run flips to private. 15 min keeps that revocation gap
+// short while still comfortably outlasting a gallery render (re-signing
+// happens on the next fetch, not per render).
+const PHOTO_SIGNED_URL_TTL_S = 15 * 60;
 
 async function signRunPhotoPaths(paths: string[]): Promise<Record<string, string>> {
 	if (paths.length === 0) return {};
