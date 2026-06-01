@@ -2530,6 +2530,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 108. Web i18n is detected client-side, with a lazy-loaded message catalogue — not an Accept-Language SSR framework
+
+**Decided (2026-06-01):** the web i18n runtime (`apps/web/src/lib/i18n/`) negotiates the active locale **on the client**, on first mount, from a stored preference → `navigator.languages` → English, and applies it to `<html lang/dir>` plus a reactive message signal. There is **no `Accept-Language` parse in `hooks.server.ts`**, contrary to the original audit framing (i18n-readiness W-2/W-3).
+
+**Why client-side.** The web app ships via `@sveltejs/adapter-static` with `prerender` + an `index.html` SPA fallback — **there is no per-request SSR server in production** (only the coach Lambda runs server-side). The HTML is baked at build time, so a server-side `Accept-Language` header has nowhere to run. Client detection mirrors the established pattern for the `preferred_unit`, `week_start_day`, theme, and `formatPrice` signals, all of which already key off `navigator.language` after hydration. The first-paint English flash is the same window the theme toggle already tolerates.
+
+**The shape.** A hand-rolled runtime, not inlang/Paraglide/sveltekit-i18n. English is statically bundled (the fallback dict + prerender default); every other locale is a **dynamic `import()`** chunk, so a single-locale visitor downloads only their own strings and the i18n layer adds ~nothing to the initial payload — this is the explicit responsiveness choice (a runtime that eagerly bundles all locales would bloat the JS). `m(key, params)` reads the reactive `dict` so call sites re-render on locale change; missing keys fall back to English then the raw key. `Messages = typeof en` + `satisfies Messages` on each locale makes a missing/extra key a compile error; `messages_parity.test.ts` guards it (and `{placeholder}` integrity) at runtime.
+
+**The trade-off.** Extraction is incremental — strings move into the catalogue surface-by-surface (shell first), and an un-extracted literal simply stays English until its turn. A bare `<html lang="en">` in `app.html` is correct as the *prerender default* only; never read it as the live locale. RTL has a switch-point (`dirForLocale`) but no RTL locale ships yet; the CSS is already logical-property-clean (rtl_css_guards). **Don't** add an `Accept-Language` server hook for the static site, and **don't** statically import the non-English catalogues.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

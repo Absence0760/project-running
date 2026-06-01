@@ -20,6 +20,8 @@
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import NotificationBell from '$lib/components/NotificationBell.svelte';
 	import { notificationStore } from '$lib/stores/notifications.svelte';
+	import { m, initLocale } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 
 	// Apply the persisted theme on first client mount. Users with a
 	// saved non-auto preference may see a brief flash on first paint —
@@ -27,6 +29,16 @@
 	// acceptable for now.
 	onMount(() => {
 		initTheme();
+	});
+
+	// Detect + apply the visitor's locale (stored choice → browser
+	// language → English). The web app is statically prerendered with no
+	// per-request SSR, so this runs client-side on first mount and updates
+	// <html lang/dir>; same pattern as the theme + unit signals. A
+	// non-English browser sees translated chrome with no flash beyond the
+	// same first-paint window the theme already tolerates.
+	onMount(() => {
+		initLocale();
 	});
 
 	// Persona-hunt Round 2 finding Casual #2. Pre-fix there was no
@@ -91,12 +103,12 @@
 	// profile popover at the bottom of the sidebar; Feed is a self-only
 	// tab on /u/[me]; Guided runs are surfaced from /coach (both are
 	// coach-driven). Top-down scan time matches frequency-of-use.
-	const navItems = [
-		{ href: '/dashboard', label: 'Dashboard', icon: 'dashboard', accent: '#F2A07B' },
-		{ href: '/runs', label: 'History', icon: 'directions_run', accent: '#D97A54' },
-		{ href: '/routes', label: 'Routes', icon: 'route', accent: '#B9A7E8' },
-		{ href: '/coach', label: 'Coach', icon: 'sports', accent: '#7FB3C2' },
-		{ href: '/social', label: 'Social', icon: 'public', accent: '#C98ECF' },
+	const navItems: { href: string; labelKey: MessageKey; icon: string; accent: string }[] = [
+		{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
+		{ href: '/runs', labelKey: 'nav.history', icon: 'directions_run', accent: '#D97A54' },
+		{ href: '/routes', labelKey: 'nav.routes', icon: 'route', accent: '#B9A7E8' },
+		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
+		{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
 	];
 
 	// "Shell-less" surfaces: rendered without the app sidebar regardless of
@@ -270,7 +282,7 @@
 {#if isOffline}
 	<div class="offline-banner" role="status" aria-live="polite" data-testid="offline-banner">
 		<span class="material-symbols offline-icon" aria-hidden="true">wifi_off</span>
-		You're offline. New runs save locally and sync when you're back online.
+		{m('shell.offline')}
 	</div>
 {/if}
 
@@ -288,13 +300,13 @@
 	<!-- These are long content pages (legal text, feature compares). With
 	     no signed-in shell they'd otherwise lack the skip link + <main>
 	     landmark that the shell branch below provides — WCAG 2.4.1. -->
-	<a href="#main-content" class="skip-link">Skip to main content</a>
+	<a href="#main-content" class="skip-link">{m('shell.skipToMain')}</a>
 	<main id="main-content">
 		<slot />
 	</main>
 {:else if auth.loading}
 	<div class="loading-screen">
-		<span class="loading-text">Loading...</span>
+		<span class="loading-text">{m('shell.loading')}</span>
 	</div>
 {:else if auth.loggedIn}
 	<!-- Authenticated app shell -->
@@ -318,12 +330,12 @@
 							class="nav-link"
 							class:active={isActive(item.href, $page.url.pathname)}
 							style="--accent: {item.accent};"
-							title={sidebarCollapsed ? item.label : undefined}
+							title={sidebarCollapsed ? m(item.labelKey) : undefined}
 						>
 							<span class="nav-icon-wrap">
 								<span class="nav-icon material-symbols">{item.icon}</span>
 							</span>
-							<span class="nav-label">{item.label}</span>
+							<span class="nav-label">{m(item.labelKey)}</span>
 						</a>
 					</li>
 				{/each}
@@ -336,7 +348,7 @@
 						onclick={() => (showLogoutModal = true)}
 						aria-haspopup="menu"
 						aria-expanded={showLogoutModal}
-						aria-label="{accountLabel(auth.user.display_name)} — profile and sign out"
+						aria-label={m('shell.profileAria', { name: accountLabel(auth.user.display_name) })}
 						title={sidebarCollapsed ? accountLabel(auth.user.display_name) : undefined}
 						bind:this={profileBtnEl}
 					>
@@ -353,13 +365,13 @@
 				<button
 					class="collapse-toggle"
 					type="button"
-					aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					aria-label={sidebarCollapsed ? m('shell.expandSidebar') : m('shell.collapseSidebar')}
 					aria-expanded={!sidebarCollapsed}
-					title={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+					title={sidebarCollapsed ? m('shell.expandSidebar') : m('shell.collapseSidebar')}
 					onclick={toggleSidebar}
 				>
 					<span class="material-symbols">{sidebarCollapsed ? 'chevron_right' : 'chevron_left'}</span>
-					{#if !sidebarCollapsed}<span class="collapse-toggle-label">Collapse</span>{/if}
+					{#if !sidebarCollapsed}<span class="collapse-toggle-label">{m('shell.collapse')}</span>{/if}
 				</button>
 			</div>
 		</nav>
@@ -371,7 +383,7 @@
 			page content. Skip link satisfies WCAG 2.4.1 (Bypass
 			Blocks). Visually hidden by default; reveals on :focus.
 		-->
-		<a href="#main-content" class="skip-link">Skip to main content</a>
+		<a href="#main-content" class="skip-link">{m('shell.skipToMain')}</a>
 
 		<main id="main-content" class="main-content">
 			<BillingIssueBanner />
@@ -384,7 +396,7 @@
 		<div
 			class="popover"
 			role="menu"
-			aria-label="Account menu"
+			aria-label={m('shell.accountMenu')}
 			bind:this={popoverEl}
 		>
 			<div class="popover-header">
@@ -404,7 +416,7 @@
 					onclick={() => (showLogoutModal = false)}
 				>
 					<span class="material-symbols">person</span>
-					View profile
+					{m('shell.viewProfile')}
 				</a>
 				<a
 					class="popover-item"
@@ -412,7 +424,7 @@
 					onclick={() => (showLogoutModal = false)}
 				>
 					<span class="material-symbols">groups</span>
-					Coaching
+					{m('shell.coaching')}
 				</a>
 				<a
 					class="popover-item"
@@ -420,13 +432,13 @@
 					onclick={() => (showLogoutModal = false)}
 				>
 					<span class="material-symbols">settings</span>
-					Settings
+					{m('shell.settings')}
 				</a>
 				<div class="popover-divider"></div>
 			{/if}
 			<button class="popover-item popover-danger" onclick={handleLogout}>
 				<span class="material-symbols">logout</span>
-				Sign out
+				{m('shell.signOut')}
 			</button>
 		</div>
 	{/if}

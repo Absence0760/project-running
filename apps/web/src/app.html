@@ -1,9 +1,11 @@
 <!doctype html>
-<!-- dir is the single RTL switch-point: the app shell uses CSS logical
-     properties (margin-inline-start / inset-inline-start / border-inline-end)
-     so flipping this to "rtl" mirrors the frame. Held at "ltr" until the i18n
-     framework lands a locale signal (audit/i18n-readiness W-1, scheduled).
-     audit/i18n-readiness (2026-05-30) Critical W-10. -->
+<!-- Prerender default only. The web app is statically prerendered with no
+     per-request SSR (adapter-static), so lang/dir are baked as en/ltr at
+     build time and then updated client-side on first mount by the i18n
+     runtime ($lib/i18n/store.svelte initLocale → document.documentElement),
+     mirroring the theme + unit signals. dir is the single RTL switch-point:
+     the app shell uses CSS logical properties so flipping it to "rtl"
+     mirrors the frame with no further plumbing. audit/i18n-readiness W-2. -->
 <html lang="en" dir="ltr">
 	<head>
 		<meta charset="utf-8" />
