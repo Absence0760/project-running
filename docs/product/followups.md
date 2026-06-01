@@ -60,3 +60,20 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 - [ ] **Advanced analytics polish** (#11, ~2 wk) — no new tables; richer dashboard breakdowns + race-time predictor over what VDOT / training-load already ship.
 - [ ] **Premium billing extensions** (#12, ~1-2 wk) — Stripe Checkout + customer portal + paywall enforcement across web + mobile.
 - [ ] **Treadmill BLE FTMS** (#13, ~3-5 d, mobile-only) — real-time speed / distance / incline from a paired treadmill. Spec in `integrations.md § Treadmills (BLE FTMS)`. Needs hardware-in-the-loop testing.
+
+## Safety-contact finish alerts (persona round-5 family-club)
+
+The `run_completed` notification (migration `20261101_001`) correctly fans a
+**public** run out to the runner's **followers**. The family-club persona wanted
+a partner to be alerted that the runner finished *even on a private run* (a
+safety use case). This is NOT a fix to the `is_public` gate — removing that gate
+would broadcast every private run to all followers, a privacy regression. The
+real need is a distinct, opt-in feature:
+
+- [ ] **Safety contacts** (~1 wk) — a `safety_contacts` table (owner → contact
+  user/email, opt-in both ways), and a `run_completed`-style trigger (or a
+  branch in the live-hub finish path) that alerts ONLY the designated contact
+  on a finish regardless of `is_public`. Pairs naturally with the live-spectator
+  feature (a watching partner already sees the finish). Gated on the same
+  deferred push/email sender as the rest of theme B. Until then the gate stays
+  as-is by design.
