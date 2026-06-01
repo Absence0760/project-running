@@ -173,13 +173,25 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
 ## Persona round-5 — remaining dispositions
 
 - [ ] **Consent-flow consistency for health-data fields (privacy, legal-adjacent)** —
-  onboarding now writes the bare `date_of_birth` column unconditionally (minor-
+  onboarding still writes the bare `date_of_birth` column unconditionally (minor-
   exclusion) while gating the prefs-bag mirror + gender + consent timestamp on the
-  Art 9 checkbox. `/settings/account` + `/settings/preferences` still persist
-  DOB/resting-HR/max-HR into `user_settings.prefs` without that same consent gate
-  (round-5 privacy "Art 9 via /settings/account"). Align all three surfaces on one
-  consent model — a legal-flow decision (is in-app entry implicit consent, or is an
-  explicit toggle required?), so deliberately not bolted on without counsel input.
+  Art 9 checkbox. `/settings/account` is now consent-gated (DOB writeback +
+  `grant_health_data_consent` RPC, matching `/settings/preferences`), so the two
+  settings surfaces are aligned; the remaining inconsistency is the onboarding
+  unconditional-DOB-column write. Decide whether onboarding's minor-exclusion DOB
+  capture counts as implicit consent or needs the explicit toggle too — a legal-flow
+  decision, deliberately not bolted on without counsel input.
+- [ ] **Age-grade calculator for non-parkrun races (older, MEDIUM)** — `age_grade`
+  is only surfaced for parkrun imports (scraped value in `metadata.age_grade`).
+  A manual / Strava / FIT race with a known distance, duration, and the runner's DOB
+  gets no age grade. Computing it properly needs the official **WMA road age-factor
+  tables** (per single-year-of-age × distance × sex) plus the open-class road
+  standards — a sizeable, version-specific dataset (WMA 2023/2025). Deliberately NOT
+  shipped as a from-memory approximation: a wrong age-grade % actively misleads the
+  exact masters-runner audience that values the metric. Build as a shared TS↔Dart
+  parity helper (web `age_grade.ts` ↔ mobile `age_grade.dart`) once the authoritative
+  factor tables are sourced, then surface on run-detail when DOB + distance + duration
+  are known and `metadata.age_grade` is absent.
 - [ ] **Health Connect import brings tracks (garmin/android, mobile + device)** —
   `health_connect_importer.dart` hard-codes `track: []`, so every HC-imported run is
   trackless/lapless/cadenceless. Reading the HC ExerciseRoute + sample series into a
