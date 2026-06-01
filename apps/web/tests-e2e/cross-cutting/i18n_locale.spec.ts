@@ -93,4 +93,23 @@ test.describe('i18n language picker (settings → preferences)', () => {
 		await page.goto('/settings/preferences');
 		await page.locator('[data-testid="language-select"]').selectOption('en');
 	});
+
+	test('plan calendar month + weekday names follow the locale (W-5)', async ({ page }) => {
+		const planUrl = '/plans/a1a1eada-aaaa-0000-0000-000000000001';
+		await page.goto(planUrl);
+		// Monday-first (default), English abbreviations.
+		await expect(page.locator('.dow-row span').first()).toHaveText('Mon');
+
+		await page.goto('/settings/preferences');
+		await page.locator('[data-testid="language-select"]').selectOption('de');
+		await page.goto(planUrl);
+		// German weekday abbreviation + localised long month header.
+		await expect(page.locator('.dow-row span').first()).toHaveText('Mo');
+		await expect(page.locator('.cal-head h3')).toHaveText(
+			/Januar|Februar|März|April|Mai|Juni|Juli|August|September|Oktober|November|Dezember/,
+		);
+
+		await page.goto('/settings/preferences');
+		await page.locator('[data-testid="language-select"]').selectOption('en');
+	});
 });

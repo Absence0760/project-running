@@ -2,19 +2,25 @@
 	import type { PlanWorkout } from '$lib/types';
 	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training/training';
 	import { fmtKm } from '$lib/format/units.svelte';
+	import { currentLocale } from '$lib/i18n/store.svelte';
+	import { monthName, weekdayAbbrevs, leadingBlanks, type WeekStart } from '$lib/format/calendar';
 
 	type Props = {
 		startDate: string;
 		endDate: string;
 		workouts: PlanWorkout[];
 		planId: string;
+		/// First day of the week — the host threads the user's
+		/// `week_start_day` preference. Defaults to Monday so the component
+		/// stays standalone-friendly.
+		weekStart?: WeekStart;
 		/// Called when the user clicks a workout cell. Hosts pass an
 		/// inline-editor opener (sets `editing = wo` on the plan page).
 		/// When omitted, falls back to navigating to the workout
 		/// detail route — keeps the component standalone-friendly.
 		onSelect?: (workout: PlanWorkout) => void;
 	};
-	let { startDate, endDate, workouts, planId, onSelect }: Props = $props();
+	let { startDate, endDate, workouts, planId, weekStart = 'monday', onSelect }: Props = $props();
 
 	const KIND_COLOR: Record<string, string> = {
 		easy: 'var(--color-text-secondary)',
@@ -77,8 +83,8 @@
 		const { year, month } = current;
 		const first = new Date(year, month, 1);
 		const last = new Date(year, month + 1, 0);
-		// Monday-first (matches the rest of the app — week_start_day default)
-		const leadDow = (first.getDay() + 6) % 7;
+		// Honour the user's week_start_day (defaults to Monday).
+		const leadDow = leadingBlanks(first.getDay(), weekStart);
 		const cells: Cell[] = [];
 
 		const prevLast = new Date(year, month, 0).getDate();
@@ -107,11 +113,9 @@
 		return cells;
 	});
 
-	const MONTH_LABELS = [
-		'January', 'February', 'March', 'April', 'May', 'June',
-		'July', 'August', 'September', 'October', 'November', 'December'
-	];
-	const DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+	// Locale-aware month label + weekday row, reordered for the chosen
+	// week start. Reading currentLocale() here re-renders on a locale flip.
+	let dow = $derived(weekdayAbbrevs(weekStart, currentLocale()));
 
 	function prev() {
 		if (currentIdx > 0) currentIdx -= 1;
@@ -132,7 +136,7 @@
 		>
 			<span class="material-symbols">chevron_left</span>
 		</button>
-		<h3>{MONTH_LABELS[current.month]} {current.year}</h3>
+		<h3>{monthName(current.month, currentLocale())} {current.year}</h3>
 		<button
 			type="button"
 			class="nav"
@@ -145,7 +149,7 @@
 	</header>
 
 	<div class="dow-row">
-		{#each DOW as d}
+		{#each dow as d}
 			<span>{d}</span>
 		{/each}
 	</div>

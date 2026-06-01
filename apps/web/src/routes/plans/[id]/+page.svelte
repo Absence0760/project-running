@@ -20,6 +20,8 @@
 		todayISO
 	} from '$lib/training/training';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
+	import { loadSettings, effective } from '$lib/settings/settings';
+	import type { WeekStart } from '$lib/format/calendar';
 	import type { TrainingPlan, PlanWeek, PlanWorkout, ClubWithMeta } from '$lib/types';
 
 	let id = $derived($page.params.id as string);
@@ -33,6 +35,7 @@
 	let publishingTo = $state('');
 	let editingPlanMeta = $state(false);
 	let recentRuns = $state<Run[]>([]);
+	let weekStart = $state<WeekStart>('monday');
 
 	let isOwner = $derived(plan != null && plan.user_id === auth.user?.id);
 
@@ -99,6 +102,16 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		await load();
+		// Calendar week-start follows the user's preference (W-5/W-14).
+		if (auth.user?.id) {
+			try {
+				const settings = await loadSettings(auth.user.id);
+				const wsd = effective<string>(settings, 'week_start_day');
+				if (wsd === 'sunday' || wsd === 'monday') weekStart = wsd;
+			} catch (_) {
+				/* default Monday */
+			}
+		}
 		// Only owners-of-this-plan see the publish-as-template control,
 		// and only when they have at least one club they admin.
 		if (auth.user?.id && plan?.user_id === auth.user.id) {
@@ -507,6 +520,7 @@
 				endDate={plan.end_date}
 				{workouts}
 				planId={plan.id}
+				{weekStart}
 				onSelect={(wo) => (editing = wo)}
 			/>
 		</section>
