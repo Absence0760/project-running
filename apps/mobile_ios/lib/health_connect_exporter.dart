@@ -16,13 +16,18 @@ import 'package:health/health.dart';
 class HealthConnectExporter {
   static final _health = Health();
 
-  /// Request WRITE access for the workout session + its distance record.
-  /// `writeWorkoutData` inserts an `ExerciseSessionRecord` plus a
-  /// `DistanceRecord` (when a distance is supplied), so both write
-  /// permissions are needed. Returns true when granted.
+  /// Request WRITE access for the workout session, its distance record, and
+  /// heart rate. `writeWorkoutData` inserts an `ExerciseSessionRecord` plus a
+  /// `DistanceRecord`; the per-point chest-strap HR is written as separate
+  /// `HeartRateRecord` samples, so all three write permissions are needed.
+  /// Returns true when granted.
   static Future<bool> requestWritePermission() async {
     await _health.configure();
-    const types = [HealthDataType.WORKOUT, HealthDataType.DISTANCE_DELTA];
+    const types = [
+      HealthDataType.WORKOUT,
+      HealthDataType.DISTANCE_DELTA,
+      HealthDataType.HEART_RATE,
+    ];
     return _health.requestAuthorization(
       types,
       permissions: types.map((_) => HealthDataAccess.WRITE).toList(),
@@ -44,7 +49,7 @@ class HealthConnectExporter {
       final start = run.startedAt;
       final end = run.startedAt.add(run.duration);
       final distance = run.distanceMetres.round();
-      return await _health.writeWorkoutData(
+      final ok = await _health.writeWorkoutData(
         activityType: type,
         start: start,
         end: end,
@@ -53,11 +58,66 @@ class HealthConnectExporter {
         title: run.metadata?['title'] as String?,
         recordingMethod: RecordingMethod.automatic,
       );
+      // Best-effort HR write-back: chest-strap BPM captured during the run
+      // (per-point on the track, or a single avg_bpm) flows back so Health
+      // Connect readers see the heart-rate trace, not just the session +
+      // distance. Wrapped separately so a missing WRITE_HEART_RATE grant or
+      // an unsupported sample can't roll back the workout write above.
+      try {
+        await _writeHeartRate(run, start);
+      } catch (e) {
+        debugPrint('Health Connect HR write failed for run ${run.id}: $e');
+      }
+      return ok;
     } catch (e) {
       debugPrint('Health Connect write failed for run ${run.id}: $e');
       return false;
     }
   }
+
+  /// Write the run's heart-rate samples. Sample selection is the pure
+  /// [heartRateSamplesForRun]; this method just fans each one onto the
+  /// platform channel.
+  static Future<void> _writeHeartRate(Run run, DateTime start) async {
+    for (final s in heartRateSamplesForRun(run, start)) {
+      await _health.writeHealthData(
+        value: s.bpm.toDouble(),
+        type: HealthDataType.HEART_RATE,
+        startTime: s.time,
+        endTime: s.time,
+        recordingMethod: RecordingMethod.automatic,
+      );
+    }
+  }
+}
+
+/// One heart-rate sample destined for Health Connect.
+class HeartRateSample {
+  final DateTime time;
+  final int bpm;
+  const HeartRateSample(this.time, this.bpm);
+}
+
+/// Pick the heart-rate samples to write back for [run]. Prefers per-point
+/// BPM stamped on the track (each waypoint with a timestamp + a positive bpm
+/// becomes one sample); falls back to a single average sample at [start] when
+/// only `metadata.avg_bpm` is present. Empty when the run carries no usable
+/// HR. Pure + top-level so the per-point-vs-average decision is unit-testable
+/// without the platform channel.
+List<HeartRateSample> heartRateSamplesForRun(Run run, DateTime start) {
+  final perPoint = <HeartRateSample>[];
+  for (final w in run.track) {
+    final bpm = w.bpm;
+    final ts = w.timestamp;
+    if (bpm == null || bpm <= 0 || ts == null) continue;
+    perPoint.add(HeartRateSample(ts, bpm));
+  }
+  if (perPoint.isNotEmpty) return perPoint;
+
+  final avg = run.metadata?['avg_bpm'];
+  final avgBpm = avg is num ? avg.round() : null;
+  if (avgBpm == null || avgBpm <= 0) return const [];
+  return [HeartRateSample(start, avgBpm)];
 }
 
 /// Map an `activity_type` string to a Health Connect workout type.

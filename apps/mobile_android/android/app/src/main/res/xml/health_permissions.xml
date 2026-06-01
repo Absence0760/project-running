@@ -15,4 +15,7 @@
     <!-- Write recorded runs back to Health Connect (persona #36). -->
     <permission name="android.permission.health.WRITE_EXERCISE" />
     <permission name="android.permission.health.WRITE_DISTANCE" />
+    <!-- BLE chest-strap HR written back alongside the workout
+         (persona round-5). -->
+    <permission name="android.permission.health.WRITE_HEART_RATE" />
 </resources>

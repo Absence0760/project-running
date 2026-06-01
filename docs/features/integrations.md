@@ -92,7 +92,7 @@ final data = await health.getHealthDataFromTypes(
 
 ### Write-back (persona #36)
 
-Read is not the only direction — Threkir also **writes finished runs back** to Health Connect so they flow on to Google Fit / Samsung Health / Fitbit / anything that reads it. `lib/health_connect_exporter.dart#writeRun` maps `metadata.activity_type` → `HealthWorkoutActivityType` and calls `health.writeWorkoutData` (an `ExerciseSessionRecord` + a `DistanceRecord`), needing the `WRITE_EXERCISE` + `WRITE_DISTANCE` permissions (added to `AndroidManifest.xml` + `res/xml/health_permissions.xml`). It's **opt-in per device**: off by default, toggled from Settings → Integrations (which requests the write grant and only flips the local `Preferences.writeToHealthConnect` flag if granted). When on, `run_screen` fires a best-effort, fire-and-forget `writeRun` after the local save (Android-only, never blocks the finish flow). The flag is local-only (Health Connect is an on-device capability, not a roaming account pref) and the write path is gated on `Platform.isAndroid`, so iOS/HealthKit is unaffected (HealthKit write would need separate entitlements — deferred).
+Read is not the only direction — Threkir also **writes finished runs back** to Health Connect so they flow on to Google Fit / Samsung Health / Fitbit / anything that reads it. `lib/health_connect_exporter.dart#writeRun` maps `metadata.activity_type` → `HealthWorkoutActivityType` and calls `health.writeWorkoutData` (an `ExerciseSessionRecord` + a `DistanceRecord`), plus best-effort heart rate (per-point chest-strap BPM from the track, else a single `metadata.avg_bpm` sample; selection in the pure `heartRateSamplesForRun`), needing the `WRITE_EXERCISE` + `WRITE_DISTANCE` + `WRITE_HEART_RATE` permissions (added to `AndroidManifest.xml` + `res/xml/health_permissions.xml`). The HR write is wrapped separately so a missing grant can't roll back the workout write. It's **opt-in per device**: off by default, toggled from Settings → Integrations (which requests the write grant and only flips the local `Preferences.writeToHealthConnect` flag if granted). When on, `run_screen` fires a best-effort, fire-and-forget `writeRun` after the local save (Android-only, never blocks the finish flow). The flag is local-only (Health Connect is an on-device capability, not a roaming account pref) and the write path is gated on `Platform.isAndroid`, so iOS/HealthKit is unaffected (HealthKit write would need separate entitlements — deferred).
 
 ### Platform notes
 
@@ -498,6 +498,7 @@ dependencies:
 <uses-permission android:name="android.permission.health.READ_HEART_RATE"/>
 <uses-permission android:name="android.permission.health.WRITE_EXERCISE"/>
 <uses-permission android:name="android.permission.health.WRITE_DISTANCE"/>
+<uses-permission android:name="android.permission.health.WRITE_HEART_RATE"/>
 ```
 
 ---
