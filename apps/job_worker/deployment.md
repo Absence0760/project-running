@@ -29,6 +29,8 @@ Fly.io organisation: runonward
 
 The live hub shares the worker's binary by design — both speak the same Supabase REST stack and the hub's in-process pub/sub state is tiny (a map keyed by `run_id` with a few hundred bytes per active room). When the hub's storage moves to Upstash Redis (see `CLAUDE.md`), the binary stays unified; only the `Hub` implementation swaps.
 
+**GDPR before enabling external Redis:** `internal/livehub/redis_hub.go` activates when `REDIS_URL` is set. Live pings carry GPS coordinates (personal data), so pointing `REDIS_URL` at a hosted Upstash instance is a cross-border processor transfer — execute Upstash's DPA from the account console and record the date in [`docs/compliance/sub-processors.md`](../../docs/compliance/sub-processors.md) **before** the prod cutover. The in-process hub (no `REDIS_URL`) has no such transfer.
+
 Why same Fly.io organisation: 6PN gives them a private network at no cost. The worker calls `http://osrm.internal:5000/match/v1/foot/...` and never goes through public internet.
 
 Why the worker app stays separate from OSRM: independent restart (worker → 5 s, OSRM → 90 s as graph re-mmaps), independent scaling (more workers without paying OSRM RAM each time), independent rollout (engine retune doesn't redeploy the queue drainer).

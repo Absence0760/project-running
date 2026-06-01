@@ -14,6 +14,7 @@ into `internal/worker.go`'s dispatch switch.
 | `WORKER_ID` | Optional. Stamped on the `jobs.locked_by` column for stuck-job debugging. Defaults to the hostname. |
 | `OSRM_URL` | Optional. When set (e.g. `http://127.0.0.1:5000`), the worker uses the OSRM `/match` endpoint instead of the passthrough shim. Local OSRM stack lives at [`./osrm/`](osrm/). |
 | `HEALTH_PORT` | Optional. Port for the embedded `/health` HTTP endpoint. Defaults to `8080` (matches `fly.toml`). Health flips to 503 if the worker poll loop hasn't ticked within 10 s — Fly.io's auto-restart catches wedged machines. |
+| `REDIS_URL` | Optional. When set, the live hub uses the Redis-backed pub/sub (`internal/livehub/redis_hub.go`) instead of the in-process map. **GDPR:** live pings carry GPS coordinates, so a hosted (e.g. Upstash) `REDIS_URL` is a cross-border processor transfer — execute the provider DPA and record it in `docs/compliance/sub-processors.md` before pointing this at prod. See [`deployment.md`](deployment.md). |
 
 ## Run locally
 
