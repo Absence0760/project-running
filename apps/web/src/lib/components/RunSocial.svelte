@@ -14,12 +14,15 @@
 	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import ReportDialog from '$lib/components/ReportDialog.svelte';
 
 	interface Props {
 		runId: string;
 		runOwnerId: string;
 	}
 	let { runId, runOwnerId }: Props = $props();
+
+	let reportCommentId = $state<string | null>(null);
 
 	let kudos = $state<RunKudosSummary>({ count: 0, viewer_has_kudos: false });
 	let comments = $state<RunCommentWithAuthor[]>([]);
@@ -162,6 +165,17 @@
 								<strong>{comment.author.display_name ?? 'Runner'}</strong>
 							</a>
 							<span class="when">{formatRelativeTime(comment.created_at)}</span>
+							{#if auth.loggedIn && auth.user?.id !== comment.author_id}
+								<button
+									class="icon-btn report-btn"
+									type="button"
+									aria-label="Report comment"
+									title="Report comment"
+									onclick={() => (reportCommentId = comment.id)}
+								>
+									<span class="material-symbols">flag</span>
+								</button>
+							{/if}
 							{#if auth.user?.id === comment.author_id || isOwn}
 								<button
 									class="icon-btn"
@@ -198,6 +212,17 @@
 													<strong>{reply.author.display_name ?? 'Runner'}</strong>
 												</a>
 												<span class="when">{formatRelativeTime(reply.created_at)}</span>
+												{#if auth.loggedIn && auth.user?.id !== reply.author_id}
+													<button
+														class="icon-btn report-btn"
+														type="button"
+														aria-label="Report reply"
+														title="Report reply"
+														onclick={() => (reportCommentId = reply.id)}
+													>
+														<span class="material-symbols">flag</span>
+													</button>
+												{/if}
 												{#if auth.user?.id === reply.author_id || isOwn}
 													<button
 														class="icon-btn"
@@ -253,6 +278,13 @@
 		{/if}
 	{/if}
 </div>
+
+<ReportDialog
+	open={reportCommentId !== null}
+	targetKind="comment"
+	targetId={reportCommentId ?? ''}
+	onclose={() => (reportCommentId = null)}
+/>
 
 <style>
 	.run-social {
@@ -367,13 +399,16 @@
 	}
 
 	.icon-btn {
-		margin-inline-start: auto;
 		background: none;
 		border: none;
 		color: var(--color-text-tertiary);
 		cursor: pointer;
 		padding: 0.15rem;
 		border-radius: var(--radius-sm);
+	}
+
+	.comment-head .icon-btn:first-of-type {
+		margin-inline-start: auto;
 	}
 
 	.icon-btn:hover {
