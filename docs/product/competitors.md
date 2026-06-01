@@ -1,46 +1,66 @@
 # Run app — competitor analysis
 
-A reference for understanding the competitive landscape, where each major app falls short, and the strategic gaps this app is built to fill.
+A reference for the competitive landscape — where each major app falls short, and the strategic gaps this app is built to fill.
+
+**The one-line read:** the market is a handful of well-funded incumbents that each gate meaningful features behind a subscription and cover platforms unevenly. This app's wedge is **free-first + watch-parity + open-source maps + friction-free migration**.
 
 > See also:
 > - [roadmap.md](roadmap.md) — what's planned per phase
 > - [../apps/mobile_android/local_testing.md](../../apps/mobile_android/local_testing.md) — every feature actually shipped on Android today
 
+## Contents
+
+- [What's shipped today](#whats-shipped-today-android) — feature-by-feature vs the field, what's deferred, migration paths, lines worth defending
+- [Market overview](#market-overview)
+- [Competitor profiles](#competitor-profiles) — Strava · Garmin · Nike Run Club · AllTrails · Runna · Komoot · COROS
+- [Platform coverage matrix](#platform-coverage-matrix) · [Feature gap matrix](#feature-gap-matrix) · [Pricing comparison](#pricing-comparison)
+- [Multi-modal landscape (Phase 4)](#multi-modal-competitive-landscape-phase-4--run--lift--meal)
+- [User acquisition opportunities](#user-acquisition-opportunities)
+- [Risks and watch items](#risks-and-watch-items)
+
+**Table legend** (used in every table below): ✓ = shipped / fully supported · — = absent · *Partial* / *Limited* = present but incomplete · *Paywalled* / *Premium* = behind that app's subscription · **Native** = a headline strength of that app · ? = unconfirmed.
+
 ---
 
 ## What's shipped today (Android)
 
-The Android app already covers a surprising amount of ground for an in-development product. The table below is "shipped right now", not aspirational.
+The Android app already covers a surprising amount of ground for an in-development product. The table below is "shipped right now", not aspirational. Rows are grouped by area; **bold rows are differentiators no other app in the table matches.**
 
 | Capability | Run app (Android) | Strava | Nike Run Club | Garmin Connect | Komoot | Runna | COROS |
 |---|---|---|---|---|---|---|---|
-| Free GPX/KML import | ✓ | Paywalled | — | ✓ | ✓ | — | ✓ (GPX) |
-| Free GPX export | ✓ | Paywalled | — | ✓ | ✓ | — | ✓ |
+| **Recording & live metrics** | | | | | | | |
 | Live GPS recording with map | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (watch) |
 | Background recording (foreground service) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ (watch) |
 | Auto-pause | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Manual pause / resume | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Lap markers | ✓ | ✓ | ✓ | ✓ | — | Auto (workout-driven) | ✓ |
-| Route following with off-route alerts | ✓ | Premium | — | ✓ | ✓ | — | ✓ |
-| Distance remaining on route | ✓ | ✓ | — | ✓ | ✓ | — | ✓ |
 | Audio cues (TTS splits + pace alerts) | ✓ | ✓ | ✓ | ✓ | Limited | ✓ (workout coaching) | — (watch tones only) |
 | Activity types with per-type behaviour (run/walk/cycle/hike) | ✓ | ✓ | Run only | ✓ | ✓ | Run only | ✓ |
 | Cadence and step count | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ |
 | Elevation chart per run | ✓ | ✓ | — | ✓ | ✓ | ✓ | ✓ |
+| **Routes & navigation** | | | | | | | |
+| Free GPX/KML import | ✓ | Paywalled | — | ✓ | ✓ | — | ✓ (GPX) |
+| Free GPX export | ✓ | Paywalled | — | ✓ | ✓ | — | ✓ |
+| Route following with off-route alerts | ✓ | Premium | — | ✓ | ✓ | — | ✓ |
+| Distance remaining on route | ✓ | ✓ | — | ✓ | ✓ | — | ✓ |
+| **Save individual routes for offline use (per-route pin)** | ✓ | — | — | Garmin device only | Region packs (paid) | — | COROS device only |
+| **Phone → watch route sync without watch internet (DataLayer)** | ✓ Wear OS | — | — | — | — | — | COROS watch only |
+| **Goals, PBs & maps** | | | | | | | |
 | Weekly distance goal with progress | ✓ | ✓ (Premium) | ✓ | ✓ | — | ✓ (plan-driven) | ✓ |
 | Personal Bests (longest, fastest pace, fastest 5k) | ✓ | ✓ | ✓ | ✓ | — | ✓ | ✓ |
 | Map tile cache (disk-backed) | ✓ | ✓ | — | ✓ | ✓ | ✓ | — (on-watch maps) |
-| **Fully offline mode — works with no account** | ✓ | — | — | — | — | — | — |
-| **Full backup ZIP (lossless) — runs + routes + tracks + profile** | ✓ | CSV (Premium) | — | TCX export | GPX | — | FIT-per-run export |
-| **Backup restore on a freshly installed phone with no account** | ✓ | — | — | — | — | — | — |
-| **CSV summary re-import (round-trips the Settings CSV export)** | ✓ | — | — | — | — | — | — |
-| **Save individual routes for offline use (per-route pin)** | ✓ | — | — | Garmin device only | Region packs (paid) | — | COROS device only |
-| **Phone → watch route sync without watch internet (DataLayer)** | ✓ Wear OS | — | — | — | — | — | COROS watch only |
+| **Sync, editing & sharing** | | | | | | | |
 | Auto-sync on wifi reconnect | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Conflict resolution (newer-wins) | ✓ | ✓ | ✓ | ✓ | ? | ✓ | ? |
 | Edit run title and notes | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Share run as GPX via system share sheet | ✓ | Premium | — | ✓ | ✓ | — | ✓ |
 | Dark mode + system theme | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| **Migration & backup** | | | | | | | |
+| **Fully offline mode — works with no account** | ✓ | — | — | — | — | — | — |
+| **Full backup ZIP (lossless) — runs + routes + tracks + profile** | ✓ | CSV (Premium) | — | TCX export | GPX | — | FIT-per-run export |
+| **Backup restore on a freshly installed phone with no account** | ✓ | — | — | — | — | — | — |
+| **CSV summary re-import (round-trips the Settings CSV export)** | ✓ | — | — | — | — | — | — |
+| **Training** | | | | | | | |
 | Adaptive training plans | ✓ | Paywalled | Guided runs | ✓ | — | **Native** | ✓ Free (EvoLab) |
 
 ### What's deliberately not in the app yet (and why)
@@ -90,6 +110,8 @@ The running app market is dominated by a small number of well-funded incumbents.
 ---
 
 ## Competitor profiles
+
+Seven apps, each as **Positioning / Strengths / Weaknesses / Verdict**. For the short version, skim just the **Verdict** line of each.
 
 ### Strava
 
@@ -273,35 +295,42 @@ The running app market is dominated by a small number of well-funded incumbents.
 
 ## Feature gap matrix
 
+Same legend as above. The **This app** column notes the platform(s) each feature ships on; `Backlog` / `Phase 3` mark our own not-yet-built items.
+
 | Feature | This app | Strava | Garmin Connect | Nike Run Club | AllTrails | Komoot | Runna | COROS |
 |---|---|---|---|---|---|---|---|---|
+| **Routes, maps & navigation** | | | | | | | | |
 | Route builder | ✓ Free | Paywalled | Web only | — | Limited | ✓ | — | — |
 | GPX import | ✓ Free | Paywalled | ✓ | — | ✓ | ✓ | — | ✓ |
 | GPX export | ✓ | Paywalled | ✓ | — | Paywalled | ✓ | — | ✓ |
 | Open-source maps (MapLibre) | ✓ | — | — | — | — | — | — | — |
 | Turn-by-turn navigation | ✓ | — | ✓ | — | Limited | ✓ | — | Breadcrumb only |
+| Offline maps | Partial (disk tile cache shipped; offline packs pending) | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — | ✓ (on-watch, higher-end models) |
+| Heatmaps / popular-route tiles | ✓ (web v1; mobile read pending) | ✓ (premium) | — | — | — | ✓ | — | — |
+| Community routes | ✓ (web, Android) | ✓ | — | — | ✓ | ✓ | — | — |
+| Route-condition reports | Backlog | — | — | — | ✓ | ✓ | — | — |
+| **Integrations & import** | | | | | | | | |
 | parkrun sync | ✓ | — | — | — | — | — | — | — |
 | Strava import | ✓ | Native | ✓ | ✓ | Limited | ✓ | ✓ | — (export-out only) |
 | HealthKit sync | ✓ | ✓ | ✓ | ✓ | — | — | ✓ | ✓ |
 | Health Connect sync | ✓ | ✓ | ✓ | — | — | — | Partial | Partial |
-| Coached running (curated audio workouts) | Backlog | — | Training plans | **Native** | — | — | ✓ | — |
+| **Training & coaching** | | | | | | | | |
 | Adaptive training plans | ✓ (web, Android) | Paywalled | ✓ | — | — | — | **Native** | ✓ Free (EvoLab) |
-| Social segments | ✓ (web, Android) | ✓ | — | — | — | — | — | — |
-| Community routes | ✓ (web, Android) | ✓ | — | — | ✓ | ✓ | — | — |
 | Live structured workout execution | Phase 3 (pending) | Paywalled | ✓ | — | — | — | **Native** | ✓ (on-watch) |
-| Offline maps | Partial (disk tile cache shipped; offline packs pending) | ✓ (premium) | ✓ | — | ✓ (premium) | ✓ | — | ✓ (on-watch, higher-end models) |
-| Segments + leaderboards | ✓ (web, Android — v1 + v2 tiered) | **Native** | — | — | — | — | — | — |
-| Heatmaps / popular-route tiles | ✓ (web v1; mobile read pending) | ✓ (premium) | — | — | — | ✓ | — | — |
-| Route-condition reports | Backlog | — | — | — | ✓ | ✓ | — | — |
-| Social graph (follows, kudos, comments) | ✓ (web, Android) | ✓ | Limited | ✓ | — | ✓ | — | — |
-| Gear tracking (shoe mileage) | ✓ (web, Android) | ✓ | ✓ | — | — | — | — | — |
-| Photos on runs / routes | ✓ (web, Android) | ✓ | Partial | — | ✓ | ✓ | — | — |
+| Coached running (curated audio workouts) | Backlog | — | Training plans | **Native** | — | — | ✓ | — |
 | Audio-coached / guided runs | Backlog | — | — | **Native** | — | — | Partial | — |
-| Race calendar + results | Backlog | Limited | ✓ | — | — | — | ✓ | — |
 | VDOT + training load + recovery analytics | ✓ (web, Android) | ✓ (premium) | ✓ | — | — | — | ✓ | ✓ Free (EvoLab) |
+| Coach ↔ athlete roster + run review | ✓ (web — roster + plan-compliance review) | — | — | — | — | — | — | ✓ (Training Hub — teams + plan-building) |
+| **Social & community** | | | | | | | | |
+| Social segments | ✓ (web, Android) | ✓ | — | — | — | — | — | — |
+| Segments + leaderboards | ✓ (web, Android — v1 + v2 tiered) | **Native** | — | — | — | — | — | — |
+| Social graph (follows, kudos, comments) | ✓ (web, Android) | ✓ | Limited | ✓ | — | ✓ | — | — |
 | Clubs + events | ✓ (web, Android) | ✓ | Limited | ✓ | — | — | — | Teams (coach-facing) |
 | Notifications inbox (kudos / comments / RSVPs) | ✓ (web, Android) | ✓ | ✓ | ✓ | — | — | ✓ | — |
-| Coach ↔ athlete roster + run review | ✓ (web — roster + plan-compliance review) | — | — | — | — | — | — | ✓ (Training Hub — teams + plan-building) |
+| Photos on runs / routes | ✓ (web, Android) | ✓ | Partial | — | ✓ | ✓ | — | — |
+| Gear tracking (shoe mileage) | ✓ (web, Android) | ✓ | ✓ | — | — | — | — | — |
+| Race calendar + results | Backlog | Limited | ✓ | — | — | — | ✓ | — |
+| **Backup, migration & portability** | | | | | | | | |
 | Lossless full backup ZIP (round-trip restore) | ✓ (web, Android — streaming + scales to 10 000+ runs) | Export-only (GDPR archive — no in-app re-import) | Export-only (TCX-per-run) | — | Export-only (GPX-per-run) | Export-only (GPX) | — | Export-only (FIT-per-run) |
 | Backup restore on a freshly installed device, no account | ✓ (Android — offline-first) | — | — | — | — | — | — | — |
 | CSV summary re-import | ✓ (Android — round-trips Settings export) | — | — | — | — | — | — | — |
@@ -330,6 +359,8 @@ The pricing sweet spot is keeping everything Strava paywalls as free in this app
 ---
 
 ## Multi-modal competitive landscape (Phase 4 — run + lift + meal)
+
+**In one line:** no one owns run + lift + meal as a first-class product — each incumbent's DNA blocks the next modality — so the wedge is a *runner-led* destination that adds gym + nutrition as complements. The detail:
 
 Forward-looking. Phase 4 expands the product from running-only to running + gym + nutrition ([roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition), [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)). The competitive set is entirely different from the running incumbents profiled above — no major player has the run + lift + meal combination as a first-class product. The space stays fragmented because each app's DNA prevents the next modality: nutrition apps treat exercise as "calories burned," strength apps don't understand cardio, running apps treat strength as cross-training rather than a parallel discipline, and the OS-level aggregators (Apple Health, Google Fit) treat everything as data rather than a guided experience.
 

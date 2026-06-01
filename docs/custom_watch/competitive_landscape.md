@@ -2,6 +2,10 @@
 
 A frank read of the watches we'd be competing with in the ultra-marathon segment, written as if you were going to bet money on the outcome. Most of the "we can beat them" thinking that founders bring to consumer hardware is wrong; this doc tries to be specific about *which* parts are wrong and which parts are actually right.
 
+**TL;DR:** you can't out-*hardware* Garmin / COROS — same chips, plus a 20-year lead on GNSS-algorithm tuning, accessory ecosystem, brand, and distribution. So don't. Win on *software*: UI clarity, the companion app, AI coach, social / community, update cadence, repairability, on-watch map quality. And test that thesis the cheap way — software on someone else's hardware (Connect IQ → Wear OS → ODM partnership) — not by building a watch from scratch.
+
+**Contents:** [what you can't beat them on](#what-you-literally-cannot-beat-them-on) · [Garmin's faults](#garmins-real-exploitable-faults) · [COROS's faults](#coross-real-exploitable-faults) · [where you can win](#where-you-can-credibly-win) · [strategic implication](#the-strategic-implication) · [what it means for tier-1](#what-this-means-for-the-tier-1-firmware-work)
+
 The watches we'd be measured against, with their best-case advertised numbers. The first four are the true MIP-display, dual-band ultra flagships — the watches the core 100mi buyer actually cross-shops. Polar and Amazfit round out the segment as AMOLED-display adjacents (premium and budget); both also happen to be the most plausible Vector-3 ODM partners (see the strategic-implication section below):
 
 | Watch | GPS battery | Display | GNSS | Price |

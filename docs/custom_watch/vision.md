@@ -1,5 +1,7 @@
 # Vision — why ultra, and what falls out of that
 
+**TL;DR:** ultra is the one watch segment where the incumbents have a structural weakness we can exploit — multi-day battery life is a hard *safety* requirement that rules out Wear OS / watchOS, the competitive set is tiny, and the buyers switch on a single feature. Our shot is matching the battery / display / GNSS table stakes while winning on app, UI, and map UX. Sections: [why ultra](#why-ultra-marathon-specifically) · [product requirements](#product-requirements-that-fall-out-of-the-ultra-niche) · [us vs the field](#us-vs-the-field-what-wed-be-competing-against).
+
 ## Why ultra-marathon specifically
 
 The general-purpose smartwatch market (Apple Watch, Samsung Galaxy Watch, Pixel Watch) is owned by phone OEMs whose moat is OS integration, not running. Competing there means competing on notifications, payments, voice assistants, and app stores — none of which we can win.
