@@ -1,26 +1,24 @@
 // AWS Lambda Function URL handler for the share-run surface.
 //
-// Owns /share/run/<id> (per-run SPA-shell HTML with OG tags).
-// CloudFront routes that path to this Lambda's Function URL — see
-// infra/modules/web-stack/main.tf for the behaviour.
+// Owns two paths, both routed to this Lambda's Function URL by
+// CloudFront (see infra/modules/web-stack/main.tf for the behaviours):
+//   - /share/run/<id>     per-run SPA-shell HTML with OG tags
+//   - /og/run/<id>.png    per-run og:image PNG
 //
-// /og/run/<id>.png stays adapter-static-prerendered at build time
-// with a 50k cap (apps/web/src/routes/og/run/[id].png/+server.ts).
-// Rendering PNGs in this Lambda would require shipping the @resvg
-// native arm64 binary as a Lambda Layer or via a build-time install
-// with `--arch=arm64 --platform=linux`; that's a separate slice
-// without enough product impact to fold in here. The realistic
-// failure mode for an over-cap run is og:image returning 404 —
-// crawlers degrade to no-image unfurls but the per-run title +
-// description (from THIS Lambda) still land correctly. The HTML
-// fix is the critical-path fix; the missing image is cosmetic.
+// Both are rendered at request time. Pre-fix, both were prerendered
+// at build time via adapter-static with a 50k cap; a public run
+// created post-build (or beyond the cap) served the SPA-shell
+// fallback `<head>` for the HTML and a 404 for the PNG, so Slack /
+// FB / X / LinkedIn unfurls of a brand-new share showed the homepage
+// card with a broken image. This Lambda fetches the run + display
+// name at request time so every URL gets the right per-run head AND
+// a matching image, regardless of build cadence. Persona-hunt
+// finding Casual #4 (HTML) + round-5 very-social (PNG).
 //
-// Persona-hunt finding Casual #4. Pre-fix, the HTML route was
-// prerendered at build time; a public run created post-build served
-// the SPA-shell fallback `<head>` (generic title) so Slack / FB / X
-// / LinkedIn unfurls of a brand-new share showed the homepage card.
-// This Lambda fetches the run + display name at request time so
-// every URL gets the right per-run head, regardless of build cadence.
+// The @resvg native binary is bundled into the Lambda zip by
+// build.mjs (esbuild keeps the `.node` arm64 addon as an asset); the
+// function runs on arm64 / Node 24 with 512 MB to give the
+// rasteriser headroom.
 
 import type { LambdaFunctionURLEvent, LambdaFunctionURLResult } from 'aws-lambda';
 
@@ -30,6 +28,7 @@ import {
 	type ShareRunMeta,
 } from '../../../src/lib/share/share_run_meta';
 import { injectShareRunMeta } from '../../../src/lib/share/share_run_spa_shell';
+import { renderRunOgPng } from '../../../src/lib/share/og_run_png';
 
 // SPA-shell HTML embedded at build time by lambda/share-run/build.mjs.
 // The bundler substitutes `__SPA_SHELL_HTML__` with the contents of
@@ -53,6 +52,7 @@ const CACHE_CONTROL =
 	'public, max-age=300, s-maxage=300, stale-while-revalidate=60';
 
 const HTML_PATH_RE = /^\/share\/run\/([^/]+)\/?$/;
+const PNG_PATH_RE = /^\/og\/run\/([^/]+)\.png$/;
 
 export const handler = async (
 	event: LambdaFunctionURLEvent,
@@ -73,9 +73,14 @@ export const handler = async (
 			});
 		}
 
+		const pngMatch = path.match(PNG_PATH_RE);
+		if (pngMatch) {
+			return await handlePng(pngMatch[1], { supabaseUrl, supabaseAnonKey });
+		}
+
 		// Anything else routed to this Lambda is a misconfiguration
 		// (CloudFront behaviour should never send us paths other than
-		// the pattern above). Return a 404 rather than guess.
+		// the patterns above). Return a 404 rather than guess.
 		return jsonResponse(404, { error: 'not found' });
 	} catch (err) {
 		console.error('[share-run lambda] unhandled_error', {
@@ -131,6 +136,35 @@ async function handleHtml(
 			'cache-control': CACHE_CONTROL,
 		},
 		body,
+	};
+}
+
+async function handlePng(
+	id: string,
+	config: { supabaseUrl: string; supabaseAnonKey: string },
+): Promise<LambdaFunctionURLResult> {
+	// renderRunOgPng renders a generic branded card when the run can't
+	// be loaded (private / deleted / never existed), so this always
+	// resolves to a valid PNG and we return 200 — a social unfurl must
+	// never break with a 404 image. Persona-hunt round-5 very-social.
+	const png = await renderRunOgPng(
+		id,
+		config.supabaseUrl && config.supabaseAnonKey
+			? {
+					supabaseUrl: config.supabaseUrl,
+					supabaseAnonKey: config.supabaseAnonKey,
+				}
+			: null,
+	);
+	return {
+		statusCode: 200,
+		headers: {
+			'content-type': 'image/png',
+			'cache-control': CACHE_CONTROL,
+		},
+		// Function URL binary responses must be base64-encoded.
+		isBase64Encoded: true,
+		body: png.toString('base64'),
 	};
 }
 
