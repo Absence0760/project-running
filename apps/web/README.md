@@ -2,7 +2,7 @@
 
 The web app — **canonical feature surface for the whole product** ([decisions.md § 24](../../docs/architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)). Every user-facing feature lives here unless it is physically impossible in a browser (live GPS recording, device sensors, haptics, OS share sheets).
 
-Stack: SvelteKit 2 + Svelte 5 (runes), TypeScript, `@sveltejs/adapter-static`, normalize.css + `src/app.css`. The `/api/coach` route doubles as the body of a hand-rolled Node 20 Lambda handler under [`lambda/coach/`](lambda/coach/).
+Stack: SvelteKit 2 + Svelte 5 (runes), TypeScript, `@sveltejs/adapter-static`, normalize.css + `src/app.css`. The `/api/coach` route doubles as the body of a hand-rolled Node 24 Lambda handler under [`lambda/coach/`](lambda/coach/).
 
 Deployed to AWS — S3 (static build) + CloudFront + Route 53 for the bulk, with the coach Lambda routed via a separate CloudFront behaviour. Terraform-provisioned, sops + AWS KMS for runtime secrets, OIDC-deployed from GitHub Actions. See [decisions.md § 53](../../docs/architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages) for the rationale and [deployment.md](deployment.md) for the full plan.
 

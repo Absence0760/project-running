@@ -1064,7 +1064,7 @@ Route 53 (threkir.com, www.threkir.com)
    ▼
 CloudFront distribution (one per env: prod, preview)
    ├── default behaviour       → S3 origin (private, OAC) — SvelteKit static build
-   ├── /api/coach/* behaviour  → Lambda Function URL (Node 20, streaming response)
+   ├── /api/coach/* behaviour  → Lambda Function URL (Node 24, streaming response)
    └── response headers policy → CSP / HSTS / X-Content-Type-Options / Referrer-Policy
 
 ACM cert (us-east-1) — auto-renew

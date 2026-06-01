@@ -16,7 +16,7 @@ For the orthogonal "how a tag triggers a build" mechanics, see [releasing.md](re
 | Backend (Postgres + Auth + Storage + Edge Functions) | `apps/backend/` | **Supabase Cloud** | Plan |
 | Job worker (Go) | `apps/job_worker/` | **Fly.io** — single machine, distroless | Plan |
 | OSRM (map-matching engine) | `apps/job_worker/osrm/` | **Fly.io** — single machine + Volume | Plan |
-| Coach LLM | `apps/web/src/routes/api/coach/+server.ts` (deployed as a Node 20 Lambda) | Anthropic Claude (default) — `OPENAI_BASE_URL` for self-host | Plan (web) |
+| Coach LLM | `apps/web/src/routes/api/coach/+server.ts` (deployed as a Node 24 Lambda) | Anthropic Claude (default) — `OPENAI_BASE_URL` for self-host | Plan (web) |
 | Mobile Android | `apps/mobile_android/` | **Google Play** — Internal → Beta → Production tracks | Plan |
 | Mobile iOS | `apps/mobile_ios/` | **App Store Connect** — TestFlight → App Store | Plan |
 | Wear OS | `apps/watch_wear/` | **Google Play** — separate listing (`com.runapp.watchwear`) | Plan |

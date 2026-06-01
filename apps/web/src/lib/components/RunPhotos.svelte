@@ -10,6 +10,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
+	import { safeImageSrc } from '$lib/util/safe_image_src';
 
 	interface Props {
 		runId: string;
@@ -135,7 +136,7 @@
 	{#if pendingFile && canManage}
 		<div class="pending">
 			<div class="pending-thumb">
-				<img src={URL.createObjectURL(pendingFile)} alt="" />
+				<img src={safeImageSrc(URL.createObjectURL(pendingFile), { allowBlob: true })} alt="" />
 			</div>
 			<div class="pending-fields">
 				<input
@@ -166,7 +167,7 @@
 			{#each photos as p (p.id)}
 				<figure class="tile">
 					<button class="tile-img" type="button" onclick={() => (lightbox = p)} aria-label="Open photo">
-						<img src={p.thumbUrl ?? p.url} alt={p.caption ?? ''} loading="lazy" />
+						<img src={safeImageSrc(p.thumbUrl ?? p.url)} alt={p.caption ?? ''} loading="lazy" />
 					</button>
 					{#if editingId === p.id}
 						<form
@@ -229,7 +230,7 @@
 		aria-label="Close"
 		onclick={() => (lightbox = null)}
 	>
-		<img src={lightbox.url} alt={lightbox.caption ?? ''} />
+		<img src={safeImageSrc(lightbox.url)} alt={lightbox.caption ?? ''} />
 		{#if lightbox.caption}
 			<div class="lightbox-caption">{lightbox.caption}</div>
 		{/if}

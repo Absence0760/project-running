@@ -13,7 +13,7 @@ Operational counterpart of [`apps/web/CLAUDE.md`](CLAUDE.md) (stack, conventions
 The web app has two parts:
 
 1. **Static site** — every route except `/api/coach`. SvelteKit prerenders / SPA-renders these. Served from S3 (private bucket) via CloudFront with Origin Access Control (OAC).
-2. **Server-side `/api/coach/+server.ts`** — needs a runtime that can stream Anthropic responses back to the client. Deployed as a Node 20 Lambda Function URL; CloudFront routes `/api/coach/*` to it as a separate behaviour on the same distribution.
+2. **Server-side `/api/coach/+server.ts`** — needs a runtime that can stream Anthropic responses back to the client. Deployed as a Node 24 Lambda Function URL; CloudFront routes `/api/coach/*` to it as a separate behaviour on the same distribution.
 
 Same domain, same CORS posture for both halves. No API Gateway in front of the Lambda — Function URLs are free, support response streaming, and skip the per-request API Gateway cost. ACM cert lives in `us-east-1` (CloudFront only reads from there, regardless of where the rest of the stack runs).
 
@@ -29,7 +29,7 @@ Route 53 (threkir.com, www.threkir.com)
    ▼
 CloudFront distribution (one per env: prod, preview)
    ├── default behaviour       → S3 origin (private, OAC) — SvelteKit static build
-   ├── /api/coach/* behaviour  → Lambda Function URL (Node 20, response streaming)
+   ├── /api/coach/* behaviour  → Lambda Function URL (Node 24, response streaming)
    └── response headers policy → CSP / HSTS / X-Content-Type-Options / Referrer-Policy
                                  / Permissions-Policy
 
@@ -159,7 +159,7 @@ Triggered by tagging `web@*`. The workflow at `.github/workflows/release-web.yml
 4. Write `.env.production` from GitHub Secrets (the `PUBLIC_*` vars table above). Strip after build.
 5. `npm run check --workspace=apps/web`.
 6. `npm run build --workspace=apps/web` → produces `apps/web/build/` (static).
-7. Build the coach Lambda zip — bundle `src/routes/api/coach/+server.ts` into a single `index.mjs` Node 20 handler, zip it.
+7. Build the coach Lambda zip — bundle `src/routes/api/coach/+server.ts` into a single `index.mjs` Node 24 handler, zip it.
 8. `aws s3 sync apps/web/build/ s3://<bucket>/ --delete` — sync the static build.
 9. `aws lambda update-function-code --function-name web-coach-prod --zip-file fileb://coach.zip` — update the Lambda.
 10. `aws cloudfront create-invalidation --distribution-id <id> --paths "/*"` — invalidate the cache.
@@ -179,7 +179,7 @@ The only SSR route in the app, and the only one that costs money to run.
 
 **Latency.** First-token latency is ~300-500 ms from `us-east-1` Lambda → Anthropic. Lambda response streaming is enabled (`InvokeMode = RESPONSE_STREAM` on the Function URL); CloudFront passes the stream through without buffering on the `/api/coach/*` behaviour by setting `OriginRequestPolicy.AllViewerExceptHostHeader` and disabling response buffering on the cache policy.
 
-**Cold starts.** Node 20 Lambda cold start at 1 GB memory is ~400 ms. For a chat endpoint that's already streaming a multi-second response, cold-start overhead is barely visible. Provisioned concurrency is *not* configured — the cost isn't justified at pre-launch traffic.
+**Cold starts.** Node 24 Lambda cold start at 1 GB memory is ~400 ms. For a chat endpoint that's already streaming a multi-second response, cold-start overhead is barely visible. Provisioned concurrency is *not* configured — the cost isn't justified at pre-launch traffic.
 
 **Memory + timeout.** 1024 MB memory (gives proportional CPU headroom for the Anthropic SDK), 30 s timeout (max for streaming through CloudFront — Function URL hard cap is 15 min but CloudFront cuts off long connections). If a user's coach turn truly runs longer than 30 s the response was already in trouble; surface the timeout cleanly client-side.
 
