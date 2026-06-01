@@ -2699,14 +2699,10 @@ export type Database = {
         Args: { a: string; b: string }
         Returns: boolean
       }
-      is_club_admin: { Args: { target_club: string }; Returns: boolean }
-      is_club_member: { Args: { target_club: string }; Returns: boolean }
-      is_event_organiser: { Args: { target_club: string }; Returns: boolean }
       is_pro: { Args: never; Returns: boolean }
       is_public_club_by_id: { Args: { p_club_id: string }; Returns: boolean }
       is_public_event_by_id: { Args: { p_event_id: string }; Returns: boolean }
       is_public_route_by_id: { Args: { p_route_id: string }; Returns: boolean }
-      is_race_director: { Args: { target_club: string }; Returns: boolean }
       job_scheduled_at_for_user: {
         Args: { p_user_id: string }
         Returns: string

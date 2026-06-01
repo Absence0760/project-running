@@ -464,7 +464,7 @@ create table club_posts (
 );
 ```
 
-**Helper functions** (RLS readability): `is_club_member(club_id)` and `is_club_admin(club_id)` — `security definer` functions that encapsulate the `club_members` lookup so every policy below can read cleanly. A trigger auto-enrolls the owner as an `owner`-role member on club insert, so the helpers work uniformly for owners too.
+**Helper functions** (RLS readability): `private.is_club_member(club_id)` and `private.is_club_admin(club_id)` — `security definer` functions that encapsulate the `club_members` lookup so every policy below can read cleanly. A trigger auto-enrolls the owner as an `owner`-role member on club insert, so the helpers work uniformly for owners too. They **live in the `private` schema** (migration `20261120_001`), which PostgREST does not expose, so they can't be probed as anon RPC oracles (audit-findings 2026-05-30 Medium); RLS policies reference them by the `private.`-qualified name (the schema move rewrites the dependency automatically).
 
 **`events.meet_lat` / `meet_lng` are column-revoked** from both `anon` and `authenticated` (migrations `20260723_001` / `20260806_001` / `20260818_001`) — a direct `select meet_lat, meet_lng from events` raises `42501`, because precise meeting coordinates would otherwise leak an organiser's home address to any signed-in non-member of a public club. The member-facing map pin + "Get directions" link on the event detail page reads them through `get_event_meet_point(p_event_id uuid) returns table(meet_lat, meet_lng)` (migration `20261027_001`): a `security definer` function that returns the coordinates only when `is_club_member(events.club_id)` and the point is set, and zero rows otherwise. EXECUTE is granted to `anon` + `authenticated` — the in-function membership check is the authorization gate, not the EXECUTE grant. Persona-hunt social-group #10.
 
@@ -487,7 +487,7 @@ Lets a registered runner claim a bib-only imported result under organiser approv
 
 #### `race_sessions` / `race_pings`
 
-Live race mode (Wear OS-led, decisions per roadmap §227). `race_sessions` is the per-instance state machine (`armed → running → finished | cancelled`); `race_pings` is the append-only telemetry stream (lat/lng/distance_m/elapsed_s/bpm) the watch posts during the session. Race-director / event-organiser permissions are checked by `is_race_director(uuid)` / `is_event_organiser(uuid)` SECURITY DEFINER functions. Migration `20260425_001_race_sessions.sql`. Stale pings are purged by the `cleanup-stale-live-run-pings` cron (see [§ pg_cron schedules](#pg_cron-schedules)).
+Live race mode (Wear OS-led, decisions per roadmap §227). `race_sessions` is the per-instance state machine (`armed → running → finished | cancelled`); `race_pings` is the append-only telemetry stream (lat/lng/distance_m/elapsed_s/bpm) the watch posts during the session. Race-director / event-organiser permissions are checked by `private.is_race_director(uuid)` / `private.is_event_organiser(uuid)` SECURITY DEFINER functions (moved to the `private` schema in `20261120_001`). Migration `20260425_001_race_sessions.sql`. Stale pings are purged by the `cleanup-stale-live-run-pings` cron (see [§ pg_cron schedules](#pg_cron-schedules)).
 
 ### Training & coaching
 
@@ -1317,9 +1317,9 @@ SECURITY DEFINER recompute of `event_results.rank` for the given (event, instanc
 
 SECURITY DEFINER. Lets a club admin or event organiser flip an `event_results` row between approved + pending visibility. Permission is checked via `is_event_organiser(uuid)`. EXECUTE revoked from `public, anon` and granted only to `authenticated` (migration `20260814_001_definer_grant_hygiene_pt2.sql` — Supabase grants implicit PUBLIC EXECUTE on every new public-schema function, so the original targeted `authenticated` grant didn't actually narrow anything; the body's organiser guard would still reject anon callers but defence-in-depth wants the EXECUTE narrowed too). Migration `20260428_001_role_permissions.sql`.
 
-### `is_event_organiser(event_uuid uuid)` / `is_race_director(event_uuid uuid)`
+### `private.is_event_organiser(uuid)` / `private.is_race_director(uuid)`
 
-SECURITY DEFINER booleans used by RLS policies and other RPCs to check whether `auth.uid()` is allowed to administer a specific event (organiser is broader; race-director is the in-event live-mode start/stop role). Both granted to `authenticated`.
+SECURITY DEFINER booleans used by RLS policies and other RPCs to check whether `auth.uid()` is allowed to administer a specific event (organiser is broader; race-director is the in-event live-mode start/stop role). **Live in the `private` schema** (migration `20261120_001`) alongside `is_club_member` / `is_club_admin` — PostgREST does not expose `private`, so they are not anon-callable membership/role oracles (audit-findings 2026-05-30 Medium). EXECUTE granted to `anon, authenticated, service_role` so RLS still evaluates; the qualified `private.` call from a policy bypasses search_path. Same private-schema treatment as `is_run_visible_to` (`20260812_001`).
 
 ### `is_pro()`
 

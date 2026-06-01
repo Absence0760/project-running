@@ -2510,6 +2510,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 106. Membership/role oracles moved to `private` via `ALTER FUNCTION SET SCHEMA`, not by re-emitting every policy
+
+**Decided (2026-06-01):** the four club/event membership oracles — `is_club_member`, `is_club_admin`, `is_event_organiser`, `is_race_director` — were SECURITY DEFINER functions in the `public` schema, so PostgREST exposed each as an anon-callable RPC (`POST /rest/v1/rpc/is_club_member` returns `true`/`false` for any (caller, club) pair — a membership/role oracle, even on private clubs). Audit-findings 2026-05-30 Medium. Same class as `is_run_visible_to` (§ corollary above / migration `20260812_001`), and the same fix: move them into the `private` schema, which PostgREST does not expose.
+
+**How matters.** The `is_run_visible_to` migration re-created the function in `private` and re-emitted each of its ~6 dependent policies with the `private.`-qualified name, leaning on the final `drop function` failing loudly to prove completeness. These four oracles are referenced by ~30 policies across ~33 migration files — re-emitting each one's *latest* body verbatim is a large transcription-error surface (a survey agent already missed several call sites). Instead, migration `20261120_001` uses **`ALTER FUNCTION public.is_club_member(uuid) SET SCHEMA private`**: this preserves the function's OID, and Postgres records RLS policy → function dependencies by OID, so every dependent policy's stored expression is rewritten to `private.is_club_member(...)` automatically and atomically — zero policies touched, zero transcription risk (verified empirically: a policy reading `is_club_member(club_id)` reads `private.is_club_member(club_id)` immediately after the move).
+
+**The trade-off / gotcha.** `SET SCHEMA` does *not* fix SECURITY DEFINER **callers** of the oracles — plpgsql/sql function bodies re-parse unqualified names at execution time using their own `search_path`, not by OID. Eight such callers exist (`approve_event_result`, `decide_event_result_claim`, `clone_plan_template`, `claim_event_result`, `clip_route_for_viewer`, `get_club_invite_token`, `get_event_meet_point`, `segment_leaderboard_tiered`); each gets `private` appended to its `search_path` so the unqualified call resolves to the moved function without re-emitting its (often long) body. The **full pgtap RLS suite is the completeness net** here, not a `drop function` — the first reset surfaced the callers `SET SCHEMA` alone left broken (`function is_club_member(uuid) does not exist`). Pinned by `membership_oracles_private_schema_test.sql`. The functions also dropped from `database.types.ts` (they were public RPCs); regenerated in the same change. **Don't** re-add one of these helpers to `public`, and **don't** add a new SECURITY DEFINER caller with `search_path = public` that calls them — it'll fail at runtime until `private` is on its search_path.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
