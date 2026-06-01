@@ -178,7 +178,12 @@ Deno.serve(withSentry('strava-webhook', async (req: Request) => {
 		if (dedupeErr.code === '23505') {
 			return Response.json({ ok: true, skipped: 'duplicate_event' });
 		}
-		console.error('Webhook dedupe insert failed:', dedupeErr?.message ?? String(dedupeErr));
+		// Log the SQLSTATE code only — a PostgREST `.message` (and the
+		// `details`/`hint` it travels with) can echo the offending row's
+		// values into the shared function-log aggregator. The code is
+		// enough to triage the error class. /audit/all edge-functions
+		// 2026-05-30 Low.
+		console.error('Webhook dedupe insert failed (code):', dedupeErr?.code ?? 'unknown');
 		return Response.json({ ok: false, error: 'dedupe_failed' }, { status: 500 });
 	}
 

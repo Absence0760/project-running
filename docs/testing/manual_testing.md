@@ -273,7 +273,7 @@ See [training.md](../features/training.md) for the engine + week phasing logic, 
 
 ## Coach (Claude / OpenAI-compatible)
 
-The Coach endpoint at `/api/coach/+server.ts` is the only server-runtime web route — deployed as a standalone Node 20 Lambda Function URL fronted by CloudFront in production (see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). The rest of the site is `adapter-static`. Defaults to Claude (`ANTHROPIC_API_KEY`); set `COACH_PROVIDER=openai` + `OPENAI_BASE_URL` to point at a local Ollama or OpenAI-compatible proxy.
+The Coach endpoint at `/api/coach/+server.ts` is the only server-runtime web route — deployed as a standalone Node 24 Lambda Function URL fronted by CloudFront in production (see [decisions.md § 53](../architecture/decisions.md#53-web-app--domain-on-aws-s3--cloudfront--lambda--route-53-not-vercel-or-cloudflare-pages)). The rest of the site is `adapter-static`. Defaults to Claude (`ANTHROPIC_API_KEY`); set `COACH_PROVIDER=openai` + `OPENAI_BASE_URL` to point at a local Ollama or OpenAI-compatible proxy.
 
 | Scenario | Steps | Pass |
 |---|---|---|

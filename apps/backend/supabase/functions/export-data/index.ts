@@ -69,7 +69,7 @@ type TrackPoint = {
 
 Deno.serve(withSentry('export-data', async (req: Request) => {
 	if (req.method !== 'POST') {
-		return new Response('Method not allowed', { status: 405 });
+		return Response.json({ error: 'method_not_allowed' }, { status: 405 });
 	}
 
 	// Body is `{ format: 'csv' | 'gpx' }` — 1 KB is plenty.
@@ -108,9 +108,10 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	const body = (guarded.body ?? {}) as { format?: unknown };
 	const format = (body.format ?? 'csv') as string;
 	if (format !== 'csv' && format !== 'gpx' && format !== 'backup') {
-		return new Response('format must be "csv", "gpx", or "backup"', {
-			status: 400,
-		});
+		return Response.json(
+			{ error: 'format must be "csv", "gpx", or "backup"' },
+			{ status: 400 },
+		);
 	}
 
 	// Pull every run for the user. The authedSupabase client respects
@@ -127,7 +128,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 
 	if (runsErr) {
 		console.error('export-data: runs select failed:', runsErr?.message ?? String(runsErr));
-		return new Response('Run fetch failed', { status: 500 });
+		return Response.json({ error: 'run fetch failed' }, { status: 500 });
 	}
 
 	const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -155,7 +156,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 		});
 	if (upErr) {
 		console.error('export-data: storage upload failed:', upErr?.message ?? String(upErr));
-		return new Response('Upload failed', { status: 500 });
+		return Response.json({ error: 'upload failed' }, { status: 500 });
 	}
 
 	const { data: signed, error: signErr } = await adminSupabase.storage
@@ -165,7 +166,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 		// Log message only — the full error object can carry storage
 		// path / internal codes into the shared log aggregator.
 		console.error('export-data: createSignedUrl failed:', signErr?.message);
-		return new Response('Signed URL failed', { status: 500 });
+		return Response.json({ error: 'signed URL failed' }, { status: 500 });
 	}
 
 	// Don't echo the Storage `path` — clients only need the signed URL

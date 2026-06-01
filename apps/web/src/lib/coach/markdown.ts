@@ -33,6 +33,12 @@ const COACH_ALLOWED_TAGS = [
 	'strong', 'sub', 'sup', 'table', 'tbody', 'td', 'th', 'thead', 'tr',
 	'u', 'ul',
 ];
+// `colspan` / `rowspan` are deliberately NOT allow-listed. GFM tables
+// (the only table source here — `marked` with gfm) cannot express
+// spanning cells, so `marked` never emits these attributes; adding them
+// would widen the sanitiser surface for output that can't occur. If a
+// future renderer can emit spans, add them here — DOMPurify coerces both
+// to digits-only, so they carry no script vector even then.
 const COACH_ALLOWED_ATTR = ['href', 'lang', 'title'];
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {

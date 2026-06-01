@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { initial, hashHue } from '$lib/format/avatar';
+	import { safeImageSrc } from '$lib/util/safe_image_src';
 
 	type BgMode = 'gradient' | 'primary' | 'seed';
 
@@ -24,6 +25,8 @@
 		seedHue?: number | null;
 	} = $props();
 
+	const safeUrl = $derived(safeImageSrc(url));
+
 	const background = $derived(
 		bg === 'seed'
 			? `hsl(${seedHue ?? 260}, ${sat}%, 55%)`
@@ -38,8 +41,8 @@
 	style="--av-size: {size}; --av-font: {font}; --av-bg: {background};"
 	aria-hidden="true"
 >
-	{#if url}
-		<img src={url} alt="" />
+	{#if safeUrl}
+		<img src={safeUrl} alt="" />
 	{:else}
 		{initial(name)}
 	{/if}

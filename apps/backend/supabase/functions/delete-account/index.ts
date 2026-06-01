@@ -227,7 +227,7 @@ async function invalidatePushTokens(
     return 'failed';
   }
   if (iosCount > 0) {
-    console.log(
+    console.error(
       `delete-account: ${iosCount} iOS push token(s) removed via DB ` +
         'cascade — APNs publishes no provider-side unregister API.',
     );

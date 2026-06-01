@@ -75,6 +75,42 @@ test('every RunTrackPreview on /u/[id] threads runId + ownerUserId', () => {
 	}
 });
 
+test('SocialFeed threads runId + ownerUserId into RunTrackPreview', () => {
+	// Reason: the /social Feed tab (SocialFeed.svelte) renders OTHER
+	// users' public runs to the viewer. RunTrackPreview's non-owner clip
+	// path needs the run id (the clip-public-track EF resolves track_url
+	// + clips server-side) AND the owner's id (so it knows the viewer
+	// isn't the owner and must clip). Without either prop the thumbnail
+	// either renders a placeholder or — worse, on a refactor that drops
+	// ownerUserId — skips the privacy-zone clip. Same contract as the
+	// /u/[id] guard above; pinned so a "simplify the feed card" refactor
+	// can't silently regress it. See decisions §33 + audit/privacy-zones.
+	const source = read('src/lib/components/SocialFeed.svelte');
+	const mounts = [...source.matchAll(/<RunTrackPreview\b[^/>]*\/?>/gs)];
+	assert.ok(
+		mounts.length >= 1,
+		'expected at least one RunTrackPreview mount in SocialFeed.svelte; got ' +
+			mounts.length +
+			' — has the feed card stopped rendering track thumbnails?',
+	);
+	for (const m of mounts) {
+		const tag = m[0];
+		assert.match(
+			tag,
+			/runId=/s,
+			'RunTrackPreview in SocialFeed missing runId prop — the non-owner clip EF can\'t resolve the track without it:\n' +
+				tag,
+		);
+		assert.match(
+			tag,
+			/ownerUserId=/s,
+			'RunTrackPreview in SocialFeed missing ownerUserId prop ' +
+				'(privacy-zone clip is skipped without it — non-owner viewers would see the unclipped polyline):\n' +
+				tag,
+		);
+	}
+});
+
 test('RunTrackPreview cache is bounded (LRU)', () => {
 	// Reason: without the cap a long session through 1000+ runs holds
 	// every deserialised track in memory until reload. JS Map preserves
