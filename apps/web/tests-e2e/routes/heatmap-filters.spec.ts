@@ -733,3 +733,47 @@ test.describe('Heatmap cluster list (web)', () => {
 		await expect(popup.locator('.cluster-route')).toHaveCount(3);
 	});
 });
+
+test.describe('Heatmap keep-on-map / pin (web)', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	function pinnedLineCount(page: import('@playwright/test').Page) {
+		return page.evaluate(() => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return -1;
+			return m
+				.querySourceFeatures('heatmap-routes-pinned')
+				.filter((f: { geometry?: { type?: string } }) => f.geometry?.type === 'LineString')
+				.length;
+		});
+	}
+
+	test('pinning a route keeps its line after you move away; Clear removes it', async ({
+		page,
+	}) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+		await flyToVA(page);
+
+		const rows = page.getByTestId('discover-list').locator('.result-li');
+		await expect.poll(() => rows.count(), { timeout: 6000 }).toBeGreaterThanOrEqual(1);
+		const first = rows.first();
+
+		expect(await pinnedLineCount(page)).toBe(0);
+		await expect(page.getByTestId('clear-pins')).toHaveCount(0);
+
+		await first.locator('.result-pin').click();
+		await expect(first.locator('.result-pin')).toHaveClass(/active/);
+		await expect.poll(() => pinnedLineCount(page), { timeout: 6000 }).toBeGreaterThanOrEqual(1);
+		await expect(page.getByTestId('clear-pins')).toBeVisible();
+
+		await page.mouse.move(2, 2);
+		await page.waitForTimeout(400);
+		expect(await pinnedLineCount(page)).toBeGreaterThanOrEqual(1);
+
+		await page.getByTestId('clear-pins').click();
+		await expect.poll(() => pinnedLineCount(page), { timeout: 5000 }).toBe(0);
+		await expect(page.getByTestId('clear-pins')).toHaveCount(0);
+	});
+});

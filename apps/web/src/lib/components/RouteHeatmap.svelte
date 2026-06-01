@@ -78,6 +78,11 @@
 	// hover visibly points at its dot on the map (synchronized hover).
 	const ROUTE_HL_SOURCE = 'heatmap-route-hl';
 	const ROUTE_HL_LAYER = 'heatmap-route-hl-layer';
+	// Routes the user has pinned ("keep on map") — their lines stay drawn
+	// (in violet, distinct from the cyan hover preview) until unpinned.
+	const ROUTE_PINNED_SOURCE = 'heatmap-routes-pinned';
+	const ROUTE_PINNED_CASING = 'heatmap-routes-pinned-casing';
+	const ROUTE_PINNED_LAYER = 'heatmap-routes-pinned-line';
 	const CLUB_PINS_SOURCE = 'heatmap-clubs';
 	const CLUB_PINS_LAYER = 'heatmap-clubs-layer';
 	const ROUTE_PINS_SOURCE = 'heatmap-route-pins';
@@ -132,6 +137,10 @@
 	// Debounce clearing the preview so moving the cursor between a dot and
 	// its line — or between adjacent rows — doesn't flash the line off/on.
 	let clearTimer: ReturnType<typeof setTimeout> | null = null;
+	// Routes the user has pinned to keep their lines on the map. Only the
+	// pinned routes are fetched (reusing geomCache from the hover preview),
+	// so this stays cheap; the lines persist across pan / filter changes.
+	let pinnedIds = $state<Set<string>>(new Set());
 
 	const activeFilterLabel = $derived(
 		FILTERS.find((f) => f.id === routeFilter)?.label ?? '',
@@ -249,6 +258,38 @@
 			map.addSource(HEATMAP_SOURCE, {
 				type: 'geojson',
 				data: { type: 'FeatureCollection', features: cachedFeatures },
+			});
+			// Pinned ("kept") route lines — added first so they render
+			// BELOW the hover preview. Violet so kept routes are distinct
+			// from the cyan hover line; clicking one opens the route.
+			map.addSource(ROUTE_PINNED_SOURCE, {
+				type: 'geojson',
+				data: { type: 'FeatureCollection', features: [] },
+				promoteId: 'route_id',
+			});
+			map.addLayer({
+				id: ROUTE_PINNED_CASING,
+				type: 'line',
+				source: ROUTE_PINNED_SOURCE,
+				paint: { 'line-color': '#1e293b', 'line-width': 6, 'line-opacity': 0.45 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+			});
+			map.addLayer({
+				id: ROUTE_PINNED_LAYER,
+				type: 'line',
+				source: ROUTE_PINNED_SOURCE,
+				paint: { 'line-color': '#8b5cf6', 'line-width': 3.5 },
+				layout: { 'line-join': 'round', 'line-cap': 'round' },
+			});
+			map.on('click', ROUTE_PINNED_LAYER, (e) => {
+				const id = e.features?.[0]?.properties?.route_id as string | undefined;
+				if (id) void goto(`/routes/${id}`);
+			});
+			map.on('mouseenter', ROUTE_PINNED_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = 'pointer';
+			});
+			map.on('mouseleave', ROUTE_PINNED_LAYER, () => {
+				if (map) map.getCanvas().style.cursor = '';
 			});
 			// The hovered route's line. Empty until a dot / list row is
 			// hovered; no minzoom, so a preview shows at whatever zoom
@@ -715,6 +756,21 @@
 			.setLngLat(coords)
 			.setHTML(html)
 			.addTo(map);
+		// Delegated handler for a route popup's "Keep on map" button (the
+		// only popup that carries data-keep-id). togglePin flips pinnedIds
+		// synchronously, so the label can update right after.
+		currentPopup.getElement().addEventListener('click', (ev) => {
+			const btn = (ev.target as HTMLElement).closest('[data-keep-id]') as
+				| HTMLElement
+				| null;
+			if (!btn?.dataset.keepId) return;
+			ev.preventDefault();
+			const id = btn.dataset.keepId;
+			void togglePin(id);
+			const pinned = pinnedIds.has(id);
+			btn.textContent = pinned ? 'Kept ✓' : 'Keep on map';
+			btn.classList.toggle('active', pinned);
+		});
 	}
 
 	interface ClubPopupData {
@@ -793,10 +849,16 @@
 					</div>
 				</div>
 				<div class="pin-popup-stats">${stats.join('')}</div>
-				<a class="pin-popup-action" href="/routes/${escapeHtml(d.id)}"
-					data-sveltekit-preload-data="hover">
-					View route &rarr;
-				</a>
+				<div class="pin-popup-actions">
+					<a class="pin-popup-action" href="/routes/${escapeHtml(d.id)}"
+						data-sveltekit-preload-data="hover">
+						View route &rarr;
+					</a>
+					<button type="button" class="pin-popup-keep ${pinnedIds.has(d.id) ? 'active' : ''}"
+						data-keep-id="${escapeHtml(d.id)}">
+						${pinnedIds.has(d.id) ? 'Kept ✓' : 'Keep on map'}
+					</button>
+				</div>
 			</div>
 		`;
 		openPopupRaw(coords, html);
@@ -1035,6 +1097,64 @@
 		setSourceData(ROUTE_HL_SOURCE, { type: 'FeatureCollection', features: [] });
 	}
 
+	// ─────────────── Pin a route's line to keep it on the map ───────────────
+	//
+	// Reuses geomCache (populated by the hover preview), so a pinned route is
+	// fetched at most once. Pinned lines persist across pan + filter changes
+	// until unpinned; the hover preview still draws on top.
+
+	/// Fetch + cache a route's polyline if not already cached. Returns the
+	/// coords (or null if unavailable).
+	async function ensureGeom(id: string): Promise<[number, number][] | null> {
+		const cached = geomCache.get(id);
+		if (cached) return cached;
+		const route = await fetchRouteById(id);
+		if (!route?.waypoints || route.waypoints.length < 2) return null;
+		const coords = route.waypoints.map((w) => [w.lng, w.lat] as [number, number]);
+		geomCache.set(id, coords);
+		return coords;
+	}
+
+	function redrawPinned() {
+		const features: GeoJSON.Feature[] = [];
+		for (const id of pinnedIds) {
+			const coords = geomCache.get(id);
+			if (coords) {
+				features.push({
+					type: 'Feature',
+					properties: { route_id: id },
+					geometry: { type: 'LineString', coordinates: coords },
+				});
+			}
+		}
+		setSourceData(ROUTE_PINNED_SOURCE, { type: 'FeatureCollection', features });
+	}
+
+	async function togglePin(id: string) {
+		const next = new Set(pinnedIds);
+		if (next.has(id)) {
+			next.delete(id);
+			pinnedIds = next;
+			redrawPinned();
+			return;
+		}
+		next.add(id);
+		pinnedIds = next;
+		// Draw immediately if cached; otherwise fetch then redraw (guarding
+		// against an unpin that happened while the fetch was in flight).
+		if (geomCache.has(id)) {
+			redrawPinned();
+		} else {
+			await ensureGeom(id);
+			if (pinnedIds.has(id)) redrawPinned();
+		}
+	}
+
+	function clearPinned() {
+		pinnedIds = new Set();
+		setSourceData(ROUTE_PINNED_SOURCE, { type: 'FeatureCollection', features: [] });
+	}
+
 	// When a cluster of overlapping start-pins is hovered, this lists the
 	// routes in it (you can't zoom apart pins that share a coordinate, so a
 	// list is the only way to reach them). Sticky via the same clear-timer
@@ -1264,7 +1384,16 @@
 			<span class="results-lens">
 				{activeFilterLabel}{#if selectedBands.length > 0} · {bandSummary}{/if}
 			</span>
-			{#if loading}
+			{#if pinnedIds.size > 0}
+				<button
+					type="button"
+					class="results-clear-pins"
+					data-testid="clear-pins"
+					onclick={clearPinned}
+				>
+					Clear {pinnedIds.size} kept
+				</button>
+			{:else if loading}
 				<span class="results-spinner" aria-label="Updating" title="Updating…"></span>
 			{:else if lastUpdated}
 				<span class="results-updated">
@@ -1276,7 +1405,7 @@
 		<ul class="results-list" data-testid="discover-list">
 			{#each routePins as r (r.id)}
 				{@const band = bandForDistance(r.distance_m)}
-				<li>
+				<li class="result-li" class:pinned={pinnedIds.has(r.id)}>
 					<a
 						class="result-row"
 						class:featured={r.featured}
@@ -1298,6 +1427,17 @@
 							{#if r.run_count > 0}<span>· {r.run_count} run{r.run_count === 1 ? '' : 's'}</span>{/if}
 						</span>
 					</a>
+					<button
+						type="button"
+						class="result-pin"
+						class:active={pinnedIds.has(r.id)}
+						data-pin-id={r.id}
+						aria-pressed={pinnedIds.has(r.id)}
+						title={pinnedIds.has(r.id) ? 'Unpin from map' : 'Keep on map'}
+						onclick={() => void togglePin(r.id)}
+					>
+						<span class="material-symbols">push_pin</span>
+					</button>
 				</li>
 			{:else}
 				<li class="results-empty">
@@ -1600,18 +1740,66 @@
 		flex: 1 1 auto;
 		min-height: 0;
 	}
+	.result-li {
+		display: flex;
+		align-items: stretch;
+		border-bottom: 1px solid var(--color-border);
+	}
 	.result-row {
+		flex: 1 1 auto;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
 		padding: 0.6rem var(--space-md);
 		text-decoration: none;
 		color: var(--color-text);
-		border-bottom: 1px solid var(--color-border);
 	}
 	.result-row:hover,
 	.result-row.hovered {
 		background: var(--color-surface-hover);
+	}
+	/* Pin ("keep on map") toggle at the trailing edge of each row. */
+	.result-pin {
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		padding: 0;
+		background: transparent;
+		border: 0;
+		border-inline-start: 1px solid var(--color-border);
+		color: var(--color-text-tertiary);
+		cursor: pointer;
+		transition: color var(--transition-fast), background var(--transition-fast);
+	}
+	.result-pin:hover {
+		color: var(--color-text);
+		background: var(--color-surface-hover);
+	}
+	.result-pin.active {
+		color: #8b5cf6;
+	}
+	.result-pin .material-symbols {
+		font-size: 1.1rem;
+	}
+	.result-pin.active .material-symbols {
+		font-variation-settings: 'FILL' 1;
+	}
+	.results-clear-pins {
+		margin-inline-start: auto;
+		padding: 0.1rem 0.5rem;
+		font-size: 0.72rem;
+		font-weight: 600;
+		color: #8b5cf6;
+		background: transparent;
+		border: 1px solid #8b5cf6;
+		border-radius: 999px;
+		cursor: pointer;
+	}
+	.results-clear-pins:hover {
+		background: rgba(139, 92, 246, 0.12);
 	}
 	/* Hovering the dot on the map tints + accents its row (and vice
 	 * versa) — the synchronized hover that ties the two surfaces. Uses
@@ -1805,6 +1993,33 @@
 	}
 	:global(.heatmap-pin-popup .pin-popup-action:hover) {
 		background: var(--color-primary-light);
+	}
+	/* Route popup actions row: View route + Keep on map side by side. */
+	:global(.heatmap-pin-popup .pin-popup-actions) {
+		display: flex;
+		gap: 0.4rem;
+	}
+	:global(.heatmap-pin-popup .pin-popup-actions .pin-popup-action) {
+		width: auto;
+		flex: 1 1 auto;
+	}
+	:global(.heatmap-pin-popup .pin-popup-keep) {
+		flex-shrink: 0;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: #8b5cf6;
+		background: transparent;
+		border: 1px solid #8b5cf6;
+		border-radius: var(--radius-sm);
+		padding: 0.4rem 0.6rem;
+		cursor: pointer;
+	}
+	:global(.heatmap-pin-popup .pin-popup-keep:hover) {
+		background: rgba(139, 92, 246, 0.12);
+	}
+	:global(.heatmap-pin-popup .pin-popup-keep.active) {
+		background: #8b5cf6;
+		color: #fff;
 	}
 
 	/* Hover tooltip — small, no border, no close button. Closes on
