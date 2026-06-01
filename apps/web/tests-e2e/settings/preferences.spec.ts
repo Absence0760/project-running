@@ -31,10 +31,7 @@ test.describe('/settings/preferences', () => {
 
 		// Switch to Miles.
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		// Visit /runs; distances on the cards should now read in mi.
 		await page.goto('/runs');
@@ -46,10 +43,7 @@ test.describe('/settings/preferences', () => {
 		// Restore to km so subsequent tests render against the default.
 		await page.goto('/settings/preferences');
 		await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
 	test('Distance unit km → mi propagates to dashboard stat cards + run detail + plan week grid + pace suffix', async ({
@@ -66,10 +60,7 @@ test.describe('/settings/preferences', () => {
 		await page.goto('/settings/preferences');
 
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		// ── /dashboard Recent Runs (formatDistance per-row) ──
 		// Stat cards are an unreliable target: "Longest Run" pre-fetch
@@ -113,10 +104,7 @@ test.describe('/settings/preferences', () => {
 		// Restore to km so subsequent tests render against the default.
 		await page.goto('/settings/preferences');
 		await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
 	test('Distance unit km → mi propagates to /routes/new builder sidebar + distance-target slider', async ({
@@ -130,10 +118,7 @@ test.describe('/settings/preferences', () => {
 		// can't silently regress.
 		await page.goto('/settings/preferences');
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ }),
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		try {
 			await page.goto('/routes/new');
@@ -167,10 +152,7 @@ test.describe('/settings/preferences', () => {
 			// Restore to km so subsequent tests render against the default.
 			await page.goto('/settings/preferences');
 			await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
-			await page.getByRole('button', { name: /Save Preferences/ }).click();
-			await expect(
-				page.getByRole('button', { name: /Saved!/ }),
-			).toBeVisible({ timeout: 5_000 });
+			await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 		}
 	});
 
@@ -196,20 +178,14 @@ test.describe('/settings/preferences', () => {
 			.locator('select');
 		const before = await sel.inputValue();
 		await sel.selectOption('min_per_mi');
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
-			timeout: 5_000
-		});
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		await page.reload();
 		await expect(sel).toHaveValue('min_per_mi');
 
 		// Restore.
 		await sel.selectOption(before);
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
-			timeout: 5_000
-		});
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
 	test('map style picker — selecting Satellite saves and survives reload', async ({
@@ -230,20 +206,14 @@ test.describe('/settings/preferences', () => {
 		await expect(sel).toBeVisible({ timeout: 10_000 });
 		const before = await sel.inputValue();
 		await sel.selectOption('satellite');
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		await page.reload();
 		await expect(sel).toHaveValue('satellite');
 
 		// Restore.
 		await sel.selectOption(before);
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
 	test('Resting + Max HR inputs render and round-trip through save', async ({
@@ -268,12 +238,12 @@ test.describe('/settings/preferences', () => {
 		await expect(resting).toBeVisible({ timeout: 10_000 });
 		await expect(max).toBeVisible();
 
+		// Number inputs auto-save on blur — fill, then blur the last field so
+		// its on-blur write fires before we wait for the cue.
 		await resting.fill('48');
 		await max.fill('182');
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
-			timeout: 5_000
-		});
+		await max.blur();
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
 		await page.reload();
 		await expect(resting).toHaveValue('48');
@@ -282,10 +252,8 @@ test.describe('/settings/preferences', () => {
 		// Clearing both must round-trip to unset (null), not 0.
 		await resting.fill('');
 		await max.fill('');
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
-		await expect(page.getByRole('button', { name: /Saved!/ })).toBeVisible({
-			timeout: 5_000
-		});
+		await max.blur();
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 		await page.reload();
 		await expect(resting).toHaveValue('');
 		await expect(max).toHaveValue('');
@@ -317,33 +285,59 @@ test.describe('/settings/preferences', () => {
 		await expect(page.locator('html')).toHaveAttribute('data-theme', 'auto');
 	});
 
-	test('Save flow emits the success toast + the button re-arms after 2s', async ({
+	test('auto-save shows a transient "Saved" cue that clears after a moment', async ({
 		page
 	}) => {
-		// The Save handler emits a `showToast('Preferences saved.', 'success')`
-		// after `updateUniversal` resolves AND flips the button label to
-		// "Saved!" for 2s before reverting to "Save Preferences". Pin both —
-		// a regression that swallowed the toast (e.g. removing the
-		// ToastContainer mount, or throwing inside the upsert) would leave
-		// users with no feedback that the save took.
+		// There is no global Save button — changing a control auto-saves and
+		// the inline status cue flips to "Saved", then clears (the savedTimer
+		// rearm). A regression that never showed the cue, or left it stuck on
+		// "Saved", surfaces here. Errors still toast; the happy path is silent
+		// beyond this cue.
 		await page.goto('/settings/preferences');
+		const status = page.getByTestId('save-status');
 
-		await page.getByRole('button', { name: /Save Preferences/ }).click();
+		await page.getByRole('button', { name: 'Miles', exact: true }).click();
+		await expect(status).toContainText('Saved', { timeout: 8_000 });
+		// The cue clears itself (rearm) so it isn't permanently stuck.
+		await expect(status).not.toContainText('Saved', { timeout: 5_000 });
 
-		const toast = page.locator('.toast.toast-success', {
-			hasText: 'Preferences saved.'
-		});
-		await expect(toast).toBeVisible({ timeout: 5_000 });
+		// Restore to km so later tests render against the default.
+		await page.getByRole('button', { name: 'Kilometres', exact: true }).click();
+		await expect(status).toContainText('Saved', { timeout: 8_000 });
+	});
 
-		// Button label cycle: Saving... → Saved! → Save Preferences. The
-		// "Saved!" state lasts ~2s; assert the rearm so a regression that
-		// stuck the button on "Saved!" (broken setTimeout) surfaces here.
-		await expect(
-			page.getByRole('button', { name: /Saved!/ })
-		).toBeVisible({ timeout: 5_000 });
-		await expect(
-			page.getByRole('button', { name: 'Save Preferences', exact: true })
-		).toBeVisible({ timeout: 5_000 });
+	test('demographics are NOT auto-saved — explicit consent-gated Save only', async ({
+		page
+	}) => {
+		// Unlike the rest of the page, gender/DOB (GDPR Art 9 special-category
+		// data) persist only via the explicit "Save demographics" button — a
+		// change must NOT trigger the auto-save path. This pins the deliberate
+		// asymmetry. All interactions here are in-memory (nothing is saved, so
+		// USER_A's stored consent + profile are untouched).
+		await page.goto('/settings/preferences');
+		await expect(page.getByTestId('save-demographics')).toBeVisible();
+
+		const consent = page
+			.locator('label.consent-checkbox', { hasText: 'gender and date of birth' })
+			.locator('input[type="checkbox"]');
+		const gender = page
+			.locator('select')
+			.filter({ has: page.getByRole('option', { name: 'Prefer not to say' }) });
+
+		// Gender is gated on consent (in-memory toggle, no write).
+		const startedChecked = await consent.isChecked();
+		if (startedChecked) await consent.uncheck();
+		await expect(gender).toBeDisabled();
+		await consent.check();
+		await expect(gender).toBeEnabled();
+
+		// Changing gender must NOT fire the auto-save cue (demographics are
+		// explicit-save only).
+		await gender.selectOption('nonbinary');
+		await expect(page.getByTestId('save-status')).not.toContainText('Saved');
+
+		// Leave consent unticked + unsaved so nothing persists for USER_A.
+		await consent.uncheck();
 	});
 
 	test('skeleton renders during initial load + is replaced by real content', async ({

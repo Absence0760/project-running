@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { beforeNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import {
@@ -22,8 +23,15 @@
 
 	let settings = $state<LoadedSettings | null>(null);
 	let loading = $state(true);
-	let saving = $state(false);
-	let saved = $state(false);
+	// Auto-save status for the cross-device prefs. Each control persists on
+	// change (no global Save button) — `saveStatus` drives a subtle inline
+	// "Saving…/Saved" cue so the user knows it took. The health-data
+	// demographics keep their own explicit, consent-gated save below.
+	let saveStatus = $state<'idle' | 'saving' | 'saved'>('idle');
+	let savedTimer: ReturnType<typeof setTimeout> | null = null;
+	// Demographics card has its own explicit save (GDPR Art 9 consent gate).
+	let savingDemographics = $state(false);
+	let demographicsSaved = $state(false);
 
 	// Universal settings from docs/backend/settings.md
 	let preferredUnit = $state<'km' | 'mi'>('km');
@@ -77,13 +85,82 @@
 		language = currentLocale();
 	}
 
+	// Auto-save path. Changes are COALESCED: rapid edits (e.g. blurring two HR
+	// fields back-to-back) accumulate into one batched updateUniversal so
+	// concurrent partial writes can't clobber each other on a stale bag
+	// snapshot. updateUniversal is offline-first (write-through cache + pending
+	// queue, decisions §79). A short debounce keeps it invisible; beforeNavigate
+	// flushes anything still pending so leaving the page never drops a change.
+	let pendingChanges: Record<string, unknown> = {};
+	let flushTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function autoSave(changes: Record<string, unknown>) {
+		if (!auth.user) return;
+		Object.assign(pendingChanges, changes);
+		saveStatus = 'saving';
+		if (flushTimer) clearTimeout(flushTimer);
+		flushTimer = setTimeout(() => void flushPending(), 350);
+	}
+
+	async function flushPending() {
+		if (flushTimer) {
+			clearTimeout(flushTimer);
+			flushTimer = null;
+		}
+		const uid = auth.user?.id;
+		if (!uid || Object.keys(pendingChanges).length === 0) return;
+		const batch = pendingChanges;
+		pendingChanges = {};
+		try {
+			await updateUniversal(uid, batch);
+			saveStatus = 'saved';
+			if (savedTimer) clearTimeout(savedTimer);
+			savedTimer = setTimeout(() => (saveStatus = 'idle'), 1800);
+		} catch (e) {
+			// Re-merge the failed batch (newer pending edits win) so it isn't lost.
+			pendingChanges = { ...batch, ...pendingChanges };
+			saveStatus = 'idle';
+			showToast(`Couldn't save: ${(e as Error).message}`, 'error');
+		}
+	}
+
+	// Flush any debounced change before leaving so a quick change-then-navigate
+	// doesn't drop it (the write-through cache captures it even if the network
+	// leg is interrupted mid-navigation).
+	beforeNavigate(() => {
+		void flushPending();
+	});
+
 	// When the user picks a distance unit, snap the pace format to the
-	// matching min-per-unit choice. Skip if they've explicitly chosen a
-	// speed format (kph/mph) — that's a deliberate non-pace selection.
-	function pickDistanceUnit(next: 'km' | 'mi') {
+	// matching min-per-unit choice (unless they've chosen a speed format),
+	// apply the app-wide unit signal, and persist — including the legacy
+	// dual-write of preferred_unit onto the profile column that leaderboard
+	// RPCs read.
+	async function pickDistanceUnit(next: 'km' | 'mi') {
 		preferredUnit = next;
-		if (paceFormat === 'kph' || paceFormat === 'mph') return;
-		paceFormat = next === 'mi' ? 'min_per_mi' : 'min_per_km';
+		if (paceFormat !== 'kph' && paceFormat !== 'mph') {
+			paceFormat = next === 'mi' ? 'min_per_mi' : 'min_per_km';
+		}
+		setUnit(next);
+		// Dual-write the profile column the auth store + leaderboard RPCs read
+		// on the next load. AWAIT it (not fire-and-forget) so the "Saved" cue —
+		// and therefore a subsequent reload — reflects the change deterministically.
+		if (auth.user) {
+			const uid = auth.user.id;
+			saveStatus = 'saving';
+			try {
+				const { error } = await supabase
+					.from('user_profiles')
+					.update({ preferred_unit: next })
+					.eq('id', uid);
+				if (error) throw error;
+			} catch (e) {
+				saveStatus = 'idle';
+				showToast(`Couldn't save: ${(e as Error).message}`, 'error');
+				return;
+			}
+		}
+		await autoSave({ preferred_unit: next, units_pace_format: paceFormat });
 	}
 
 	// Measured resting + max HR. max_hr_bpm overrides the Tanaka
@@ -208,103 +285,72 @@
 		await persistZones(privacyZones.filter((_, i) => i !== idx));
 	}
 
-	async function handleSave() {
+	// HR zones are a single jsonb object — rebuild it from the five fields on
+	// each blur and auto-save (null when all blank). Resting/max HR auto-save
+	// independently. These are health-adjacent but not Art 9 special category,
+	// and carry no consent gate today, so auto-saving keeps the existing
+	// posture (see the consent-flow follow-up).
+	function saveHrZones() {
+		const z =
+			z1 || z2 || z3 || z4 || z5
+				? {
+						z1: parseInt(z1, 10) || 0,
+						z2: parseInt(z2, 10) || 0,
+						z3: parseInt(z3, 10) || 0,
+						z4: parseInt(z4, 10) || 0,
+						z5: parseInt(z5, 10) || 0,
+					}
+				: null;
+		void autoSave({ hr_zones: z });
+	}
+
+	// Demographics (gender + DOB) are special-category data under GDPR Art 9,
+	// so they keep an EXPLICIT, consent-gated save rather than auto-saving —
+	// the user must deliberately confirm. Grant stamps the consent timestamp
+	// via a SECURITY DEFINER RPC (first-stamp-wins, lock-trigger enforced);
+	// withdrawal nulls gender + DOB + the timestamp atomically per Art 7(3).
+	async function saveDemographics() {
 		if (!auth.user) return;
-		saving = true; saved = false;
-		const changes: Record<string, unknown> = {
-			preferred_unit: preferredUnit,
-			units_pace_format: paceFormat,
-			default_activity_type: defaultActivity,
-			week_start_day: weekStartDay,
-			map_style: mapStyle,
-			privacy_default: privacyDefault,
-			coach_personality: coachPersonality,
-			strava_auto_share: stravaAutoShare,
-			voice_feedback_enabled: voiceFeedbackEnabled,
-			voice_feedback_verbosity: voiceFeedbackVerbosity,
-			voice_feedback_interval_km: parseFloat(voiceFeedbackIntervalKm) || 1.0,
-			discoverable_in_search: discoverableInSearch,
-		};
-		if (weeklyMileageGoal) {
-			changes.weekly_mileage_goal_m = parseInt(weeklyMileageGoal, 10) || null;
-		} else {
-			changes.weekly_mileage_goal_m = null;
-		}
-
-		changes.resting_hr_bpm = restingHr ? parseInt(restingHr, 10) || null : null;
-		changes.max_hr_bpm = maxHr ? parseInt(maxHr, 10) || null : null;
-
-		if (z1 || z2 || z3 || z4 || z5) {
-			changes.hr_zones = {
-				z1: parseInt(z1, 10) || 0,
-				z2: parseInt(z2, 10) || 0,
-				z3: parseInt(z3, 10) || 0,
-				z4: parseInt(z4, 10) || 0,
-				z5: parseInt(z5, 10) || 0,
-			};
-		} else {
-			changes.hr_zones = null;
-		}
-
-		// Also dual-write preferred_unit to profile column for legacy readers.
-		// Demographics live here too — RPCs that tier leaderboards by gender
-		// and age band read from user_profiles directly. GDPR Art 9 explicit
-		// consent gates whether gender + DOB persist at all; without it the
-		// only legal action is to null them out.
 		const hasDemographic = !!(gender || dateOfBirth);
 		if (hasDemographic && !healthDataConsent) {
-			// Fail the save loudly so the user sees the consent checkbox
-			// requirement rather than us silently dropping their input.
 			showToast(
-				'To save gender or date of birth, tick the consent ' +
-					'checkbox under Demographics.',
+				'To save gender or date of birth, tick the consent checkbox above.',
 				'error',
 			);
 			return;
 		}
-		if (healthDataConsent && healthDataConsentAt == null) {
-			// Grant — stamp the consent timestamp server-side via a
-			// SECURITY DEFINER RPC (first-stamp-wins) so the record can't be
-			// backdated by a client-supplied value. A direct write of
-			// health_data_consent_at is now rejected by the lock trigger
-			// (migration 20261118_001). Do this before the demographic write
-			// so consent is on record before gender / DOB persist.
-			const { data: stampedAt, error: consentErr } =
-				await supabase.rpc('grant_health_data_consent');
-			if (consentErr) {
-				showToast(`Save failed: ${consentErr.message}`, 'error');
-				saving = false;
-				return;
-			}
-			if (stampedAt) healthDataConsentAt = stampedAt as string;
-		}
-		const profileUpdate: Record<string, unknown> = {
-			preferred_unit: preferredUnit,
-			gender: (healthDataConsent && gender) ? gender : null,
-			date_of_birth: (healthDataConsent && dateOfBirth) ? dateOfBirth : null,
-		};
-		if (!healthDataConsent) {
-			// Withdrawal — null all three fields atomically per Art 7(3).
-			// The lock trigger permits a direct null write (withdrawal),
-			// only the non-null grant is RPC-gated.
-			profileUpdate.health_data_consent_at = null;
-			healthDataConsentAt = null;
-		}
-		await supabase.from('user_profiles').update(profileUpdate).eq('id', auth.user.id);
-
+		savingDemographics = true;
+		demographicsSaved = false;
 		try {
-			await updateUniversal(auth.user.id, changes);
-			// Propagate to the app-wide unit signal so every view re-renders
-			// with the new label without a full reload.
-			setUnit(preferredUnit);
-			setMapStyle(mapStyle);
-			saved = true;
-			showToast('Preferences saved.', 'success');
-			setTimeout(() => (saved = false), 2000);
+			if (healthDataConsent && healthDataConsentAt == null) {
+				const { data: stampedAt, error: consentErr } =
+					await supabase.rpc('grant_health_data_consent');
+				if (consentErr) {
+					showToast(`Save failed: ${consentErr.message}`, 'error');
+					return;
+				}
+				if (stampedAt) healthDataConsentAt = stampedAt as string;
+			}
+			const profileUpdate: Record<string, unknown> = {
+				gender: healthDataConsent && gender ? gender : null,
+				date_of_birth: healthDataConsent && dateOfBirth ? dateOfBirth : null,
+			};
+			if (!healthDataConsent) {
+				profileUpdate.health_data_consent_at = null;
+				healthDataConsentAt = null;
+			}
+			const { error } = await supabase
+				.from('user_profiles')
+				.update(profileUpdate)
+				.eq('id', auth.user.id);
+			if (error) throw error;
+			demographicsSaved = true;
+			showToast('Demographics saved.', 'success');
+			setTimeout(() => (demographicsSaved = false), 2000);
 		} catch (e) {
 			showToast(`Save failed: ${(e as Error).message}`, 'error');
 		} finally {
-			saving = false;
+			savingDemographics = false;
 		}
 	}
 </script>
@@ -315,7 +361,14 @@
 		<h1>Preferences</h1>
 		<p class="tagline">
 			Units, defaults, privacy, and the knobs that shape how every run is recorded
-			and shown. These sync across every device you sign into.
+			and shown. Changes save automatically and sync across every device you sign into.
+		</p>
+		<p class="save-status" role="status" aria-live="polite" data-testid="save-status">
+			{#if saveStatus === 'saving'}
+				<span class="material-symbols spin" aria-hidden="true">progress_activity</span> Saving…
+			{:else if saveStatus === 'saved'}
+				<span class="material-symbols" aria-hidden="true">check_circle</span> Saved
+			{/if}
 		</p>
 	</header>
 
@@ -360,7 +413,7 @@
 				</div>
 				<label>
 					<span class="label-text">Pace Format</span>
-					<select bind:value={paceFormat}>
+					<select bind:value={paceFormat} onchange={() => autoSave({ units_pace_format: paceFormat })}>
 						<option value="min_per_km">min/km</option>
 						<option value="min_per_mi">min/mi</option>
 						<option value="kph">km/h</option>
@@ -369,7 +422,13 @@
 				</label>
 				<label>
 					<span class="label-text">Map Style</span>
-					<select bind:value={mapStyle}>
+					<select
+						bind:value={mapStyle}
+						onchange={() => {
+							setMapStyle(mapStyle);
+							autoSave({ map_style: mapStyle });
+						}}
+					>
 						<option value="streets">Streets</option>
 						<option value="satellite">Satellite</option>
 						<option value="outdoors">Outdoors</option>
@@ -378,7 +437,7 @@
 				</label>
 				<label>
 					<span class="label-text">Week Starts On</span>
-					<select bind:value={weekStartDay}>
+					<select bind:value={weekStartDay} onchange={() => autoSave({ week_start_day: weekStartDay })}>
 						<option value="monday">Monday</option>
 						<option value="sunday">Sunday</option>
 					</select>
@@ -415,7 +474,7 @@
 			<div class="form-grid">
 				<label>
 					<span class="label-text">Default Activity</span>
-					<select bind:value={defaultActivity}>
+					<select bind:value={defaultActivity} onchange={() => autoSave({ default_activity_type: defaultActivity })}>
 						<option value="run">Run</option>
 						<option value="walk">Walk</option>
 						<option value="hike">Hike</option>
@@ -423,13 +482,13 @@
 					</select>
 				</label>
 				<label class="checkbox-label">
-					<input type="checkbox" bind:checked={voiceFeedbackEnabled} />
+					<input type="checkbox" bind:checked={voiceFeedbackEnabled} onchange={() => autoSave({ voice_feedback_enabled: voiceFeedbackEnabled })} />
 					<span>Spoken split announcements (mobile + watch)</span>
 				</label>
 				{#if voiceFeedbackEnabled}
 					<label>
 						<span class="label-text">Cue detail</span>
-						<select bind:value={voiceFeedbackVerbosity}>
+						<select bind:value={voiceFeedbackVerbosity} onchange={() => autoSave({ voice_feedback_verbosity: voiceFeedbackVerbosity })}>
 							<option value="full">Full — every cue</option>
 							<option value="minimal">Minimal — skip mid-rep & pace-drift nudges</option>
 						</select>
@@ -456,12 +515,18 @@
 							step="0.5"
 							min="0.5"
 							max="10"
+							onblur={() => autoSave({ voice_feedback_interval_km: parseFloat(voiceFeedbackIntervalKm) || 1.0 })}
 						/>
 					</label>
 				{/if}
 				<label id="weekly-mileage-goal">
 					<span class="label-text">Weekly Mileage Goal (m)</span>
-					<input type="number" bind:value={weeklyMileageGoal} placeholder="e.g. 40000 (40 km)" />
+					<input
+						type="number"
+						bind:value={weeklyMileageGoal}
+						placeholder="e.g. 40000 (40 km)"
+						onblur={() => autoSave({ weekly_mileage_goal_m: weeklyMileageGoal ? parseInt(weeklyMileageGoal, 10) || null : null })}
+					/>
 				</label>
 			</div>
 		</section>
@@ -477,20 +542,20 @@
 			<div class="form-grid">
 				<label>
 					<span class="label-text">Resting HR (bpm)</span>
-					<input type="number" bind:value={restingHr} min="30" max="120" placeholder="e.g. 55" />
+					<input type="number" bind:value={restingHr} min="30" max="120" placeholder="e.g. 55" onblur={() => autoSave({ resting_hr_bpm: restingHr ? parseInt(restingHr, 10) || null : null })} />
 				</label>
 				<label>
 					<span class="label-text">Max HR (bpm)</span>
-					<input type="number" bind:value={maxHr} min="100" max="230" placeholder="e.g. 185" />
+					<input type="number" bind:value={maxHr} min="100" max="230" placeholder="e.g. 185" onblur={() => autoSave({ max_hr_bpm: maxHr ? parseInt(maxHr, 10) || null : null })} />
 				</label>
 			</div>
 			<p class="section-desc">Upper bound in bpm for each zone. Leave blank if you don't know.</p>
 			<div class="form-grid zones">
-				<label><span class="label-text">Z1 (recovery)</span><input type="number" bind:value={z1} placeholder="130" /></label>
-				<label><span class="label-text">Z2 (easy)</span><input type="number" bind:value={z2} placeholder="145" /></label>
-				<label><span class="label-text">Z3 (tempo)</span><input type="number" bind:value={z3} placeholder="160" /></label>
-				<label><span class="label-text">Z4 (threshold)</span><input type="number" bind:value={z4} placeholder="175" /></label>
-				<label><span class="label-text">Z5 (max)</span><input type="number" bind:value={z5} placeholder="195" /></label>
+				<label><span class="label-text">Z1 (recovery)</span><input type="number" bind:value={z1} placeholder="130" onblur={saveHrZones} /></label>
+				<label><span class="label-text">Z2 (easy)</span><input type="number" bind:value={z2} placeholder="145" onblur={saveHrZones} /></label>
+				<label><span class="label-text">Z3 (tempo)</span><input type="number" bind:value={z3} placeholder="160" onblur={saveHrZones} /></label>
+				<label><span class="label-text">Z4 (threshold)</span><input type="number" bind:value={z4} placeholder="175" onblur={saveHrZones} /></label>
+				<label><span class="label-text">Z5 (max)</span><input type="number" bind:value={z5} placeholder="195" onblur={saveHrZones} /></label>
 			</div>
 		</section>
 
@@ -500,18 +565,18 @@
 			<div class="form-stack">
 				<label class="field">
 					<span class="label-text">Default Visibility for New Runs</span>
-					<select bind:value={privacyDefault}>
+					<select bind:value={privacyDefault} onchange={() => autoSave({ privacy_default: privacyDefault })}>
 						<option value="public">Public</option>
 						<option value="followers">Followers only</option>
 						<option value="private">Private</option>
 					</select>
 				</label>
 				<label class="checkbox-row">
-					<input type="checkbox" bind:checked={stravaAutoShare} />
+					<input type="checkbox" bind:checked={stravaAutoShare} onchange={() => autoSave({ strava_auto_share: stravaAutoShare })} />
 					<span>Auto-push runs to Strava</span>
 				</label>
 				<label class="checkbox-row">
-					<input type="checkbox" bind:checked={discoverableInSearch} />
+					<input type="checkbox" bind:checked={discoverableInSearch} onchange={() => autoSave({ discoverable_in_search: discoverableInSearch })} />
 					<span>
 						Show me in name search
 						<span class="hint">
@@ -569,6 +634,18 @@
 					clear both fields per Art 7(3).
 				</p>
 			{/if}
+			<!-- Unlike the rest of the page, demographics do NOT auto-save:
+			     they are Art 9 special-category data, so persisting them is a
+			     deliberate, consent-gated action behind this button. -->
+			<button
+				class="btn btn-primary btn-save"
+				type="button"
+				onclick={saveDemographics}
+				disabled={savingDemographics}
+				data-testid="save-demographics"
+			>
+				{savingDemographics ? 'Saving…' : demographicsSaved ? 'Saved!' : 'Save demographics'}
+			</button>
 		</section>
 
 		<!-- Privacy zones — clipped from the start and end of public tracks. -->
@@ -655,7 +732,7 @@
 			<div class="form-grid">
 				<label>
 					<span class="label-text">Coach Personality</span>
-					<select bind:value={coachPersonality}>
+					<select bind:value={coachPersonality} onchange={() => autoSave({ coach_personality: coachPersonality })}>
 						<option value="supportive">Supportive</option>
 						<option value="drill_sergeant">Drill Sergeant</option>
 						<option value="analytical">Analytical</option>
@@ -663,10 +740,6 @@
 				</label>
 			</div>
 		</section>
-
-		<button class="btn btn-primary btn-save" onclick={handleSave} disabled={saving}>
-			{saving ? 'Saving...' : saved ? 'Saved!' : 'Save Preferences'}
-		</button>
 	{/if}
 </div>
 
@@ -697,6 +770,27 @@
 		line-height: 1.5;
 		margin: 0;
 		max-width: 44rem;
+	}
+	.save-status {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		min-height: 1.25rem;
+		margin: var(--space-xs) 0 0;
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-success, #2e7d32);
+	}
+	.save-status .material-symbols {
+		font-size: 1rem;
+	}
+	.save-status .spin {
+		animation: prefs-spin 0.8s linear infinite;
+	}
+	@keyframes prefs-spin {
+		to {
+			transform: rotate(360deg);
+		}
 	}
 	h2 { font-size: 0.9rem; font-weight: 600; color: var(--color-text-secondary); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: var(--space-lg); }
 	.inline-empty {

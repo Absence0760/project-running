@@ -2562,6 +2562,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 111. Settings → Preferences auto-saves; only the Art 9 demographics keep an explicit, consent-gated Save
+
+**Decided (2026-06-01):** the preferences page no longer has a global "Save Preferences" button. Every cross-device pref persists the moment it changes — selects/toggles on `change`, number inputs (mileage goal, voice interval, resting/max HR, HR zones) on `blur` — with a subtle inline "Saving…/Saved" cue. The **demographics** (gender + DOB) are the sole exception: they keep a dedicated **"Save demographics"** button gated on the GDPR Art 9 consent checkbox.
+
+**Why.** The page was a confusing mix — theme, language, and privacy zones applied instantly while everything else waited for a Save button, so a user who'd just seen Language change live would change "Week starts on", navigate away, and silently lose it. Auto-save makes the whole page behave the way the instant controls already did. Demographics stay explicit because they're special-category data: persisting them must be a deliberate, consent-confirmed action, and auto-saving them would entangle the write with the still-open consent-flow-consistency follow-up. Auto-save is safe here because `updateUniversal` is already offline-first (write-through cache + pending queue, [§79]).
+
+**The trade-off.** Per-field writes are **debounce-coalesced** (~350 ms) into a single batched `updateUniversal` so two fields blurred back-to-back can't clobber each other on a stale bag snapshot (the bug the HR clear-path test caught); `beforeNavigate` flushes anything still pending so a change-then-leave never drops. The unit toggle additionally **awaits** its `user_profiles.preferred_unit` dual-write before the "Saved" cue, since the auth store reads that column on the next load. **Don't** reintroduce a global Save button, and **don't** fold gender/DOB into the auto-save path until the consent-flow item is resolved with counsel.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
