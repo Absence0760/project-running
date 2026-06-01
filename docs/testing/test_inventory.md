@@ -236,7 +236,7 @@ Covers the universal-bag and device-bag overlay logic on `SettingsSyncService` v
 
 **Initial state (2 tests):** `synced` is false and `service` is null before `onSignedIn`, every `pushX` / `updateX` is a no-op while settings is null (so a UI handler can safely call them before sign-in).
 
-### `apps/mobile_android/test/run_screen_recording_flow_test.dart` — 5 tests
+### `apps/mobile_android/test/run_screen_recording_flow_test.dart` — 6 tests
 
 Drives the full RunScreen UI flow on top of the existing data-pipeline integration test. Adds a mock-everything setUp that closes every platform-channel surface RunScreen touches when transitioning out of idle:
 
@@ -246,11 +246,9 @@ Drives the full RunScreen UI flow on top of the existing data-pipeline integrati
 - MethodChannel `flutter_tts` — returns success.
 - MethodChannel `run_app/run_notification` — returns null (lock-screen update channel).
 - EventChannels `step_count` and `step_detection` (pedometer) — silent streams via the underlying MethodChannel `listen` / `cancel`.
-- `dotenv.loadFromString(isOptional: true)` so LiveRunMap's MAPTILER_KEY lookup doesn't throw `NotInitializedError` when the recording state mounts the map.
+- `dotenv` sets `TILE_URL_TEMPLATE` to an unsupported scheme so LiveRunMap's dio tile fetches fail synchronously rather than leaving pending fake-async timers that would trip the teardown guard once the Finish-save test enters `tester.runAsync`.
 
-Tests: tapping START transitions the screen into countdown state (text "3" appears, START button gone); the countdown ticks 3 → 2 → 1 across three seconds (Timer.periodic at 1 Hz); after the countdown elapses the screen leaves countdown state (the large "3" is no longer the focal text); LiveRunMap mounts once recording begins (the invariant from `run_screen_test.dart` flips after `_begin()`); positions emitted by the geolocator fake during recording flow into the recorder without throwing.
-
-The test stops short of tapping Finish + asserting save — that flow does an animated transition + a Storage upload that needs a real Supabase client. The data-pipeline equivalent is covered by `recording_integration_test.dart`.
+Tests: tapping START transitions the screen into countdown state (text "3" appears, START button gone); the countdown ticks 3 → 2 → 1 across three seconds (Timer.periodic at 1 Hz); after the countdown elapses the screen leaves countdown state (the large "3" is no longer the focal text); LiveRunMap mounts once recording begins (the invariant from `run_screen_test.dart` flips after `_begin()`); positions emitted by the geolocator fake during recording flow into the recorder without throwing; **holding Finish saves the run through `runStore.save`** — invokes the rendered `_HoldToStopButton`'s wired `onHoldComplete` (the 800 ms `Ticker` is unreliable under the fake clock) inside `tester.runAsync` (the recorder's position-stream cancel only completes on the real event loop) against a `_CapturingRunStore` spy (the real store's `save` does filesystem I/O that doesn't resolve under fake-async), then asserts exactly one run was captured carrying the chosen `activity_type`.
 
 ### `apps/mobile_android/test/recording_integration_test.dart` — 3 tests
 

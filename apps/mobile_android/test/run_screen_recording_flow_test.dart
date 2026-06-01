@@ -43,12 +43,12 @@ import '../lib/training_service.dart';
 ///   - Tapping START transitions the screen out of idle.
 ///   - The countdown text ("3" / "2" / "1") cycles correctly.
 ///   - The recording state initializes RunRecorder + LiveRunMap.
-///
-/// What it intentionally stops short of:
-///   - Tapping Finish + asserting save. The finish flow does an
-///     animated transition + a Storage upload that requires a real
-///     supabase client, which the existing recording_integration_test
-///     covers at the pipeline layer.
+///   - Holding the Finish (hold-to-stop) button runs the real `_stop()`,
+///     which persists the finished run via `runStore.save(run)` — closing
+///     the documented "RunScreen Finish + save UI test" gap. The store is
+///     a `_CapturingRunStore` spy so the save is captured synchronously
+///     (the real store does filesystem I/O that doesn't resolve under the
+///     fake test clock); everything else is the production path.
 
 class _FakeGeolocatorPlatform extends GeolocatorPlatform {
   StreamController<Position>? _positions;
@@ -79,6 +79,26 @@ class _FakeGeolocatorPlatform extends GeolocatorPlatform {
     await _positions?.close();
     _positions = null;
   }
+}
+
+/// Spy [LocalRunStore] that captures `save(run)` synchronously instead of
+/// writing to disk. The real store's `save` awaits a `File.writeAsString`,
+/// and real I/O futures don't resolve under flutter_test's fake-async
+/// `pump()` — completing them needs `tester.runAsync`, which can't coexist
+/// with the fake-async timers LiveRunMap's dio tile fetches leave pending.
+/// Capturing in memory keeps the whole Finish flow on the fake clock (like
+/// every other test in this file) while still exercising the real
+/// `_stop()` → `runStore.save(run)` UI path end-to-end.
+class _CapturingRunStore extends LocalRunStore {
+  final List<dynamic> captured = [];
+
+  @override
+  Future<void> save(run) async {
+    captured.add(run);
+  }
+
+  @override
+  Future<void> clearInProgress() async {}
 }
 
 class _NoOpWakelock extends WakelockPlusPlatformInterface {
@@ -149,9 +169,17 @@ void main() {
   setUpAll(() async {
     TestWidgetsFlutterBinding.ensureInitialized();
     SharedPreferences.setMockInitialValues({});
-    // Empty dotenv so the LiveRunMap MAPTILER_KEY lookup doesn't throw
-    // NotInitializedError when the recording state mounts the map.
-    dotenv.loadFromString(isOptional: true);
+    // Point LiveRunMap's tile URL at a scheme dart:io HttpClient rejects
+    // synchronously, so dio's tile fetches fail immediately instead of
+    // leaving pending fake-async timers — those would otherwise trip the
+    // teardown `!timersPending` guard once the Finish-save test enters a
+    // `tester.runAsync` block. (Empty dotenv would fall back to the OSM
+    // URL, which does fetch.) Other tests in this file already tolerate
+    // tile-fetch failures via takeException.
+    dotenv.loadFromString(
+      envString: 'TILE_URL_TEMPLATE=offline-no-network://tiles/{z}/{x}/{y}.png',
+      isOptional: true,
+    );
     if (!supabaseReady) {
       await Supabase.initialize(
         url: 'http://127.0.0.1:54321',
@@ -254,7 +282,7 @@ void main() {
     );
   }
 
-  Future<void> pumpRunScreen(WidgetTester tester) async {
+  Future<LocalRunStore> pumpRunScreen(WidgetTester tester) async {
     final s = await makeStores();
     await tester.pumpWidget(
       MaterialApp(
@@ -271,6 +299,32 @@ void main() {
         ),
       ),
     );
+    await tester.pump();
+    return s.runStore;
+  }
+
+  /// Complete a Finish hold. The button (`_HoldToStopButton`) only fires
+  /// `onHoldComplete` after an 800 ms `Ticker`-driven hold; driving that
+  /// Ticker to the threshold under the fake test clock is unreliable, so
+  /// we assert the button is present + hit-testable in the recording UI
+  /// (a real user can reach it), then invoke its wired `onHoldComplete`
+  /// callback — the exact action a completed hold performs. That routes
+  /// through the real `_stop()`, which persists via `runStore.save(run)`.
+  Future<void> holdFinish(WidgetTester tester) async {
+    final btnFinder =
+        find.byWidgetPredicate((w) => w.runtimeType.toString() == '_HoldToStopButton');
+    expect(btnFinder.hitTestable(), findsOneWidget,
+        reason: 'a hit-testable Finish button must be present while recording');
+    final hitButton = btnFinder.hitTestable().evaluate().single.widget;
+    // _stop() awaits recorder.stop(), whose position-stream cancel only
+    // completes on the real event loop (not the fake test clock), so drive
+    // it under runAsync. The spy store captures the save synchronously, so
+    // no real I/O is left in flight when runAsync returns.
+    await tester.runAsync(() async {
+      // ignore: avoid_dynamic_calls
+      (hitButton as dynamic).onHoldComplete();
+      await Future<void>.delayed(const Duration(milliseconds: 200));
+    });
     await tester.pump();
   }
 
@@ -413,6 +467,69 @@ void main() {
       tester.takeException();
       expect(find.byType(MaterialApp), findsOneWidget,
           reason: 'widget tree must still be alive after GPS feed');
+    });
+
+    testWidgets('holding Finish saves the run through runStore.save',
+        (tester) async {
+      // Spy store captures the save synchronously (see _CapturingRunStore).
+      final runStore = _CapturingRunStore();
+      await runStore.init(overrideDirectory: runsDir);
+      final s = await makeStores();
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunScreen(
+            apiClient: null,
+            runStore: runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+          ),
+        ),
+      );
+      await tester.pump();
+      expect(runStore.captured, isEmpty,
+          reason: 'no run saved yet on a fresh store');
+
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      tester.takeException(); // drain LiveRunMap tile-fetch noise
+
+      // Feed a short track so the saved run carries real geometry.
+      for (var i = 0; i < 6; i++) {
+        geolocator.emit(_pos(metresEast: i * 12.0, secondsFromStart: i * 2));
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
+
+      // Hold the Finish button → _stop() → runStore.save().
+      await holdFinish(tester);
+      tester.takeException(); // drain any LiveRunMap tile noise from the rebuild
+
+      expect(runStore.captured, hasLength(1),
+          reason: 'holding Finish must save exactly one run');
+      final saved = runStore.captured.single;
+      expect(saved.metadata?['activity_type'], 'run',
+          reason: 'the chosen activity type is tagged onto the saved run');
+      expect(saved.duration.inSeconds, greaterThanOrEqualTo(0));
+
+      // Unmount the screen (disposes LiveRunMap so no new tile fetches are
+      // scheduled), then pump to fire any orphaned zero-duration dio fetch
+      // timers so the teardown `!timersPending` guard stays satisfied.
+      await tester.pumpWidget(const SizedBox());
+      for (var i = 0; i < 4; i++) {
+        await tester.pump(const Duration(milliseconds: 50));
+      }
+      tester.takeException();
     });
   });
 }

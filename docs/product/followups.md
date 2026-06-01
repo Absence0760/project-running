@@ -11,7 +11,6 @@ Every item below is one of: (a) blocked on an external credential / account, (b)
 
 ## Testing gaps
 
-- [ ] **RunScreen Finish + save UI test** — the widget-test scaffold doesn't fully initialise `RunRecorder`, so `_stop()` produces no `LocalRunStore` row; needs platform-channel mocks for the recorder's start-time deps. The data-pipeline path (`recording_integration_test.dart`) is covered — only the Finish-tap UI surface is open.
 - [ ] **Device-instrumented `integration_test` harness** — none today; would cover tile-cache / foreground-service / background-sync on real Android primitives. New infrastructure.
 - [ ] **OSRM smoke test in CI** — blocked on free-runner capacity (OSM PBF extract + osrm-extract memory). Options: a self-hosted runner, or a pre-built OSRM cache in S3 the workflow downloads.
 - [ ] **Positive-path Edge Function tests** — the envelope suite covers auth-rejection only; 200-on-valid-HMAC / replay-dedupe / freshness-window tests need real secret values in the CI config.
