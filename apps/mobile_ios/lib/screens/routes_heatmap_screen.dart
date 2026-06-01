@@ -89,6 +89,11 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   /// id → polyline cache so re-selecting a route never refetches.
   final Map<String, List<LatLng>> _geomCache = <String, List<LatLng>>{};
 
+  /// Routes the user has pinned ("keep on map") — their lines stay drawn
+  /// (in violet) across pan / filter changes until unpinned. Only pinned
+  /// routes are fetched (reusing _geomCache), so this stays cheap.
+  final Set<String> _pinnedIds = <String>{};
+
   bool _loading = false;
   Timer? _debounce;
   Timer? _searchDebounce;
@@ -290,24 +295,44 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     await _drawSelectedLine(pin.id);
   }
 
-  Future<void> _drawSelectedLine(String id) async {
-    var line = _geomCache[id];
-    if (line == null) {
-      try {
-        final res = await widget.api.fetchRouteById(id);
-        // The selection may have changed while the fetch was in flight.
-        if (_selectedRouteId != id) return;
-        final route = res.route;
-        if (route == null || route.waypoints.length < 2) return;
-        line = [for (final w in route.waypoints) LatLng(w.lat, w.lng)];
-        _geomCache[id] = line;
-      } catch (e) {
-        debugPrint('route preview fetch failed: $e');
-        return;
-      }
+  /// Fetch + cache a route's polyline if not already cached. Returns null
+  /// when unavailable. Shared by the hover/tap preview and pinning.
+  Future<List<LatLng>?> _ensureGeom(String id) async {
+    final cached = _geomCache[id];
+    if (cached != null) return cached;
+    try {
+      final res = await widget.api.fetchRouteById(id);
+      final route = res.route;
+      if (route == null || route.waypoints.length < 2) return null;
+      final line = [for (final w in route.waypoints) LatLng(w.lat, w.lng)];
+      _geomCache[id] = line;
+      return line;
+    } catch (e) {
+      debugPrint('route geom fetch failed: $e');
+      return null;
     }
-    if (_selectedRouteId != id || !mounted) return;
+  }
+
+  Future<void> _drawSelectedLine(String id) async {
+    final line = await _ensureGeom(id);
+    // The selection may have changed while the fetch was in flight.
+    if (line == null || _selectedRouteId != id || !mounted) return;
     setState(() => _selectedLine = line);
+  }
+
+  Future<void> _togglePin(cm.DiscoverableRoutePin p) async {
+    if (_pinnedIds.contains(p.id)) {
+      setState(() => _pinnedIds.remove(p.id));
+      return;
+    }
+    final line = await _ensureGeom(p.id);
+    if (line == null || !mounted) return;
+    setState(() => _pinnedIds.add(p.id));
+  }
+
+  void _clearPinned() {
+    if (_pinnedIds.isEmpty) return;
+    setState(_pinnedIds.clear);
   }
 
   void _clearSelection() {
@@ -585,6 +610,27 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                       ),
                   ],
                 ),
+              // Pinned ("kept") route lines — violet, distinct from the
+              // cyan preview, drawn below it and persistent until unpinned.
+              if (_pinnedIds.isNotEmpty)
+                PolylineLayer(
+                  key: const ValueKey('heatmap-pinned-routes'),
+                  polylines: [
+                    for (final id in _pinnedIds)
+                      if (_geomCache[id] != null) ...[
+                        Polyline(
+                          points: _geomCache[id]!,
+                          strokeWidth: 6,
+                          color: const Color(0x731E293B),
+                        ),
+                        Polyline(
+                          points: _geomCache[id]!,
+                          strokeWidth: 3.5,
+                          color: const Color(0xFF8B5CF6),
+                        ),
+                      ],
+                  ],
+                ),
               // The previewed route's line — hidden until a pin / row is
               // tapped. Dark casing + cyan body, matching web.
               if (_selectedLine != null)
@@ -750,6 +796,15 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                   overflow: TextOverflow.ellipsis,
                 ),
               ),
+              if (_pinnedIds.isNotEmpty)
+                TextButton(
+                  onPressed: _clearPinned,
+                  style: TextButton.styleFrom(
+                    foregroundColor: const Color(0xFF8B5CF6),
+                    visualDensity: VisualDensity.compact,
+                  ),
+                  child: Text('Clear ${_pinnedIds.length} kept'),
+                ),
             ],
           ),
         ),
@@ -786,6 +841,18 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
             child: Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis),
           ),
         ],
+      ),
+      trailing: IconButton(
+        visualDensity: VisualDensity.compact,
+        icon: Icon(
+          _pinnedIds.contains(p.id)
+              ? Icons.push_pin
+              : Icons.push_pin_outlined,
+          size: 20,
+          color: _pinnedIds.contains(p.id) ? const Color(0xFF8B5CF6) : null,
+        ),
+        tooltip: _pinnedIds.contains(p.id) ? 'Unpin from map' : 'Keep on map',
+        onPressed: () => _togglePin(p),
       ),
       onTap: () => _selectRoute(p, pan: true),
     );
@@ -836,17 +903,38 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           ],
         ),
         const SizedBox(height: 16),
-        FilledButton.icon(
-          onPressed: () {
-            Navigator.of(context).push(
-              MaterialPageRoute<void>(
-                builder: (_) =>
-                    PublicRouteScreen(api: widget.api, routeId: p.id),
+        Row(
+          children: [
+            Expanded(
+              child: FilledButton.icon(
+                onPressed: () {
+                  Navigator.of(context).push(
+                    MaterialPageRoute<void>(
+                      builder: (_) =>
+                          PublicRouteScreen(api: widget.api, routeId: p.id),
+                    ),
+                  );
+                },
+                icon: const Icon(Icons.arrow_forward),
+                label: const Text('View route'),
               ),
-            );
-          },
-          icon: const Icon(Icons.arrow_forward),
-          label: const Text('View route'),
+            ),
+            const SizedBox(width: 8),
+            OutlinedButton.icon(
+              onPressed: () => _togglePin(p),
+              icon: Icon(
+                _pinnedIds.contains(p.id)
+                    ? Icons.push_pin
+                    : Icons.push_pin_outlined,
+                size: 18,
+              ),
+              label: Text(_pinnedIds.contains(p.id) ? 'Kept' : 'Keep'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF8B5CF6),
+                side: const BorderSide(color: Color(0xFF8B5CF6)),
+              ),
+            ),
+          ],
         ),
       ],
     );

@@ -354,4 +354,14 @@ void main() {
           findsOneWidget);
     });
   });
+
+  // The keep-on-map / pin behaviour (pin a route -> its violet line persists
+  // across pan + filter -> Clear removes it) is covered end-to-end by the web
+  // Playwright suite (apps/web/tests-e2e/routes/heatmap-filters.spec.ts,
+  // "Heatmap keep-on-map / pin"). The mobile screen is a direct mirror; a
+  // widget test isn't added here because the pin controls live below the
+  // collapsed DraggableScrollableSheet fold, which flutter_test can't tap
+  // reliably (it matches the sheet's offstage measurement copy) — the same
+  // limitation the existing sheet tests work around by tapping only the
+  // top-of-list rows.
 }
