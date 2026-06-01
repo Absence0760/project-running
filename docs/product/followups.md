@@ -144,3 +144,30 @@ in-club social surface. If we want member-to-member connection, the right shape
 is a **"Follow members" suggestion list** on the club page (opt-in, one tap),
 not an automatic fan-out — tracked here rather than shipped as a silent
 follow-everyone trigger.
+
+## Persona round-5 — feature-scale items (not bug fixes)
+
+Surfaced by the round-5 persona hunt; each is a real feature or needs external
+keys/product sign-off, so none were half-built. Sized for the roadmap:
+
+- [ ] **Push / email notification delivery (theme B, ~1-2 wk + ops)** — DB triggers
+  already fan out `event_cancel` / `run_completed` / `club_post` notification rows
+  and the in-app bell renders them, but there is NO server-side sender, so a
+  Saturday-morning race cancellation never reaches a locked phone. Needs an Edge
+  Function / Go endpoint that reads new notification rows and pushes via FCM
+  (Android) + APNs (iOS) + a web-push path (the `VAPID_PRIVATE_KEY` is already in
+  backend env, unused), plus an email channel (no email sender exists anywhere).
+  Blocked on operator-supplied Firebase/APNs credentials. Hit by parkrun-owner
+  (Critical), event-organizer (High), family-club (Critical), social-group (Med).
+- [ ] **Paid event registration (~2-3 wk)** — event creation has no paid-entry /
+  ticketing path (event-organizer Critical). Needs a Stripe-backed registration
+  flow (capacity cap + waitlist already partially modelled), refunds, and payout
+  config — couples to the premium-billing work below. Product + payments decision.
+- [ ] **Strava community segment import (~2-3 wk)** — strava-migration wants their
+  Strava KOM/QOM segments imported. Strava's segment API requires per-segment
+  OAuth scopes we don't request, and segment-leaderboard data has Strava ToS
+  redistribution limits — needs a legal + API-scope decision before building.
+- [ ] **Family / household Pro tier (~1 wk + pricing decision)** — family-club pays
+  4× $9.99 for 4 accounts. A household plan (shared subscription across linked
+  accounts) is a pricing/product decision (RevenueCat entitlement model + a
+  household link table), not a code-only change.
