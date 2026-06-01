@@ -277,7 +277,8 @@ See [docs/features/training.md](../features/training.md) and [docs/features/work
 
 | Feature | Android | iOS | Web | Wear OS | Apple Watch | Notes |
 |---|---|---|---|---|---|---|
-| Coach-athlete roster (invite/accept) | ✗ | ✗ | ✓ | N/A | N/A | `coach_athletes` + `redeem_coach_invite` RPC (migration `20261102_001`). Web-only `/coaching` hub: mint a shareable `/coaching/accept/<token>` link, athlete redeems → active link; coach roster + "my coaches" list; either party can end. MVP = invite/accept + roster (persona #46, decisions §97). Coach-owned plans + consent-gated run visibility (#47) deferred. Mobile/watch not built (web-canonical, decisions §24). |
+| Coach-athlete roster (invite/accept) | ✗ | ✗ | ✓ | N/A | N/A | `coach_athletes` + `redeem_coach_invite` RPC (migration `20261102_001`). Web-only `/coaching` hub: mint a shareable `/coaching/accept/<token>` link, athlete redeems → active link; coach roster + "my coaches" list; either party can end. MVP = invite/accept + roster (persona #46, decisions §97). Mobile/watch not built (web-canonical, decisions §24). |
+| Coach run-review surface | ✗ | ✗ | ✓ | N/A | N/A | `/coaching/athletes/[id]`: a coach reviews a linked athlete's recent runs (public **and** private, via the `active coach reads athlete runs` RLS policy — decisions §98) and active-plan compliance (planned-vs-done workouts + a completion bar, via the coach plan-read policies, migration `20261116_001`). Read-only — no coach write path into the athlete's runs; the raw GPS track stays owner-only. `fetchAthleteRuns` / `fetchAthletePlanOverview`; Playwright-covered in `tests-e2e/coaching/invite.spec.ts`. |
 
 ## AI Coach
 

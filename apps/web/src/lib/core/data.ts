@@ -32,7 +32,7 @@ import type {
 	NotificationKind
 } from '../types';
 export type { NotificationKind };
-import { parseRunSource } from '../types';
+import { parseRunSource, type RunSource } from '../types';
 import type { GeneratedPlan, GoalEvent } from '../training/training';
 import { auth } from '../stores/auth.svelte';
 import type { CoachAthleteStatus } from '../types';
@@ -5016,6 +5016,86 @@ export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
 		display_name: byId.get(r.athlete_id as string)?.display_name ?? null,
 		avatar_url: byId.get(r.athlete_id as string)?.avatar_url ?? null
 	}));
+}
+
+/// One athlete's recent runs for the coach review surface
+/// (`/coaching/athletes/[id]`). The RLS policy `active coach reads
+/// athlete runs` (migration 20261103_001) grants a `status='active'`
+/// coach SELECT on the athlete's run rows — public AND private —
+/// straight off the base table, so the explicit `user_id` filter here
+/// is the *athlete*, not the caller. Column-narrowed: no track
+/// download (the raw GPS trace stays owner-only — decisions § 98).
+/// Returns [] when the caller isn't an active coach of `athleteId`
+/// (RLS simply yields zero rows — no error).
+export interface AthleteRunSummary {
+	id: string;
+	started_at: string;
+	distance_m: number;
+	duration_s: number;
+	is_public: boolean;
+	source: RunSource;
+	route_id: string | null;
+	metadata: Record<string, unknown> | null;
+}
+
+export async function fetchAthleteRuns(
+	athleteId: string,
+	limit = 20
+): Promise<AthleteRunSummary[]> {
+	if (!auth.user?.id || !athleteId) return [];
+	const { data, error } = await supabase
+		.from('runs')
+		.select('id, started_at, distance_m, duration_s, is_public, source, route_id, metadata')
+		.eq('user_id', athleteId)
+		.order('started_at', { ascending: false })
+		.limit(limit);
+	if (error || !data) return [];
+	return (data as Array<Record<string, unknown>>).map((r) => ({
+		id: r.id as string,
+		started_at: r.started_at as string,
+		distance_m: r.distance_m as number,
+		duration_s: r.duration_s as number,
+		is_public: (r.is_public as boolean) ?? false,
+		source: parseRunSource(r.source as string | null),
+		route_id: (r.route_id as string | null) ?? null,
+		metadata: (r.metadata as Record<string, unknown> | null) ?? null,
+	}));
+}
+
+/// The athlete's active training plan + per-workout compliance for the
+/// coach review surface. Mirrors [fetchActivePlanOverview] but scoped
+/// to `athleteId` — the coach plan-read policies (migration
+/// 20261116_001) grant SELECT on `training_plans` / `plan_weeks` /
+/// `plan_workouts` for active-linked athletes. Null when the athlete
+/// has no active plan, or the caller isn't their active coach (RLS
+/// yields no rows).
+export async function fetchAthletePlanOverview(
+	athleteId: string
+): Promise<ActivePlanOverview | null> {
+	if (!auth.user?.id || !athleteId) return null;
+	const { data: plan } = await supabase
+		.from('training_plans')
+		.select('*')
+		.eq('user_id', athleteId)
+		.eq('status', 'active')
+		.maybeSingle();
+	if (!plan) return null;
+	const { weeks, workouts } = await fetchPlan(plan.id);
+	const { todayISO } = await import('../training/training');
+	const today = todayISO();
+	const todayWorkout = workouts.find((w) => w.scheduled_date === today) ?? null;
+	const completed = workouts.filter(
+		(w) => w.manually_completed === true || w.completed_run_id != null
+	).length;
+	const total = workouts.filter((w) => w.kind !== 'rest').length;
+	const completionPct = total === 0 ? 0 : Math.round((completed / total) * 100);
+	return {
+		plan: plan as TrainingPlan,
+		weeks: weeks ?? [],
+		workouts: workouts ?? [],
+		todayWorkout,
+		completionPct,
+	};
 }
 
 /// Unredeemed invites the signed-in coach has minted.

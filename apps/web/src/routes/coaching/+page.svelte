@@ -162,10 +162,11 @@
 						<li class="link-row">
 							<Avatar name={a.display_name} size="2.25rem" font="0.85rem" />
 							<div class="link-body">
-								<a class="link-name" href="/u/{a.user_id}">{a.display_name ?? 'Runner'}</a>
+								<a class="link-name" href="/coaching/athletes/{a.user_id}">{a.display_name ?? 'Runner'}</a>
 								<span class="link-sub">Coaching since {sinceLabel(a.accepted_at)}</span>
 							</div>
 							<div class="link-actions">
+								<a class="btn btn-sm btn-primary" href="/coaching/athletes/{a.user_id}">Review</a>
 								<button class="btn btn-sm btn-outline" onclick={() => removeAthlete(a)}>Remove</button>
 							</div>
 						</li>

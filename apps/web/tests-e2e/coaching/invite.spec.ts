@@ -62,13 +62,65 @@ test.describe('/coaching — coach side', () => {
 		await expect(page.getByRole('heading', { level: 1, name: 'Coaching' })).toBeVisible({
 			timeout: 10_000
 		});
-		const athleteLink = page.locator(`a[href="/u/${USER_C_PRO.id}"]`);
-		await expect(athleteLink).toBeVisible({ timeout: 10_000 });
+		// The athlete row links to the coach review surface
+		// (/coaching/athletes/[id]) — both the name and the Review button.
+		const athleteLink = page.locator(`a[href="/coaching/athletes/${USER_C_PRO.id}"]`);
+		await expect(athleteLink.first()).toBeVisible({ timeout: 10_000 });
 
 		// removeAthlete() goes through a window.confirm() — accept it.
 		page.on('dialog', (d) => d.accept());
 		await page.getByRole('button', { name: 'Remove' }).first().click();
 		await expect(athleteLink).toHaveCount(0, { timeout: 10_000 });
+	});
+
+	test('review surface shows an athlete private run the coach can read', async ({ page }) => {
+		await clearLinks();
+		await getAdminClient().from('coach_athletes').insert({
+			coach_id: USER_B.id,
+			athlete_id: USER_C_PRO.id,
+			status: 'active',
+			invite_token: INVITE_TOKEN,
+			accepted_at: new Date().toISOString()
+		});
+		// A PRIVATE run owned by the athlete — the coach reads it via the
+		// `active coach reads athlete runs` RLS policy (decisions § 98),
+		// which is the whole point of this surface.
+		const admin = getAdminClient();
+		const runIns = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_C_PRO.id,
+				started_at: new Date('2026-05-20T07:00:00Z').toISOString(),
+				duration_s: 1800,
+				distance_m: 6000,
+				source: 'app' as const,
+				is_public: false,
+				metadata: { activity_type: 'run' }
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto(`/coaching/athletes/${USER_C_PRO.id}`);
+			await expect(
+				page.getByRole('heading', { level: 2, name: 'Recent runs' })
+			).toBeVisible({ timeout: 10_000 });
+			await expect(
+				page.getByRole('heading', { level: 2, name: 'Plan compliance' })
+			).toBeVisible({ timeout: 10_000 });
+			// The private run is listed, flagged as Private.
+			await expect(page.getByText('Private').first()).toBeVisible({ timeout: 10_000 });
+		} finally {
+			if (runIns.data?.id) await admin.from('runs').delete().eq('id', runIns.data.id);
+		}
+	});
+
+	test('review surface refuses an athlete who is not on the roster', async ({ page }) => {
+		await clearLinks();
+		await page.goto(`/coaching/athletes/${USER_C_PRO.id}`);
+		await expect(
+			page.getByRole('heading', { name: 'Not on your roster' })
+		).toBeVisible({ timeout: 10_000 });
 	});
 
 	test('can mint a pending invite and revoke it', async ({ page, context }) => {

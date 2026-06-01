@@ -180,11 +180,6 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   (round-5 privacy "Art 9 via /settings/account"). Align all three surfaces on one
   consent model — a legal-flow decision (is in-app entry implicit consent, or is an
   explicit toggle required?), so deliberately not bolted on without counsel input.
-- [ ] **Coach run-review UI (coach, ~3-5 d)** — RLS already lets an active coach read
-  an athlete's runs (20261103_001) and now their plans (20261116_001), but the
-  `/coaching` page is a flat name list — it never fetches/renders an athlete's runs.
-  Build the per-athlete review surface (recent runs + compliance) on top of the
-  existing read access. Web feature.
 - [ ] **Health Connect import brings tracks (garmin/android, mobile + device)** —
   `health_connect_importer.dart` hard-codes `track: []`, so every HC-imported run is
   trackless/lapless/cadenceless. Reading the HC ExerciseRoute + sample series into a

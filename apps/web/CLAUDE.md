@@ -88,6 +88,7 @@ src/
     clubs/[slug]/events/[id]/     # Event detail + per-instance RSVP + per-event updates
     clubs/join/[token]/           # Public invite-link landing (redeems via join_club_by_token RPC)
     coaching/                     # Coach-athlete roster hub (persona #46): mint/revoke invite links + athlete & coach lists
+    coaching/athletes/[id]/       # Coach run-review surface: a linked athlete's recent runs (public+private, RLS §98) + active-plan compliance. fetchAthleteRuns / fetchAthletePlanOverview
     coaching/accept/[token]/      # Public coach-invite landing (redeems via redeem_coach_invite RPC)
     plans/          # Training plans list
     plans/new/      # New-plan wizard with editable week-by-week preview (click a week to expand the day-by-day editor; edits persist on submit)
