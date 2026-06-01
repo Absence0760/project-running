@@ -58,6 +58,8 @@ src/
     integrations/garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
     integrations/garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)
     util/push.ts         # Web push subscribe / unsubscribe (registers /sw.js, persists to user_device_settings.prefs.push_subscription)
+    util/exif_strip.ts   # Lossless JPEG marker-walk that drops the APP1 (EXIF/XMP, incl. GPS) segment before photo upload. TS twin of mobile exif_strip.dart; called inside addRunPhoto so a geotagged original never reaches the run-photos bucket ahead of the server worker's async strip.
+
     routes/privacy.ts      # PrivacyZone type + clipPointsToZones (pure JS, used for owner preview); server-side clipping for non-owner views goes through clip_track_for_user RPC. Decisions §33.
     coach/          # Transport-agnostic core for the /api/coach handler. handler.ts (entry), providers.ts (Anthropic + OpenAI streaming), context.ts (builds the runner profile + plan + recent-runs JSON dump), types.ts, system_prompt.ts. Wrapped twice — once by src/routes/api/coach/+server.ts (SvelteKit dev), once by apps/web/lambda/coach/src/index.ts (production AWS Lambda). Decisions §53.
     training/training_load.ts  # TRIMP / distance-proxy stress score + 90-day daily EWMA → fitness/fatigue/form trio. Pure functions, 10 unit tests. Mounted via TrainingLoadChart on /dashboard. Decisions §34.

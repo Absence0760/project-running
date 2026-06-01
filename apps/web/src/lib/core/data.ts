@@ -5,6 +5,7 @@ import { supabase } from './supabase';
 import { loadSettings, effective } from '../settings/settings';
 import { privacyDefaultToIsPublic } from '../social/run_visibility';
 import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
+import { stripExifFromFile } from '../util/exif_strip';
 import type {
 	Run,
 	Route,
@@ -3895,13 +3896,18 @@ export async function addRunPhoto(input: {
 	if (!ext) throw new Error('Unsupported image type — JPEG, PNG, WebP, or HEIC only');
 	if (input.file.size > PHOTO_MAX_BYTES) throw new Error('Image too large (10 MB max)');
 
+	// Strip EXIF/XMP (incl. GPS) client-side before upload so a geotagged
+	// original never sits readable in the bucket ahead of the server worker's
+	// async strip. Mirrors mobile's pre-upload strip (persona woman/family #52).
+	const file = await stripExifFromFile(input.file);
+
 	const photoId = crypto.randomUUID();
 	const storagePath = `${userId}/${photoId}.${ext}`;
 
 	const { error: upErr } = await supabase.storage
 		.from('run-photos')
-		.upload(storagePath, input.file, {
-			contentType: input.file.type,
+		.upload(storagePath, file, {
+			contentType: file.type,
 			upsert: false,
 		});
 	if (upErr) throw upErr;
