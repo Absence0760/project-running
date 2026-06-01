@@ -141,9 +141,7 @@
 		</section>
 	{/if}
 
-	<section class="card">
-		<RunPhotos runId={run.id} runOwnerId={run.user_id} />
-	</section>
+	<RunPhotos runId={run.id} runOwnerId={run.user_id} />
 
 	{#if auth.loggedIn}
 		<section class="card">

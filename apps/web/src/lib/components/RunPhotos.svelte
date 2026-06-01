@@ -14,8 +14,9 @@
 	interface Props {
 		runId: string;
 		runOwnerId: string;
+		wrapperClass?: string;
 	}
-	let { runId, runOwnerId }: Props = $props();
+	let { runId, runOwnerId, wrapperClass = 'card' }: Props = $props();
 
 	let photos = $state<RunPhoto[]>([]);
 	let loading = $state(true);
@@ -106,6 +107,8 @@
 	}
 </script>
 
+{#if canManage || loading || photos.length > 0}
+<section class={wrapperClass}>
 <div class="photos">
 	<header class="hd">
 		<h3>
@@ -216,6 +219,8 @@
 		</div>
 	{/if}
 </div>
+</section>
+{/if}
 
 {#if lightbox}
 	<button
@@ -242,6 +247,20 @@
 />
 
 <style>
+	.card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		margin-bottom: var(--space-xl);
+	}
+
+	.section {
+		margin-bottom: var(--space-xl);
+		padding-top: var(--space-xl);
+		border-top: 1px solid var(--color-border);
+	}
+
 	.photos {
 		display: flex;
 		flex-direction: column;
