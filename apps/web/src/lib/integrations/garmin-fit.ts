@@ -67,6 +67,64 @@ export function fitCadenceToSpm(raw: unknown, isFootSport: boolean): number | nu
 	return Math.round(raw * 2);
 }
 
+/// Garmin Running Dynamics, projected off a FIT session message. Every
+/// field is optional — only the metrics the watch actually recorded are
+/// present (a base watch with no HRM-Pro/Run pod carries none of them).
+/// Registered in docs/backend/metadata.md § running_dynamics.
+export interface RunningDynamics {
+	vertical_oscillation_mm?: number;
+	gct_ms?: number;
+	stride_length_m?: number;
+	power_w?: number;
+	lr_balance_pct?: number;
+}
+
+interface RawFitSessionDynamics {
+	avg_vertical_oscillation?: unknown;
+	vertical_oscillation?: unknown;
+	avg_stance_time?: unknown;
+	stance_time?: unknown;
+	avg_step_length?: unknown;
+	step_length?: unknown;
+	avg_power?: unknown;
+	power?: unknown;
+	avg_left_right_balance?: unknown;
+	left_right_balance?: unknown;
+}
+
+function finitePositive(v: unknown): number | null {
+	return typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null;
+}
+
+/// Project the Running Dynamics fields off a FIT session. Returns null
+/// when the session carried none of them, so the caller can omit the key
+/// entirely rather than write an empty object. `fit-file-parser` reports
+/// vertical oscillation + step length in mm (lengthUnit only rescales
+/// position/altitude/distance), stance time in ms, power in W. Step length
+/// is converted mm → m to match the rest of the app's metre convention.
+/// `avg_left_right_balance` decodes to a 0–100 percentage; some files emit
+/// the raw packed byte (high bit = "right" flag) instead, so values outside
+/// 0–100 are dropped rather than guessed at.
+export function buildRunningDynamics(
+	session: RawFitSessionDynamics | null | undefined,
+): RunningDynamics | null {
+	if (!session) return null;
+	const out: RunningDynamics = {};
+	const vo = finitePositive(session.avg_vertical_oscillation ?? session.vertical_oscillation);
+	if (vo != null) out.vertical_oscillation_mm = Math.round(vo * 10) / 10;
+	const gct = finitePositive(session.avg_stance_time ?? session.stance_time);
+	if (gct != null) out.gct_ms = Math.round(gct);
+	const step = finitePositive(session.avg_step_length ?? session.step_length);
+	if (step != null) out.stride_length_m = Math.round(step) / 1000;
+	const power = finitePositive(session.avg_power ?? session.power);
+	if (power != null) out.power_w = Math.round(power);
+	const balance = session.avg_left_right_balance ?? session.left_right_balance;
+	if (typeof balance === 'number' && Number.isFinite(balance) && balance >= 0 && balance <= 100) {
+		out.lr_balance_pct = Math.round(balance * 10) / 10;
+	}
+	return Object.keys(out).length > 0 ? out : null;
+}
+
 /// Cross-source dedupe key for a Garmin activity, from its FIT file_id.
 /// `garmin:{file_id}` mirrors the `strava:{id}` / `csv:{...}` convention so a
 /// re-import of the same activity is caught by the per-user runs.external_id
@@ -102,7 +160,25 @@ export interface ParsedFitRun {
 	/// True for treadmill / indoor / virtual sessions — distance is
 	/// belt-/estimate-derived, not GPS, so it must not feed VDOT (#16).
 	indoor: boolean;
+	/// Normalised FIT `sub_sport` (e.g. `trail`, `treadmill`, `track`,
+	/// `road`). Preserves the discipline the coarse `activity_type` throws
+	/// away — there is no `trail` activity_type. `null` when the file had
+	/// no `sub_sport` or only the uninformative `generic`. (persona round-5 F1)
+	sub_sport: string | null;
+	/// Garmin Running Dynamics off the session, when the watch recorded
+	/// them. `null` for files without any of the fields. (persona round-5 F2)
+	running_dynamics: RunningDynamics | null;
 	track: TrackPoint[];
+}
+
+/// Normalise a FIT `sub_sport` enum value. Lower-cases and drops the
+/// uninformative `generic` / `all` placeholders + empties to null so we
+/// never persist a meaningless discipline. (persona round-5 F1)
+export function normalizeSubSport(raw: unknown): string | null {
+	if (typeof raw !== 'string') return null;
+	const s = raw.trim().toLowerCase();
+	if (!s || s === 'generic' || s === 'all' || s === 'invalid') return null;
+	return s;
 }
 
 /// Parse a single FIT activity buffer. Returns `null` for files that
@@ -167,7 +243,8 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 	}
 
 	const sport = (session.sport ?? '').toLowerCase();
-	const subSport = ((session as { sub_sport?: string }).sub_sport ?? '').toLowerCase();
+	const rawSubSport = (session as { sub_sport?: string }).sub_sport;
+	const subSport = (rawSubSport ?? '').toLowerCase();
 	const indoor =
 		subSport.includes('treadmill') ||
 		subSport.includes('indoor') ||
@@ -217,6 +294,8 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 		garmin_file_id: garminFileId && garminFileId !== '-' ? garminFileId : null,
 		laps: buildCanonicalLaps(data.laps as RawFitLap[] | undefined),
 		indoor,
+		sub_sport: normalizeSubSport(rawSubSport),
+		running_dynamics: buildRunningDynamics(session as RawFitSessionDynamics),
 		track,
 	};
 }

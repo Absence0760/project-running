@@ -2,8 +2,8 @@
 ///
 /// Strava's "Request your archive" download is a zip with a root-level
 /// `activities.csv` (the index) and an `activities/` folder of per-run
-/// files — GPX (most runs), TCX (older exports), or FIT (binary, not
-/// yet supported by our parsers). The csv carries scalar fields (name,
+/// files — GPX (most runs), TCX (older exports), or FIT (binary, routed
+/// through the shared `garmin-fit` parser). The csv carries scalar fields (name,
 /// type, moving time, distance, avg HR, etc.) that aren't necessarily
 /// present in the activity file; we combine the two so metadata
 /// survives the round trip.
@@ -14,9 +14,11 @@
 
 import JSZip from 'jszip';
 import { parseRouteFile, type ImportedRoute } from './import';
+import { parseFitBuffer } from './garmin-fit';
 import { saveRun, addRunPhoto } from '../core/data';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { buildStravaDedupeSet } from './strava-zip-dedupe';
+import { classifyStravaMember } from './strava-zip-classify';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
 
@@ -144,18 +146,18 @@ async function importOne(
 	// Try to parse the per-activity file for the GPS track. Modern
 	// Strava exports gzip the inner GPX/TCX (`.gpx.gz`). The browser-
 	// native DecompressionStream gunzips without a new dep. Plain
-	// extensions still work as before. `.fit` stays out of scope on
-	// web — the FIT binary parser is mobile-only today.
+	// extensions still work as before. `.fit` members route through the
+	// shared FIT parser so a Strava export of a Garmin-recorded run keeps
+	// its track instead of importing trackless. (persona round-5 F4)
 	// audit/strava May 2026 Medium #2.
 	let track: ImportedRoute['waypoints'] | null = null;
 	if (filename) {
 		const entry = zip.file(filename);
-		const isPlain = /\.(gpx|tcx|kml|geojson|json)$/i.test(filename);
-		const isGzWrapped = /\.(gpx|tcx|kml|geojson|json)\.gz$/i.test(filename);
-		if (entry && (isPlain || isGzWrapped)) {
+		const { parser, gzipped } = classifyStravaMember(filename);
+		if (entry && parser) {
 			let blob = await entry.async('blob');
 			let innerName = filename.split('/').pop()!;
-			if (isGzWrapped) {
+			if (gzipped) {
 				try {
 					const gz = await blob.arrayBuffer();
 					const ds = new (globalThis as { DecompressionStream: typeof DecompressionStream })
@@ -169,12 +171,21 @@ async function importOne(
 					return;
 				}
 			}
-			const synthetic = new File([blob], innerName);
-			try {
-				const routes = await parseRouteFile(synthetic);
-				if (routes.length > 0) track = routes[0].waypoints;
-			} catch (_) {
-				// Fallthrough — keep row without track.
+			if (parser === 'fit') {
+				try {
+					const parsed = await parseFitBuffer(await blob.arrayBuffer());
+					if (parsed && parsed.track.length > 0) track = parsed.track;
+				} catch (_) {
+					// Fallthrough — keep row without track.
+				}
+			} else {
+				const synthetic = new File([blob], innerName);
+				try {
+					const routes = await parseRouteFile(synthetic);
+					if (routes.length > 0) track = routes[0].waypoints;
+				} catch (_) {
+					// Fallthrough — keep row without track.
+				}
 			}
 		}
 	}
