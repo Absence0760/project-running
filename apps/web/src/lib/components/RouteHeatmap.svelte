@@ -85,11 +85,15 @@
 	const ROUTE_CLUSTER_LAYER = 'heatmap-route-pins-cluster';
 	const ROUTE_CLUSTER_COUNT_LAYER = 'heatmap-route-pins-cluster-count';
 
-	// Discoverable-pin layer toggles. Both default-on; the user can
-	// hide either via the legend popover.
+	// Layer toggles. Clubs + route pins default-on. The heat layer is
+	// OFF by default: at any zoom where you can read individual routes it
+	// traces each route's path (densified points), which reads as "the
+	// route is already shown" and fights the hidden-until-hover model.
+	// The default view is basemap + dots + hover-to-preview; turn Heat on
+	// in Filters to get the ambient "where people run" density.
 	let showClubPins = $state(true);
 	let showRoutePins = $state(true);
-	let showHeatmapLayer = $state(true);
+	let showHeatmapLayer = $state(false);
 	let clubPinsCount = $state(0);
 	let routePinsCount = $state(0);
 
@@ -488,6 +492,9 @@
 				id: HEATMAP_LAYER,
 				type: 'heatmap',
 				source: HEATMAP_SOURCE,
+				// Off by default (see showHeatmapLayer) — start hidden so
+				// there's no flash before the visibility $effect runs.
+				layout: { visibility: showHeatmapLayer ? 'visible' : 'none' },
 				paint: {
 					'heatmap-radius': [
 						'interpolate',
@@ -515,19 +522,17 @@
 						0.6, 'rgba(178, 24, 43, 0.75)',
 						1.0, 'rgba(178, 24, 43, 0.9)',
 					],
-					// Fade the heat as the user zooms in to pick a route.
-					// At city/region scale the density blob is the honest
-					// "where do people run" signal; once you're close enough
-					// that the route pins + polylines carry the detail, a
-					// full-strength blob just muddies them. Dims from 0.85
-					// down to 0.25 across zoom 11→16.
+					// Heat is off by default; this curve applies only when a
+					// user turns it on in Filters. Even then it dims as you
+					// zoom in so it doesn't trace individual routes over the
+					// pins at the picking zoom.
 					'heatmap-opacity': [
 						'interpolate',
 						['linear'],
 						['zoom'],
-						11, 0.85,
-						14, 0.4,
-						16, 0.25,
+						11, 0.8,
+						14, 0.45,
+						16, 0.3,
 					],
 				},
 			});
