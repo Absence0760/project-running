@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../backend_timeout.dart';
 import '../calories.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
@@ -337,7 +338,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
     setState(() => _loadingTrack = true);
     try {
-      final track = await api.fetchTrack(run);
+      final track = await api.fetchTrack(run).timeout(kBackendLoadTimeout);
       if (track.isEmpty) return;
       // Update the in-memory run for display but don't persist the full
       // track back to LocalRunStore — it's already stored gzipped in
@@ -371,10 +372,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
   static const _metresPerMile = 1609.344;
 
+  bool get _isDnf => run.metadata?['is_dnf'] == true;
+
   Future<void> _editDetails() async {
     final unit = widget.preferences.unit;
     final titleCtl = TextEditingController(text: _title);
     final notesCtl = TextEditingController(text: _notes);
+    var dnf = _isDnf;
 
     // Distance + duration are editable only when there's no GPS track to
     // contradict the typed values. Recorded runs derive these from the
@@ -396,7 +400,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
         title: const Text('Edit run'),
         content: SingleChildScrollView(
           child: Column(
@@ -440,6 +445,18 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   ],
                 ),
               ],
+              const SizedBox(height: 8),
+              // Marking a run as DNF (Did Not Finish) excludes it from
+              // personal-record scoring server-side (the PR trigger drops it
+              // on the next refresh). Mirrors the web run-detail edit toggle.
+              CheckboxListTile(
+                contentPadding: EdgeInsets.zero,
+                controlAffinity: ListTileControlAffinity.leading,
+                value: dnf,
+                onChanged: (v) => setDialogState(() => dnf = v ?? false),
+                title: const Text('Mark as DNF'),
+                subtitle: const Text('Excludes this run from personal records'),
+              ),
             ],
           ),
         ),
@@ -453,6 +470,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             child: const Text('Save'),
           ),
         ],
+      ),
       ),
     );
     if (ok != true) return;
@@ -487,6 +505,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       title: titleCtl.text,
       notes: notesCtl.text,
     );
+    applyDnfFlag(metadata, dnf);
 
     final updated = Run(
       id: run.id,
@@ -548,7 +567,30 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_title),
+        title: Row(
+          children: [
+            Flexible(child: Text(_title, overflow: TextOverflow.ellipsis)),
+            if (_isDnf) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Theme.of(context).colorScheme.errorContainer,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  'DNF',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color:
+                            Theme.of(context).colorScheme.onErrorContainer,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+              ),
+            ],
+          ],
+        ),
         // Action row polish: pre-polish had 4 stacked icon buttons
         // (Edit / Save as route / Share / Delete) which crowded
         // the AppBar — common at standard widths, broken at
@@ -2536,5 +2578,18 @@ Map<String, dynamic> applyRunMetadataEdit(
     next['notes'] = notesTrim;
   }
   return next;
+}
+
+/// Mirror the web run-detail DNF toggle: write `is_dnf: true` when [dnf] is
+/// set, delete the key when cleared (the metadata bag stores presence, not
+/// `false`). A DNF run is excluded from personal-record scoring server-side —
+/// the PR trigger drops it on the next refresh. Mutates [metadata] in place.
+@visibleForTesting
+void applyDnfFlag(Map<String, dynamic> metadata, bool dnf) {
+  if (dnf) {
+    metadata['is_dnf'] = true;
+  } else {
+    metadata.remove('is_dnf');
+  }
 }
 
