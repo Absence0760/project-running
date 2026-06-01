@@ -359,7 +359,10 @@ class _RunsScreenState extends State<RunsScreen> {
       case _RunsRange.today:
         return DateTime(now.year, now.month, now.day);
       case _RunsRange.week:
-        return weekStartLocal(now);
+        return weekStartLocal(now,
+            weekStartDay: widget.settingsSync?.service
+                    ?.effective<String>(SettingsKeys.weekStartDay) ??
+                'monday');
       case _RunsRange.month:
         return DateTime(now.year, now.month, now.day)
             .subtract(const Duration(days: 30));

@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:ui' as ui;
 
+import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -19,19 +20,22 @@ enum PeriodType { week, month }
 
 // ── Pure helpers (testable without widget infrastructure) ────────────────
 
-DateTime periodStart(PeriodType period, DateTime anchor) {
+DateTime periodStart(PeriodType period, DateTime anchor,
+    {String weekStartDay = 'monday'}) {
   switch (period) {
     case PeriodType.week:
-      return weekStartLocal(anchor);
+      return weekStartLocal(anchor, weekStartDay: weekStartDay);
     case PeriodType.month:
       return DateTime(anchor.year, anchor.month, 1);
   }
 }
 
-DateTime periodEnd(PeriodType period, DateTime anchor) {
+DateTime periodEnd(PeriodType period, DateTime anchor,
+    {String weekStartDay = 'monday'}) {
   switch (period) {
     case PeriodType.week:
-      return weekStartLocal(anchor).add(const Duration(days: 7));
+      return weekStartLocal(anchor, weekStartDay: weekStartDay)
+          .add(const Duration(days: 7));
     case PeriodType.month:
       final nextMonth = anchor.month == 12 ? 1 : anchor.month + 1;
       final year = anchor.month == 12 ? anchor.year + 1 : anchor.year;
@@ -39,17 +43,19 @@ DateTime periodEnd(PeriodType period, DateTime anchor) {
   }
 }
 
-String periodTitle(PeriodType period, DateTime anchor) {
+String periodTitle(PeriodType period, DateTime anchor,
+    {String weekStartDay = 'monday'}) {
   switch (period) {
     case PeriodType.week:
-      return 'Week of ${shortDate(periodStart(period, anchor))}';
+      return 'Week of ${shortDate(periodStart(period, anchor, weekStartDay: weekStartDay))}';
     case PeriodType.month:
       return '${monthName(anchor.month)} ${anchor.year}';
   }
 }
 
-String periodLabel(PeriodType period, DateTime anchor) {
-  final start = periodStart(period, anchor);
+String periodLabel(PeriodType period, DateTime anchor,
+    {String weekStartDay = 'monday'}) {
+  final start = periodStart(period, anchor, weekStartDay: weekStartDay);
   switch (period) {
     case PeriodType.week:
       final end = start.add(const Duration(days: 6));
@@ -106,6 +112,7 @@ String buildPeriodShareText({
   required DateTime anchor,
   required List<Run> runs,
   required DistanceUnit unit,
+  String weekStartDay = 'monday',
 }) {
   final stats = computePeriodStats(runs);
   final dist = UnitFormat.distance(stats.totalDistanceMetres, unit);
@@ -115,7 +122,7 @@ String buildPeriodShareText({
       : null;
 
   final buf = StringBuffer();
-  buf.writeln(periodTitle(period, anchor));
+  buf.writeln(periodTitle(period, anchor, weekStartDay: weekStartDay));
   buf.writeln('${stats.runCount} run${stats.runCount == 1 ? '' : 's'}');
   buf.writeln('$dist  |  $dur');
   if (pace != null) buf.writeln('Avg pace: $pace');
@@ -189,6 +196,11 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 
   List<Run> _periodRuns = const [];
 
+  String get _weekStartDay =>
+      widget.settingsSync?.service
+          ?.effective<String>(SettingsKeys.weekStartDay) ??
+      'monday';
+
   @override
   void initState() {
     super.initState();
@@ -213,8 +225,8 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   }
 
   void _recompute() {
-    final start = periodStart(_period, _anchor);
-    final end = periodEnd(_period, _anchor);
+    final start = periodStart(_period, _anchor, weekStartDay: _weekStartDay);
+    final end = periodEnd(_period, _anchor, weekStartDay: _weekStartDay);
     _periodRuns = widget.runStore.runs
         .where((r) => !r.startedAt.isBefore(start) && r.startedAt.isBefore(end))
         .toList()
@@ -223,7 +235,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 
   bool get _isFuture {
     final now = DateTime.now();
-    final end = periodEnd(_period, _anchor);
+    final end = periodEnd(_period, _anchor, weekStartDay: _weekStartDay);
     return end.isAfter(now.add(const Duration(days: 1)));
   }
 
@@ -271,15 +283,17 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _PeriodShareSheet(
-        periodTitle: periodTitle(_period, _anchor),
-        periodLabel: periodLabel(_period, _anchor),
+        periodTitle: periodTitle(_period, _anchor, weekStartDay: _weekStartDay),
+        periodLabel: periodLabel(_period, _anchor, weekStartDay: _weekStartDay),
         periodName: _period.name,
-        periodStartIso: periodStart(_period, _anchor).toIso8601String(),
+        periodStartIso: periodStart(_period, _anchor, weekStartDay: _weekStartDay)
+            .toIso8601String(),
         shareText: buildPeriodShareText(
           period: _period,
           anchor: _anchor,
           runs: _periodRuns,
           unit: unit,
+          weekStartDay: _weekStartDay,
         ),
         stats: stats,
         unit: unit,
@@ -362,7 +376,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             child: Column(
               children: [
                 Text(
-                  periodTitle(_period, _anchor),
+                  periodTitle(_period, _anchor, weekStartDay: _weekStartDay),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

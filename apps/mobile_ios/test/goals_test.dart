@@ -51,6 +51,45 @@ void main() {
       expect(goalPeriodStart(GoalPeriod.month, dec), DateTime(2026, 12, 1));
       expect(goalPeriodEnd(GoalPeriod.month, dec), DateTime(2027, 1, 1));
     });
+
+    test('week start honours week_start_day=sunday (anchors on the prior Sunday)', () {
+      // Wed Apr 15 2026 → the containing Sunday-start week begins Sun Apr 12.
+      expect(
+        weekStartLocal(now, weekStartDay: 'sunday'),
+        DateTime(2026, 4, 12),
+      );
+      expect(
+        goalPeriodStart(GoalPeriod.week, now, weekStartDay: 'sunday'),
+        DateTime(2026, 4, 12),
+      );
+      expect(
+        goalPeriodEnd(GoalPeriod.week, now, weekStartDay: 'sunday'),
+        DateTime(2026, 4, 19),
+      );
+    });
+
+    test('week start on a Sunday with sunday setting anchors on itself', () {
+      final sun = DateTime(2026, 4, 12, 9); // Sunday
+      expect(weekStartLocal(sun, weekStartDay: 'sunday'), DateTime(2026, 4, 12));
+      // Monday default would push it back to Apr 6.
+      expect(weekStartLocal(sun), DateTime(2026, 4, 6));
+    });
+
+    test('evaluateGoal week period shifts with week_start_day', () {
+      const goal = RunGoal(
+        id: 'g',
+        period: GoalPeriod.week,
+        distanceMetres: 20000,
+      );
+      // A run on Sun Apr 12 falls in the Sunday-start week of Apr 15 but NOT
+      // the Monday-start week (which begins Apr 13).
+      final sundayRun = makeRun(startedAt: DateTime(2026, 4, 12, 10));
+      final monday = evaluateGoal(goal, [sundayRun], now);
+      final sunday =
+          evaluateGoal(goal, [sundayRun], now, weekStartDay: 'sunday');
+      expect(targetOf(monday, GoalTargetKind.distance).current, 0);
+      expect(targetOf(sunday, GoalTargetKind.distance).current, 5000);
+    });
   });
 
   group('distance target', () {
