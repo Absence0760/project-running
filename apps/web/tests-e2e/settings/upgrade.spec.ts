@@ -60,7 +60,10 @@ test.describe('/settings/upgrade — free user', () => {
 
 		const freeCard = page.locator('.tier-free');
 		await expect(freeCard).toBeVisible({ timeout: 10_000 });
-		await expect(freeCard.locator('.price-amount')).toHaveText('$0');
+		// Free price goes through formatPrice (locale-aware, USD currency
+		// preserved) rather than a hard-coded `$0` — en-GB renders US$0.00,
+		// de-DE 0,00 $, etc. (W-8). Match the zero amount, not the symbol.
+		await expect(freeCard.locator('.price-amount')).toContainText(/0[.,]00/);
 		await expect(freeCard.locator('.price-period')).toHaveText('forever');
 		await expect(freeCard.locator('.tier-features > li')).toHaveCount(4);
 		await expect(freeCard.locator('.tier-features .check')).toHaveCount(4);

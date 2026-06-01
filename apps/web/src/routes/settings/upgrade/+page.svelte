@@ -108,7 +108,7 @@
 			<header class="tier-head">
 				<h2 id="tier-free-h">Free</h2>
 				<p class="tier-price">
-					<span class="price-amount">$0</span>
+					<span class="price-amount">{formatPrice(0)}</span>
 					<span class="price-period">forever</span>
 				</p>
 			</header>
