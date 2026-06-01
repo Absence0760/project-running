@@ -7,6 +7,7 @@ import {
 	fitCadenceToSpm,
 	normalizeSubSport,
 	buildRunningDynamics,
+	buildHrZonesFromFit,
 } from './garmin-fit';
 
 test('fitCadenceToSpm — doubles per-foot RPM for foot sports', () => {
@@ -155,4 +156,65 @@ test('buildRunningDynamics — drops out-of-range / non-finite values', () => {
 	// Non-positive / non-finite metrics are ignored.
 	assert.equal(buildRunningDynamics({ avg_power: 0, avg_vertical_oscillation: -1 }), null);
 	assert.equal(buildRunningDynamics({ avg_power: Number.NaN }), null);
+});
+
+test('buildHrZonesFromFit — maps a 5-zone high_bpm set to z1..z5', () => {
+	const zones = [
+		{ high_bpm: 120 },
+		{ high_bpm: 140 },
+		{ high_bpm: 160 },
+		{ high_bpm: 175 },
+		{ high_bpm: 190 },
+	];
+	assert.deepEqual(buildHrZonesFromFit(zones), {
+		z1: 120,
+		z2: 140,
+		z3: 160,
+		z4: 175,
+		z5: 190,
+	});
+});
+
+test('buildHrZonesFromFit — drops a leading resting-zone-0 entry (6 zones)', () => {
+	const zones = [
+		{ high_bpm: 90 }, // resting zone 0
+		{ high_bpm: 120 },
+		{ high_bpm: 140 },
+		{ high_bpm: 160 },
+		{ high_bpm: 175 },
+		{ high_bpm: 190 },
+	];
+	assert.deepEqual(buildHrZonesFromFit(zones), {
+		z1: 120,
+		z2: 140,
+		z3: 160,
+		z4: 175,
+		z5: 190,
+	});
+});
+
+test('buildHrZonesFromFit — null when fewer than five usable boundaries', () => {
+	assert.equal(buildHrZonesFromFit([{ high_bpm: 120 }, { high_bpm: 140 }]), null);
+	assert.equal(buildHrZonesFromFit([]), null);
+	assert.equal(buildHrZonesFromFit(null), null);
+});
+
+test('buildHrZonesFromFit — ignores out-of-range / non-numeric boundaries', () => {
+	const zones = [
+		{ high_bpm: 0 },
+		{ high_bpm: 300 },
+		{ high_bpm: 'x' },
+		{ high_bpm: 120 },
+		{ high_bpm: 140 },
+		{ high_bpm: 160 },
+		{ high_bpm: 175 },
+		{ high_bpm: 190 },
+	];
+	assert.deepEqual(buildHrZonesFromFit(zones), {
+		z1: 120,
+		z2: 140,
+		z3: 160,
+		z4: 175,
+		z5: 190,
+	});
 });

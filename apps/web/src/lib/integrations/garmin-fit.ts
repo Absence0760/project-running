@@ -162,7 +162,41 @@ export interface ParsedFitRun {
 	/// Garmin Running Dynamics off the session, when the watch recorded
 	/// them. `null` for files without any of the fields. (persona round-5 F2)
 	running_dynamics: RunningDynamics | null;
+	/// HR-zone boundaries from the FIT `hr_zone` messages, when the file
+	/// carried a full five-zone set. Used to one-time seed the user's
+	/// `hr_zones` setting on import. `null` when the file had no zones.
+	hr_zones: FitHrZones | null;
 	track: TrackPoint[];
+}
+
+/// The five HR-zone upper boundaries, matching the app's
+/// `user_settings.prefs.hr_zones` shape. `z1`..`z5` are the upper bpm of
+/// zones 1-5; a measured HR at or below `z1` is zone 1, etc.
+export interface FitHrZones {
+	z1: number;
+	z2: number;
+	z3: number;
+	z4: number;
+	z5: number;
+}
+
+/// Project the FIT `hr_zone` messages onto the app's 5-cutoff shape.
+/// Each FIT `hr_zone` carries a `high_bpm` upper boundary; Garmin emits
+/// one per zone (sometimes with a leading resting-zone entry). We take the
+/// five highest distinct boundaries in ascending order as z1..z5, so the
+/// optional resting-zone-0 entry is dropped. Returns null when fewer than
+/// five usable boundaries are present (e.g. the watch had no zones set).
+export function buildHrZonesFromFit(
+	zones: { high_bpm?: unknown }[] | undefined | null,
+): FitHrZones | null {
+	if (!zones || zones.length === 0) return null;
+	const highs = zones
+		.map((z) => (typeof z.high_bpm === 'number' ? z.high_bpm : NaN))
+		.filter((n) => Number.isFinite(n) && n >= 60 && n <= 230);
+	const uniqAsc = Array.from(new Set(highs)).sort((a, b) => a - b);
+	if (uniqAsc.length < 5) return null;
+	const last5 = uniqAsc.slice(-5);
+	return { z1: last5[0], z2: last5[1], z3: last5[2], z4: last5[3], z5: last5[4] };
 }
 
 /// Normalise a FIT `sub_sport` enum value. Lower-cases and drops the
@@ -290,6 +324,9 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 		indoor,
 		sub_sport: normalizeSubSport(rawSubSport),
 		running_dynamics: buildRunningDynamics(session as RawFitSessionDynamics),
+		hr_zones: buildHrZonesFromFit(
+			(data as { hr_zone?: { high_bpm?: unknown }[] }).hr_zone,
+		),
 		track,
 	};
 }

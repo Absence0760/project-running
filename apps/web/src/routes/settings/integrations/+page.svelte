@@ -190,6 +190,9 @@
 				`Garmin import: ${result.imported} new, ${result.skipped} already present${result.failed ? `, ${result.failed} failed` : ''}.`,
 				'success',
 			);
+			if (result.hrZonesImported) {
+				showToast('Imported your heart-rate zones from Garmin.', 'success');
+			}
 		} catch (err) {
 			garminError = err instanceof Error ? err.message : String(err);
 		} finally {

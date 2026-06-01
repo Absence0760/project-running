@@ -23,7 +23,8 @@ import { parseRouteFile } from './import';
 import { saveRun } from '../core/data';
 import { supabase } from '../core/supabase';
 import { auth } from '../stores/auth.svelte';
-import { parseFitBuffer, garminExternalId, type ParsedFitRun } from './garmin-fit';
+import { parseFitBuffer, garminExternalId, type ParsedFitRun, type FitHrZones } from './garmin-fit';
+import { loadSettings, effective, updateUniversal } from '../settings/settings';
 
 export interface GarminZipProgress {
 	total: number;
@@ -31,6 +32,35 @@ export interface GarminZipProgress {
 	skipped: number;
 	failed: number;
 	currentName: string | null;
+	/// True when the import seeded the user's HR zones from a FIT file's
+	/// `hr_zone` messages (only happens when the user had none set).
+	hrZonesImported?: boolean;
+}
+
+/// Collects the first HR-zone set seen across an import so it can seed the
+/// user's settings once (only when they have none).
+interface HrZoneCollector {
+	hrZones: FitHrZones | null;
+}
+
+/// One-time seed of the user's HR zones from a parsed FIT file. No-op when
+/// the file carried no zones or the user already has zones configured — we
+/// never clobber an existing set. Sets `progress.hrZonesImported` so the
+/// caller can surface a toast.
+async function seedHrZonesIfUnset(
+	uid: string,
+	collector: HrZoneCollector,
+	progress: GarminZipProgress,
+): Promise<void> {
+	if (!collector.hrZones) return;
+	try {
+		const settings = await loadSettings(uid);
+		if (effective<Record<string, number>>(settings, 'hr_zones')) return;
+		await updateUniversal(uid, { hr_zones: collector.hrZones });
+		progress.hrZonesImported = true;
+	} catch (_e) {
+		// Best-effort — a failed seed must not fail the whole import.
+	}
 }
 
 type ProgressHandler = (p: GarminZipProgress) => void;
@@ -63,6 +93,7 @@ export async function importGarminBundle(
 		if (gid) seenIds.add(String(gid));
 		seenComposite.add(`${r.started_at}|${r.distance_m}`);
 	}
+	const hrZoneCollector: HrZoneCollector = { hrZones: null };
 
 	if (lower.endsWith('.fit')) {
 		const progress: GarminZipProgress = {
@@ -79,12 +110,14 @@ export async function importGarminBundle(
 				file.name,
 				seenIds,
 				seenComposite,
+				hrZoneCollector,
 			);
 			if (handled === 'imported') progress.imported++;
 			else if (handled === 'skipped') progress.skipped++;
 		} catch (_e) {
 			progress.failed++;
 		}
+		await seedHrZonesIfUnset(uid, hrZoneCollector, progress);
 		progress.currentName = null;
 		onProgress?.(progress);
 		return progress;
@@ -123,7 +156,7 @@ export async function importGarminBundle(
 			let handled: 'imported' | 'skipped' | 'failed' = 'failed';
 			if (e.kind === 'fit') {
 				const buf = await zip.file(e.path)!.async('uint8array');
-				handled = await importFitFile(buf, e.path, seenIds, seenComposite);
+				handled = await importFitFile(buf, e.path, seenIds, seenComposite, hrZoneCollector);
 			} else if (e.kind === 'route') {
 				const blob = await zip.file(e.path)!.async('blob');
 				const synthetic = new File([blob], e.path.split('/').pop()!);
@@ -137,7 +170,7 @@ export async function importGarminBundle(
 				for (const name of Object.keys(inner.files)) {
 					if (!name.toLowerCase().endsWith('.fit')) continue;
 					const buf = await inner.file(name)!.async('uint8array');
-					innerHandled = await importFitFile(buf, name, seenIds, seenComposite);
+					innerHandled = await importFitFile(buf, name, seenIds, seenComposite, hrZoneCollector);
 					if (innerHandled === 'imported' || innerHandled === 'skipped') break;
 				}
 				handled = innerHandled;
@@ -151,6 +184,7 @@ export async function importGarminBundle(
 		onProgress?.(progress);
 	}
 
+	await seedHrZonesIfUnset(uid, hrZoneCollector, progress);
 	progress.currentName = null;
 	onProgress?.(progress);
 	return progress;
@@ -162,6 +196,7 @@ async function importFitFile(
 	displayName: string,
 	seenIds: Set<string>,
 	seenComposite: Set<string>,
+	collector?: HrZoneCollector,
 ): Promise<'imported' | 'skipped' | 'failed'> {
 	let parsed: ParsedFitRun | null;
 	try {
@@ -173,6 +208,12 @@ async function importFitFile(
 		return 'failed';
 	}
 	if (!parsed) return 'skipped';
+
+	// Capture HR zones even from a duplicate/skipped run — the zones are
+	// the same regardless of whether this particular activity is new.
+	if (collector && !collector.hrZones && parsed.hr_zones) {
+		collector.hrZones = parsed.hr_zones;
+	}
 
 	// Skip non-foot/cycle activities — we don't model swim, ski, etc.
 	if (!parsed.activity_type) return 'skipped';
