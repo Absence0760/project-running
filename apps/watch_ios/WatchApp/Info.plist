@@ -24,6 +24,8 @@
 	<string>Threkir needs to save workout data to Health so your runs are tracked alongside your other fitness activities.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Threkir needs your location to track your running route, calculate distance, and provide pace information.</string>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Threkir continues tracking your run when your watch display turns off during a workout.</string>
 	<key>WKApplication</key>
 	<true/>
 	<key>WKWatchOnly</key>
