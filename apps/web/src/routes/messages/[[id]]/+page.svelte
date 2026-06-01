@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { initial } from '$lib/format/avatar';
 	import { page } from '$app/stores';
@@ -80,7 +81,7 @@
 	}
 
 	function fmtTime(iso: string): string {
-		return new Date(iso).toLocaleString(undefined, {
+		return new Date(iso).toLocaleString(activeFormatLocale(), {
 			month: 'short',
 			day: 'numeric',
 			hour: 'numeric',

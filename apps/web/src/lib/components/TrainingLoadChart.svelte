@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import type { TrainingLoadPoint } from '$lib/training/training_load';
 
 	interface Props {
@@ -67,7 +68,7 @@
 		if (!iso) return '';
 		const [y, m, d] = iso.split('-').map(Number);
 		const dt = new Date(y, m - 1, d);
-		return dt.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+		return dt.toLocaleDateString(activeFormatLocale(), { month: 'short', day: 'numeric' });
 	}
 </script>
 

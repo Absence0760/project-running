@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
@@ -184,7 +185,7 @@
 	}
 
 	function formatDate(iso: string): string {
-		return new Date(iso).toLocaleDateString(undefined, {
+		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			year: 'numeric', month: 'short', day: 'numeric',
 			hour: '2-digit', minute: '2-digit',
 		});

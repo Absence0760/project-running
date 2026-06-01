@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
-	import { formatDuration, formatRelativeTime } from '$lib/format/time';
+	import { formatDuration, formatRelativeTime, activeFormatLocale } from '$lib/format/time';
 	import { currentLocale } from '$lib/i18n/store.svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
@@ -373,7 +373,7 @@
 	}
 
 	function fmtDate(iso: string): string {
-		return new Date(iso).toLocaleDateString(undefined, {
+		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			month: 'short',
 			day: 'numeric',
 			year: 'numeric',

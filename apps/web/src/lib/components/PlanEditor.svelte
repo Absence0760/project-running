@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { createTrainingPlan, fetchActivePlanOverview } from '$lib/core/data';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -518,7 +519,7 @@
 									{#each w.workouts as wo, woIdx (woIdx)}
 										<div class="wo-row">
 											<div class="wo-date">
-												{new Date(wo.scheduled_date).toLocaleDateString(undefined, {
+												{new Date(wo.scheduled_date).toLocaleDateString(activeFormatLocale(), {
 													weekday: 'short',
 													month: 'short',
 													day: 'numeric',

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import type { Run } from '$lib/types';
 	import { formatISO } from '$lib/training/training';
 	import { fmtKm } from '$lib/format/units.svelte';
@@ -69,7 +70,7 @@
 
 	function formatTooltip(date: string, distance: number): string {
 		const d = new Date(date);
-		const label = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+		const label = d.toLocaleDateString(activeFormatLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 		if (distance === 0) return `${label}: No run`;
 		return `${label}: ${fmtKm(distance)}`;
 	}

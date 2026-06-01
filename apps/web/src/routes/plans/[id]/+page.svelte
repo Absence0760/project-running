@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
@@ -239,7 +240,7 @@
 	function fmtRaceDate(iso: string): string {
 		const [y, m, d] = iso.split('-').map(Number);
 		const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-		return dt.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+		return dt.toLocaleDateString(activeFormatLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
 	function workoutAriaLabel(wo: PlanWorkout): string {

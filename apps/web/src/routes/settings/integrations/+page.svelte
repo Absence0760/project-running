@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
@@ -268,7 +269,7 @@
 						<p>{integration.description}</p>
 						{#if integration.connected && integration.lastSync}
 							<span class="last-sync">
-								Last synced {new Date(integration.lastSync).toLocaleDateString(undefined, {
+								Last synced {new Date(integration.lastSync).toLocaleDateString(activeFormatLocale(), {
 									day: 'numeric',
 									month: 'short',
 									hour: '2-digit',

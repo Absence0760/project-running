@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { formatDistance, formatPace, sourceLabel, sourceColor } from '$lib/core/mock-data';
-	import { formatDate, formatDuration } from '$lib/format/time';
+	import { formatDate, formatDuration, activeFormatLocale } from '$lib/format/time';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatISO } from '$lib/training/training';
 	import type { Run } from '$lib/types';
@@ -77,12 +77,12 @@
 	function periodLabel(d: Date, t: PeriodType): string {
 		if (t === 'week') {
 			const end = periodEnd(d, t);
-			return `${d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(
+			return `${d.toLocaleDateString(activeFormatLocale(), { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(
 				undefined,
 				{ month: 'short', day: 'numeric', year: 'numeric' },
 			)}`;
 		}
-		return d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+		return d.toLocaleDateString(activeFormatLocale(), { month: 'long', year: 'numeric' });
 	}
 
 	let periodRuns = $derived.by(() => {

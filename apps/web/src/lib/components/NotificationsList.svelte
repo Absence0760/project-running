@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { goto } from '$app/navigation';
@@ -137,7 +138,7 @@
 	}
 
 	function fmtAbsolute(iso: string): string {
-		return new Date(iso).toLocaleString(undefined, {
+		return new Date(iso).toLocaleString(activeFormatLocale(), {
 			weekday: 'short',
 			month: 'short',
 			day: 'numeric',

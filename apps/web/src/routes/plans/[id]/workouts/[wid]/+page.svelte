@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
@@ -107,7 +108,7 @@
 	function fmtIsoDate(iso: string): string {
 		const [y, m, d] = iso.split('-').map(Number);
 		const dt = new Date(y, (m ?? 1) - 1, d ?? 1);
-		return dt.toLocaleDateString(undefined, {
+		return dt.toLocaleDateString(activeFormatLocale(), {
 			weekday: 'long',
 			day: 'numeric',
 			month: 'long',

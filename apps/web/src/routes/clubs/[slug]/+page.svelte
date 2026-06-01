@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount, onDestroy } from 'svelte';
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -546,7 +547,7 @@
 	function fmtDate(iso: string | null | undefined): string {
 		if (!iso) return '';
 		const d = new Date(iso);
-		return d.toLocaleString(undefined, {
+		return d.toLocaleString(activeFormatLocale(), {
 			weekday: 'short',
 			month: 'short',
 			day: 'numeric',
@@ -1005,12 +1006,12 @@
 					{#each upcoming as evt (evt.id)}
 						<a href="/clubs/{club.slug}/events/{evt.id}" class="event-row">
 							<div class="event-date">
-								{new Date(evt.starts_at).toLocaleDateString(undefined, {
+								{new Date(evt.starts_at).toLocaleDateString(activeFormatLocale(), {
 									month: 'short',
 									day: 'numeric'
 								})}
 								<span class="time">
-									{new Date(evt.starts_at).toLocaleTimeString(undefined, {
+									{new Date(evt.starts_at).toLocaleTimeString(activeFormatLocale(), {
 										hour: 'numeric',
 										minute: '2-digit'
 									})}
@@ -1079,7 +1080,7 @@
 					{#each past as evt (evt.id)}
 						<a href="/clubs/{club.slug}/events/{evt.id}" class="event-row past">
 							<div class="event-date">
-								{new Date(evt.starts_at).toLocaleDateString(undefined, {
+								{new Date(evt.starts_at).toLocaleDateString(activeFormatLocale(), {
 									month: 'short',
 									day: 'numeric'
 								})}

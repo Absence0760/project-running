@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import {
@@ -99,7 +100,7 @@
 
 	function sinceLabel(iso: string | null): string {
 		if (!iso) return '';
-		return new Date(iso).toLocaleDateString(undefined, {
+		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			year: 'numeric',
 			month: 'short',
 			day: 'numeric'

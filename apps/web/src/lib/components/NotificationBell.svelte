@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { goto } from '$app/navigation';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import {
@@ -181,7 +182,7 @@
 		if (hrs < 24) return `${hrs}h ago`;
 		const days = Math.floor(hrs / 24);
 		if (days < 30) return `${days}d ago`;
-		return new Date(iso).toLocaleDateString(undefined, {
+		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			month: 'short',
 			day: 'numeric',
 		});

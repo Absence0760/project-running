@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
-	import { formatDate, formatDateShort, formatDuration } from '$lib/format/time';
+	import { formatDate, formatDateShort, formatDuration, activeFormatLocale } from '$lib/format/time';
 	import {
 		fetchRuns,
 		fetchWeeklyMileage,
@@ -488,7 +488,7 @@
 
 	function fmtRaceDate(iso: string): string {
 		const d = planMidnight(iso);
-		return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
+		return d.toLocaleDateString(activeFormatLocale(), { day: 'numeric', month: 'short', year: 'numeric' });
 	}
 
 	/// Combined distance + activity count for the "This Week" card.
@@ -562,7 +562,7 @@
 				// Display label honours the user's locale for the month
 				// abbreviation but uses a 4-digit year so a 100-year-old
 				// row doesn't collide with the current decade.
-				display = d.toLocaleDateString(undefined, {
+				display = d.toLocaleDateString(activeFormatLocale(), {
 					month: 'short',
 					year: 'numeric',
 				});
@@ -764,7 +764,7 @@
 		     Android's upcoming_event_card. Hides when nothing matches. -->
 		{#if upcomingEvent}
 			{@const when = new Date(upcomingEvent.instance_start)}
-			{@const whenLabel = when.toLocaleString(undefined, {
+			{@const whenLabel = when.toLocaleString(activeFormatLocale(), {
 				weekday: 'short',
 				month: 'short',
 				day: 'numeric',

@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { renderCoachMarkdown } from '$lib/coach/markdown';
 	import { supabase } from '$lib/core/supabase';
@@ -246,7 +247,7 @@
 		if (diffDays === 0) return 'Today';
 		if (diffDays === 1) return 'Yesterday';
 		if (diffDays < 7) return `${diffDays} days ago`;
-		return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+		return d.toLocaleDateString(activeFormatLocale(), { month: 'short', day: 'numeric', year: 'numeric' });
 	}
 
 	let lastCache = $state<{ read: number; create: number; in: number; out: number } | null>(null);

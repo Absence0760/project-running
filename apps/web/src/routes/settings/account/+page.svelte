@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -678,7 +679,7 @@
 							{#if email}<span class="identity-meta">{email}</span>{/if}
 							{#if id.created_at}
 								<span class="identity-meta">
-									Linked {new Date(id.created_at).toLocaleDateString(undefined, {
+									Linked {new Date(id.created_at).toLocaleDateString(activeFormatLocale(), {
 										year: 'numeric', month: 'short', day: 'numeric',
 									})}
 								</span>

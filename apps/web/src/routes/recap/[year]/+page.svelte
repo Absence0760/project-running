@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { activeFormatLocale } from '$lib/format/time';
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -50,7 +51,7 @@
 
 	function fmtWeekStart(iso: string): string {
 		const d = new Date(iso + 'T00:00:00');
-		return d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+		return d.toLocaleDateString(activeFormatLocale(), { day: 'numeric', month: 'short' });
 	}
 
 	function maxMonthlyDistance(monthly: YearInRunningRecap['monthly']): number {

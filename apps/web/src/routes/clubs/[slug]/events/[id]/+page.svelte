@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { initial, hashHue } from '$lib/format/avatar';
-	import { formatDuration as baseDuration } from '$lib/format/time';
+	import { formatDuration as baseDuration, activeFormatLocale } from '$lib/format/time';
 	import { page } from '$app/stores';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
@@ -607,7 +607,7 @@
 	}
 
 	function formatRunDate(iso: string): string {
-		return new Date(iso).toLocaleDateString(undefined, {
+		return new Date(iso).toLocaleDateString(activeFormatLocale(), {
 			month: 'short',
 			day: 'numeric',
 			year: 'numeric'
@@ -931,7 +931,7 @@
 
 	function fmtDate(iso: string): string {
 		const d = new Date(iso);
-		return d.toLocaleString(undefined, {
+		return d.toLocaleString(activeFormatLocale(), {
 			weekday: 'long',
 			month: 'long',
 			day: 'numeric',
@@ -1225,7 +1225,7 @@
 							class:active={activeInstance === iso.toISOString()}
 							onclick={() => pickInstance(iso.toISOString())}
 						>
-							{iso.toLocaleDateString(undefined, {
+							{iso.toLocaleDateString(activeFormatLocale(), {
 								weekday: 'short',
 								month: 'short',
 								day: 'numeric'
