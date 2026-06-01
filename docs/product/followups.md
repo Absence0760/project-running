@@ -192,6 +192,24 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   parity helper (web `age_grade.ts` ↔ mobile `age_grade.dart`) once the authoritative
   factor tables are sourced, then surface on run-detail when DOB + distance + duration
   are known and `metadata.age_grade` is absent.
+- [ ] **Treadmill / indoor per-point HR → HR-zone chart (garmin, MEDIUM-HIGH, data-model decision)** —
+  `garmin-fit.ts` only emits a `TrackPoint` when a FIT record carries GPS, so an indoor
+  / treadmill run (HR + cadence, no lat/lng) imports with `track: []`. `avg_bpm` is
+  saved (stat grid shows average HR) but the per-point `bpm` the run-detail HR-zone
+  breakdown needs is dropped, so the zone chart is blank. **Not a quick fix** — the
+  obvious approach (emit HR-only `TrackPoint`s with no lat/lng) ripples through every
+  track consumer across THREE languages: web run-detail splits / moving-time /
+  privacy-intersect / map (need a `geoTrack` filter), the `clip_track_for_user` RPC
+  (verified safe — null coords are treated as in-zone and dropped, no crash/leak), the
+  GPX-export Edge Function (`decode_track.ts` would emit `<trkpt lat="undefined">`), the
+  Go job-worker map-match + data-export, the Dart `TrackPoint.fromJson` + mobile
+  run-detail, and backup/restore. Three viable data models, each with a cost: (a) HR-only
+  points in the track file → wide blast radius, every coordinate consumer needs a guard;
+  (b) a separate `{user_id}/{run_id}.hr.json.gz` Storage object → new infra + backup/export
+  plumbing; (c) a downsampled per-minute `metadata.hr_series` → bloats the `runs` row that
+  `SELECT *` pulls on every list/dashboard load. Pick one deliberately (lean (b) to keep
+  the row light and the coordinate pipeline untouched) and land it via `/safe-edit` with
+  per-consumer verification. Build as a shared helper so web + mobile read the same series.
 - [ ] **Health Connect import brings tracks (garmin/android, mobile + device)** —
   `health_connect_importer.dart` hard-codes `track: []`, so every HC-imported run is
   trackless/lapless/cadenceless. Reading the HC ExerciseRoute + sample series into a
