@@ -2552,6 +2552,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 110. Coach assistant messages are written by a service-role client; clients may only insert their own `role='user'` turns
+
+**Decided (2026-06-01, XSS audit H1):** the `coach_messages` INSERT policy is `with check (auth.uid() = user_id and role = 'user')` (migration `20261122_001`), and the coach handler persists the assistant turn through a **service-role** Supabase client that bypasses RLS — not the user-JWT client it uses for everything else. Content is capped at 64 KiB by a DB CHECK (`NOT VALID`) matching `MAX_COACH_ASSISTANT_CONTENT_BYTES`, and the handler truncates to the same bound before insert.
+
+**Why.** The handler runs *as the authenticated user* (anon key + the caller's JWT — `handler.ts`), so the old owner-only INSERT policy let any caller (or a hand-rolled REST request) write a `role='assistant'` row whose `content` is rendered via `{@html renderMarkdown(...)}` in `CoachChat.svelte`. DOMPurify sanitises it and `coach_messages` SELECT is owner-only, so the live blast radius is self-XSS — but it is a least-privilege violation and would become cross-user stored XSS the moment a coach-athlete shared-thread read path exists (the §97/§98 coach run-read path deliberately does **not** cover `coach_messages`). Because the handler and a malicious client are the *same* role, the only way to give the handler a write the client lacks is to write under service-role.
+
+**The trade-off.** This introduces `SUPABASE_SERVICE_ROLE_KEY` into the coach Lambda env (provisioned via the env's sops secrets file; the share-run Lambda has a separate env and never sees it) — a high-privilege secret scoped to one function. When the key is absent the coach still streams; only assistant-message persistence is skipped (logged). The one-time localStorage→DB migration now imports only the user's own turns. pgtap pins the contract (`coach_messages_role_lockdown_test.sql`). **Don't** route assistant writes back through the user-JWT client, and **don't** widen the INSERT policy to accept `role='assistant'`.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

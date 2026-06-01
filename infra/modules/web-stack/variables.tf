@@ -42,7 +42,7 @@ variable "public_supabase_anon_key" {
 }
 
 variable "secrets_file" {
-  description = "Path to the sops-encrypted YAML file with runtime secrets (ANTHROPIC_API_KEY, SENTRY_DSN). Set to null on first apply (before the file exists); the Lambda starts up but the coach endpoint returns 503 until secrets are populated."
+  description = "Path to the sops-encrypted YAML file with runtime secrets (ANTHROPIC_API_KEY, SENTRY_DSN, SUPABASE_SERVICE_ROLE_KEY). Every key in the file is merged into the coach Lambda env (the share-run Lambda has a separate env and never sees these). SUPABASE_SERVICE_ROLE_KEY lets the coach handler persist assistant messages (migration 20261122_001 / XSS audit H1); without it the coach still streams but assistant turns aren't saved. Set to null on first apply (before the file exists); the Lambda starts up but the coach endpoint returns 503 until ANTHROPIC_API_KEY is populated."
   type        = string
   default     = null
 }

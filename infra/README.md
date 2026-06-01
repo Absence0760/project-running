@@ -147,6 +147,7 @@ ARN=$(terraform output -raw kms_key_arn)
 sed -i "s|REPLACE_PREVIEW_KMS_ARN|$ARN|" ../../.sops.yaml
 grep -q 'REPLACE_' ../../.sops.yaml && { echo 'ERROR: .sops.yaml still has placeholder ARNs'; exit 1; }
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
+echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1); without it the coach streams but doesn't save replies
 echo 'SENTRY_DSN: ...' >> /tmp/coach.yaml      # optional
 sops --encrypt /tmp/coach.yaml > secrets.enc.yaml
 shred -u /tmp/coach.yaml
@@ -172,6 +173,7 @@ ARN=$(terraform output -raw kms_key_arn)
 sed -i "s|REPLACE_PROD_KMS_ARN|$ARN|" ../../.sops.yaml
 grep -q 'REPLACE_' ../../.sops.yaml && { echo 'ERROR: .sops.yaml still has placeholder ARNs'; exit 1; }
 echo 'ANTHROPIC_API_KEY: sk-ant-...' > /tmp/coach.yaml
+echo 'SUPABASE_SERVICE_ROLE_KEY: eyJ...' >> /tmp/coach.yaml   # coach assistant-message persistence (XSS audit H1)
 sops --encrypt /tmp/coach.yaml > secrets.enc.yaml
 shred -u /tmp/coach.yaml
 terraform apply
