@@ -271,6 +271,31 @@
 		((run?.metadata as Record<string, unknown> | null)?.activity_type as string) ??
 			'run',
 	);
+	/// Garmin discipline (FIT sub_sport) — the trail/track/treadmill/road
+	/// distinction the coarse activity_type throws away. Shown as a header
+	/// chip so a trail run reads as trail, not generic "Run" (round-5 F1).
+	let subSport = $derived(
+		((run?.metadata as Record<string, unknown> | null)?.sub_sport as string | null) ?? null,
+	);
+	let disciplineLabel = $derived(
+		subSport ? subSport.charAt(0).toUpperCase() + subSport.slice(1) : null,
+	);
+	/// Garmin Running Dynamics off the imported session (round-5 F2).
+	let runningDynamics = $derived(
+		((run?.metadata as Record<string, unknown> | null)?.running_dynamics as {
+			vertical_oscillation_mm?: number;
+			gct_ms?: number;
+			stride_length_m?: number;
+			power_w?: number;
+		} | null) ?? null,
+	);
+	let hasRunningDynamics = $derived(
+		runningDynamics != null &&
+			(runningDynamics.vertical_oscillation_mm != null ||
+				runningDynamics.gct_ms != null ||
+				runningDynamics.stride_length_m != null ||
+				runningDynamics.power_w != null),
+	);
 	let estimatedCalories = $derived(
 		run
 			? estimateRunCalories({
@@ -1087,6 +1112,12 @@
 								{activity.label}
 							</span>
 						{/if}
+						{#if disciplineLabel}
+							<span class="meta-item discipline-chip" data-testid="discipline-chip">
+								<span class="material-symbols">terrain</span>
+								{disciplineLabel}
+							</span>
+						{/if}
 						<span class="meta-item meta-source" style:--source-color={sourceColor(run.source)}>
 							<span class="meta-source-dot"></span>
 							{sourceLabel(run.source)}
@@ -1458,6 +1489,41 @@
 						{/each}
 					</tbody>
 				</table>
+			</section>
+		{/if}
+
+		<!-- Running Dynamics — Garmin HRM-Pro / Run pod metrics off an
+		     imported FIT session. Renders only the fields the watch recorded
+		     (round-5 garmin F2). -->
+		{#if hasRunningDynamics && runningDynamics}
+			<section class="section running-dynamics">
+				<h2>Running Dynamics</h2>
+				<div class="key-stats">
+					{#if runningDynamics.vertical_oscillation_mm != null}
+						<div class="key-stat">
+							<span class="key-stat-value">{runningDynamics.vertical_oscillation_mm} mm</span>
+							<span class="key-stat-label">Vertical oscillation</span>
+						</div>
+					{/if}
+					{#if runningDynamics.gct_ms != null}
+						<div class="key-stat">
+							<span class="key-stat-value">{runningDynamics.gct_ms} ms</span>
+							<span class="key-stat-label">Ground contact</span>
+						</div>
+					{/if}
+					{#if runningDynamics.stride_length_m != null}
+						<div class="key-stat">
+							<span class="key-stat-value">{runningDynamics.stride_length_m.toFixed(2)} m</span>
+							<span class="key-stat-label">Stride length</span>
+						</div>
+					{/if}
+					{#if runningDynamics.power_w != null}
+						<div class="key-stat">
+							<span class="key-stat-value">{runningDynamics.power_w} W</span>
+							<span class="key-stat-label">Avg power</span>
+						</div>
+					{/if}
+				</div>
 			</section>
 		{/if}
 
@@ -2157,6 +2223,16 @@
 
 	.dnf-chip .material-symbols {
 		color: var(--color-danger);
+	}
+
+	.discipline-chip {
+		padding: 0.2rem 0.55rem;
+		border-radius: 9999px;
+		background: var(--color-bg-tertiary);
+		border: 1px solid var(--color-border);
+		color: var(--color-text-secondary);
+		font-weight: 600;
+		font-size: 0.72rem;
 	}
 
 	.back-link {
