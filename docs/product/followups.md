@@ -77,3 +77,17 @@ real need is a distinct, opt-in feature:
   feature (a watching partner already sees the finish). Gated on the same
   deferred push/email sender as the rest of theme B. Until then the gate stays
   as-is by design.
+
+## Auto-follow on club join (persona round-5 social-group) — product decision
+
+`join_club_by_token` adds an active `club_members` row; it deliberately does
+NOT create `user_follows` edges. The social-group persona wanted joining a club
+to wire up the social graph. But club invite tokens are **generic** (one
+`clubs.invite_token`, not per-inviter), so there is no specific person to
+follow-back, and auto-following every active member on join is presumptuous +
+spammy + a consent concern (you didn't choose to follow 50 strangers). The club
+feed (`club_posts`, already fanned out via notifications) is the intended
+in-club social surface. If we want member-to-member connection, the right shape
+is a **"Follow members" suggestion list** on the club page (opt-in, one tap),
+not an automatic fan-out — tracked here rather than shipped as a silent
+follow-everyone trigger.
