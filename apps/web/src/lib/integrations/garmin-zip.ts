@@ -195,6 +195,8 @@ async function importFitFile(
 	if (parsed.avg_cadence_spm != null) metadata.cadence_spm = parsed.avg_cadence_spm;
 	if (parsed.laps.length > 0) metadata.laps = parsed.laps;
 	if (parsed.indoor) metadata.indoor = true;
+	if (parsed.sub_sport) metadata.sub_sport = parsed.sub_sport;
+	if (parsed.running_dynamics) metadata.running_dynamics = parsed.running_dynamics;
 
 	await saveRun({
 		started_at: parsed.startedAt,

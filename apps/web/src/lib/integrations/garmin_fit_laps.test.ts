@@ -1,7 +1,13 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 
-import { buildCanonicalLaps, garminExternalId, fitCadenceToSpm } from './garmin-fit';
+import {
+	buildCanonicalLaps,
+	garminExternalId,
+	fitCadenceToSpm,
+	normalizeSubSport,
+	buildRunningDynamics,
+} from './garmin-fit';
 
 test('fitCadenceToSpm — doubles per-foot RPM for foot sports', () => {
 	// FIT reports running cadence per foot; the runner-facing spm is ×2.
@@ -90,4 +96,67 @@ test('buildCanonicalLaps — clamps missing/negative distance + rounds fractiona
 		laps.map((l) => l.start_offset_s),
 		[0, 300],
 	);
+});
+
+test('normalizeSubSport — preserves a trail run discipline', () => {
+	// F1: a trail run collapses to a generic activity_type='run'; the
+	// sub_sport datum is what tells the runner it was a trail.
+	assert.equal(normalizeSubSport('trail'), 'trail');
+	assert.equal(normalizeSubSport('Trail'), 'trail');
+	assert.equal(normalizeSubSport('  TREADMILL '), 'treadmill');
+	assert.equal(normalizeSubSport('track'), 'track');
+});
+
+test('normalizeSubSport — drops uninformative / missing placeholders to null', () => {
+	assert.equal(normalizeSubSport('generic'), null);
+	assert.equal(normalizeSubSport('all'), null);
+	assert.equal(normalizeSubSport('invalid'), null);
+	assert.equal(normalizeSubSport(''), null);
+	assert.equal(normalizeSubSport('   '), null);
+	assert.equal(normalizeSubSport(undefined), null);
+	assert.equal(normalizeSubSport(null), null);
+	assert.equal(normalizeSubSport(42), null);
+});
+
+test('buildRunningDynamics — projects the fields a Running pod recorded', () => {
+	// F2: avg_* off the session; step length mm → m; rest pass through.
+	const rd = buildRunningDynamics({
+		avg_vertical_oscillation: 8.42,
+		avg_stance_time: 245.6,
+		avg_step_length: 1180,
+		avg_power: 312,
+		avg_left_right_balance: 49.7,
+	});
+	assert.deepEqual(rd, {
+		vertical_oscillation_mm: 8.4,
+		gct_ms: 246,
+		stride_length_m: 1.18,
+		power_w: 312,
+		lr_balance_pct: 49.7,
+	});
+});
+
+test('buildRunningDynamics — only populates fields the file actually carried', () => {
+	const rd = buildRunningDynamics({ avg_power: 280 });
+	assert.deepEqual(rd, { power_w: 280 });
+	// No sentinel zeros / nulls for the fields the watch never recorded.
+	assert.equal('vertical_oscillation_mm' in rd!, false);
+	assert.equal('lr_balance_pct' in rd!, false);
+});
+
+test('buildRunningDynamics — falls back to per-record field names', () => {
+	const rd = buildRunningDynamics({ vertical_oscillation: 9, stance_time: 250 });
+	assert.deepEqual(rd, { vertical_oscillation_mm: 9, gct_ms: 250 });
+});
+
+test('buildRunningDynamics — drops out-of-range / non-finite values', () => {
+	// A base watch with no Running pod: nothing → null, not an empty object.
+	assert.equal(buildRunningDynamics({}), null);
+	assert.equal(buildRunningDynamics(null), null);
+	assert.equal(buildRunningDynamics(undefined), null);
+	// Packed left_right_balance byte (>100) is dropped rather than guessed.
+	assert.equal(buildRunningDynamics({ avg_left_right_balance: 178 }), null);
+	// Non-positive / non-finite metrics are ignored.
+	assert.equal(buildRunningDynamics({ avg_power: 0, avg_vertical_oscillation: -1 }), null);
+	assert.equal(buildRunningDynamics({ avg_power: Number.NaN }), null);
 });
