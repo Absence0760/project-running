@@ -1592,6 +1592,17 @@ export async function approveMember(clubId: string, userId: string): Promise<voi
 	if (error) throw error;
 }
 
+export async function bulkApproveMembers(clubId: string, userIds: string[]): Promise<void> {
+	if (userIds.length === 0) return;
+	const { error } = await supabase
+		.from('club_members')
+		.update({ status: 'active' })
+		.eq('club_id', clubId)
+		.eq('status', 'pending')
+		.in('user_id', userIds);
+	if (error) throw error;
+}
+
 export async function setMemberRole(
 	clubId: string,
 	userId: string,
@@ -2437,6 +2448,32 @@ export async function approveEventResult(
 		p_user_id: userId,
 		p_approve: approve,
 	});
+	if (error) throw error;
+}
+
+// Approve / unverify a single result by its row id. The `approve_event_result`
+// RPC keys on (event, instance, user_id) so it can only touch account-linked
+// rows — a bib-only imported finisher has user_id = NULL and is unreachable
+// through it. This path goes straight at the row, gated by the
+// `event_results_update_self_or_director` RLS policy (a race_director of the
+// event's club may update any of its result rows). Audit columns are written
+// client-side from the signed-in director to mirror what the RPC's auth.uid()
+// would set.
+export async function approveEventResultById(
+	resultId: string,
+	approve: boolean
+): Promise<void> {
+	const directorId = auth.user?.id;
+	if (!directorId) throw new Error('Not authenticated');
+	const { error } = await supabase
+		.from('event_results')
+		.update({
+			organiser_approved: approve,
+			organiser_approved_by: directorId,
+			organiser_approved_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+		})
+		.eq('id', resultId);
 	if (error) throw error;
 }
 

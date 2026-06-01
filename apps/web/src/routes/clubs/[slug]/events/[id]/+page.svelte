@@ -26,6 +26,7 @@
 		startRace,
 		endRace,
 		approveEventResult,
+		approveEventResultById,
 		bulkImportEventResults,
 		requestEventResultClaim,
 		fetchMyEventResultClaims,
@@ -53,7 +54,7 @@
 	import { buildStaticMarkerMapUrl, mapsDirectionsUrl } from '$lib/routes/static_map';
 	import { buildFinisherCertificateSvg, CERT_WIDTH, CERT_HEIGHT } from '$lib/runs/finisher_certificate';
 	import { rasterizeSvgToPng, downloadBlob } from '$lib/format/svg_raster';
-	import { parseChipTimingCsv, type ParsedResultRow } from '$lib/runs/event_results_csv';
+	import { parseChipTimingCsv, resultsToCsv, type ParsedResultRow } from '$lib/runs/event_results_csv';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import type {
 		EventWithMeta,
@@ -395,6 +396,18 @@
 		}
 	}
 
+	// Bib-only imported finishers have user_id = NULL and are unreachable by the
+	// user-id-keyed approve RPC, so approve them by row id instead (persona
+	// round-5 event-organizer).
+	async function handleApproveById(resultId: string, approve: boolean) {
+		try {
+			await approveEventResultById(resultId, approve);
+			await reloadInstance();
+		} catch (e: unknown) {
+			error = e instanceof Error ? e.message : 'Approval failed';
+		}
+	}
+
 	// Tick for the live elapsed display during a race.
 	let tickTimer: ReturnType<typeof setInterval> | null = null;
 	$effect(() => {
@@ -562,6 +575,23 @@
 		} finally {
 			certBusy = null;
 		}
+	}
+
+	function exportResultsCsv() {
+		if (!event || results.length === 0) return;
+		const csv = resultsToCsv(
+			results.map((r) => ({
+				bib: r.bib,
+				finisherName: r.finisher_name ?? r.display_name,
+				durationS: r.duration_s,
+				distanceM: r.distance_m,
+				finisherStatus: r.finisher_status,
+				rank: r.rank,
+			}))
+		);
+		const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+		const safe = event.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+		downloadBlob(blob, `threkir-results-${safe}.csv`);
 	}
 
 	function formatRunDate(iso: string): string {
@@ -1307,6 +1337,9 @@
 				<div class="results-actions">
 					{#if isEventOrganiser}
 						<button type="button" class="btn-link" onclick={openImport}>Import results CSV</button>
+						{#if results.length > 0}
+							<button type="button" class="btn-link" onclick={exportResultsCsv}>Download results CSV</button>
+						{/if}
 					{/if}
 					{#if myUserId}
 						{#if hasMyResult}
@@ -1354,6 +1387,10 @@
 								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id!, true)}>Approve</button>
 							{:else if isRaceDirector && r.user_id !== null && r.organiser_approved && r.user_id !== myUserId}
 								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id!, false)}>Unverify</button>
+							{:else if isRaceDirector && r.user_id === null && !r.organiser_approved}
+								<button type="button" class="btn-link approve" onclick={() => handleApproveById(r.id, true)}>Approve</button>
+							{:else if isRaceDirector && r.user_id === null && r.organiser_approved}
+								<button type="button" class="btn-link reject" onclick={() => handleApproveById(r.id, false)}>Unverify</button>
 							{/if}
 							{#if myUserId && r.user_id === null && !hasMyResult}
 								{#if myClaims.get(r.id) === 'pending'}
