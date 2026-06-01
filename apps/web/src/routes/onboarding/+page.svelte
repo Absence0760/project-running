@@ -42,10 +42,14 @@
 
 	// ── Step 4: about you (gender + DOB + weight + Art 9 consent) ──
 	// Identical shape to /settings/preferences so the same fields
-	// land in the same columns. Consent gates persistence — if the
-	// user doesn't tick the checkbox, gender + DOB are silently
-	// dropped at save time. Weight isn't Art 9 (it's not health
-	// data on its own), so it persists regardless.
+	// land in the same columns. Consent gates the health-data *use* —
+	// gender, the prefs-bag mirror, and the consent timestamp are only
+	// written when the box is ticked. The bare `date_of_birth` column,
+	// however, writes unconditionally: it backs the under-18
+	// minor-exclusion in people-search (a child-safety purpose, distinct
+	// from consenting to use DOB for HR/leaderboards), so a declined
+	// consent must not leave a NULL DOB that keeps the account
+	// discoverable. Weight isn't Art 9, so it persists regardless.
 	let gender = $state<'male' | 'female' | 'nonbinary' | ''>('');
 	let dateOfBirth = $state('');
 	let bodyWeightKg = $state('');

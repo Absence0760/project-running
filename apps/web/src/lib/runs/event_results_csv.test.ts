@@ -151,6 +151,17 @@ test('resultsToCsv emits a recognised header + escapes fields with commas/quotes
 	assert.equal(lines[1], '1,1,"Alice, ""Ace""",1:01:01,10000,finished');
 });
 
+test('resultsToCsv neutralises spreadsheet formula-injection in user fields', () => {
+	const csv = resultsToCsv([
+		{ bib: '=2+5', finisherName: '@SUM(A1)', durationS: 3600, distanceM: 5000, finisherStatus: 'finished', rank: 1 },
+	]);
+	const cells = csv.split('\r\n')[1].split(',');
+	// A leading formula char is prefixed with ' so a spreadsheet treats it
+	// as text; the name has no comma/quote so it isn't double-quoted.
+	assert.equal(cells[1], "'=2+5");
+	assert.equal(cells[2], "'@SUM(A1)");
+});
+
 test('resultsToCsv blanks the time for DNF/DNS and tolerates null bib/name/rank', () => {
 	const csv = resultsToCsv([
 		{ bib: null, finisherName: null, durationS: 0, distanceM: 5000, finisherStatus: 'dnf', rank: null },

@@ -2473,7 +2473,12 @@ export async function approveEventResultById(
 			organiser_approved_at: new Date().toISOString(),
 			updated_at: new Date().toISOString(),
 		})
-		.eq('id', resultId);
+		.eq('id', resultId)
+		// This path is for bib-only (unmatched) results; matched-user rows
+		// approve via approve_event_result. Constrain to null-user rows so a
+		// stray caller can't reach a matched runner's result through here
+		// (the director RLS policy already bounds it to their own events).
+		.is('user_id', null);
 	if (error) throw error;
 }
 

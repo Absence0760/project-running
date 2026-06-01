@@ -382,7 +382,7 @@ test('isReturningFromGap — counts non-qualifying runs (a logged treadmill walk
 	assert.equal(isReturningFromGap(runs, 60, NOW), true);
 });
 
-test('isReturningFromGap — false right at the boundary, true just past it', () => {
+test('isReturningFromGap — true exactly at the boundary, false just inside it', () => {
 	const dayMs = 24 * 3600_000;
 	const exactly60 = r({
 		started_at: new Date(NOW - 60 * dayMs).toISOString(),

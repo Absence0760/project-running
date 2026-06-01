@@ -198,7 +198,15 @@ function formatDurationCsv(totalS: number): string {
 }
 
 function escapeCsvField(value: string): string {
-	return /[",\n\r]/.test(value) ? `"${value.replace(/"/g, '""')}"` : value;
+	// Formula-injection guard: a field a spreadsheet would evaluate as a
+	// formula (leading = + - @, or a tab/CR it strips first) is prefixed
+	// with a single quote so Sheets/Excel render it as text. Finisher
+	// names + bibs are user-controlled (imported from an external sheet),
+	// so this matters even though only an organiser downloads the export.
+	const neutralised = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+	return /[",\n\r]/.test(neutralised)
+		? `"${neutralised.replace(/"/g, '""')}"`
+		: neutralised;
 }
 
 // Serialise finisher results to a CSV whose headers are a subset the importer
