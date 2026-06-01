@@ -97,6 +97,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		openaiModel: env.OPENAI_MODEL ?? 'llama3.2',
 		publicSupabaseUrl: PUBLIC_SUPABASE_URL,
 		publicSupabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY,
+		supabaseServiceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
 		bypassPaywallEnabled,
 	});
 

@@ -21,6 +21,7 @@ import { buildContext } from './context';
 import {
 	clampRunsLimit,
 	jsonError as buildJsonError,
+	MAX_COACH_ASSISTANT_CONTENT_BYTES,
 	parseAuthHeader,
 	personalityAddendum,
 	rateLimitHeaders,
@@ -377,21 +378,44 @@ export async function handleCoach(
 
 		let assistantMessageId: string | null = null;
 		if (accumulated) {
-			try {
-				const { data, error: insertErr } = await supabase
-					.from('coach_messages')
-					.insert({
-						user_id: userIdForStream,
-						plan_id: body.plan_id ?? null,
-						role: 'assistant',
-						content: accumulated,
-					})
-					.select('id')
-					.single();
-				if (insertErr) console.error('[coach] persist assistant failed', insertErr);
-				else assistantMessageId = data?.id ?? null;
-			} catch (e) {
-				console.error('[coach] persist assistant exception', e);
+			// Assistant rows must be written by a role that bypasses RLS:
+			// the coach_messages INSERT policy confines the user-JWT client
+			// to role='user' turns (XSS audit H1, migration 20261122_001).
+			// A service-role client is the trusted writer; without the key
+			// we skip persistence (the reply still streams to the user) and
+			// log loudly so a misconfigured env is visible.
+			if (!config.supabaseServiceRoleKey) {
+				console.error(
+					'[coach] SUPABASE_SERVICE_ROLE_KEY not set — assistant message ' +
+						'not persisted. Cross-device coach history will be incomplete ' +
+						'until the secret is configured.',
+				);
+			} else {
+				// Bound the persisted content to the same cap the DB CHECK
+				// enforces (coach_messages_content_len_chk) so a long reply
+				// can't be rejected at insert time and lost.
+				const content = accumulated.slice(0, MAX_COACH_ASSISTANT_CONTENT_BYTES);
+				const supabaseService = createClient(
+					config.publicSupabaseUrl,
+					config.supabaseServiceRoleKey,
+					{ auth: { persistSession: false, autoRefreshToken: false } },
+				);
+				try {
+					const { data, error: insertErr } = await supabaseService
+						.from('coach_messages')
+						.insert({
+							user_id: userIdForStream,
+							plan_id: body.plan_id ?? null,
+							role: 'assistant',
+							content,
+						})
+						.select('id')
+						.single();
+					if (insertErr) console.error('[coach] persist assistant failed', insertErr);
+					else assistantMessageId = data?.id ?? null;
+				} catch (e) {
+					console.error('[coach] persist assistant exception', e);
+				}
 			}
 		}
 

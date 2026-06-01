@@ -101,11 +101,14 @@
 				return;
 			}
 			const parsed = JSON.parse(raw) as { messages?: Msg[] };
+			// Only the user's own turns are migrated. Since migration
+			// 20261122_001 (XSS audit H1) a client can only insert
+			// role='user' rows — assistant rows are written exclusively by
+			// the coach handler via service-role. The old localStorage
+			// assistant replies are ephemeral; the durable value is the
+			// user's questions, which carry the thread's meaning.
 			const legacy = (parsed?.messages ?? []).filter(
-				(m) =>
-					m &&
-					(m.role === 'user' || m.role === 'assistant') &&
-					typeof m.content === 'string',
+				(m) => m && m.role === 'user' && typeof m.content === 'string',
 			);
 			if (legacy.length === 0) {
 				localStorage.removeItem(legacyStorageKey(userId, planId));

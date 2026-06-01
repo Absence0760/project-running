@@ -109,6 +109,12 @@ export const handler = awslambda.streamifyResponse<LambdaFunctionURLEvent>(
 			openaiModel: process.env.OPENAI_MODEL,
 			publicSupabaseUrl: requireEnv('PUBLIC_SUPABASE_URL'),
 			publicSupabaseAnonKey: requireEnv('PUBLIC_SUPABASE_ANON_KEY'),
+			// Used only to persist the assistant message (handler.ts):
+			// since migration 20261122_001 the coach_messages INSERT policy
+			// confines the user-JWT client to role='user' rows, so the
+			// assistant turn needs an RLS-bypassing writer. Provisioned via
+			// the env's sops secrets file (see infra/modules/web-stack).
+			supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY,
 			bypassPaywallEnabled: false,
 		};
 

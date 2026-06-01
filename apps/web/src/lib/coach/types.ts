@@ -39,6 +39,17 @@ export interface CoachConfig {
 	publicSupabaseUrl: string;
 	publicSupabaseAnonKey: string;
 
+	// Service-role key, used ONLY to persist the assistant message
+	// (handler.ts). Since migration 20261122_001 the coach_messages
+	// INSERT policy confines clients — and the user-JWT client the
+	// handler otherwise uses — to role='user' rows (XSS audit H1), so
+	// the assistant turn must be written by an RLS-bypassing role.
+	// Optional: if unset (e.g. a dev env that hasn't configured it),
+	// assistant persistence is skipped with a logged warning and the
+	// rest of the coach flow still works. Never logged, never sent to
+	// the provider (system_prompt.test.ts guards prompt leakage).
+	supabaseServiceRoleKey?: string;
+
 	// Pre-computed by the caller. True iff the bypass is honoured. The
 	// caller is responsible for the prod-env gate (NODE_ENV check +
 	// localhost-Supabase check in the SvelteKit dev wrapper; hardcoded
