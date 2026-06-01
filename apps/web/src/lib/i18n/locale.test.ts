@@ -46,10 +46,16 @@ test('negotiateLocale: a stored non-canonical tag resolves by base', () => {
 	assert.equal(negotiateLocale(null, 'fr-CA'), 'fr');
 });
 
-test('negotiateLocale: exact match beats base match across the q-list', () => {
-	// pt-BR is exact even though de appears first only at lower q.
+test('negotiateLocale: priority wins — a higher-q tag is matched (exact or base) before a lower-q one', () => {
+	// Highest-q tag with any match wins.
 	assert.equal(negotiateLocale('pt-BR;q=0.9,de;q=1.0'), 'de');
 	assert.equal(negotiateLocale('en-GB,en;q=0.9'), 'en');
+	// Regression (F1): a lower-priority EXACT tag must NOT beat a
+	// higher-priority tag we only carry by base language. fr-CA (q=1) has
+	// no exact catalogue but resolves to the fr base; en (q=0.5) is exact.
+	// The user's top preference is French, so fr must win.
+	assert.equal(negotiateLocale('fr-CA,en;q=0.5'), 'fr');
+	assert.equal(negotiateLocale('de-AT;q=1.0,en;q=0.8'), 'de');
 });
 
 test('negotiateLocale: base-language fallback for unshipped regional variants', () => {

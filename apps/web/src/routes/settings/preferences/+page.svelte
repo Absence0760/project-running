@@ -66,9 +66,12 @@
 	// language.
 	let language = $state<Locale>('en');
 
-	function changeLanguage(next: Locale) {
-		language = next;
-		void setLocale(next);
+	async function changeLanguage(next: Locale) {
+		await setLocale(next);
+		// Reflect the locale that actually applied — if the chunk failed to
+		// load, setLocale keeps the current locale and the select snaps back
+		// rather than lying about a switch that didn't happen.
+		language = currentLocale();
 	}
 
 	// When the user picks a distance unit, snap the pace format to the
@@ -335,7 +338,6 @@
 					<select
 						value={language}
 						onchange={(e) => changeLanguage(e.currentTarget.value as Locale)}
-						aria-label={m('prefs.language')}
 						data-testid="language-select"
 					>
 						{#each SUPPORTED_LOCALES as loc}

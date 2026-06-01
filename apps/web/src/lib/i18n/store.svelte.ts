@@ -1,5 +1,7 @@
 import { browser } from '$app/environment';
 import { en } from './locales/en';
+import { CATALOGUE_LOADERS } from './catalogues';
+import { interpolate } from './interpolate';
 import type { Messages, MessageKey } from './messages';
 import {
 	DEFAULT_LOCALE,
@@ -8,19 +10,6 @@ import {
 	negotiateLocale,
 	type Locale,
 } from './locale';
-
-// Lazy loaders for every non-default locale. English is statically
-// bundled (it is the fallback dict and the prerender default); the rest
-// are split into their own chunks so a single-locale visitor only ever
-// downloads their own strings — the i18n layer adds ~nothing to the
-// initial payload. See the responsiveness rationale in decisions.md.
-const LOADERS: Record<Exclude<Locale, 'en'>, () => Promise<{ messages: Messages }>> = {
-	de: () => import('./locales/de'),
-	fr: () => import('./locales/fr'),
-	es: () => import('./locales/es'),
-	ja: () => import('./locales/ja'),
-	'pt-BR': () => import('./locales/pt-BR'),
-};
 
 let locale = $state<Locale>(DEFAULT_LOCALE);
 let dict = $state<Messages>(en);
@@ -34,13 +23,8 @@ export function currentLocale(): Locale {
 // back to the English string, then the raw key, so a not-yet-translated
 // key degrades gracefully rather than rendering blank.
 export function m(key: MessageKey, params?: Record<string, string | number>): string {
-	let value: string = dict[key] ?? en[key] ?? key;
-	if (params) {
-		for (const [k, v] of Object.entries(params)) {
-			value = value.replaceAll(`{${k}}`, String(v));
-		}
-	}
-	return value;
+	const value: string = dict[key] ?? en[key] ?? key;
+	return interpolate(value, params);
 }
 
 function applyDocumentLocale(next: Locale): void {
@@ -65,8 +49,7 @@ export async function setLocale(next: Locale): Promise<void> {
 		return;
 	}
 	try {
-		const mod = await LOADERS[next]();
-		dict = mod.messages;
+		dict = await CATALOGUE_LOADERS[next]();
 		locale = next;
 		applyDocumentLocale(next);
 	} catch {

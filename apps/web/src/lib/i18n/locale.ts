@@ -107,14 +107,16 @@ export function negotiateLocale(
 		if (m) return m;
 	}
 	if (!acceptLanguage) return DEFAULT_LOCALE;
+	// Walk tags in descending q-order; for each, try an exact match then a
+	// base-language match before moving to the next, lower-priority tag.
+	// A naive "all exact matches first, then all base matches" pass lets a
+	// low-priority exact tag beat a higher-priority tag we only carry by
+	// base language — e.g. `fr-CA,en;q=0.5` must resolve to fr (the user's
+	// top preference, which we ship as the fr base), not en.
 	const tags = parseAcceptLanguage(acceptLanguage);
 	for (const tag of tags) {
-		const m = exactMatch(tag);
-		if (m) return m;
-	}
-	for (const tag of tags) {
-		const m = baseMatch(tag);
-		if (m) return m;
+		const match = exactMatch(tag) ?? baseMatch(tag);
+		if (match) return match;
 	}
 	return DEFAULT_LOCALE;
 }
