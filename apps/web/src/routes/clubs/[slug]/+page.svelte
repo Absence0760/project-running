@@ -1553,7 +1553,7 @@
 	}
 
 	.approve-all {
-		margin-left: auto;
+		margin-inline-start: auto;
 	}
 
 	.policy-chip {
