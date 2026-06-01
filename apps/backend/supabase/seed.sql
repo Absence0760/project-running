@@ -241,6 +241,45 @@ INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_pu
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000001-0000-0000-0000-00000000000a.json.gz',
     '{"activity_type":"run","title":"Mill Mountain hill reps","avg_bpm":166,"steps":8950}'::jsonb);
 
+-- Bulk repeat efforts on the real routes so /runs/heatmap shows genuine
+-- density (frequently-run routes accumulate heat; the high-zoom line
+-- layer gets overlapping paths to reveal). is_public = false on purpose:
+-- they feed the runner's OWN personal heatmap + dashboard without
+-- flooding the public activity feed or the community /routes/heatmap
+-- (which reads public routes, not runs). The UUIDs + per-route counts
+-- here MUST match the REPEAT_SPEC generator in
+-- scripts/seed-run-tracks.mjs, which uploads the matching tracks; run
+-- `npm run dev:db:seed-tracks` after `supabase db reset`.
+INSERT INTO runs (id, user_id, started_at, duration_s, distance_m, source, is_public, route_id, track_url, metadata)
+SELECT
+  ('a1000002-0000-0000-0000-' || lpad((s.idx * 100 + j)::text, 12, '0'))::uuid,
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890'::uuid,
+  TIMESTAMPTZ '2026-05-26 07:30:00+00' - (j * interval '7 days') - (s.idx * interval '1 day'),
+  s.base_dur + (j % 5) * 30,
+  s.dist,
+  'app',
+  false,
+  (SELECT id FROM routes r
+     WHERE r.user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890' AND r.name = s.name
+     LIMIT 1),
+  'a1b2c3d4-e5f6-7890-abcd-ef1234567890/a1000002-0000-0000-0000-'
+    || lpad((s.idx * 100 + j)::text, 12, '0') || '.json.gz',
+  jsonb_build_object(
+    'activity_type', 'run',
+    'title', s.name || ' #' || j::text,
+    'avg_bpm', s.bpm,
+    'steps', s.steps
+  )
+FROM (VALUES
+  (0, 'Belle Isle + Pipeline Loop',            6500,  2200, 16, 158,  7900),
+  (1, 'UVA Rotunda Loop (Charlottesville)',    4200,  1560,  6, 146,  5400),
+  (2, 'Mount Vernon Trail North (Arlington)', 10200,  3600,  5, 152, 12800),
+  (3, 'Mill Mountain Star Climb (Roanoke)',    7200,  2580,  4, 165,  8800),
+  (4, 'Norfolk Botanical Garden Loop',         4800,  1680,  5, 148,  6100),
+  (5, 'VA Beach Boardwalk Out & Back',         6300,  1980,  4, 150,  7700)
+) AS s(idx, name, dist, base_dur, repeats, bpm, steps),
+LATERAL generate_series(1, s.repeats) AS j;
+
 -- Star three of the seeded routes so the watch picker shows a
 -- realistic "what I run weekly" rotation out of the box. Without
 -- this, the watch's starred-only fetch returns empty and a fresh

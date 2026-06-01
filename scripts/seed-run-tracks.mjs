@@ -345,6 +345,37 @@ const PLAN = [
 	},
 ];
 
+// Repeat efforts on a handful of real routes so /runs/heatmap shows real
+// density — frequently-run routes accumulate heat and the high-zoom line
+// layer has plenty of overlapping paths to reveal. Each repeat re-uses
+// its route's geometry; densifyTrack's per-point jitter makes every
+// upload a slightly different trace (realistic GPS noise), so stacked
+// runs read as a thick bundle rather than one hard line. UUIDs +
+// per-route counts MUST match the set-based INSERT in
+// apps/backend/supabase/seed.sql (the script + SQL are linked by id).
+const _waypointsByPlanId = Object.fromEntries(
+	PLAN.map((p) => [p.id, p.waypoints]),
+);
+const REPEAT_SPEC = [
+	{ idx: 0, planId: 'a1000001-0000-0000-0000-000000000001', repeats: 16 }, // Belle Isle (home base — gets hot)
+	{ idx: 1, planId: 'a1000001-0000-0000-0000-000000000002', repeats: 6 }, // UVA Rotunda
+	{ idx: 2, planId: 'a1000001-0000-0000-0000-000000000003', repeats: 5 }, // Mount Vernon Trail
+	{ idx: 3, planId: 'a1000001-0000-0000-0000-000000000004', repeats: 4 }, // Mill Mountain
+	{ idx: 4, planId: 'a1000001-0000-0000-0000-000000000005', repeats: 5 }, // Norfolk Botanical
+	{ idx: 5, planId: 'a1000001-0000-0000-0000-000000000006', repeats: 4 }, // VA Beach Boardwalk
+];
+const REPEAT_BASE_MS = Date.parse('2026-05-26T07:30:00Z');
+const DAY_MS = 86_400_000;
+for (const spec of REPEAT_SPEC) {
+	const waypoints = _waypointsByPlanId[spec.planId];
+	for (let j = 1; j <= spec.repeats; j++) {
+		const counter = spec.idx * 100 + j;
+		const id = `a1000002-0000-0000-0000-${String(counter).padStart(12, '0')}`;
+		const startedAt = new Date(REPEAT_BASE_MS - (j * 7 + spec.idx) * DAY_MS);
+		PLAN.push({ id, startedAt, waypoints });
+	}
+}
+
 async function uploadTrack(serviceRoleKey, run) {
 	const path = `${SEED_USER_ID}/${run.id}.json.gz`;
 	const track = densifyTrack(run.waypoints, 4, run.startedAt);
