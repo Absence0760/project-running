@@ -33,8 +33,17 @@ class PlaceResult {
 
 typedef GeocodingFetcher = Future<String> Function(Uri url);
 
+/// Nominatim rejects requests carrying a stock HTTP-library User-Agent
+/// (dart:io's default looks like `Dart/x.y (dart:io)`) with HTTP 403 — its
+/// usage policy requires a UA identifying the application. Set one so
+/// the no-MapTiler-key Nominatim fallback returns results instead of
+/// silently 403ing into an empty search dropdown. MapTiler ignores the
+/// header, so it is safe to send on both providers.
+const kGeocodingUserAgent = 'threkir-run-app/1.0 (privacy@threkir.com)';
+
 Future<String> _defaultFetcher(Uri url) async {
   final client = HttpClient();
+  client.userAgent = kGeocodingUserAgent;
   try {
     final req = await client.getUrl(url);
     final res = await req.close();

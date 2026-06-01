@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 
@@ -17,6 +18,23 @@ class _StubFetcher {
 }
 
 void main() {
+  group('production fetcher', () {
+    // The injected-fetcher tests below all bypass _defaultFetcher, so this
+    // source guard pins the one thing they can't: the real HttpClient must
+    // send a non-stock User-Agent or Nominatim 403s the no-key fallback
+    // into an empty dropdown (verified by curl: stock dart:io UA → 403,
+    // descriptive UA → 200).
+    test('sets a descriptive User-Agent so Nominatim does not 403', () {
+      expect(kGeocodingUserAgent, isNotEmpty);
+      expect(kGeocodingUserAgent.toLowerCase().contains('dart'), isFalse,
+          reason: 'must not look like a stock dart:io User-Agent');
+      final src = File('lib/geocoding.dart').readAsStringSync();
+      expect(src.contains('client.userAgent = kGeocodingUserAgent'), isTrue,
+          reason: '_defaultFetcher must apply kGeocodingUserAgent to the '
+              'HttpClient before issuing the request');
+    });
+  });
+
   group('searchPlaces', () {
     test('empty list when query is shorter than 2 chars', () async {
       final out = await searchPlaces(
