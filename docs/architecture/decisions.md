@@ -2542,6 +2542,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 109. The dashboard's CTL/ATL/TSB numbers, recovery advice, and readiness ring read the same training-load series as the chart
+
+**Decided (2026-06-01):** on the dashboard, the displayed Fitness/Fatigue/Form numbers, the recovery-advice line, and the readiness ring all derive from the **final point of `computeTrainingLoadSeries`** (`training_load.ts` / `.dart`) — the same series the training-load chart plots. `computeSnapshot` (`fitness.ts` / `.dart`) stays the source for VO₂max / VDOT / qualifying-run-count only.
+
+**Why.** The two modules compute training load differently: `fitness.ts` uses a threshold-pace TSS with EWMA `prev + (sample−prev)/tau`, while `training_load.ts` uses TRIMP-when-HR / distance-fallback stress with EWMA `alpha = 1 − exp(−1/halflife)`. Driving the *number + advice* off one module and the *chart* off the other let them straddle the TSB advice threshold — the card could read "+30, fresh, go race" directly above a chart whose curve said otherwise (persona round-5 pro). One series, one truth.
+
+**The trade-off.** The displayed CTL/ATL/TSB now match the chart's model (TRIMP/distance) rather than `fitness.ts`'s TSS model, so the numbers shifted slightly for existing users — an acceptable one-time change in exchange for internal consistency. The two stress models were deliberately **not** merged (that's a larger behavioural change); they coexist, and the dashboard simply commits to the chart's as canonical for the load trio. Source-level guards pin the single-source wiring on both web (`dashboard_fitness_source_guard.test.ts`) and mobile (`fitness_card_test.dart`). **Don't** re-point the card or readiness ring back at `computeSnapshot` for the load numbers.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

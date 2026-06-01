@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../fitness.dart';
+import '../training_load.dart';
 
 /// Dashboard "Fitness" card — VO₂ max / VDOT / qualifying-run count
 /// on the top row, training-load (CTL / ATL / TSB) on the second, plus
@@ -15,16 +16,31 @@ import '../fitness.dart';
 class FitnessCard extends StatelessWidget {
   final List<Run> runs;
   final DateTime now;
-  const FitnessCard({super.key, required this.runs, required this.now});
+  final HrPrefs hrPrefs;
+  const FitnessCard({
+    super.key,
+    required this.runs,
+    required this.now,
+    this.hrPrefs = const HrPrefs(),
+  });
 
   @override
   Widget build(BuildContext context) {
     final snapshot = computeSnapshot(runs, now: now);
     if (snapshot.qualifyingRunCount == 0) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    // CTL / ATL / TSB + the advice come from the SAME training-load series
+    // the chart below uses, so the number, the advice, and the curve can't
+    // contradict each other (round-5 pro). VO₂max / VDOT / qualifying stay
+    // on computeSnapshot.
+    final series = computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
+    final load = (series.isNotEmpty &&
+            (series.last.ctl > 0 || series.last.atl > 0))
+        ? series.last
+        : null;
     final advice = recoveryAdvice(
-      snapshot.trainingStressBal,
-      snapshot.chronicLoad,
+      load?.tsb,
+      load?.ctl,
       returningFromLayoff: isReturningFromLayoff(runs, now: now),
     );
 
@@ -71,19 +87,19 @@ class FitnessCard extends StatelessWidget {
                   children: [
                     FitnessStat(
                       label: 'Fitness (CTL)',
-                      value: fmt(snapshot.chronicLoad, digits: 0),
+                      value: fmt(load?.ctl, digits: 0),
                       tooltip:
                           'Your rolling 42-day training load. Builds slowly; this is your endurance base.',
                     ),
                     FitnessStat(
                       label: 'Fatigue (ATL)',
-                      value: fmt(snapshot.acuteLoad, digits: 0),
+                      value: fmt(load?.atl, digits: 0),
                       tooltip:
                           'Your last 7 days of load. Rises fast after hard sessions and drops with rest.',
                     ),
                     FitnessStat(
                       label: 'Form (TSB)',
-                      value: fmt(snapshot.trainingStressBal, digits: 0),
+                      value: fmt(load?.tsb, digits: 0),
                       tooltip:
                           'Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.',
                     ),

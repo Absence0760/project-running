@@ -91,6 +91,22 @@
 	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
 	let trainingLoadSeries = $derived(computeTrainingLoadSeries(runs, trimpPrefs, 90));
 	let trainingLoadHasHr = $derived(hasTrimpSignal(runs, trimpPrefs));
+	// Single source of truth for CTL/ATL/TSB on this page. The fitness
+	// card's numbers, the recovery advice, and the readiness ring used to
+	// read computeSnapshot (fitness.ts) while the chart below read
+	// computeTrainingLoadSeries (training_load.ts) — different EWMA AND
+	// different stress model, so the advice could contradict the chart
+	// around the TSB threshold (round-5 pro). Drive all four off the chart's
+	// own final point so the number, the advice, and the curve always agree.
+	// computeSnapshot stays the source for VO₂max / VDOT only.
+	let loadNow = $derived.by(() => {
+		const s = trainingLoadSeries;
+		if (s.length === 0) return null;
+		const last = s[s.length - 1];
+		// No training load (no qualifying runs) → hide like the old null.
+		if (last.ctl <= 0 && last.atl <= 0) return null;
+		return last;
+	});
 
 	/// HR zone thresholds (z1..z5 = upper bound of each zone, bpm) live in
 	/// `user_settings.prefs.hr_zones`. Null until loaded; null means the
@@ -511,7 +527,7 @@
 	/// Connect / HealthKit reads ship separately); the helper handles
 	/// null gracefully so the card shows a TSB-only score for now.
 	let readiness = $derived.by(() =>
-		computeReadiness({ tsb: liveSnap.trainingStressBal ?? null }),
+		computeReadiness({ tsb: loadNow?.tsb ?? null }),
 	);
 
 	// Mileage chart data based on view mode.
@@ -959,7 +975,7 @@
 		     through the `readiness.ts` helper unchanged once Health
 		     Connect / HealthKit reads land. Hide entirely when there's
 		     nothing to score (no TSB, no qualifying runs). -->
-		{#if liveSnap.trainingStressBal != null}
+		{#if loadNow != null}
 			<section class="readiness-card readiness-{readiness.band}">
 				<div class="readiness-head">
 					<span class="readiness-label">Readiness</span>
@@ -982,7 +998,7 @@
 			</section>
 		{/if}
 
-		{#if liveSnap.vo2Max != null || liveSnap.chronicLoad != null}
+		{#if liveSnap.vo2Max != null || loadNow != null}
 			<section class="fitness-card">
 				<div class="fitness-row">
 					<div
@@ -995,13 +1011,13 @@
 						</span>
 						<span class="fitness-unit">ml/kg/min</span>
 					</div>
-					{#if liveSnap.chronicLoad != null}
+					{#if loadNow != null}
 						<div
 							class="fitness-metric"
 							title="Fitness (CTL) — your rolling 42-day training load. Builds slowly; this is your endurance base."
 						>
 							<span class="fitness-label">CTL (fitness)</span>
-							<span class="fitness-value">{liveSnap.chronicLoad.toFixed(0)}</span>
+							<span class="fitness-value">{loadNow.ctl.toFixed(0)}</span>
 							<span class="fitness-unit">42-day load</span>
 						</div>
 						<div
@@ -1009,9 +1025,7 @@
 							title="Fatigue (ATL) — your last 7 days of load. Rises fast after hard sessions and drops with rest."
 						>
 							<span class="fitness-label">ATL (fatigue)</span>
-							<span class="fitness-value">
-								{liveSnap.acuteLoad != null ? liveSnap.acuteLoad.toFixed(0) : '—'}
-							</span>
+							<span class="fitness-value">{loadNow.atl.toFixed(0)}</span>
 							<span class="fitness-unit">7-day load</span>
 						</div>
 						<div
@@ -1021,19 +1035,17 @@
 							<span class="fitness-label">TSB (form)</span>
 							<span
 								class="fitness-value"
-								class:tsb-neg={(liveSnap.trainingStressBal ?? 0) < -10}
-								class:tsb-pos={(liveSnap.trainingStressBal ?? 0) > 10}
+								class:tsb-neg={loadNow.tsb < -10}
+								class:tsb-pos={loadNow.tsb > 10}
 							>
-								{liveSnap.trainingStressBal != null
-									? (liveSnap.trainingStressBal > 0 ? '+' : '') + liveSnap.trainingStressBal.toFixed(0)
-									: '—'}
+								{(loadNow.tsb > 0 ? '+' : '') + loadNow.tsb.toFixed(0)}
 							</span>
 							<span class="fitness-unit">fitness − fatigue</span>
 						</div>
 					{/if}
 				</div>
 				<p class="fitness-advice">
-					{recoveryAdvice(liveSnap.trainingStressBal, liveSnap.chronicLoad, isReturningFromLayoff(runs))}
+					{recoveryAdvice(loadNow?.tsb ?? null, loadNow?.ctl ?? null, isReturningFromLayoff(runs))}
 				</p>
 				{#if trendPath}
 					<!-- Trend sparkline: VO2 max over the persisted

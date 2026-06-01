@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/training_load.dart';
 import '../lib/widgets/fitness_card.dart';
 
 Run _r({
@@ -100,6 +101,37 @@ void main() {
       // Recovery-advice line is present (text content varies with TSB,
       // so just check the icon and that some text sits beside it).
       expect(find.byIcon(Icons.health_and_safety), findsOneWidget);
+    });
+
+    testWidgets('CTL/ATL/TSB come from the training-load series, not computeSnapshot',
+        (tester) async {
+      // round-5 pro: the card must read the SAME series the chart shows so
+      // the form number can't contradict the curve. Pin the displayed
+      // CTL/ATL/TSB to computeTrainingLoadSeries(...).last.
+      final now = DateTime.utc(2026, 5, 1);
+      final runs = [
+        _r(distance: 5000, durationS: 1500, startedAt: now.subtract(const Duration(days: 25))),
+        _r(distance: 5000, durationS: 1300, startedAt: now.subtract(const Duration(days: 5))),
+      ];
+      final last = computeTrainingLoadSeries(runs, endDate: now).last;
+      await _pump(tester, runs: runs, now: now);
+      await tester.pumpAndSettle();
+
+      for (final entry in {
+        'Fitness (CTL)': last.ctl,
+        'Fatigue (ATL)': last.atl,
+        'Form (TSB)': last.tsb,
+      }.entries) {
+        final stat = find.ancestor(
+            of: find.text(entry.key), matching: find.byType(FitnessStat));
+        expect(
+          find.descendant(
+              of: stat, matching: find.text(entry.value.toStringAsFixed(0))),
+          findsOneWidget,
+          reason: '${entry.key} must equal the series value '
+              '${entry.value.toStringAsFixed(0)}',
+        );
+      }
     });
 
     testWidgets('uses an em-dash placeholder when VDOT cannot be computed',

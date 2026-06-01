@@ -1,8 +1,8 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
-import '../fitness.dart';
 import '../readiness.dart';
+import '../training_load.dart';
 
 /// Dashboard card surfacing the readiness-to-run score derived from
 /// the user's training-stress balance. Sleep + resting-HR inputs are
@@ -12,18 +12,26 @@ import '../readiness.dart';
 class ReadinessCard extends StatelessWidget {
   final List<Run> runs;
   final DateTime now;
+  final HrPrefs hrPrefs;
 
   const ReadinessCard({
     super.key,
     required this.runs,
     required this.now,
+    this.hrPrefs = const HrPrefs(),
   });
 
   @override
   Widget build(BuildContext context) {
-    final snapshot = computeSnapshot(runs, now: now);
-    final tsb = snapshot.trainingStressBal;
-    if (tsb == null) return const SizedBox.shrink();
+    // TSB from the same training-load series the chart + fitness card use,
+    // so readiness can't disagree with the displayed form number (round-5 pro).
+    final series = computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
+    final load = (series.isNotEmpty &&
+            (series.last.ctl > 0 || series.last.atl > 0))
+        ? series.last
+        : null;
+    if (load == null) return const SizedBox.shrink();
+    final tsb = load.tsb;
 
     final readiness = computeReadiness(ReadinessInputs(tsb: tsb));
     final theme = Theme.of(context);

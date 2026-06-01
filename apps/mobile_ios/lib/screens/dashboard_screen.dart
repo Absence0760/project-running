@@ -184,13 +184,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
       widget.settingsSync?.service?.effective<String>(SettingsKeys.weekStartDay) ??
       'monday';
 
+  // Shared HR prefs for every training-load surface on this page so the
+  // fitness card, readiness card, and chart all score on the same model.
+  HrPrefs _hrPrefs() => HrPrefs(
+        restingHrBpm: widget.settingsSync?.service
+            ?.effective<num>(SettingsKeys.restingHrBpm),
+        maxHrBpm: widget.settingsSync?.service
+            ?.effective<num>(SettingsKeys.maxHrBpm),
+      );
+
   Widget _buildTrainingLoadChart(List<Run> runs, DateTime now) {
-    final hrPrefs = HrPrefs(
-      restingHrBpm: widget.settingsSync?.service
-          ?.effective<num>(SettingsKeys.restingHrBpm),
-      maxHrBpm: widget.settingsSync?.service
-          ?.effective<num>(SettingsKeys.maxHrBpm),
-    );
+    final hrPrefs = _hrPrefs();
     final series =
         computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
     return TrainingLoadChart(
@@ -469,8 +473,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   _kSectionGap,
                 ],
-                FitnessCard(runs: runs, now: now),
-                ReadinessCard(runs: runs, now: now),
+                FitnessCard(runs: runs, now: now, hrPrefs: _hrPrefs()),
+                ReadinessCard(runs: runs, now: now, hrPrefs: _hrPrefs()),
                 IntensityCard(
                   runs: runs,
                   hrZones: parseHrZones(widget.settingsSync?.service
