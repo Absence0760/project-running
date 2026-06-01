@@ -1,8 +1,8 @@
 # Competitive landscape — what we're up against, and what's actually beatable
 
-A frank read of the four watches we'd be competing with in the ultra-marathon segment, written as if you were going to bet money on the outcome. Most of the "we can beat them" thinking that founders bring to consumer hardware is wrong; this doc tries to be specific about *which* parts are wrong and which parts are actually right.
+A frank read of the watches we'd be competing with in the ultra-marathon segment, written as if you were going to bet money on the outcome. Most of the "we can beat them" thinking that founders bring to consumer hardware is wrong; this doc tries to be specific about *which* parts are wrong and which parts are actually right.
 
-The four watches we'd be measured against, with their best-case advertised numbers:
+The watches we'd be measured against, with their best-case advertised numbers. The first four are the true MIP-display, dual-band ultra flagships — the watches the core 100mi buyer actually cross-shops. Polar and Amazfit round out the segment as AMOLED-display adjacents (premium and budget); both also happen to be the most plausible Vector-3 ODM partners (see the strategic-implication section below):
 
 | Watch | GPS battery | Display | GNSS | Price |
 |---|---|---|---|---|
@@ -10,8 +10,10 @@ The four watches we'd be measured against, with their best-case advertised numbe
 | Garmin Enduro 3 | ~110hr (single-band) | 1.4" MIP | Dual-band | $900 |
 | COROS Vertix 2 / 2S | ~140hr / ~118hr | 1.4" MIP | Dual-band | $700 |
 | Suunto Vertical | ~85hr (Performance mode) | 1.4" MIP | Dual-band | $700 |
+| Polar Grit X2 Pro | ~140hr (eco) / ~40hr (full) | 1.39" AMOLED | Dual-band | ~$750 |
+| Amazfit T-Rex 3 Pro | ~116hr (max-battery) / ~38hr (accurate) | AMOLED | Dual-band | ~$280 |
 
-Headline numbers are best-case single-band; multi-band-with-music typically drops them 40–60%. Treat them as marketing, not as what you'd see on the wrist during a 100-miler. The analysis below assumes the buyer knows this.
+Headline numbers are best-case single-band; multi-band-with-music typically drops them 40–60%. Treat them as marketing, not as what you'd see on the wrist during a 100-miler. The analysis below assumes the buyer knows this. The two AMOLED entrants make the battery thesis concrete: Polar is premium hardware but its AMOLED panel caps real full-GPS life around 40hr (fine for a fast 100k, short for a slow 100-miler), while Amazfit hits a big headline number cheaply but trails the flagships on GNSS-algorithm maturity, accessory ecosystem, and brand trust — the same hard-to-cross moats covered next. The deep fault analysis below stays on Garmin and COROS, the two incumbents whose customers we'd actually be converting.
 
 ## What you literally cannot beat them on
 
