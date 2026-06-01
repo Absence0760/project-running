@@ -66,6 +66,10 @@ class _FakeApiClient extends ApiClient {
     discoverCalls++;
     lastFilter = filter;
     lastDistMin = distMin;
+    lastMinLng = minLng;
+    lastMinLat = minLat;
+    lastMaxLng = maxLng;
+    lastMaxLat = maxLat;
     return nextPins;
   }
 
@@ -177,14 +181,14 @@ void main() {
         },
       );
       await tester.pump(const Duration(milliseconds: 100));
-      final initialFetches = api.fetchCalls;
+      final initialFetches = api.discoverCalls;
 
       await tester.tap(find.byType(FloatingActionButton));
       await tester.pump();
       await tester.pump(const Duration(milliseconds: 300));
 
       expect(locateCalls, 1);
-      expect(api.fetchCalls, greaterThan(initialFetches),
+      expect(api.discoverCalls, greaterThan(initialFetches),
           reason: 'Locate must schedule a refresh so discovery '
               "repopulates around the user's location.");
     });
@@ -211,25 +215,53 @@ void main() {
               'MapTiler key is unset; the dropdown must not surface.');
     });
 
-    testWidgets('mounts a FlutterMap with a TileLayer + CircleLayer',
+    testWidgets('mounts a FlutterMap with a TileLayer + a marker layer',
         (tester) async {
       final api = _FakeApiClient();
       await _pump(tester, api);
       expect(find.byType(FlutterMap), findsOneWidget);
       expect(find.byType(TileLayer), findsAtLeastNWidgets(1));
-      expect(find.byType(CircleLayer), findsAtLeastNWidgets(1));
+      // Pins render in a MarkerLayer (even when empty). Heat is off by
+      // default, so there is no heat CircleLayer on mount.
+      expect(find.byType(MarkerLayer), findsAtLeastNWidgets(1));
     });
 
-    testWidgets('fires fetchHeatmapPoints on mount with valid bbox',
+    testWidgets('fetches discovery on mount with a valid bbox; heat is off',
+        (tester) async {
+      final api = _FakeApiClient();
+      await _pump(tester, api);
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(api.discoverCalls, greaterThanOrEqualTo(1));
+      expect(api.lastMinLng, isNotNull);
+      expect(api.lastMinLng!, lessThan(api.lastMaxLng!));
+      expect(api.lastMinLat!, lessThan(api.lastMaxLat!));
+      // Heat is off by default → no heat-points fetch on mount.
+      expect(api.fetchCalls, 0,
+          reason: 'the density heat layer is opt-in; we must not pay '
+              'for heatmap points until the user enables Heat.');
+    });
+
+    testWidgets('enabling Heat fetches heat points + mounts the heat layer',
         (tester) async {
       final api = _FakeApiClient()
         ..nextPoints = const [HeatmapPoint(lat: 51.5074, lng: -0.1276)];
       await _pump(tester, api);
       await tester.pump(const Duration(milliseconds: 100));
-      expect(api.fetchCalls, greaterThanOrEqualTo(1));
-      expect(api.lastMinLng, isNotNull);
-      expect(api.lastMinLng!, lessThan(api.lastMaxLng!));
-      expect(api.lastMinLat!, lessThan(api.lastMaxLat!));
+      expect(api.fetchCalls, 0);
+      expect(find.byType(CircleLayer), findsNothing);
+
+      await tester.tap(find.byIcon(Icons.tune));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      // The Heat chip sits at the bottom of the scrollable sheet.
+      await tester.ensureVisible(find.text('Heat density'));
+      await tester.pump();
+      await tester.tap(find.text('Heat density'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(api.fetchCalls, greaterThanOrEqualTo(1),
+          reason: 'toggling Heat must fetch the density points');
     });
 
     testWidgets('RPC error path swallows + does not crash', (tester) async {

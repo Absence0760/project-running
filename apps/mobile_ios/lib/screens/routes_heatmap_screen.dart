@@ -75,6 +75,11 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   /// Selected race-distance band keys (multi-select). Empty = no filter.
   final Set<String> _bands = <String>{};
 
+  /// The density heat layer is OFF by default: it traces each route's
+  /// path and reads as "the route is already shown", fighting the
+  /// tap-to-preview model. Opt in from the Filters sheet.
+  bool _showHeat = false;
+
   /// The route currently previewed (tapped from its pin or its list row).
   /// Its line is drawn on the map; the bottom sheet shows its card.
   String? _selectedRouteId;
@@ -136,12 +141,15 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     setState(() => _loading = true);
     try {
       final ranges = bandsToRanges(_bands.toList());
-      final heat = await widget.api.fetchHeatmapPoints(
-        minLng: bounds.west,
-        minLat: bounds.south,
-        maxLng: bounds.east,
-        maxLat: bounds.north,
-      );
+      // Only pay for heat points when the layer is on (off by default).
+      final heat = _showHeat
+          ? await widget.api.fetchHeatmapPoints(
+              minLng: bounds.west,
+              minLat: bounds.south,
+              maxLng: bounds.east,
+              maxLat: bounds.north,
+            )
+          : const <cm.HeatmapPoint>[];
       final pins = await widget.api.fetchDiscoverableRoutesInBbox(
         minLng: bounds.west,
         minLat: bounds.south,
@@ -307,6 +315,23 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                             _refresh();
                           },
                         ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  const _FilterGroupLabel('Map'),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      FilterChip(
+                        label: const Text('Heat density'),
+                        selected: _showHeat,
+                        onSelected: (_) {
+                          setState(() => _showHeat = !_showHeat);
+                          setSheet(() {});
+                          _refresh();
+                        },
+                      ),
                     ],
                   ),
                   const SizedBox(height: 4),
@@ -493,18 +518,20 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                   dio: TileCache.dio,
                 ),
               ),
-              // Heat-density background (stacked low-opacity dots).
-              CircleLayer(
-                circles: [
-                  for (final p in _points)
-                    CircleMarker(
-                      point: LatLng(p.lat, p.lng),
-                      radius: 4,
-                      color: Colors.red.withValues(alpha: 0.18),
-                      borderStrokeWidth: 0,
-                    ),
-                ],
-              ),
+              // Heat-density background (stacked low-opacity dots) —
+              // opt-in via the Filters sheet.
+              if (_showHeat)
+                CircleLayer(
+                  circles: [
+                    for (final p in _points)
+                      CircleMarker(
+                        point: LatLng(p.lat, p.lng),
+                        radius: 4,
+                        color: Colors.red.withValues(alpha: 0.18),
+                        borderStrokeWidth: 0,
+                      ),
+                  ],
+                ),
               // The previewed route's line — hidden until a pin / row is
               // tapped. Dark casing + cyan body, matching web.
               if (_selectedLine != null)
