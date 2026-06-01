@@ -92,6 +92,14 @@
 		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
 		return undefined;
 	});
+
+	// The runner's own caption (metadata.title) is the headline the
+	// persona screenshots for social; fall back to the date when there's
+	// no title. The OG <head> title already prefers the caption, so this
+	// keeps the visible page body consistent with the share-card preview.
+	let runTitle = $derived(
+		((run?.metadata as Record<string, unknown> | null)?.title as string) ?? '',
+	);
 </script>
 
 {#if loading}
@@ -100,9 +108,17 @@
 	<p class="status">Run not found.</p>
 {:else if run}
 	{#if !headerless}
-		<h1 class:compact>{formatDate(run.started_at)}</h1>
+		{#if runTitle}
+			<h1 class:compact>{runTitle}</h1>
+		{:else}
+			<h1 class:compact>{formatDate(run.started_at)}</h1>
+		{/if}
 	{/if}
 	<div class="run-meta">
+		{#if runTitle}
+			<span>{formatDate(run.started_at)}</span>
+			<span class="meta-sep">&middot;</span>
+		{/if}
 		<span>{formatDistance(run.distance_m)}</span>
 		<span class="meta-sep">&middot;</span>
 		<span>{formatDuration(run.duration_s)}</span>

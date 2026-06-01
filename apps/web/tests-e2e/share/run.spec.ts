@@ -221,6 +221,26 @@ test.describe('/share/run/[id] — anon', () => {
 		await expect(page.locator('.run-meta')).toBeVisible({ timeout: 10_000 });
 	});
 
+	test('headline shows the runner caption, not the date', async ({ page }) => {
+		// The seeded RUNNER_PUBLIC_RUN_ID carries metadata.title
+		// "E2E demo public run". The share-page <h1> should render that
+		// caption (what the runner screenshots for social), with the run
+		// date demoted into the run-meta row — persona round-5 very-social.
+		await page.route('**/functions/v1/clip-public-track', (route) =>
+			route.fulfill({
+				status: 200,
+				contentType: 'application/json',
+				body: JSON.stringify({ points: [] })
+			})
+		);
+
+		await page.goto(`/share/run/${RUNNER_PUBLIC_RUN_ID}`);
+
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'E2E demo public run' })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('zero-photo run shows no empty Photos card to an anon viewer', async ({ page }) => {
 		// RunPhotos renders nothing for a non-owner when the run has no
 		// photos (persona round-5, runner-casual): an empty "Photos" card
