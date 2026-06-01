@@ -19,7 +19,7 @@
 
 begin;
 
-select plan(14);
+select plan(17);
 
 -- ─── 1. public = false on private buckets ──────────────────────────
 select is(
@@ -101,6 +101,43 @@ select ok(
   'avatars bucket MUST have an owner-scoped INSERT policy '
   '(without it, the bucket is upload-by-anyone — same shape that '
   '20260712_001 closed for run-photos)'
+);
+
+-- The INSERT policy pins write-once; the UPDATE + DELETE policies pin
+-- the overwrite + remove guards. avatars is public=true, so an
+-- authenticated user who can upload could also overwrite another
+-- user's avatar path if the owner-scoped UPDATE policy were dropped by
+-- a bare-body `drop policy + create policy` regression. Pin all three.
+select ok(
+  (select count(*) from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and policyname = 'avatars owner can update') = 1,
+  'avatars bucket MUST have an owner-scoped UPDATE policy — without it '
+  'any authenticated user could overwrite another users avatar bytes'
+);
+
+select ok(
+  (select count(*) from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and policyname = 'avatars owner can delete') = 1,
+  'avatars bucket MUST have an owner-scoped DELETE policy — without it '
+  'any authenticated user could delete another users avatar'
+);
+
+-- avatars is intentionally served via the public-bucket CDN bypass, so
+-- there is deliberately NO SELECT policy on storage.objects for it.
+-- Pin that absence: a future restrictive SELECT policy added without
+-- flipping public=false would be silently dead code (the CDN bypass
+-- keeps serving the bytes), masking the intended access model.
+select is(
+  (select count(*) from pg_policies
+     where schemaname = 'storage' and tablename = 'objects'
+       and cmd = 'SELECT'
+       and (qual ilike '%avatars%' or with_check ilike '%avatars%'))::int,
+  0::int,
+  'avatars bucket MUST have NO SELECT policy — it relies on the '
+  'public=true CDN bypass; a SELECT policy here would be dead code '
+  'and signal a misunderstanding of the access model'
 );
 
 -- ─── 5. run-photos SELECT policy content pin ───────────────────────
