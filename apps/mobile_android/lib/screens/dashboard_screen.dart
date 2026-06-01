@@ -158,6 +158,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
         existing: goal,
       );
 
+  String get _weekStartDay =>
+      widget.settingsSync?.service?.effective<String>(SettingsKeys.weekStartDay) ??
+      'monday';
+
   Widget _buildTrainingLoadChart(List<Run> runs, DateTime now) {
     final hrPrefs = HrPrefs(
       restingHrBpm: widget.settingsSync?.service
@@ -197,7 +201,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final goals = widget.preferences.goals;
 
     final now = DateTime.now();
-    final weekStart = weekStartLocal(now);
+    final weekStart = weekStartLocal(now, weekStartDay: _weekStartDay);
     final monthStart = DateTime(now.year, now.month, 1);
 
     // One pass over the runs list collects everything every card needs —
@@ -488,7 +492,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           for (final goal in goals)
             _GoalCard(
               goal: goal,
-              progress: evaluateGoal(goal, runs, now),
+              progress:
+                  evaluateGoal(goal, runs, now, weekStartDay: _weekStartDay),
               unit: unit,
               onTap: () => _editGoal(goal),
             ),

@@ -164,9 +164,11 @@ class GoalProgress {
 
 /// Pure evaluator: given a goal and the full run list, compute progress
 /// for every active target.
-GoalProgress evaluateGoal(RunGoal goal, List<Run> runs, DateTime now) {
-  final periodStart = goalPeriodStart(goal.period, now);
-  final periodEnd = goalPeriodEnd(goal.period, now);
+GoalProgress evaluateGoal(RunGoal goal, List<Run> runs, DateTime now,
+    {String weekStartDay = 'monday'}) {
+  final periodStart =
+      goalPeriodStart(goal.period, now, weekStartDay: weekStartDay);
+  final periodEnd = goalPeriodEnd(goal.period, now, weekStartDay: weekStartDay);
 
   final inPeriod = runs
       .where((r) =>
@@ -378,31 +380,36 @@ String _formatSecondsCoarse(double seconds) {
   return '${totalMin}m';
 }
 
-/// Monday 00:00 local time of the ISO week containing [now]. The single
-/// source of truth for "this week" across goals, the history filter, and
-/// the dashboard summary cards — keeping them in lockstep so a future
-/// change of convention (e.g. Sunday-start) is a one-file edit.
-DateTime weekStartLocal(DateTime now) {
+/// 00:00 local time of the week containing [now]. The single source of truth
+/// for "this week" across goals, the history filter, and the dashboard summary
+/// cards. Honours the user's `week_start_day` setting ('monday' | 'sunday'),
+/// defaulting to Monday — mirrors web `periodStart` in training/goals.ts.
+DateTime weekStartLocal(DateTime now, {String weekStartDay = 'monday'}) {
   final startOfToday = DateTime(now.year, now.month, now.day);
-  final daysFromMonday = (now.weekday - DateTime.monday) % 7;
-  return startOfToday.subtract(Duration(days: daysFromMonday));
+  final daysFromStart = weekStartDay == 'sunday'
+      ? now.weekday % 7
+      : (now.weekday - DateTime.monday) % 7;
+  return startOfToday.subtract(Duration(days: daysFromStart));
 }
 
 /// Start of the period containing [now], inclusive, in local time.
-DateTime goalPeriodStart(GoalPeriod period, DateTime now) {
+DateTime goalPeriodStart(GoalPeriod period, DateTime now,
+    {String weekStartDay = 'monday'}) {
   switch (period) {
     case GoalPeriod.week:
-      return weekStartLocal(now);
+      return weekStartLocal(now, weekStartDay: weekStartDay);
     case GoalPeriod.month:
       return DateTime(now.year, now.month, 1);
   }
 }
 
 /// Exclusive end of the period containing [now], in local time.
-DateTime goalPeriodEnd(GoalPeriod period, DateTime now) {
+DateTime goalPeriodEnd(GoalPeriod period, DateTime now,
+    {String weekStartDay = 'monday'}) {
   switch (period) {
     case GoalPeriod.week:
-      return goalPeriodStart(period, now).add(const Duration(days: 7));
+      return goalPeriodStart(period, now, weekStartDay: weekStartDay)
+          .add(const Duration(days: 7));
     case GoalPeriod.month:
       final nextMonth = now.month == 12 ? 1 : now.month + 1;
       final year = now.month == 12 ? now.year + 1 : now.year;

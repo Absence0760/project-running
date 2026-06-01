@@ -155,6 +155,50 @@ void main() {
       expect(instances, hasLength(3)); // Apr 5, May 5, Jun 5
     });
 
+    test('day-31 monthly clamps to the last day of shorter months (no overflow)', () {
+      // Jan-31 monthly must land on Feb-28 (2026 is not a leap year), Mar-31,
+      // Apr-30 — never overflow into the following month. A naive
+      // DateTime(y, 2, 31) rolls into March 3.
+      final start = DateTime(2026, 1, 31, 9, 0);
+      final e = EventRecurrence(
+        startsAt: start,
+        freq: RecurrenceFreq.monthly,
+      );
+
+      final instances = expandInstances(
+        e,
+        DateTime(2026, 1, 1),
+        DateTime(2026, 4, 30, 23, 59, 59),
+      );
+
+      final dates = instances.map((d) => '${d.year}-${d.month}-${d.day}').toList();
+      expect(dates, ['2026-1-31', '2026-2-28', '2026-3-31', '2026-4-30']);
+      // The clamp must not permanently shrink the day-of-month: March is
+      // back to 31, proving each instance re-anchors on the original day.
+      for (final inst in instances) {
+        expect(inst.hour, 9);
+        expect(inst.minute, 0);
+      }
+    });
+
+    test('day-31 monthly hits Feb-29 in a leap year', () {
+      final start = DateTime(2024, 1, 31, 8, 0);
+      final e = EventRecurrence(
+        startsAt: start,
+        freq: RecurrenceFreq.monthly,
+      );
+
+      final instances = expandInstances(
+        e,
+        DateTime(2024, 2, 1),
+        DateTime(2024, 2, 29, 23, 59, 59),
+      );
+
+      expect(instances, hasLength(1));
+      expect(instances.first.month, 2);
+      expect(instances.first.day, 29);
+    });
+
     test('monthly recurrence_count cap limits instances', () {
       final utcStart = DateTime.utc(2026, 1, 1, 9, 0, 0);
       final e = EventRecurrence(

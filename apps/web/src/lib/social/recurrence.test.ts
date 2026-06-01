@@ -153,6 +153,45 @@ test('expandInstances — monthly produces one instance per month in window', ()
 	assert.equal(out.length, 3);
 });
 
+test('expandInstances — day-31 monthly clamps to month-end (no overflow)', () => {
+	// Jan-31 monthly must land on Feb-28 (2026 is not a leap year), Mar-31,
+	// Apr-30 — never roll into the following month. A naive setMonth(+1) on a
+	// Jan-31 cursor overflows to March 3. Local-time start (no Z) so the
+	// day-of-month is unambiguous in the UTC CI runner.
+	const e = ev({
+		starts_at: '2026-01-31T09:00:00',
+		recurrence_freq: 'monthly',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2026-01-01T00:00:00'),
+		new Date('2026-04-30T23:59:59'),
+	);
+	const dates = out.map((d) => `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+	assert.deepEqual(dates, ['2026-1-31', '2026-2-28', '2026-3-31', '2026-4-30']);
+	// Each instance re-anchors on the original day (March is back to 31), so a
+	// February clamp doesn't permanently shrink the day-of-month.
+	for (const d of out) {
+		assert.equal(d.getHours(), 9);
+		assert.equal(d.getMinutes(), 0);
+	}
+});
+
+test('expandInstances — day-31 monthly hits Feb-29 in a leap year', () => {
+	const e = ev({
+		starts_at: '2024-01-31T08:00:00',
+		recurrence_freq: 'monthly',
+	});
+	const out = expandInstances(
+		e,
+		new Date('2024-02-01T00:00:00'),
+		new Date('2024-02-29T23:59:59'),
+	);
+	assert.equal(out.length, 1);
+	assert.equal(out[0].getMonth(), 1); // February
+	assert.equal(out[0].getDate(), 29);
+});
+
 test('expandInstances — instances do not precede the original starts_at', () => {
 	const startsAt = '2026-04-08T09:00:00Z';
 	const e = ev({ starts_at: startsAt, recurrence_freq: 'weekly' });

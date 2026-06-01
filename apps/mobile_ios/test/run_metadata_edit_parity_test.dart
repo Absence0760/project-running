@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import '../lib/screens/run_detail_screen.dart' show applyRunMetadataEdit;
+import '../lib/screens/run_detail_screen.dart'
+    show applyRunMetadataEdit, applyDnfFlag;
 
 /// Parity tests for `applyRunMetadataEdit` — mobile's run-detail edit
 /// dialog metadata normalisation. The matching web implementation
@@ -120,6 +121,29 @@ void main() {
       final out = applyRunMetadataEdit(null, title: '0', notes: '0');
       expect(out['title'], '0');
       expect(out['notes'], '0');
+    });
+  });
+
+  group('applyDnfFlag — DNF toggle (mirrors web run-detail edit)', () {
+    test('setting DNF writes is_dnf: true', () {
+      final meta = <String, dynamic>{'title': 'Ultra attempt'};
+      applyDnfFlag(meta, true);
+      expect(meta['is_dnf'], true);
+      expect(meta['title'], 'Ultra attempt');
+    });
+
+    test('clearing DNF removes the key (not is_dnf: false)', () {
+      final meta = <String, dynamic>{'is_dnf': true, 'activity_type': 'run'};
+      applyDnfFlag(meta, false);
+      expect(meta.containsKey('is_dnf'), isFalse,
+          reason: 'metadata bag stores presence, not a false value');
+      expect(meta['activity_type'], 'run');
+    });
+
+    test('clearing DNF on a run that never had it is a no-op', () {
+      final meta = <String, dynamic>{'title': 'Easy'};
+      applyDnfFlag(meta, false);
+      expect(meta, equals({'title': 'Easy'}));
     });
   });
 }
