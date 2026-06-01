@@ -48,6 +48,59 @@ Surfaced by the 2026-05-30 i18n-readiness audit. RTL *layout* is already complet
 - [ ] **Watch localisation** (WR-1, WOS-1) — Wear Compose string resources + watchOS `Localizable.strings`.
 - [ ] **Guided-run scripts** (S-1) — per-locale `GUIDED_RUN_LIBRARY` script sets.
 
+## Watch (Wear OS) — sized features awaiting hardware + a product green-light
+
+Surfaced by the persona round-5 samsung-watch hunt. Each needs the Wear build
+toolchain plus on-watch verification (Galaxy Watch / Pixel Watch) — the watch
+recording stack is not runtime-testable without a device, so these can't be
+closed from a host JVM. The audio-focus ducking fix from the same hunt shipped
+already (`TtsAnnouncer.kt` now requests `AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK`);
+these three are genuine features, not bug fixes.
+
+- [ ] **BLE chest-strap HR paired directly to the watch** (~1-1.5 wk + device) —
+  today BLE chest-strap HR is **phone-only** (`apps/mobile_android/lib/ble_heart_rate.dart`);
+  the watch records **optical** HR via Health Services `MeasureClient` only, and
+  only when standalone. Supporting a strap paired to the *watch* means an
+  on-watch Wear OS BLE GATT client: a scan/pair UI, the standard Heart Rate
+  Service (`0x180D`) / Heart Rate Measurement (`0x2A37`) characteristic
+  subscription, `BLUETOOTH_SCAN` + `BLUETOOTH_CONNECT` runtime perms, and a
+  source-preference so a connected strap overrides the optical stream into
+  `metadata.avg_bpm`. Reconnect/dropout handling on the wrist is the fiddly part.
+  A minority feature (watch-standalone runners who own a strap) — already noted
+  as deferred in [`apps/watch_wear/CLAUDE.md` § "What's still deferred"](../../apps/watch_wear/CLAUDE.md).
+  **Needs hardware**: a real strap + watch to validate GATT connect, sample
+  cadence, and battery cost; not unit-testable.
+- [ ] **Real body weight → calorie estimate** (~2-4 d + device) —
+  `apps/watch_wear/.../recording/RunCalories.kt` reads `body_weight_kg` from the
+  prefs bag but defaults to **70 kg** when unset, so a runner who never set a
+  weight in the web/mobile settings gets a generic kcal figure on `PostRunScreen`.
+  Pipe the user's *actual* weight into the estimate. Data-source options, in
+  rough order of fidelity: (a) Samsung Health BIA body-composition (most accurate
+  on a Galaxy Watch, but requires the Samsung Health SDK / Health Connect read
+  permission + Samsung partner approval — heaviest integration); (b) Health
+  Services / Health Connect `WeightRecord` (vendor-neutral, lighter, but the user
+  must have logged a weight somewhere that syncs); (c) surface a weight field in
+  the watch settings or rely on the existing universal-setting sync from
+  web/mobile (cheapest, no new permission, but manual). The watch still won't
+  apply the female calibration the phone/web cell uses (it reads
+  `user_settings.prefs` only, not `user_profiles.gender` — decisions §77), so the
+  watch summary stays an estimate that the synced run-detail page recomputes.
+  **Needs a device** to confirm the chosen read path actually returns a value on
+  a real Galaxy Watch.
+- [ ] **Watch-face complication** (~1-1.5 wk + device) — only an **active-run
+  tile** ships today (`tiles/ActiveRunTileService.kt`); a true watch-face
+  *complication* (a glanceable slot the user adds directly to their watch face,
+  vs. the swipe-to tile carousel) is unbuilt — `parity.md` was corrected to say
+  tile-only. Building it means a `ComplicationDataSourceService` (androidx
+  `wear-watchface-complications-data-source`), supported complication types
+  (`SHORT_TEXT` for elapsed/distance, `RANGED_VALUE` for goal progress,
+  `MONOCHROMATIC_IMAGE` for an idle glyph), a tap `PendingIntent` into
+  `MainActivity`, the same `requestUpdate`-on-stage-transition wiring the tile
+  uses, plus a preview + picker label. Pure formatters can be unit-tested
+  (mirror `ActiveRunTileFormattersTest`); the data-source binding + render need a
+  watch face that hosts the complication slot, so **on-device verification is
+  required**.
+
 ## Competitor-parity backlog (needs product green-light)
 
 From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carried from the roadmap table:
