@@ -263,23 +263,50 @@
 		}
 	}
 
-	// #49: the viewer can contribute to the event gallery when they have
-	// a finisher result here (their own result row carries run_id; the
-	// redaction view nulls it for everyone else). The photo attaches to
-	// that run and is tagged with the event so it shows in the gallery.
+	// #49: when the viewer has a finisher result here, their own result row
+	// carries run_id (the redaction view nulls it for everyone else), so the
+	// photo attaches to that run with zero extra clicks. Group runs and other
+	// non-race events have no result rows, so any signed-in attendee instead
+	// picks which of their own runs the photo belongs to (persona round-5
+	// runner-social-group) — addRunPhoto needs a run_id the uploader owns.
 	let myEventRunId = $derived(
 		results.find((r) => r.user_id === myUserId && r.run_id)?.run_id ?? null
 	);
+	let canAddPhoto = $derived(auth.user != null);
+	let showPhotoRunPicker = $state(false);
+	let pendingPhotoRunId = $state<string | null>(null);
+	let photoFileInput: HTMLInputElement | null = $state(null);
+
+	async function openPhotoFlow() {
+		if (!canAddPhoto || photoUploading) return;
+		if (myEventRunId) {
+			pendingPhotoRunId = myEventRunId;
+			photoFileInput?.click();
+			return;
+		}
+		if (runOptions.length === 0) {
+			runOptions = await fetchRecentRunsForPicker(20);
+		}
+		showPhotoRunPicker = true;
+	}
+
+	function pickRunForPhoto(runId: string) {
+		pendingPhotoRunId = runId;
+		showPhotoRunPicker = false;
+		photoFileInput?.click();
+	}
 
 	async function handleAddEventPhoto(e: Event) {
 		const input = e.target as HTMLInputElement;
 		const file = input.files?.[0];
 		input.value = '';
-		if (!file || !event || !myEventRunId || photoUploading) return;
+		const runId = pendingPhotoRunId;
+		pendingPhotoRunId = null;
+		if (!file || !event || !runId || photoUploading) return;
 		photoUploading = true;
 		try {
 			await addRunPhoto({
-				run_id: myEventRunId,
+				run_id: runId,
 				file,
 				event_id: event.id,
 				event_instance_start: activeInstance
@@ -1441,22 +1468,56 @@
 		<section class="card">
 			<div class="results-head">
 				<h3>Photos ({eventPhotos.length})</h3>
-				{#if myEventRunId}
-					<label class="btn-link photo-add">
+				{#if canAddPhoto}
+					<button
+						type="button"
+						class="btn-link photo-add"
+						onclick={openPhotoFlow}
+						disabled={photoUploading}
+					>
 						{photoUploading ? 'Uploading…' : 'Add photo'}
-						<input
-							type="file"
-							accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
-							onchange={handleAddEventPhoto}
-							disabled={photoUploading}
-							hidden
-						/>
-					</label>
+					</button>
 				{/if}
 			</div>
+			<input
+				bind:this={photoFileInput}
+				type="file"
+				accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+				onchange={handleAddEventPhoto}
+				disabled={photoUploading}
+				hidden
+			/>
+			{#if showPhotoRunPicker}
+				<div class="picker">
+					<h4>Which run is this photo from?</h4>
+					{#if runOptions.length === 0}
+						<p class="muted">No recent runs found. Record a run first.</p>
+					{:else}
+						<ul class="run-options">
+							{#each runOptions as run (run.id)}
+								<li>
+									<button
+										type="button"
+										class="run-option"
+										onclick={() => pickRunForPhoto(run.id)}
+									>
+										<span class="run-date">{formatRunDate(run.started_at)}</span>
+										<span class="run-dist">{formatDistance(run.distance_m)}</span>
+										<span class="run-time">{formatDuration(run.duration_s)}</span>
+										<span class="run-kind muted">{run.activity_type}</span>
+									</button>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+					<div class="picker-actions">
+						<button type="button" class="btn-link" onclick={() => (showPhotoRunPicker = false)}>Cancel</button>
+					</div>
+				</div>
+			{/if}
 			{#if eventPhotos.length === 0}
 				<p class="muted">
-					No photos yet.{myEventRunId ? ' Add one from your run at this event.' : ''}
+					No photos yet.{canAddPhoto ? ' Add one from one of your runs.' : ''}
 				</p>
 			{:else}
 				<div class="photo-gallery">
