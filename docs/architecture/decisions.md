@@ -2490,6 +2490,16 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 ---
 
+## 104. Overlapping start pins list their routes; routes can be pinned to keep them visible
+
+**Decided (2026-05-31):** two follow-ons to the hover-preview model (§ 101 / § 102), both on web + the mobile twin.
+
+**Overlapping pins → a list, not an arbitrary pick.** Routes that share (or nearly share) a start collapse into a cluster, and pins at an *identical* coordinate can never be zoomed apart. The old behaviours were dead ends: clicking such a cluster zoomed uselessly, and past the cluster zoom the hover handler previewed `e.features[0]` — whichever pin rendered on top, arbitrarily. Now hovering a cluster (web) or an overlapping leaf stack opens a **list popup** of its routes (`getClusterLeaves` for clusters; `queryRenderedFeatures` at the cursor for un-clustered overlaps, de-duped by id), each row previews its line on hover and opens on click. On mobile (where pixel-proximity clustering means same-start pins are *always* clustered) tapping a cluster opens the equivalent bottom **sheet** — the pure-Dart clusterer already hands the screen `cluster.items`.
+
+**Keep-on-map (pin).** A pin affordance (row button + a "Keep on map" button in the route popup + a "Clear N kept" header control) keeps a route's line drawn — in **violet**, on its own layer below the cyan hover preview, persisting across pan + filter changes — so several routes can be compared at once. It is deliberately cheap: only pinned routes are fetched, reusing the hover `geomCache`, so a route is fetched at most once and the default view costs nothing. Chosen over a "show all route lines" toggle precisely because that would reintroduce the bulk-geometry fetch + clutter the hidden-until-asked model removed (the compute the owner repeatedly flagged).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
