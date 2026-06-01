@@ -20,6 +20,14 @@ class RunSnapshot {
   /// The full GPS track recorded so far (unmodifiable).
   final List<Waypoint> track;
 
+  /// True when the most recent GPS fix was rejected by the accuracy gate
+  /// (low-accuracy fix under tree cover / urban canyon), so distance is
+  /// not advancing even though the stopwatch keeps ticking. Lets the UI
+  /// disclose "distance paused" instead of looking frozen. Cleared as soon
+  /// as a fix passes the gate again. Always false before the first dropped
+  /// fix and for indoor / no-GPS runs.
+  final bool weakGps;
+
   const RunSnapshot({
     required this.elapsed,
     required this.distanceMetres,
@@ -28,5 +36,6 @@ class RunSnapshot {
     this.offRouteDistanceMetres,
     this.routeRemainingMetres,
     this.track = const [],
+    this.weakGps = false,
   });
 }
