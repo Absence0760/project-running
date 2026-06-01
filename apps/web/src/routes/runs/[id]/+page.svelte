@@ -31,6 +31,7 @@
 		type RunMatchInfo,
 		type RouteMatchCandidate,
 	} from '$lib/core/data';
+	import { applyRunMetadataPatch } from '$lib/core/data_normalise';
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/runs/run_stats';
@@ -85,6 +86,11 @@
 	let editing = $state(false);
 	let editTitle = $state('');
 	let editNotes = $state('');
+	// DNF flag, mirrored from metadata.is_dnf into the edit form. Setting
+	// it excludes the run from personal-records scoring server-side
+	// (migration 20260530000001) — a DNF ultra must not promote as a PR
+	// just because its truncated distance fits a shorter bracket.
+	let editIsDnf = $state(false);
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
 	let shareConfirmIntersectsZone = $state(false);
@@ -251,6 +257,7 @@
 
 	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
 	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
+	let isDnf = $derived((run?.metadata as Record<string, unknown> | null)?.['is_dnf'] === true);
 	/// Estimated calories — routes through the shared pure helper
 	/// `apps/web/src/lib/runs/calories.ts` (mirrored byte-for-byte in
 	/// the Dart twin) so the formula stays in lockstep across the
@@ -367,15 +374,41 @@
 	function startEdit() {
 		editTitle = runTitle;
 		editNotes = runNotes;
+		editIsDnf = isDnf;
 		editing = true;
 	}
 
 	async function saveEdit() {
 		if (!run) return;
 		try {
-			await updateRunMetadata(run.id, { title: editTitle, notes: editNotes });
-			const metadata = { ...(run.metadata as Record<string, unknown> ?? {}), title: editTitle, notes: editNotes };
-			run = { ...run, metadata } as Run;
+			// title/notes go through updateRunMetadata's normalised patch.
+			// is_dnf isn't one of its keys (the normaliser only knows
+			// title + notes), so when it changed apply the same
+			// read-merge-write here in a single round-trip: build the
+			// title/notes patch with the shared helper, then add or drop
+			// is_dnf on top. Setting it true excludes the run from
+			// personal-records scoring; the PR trigger drops it on the next
+			// refresh. Un-toggling deletes the key rather than writing
+			// `false`, matching the metadata-bag convention.
+			if (editIsDnf !== isDnf) {
+				const nextMeta = applyRunMetadataPatch(
+					run.metadata as Record<string, unknown> | null | undefined,
+					{ title: editTitle, notes: editNotes },
+					new Date().toISOString(),
+				);
+				if (editIsDnf) nextMeta['is_dnf'] = true;
+				else delete nextMeta['is_dnf'];
+				const { error } = await supabase
+					.from('runs')
+					.update({ metadata: nextMeta })
+					.eq('id', run.id);
+				if (error) throw error;
+				run = { ...run, metadata: nextMeta } as Run;
+			} else {
+				await updateRunMetadata(run.id, { title: editTitle, notes: editNotes });
+				const metadata = { ...(run.metadata as Record<string, unknown> ?? {}), title: editTitle, notes: editNotes };
+				run = { ...run, metadata } as Run;
+			}
 			editing = false;
 		} catch (e) {
 			showToast(`Save failed: ${e}`, 'error');
@@ -1029,6 +1062,12 @@
 							<span class="material-symbols">{run.is_public ? 'public' : 'lock'}</span>
 							{run.is_public ? 'Public' : 'Private'}
 						</span>
+						{#if isDnf}
+							<span class="meta-item dnf-chip" data-testid="dnf-chip">
+								<span class="material-symbols">flag</span>
+								DNF
+							</span>
+						{/if}
 					</div>
 				</div>
 				{#if auth.loggedIn}
@@ -1116,6 +1155,16 @@
 			<div class="edit-form">
 				<input type="text" bind:value={editTitle} placeholder="Run title" class="edit-input" />
 				<textarea bind:value={editNotes} placeholder="Notes" class="edit-textarea" rows="2"></textarea>
+				<label class="edit-dnf">
+					<input type="checkbox" bind:checked={editIsDnf} data-testid="dnf-toggle" />
+					<span>
+						<strong>Mark as DNF (did not finish)</strong>
+						<span class="edit-dnf-hint">
+							Keeps this run out of personal-record scoring — useful when
+							you stopped short of the planned distance.
+						</span>
+					</span>
+				</label>
 				{#if run.is_public}
 					<p class="edit-public-hint">
 						Heads up: this run is public. Your title and notes are
@@ -1418,6 +1467,13 @@
 						</div>
 					{/each}
 				</div>
+				{#if zoneCutoffs == null && maxHrBpm == null}
+					<p class="hr-disclaimer">
+						Zones use an age-estimated max HR. On heart-rate medication
+						(e.g. beta-blockers) or if you've measured your max HR, set it in
+						<a href="/settings/account">Settings → Preferences</a> for accurate zones.
+					</p>
+				{/if}
 			{:else}
 				<p class="hr-empty">
 					{#if avgBpm != null}
@@ -2026,6 +2082,20 @@
 		color: var(--color-success);
 	}
 
+	.dnf-chip {
+		padding: 0.2rem 0.55rem;
+		border-radius: 9999px;
+		background: var(--color-danger-light);
+		border: 1px solid transparent;
+		color: var(--color-danger);
+		font-weight: 600;
+		font-size: 0.72rem;
+	}
+
+	.dnf-chip .material-symbols {
+		color: var(--color-danger);
+	}
+
 	.back-link {
 		display: inline-flex;
 		align-items: center;
@@ -2416,6 +2486,32 @@
 		color: var(--color-text);
 	}
 
+	.edit-dnf {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-sm);
+		font-size: 0.82rem;
+		cursor: pointer;
+	}
+
+	.edit-dnf input {
+		margin-top: 0.2rem;
+		flex-shrink: 0;
+	}
+
+	.edit-dnf span {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
+	}
+
+	.edit-dnf-hint {
+		font-weight: 400;
+		font-size: 0.75rem;
+		color: var(--color-text-muted);
+		line-height: 1.4;
+	}
+
 	.edit-actions {
 		display: flex;
 		gap: var(--space-sm);
@@ -2462,6 +2558,17 @@
 		color: var(--color-text-secondary);
 		line-height: 1.5;
 		margin: 0;
+	}
+
+	.hr-disclaimer {
+		font-size: 0.78rem;
+		color: var(--color-text-muted);
+		line-height: 1.5;
+		margin: var(--space-sm) 0 0;
+	}
+
+	.hr-disclaimer a {
+		color: var(--color-primary);
 	}
 
 	.share-card {
