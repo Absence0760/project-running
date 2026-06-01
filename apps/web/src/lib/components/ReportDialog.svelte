@@ -7,9 +7,16 @@
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 
+	// `comment` reports route through the same submit_report RPC; the
+	// backend `p_target_kind` is plain text so the value passes through.
+	// Kept local rather than widening the shared `ReportTargetKind`
+	// (which the user/club/route surfaces share) until comments are a
+	// first-class report target everywhere.
+	type ReportableKind = ReportTargetKind | 'comment';
+
 	interface Props {
 		open: boolean;
-		targetKind: ReportTargetKind;
+		targetKind: ReportableKind;
 		targetId: string;
 		/// Human-readable name of the thing being reported. Surfaced
 		/// in the dialog body so the user can sanity-check what they're
@@ -20,6 +27,13 @@
 	}
 
 	let { open, targetKind, targetId, targetLabel, onclose }: Props = $props();
+
+	const NOUNS: Record<ReportableKind, string> = {
+		user: 'profile',
+		club: 'club',
+		route: 'route',
+		comment: 'comment',
+	};
 
 	const REASONS: { value: ReportReason; label: string; hint: string }[] = [
 		{
@@ -50,9 +64,7 @@
 	let busy = $state(false);
 	let error = $state<string | null>(null);
 
-	const targetNoun = $derived(
-		targetKind === 'user' ? 'profile' : targetKind === 'club' ? 'club' : 'route',
-	);
+	const targetNoun = $derived(NOUNS[targetKind]);
 
 	function reset() {
 		reason = 'spam';
@@ -72,7 +84,7 @@
 		error = null;
 		try {
 			await submitReport({
-				targetKind,
+				targetKind: targetKind as ReportTargetKind,
 				targetId,
 				reason,
 				notes: notes.trim() || undefined,
