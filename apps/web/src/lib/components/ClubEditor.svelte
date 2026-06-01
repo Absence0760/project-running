@@ -2,6 +2,7 @@
 	import { createClub } from '$lib/core/data';
 	import { geocodePlace } from '$lib/routes/geocoding';
 	import type { JoinPolicy } from '$lib/types';
+	import { m } from '$lib/i18n/store.svelte';
 
 	interface Props {
 		oncreated?: (club: { slug: string; id: string }) => void;
@@ -57,7 +58,7 @@
 			});
 			oncreated?.(club);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to create club';
+			error = e instanceof Error ? e.message : m('clubEditor.createFailed');
 		} finally {
 			busy = false;
 		}
@@ -66,33 +67,33 @@
 
 <form onsubmit={submit} class="club-editor">
 	<label>
-		<span>Name</span>
+		<span>{m('clubEditor.name')}</span>
 		<input
 			type="text"
 			bind:value={name}
-			placeholder="e.g. Riverside Runners"
+			placeholder={m('clubEditor.namePlaceholder')}
 			required
 			maxlength="80"
 		/>
 	</label>
 
 	<label>
-		<span>Description <span class="optional">optional</span></span>
+		<span>{m('clubEditor.description')} <span class="optional">{m('clubEditor.optional')}</span></span>
 		<textarea
 			bind:value={description}
-			placeholder="Who are you, where do you meet, what kind of pace?"
+			placeholder={m('clubEditor.descriptionPlaceholder')}
 			rows="4"
 			maxlength="600"
 		></textarea>
 	</label>
 
 	<label>
-		<span>Location <span class="optional">optional</span></span>
-		<input type="text" bind:value={location} placeholder="e.g. Austin, TX" maxlength="80" />
+		<span>{m('clubEditor.location')} <span class="optional">{m('clubEditor.optional')}</span></span>
+		<input type="text" bind:value={location} placeholder={m('clubEditor.locationPlaceholder')} maxlength="80" />
 	</label>
 
 	<fieldset>
-		<legend>Visibility</legend>
+		<legend>{m('clubEditor.visibility')}</legend>
 		<label class="radio">
 			<input
 				type="radio"
@@ -101,8 +102,8 @@
 				onchange={() => (visibility = 'public')}
 			/>
 			<span>
-				<strong>Public</strong>
-				<span class="hint">Anyone can find this club in Browse.</span>
+				<strong>{m('clubEditor.public')}</strong>
+				<span class="hint">{m('clubEditor.publicHint')}</span>
 			</span>
 		</label>
 		<label class="radio">
@@ -113,9 +114,9 @@
 				onchange={() => (visibility = 'private')}
 			/>
 			<span>
-				<strong>Private</strong>
+				<strong>{m('clubEditor.private')}</strong>
 				<span class="hint">
-					Hidden from Browse. Invite-only — share the generated link to let people join.
+					{m('clubEditor.privateHint')}
 				</span>
 			</span>
 		</label>
@@ -123,7 +124,7 @@
 
 	{#if visibility === 'public'}
 		<fieldset>
-			<legend>Who can join?</legend>
+			<legend>{m('clubEditor.whoCanJoin')}</legend>
 			<label class="radio">
 				<input
 					type="radio"
@@ -132,8 +133,8 @@
 					onchange={() => (joinPolicy = 'open')}
 				/>
 				<span>
-					<strong>Anyone</strong>
-					<span class="hint">One click to join, no approval needed.</span>
+					<strong>{m('clubEditor.anyone')}</strong>
+					<span class="hint">{m('clubEditor.anyoneHint')}</span>
 				</span>
 			</label>
 			<label class="radio">
@@ -144,9 +145,9 @@
 					onchange={() => (joinPolicy = 'request')}
 				/>
 				<span>
-					<strong>Approval required</strong>
+					<strong>{m('clubEditor.approvalRequired')}</strong>
 					<span class="hint">
-						New members sit in a pending queue until an admin accepts them.
+						{m('clubEditor.approvalRequiredHint')}
 					</span>
 				</span>
 			</label>
@@ -156,8 +157,7 @@
 	<label class="waiver-toggle">
 		<input type="checkbox" bind:checked={requireWaiver} />
 		<span>
-			Require an activity-risk acknowledgement to join. Members confirm they
-			understand the physical risks of group runs before joining.
+			{m('clubEditor.waiverLabel')}
 		</span>
 	</label>
 
@@ -167,10 +167,10 @@
 
 	<div class="actions">
 		{#if oncancel}
-			<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>Cancel</button>
+			<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>{m('clubEditor.cancel')}</button>
 		{/if}
 		<button type="submit" class="btn btn-primary" disabled={!name.trim() || busy}>
-			{busy ? 'Creating…' : 'Create club'}
+			{busy ? m('clubEditor.creating') : m('clubEditor.createClub')}
 		</button>
 	</div>
 </form>

@@ -3,6 +3,7 @@
 	import { saveRoute } from '$lib/core/data';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { goto } from '$app/navigation';
+	import { m } from '$lib/i18n/store.svelte';
 	import Modal from './Modal.svelte';
 
 	let {
@@ -56,7 +57,7 @@
 			names = routes.map((r) => r.name);
 			selected = routes.map(() => true);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to parse file';
+			error = err instanceof Error ? err.message : m('importRoute.failedToParse');
 		} finally {
 			parsing = false;
 		}
@@ -71,7 +72,7 @@
 				.map((r, i) => ({ route: r, name: names[i] || r.name, keep: selected[i] }))
 				.filter((x) => x.keep);
 			if (toSave.length === 0) {
-				error = 'Select at least one route to import.';
+				error = m('importRoute.selectAtLeastOne');
 				saving = false;
 				return;
 			}
@@ -99,7 +100,7 @@
 				onclose();
 			}
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to save route';
+			error = err instanceof Error ? err.message : m('importRoute.failedToSave');
 		} finally {
 			saving = false;
 		}
@@ -113,7 +114,7 @@
 	}
 </script>
 
-<Modal open={true} title="Import Route" {onclose}>
+<Modal open={true} title={m('importRoute.title')} {onclose}>
 	{@render importBody()}
 </Modal>
 
@@ -130,21 +131,21 @@
 				class="drop-zone"
 				class:dragging
 				role="region"
-				aria-label="Route file drop zone"
+				aria-label={m('importRoute.dropZoneLabel')}
 				ondragover={handleDragOver}
 				ondragleave={handleDragLeave}
 				ondrop={handleDrop}
 			>
 				{#if parsing}
 					<span class="material-symbols">hourglass_empty</span>
-					<p>Parsing file...</p>
+					<p>{m('importRoute.parsingFile')}</p>
 				{:else}
 					<span class="material-symbols">upload_file</span>
-					<p>Drag & drop a route file here</p>
-					<p class="drop-hint">GPX, KML, KMZ, GeoJSON, or TCX</p>
-					<p class="drop-hint">Works with Google Maps, Google Earth, Strava, Garmin, and more</p>
+					<p>{m('importRoute.dragDropPrompt')}</p>
+					<p class="drop-hint">{m('importRoute.supportedFormats')}</p>
+					<p class="drop-hint">{m('importRoute.worksWith')}</p>
 					<label class="browse-btn">
-						Browse files
+						{m('importRoute.browseFiles')}
 						<input type="file" accept=".gpx,.kml,.kmz,.geojson,.json,.tcx" onchange={handleFileSelect} hidden />
 					</label>
 				{/if}
@@ -153,29 +154,29 @@
 			<!-- Single-route preview (current behaviour) -->
 			<div class="preview">
 				<label>
-					<span class="label-text">Route Name</span>
+					<span class="label-text">{m('importRoute.routeName')}</span>
 					<input type="text" bind:value={names[0]} />
 				</label>
 
 				<div class="stats">
 					<div class="stat">
 						<span class="stat-value">{formatDistance(parsed[0].distance_m)}</span>
-						<span class="stat-label">Distance</span>
+						<span class="stat-label">{m('importRoute.distance')}</span>
 					</div>
 					<div class="stat">
 						<span class="stat-value">{parsed[0].elevation_m ?? 0} m</span>
-						<span class="stat-label">Elevation Gain</span>
+						<span class="stat-label">{m('importRoute.elevationGain')}</span>
 					</div>
 					<div class="stat">
 						<span class="stat-value">{parsed[0].waypoints.length}</span>
-						<span class="stat-label">Points</span>
+						<span class="stat-label">{m('importRoute.points')}</span>
 					</div>
 				</div>
 
 				<div class="actions">
-					<button class="btn btn-ghost" onclick={reset}>Choose different file</button>
+					<button class="btn btn-ghost" onclick={reset}>{m('importRoute.chooseDifferentFile')}</button>
 					<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
-						{saving ? 'Saving...' : 'Save Route'}
+						{saving ? m('importRoute.saving') : m('importRoute.saveRoute')}
 					</button>
 				</div>
 			</div>
@@ -184,8 +185,7 @@
 			     user to rename or deselect individual tracks before import. -->
 			<div class="preview">
 				<p class="multi-intro">
-					Found <strong>{parsed.length}</strong> routes in this file. Pick which
-					ones to import — each becomes its own route in Threkir.
+					{m('importRoute.multiIntroPrefix')}<strong>{parsed.length}</strong>{m('importRoute.multiIntroSuffix')}
 				</p>
 				<ul class="multi-list">
 					{#each parsed as route, i (i)}
@@ -198,20 +198,25 @@
 								<div class="multi-meta">
 									<span>{formatDistance(route.distance_m)}</span>
 									<span class="meta-sep">·</span>
-									<span>{route.elevation_m ?? 0} m elev</span>
+									<span>{m('importRoute.metaElev', { m: route.elevation_m ?? 0 })}</span>
 									<span class="meta-sep">·</span>
-									<span>{route.waypoints.length} pts</span>
+									<span>{m('importRoute.metaPts', { n: route.waypoints.length })}</span>
 								</div>
 							</div>
 						</li>
 					{/each}
 				</ul>
 				<div class="actions">
-					<button class="btn btn-ghost" onclick={reset}>Choose different file</button>
+					<button class="btn btn-ghost" onclick={reset}>{m('importRoute.chooseDifferentFile')}</button>
 					<button class="btn btn-primary" onclick={handleSave} disabled={saving}>
 						{saving
-							? 'Saving...'
-							: `Import ${selected.filter(Boolean).length} route${selected.filter(Boolean).length === 1 ? '' : 's'}`}
+							? m('importRoute.saving')
+							: m(
+									selected.filter(Boolean).length === 1
+										? 'importRoute.importCountOne'
+										: 'importRoute.importCountMany',
+									{ n: selected.filter(Boolean).length },
+								)}
 					</button>
 				</div>
 			</div>

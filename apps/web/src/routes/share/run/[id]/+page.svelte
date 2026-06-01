@@ -1,5 +1,6 @@
 <script lang="ts">
 	import RunShareView from '$lib/components/RunShareView.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		buildRunShareDescription,
@@ -42,9 +43,9 @@
 
 	{#if hasRun}
 		<section class="hero">
-			<p class="kicker">A run on Threkir</p>
+			<p class="kicker">{m('shareRun.heroKicker')}</p>
 			<h1>
-				{#if heroAthlete}{heroAthlete}'s run{:else}A public run{/if}
+				{#if heroAthlete}{m('shareRun.heroAthleteRun', { name: heroAthlete })}{:else}{m('shareRun.heroPublicRun')}{/if}
 			</h1>
 			<p class="subtitle">
 				{#if heroDistance}{heroDistance}{/if}
@@ -59,15 +60,14 @@
 	{:else}
 		<main class="content">
 			<div class="notfound-card">
-				<p class="kicker">Nothing to see here</p>
-				<h1>Run not found.</h1>
+				<p class="kicker">{m('shareRun.notFoundKicker')}</p>
+				<h1>{m('shareRun.notFoundTitle')}</h1>
 				<p class="notfound-sub">
-					This link may have expired, the run may have been deleted, or its owner may have made it
-					private.
+					{m('shareRun.notFoundSub')}
 				</p>
 				<div class="notfound-actions">
-					<a class="btn btn-primary" href="/login">Sign in</a>
-					<a class="btn btn-outline" href="/">Go to Threkir</a>
+					<a class="btn btn-primary" href="/login">{m('shareRun.signIn')}</a>
+					<a class="btn btn-outline" href="/">{m('shareRun.goToThrekir')}</a>
 				</div>
 			</div>
 		</main>
@@ -75,19 +75,19 @@
 
 	{#if !auth.loggedIn && hasRun}
 		<section class="signup-cta" aria-labelledby="signup-cta-heading">
-			<p class="kicker">Track your own</p>
-			<h2 id="signup-cta-heading">Sign up to track your own runs</h2>
+			<p class="kicker">{m('shareRun.ctaKicker')}</p>
+			<h2 id="signup-cta-heading">{m('shareRun.ctaHeading')}</h2>
 			<p class="signup-sub">
-				Free. Map, splits, elevation, kudos, training plans. No subscription needed for the basics.
+				{m('shareRun.ctaSub')}
 			</p>
-			<a class="btn btn-primary" href="/login?signup=1">Sign up for Free</a>
+			<a class="btn btn-primary" href="/login?signup=1">{m('shareRun.ctaButton')}</a>
 		</section>
 	{/if}
 
 	<footer class="share-footer">
-		<a href="/">Threkir home</a>
+		<a href="/">{m('shareRun.footerHome')}</a>
 		<span class="dot">&middot;</span>
-		<a href="/login">Sign in</a>
+		<a href="/login">{m('shareRun.signIn')}</a>
 	</footer>
 </div>
 

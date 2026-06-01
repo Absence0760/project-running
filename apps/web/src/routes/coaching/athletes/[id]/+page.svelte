@@ -13,6 +13,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { formatDistance, formatPace } from '$lib/format/units.svelte';
 	import { formatDuration, formatDate } from '$lib/format/time';
+	import { m } from '$lib/i18n/store.svelte';
 
 	const athleteId = $derived($page.params.id);
 
@@ -111,50 +112,49 @@
 	});
 </script>
 
-<svelte:head><title>{link?.display_name ?? 'Athlete'} · Coaching · Threkir</title></svelte:head>
+<svelte:head><title>{link?.display_name ?? m('coachingAthlete.athleteFallback')} · Coaching · Threkir</title></svelte:head>
 
 <div class="page">
-	<a class="back" href="/coaching">← Coaching</a>
+	<a class="back" href="/coaching">← {m('shell.coaching')}</a>
 
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<p class="muted">{m('shell.loading')}</p>
 	{:else if notOnRoster}
 		<div class="card">
-			<h1>Not on your roster</h1>
+			<h1>{m('coachingAthlete.notOnRosterTitle')}</h1>
 			<p class="muted">
-				This athlete isn't linked to you, or the link has ended. Send them an
-				invite from the <a href="/coaching">Coaching</a> page to review their training.
+				{m('coachingAthlete.notOnRosterPrefix')}<a href="/coaching">{m('shell.coaching')}</a>{m('coachingAthlete.notOnRosterSuffix')}
 			</p>
 		</div>
 	{:else}
 		<header class="athlete-head">
 			<Avatar name={link?.display_name} size="3rem" font="1.1rem" />
 			<div>
-				<h1>{link?.display_name ?? 'Runner'}</h1>
+				<h1>{link?.display_name ?? m('coachingAthlete.runnerFallback')}</h1>
 				<p class="muted">
-					Coaching since {link?.accepted_at ? formatDate(link.accepted_at) : '—'} ·
-					<a href="/u/{athleteId}">public profile</a>
+					{m('coachingAthlete.coachingSince', { date: link?.accepted_at ? formatDate(link.accepted_at) : '—' })} ·
+					<a href="/u/{athleteId}">{m('coachingAthlete.publicProfile')}</a>
 				</p>
 			</div>
 		</header>
 
 		<section class="card">
-			<h2>Plan compliance</h2>
+			<h2>{m('coachingAthlete.planCompliance')}</h2>
 			{#if !overview}
-				<p class="empty">No active training plan.</p>
+				<p class="empty">{m('coachingAthlete.noActivePlan')}</p>
 			{:else}
 				<div class="plan-summary">
 					<a class="plan-name" href="/plans/{overview.plan.id}">{overview.plan.name}</a>
 					{#if compliance}
 						<div class="compliance-bar" role="img"
-							aria-label={`${compliance.pct}% of workouts completed`}>
+							aria-label={m('coachingAthlete.complianceBarLabel', { pct: compliance.pct })}>
 							<div class="compliance-fill" style="width:{compliance.pct}%"></div>
 						</div>
 						<p class="compliance-stats">
-							<strong>{compliance.pct}%</strong> complete ·
-							{compliance.done}/{compliance.total} done
+							<strong>{compliance.pct}%</strong> {m('coachingAthlete.complete')} ·
+							{m('coachingAthlete.doneCount', { done: compliance.done, total: compliance.total })}
 							{#if compliance.missed > 0}
-								· <span class="missed-count">{compliance.missed} missed</span>
+								· <span class="missed-count">{m('coachingAthlete.missedCount', { n: compliance.missed })}</span>
 							{/if}
 						</p>
 					{/if}
@@ -172,7 +172,11 @@
 								{/if}
 							</span>
 							<span class="w-status status-pill status-{status}">
-								{status === 'done' ? 'Done' : status === 'missed' ? 'Missed' : 'Upcoming'}
+								{status === 'done'
+									? m('coachingAthlete.statusDone')
+									: status === 'missed'
+										? m('coachingAthlete.statusMissed')
+										: m('coachingAthlete.statusUpcoming')}
 							</span>
 						</li>
 					{/each}
@@ -181,9 +185,9 @@
 		</section>
 
 		<section class="card">
-			<h2>Recent runs</h2>
+			<h2>{m('coachingAthlete.recentRuns')}</h2>
 			{#if runs.length === 0}
-				<p class="empty">No runs recorded yet.</p>
+				<p class="empty">{m('coachingAthlete.noRunsYet')}</p>
 			{:else}
 				<ul class="run-list">
 					{#each runs as r (r.id)}
@@ -194,7 +198,7 @@
 							<span class="r-duration">{formatDuration(r.duration_s)}</span>
 							<span class="r-pace">{paceLabel(r)}</span>
 							{#if !r.is_public}
-								<span class="r-private" title="Private run — visible to you as their coach">Private</span>
+								<span class="r-private" title={m('coachingAthlete.privateRunTooltip')}>{m('coachingAthlete.private')}</span>
 							{/if}
 						</li>
 					{/each}

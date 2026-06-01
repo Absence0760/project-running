@@ -16,6 +16,7 @@
 	import Modal from '$lib/components/Modal.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 
 	let gear = $state<GearWithDistance[]>([]);
 	let loading = $state(true);
@@ -107,7 +108,7 @@
 			resetForm();
 			showCreate = false;
 		} catch (e) {
-			showToast(`Save failed: ${(e as Error).message}`, 'error');
+			showToast(t('settingsGear.saveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			saving = false;
 		}
@@ -122,7 +123,7 @@
 			await setDefaultGear(g.is_default ? null : g.id, g.kind);
 			gear = await fetchMyGear();
 		} catch (e) {
-			showToast(`Failed: ${(e as Error).message}`, 'error');
+			showToast(t('settingsGear.failed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -135,7 +136,7 @@
 			}
 			gear = await fetchMyGear();
 		} catch (e) {
-			showToast(`Failed: ${(e as Error).message}`, 'error');
+			showToast(t('settingsGear.failed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -145,7 +146,7 @@
 			await deleteGear(confirmingDelete.id);
 			gear = await fetchMyGear();
 		} catch (e) {
-			showToast(`Delete failed: ${(e as Error).message}`, 'error');
+			showToast(t('settingsGear.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			confirmingDelete = null;
 		}
@@ -169,11 +170,10 @@
 
 <div class="page">
 	<header class="page-head">
-		<p class="kicker">Settings</p>
-		<h1>Gear</h1>
+		<p class="kicker">{t('shell.settings')}</p>
+		<h1>{t('settingsGear.title')}</h1>
 		<p class="tagline">
-			Track shoes and bikes. Tag runs with the gear you wore on the run-detail page;
-			retirement targets nudge you when a pair crosses its planned mileage.
+			{t('settingsGear.tagline')}
 		</p>
 	</header>
 
@@ -183,14 +183,14 @@
 			class:active={activeTab === 'shoe'}
 			onclick={() => (activeTab = 'shoe')}
 		>
-			<span class="material-symbols" aria-hidden="true">directions_run</span> Shoes
+			<span class="material-symbols" aria-hidden="true">directions_run</span> {t('settingsGear.tabShoes')}
 		</button>
 		<button
 			class="tab"
 			class:active={activeTab === 'bike'}
 			onclick={() => (activeTab = 'bike')}
 		>
-			<span class="material-symbols" aria-hidden="true">directions_bike</span> Bikes
+			<span class="material-symbols" aria-hidden="true">directions_bike</span> {t('settingsGear.tabBikes')}
 		</button>
 		<div class="spacer"></div>
 		<button
@@ -200,7 +200,7 @@
 				showCreate = true;
 			}}
 		>
-			+ New {activeTab === 'shoe' ? 'shoes' : 'bike'}
+			{activeTab === 'shoe' ? t('settingsGear.newShoes') : t('settingsGear.newBike')}
 		</button>
 	</div>
 
@@ -216,19 +216,18 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading gear…</p>
+		<p class="sr-only" role="status">{t('settingsGear.loadingGear')}</p>
 	{:else if visible.length === 0}
 		<section class="card empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">
 				{activeTab === 'shoe' ? 'directions_run' : 'directions_bike'}
 			</span>
-			<h3>No {activeTab === 'shoe' ? 'shoes' : 'bikes'} yet</h3>
+			<h3>{activeTab === 'shoe' ? t('settingsGear.emptyShoesTitle') : t('settingsGear.emptyBikesTitle')}</h3>
 			<p class="empty-text">
 				{#if activeTab === 'shoe'}
-					Add a pair to track mileage and get a nudge when they cross their retirement
-					target. Most road shoes are happy for 500–800 km; trail shoes a bit less.
+					{t('settingsGear.emptyShoesText')}
 				{:else}
-					Add a bike to track distance accrued and tag rides on the run-detail page.
+					{t('settingsGear.emptyBikesText')}
 				{/if}
 			</p>
 			<button
@@ -240,7 +239,7 @@
 				}}
 			>
 				<span class="material-symbols" aria-hidden="true">add</span>
-				Add {activeTab === 'shoe' ? 'shoes' : 'bike'}
+				{activeTab === 'shoe' ? t('settingsGear.addShoes') : t('settingsGear.addBike')}
 			</button>
 		</section>
 	{:else}
@@ -253,7 +252,7 @@
 							<div class="gear-name">
 								<strong>{g.name}</strong>
 								{#if g.is_default}
-									<span class="default-pill" title="Auto-tagged on new runs">Current</span>
+									<span class="default-pill" title={t('settingsGear.currentPillTitle')}>{t('settingsGear.currentPill')}</span>
 								{/if}
 								{#if g.brand || g.model}
 									<span class="muted">{[g.brand, g.model].filter(Boolean).join(' ')}</span>
@@ -266,7 +265,7 @@
 							{/if}
 							<div class="gear-meta">
 								<span>{prog.label}</span>
-								<span class="muted">{g.run_count} run{g.run_count === 1 ? '' : 's'}</span>
+								<span class="muted">{t(g.run_count === 1 ? 'settingsGear.runCountOne' : 'settingsGear.runCountMany', { n: g.run_count })}</span>
 							</div>
 						</button>
 						<div class="gear-actions">
@@ -275,8 +274,8 @@
 								class="star-btn"
 								class:active={g.is_default}
 								aria-label={g.is_default
-									? `Unmark ${g.name} as current`
-									: `Mark ${g.name} as current — new runs will auto-tag with this gear`}
+									? t('settingsGear.unmarkCurrent', { name: g.name ?? '' })
+									: t('settingsGear.markCurrent', { name: g.name ?? '' })}
 								aria-pressed={g.is_default}
 								onclick={() => handleToggleDefault(g)}
 							>
@@ -285,10 +284,10 @@
 								</span>
 							</button>
 							<button class="btn-outline btn-sm" onclick={() => handleRetire(g)}>
-								Retire
+								{t('settingsGear.retire')}
 							</button>
 							<button class="btn-danger btn-sm" onclick={() => (confirmingDelete = g)}>
-								Delete
+								{t('settingsGear.delete')}
 							</button>
 						</div>
 					</li>
@@ -297,7 +296,7 @@
 		{/if}
 
 		{#if retired.length > 0}
-			<h3 class="section-title">Retired</h3>
+			<h3 class="section-title">{t('settingsGear.retiredSection')}</h3>
 			<ul class="gear-list retired-list">
 				{#each retired as g (g.id)}
 					{@const prog = progressFor(g)}
@@ -311,15 +310,15 @@
 							</div>
 							<div class="gear-meta">
 								<span>{prog.label}</span>
-								<span class="muted">retired {g.retired_at}</span>
+								<span class="muted">{t('settingsGear.retiredOn', { date: g.retired_at ?? '' })}</span>
 							</div>
 						</button>
 						<div class="gear-actions">
 							<button class="btn-outline btn-sm" onclick={() => handleRetire(g)}>
-								Restore
+								{t('settingsGear.restore')}
 							</button>
 							<button class="btn-danger btn-sm" onclick={() => (confirmingDelete = g)}>
-								Delete
+								{t('settingsGear.delete')}
 							</button>
 						</div>
 					</li>
@@ -335,7 +334,11 @@
 		showCreate = false;
 		resetForm();
 	}}
-	title={editingId ? 'Edit gear' : `Add ${activeTab === 'shoe' ? 'shoes' : 'bike'}`}
+	title={editingId
+		? t('settingsGear.editTitle')
+		: activeTab === 'shoe'
+			? t('settingsGear.addShoes')
+			: t('settingsGear.addBike')}
 >
 	<form
 		class="gear-form"
@@ -345,39 +348,39 @@
 		}}
 	>
 		<label>
-			Name
+			{t('settingsGear.fieldName')}
 			<input type="text" bind:value={formName} maxlength="80" required placeholder="Pegasus 39" />
 		</label>
 		<div class="row">
 			<label>
-				Brand
+				{t('settingsGear.fieldBrand')}
 				<input type="text" bind:value={formBrand} maxlength="60" placeholder="Nike" />
 			</label>
 			<label>
-				Model
+				{t('settingsGear.fieldModel')}
 				<input type="text" bind:value={formModel} maxlength="60" placeholder="Air Zoom Pegasus 39" />
 			</label>
 		</div>
 		<div class="row">
 			<label>
-				Bought
+				{t('settingsGear.fieldBought')}
 				<input type="date" bind:value={formPurchased} />
 			</label>
 			<label>
-				Retirement target ({getUnit()})
+				{t('settingsGear.fieldTarget', { unit: getUnit() })}
 				<input type="number" min="1" bind:value={formTargetDisplay} placeholder="500" />
 			</label>
 		</div>
 		<label>
-			Notes
+			{t('settingsGear.fieldNotes')}
 			<textarea bind:value={formNotes} maxlength="500" rows="3"></textarea>
 		</label>
 		<footer>
 			<button class="btn-outline" type="button" onclick={() => { showCreate = false; resetForm(); }}>
-				Cancel
+				{t('settingsGear.cancel')}
 			</button>
 			<button class="btn-primary" type="submit" disabled={saving || !formName.trim()}>
-				{saving ? 'Saving…' : editingId ? 'Save' : 'Add'}
+				{saving ? t('settingsGear.saving') : editingId ? t('settingsGear.save') : t('settingsGear.add')}
 			</button>
 		</footer>
 	</form>
@@ -385,11 +388,11 @@
 
 <ConfirmDialog
 	open={confirmingDelete !== null}
-	title="Delete gear?"
+	title={t('settingsGear.deleteConfirmTitle')}
 	message={confirmingDelete
-		? `Delete "${confirmingDelete.name}"? Mileage history on past runs will be lost. To keep records, retire instead.`
+		? t('settingsGear.deleteConfirmMessage', { name: confirmingDelete.name ?? '' })
 		: ''}
-	confirmLabel="Delete"
+	confirmLabel={t('settingsGear.delete')}
 	danger={true}
 	onconfirm={handleDelete}
 	oncancel={() => (confirmingDelete = null)}

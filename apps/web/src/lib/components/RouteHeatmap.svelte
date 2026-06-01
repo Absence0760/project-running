@@ -20,6 +20,7 @@
 		bandForDistance,
 		type DistanceBandKey,
 	} from '$lib/routes/distance_bands';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -106,12 +107,16 @@
 	// map stops being one undifferentiated blob and becomes a route
 	// browser. Mirrors the RPC's p_filter arms — see data.ts.
 	let routeFilter = $state<DiscoverFilter>('popular');
-	const FILTERS: { id: DiscoverFilter; label: string; hint: string }[] = [
-		{ id: 'popular', label: 'Popular', hint: 'Routes people actually run' },
-		{ id: 'friends', label: 'Friends', hint: 'Routes from people you follow' },
-		{ id: 'featured', label: 'Featured', hint: 'Hand-picked routes' },
-		{ id: 'hidden_gems', label: 'Hidden gems', hint: 'Quiet routes nobody has run yet' },
-	];
+	const FILTERS = $derived<{ id: DiscoverFilter; label: string; hint: string }[]>([
+		{ id: 'popular', label: m('routeHeatmap.lensPopular'), hint: m('routeHeatmap.lensPopularHint') },
+		{ id: 'friends', label: m('routeHeatmap.lensFriends'), hint: m('routeHeatmap.lensFriendsHint') },
+		{ id: 'featured', label: m('routeHeatmap.lensFeatured'), hint: m('routeHeatmap.lensFeaturedHint') },
+		{
+			id: 'hidden_gems',
+			label: m('routeHeatmap.lensHiddenGems'),
+			hint: m('routeHeatmap.lensHiddenGemsHint'),
+		},
+	]);
 	// The viewport's discoverable routes, kept as state so the results
 	// list (and the count) render straight off the same fetch the map
 	// pins use.
@@ -377,7 +382,7 @@
 				if (!f || !map) return;
 				const slug = f.properties?.slug as string | undefined;
 				const id = f.properties?.id as string | undefined;
-				const name = (f.properties?.name as string) ?? 'Club';
+				const name = (f.properties?.name as string) ?? m('routeHeatmap.clubFallbackName');
 				const memberCount = (f.properties?.member_count as number) ?? 0;
 				const locationLabel = (f.properties?.location_label as string) ?? '';
 				const avatarUrl = (f.properties?.avatar_url as string) ?? '';
@@ -483,7 +488,7 @@
 						const c = (lf.geometry as GeoJSON.Point).coordinates as [number, number];
 						return {
 							id: p.id as string,
-							name: (p.name as string) ?? 'Route',
+							name: (p.name as string) ?? m('routeHeatmap.routeFallbackName'),
 							featured: !!p.featured,
 							distance_m: (p.distance_m as number) ?? 0,
 							surface: (p.surface as string) ?? '',
@@ -574,7 +579,7 @@
 					const c = (h.geometry as GeoJSON.Point).coordinates as [number, number];
 					routes.push({
 						id,
-						name: (p.name as string) ?? 'Route',
+						name: (p.name as string) ?? m('routeHeatmap.routeFallbackName'),
 						featured: !!p.featured,
 						distance_m: (p.distance_m as number) ?? 0,
 						surface: (p.surface as string) ?? '',
@@ -773,7 +778,10 @@
 		const avatar = d.avatarUrl
 			? `<img class="pin-avatar" src="${escapeHtml(d.avatarUrl)}" alt="" />`
 			: `<span class="pin-avatar pin-avatar-initials">${escapeHtml(initialsOf(d.name))}</span>`;
-		const memberLine = `${d.memberCount} member${d.memberCount === 1 ? '' : 's'}`;
+		const memberLine =
+			d.memberCount === 1
+				? m('routeHeatmap.memberCountOne', { n: d.memberCount })
+				: m('routeHeatmap.memberCountMany', { n: d.memberCount });
 		const subtitle = d.locationLabel
 			? `<span class="pin-popup-location">📍 ${escapeHtml(d.locationLabel)}</span>`
 			: '';
@@ -789,7 +797,7 @@
 				${subtitle}
 				<a class="pin-popup-action" href="${escapeHtml(d.href)}"
 					data-sveltekit-preload-data="hover">
-					View club &rarr;
+					${escapeHtml(m('routeHeatmap.viewClub'))} &rarr;
 				</a>
 			</div>
 		`;
@@ -1115,12 +1123,16 @@
 		const rowsHtml = routes
 			.map((r) => {
 				const star = r.featured
-					? '<span class="cluster-route-star" title="Featured">★</span>'
+					? `<span class="cluster-route-star" title="${escapeHtml(m('routeHeatmap.featured'))}">★</span>`
 					: '';
 				const meta = [
 					formatDistance(r.distance_m),
 					r.surface,
-					r.run_count > 0 ? `${r.run_count} run${r.run_count === 1 ? '' : 's'}` : '',
+					r.run_count > 0
+						? r.run_count === 1
+							? m('routeHeatmap.runCountOne', { n: r.run_count })
+							: m('routeHeatmap.runCountMany', { n: r.run_count })
+						: '',
 				]
 					.filter(Boolean)
 					.join(' · ');
@@ -1128,22 +1140,22 @@
 				return `<div class="cluster-route ${kept ? 'kept' : ''}"
 					data-route-id="${escapeHtml(r.id)}" data-lng="${r.lng}" data-lat="${r.lat}"
 					data-name="${escapeHtml(r.name)}" role="button" tabindex="0"
-					title="${kept ? 'Kept on map — click to remove' : 'Click to keep on map'}">
+					title="${escapeHtml(kept ? m('routeHeatmap.keptClickRemove') : m('routeHeatmap.clickKeep'))}">
 					<span class="cluster-route-main">
 						<span class="cluster-route-name">${star}${escapeHtml(r.name)}</span>
 						<span class="cluster-route-meta">${escapeHtml(meta)}</span>
 					</span>
 					<a class="cluster-route-view" href="/routes/${escapeHtml(r.id)}"
-						data-sveltekit-preload-data="hover" title="Open route page">View &rarr;</a>
+						data-sveltekit-preload-data="hover" title="${escapeHtml(m('routeHeatmap.openRoutePage'))}">${escapeHtml(m('routeHeatmap.view'))} &rarr;</a>
 				</div>`;
 			})
 			.join('');
 		const more =
 			total > routes.length
-				? `<div class="cluster-more">+${total - routes.length} more · zoom in to see all</div>`
+				? `<div class="cluster-more">${escapeHtml(m('routeHeatmap.clusterMore', { n: total - routes.length }))}</div>`
 				: '';
 		const html = `<div class="cluster-popup">
-			<div class="cluster-popup-head">${total} routes start here</div>
+			<div class="cluster-popup-head">${escapeHtml(m('routeHeatmap.clusterHead', { n: total }))}</div>
 			<div class="cluster-popup-list">${rowsHtml}</div>
 			${more}
 		</div>`;
@@ -1196,7 +1208,7 @@
 			void togglePin(id);
 			const kept = pinnedIds.has(id);
 			row.classList.toggle('kept', kept);
-			row.title = kept ? 'Kept on map — click to remove' : 'Click to keep on map';
+			row.title = kept ? m('routeHeatmap.keptClickRemove') : m('routeHeatmap.clickKeep');
 		});
 	}
 
@@ -1232,7 +1244,7 @@
 </script>
 
 <div class="discover" class:collapsed={!sidebarOpen}>
-	<aside class="discover-sidebar" data-testid="discover-sidebar" aria-label="Route discovery">
+	<aside class="discover-sidebar" data-testid="discover-sidebar" aria-label={m('routeHeatmap.routeDiscovery')}>
 		<div class="sidebar-search" data-testid="heatmap-search">
 			<div class="search-input-row">
 				<input
@@ -1244,8 +1256,8 @@
 						if (searchResults.length > 0) showResults = true;
 					}}
 					type="text"
-					placeholder="Search a place…"
-					aria-label="Search for a place to centre the map on"
+					placeholder={m('routeHeatmap.searchPlaceholder')}
+					aria-label={m('routeHeatmap.searchAriaLabel')}
 				/>
 				<button
 					type="button"
@@ -1256,7 +1268,7 @@
 					onclick={() => (filtersOpen = !filtersOpen)}
 				>
 					<span class="material-symbols">tune</span>
-					<span class="filters-btn-text">Filters</span>
+					<span class="filters-btn-text">{m('routeHeatmap.filters')}</span>
 					{#if activeFilterCount > 0}
 						<span class="filters-badge">{activeFilterCount}</span>
 					{/if}
@@ -1278,8 +1290,8 @@
 		{#if filtersOpen}
 			<div class="filters-panel" data-testid="filters-panel">
 				<div class="filter-group">
-					<span class="filter-group-label">Show</span>
-					<div class="chip-row" role="group" aria-label="Route lens" data-testid="lens-chips">
+					<span class="filter-group-label">{m('routeHeatmap.show')}</span>
+					<div class="chip-row" role="group" aria-label={m('routeHeatmap.routeLens')} data-testid="lens-chips">
 						{#each FILTERS as f (f.id)}
 							<button
 								type="button"
@@ -1293,8 +1305,8 @@
 					</div>
 				</div>
 				<div class="filter-group">
-					<span class="filter-group-label">Distance</span>
-					<div class="chip-row" role="group" aria-label="Race distance" data-testid="band-chips">
+					<span class="filter-group-label">{m('routeHeatmap.distance')}</span>
+					<div class="chip-row" role="group" aria-label={m('routeHeatmap.raceDistance')} data-testid="band-chips">
 						{#each DISTANCE_BANDS as b (b.key)}
 							<button
 								type="button"
@@ -1307,22 +1319,22 @@
 					</div>
 				</div>
 				<div class="filter-group">
-					<span class="filter-group-label">Map layers</span>
+					<span class="filter-group-label">{m('routeHeatmap.mapLayers')}</span>
 					<div class="layer-toggles">
 						<label class="layer-row">
 							<input type="checkbox" bind:checked={showHeatmapLayer} />
-							<span>Heat</span>
+							<span>{m('routeHeatmap.heat')}</span>
 						</label>
 						<label class="layer-row">
 							<input type="checkbox" bind:checked={showClubPins} />
-							<span>Clubs</span>
+							<span>{m('routeHeatmap.clubs')}</span>
 							<span class="layer-count">{clubPinsCount}</span>
 						</label>
 					</div>
 				</div>
 				{#if activeFilterCount > 0}
 					<button type="button" class="filters-reset" onclick={resetFilters}>
-						Reset filters
+						{m('routeHeatmap.resetFilters')}
 					</button>
 				{/if}
 			</div>
@@ -1331,7 +1343,7 @@
 		<div class="results-header">
 			<span class="results-count">
 				<strong>{routePinsCount}</strong>
-				{routePinsCount === 1 ? 'route' : 'routes'}
+				{routePinsCount === 1 ? m('routeHeatmap.routeWordOne') : m('routeHeatmap.routeWordMany')}
 			</span>
 			<span class="results-lens">
 				{activeFilterLabel}{#if selectedBands.length > 0} · {bandSummary}{/if}
@@ -1343,10 +1355,10 @@
 					data-testid="clear-pins"
 					onclick={clearPinned}
 				>
-					Clear {pinnedIds.size} kept
+					{m('routeHeatmap.clearKept', { n: pinnedIds.size })}
 				</button>
 			{:else if loading}
-				<span class="results-spinner" aria-label="Updating" title="Updating…"></span>
+				<span class="results-spinner" aria-label={m('routeHeatmap.updating')} title={m('routeHeatmap.updatingTitle')}></span>
 			{:else if lastUpdated}
 				<span class="results-updated">
 					{lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -1367,8 +1379,8 @@
 						data-route-id={r.id}
 						aria-pressed={pinnedIds.has(r.id)}
 						title={pinnedIds.has(r.id)
-							? 'Kept on map — click to remove'
-							: 'Click to keep this route on the map'}
+							? m('routeHeatmap.keptClickRemove')
+							: m('routeHeatmap.clickKeepThisRoute')}
 						onmouseenter={() => previewRoute(r.id, [r.lng, r.lat], r.name)}
 						onmouseleave={scheduleClear}
 						onclick={() => void togglePin(r.id)}
@@ -1376,16 +1388,16 @@
 						<span class="result-name">
 							{#if pinnedIds.has(r.id)}<span
 									class="result-kept material-symbols"
-									title="Kept on map">push_pin</span
+									title={m('routeHeatmap.keptOnMap')}>push_pin</span
 								>{/if}
-							{#if r.featured}<span class="result-star" title="Featured">★</span>{/if}
+							{#if r.featured}<span class="result-star" title={m('routeHeatmap.featured')}>★</span>{/if}
 							{r.name}
 						</span>
 						<span class="result-meta">
 							{#if band}<span class="result-band">{band.label}</span>{/if}
 							<span>{formatDistance(r.distance_m)}</span>
 							{#if r.surface}<span>· {r.surface}</span>{/if}
-							{#if r.run_count > 0}<span>· {r.run_count} run{r.run_count === 1 ? '' : 's'}</span>{/if}
+							{#if r.run_count > 0}<span>· {r.run_count === 1 ? m('routeHeatmap.runCountOne', { n: r.run_count }) : m('routeHeatmap.runCountMany', { n: r.run_count })}</span>{/if}
 						</span>
 					</button>
 					<a
@@ -1393,14 +1405,14 @@
 						href="/routes/{r.id}"
 						data-sveltekit-preload-data="hover"
 						data-testid="result-view"
-						title="Open route page"
+						title={m('routeHeatmap.openRoutePage')}
 					>
-						View<span class="material-symbols">arrow_forward</span>
+						{m('routeHeatmap.view')}<span class="material-symbols">arrow_forward</span>
 					</a>
 				</li>
 			{:else}
 				<li class="results-empty">
-					No routes here yet. Pan the map, zoom out, or change the filters.
+					{m('routeHeatmap.emptyState')}
 				</li>
 			{/each}
 		</ul>
@@ -1412,7 +1424,7 @@
 			class="sidebar-toggle"
 			data-testid="sidebar-toggle"
 			onclick={() => (sidebarOpen = !sidebarOpen)}
-			aria-label={sidebarOpen ? 'Hide route list' : 'Show route list'}
+			aria-label={sidebarOpen ? m('routeHeatmap.hideRouteList') : m('routeHeatmap.showRouteList')}
 			aria-expanded={sidebarOpen}
 		>
 			<span class="material-symbols">{sidebarOpen ? 'chevron_left' : 'chevron_right'}</span>

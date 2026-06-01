@@ -9,6 +9,7 @@
 	import ClubEditor from '$lib/components/ClubEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import VerifiedBadge from '$lib/components/VerifiedBadge.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
 	let subtab = $state<'browse' | 'mine'>('mine');
@@ -82,7 +83,7 @@
 </script>
 
 <div class="clubs-panel">
-	<div class="tabs" role="tablist" aria-label="Clubs section">
+	<div class="tabs" role="tablist" aria-label={m('socialClubs.tablistLabel')}>
 		<button
 			role="tab"
 			class="tab"
@@ -90,7 +91,7 @@
 			aria-selected={subtab === 'mine'}
 			onclick={() => setSubtab('mine')}
 		>
-			My clubs
+			{m('socialClubs.myClubs')}
 		</button>
 		<button
 			role="tab"
@@ -99,7 +100,7 @@
 			aria-selected={subtab === 'browse'}
 			onclick={() => setSubtab('browse')}
 		>
-			Browse
+			{m('socialClubs.browse')}
 		</button>
 	</div>
 
@@ -110,16 +111,16 @@
 				<input
 					type="text"
 					class="search-input"
-					placeholder="Search by name or location"
+					placeholder={m('socialClubs.searchPlaceholder')}
 					bind:value={search}
 					oninput={onSearchInput}
-					aria-label="Search clubs"
+					aria-label={m('socialClubs.searchAriaLabel')}
 				/>
 				{#if search}
 					<button
 						type="button"
 						class="search-clear"
-						aria-label="Clear search"
+						aria-label={m('socialClubs.clearSearchAriaLabel')}
 						onclick={() => { search = ''; loadBrowse(); }}
 					>
 						<span class="material-symbols" aria-hidden="true">close</span>
@@ -130,7 +131,7 @@
 		<div class="toolbar-actions">
 			<button class="btn btn-primary btn-sm" type="button" onclick={() => (showClubModal = true)}>
 				<span class="material-symbols" aria-hidden="true">add</span>
-				Create club
+				{m('socialClubs.createClub')}
 			</button>
 		</div>
 	</div>
@@ -151,32 +152,30 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading clubs…</p>
+		<p class="sr-only" role="status">{m('socialClubs.loadingClubs')}</p>
 	{:else if visible.length === 0}
 		<div class="empty-card">
 			{#if subtab === 'mine'}
 				<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
-				<h3>You haven't joined a club yet</h3>
+				<h3>{m('socialClubs.emptyMineTitle')}</h3>
 				<p class="empty-text">
-					Clubs are weekly groups, route-sharing circles, and event hubs. Browse
-					what's public near you, request to join with one tap, or start your own.
+					{m('socialClubs.emptyMineText')}
 				</p>
 				<div class="empty-actions">
 					<button class="btn btn-primary" type="button" onclick={() => setSubtab('browse')}>
 						<span class="material-symbols" aria-hidden="true">search</span>
-						Find a club
+						{m('socialClubs.findAClub')}
 					</button>
 					<button class="btn btn-outline" type="button" onclick={() => (showClubModal = true)}>
 						<span class="material-symbols" aria-hidden="true">add</span>
-						Create one instead
+						{m('socialClubs.createOneInstead')}
 					</button>
 				</div>
 			{:else if search.trim()}
 				<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>
-				<h3>No clubs match "{search.trim()}"</h3>
+				<h3>{m('socialClubs.noClubsMatch', { query: search.trim() })}</h3>
 				<p class="empty-text">
-					Public clubs are searched by name and location. Try a shorter or
-					different term, or clear the search to see everything available.
+					{m('socialClubs.noClubsMatchText')}
 				</p>
 				<div class="empty-actions">
 					<button
@@ -184,20 +183,19 @@
 						class="btn btn-primary"
 						onclick={() => { search = ''; loadBrowse(); }}
 					>
-						Clear search
+						{m('socialClubs.clearSearch')}
 					</button>
 				</div>
 			{:else}
 				<span class="material-symbols empty-icon" aria-hidden="true">groups</span>
-				<h3>No public clubs yet</h3>
+				<h3>{m('socialClubs.noPublicClubsTitle')}</h3>
 				<p class="empty-text">
-					There aren't any public clubs to browse right now. Start one to put your
-					area on the map — others can find and join.
+					{m('socialClubs.noPublicClubsText')}
 				</p>
 				<div class="empty-actions">
 					<button class="btn btn-primary" type="button" onclick={() => (showClubModal = true)}>
 						<span class="material-symbols" aria-hidden="true">add</span>
-						Create a club
+						{m('socialClubs.createAClub')}
 					</button>
 				</div>
 			{/if}
@@ -230,7 +228,7 @@
 							{/if}
 						</div>
 						{#if !club.is_public}
-							<span class="badge" title="Private — invite only">Private</span>
+							<span class="badge" title={m('socialClubs.privateTitle')}>{m('socialClubs.private')}</span>
 						{/if}
 					</div>
 					{#if club.description}
@@ -239,13 +237,13 @@
 					<div class="card-foot">
 						<span class="members">
 							<span class="material-symbols" aria-hidden="true">group</span>
-							{club.member_count} member{club.member_count === 1 ? '' : 's'}
+							{m(club.member_count === 1 ? 'socialClubs.memberCountOne' : 'socialClubs.memberCountMany', { n: club.member_count })}
 						</span>
 						{#if club.viewer_role}
 							<span class="chip chip-mine">{club.viewer_role}</span>
 						{:else if club.viewer_status === 'pending'}
-							<span class="chip chip-pending" title="Request awaiting admin approval">
-								Request pending
+							<span class="chip chip-pending" title={m('socialClubs.requestPendingTitle')}>
+								{m('socialClubs.requestPending')}
 							</span>
 						{/if}
 					</div>
@@ -257,7 +255,7 @@
 
 <Modal
 	open={showClubModal}
-	title="Create a club"
+	title={m('socialClubs.createAClub')}
 	onclose={() => (showClubModal = false)}
 >
 	<ClubEditor oncreated={handleClubCreated} oncancel={() => (showClubModal = false)} />

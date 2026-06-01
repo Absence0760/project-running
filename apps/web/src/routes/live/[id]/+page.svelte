@@ -17,6 +17,7 @@
 		type LivePing,
 	} from '$lib/runs/live_hub';
 	import { runnerHandle, shouldRevealDisplayName } from '$lib/social/runner_handle';
+	import { m } from '$lib/i18n/store.svelte';
 
 	// audit/cookie-consent (2026-05-25): MapTiler tile fetches log
 	// requester IPs per tile, so initialising MapLibre before consent
@@ -409,10 +410,10 @@
 </script>
 
 <svelte:head>
-	<title>Live Run — Threkir</title>
-	<meta name="description" content="Watch a runner's progress in real time" />
-	<meta property="og:title" content="Live Run — Threkir" />
-	<meta property="og:description" content="Watch a runner's progress in real time" />
+	<title>{m('live.pageTitle')}</title>
+	<meta name="description" content={m('live.pageDescription')} />
+	<meta property="og:title" content={m('live.pageTitle')} />
+	<meta property="og:description" content={m('live.pageDescription')} />
 	<meta property="og:type" content="website" />
 </svelte:head>
 
@@ -432,17 +433,17 @@
 		>
 			{#if status === 'connecting'}
 				<span class="badge-spinner" aria-hidden="true"></span>
-				Connecting…
+				{m('live.badgeConnecting')}
 			{:else if status === 'live'}
-				<span class="pulse-dot"></span> LIVE
+				<span class="pulse-dot"></span> {m('live.badgeLive')}
 			{:else if status === 'demo'}
-				Demo feed
+				{m('live.badgeDemo')}
 			{:else if status === 'finished'}
-				Finished
+				{m('live.badgeFinished')}
 			{:else if status === 'not-found'}
-				Not broadcasting
+				{m('live.badgeNotBroadcasting')}
 			{:else}
-				Connection lost
+				{m('live.badgeConnectionLost')}
 			{/if}
 		</div>
 	</header>
@@ -452,46 +453,45 @@
 			<div class="live-empty-icon" aria-hidden="true">
 				<span class="material-symbols">satellite_alt</span>
 			</div>
-			<h1>This run isn't broadcasting</h1>
+			<h1>{m('live.notFoundTitle')}</h1>
 			<p>
-				The link may be stale, the run may have finished, or it may be private. Ask the runner
-				to share a new live link if you expected to see something here.
+				{m('live.notFoundBody')}
 			</p>
-			<a href="/" class="btn btn-primary">Back to Threkir</a>
+			<a href="/" class="btn btn-primary">{m('live.backToThrekir')}</a>
 		</div>
 	{:else}
-		<section class="live-strip" aria-label="Live status">
+		<section class="live-strip" aria-label={m('live.liveStatusAria')}>
 			<div class="live-runner">
 				<span class="avatar" aria-hidden="true">{initials(runnerName ?? 'R')}</span>
 				<div class="live-runner-text">
-					<span class="live-runner-name">{runnerName ?? 'Anonymous runner'}</span>
+					<span class="live-runner-name">{runnerName ?? m('live.anonymousRunner')}</span>
 					<span class="live-runner-sub">
 						{#if status === 'connecting'}
-							Waiting for the first ping
+							{m('live.subWaitingFirstPing')}
 						{:else if status === 'demo'}
-							Synthesised demo data
+							{m('live.subSynthesisedDemo')}
 						{:else if status === 'live'}
-							Live from the runner's device
+							{m('live.subLiveFromDevice')}
 						{:else if status === 'finished'}
-							Run finished
+							{m('live.subRunFinished')}
 						{:else}
-							Reconnecting
+							{m('live.subReconnecting')}
 						{/if}
 					</span>
 				</div>
 			</div>
-			<div class="live-stats" role="group" aria-label="Live stats">
+			<div class="live-stats" role="group" aria-label={m('live.liveStatsAria')}>
 				<div class="live-stat">
 					<span class="live-stat-value">{formatDistance(distance)}</span>
-					<span class="live-stat-label">Distance</span>
+					<span class="live-stat-label">{m('live.statDistance')}</span>
 				</div>
 				<div class="live-stat">
 					<span class="live-stat-value">{formatDuration(elapsed)}</span>
-					<span class="live-stat-label">Elapsed</span>
+					<span class="live-stat-label">{m('live.statElapsed')}</span>
 				</div>
 				<div class="live-stat">
 					<span class="live-stat-value">{currentPace}</span>
-					<span class="live-stat-label">Pace</span>
+					<span class="live-stat-label">{m('live.statPace')}</span>
 				</div>
 			</div>
 		</section>
@@ -503,7 +503,7 @@
 					<div class="map-veil" aria-hidden="true">
 						<div class="map-veil-card">
 							<span class="badge-spinner" aria-hidden="true"></span>
-							<p>Waiting for the runner to start broadcasting…</p>
+							<p>{m('live.waitingToStartBroadcasting')}</p>
 						</div>
 					</div>
 				{/if}
@@ -517,16 +517,14 @@
 				-->
 				<div class="map-consent-veil">
 					<div class="map-consent-card">
-						<h2>Map disabled until you load it</h2>
+						<h2>{m('live.consentTitle')}</h2>
 						<p>
-							Loading the map sends your IP address to <strong>MapTiler</strong>,
-							our tile provider in Switzerland. Tap <strong>Load map</strong>
-							below to continue. Your choice is remembered only for this page
-							session — the global setting lives in our
-							<a href="/cookie-notice">cookie notice</a>.
+							{m('live.consentBodyPrefix')}<strong>MapTiler</strong>{m('live.consentBodyMid')}<strong
+								>{m('live.loadMap')}</strong
+							>{m('live.consentBodyBeforeLink')}<a href="/cookie-notice">{m('live.consentCookieNoticeLink')}</a>{m('live.consentBodySuffix')}
 						</p>
 						<button type="button" class="btn btn-primary" onclick={loadMapNow}>
-							Load map
+							{m('live.loadMap')}
 						</button>
 					</div>
 				</div>

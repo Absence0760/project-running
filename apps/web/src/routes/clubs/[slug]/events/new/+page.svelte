@@ -5,6 +5,7 @@
 	import { fetchClubBySlug } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import EventEditor from '$lib/components/EventEditor.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { ClubWithMeta } from '$lib/types';
 
 	let slug = $derived($page.params.slug as string);
@@ -48,10 +49,10 @@
 </script>
 
 {#if loading}
-	<div class="page" aria-busy="true" aria-label="Loading">
+	<div class="page" aria-busy="true" aria-label={m('eventNew.loadingAria')}>
 		<span class="back-skel" aria-hidden="true">
 			<span class="material-symbols">arrow_back</span>
-			Back to club
+			{m('eventNew.backToClub')}
 		</span>
 		<div class="header-skel">
 			<span class="skel skel-line skel-w-20"></span>
@@ -64,17 +65,17 @@
 			<span class="skel skel-block"></span>
 		</div>
 	</div>
-	<p class="sr-only" role="status">Loading…</p>
+	<p class="sr-only" role="status">{m('shell.loading')}</p>
 {:else if !club}
 	<div class="page">
 		<div class="empty-card">
 			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-			<h3>Club not found</h3>
+			<h3>{m('eventNew.clubNotFound')}</h3>
 			<p class="empty-text">
-				This club may be private, or it may have been deleted.
+				{m('eventNew.clubNotFoundBody')}
 			</p>
 			<div class="empty-actions">
-				<a href="/clubs" class="btn btn-primary">Back to clubs</a>
+				<a href="/clubs" class="btn btn-primary">{m('eventNew.backToClubs')}</a>
 			</div>
 		</div>
 	</div>
@@ -82,14 +83,14 @@
 	<div class="page">
 		<a class="back" href="/clubs/{slug}" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to {club.name}
+			{m('eventNew.backToNamedClub', { name: club.name })}
 		</a>
 
 		<header class="page-header">
 			<span class="kicker">{club.name}</span>
-			<h1>New event</h1>
+			<h1>{m('eventNew.title')}</h1>
 			<p class="tagline">
-				Every active member can RSVP to this event the moment you publish.
+				{m('eventNew.tagline')}
 			</p>
 		</header>
 

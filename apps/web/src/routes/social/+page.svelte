@@ -4,12 +4,14 @@
 	import SocialFeed from '$lib/components/SocialFeed.svelte';
 	import SocialPeople from '$lib/components/SocialPeople.svelte';
 	import SocialClubs from '$lib/components/SocialClubs.svelte';
+	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 
 	type Tab = 'feed' | 'people' | 'clubs';
-	const TABS: { id: Tab; label: string; icon: string }[] = [
-		{ id: 'feed', label: 'Feed', icon: 'dynamic_feed' },
-		{ id: 'people', label: 'People', icon: 'person_search' },
-		{ id: 'clubs', label: 'Clubs', icon: 'groups' },
+	const TABS: { id: Tab; labelKey: MessageKey; icon: string }[] = [
+		{ id: 'feed', labelKey: 'socialHub.tabFeed', icon: 'dynamic_feed' },
+		{ id: 'people', labelKey: 'socialHub.tabPeople', icon: 'person_search' },
+		{ id: 'clubs', labelKey: 'socialHub.tabClubs', icon: 'groups' },
 	];
 
 	let tab = $state<Tab>('feed');
@@ -34,17 +36,17 @@
 </script>
 
 <svelte:head>
-	<title>Social — Threkir</title>
+	<title>{m('socialHub.pageTitle')}</title>
 </svelte:head>
 
 <div class="page">
 	<header class="page-head">
-		<p class="kicker">SOCIAL</p>
-		<h1>Social</h1>
-		<p class="tagline">Your feed, people to follow, and clubs to join.</p>
+		<p class="kicker">{m('socialHub.kicker')}</p>
+		<h1>{m('socialHub.heading')}</h1>
+		<p class="tagline">{m('socialHub.tagline')}</p>
 	</header>
 
-	<div class="tabs" role="tablist" aria-label="Social sections">
+	<div class="tabs" role="tablist" aria-label={m('socialHub.sectionsLabel')}>
 		{#each TABS as t}
 			<button
 				type="button"
@@ -56,7 +58,7 @@
 				onclick={() => setTab(t.id)}
 			>
 				<span class="material-symbols" aria-hidden="true">{t.icon}</span>
-				<span>{t.label}</span>
+				<span>{m(t.labelKey)}</span>
 			</button>
 		{/each}
 	</div>
@@ -65,7 +67,9 @@
 		id="social-panel-{tab}"
 		role="tabpanel"
 		tabindex="0"
-		aria-label="{TABS.find((t) => t.id === tab)?.label} panel"
+		aria-label={m('socialHub.panelLabel', {
+			section: m(TABS.find((t) => t.id === tab)?.labelKey ?? 'socialHub.tabFeed'),
+		})}
 	>
 		{#if tab === 'feed'}
 			<SocialFeed />

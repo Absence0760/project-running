@@ -4,6 +4,7 @@
 	import { fetchRoutes, fetchClubRoutes, createEvent } from '$lib/core/data';
 	import { WEEKDAY_CHOICES } from '$lib/social/recurrence';
 	import { formatDistance, getUnit } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Route, RecurrenceFreq, Weekday } from '$lib/types';
 
 	// Conversion factor for the unit label / pace target. The form
@@ -117,7 +118,7 @@
 			});
 			oncreated?.(event);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to create event';
+			error = e instanceof Error ? e.message : m('eventEditor.createFailed');
 		} finally {
 			busy = false;
 		}
@@ -125,56 +126,56 @@
 </script>
 
 <form onsubmit={submit} class="event-editor">
-	<p class="sub">One-off meetup for {clubName}, or set a cadence below to repeat.</p>
+	<p class="sub">{m('eventEditor.sub', { clubName })}</p>
 
 	<label>
-		<span>Title</span>
-		<input type="text" bind:value={title} required maxlength="120" placeholder="Sunday long run" />
+		<span>{m('eventEditor.title')}</span>
+		<input type="text" bind:value={title} required maxlength="120" placeholder={m('eventEditor.titlePlaceholder')} />
 	</label>
 
 	<label>
-		<span>Details <span class="optional">optional</span></span>
+		<span>{m('eventEditor.details')} <span class="optional">{m('eventEditor.optional')}</span></span>
 		<textarea
 			bind:value={description}
 			rows="3"
 			maxlength="1000"
-			placeholder="Pace groups, post-run coffee, terrain, what to bring"
+			placeholder={m('eventEditor.detailsPlaceholder')}
 		></textarea>
 	</label>
 
 	<div class="row">
 		<label>
-			<span>Date</span>
+			<span>{m('eventEditor.date')}</span>
 			<input type="date" bind:value={date} required />
 		</label>
 		<label>
-			<span>Start time</span>
+			<span>{m('eventEditor.startTime')}</span>
 			<input type="time" bind:value={time} required />
 		</label>
 		<label>
-			<span>Duration <span class="optional">min</span></span>
-			<input type="number" min="5" max="600" bind:value={durationMin} placeholder="e.g. 60" />
+			<span>{m('eventEditor.duration')} <span class="optional">{m('eventEditor.minLabel')}</span></span>
+			<input type="number" min="5" max="600" bind:value={durationMin} placeholder={m('eventEditor.durationPlaceholder')} />
 		</label>
 	</div>
 
 	<label>
-		<span>Meeting point <span class="optional">optional</span></span>
-		<input type="text" bind:value={meetLabel} placeholder="e.g. North Gate, Central Park" maxlength="120" />
+		<span>{m('eventEditor.meetingPoint')} <span class="optional">{m('eventEditor.optional')}</span></span>
+		<input type="text" bind:value={meetLabel} placeholder={m('eventEditor.meetingPointPlaceholder')} maxlength="120" />
 	</label>
 
 	<label>
-		<span>Route <span class="optional">optional</span></span>
+		<span>{m('eventEditor.route')} <span class="optional">{m('eventEditor.optional')}</span></span>
 		<select bind:value={routeId}>
-			<option value="">— no route —</option>
+			<option value="">{m('eventEditor.noRoute')}</option>
 			{#if clubRoutes.length > 0}
-				<optgroup label="{clubName} routes">
+				<optgroup label={m('eventEditor.clubRoutes', { clubName })}>
 					{#each clubRoutes as r}
 						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
 					{/each}
 				</optgroup>
 			{/if}
 			{#if myRoutes.length > 0}
-				<optgroup label="My routes">
+				<optgroup label={m('eventEditor.myRoutes')}>
 					{#each myRoutes as r}
 						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
 					{/each}
@@ -184,13 +185,13 @@
 	</label>
 
 	<fieldset>
-		<legend>Repeats</legend>
+		<legend>{m('eventEditor.repeats')}</legend>
 		<div class="freq-row">
 			{#each [
-				{ value: 'none', label: 'One-off' },
-				{ value: 'weekly', label: 'Weekly' },
-				{ value: 'biweekly', label: 'Every 2 weeks' },
-				{ value: 'monthly', label: 'Monthly' }
+				{ value: 'none', label: m('eventEditor.freqNone') },
+				{ value: 'weekly', label: m('eventEditor.freqWeekly') },
+				{ value: 'biweekly', label: m('eventEditor.freqBiweekly') },
+				{ value: 'monthly', label: m('eventEditor.freqMonthly') }
 			] as opt}
 				<label class="radio-inline">
 					<input
@@ -206,7 +207,7 @@
 
 		{#if recurrence === 'weekly' || recurrence === 'biweekly'}
 			<div class="byday-row">
-				<span class="hint">On these days:</span>
+				<span class="hint">{m('eventEditor.onTheseDays')}</span>
 				{#each WEEKDAY_CHOICES as wd}
 					<button
 						type="button"
@@ -222,17 +223,17 @@
 
 		{#if recurrence !== 'none'}
 			<label class="until">
-				<span>Ends on <span class="optional">optional</span></span>
+				<span>{m('eventEditor.endsOn')} <span class="optional">{m('eventEditor.optional')}</span></span>
 				<input type="date" bind:value={until} />
 			</label>
 			<label class="until">
-				<span>End after <span class="optional">optional</span></span>
+				<span>{m('eventEditor.endAfter')} <span class="optional">{m('eventEditor.optional')}</span></span>
 				<input
 					type="number"
 					min="1"
 					max="520"
 					bind:value={count}
-					placeholder="N occurrences"
+					placeholder={m('eventEditor.endAfterPlaceholder')}
 				/>
 			</label>
 		{/if}
@@ -240,26 +241,26 @@
 
 	<div class="row">
 		<label>
-			<span>Distance <span class="optional">{distanceUnitLabel}</span></span>
+			<span>{m('eventEditor.distance')} <span class="optional">{distanceUnitLabel}</span></span>
 			<input
 				type="number"
 				step="0.1"
 				min="0"
 				bind:value={distanceInUnit}
-				placeholder="e.g. 10"
+				placeholder={m('eventEditor.distancePlaceholder')}
 			/>
 		</label>
 		<label>
-			<span>Target pace <span class="optional">{paceUnitLabel}</span></span>
+			<span>{m('eventEditor.targetPace')} <span class="optional">{paceUnitLabel}</span></span>
 			<div class="pace">
-				<input type="number" min="0" max="59" bind:value={paceMin} placeholder="min" />
+				<input type="number" min="0" max="59" bind:value={paceMin} placeholder={m('eventEditor.paceMin')} />
 				<span class="pace-sep">:</span>
-				<input type="number" min="0" max="59" bind:value={paceSec} placeholder="sec" />
+				<input type="number" min="0" max="59" bind:value={paceSec} placeholder={m('eventEditor.paceSec')} />
 			</div>
 		</label>
 		<label>
-			<span>Capacity <span class="optional">optional</span></span>
-			<input type="number" min="1" bind:value={capacity} placeholder="unlimited" />
+			<span>{m('eventEditor.capacity')} <span class="optional">{m('eventEditor.optional')}</span></span>
+			<input type="number" min="1" bind:value={capacity} placeholder={m('eventEditor.capacityPlaceholder')} />
 		</label>
 	</div>
 
@@ -269,10 +270,10 @@
 
 	<div class="actions">
 		{#if oncancel}
-			<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>Cancel</button>
+			<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>{m('eventEditor.cancel')}</button>
 		{/if}
 		<button type="submit" class="btn btn-primary" disabled={!title.trim() || busy}>
-			{busy ? 'Creating…' : 'Create event'}
+			{busy ? m('eventEditor.creating') : m('eventEditor.createEvent')}
 		</button>
 	</div>
 </form>

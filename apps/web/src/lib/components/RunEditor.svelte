@@ -6,6 +6,8 @@
 	import { supabase } from '$lib/core/supabase';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { getUnit } from '$lib/format/units.svelte';
+	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Route } from '$lib/types';
 
 	interface Props {
@@ -39,7 +41,7 @@
 	let isPublic = $state(false);
 	let touched = $state(false);
 
-	let distanceLabel = $derived(`Distance (${unit})`);
+	let distanceLabel = $derived(m('runEditor.distanceLabel', { unit }));
 
 	onMount(async () => {
 		unit = getUnit();
@@ -73,7 +75,7 @@
 		const perUnitMetres = unit === 'mi' ? METRES_PER_MILE : 1000;
 		const distanceM = Math.max(0, distance * perUnitMetres);
 		if (totalSec <= 0 || distanceM <= 0) {
-			showToast('Distance and duration are both required.', 'error');
+			showToast(m('runEditor.distanceDurationRequired'), 'error');
 			return;
 		}
 		submitting = true;
@@ -88,10 +90,10 @@
 				routeId: routeId || null,
 				isPublic
 			});
-			showToast('Run added.', 'success');
+			showToast(m('runEditor.runAdded'), 'success');
 			oncreated?.({ id });
 		} catch (err) {
-			showToast(`Couldn't add run: ${(err as Error).message}`, 'error');
+			showToast(m('runEditor.addRunFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
 		} finally {
 			submitting = false;
 		}
@@ -100,13 +102,13 @@
 
 <form class="run-editor" onsubmit={handleSubmit}>
 	<label class="field">
-		<span class="field-label">Started at</span>
+		<span class="field-label">{m('runEditor.startedAt')}</span>
 		<input type="datetime-local" bind:value={startedAt} required class="input" />
 	</label>
 
 	<fieldset class="field activity-field">
-		<legend class="field-label">Activity</legend>
-		<div class="chip-row" role="radiogroup" aria-label="Activity">
+		<legend class="field-label">{m('runEditor.activity')}</legend>
+		<div class="chip-row" role="radiogroup" aria-label={m('runEditor.activity')}>
 			{#each ['run', 'walk', 'hike', 'cycle', 'stroller'] as a}
 				<button
 					type="button"
@@ -116,7 +118,7 @@
 					class:active={activityType === a}
 					onclick={() => (activityType = a as typeof activityType)}
 				>
-					{a.charAt(0).toUpperCase() + a.slice(1)}
+					{m(`runEditor.activity_${a}` as MessageKey)}
 				</button>
 			{/each}
 		</div>
@@ -128,35 +130,35 @@
 			<input type="number" min="0" step="0.01" bind:value={distance} required class="input" />
 		</label>
 		<label class="field">
-			<span class="field-label">Duration — min</span>
+			<span class="field-label">{m('runEditor.durationMin')}</span>
 			<input type="number" min="0" step="1" bind:value={durationMin} required class="input" />
 		</label>
 		<label class="field">
-			<span class="field-label">Sec</span>
+			<span class="field-label">{m('runEditor.durationSec')}</span>
 			<input type="number" min="0" max="59" step="1" bind:value={durationSec} class="input" />
 		</label>
 	</div>
 
 	<label class="field">
-		<span class="field-label">Route (optional)</span>
+		<span class="field-label">{m('runEditor.routeOptional')}</span>
 		<select bind:value={routeId} class="input">
-			<option value="">— No route —</option>
+			<option value="">{m('runEditor.noRoute')}</option>
 			{#each routes as r (r.id)}
 				<option value={r.id}>{r.name}</option>
 			{/each}
 		</select>
 		<span class="field-hint">
-			Link this run to one of your saved routes — or leave blank to log it without a route.
+			{m('runEditor.routeHint')}
 		</span>
 	</label>
 
 	<label class="field">
-		<span class="field-label">Notes (optional)</span>
+		<span class="field-label">{m('runEditor.notesOptional')}</span>
 		<textarea
 			bind:value={notes}
 			rows="3"
 			class="input"
-			placeholder="How did it feel? What was the weather like?"
+			placeholder={m('runEditor.notesPlaceholder')}
 		></textarea>
 	</label>
 
@@ -168,12 +170,9 @@
 			class="toggle-input"
 		/>
 		<span>
-			<span class="field-label toggle-label">Make this run public</span>
+			<span class="field-label toggle-label">{m('runEditor.makePublic')}</span>
 			<span class="field-hint">
-				This is the only visibility choice — there's no followers-only tier.
-				Checked: anyone can see the run on your public profile and in the feed.
-				Unchecked: private, visible only to you. Starts from your Settings
-				default until you change it here.
+				{m('runEditor.makePublicHint')}
 			</span>
 		</span>
 	</label>
@@ -186,11 +185,11 @@
 				onclick={() => oncancel?.()}
 				disabled={submitting}
 			>
-				Cancel
+				{m('runEditor.cancel')}
 			</button>
 		{/if}
 		<button type="submit" class="btn btn-primary" disabled={submitting}>
-			{submitting ? 'Saving…' : 'Save run'}
+			{submitting ? m('runEditor.saving') : m('runEditor.saveRun')}
 		</button>
 	</div>
 </form>

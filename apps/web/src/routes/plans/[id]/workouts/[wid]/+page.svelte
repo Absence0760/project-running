@@ -8,6 +8,7 @@
 	import { fmtHms, isWorkoutCompleted, WORKOUT_KIND_LABEL } from '$lib/training/training';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import type { WorkoutStructure } from '$lib/training/training';
 
@@ -124,10 +125,10 @@
 </script>
 
 {#if loading}
-	<div class="page" aria-busy="true" aria-label="Loading workout">
+	<div class="page" aria-busy="true" aria-label={t('workoutDetail.loadingWorkout')}>
 		<span class="back-skel" aria-hidden="true">
 			<span class="material-symbols">arrow_back</span>
-			Back to plan
+			{t('workoutDetail.backToPlan')}
 		</span>
 		<div class="hero skel-hero" aria-hidden="true">
 			<div class="skel-hero-text">
@@ -142,22 +143,21 @@
 			<span class="skel skel-line skel-w-60"></span>
 		</div>
 	</div>
-	<p class="sr-only" role="status">Loading workout…</p>
+	<p class="sr-only" role="status">{t('workoutDetail.loadingWorkoutEllipsis')}</p>
 {:else if !workout}
 	<div class="page">
 		<a class="back" href="/plans/{planId}">
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to plan
+			{t('workoutDetail.backToPlan')}
 		</a>
 		<div class="empty-card">
 			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-			<h2>Workout not found</h2>
+			<h2>{t('workoutDetail.notFoundTitle')}</h2>
 			<p class="empty-text">
-				This workout may have been removed from the plan, or the plan no
-				longer exists.
+				{t('workoutDetail.notFoundText')}
 			</p>
 			<div class="empty-actions">
-				<a class="btn btn-primary" href="/plans/{planId}">Return to plan</a>
+				<a class="btn btn-primary" href="/plans/{planId}">{t('workoutDetail.returnToPlan')}</a>
 			</div>
 		</div>
 	</div>
@@ -165,7 +165,7 @@
 	<div class="page" data-kind={kindForChrome}>
 		<a class="back" href="/plans/{planId}" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to plan
+			{t('workoutDetail.backToPlan')}
 		</a>
 
 		<header class="hero">
@@ -174,35 +174,35 @@
 				<h1>{workoutKindLabel(workout.kind)}</h1>
 				<p class="tagline">
 					{#if structure}
-						Structured workout — follow each segment as written.
+						{t('workoutDetail.taglineStructured')}
 					{:else if workout.kind === 'easy' || workout.kind === 'recovery'}
-						Free-form easy effort. Run by feel.
+						{t('workoutDetail.taglineEasy')}
 					{:else if workout.kind === 'long'}
-						Free-form long run. Pace yourself for the back half.
+						{t('workoutDetail.taglineLong')}
 					{:else if workout.kind === 'rest'}
-						Rest day. Light movement only if you feel like it.
+						{t('workoutDetail.taglineRest')}
 					{:else if workout.kind === 'race'}
-						Race day. Trust the taper.
+						{t('workoutDetail.taglineRace')}
 					{:else}
-						Free-form run.
+						{t('workoutDetail.taglineFreeForm')}
 					{/if}
 				</p>
 				<div class="meta">
 					{#if workout.target_distance_m != null}
 						<div class="metric">
-							<span class="m-label">Distance</span>
+							<span class="m-label">{t('workoutDetail.distance')}</span>
 							<strong>{fmtKm(workout.target_distance_m, 2)}</strong>
 						</div>
 					{/if}
 					{#if workout.target_duration_seconds}
 						<div class="metric">
-							<span class="m-label">Duration</span>
+							<span class="m-label">{t('workoutDetail.duration')}</span>
 							<strong>{fmtHms(workout.target_duration_seconds)}</strong>
 						</div>
 					{/if}
 					{#if workout.target_pace_sec_per_km}
 						<div class="metric pace-metric">
-							<span class="m-label">Target pace</span>
+							<span class="m-label">{t('workoutDetail.targetPace')}</span>
 							<strong>
 								{fmtPace(workout.target_pace_sec_per_km)}
 								{#if workout.target_pace_end_sec_per_km && workout.target_pace_end_sec_per_km !== workout.target_pace_sec_per_km}
@@ -225,9 +225,9 @@
 			{#if isWorkoutCompleted(workout)}
 				<div class="completed-card">
 					<span class="material-symbols" aria-hidden="true">check_circle</span>
-					<span class="completed-label">Completed</span>
+					<span class="completed-label">{t('workoutDetail.completed')}</span>
 					<button class="btn-ghost" onclick={unlink}>
-						{workout.completed_run_id ? 'Unlink' : 'Mark not done'}
+						{workout.completed_run_id ? t('workoutDetail.unlink') : t('workoutDetail.markNotDone')}
 					</button>
 				</div>
 			{/if}
@@ -235,15 +235,15 @@
 
 		{#if workout.notes}
 			<section class="card">
-				<h3>Notes</h3>
+				<h3>{t('workoutDetail.notes')}</h3>
 				<p>{workout.notes}</p>
 			</section>
 		{/if}
 
 		{#if structure}
 			<section class="card structure-card">
-				<h3>Structure</h3>
-				<div class="timeline" role="img" aria-label="Workout segment timeline">
+				<h3>{t('workoutDetail.structure')}</h3>
+				<div class="timeline" role="img" aria-label={t('workoutDetail.segmentTimeline')}>
 					{#each segmentVisuals(structure) as seg, i (i)}
 						<span
 							class="tl-seg tl-{seg.role}"
@@ -255,56 +255,59 @@
 				<ol class="steps">
 					{#if structure.warmup}
 						<li class="step step-warmup">
-							<span class="step-kind">Warmup</span>
+							<span class="step-kind">{t('workoutDetail.warmup')}</span>
 							<span class="step-body">
 								<span class="step-main">{fmtKm(structure.warmup.distance_m, 1)}</span>
-								<span class="step-pace">@ easy</span>
+								<span class="step-pace">{t('workoutDetail.atEasy')}</span>
 							</span>
 						</li>
 					{/if}
 					{#if structure.repeats}
 						<li class="step step-work">
-							<span class="step-kind">Repeats</span>
+							<span class="step-kind">{t('workoutDetail.repeats')}</span>
 							<span class="step-body">
 								<span class="step-main">
-									{structure.repeats.count}× {fmtKm(structure.repeats.distance_m, 2)}
-									@ {fmtPace(structure.repeats.pace_sec_per_km)} with
-									{fmtKm(structure.repeats.recovery_distance_m, 2)} {structure.repeats.recovery_pace}
+									{t('workoutDetail.repeatsDetail', {
+										count: structure.repeats.count,
+										distance: fmtKm(structure.repeats.distance_m, 2),
+										pace: fmtPace(structure.repeats.pace_sec_per_km),
+										recoveryDistance: fmtKm(structure.repeats.recovery_distance_m, 2),
+										recoveryPace: structure.repeats.recovery_pace ?? ''
+									})}
 								</span>
 							</span>
 						</li>
 					{/if}
 					{#if structure.steady}
 						<li class="step step-steady">
-							<span class="step-kind">Steady</span>
+							<span class="step-kind">{t('workoutDetail.steady')}</span>
 							<span class="step-body">
 								<span class="step-main">{fmtKm(structure.steady.distance_m, 1)}</span>
-								<span class="step-pace">@ {fmtPace(structure.steady.pace_sec_per_km)}</span>
+								<span class="step-pace">{t('workoutDetail.atPace', { pace: fmtPace(structure.steady.pace_sec_per_km) })}</span>
 							</span>
 						</li>
 					{/if}
 					{#if structure.cooldown}
 						<li class="step step-cooldown">
-							<span class="step-kind">Cooldown</span>
+							<span class="step-kind">{t('workoutDetail.cooldown')}</span>
 							<span class="step-body">
 								<span class="step-main">{fmtKm(structure.cooldown.distance_m, 1)}</span>
-								<span class="step-pace">@ easy</span>
+								<span class="step-pace">{t('workoutDetail.atEasy')}</span>
 							</span>
 						</li>
 					{/if}
 				</ol>
-				<p class="total">Total: {fmtKm(intervalTotal(structure), 2)}</p>
+				<p class="total">{t('workoutDetail.total', { value: fmtKm(intervalTotal(structure), 2) })}</p>
 			</section>
 		{:else if workout.kind !== 'rest'}
 			<section class="card structure-empty">
-				<h3>Plan it</h3>
+				<h3>{t('workoutDetail.planIt')}</h3>
 				<div class="structure-empty-body">
 					<span class="material-symbols" aria-hidden="true">timeline</span>
 					<div>
-						<strong>Free-form run</strong>
+						<strong>{t('workoutDetail.freeFormRun')}</strong>
 						<span class="muted">
-							No segments to follow — just run the distance at the suggested
-							pace.
+							{t('workoutDetail.freeFormRunHint')}
 						</span>
 					</div>
 				</div>
@@ -312,42 +315,38 @@
 		{/if}
 
 		<section class="card advice">
-			<h3>How to run it</h3>
+			<h3>{t('workoutDetail.howToRunIt')}</h3>
 			{#if workout.kind === 'easy' || workout.kind === 'recovery'}
-				<p>Conversational pace. If you can't hold a conversation, you're running it too fast.</p>
+				<p>{t('workoutDetail.adviceEasy')}</p>
 			{:else if workout.kind === 'long'}
 				<p>
-					Stay relaxed — aim for steady breathing. If the weather is rough or you're
-					sore, drop 10% of the distance rather than skip.
+					{t('workoutDetail.adviceLong')}
 				</p>
 			{:else if workout.kind === 'tempo'}
 				<p>
-					"Comfortably hard". You should feel like you could hold the pace for about an
-					hour at peak effort, but no longer.
+					{t('workoutDetail.adviceTempo')}
 				</p>
 			{:else if workout.kind === 'interval'}
 				<p>
-					Run the reps hard enough that the last one feels like the first. Don't pick
-					a pace you can only hold for two or three reps.
+					{t('workoutDetail.adviceInterval')}
 				</p>
 			{:else if workout.kind === 'marathon_pace'}
 				<p>
-					Lock into goal marathon pace exactly. This is a rehearsal session — no
-					faster, no slower.
+					{t('workoutDetail.adviceMarathonPace')}
 				</p>
 			{:else if workout.kind === 'race'}
-				<p>Trust the plan. Don't chase a PB in the first mile.</p>
+				<p>{t('workoutDetail.adviceRace')}</p>
 			{:else}
-				<p>Rest day — if you need to move, walk or stretch.</p>
+				<p>{t('workoutDetail.adviceRest')}</p>
 			{/if}
 		</section>
 	</div>
 
 <ConfirmDialog
 	open={showUnlinkConfirm}
-	title="Unlink run"
-	message="Unlink the matched run? The workout will show as not yet done."
-	confirmLabel="Unlink"
+	title={t('workoutDetail.unlinkRunTitle')}
+	message={t('workoutDetail.unlinkRunMessage')}
+	confirmLabel={t('workoutDetail.unlink')}
 	onconfirm={confirmUnlink}
 	oncancel={() => showUnlinkConfirm = false}
 	danger

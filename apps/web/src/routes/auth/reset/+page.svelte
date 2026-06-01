@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let password = $state('');
 	let confirmPassword = $state('');
@@ -55,11 +56,11 @@
 		e.preventDefault();
 		error = '';
 		if (password.length < 6) {
-			error = 'Password must be at least 6 characters.';
+			error = m('authReset.errorTooShort');
 			return;
 		}
 		if (password !== confirmPassword) {
-			error = "Passwords don't match.";
+			error = m('authReset.errorMismatch');
 			return;
 		}
 		busy = true;
@@ -72,7 +73,7 @@
 			await auth.refreshSession();
 			goto('/dashboard');
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Failed to update password.';
+			error = err instanceof Error ? err.message : m('authReset.errorGeneric');
 			busy = false;
 		}
 	}
@@ -88,22 +89,21 @@
 
 	<main class="reset-main">
 		<div class="reset-card">
-			<p class="kicker">Almost there</p>
-			<h1>Set a new password</h1>
+			<p class="kicker">{m('authReset.kicker')}</p>
+			<h1>{m('authReset.heading')}</h1>
 
 			{#if !ready}
-				<p class="muted">Verifying your reset link…</p>
+				<p class="muted">{m('authReset.verifying')}</p>
 			{:else if !auth.user}
-				<p class="muted">This reset link is invalid or has expired.</p>
+				<p class="muted">{m('authReset.invalidLink')}</p>
 				<div class="error-block">
 					<p>
-						Reset links expire after a short window for security. Request a fresh one
-						and we'll send it to the same inbox.
+						{m('authReset.invalidLinkBody')}
 					</p>
 				</div>
-				<a class="btn btn-primary reset-cta" href="/login?reset=1">Request a new link</a>
+				<a class="btn btn-primary reset-cta" href="/login?reset=1">{m('authReset.requestNewLink')}</a>
 			{:else}
-				<p class="subtitle">Choose a new password for <strong>{auth.user.email}</strong>.</p>
+				<p class="subtitle">{m('authReset.subtitlePrefix')} <strong>{auth.user.email}</strong>{m('authReset.subtitleSuffix')}</p>
 
 				{#if error}
 					<div class="error" role="alert">{error}</div>
@@ -113,7 +113,7 @@
 					<input
 						type="password"
 						bind:value={password}
-						placeholder="New password"
+						placeholder={m('authReset.newPasswordPlaceholder')}
 						required
 						minlength="6"
 						autocomplete="new-password"
@@ -121,22 +121,22 @@
 					<input
 						type="password"
 						bind:value={confirmPassword}
-						placeholder="Confirm new password"
+						placeholder={m('authReset.confirmPasswordPlaceholder')}
 						required
 						minlength="6"
 						autocomplete="new-password"
 					/>
 					<button type="submit" class="btn btn-primary reset-cta" disabled={busy}>
-						{busy ? 'Updating…' : 'Update password'}
+						{busy ? m('authReset.updating') : m('authReset.updateButton')}
 					</button>
 				</form>
-				<p class="reset-hint">Pick something at least 6 characters long.</p>
+				<p class="reset-hint">{m('authReset.hint')}</p>
 			{/if}
 		</div>
 	</main>
 
 	<footer class="reset-footer">
-		<a href="/login">Back to sign in</a>
+		<a href="/login">{m('authReset.backToSignIn')}</a>
 	</footer>
 </div>
 

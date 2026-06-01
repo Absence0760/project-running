@@ -17,6 +17,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { distanceInPreferred } from '$lib/format/units.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 
 	interface Props {
@@ -109,11 +110,11 @@
 		const name = draftName.trim();
 		if (!name) return;
 		if (draftEnd <= draftStart) {
-			showToast('End must be greater than start', 'error');
+			showToast(t('segments.endGreaterThanStart'), 'error');
 			return;
 		}
 		if (draftEnd - draftStart < 100) {
-			showToast('Segment must be at least 100 m', 'error');
+			showToast(t('segments.minLength'), 'error');
 			return;
 		}
 		creating = true;
@@ -128,7 +129,7 @@
 			showCreate = false;
 			draftName = '';
 		} catch (e: any) {
-			showToast(e?.message ?? 'Could not create segment', 'error');
+			showToast(e?.message ?? t('segments.createFailed'), 'error');
 		} finally {
 			creating = false;
 		}
@@ -146,7 +147,7 @@
 			);
 			if (openSegmentId === target.id) openSegmentId = null;
 		} catch (e: any) {
-			showToast(e?.message ?? 'Delete failed', 'error');
+			showToast(e?.message ?? t('segments.deleteFailed'), 'error');
 		}
 	}
 
@@ -163,14 +164,14 @@
 
 <div class="segments-panel">
 	<header class="hd">
-		<h2>Segments</h2>
+		<h2>{t('segments.heading')}</h2>
 		{#if canCreate}
 			<button
 				class="btn btn-outline btn-sm"
 				type="button"
 				onclick={() => (showCreate = !showCreate)}
 			>
-				{showCreate ? 'Cancel' : 'New segment'}
+				{showCreate ? t('segments.cancel') : t('segments.newSegment')}
 			</button>
 		{/if}
 	</header>
@@ -184,12 +185,12 @@
 			}}
 		>
 			<label>
-				<span>Name</span>
-				<input type="text" bind:value={draftName} maxlength="120" placeholder="Climb of doom" />
+				<span>{t('segments.nameLabel')}</span>
+				<input type="text" bind:value={draftName} maxlength="120" placeholder={t('segments.namePlaceholder')} />
 			</label>
 			<div class="range">
 				<label>
-					<span>Start (m)</span>
+					<span>{t('segments.startMeters')}</span>
 					<input
 						type="number"
 						min="0"
@@ -199,7 +200,7 @@
 					/>
 				</label>
 				<label>
-					<span>End (m)</span>
+					<span>{t('segments.endMeters')}</span>
 					<input
 						type="number"
 						min="100"
@@ -215,15 +216,15 @@
 				</span>
 			</div>
 			<button class="btn btn-primary btn-sm" type="submit" disabled={creating || !draftName.trim()}>
-				{creating ? 'Creating…' : 'Create'}
+				{creating ? t('segments.creating') : t('segments.create')}
 			</button>
 		</form>
 	{/if}
 
 	{#if loading}
-		<p class="muted">Loading segments…</p>
+		<p class="muted">{t('segments.loadingSegments')}</p>
 	{:else if segments.length === 0}
-		<p class="muted">No segments on this route yet.</p>
+		<p class="muted">{t('segments.empty')}</p>
 	{:else}
 		<ul class="seg-list">
 			{#each segments as seg (seg.id)}
@@ -246,18 +247,18 @@
 						<div class="leaderboard">
 							<div class="tier-filters">
 								<label>
-									Gender
+									{t('segments.gender')}
 									<select bind:value={genderFilter}>
-										<option value={null}>All</option>
-										<option value="male">Men</option>
-										<option value="female">Women</option>
-										<option value="nonbinary">Nonbinary</option>
+										<option value={null}>{t('segments.all')}</option>
+										<option value="male">{t('segments.men')}</option>
+										<option value="female">{t('segments.women')}</option>
+										<option value="nonbinary">{t('segments.nonbinary')}</option>
 									</select>
 								</label>
 								<label>
-									Age band
+									{t('segments.ageBand')}
 									<select bind:value={ageFilter}>
-										<option value={null}>All ages</option>
+										<option value={null}>{t('segments.allAges')}</option>
 										{#each SEGMENT_AGE_BANDS as band}
 											<option value={band}>{band}</option>
 										{/each}
@@ -266,7 +267,7 @@
 								{#if clubId}
 									<label class="club-only-toggle">
 										<input type="checkbox" bind:checked={clubOnly} />
-										Club only
+										{t('segments.clubOnly')}
 									</label>
 								{/if}
 								{#if genderFilter || ageFilter || clubOnly}
@@ -278,19 +279,19 @@
 											ageFilter = null;
 											clubOnly = false;
 										}}
-										title="Clear filters"
+										title={t('segments.clearFilters')}
 									>
-										Reset
+										{t('segments.reset')}
 									</button>
 								{/if}
 							</div>
 							{#if leaderboards.get(seg.id) == null}
-								<p class="muted small">Loading…</p>
+								<p class="muted small">{t('segments.loading')}</p>
 							{:else if (leaderboards.get(seg.id) ?? []).length === 0}
 								<p class="muted small">
 									{genderFilter || ageFilter
-										? 'No efforts match this filter — try widening it.'
-										: 'No efforts yet — be the first to run this segment.'}
+										? t('segments.noEffortsFiltered')
+										: t('segments.noEffortsYet')}
 								</p>
 							{:else}
 								{@const _board = leaderboards.get(seg.id) ?? []}
@@ -300,7 +301,7 @@
 								{#if _viewerHoldsCrown}
 									<p class="crown-banner" title={crownLabel(genderFilter, ageFilter)}>
 										<span class="material-symbols crown-icon">emoji_events</span>
-										You hold this crown — {crownLabel(genderFilter, ageFilter)}.
+										{t('segments.youHoldCrown', { label: crownLabel(genderFilter, ageFilter) ?? '' })}
 									</p>
 								{/if}
 								<ol>
@@ -327,7 +328,7 @@
 													font="0.72rem"
 												/>
 												<span class="athlete-name">
-													{entry.athlete.display_name ?? 'Runner'}
+													{entry.athlete.display_name ?? t('segments.runnerFallback')}
 												</span>
 											</a>
 											<span class="time">{fmtTime(entry.effort.time_seconds)}</span>
@@ -341,7 +342,7 @@
 									type="button"
 									onclick={() => (confirmDelete = seg)}
 								>
-									Delete segment
+									{t('segments.deleteSegment')}
 								</button>
 							{/if}
 						</div>
@@ -354,9 +355,9 @@
 
 <ConfirmDialog
 	open={confirmDelete != null}
-	title="Delete segment?"
-	message="This removes the segment and all its efforts. Cannot be undone."
-	confirmLabel="Delete"
+	title={t('segments.deleteConfirmTitle')}
+	message={t('segments.deleteConfirmMessage')}
+	confirmLabel={t('segments.delete')}
 	danger
 	onconfirm={doDelete}
 	oncancel={() => (confirmDelete = null)}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { m as tr } from '$lib/i18n/store.svelte';
 	import { onMount, onDestroy } from 'svelte';
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
@@ -97,7 +98,7 @@
 		// Refresh the events lists so the new one shows up immediately;
 		// admins typically stay on the club page after creating.
 		await load();
-		showToast('Event created.');
+		showToast(tr('clubHome.toastEventCreated'));
 	}
 
 	let draftPost = $state('');
@@ -159,10 +160,10 @@
 	async function unmakeTemplate(planId: string) {
 		try {
 			await setPlanIsTemplate(planId, false, null);
-			showToast('Template removed from club.');
+			showToast(tr('clubHome.toastTemplateRemoved'));
 			await load();
 		} catch (e) {
-			showToast(`Failed: ${e}`, 'error');
+			showToast(tr('clubHome.toastFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -179,20 +180,20 @@
 		try {
 			await setRouteClubId(transferRouteId, club.id);
 			showTransferModal = false;
-			showToast('Route transferred to club.');
+			showToast(tr('clubHome.toastRouteTransferred'));
 			await load();
 		} catch (e) {
-			showToast(`Failed to transfer route: ${e}`, 'error');
+			showToast(tr('clubHome.toastRouteTransferFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
 	async function removeRouteFromClub(routeId: string) {
 		try {
 			await setRouteClubId(routeId, null);
-			showToast('Route returned to your personal library.');
+			showToast(tr('clubHome.toastRouteReturned'));
 			await load();
 		} catch (e) {
-			showToast(`Failed to remove route from club: ${e}`, 'error');
+			showToast(tr('clubHome.toastRouteRemoveFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -393,11 +394,11 @@
 		try {
 			const status = await joinClub(club.id, club.join_policy, waiverAck);
 			if (status === 'pending') {
-				error = `Request sent. An admin will review it.`;
+				error = tr('clubHome.requestSent');
 			}
 			await load();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to join';
+			error = e instanceof Error ? e.message : tr('clubHome.failedToJoin');
 		} finally {
 			joinBusy = false;
 		}
@@ -416,7 +417,7 @@
 			await leaveClub(club.id);
 			await load();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to leave';
+			error = e instanceof Error ? e.message : tr('clubHome.failedToLeave');
 		} finally {
 			joinBusy = false;
 		}
@@ -438,9 +439,9 @@
 				pending.map((p) => p.user_id)
 			);
 			await load();
-			showToast('Approved all pending requests.');
+			showToast(tr('clubHome.toastApprovedAll'));
 		} catch (e: unknown) {
-			showToast(`Failed to approve all: ${e instanceof Error ? e.message : e}`, 'error');
+			showToast(tr('clubHome.toastApproveAllFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			approvingAll = false;
 		}
@@ -460,7 +461,7 @@
 			await removeMember(club.id, userId);
 			await load();
 		} catch (e) {
-			showToast(`Failed to remove member: ${e}`, 'error');
+			showToast(tr('clubHome.toastRemoveMemberFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -468,7 +469,7 @@
 		if (!club?.invite_token) return;
 		const link = `${location.origin}/clubs/join/${club.invite_token}`;
 		await navigator.clipboard.writeText(link);
-		error = 'Invite link copied to clipboard.';
+		error = tr('clubHome.inviteCopied');
 	}
 
 	function regenerateInvite() {
@@ -513,7 +514,7 @@
 			draftPost = '';
 			posts = await fetchClubPosts(club.id, 20);
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to post';
+			error = e instanceof Error ? e.message : tr('clubHome.failedToPost');
 		} finally {
 			postingBusy = false;
 		}
@@ -568,12 +569,12 @@
 	function fmtRelative(iso: string): string {
 		const diff = Date.now() - new Date(iso).getTime();
 		const min = Math.floor(diff / 60_000);
-		if (min < 1) return 'Just now';
-		if (min < 60) return `${min}m ago`;
+		if (min < 1) return tr('clubHome.justNow');
+		if (min < 60) return tr('clubHome.minutesAgo', { n: min });
 		const hr = Math.floor(min / 60);
-		if (hr < 24) return `${hr}h ago`;
+		if (hr < 24) return tr('clubHome.hoursAgo', { n: hr });
 		const d = Math.floor(hr / 24);
-		if (d < 7) return `${d}d ago`;
+		if (d < 7) return tr('clubHome.daysAgo', { n: d });
 		return new Date(iso).toLocaleDateString();
 	}
 
@@ -584,7 +585,7 @@
 	<div class="page">
 		<span class="back-skel" aria-hidden="true">
 			<span class="material-symbols">arrow_back</span>
-			All clubs
+			{tr('clubHome.allClubs')}
 		</span>
 		<div class="hero skel-hero" aria-hidden="true">
 			<span class="skel skel-avatar-lg"></span>
@@ -615,18 +616,18 @@
 			{/each}
 		</div>
 	</div>
-	<p class="sr-only" role="status">Loading club…</p>
+	<p class="sr-only" role="status">{tr('clubHome.loadingClub')}</p>
 {:else if !club}
 	<div class="not-found">
-		<h2>Club not found</h2>
-		<p>This club may be private, or it may have been deleted.</p>
-		<a href="/clubs" class="btn-secondary">Back to clubs</a>
+		<h2>{tr('clubHome.notFoundTitle')}</h2>
+		<p>{tr('clubHome.notFoundBody')}</p>
+		<a href="/clubs" class="btn-secondary">{tr('clubHome.backToClubs')}</a>
 	</div>
 {:else}
 	<div class="page" class:realtime-ready={realtimeReady}>
 		<a class="back" href="/clubs" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			All clubs
+			{tr('clubHome.allClubs')}
 		</a>
 
 		<div class="hero">
@@ -640,7 +641,7 @@
 						{/if}
 					</h1>
 					{#if !club.is_public}
-						<span class="badge">Private</span>
+						<span class="badge">{tr('clubHome.privateBadge')}</span>
 					{/if}
 				</div>
 				{#if club.location_label}
@@ -651,32 +652,32 @@
 				{/if}
 				<p class="members-line">
 					<span class="material-symbols" aria-hidden="true">group</span>
-					{club.member_count} member{club.member_count === 1 ? '' : 's'}
+					{tr(club.member_count === 1 ? 'clubHome.memberCountOne' : 'clubHome.memberCountMany', { n: club.member_count })}
 				</p>
 				{#if club.viewer_role === 'owner'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						You're the <strong>owner</strong>
+						{tr('clubHome.roleOwnerPrefix')} <strong>{tr('clubHome.roleOwner')}</strong>
 					</p>
 				{:else if club.viewer_role === 'admin'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						You're an <strong>admin</strong>
+						{tr('clubHome.roleAdminPrefix')} <strong>{tr('clubHome.roleAdmin')}</strong>
 					</p>
 				{:else if club.viewer_role === 'event_organiser'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						You're an <strong>event organiser</strong>
+						{tr('clubHome.roleOrganiserPrefix')} <strong>{tr('clubHome.roleOrganiser')}</strong>
 					</p>
 				{:else if club.viewer_role === 'race_director'}
 					<p class="role-line">
 						<span class="material-symbols" aria-hidden="true">shield_person</span>
-						You're a <strong>race director</strong>
+						{tr('clubHome.roleDirectorPrefix')} <strong>{tr('clubHome.roleDirector')}</strong>
 					</p>
 				{:else if club.viewer_role === 'member'}
 					<p class="role-line subtle">
 						<span class="material-symbols" aria-hidden="true">check_circle</span>
-						You're a member
+						{tr('clubHome.roleMember')}
 					</p>
 				{/if}
 				{#if club.description}
@@ -685,16 +686,16 @@
 			</div>
 			<div class="hero-actions">
 				{#if !club.viewer_role && club.viewer_status === 'pending'}
-					<button class="btn-secondary" disabled>Request pending</button>
+					<button class="btn-secondary" disabled>{tr('clubHome.requestPending')}</button>
 				{:else if !club.viewer_role && club.join_policy === 'invite'}
-					<button class="btn-secondary" disabled title="Invite-only — ask an admin for the link.">
-						Invite only
+					<button class="btn-secondary" disabled title={tr('clubHome.inviteOnlyTitle')}>
+						{tr('clubHome.inviteOnly')}
 					</button>
 				{:else if !club.viewer_role}
 					{#if club.requires_activity_waiver}
 						<label class="waiver-ack">
 							<input type="checkbox" bind:checked={waiverAck} />
-							<span>I understand the physical risks of group running and join at my own risk.</span>
+							<span>{tr('clubHome.waiverAck')}</span>
 						</label>
 					{/if}
 					<button
@@ -703,24 +704,24 @@
 						disabled={joinBusy || (club.requires_activity_waiver && !waiverAck)}
 					>
 						{#if joinBusy}
-							{club.join_policy === 'request' ? 'Requesting…' : 'Joining…'}
+							{club.join_policy === 'request' ? tr('clubHome.requesting') : tr('clubHome.joining')}
 						{:else if club.join_policy === 'request'}
-							Request to join
+							{tr('clubHome.requestToJoin')}
 						{:else}
-							Join club
+							{tr('clubHome.joinClub')}
 						{/if}
 					</button>
 				{:else if club.viewer_role === 'owner'}
-					<button class="btn-secondary danger" onclick={handleDeleteClub}>Delete club</button>
+					<button class="btn-secondary danger" onclick={handleDeleteClub}>{tr('clubHome.deleteClub')}</button>
 				{:else}
 					<button class="btn-secondary" onclick={leave} disabled={joinBusy}>
-						{joinBusy ? 'Leaving…' : 'Leave'}
+						{joinBusy ? tr('clubHome.leaving') : tr('clubHome.leave')}
 					</button>
 				{/if}
 				{#if canManageEvents}
 					<button class="btn-primary" type="button" onclick={() => (showEventModal = true)}>
 						<span class="material-symbols" aria-hidden="true">add</span>
-						New event
+						{tr('clubHome.newEvent')}
 					</button>
 				{/if}
 				{#if !isAdmin && auth.loggedIn}
@@ -728,8 +729,8 @@
 						class="btn-secondary btn-icon-only"
 						type="button"
 						onclick={() => (showReportDialog = true)}
-						aria-label="Report this club"
-						title="Report this club"
+						aria-label={tr('clubHome.reportClub')}
+						title={tr('clubHome.reportClub')}
 					>
 						<span class="material-symbols" aria-hidden="true">flag</span>
 					</button>
@@ -745,7 +746,7 @@
 			<section class="admin-card">
 				<div class="admin-card-title">
 					<span class="material-symbols" aria-hidden="true">link</span>
-					<strong>Invite link</strong>
+					<strong>{tr('clubHome.inviteLink')}</strong>
 					<span class="policy-chip">{club.join_policy}</span>
 				</div>
 				{#if club.invite_token}
@@ -753,15 +754,15 @@
 						<code class="invite-link">{location.origin}/clubs/join/{club.invite_token}</code>
 						<button class="btn-ghost" onclick={copyInvite}>
 							<span class="material-symbols" aria-hidden="true">content_copy</span>
-							Copy
+							{tr('clubHome.copy')}
 						</button>
 						<button class="btn-ghost" onclick={regenerateInvite}>
 							<span class="material-symbols" aria-hidden="true">refresh</span>
-							Rotate
+							{tr('clubHome.rotate')}
 						</button>
 					</div>
 				{:else}
-					<button class="btn-secondary" onclick={regenerateInvite}>Generate invite link</button>
+					<button class="btn-secondary" onclick={regenerateInvite}>{tr('clubHome.generateInviteLink')}</button>
 				{/if}
 			</section>
 		{/if}
@@ -770,7 +771,7 @@
 			<section class="admin-card">
 				<div class="admin-card-title">
 					<span class="material-symbols" aria-hidden="true">hourglass_top</span>
-					<strong>Pending requests ({pending.length})</strong>
+					<strong>{tr('clubHome.pendingRequests', { n: pending.length })}</strong>
 					{#if pending.length > 1}
 						<button
 							class="btn-secondary btn-sm approve-all"
@@ -778,7 +779,7 @@
 							onclick={approveAll}
 							disabled={approvingAll}
 						>
-							{approvingAll ? 'Approving…' : 'Approve all'}
+							{approvingAll ? tr('clubHome.approving') : tr('clubHome.approveAll')}
 						</button>
 					{/if}
 				</div>
@@ -787,11 +788,11 @@
 						<div class="pending-row">
 							<Avatar name={p.display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(p.user_id)} />
 							<div class="pending-info">
-								<strong>{p.display_name ?? 'Member'}</strong>
-								<span class="when">Requested {fmtRelative(p.joined_at ?? new Date().toISOString())}</span>
+								<strong>{p.display_name ?? tr('clubHome.memberFallback')}</strong>
+								<span class="when">{tr('clubHome.requestedRelative', { time: fmtRelative(p.joined_at ?? new Date().toISOString()) })}</span>
 							</div>
-							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)}>Approve</button>
-							<button class="btn-ghost" onclick={() => reject(p.user_id)}>Reject</button>
+							<button class="btn-primary btn-sm" onclick={() => approve(p.user_id)}>{tr('clubHome.approve')}</button>
+							<button class="btn-ghost" onclick={() => reject(p.user_id)}>{tr('clubHome.reject')}</button>
 						</div>
 					{/each}
 				</div>
@@ -800,7 +801,7 @@
 
 		<!-- tabindex=-1: keydown bubbles here from the focused tab; the tabs
 		     carry the roving tabindex. Satisfies a11y_interactive_supports_focus. -->
-		<div class="tabs" role="tablist" aria-label="Club sections" tabindex={-1} onkeydown={handleTablistKeydown}>
+		<div class="tabs" role="tablist" aria-label={tr('clubHome.tablistLabel')} tabindex={-1} onkeydown={handleTablistKeydown}>
 			<button
 				role="tab"
 				class="tab"
@@ -809,7 +810,7 @@
 				tabindex={tab === 'feed' ? 0 : -1}
 				onclick={() => setTab('feed')}
 			>
-				Feed{posts.length ? ` (${posts.length})` : ''}
+				{tr('clubHome.tabFeed')}{posts.length ? ` (${posts.length})` : ''}
 			</button>
 			<button
 				role="tab"
@@ -819,7 +820,7 @@
 				tabindex={tab === 'events' ? 0 : -1}
 				onclick={() => setTab('events')}
 			>
-				Events{upcoming.length ? ` (${upcoming.length})` : ''}
+				{tr('clubHome.tabEvents')}{upcoming.length ? ` (${upcoming.length})` : ''}
 			</button>
 			<button
 				role="tab"
@@ -829,7 +830,7 @@
 				tabindex={tab === 'members' ? 0 : -1}
 				onclick={() => setTab('members')}
 			>
-				Members ({club.member_count})
+				{tr('clubHome.tabMembers')} ({club.member_count})
 			</button>
 			<button
 				role="tab"
@@ -839,7 +840,7 @@
 				tabindex={tab === 'routes' ? 0 : -1}
 				onclick={() => setTab('routes')}
 			>
-				Routes{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
+				{tr('clubHome.tabRoutes')}{clubRoutes.length ? ` (${clubRoutes.length})` : ''}
 			</button>
 			<button
 				role="tab"
@@ -849,14 +850,14 @@
 				tabindex={tab === 'templates' ? 0 : -1}
 				onclick={() => setTab('templates')}
 			>
-				Templates{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
+				{tr('clubHome.tabTemplates')}{clubTemplates.length ? ` (${clubTemplates.length})` : ''}
 			</button>
 		</div>
 
 		{#if tab === 'feed'}
 			{#if upcoming.length > 0}
 				<div class="next-event-card">
-					<span class="label">Next event</span>
+					<span class="label">{tr('clubHome.nextEvent')}</span>
 					<a href="/clubs/{club.slug}/events/{upcoming[0].id}" class="next-event-link">
 						<h3>{upcoming[0].title}</h3>
 						<div class="next-event-meta">
@@ -872,7 +873,7 @@
 							{/if}
 							<span>
 								<span class="material-symbols" aria-hidden="true">group</span>
-								{upcoming[0].attendee_count} going
+								{tr('clubHome.goingCount', { n: upcoming[0].attendee_count })}
 							</span>
 						</div>
 					</a>
@@ -883,12 +884,12 @@
 				<form class="post-form" onsubmit={submitPost}>
 					<textarea
 						bind:value={draftPost}
-						placeholder="Share an update with members — course change, weather call, post-run social…"
+						placeholder={tr('clubHome.postPlaceholder')}
 						rows="3"
 						maxlength="1200"
 					></textarea>
 					<button class="btn-primary" type="submit" disabled={!draftPost.trim() || postingBusy}>
-						{postingBusy ? 'Posting…' : 'Post'}
+						{postingBusy ? tr('clubHome.posting') : tr('clubHome.post')}
 					</button>
 				</form>
 			{/if}
@@ -896,14 +897,12 @@
 			{#if posts.length === 0}
 				<div class="empty-card">
 					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-					<h3>No posts yet</h3>
+					<h3>{tr('clubHome.emptyFeedTitle')}</h3>
 					<p class="empty-text">
 						{#if isMember}
-							Share course changes, weather calls, or post-run plans with members.
-							Posts here notify every active member.
+							{tr('clubHome.emptyFeedMember')}
 						{:else}
-							This is where members trade course changes, weather calls, and
-							post-run plans. Join the club to see and add posts.
+							{tr('clubHome.emptyFeedNonMember')}
 						{/if}
 					</p>
 					{#if isMember}
@@ -917,7 +916,7 @@
 								}}
 							>
 								<span class="material-symbols" aria-hidden="true">edit</span>
-								Write the first post
+								{tr('clubHome.writeFirstPost')}
 							</button>
 						</div>
 					{/if}
@@ -930,12 +929,12 @@
 								<a href="/u/{post.author_id}" class="author-link">
 									<Avatar name={post.author_display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(post.author_id)} />
 									<div>
-										<strong>{post.author_display_name ?? 'Member'}</strong>
+										<strong>{post.author_display_name ?? tr('clubHome.memberFallback')}</strong>
 										<span class="when">{fmtRelative(post.created_at ?? new Date().toISOString())}</span>
 									</div>
 								</a>
 								{#if isAdmin}
-									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label="Delete post">
+									<button class="icon-btn" onclick={() => removePost(post.id)} aria-label={tr('clubHome.deletePostAria')}>
 										<span class="material-symbols" aria-hidden="true">close</span>
 									</button>
 								{/if}
@@ -947,11 +946,11 @@
 									<button class="link-btn" onclick={() => toggleReplies(post.id)}>
 										<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
 										{#if post.reply_count === 0}
-											Reply
+											{tr('clubHome.reply')}
 										{:else if expandedThreads[post.id]}
-											Hide {post.reply_count} {post.reply_count === 1 ? 'reply' : 'replies'}
+											{tr(post.reply_count === 1 ? 'clubHome.hideRepliesOne' : 'clubHome.hideRepliesMany', { n: post.reply_count })}
 										{:else}
-											{post.reply_count} {post.reply_count === 1 ? 'reply' : 'replies'}
+											{tr(post.reply_count === 1 ? 'clubHome.repliesCountOne' : 'clubHome.repliesCountMany', { n: post.reply_count })}
 										{/if}
 									</button>
 								</div>
@@ -965,7 +964,7 @@
 												</a>
 												<div class="reply-body">
 													<div class="reply-head">
-														<a href="/u/{reply.author_id}" class="author-link"><strong>{reply.author_display_name ?? 'Member'}</strong></a>
+														<a href="/u/{reply.author_id}" class="author-link"><strong>{reply.author_display_name ?? tr('clubHome.memberFallback')}</strong></a>
 														<span class="when">{fmtRelative(reply.created_at ?? new Date().toISOString())}</span>
 													</div>
 													<p>{reply.body}</p>
@@ -981,7 +980,7 @@
 										>
 											<input
 												type="text"
-												placeholder="Write a reply…"
+												placeholder={tr('clubHome.replyPlaceholder')}
 												bind:value={replyDrafts[post.id]}
 											/>
 											<button
@@ -989,7 +988,7 @@
 												type="submit"
 												disabled={!replyDrafts[post.id]?.trim()}
 											>
-												Reply
+												{tr('clubHome.reply')}
 											</button>
 										</form>
 									</div>
@@ -1001,7 +1000,7 @@
 			{/if}
 		{:else if tab === 'events'}
 			{#if upcoming.length > 0}
-				<h2 class="section-title">Upcoming</h2>
+				<h2 class="section-title">{tr('clubHome.upcoming')}</h2>
 				<div class="event-list">
 					{#each upcoming as evt (evt.id)}
 						<a href="/clubs/{club.slug}/events/{evt.id}" class="event-row">
@@ -1034,14 +1033,14 @@
 									{/if}
 									<span>
 										<span class="material-symbols" aria-hidden="true">group</span>
-										{evt.attendee_count} going
+										{tr('clubHome.goingCount', { n: evt.attendee_count })}
 									</span>
 								</div>
 							</div>
 							{#if evt.viewer_rsvp === 'going'}
-								<span class="chip chip-going">Going</span>
+								<span class="chip chip-going">{tr('clubHome.rsvpGoing')}</span>
 							{:else if evt.viewer_rsvp === 'maybe'}
-								<span class="chip chip-maybe">Maybe</span>
+								<span class="chip chip-maybe">{tr('clubHome.rsvpMaybe')}</span>
 							{/if}
 						</a>
 					{/each}
@@ -1049,14 +1048,12 @@
 			{:else}
 				<div class="empty-card">
 					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-					<h3>No upcoming events</h3>
+					<h3>{tr('clubHome.emptyEventsTitle')}</h3>
 					<p class="empty-text">
 						{#if isAdmin}
-							Set up a weekly long run, a tempo session, or a race-day meetup.
-							It shows up here for every member to RSVP the moment you publish.
+							{tr('clubHome.emptyEventsAdmin')}
 						{:else}
-							Admins post group runs, tempo sessions, and races here. Check
-							back soon — or browse past events below.
+							{tr('clubHome.emptyEventsNonAdmin')}
 						{/if}
 					</p>
 					{#if isAdmin}
@@ -1067,7 +1064,7 @@
 								onclick={() => (showEventModal = true)}
 							>
 								<span class="material-symbols" aria-hidden="true">add</span>
-								Create the first event
+								{tr('clubHome.createFirstEvent')}
 							</button>
 						</div>
 					{/if}
@@ -1075,7 +1072,7 @@
 			{/if}
 
 			{#if past.length > 0}
-				<h2 class="section-title muted-title">Past</h2>
+				<h2 class="section-title muted-title">{tr('clubHome.past')}</h2>
 				<div class="event-list">
 					{#each past as evt (evt.id)}
 						<a href="/clubs/{club.slug}/events/{evt.id}" class="event-row past">
@@ -1090,7 +1087,7 @@
 								<div class="event-meta">
 									<span>
 										<span class="material-symbols" aria-hidden="true">group</span>
-										{evt.attendee_count} attended
+										{tr('clubHome.attendedCount', { n: evt.attendee_count })}
 									</span>
 								</div>
 							</div>
@@ -1103,43 +1100,41 @@
 				<div class="routes-actions">
 					<a href="/routes/new?club={club.id}" class="btn btn-primary">
 						<span class="material-symbols" aria-hidden="true">add</span>
-						New route
+						{tr('clubHome.newRoute')}
 					</a>
 					<button class="btn btn-outline" type="button" onclick={openTransferModal}>
 						<span class="material-symbols" aria-hidden="true">arrow_outward</span>
-						Transfer from My routes
+						{tr('clubHome.transferFromMyRoutes')}
 					</button>
 				</div>
 			{/if}
 			{#if clubRoutes.length === 0}
 				<div class="empty-card">
 					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-					<h3>No club routes yet</h3>
+					<h3>{tr('clubHome.emptyRoutesTitle')}</h3>
 					<p class="empty-text">
 						{#if isAdmin}
-							Build the official course on the map, or transfer one of your
-							personal routes here so every member can find it.
+							{tr('clubHome.emptyRoutesAdmin')}
 						{:else}
-							Admins post the official courses, alternate routes, and race
-							courses here. Build your own under My routes any time.
+							{tr('clubHome.emptyRoutesNonAdmin')}
 						{/if}
 					</p>
 					{#if isAdmin}
 						<div class="empty-actions">
 							<a href="/routes/new?club={club.id}" class="btn btn-primary">
 								<span class="material-symbols" aria-hidden="true">add</span>
-								Build a route
+								{tr('clubHome.buildARoute')}
 							</a>
 							<button class="btn btn-outline" type="button" onclick={openTransferModal}>
 								<span class="material-symbols" aria-hidden="true">arrow_outward</span>
-								Transfer one in
+								{tr('clubHome.transferOneIn')}
 							</button>
 						</div>
 					{:else}
 						<div class="empty-actions">
 							<a href="/routes" class="btn btn-outline">
 								<span class="material-symbols" aria-hidden="true">route</span>
-								Browse my routes
+								{tr('clubHome.browseMyRoutes')}
 							</a>
 						</div>
 					{/if}
@@ -1166,13 +1161,13 @@
 										<span>{formatDistance(route.distance_m)}</span>
 										{#if route.elevation_m}
 											<span class="meta-sep">·</span>
-											<span>{route.elevation_m} m elev</span>
+											<span>{tr('clubHome.elevation', { n: route.elevation_m })}</span>
 										{/if}
 										<span class="meta-sep">·</span>
 										<span class="surface-tag">{route.surface}</span>
 										{#if route.is_public}
 											<span class="meta-sep">·</span>
-											<span class="public-tag">Public</span>
+											<span class="public-tag">{tr('clubHome.publicTag')}</span>
 										{/if}
 									</div>
 								</div>
@@ -1181,8 +1176,8 @@
 								<button
 									class="route-remove"
 									type="button"
-									title="Remove from club (returns to uploader's library)"
-									aria-label="Remove route from club"
+									title={tr('clubHome.removeRouteTitle')}
+									aria-label={tr('clubHome.removeRouteAria')}
 									onclick={() => removeRouteFromClub(route.id)}
 								>
 									<span class="material-symbols" aria-hidden="true">link_off</span>
@@ -1195,9 +1190,7 @@
 		{:else if tab === 'templates'}
 			{#if clubTemplates.length > 0}
 				<p class="section-hint">
-					Members can clone any template into a personal plan with a start date
-					of their choosing. Edits to a clone don't propagate back to the
-					template.
+					{tr('clubHome.templatesHint')}
 				</p>
 				<ul class="template-list">
 					{#each clubTemplates as t (t.id)}
@@ -1206,14 +1199,14 @@
 								<strong>{t.name}</strong>
 								<span class="template-meta">
 									{t.goal_event} · {formatDistance(Number(t.goal_distance_m))}
-									· {t.days_per_week}/wk
+									· {tr('clubHome.daysPerWeek', { n: t.days_per_week })}
 								</span>
 							</a>
 							<div class="template-actions">
 								{#if isMember}
 									<a href="/plans/new?from={t.id}" class="btn btn-primary btn-sm">
 										<span class="material-symbols" aria-hidden="true">content_copy</span>
-										Adopt
+										{tr('clubHome.adopt')}
 									</a>
 								{/if}
 								{#if isAdmin}
@@ -1221,9 +1214,9 @@
 										class="btn btn-outline btn-sm"
 										type="button"
 										onclick={() => unmakeTemplate(t.id)}
-										title="Remove from club templates (the plan stays in the author's library)"
+										title={tr('clubHome.unpublishTitle')}
 									>
-										Unpublish
+										{tr('clubHome.unpublish')}
 									</button>
 								{/if}
 							</div>
@@ -1233,22 +1226,19 @@
 			{:else}
 				<div class="empty-card">
 					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-					<h3>No plan templates yet</h3>
+					<h3>{tr('clubHome.emptyTemplatesTitle')}</h3>
 					<p class="empty-text">
 						{#if isAdmin}
-							Templates let members adopt a club-curated training plan with one
-							click. Create a plan first, then on its detail page mark it as a
-							template for this club.
+							{tr('clubHome.emptyTemplatesAdmin')}
 						{:else}
-							When admins publish training plans, members can adopt them with
-							one click and start training on a schedule of their choosing.
+							{tr('clubHome.emptyTemplatesNonAdmin')}
 						{/if}
 					</p>
 					{#if isAdmin}
 						<div class="empty-actions">
 							<a href="/plans/new" class="btn btn-primary">
 								<span class="material-symbols" aria-hidden="true">add</span>
-								Create a plan
+								{tr('clubHome.createAPlan')}
 							</a>
 						</div>
 					{/if}
@@ -1258,9 +1248,9 @@
 			{#if members.length === 0}
 				<div class="empty-card">
 					<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-					<h3>No members yet</h3>
+					<h3>{tr('clubHome.emptyMembersTitle')}</h3>
 					<p class="empty-text">
-						As soon as someone joins, they'll appear here with their role.
+						{tr('clubHome.emptyMembersBody')}
 					</p>
 				</div>
 			{:else}
@@ -1270,7 +1260,7 @@
 							<a href="/u/{m.user_id}" class="member-link">
 								<Avatar name={m.display_name} size="2.1rem" font="0.9rem" bg="seed" sat={50} seedHue={hashHue(m.user_id)} />
 								<div class="member-name">
-									<strong>{m.display_name ?? 'Member'}</strong>
+									<strong>{m.display_name ?? tr('clubHome.memberFallback')}</strong>
 									{#if m.role !== 'member' && (!isAdmin || m.role === 'owner' || m.user_id === club?.owner_id)}
 										<span class="role-badge role-{m.role}">{m.role.replace('_', ' ')}</span>
 									{/if}
@@ -1281,7 +1271,7 @@
 									<select
 										class="role-select"
 										value={m.role}
-										aria-label="Change member role"
+										aria-label={tr('clubHome.changeRoleAria')}
 										onchange={async (e) => {
 											const target = e.currentTarget as HTMLSelectElement;
 											const newRole = target.value as 'admin' | 'event_organiser' | 'race_director' | 'member';
@@ -1291,20 +1281,20 @@
 												m.role = newRole;
 											} catch (err) {
 												target.value = m.role;
-												showToast('Failed to change role: ' + err, 'error');
+												showToast(tr('clubHome.toastRoleChangeFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
 											}
 										}}
 									>
-										<option value="admin">Admin</option>
-										<option value="event_organiser">Event organiser</option>
-										<option value="race_director">Race director</option>
-										<option value="member">Member</option>
+										<option value="admin">{tr('clubHome.roleOptionAdmin')}</option>
+										<option value="event_organiser">{tr('clubHome.roleOptionOrganiser')}</option>
+										<option value="race_director">{tr('clubHome.roleOptionDirector')}</option>
+										<option value="member">{tr('clubHome.roleOptionMember')}</option>
 									</select>
 									{#if m.user_id !== auth.user?.id}
 										<button
 											class="icon-btn danger"
-											title="Remove from club"
-											aria-label="Remove member"
+											title={tr('clubHome.removeFromClubTitle')}
+											aria-label={tr('clubHome.removeMemberAria')}
 											onclick={() => (removingMemberId = m.user_id)}
 										>
 											<span class="material-symbols" aria-hidden="true">person_remove</span>
@@ -1321,9 +1311,9 @@
 
 <ConfirmDialog
 	open={showLeaveConfirm}
-	title="Leave club"
-	message={`Leave ${club?.name ?? ''}?`}
-	confirmLabel="Leave"
+	title={tr('clubHome.leaveClubTitle')}
+	message={tr('clubHome.leaveClubMessage', { name: club?.name ?? '' })}
+	confirmLabel={tr('clubHome.leave')}
 	onconfirm={confirmLeave}
 	oncancel={() => showLeaveConfirm = false}
 	danger
@@ -1331,18 +1321,18 @@
 
 <ConfirmDialog
 	open={showRegenConfirm}
-	title="Regenerate invite link"
-	message="Generate a new invite link? The current link stops working immediately."
-	confirmLabel="Regenerate"
+	title={tr('clubHome.regenTitle')}
+	message={tr('clubHome.regenMessage')}
+	confirmLabel={tr('clubHome.regenerate')}
 	onconfirm={confirmRegenerate}
 	oncancel={() => showRegenConfirm = false}
 />
 
 <ConfirmDialog
 	open={showDeletePostConfirm !== null}
-	title="Delete post"
-	message="Delete this post?"
-	confirmLabel="Delete"
+	title={tr('clubHome.deletePostTitle')}
+	message={tr('clubHome.deletePostMessage')}
+	confirmLabel={tr('clubHome.delete')}
 	onconfirm={confirmDeletePost}
 	oncancel={() => showDeletePostConfirm = null}
 	danger
@@ -1350,9 +1340,9 @@
 
 <ConfirmDialog
 	open={showDeleteClubConfirm}
-	title="Delete club"
-	message={`Delete ${club?.name ?? ''}? This removes all events, posts, and members.`}
-	confirmLabel="Delete"
+	title={tr('clubHome.deleteClubTitle')}
+	message={tr('clubHome.deleteClubMessage', { name: club?.name ?? '' })}
+	confirmLabel={tr('clubHome.delete')}
 	onconfirm={confirmDeleteClub}
 	oncancel={() => showDeleteClubConfirm = false}
 	danger
@@ -1360,9 +1350,12 @@
 
 <ConfirmDialog
 	open={removingMemberId !== null}
-	title="Remove member"
-	message={`Remove ${members.find((m) => m.user_id === removingMemberId)?.display_name ?? 'this member'} from ${club?.name ?? 'the club'}?`}
-	confirmLabel="Remove"
+	title={tr('clubHome.removeMemberTitle')}
+	message={tr('clubHome.removeMemberMessage', {
+		name: members.find((m) => m.user_id === removingMemberId)?.display_name ?? tr('clubHome.thisMember'),
+		club: club?.name ?? tr('clubHome.theClub')
+	})}
+	confirmLabel={tr('clubHome.remove')}
 	onconfirm={confirmRemoveMember}
 	oncancel={() => (removingMemberId = null)}
 	danger
@@ -1380,7 +1373,7 @@
 
 <Modal
 	open={showEventModal && club != null}
-	title="New event"
+	title={tr('clubHome.newEvent')}
 	onclose={() => (showEventModal = false)}
 >
 	{#if club}
@@ -1395,7 +1388,7 @@
 
 <Modal
 	open={showTransferModal}
-	title="Transfer route to club"
+	title={tr('clubHome.transferModalTitle')}
 	onclose={() => (showTransferModal = false)}
 >
 	<form
@@ -1406,26 +1399,26 @@
 		}}
 	>
 		{#if transferableRoutes.length === 0}
-			<p class="muted">You don't have any personal routes that aren't already in a club.</p>
+			<p class="muted">{tr('clubHome.noTransferableRoutes')}</p>
 		{:else}
 			<label>
-				<span>Pick a route</span>
+				<span>{tr('clubHome.pickARoute')}</span>
 				<select bind:value={transferRouteId} required>
-					<option value="">— select —</option>
+					<option value="">{tr('clubHome.selectPlaceholder')}</option>
 					{#each transferableRoutes as r (r.id)}
 						<option value={r.id}>{r.name} ({formatDistance(r.distance_m)})</option>
 					{/each}
 				</select>
 			</label>
 			<p class="hint muted">
-				The route's uploader stays the same; ownership and editing rights move to the club's admins.
+				{tr('clubHome.transferHint')}
 			</p>
 		{/if}
 		<div class="transfer-actions">
 			<button type="button" class="btn btn-outline" onclick={() => (showTransferModal = false)}>
-				Cancel
+				{tr('clubHome.cancel')}
 			</button>
-			<button type="submit" class="btn btn-primary" disabled={!transferRouteId}>Transfer</button>
+			<button type="submit" class="btn btn-primary" disabled={!transferRouteId}>{tr('clubHome.transfer')}</button>
 		</div>
 	</form>
 </Modal>

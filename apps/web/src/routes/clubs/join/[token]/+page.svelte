@@ -5,6 +5,7 @@
 	import { joinClubByToken } from '$lib/core/data';
 	import { supabase } from '$lib/core/supabase';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let token = $derived($page.params.token as string);
 	let status = $state<'joining' | 'error' | 'not-authed'>('joining');
@@ -27,7 +28,7 @@
 			goto(data?.slug ? `/clubs/${data.slug}` : '/clubs');
 		} catch (e: unknown) {
 			status = 'error';
-			errorMsg = e instanceof Error ? e.message : 'This invite is invalid or expired.';
+			errorMsg = e instanceof Error ? e.message : m('clubJoin.invalidOrExpired');
 		}
 	});
 
@@ -45,43 +46,41 @@
 	<main class="invite-main">
 		{#if status === 'joining'}
 			<section class="invite-card joining-card" aria-live="polite">
-				<p class="kicker">Almost there</p>
-				<h1>Joining the club…</h1>
-				<p class="muted">Hang tight — we're redeeming your invite.</p>
+				<p class="kicker">{m('clubJoin.almostThere')}</p>
+				<h1>{m('clubJoin.joiningTitle')}</h1>
+				<p class="muted">{m('clubJoin.joiningBody')}</p>
 				<div class="spinner-dots" aria-hidden="true">
 					<span></span><span></span><span></span>
 				</div>
 			</section>
 		{:else if status === 'not-authed'}
 			<section class="invite-card">
-				<p class="kicker">You've been invited</p>
-				<h1>Sign in to accept this invite</h1>
+				<p class="kicker">{m('clubJoin.youveBeenInvited')}</p>
+				<h1>{m('clubJoin.signInToAccept')}</h1>
 				<p class="muted">
-					You need a Threkir account to join. Sign in to an existing account or
-					create a new one — both are free.
+					{m('clubJoin.notAuthedBody')}
 				</p>
 				<div class="invite-actions">
-					<a class="btn btn-primary" href="/login?return_to={returnTo}">Sign in</a>
+					<a class="btn btn-primary" href="/login?return_to={returnTo}">{m('clubJoin.signIn')}</a>
 					<a class="btn btn-outline" href="/login?signup=1&return_to={returnTo}">
-						Create a free account
+						{m('clubJoin.createFreeAccount')}
 					</a>
 				</div>
 				<p class="footnote">
-					Private clubs only show their members and posts after you've joined.
+					{m('clubJoin.privateClubsFootnote')}
 				</p>
 			</section>
 		{:else}
 			<section class="invite-card">
-				<p class="kicker">Hmm</p>
-				<h1>Invite problem</h1>
+				<p class="kicker">{m('clubJoin.hmm')}</p>
+				<h1>{m('clubJoin.inviteProblem')}</h1>
 				<p class="error">{errorMsg}</p>
 				<p class="muted">
-					This invite link may have been rotated, the club may have changed its join policy,
-					or the link could simply be expired. Ask whoever sent it to share a fresh one.
+					{m('clubJoin.inviteProblemBody')}
 				</p>
 				<div class="invite-actions">
-					<a class="btn btn-primary" href="/clubs">Browse clubs</a>
-					<a class="btn btn-outline" href="/dashboard">Go to dashboard</a>
+					<a class="btn btn-primary" href="/clubs">{m('clubJoin.browseClubs')}</a>
+					<a class="btn btn-outline" href="/dashboard">{m('clubJoin.goToDashboard')}</a>
 				</div>
 			</section>
 		{/if}

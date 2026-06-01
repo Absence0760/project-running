@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { formatISO } from '$lib/training/training';
+	import { m } from '$lib/i18n/store.svelte';
 	import Modal from './Modal.svelte';
 
 	interface Props {
@@ -195,19 +196,19 @@
 	let activeStart = $derived(pendingFrom === null || !selectingEnd());
 </script>
 
-<Modal {open} {onclose} title="Select dates" bodyClass="range-body" dimBackdrop={false}>
+<Modal {open} {onclose} title={m('dateRange.title')} bodyClass="range-body" dimBackdrop={false}>
 	<div class="range-picker">
 		<div class="chip-row">
 			<div class="chip" class:active={activeStart}>
-				<span class="chip-label">START</span>
+				<span class="chip-label">{m('dateRange.start')}</span>
 				<span class="chip-value">
-					{pendingFrom ? formatChip(pendingFrom) : 'Tap a date'}
+					{pendingFrom ? formatChip(pendingFrom) : m('dateRange.tapDate')}
 				</span>
 			</div>
 			<div class="chip" class:active={!activeStart}>
-				<span class="chip-label">END</span>
+				<span class="chip-label">{m('dateRange.end')}</span>
 				<span class="chip-value">
-					{pendingTo ? formatChip(pendingTo) : 'Tap a date'}
+					{pendingTo ? formatChip(pendingTo) : m('dateRange.tapDate')}
 				</span>
 			</div>
 		</div>
@@ -217,7 +218,7 @@
 				<button
 					type="button"
 					class="jumper-btn"
-					aria-label="Previous month"
+					aria-label={m('dateRange.previousMonth')}
 					onclick={() => stepMonth(-1)}
 					disabled={viewIndex <= minIndex}
 				>
@@ -225,7 +226,7 @@
 				</button>
 				<select
 					class="jumper-select"
-					aria-label="Month"
+					aria-label={m('dateRange.month')}
 					value={viewMonth}
 					onchange={(e) =>
 						setView(viewYear, Number((e.currentTarget as HTMLSelectElement).value))}
@@ -237,7 +238,7 @@
 				<button
 					type="button"
 					class="jumper-btn"
-					aria-label="Next month"
+					aria-label={m('dateRange.nextMonth')}
 					onclick={() => stepMonth(1)}
 					disabled={viewIndex >= maxIndex}
 				>
@@ -248,7 +249,7 @@
 				<button
 					type="button"
 					class="jumper-btn"
-					aria-label="Previous year"
+					aria-label={m('dateRange.previousYear')}
 					onclick={() => stepYear(-1)}
 					disabled={viewYear <= yearOptions[0]}
 				>
@@ -256,7 +257,7 @@
 				</button>
 				<select
 					class="jumper-select"
-					aria-label="Year"
+					aria-label={m('dateRange.year')}
 					value={viewYear}
 					onchange={(e) =>
 						setView(Number((e.currentTarget as HTMLSelectElement).value), viewMonth)}
@@ -268,14 +269,14 @@
 				<button
 					type="button"
 					class="jumper-btn"
-					aria-label="Next year"
+					aria-label={m('dateRange.nextYear')}
 					onclick={() => stepYear(1)}
 					disabled={viewYear >= yearOptions[yearOptions.length - 1]}
 				>
 					<span class="material-symbols">chevron_right</span>
 				</button>
 			</div>
-			<button type="button" class="jumper-today" onclick={jumpToToday}>Today</button>
+			<button type="button" class="jumper-today" onclick={jumpToToday}>{m('dateRange.today')}</button>
 		</div>
 
 		<div class="dow-row" aria-hidden="true">
@@ -324,12 +325,12 @@
 				type="button"
 				class="btn btn-outline"
 				disabled={pendingFrom === null && pendingTo === null}
-				onclick={clearPending}>Clear</button>
+				onclick={clearPending}>{m('dateRange.clear')}</button>
 			<button
 				type="button"
 				class="btn btn-primary"
 				disabled={!canApply}
-				onclick={apply}>Apply</button>
+				onclick={apply}>{m('dateRange.apply')}</button>
 		</footer>
 	</div>
 </Modal>

@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatRelativeTime } from '$lib/format/time';
-	import { currentLocale } from '$lib/i18n/store.svelte';
+	import { currentLocale, m as t } from '$lib/i18n/store.svelte';
 	import {
 		fetchKudosForRun,
 		giveKudos,
@@ -58,7 +58,7 @@
 				kudos = { count: kudos.count + 1, viewer_has_kudos: true };
 			}
 		} catch (e) {
-			showToast(`Could not update kudos: ${e}`, 'error');
+			showToast(t('runSocial.kudosUpdateFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			kudosBusy = false;
 		}
@@ -73,7 +73,7 @@
 			draftBody = '';
 			await load();
 		} catch (e) {
-			showToast(`Failed to post comment: ${e}`, 'error');
+			showToast(t('runSocial.commentPostFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			posting = false;
 		}
@@ -89,7 +89,7 @@
 			replyTo = null;
 			await load();
 		} catch (e) {
-			showToast(`Failed to post reply: ${e}`, 'error');
+			showToast(t('runSocial.replyPostFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			posting = false;
 		}
@@ -100,7 +100,7 @@
 			await deleteRunComment(commentId);
 			await load();
 		} catch (e) {
-			showToast(`Failed to delete: ${e}`, 'error');
+			showToast(t('runSocial.deleteFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		}
 	}
 
@@ -129,22 +129,22 @@
 			type="button"
 			onclick={toggleKudos}
 			title={!auth.loggedIn
-				? 'Sign in to give kudos'
+				? t('runSocial.signInToGiveKudos')
 				: isOwn
-					? "You can't kudos your own run"
+					? t('runSocial.cannotKudosOwnRun')
 					: kudos.viewer_has_kudos
-						? 'Rescind kudos'
-						: 'Give kudos'}
+						? t('runSocial.rescindKudos')
+						: t('runSocial.giveKudos')}
 		>
 			<span class="material-symbols">
 				{kudos.viewer_has_kudos ? 'favorite' : 'favorite_border'}
 			</span>
 			<span class="kudos-count">{kudos.count}</span>
-			<span class="kudos-label">{kudos.count === 1 ? 'kudos' : 'kudos'}</span>
+			<span class="kudos-label">{t('runSocial.kudosLabel')}</span>
 		</button>
 		<span class="comment-count">
 			<span class="material-symbols">chat_bubble_outline</span>
-			{comments.length} {comments.length === 1 ? 'comment' : 'comments'}
+			{comments.length === 1 ? t('runSocial.commentCountOne', { n: comments.length }) : t('runSocial.commentCountMany', { n: comments.length })}
 		</span>
 	</div>
 
@@ -163,15 +163,15 @@
 					<div class="comment-body">
 						<div class="comment-head">
 							<a href="/u/{comment.author_id}" class="comment-author-link">
-								<strong>{comment.author.display_name ?? 'Runner'}</strong>
+								<strong>{comment.author.display_name ?? t('runSocial.runnerFallback')}</strong>
 							</a>
 							<span class="when">{formatRelativeTime(comment.created_at, undefined, currentLocale())}</span>
 							{#if auth.loggedIn && auth.user?.id !== comment.author_id}
 								<button
 									class="icon-btn report-btn"
 									type="button"
-									aria-label="Report comment"
-									title="Report comment"
+									aria-label={t('runSocial.reportComment')}
+									title={t('runSocial.reportComment')}
 									onclick={() => (reportCommentId = comment.id)}
 								>
 									<span class="material-symbols">flag</span>
@@ -181,7 +181,7 @@
 								<button
 									class="icon-btn"
 									type="button"
-									aria-label="Delete comment"
+									aria-label={t('runSocial.deleteComment')}
 									onclick={() => removeComment(comment.id)}
 								>
 									<span class="material-symbols">close</span>
@@ -191,7 +191,7 @@
 						<p>{comment.body}</p>
 						{#if auth.loggedIn}
 							<button class="link-btn" type="button" onclick={() => (replyTo = replyTo === comment.id ? null : comment.id)}>
-								Reply
+								{t('runSocial.reply')}
 							</button>
 						{/if}
 
@@ -210,15 +210,15 @@
 										<div class="reply-body">
 											<div class="comment-head">
 												<a href="/u/{reply.author_id}" class="comment-author-link">
-													<strong>{reply.author.display_name ?? 'Runner'}</strong>
+													<strong>{reply.author.display_name ?? t('runSocial.runnerFallback')}</strong>
 												</a>
 												<span class="when">{formatRelativeTime(reply.created_at, undefined, currentLocale())}</span>
 												{#if auth.loggedIn && auth.user?.id !== reply.author_id}
 													<button
 														class="icon-btn report-btn"
 														type="button"
-														aria-label="Report reply"
-														title="Report reply"
+														aria-label={t('runSocial.reportReply')}
+														title={t('runSocial.reportReply')}
 														onclick={() => (reportCommentId = reply.id)}
 													>
 														<span class="material-symbols">flag</span>
@@ -228,7 +228,7 @@
 													<button
 														class="icon-btn"
 														type="button"
-														aria-label="Delete reply"
+														aria-label={t('runSocial.deleteReply')}
 														onclick={() => removeComment(reply.id)}
 													>
 														<span class="material-symbols">close</span>
@@ -246,12 +246,12 @@
 							<form class="reply-form" onsubmit={(e) => { e.preventDefault(); submitReply(comment.id); }}>
 								<input
 									type="text"
-									placeholder="Write a reply…"
+									placeholder={t('runSocial.writeReplyPlaceholder')}
 									bind:value={replyBody}
 									maxlength="2000"
 								/>
 								<button class="btn btn-primary btn-sm" type="submit" disabled={!replyBody.trim() || posting}>
-									{posting ? 'Posting…' : 'Reply'}
+									{posting ? t('runSocial.posting') : t('runSocial.reply')}
 								</button>
 							</form>
 						{/if}
@@ -264,17 +264,17 @@
 			<form class="composer" onsubmit={(e) => { e.preventDefault(); submitComment(); }}>
 				<textarea
 					bind:value={draftBody}
-					placeholder="Add a comment…"
+					placeholder={t('runSocial.addCommentPlaceholder')}
 					rows="2"
 					maxlength="2000"
 				></textarea>
 				<button class="btn btn-primary" type="submit" disabled={!draftBody.trim() || posting}>
-					{posting ? 'Posting…' : 'Post'}
+					{posting ? t('runSocial.posting') : t('runSocial.post')}
 				</button>
 			</form>
 		{:else}
 			<p class="muted">
-				<a href="/login">Sign in</a> to give kudos and comment.
+				<a href="/login">{t('runSocial.signIn')}</a>{t('runSocial.signInToEngageSuffix')}
 			</p>
 		{/if}
 	{/if}

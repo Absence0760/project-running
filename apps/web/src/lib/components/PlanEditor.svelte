@@ -22,6 +22,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 
 	// Persona-hunt Round 3 finding Woman #3. Pull the runner's gender
 	// off user_profiles so generatePlan can apply the gender-aware
@@ -156,7 +157,7 @@
 			if (typeof obj.details === 'string') parts.push(obj.details);
 			if (parts.length) return parts.join(' ');
 		}
-		return 'Failed to create plan. Check the browser console for details.';
+		return t('planEditor.errorCreateFailed');
 	}
 
 	// A brand-new runner ticking the walk-run box is not training for a half
@@ -253,12 +254,12 @@
 		}
 	});
 
-	const eventOptions: { value: GoalEvent; label: string }[] = [
+	const eventOptions: { value: GoalEvent; label: string }[] = $derived([
 		{ value: 'distance_5k', label: '5K' },
 		{ value: 'distance_10k', label: '10K' },
-		{ value: 'distance_half', label: 'Half marathon' },
-		{ value: 'distance_full', label: 'Marathon' }
-	];
+		{ value: 'distance_half', label: t('planEditor.halfMarathon') },
+		{ value: 'distance_full', label: t('planEditor.marathon') }
+	]);
 
 	/// The schema enforces one active plan per user via a partial unique
 	/// index, and `createTrainingPlan` enforces it by auto-completing
@@ -283,8 +284,7 @@
 		// and a future refactor that drops the markup-level min loses
 		// the only guardrail. Validate at submit-time too.
 		if (startDate && startDate < todayIso()) {
-			error =
-				'Plan start date is in the past. Pick today or a future date so the plan starts at week 1, not week 0.';
+			error = t('planEditor.errorStartInPast');
 			return;
 		}
 		// Defensive backstop: onchange snaps the date to a Sunday, but if a
@@ -294,8 +294,7 @@
 		// aligned date, so ask the user to submit once more.
 		if (startDate && !isSundayIso(startDate)) {
 			alignStartToSunday();
-			error =
-				'Start date moved to the next Sunday so the schedule lines up. Review the preview and submit again.';
+			error = t('planEditor.errorStartMovedToSunday');
 			return;
 		}
 		busy = true;
@@ -356,18 +355,18 @@
 	<div class="grid">
 		<section class="form">
 			<label>
-				<span>Plan name</span>
+				<span>{t('planEditor.planName')}</span>
 				<input
 					type="text"
 					bind:value={name}
-					placeholder="Autumn half marathon"
+					placeholder={t('planEditor.planNamePlaceholder')}
 					required
 					maxlength="80"
 				/>
 			</label>
 
 			<label>
-				<span>Goal race</span>
+				<span>{t('planEditor.goalRace')}</span>
 				<select bind:value={goalEvent}>
 					{#each eventOptions as opt}
 						<option value={opt.value}>{opt.label}</option>
@@ -376,7 +375,7 @@
 			</label>
 
 			<label>
-				<span>Start date <span class="optional">first week begins Sunday</span></span>
+				<span>{t('planEditor.startDate')} <span class="optional">{t('planEditor.firstWeekBeginsSunday')}</span></span>
 				<input
 					type="date"
 					bind:value={startDate}
@@ -385,67 +384,64 @@
 					required
 				/>
 				{#if startSnapped}
-					<span class="field-note">Moved to the next Sunday so week 1 lines up with the schedule.</span>
+					<span class="field-note">{t('planEditor.movedToNextSunday')}</span>
 				{/if}
 			</label>
 
 			<label>
-				<span>Days per week</span>
+				<span>{t('planEditor.daysPerWeek')}</span>
 				<select bind:value={daysPerWeek}>
 					{#each [3, 4, 5, 6, 7] as n}
-						<option value={n}>{n} days</option>
+						<option value={n}>{t('planEditor.nDays', { n })}</option>
 					{/each}
 				</select>
 			</label>
 
 			<fieldset>
-				<legend>Goal time <span class="optional">optional</span></legend>
-				<p class="hint">Drives the pace targets. Leave blank for a volume-only plan.</p>
+				<legend>{t('planEditor.goalTime')} <span class="optional">{t('planEditor.optional')}</span></legend>
+				<p class="hint">{t('planEditor.goalTimeHint')}</p>
 				<div class="time-row">
-					<input type="number" min="0" max="9" bind:value={targetHours} placeholder="h" />
+					<input type="number" min="0" max="9" bind:value={targetHours} placeholder={t('planEditor.placeholderHours')} />
 					<span>:</span>
-					<input type="number" min="0" max="59" bind:value={targetMin} placeholder="m" />
+					<input type="number" min="0" max="59" bind:value={targetMin} placeholder={t('planEditor.placeholderMinutes')} />
 					<span>:</span>
-					<input type="number" min="0" max="59" bind:value={targetSec} placeholder="s" />
+					<input type="number" min="0" max="59" bind:value={targetSec} placeholder={t('planEditor.placeholderSeconds')} />
 				</div>
 			</fieldset>
 
 			<label class="beginner-toggle">
 				<input type="checkbox" checked={beginnerWalkRun} onchange={onBeginnerToggle} />
 				<span>
-					<span class="beginner-title">New to running? Use a walk-run plan</span>
+					<span class="beginner-title">{t('planEditor.beginnerTitle')}</span>
 					<span class="hint">
-						A gentle C25K-style schedule of timed run/walk intervals that builds to a
-						continuous run. Overrides goal-time pacing.
+						{t('planEditor.beginnerHint')}
 					</span>
 				</span>
 			</label>
 
 			<fieldset>
-				<legend>Recent 5K time <span class="optional">optional</span></legend>
-				<p class="hint">Anchor paces on a real result via Riegel equivalence.</p>
+				<legend>{t('planEditor.recent5kTime')} <span class="optional">{t('planEditor.optional')}</span></legend>
+				<p class="hint">{t('planEditor.recent5kHint')}</p>
 				<div class="time-row">
-					<input type="number" min="0" max="59" bind:value={recent5kMin} placeholder="m" />
+					<input type="number" min="0" max="59" bind:value={recent5kMin} placeholder={t('planEditor.placeholderMinutes')} />
 					<span>:</span>
-					<input type="number" min="0" max="59" bind:value={recent5kSec} placeholder="s" />
+					<input type="number" min="0" max="59" bind:value={recent5kSec} placeholder={t('planEditor.placeholderSeconds')} />
 				</div>
 				{#if recent5kTotal != null}
 					<label class="confirm-recent">
 						<input type="checkbox" bind:checked={recent5kConfirmed} />
-						<span>This is a time I could run today — it reflects my current fitness.</span>
+						<span>{t('planEditor.recent5kConfirm')}</span>
 					</label>
 				{/if}
 				{#if recent5kNeedsConfirm}
 					<p class="hint warn" role="status">
-						Until you confirm, paces stay on the conservative goal-based estimate.
-						Anchoring on an old result can prescribe paces that are too fast for a
-						returning runner.
+						{t('planEditor.recent5kWarn')}
 					</p>
 				{/if}
 			</fieldset>
 
 			<label>
-				<span>Override total weeks <span class="optional">optional</span></span>
+				<span>{t('planEditor.overrideTotalWeeks')} <span class="optional">{t('planEditor.optional')}</span></span>
 				<input
 					type="number"
 					min="4"
@@ -461,42 +457,42 @@
 
 			<div class="actions">
 				{#if oncancel}
-					<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>Cancel</button>
+					<button type="button" class="btn btn-secondary" onclick={() => oncancel?.()}>{t('planEditor.cancel')}</button>
 				{/if}
 				<button type="submit" class="btn btn-primary" disabled={!name.trim() || !plan || busy}>
-					{busy ? 'Creating…' : 'Create plan'}
+					{busy ? t('planEditor.creating') : t('planEditor.createPlan')}
 				</button>
 			</div>
 		</section>
 
 		<aside class="preview">
-			<h2>Preview &amp; edit</h2>
+			<h2>{t('planEditor.previewAndEdit')}</h2>
 			{#if plan}
 				<div class="paces">
-					<div class="pace-row"><span>Easy</span><strong>{fmtPace(plan.paces.easy)}</strong></div>
-					<div class="pace-row"><span>Marathon</span><strong>{fmtPace(plan.paces.marathon)}</strong></div>
-					<div class="pace-row"><span>Tempo</span><strong>{fmtPace(plan.paces.tempo)}</strong></div>
-					<div class="pace-row"><span>Interval</span><strong>{fmtPace(plan.paces.interval)}</strong></div>
-					<div class="pace-row"><span>Repetition</span><strong>{fmtPace(plan.paces.repetition)}</strong></div>
+					<div class="pace-row"><span>{t('planEditor.paceEasy')}</span><strong>{fmtPace(plan.paces.easy)}</strong></div>
+					<div class="pace-row"><span>{t('planEditor.paceMarathon')}</span><strong>{fmtPace(plan.paces.marathon)}</strong></div>
+					<div class="pace-row"><span>{t('planEditor.paceTempo')}</span><strong>{fmtPace(plan.paces.tempo)}</strong></div>
+					<div class="pace-row"><span>{t('planEditor.paceInterval')}</span><strong>{fmtPace(plan.paces.interval)}</strong></div>
+					<div class="pace-row"><span>{t('planEditor.paceRepetition')}</span><strong>{fmtPace(plan.paces.repetition)}</strong></div>
 				</div>
 
 				{#if plan.pacesAreFallback}
 					<p class="paces-estimated" role="status">
-						Estimated paces — add a recent run or a goal time for personalised targets.
+						{t('planEditor.pacesEstimated')}
 					</p>
 				{/if}
 
 				{#if plan.vdot}
-					<p class="vdot">Daniels VDOT: <strong>{plan.vdot.toFixed(1)}</strong></p>
+					<p class="vdot">{t('planEditor.danielsVdot')} <strong>{plan.vdot.toFixed(1)}</strong></p>
 				{/if}
 
-				<h3>Week outline</h3>
+				<h3>{t('planEditor.weekOutline')}</h3>
 				<p class="outline-hint">
-					Click a week to expand the day-by-day editor. Changes are kept until you tweak
-					a top-level input above (which regenerates the whole plan).
+					{t('planEditor.outlineHint')}
 				</p>
 				<ul class="weeks">
 					{#each plan.weeks as w, weekIdx (w.week_index)}
+						{@const sessionCount = w.workouts.filter((x) => x.kind !== 'rest').length}
 						<li class="week-item" class:expanded={expandedWeek === weekIdx}>
 							<button
 								type="button"
@@ -507,7 +503,7 @@
 								<span class="week-phase">{PHASE_LABEL[w.phase]}</span>
 								<span class="week-km">{fmtKm(w.target_volume_m, 0)}</span>
 								<span class="week-workouts">
-									{w.workouts.filter((x) => x.kind !== 'rest').length} sessions
+									{t(sessionCount === 1 ? 'planEditor.nSessionsOne' : 'planEditor.nSessionsMany', { n: sessionCount })}
 								</span>
 								<span class="caret material-symbols">
 									{expandedWeek === weekIdx ? 'expand_less' : 'expand_more'}
@@ -526,7 +522,7 @@
 												})}
 											</div>
 											<label class="wo-field">
-												<span>Run type</span>
+												<span>{t('planEditor.runType')}</span>
 												<select bind:value={w.workouts[woIdx].kind}>
 													{#each KIND_OPTIONS as k}
 														<option value={k}>{WORKOUT_KIND_LABEL[k]}</option>
@@ -534,7 +530,7 @@
 												</select>
 											</label>
 											<label class="wo-field">
-												<span>Distance ({distanceUnit})</span>
+												<span>{t('planEditor.distance', { unit: distanceUnit })}</span>
 												<input
 													type="number"
 													min="0"
@@ -549,7 +545,7 @@
 												/>
 											</label>
 											<label class="wo-field">
-												<span>Pace (mm:ss)</span>
+												<span>{t('planEditor.paceMmSs')}</span>
 												<input
 													type="text"
 													inputmode="numeric"
@@ -561,7 +557,7 @@
 												/>
 											</label>
 											<label class="wo-field wo-notes">
-												<span>Notes</span>
+												<span>{t('planEditor.notes')}</span>
 												<input
 													type="text"
 													bind:value={w.workouts[woIdx].notes}
@@ -577,7 +573,7 @@
 					{/each}
 				</ul>
 			{:else}
-				<p class="muted">Fill in the form to see a preview.</p>
+				<p class="muted">{t('planEditor.fillFormForPreview')}</p>
 			{/if}
 		</aside>
 	</div>
@@ -585,12 +581,12 @@
 
 <ConfirmDialog
 	open={showReplaceConfirm}
-	title="Replace your active plan?"
+	title={t('planEditor.replaceActivePlanTitle')}
 	message={existingActiveName
-		? `You already have an active plan: "${existingActiveName}". Creating a new plan will mark the current one as completed (you can still find it under Manage plans). Continue?`
-		: 'You already have an active plan. Creating a new plan will mark the current one as completed. Continue?'}
-	confirmLabel="Replace plan"
-	cancelLabel="Keep current"
+		? t('planEditor.replaceActivePlanNamed', { name: existingActiveName })
+		: t('planEditor.replaceActivePlanUnnamed')}
+	confirmLabel={t('planEditor.replacePlan')}
+	cancelLabel={t('planEditor.keepCurrent')}
 	danger={true}
 	onconfirm={proceedWithCreate}
 	oncancel={cancelReplace}

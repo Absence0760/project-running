@@ -8,6 +8,7 @@
 		type WorkoutStructure
 	} from '$lib/training/training';
 	import { getUnit } from '$lib/format/units.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
 	import Modal from './Modal.svelte';
 
@@ -192,7 +193,7 @@
 			}
 			onSaved();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Update failed';
+			error = e instanceof Error ? e.message : t('workoutEditor.updateFailed');
 		} finally {
 			busy = false;
 		}
@@ -274,7 +275,7 @@
 			});
 			onSaved();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Save failed';
+			error = e instanceof Error ? e.message : t('workoutEditor.saveFailed');
 		} finally {
 			busy = false;
 		}
@@ -283,11 +284,11 @@
 
 <Modal
 	open={true}
-	title="Edit workout · {workout.scheduled_date}"
+	title={t('workoutEditor.title', { date: workout.scheduled_date ?? '' })}
 	onclose={onClose}
 >
 		<label>
-			<span>Kind</span>
+			<span>{t('workoutEditor.kind')}</span>
 			<select bind:value={kind}>
 				{#each kindOptions as k}
 					<option value={k}>{WORKOUT_KIND_LABEL[k]}</option>
@@ -297,23 +298,23 @@
 
 		{#if kind !== 'rest'}
 			<label>
-				<span>Distance <span class="hint">{unit}</span></span>
+				<span>{t('workoutEditor.distance')} <span class="hint">{unit}</span></span>
 				<input type="number" min="0" step="0.1" bind:value={distance} />
 			</label>
 
 			<fieldset>
-				<legend>Target pace <span class="hint">per {unit}</span></legend>
+				<legend>{t('workoutEditor.targetPace')} <span class="hint">{t('workoutEditor.perUnit', { unit })}</span></legend>
 				<div class="pace-row">
-					<input type="number" min="0" max="59" bind:value={paceMin} placeholder="min" />
+					<input type="number" min="0" max="59" bind:value={paceMin} placeholder={t('workoutEditor.min')} />
 					<span>:</span>
-					<input type="number" min="0" max="59" bind:value={paceSec} placeholder="sec" />
+					<input type="number" min="0" max="59" bind:value={paceSec} placeholder={t('workoutEditor.sec')} />
 					<span class="arrow">→</span>
 					<input
 						type="number"
 						min="0"
 						max="59"
 						bind:value={paceEndMin}
-						placeholder="min"
+						placeholder={t('workoutEditor.min')}
 					/>
 					<span>:</span>
 					<input
@@ -321,31 +322,31 @@
 						min="0"
 						max="59"
 						bind:value={paceEndSec}
-						placeholder="sec"
+						placeholder={t('workoutEditor.sec')}
 					/>
 				</div>
 				<p class="hint">
-					Right side is optional — use when the pace progresses across a phase (e.g. MP 7:15 → 6:41).
+					{t('workoutEditor.paceEndHint')}
 				</p>
 			</fieldset>
 
 			<label>
-				<span>Pace tolerance <span class="hint">± seconds</span></span>
+				<span>{t('workoutEditor.paceTolerance')} <span class="hint">{t('workoutEditor.plusMinusSeconds')}</span></span>
 				<input type="number" min="0" max="60" bind:value={toleranceSec} />
 			</label>
 
 			<label>
-				<span>Zone label <span class="hint">optional — E, T, I, MP…</span></span>
+				<span>{t('workoutEditor.zoneLabel')} <span class="hint">{t('workoutEditor.zoneHint')}</span></span>
 				<input type="text" bind:value={zone} maxlength="16" />
 			</label>
 		{/if}
 
 		{#if showStructure}
 			<fieldset class="structure">
-				<legend>Structure</legend>
+				<legend>{t('workoutEditor.structure')}</legend>
 
 				<label class="warmup">
-					<span>Warmup <span class="hint">{unit}</span></span>
+					<span>{t('workoutEditor.warmup')} <span class="hint">{unit}</span></span>
 					<input
 						type="number"
 						min="0"
@@ -354,7 +355,7 @@
 					/>
 				</label>
 
-				<div class="mode-toggle" role="radiogroup" aria-label="Body of workout">
+				<div class="mode-toggle" role="radiogroup" aria-label={t('workoutEditor.bodyOfWorkout')}>
 					<label class="mode-opt">
 						<input
 							type="radio"
@@ -363,7 +364,7 @@
 							checked={mode === 'repeats'}
 							onchange={() => (mode = 'repeats')}
 						/>
-						<span>Repeats</span>
+						<span>{t('workoutEditor.repeats')}</span>
 					</label>
 					<label class="mode-opt">
 						<input
@@ -373,15 +374,15 @@
 							checked={mode === 'steady'}
 							onchange={() => (mode = 'steady')}
 						/>
-						<span>Steady</span>
+						<span>{t('workoutEditor.steady')}</span>
 					</label>
 				</div>
 
 				{#if mode === 'repeats'}
 					<fieldset class="repeats">
-						<legend>Repeats</legend>
+						<legend>{t('workoutEditor.repeats')}</legend>
 						<label>
-							<span>Count</span>
+							<span>{t('workoutEditor.count')}</span>
 							<input
 								type="number"
 								min="1"
@@ -391,7 +392,7 @@
 							/>
 						</label>
 						<label>
-							<span>Rep distance <span class="hint">{unit}</span></span>
+							<span>{t('workoutEditor.repDistance')} <span class="hint">{unit}</span></span>
 							<input
 								type="number"
 								min="0"
@@ -400,14 +401,14 @@
 							/>
 						</label>
 						<fieldset>
-							<legend>Rep pace <span class="hint">per {unit}</span></legend>
+							<legend>{t('workoutEditor.repPace')} <span class="hint">{t('workoutEditor.perUnit', { unit })}</span></legend>
 							<div class="pace-row">
 								<input
 									type="number"
 									min="0"
 									max="59"
 									bind:value={repeatsPaceMin}
-									placeholder="min"
+									placeholder={t('workoutEditor.min')}
 								/>
 								<span>:</span>
 								<input
@@ -415,12 +416,12 @@
 									min="0"
 									max="59"
 									bind:value={repeatsPaceSec}
-									placeholder="sec"
+									placeholder={t('workoutEditor.sec')}
 								/>
 							</div>
 						</fieldset>
 						<label class="recovery">
-							<span>Recovery <span class="hint">{unit}</span></span>
+							<span>{t('workoutEditor.recovery')} <span class="hint">{unit}</span></span>
 							<input
 								type="number"
 								min="0"
@@ -429,18 +430,18 @@
 							/>
 						</label>
 						<label>
-							<span>Recovery pace</span>
+							<span>{t('workoutEditor.recoveryPace')}</span>
 							<select bind:value={recoveryPace}>
-								<option value="jog">jog</option>
-								<option value="easy">easy</option>
+								<option value="jog">{t('workoutEditor.jog')}</option>
+								<option value="easy">{t('workoutEditor.easy')}</option>
 							</select>
 						</label>
 					</fieldset>
 				{:else}
 					<fieldset class="steady">
-						<legend>Steady</legend>
+						<legend>{t('workoutEditor.steady')}</legend>
 						<label>
-							<span>Distance <span class="hint">{unit}</span></span>
+							<span>{t('workoutEditor.distance')} <span class="hint">{unit}</span></span>
 							<input
 								type="number"
 								min="0"
@@ -449,14 +450,14 @@
 							/>
 						</label>
 						<fieldset>
-							<legend>Pace <span class="hint">per {unit}</span></legend>
+							<legend>{t('workoutEditor.pace')} <span class="hint">{t('workoutEditor.perUnit', { unit })}</span></legend>
 							<div class="pace-row">
 								<input
 									type="number"
 									min="0"
 									max="59"
 									bind:value={steadyPaceMin}
-									placeholder="min"
+									placeholder={t('workoutEditor.min')}
 								/>
 								<span>:</span>
 								<input
@@ -464,7 +465,7 @@
 									min="0"
 									max="59"
 									bind:value={steadyPaceSec}
-									placeholder="sec"
+									placeholder={t('workoutEditor.sec')}
 								/>
 							</div>
 						</fieldset>
@@ -472,7 +473,7 @@
 				{/if}
 
 				<label class="cooldown">
-					<span>Cooldown <span class="hint">{unit}</span></span>
+					<span>{t('workoutEditor.cooldown')} <span class="hint">{unit}</span></span>
 					<input
 						type="number"
 						min="0"
@@ -484,7 +485,7 @@
 		{/if}
 
 		<label>
-			<span>Notes</span>
+			<span>{t('workoutEditor.notes')}</span>
 			<textarea rows="3" bind:value={notes} maxlength="500"></textarea>
 		</label>
 
@@ -493,21 +494,21 @@
 		{/if}
 
 		<div class="actions">
-			<button class="btn btn-secondary" onclick={onClose} disabled={busy}>Cancel</button>
+			<button class="btn btn-secondary" onclick={onClose} disabled={busy}>{t('workoutEditor.cancel')}</button>
 			<button
 				class="btn btn-outline"
 				onclick={toggleCompleted}
 				disabled={busy || hasLinkedRun}
 				title={hasLinkedRun
-					? 'A run is linked — unlink it from the workout detail page first.'
+					? t('workoutEditor.linkedRunTitle')
 					: wasCompleted
-						? 'Clear the manual completion flag.'
-						: 'Mark this workout as done without a tracked run.'}
+						? t('workoutEditor.clearManualTitle')
+						: t('workoutEditor.markDoneTitle')}
 			>
-				{wasCompleted ? 'Mark not done' : 'Mark as done'}
+				{wasCompleted ? t('workoutEditor.markNotDone') : t('workoutEditor.markAsDone')}
 			</button>
 			<button class="btn btn-primary" onclick={save} disabled={busy}>
-				{busy ? 'Saving…' : 'Save'}
+				{busy ? t('workoutEditor.saving') : t('workoutEditor.save')}
 			</button>
 		</div>
 </Modal>

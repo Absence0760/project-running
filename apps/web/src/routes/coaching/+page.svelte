@@ -14,6 +14,7 @@
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let athletes = $state<CoachAthleteLink[]>([]);
 	let pending = $state<PendingCoachInvite[]>([]);
@@ -49,9 +50,9 @@
 	async function copyLink(token: string) {
 		try {
 			await navigator.clipboard.writeText(inviteLink(token));
-			showToast('Invite link copied');
+			showToast(m('coaching.inviteLinkCopied'));
 		} catch (_) {
-			showToast('Could not copy — long-press the link to copy it manually', 'error');
+			showToast(m('coaching.copyFailed'), 'error');
 		}
 	}
 
@@ -62,7 +63,7 @@
 			await copyLink(token);
 			pending = await fetchPendingCoachInvites();
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : 'Could not create invite', 'error');
+			showToast(e instanceof Error ? e.message : m('coaching.createInviteFailed'), 'error');
 		} finally {
 			minting = false;
 		}
@@ -73,27 +74,27 @@
 			await revokeCoachInvite(id);
 			pending = pending.filter((p) => p.id !== id);
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : 'Could not revoke invite', 'error');
+			showToast(e instanceof Error ? e.message : m('coaching.revokeInviteFailed'), 'error');
 		}
 	}
 
 	async function removeAthlete(link: CoachAthleteLink) {
-		if (!confirm(`Remove ${link.display_name ?? 'this athlete'} from your roster?`)) return;
+		if (!confirm(m('coaching.removeAthleteConfirm', { name: link.display_name ?? m('coaching.thisAthlete') }))) return;
 		try {
 			await endCoachLink(link.id);
 			athletes = athletes.filter((a) => a.id !== link.id);
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : 'Could not remove athlete', 'error');
+			showToast(e instanceof Error ? e.message : m('coaching.removeAthleteFailed'), 'error');
 		}
 	}
 
 	async function leaveCoach(link: CoachAthleteLink) {
-		if (!confirm(`Stop sharing with ${link.display_name ?? 'this coach'}?`)) return;
+		if (!confirm(m('coaching.leaveCoachConfirm', { name: link.display_name ?? m('coaching.thisCoach') }))) return;
 		try {
 			await endCoachLink(link.id);
 			coaches = coaches.filter((c) => c.id !== link.id);
 		} catch (e: unknown) {
-			showToast(e instanceof Error ? e.message : 'Could not end link', 'error');
+			showToast(e instanceof Error ? e.message : m('coaching.endLinkFailed'), 'error');
 		}
 	}
 
@@ -108,28 +109,27 @@
 	}
 </script>
 
-<svelte:head><title>Coaching · Threkir</title></svelte:head>
+<svelte:head><title>{m('shell.coaching')} · Threkir</title></svelte:head>
 
 <div class="page">
 	<header class="page-head">
-		<h1>Coaching</h1>
+		<h1>{m('shell.coaching')}</h1>
 		<p class="lede">
-			Connect a coach to an athlete with a shareable invite link. Coaches build a
-			roster of the athletes who've accepted; athletes see who they're linked to.
+			{m('coaching.lede')}
 		</p>
 	</header>
 
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<p class="muted">{m('shell.loading')}</p>
 	{:else}
 		<section class="card">
 			<div class="card-head">
 				<div>
-					<h2>My athletes</h2>
-					<p class="muted">Athletes who've accepted your invite.</p>
+					<h2>{m('coaching.myAthletes')}</h2>
+					<p class="muted">{m('coaching.myAthletesSub')}</p>
 				</div>
 				<button class="btn btn-primary" onclick={mintInvite} disabled={minting}>
-					{minting ? 'Creating…' : 'Invite an athlete'}
+					{minting ? m('coaching.creating') : m('coaching.inviteAnAthlete')}
 				</button>
 			</div>
 
@@ -139,15 +139,15 @@
 						<li class="link-row">
 							<span class="pending-icon material-symbols" aria-hidden="true">link</span>
 							<div class="link-body">
-								<span class="link-name">Pending invite</span>
-								<span class="link-sub">Created {sinceLabel(inv.created_at)} · not yet redeemed</span>
+								<span class="link-name">{m('coaching.pendingInvite')}</span>
+								<span class="link-sub">{m('coaching.pendingInviteSub', { date: sinceLabel(inv.created_at) })}</span>
 							</div>
 							<div class="link-actions">
 								<button class="btn btn-sm btn-outline" onclick={() => copyLink(inv.invite_token)}>
-									Copy link
+									{m('coaching.copyLink')}
 								</button>
 								<button class="btn btn-sm btn-danger" onclick={() => revoke(inv.id)}>
-									Revoke
+									{m('coaching.revoke')}
 								</button>
 							</div>
 						</li>
@@ -156,19 +156,19 @@
 			{/if}
 
 			{#if athletes.length === 0}
-				<p class="empty">No athletes yet. Create an invite and share the link to get started.</p>
+				<p class="empty">{m('coaching.noAthletes')}</p>
 			{:else}
 				<ul class="link-list">
 					{#each athletes as a (a.id)}
 						<li class="link-row">
 							<Avatar name={a.display_name} size="2.25rem" font="0.85rem" />
 							<div class="link-body">
-								<a class="link-name" href="/coaching/athletes/{a.user_id}">{a.display_name ?? 'Runner'}</a>
-								<span class="link-sub">Coaching since {sinceLabel(a.accepted_at)}</span>
+								<a class="link-name" href="/coaching/athletes/{a.user_id}">{a.display_name ?? m('coaching.runner')}</a>
+								<span class="link-sub">{m('coaching.coachingSince', { date: sinceLabel(a.accepted_at) })}</span>
 							</div>
 							<div class="link-actions">
-								<a class="btn btn-sm btn-primary" href="/coaching/athletes/{a.user_id}">Review</a>
-								<button class="btn btn-sm btn-outline" onclick={() => removeAthlete(a)}>Remove</button>
+								<a class="btn btn-sm btn-primary" href="/coaching/athletes/{a.user_id}">{m('coaching.review')}</a>
+								<button class="btn btn-sm btn-outline" onclick={() => removeAthlete(a)}>{m('coaching.remove')}</button>
 							</div>
 						</li>
 					{/each}
@@ -179,23 +179,23 @@
 		<section class="card">
 			<div class="card-head">
 				<div>
-					<h2>My coaches</h2>
-					<p class="muted">People coaching you. Accept a coach's invite link to appear here.</p>
+					<h2>{m('coaching.myCoaches')}</h2>
+					<p class="muted">{m('coaching.myCoachesSub')}</p>
 				</div>
 			</div>
 			{#if coaches.length === 0}
-				<p class="empty">You're not linked to any coach yet.</p>
+				<p class="empty">{m('coaching.noCoaches')}</p>
 			{:else}
 				<ul class="link-list">
 					{#each coaches as c (c.id)}
 						<li class="link-row">
 							<Avatar name={c.display_name} size="2.25rem" font="0.85rem" />
 							<div class="link-body">
-								<a class="link-name" href="/u/{c.user_id}">{c.display_name ?? 'Coach'}</a>
-								<span class="link-sub">Linked since {sinceLabel(c.accepted_at)}</span>
+								<a class="link-name" href="/u/{c.user_id}">{c.display_name ?? m('coaching.coach')}</a>
+								<span class="link-sub">{m('coaching.linkedSince', { date: sinceLabel(c.accepted_at) })}</span>
 							</div>
 							<div class="link-actions">
-								<button class="btn btn-sm btn-outline" onclick={() => leaveCoach(c)}>Leave</button>
+								<button class="btn btn-sm btn-outline" onclick={() => leaveCoach(c)}>{m('coaching.leave')}</button>
 							</div>
 						</li>
 					{/each}

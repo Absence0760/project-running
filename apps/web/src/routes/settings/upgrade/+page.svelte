@@ -2,6 +2,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatPrice } from '$lib/format/format_price';
+	import { m } from '$lib/i18n/store.svelte';
 	import {
 		startProCheckout,
 		managementUrl,
@@ -24,21 +25,21 @@
 	async function handleGetPro() {
 		const userId = auth.user?.id;
 		if (!userId) {
-			showToast('Sign in to upgrade to Pro.', 'error');
+			showToast(m('upgrade.signInToUpgrade'), 'error');
 			return;
 		}
 		if (!isRevenueCatConfigured()) {
 			// Dev / preview builds without a RevenueCat key fall back to
 			// the original placeholder so the page stays usable end-to-
 			// end without a real billing account.
-			showToast('Pro checkout is not configured on this build.', 'info');
+			showToast(m('upgrade.checkoutNotConfigured'), 'info');
 			return;
 		}
 		purchasing = true;
 		try {
 			const { purchased } = await startProCheckout(userId);
 			if (purchased) {
-				showToast('Welcome to Pro! Refreshing your subscription…', 'success');
+				showToast(m('upgrade.welcomeToPro'), 'success');
 				// The revenuecat-webhook Edge Function flips the tier
 				// server-side; refetch the profile so the UI picks up the
 				// change without a full reload.
@@ -46,7 +47,7 @@
 			}
 		} catch (err) {
 			showToast(
-				`Checkout failed: ${err instanceof Error ? err.message : String(err)}`,
+				m('upgrade.checkoutFailed', { error: err instanceof Error ? err.message : String(err) }),
 				'error',
 			);
 		} finally {
@@ -67,7 +68,7 @@
 		if (!userId) return;
 		if (!isRevenueCatConfigured()) {
 			showToast(
-				'Manage your subscription where you started it — App Store / Play Store / billing portal.',
+				m('upgrade.manageWhereStarted'),
 				'info',
 			);
 			return;
@@ -78,13 +79,13 @@
 				window.open(url, '_blank', 'noopener,noreferrer');
 			} else {
 				showToast(
-					'No active web subscription found — manage in the App Store / Play Store instead.',
+					m('upgrade.noActiveWebSub'),
 					'info',
 				);
 			}
 		} catch (err) {
 			showToast(
-				`Could not open billing portal: ${err instanceof Error ? err.message : String(err)}`,
+				m('upgrade.billingPortalFailed', { error: err instanceof Error ? err.message : String(err) }),
 				'error',
 			);
 		}
@@ -93,125 +94,119 @@
 
 <div class="page">
 	<header class="hero">
-		<p class="kicker">Settings</p>
-		<h1>Pro &amp; support</h1>
+		<p class="kicker">{m('shell.settings')}</p>
+		<h1>{m('upgrade.heroTitle')}</h1>
 		<p class="tagline">
-			Threkir is free for the parts that matter — recording, routes, plans,
-			clubs, imports. Pro raises the daily Coach cap (2 → 10 messages) and
-			pushes your map-matching to the front of the queue. Or chip in one-off
-			to help keep the lights on.
+			{m('upgrade.heroTagline')}
 		</p>
 	</header>
 
 	<section class="tier-grid">
 		<article class="tier tier-free" aria-labelledby="tier-free-h">
 			<header class="tier-head">
-				<h2 id="tier-free-h">Free</h2>
+				<h2 id="tier-free-h">{m('upgrade.tierFree')}</h2>
 				<p class="tier-price">
 					<span class="price-amount">{formatPrice(0)}</span>
-					<span class="price-period">forever</span>
+					<span class="price-period">{m('upgrade.forever')}</span>
 				</p>
 			</header>
-			<p class="tier-blurb">Everything you need to record, plan, and share.</p>
+			<p class="tier-blurb">{m('upgrade.freeBlurb')}</p>
 			<ul class="tier-features">
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<span>Unlimited recording on phone &amp; watch</span>
+					<span>{m('upgrade.freeFeatRecording')}</span>
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<span>Routes, plans, clubs, social feed</span>
+					<span>{m('upgrade.freeFeatRoutes')}</span>
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<span>Strava, parkrun, Garmin sync &amp; imports</span>
+					<span>{m('upgrade.freeFeatSync')}</span>
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
-					<span>AI Coach — 2 chats per day</span>
+					<span>{m('upgrade.freeFeatCoach')}</span>
 				</li>
 			</ul>
 			{#if !isPro}
-				<p class="tier-note">You're on Free.</p>
+				<p class="tier-note">{m('upgrade.youreOnFree')}</p>
 			{/if}
 		</article>
 
 		<article class="tier tier-pro" class:active={isPro} aria-labelledby="tier-pro-h">
-			<span class="tier-flag">Most popular</span>
+			<span class="tier-flag">{m('upgrade.mostPopular')}</span>
 			<header class="tier-head">
 				<h2 id="tier-pro-h">Pro</h2>
-				{#if isPro}<span class="pro-badge">Active</span>{/if}
+				{#if isPro}<span class="pro-badge">{m('upgrade.active')}</span>{/if}
 				<p class="tier-price">
 					<span class="price-amount">{priceLabel}</span>
-					<span class="price-period">/ month</span>
+					<span class="price-period">{m('upgrade.perMonth')}</span>
 				</p>
 				<!-- Honesty notes (audit-findings 2026-05-30 Medium [regional]):
 				     the amount is billed in USD (we don't FX-convert), and
 				     the payment processor can't serve every country. -->
 				<p class="tier-price-note">
-					Billed in US dollars. Availability depends on your country and payment
-					method — some regions can't be served by our payment processor.
+					{m('upgrade.priceNote')}
 				</p>
 			</header>
-			<p class="tier-blurb">For runners who live in the app.</p>
+			<p class="tier-blurb">{m('upgrade.proBlurb')}</p>
 			<ul class="tier-features">
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<div>
-						<strong>AI Coach — 10/day</strong>
-						<span class="feat-sub">5× the Free cap on Coach chat (2/day → 10/day).</span>
+						<strong>{m('upgrade.proFeatCoachTitle')}</strong>
+						<span class="feat-sub">{m('upgrade.proFeatCoachSub')}</span>
 					</div>
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<div>
-						<strong>Priority map-matching</strong>
-						<span class="feat-sub">Your GPS tracks snap to roads in seconds, not minutes.</span>
+						<strong>{m('upgrade.proFeatMapMatchTitle')}</strong>
+						<span class="feat-sub">{m('upgrade.proFeatMapMatchSub')}</span>
 					</div>
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<div>
-						<strong>Priority cloud exports</strong>
-						<span class="feat-sub">8 GPX bundle exports per hour vs. 2 on Free.</span>
+						<strong>{m('upgrade.proFeatExportsTitle')}</strong>
+						<span class="feat-sub">{m('upgrade.proFeatExportsSub')}</span>
 					</div>
 				</li>
 				<li>
 					<span class="check material-symbols" aria-hidden="true">check_circle</span>
 					<div>
-						<strong>Everything in Free</strong>
-						<span class="feat-sub">Recording, routes, plans, clubs, sync, imports.</span>
+						<strong>{m('upgrade.proFeatEverythingTitle')}</strong>
+						<span class="feat-sub">{m('upgrade.proFeatEverythingSub')}</span>
 					</div>
 				</li>
 			</ul>
 			{#if isPro}
 				<p class="pro-note">
-					Thanks for supporting Threkir. Manage your subscription where
-					you started it — App Store, Play Store, or the web billing portal.
+					{m('upgrade.proThanks')}
 				</p>
 				<button class="btn btn-outline" onclick={handleManageSubscription}>
-					Manage subscription
+					{m('upgrade.manageSubscription')}
 				</button>
 			{:else}
 				<button class="btn btn-primary tier-cta" onclick={handleGetPro} disabled={purchasing}>
-					{purchasing ? 'Redirecting…' : `Get Pro — ${priceLabel}/mo`}
+					{purchasing ? m('upgrade.redirecting') : m('upgrade.getPro', { price: priceLabel })}
 				</button>
-				<p class="tier-fine">Cancel anytime from the App Store, Play Store, or billing portal.</p>
+				<p class="tier-fine">{m('upgrade.cancelAnytime')}</p>
 			{/if}
 		</article>
 	</section>
 
 	<section class="donate-card">
 		<div class="donate-text">
-			<h2>Not ready for a subscription?</h2>
+			<h2>{m('upgrade.donateTitle')}</h2>
 			<p>
-				A one-off donation helps cover map tiles, push notifications, and the
-				occasional server invoice. Every chip-in lands directly with the project.
+				{m('upgrade.donateBody')}
 			</p>
 		</div>
 		<button class="btn btn-outline" onclick={handleDonate}>
 			<span class="material-symbols" aria-hidden="true">favorite</span>
-			Donate
+			{m('upgrade.donate')}
 		</button>
 	</section>
 </div>

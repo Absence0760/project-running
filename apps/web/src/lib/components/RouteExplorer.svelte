@@ -13,6 +13,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { supabase } from '$lib/core/supabase';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import RouteTrackPreview from './RouteTrackPreview.svelte';
 
 	let routes = $state<Route[]>([]);
@@ -41,29 +42,29 @@
 			if (getUnit() === 'mi') {
 				const m = 1609.344;
 				return {
-					any: { label: 'Any distance' },
-					short: { max: 3 * m, label: 'Under 3 mi' },
-					medium: { min: 3 * m, max: 6 * m, label: '3-6 mi' },
-					long: { min: 6 * m, max: 13 * m, label: '6-13 mi' },
-					ultra: { min: 13 * m, label: '13 mi+' },
+					any: { label: t('routeExplorer.distanceAny') },
+					short: { max: 3 * m, label: t('routeExplorer.distanceUnder3Mi') },
+					medium: { min: 3 * m, max: 6 * m, label: t('routeExplorer.distance3to6Mi') },
+					long: { min: 6 * m, max: 13 * m, label: t('routeExplorer.distance6to13Mi') },
+					ultra: { min: 13 * m, label: t('routeExplorer.distance13MiPlus') },
 				};
 			}
 			return {
-				any: { label: 'Any distance' },
-				short: { max: 5000, label: 'Under 5 km' },
-				medium: { min: 5000, max: 10000, label: '5-10 km' },
-				long: { min: 10000, max: 21000, label: '10-21 km' },
-				ultra: { min: 21000, label: '21 km+' },
+				any: { label: t('routeExplorer.distanceAny') },
+				short: { max: 5000, label: t('routeExplorer.distanceUnder5Km') },
+				medium: { min: 5000, max: 10000, label: t('routeExplorer.distance5to10Km') },
+				long: { min: 10000, max: 21000, label: t('routeExplorer.distance10to21Km') },
+				ultra: { min: 21000, label: t('routeExplorer.distance21KmPlus') },
 			};
 		},
 	);
 
-	const surfaceOptions: Record<string, string> = {
-		any: 'Any surface',
-		road: 'Road',
-		trail: 'Trail',
-		mixed: 'Mixed',
-	};
+	const surfaceOptions = $derived<Record<string, string>>({
+		any: t('routeExplorer.surfaceAny'),
+		road: t('routeExplorer.surfaceRoad'),
+		trail: t('routeExplorer.surfaceTrail'),
+		mixed: t('routeExplorer.surfaceMixed'),
+	});
 
 	function searchOptions(offset: number) {
 		const opts = distanceOptions[distanceFilter];
@@ -129,14 +130,14 @@
 				const next = new Set(savedIds);
 				next.delete(route.id);
 				savedIds = next;
-				showToast(`Removed "${route.name}" from your library`);
+				showToast(t('routeExplorer.toastRemoved', { name: route.name ?? '' }));
 			} else {
 				await bookmarkRoute(route.id);
 				savedIds = new Set([...savedIds, route.id]);
-				showToast(`Saved "${route.name}" to your library`, 'success');
+				showToast(t('routeExplorer.toastSaved', { name: route.name ?? '' }), 'success');
 			}
 		} catch (e) {
-			showToast(`Could not update bookmark: ${e}`, 'error');
+			showToast(t('routeExplorer.toastBookmarkError', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			const next = new Set(bookmarkBusy);
 			next.delete(route.id);
@@ -172,8 +173,8 @@
 			});
 		} catch (e) {
 			locationError = e instanceof GeolocationPositionError
-				? 'Location access denied — enable it in your browser settings'
-				: `Could not get location: ${e}`;
+				? t('routeExplorer.locationDenied')
+				: t('routeExplorer.locationError', { error: e instanceof Error ? e.message : String(e) });
 		}
 		loading = false;
 	}
@@ -198,10 +199,10 @@
 <div class="explorer">
 	<div class="mode-tabs">
 		<button class="mode-tab" class:active={mode === 'search'} onclick={() => switchMode('search')}>
-			<span class="material-symbols">search</span> Search
+			<span class="material-symbols">search</span> {t('routeExplorer.tabSearch')}
 		</button>
 		<button class="mode-tab" class:active={mode === 'nearby'} onclick={() => switchMode('nearby')}>
-			<span class="material-symbols">near_me</span> Near Me
+			<span class="material-symbols">near_me</span> {t('routeExplorer.tabNearMe')}
 		</button>
 	</div>
 
@@ -217,7 +218,7 @@
 		<span class="material-symbols search-icon">search</span>
 		<input
 			type="text"
-			placeholder="Search routes by name..."
+			placeholder={t('routeExplorer.searchPlaceholder')}
 			bind:value={query}
 			onkeydown={handleKeydown}
 		/>
@@ -240,15 +241,15 @@
 			{/each}
 		</select>
 		<select bind:value={sort} onchange={() => search()}>
-			<option value="popular">Most run</option>
-			<option value="newest">Newest</option>
-			<option value="featured">Featured</option>
+			<option value="popular">{t('routeExplorer.sortMostRun')}</option>
+			<option value="newest">{t('routeExplorer.sortNewest')}</option>
+			<option value="featured">{t('routeExplorer.sortFeatured')}</option>
 		</select>
 		<label class="chip-toggle">
 			<input type="checkbox" bind:checked={featuredOnly} onchange={() => search()} />
-			<span>Featured only</span>
+			<span>{t('routeExplorer.featuredOnly')}</span>
 		</label>
-		<button class="btn btn-outline" onclick={() => search()}>Search</button>
+		<button class="btn btn-outline" onclick={() => search()}>{t('routeExplorer.searchButton')}</button>
 	</div>
 
 	{#if popularTags.length > 0}
@@ -269,23 +270,20 @@
 	{#if routes.length === 0 && !loading}
 		<div class="empty-card">
 			<span class="material-symbols empty-icon" aria-hidden="true">explore</span>
-			<h3>{query ? 'No routes match your search' : 'No public routes here yet'}</h3>
+			<h3>{query ? t('routeExplorer.emptyNoMatch') : t('routeExplorer.emptyNone')}</h3>
 			<p class="empty-text">
 				{#if query}
-					Try a broader search term, switch the surface to "any", or widen
-					the distance bucket.
+					{t('routeExplorer.emptyQueryHint')}
 				{:else if mode === 'nearby'}
-					No public routes within 50 km of you yet. Try Search and a city
-					name, or be the first to share one from the route builder.
+					{t('routeExplorer.emptyNearbyHint')}
 				{:else}
-					Routes shared from the route builder appear here. Build one and
-					flip it public to seed the map.
+					{t('routeExplorer.emptyDefaultHint')}
 				{/if}
 			</p>
 			<div class="empty-actions">
 				<a href="/routes/new" class="btn btn-primary">
 					<span class="material-symbols" aria-hidden="true">add</span>
-					Build a route
+					{t('routeExplorer.buildRoute')}
 				</a>
 				{#if query || selectedTags.size > 0 || distanceFilter !== 'any' || surfaceFilter !== 'any' || featuredOnly}
 					<button
@@ -300,7 +298,7 @@
 							search();
 						}}
 					>
-						Clear filters
+						{t('routeExplorer.clearFilters')}
 					</button>
 				{/if}
 			</div>
@@ -325,7 +323,7 @@
 								ownerUserId={route.user_id}
 							/>
 							{#if route.featured}
-								<span class="featured-badge" title="Featured route">
+								<span class="featured-badge" title={t('routeExplorer.featuredRoute')}>
 									<span class="material-symbols">star</span>
 								</span>
 							{/if}
@@ -369,7 +367,7 @@
 							class:saved={savedIds.has(route.id)}
 							onclick={() => toggleBookmark(route)}
 							disabled={bookmarkBusy.has(route.id)}
-							title={savedIds.has(route.id) ? 'Remove from your library' : 'Save to your library'}
+							title={savedIds.has(route.id) ? t('routeExplorer.removeFromLibrary') : t('routeExplorer.saveToLibrary')}
 						>
 							<span class="material-symbols">{savedIds.has(route.id) ? 'bookmark' : 'bookmark_add'}</span>
 						</button>
@@ -381,7 +379,7 @@
 		{#if hasMore}
 			<div class="load-more">
 				<button class="btn btn-outline" onclick={loadMore} disabled={loading}>
-					{loading ? 'Loading...' : 'Load more'}
+					{loading ? t('routeExplorer.loading') : t('routeExplorer.loadMore')}
 				</button>
 			</div>
 		{/if}
@@ -399,7 +397,7 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Searching public routes…</p>
+		<p class="sr-only" role="status">{t('routeExplorer.searchingStatus')}</p>
 	{/if}
 </div>
 

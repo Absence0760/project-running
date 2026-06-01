@@ -3,6 +3,7 @@
 	import Modal from './Modal.svelte';
 	import { updatePlanMeta } from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
 	interface Props {
@@ -41,7 +42,7 @@
 
 	async function save() {
 		if (!name.trim()) {
-			error = 'Name is required';
+			error = m('planMeta.nameRequired');
 			return;
 		}
 		saving = true;
@@ -64,17 +65,17 @@
 				days_per_week: daysPerWeek,
 				rules: rules.length > 0 ? rules : null,
 			});
-			showToast('Plan updated.');
+			showToast(m('planMeta.planUpdated'));
 			onSaved();
 		} catch (e: any) {
-			error = e?.message ?? 'Save failed';
+			error = e?.message ?? m('planMeta.saveFailed');
 		} finally {
 			saving = false;
 		}
 	}
 </script>
 
-<Modal open title="Edit plan" onclose={onClose} bodyClass="plan-meta-body">
+<Modal open title={m('planMeta.title')} onclose={onClose} bodyClass="plan-meta-body">
 	<form
 		class="form"
 		onsubmit={(e) => {
@@ -83,51 +84,50 @@
 		}}
 	>
 		<label class="field">
-			<span class="field-label">Name</span>
+			<span class="field-label">{m('planMeta.name')}</span>
 			<input type="text" bind:value={name} maxlength="80" required />
 		</label>
 
 		<label class="field">
-			<span class="field-label">Days per week</span>
+			<span class="field-label">{m('planMeta.daysPerWeek')}</span>
 			<select bind:value={daysPerWeek}>
 				{#each [3, 4, 5, 6, 7] as n}
-					<option value={n}>{n} days</option>
+					<option value={n}>{m('planMeta.daysCount', { n })}</option>
 				{/each}
 			</select>
 			<span class="field-hint">
-				Changing this doesn't reshuffle existing workouts — edit individual days from the calendar below.
+				{m('planMeta.daysPerWeekHint')}
 			</span>
 		</label>
 
 		<fieldset class="field">
-			<legend class="field-label">Goal time <span class="optional">optional</span></legend>
+			<legend class="field-label">{m('planMeta.goalTime')} <span class="optional">{m('planMeta.optional')}</span></legend>
 			<div class="time-row">
-				<input type="number" min="0" max="9" bind:value={goalTimeHours} placeholder="h" />
+				<input type="number" min="0" max="9" bind:value={goalTimeHours} placeholder={m('planMeta.hoursAbbr')} />
 				<span>:</span>
-				<input type="number" min="0" max="59" bind:value={goalTimeMin} placeholder="m" />
+				<input type="number" min="0" max="59" bind:value={goalTimeMin} placeholder={m('planMeta.minutesAbbr')} />
 				<span>:</span>
-				<input type="number" min="0" max="59" bind:value={goalTimeSec} placeholder="s" />
+				<input type="number" min="0" max="59" bind:value={goalTimeSec} placeholder={m('planMeta.secondsAbbr')} />
 			</div>
 			<span class="field-hint">
-				Pace targets on existing workouts won't auto-recalculate — only the displayed goal updates.
+				{m('planMeta.goalTimeHint')}
 			</span>
 		</fieldset>
 
 		<label class="field">
-			<span class="field-label">Notes <span class="optional">optional</span></span>
-			<textarea bind:value={notes} rows="2" maxlength="500" placeholder="Anything to remember about this plan…"></textarea>
+			<span class="field-label">{m('planMeta.notes')} <span class="optional">{m('planMeta.optional')}</span></span>
+			<textarea bind:value={notes} rows="2" maxlength="500" placeholder={m('planMeta.notesPlaceholder')}></textarea>
 		</label>
 
 		<label class="field">
-			<span class="field-label">Rules <span class="optional">one per line</span></span>
+			<span class="field-label">{m('planMeta.rules')} <span class="optional">{m('planMeta.onePerLine')}</span></span>
 			<textarea
 				bind:value={rulesText}
 				rows="3"
 				maxlength="500"
-				placeholder="No tempos within 5 days of a race
-Long run on Sundays only"
+				placeholder={m('planMeta.rulesPlaceholder')}
 			></textarea>
-			<span class="field-hint">Shown in the plan hero so you don't forget self-imposed constraints.</span>
+			<span class="field-hint">{m('planMeta.rulesHint')}</span>
 		</label>
 
 		{#if error}
@@ -136,10 +136,10 @@ Long run on Sundays only"
 
 		<div class="actions">
 			<button type="button" class="btn btn-secondary" onclick={onClose} disabled={saving}>
-				Cancel
+				{m('planMeta.cancel')}
 			</button>
 			<button type="submit" class="btn btn-primary" disabled={saving || !name.trim()}>
-				{saving ? 'Saving…' : 'Save'}
+				{saving ? m('planMeta.saving') : m('planMeta.save')}
 			</button>
 		</div>
 	</form>

@@ -7,6 +7,7 @@
 	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
 	import { fmtKm, getUnit, fmtPace } from '$lib/format/units.svelte';
+	import { m as t } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
@@ -96,12 +97,12 @@
 	async function shareRecap() {
 		if (!recap) return;
 		const lines = [
-			`My ${recap.year} in running`,
+			t('recap.shareTitle', { year: recap.year }),
 			'',
-			`${fmtKm(recap.totalDistanceM)} across ${recap.runCount} runs`,
-			`Longest run: ${fmtKm(recap.longestRunM)}`,
-			`Best streak: ${recap.bestStreakDays} days`,
-			`Top week: ${fmtKm(recap.topWeek?.distanceM ?? 0)}`,
+			t('recap.shareDistance', { distance: fmtKm(recap.totalDistanceM), n: recap.runCount }),
+			t('recap.shareLongest', { distance: fmtKm(recap.longestRunM) }),
+			t('recap.shareStreak', { n: recap.bestStreakDays }),
+			t('recap.shareTopWeek', { distance: fmtKm(recap.topWeek?.distanceM ?? 0) }),
 		];
 		const text = lines.join('\n');
 
@@ -114,7 +115,7 @@
 			const blob = await svgToPngBlob(svg, 1080);
 			const file = new File([blob], `threkir-${recap.year}.png`, { type: 'image/png' });
 			if (navigator.canShare?.({ files: [file] })) {
-				await navigator.share({ files: [file], title: `My ${recap.year} in running`, text });
+				await navigator.share({ files: [file], title: t('recap.shareTitle', { year: recap.year }), text });
 				return;
 			}
 			const dl = URL.createObjectURL(blob);
@@ -130,121 +131,120 @@
 
 		if (navigator.share) {
 			try {
-				await navigator.share({ title: `My ${recap.year} in running`, text });
+				await navigator.share({ title: t('recap.shareTitle', { year: recap.year }), text });
 				return;
 			} catch (_) {
 				// fall through to clipboard
 			}
 		}
 		await navigator.clipboard.writeText(text);
-		alert('Recap copied to clipboard.');
+		alert(t('recap.copiedToClipboard'));
 	}
 </script>
 
 <svelte:head>
-	<title>My {year} in running — Threkir</title>
+	<title>{t('recap.pageTitle', { year })}</title>
 </svelte:head>
 
 <div class="page">
 	{#if !valid}
-		<p class="muted">Pick a year between 2010 and 2100.</p>
+		<p class="muted">{t('recap.invalidYear')}</p>
 	{:else if loading}
-		<p class="muted">Loading your year…</p>
+		<p class="muted">{t('recap.loadingYear')}</p>
 	{:else if !auth.user}
-		<p class="muted">Sign in to see your year in running.</p>
+		<p class="muted">{t('recap.signInPrompt')}</p>
 	{:else if recap == null || recap.runCount === 0}
 		<header class="hero hero-empty">
 			<p class="kicker">{year}</p>
-			<h1>No runs in {year} yet</h1>
+			<h1>{t('recap.noRunsYet', { year })}</h1>
 			<p class="empty-sub">
-				Get out there — your wrap card is waiting. Every run you log this year shows up
-				here.
+				{t('recap.emptySub')}
 			</p>
 		</header>
 	{:else}
 		<header class="hero">
-			<p class="kicker">My {recap.year} in running</p>
+			<p class="kicker">{t('recap.heroKicker', { year: recap.year })}</p>
 			<h1 class="bignum">{fmtKm(recap.totalDistanceM)}</h1>
 			<p class="subhead">
-				across {recap.runCount} {recap.runCount === 1 ? 'run' : 'runs'}
+				{t(recap.runCount === 1 ? 'recap.acrossRunsOne' : 'recap.acrossRunsMany', { n: recap.runCount })}
 			</p>
 			<div class="hero-meta">
 				<span class="hero-meta-item">
 					<span class="material-symbols">timer</span>
-					{fmtTime(recap.totalDurationS)} on foot
+					{t('recap.onFoot', { time: fmtTime(recap.totalDurationS) })}
 				</span>
 				<span class="hero-meta-divider" aria-hidden="true"></span>
 				<span class="hero-meta-item">
 					<span class="material-symbols">terrain</span>
-					{Math.round(recap.totalElevationM).toLocaleString()} m climbed
+					{t('recap.climbed', { meters: Math.round(recap.totalElevationM).toLocaleString() })}
 				</span>
 				<span class="hero-meta-divider" aria-hidden="true"></span>
 				<span class="hero-meta-item">
 					<span class="material-symbols">calendar_month</span>
-					active in {activeMonths(recap.monthly)} {activeMonths(recap.monthly) === 1 ? 'month' : 'months'}
+					{t(activeMonths(recap.monthly) === 1 ? 'recap.activeInMonthsOne' : 'recap.activeInMonthsMany', { n: activeMonths(recap.monthly) })}
 				</span>
 			</div>
 			<button type="button" class="btn share-btn" onclick={shareRecap}>
 				<span class="material-symbols">ios_share</span>
-				Share recap
+				{t('recap.shareRecap')}
 			</button>
 		</header>
 
 		<section class="cards">
 			<div class="card">
-				<span class="card-label">Longest run</span>
+				<span class="card-label">{t('recap.longestRun')}</span>
 				<span class="card-value">{fmtKm(recap.longestRunM)}</span>
-				<span class="card-sub">single outing</span>
+				<span class="card-sub">{t('recap.singleOuting')}</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Fastest pace</span>
+				<span class="card-label">{t('recap.fastestPace')}</span>
 				<span class="card-value">{fmtPace(recap.fastestPaceSecPerKm)}</span>
-				<span class="card-sub">on runs over 500&nbsp;m</span>
+				<span class="card-sub">{t('recap.fastestPaceSub')}</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Best streak</span>
-				<span class="card-value">{recap.bestStreakDays} <small>days</small></span>
-				<span class="card-sub">consecutive run days</span>
+				<span class="card-label">{t('recap.bestStreak')}</span>
+				<span class="card-value">{recap.bestStreakDays} <small>{t('recap.days')}</small></span>
+				<span class="card-sub">{t('recap.consecutiveRunDays')}</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Top week</span>
+				<span class="card-label">{t('recap.topWeek')}</span>
 				<span class="card-value">{fmtKm(recap.topWeek?.distanceM ?? 0)}</span>
 				<span class="card-sub">
 					{#if recap.topWeek}
-						week of {fmtWeekStart(recap.topWeek.weekStart)}
+						{t('recap.weekOf', { date: fmtWeekStart(recap.topWeek.weekStart) })}
 					{:else}
-						no weekly data
+						{t('recap.noWeeklyData')}
 					{/if}
 				</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Routes run</span>
+				<span class="card-label">{t('recap.routesRun')}</span>
 				<span class="card-value">{recap.uniqueRouteCount}</span>
-				<span class="card-sub">distinct saved routes</span>
+				<span class="card-sub">{t('recap.distinctSavedRoutes')}</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Earliest start</span>
+				<span class="card-label">{t('recap.earliestStart')}</span>
 				<span class="card-value">{recap.earliestStartLocal ?? '—'}</span>
-				<span class="card-sub">local time</span>
+				<span class="card-sub">{t('recap.localTime')}</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Personal records</span>
+				<span class="card-label">{t('recap.personalRecords')}</span>
 				<span class="card-value">{recap.personalRecordCount}</span>
-				<span class="card-sub">set this year</span>
+				<span class="card-sub">{t('recap.setThisYear')}</span>
 			</div>
 			<div class="card">
-				<span class="card-label">Photos</span>
+				<span class="card-label">{t('recap.photos')}</span>
 				<span class="card-value">{recap.photoCount}</span>
-				<span class="card-sub">moments captured</span>
+				<span class="card-sub">{t('recap.momentsCaptured')}</span>
 			</div>
 		</section>
 
 		{#if recap.badges.length > 0}
 			<section class="badges">
 				<header class="badges-head">
-					<h2>Trophies</h2>
+					<h2>{t('recap.trophies')}</h2>
 					<span class="badges-meta">
-						{recap.badges.length} earned in {recap.year}
+						{t('recap.earnedInYear', { n: recap.badges.length, year: recap.year })}
 					</span>
 				</header>
 				<div class="badge-grid">
@@ -261,16 +261,16 @@
 
 		<section class="month-chart">
 			<header class="month-chart-head">
-				<h2>Distance by month</h2>
+				<h2>{t('recap.distanceByMonth')}</h2>
 				<span class="month-chart-meta">
-					Peak {fmtKm(maxMonthlyDistance(recap.monthly))}
+					{t('recap.peak', { distance: fmtKm(maxMonthlyDistance(recap.monthly)) })}
 				</span>
 			</header>
 			<div class="bars">
 				{#each recap.monthly as m (m.month)}
 					{@const max = maxMonthlyDistance(recap.monthly)}
 					{@const pct = (m.distanceM / max) * 100}
-					<div class="bar-col" title={`${fmtKm(m.distanceM)} (${m.runCount} runs)`}>
+					<div class="bar-col" title={t(m.runCount === 1 ? 'recap.barTitleOne' : 'recap.barTitleMany', { distance: fmtKm(m.distanceM), n: m.runCount })}>
 						<span class="bar-track">
 							<span class="bar" class:bar-empty={m.runCount === 0} style="height: {pct}%"></span>
 						</span>
@@ -281,14 +281,13 @@
 		</section>
 
 		<section class="closing">
-			<h2>Wrap it up</h2>
+			<h2>{t('recap.wrapItUp')}</h2>
 			<p>
-				That's {fmtKm(recap.totalDistanceM)} of effort. Share the card, then come back next
-				year and beat it.
+				{t('recap.closingBody', { distance: fmtKm(recap.totalDistanceM) })}
 			</p>
 			<button type="button" class="btn btn-primary" onclick={shareRecap}>
 				<span class="material-symbols">ios_share</span>
-				Share my {recap.year}
+				{t('recap.shareMyYear', { year: recap.year })}
 			</button>
 		</section>
 	{/if}

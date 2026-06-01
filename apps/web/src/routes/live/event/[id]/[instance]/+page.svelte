@@ -22,6 +22,7 @@
 	import type { RealtimeChannel } from '@supabase/supabase-js';
 	import { formatDistance, fmtPace } from '$lib/format/units.svelte';
 	import { hasAcceptedConsent } from '$lib/settings/consent.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let eventId = $derived($page.params.id as string);
 	let instance = $derived(decodeURIComponent($page.params.instance as string));
@@ -231,23 +232,23 @@
 
 
 	function nameFor(key: string): string {
-		return profiles.get(key)?.display_name ?? 'Runner';
+		return profiles.get(key)?.display_name ?? m('liveEvent.runnerFallback');
 	}
 
 	let finishedResults = $derived(results.filter((r) => r.finisher_status === 'finished'));
 	let dnfResults = $derived(results.filter((r) => r.finisher_status !== 'finished'));
 
 	let statusCopy = $derived.by(() => {
-		if (!race) return { label: 'Pre-race', sub: 'Organiser hasn’t armed the race timer yet.' };
+		if (!race) return { label: m('liveEvent.statusPreRaceLabel'), sub: m('liveEvent.statusPreRaceSub') };
 		switch (race.status) {
 			case 'armed':
-				return { label: 'Armed', sub: 'Timer is armed. Waiting for the start.' };
+				return { label: m('liveEvent.statusArmedLabel'), sub: m('liveEvent.statusArmedSub') };
 			case 'running':
-				return { label: 'Running', sub: `Elapsed ${formatDuration(raceElapsedS)}` };
+				return { label: m('liveEvent.statusRunningLabel'), sub: m('liveEvent.statusRunningSub', { time: formatDuration(raceElapsedS) }) };
 			case 'finished':
-				return { label: 'Finished', sub: `Final time ${formatDuration(raceElapsedS)}` };
+				return { label: m('liveEvent.statusFinishedLabel'), sub: m('liveEvent.statusFinishedSub', { time: formatDuration(raceElapsedS) }) };
 			case 'cancelled':
-				return { label: 'Cancelled', sub: 'Race was cancelled by the organiser.' };
+				return { label: m('liveEvent.statusCancelledLabel'), sub: m('liveEvent.statusCancelledSub') };
 			default:
 				return { label: race.status, sub: '' };
 		}
@@ -416,13 +417,13 @@
 </script>
 
 <svelte:head>
-	<title>Live race — {event?.title ?? 'Event'}</title>
+	<title>{m('liveEvent.pageTitle', { title: event?.title ?? m('liveEvent.eventFallback') })}</title>
 </svelte:head>
 
 <div class="page">
 	<header class="hero">
-		<p class="kicker">Live race</p>
-		<h1>{event?.title ?? 'Live race'}</h1>
+		<p class="kicker">{m('liveEvent.kicker')}</p>
+		<h1>{event?.title ?? m('liveEvent.heroFallback')}</h1>
 		<div class="status-row">
 			<span class="status-dot status-{race?.status ?? 'idle'}"></span>
 			<strong class="status-label">{statusCopy.label}</strong>
@@ -431,21 +432,18 @@
 	</header>
 
 	{#if loading}
-		<p class="muted">Loading…</p>
+		<p class="muted">{m('shell.loading')}</p>
 	{:else}
 		<div class="layout">
 			<section class="leaderboard">
 				<header class="section-head">
-					<h2>On course</h2>
+					<h2>{m('liveEvent.onCourse')}</h2>
 					<span class="count">{pings.length}</span>
 				</header>
 				{#if pings.length === 0}
 					<div class="empty-inline">
 						<span class="material-symbols">satellite_alt</span>
-						<p>
-							No live position data yet. Runners' watches and phones push pings every ~10
-							seconds once the race starts.
-						</p>
+						<p>{m('liveEvent.noLiveData')}</p>
 					</div>
 				{:else}
 					<ol class="runners">
@@ -480,16 +478,12 @@
 						-->
 						<div class="map-card map-consent-veil">
 							<div class="map-consent-card">
-								<h2>Map disabled until you load it</h2>
+								<h2>{m('liveEvent.mapConsentTitle')}</h2>
 								<p>
-									Loading the map sends your IP address to <strong>MapTiler</strong>,
-									our tile provider in Switzerland. Tap <strong>Load map</strong>
-									below to continue. Your choice is remembered only for this page
-									session — the global setting lives in our
-									<a href="/cookie-notice">cookie notice</a>.
+									{m('liveEvent.mapConsentPrefix')}<strong>MapTiler</strong>{m('liveEvent.mapConsentMiddle')}<strong>{m('liveEvent.loadMap')}</strong>{m('liveEvent.mapConsentSuffix')}<a href="/cookie-notice">{m('liveEvent.cookieNoticeLink')}</a>.
 								</p>
 								<button type="button" class="btn btn-primary" onclick={loadMapNow}>
-									Load map
+									{m('liveEvent.loadMap')}
 								</button>
 							</div>
 						</div>
@@ -497,7 +491,7 @@
 				{:else}
 					<div class="map-card map-card-empty">
 						<span class="material-symbols">map</span>
-						<p>The race map will appear here once the first runners are on course.</p>
+						<p>{m('liveEvent.mapPlaceholder')}</p>
 					</div>
 				{/if}
 			</aside>
@@ -507,7 +501,7 @@
 			<section class="results">
 				{#if finishedResults.length > 0}
 					<header class="section-head">
-						<h2>Finished</h2>
+						<h2>{m('liveEvent.finished')}</h2>
 						<span class="count">{finishedResults.length}</span>
 					</header>
 					<ol class="runners">
@@ -521,7 +515,7 @@
 								<span class="dist">{formatDistance(r.distance_m)}</span>
 								<span class="elapsed">{formatDuration(r.duration_s)}</span>
 								{#if !r.organiser_approved}
-									<span class="pending-tag">Pending</span>
+									<span class="pending-tag">{m('liveEvent.pending')}</span>
 								{/if}
 							</li>
 						{/each}
@@ -530,7 +524,7 @@
 
 				{#if dnfResults.length > 0}
 					<header class="section-head section-head-spaced">
-						<h2>Did not finish</h2>
+						<h2>{m('liveEvent.didNotFinish')}</h2>
 						<span class="count">{dnfResults.length}</span>
 					</header>
 					<ol class="runners">

@@ -4,6 +4,7 @@
 	import { formatDate, formatDuration, activeFormatLocale } from '$lib/format/time';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { formatISO } from '$lib/training/training';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 
 	type PeriodType = 'week' | 'month';
@@ -105,22 +106,22 @@
 
 	async function handleShare() {
 		const lines = [
-			`${type === 'week' ? 'Week of' : ''} ${periodLabel(startDate, type)}`,
-			`Distance: ${formatDistance(stats.distance)}`,
-			`Time: ${formatDuration(stats.duration)}`,
-			`Runs: ${stats.count}`,
+			`${type === 'week' ? m('periodSummary.weekOf') : ''} ${periodLabel(startDate, type)}`,
+			`${m('periodSummary.shareDistance')}: ${formatDistance(stats.distance)}`,
+			`${m('periodSummary.shareTime')}: ${formatDuration(stats.duration)}`,
+			`${m('periodSummary.shareRuns')}: ${stats.count}`,
 		];
 		if (stats.count > 0) {
-			lines.push(`Longest: ${formatDistance(stats.longest)}`);
-			lines.push(`Avg pace: ${formatPace(stats.duration, stats.distance)}`);
+			lines.push(`${m('periodSummary.shareLongest')}: ${formatDistance(stats.longest)}`);
+			lines.push(`${m('periodSummary.shareAvgPace')}: ${formatPace(stats.duration, stats.distance)}`);
 		}
 		const text = lines.join('\n');
 		try {
 			if (navigator.share) {
-				await navigator.share({ title: 'My running period', text });
+				await navigator.share({ title: m('periodSummary.shareTitle'), text });
 			} else {
 				await navigator.clipboard.writeText(text);
-				showToast('Copied to clipboard.', 'success');
+				showToast(m('periodSummary.copiedToClipboard'), 'success');
 			}
 		} catch (_) {
 			/* user cancelled share — noop */
@@ -132,7 +133,7 @@
 	<div class="nav-row">
 		<button class="nav-btn" onclick={() => shiftPeriod(-1)} type="button">
 			<span class="material-symbols">chevron_left</span>
-			Previous
+			{m('periodSummary.previous')}
 		</button>
 		<div class="center-labels">
 			<div class="type-toggle">
@@ -141,41 +142,41 @@
 					class:active={type === 'week'}
 					onclick={() => setType('week')}
 					type="button"
-				>Week</button>
+				>{m('periodSummary.week')}</button>
 				<button
 					class="toggle-btn"
 					class:active={type === 'month'}
 					onclick={() => setType('month')}
 					type="button"
-				>Month</button>
+				>{m('periodSummary.month')}</button>
 			</div>
 			<h2>{periodLabel(startDate, type)}</h2>
 		</div>
 		<button class="nav-btn" onclick={() => shiftPeriod(1)} type="button">
-			Next
+			{m('periodSummary.next')}
 			<span class="material-symbols">chevron_right</span>
 		</button>
 	</div>
 
 	<div class="stats">
 		<div class="stat-card">
-			<span class="stat-label">Distance</span>
+			<span class="stat-label">{m('periodSummary.distance')}</span>
 			<span class="stat-value">
 				{stats.count > 0 ? formatDistance(stats.distance) : '—'}
 			</span>
 		</div>
 		<div class="stat-card">
-			<span class="stat-label">Time</span>
+			<span class="stat-label">{m('periodSummary.time')}</span>
 			<span class="stat-value">
 				{stats.count > 0 ? formatDuration(stats.duration) : '—'}
 			</span>
 		</div>
 		<div class="stat-card">
-			<span class="stat-label">Runs</span>
+			<span class="stat-label">{m('periodSummary.runs')}</span>
 			<span class="stat-value">{stats.count}</span>
 		</div>
 		<div class="stat-card">
-			<span class="stat-label">Avg pace</span>
+			<span class="stat-label">{m('periodSummary.avgPace')}</span>
 			<span class="stat-value">
 				{stats.count > 0 && stats.distance > 0
 					? formatPace(stats.duration, stats.distance)
@@ -187,16 +188,15 @@
 	<div class="actions">
 		<button class="btn btn-secondary" onclick={handleShare} type="button">
 			<span class="material-symbols">share</span>
-			Share summary
+			{m('periodSummary.shareSummary')}
 		</button>
 	</div>
 
 	<section class="card">
-		<h3>Runs this {type}</h3>
+		<h3>{m(type === 'week' ? 'periodSummary.runsThisWeek' : 'periodSummary.runsThisMonth')}</h3>
 		{#if periodRuns.length === 0}
 			<p class="muted">
-				No runs logged for this {type}. Use Previous / Next above to
-				browse other {type}s, or close this and record a new run.
+				{m(type === 'week' ? 'periodSummary.emptyWeek' : 'periodSummary.emptyMonth')}
 			</p>
 		{:else}
 			<div class="run-list">

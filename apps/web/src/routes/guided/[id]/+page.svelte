@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { afterNavigate } from '$app/navigation';
 	import { findGuidedRun } from '$lib/training/guided_runs';
+	import { m as t } from '$lib/i18n/store.svelte';
 
 	let id = $derived($page.params.id ?? '');
 	let run = $derived(findGuidedRun(id));
@@ -33,32 +34,31 @@
 </script>
 
 <svelte:head>
-	<title>{run?.title ?? 'Guided run'} — Threkir</title>
+	<title>{run?.title ?? t('guidedDetail.guidedRun')} — Threkir</title>
 </svelte:head>
 
 <div class="page">
 	{#if run == null}
 		<a href="/guided" class="back-link" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to library
+			{t('guidedDetail.backToLibrary')}
 		</a>
 		<div class="empty">
-			<p class="empty-eyebrow">Unknown guided run.</p>
+			<p class="empty-eyebrow">{t('guidedDetail.unknownRun')}</p>
 			<p class="empty-sub">
-				The link may be stale or the run id may have changed. Browse the library for the
-				current set.
+				{t('guidedDetail.unknownRunSub')}
 			</p>
-			<a href="/guided" class="btn btn-primary">Back to library</a>
+			<a href="/guided" class="btn btn-primary">{t('guidedDetail.backToLibrary')}</a>
 		</div>
 	{:else}
 		<a href="/guided" class="back-link" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Library
+			{t('guidedDetail.library')}
 		</a>
 
 		<header class="hero">
 			<div class="hero-head">
-				<p class="kicker">Guided run</p>
+				<p class="kicker">{t('guidedDetail.guidedRun')}</p>
 				<span class="duration">{fmtMinutes(run.duration_sec)}</span>
 			</div>
 			<h1>{run.title}</h1>
@@ -66,14 +66,14 @@
 			<p class="desc">{run.description}</p>
 			<p class="note">
 				<span class="material-symbols" aria-hidden="true">phone_iphone</span>
-				Open the mobile app to run this. Cues fire automatically as you go.
+				{t('guidedDetail.mobileNote')}
 			</p>
 		</header>
 
-		<section class="script" aria-label="Cue script">
+		<section class="script" aria-label={t('guidedDetail.cueScript')}>
 			<header class="script-head">
-				<h2>The full script</h2>
-				<span class="cue-count">{run.cues.length} cues</span>
+				<h2>{t('guidedDetail.fullScript')}</h2>
+				<span class="cue-count">{t(run.cues.length === 1 ? 'guidedDetail.cueCountOne' : 'guidedDetail.cueCountMany', { n: run.cues.length })}</span>
 			</header>
 			<ol class="timeline">
 				{#each run.cues as cue, i (cue.at_sec)}

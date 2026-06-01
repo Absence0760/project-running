@@ -9,6 +9,7 @@
 		clonePlanTemplate,
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { TrainingPlan } from '$lib/types';
 
 	interface TemplateOption {
@@ -73,10 +74,10 @@
 		cloning = true;
 		try {
 			const newPlanId = await clonePlanTemplate(selectedTemplateId, startDate);
-			showToast('Plan created from template.');
+			showToast(m('plansNew.toastCreated'));
 			goto(`/plans/${newPlanId}`);
 		} catch (e) {
-			showToast(`Failed to clone template: ${e}`, 'error');
+			showToast(m('plansNew.toastCloneFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			cloning = false;
 		}
@@ -84,37 +85,34 @@
 </script>
 
 <svelte:head>
-	<title>New plan — Threkir</title>
+	<title>{m('plansNew.pageTitle')}</title>
 </svelte:head>
 
 <div class="page">
 	<a href="/plans" class="back-link" onclick={handleBack}>
 		<span class="material-symbols">arrow_back</span>
-		Back to plans
+		{m('plansNew.backToPlans')}
 	</a>
 
 	<header class="page-header">
-		<p class="kicker">New plan</p>
-		<h1>Build a training plan</h1>
+		<p class="kicker">{m('plansNew.kicker')}</p>
+		<h1>{m('plansNew.heading')}</h1>
 		<p class="tagline">
-			Pick a goal race and we'll schedule the phases, long runs, and quality sessions for you.
-			Every week is editable before you commit — adjust days per week, target paces, or
-			individual workouts as you go.
+			{m('plansNew.tagline')}
 		</p>
 	</header>
 
 	{#if !loadingTemplates && templates.length > 0}
 		<section class="template-picker">
-			<h2>Start from a club template</h2>
+			<h2>{m('plansNew.templateHeading')}</h2>
 			<p class="picker-hint">
-				Clone a coach- or club-authored plan and anchor it to a start date you choose. The
-				clone is your own copy — edits won't sync back to the template.
+				{m('plansNew.templateHint')}
 			</p>
 			<div class="picker-row">
 				<label class="picker-field">
-					<span>Template</span>
+					<span>{m('plansNew.templateLabel')}</span>
 					<select bind:value={selectedTemplateId}>
-						<option value="">— select —</option>
+						<option value="">{m('plansNew.selectPlaceholder')}</option>
 						{#each templates as t (t.template.id)}
 							<option value={t.template.id}>
 								{t.template.name} — {t.clubName}
@@ -123,7 +121,7 @@
 					</select>
 				</label>
 				<label class="picker-field">
-					<span>Start date</span>
+					<span>{m('plansNew.startDateLabel')}</span>
 					<input type="date" bind:value={startDate} />
 				</label>
 				<button
@@ -134,15 +132,15 @@
 				>
 					{#if cloning}
 						<span class="btn-spinner" aria-hidden="true"></span>
-						Cloning…
+						{m('plansNew.cloning')}
 					{:else}
-						Clone template
+						{m('plansNew.cloneTemplate')}
 					{/if}
 				</button>
 			</div>
 		</section>
 
-		<div class="or-rule"><span>or build a plan from scratch</span></div>
+		<div class="or-rule"><span>{m('plansNew.orFromScratch')}</span></div>
 	{/if}
 
 	<PlanEditor

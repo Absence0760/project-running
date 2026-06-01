@@ -11,6 +11,7 @@
 	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let query = $state('');
 	let results = $state<PeopleSuggestion[]>([]);
@@ -59,7 +60,7 @@
 			// the user looking at an empty results list with no
 			// feedback. Surface the failure so they know to retry.
 			if (gen === searchGen) {
-				showToast(`Search failed: ${e}`, 'error');
+				showToast(m('socialPeople.searchFailed', { error: e instanceof Error ? e.message : String(e) }), 'error');
 			}
 		} finally {
 			if (gen === searchGen) searching = false;
@@ -85,7 +86,7 @@
 			else await followUser(target.id);
 		} catch (err) {
 			flipFollow(target.id, wasFollowing);
-			showToast(`Could not update follow: ${err}`, 'error');
+			showToast(m('socialPeople.followFailed', { error: err instanceof Error ? err.message : String(err) }), 'error');
 		} finally {
 			const next = new Set(rowBusy);
 			next.delete(target.id);
@@ -107,16 +108,16 @@
 		<input
 			type="search"
 			class="search-input"
-			placeholder="Search runners by name"
+			placeholder={m('socialPeople.searchPlaceholder')}
 			bind:value={query}
 			oninput={onSearchInput}
-			aria-label="Search runners"
+			aria-label={m('socialPeople.searchAriaLabel')}
 		/>
 		{#if hasQuery}
 			<button
 				type="button"
 				class="search-clear"
-				aria-label="Clear search"
+				aria-label={m('socialPeople.clearSearch')}
 				onclick={clearSearch}
 			>
 				<span class="material-symbols" aria-hidden="true">close</span>
@@ -125,21 +126,20 @@
 	</div>
 
 	{#if hasQuery}
-		<h2 class="section-title">Search results</h2>
+		<h2 class="section-title">{m('socialPeople.searchResults')}</h2>
 		{#if searching}
-			<p class="muted" role="status">Searching…</p>
+			<p class="muted" role="status">{m('socialPeople.searching')}</p>
 		{:else if results.length === 0}
 			<div class="empty-card">
 				<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>
-				<h3>No runners match "{query.trim()}"</h3>
+				<h3>{m('socialPeople.noMatch', { query: query.trim() })}</h3>
 				<p class="empty-text">
-					Try a shorter or different name. Display names are public; people who
-					haven't set one yet won't show up here.
+					{m('socialPeople.noMatchHelp')}
 				</p>
 			</div>
 		{/if}
 	{:else}
-		<h2 class="section-title">Suggested for you</h2>
+		<h2 class="section-title">{m('socialPeople.suggestedForYou')}</h2>
 		{#if loadingSuggestions}
 			<div class="grid" aria-hidden="true">
 				{#each Array(4) as _, i (i)}
@@ -153,18 +153,17 @@
 					</div>
 				{/each}
 			</div>
-			<p class="sr-only" role="status">Loading suggestions…</p>
+			<p class="sr-only" role="status">{m('socialPeople.loadingSuggestions')}</p>
 		{:else if suggestions.length === 0}
 			<div class="empty-card">
 				<span class="material-symbols empty-icon" aria-hidden="true">groups</span>
-				<h3>No suggestions yet</h3>
+				<h3>{m('socialPeople.noSuggestions')}</h3>
 				<p class="empty-text">
-					Suggestions come from people in clubs you've joined. Browse clubs to
-					find a group near you — once you're in, members show up here.
+					{m('socialPeople.noSuggestionsHelp')}
 				</p>
 				<a class="btn btn-primary" href="/social?tab=clubs">
 					<span class="material-symbols" aria-hidden="true">groups</span>
-					Browse clubs
+					{m('socialPeople.browseClubs')}
 				</a>
 			</div>
 		{/if}
@@ -183,12 +182,12 @@
 						seedHue={hashHue(person.id)}
 					/>
 					<div class="person-body">
-						<span class="person-name">{person.display_name ?? 'Runner'}</span>
+						<span class="person-name">{person.display_name ?? m('socialPeople.runnerFallback')}</span>
 						<span class="person-meta">
-							{person.public_runs_count} public run{person.public_runs_count === 1 ? '' : 's'}
+							{m(person.public_runs_count === 1 ? 'socialPeople.publicRunsOne' : 'socialPeople.publicRunsMany', { n: person.public_runs_count })}
 							{#if person.shared_clubs > 0}
 								<span class="dot">·</span>
-								{person.shared_clubs} club{person.shared_clubs === 1 ? '' : 's'} together
+								{m(person.shared_clubs === 1 ? 'socialPeople.sharedClubsOne' : 'socialPeople.sharedClubsMany', { n: person.shared_clubs })}
 							{/if}
 						</span>
 					</div>
@@ -200,14 +199,14 @@
 							disabled={rowBusy.has(person.id)}
 							onclick={(e) => toggleFollow(person, e)}
 							aria-label={person.viewer_follows
-								? `Unfollow ${person.display_name ?? 'runner'}`
-								: `Follow ${person.display_name ?? 'runner'}`}
+								? m('socialPeople.unfollowName', { name: person.display_name ?? m('socialPeople.runnerFallbackLower') })
+								: m('socialPeople.followName', { name: person.display_name ?? m('socialPeople.runnerFallbackLower') })}
 						>
 							<span class="material-symbols" aria-hidden="true">
 								{person.viewer_follows ? 'check' : 'person_add'}
 							</span>
 							<span class="follow-label">
-								{person.viewer_follows ? 'Following' : 'Follow'}
+								{person.viewer_follows ? m('socialPeople.following') : m('socialPeople.follow')}
 							</span>
 						</button>
 					{/if}

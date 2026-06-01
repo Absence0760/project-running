@@ -56,6 +56,7 @@
 	import { rasterizeSvgToPng, downloadBlob } from '$lib/format/svg_raster';
 	import { parseChipTimingCsv, resultsToCsv, type ParsedResultRow } from '$lib/runs/event_results_csv';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type {
 		EventWithMeta,
 		ClubWithMeta,
@@ -259,20 +260,20 @@
 	async function claimResult(resultId: string) {
 		try {
 			await requestEventResultClaim(resultId);
-			showToast('Claim submitted — the organiser will review it.', 'success');
+			showToast(m('clubEvent.claimSubmitted'), 'success');
 			await reloadInstance();
 		} catch (err) {
-			showToast(err instanceof Error ? err.message : 'Could not submit claim.', 'error');
+			showToast(err instanceof Error ? err.message : m('clubEvent.claimSubmitFailed'), 'error');
 		}
 	}
 
 	async function decideClaim(claimId: string, approve: boolean) {
 		try {
 			await decideEventResultClaim(claimId, approve);
-			showToast(approve ? 'Claim approved.' : 'Claim rejected.', 'success');
+			showToast(approve ? m('clubEvent.claimApproved') : m('clubEvent.claimRejected'), 'success');
 			await reloadInstance();
 		} catch (err) {
-			showToast(err instanceof Error ? err.message : 'Could not update claim.', 'error');
+			showToast(err instanceof Error ? err.message : m('clubEvent.claimUpdateFailed'), 'error');
 		}
 	}
 
@@ -326,7 +327,7 @@
 			});
 			eventPhotos = await fetchEventPhotos(event.id, activeInstance!);
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Photo upload failed';
+			error = err instanceof Error ? err.message : m('clubEvent.photoUploadFailed');
 		} finally {
 			photoUploading = false;
 		}
@@ -359,7 +360,7 @@
 			raceSession = await armRace(event.id, activeInstance, autoApproveOnArm);
 			broadcastRaceStateChanged();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Arm failed';
+			error = e instanceof Error ? e.message : m('clubEvent.armFailed');
 		} finally {
 			raceBusy = false;
 		}
@@ -372,7 +373,7 @@
 			raceSession = await startRace(event.id, activeInstance);
 			broadcastRaceStateChanged();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Start failed';
+			error = e instanceof Error ? e.message : m('clubEvent.startFailed');
 		} finally {
 			raceBusy = false;
 		}
@@ -392,7 +393,7 @@
 			raceSession = await endRace(event.id, activeInstance, status);
 			broadcastRaceStateChanged();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'End failed';
+			error = e instanceof Error ? e.message : m('clubEvent.endFailed');
 		} finally {
 			raceBusy = false;
 		}
@@ -404,7 +405,7 @@
 			await approveEventResult(event.id, activeInstance, userId, approve);
 			await reloadInstance();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Approval failed';
+			error = e instanceof Error ? e.message : m('clubEvent.approvalFailed');
 		}
 	}
 
@@ -416,7 +417,7 @@
 			await approveEventResultById(resultId, approve);
 			await reloadInstance();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Approval failed';
+			error = e instanceof Error ? e.message : m('clubEvent.approvalFailed');
 		}
 	}
 
@@ -460,7 +461,7 @@
 			showResultPicker = false;
 			await reloadInstance();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Submit failed';
+			error = e instanceof Error ? e.message : m('clubEvent.submitFailed');
 		} finally {
 			submitting = false;
 		}
@@ -485,7 +486,7 @@
 			// propagate uncaught. Pre-fix, a network drop on DNF / DNS
 			// left the picker open with no feedback and the user
 			// guessing whether their non-finish was recorded.
-			error = e instanceof Error ? e.message : 'Result submit failed';
+			error = e instanceof Error ? e.message : m('clubEvent.resultSubmitFailed');
 		} finally {
 			submitting = false;
 		}
@@ -539,7 +540,7 @@
 			importErrors = errors;
 		} catch {
 			importPreview = [];
-			importErrors = ['Could not read the file.'];
+			importErrors = [m('clubEvent.importReadError')];
 		}
 	}
 
@@ -552,12 +553,17 @@
 				instanceStart: activeInstance,
 				rows: importPreview
 			});
-			showToast(`Imported ${importPreview.length} result${importPreview.length === 1 ? '' : 's'}.`, 'success');
+			showToast(
+				m(importPreview.length === 1 ? 'clubEvent.importedToastOne' : 'clubEvent.importedToastMany', {
+					n: importPreview.length
+				}),
+				'success'
+			);
 			closeImport();
 			await reloadInstance();
 		} catch (err) {
 			console.error('bulk result import failed', err);
-			showToast('Import failed. Check your permissions and try again.', 'error');
+			showToast(m('clubEvent.importFailed'), 'error');
 		} finally {
 			importBusy = false;
 		}
@@ -570,7 +576,7 @@
 		try {
 			const svg = buildFinisherCertificateSvg({
 				eventTitle: event.title,
-				finisherName: r.display_name ?? 'Runner',
+				finisherName: r.display_name ?? m('clubEvent.runnerFallback'),
 				durationS: r.duration_s,
 				distanceM: r.distance_m,
 				rank: r.rank,
@@ -583,7 +589,7 @@
 			downloadBlob(blob, `threkir-certificate-${safe}.png`);
 		} catch (e) {
 			console.error('certificate generation failed', e);
-			showToast('Could not generate the certificate. Please try again.', 'error');
+			showToast(m('clubEvent.certificateFailed'), 'error');
 		} finally {
 			certBusy = null;
 		}
@@ -863,7 +869,7 @@
 			}
 			await load();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'RSVP failed';
+			error = e instanceof Error ? e.message : m('clubEvent.rsvpFailed');
 		} finally {
 			busy = false;
 		}
@@ -890,7 +896,7 @@
 			showCancelInstance = false;
 			await load();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Could not cancel this occurrence';
+			error = e instanceof Error ? e.message : m('clubEvent.cancelOccurrenceFailed');
 		} finally {
 			busy = false;
 		}
@@ -903,7 +909,7 @@
 			await reinstateEventInstance(event.id, activeInstance);
 			await load();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Could not reinstate this occurrence';
+			error = e instanceof Error ? e.message : m('clubEvent.reinstateOccurrenceFailed');
 		} finally {
 			busy = false;
 		}
@@ -923,7 +929,7 @@
 			draftPost = '';
 			await reloadInstance();
 		} catch (e: unknown) {
-			error = e instanceof Error ? e.message : 'Failed to post update';
+			error = e instanceof Error ? e.message : m('clubEvent.postUpdateFailed');
 		} finally {
 			busy = false;
 		}
@@ -944,21 +950,21 @@
 	function fmtRelative(iso: string): string {
 		const diff = Date.now() - new Date(iso).getTime();
 		const min = Math.floor(diff / 60_000);
-		if (min < 1) return 'Just now';
-		if (min < 60) return `${min}m ago`;
+		if (min < 1) return m('clubEvent.justNow');
+		if (min < 60) return m('clubEvent.minutesAgo', { n: min });
 		const hr = Math.floor(min / 60);
-		if (hr < 24) return `${hr}h ago`;
-		return `${Math.floor(hr / 24)}d ago`;
+		if (hr < 24) return m('clubEvent.hoursAgo', { n: hr });
+		return m('clubEvent.daysAgo', { n: Math.floor(hr / 24) });
 	}
 
 
 </script>
 
 {#if loading}
-	<div class="page" aria-busy="true" aria-label="Loading event">
+	<div class="page" aria-busy="true" aria-label={m('clubEvent.loadingEvent')}>
 		<span class="back-skel" aria-hidden="true">
 			<span class="material-symbols">arrow_back</span>
-			Back to club
+			{m('clubEvent.backToClub')}
 		</span>
 		<div class="hero skel-hero" aria-hidden="true">
 			<div class="skel-hero-text">
@@ -978,22 +984,21 @@
 			<span class="skel skel-line skel-w-80"></span>
 		</div>
 	</div>
-	<p class="sr-only" role="status">Loading event…</p>
+	<p class="sr-only" role="status">{m('clubEvent.loadingEventStatus')}</p>
 {:else if !event || !club}
 	<div class="page">
 		<a class="back" href="/clubs/{slug}">
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to clubs
+			{m('clubEvent.backToClubs')}
 		</a>
 		<div class="empty-card">
 			<img src="/icon-192.png" alt="" width="56" height="56" class="empty-mark" />
-			<h3>Event not found</h3>
+			<h3>{m('clubEvent.notFoundTitle')}</h3>
 			<p class="empty-text">
-				This event may have been cancelled, or the club is private and you
-				don't have access.
+				{m('clubEvent.notFoundBody')}
 			</p>
 			<div class="empty-actions">
-				<a href="/clubs/{slug}" class="btn btn-primary">Back to club</a>
+				<a href="/clubs/{slug}" class="btn btn-primary">{m('clubEvent.backToClub')}</a>
 			</div>
 		</div>
 	</div>
@@ -1007,7 +1012,7 @@
 	>
 		<a class="back" href="/clubs/{slug}" onclick={handleBack}>
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
-			Back to {club.name}
+			{m('clubEvent.backToNamed', { name: club.name })}
 		</a>
 
 		<header class="hero" class:past={isPast}>
@@ -1016,9 +1021,9 @@
 					{#if event.recurrence_freq}
 						{recurrenceLabel}
 					{:else if isPast}
-						Past event
+						{m('clubEvent.pastEvent')}
 					{:else}
-						Upcoming event
+						{m('clubEvent.upcomingEvent')}
 					{/if}
 				</span>
 				<h1>{event.title}</h1>
@@ -1044,23 +1049,23 @@
 				<div class="metrics">
 					{#if event.distance_m != null}
 						<div class="metric">
-							<span class="label">Distance</span>
+							<span class="label">{m('clubEvent.distanceLabel')}</span>
 							<span class="value">{formatDistance(event.distance_m)}</span>
 						</div>
 					{/if}
 					{#if event.pace_target_sec}
 						<div class="metric">
-							<span class="label">Target pace</span>
+							<span class="label">{m('clubEvent.targetPaceLabel')}</span>
 							<span class="value">{fmtPace(event.pace_target_sec)}</span>
 						</div>
 					{/if}
 					<div class="metric">
-						<span class="label">Going</span>
+						<span class="label">{m('clubEvent.goingLabel')}</span>
 						<span class="value">
 							{event.attendee_count}{event.capacity ? ` / ${event.capacity}` : ''}
 						</span>
 						{#if rsvpCounts.waitlisted > 0}
-							<span class="waitlist-note">Full · {rsvpCounts.waitlisted} on waitlist</span>
+							<span class="waitlist-note">{m(rsvpCounts.waitlisted === 1 ? 'clubEvent.waitlistNoteOne' : 'clubEvent.waitlistNoteMany', { n: rsvpCounts.waitlisted })}</span>
 						{/if}
 					</div>
 				</div>
@@ -1081,9 +1086,9 @@
 								href={directionsHref}
 								target="_blank"
 								rel="noopener noreferrer"
-								aria-label="Open the meeting point in maps"
+								aria-label={m('clubEvent.openMeetInMaps')}
 							>
-								<img src={meetMapUrl} alt="Map of the meeting point" loading="lazy" />
+								<img src={meetMapUrl} alt={m('clubEvent.meetMapAlt')} loading="lazy" />
 							</a>
 						{/if}
 						<a
@@ -1093,7 +1098,9 @@
 							rel="noopener noreferrer"
 						>
 							<span class="material-symbols" aria-hidden="true">directions</span>
-							Get directions{event.meet_label ? ` to ${event.meet_label}` : ''}
+							{event.meet_label
+								? m('clubEvent.getDirectionsTo', { label: event.meet_label })
+								: m('clubEvent.getDirections')}
 						</a>
 					</div>
 				{/if}
@@ -1103,7 +1110,7 @@
 					<div class="cancelled-banner" role="status">
 						<span class="material-symbols" aria-hidden="true">event_busy</span>
 						<div>
-							<strong>This occurrence was cancelled.</strong>
+							<strong>{m('clubEvent.occurrenceCancelled')}</strong>
 							{#if activeException.reason}
 								<span class="cancel-reason">{activeException.reason}</span>
 							{/if}
@@ -1117,14 +1124,14 @@
 							disabled={busy}
 						>
 							<span class="material-symbols" aria-hidden="true">event_available</span>
-							Reinstate this occurrence
+							{m('clubEvent.reinstateOccurrence')}
 						</button>
 					{/if}
 				{:else if !isPast && auth.user}
 					<div
 						class="rsvp-tri"
 						role="group"
-						aria-label="Your RSVP"
+						aria-label={m('clubEvent.yourRsvp')}
 					>
 						<button
 							type="button"
@@ -1132,10 +1139,10 @@
 							class:active={viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted'}
 							aria-pressed={viewerRsvpForActive === 'going' || viewerRsvpForActive === 'waitlisted'}
 							aria-label={viewerRsvpForActive === 'going'
-								? 'Going'
+								? m('clubEvent.going')
 								: viewerRsvpForActive === 'waitlisted'
-									? 'Waitlisted'
-									: "I'm in"}
+									? m('clubEvent.waitlisted')
+									: m('clubEvent.imIn')}
 							onclick={() => rsvp('going')}
 							disabled={busy}
 						>
@@ -1148,10 +1155,10 @@
 							</span>
 							<span class="rsvp-label">
 								{viewerRsvpForActive === 'going'
-									? 'Going'
+									? m('clubEvent.going')
 									: viewerRsvpForActive === 'waitlisted'
-										? 'Waitlisted'
-										: "I'm in"}
+										? m('clubEvent.waitlisted')
+										: m('clubEvent.imIn')}
 							</span>
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.going}</span>
 						</button>
@@ -1160,12 +1167,12 @@
 							class="rsvp-opt rsvp-maybe"
 							class:active={viewerRsvpForActive === 'maybe'}
 							aria-pressed={viewerRsvpForActive === 'maybe'}
-							aria-label="Maybe"
+							aria-label={m('clubEvent.maybe')}
 							onclick={() => rsvp('maybe')}
 							disabled={busy}
 						>
 							<span class="material-symbols" aria-hidden="true">help_outline</span>
-							<span class="rsvp-label">Maybe</span>
+							<span class="rsvp-label">{m('clubEvent.maybe')}</span>
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.maybe}</span>
 						</button>
 						<button
@@ -1173,12 +1180,12 @@
 							class="rsvp-opt rsvp-declined"
 							class:active={viewerRsvpForActive === 'declined'}
 							aria-pressed={viewerRsvpForActive === 'declined'}
-							aria-label="Can't make it"
+							aria-label={m('clubEvent.cantMakeIt')}
 							onclick={() => rsvp('declined')}
 							disabled={busy}
 						>
 							<span class="material-symbols" aria-hidden="true">close</span>
-							<span class="rsvp-label">Can't make it</span>
+							<span class="rsvp-label">{m('clubEvent.cantMakeIt')}</span>
 							<span class="rsvp-count" aria-hidden="true">{rsvpCounts.declined}</span>
 						</button>
 					</div>
@@ -1191,7 +1198,7 @@
 							onclick={() => (showCancelInstance = true)}
 						>
 							<span class="material-symbols" aria-hidden="true">event_busy</span>
-							Cancel this occurrence
+							{m('clubEvent.cancelOccurrence')}
 						</button>
 					</div>
 				{/if}
@@ -1201,10 +1208,10 @@
 							type="button"
 							class="btn-ghost danger"
 							onclick={handleDeleteEvent}
-							aria-label="Delete event"
+							aria-label={m('clubEvent.deleteEvent')}
 						>
 							<span class="material-symbols" aria-hidden="true">delete</span>
-							Delete event
+							{m('clubEvent.deleteEvent')}
 						</button>
 					</div>
 				{/if}
@@ -1217,7 +1224,7 @@
 
 		{#if event.recurrence_freq && liveInstances.length > 1}
 			<section class="instance-picker">
-				<span class="label">Pick an occurrence</span>
+				<span class="label">{m('clubEvent.pickOccurrence')}</span>
 				<div class="instance-chips">
 					{#each visibleInstances as iso}
 						<button
@@ -1241,8 +1248,8 @@
 						aria-expanded={showAllInstances}
 					>
 						{showAllInstances
-							? 'Show fewer'
-							: `Show all ${liveInstances.length} upcoming`}
+							? m('clubEvent.showFewer')
+							: m('clubEvent.showAllUpcoming', { n: liveInstances.length })}
 					</button>
 				{/if}
 			</section>
@@ -1250,17 +1257,17 @@
 
 		{#if isMember}
 			<section class="card">
-				<h3>Post an update</h3>
-				<p class="sub">Members will see this on the club feed, tagged to this event.</p>
+				<h3>{m('clubEvent.postUpdateTitle')}</h3>
+				<p class="sub">{m('clubEvent.postUpdateSub')}</p>
 				<form class="post-form" onsubmit={submitPost}>
 					<textarea
 						bind:value={draftPost}
-						placeholder="Running late? Weather call? Meeting at a different spot? Say it here."
+						placeholder={m('clubEvent.postUpdatePlaceholder')}
 						rows="3"
 						maxlength="1200"
 					></textarea>
 					<button class="btn-primary" type="submit" disabled={!draftPost.trim() || busy}>
-						Post update
+						{m('clubEvent.postUpdateButton')}
 					</button>
 				</form>
 			</section>
@@ -1268,14 +1275,14 @@
 
 		{#if eventPosts.length > 0}
 			<section class="card">
-				<h3>Updates</h3>
+				<h3>{m('clubEvent.updatesTitle')}</h3>
 				<div class="feed">
 					{#each eventPosts as p (p.id)}
 						<article class="post">
 							<div class="post-author">
 								<Avatar name={p.author_display_name} size="2rem" font="0.85rem" bg="seed" sat={50} seedHue={hashHue(p.author_id)} />
 								<div>
-									<strong>{p.author_display_name ?? 'Member'}</strong>
+									<strong>{p.author_display_name ?? m('clubEvent.memberFallback')}</strong>
 									<span class="when">{fmtRelative(p.created_at ?? new Date().toISOString())}</span>
 								</div>
 							</div>
@@ -1289,47 +1296,47 @@
 		{#if isRaceDirector}
 			<section class="card race-panel">
 				<div class="results-head">
-					<h3>Race control</h3>
+					<h3>{m('clubEvent.raceControlTitle')}</h3>
 					<a class="btn-link" href={`/live/event/${event.id}/${encodeURIComponent(activeInstance ?? '')}`} target="_blank" rel="noopener">
-						Spectator view ↗
+						{m('clubEvent.spectatorView')}
 					</a>
 				</div>
 				{#if !raceSession || raceSession.status === 'finished' || raceSession.status === 'cancelled'}
 					<p class="muted">
 						{raceSession?.status === 'finished'
-							? 'This race is finished. Arm a new session to start another run.'
+							? m('clubEvent.raceFinishedHint')
 							: raceSession?.status === 'cancelled'
-							? 'Previous race cancelled.'
-							: 'Arm the race when everyone is ready to go — attendees see an armed screen on their watch and phone.'}
+							? m('clubEvent.racePreviousCancelled')
+							: m('clubEvent.raceArmHint')}
 					</p>
 					<label class="auto-approve">
 						<input type="checkbox" bind:checked={autoApproveOnArm} />
-						<span>Auto-approve submitted results</span>
+						<span>{m('clubEvent.autoApproveResults')}</span>
 					</label>
 					<button type="button" class="btn btn-primary-sm" onclick={handleArm} disabled={raceBusy}>
-						Arm race
+						{m('clubEvent.armRace')}
 					</button>
 				{:else if raceSession.status === 'armed'}
 					<p class="race-state armed">
 						<span class="dot armed-dot"></span>
-						<strong>Armed</strong> — attendees are waiting for your Start.
+						<strong>{m('clubEvent.armedLabel')}</strong> {m('clubEvent.armedHint')}
 					</p>
 					<div class="race-actions">
 						<button type="button" class="btn btn-primary-sm big" onclick={handleStart} disabled={raceBusy}>
-							GO
+							{m('clubEvent.go')}
 						</button>
 						<button type="button" class="btn-link" onclick={() => handleEnd('cancelled')} disabled={raceBusy}>
-							Cancel
+							{m('clubEvent.cancel')}
 						</button>
 					</div>
 				{:else if raceSession.status === 'running'}
 					<p class="race-state running">
 						<span class="dot running-dot"></span>
-						<strong>Running</strong> — elapsed {formatDuration(raceElapsedS)}
+						<strong>{m('clubEvent.runningLabel')}</strong> {m('clubEvent.runningElapsed', { time: formatDuration(raceElapsedS) })}
 					</p>
 					<div class="race-actions">
 						<button type="button" class="btn btn-danger" onclick={() => handleEnd('finished')} disabled={raceBusy}>
-							End race
+							{m('clubEvent.endRace')}
 						</button>
 					</div>
 				{/if}
@@ -1337,36 +1344,36 @@
 		{:else if raceSession && (raceSession.status === 'armed' || raceSession.status === 'running')}
 			<section class="card race-banner">
 				{#if raceSession.status === 'armed'}
-					<p><span class="dot armed-dot"></span><strong>Race armed</strong> — the organiser will start shortly. Your watch / phone will begin recording automatically.</p>
+					<p><span class="dot armed-dot"></span><strong>{m('clubEvent.raceArmedLabel')}</strong> {m('clubEvent.raceArmedHint')}</p>
 				{:else}
-					<p><span class="dot running-dot"></span><strong>Race running</strong> — {formatDuration(raceElapsedS)} elapsed. Keep moving!</p>
+					<p><span class="dot running-dot"></span><strong>{m('clubEvent.raceRunningLabel')}</strong> {m('clubEvent.raceRunningHint', { time: formatDuration(raceElapsedS) })}</p>
 				{/if}
 			</section>
 		{/if}
 
 		<section class="card">
 			<div class="results-head">
-				<h3>Results ({results.length})</h3>
+				<h3>{m('clubEvent.resultsTitle', { n: results.length })}</h3>
 				<div class="results-actions">
 					{#if isEventOrganiser}
-						<button type="button" class="btn-link" onclick={openImport}>Import results CSV</button>
+						<button type="button" class="btn-link" onclick={openImport}>{m('clubEvent.importResultsCsv')}</button>
 						{#if results.length > 0}
-							<button type="button" class="btn-link" onclick={exportResultsCsv}>Download results CSV</button>
+							<button type="button" class="btn-link" onclick={exportResultsCsv}>{m('clubEvent.downloadResultsCsv')}</button>
 						{/if}
 					{/if}
 					{#if myUserId}
 						{#if hasMyResult}
-							<button type="button" class="btn-link" onclick={removeMyResult}>Remove mine</button>
+							<button type="button" class="btn-link" onclick={removeMyResult}>{m('clubEvent.removeMine')}</button>
 						{:else}
 							<button type="button" class="btn btn-primary-sm" onclick={openResultPicker} disabled={submitting}>
-								{submitting ? 'Submitting…' : 'Submit my time'}
+								{submitting ? m('clubEvent.submitting') : m('clubEvent.submitMyTime')}
 							</button>
 						{/if}
 					{/if}
 				</div>
 			</div>
 			{#if results.length === 0}
-				<p class="muted">No results yet. Submit your time after the event and others will see it here.</p>
+				<p class="muted">{m('clubEvent.noResultsYet')}</p>
 			{:else}
 				<ol class="results">
 					{#each results as r (rowKey(r))}
@@ -1374,9 +1381,9 @@
 							<span class="rank">{r.organiser_approved ? (r.rank ?? '—') : '…'}</span>
 							<Avatar name={r.display_name} size="2rem" font="0.85rem" bg="seed" sat={50} seedHue={hashHue(rowKey(r))} />
 							<div class="res-info">
-								<strong>{r.display_name ?? 'Runner'}</strong>
-								{#if r.user_id !== null && r.user_id === myUserId}<span class="you">(you)</span>{/if}
-								{#if !r.organiser_approved}<span class="pending-tag">PENDING</span>{/if}
+								<strong>{r.display_name ?? m('clubEvent.runnerFallback')}</strong>
+								{#if r.user_id !== null && r.user_id === myUserId}<span class="you">{m('clubEvent.youTag')}</span>{/if}
+								{#if !r.organiser_approved}<span class="pending-tag">{m('clubEvent.pendingTag')}</span>{/if}
 								{#if r.finisher_status !== 'finished'}
 									<span class="dnf-tag">{r.finisher_status.toUpperCase()}</span>
 								{/if}
@@ -1389,27 +1396,27 @@
 								<button
 									type="button"
 									class="btn-link cert"
-									title="Download finisher certificate"
+									title={m('clubEvent.downloadCertificate')}
 									disabled={certBusy === rowKey(r)}
 									onclick={() => downloadCertificate(r)}
 								>
-									{certBusy === rowKey(r) ? '…' : 'Certificate'}
+									{certBusy === rowKey(r) ? '…' : m('clubEvent.certificate')}
 								</button>
 							{/if}
 							{#if isRaceDirector && r.user_id !== null && !r.organiser_approved}
-								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id!, true)}>Approve</button>
+								<button type="button" class="btn-link approve" onclick={() => handleApprove(r.user_id!, true)}>{m('clubEvent.approve')}</button>
 							{:else if isRaceDirector && r.user_id !== null && r.organiser_approved && r.user_id !== myUserId}
-								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id!, false)}>Unverify</button>
+								<button type="button" class="btn-link reject" onclick={() => handleApprove(r.user_id!, false)}>{m('clubEvent.unverify')}</button>
 							{:else if isRaceDirector && r.user_id === null && !r.organiser_approved}
-								<button type="button" class="btn-link approve" onclick={() => handleApproveById(r.id, true)}>Approve</button>
+								<button type="button" class="btn-link approve" onclick={() => handleApproveById(r.id, true)}>{m('clubEvent.approve')}</button>
 							{:else if isRaceDirector && r.user_id === null && r.organiser_approved}
-								<button type="button" class="btn-link reject" onclick={() => handleApproveById(r.id, false)}>Unverify</button>
+								<button type="button" class="btn-link reject" onclick={() => handleApproveById(r.id, false)}>{m('clubEvent.unverify')}</button>
 							{/if}
 							{#if myUserId && r.user_id === null && !hasMyResult}
 								{#if myClaims.get(r.id) === 'pending'}
-									<span class="claim-pending">Claim pending</span>
+									<span class="claim-pending">{m('clubEvent.claimPending')}</span>
 								{:else}
-									<button type="button" class="btn-link claim" onclick={() => claimResult(r.id)}>This is me</button>
+									<button type="button" class="btn-link claim" onclick={() => claimResult(r.id)}>{m('clubEvent.thisIsMe')}</button>
 								{/if}
 							{/if}
 						</li>
@@ -1419,17 +1426,17 @@
 
 			{#if isEventOrganiser && pendingClaims.length > 0}
 				<div class="claims-queue">
-					<h4>Result claims ({pendingClaims.length})</h4>
-					<p class="muted claims-help">A runner is asking to attach their account to an imported result. Approving links it to them.</p>
+					<h4>{m('clubEvent.resultClaimsTitle', { n: pendingClaims.length })}</h4>
+					<p class="muted claims-help">{m('clubEvent.resultClaimsHelp')}</p>
 					<ul>
 						{#each pendingClaims as c (c.id)}
 							<li>
 								<span class="claim-desc">
-									<strong>{c.claimant_name ?? 'Runner'}</strong> claims bib {c.bib ?? '—'}
+									<strong>{c.claimant_name ?? m('clubEvent.runnerFallback')}</strong> {m('clubEvent.claimsBib', { bib: c.bib ?? '—' })}
 									{#if c.finisher_name}<span class="muted">({c.finisher_name})</span>{/if}
 								</span>
-								<button type="button" class="btn-link approve" onclick={() => decideClaim(c.id, true)}>Approve</button>
-								<button type="button" class="btn-link reject" onclick={() => decideClaim(c.id, false)}>Reject</button>
+								<button type="button" class="btn-link approve" onclick={() => decideClaim(c.id, true)}>{m('clubEvent.approve')}</button>
+								<button type="button" class="btn-link reject" onclick={() => decideClaim(c.id, false)}>{m('clubEvent.reject')}</button>
 							</li>
 						{/each}
 					</ul>
@@ -1438,9 +1445,9 @@
 
 			{#if showResultPicker}
 				<div class="picker">
-					<h4>Attach a run</h4>
+					<h4>{m('clubEvent.attachRun')}</h4>
 					{#if runOptions.length === 0}
-						<p class="muted">No recent runs found. Record a run first.</p>
+						<p class="muted">{m('clubEvent.noRecentRuns')}</p>
 					{:else}
 						<ul class="run-options">
 							{#each runOptions as run (run.id)}
@@ -1461,24 +1468,23 @@
 						</ul>
 					{/if}
 					<div class="picker-actions">
-						<button type="button" class="btn-link" onclick={() => recordNonFinish('dnf')} disabled={submitting}>Record DNF</button>
-						<button type="button" class="btn-link" onclick={() => recordNonFinish('dns')} disabled={submitting}>Record DNS</button>
-						<button type="button" class="btn-link" onclick={() => (showResultPicker = false)}>Cancel</button>
+						<button type="button" class="btn-link" onclick={() => recordNonFinish('dnf')} disabled={submitting}>{m('clubEvent.recordDnf')}</button>
+						<button type="button" class="btn-link" onclick={() => recordNonFinish('dns')} disabled={submitting}>{m('clubEvent.recordDns')}</button>
+						<button type="button" class="btn-link" onclick={() => (showResultPicker = false)}>{m('clubEvent.cancel')}</button>
 					</div>
 				</div>
 			{/if}
 
 			{#if importOpen}
 				<div class="picker import-panel">
-					<h4>Import chip-timing results</h4>
+					<h4>{m('clubEvent.importTitle')}</h4>
 					<p class="muted import-help">
-						Upload a CSV with <code>bib</code>, <code>name</code> and <code>time</code> columns
-						(an optional <code>status</code> column accepts <code>dnf</code> / <code>dns</code>).
-						Finishers without an account are added by bib; re-importing a corrected file
-						updates them in place.
+						{m('clubEvent.importHelpPrefix')} <code>bib</code>, <code>name</code> {m('clubEvent.importHelpAnd')} <code>time</code> {m('clubEvent.importHelpColumns')}
+						(<code>status</code> {m('clubEvent.importHelpStatus')} <code>dnf</code> / <code>dns</code>).
+						{m('clubEvent.importHelpSuffix')}
 					</p>
 					<label class="btn-link import-file">
-						{importFileName ? `File: ${importFileName}` : 'Choose CSV file'}
+						{importFileName ? m('clubEvent.importFileName', { name: importFileName }) : m('clubEvent.chooseCsvFile')}
 						<input
 							bind:this={importInput}
 							type="file"
@@ -1493,12 +1499,12 @@
 								<li>{err}</li>
 							{/each}
 							{#if importErrors.length > 8}
-								<li>…and {importErrors.length - 8} more.</li>
+								<li>{m('clubEvent.andMore', { n: importErrors.length - 8 })}</li>
 							{/if}
 						</ul>
 					{/if}
 					{#if importPreview.length > 0}
-						<p class="import-summary">{importPreview.length} result{importPreview.length === 1 ? '' : 's'} ready to import.</p>
+						<p class="import-summary">{m(importPreview.length === 1 ? 'clubEvent.importReadyOne' : 'clubEvent.importReadyMany', { n: importPreview.length })}</p>
 					{/if}
 					<div class="picker-actions">
 						<button
@@ -1507,9 +1513,11 @@
 							onclick={confirmImport}
 							disabled={importBusy || importPreview.length === 0}
 						>
-							{importBusy ? 'Importing…' : `Import ${importPreview.length || ''} result${importPreview.length === 1 ? '' : 's'}`}
+							{importBusy
+								? m('clubEvent.importing')
+								: m(importPreview.length === 1 ? 'clubEvent.importButtonOne' : 'clubEvent.importButtonMany', { n: importPreview.length })}
 						</button>
-						<button type="button" class="btn-link" onclick={closeImport} disabled={importBusy}>Cancel</button>
+						<button type="button" class="btn-link" onclick={closeImport} disabled={importBusy}>{m('clubEvent.cancel')}</button>
 					</div>
 				</div>
 			{/if}
@@ -1517,7 +1525,7 @@
 
 		<section class="card">
 			<div class="results-head">
-				<h3>Photos ({eventPhotos.length})</h3>
+				<h3>{m('clubEvent.photosTitle', { n: eventPhotos.length })}</h3>
 				{#if canAddPhoto}
 					<button
 						type="button"
@@ -1525,7 +1533,7 @@
 						onclick={openPhotoFlow}
 						disabled={photoUploading}
 					>
-						{photoUploading ? 'Uploading…' : 'Add photo'}
+						{photoUploading ? m('clubEvent.uploading') : m('clubEvent.addPhoto')}
 					</button>
 				{/if}
 			</div>
@@ -1539,9 +1547,9 @@
 			/>
 			{#if showPhotoRunPicker}
 				<div class="picker">
-					<h4>Which run is this photo from?</h4>
+					<h4>{m('clubEvent.whichRunPhoto')}</h4>
 					{#if runOptions.length === 0}
-						<p class="muted">No recent runs found. Record a run first.</p>
+						<p class="muted">{m('clubEvent.noRecentRuns')}</p>
 					{:else}
 						<ul class="run-options">
 							{#each runOptions as run (run.id)}
@@ -1561,22 +1569,22 @@
 						</ul>
 					{/if}
 					<div class="picker-actions">
-						<button type="button" class="btn-link" onclick={() => (showPhotoRunPicker = false)}>Cancel</button>
+						<button type="button" class="btn-link" onclick={() => (showPhotoRunPicker = false)}>{m('clubEvent.cancel')}</button>
 					</div>
 				</div>
 			{/if}
 			{#if eventPhotos.length === 0}
 				<p class="muted">
-					No photos yet.{canAddPhoto ? ' Add one from one of your runs.' : ''}
+					{m('clubEvent.noPhotosYet')}{canAddPhoto ? ` ${m('clubEvent.noPhotosAddHint')}` : ''}
 				</p>
 			{:else}
 				<div class="photo-gallery">
 					{#each eventPhotos as p (p.id)}
 						<figure class="photo-tile">
-							<img src={p.thumbUrl ?? p.url} alt={p.caption ?? 'Event photo'} loading="lazy" />
+							<img src={p.thumbUrl ?? p.url} alt={p.caption ?? m('clubEvent.eventPhotoAlt')} loading="lazy" />
 							<figcaption>
 								{#if p.caption}<span class="cap">{p.caption}</span>{/if}
-								<span class="by">{p.uploader_name ?? 'Runner'}</span>
+								<span class="by">{p.uploader_name ?? m('clubEvent.runnerFallback')}</span>
 							</figcaption>
 						</figure>
 					{/each}
@@ -1585,19 +1593,19 @@
 		</section>
 
 		<section class="card">
-			<h3>Attendees ({attendees.length})</h3>
+			<h3>{m('clubEvent.attendeesTitle', { n: attendees.length })}</h3>
 			{#if attendees.length === 0}
 				<div class="attendees-empty">
 					<span class="material-symbols" aria-hidden="true">group_add</span>
 					<div>
-						<strong>No RSVPs yet</strong>
+						<strong>{m('clubEvent.noRsvpsYet')}</strong>
 						<span class="muted">
 							{#if !isPast && isMember}
-								Be the first to lock in your spot above.
+								{m('clubEvent.beFirstRsvp')}
 							{:else if !isPast}
-								Join the club to RSVP.
+								{m('clubEvent.joinToRsvp')}
 							{:else}
-								No-one logged an RSVP for this event.
+								{m('clubEvent.noRsvpsLogged')}
 							{/if}
 						</span>
 					</div>
@@ -1608,7 +1616,7 @@
 						<div class="attendee" class:maybe={a.status === 'maybe'} class:declined={a.status === 'declined'}>
 							<Avatar name={a.display_name} size="2rem" font="0.85rem" bg="seed" sat={50} seedHue={hashHue(a.user_id)} />
 							<div class="att-info">
-								<strong>{a.display_name ?? 'Member'}</strong>
+								<strong>{a.display_name ?? m('clubEvent.memberFallback')}</strong>
 								<span class="status">{a.status}</span>
 							</div>
 						</div>
@@ -1620,9 +1628,9 @@
 
 <ConfirmDialog
 	open={showEndRaceConfirm !== null}
-	title={showEndRaceConfirm === 'cancelled' ? 'Cancel race' : 'End race'}
-	message={showEndRaceConfirm === 'cancelled' ? 'Cancel the race?' : 'End the race?'}
-	confirmLabel={showEndRaceConfirm === 'cancelled' ? 'Cancel race' : 'End race'}
+	title={showEndRaceConfirm === 'cancelled' ? m('clubEvent.cancelRaceTitle') : m('clubEvent.endRaceTitle')}
+	message={showEndRaceConfirm === 'cancelled' ? m('clubEvent.cancelRaceMessage') : m('clubEvent.endRaceMessage')}
+	confirmLabel={showEndRaceConfirm === 'cancelled' ? m('clubEvent.cancelRaceTitle') : m('clubEvent.endRaceTitle')}
 	onconfirm={confirmEndRace}
 	oncancel={() => showEndRaceConfirm = null}
 	danger
@@ -1630,9 +1638,9 @@
 
 <ConfirmDialog
 	open={showDeleteEventConfirm}
-	title="Delete event"
-	message={`Delete "${event?.title ?? ''}"?${event?.recurrence_freq ? ' All occurrences will be removed.' : ''}`}
-	confirmLabel="Delete"
+	title={m('clubEvent.deleteEvent')}
+	message={`${m('clubEvent.deleteEventMessage', { title: event?.title ?? '' })}${event?.recurrence_freq ? ` ${m('clubEvent.deleteEventAllOccurrences')}` : ''}`}
+	confirmLabel={m('clubEvent.delete')}
 	onconfirm={confirmDeleteEvent}
 	oncancel={() => showDeleteEventConfirm = false}
 	danger
@@ -1640,21 +1648,20 @@
 
 <Modal
 	open={showCancelInstance}
-	title="Cancel this occurrence"
+	title={m('clubEvent.cancelOccurrence')}
 	onclose={() => (showCancelInstance = false)}
 >
 	<div class="cancel-instance-form">
 		<p>
-			Only this occurrence is called off — the rest of the series is unaffected.
-			Everyone who RSVP'd to it (going, maybe, or waitlisted) is notified.
+			{m('clubEvent.cancelInstanceBody')}
 		</p>
 		<label>
-			<span>Reason (optional)</span>
+			<span>{m('clubEvent.reasonOptional')}</span>
 			<textarea
 				bind:value={cancelReason}
 				rows="2"
 				maxlength="300"
-				placeholder="Course flooded, public holiday, marshal shortage…"
+				placeholder={m('clubEvent.cancelReasonPlaceholder')}
 			></textarea>
 		</label>
 		<div class="cancel-instance-actions">
@@ -1664,7 +1671,7 @@
 				onclick={() => (showCancelInstance = false)}
 				disabled={busy}
 			>
-				Keep it
+				{m('clubEvent.keepIt')}
 			</button>
 			<button
 				type="button"
@@ -1672,7 +1679,7 @@
 				onclick={confirmCancelInstance}
 				disabled={busy}
 			>
-				{busy ? 'Cancelling…' : 'Cancel occurrence'}
+				{busy ? m('clubEvent.cancelling') : m('clubEvent.cancelOccurrence')}
 			</button>
 		</div>
 	</div>

@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { redeemCoachInvite } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let token = $derived($page.params.token as string);
 	let status = $state<'joining' | 'error' | 'not-authed'>('joining');
@@ -25,7 +26,7 @@
 			goto('/coaching');
 		} catch (e: unknown) {
 			status = 'error';
-			errorMsg = e instanceof Error ? e.message : 'This invite is invalid or expired.';
+			errorMsg = e instanceof Error ? e.message : m('coachingAccept.inviteInvalidOrExpired');
 		}
 	});
 
@@ -43,44 +44,41 @@
 	<main class="invite-main">
 		{#if status === 'joining'}
 			<section class="invite-card joining-card" aria-live="polite">
-				<p class="kicker">Almost there</p>
-				<h1>Connecting you to your coach…</h1>
-				<p class="muted">Hang tight — we're redeeming your invite.</p>
+				<p class="kicker">{m('coachingAccept.joiningKicker')}</p>
+				<h1>{m('coachingAccept.joiningHeading')}</h1>
+				<p class="muted">{m('coachingAccept.joiningBody')}</p>
 				<div class="spinner-dots" aria-hidden="true">
 					<span></span><span></span><span></span>
 				</div>
 			</section>
 		{:else if status === 'not-authed'}
 			<section class="invite-card">
-				<p class="kicker">You've been invited</p>
-				<h1>Sign in to accept this coaching invite</h1>
+				<p class="kicker">{m('coachingAccept.invitedKicker')}</p>
+				<h1>{m('coachingAccept.invitedHeading')}</h1>
 				<p class="muted">
-					You need a Threkir account to connect with a coach. Sign in to an existing
-					account or create a new one — both are free.
+					{m('coachingAccept.invitedBody')}
 				</p>
 				<div class="invite-actions">
-					<a class="btn btn-primary" href="/login?return_to={returnTo}">Sign in</a>
+					<a class="btn btn-primary" href="/login?return_to={returnTo}">{m('coachingAccept.signIn')}</a>
 					<a class="btn btn-outline" href="/login?signup=1&return_to={returnTo}">
-						Create a free account
+						{m('coachingAccept.createFreeAccount')}
 					</a>
 				</div>
 				<p class="footnote">
-					Accepting links your account to this coach so they can be added to your
-					roster. You can end the link any time from the Coaching page.
+					{m('coachingAccept.invitedFootnote')}
 				</p>
 			</section>
 		{:else}
 			<section class="invite-card">
-				<p class="kicker">Hmm</p>
-				<h1>Invite problem</h1>
+				<p class="kicker">{m('coachingAccept.errorKicker')}</p>
+				<h1>{m('coachingAccept.errorHeading')}</h1>
 				<p class="error" role="alert">{errorMsg}</p>
 				<p class="muted">
-					This invite link may have been revoked, already redeemed, or you may already
-					be linked to this coach. Ask them to share a fresh one.
+					{m('coachingAccept.errorBody')}
 				</p>
 				<div class="invite-actions">
-					<a class="btn btn-primary" href="/coaching">Go to coaching</a>
-					<a class="btn btn-outline" href="/dashboard">Go to dashboard</a>
+					<a class="btn btn-primary" href="/coaching">{m('coachingAccept.goToCoaching')}</a>
+					<a class="btn btn-outline" href="/dashboard">{m('coachingAccept.goToDashboard')}</a>
 				</div>
 			</section>
 		{/if}

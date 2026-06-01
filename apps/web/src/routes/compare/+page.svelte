@@ -4,45 +4,44 @@
 		COMPARE_HEADLINE,
 		type FeatureSupport,
 	} from '$lib/settings/compare_features';
+	import { m } from '$lib/i18n/store.svelte';
 
 	function cellLabel(v: FeatureSupport): string {
-		return v === 'yes' ? 'Yes' : v === 'no' ? 'No' : 'Partial';
+		return v === 'yes' ? m('compare.cellYes') : v === 'no' ? m('compare.cellNo') : m('compare.cellPartial');
 	}
 </script>
 
 <svelte:head>
-	<title>How we compare to Strava — Threkir</title>
+	<title>{m('compare.pageTitle')}</title>
 	<meta
 		name="description"
-		content="Every Strava Pro feature, free. See the side-by-side."
+		content={m('compare.metaDescription')}
 	/>
 </svelte:head>
 
 <div class="page">
 	<header class="hero">
-		<p class="kicker">Pricing &amp; features</p>
-		<h1>Everything Strava Pro has — free.</h1>
+		<p class="kicker">{m('compare.kicker')}</p>
+		<h1>{m('compare.heroHeading')}</h1>
 		<p class="tagline">
-			Strava paywalls the features that make running data actually useful: heart-rate zones, pace heatmaps,
-			best-effort detection, training-load curves, live tracking. We ship all of it for free, plus a couple
-			of things even Strava Pro doesn’t do (readiness score, tiered KOM/QOM crowns).
+			{m('compare.tagline')}
 		</p>
 
 		<div class="price-cards">
 			<div class="price-card us">
 				<span class="price-label">Threkir</span>
 				<span class="price">{COMPARE_HEADLINE.usPrice}</span>
-				<span class="price-sub">Forever</span>
+				<span class="price-sub">{m('compare.forever')}</span>
 			</div>
 			<div class="price-card">
 				<span class="price-label">Strava Free</span>
 				<span class="price">{COMPARE_HEADLINE.stravaFreePrice}</span>
-				<span class="price-sub">Most analysis features locked</span>
+				<span class="price-sub">{m('compare.stravaFreeSub')}</span>
 			</div>
 			<div class="price-card">
 				<span class="price-label">Strava Pro</span>
 				<span class="price">{COMPARE_HEADLINE.stravaProPrice}</span>
-				<span class="price-sub">Required to unlock the good stuff</span>
+				<span class="price-sub">{m('compare.stravaProSub')}</span>
 			</div>
 		</div>
 	</header>
@@ -53,7 +52,7 @@
 			<table class="cmp-table">
 				<thead>
 					<tr>
-						<th class="feature-col">Feature</th>
+						<th class="feature-col">{m('compare.featureColumn')}</th>
 						<th>Threkir</th>
 						<th>Strava Free</th>
 						<th>Strava Pro</th>
@@ -98,23 +97,21 @@
 
 	<footer class="cmp-footer">
 		<p>
-			Threkir is free because the math is open-source, we’re indie, and the infrastructure runs on
-			a shoestring. No ads, no upsell modals. If you want to support us, the
-			<a href="/settings/upgrade">donate page</a> exists; it’s never required.
+			{m('compare.footerPrefix')}<a href="/settings/upgrade">{m('compare.footerDonateLink')}</a>{m('compare.footerSuffix')}
 		</p>
 		<p class="cmp-links">
-			Explore the features:
-			<a href="/coach">AI Coach</a>
+			{m('compare.exploreFeatures')}
+			<a href="/coach">{m('compare.linkAiCoach')}</a>
 			<span class="sep">&middot;</span>
-			<a href="/plans">Training plans</a>
+			<a href="/plans">{m('compare.linkTrainingPlans')}</a>
 			<span class="sep">&middot;</span>
-			<a href="/clubs">Clubs</a>
+			<a href="/clubs">{m('compare.linkClubs')}</a>
 			<span class="sep">&middot;</span>
 			<a
 				href="https://www.strava.com/premium"
 				target="_blank"
 				rel="noopener noreferrer"
-			>Strava Pro pricing</a>
+			>{m('compare.linkStravaProPricing')}</a>
 		</p>
 	</footer>
 </div>

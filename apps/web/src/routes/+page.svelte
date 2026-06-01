@@ -2,6 +2,7 @@
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 
 	$effect(() => {
 		if (browser && !auth.loading && auth.loggedIn) {
@@ -16,48 +17,48 @@
 			icon: 'android',
 			name: 'Android',
 			tagline: 'Flutter · Material 3',
-			body: 'Record runs with live GPS, auto-pause, voice cues, and offline tile caching.'
+			body: m('landing.appAndroidBody')
 		},
 		{
 			icon: 'phone_iphone',
 			name: 'iOS',
 			tagline: 'Flutter · Cupertino',
-			body: 'A HealthKit-friendly companion with the same plans, routes, and history. In development.',
+			body: m('landing.appIosBody'),
 			comingSoon: true
 		},
 		{
 			icon: 'watch',
 			name: 'Apple Watch',
 			tagline: 'Native SwiftUI',
-			body: 'Standalone workouts on the wrist — splits, pace, and HR. Planned alongside the iOS release.',
+			body: m('landing.appAppleWatchBody'),
 			comingSoon: true
 		},
 		{
 			icon: 'watch',
 			name: 'Wear OS',
 			tagline: 'Kotlin · Compose',
-			body: 'First-class Pixel Watch and Galaxy Watch support with standalone GPS recording.'
+			body: m('landing.appWearOsBody')
 		},
 		{
 			icon: 'desktop_windows',
 			name: 'Web',
 			tagline: 'SvelteKit',
-			body: 'The review surface. Build routes, analyse splits, manage plans on a big screen.'
+			body: m('landing.appWebBody')
 		}
 	];
 </script>
 
 <svelte:head>
-	<title>Threkir — track anywhere, review everywhere</title>
+	<title>{m('landing.pageTitle')}</title>
 	<meta
 		name="description"
-		content="Plan routes, track runs, and analyse everything across web, mobile, and watch. Free, open about its data, no paywall on the analysis."
+		content={m('landing.pageDescription')}
 	/>
 </svelte:head>
 
 {#if !showLanding}
 	<div class="landing-loading">
-		<span>Loading...</span>
+		<span>{m('landing.loading')}</span>
 	</div>
 {:else}
 <nav class="landing-nav">
@@ -66,51 +67,50 @@
 		Threkir
 	</a>
 	<div class="nav-links">
-		<a href="#apps" class="nav-link">Apps</a>
-		<a href="#features" class="nav-link">Features</a>
-		<a href="/login" class="nav-signin">Sign In</a>
+		<a href="#apps" class="nav-link">{m('landing.navApps')}</a>
+		<a href="#features" class="nav-link">{m('landing.navFeatures')}</a>
+		<a href="/login" class="nav-signin">{m('landing.signIn')}</a>
 	</div>
 </nav>
 
 <main class="hero">
-	<h1>Plan routes.<br />Track runs.<br />Analyse everything.</h1>
+	<h1>{m('landing.heroLine1')}<br />{m('landing.heroLine2')}<br />{m('landing.heroLine3')}</h1>
 	<p class="hero-sub">
-		Record on your phone or watch. Review on a big screen.
-		Shipping on Android, Wear OS, and the web today; iOS and Apple Watch coming next. Free forever.
+		{m('landing.heroSub')}
 	</p>
 	<div class="hero-actions">
-		<a href="/login" class="btn btn-primary btn-lg">Get Started</a>
-		<a href="#apps" class="btn btn-outline btn-lg">See the Apps</a>
+		<a href="/login" class="btn btn-primary btn-lg">{m('landing.getStarted')}</a>
+		<a href="#apps" class="btn btn-outline btn-lg">{m('landing.seeTheApps')}</a>
 	</div>
 </main>
 
 <section id="features" class="features">
 	<div class="feature">
 		<span class="feature-icon material-symbols">route</span>
-		<h3>Route Builder</h3>
-		<p>Click-to-place waypoints with road and trail snapping. Free — no paywall.</p>
+		<h3>{m('landing.featureRouteBuilderTitle')}</h3>
+		<p>{m('landing.featureRouteBuilderBody')}</p>
 	</div>
 	<div class="feature">
 		<span class="feature-icon material-symbols">watch</span>
-		<h3>Watch Parity</h3>
-		<p>Wear OS is first-class — standalone GPS, no phone needed. Apple Watch is on the roadmap.</p>
+		<h3>{m('landing.featureWatchParityTitle')}</h3>
+		<p>{m('landing.featureWatchParityBody')}</p>
 	</div>
 	<div class="feature">
 		<span class="feature-icon material-symbols">sync</span>
-		<h3>Sync Everything</h3>
-		<p>Strava, Garmin, HealthKit, parkrun — all your runs in one place.</p>
+		<h3>{m('landing.featureSyncTitle')}</h3>
+		<p>{m('landing.featureSyncBody')}</p>
 	</div>
 	<div class="feature">
 		<span class="feature-icon material-symbols">analytics</span>
-		<h3>Deep Analysis</h3>
-		<p>Splits, HR zones, elevation, personal records — better on a big screen.</p>
+		<h3>{m('landing.featureAnalysisTitle')}</h3>
+		<p>{m('landing.featureAnalysisBody')}</p>
 	</div>
 </section>
 
 <section id="apps" class="apps-section">
 	<div class="section-head">
-		<h2>Available on every device you run with</h2>
-		<p>Native experiences on each platform. One account syncs them all.</p>
+		<h2>{m('landing.appsSectionTitle')}</h2>
+		<p>{m('landing.appsSectionSub')}</p>
 	</div>
 	<div class="apps-grid">
 		{#each apps as app}
@@ -119,7 +119,7 @@
 				<h3>
 					{app.name}
 					{#if app.comingSoon}
-						<span class="coming-soon-pill">Coming soon</span>
+						<span class="coming-soon-pill">{m('landing.comingSoon')}</span>
 					{/if}
 				</h3>
 				<span class="app-tagline">{app.tagline}</span>
@@ -130,20 +130,20 @@
 </section>
 
 <section class="closing-cta">
-	<h2>Ready to log your next run?</h2>
-	<p>Create a free account — no credit card, no paywall.</p>
-	<a href="/login" class="btn btn-primary btn-lg">Sign in to continue</a>
+	<h2>{m('landing.closingTitle')}</h2>
+	<p>{m('landing.closingBody')}</p>
+	<a href="/login" class="btn btn-primary btn-lg">{m('landing.signInToContinue')}</a>
 </section>
 
 <footer class="landing-footer">
-	<span>&copy; Threkir — track anywhere, review everywhere.</span>
+	<span>&copy; Threkir — {m('landing.footerTagline')}</span>
 	<div class="footer-links">
-		<a href="/login">Sign In</a>
-		<a href="#apps">Apps</a>
-		<a href="#features">Features</a>
-		<a href="/privacy">Privacy</a>
-		<a href="/terms">Terms</a>
-		<a href="/cookie-notice">Cookies</a>
+		<a href="/login">{m('landing.signIn')}</a>
+		<a href="#apps">{m('landing.navApps')}</a>
+		<a href="#features">{m('landing.navFeatures')}</a>
+		<a href="/privacy">{m('landing.footerPrivacy')}</a>
+		<a href="/terms">{m('landing.footerTerms')}</a>
+		<a href="/cookie-notice">{m('landing.footerCookies')}</a>
 	</div>
 </footer>
 {/if}

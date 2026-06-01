@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { activeFormatLocale } from '$lib/format/time';
+	import { m as tr } from '$lib/i18n/store.svelte';
 	import { onMount } from 'svelte';
 	import { initial } from '$lib/format/avatar';
 	import { page } from '$app/stores';
@@ -67,7 +68,7 @@
 			draft = '';
 			threads = await fetchDmThreads();
 		} catch (e) {
-			sendError = e instanceof Error ? e.message : 'Send failed';
+			sendError = e instanceof Error ? e.message : tr('messages.sendFailed');
 		} finally {
 			sending = false;
 		}
@@ -91,20 +92,20 @@
 
 </script>
 
-<svelte:head><title>Messages — Threkir</title></svelte:head>
+<svelte:head><title>{tr('messages.pageTitle')}</title></svelte:head>
 
 <div class="page">
-	<h1 class="visually-hidden">Messages</h1>
+	<h1 class="visually-hidden">{tr('messages.heading')}</h1>
 	{#if !ready}
-		<p class="muted">Loading…</p>
+		<p class="muted">{tr('shell.loading')}</p>
 	{:else if !auth.user}
-		<p class="muted">Sign in to see your messages.</p>
+		<p class="muted">{tr('messages.signInPrompt')}</p>
 	{:else}
 		<div class="layout">
 			<aside class="threads" class:has-active={activeId}>
-				<header class="pane-head"><h2>Messages</h2></header>
+				<header class="pane-head"><h2>{tr('messages.heading')}</h2></header>
 				{#if threads.length === 0}
-					<p class="muted empty">No conversations yet. Open a runner's profile and tap Message.</p>
+					<p class="muted empty">{tr('messages.emptyThreads')}</p>
 				{:else}
 					<ul>
 						{#each threads as t (t.partnerId)}
@@ -117,10 +118,10 @@
 									<span class="avatar">{initial(t.partnerName)}</span>
 									<span class="thread-body">
 										<span class="thread-top">
-											<strong>{t.partnerName ?? 'Runner'}</strong>
+											<strong>{t.partnerName ?? tr('messages.runnerFallback')}</strong>
 											{#if t.unread > 0}<span class="badge">{t.unread}</span>{/if}
 										</span>
-										<span class="preview">{t.lastFromMe ? 'You: ' : ''}{t.lastBody}</span>
+										<span class="preview">{t.lastFromMe ? tr('messages.youPrefix') : ''}{t.lastBody}</span>
 									</span>
 								</a>
 							</li>
@@ -131,19 +132,19 @@
 
 			<section class="conversation" class:has-active={activeId}>
 				{#if !activeId}
-					<p class="muted center">Pick a conversation.</p>
+					<p class="muted center">{tr('messages.pickConversation')}</p>
 				{:else}
 					<header class="pane-head conv-head">
-						<a class="back" href="/messages" aria-label="Back to conversations">←</a>
+						<a class="back" href="/messages" aria-label={tr('messages.backAria')}>←</a>
 						<a class="who" href={`/u/${activeId}`}>
-							{activeThread?.partnerName ?? 'Runner'}
+							{activeThread?.partnerName ?? tr('messages.runnerFallback')}
 						</a>
 					</header>
 					<div class="messages">
 						{#if loadingThread}
-							<p class="muted center">Loading…</p>
+							<p class="muted center">{tr('shell.loading')}</p>
 						{:else if messages.length === 0}
-							<p class="muted center">No messages yet. Say hi.</p>
+							<p class="muted center">{tr('messages.emptyConversation')}</p>
 						{:else}
 							{#each messages as m (m.id)}
 								<div class="bubble" class:mine={m.sender_id === me}>
@@ -158,12 +159,12 @@
 						<textarea
 							bind:value={draft}
 							onkeydown={onKeydown}
-							placeholder="Message…"
+							placeholder={tr('messages.composerPlaceholder')}
 							rows="1"
 							maxlength="4000"
 						></textarea>
 						<button class="btn btn-primary" onclick={send} disabled={sending || !draft.trim()}>
-							{sending ? '…' : 'Send'}
+							{sending ? '…' : tr('messages.send')}
 						</button>
 					</div>
 				{/if}

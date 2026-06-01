@@ -8,6 +8,7 @@
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Run, TrackPoint } from '$lib/types';
 
 	let {
@@ -103,9 +104,9 @@
 </script>
 
 {#if loading}
-	<p class="status">Loading…</p>
+	<p class="status">{m('shell.loading')}</p>
 {:else if notFound}
-	<p class="status">Run not found.</p>
+	<p class="status">{m('runShareView.runNotFound')}</p>
 {:else if run}
 	{#if !headerless}
 		{#if runTitle}
@@ -148,7 +149,7 @@
 
 	{#if elevations.some((e) => e > 0)}
 		<section class="card">
-			<h2>Elevation Profile</h2>
+			<h2>{m('runShareView.elevationProfile')}</h2>
 			<ElevationProfile
 				{elevations}
 				totalDistance={run.distance_m}
@@ -165,8 +166,8 @@
 		</section>
 	{:else if !hideAnonCta}
 		<div class="cta">
-			<p>Track your own runs and join the conversation</p>
-			<a href="/login?signup=1" class="btn btn-primary">Sign up for Free</a>
+			<p>{m('runShareView.ctaTrackYourOwn')}</p>
+			<a href="/login?signup=1" class="btn btn-primary">{m('runShareView.signUpForFree')}</a>
 		</div>
 	{/if}
 {/if}

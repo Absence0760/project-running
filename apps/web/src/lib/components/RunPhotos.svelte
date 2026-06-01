@@ -9,6 +9,7 @@
 	} from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 	import ConfirmDialog from './ConfirmDialog.svelte';
 	import { safeImageSrc } from '$lib/util/safe_image_src';
 
@@ -64,7 +65,7 @@
 			pendingCaption = '';
 			if (fileInput) fileInput.value = '';
 		} catch (e: any) {
-			showToast(e?.message ?? 'Upload failed', 'error');
+			showToast(e?.message ?? m('runPhotos.uploadFailed'), 'error');
 		} finally {
 			uploading = false;
 		}
@@ -85,7 +86,7 @@
 			photos = photos.filter((p) => p.id !== target.id);
 			if (lightbox?.id === target.id) lightbox = null;
 		} catch (e: any) {
-			showToast(e?.message ?? 'Delete failed', 'error');
+			showToast(e?.message ?? m('runPhotos.deleteFailed'), 'error');
 		}
 	}
 
@@ -103,7 +104,7 @@
 			await updateRunPhotoCaption(id, next);
 			photos = photos.map((p) => (p.id === id ? { ...p, caption: next } : p));
 		} catch (e: any) {
-			showToast(e?.message ?? 'Could not update caption', 'error');
+			showToast(e?.message ?? m('runPhotos.captionUpdateFailed'), 'error');
 		}
 	}
 </script>
@@ -114,13 +115,13 @@
 	<header class="hd">
 		<h3>
 			<span class="material-symbols">photo_library</span>
-			Photos
+			{m('runPhotos.heading')}
 			{#if photos.length > 0}<span class="muted">({photos.length})</span>{/if}
 		</h3>
 		{#if canManage}
 			<button type="button" class="btn btn-secondary btn-sm" onclick={pickFile}>
 				<span class="material-symbols">add_photo_alternate</span>
-				Add photo
+				{m('runPhotos.addPhoto')}
 			</button>
 		{/if}
 	</header>
@@ -141,17 +142,17 @@
 			<div class="pending-fields">
 				<input
 					type="text"
-					placeholder="Caption (optional, 280 chars)"
+					placeholder={m('runPhotos.captionPlaceholder')}
 					maxlength="280"
 					bind:value={pendingCaption}
 					disabled={uploading}
 				/>
 				<div class="pending-actions">
 					<button class="btn btn-secondary btn-sm" type="button" onclick={cancelPending} disabled={uploading}>
-						Cancel
+						{m('runPhotos.cancel')}
 					</button>
 					<button class="btn btn-primary btn-sm" type="button" onclick={uploadPending} disabled={uploading}>
-						{uploading ? 'Uploading…' : 'Upload'}
+						{uploading ? m('runPhotos.uploading') : m('runPhotos.upload')}
 					</button>
 				</div>
 			</div>
@@ -159,14 +160,14 @@
 	{/if}
 
 	{#if loading}
-		<p class="muted">Loading photos…</p>
+		<p class="muted">{m('runPhotos.loadingPhotos')}</p>
 	{:else if photos.length === 0 && !canManage}
-		<p class="muted">No photos on this run.</p>
+		<p class="muted">{m('runPhotos.noPhotos')}</p>
 	{:else if photos.length > 0}
 		<div class="grid">
 			{#each photos as p (p.id)}
 				<figure class="tile">
-					<button class="tile-img" type="button" onclick={() => (lightbox = p)} aria-label="Open photo">
+					<button class="tile-img" type="button" onclick={() => (lightbox = p)} aria-label={m('runPhotos.openPhoto')}>
 						<img src={safeImageSrc(p.thumbUrl ?? p.url)} alt={p.caption ?? ''} loading="lazy" />
 					</button>
 					{#if editingId === p.id}
@@ -181,11 +182,11 @@
 								type="text"
 								bind:value={editingCaption}
 								maxlength="280"
-								placeholder="Caption…"
+								placeholder={m('runPhotos.captionEditPlaceholder')}
 							/>
-							<button class="btn btn-primary btn-sm" type="submit">Save</button>
+							<button class="btn btn-primary btn-sm" type="submit">{m('runPhotos.save')}</button>
 							<button class="btn btn-secondary btn-sm" type="button" onclick={() => (editingId = null)}>
-								Cancel
+								{m('runPhotos.cancel')}
 							</button>
 						</form>
 					{:else if p.caption}
@@ -197,8 +198,8 @@
 								<button
 									type="button"
 									class="icon-btn"
-									aria-label="Edit caption"
-									title="Edit caption"
+									aria-label={m('runPhotos.editCaption')}
+									title={m('runPhotos.editCaption')}
 									onclick={() => startEdit(p)}
 								>
 									<span class="material-symbols">edit</span>
@@ -207,8 +208,8 @@
 							<button
 								type="button"
 								class="icon-btn"
-								aria-label="Delete photo"
-								title="Delete photo"
+								aria-label={m('runPhotos.deletePhoto')}
+								title={m('runPhotos.deletePhoto')}
 								onclick={() => (confirmDelete = p)}
 							>
 								<span class="material-symbols">delete</span>
@@ -227,7 +228,7 @@
 	<button
 		class="lightbox"
 		type="button"
-		aria-label="Close"
+		aria-label={m('runPhotos.close')}
 		onclick={() => (lightbox = null)}
 	>
 		<img src={safeImageSrc(lightbox.url)} alt={lightbox.caption ?? ''} />
@@ -239,9 +240,9 @@
 
 <ConfirmDialog
 	open={confirmDelete != null}
-	title="Delete photo?"
-	message="This removes the photo from the run permanently."
-	confirmLabel="Delete"
+	title={m('runPhotos.deleteConfirmTitle')}
+	message={m('runPhotos.deleteConfirmMessage')}
+	confirmLabel={m('runPhotos.delete')}
 	danger
 	onconfirm={doDelete}
 	oncancel={() => (confirmDelete = null)}

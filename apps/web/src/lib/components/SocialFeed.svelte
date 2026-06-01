@@ -2,7 +2,8 @@
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime } from '$lib/format/time';
-	import { currentLocale } from '$lib/i18n/store.svelte';
+	import { currentLocale, m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import {
 		fetchFollowingFeed,
 		fetchEngagementSummaries,
@@ -17,12 +18,12 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 
-	const FEED_ACTIVITIES: { value: string; label: string; icon: string }[] = [
-		{ value: 'all', label: 'All', icon: 'apps' },
-		{ value: 'run', label: 'Run', icon: 'directions_run' },
-		{ value: 'walk', label: 'Walk', icon: 'directions_walk' },
-		{ value: 'cycle', label: 'Cycle', icon: 'directions_bike' },
-		{ value: 'hike', label: 'Hike', icon: 'terrain' },
+	const FEED_ACTIVITIES: { value: string; labelKey: MessageKey; icon: string }[] = [
+		{ value: 'all', labelKey: 'socialFeed.activityAll', icon: 'apps' },
+		{ value: 'run', labelKey: 'socialFeed.activityRun', icon: 'directions_run' },
+		{ value: 'walk', labelKey: 'socialFeed.activityWalk', icon: 'directions_walk' },
+		{ value: 'cycle', labelKey: 'socialFeed.activityCycle', icon: 'directions_bike' },
+		{ value: 'hike', labelKey: 'socialFeed.activityHike', icon: 'terrain' },
 	];
 
 	let entries = $state<FeedEntry[]>([]);
@@ -75,7 +76,7 @@
 			exhausted = entries.length < 20;
 			engagement = await fetchEngagementSummaries(entries.map((e) => e.id));
 		} catch (e) {
-			showToast(`Could not load feed: ${e}`, 'error');
+			showToast(m('socialFeed.loadFeedError', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			loading = false;
 			loaded = true;
@@ -103,7 +104,7 @@
 			// more" scroll trigger left the user scrolling forever
 			// waiting for entries that never arrived. Surface so they
 			// know to retry.
-			showToast(`Could not load more: ${e}`, 'error');
+			showToast(m('socialFeed.loadMoreError', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			loadingMore = false;
 		}
@@ -134,7 +135,7 @@
 				});
 			}
 		} catch (e) {
-			showToast(`Could not update kudos: ${e}`, 'error');
+			showToast(m('socialFeed.kudosError', { error: e instanceof Error ? e.message : String(e) }), 'error');
 		} finally {
 			const next = new Set(kudosBusy);
 			next.delete(runId);
@@ -156,23 +157,23 @@
 
 <div class="social-feed">
 	<div class="feed-toolbar">
-		<div class="activity-group" role="group" aria-label="Activity type">
+		<div class="activity-group" role="group" aria-label={m('socialFeed.activityTypeGroup')}>
 			{#each FEED_ACTIVITIES as act}
 				<button
 					class="activity-btn"
 					class:active={activityFilter === act.value}
 					onclick={() => (activityFilter = act.value)}
-					title={act.label}
-					aria-label={act.label}
+					title={m(act.labelKey)}
+					aria-label={m(act.labelKey)}
 					aria-pressed={activityFilter === act.value}
 					type="button"
 				>
 					<span class="material-symbols" aria-hidden="true">{act.icon}</span>
-					<span class="activity-label">{act.label}</span>
+					<span class="activity-label">{m(act.labelKey)}</span>
 				</button>
 			{/each}
 		</div>
-		<span class="window-hint">Last {FEED_WINDOW_DAYS} days</span>
+		<span class="window-hint">{m('socialFeed.windowHint', { n: FEED_WINDOW_DAYS })}</span>
 	</div>
 
 	{#if loading && !loaded}
@@ -187,39 +188,37 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading feed…</p>
+		<p class="sr-only" role="status">{m('socialFeed.loadingFeed')}</p>
 	{:else if entries.length === 0}
 		<div class="empty-card">
 			{#if !followsAnyone}
 				<img src="/icon-192.png" alt="" width="64" height="64" class="empty-mark" />
-				<h3>Your feed is empty</h3>
+				<h3>{m('socialFeed.emptyTitle')}</h3>
 				<p class="empty-text">
-					Follow other runners to see their public runs here. Find people on the
-					People tab, or visit a club's Members tab.
+					{m('socialFeed.emptyText')}
 				</p>
 				<a href="/social?tab=people" class="btn btn-primary">
 					<span class="material-symbols" aria-hidden="true">person_search</span>
-					Find people
+					{m('socialFeed.findPeople')}
 				</a>
 			{:else if activityFilter !== 'all'}
 				<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-				<h3>No matches</h3>
+				<h3>{m('socialFeed.noMatchesTitle')}</h3>
 				<p class="empty-text">
-					Nothing matches the current filter in the last {FEED_WINDOW_DAYS} days.
+					{m('socialFeed.noMatchesText', { n: FEED_WINDOW_DAYS })}
 				</p>
 				<button
 					class="btn btn-primary"
 					type="button"
 					onclick={() => (activityFilter = 'all')}
 				>
-					Clear filters
+					{m('socialFeed.clearFilters')}
 				</button>
 			{:else}
 				<span class="material-symbols empty-icon" aria-hidden="true">schedule</span>
-				<h3>No recent activity</h3>
+				<h3>{m('socialFeed.noActivityTitle')}</h3>
 				<p class="empty-text">
-					Nobody you follow has logged a public run in the last {FEED_WINDOW_DAYS} days.
-					Older runs are still on each runner's profile.
+					{m('socialFeed.noActivityText', { n: FEED_WINDOW_DAYS })}
 				</p>
 			{/if}
 		</div>
@@ -237,7 +236,7 @@
 								font="0.8rem"
 								bg="primary"
 							/>
-							<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
+							<span class="author-name">{entry.author.display_name ?? m('socialFeed.runnerFallback')}</span>
 						</a>
 						<span class="when">{formatRelativeTime(entry.started_at, undefined, currentLocale())}</span>
 					</header>
@@ -260,15 +259,15 @@
 							<div class="stats">
 								<div class="stat">
 									<span class="stat-num">{formatDistance(entry.distance_m)}</span>
-									<span class="stat-label">Distance</span>
+									<span class="stat-label">{m('socialFeed.statDistance')}</span>
 								</div>
 								<div class="stat">
 									<span class="stat-num">{formatDuration(entry.duration_s)}</span>
-									<span class="stat-label">Time</span>
+									<span class="stat-label">{m('socialFeed.statTime')}</span>
 								</div>
 								<div class="stat">
 									<span class="stat-num">{pace(entry.distance_m, entry.duration_s)}</span>
-									<span class="stat-label">Pace</span>
+									<span class="stat-label">{m('socialFeed.statPace')}</span>
 								</div>
 							</div>
 						</div>
@@ -280,14 +279,14 @@
 							type="button"
 							disabled={kudosBusy.has(entry.id)}
 							onclick={() => toggleKudos(entry.id)}
-							aria-label={eng.viewer_has_kudos ? 'Rescind kudos' : 'Give kudos'}
+							aria-label={eng.viewer_has_kudos ? m('socialFeed.rescindKudos') : m('socialFeed.giveKudos')}
 						>
 							<span class="material-symbols" aria-hidden="true">
 								{eng.viewer_has_kudos ? 'favorite' : 'favorite_border'}
 							</span>
 							<span>{eng.kudos_count}</span>
 						</button>
-						<a class="comment-pill" href="/runs/{entry.id}" aria-label="View comments">
+						<a class="comment-pill" href="/runs/{entry.id}" aria-label={m('socialFeed.viewComments')}>
 							<span class="material-symbols" aria-hidden="true">chat_bubble_outline</span>
 							<span>{eng.comment_count}</span>
 						</a>
@@ -299,7 +298,7 @@
 		{#if !exhausted}
 			<div class="load-more">
 				<button class="btn btn-outline" onclick={loadMore} disabled={loadingMore}>
-					{loadingMore ? 'Loading…' : 'Load more'}
+					{loadingMore ? m('shell.loading') : m('socialFeed.loadMore')}
 				</button>
 			</div>
 		{/if}

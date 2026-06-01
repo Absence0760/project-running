@@ -6,6 +6,7 @@
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import { buildRouteShareDescription, buildRouteShareTitle } from '$lib/share/share_meta';
+	import { m } from '$lib/i18n/store.svelte';
 	import type { Route, TrackPoint } from '$lib/types';
 
 	let { data } = $props();
@@ -61,31 +62,30 @@
 	</header>
 
 	{#if loading}
-		<div class="content"><p class="status">Loading…</p></div>
+		<div class="content"><p class="status">{m('shell.loading')}</p></div>
 	{:else if notFound}
 		<div class="content">
 			<div class="notfound-card">
-				<p class="kicker">Nothing to see here</p>
-				<h1>Route not found or is private.</h1>
+				<p class="kicker">{m('shareRoute.notFoundKicker')}</p>
+				<h1>{m('shareRoute.notFoundHeading')}</h1>
 				<p class="notfound-sub">
-					This link may have expired, the route may have been deleted, or its owner may have made it
-					private.
+					{m('shareRoute.notFoundSub')}
 				</p>
 				<div class="notfound-actions">
-					<a class="btn btn-primary" href="/login">Sign in</a>
-					<a class="btn btn-outline" href="/">Go to Threkir</a>
+					<a class="btn btn-primary" href="/login">{m('shareRoute.signIn')}</a>
+					<a class="btn btn-outline" href="/">{m('shareRoute.goToThrekir')}</a>
 				</div>
 			</div>
 		</div>
 	{:else if route}
 		<section class="hero">
-			<p class="kicker">A public route</p>
+			<p class="kicker">{m('shareRoute.heroKicker')}</p>
 			<h1>{route.name}</h1>
 			<p class="route-meta">
 				<span>{formatDistance(route.distance_m)}</span>
 				{#if route.elevation_m}
 					<span class="meta-sep">&middot;</span>
-					<span>{route.elevation_m} m elevation</span>
+					<span>{m('shareRoute.elevationValue', { n: route.elevation_m })}</span>
 				{/if}
 				<span class="meta-sep">&middot;</span>
 				<span class="surface-tag">{route.surface}</span>
@@ -100,7 +100,7 @@
 
 				{#if hasElevationData}
 					<section class="card">
-						<h2>Elevation Profile</h2>
+						<h2>{m('shareRoute.elevationProfile')}</h2>
 						<ElevationProfile {elevations} totalDistance={route.distance_m} />
 					</section>
 				{/if}
@@ -109,20 +109,20 @@
 
 		{#if !auth.loggedIn}
 			<section class="signup-cta" aria-labelledby="signup-cta-heading">
-				<p class="kicker">Make it yours</p>
-				<h2 id="signup-cta-heading">Sign up to run this route</h2>
+				<p class="kicker">{m('shareRoute.ctaKicker')}</p>
+				<h2 id="signup-cta-heading">{m('shareRoute.ctaHeading')}</h2>
 				<p class="signup-sub">
-					Free. Save routes, record runs, view splits and elevation, follow friends.
+					{m('shareRoute.ctaSub')}
 				</p>
-				<a class="btn btn-primary" href="/login?signup=1">Sign up for Free</a>
+				<a class="btn btn-primary" href="/login?signup=1">{m('shareRoute.ctaButton')}</a>
 			</section>
 		{/if}
 	{/if}
 
 	<footer class="share-footer">
-		<a href="/">Threkir home</a>
+		<a href="/">{m('shareRoute.footerHome')}</a>
 		<span class="dot">&middot;</span>
-		<a href="/login">Sign in</a>
+		<a href="/login">{m('shareRoute.signIn')}</a>
 	</footer>
 </div>
 
