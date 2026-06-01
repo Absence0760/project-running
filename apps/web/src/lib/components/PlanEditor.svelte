@@ -156,6 +156,18 @@
 		return 'Failed to create plan. Check the browser console for details.';
 	}
 
+	// A brand-new runner ticking the walk-run box is not training for a half
+	// (the default goal) — point them at 5K, the appropriate first-timer
+	// target. One-shot on enable only, and only when the current goal is
+	// longer than 5K, so it never clobbers a deliberate 5K choice and never
+	// stops them re-picking 10K afterwards.
+	function onBeginnerToggle(e: Event) {
+		beginnerWalkRun = (e.currentTarget as HTMLInputElement).checked;
+		if (beginnerWalkRun && goalDistance > GOAL_DISTANCES_M.distance_5k) {
+			goalEvent = 'distance_5k';
+		}
+	}
+
 	function defaultStart(): string {
 		const d = new Date();
 		d.setDate(d.getDate() + 7);
@@ -357,7 +369,7 @@
 			</fieldset>
 
 			<label class="beginner-toggle">
-				<input type="checkbox" bind:checked={beginnerWalkRun} />
+				<input type="checkbox" checked={beginnerWalkRun} onchange={onBeginnerToggle} />
 				<span>
 					<span class="beginner-title">New to running? Use a walk-run plan</span>
 					<span class="hint">
