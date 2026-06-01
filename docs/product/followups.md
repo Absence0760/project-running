@@ -171,3 +171,26 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   4× $9.99 for 4 accounts. A household plan (shared subscription across linked
   accounts) is a pricing/product decision (RevenueCat entitlement model + a
   household link table), not a code-only change.
+
+## Persona round-5 — remaining dispositions
+
+- [ ] **Consent-flow consistency for health-data fields (privacy, legal-adjacent)** —
+  onboarding now writes the bare `date_of_birth` column unconditionally (minor-
+  exclusion) while gating the prefs-bag mirror + gender + consent timestamp on the
+  Art 9 checkbox. `/settings/account` + `/settings/preferences` still persist
+  DOB/resting-HR/max-HR into `user_settings.prefs` without that same consent gate
+  (round-5 privacy "Art 9 via /settings/account"). Align all three surfaces on one
+  consent model — a legal-flow decision (is in-app entry implicit consent, or is an
+  explicit toggle required?), so deliberately not bolted on without counsel input.
+- [ ] **Coach run-review UI (coach, ~3-5 d)** — RLS already lets an active coach read
+  an athlete's runs (20261103_001) and now their plans (20261116_001), but the
+  `/coaching` page is a flat name list — it never fetches/renders an athlete's runs.
+  Build the per-athlete review surface (recent runs + compliance) on top of the
+  existing read access. Web feature.
+- [ ] **Health Connect import brings tracks (garmin/android, mobile + device)** —
+  `health_connect_importer.dart` hard-codes `track: []`, so every HC-imported run is
+  trackless/lapless/cadenceless. Reading the HC ExerciseRoute + sample series into a
+  track needs the HC route API + on-device testing. Mobile feature.
+- [ ] **Year-in-Running recap parity (strava-migration, ~1 wk)** — the recap omits
+  photos / crowns / badges that Strava's Year in Sport shows. Additive recap
+  enhancement (recap.ts + recap/[year]); product-styling decision on what to feature.
