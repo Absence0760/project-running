@@ -434,6 +434,49 @@ void main() {
           reason: 'LiveRunMap should mount once recording begins');
     });
 
+    testWidgets('pace-cue mute toggle appears when a pace target is set and silences cues',
+        (tester) async {
+      final s = await makeStores();
+      // A pace target + audio cues on are the precondition for live pace
+      // cues — and therefore for the session mute affordance.
+      await s.prefs.setTargetPaceSecPerKm(300);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: RunScreen(
+            apiClient: null,
+            runStore: s.runStore,
+            routeStore: s.routeStore,
+            preferences: s.prefs,
+            audioCues: s.audioCues,
+            social: s.social,
+            raceController: s.raceController,
+            training: s.training,
+            heartRate: s.heartRate,
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('START'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+      for (var i = 0; i < 3; i++) {
+        await tester.pump(const Duration(seconds: 1));
+      }
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      // The mute affordance is offered (not yet muted).
+      expect(find.text('Mute pace cues'), findsOneWidget);
+      expect(find.text('Pace cues muted'), findsNothing);
+
+      // Tapping it flips to the muted state for this session.
+      await tester.tap(find.text('Mute pace cues'));
+      await tester.pump();
+      expect(find.text('Pace cues muted'), findsOneWidget);
+      expect(find.text('Mute pace cues'), findsNothing);
+    });
+
     testWidgets('positions emitted after recording begins flow into the recorder',
         (tester) async {
       await pumpRunScreen(tester);

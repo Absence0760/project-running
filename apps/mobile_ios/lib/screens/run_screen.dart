@@ -235,6 +235,10 @@ class _RunScreenState extends State<RunScreen> {
 
   // Pace alerts
   DateTime? _lastPaceAlertAt;
+  // Session-only mute for live pace cues. Not persisted — a group-run
+  // runner silences the pace nagging for this run, their saved audio-cue
+  // preference is untouched (round-5 social-group).
+  bool _paceCuesMuted = false;
 
   // Off-route
   double? _offRouteDistance;
@@ -1214,7 +1218,8 @@ class _RunScreenState extends State<RunScreen> {
         if (!_activityType.usesSpeed &&
             target > 0 &&
             _pace != null &&
-            widget.preferences.audioCues) {
+            widget.preferences.audioCues &&
+            !_paceCuesMuted) {
           final diff = _pace! - target;
           final lastAlert = _lastPaceAlertAt;
           final canAlert = lastAlert == null ||
@@ -2721,6 +2726,12 @@ class _RunScreenState extends State<RunScreen> {
                     onDiscard: _confirmDiscardMidRun,
                     onPauseToggle: _toggleManualPause,
                     onLap: _markLap,
+                    paceCuesActive: !_activityType.usesSpeed &&
+                        widget.preferences.audioCues &&
+                        widget.preferences.targetPaceSecPerKm > 0,
+                    paceCuesMuted: _paceCuesMuted,
+                    onTogglePaceMute: () =>
+                        setState(() => _paceCuesMuted = !_paceCuesMuted),
                   ),
                 ),
               ),
@@ -2852,6 +2863,13 @@ class _StatsOverlay extends StatelessWidget {
   final VoidCallback onDiscard;
   final VoidCallback onPauseToggle;
   final VoidCallback onLap;
+  /// Pace-cue mute toggle — only shown when pace cues can actually fire
+  /// (a pace target is set and audio cues are on). Lets a runner on a
+  /// social group run silence the pace nagging for this session only,
+  /// without touching their saved audio-cue preference (round-5 social-group).
+  final bool paceCuesActive;
+  final bool paceCuesMuted;
+  final VoidCallback? onTogglePaceMute;
 
   const _StatsOverlay({
     required this.time,
@@ -2873,6 +2891,9 @@ class _StatsOverlay extends StatelessWidget {
     required this.onDiscard,
     required this.onPauseToggle,
     required this.onLap,
+    this.paceCuesActive = false,
+    this.paceCuesMuted = false,
+    this.onTogglePaceMute,
   });
 
   @override
@@ -2934,6 +2955,19 @@ class _StatsOverlay extends StatelessWidget {
                       ),
                     ),
                   ],
+                ),
+              ],
+              if (paceCuesActive) ...[
+                const SizedBox(height: 12),
+                TextButton.icon(
+                  onPressed: onTogglePaceMute,
+                  icon: Icon(
+                    paceCuesMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                    size: 18,
+                  ),
+                  label: Text(
+                    paceCuesMuted ? 'Pace cues muted' : 'Mute pace cues',
+                  ),
                 ),
               ],
               const SizedBox(height: 16),
