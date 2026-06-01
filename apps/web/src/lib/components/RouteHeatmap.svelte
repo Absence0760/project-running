@@ -507,12 +507,44 @@
 			map.on('mouseenter', ROUTE_PINS_LAYER, (e) => {
 				if (!map) return;
 				map.getCanvas().style.cursor = 'pointer';
-				const f = e.features?.[0];
-				if (!f) return;
-				const id = f.properties?.id as string | undefined;
-				const name = (f.properties?.name as string) ?? '';
-				const coords = (f.geometry as GeoJSON.Point).coordinates as [number, number];
-				if (id) previewRoute(id, coords, name);
+				if (clearTimer) {
+					clearTimeout(clearTimer);
+					clearTimer = null;
+				}
+				// How many route pins are stacked under the cursor? Beyond the
+				// cluster zoom, routes that share (or nearly share) a start
+				// render as overlapping leaf pins. Show the list so the user
+				// picks, instead of arbitrarily previewing whichever pin
+				// happens to render on top.
+				const hits = map.queryRenderedFeatures(e.point, {
+					layers: [ROUTE_PINS_LAYER],
+				});
+				const seen = new Set<string>();
+				const routes: ClusterRoute[] = [];
+				for (const h of hits) {
+					const p = (h.properties ?? {}) as Record<string, unknown>;
+					const id = p.id as string | undefined;
+					if (!id || seen.has(id)) continue;
+					seen.add(id);
+					const c = (h.geometry as GeoJSON.Point).coordinates as [number, number];
+					routes.push({
+						id,
+						name: (p.name as string) ?? 'Route',
+						featured: !!p.featured,
+						distance_m: (p.distance_m as number) ?? 0,
+						surface: (p.surface as string) ?? '',
+						run_count: (p.run_count as number) ?? 0,
+						lng: c[0],
+						lat: c[1],
+					});
+				}
+				if (routes.length === 0) return;
+				const coords: [number, number] = [routes[0].lng, routes[0].lat];
+				if (routes.length > 1) {
+					openClusterPopup(coords, routes, routes.length);
+				} else {
+					previewRoute(routes[0].id, coords, routes[0].name);
+				}
 			});
 			map.on('mouseleave', ROUTE_PINS_LAYER, () => {
 				if (map) map.getCanvas().style.cursor = '';

@@ -691,4 +691,45 @@ test.describe('Heatmap cluster list (web)', () => {
 		const href = await rows.first().getAttribute('href');
 		expect(href).toMatch(/^\/routes\/[0-9a-f-]+$/);
 	});
+
+	test('zoomed past clustering, overlapping pins still list (no arbitrary pick)', async ({
+		page,
+	}) => {
+		await page.goto('/routes/heatmap');
+		await expect(page.locator('.maplibregl-map')).toBeVisible({ timeout: 15_000 });
+		await page.waitForTimeout(1100);
+
+		// Zoom 16 is past clusterMaxZoom (14), so the 3 Wash Park routes
+		// that share an exact start are now un-clustered, overlapping leaf
+		// pins. Hovering must surface the list, not one arbitrary route.
+		const screen = await page.evaluate(async ([lng, lat]) => {
+			const m = (window as unknown as { __heatmapMap?: any }).__heatmapMap;
+			if (!m) return null;
+			await new Promise<void>((r) => {
+				m.once('moveend', () => r());
+				m.flyTo({ center: [lng, lat], zoom: 16 });
+			});
+			const deadline = Date.now() + 4000;
+			while (Date.now() < deadline) {
+				const p = m.project([lng, lat]);
+				if (
+					m.queryRenderedFeatures([p.x, p.y], {
+						layers: ['heatmap-route-pins-layer'],
+					}).length > 0
+				)
+					break;
+				await new Promise<void>((r) => setTimeout(r, 150));
+			}
+			const p = m.project([lng, lat]);
+			const rect = m.getContainer().getBoundingClientRect();
+			return { x: rect.left + p.x, y: rect.top + p.y };
+		}, [-105.0, 39.74]);
+		expect(screen).toBeTruthy();
+		if (!screen) return;
+
+		await page.mouse.move(screen.x, screen.y);
+		const popup = page.locator('.heatmap-cluster-popup');
+		await expect(popup).toBeVisible({ timeout: 5000 });
+		await expect(popup.locator('.cluster-route')).toHaveCount(3);
+	});
 });
