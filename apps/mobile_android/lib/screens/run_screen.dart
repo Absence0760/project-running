@@ -35,6 +35,7 @@ import '../route_match.dart';
 import '../settings_sync.dart';
 import 'route_picker_screen.dart';
 import '../background_location_nudge.dart';
+import '../battery_optimisation_hint.dart';
 import '../run_notification_bridge.dart';
 import '../run_stats.dart';
 import '../social_service.dart';
@@ -188,6 +189,14 @@ class _RunScreenState extends State<RunScreen> {
   static const _gpsLostThreshold = Duration(seconds: 10);
   bool _gpsLost = false;
   Timer? _gpsLostCheckTimer;
+
+  // Weak-GPS (accuracy-gate) state. The recorder drops low-accuracy fixes so
+  // distance stops advancing under tree cover / in an urban canyon. Without a
+  // banner the runner thinks the app froze. `_weakGpsLatest` mirrors the most
+  // recent snapshot's flag (written in _onSnapshot, no setState — hot path);
+  // `_weakGps` is the debounced UI flag flipped by _checkGpsHealth's setState.
+  bool _weakGpsLatest = false;
+  bool _weakGps = false;
 
   // Permission watchdog — polls Geolocator.checkPermission() so we can
   // warn the runner if location permission is revoked mid-run in Android
@@ -563,7 +572,30 @@ class _RunScreenState extends State<RunScreen> {
     // POST_NOTIFICATIONS on Android 13+ — without this,
     // NotificationManager.notify silently no-ops and the lock-screen stats
     // never appear. Idempotent; skipped by the OS on older versions.
-    await Permission.notification.request();
+    final notif = await Permission.notification.request();
+    // A denied notification permission used to be swallowed: the run still
+    // recorded but the live lock-screen notification never showed, with no
+    // explanation. Surface a one-time hint so the runner knows why (and that
+    // recording is unaffected). Android-only — iOS routes notifications
+    // differently and the live-notification bridge is a no-op there.
+    if (Platform.isAndroid &&
+        !notif.isGranted &&
+        !widget.preferences.notifDeniedHintShown) {
+      try {
+        await widget.preferences.setNotifDeniedHintShown();
+      } catch (e) {
+        debugPrint('setNotifDeniedHintShown failed: $e');
+      }
+      if (mounted) {
+        _showTopBanner(
+          'Notifications are off — the live run notification won\'t show. '
+          'Recording still works.',
+          duration: const Duration(seconds: 6),
+          actionLabel: 'Settings',
+          onAction: () => openAppSettings(),
+        );
+      }
+    }
   }
 
   /// Android 11+ only grants "while in use" from the initial dialog;
@@ -606,6 +638,54 @@ class _RunScreenState extends State<RunScreen> {
     }
   }
 
+  /// One-time OEM battery-optimisation disclosure. Aggressive OEM app-killers
+  /// (Samsung Stamina, Xiaomi, OnePlus) freeze the recording foreground
+  /// service mid-run unless the app is exempted from battery optimisation,
+  /// silently truncating a long effort. Surface a single dismissible hint
+  /// pointing the user at the exemption. Android-only, non-blocking — the run
+  /// proceeds either way. Wrapped so a settings-deep-link failure can't abort
+  /// the run start.
+  Future<void> _maybeShowBatteryOptHint() async {
+    if (!shouldShowBatteryOptHint(
+      isAndroid: Platform.isAndroid,
+      alreadyShown: widget.preferences.batteryOptHintShown,
+    )) {
+      return;
+    }
+    // Mark shown up front so a crash / early-dismiss can't re-trigger it on
+    // the next run — the hint is informational, once is enough.
+    try {
+      await widget.preferences.setBatteryOptHintShown();
+    } catch (e) {
+      debugPrint('setBatteryOptHintShown failed: $e');
+    }
+    if (!mounted) return;
+    final openSettings = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text(kBatteryOptHintTitle),
+        content: const Text(kBatteryOptHintBody),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Not now'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Open settings'),
+          ),
+        ],
+      ),
+    );
+    if (openSettings == true) {
+      try {
+        await openAppSettings();
+      } catch (e) {
+        debugPrint('openAppSettings (battery opt) failed: $e');
+      }
+    }
+  }
+
   Future<void> _selectRoute() async {
     final routes = widget.routeStore.routes;
     if (routes.isEmpty) {
@@ -630,6 +710,11 @@ class _RunScreenState extends State<RunScreen> {
       return;
     }
     await _maybeNudgeBackgroundLocation();
+    if (!mounted) {
+      _startRequested = false;
+      return;
+    }
+    await _maybeShowBatteryOptHint();
     if (!mounted) {
       _startRequested = false;
       return;
@@ -902,6 +987,17 @@ class _RunScreenState extends State<RunScreen> {
             _showTopBanner('Heart-rate strap lost — recording continues without HR.');
           }
           setState(() => _currentBpm = null);
+        case BleHrStatus.connectFailed:
+          // Strap was off / out of range at launch — auto-reconnect doesn't
+          // retry this case, so offer a manual one-tap reconnect instead of
+          // leaving the runner with a silently-dead HR readout.
+          setState(() => _currentBpm = null);
+          _showTopBanner(
+            'Heart-rate strap not found — put it on, then reconnect.',
+            duration: const Duration(seconds: 6),
+            actionLabel: 'Reconnect',
+            onAction: _reconnectHeartRate,
+          );
         case BleHrStatus.connecting:
           break;
       }
@@ -938,6 +1034,25 @@ class _RunScreenState extends State<RunScreen> {
         eventId: race.eventId,
         instance: race.instanceStart,
       );
+    }
+  }
+
+  /// Manual heart-rate reconnect, driven by the "Reconnect" affordance on
+  /// the strap-not-found banner. Best-effort L4 aux effect — wrapped so a
+  /// BLE failure can never disturb the live recording. The status stream the
+  /// banner reads from updates on its own as the connect progresses.
+  Future<void> _reconnectHeartRate() async {
+    try {
+      final ok = await widget.heartRate.reconnect();
+      if (!mounted) return;
+      if (!ok) {
+        _showTopBanner(
+          'Still no strap — recording continues without HR.',
+          duration: const Duration(seconds: 4),
+        );
+      }
+    } catch (e) {
+      debugPrint('Manual HR reconnect failed: $e');
     }
   }
 
@@ -989,6 +1104,10 @@ class _RunScreenState extends State<RunScreen> {
       _currentPosition = snapshot.currentPosition;
       _offRouteDistance = snapshot.offRouteDistanceMetres;
       _routeRemaining = snapshot.routeRemainingMetres;
+      // Mirror only — the visible banner flips through _checkGpsHealth's
+      // setState (2 s cadence) so the GPS-rate snapshot stream never drives
+      // a full-screen rebuild.
+      _weakGpsLatest = snapshot.weakGps;
       _statsNotifier.value = _LiveStats(
         elapsed: _elapsed,
         distanceMetres: _distanceMetres,
@@ -1280,8 +1399,14 @@ class _RunScreenState extends State<RunScreen> {
     final last = _lastSnapshotAt;
     final lost =
         last != null && DateTime.now().difference(last) > _gpsLostThreshold;
-    if (lost != _gpsLost && mounted) {
-      setState(() => _gpsLost = lost);
+    // Weak-GPS only matters while the signal is still live; a full GPS-lost
+    // state supersedes it (and carries its own, louder banner).
+    final weak = _weakGpsLatest && !lost;
+    if ((lost != _gpsLost || weak != _weakGps) && mounted) {
+      setState(() {
+        _gpsLost = lost;
+        _weakGps = weak;
+      });
     }
   }
 
@@ -1693,6 +1818,8 @@ class _RunScreenState extends State<RunScreen> {
     _runStartedAtWall = null;
     _pedometerRetries = 0;
     _gpsLost = false;
+    _weakGps = false;
+    _weakGpsLatest = false;
     _permissionLost = false;
     _everHadGpsFix = false;
     _elevationGainMetres = 0;
@@ -2498,6 +2625,32 @@ class _RunScreenState extends State<RunScreen> {
                       SizedBox(width: 8),
                       Text(
                         'GPS signal lost — move to open sky',
+                        style: TextStyle(
+                            color: Colors.white, fontWeight: FontWeight.w600),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          )
+        else if (_weakGps)
+          const Positioned(
+            top: 60,
+            left: 0,
+            right: 0,
+            child: Center(
+              child: Card(
+                color: Color(0xFFD97706),
+                child: Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.gps_not_fixed, color: Colors.white, size: 18),
+                      SizedBox(width: 8),
+                      Text(
+                        'Weak GPS — distance paused',
                         style: TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w600),
                       ),

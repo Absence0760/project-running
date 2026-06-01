@@ -31,7 +31,12 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// [statusStream] surfaces the reconnecting / lost state so the run UI
 /// can disclose the drop instead of silently flat-lining HR. Persona
 /// android #13.
-enum BleHrStatus { disconnected, connecting, connected, reconnecting }
+/// `connectFailed` is distinct from `disconnected`: it means the initial
+/// connect never reached `connected` (strap off / out of range at launch),
+/// which auto-reconnect deliberately does NOT retry. The run UI uses it to
+/// offer a one-tap "reconnect" affordance, where a plain `disconnected`
+/// (no strap paired, or a clean teardown) shows nothing.
+enum BleHrStatus { disconnected, connecting, connected, reconnecting, connectFailed }
 
 class BleHeartRate {
   static const String _prefsDeviceId = 'ble_hr_device_id';
@@ -169,6 +174,13 @@ class BleHeartRate {
     }
   }
 
+  /// Manual reconnect for the strap-off-at-launch case. The run UI calls
+  /// this from the "reconnect" affordance it shows on [BleHrStatus.connectFailed].
+  /// Thin wrapper over [connectCached] so the run screen doesn't need the
+  /// stored device id. Returns false when no strap is paired or the connect
+  /// still fails.
+  Future<bool> reconnect() => connectCached();
+
   Future<void> _connect(String deviceId) async {
     await disconnect();
     // disconnect() latched _intentional; clear it now that we're opening
@@ -219,8 +231,9 @@ class BleHeartRate {
         if (!_everConnected) {
           // Initial connect never succeeded (strap off at app start).
           // Report failure to the caller and don't burn battery retrying
-          // a strap the user may not even have on.
-          _setStatus(BleHrStatus.disconnected);
+          // a strap the user may not even have on. `connectFailed` (not
+          // `disconnected`) lets the run UI offer a manual reconnect.
+          _setStatus(BleHrStatus.connectFailed);
           if (completer != null && !completer.isCompleted) {
             completer.completeError(
               StateError('Connection failed: ${update.failure}'),
@@ -234,6 +247,9 @@ class BleHeartRate {
     }, onError: (Object e) {
       debugPrint('BLE connectToDevice error: $e');
       if (completer != null && !completer.isCompleted) {
+        // Initial connect errored out — surface a reconnectable state so the
+        // run UI can offer a retry rather than silently flat-lining HR.
+        if (!_everConnected) _setStatus(BleHrStatus.connectFailed);
         completer.completeError(e);
       } else if (!_intentional && _everConnected) {
         _scheduleReconnect(deviceId);

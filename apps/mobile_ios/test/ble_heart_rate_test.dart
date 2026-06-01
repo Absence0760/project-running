@@ -1,7 +1,9 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/ble_heart_rate.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   group('parseBleHeartRateMeasurement', () {
     test('8-bit BPM with flags=0x00', () {
       // flags 0x00 (all off) + BPM 72 in byte 1
@@ -68,6 +70,25 @@ void main() {
 
     test('negative attempt clamps to the first delay', () {
       expect(bleReconnectDelay(-1), const Duration(seconds: 2));
+    });
+  });
+
+  group('initial-connect affordance (persona round-5)', () {
+    test('connectFailed is a distinct status from disconnected', () {
+      // The run UI keys its manual-reconnect affordance off connectFailed,
+      // so it must not collapse into the idle/clean-teardown disconnected
+      // value.
+      expect(BleHrStatus.connectFailed, isNot(BleHrStatus.disconnected));
+      expect(BleHrStatus.values, contains(BleHrStatus.connectFailed));
+    });
+
+    test('reconnect() returns false when no strap is paired', () async {
+      SharedPreferences.setMockInitialValues({});
+      final ble = BleHeartRate();
+      // No stored device id → connectCached short-circuits before touching
+      // the (unavailable-under-test) BLE channel.
+      expect(await ble.reconnect(), isFalse);
+      await ble.dispose();
     });
   });
 }
