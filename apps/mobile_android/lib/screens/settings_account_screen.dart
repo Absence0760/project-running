@@ -492,6 +492,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                         apiClient: widget.apiClient,
                         runStore: widget.runStore!,
                         routeStore: widget.routeStore,
+                        preferences: widget.preferences,
+                        settingsSync: widget.settingsSync,
                       ),
                     ),
                   );

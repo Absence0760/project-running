@@ -24,6 +24,11 @@ class HealthConnectImporter {
       HealthDataType.WORKOUT,
       HealthDataType.DISTANCE_DELTA,
       HealthDataType.HEART_RATE,
+      // Read body weight so the import can seed the user's body_weight_kg
+      // (used by the calorie estimate) when they haven't set one — a
+      // Samsung-watch user keeps their weight in Samsung Health, which
+      // syncs into Health Connect (persona round-5 samsung-watch).
+      HealthDataType.WEIGHT,
     ];
 
     final granted = await _health.requestAuthorization(
@@ -90,6 +95,49 @@ class HealthConnectImporter {
       }
     }
     return runs;
+  }
+
+  /// The most-recent body-weight sample (kg) Health Connect holds, or null
+  /// when there is none or the read errors. Used to one-time seed the
+  /// user's `body_weight_kg` on import. Clamps to a sane 30–300 kg so a
+  /// stray sample can't poison the calorie estimate.
+  static Future<double?> fetchLatestWeightKg() async {
+    try {
+      final now = DateTime.now();
+      final samples = await _health.getHealthDataFromTypes(
+        types: const [HealthDataType.WEIGHT],
+        startTime: now.subtract(const Duration(days: 3650)),
+        endTime: now,
+      );
+      return selectLatestWeightKg([
+        for (final s in samples)
+          if (s.value is NumericHealthValue)
+            (
+              kg: (s.value as NumericHealthValue).numericValue.toDouble(),
+              at: s.dateTo,
+            ),
+      ]);
+    } catch (e) {
+      debugPrint('Weight fetch failed: $e');
+      return null;
+    }
+  }
+
+  /// Pick the most-recent in-range (30–300 kg) weight from a list of
+  /// samples. Pure so the recency + clamp logic is unit-testable without
+  /// the Health Connect plugin. Returns null when none qualify.
+  @visibleForTesting
+  static double? selectLatestWeightKg(List<({double kg, DateTime at})> samples) {
+    double? latestKg;
+    DateTime? latestAt;
+    for (final s in samples) {
+      if (s.kg < 30 || s.kg > 300) continue;
+      if (latestAt == null || s.at.isAfter(latestAt)) {
+        latestAt = s.at;
+        latestKg = s.kg;
+      }
+    }
+    return latestKg;
   }
 
   /// Mean of every HR sample Health Connect has between [start] and [end].

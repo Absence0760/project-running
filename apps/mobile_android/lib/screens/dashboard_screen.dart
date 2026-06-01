@@ -123,6 +123,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
           apiClient: widget.apiClient,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
+          preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
         ),
       ),
     );

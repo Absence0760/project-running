@@ -11,6 +11,8 @@ import '../csv_run_importer.dart';
 import '../health_connect_importer.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../preferences.dart';
+import '../settings_sync.dart';
 import '../strava_importer.dart';
 
 /// Build the post-import status line. Appends a no-route note for sources
@@ -44,12 +46,18 @@ class ImportScreen extends StatefulWidget {
   /// LocalRouteStore handy (smoke tests, share-target entry points) can
   /// still drive runs-only restore.
   final LocalRouteStore? routeStore;
+  /// Optional. When supplied, a Health Connect import that finds a body
+  /// weight seeds `body_weight_kg` (only when the user hasn't set one).
+  final Preferences? preferences;
+  final SettingsSyncService? settingsSync;
 
   const ImportScreen({
     super.key,
     this.apiClient,
     required this.runStore,
     this.routeStore,
+    this.preferences,
+    this.settingsSync,
   });
 
   @override
@@ -84,6 +92,8 @@ class _ImportScreenState extends State<ImportScreen> {
         return;
       }
 
+      await _maybeSeedBodyWeight();
+
       setState(() => _status = 'Reading workouts...');
       final runs = await HealthConnectImporter.fetchWorkouts();
       // Health Connect exposes workout summaries but not route geometry, so
@@ -96,6 +106,24 @@ class _ImportScreenState extends State<ImportScreen> {
         _busy = false;
         _status = '$_healthLabel import failed: $e';
       });
+    }
+  }
+
+  /// Seed `body_weight_kg` from Health Connect when the user hasn't set
+  /// one. Never overwrites an existing weight. Best-effort: a failure here
+  /// must not derail the workout import.
+  Future<void> _maybeSeedBodyWeight() async {
+    final prefs = widget.preferences;
+    if (prefs == null || prefs.bodyWeightKg != null) return;
+    final kg = await HealthConnectImporter.fetchLatestWeightKg();
+    if (kg == null) return;
+    prefs.setBodyWeightKg(kg);
+    try {
+      await widget.settingsSync?.updateUniversal(
+        <String, dynamic>{SettingsKeys.bodyWeightKg: kg},
+      );
+    } catch (e) {
+      debugPrint('Body-weight seed sync failed: $e');
     }
   }
 
