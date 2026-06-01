@@ -70,6 +70,25 @@ RecurrenceFreq? recurrenceFromString(String? s) {
   }
 }
 
+/// [base] advanced by [months] whole months, clamping the day-of-month to the
+/// target month's last day so a day-31 anchor lands on Feb-28/29 instead of
+/// overflowing into the following month (DateTime(y, 2, 31) → March).
+DateTime _addMonthsClamped(DateTime base, int months) {
+  final total = base.month - 1 + months;
+  final year = base.year + (total ~/ 12);
+  final month = total % 12 + 1;
+  final lastDay = DateTime(year, month + 1, 0).day;
+  final day = base.day < lastDay ? base.day : lastDay;
+  return DateTime(
+    year,
+    month,
+    day,
+    base.hour,
+    base.minute,
+    base.second,
+  );
+}
+
 class EventRecurrence {
   final DateTime startsAt;
   final RecurrenceFreq? freq;
@@ -103,22 +122,19 @@ List<DateTime> expandInstances(
   final results = <DateTime>[];
 
   if (e.freq == RecurrenceFreq.monthly) {
-    var cursor = e.startsAt;
-    for (var i = 0; i < max * 12 && results.length < hardCap; i++) {
+    for (var i = 0; results.length < hardCap; i++) {
+      if (i >= max * 12) break;
+      // Anchor on startsAt's day-of-month and step `i` whole months from it,
+      // clamping to the target month's last day (Jan-31 → Feb-28/29). Stepping
+      // a running cursor instead would let a clamp permanently shrink the
+      // day-of-month (Jan-31 → Feb-28 → Mar-28), drifting off the intended day.
+      final cursor = _addMonthsClamped(e.startsAt, i);
       if (e.until != null && cursor.isAfter(e.until!)) break;
       if (cursor.isAfter(to)) break;
       if (!cursor.isBefore(from)) {
         results.add(cursor);
         if (results.length >= max) break;
       }
-      cursor = DateTime(
-        cursor.year,
-        cursor.month + 1,
-        cursor.day,
-        cursor.hour,
-        cursor.minute,
-        cursor.second,
-      );
     }
     return results;
   }

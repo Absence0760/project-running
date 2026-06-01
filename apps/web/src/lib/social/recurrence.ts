@@ -49,17 +49,21 @@ export function expandInstances(event: Event, from: Date, to: Date, max = 100): 
 
 	let produced = 0;
 	if (event.recurrence_freq === 'monthly') {
-		// Monthly: same day-of-month as starts_at, every N months stepping by 1.
-		let cursor = new Date(start);
-		for (let i = 0; i < max * 12 && produced < hardCap; i++) {
+		// Monthly: same day-of-month as starts_at, every N months. Each instance
+		// is `i` whole months from start with the day clamped to the target
+		// month's last day (Jan-31 → Feb-28/29). Stepping a running cursor would
+		// let a clamp permanently shrink the day-of-month (Jan-31 → Feb-28 →
+		// Mar-28), drifting off the intended day.
+		for (let i = 0; produced < hardCap; i++) {
+			if (i >= max * 12) break;
+			const cursor = addMonthsClamped(start, i);
 			if (until && cursor > until) break;
 			if (cursor > to) break;
 			if (cursor >= from) {
-				results.push(new Date(cursor));
+				results.push(cursor);
 				produced++;
 				if (results.length >= max) break;
 			}
-			cursor = addMonths(cursor, 1);
 		}
 		return results;
 	}
@@ -135,10 +139,21 @@ function addDays(d: Date, n: number): Date {
 	return c;
 }
 
-function addMonths(d: Date, n: number): Date {
-	const c = new Date(d);
-	c.setMonth(c.getMonth() + n);
-	return c;
+function addMonthsClamped(base: Date, months: number): Date {
+	const total = base.getMonth() + months;
+	const year = base.getFullYear() + Math.floor(total / 12);
+	const month = ((total % 12) + 12) % 12;
+	const lastDay = new Date(year, month + 1, 0).getDate();
+	const day = Math.min(base.getDate(), lastDay);
+	return new Date(
+		year,
+		month,
+		day,
+		base.getHours(),
+		base.getMinutes(),
+		base.getSeconds(),
+		0
+	);
 }
 
 function startOfWeek(d: Date): Date {
