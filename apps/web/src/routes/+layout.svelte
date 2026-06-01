@@ -82,10 +82,10 @@
 		})();
 	});
 
-	// Notification bell — refresh unread count on auth-ready and on
-	// window focus. No polling timer; the focus handler covers the
-	// "left tab open, came back later" case while keeping the UI
-	// silent in the background.
+	// Notification bell — refresh unread count on auth-ready, on window
+	// focus, and live via a Realtime subscription so kudos / comments /
+	// follows arriving while the tab is open bump the badge immediately.
+	// The focus handler still covers the backgrounded-tab catch-up.
 	$effect(() => {
 		const uid = auth.user?.id;
 		if (!browser || !uid) {
@@ -93,9 +93,13 @@
 			return;
 		}
 		notificationStore.refresh();
+		notificationStore.subscribe(uid);
 		const onFocus = () => notificationStore.refresh();
 		window.addEventListener('focus', onFocus);
-		return () => window.removeEventListener('focus', onFocus);
+		return () => {
+			window.removeEventListener('focus', onFocus);
+			notificationStore.unsubscribe();
+		};
 	});
 
 	// Order is runner-led: log + review + train is the daily loop, then

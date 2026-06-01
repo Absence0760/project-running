@@ -10,15 +10,21 @@
  *   - on auth-ready (initial paint)
  *   - on window focus (covers the "left tab open, came back later"
  *     case without a polling timer)
+ *   - a Supabase Realtime subscription on the user's notification rows,
+ *     so a kudos / comment / follow arriving while the tab is open bumps
+ *     the badge live without waiting for a focus event
  *   - explicit `refresh()` after the bell popover or /notifications
  *     page modifies state
  */
+import type { RealtimeChannel } from '@supabase/supabase-js';
 import { fetchUnreadNotificationCount } from '$lib/core/data';
+import { supabase } from '$lib/core/supabase';
 import { auth } from './auth.svelte';
 
 class NotificationStore {
 	unreadCount = $state(0);
 	loading = $state(false);
+	#channel: RealtimeChannel | null = null;
 
 	async refresh() {
 		if (!auth.user?.id) {
@@ -42,7 +48,48 @@ class NotificationStore {
 		this.unreadCount = Math.max(0, this.unreadCount - by);
 	}
 
+	/// Subscribe to live changes on this user's notification rows. INSERT
+	/// (always unread on creation) bumps the badge immediately; UPDATE /
+	/// DELETE (read or dismissed, possibly from another tab) re-read the
+	/// authoritative count. Idempotent — a second call tears the prior
+	/// channel down first.
+	subscribe(userId: string) {
+		this.unsubscribe();
+		this.#channel = supabase
+			.channel(`notifications:${userId}`)
+			.on(
+				'postgres_changes',
+				{ event: 'INSERT', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+				() => {
+					this.unreadCount += 1;
+				},
+			)
+			.on(
+				'postgres_changes',
+				{ event: 'UPDATE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+				() => {
+					void this.refresh();
+				},
+			)
+			.on(
+				'postgres_changes',
+				{ event: 'DELETE', schema: 'public', table: 'notifications', filter: `user_id=eq.${userId}` },
+				() => {
+					void this.refresh();
+				},
+			)
+			.subscribe();
+	}
+
+	unsubscribe() {
+		if (this.#channel) {
+			void supabase.removeChannel(this.#channel);
+			this.#channel = null;
+		}
+	}
+
 	clear() {
+		this.unsubscribe();
 		this.unreadCount = 0;
 	}
 }
