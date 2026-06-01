@@ -2243,8 +2243,11 @@
 	}
 
 	.key-stat-label {
-		font-size: 0.7rem;
-		color: var(--color-text-tertiary);
+		/* 0.8125rem (13px) on the secondary colour rather than 0.7rem on
+		   tertiary — readable at arm's length for presbyopic / older
+		   runners without changing the layout (persona round-5 older). */
+		font-size: 0.8125rem;
+		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
@@ -2267,9 +2270,11 @@
 
 	.splits-table th {
 		text-align: start;
-		font-size: 0.7rem;
+		/* Match .key-stat-label — 13px on the secondary colour for
+		   arm's-length legibility (persona round-5 older). */
+		font-size: 0.8125rem;
 		font-weight: 500;
-		color: var(--color-text-tertiary);
+		color: var(--color-text-secondary);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: var(--space-sm) 0;
