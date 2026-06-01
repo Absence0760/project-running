@@ -18,12 +18,16 @@ export function bucketWeeklyMileage(
 	runs: { started_at: string; distance_m: number }[],
 	maxWeeks = 12,
 	locale?: string,
+	weekStartDay: 'monday' | 'sunday' = 'monday',
 ): WeekBar[] {
 	const weeks = new Map<string, { label: string; distance_m: number }>();
 	for (const run of runs) {
 		const d = new Date(run.started_at);
 		const weekStart = new Date(d);
-		weekStart.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday-start, matches goals.ts
+		// Anchor to the user's week_start_day (default Monday — matches
+		// goals.ts periodStart). getDay(): 0 = Sunday … 6 = Saturday.
+		const offset = weekStartDay === 'sunday' ? d.getDay() : (d.getDay() + 6) % 7;
+		weekStart.setDate(d.getDate() - offset);
 		weekStart.setHours(0, 0, 0, 0);
 		const key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
 		// The KEY stays year-stable ISO (locale-independent); only the

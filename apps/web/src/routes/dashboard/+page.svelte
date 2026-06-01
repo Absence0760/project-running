@@ -257,9 +257,19 @@
 			await new Promise((r) => setTimeout(r, 50));
 		}
 		goals = loadGoals(auth.user?.id);
+		// Anchor the weekly-mileage chart on the user's week_start_day. The
+		// authoritative settings load happens after this fetch (below), so
+		// read the cached pref up front; a cold cache falls back to Monday
+		// and reconciles on the next load (same eventual-consistency shape
+		// the bag-backed cards use — decisions §79).
+		const uidEarly = auth.user?.id;
+		if (uidEarly) {
+			const wsd = effective<string>(peekCachedSettings(uidEarly), 'week_start_day');
+			if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
+		}
 		[runs, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
 			fetchRuns(),
-			fetchWeeklyMileage(currentLocale()),
+			fetchWeeklyMileage(currentLocale(), weekStartDay),
 			fetchPersonalRecords(),
 			fetchActivePlanOverview(),
 			fetchNextRsvpedEvent(48),

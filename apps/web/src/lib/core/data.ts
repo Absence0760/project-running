@@ -1190,7 +1190,10 @@ export async function deleteRoute(id: string): Promise<void> {
 
 // --- Dashboard stats ---
 
-export async function fetchWeeklyMileage(locale?: string) {
+export async function fetchWeeklyMileage(
+	locale?: string,
+	weekStartDay: 'monday' | 'sunday' = 'monday',
+) {
 	const { data: { user } } = await supabase.auth.getUser();
 	if (!user) return [];
 	// Only the last ~12 weeks are charted, so window the query by date
@@ -1207,7 +1210,7 @@ export async function fetchWeeklyMileage(locale?: string) {
 		.order('started_at', { ascending: true });
 
 	if (!runs || runs.length === 0) return [];
-	return bucketWeeklyMileage(runs, 12, locale);
+	return bucketWeeklyMileage(runs, 12, locale, weekStartDay);
 }
 
 export async function fetchPersonalRecords() {

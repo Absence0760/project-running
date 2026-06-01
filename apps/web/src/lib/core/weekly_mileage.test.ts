@@ -67,6 +67,20 @@ test('bucketWeeklyMileage — the week label honours the locale (W-10 label)', (
 	assert.notEqual(en, de, 'de differs from en-GB (5. Jan. vs 5 Jan)');
 });
 
+test('bucketWeeklyMileage — the week anchor honours week_start_day (W-14)', () => {
+	// 2026-01-04 is a Sunday, 2026-01-05 the following Monday.
+	const runs = [
+		{ started_at: '2026-01-04T08:00:00Z', distance_m: 1000 },
+		{ started_at: '2026-01-05T08:00:00Z', distance_m: 2000 },
+	];
+	// Monday-anchored: the Sunday and Monday fall in different weeks → 2 bars.
+	assert.equal(bucketWeeklyMileage(runs, 12, 'en', 'monday').length, 2);
+	// Sunday-anchored: both fall in the same Sunday-started week → 1 bar.
+	const sun = bucketWeeklyMileage(runs, 12, 'en', 'sunday');
+	assert.equal(sun.length, 1);
+	assert.equal(sun[0].distance_m, 3000);
+});
+
 test('bucketWeeklyMileage — the bucket KEY stays locale-independent (no cross-locale split)', () => {
 	const runs = [
 		{ started_at: '2026-01-05T08:00:00Z', distance_m: 1000 },
