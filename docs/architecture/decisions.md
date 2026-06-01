@@ -2572,6 +2572,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 112. The mobile route-heatmap keeps the map full-bleed: a results pill + modal list + selection card, not an always-present draggable sheet
+
+**Decided (2026-06-01):** on `routes_heatmap_screen.dart` (Android + iOS twin) the discovery results no longer live in a permanently-mounted `DraggableScrollableSheet`. The map is full-bleed; a floating "N routes" pill opens the list as a **dismissible modal** sheet, and selecting a pin/row shows a **compact dismissible card** at the bottom. The Locate FAB floats just above whichever is showing. Web keeps its desktop **sidebar** unchanged — this is a deliberate mobile-only layout divergence, allowed under [§24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive) (same feature, platform-native presentation).
+
+**Why.** The old sheet had `minChildSize: 0.12`, so even collapsed it permanently ate the bottom of the map and obscured pins exactly where routes near the user cluster; the drag-to-resize was the part the owner disliked. A modal that opens on demand and swipes away matches what map apps (Google Maps, Komoot) converge on and keeps the map the hero on a small screen.
+
+**The trade-off.** The list is a snapshot taken when the pill opens (the modal scrim blocks panning anyway — close, pan, reopen); pin-toggles inside the modal refresh it via a `StatefulBuilder` `setSheet`, the same pattern the Filters sheet already uses. **Don't** port this to web — its sidebar is correct on desktop, and the owner likes it.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

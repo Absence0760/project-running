@@ -20,12 +20,15 @@ import '../widgets/top_banner.dart';
 import 'public_route_screen.dart';
 
 /// Route-discovery browser. Mobile mirror of the web RouteHeatmap.svelte
-/// surface: a heat-density background plus discoverable route pins
-/// (clustered) you can filter by lens + race distance, a results list in
-/// a bottom sheet, and tap-to-preview — tapping a pin or a list row
-/// draws just that route's line (the touch-device equivalent of web's
-/// hover preview). Backed by `heatmap_points_in_bbox`,
-/// `discoverable_routes_in_bbox`, and `clubs_in_bbox`.
+/// surface (web keeps its desktop sidebar — this is a deliberate
+/// mobile-only layout): a heat-density background plus discoverable
+/// route pins (clustered) you can filter by lens + race distance. The
+/// map stays full-bleed; a floating "N routes" pill opens the results
+/// list as a dismissible modal sheet, and tapping a pin or a list row
+/// draws just that route's line + shows a compact card (the touch-device
+/// equivalent of web's hover preview). Nothing permanently covers the
+/// map. Backed by `heatmap_points_in_bbox`, `discoverable_routes_in_bbox`,
+/// and `clubs_in_bbox`.
 ///
 /// Navigation:
 ///   * AppBar search field — MapTiler geocoding place search.
@@ -564,12 +567,6 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        heroTag: 'routes_heatmap_locate_fab',
-        tooltip: 'Locate me',
-        onPressed: _locate,
-        child: const Icon(Icons.my_location),
-      ),
       body: Stack(
         children: [
           FlutterMap(
@@ -739,48 +736,118 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                 ),
               ),
             ),
-          // Results list / selected-route card, in a draggable sheet.
-          DraggableScrollableSheet(
-            initialChildSize: 0.28,
-            minChildSize: 0.12,
-            maxChildSize: 0.8,
-            snap: true,
-            builder: (ctx, scrollCtl) {
-              return Material(
-                elevation: 8,
-                clipBehavior: Clip.antiAlias,
-                borderRadius:
-                    const BorderRadius.vertical(top: Radius.circular(16)),
-                child: _selectedPin != null
-                    ? _selectionPanel(scrollCtl, _selectedPin!)
-                    : _resultsPanel(scrollCtl),
-              );
-            },
+          // Clean map by default: the Locate FAB floats just above a
+          // floating "N routes" pill (opens the list as a dismissible
+          // modal) or, once a route is picked, a compact dismissible
+          // card. Neither permanently covers the map — the user's
+          // complaint about the old always-present draggable sheet.
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: SafeArea(
+              top: false,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(right: 16, bottom: 10),
+                    child: Align(
+                      alignment: Alignment.centerRight,
+                      child: FloatingActionButton.small(
+                        heroTag: 'routes_heatmap_locate_fab',
+                        tooltip: 'Locate me',
+                        onPressed: _locate,
+                        child: const Icon(Icons.my_location),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
+                    child: _selectedPin != null
+                        ? _selectionCard(_selectedPin!)
+                        : Center(child: _resultsPill()),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _resultsPanel(ScrollController sc) {
+  /// Bottom pill showing the in-view route count; tap to open the list.
+  Widget _resultsPill() {
     final theme = Theme.of(context);
-    return ListView(
-      controller: sc,
-      padding: EdgeInsets.zero,
-      children: [
-        const SizedBox(height: 8),
-        Center(
-          child: Container(
-            width: 36,
-            height: 4,
-            decoration: BoxDecoration(
-              color: theme.colorScheme.outlineVariant,
-              borderRadius: BorderRadius.circular(999),
-            ),
+    final count = _pins.length;
+    final label =
+        count == 0 ? 'No routes here' : '$count ${count == 1 ? 'route' : 'routes'}';
+    return Material(
+      elevation: 6,
+      borderRadius: BorderRadius.circular(999),
+      color: theme.colorScheme.surface,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: _openResultsSheet,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.format_list_bulleted,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(label, style: theme.textTheme.titleSmall),
+              if (_pinnedIds.isNotEmpty) ...[
+                const SizedBox(width: 10),
+                const Icon(Icons.push_pin, size: 14, color: Color(0xFF8B5CF6)),
+                const SizedBox(width: 2),
+                Text(
+                  '${_pinnedIds.length}',
+                  style: theme.textTheme.labelMedium
+                      ?.copyWith(color: const Color(0xFF8B5CF6)),
+                ),
+              ],
+            ],
           ),
         ),
+      ),
+    );
+  }
+
+  Future<void> _openResultsSheet() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheet) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(ctx).height * 0.7,
+              ),
+              child: _resultsList(ctx, setSheet),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _resultsList(BuildContext sheetCtx, StateSetter setSheet) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: EdgeInsets.zero,
+      shrinkWrap: true,
+      children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(16, 10, 16, 8),
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
           child: Row(
             children: [
               Text(
@@ -798,7 +865,10 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               ),
               if (_pinnedIds.isNotEmpty)
                 TextButton(
-                  onPressed: _clearPinned,
+                  onPressed: () {
+                    _clearPinned();
+                    setSheet(() {});
+                  },
                   style: TextButton.styleFrom(
                     foregroundColor: const Color(0xFF8B5CF6),
                     visualDensity: VisualDensity.compact,
@@ -815,12 +885,16 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
             child: Text('No routes here. Pan the map or change the filters.'),
           )
         else
-          for (final p in _pins) _routeRow(p),
+          for (final p in _pins) _routeRow(sheetCtx, setSheet, p),
       ],
     );
   }
 
-  Widget _routeRow(cm.DiscoverableRoutePin p) {
+  Widget _routeRow(
+    BuildContext sheetCtx,
+    StateSetter setSheet,
+    cm.DiscoverableRoutePin p,
+  ) {
     final band = bandForDistance(p.distanceM);
     final meta = <String>[
       formatDistanceForPref(p.distanceM),
@@ -852,13 +926,22 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           color: _pinnedIds.contains(p.id) ? const Color(0xFF8B5CF6) : null,
         ),
         tooltip: _pinnedIds.contains(p.id) ? 'Unpin from map' : 'Keep on map',
-        onPressed: () => _togglePin(p),
+        onPressed: () async {
+          await _togglePin(p);
+          setSheet(() {});
+        },
       ),
-      onTap: () => _selectRoute(p, pan: true),
+      onTap: () {
+        Navigator.of(sheetCtx).pop();
+        _selectRoute(p, pan: true);
+      },
     );
   }
 
-  Widget _selectionPanel(ScrollController sc, cm.DiscoverableRoutePin p) {
+  /// Compact, dismissible card for the currently-previewed route. Sits at
+  /// the bottom over the map (not a draggable sheet); close returns to the
+  /// results pill.
+  Widget _selectionCard(cm.DiscoverableRoutePin p) {
     final theme = Theme.of(context);
     final band = bandForDistance(p.distanceM);
     final meta = <String>[
@@ -868,75 +951,91 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       if (p.surface.isNotEmpty) p.surface,
       if (p.runCount > 0) '${p.runCount} run${p.runCount == 1 ? '' : 's'}',
     ].join(' · ');
-    return ListView(
-      controller: sc,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-      children: [
-        Row(
+    return Material(
+      elevation: 8,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      color: theme.colorScheme.surface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                p.name,
-                style: theme.textTheme.titleMedium,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    p.name,
+                    style: theme.textTheme.titleMedium,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: 'Back to list',
+                  onPressed: _clearSelection,
+                ),
+              ],
             ),
-            IconButton(
-              icon: const Icon(Icons.close),
-              tooltip: 'Back to list',
-              onPressed: _clearSelection,
-            ),
-          ],
-        ),
-        const SizedBox(height: 4),
-        Row(
-          children: [
-            if (band != null) _bandBadge(band.label),
-            Flexible(
-              child: Text(
-                meta,
-                style: theme.textTheme.bodyMedium
-                    ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            Expanded(
-              child: FilledButton.icon(
-                onPressed: () {
-                  Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (_) =>
-                          PublicRouteScreen(api: widget.api, routeId: p.id),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Row(
+                children: [
+                  if (band != null) _bandBadge(band.label),
+                  Flexible(
+                    child: Text(
+                      meta,
+                      style: theme.textTheme.bodyMedium
+                          ?.copyWith(color: theme.colorScheme.onSurfaceVariant),
                     ),
-                  );
-                },
-                icon: const Icon(Icons.arrow_forward),
-                label: const Text('View route'),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            OutlinedButton.icon(
-              onPressed: () => _togglePin(p),
-              icon: Icon(
-                _pinnedIds.contains(p.id)
-                    ? Icons.push_pin
-                    : Icons.push_pin_outlined,
-                size: 18,
-              ),
-              label: Text(_pinnedIds.contains(p.id) ? 'Kept' : 'Keep'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF8B5CF6),
-                side: const BorderSide(color: Color(0xFF8B5CF6)),
+            const SizedBox(height: 14),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () {
+                        Navigator.of(context).push(
+                          MaterialPageRoute<void>(
+                            builder: (_) => PublicRouteScreen(
+                              api: widget.api,
+                              routeId: p.id,
+                            ),
+                          ),
+                        );
+                      },
+                      icon: const Icon(Icons.arrow_forward),
+                      label: const Text('View route'),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: () => _togglePin(p),
+                    icon: Icon(
+                      _pinnedIds.contains(p.id)
+                          ? Icons.push_pin
+                          : Icons.push_pin_outlined,
+                      size: 18,
+                    ),
+                    label: Text(_pinnedIds.contains(p.id) ? 'Kept' : 'Keep'),
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: const Color(0xFF8B5CF6),
+                      side: const BorderSide(color: Color(0xFF8B5CF6)),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
         ),
-      ],
+      ),
     );
   }
 

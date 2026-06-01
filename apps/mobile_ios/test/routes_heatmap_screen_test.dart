@@ -215,6 +215,29 @@ void main() {
               'MapTiler key is unset; the dropdown must not surface.');
     });
 
+    testWidgets('typing surfaces place options from the Nominatim fallback',
+        (tester) async {
+      // With no MapTiler key (the protomaps-only dev default) searchPlaces
+      // falls through to Nominatim, whose response is a JSON array. The
+      // dropdown must surface as the user types — the production bug was a
+      // missing User-Agent making Nominatim 403 into an empty list.
+      final api = _FakeApiClient();
+      Future<String> nominatimStub(Uri _) async => jsonEncode([
+            {
+              'display_name': 'London, Greater London, England',
+              'lat': '51.5074',
+              'lon': '-0.1276',
+            },
+          ]);
+      await _pump(tester, api, geocodingFetcher: nominatimStub);
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search places…'),
+        'London',
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('London, Greater London, England'), findsOneWidget);
+    });
+
     testWidgets('mounts a FlutterMap with a TileLayer + a marker layer',
         (tester) async {
       final api = _FakeApiClient();
@@ -273,7 +296,7 @@ void main() {
   });
 
   group('discovery pins + lens', () {
-    testWidgets('fetches discoverable pins on mount + lists them',
+    testWidgets('fetches discoverable pins on mount + lists them via the pill',
         (tester) async {
       final api = _FakeApiClient()..nextPins = [_pin()];
       await _pump(tester, api);
@@ -281,7 +304,14 @@ void main() {
       expect(api.discoverCalls, greaterThanOrEqualTo(1));
       expect(api.lastFilter, 'popular',
           reason: 'the default lens is popular');
-      // The bottom-sheet results list renders the route by name.
+      // The map is clean by default: the count shows on the pill, the
+      // route name only after the pill opens the modal results list.
+      expect(find.text('1 route'), findsOneWidget);
+      expect(find.text('Wash Park 5K Loop'), findsNothing);
+
+      await tester.tap(find.text('1 route'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Wash Park 5K Loop'), findsOneWidget);
     });
 
@@ -344,11 +374,15 @@ void main() {
       expect(find.byKey(const ValueKey('heatmap-selected-route')),
           findsNothing);
 
+      // Open the modal results list, then tap the row.
+      await tester.tap(find.text('1 route'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
       await tester.tap(find.text('Wash Park 5K Loop'));
       await tester.pump();
-      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 300));
 
-      // The selection card + the previewed route line both appear.
+      // The sheet pops; the selection card + previewed route line appear.
       expect(find.text('View route'), findsOneWidget);
       expect(find.byKey(const ValueKey('heatmap-selected-route')),
           findsOneWidget);
