@@ -146,6 +146,11 @@
 		return formatPace(duration_s, distance_m);
 	}
 
+	function runTitle(entry: FeedEntry): string {
+		const t = (entry.metadata as Record<string, unknown> | null)?.title;
+		return typeof t === 'string' ? t.trim() : '';
+	}
+
 </script>
 
 <div class="social-feed">
@@ -248,6 +253,9 @@
 							</div>
 						{/if}
 						<div class="entry-stats-wrap">
+							{#if runTitle(entry)}
+								<h3 class="entry-title">{runTitle(entry)}</h3>
+							{/if}
 							<div class="stats">
 								<div class="stat">
 									<span class="stat-num">{formatDistance(entry.distance_m)}</span>
@@ -394,6 +402,18 @@
 	}
 	.entry-stats-wrap {
 		padding: var(--space-sm) var(--space-md);
+	}
+	.entry-title {
+		margin: 0 0 var(--space-sm);
+		font-size: 0.95rem;
+		font-weight: 600;
+		line-height: 1.3;
+		color: var(--color-text);
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
 	}
 	.stats {
 		display: grid;
