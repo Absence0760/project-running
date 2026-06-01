@@ -183,3 +183,57 @@ class HeatmapPoint {
 
   const HeatmapPoint({required this.lat, required this.lng});
 }
+
+/// A discoverable public route pin returned by `discoverable_routes_in_bbox`.
+/// Mobile mirror of the web `DiscoverableRoutePin` interface — featured /
+/// popular / friends' / hidden-gem routes the discovery map drops a pin
+/// at (the start point).
+class DiscoverableRoutePin {
+  final String id;
+  final String name;
+  final String? slug;
+  final bool featured;
+  final double distanceM;
+  final double? elevationM;
+  final String surface;
+  final int runCount;
+  final double lat;
+  final double lng;
+
+  const DiscoverableRoutePin({
+    required this.id,
+    required this.name,
+    this.slug,
+    required this.featured,
+    required this.distanceM,
+    this.elevationM,
+    required this.surface,
+    required this.runCount,
+    required this.lat,
+    required this.lng,
+  });
+}
+
+/// A club pin returned by `clubs_in_bbox`. Mobile mirror of the web
+/// club-pin shape used by the discovery map's club layer.
+class ClubPin {
+  final String id;
+  final String name;
+  final String? slug;
+  final String? avatarUrl;
+  final String? locationLabel;
+  final int memberCount;
+  final double lat;
+  final double lng;
+
+  const ClubPin({
+    required this.id,
+    required this.name,
+    this.slug,
+    this.avatarUrl,
+    this.locationLabel,
+    required this.memberCount,
+    required this.lat,
+    required this.lng,
+  });
+}

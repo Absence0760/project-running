@@ -1166,6 +1166,94 @@ class ApiClient {
         .toList();
   }
 
+  /// Discoverable public routes inside the viewport bbox for the route
+  /// discovery map. Mirror of the web `fetchDiscoverableRoutesInBbox`.
+  /// [filter] is the lens: 'popular' (default) | 'featured' | 'friends' |
+  /// 'hidden_gems'. [distMin]/[distMax] are the parallel race-distance
+  /// band bounds (a null [distMax] element = open-ended ultra); omit them
+  /// for no distance filter. Fails soft to an empty list.
+  Future<List<DiscoverableRoutePin>> fetchDiscoverableRoutesInBbox({
+    required double minLng,
+    required double minLat,
+    required double maxLng,
+    required double maxLat,
+    int limit = 100,
+    String filter = 'popular',
+    List<double>? distMin,
+    List<double?>? distMax,
+  }) async {
+    try {
+      final params = <String, dynamic>{
+        'p_min_lng': minLng,
+        'p_min_lat': minLat,
+        'p_max_lng': maxLng,
+        'p_max_lat': maxLat,
+        'p_limit': limit,
+        'p_filter': filter,
+      };
+      if (distMin != null && distMin.isNotEmpty) {
+        params['p_dist_min'] = distMin;
+        params['p_dist_max'] = distMax;
+      }
+      final data = await _client.rpc('discoverable_routes_in_bbox',
+          params: params);
+      if (data is! List) return const [];
+      return data.map<DiscoverableRoutePin>((row) {
+        final r = row as Map<String, dynamic>;
+        return DiscoverableRoutePin(
+          id: r['id'] as String,
+          name: (r['name'] as String?) ?? 'Route',
+          slug: r['slug'] as String?,
+          featured: (r['featured'] as bool?) ?? false,
+          distanceM: (r['distance_m'] as num?)?.toDouble() ?? 0,
+          elevationM: (r['elevation_m'] as num?)?.toDouble(),
+          surface: (r['surface'] as String?) ?? '',
+          runCount: (r['run_count'] as num?)?.toInt() ?? 0,
+          lat: (r['lat'] as num).toDouble(),
+          lng: (r['lng'] as num).toDouble(),
+        );
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Public clubs inside the viewport bbox for the discovery map's club
+  /// layer. Mirror of the web `fetchClubsInBbox`. Fails soft.
+  Future<List<ClubPin>> fetchClubsInBbox({
+    required double minLng,
+    required double minLat,
+    required double maxLng,
+    required double maxLat,
+    int limit = 100,
+  }) async {
+    try {
+      final data = await _client.rpc('clubs_in_bbox', params: {
+        'p_min_lng': minLng,
+        'p_min_lat': minLat,
+        'p_max_lng': maxLng,
+        'p_max_lat': maxLat,
+        'p_limit': limit,
+      });
+      if (data is! List) return const [];
+      return data.map<ClubPin>((row) {
+        final r = row as Map<String, dynamic>;
+        return ClubPin(
+          id: r['id'] as String,
+          name: (r['name'] as String?) ?? 'Club',
+          slug: r['slug'] as String?,
+          avatarUrl: r['avatar_url'] as String?,
+          locationLabel: r['location_label'] as String?,
+          memberCount: (r['member_count'] as num?)?.toInt() ?? 0,
+          lat: (r['lat'] as num).toDouble(),
+          lng: (r['lng'] as num).toDouble(),
+        );
+      }).toList();
+    } catch (_) {
+      return const [];
+    }
+  }
+
   // -- Route reviews --
 
   /// Fetch all reviews for a route, newest first.
