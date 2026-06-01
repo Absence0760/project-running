@@ -1,0 +1,50 @@
+<?xml version="1.0"?>
+<!--
+  Connect IQ manifest for the Run grade-adjusted-pace data field.
+
+  type="datafield": this app injects ONE metric into Garmin's native run
+  recording screen. Garmin still owns the activity, the GPS, the FIT file
+  and the sync. We add a single field. This is the lowest-commitment shape
+  of strategic Vector 1 (see ../../docs/custom_watch/roadmap.md). The full
+  "watch app" shape (our own recording UI + direct Supabase sync) is a
+  separate, months-long effort and is deliberately NOT what this spike is.
+-->
+<iq:manifest version="3" xmlns:iq="http://www.garmin.com/xml/connectiq">
+    <iq:application
+        entry="RunGarminApp"
+        id="42b15e3edf224e69835b25c52532df5f"
+        type="datafield"
+        name="@Strings.AppName"
+        launcherIcon="@Drawables.LauncherIcon"
+        minApiLevel="3.1.0">
+
+        <!--
+          A data field that only reads Activity.Info (speed, altitude,
+          distance) needs no permissions. The moment this grows into a
+          watch app that POSTs runs to a Supabase Edge Function it must add
+          <iq:uses-permission id="Communications"/> and a phone tether or
+          Wi-Fi-capable device. We keep it empty on purpose for the spike.
+        -->
+        <iq:permissions/>
+
+        <iq:languages>
+            <iq:language>eng</iq:language>
+        </iq:languages>
+
+        <!--
+          Representative modern device set with enough app memory for a
+          data field. Expand from the Connect IQ device DB as needed; each
+          id here must have a matching simulator device installed.
+        -->
+        <iq:products>
+            <iq:product id="fenix7"/>
+            <iq:product id="fenix7s"/>
+            <iq:product id="fenix7x"/>
+            <iq:product id="fenix8solar47mm"/>
+            <iq:product id="epix2"/>
+            <iq:product id="fr955"/>
+            <iq:product id="fr965"/>
+            <iq:product id="venu2"/>
+        </iq:products>
+    </iq:application>
+</iq:manifest>

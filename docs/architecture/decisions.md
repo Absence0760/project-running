@@ -2520,6 +2520,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 107. Vector 1 starts as a Connect IQ data field (grade-adjusted pace), not a full watch app
+
+**Decided (2026-06-01):** the strategic-Vector-1 probe ([§ 87](#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware)) is scaffolded at `apps/watch_garmin/` as a Connect IQ **data field** in Monkey C — one metric (grade-adjusted pace, Minetti 2002 model) injected into Garmin's native run screen — **not** a full Connect IQ watch app.
+
+**Why a data field.** It's the cheapest of the four Connect IQ app types: Garmin keeps owning the recording, GPS, FIT file, and sync, so there's no sandbox fight over mid-activity networking, no OAuth-on-watch, and no Garmin business approval — it ships through the Connect IQ Store at near-zero risk. The full watch-app shape (our own recording UI + direct Supabase POST via `Communications.makeWebRequest` on a phone tether) is the real "is our UX better than Garmin's" test but is months of work; we gate starting it on the data field proving install demand, which is the validation channel [§ 89](#89-skip-user-research-interviews-vector-1-install-rate-is-the-validation-channel) already named.
+
+**The trade-off / exemption.** `watch_garmin` is **research-tier and exempt from the web-first rule** ([§ 24](#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive)) the same narrow way `apps/custom_watch/` is — it's a platform probe, so it's absent from `parity.md`. The exemption covers *proving the toolchain*, not pioneering product features: grade-adjusted pace is **not a web feature yet**, so on this surface it's a demo, and shipping it to users is gated on it landing on web first (tracked in `followups.md`). Monkey C can't import the Dart/TS parity helpers, so the GAP model is a **third** hand-maintained copy — kept tiny and source-commented. **Don't** treat `watch_garmin` as a parity client, and **don't** ship a metric here that doesn't exist on web.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

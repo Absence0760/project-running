@@ -31,7 +31,8 @@ Every item below is one of: (a) blocked on an external credential / account, (b)
 ## Blocked on external credentials / accounts
 
 - [ ] **Push notifications (FCM + APNs + web Push)** — operator: create a Firebase project, drop `google-services.json` (Android) / `GoogleService-Info.plist` (iOS), enable an APNs auth key in the Apple Developer portal + upload to Firebase, generate `VAPID_PRIVATE_KEY` for web. Then add `firebase_messaging`, register tokens to `user_devices.push_token`, write the workout-reminder + kudos receive handlers, and wire `apps/web/src/lib/util/push.ts`.
-- [ ] **Garmin Connect** — blocked on the multi-day Garmin Developer Program application + OAuth client provisioning. Then follow the Strava pattern: a `garmin.dart` helper + a `garmin-import` Edge Function + a Settings tile wired to OAuth.
+- [ ] **Garmin Connect** — blocked on the multi-day Garmin Developer Program application + OAuth client provisioning. Then follow the Strava pattern: a `garmin.dart` helper + a `garmin-import` Edge Function + a Settings tile wired to OAuth. (Distinct from the on-watch Connect IQ data field at `apps/watch_garmin/` — that runs *on* the watch in Monkey C and needs no Garmin approval; this is server-side cloud sync. See [decisions.md § 107](../architecture/decisions.md#107-vector-1-starts-as-a-connect-iq-data-field-grade-adjusted-pace-not-a-full-watch-app).)
+- [ ] **Grade-adjusted pace on web** — the `apps/watch_garmin/` Connect IQ spike computes GAP on-watch (Minetti 2002 model in `GradeAdjustedPaceView.mc`), but GAP is not a product feature on web yet. Shipping the data field to real users is gated on GAP existing on web first (web-first rule, [decisions.md § 107](../architecture/decisions.md#107-vector-1-starts-as-a-connect-iq-data-field-grade-adjusted-pace-not-a-full-watch-app)). Port the model to a TS↔Dart parity helper, surface it on run detail, then the watch field stops being a demo.
 - [ ] **RunSignUp race-results** — needs a runsignup.com API key (free for non-commercial use). Then follow the parkrun pattern: a `runsignup-import` Edge Function + a Settings tile that ingests into `runs.metadata.event` / `position`.
 - [ ] **iOS verification** — Mac-only. The byte-identical Dart codebase already supports every Android feature (decisions §39); `parity.md` cells stay ✗/Partial *by design* until simulator/device-verified. Gates: `Runner.entitlements` (HealthKit + Sign-in-with-Apple), `pod install`, the Apple Developer Sign-in-with-Apple Services ID + APNs setup. Info.plist is already complete.
 - [ ] **Apple Watch** — Xcode / watchOS device required: route-nav visuals, ultra-length stress test, live race participant, complication target (Widget Extension), activity types, lap markers, hold-to-stop, TTS cues, pedometer, GPS self-heal, indoor mode, route picker, BLE pairing UI — each wired in Xcode + verified on a simulator or paired device.
@@ -183,6 +184,10 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   `health_connect_importer.dart` hard-codes `track: []`, so every HC-imported run is
   trackless/lapless/cadenceless. Reading the HC ExerciseRoute + sample series into a
   track needs the HC route API + on-device testing. Mobile feature.
-- [ ] **Year-in-Running recap parity (strava-migration, ~1 wk)** — the recap omits
-  photos / crowns / badges that Strava's Year in Sport shows. Additive recap
-  enhancement (recap.ts + recap/[year]); product-styling decision on what to feature.
+- [ ] **Segment-KOM "crowns" in the recap (deferred)** — the Year-in-Running recap now
+  shows a derived **Trophies** badge grid + **Photos** and **Personal records** counts
+  (`recap.ts#computeRecapBadges` + `fetchRecapExtras`). Strava-style segment KOM/QOM
+  "crowns" specifically are still omitted: `segment_efforts` has no stored rank, so a
+  per-segment global-min aggregation across all users would be needed — heavier than a
+  recap card warrants, and segment leaderboards are a secondary surface here. Personal
+  records stand in as the achievement metric.

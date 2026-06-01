@@ -1,0 +1,6 @@
+# Connect IQ build configuration.
+# The default source/ + resources/ layout is auto-discovered by the
+# compiler; the only thing we have to declare is the manifest. Per-device
+# resource overrides (e.g. resources-fenix7x/) would be added as
+# `<product>.resourcePath = ...` lines here when a device needs them.
+project.manifest = manifest.xml

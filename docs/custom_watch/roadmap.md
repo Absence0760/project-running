@@ -92,7 +92,7 @@ Per [`competitive_landscape.md`](competitive_landscape.md), three vectors beat "
 
 | Field | Value |
 |---|---|
-| Status | **Active, parallel to tier-1** per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) |
+| Status | **Active, parallel to tier-1** per [§ 87](../architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware). **Scaffold landed** at [`apps/watch_garmin/`](../../apps/watch_garmin/README.md) — a Connect IQ **data field** (Monkey C) showing grade-adjusted pace; toolchain spike, not yet shipped. See [§ 107](../architecture/decisions.md#107-vector-1-starts-as-a-connect-iq-data-field-grade-adjusted-pace-not-a-full-watch-app). |
 | Cost | A few weeks of Monkey C development |
 | Risk | Near zero — distributed via Garmin's own marketplace |
 | What it tests | Whether our software UX is meaningfully better than Garmin's first-party UI (the #1 complaint about Garmin) |

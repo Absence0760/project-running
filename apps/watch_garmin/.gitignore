@@ -1,0 +1,10 @@
+# Connect IQ build output
+bin/
+*.iq
+*.prg
+*.prg.debug.xml
+
+# SDK / signing material (developer key must never be committed)
+developer_key
+*.der
+*.pem

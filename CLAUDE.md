@@ -57,6 +57,7 @@ Per-app notes (framework specifics, what's real vs stubbed, app-specific gotchas
 - [apps/mobile_ios/CLAUDE.md](apps/mobile_ios/CLAUDE.md) — Flutter; **`lib/` and `test/` are byte-identical to `mobile_android`** ([decisions.md § 39](docs/architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)); platform-specific behaviour dispatches via `Platform.isIOS` inside the unified files
 - [apps/watch_wear/CLAUDE.md](apps/watch_wear/CLAUDE.md) — native Kotlin + Compose-for-Wear, functional (not Flutter); wrist-only complement, NOT a pocket-app mirror
 - [apps/watch_ios/CLAUDE.md](apps/watch_ios/CLAUDE.md) — native SwiftUI, functional; wrist-only complement, NOT a pocket-app mirror
+- [apps/watch_garmin/CLAUDE.md](apps/watch_garmin/CLAUDE.md) — native **Monkey C / Connect IQ** data field for existing Garmin watches; **research-tier, strategic Vector 1 spike** (is our UX better than Garmin's native UI?), not a parity client. See [decisions.md § 87](docs/architecture/decisions.md#87-strategic-vector-1-connect-iq-app-runs-in-parallel-with-tier-1-firmware) + [§ 107](docs/architecture/decisions.md#107-vector-1-starts-as-a-connect-iq-data-field-grade-adjusted-pace-not-a-full-watch-app)
 - [apps/custom_watch/CLAUDE.md](apps/custom_watch/CLAUDE.md) — Rust + Embassy firmware for the ultra-marathon watch research effort; **research-tier, tier-1 bench prototype only**, see [decisions.md § 71](docs/architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) + [§ 80](docs/architecture/decisions.md#80-tier-1-firmware-uses-embassy-on-rust-on-the-nordic-nrf52840--chosen-for-memory-safety-tooling-and-async-ergonomics-not-for-performance). Strategy + BOM + cost tiers + parts list live at [docs/custom_watch/](docs/custom_watch/README.md)
 
 ## Audit commands
@@ -159,6 +160,7 @@ apps/
   mobile_ios/        → Flutter; lib/ + test/ kept byte-identical to mobile_android (see decisions.md § 39)
   watch_wear/        → native Kotlin + Compose-for-Wear (not Flutter)
   watch_ios/         → native SwiftUI Xcode project, functional
+  watch_garmin/      → native Monkey C / Connect IQ data field for existing Garmin watches (research-tier, strategic Vector 1 spike; decisions §87 + §107)
   custom_watch/      → Rust + Embassy firmware for the ultra-marathon watch research effort (research-tier, tier-1 bench prototype only; decisions §71 amendment + §80, 2026-05-28)
   job_worker/        → Go background-job worker (drains the `jobs` queue; first kind is map_match)
 packages/

@@ -1,0 +1,6 @@
+<strings>
+    <string id="AppName">Run GAP</string>
+    <!-- Shown as the field label on the native data screen. Kept short so
+         it fits a single data-field cell on small (s) bezels. -->
+    <string id="FieldLabel">GAP</string>
+</strings>
