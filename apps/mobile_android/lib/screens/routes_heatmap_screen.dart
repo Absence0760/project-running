@@ -215,11 +215,64 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       return;
     }
     if (hit.isCluster) {
-      _mapController.move(LatLng(hit.lat, hit.lng), camera.zoom + 2);
-      _scheduleRefresh();
+      // Overlapping pins (routes that share a start can't be zoomed
+      // apart) — list them so the user picks, instead of zooming uselessly.
+      _showClusterSheet(hit.items);
     } else {
       _selectRoute(hit.first, pan: false);
     }
+  }
+
+  Future<void> _showClusterSheet(List<cm.DiscoverableRoutePin> routes) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      useSafeArea: true,
+      showDragHandle: true,
+      builder: (ctx) {
+        return ListView(
+          shrinkWrap: true,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                '${routes.length} routes start here',
+                style: Theme.of(ctx).textTheme.titleSmall,
+              ),
+            ),
+            for (final p in routes)
+              ListTile(
+                dense: true,
+                leading: p.featured
+                    ? const Icon(Icons.star, color: Color(0xFFFACC15), size: 20)
+                    : const Icon(Icons.place_outlined, size: 20),
+                title: Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+                subtitle: Row(
+                  children: [
+                    if (bandForDistance(p.distanceM) != null)
+                      _bandBadge(bandForDistance(p.distanceM)!.label),
+                    Flexible(
+                      child: Text(
+                        <String>[
+                          formatDistanceForPref(p.distanceM),
+                          if (p.surface.isNotEmpty) p.surface,
+                          if (p.runCount > 0)
+                            '${p.runCount} run${p.runCount == 1 ? '' : 's'}',
+                        ].join(' · '),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+                onTap: () {
+                  Navigator.of(ctx).pop();
+                  _selectRoute(p, pan: true);
+                },
+              ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _selectRoute(
