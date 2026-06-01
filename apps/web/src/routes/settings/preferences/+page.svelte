@@ -357,17 +357,16 @@
 
 <div class="page">
 	<header class="page-head">
-		<p class="kicker">Settings</p>
-		<h1>Preferences</h1>
+		<p class="kicker">{m('prefs.kicker')}</p>
+		<h1>{m('prefs.heading')}</h1>
 		<p class="tagline">
-			Units, defaults, privacy, and the knobs that shape how every run is recorded
-			and shown. Changes save automatically and sync across every device you sign into.
+			{m('prefs.tagline')}
 		</p>
 		<p class="save-status" role="status" aria-live="polite" data-testid="save-status">
 			{#if saveStatus === 'saving'}
-				<span class="material-symbols spin" aria-hidden="true">progress_activity</span> Saving…
+				<span class="material-symbols spin" aria-hidden="true">progress_activity</span> {m('prefs.saving')}
 			{:else if saveStatus === 'saved'}
-				<span class="material-symbols" aria-hidden="true">check_circle</span> Saved
+				<span class="material-symbols" aria-hidden="true">check_circle</span> {m('prefs.saved')}
 			{/if}
 		</p>
 	</header>
@@ -386,11 +385,11 @@
 				</div>
 			{/each}
 		</div>
-		<p class="sr-only" role="status">Loading preferences…</p>
+		<p class="sr-only" role="status">{m('prefs.loading')}</p>
 	{:else}
 		<!-- Units -->
 		<section class="card">
-			<h2>Units & Display</h2>
+			<h2>{m('prefs.unitsDisplayHeading')}</h2>
 			<div class="form-grid">
 				<label>
 					<span class="label-text">{m('prefs.language')}</span>
@@ -405,14 +404,14 @@
 					</select>
 				</label>
 				<div class="field">
-					<span class="label-text">Distance Unit</span>
-					<div class="toggle-row" role="group" aria-label="Distance Unit">
-						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => pickDistanceUnit('km')} type="button">Kilometres</button>
-						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => pickDistanceUnit('mi')} type="button">Miles</button>
+					<span class="label-text">{m('prefs.distanceUnit')}</span>
+					<div class="toggle-row" role="group" aria-label={m('prefs.distanceUnit')}>
+						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => pickDistanceUnit('km')} type="button">{m('prefs.kilometres')}</button>
+						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => pickDistanceUnit('mi')} type="button">{m('prefs.miles')}</button>
 					</div>
 				</div>
 				<label>
-					<span class="label-text">Pace Format</span>
+					<span class="label-text">{m('prefs.paceFormat')}</span>
 					<select bind:value={paceFormat} onchange={() => autoSave({ units_pace_format: paceFormat })}>
 						<option value="min_per_km">min/km</option>
 						<option value="min_per_mi">min/mi</option>
@@ -421,7 +420,7 @@
 					</select>
 				</label>
 				<label>
-					<span class="label-text">Map Style</span>
+					<span class="label-text">{m('prefs.mapStyle')}</span>
 					<select
 						bind:value={mapStyle}
 						onchange={() => {
@@ -429,40 +428,40 @@
 							autoSave({ map_style: mapStyle });
 						}}
 					>
-						<option value="streets">Streets</option>
-						<option value="satellite">Satellite</option>
-						<option value="outdoors">Outdoors</option>
-						<option value="dark">Dark</option>
+						<option value="streets">{m('prefs.mapStyleStreets')}</option>
+						<option value="satellite">{m('prefs.mapStyleSatellite')}</option>
+						<option value="outdoors">{m('prefs.mapStyleOutdoors')}</option>
+						<option value="dark">{m('prefs.mapStyleDark')}</option>
 					</select>
 				</label>
 				<label>
-					<span class="label-text">Week Starts On</span>
+					<span class="label-text">{m('prefs.weekStartsOn')}</span>
 					<select bind:value={weekStartDay} onchange={() => autoSave({ week_start_day: weekStartDay })}>
-						<option value="monday">Monday</option>
-						<option value="sunday">Sunday</option>
+						<option value="monday">{m('prefs.monday')}</option>
+						<option value="sunday">{m('prefs.sunday')}</option>
 					</select>
 				</label>
 				<div class="field">
-					<span class="label-text">Theme</span>
-					<div class="toggle-row" role="group" aria-label="Theme">
+					<span class="label-text">{m('prefs.theme')}</span>
+					<div class="toggle-row" role="group" aria-label={m('prefs.theme')}>
 						<button
 							class="toggle-btn"
 							class:active={theme === 'auto'}
 							onclick={() => changeTheme('auto')}
 							type="button"
-						>Auto</button>
+						>{m('prefs.themeAuto')}</button>
 						<button
 							class="toggle-btn"
 							class:active={theme === 'light'}
 							onclick={() => changeTheme('light')}
 							type="button"
-						>Light</button>
+						>{m('prefs.themeLight')}</button>
 						<button
 							class="toggle-btn"
 							class:active={theme === 'dark'}
 							onclick={() => changeTheme('dark')}
 							type="button"
-						>Dark</button>
+						>{m('prefs.themeDark')}</button>
 					</div>
 				</div>
 			</div>
@@ -470,31 +469,31 @@
 
 		<!-- Activity & Recording -->
 		<section class="card">
-			<h2>Activity & Recording</h2>
+			<h2>{m('prefs.activityRecordingHeading')}</h2>
 			<div class="form-grid">
 				<label>
-					<span class="label-text">Default Activity</span>
+					<span class="label-text">{m('prefs.defaultActivity')}</span>
 					<select bind:value={defaultActivity} onchange={() => autoSave({ default_activity_type: defaultActivity })}>
-						<option value="run">Run</option>
-						<option value="walk">Walk</option>
-						<option value="hike">Hike</option>
-						<option value="cycle">Cycle</option>
+						<option value="run">{m('prefs.activityRun')}</option>
+						<option value="walk">{m('prefs.activityWalk')}</option>
+						<option value="hike">{m('prefs.activityHike')}</option>
+						<option value="cycle">{m('prefs.activityCycle')}</option>
 					</select>
 				</label>
 				<label class="checkbox-label">
 					<input type="checkbox" bind:checked={voiceFeedbackEnabled} onchange={() => autoSave({ voice_feedback_enabled: voiceFeedbackEnabled })} />
-					<span>Spoken split announcements (mobile + watch)</span>
+					<span>{m('prefs.spokenSplits')}</span>
 				</label>
 				{#if voiceFeedbackEnabled}
 					<label>
-						<span class="label-text">Cue detail</span>
+						<span class="label-text">{m('prefs.cueDetail')}</span>
 						<select bind:value={voiceFeedbackVerbosity} onchange={() => autoSave({ voice_feedback_verbosity: voiceFeedbackVerbosity })}>
-							<option value="full">Full — every cue</option>
-							<option value="minimal">Minimal — skip mid-rep & pace-drift nudges</option>
+							<option value="full">{m('prefs.cueDetailFull')}</option>
+							<option value="minimal">{m('prefs.cueDetailMinimal')}</option>
 						</select>
 					</label>
 					<label>
-						<span class="label-text">Split interval ({preferredUnit})</span>
+						<span class="label-text">{m('prefs.splitInterval', { unit: preferredUnit })}</span>
 						<!-- min/max/step are in the displayed unit by design — a
 						     0.5–10 range reads as round numbers whether the user
 						     thinks in km or mi (a mi-user gets 0.5–10 mile splits,
@@ -520,11 +519,11 @@
 					</label>
 				{/if}
 				<label id="weekly-mileage-goal">
-					<span class="label-text">Weekly Mileage Goal (m)</span>
+					<span class="label-text">{m('prefs.weeklyMileageGoal')}</span>
 					<input
 						type="number"
 						bind:value={weeklyMileageGoal}
-						placeholder="e.g. 40000 (40 km)"
+						placeholder={m('prefs.weeklyMileageGoalPlaceholder')}
 						onblur={() => autoSave({ weekly_mileage_goal_m: weeklyMileageGoal ? parseInt(weeklyMileageGoal, 10) || null : null })}
 					/>
 				</label>
@@ -533,56 +532,52 @@
 
 		<!-- Heart Rate Zones -->
 		<section class="card" id="heart-rate-zones">
-			<h2>Heart Rate Zones</h2>
+			<h2>{m('prefs.heartRateZonesHeading')}</h2>
 			<p class="section-desc">
-				Your measured resting and max heart rate. A measured max HR overrides the
-				age-based estimate (208 − 0.7 × age) we'd otherwise use — set it if a
-				medication like a beta-blocker makes the formula wrong for you.
+				{m('prefs.heartRateZonesDesc')}
 			</p>
 			<div class="form-grid">
 				<label>
-					<span class="label-text">Resting HR (bpm)</span>
-					<input type="number" bind:value={restingHr} min="30" max="120" placeholder="e.g. 55" onblur={() => autoSave({ resting_hr_bpm: restingHr ? parseInt(restingHr, 10) || null : null })} />
+					<span class="label-text">{m('prefs.restingHr')}</span>
+					<input type="number" bind:value={restingHr} min="30" max="120" placeholder={m('prefs.restingHrPlaceholder')} onblur={() => autoSave({ resting_hr_bpm: restingHr ? parseInt(restingHr, 10) || null : null })} />
 				</label>
 				<label>
-					<span class="label-text">Max HR (bpm)</span>
-					<input type="number" bind:value={maxHr} min="100" max="230" placeholder="e.g. 185" onblur={() => autoSave({ max_hr_bpm: maxHr ? parseInt(maxHr, 10) || null : null })} />
+					<span class="label-text">{m('prefs.maxHr')}</span>
+					<input type="number" bind:value={maxHr} min="100" max="230" placeholder={m('prefs.maxHrPlaceholder')} onblur={() => autoSave({ max_hr_bpm: maxHr ? parseInt(maxHr, 10) || null : null })} />
 				</label>
 			</div>
-			<p class="section-desc">Upper bound in bpm for each zone. Leave blank if you don't know.</p>
+			<p class="section-desc">{m('prefs.zonesUpperBoundDesc')}</p>
 			<div class="form-grid zones">
-				<label><span class="label-text">Z1 (recovery)</span><input type="number" bind:value={z1} placeholder="130" onblur={saveHrZones} /></label>
-				<label><span class="label-text">Z2 (easy)</span><input type="number" bind:value={z2} placeholder="145" onblur={saveHrZones} /></label>
-				<label><span class="label-text">Z3 (tempo)</span><input type="number" bind:value={z3} placeholder="160" onblur={saveHrZones} /></label>
-				<label><span class="label-text">Z4 (threshold)</span><input type="number" bind:value={z4} placeholder="175" onblur={saveHrZones} /></label>
-				<label><span class="label-text">Z5 (max)</span><input type="number" bind:value={z5} placeholder="195" onblur={saveHrZones} /></label>
+				<label><span class="label-text">{m('prefs.zone1Recovery')}</span><input type="number" bind:value={z1} placeholder="130" onblur={saveHrZones} /></label>
+				<label><span class="label-text">{m('prefs.zone2Easy')}</span><input type="number" bind:value={z2} placeholder="145" onblur={saveHrZones} /></label>
+				<label><span class="label-text">{m('prefs.zone3Tempo')}</span><input type="number" bind:value={z3} placeholder="160" onblur={saveHrZones} /></label>
+				<label><span class="label-text">{m('prefs.zone4Threshold')}</span><input type="number" bind:value={z4} placeholder="175" onblur={saveHrZones} /></label>
+				<label><span class="label-text">{m('prefs.zone5Max')}</span><input type="number" bind:value={z5} placeholder="195" onblur={saveHrZones} /></label>
 			</div>
 		</section>
 
 		<!-- Privacy & Sharing -->
 		<section class="card">
-			<h2>Privacy & Sharing</h2>
+			<h2>{m('prefs.privacySharingHeading')}</h2>
 			<div class="form-stack">
 				<label class="field">
-					<span class="label-text">Default Visibility for New Runs</span>
+					<span class="label-text">{m('prefs.defaultVisibility')}</span>
 					<select bind:value={privacyDefault} onchange={() => autoSave({ privacy_default: privacyDefault })}>
-						<option value="public">Public</option>
-						<option value="followers">Followers only</option>
-						<option value="private">Private</option>
+						<option value="public">{m('prefs.visibilityPublic')}</option>
+						<option value="followers">{m('prefs.visibilityFollowers')}</option>
+						<option value="private">{m('prefs.visibilityPrivate')}</option>
 					</select>
 				</label>
 				<label class="checkbox-row">
 					<input type="checkbox" bind:checked={stravaAutoShare} onchange={() => autoSave({ strava_auto_share: stravaAutoShare })} />
-					<span>Auto-push runs to Strava</span>
+					<span>{m('prefs.autoPushStrava')}</span>
 				</label>
 				<label class="checkbox-row">
 					<input type="checkbox" bind:checked={discoverableInSearch} onchange={() => autoSave({ discoverable_in_search: discoverableInSearch })} />
 					<span>
-						Show me in name search
+						{m('prefs.showInSearch')}
 						<span class="hint">
-							When off, your account won't appear when other runners search by
-							display name. Your public runs and profile remain reachable to
-							anyone with the URL.
+							{m('prefs.showInSearchHint')}
 						</span>
 					</span>
 				</label>
@@ -593,45 +588,38 @@
 		     Combined they are special-category data under GDPR Art 9 so the
 		     explicit-consent checkbox is the precondition for saving either. -->
 		<section class="card">
-			<h2>Demographics</h2>
+			<h2>{m('prefs.demographicsHeading')}</h2>
 			<p class="section-desc">
-				Optional. Lets segment leaderboards filter by gender and 5-year age band — the same buckets
-				Strava uses. Leave blank to stay out of those filtered views.
+				{m('prefs.demographicsDesc')}
 			</p>
 			<p class="section-desc consent-notice">
-				These fields are health-adjacent personal data under GDPR Art 9. We process
-				them only with your explicit consent and only to power the
-				gender + age-band views you see on segment leaderboards. See our
-				<a href="/privacy">privacy policy</a> for the full purposes,
-				retention, and your withdrawal rights.
+				{m('prefs.demographicsConsentNotice')}
+				<a href="/privacy">{m('prefs.privacyPolicyLink')}</a>{m('prefs.demographicsConsentNoticeTail')}
 			</p>
 			<label class="consent-checkbox">
 				<input type="checkbox" bind:checked={healthDataConsent} />
 				<span>
-					I consent to Threkir storing my gender and date of birth for the
-					segment-leaderboard tiering described above (GDPR Art 9(2)(a)).
+					{m('prefs.demographicsConsent')}
 				</span>
 			</label>
 			<div class="form-grid">
 				<label>
-					<span class="label-text">Gender</span>
+					<span class="label-text">{m('prefs.gender')}</span>
 					<select bind:value={gender} disabled={!healthDataConsent}>
-						<option value="">Prefer not to say</option>
-						<option value="male">Male</option>
-						<option value="female">Female</option>
-						<option value="nonbinary">Nonbinary</option>
+						<option value="">{m('prefs.genderPreferNotToSay')}</option>
+						<option value="male">{m('prefs.genderMale')}</option>
+						<option value="female">{m('prefs.genderFemale')}</option>
+						<option value="nonbinary">{m('prefs.genderNonbinary')}</option>
 					</select>
 				</label>
 				<label>
-					<span class="label-text">Date of birth</span>
+					<span class="label-text">{m('prefs.dateOfBirth')}</span>
 					<input type="date" bind:value={dateOfBirth} disabled={!healthDataConsent} />
 				</label>
 			</div>
 			{#if healthDataConsentAt}
 				<p class="section-hint">
-					Consent recorded on {new Date(healthDataConsentAt).toLocaleDateString()}.
-					Unticking the checkbox above and saving will withdraw consent and
-					clear both fields per Art 7(3).
+					{m('prefs.consentRecordedOn', { date: new Date(healthDataConsentAt).toLocaleDateString() })}
 				</p>
 			{/if}
 			<!-- Unlike the rest of the page, demographics do NOT auto-save:
@@ -644,23 +632,21 @@
 				disabled={savingDemographics}
 				data-testid="save-demographics"
 			>
-				{savingDemographics ? 'Saving…' : demographicsSaved ? 'Saved!' : 'Save demographics'}
+				{savingDemographics ? m('prefs.saving') : demographicsSaved ? m('prefs.demographicsSavedBtn') : m('prefs.saveDemographics')}
 			</button>
 		</section>
 
 		<!-- Privacy zones — clipped from the start and end of public tracks. -->
 		<section class="card">
-			<h2>Privacy zones</h2>
+			<h2>{m('prefs.privacyZonesHeading')}</h2>
 			<p class="section-hint">
-				Hide a radius around home, work, or anywhere else from public run + route shares. The
-				start and end of any track that falls inside a zone is clipped before the public sees
-				it. Owner views always show the full track.
+				{m('prefs.privacyZonesDesc')}
 			</p>
 
 			{#if privacyZones.length === 0}
 				<div class="inline-empty">
 					<span class="material-symbols" aria-hidden="true">my_location</span>
-					<p>No privacy zones yet. Add one around your home or workplace to hide it from public shares.</p>
+					<p>{m('prefs.privacyZonesEmpty')}</p>
 				</div>
 			{:else}
 				<ul class="zone-list">
@@ -670,10 +656,10 @@
 								<div class="zone-coords">
 									{zone.lat.toFixed(5)}, {zone.lng.toFixed(5)}
 								</div>
-								<div class="zone-radius">{zone.radius_m} m radius</div>
+								<div class="zone-radius">{m('prefs.zoneRadius', { radius: String(zone.radius_m) })}</div>
 							</div>
 							<button class="btn btn-outline btn-sm" type="button" onclick={() => removeZone(idx)}>
-								Remove
+								{m('prefs.removeZone')}
 							</button>
 						</li>
 					{/each}
@@ -683,7 +669,7 @@
 			<div>
 				<button class="btn btn-primary" type="button" onclick={() => (showZonePicker = true)}>
 					<span class="material-symbols">add</span>
-					Add a zone
+					{m('prefs.addZone')}
 				</button>
 			</div>
 		</section>
@@ -694,13 +680,9 @@
 		     hooks.server.ts + hooks.client.ts gates Sentry on this
 		     state. See audit/gdpr (2026-05-25) High. -->
 		<section class="card">
-			<h2>Privacy & telemetry</h2>
+			<h2>{m('prefs.telemetryHeading')}</h2>
 			<p class="section-desc">
-				When enabled, anonymised error reports (URL paths, stack
-				traces, breadcrumbs without auth tokens) are sent to Sentry —
-				a US-hosted sub-processor — so we can spot crashes and
-				regressions. Disable to stop sending. Your withdrawal
-				takes effect immediately on the next page load.
+				{m('prefs.telemetryDesc')}
 			</p>
 			<label class="consent-checkbox">
 				<input
@@ -717,25 +699,25 @@
 						);
 					}}
 				/>
-				<span>Send anonymised error reports to Sentry.</span>
+				<span>{m('prefs.telemetryConsent')}</span>
 			</label>
 			{#if consent.timestamp}
 				<p class="section-hint">
-					Choice recorded on {new Date(consent.timestamp).toLocaleDateString()}.
+					{m('prefs.choiceRecordedOn', { date: new Date(consent.timestamp).toLocaleDateString() })}
 				</p>
 			{/if}
 		</section>
 
 		<!-- AI Coach -->
 		<section class="card">
-			<h2>AI Coach</h2>
+			<h2>{m('prefs.aiCoachHeading')}</h2>
 			<div class="form-grid">
 				<label>
-					<span class="label-text">Coach Personality</span>
+					<span class="label-text">{m('prefs.coachPersonality')}</span>
 					<select bind:value={coachPersonality} onchange={() => autoSave({ coach_personality: coachPersonality })}>
-						<option value="supportive">Supportive</option>
-						<option value="drill_sergeant">Drill Sergeant</option>
-						<option value="analytical">Analytical</option>
+						<option value="supportive">{m('prefs.coachSupportive')}</option>
+						<option value="drill_sergeant">{m('prefs.coachDrillSergeant')}</option>
+						<option value="analytical">{m('prefs.coachAnalytical')}</option>
 					</select>
 				</label>
 			</div>
@@ -745,7 +727,7 @@
 
 <Modal
 	open={showZonePicker}
-	title="Add a privacy zone"
+	title={m('prefs.addZoneModalTitle')}
 	onclose={() => (showZonePicker = false)}
 	wide
 >
