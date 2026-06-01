@@ -37,6 +37,21 @@ test.describe('i18n locale negotiation', () => {
 		await context.close();
 	});
 
+	test('the login page renders in the browser language (cluster: login)', async ({ browser }) => {
+		const de = await browser.newContext({ locale: 'de-DE' });
+		const p1 = await de.newPage();
+		await p1.goto('/login');
+		await expect(p1.locator('html')).toHaveAttribute('lang', 'de');
+		await expect(p1.getByRole('button', { name: 'Mit Google fortfahren' })).toBeVisible();
+		await de.close();
+
+		const en = await browser.newContext({ locale: 'en-US' });
+		const p2 = await en.newPage();
+		await p2.goto('/login');
+		await expect(p2.getByRole('button', { name: 'Continue with Google' })).toBeVisible();
+		await en.close();
+	});
+
 	test('an unsupported language falls back to English', async ({ browser }) => {
 		const context = await browser.newContext({ locale: 'it-IT' });
 		const page = await context.newPage();

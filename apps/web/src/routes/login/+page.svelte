@@ -6,6 +6,7 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { checkSignUpGates } from '$lib/core/auth_gates';
+	import { m } from '$lib/i18n/store.svelte';
 
 	let error = $state('');
 	let info = $state('');
@@ -73,7 +74,7 @@
 		try {
 			await auth.signInWithGoogle();
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Sign in failed';
+			error = err instanceof Error ? err.message : m('login.signInFailed');
 			loading = false;
 		}
 	}
@@ -84,7 +85,7 @@
 		// the user clearly and point them at the working options. When
 		// Apple OAuth ships, copy the `handleGoogleSignIn` gate
 		// pattern so the sign-up checkboxes apply to Apple too.
-		error = 'Sign in with Apple is coming soon. For now, please use Google or email.';
+		error = m('login.appleSoon');
 	}
 
 	async function handleEmailSubmit(e: Event) {
@@ -137,22 +138,28 @@
 				goto(safeReturnTo());
 			}
 		} catch (err) {
-			error = err instanceof Error ? err.message : 'Authentication failed';
+			error = err instanceof Error ? err.message : m('login.authFailed');
 		} finally {
 			loading = false;
 		}
 	}
 
-	let kicker = $derived(isReset ? 'Forgot your password?' : isSignUp ? 'Join Threkir' : 'Welcome back');
+	let kicker = $derived(
+		isReset ? m('login.kicker.reset') : isSignUp ? m('login.kicker.signup') : m('login.kicker.signin')
+	);
 	let headline = $derived(
-		isReset ? 'Reset your password' : isSignUp ? 'Create an account' : 'Sign in to your account'
+		isReset
+			? m('login.headline.reset')
+			: isSignUp
+				? m('login.headline.signup')
+				: m('login.headline.signin')
 	);
 	let subtitle = $derived(
 		isReset
-			? "Enter your email and we'll send you a reset link."
+			? m('login.subtitle.reset')
 			: isSignUp
-				? 'Track your runs across every device. Free forever.'
-				: 'Pick up where you left off — your runs are waiting.'
+				? m('login.subtitle.signup')
+				: m('login.subtitle.signin')
 	);
 </script>
 
@@ -164,23 +171,23 @@
 		</a>
 		<div class="brand-copy">
 			<p class="brand-kicker">{kicker}</p>
-			<h2 class="brand-headline">Track every run. Plan every race. Bring your club along.</h2>
+			<h2 class="brand-headline">{m('login.brandHeadline')}</h2>
 			<ul class="brand-bullets">
 				<li>
 					<span class="bullet-dot" aria-hidden="true"></span>
-					<span>Map, splits, elevation, HR zones — the basics, polished.</span>
+					<span>{m('login.bullet1')}</span>
 				</li>
 				<li>
 					<span class="bullet-dot" aria-hidden="true"></span>
-					<span>Plans that adapt: VDOT, Riegel, week-by-week editable preview.</span>
+					<span>{m('login.bullet2')}</span>
 				</li>
 				<li>
 					<span class="bullet-dot" aria-hidden="true"></span>
-					<span>Clubs, kudos, comments. Private by default; share what you choose.</span>
+					<span>{m('login.bullet3')}</span>
 				</li>
 			</ul>
 		</div>
-		<p class="brand-foot">Free forever. Add Pro to unlock club perks, the coach, and bulk imports.</p>
+		<p class="brand-foot">{m('login.brandFoot')}</p>
 	</aside>
 
 	<main class="form-pane">
@@ -210,20 +217,20 @@
 							<path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
 							<path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
 						</svg>
-						Continue with Google
+						{m('login.continueGoogle')}
 					</button>
 
 					<button class="btn btn-apple" onclick={handleAppleSignIn} disabled={loading}>
 						<svg class="oauth-icon" viewBox="0 0 24 24" width="20" height="20" fill="white">
 							<path d="M17.05 20.28c-.98.95-2.05.88-3.08.4-1.09-.5-2.08-.48-3.24 0-1.44.62-2.2.44-3.06-.4C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/>
 						</svg>
-						Continue with Apple
-						<span class="soon-pill">Soon</span>
+						{m('login.continueApple')}
+						<span class="soon-pill">{m('login.soon')}</span>
 					</button>
 				</div>
 
 				<div class="divider">
-					<span>or continue with email</span>
+					<span>{m('login.orEmail')}</span>
 				</div>
 			{/if}
 
@@ -237,22 +244,22 @@
 					alone is also valid per WCAG 3.3.2 but explicit
 					<label for> is the most compatible form.
 				-->
-				<label for="login-email" class="visually-hidden">Email address</label>
+				<label for="login-email" class="visually-hidden">{m('login.emailPlaceholder')}</label>
 				<input
 					id="login-email"
 					type="email"
 					bind:value={email}
-					placeholder="Email address"
+					placeholder={m('login.emailPlaceholder')}
 					required
 					autocomplete="email"
 				/>
 				{#if !isReset}
-					<label for="login-password" class="visually-hidden">Password</label>
+					<label for="login-password" class="visually-hidden">{m('login.passwordPlaceholder')}</label>
 					<input
 						id="login-password"
 						type="password"
 						bind:value={password}
-						placeholder="Password"
+						placeholder={m('login.passwordPlaceholder')}
 						required
 						minlength="6"
 						autocomplete={isSignUp ? 'new-password' : 'current-password'}
@@ -261,15 +268,15 @@
 				{#if isSignUp}
 					<label class="signup-check">
 						<input type="checkbox" bind:checked={confirmAdult} required />
-						<span>I confirm I am 16 years of age or older.</span>
+						<span>{m('login.confirmAdult')}</span>
 					</label>
 					<label class="signup-check">
 						<input type="checkbox" bind:checked={acceptTerms} required />
 						<span>
-							I have read and agree to the
-							<a href="/terms" target="_blank" rel="noopener noreferrer">Terms of Service</a>
-							and
-							<a href="/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.
+							{m('login.agreePrefix')}
+							<a href="/terms" target="_blank" rel="noopener noreferrer">{m('legal.termsOfService')}</a>
+							{m('login.agreeBetween')}
+							<a href="/privacy" target="_blank" rel="noopener noreferrer">{m('legal.privacyPolicy')}</a>{m('login.agreeSuffix')}
 						</span>
 					</label>
 				{/if}
@@ -279,11 +286,11 @@
 					disabled={!hydrated || loading || (isSignUp && (!confirmAdult || !acceptTerms))}
 				>
 					{#if loading}
-						{#if isReset}Sending...{:else}Signing {isSignUp ? 'up' : 'in'}...{/if}
+						{#if isReset}{m('login.sending')}{:else}{isSignUp ? m('login.signingUp') : m('login.signingIn')}{/if}
 					{:else if isReset}
-						Send reset link
+						{m('login.sendResetLink')}
 					{:else}
-						{isSignUp ? 'Sign Up' : 'Sign In'}
+						{isSignUp ? m('login.signUp') : m('login.signIn')}
 					{/if}
 				</button>
 			</form>
@@ -291,20 +298,20 @@
 			{#if isReset}
 				<p class="toggle-mode">
 					<button type="button" class="link-btn" onclick={() => { isReset = false; error = ''; info = ''; }}>
-						Back to sign in
+						{m('login.backToSignIn')}
 					</button>
 				</p>
 			{:else}
 				<p class="toggle-mode">
-					{isSignUp ? 'Already have an account?' : "Don't have an account?"}
+					{isSignUp ? m('login.haveAccount') : m('login.noAccount')}
 					<button type="button" class="link-btn" onclick={() => { isSignUp = !isSignUp; error = ''; }}>
-						{isSignUp ? 'Sign in' : 'Sign up'}
+						{isSignUp ? m('login.toggleToSignIn') : m('login.toggleToSignUp')}
 					</button>
 				</p>
 				{#if !isSignUp}
 					<p class="toggle-mode">
 						<button type="button" class="link-btn" onclick={() => { isReset = true; error = ''; password = ''; }}>
-							Forgot your password?
+							{m('login.kicker.reset')}
 						</button>
 					</p>
 				{/if}
