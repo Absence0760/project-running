@@ -2500,6 +2500,16 @@ Fixing this surfaced a latent bug: the web layer-visibility `$effect`s early-ret
 
 ---
 
+## 105. On the discovery map a click keeps a route; navigation is an explicit "View route" link (web)
+
+**Decided (2026-05-31):** clicking *any* route surface on `/routes/heatmap` — a list row, a map dot, a previewed line, or an overlap-popup row — used to navigate to `/routes/[id]`. A single mis-click yanked the user off the discovery map, discarding their filters, pan, and kept routes; the dot was the worst offender (it opened a popup whose primary action was the same navigation). The owner flagged this as bad UX.
+
+**A click now *inspects*, never *leaves*.** Clicking a route toggles "keep on map" (draws / removes its violet line) everywhere. Navigation moved behind an explicit, labelled **"View route →"** link — one per sidebar row, one per overlap-popup row. The route dot no longer opens a navigable popup at all; it just keeps / un-keeps. This collapses the older two-control model (§ 104: a separate keep button + a click-to-navigate row) into one: the row body *is* the keep target, and the old pin button is replaced by the View link. Power users keep a fast path — the View link is a real `<a href>`, so ctrl/cmd-click and right-click still open the detail page directly. Club pins are unchanged (their popup is informational, its only action a "View club" link).
+
+This is **web-only for now**: the mobile twin already avoids the mis-click trap (a tap selects → shows a route card → the card's button navigates), so it has no equivalent bug to fix. Whether mobile should adopt the same click-keeps model (rather than its select-card) is an open product question, not a parity regression.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
