@@ -823,6 +823,34 @@
 
 	let splits = $derived(run?.track ? computeRealSplits(run.track) : []);
 
+	/// Manually-marked laps. The recorder writes `metadata.laps` as an
+	/// array of `{ index, start_offset_s, distance_m, duration_s }` where
+	/// `distance_m` / `duration_s` are the *per-lap* deltas, not cumulative
+	/// (docs/backend/metadata.md § laps). `metadata` is null entirely when
+	/// there were no laps, so guard on both the bag and the key.
+	interface Lap {
+		index: number;
+		distance_m: number;
+		duration_s: number;
+	}
+	let laps = $derived.by<Lap[]>(() => {
+		const v = (run?.metadata as Record<string, unknown> | null)?.['laps'];
+		if (!Array.isArray(v)) return [];
+		return v
+			.filter(
+				(l): l is Lap =>
+					l != null &&
+					typeof (l as Lap).index === 'number' &&
+					typeof (l as Lap).distance_m === 'number' &&
+					typeof (l as Lap).duration_s === 'number',
+			)
+			.map((l) => ({
+				index: l.index,
+				distance_m: l.distance_m,
+				duration_s: l.duration_s,
+			}));
+	});
+
 	/// Static-map URL for the share card. Same pipeline as the
 	/// runs/routes list thumbnails — `buildLocalStaticMapUrl` for
 	/// the local Protomaps dev stack, `buildStaticMapUrl` for
@@ -1341,6 +1369,38 @@
 								<td class="num">{fmtPace(s.actual_pace_sec_per_km)}</td>
 								<td class="num pace-delta pace-delta-{paceDeltaClass(s)}">
 									{s.status === 'skipped' ? 'skip' : paceDeltaLabel(s)}
+								</td>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</section>
+		{/if}
+
+		<!-- Laps — manually marked mid-run on a recording client. Per-lap
+		     distance / duration / derived pace. Renders only when the run
+		     carries a non-empty `metadata.laps`; absent for runs with no
+		     laps (mobile parity, decisions §24). -->
+		{#if laps.length > 0}
+			<section class="section laps">
+				<h2>Laps</h2>
+				<table class="splits-table laps-table">
+					<thead>
+						<tr>
+							<th>Lap</th>
+							<th>Distance</th>
+							<th>Time</th>
+							<th>Pace</th>
+						</tr>
+					</thead>
+					<tbody>
+						{#each laps as lap}
+							<tr>
+								<td>{lap.index}</td>
+								<td>{formatDistance(lap.distance_m)}</td>
+								<td>{formatDuration(lap.duration_s)}</td>
+								<td class="split-pace">
+									{lap.distance_m > 0 ? formatPace(lap.duration_s, lap.distance_m) : '—'}
 								</td>
 							</tr>
 						{/each}
