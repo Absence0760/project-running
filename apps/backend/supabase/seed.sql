@@ -920,6 +920,71 @@ UPDATE routes SET run_count = 3 WHERE name = 'Sloan Lake Loop CW';
 UPDATE routes SET run_count = 1 WHERE name = 'Wash Park Half Adventure';
 UPDATE routes SET run_count = 1 WHERE name = 'Sloan Lake Double';
 
+-- ───────────────── Richmond, VA route density ─────────────────
+--
+-- A realistic spread of public routes around Richmond — the default
+-- dev / demo city (bin/protomaps-dev.sh extracts Virginia tiles) — so
+-- the discovery map looks lived-in when you open it on Richmond instead
+-- of a near-empty handful. Real local running spots, distances spread
+-- across the race-distance bands, and a mix of lens states (featured /
+-- popular / un-run hidden gem / a followee-owned route for `friends`).
+-- The discovery RPCs are all bbox-windowed + capped, so more routes
+-- here don't slow the heatmap down — only what's in your viewport is
+-- fetched, and at most 100 pins / 200 densified routes per call.
+INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, is_public) VALUES
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Monument Avenue 10K',
+  '[{"lat":37.5546,"lng":-77.4700,"ele":60},{"lat":37.5560,"lng":-77.4760,"ele":62},{"lat":37.5575,"lng":-77.4830,"ele":64},{"lat":37.5588,"lng":-77.4900,"ele":66}]',
+  10000, 30, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Forest Hill Park Loop',
+  '[{"lat":37.5200,"lng":-77.4800,"ele":70},{"lat":37.5215,"lng":-77.4770,"ele":78},{"lat":37.5205,"lng":-77.4745,"ele":74},{"lat":37.5190,"lng":-77.4775,"ele":68},{"lat":37.5200,"lng":-77.4800,"ele":70}]',
+  4200, 45, 'trail', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Buttermilk Trail',
+  '[{"lat":37.5300,"lng":-77.4650,"ele":55},{"lat":37.5285,"lng":-77.4580,"ele":62},{"lat":37.5278,"lng":-77.4500,"ele":70},{"lat":37.5270,"lng":-77.4420,"ele":66}]',
+  8000, 95, 'trail', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'North Bank + Texas Beach',
+  '[{"lat":37.5560,"lng":-77.4620,"ele":58},{"lat":37.5545,"lng":-77.4575,"ele":52},{"lat":37.5530,"lng":-77.4540,"ele":48},{"lat":37.5520,"lng":-77.4510,"ele":50}]',
+  6500, 40, 'trail', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Byrd Park Vita Course',
+  '[{"lat":37.5350,"lng":-77.4720,"ele":62},{"lat":37.5365,"lng":-77.4700,"ele":64},{"lat":37.5360,"lng":-77.4675,"ele":63},{"lat":37.5345,"lng":-77.4695,"ele":61},{"lat":37.5350,"lng":-77.4720,"ele":62}]',
+  5000, 25, 'mixed', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Maymont Loop',
+  '[{"lat":37.5310,"lng":-77.4830,"ele":58},{"lat":37.5325,"lng":-77.4815,"ele":72},{"lat":37.5315,"lng":-77.4795,"ele":66},{"lat":37.5300,"lng":-77.4815,"ele":56},{"lat":37.5310,"lng":-77.4830,"ele":58}]',
+  3800, 55, 'mixed', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Bryan Park Perimeter',
+  '[{"lat":37.6000,"lng":-77.4600,"ele":68},{"lat":37.6020,"lng":-77.4565,"ele":70},{"lat":37.6005,"lng":-77.4530,"ele":66},{"lat":37.5985,"lng":-77.4570,"ele":64}]',
+  5500, 35, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Capital Trail to Rocketts',
+  '[{"lat":37.5300,"lng":-77.4250,"ele":12},{"lat":37.5320,"lng":-77.4150,"ele":14},{"lat":37.5345,"lng":-77.4040,"ele":16},{"lat":37.5360,"lng":-77.3940,"ele":15}]',
+  11000, 28, 'mixed', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Brown''s Island + Canal Walk',
+  '[{"lat":37.5340,"lng":-77.4400,"ele":48},{"lat":37.5335,"lng":-77.4360,"ele":46},{"lat":37.5345,"lng":-77.4320,"ele":47},{"lat":37.5355,"lng":-77.4355,"ele":49}]',
+  4800, 18, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Libby Hill Sprints',
+  '[{"lat":37.5300,"lng":-77.4220,"ele":40},{"lat":37.5310,"lng":-77.4200,"ele":58},{"lat":37.5295,"lng":-77.4185,"ele":62},{"lat":37.5285,"lng":-77.4205,"ele":44}]',
+  4500, 70, 'road', true),
+('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Richmond Marathon Route',
+  '[{"lat":37.5546,"lng":-77.4700,"ele":60},{"lat":37.5300,"lng":-77.4400,"ele":45},{"lat":37.5350,"lng":-77.3950,"ele":30},{"lat":37.5600,"lng":-77.4200,"ele":55},{"lat":37.5400,"lng":-77.4600,"ele":50}]',
+  42195, 280, 'road', true),
+('b2c3d4e5-f6a7-8901-bcde-f23456789012', 'Alex''s Fan District Loop',
+  '[{"lat":37.5520,"lng":-77.4650,"ele":60},{"lat":37.5535,"lng":-77.4620,"ele":62},{"lat":37.5525,"lng":-77.4595,"ele":61},{"lat":37.5510,"lng":-77.4625,"ele":59},{"lat":37.5520,"lng":-77.4650,"ele":60}]',
+  5200, 22, 'road', true);
+
+-- Lens states for Richmond (see the comment above).
+UPDATE routes SET featured = true, featured_at = now()
+  WHERE name IN (
+    'Monument Avenue 10K',
+    'Brown''s Island + Canal Walk',
+    'Richmond Marathon Route'
+  );
+UPDATE routes SET run_count = 5 WHERE name = 'Forest Hill Park Loop';
+UPDATE routes SET run_count = 4 WHERE name = 'Buttermilk Trail';
+UPDATE routes SET run_count = 3 WHERE name = 'North Bank + Texas Beach';
+UPDATE routes SET run_count = 8 WHERE name = 'Byrd Park Vita Course';
+UPDATE routes SET run_count = 2 WHERE name = 'Maymont Loop';
+UPDATE routes SET run_count = 6 WHERE name = 'Capital Trail to Rocketts';
+-- 'Bryan Park Perimeter' + 'Libby Hill Sprints' stay run_count 0 → hidden
+-- gems; 'Alex''s Fan District Loop' stays 0 + alex-owned → friends only.
+
 -- ─────────────────────── e2e fixtures ───────────────────────
 --
 -- Additions for the Playwright e2e suite (apps/web/tests-e2e/).

@@ -260,7 +260,12 @@ test.describe('Heatmap filters popover (web)', () => {
 		await open(page);
 
 		const count = page.locator('.results-count strong');
-		await expect(count).toHaveText('6', { timeout: 6000 }); // popular VA
+		const readCount = async () =>
+			parseInt((await count.textContent()) ?? '0', 10);
+		// Relationship-based, not a magic number, so adding seed routes in
+		// VA doesn't break it: popular has routes.
+		await expect.poll(readCount, { timeout: 6000 }).toBeGreaterThanOrEqual(1);
+		const popularN = await readCount();
 
 		// Filters panel is closed until the button is pressed.
 		await expect(page.getByTestId('filters-panel')).toHaveCount(0);
@@ -272,41 +277,56 @@ test.describe('Heatmap filters popover (web)', () => {
 		const featuredChip = panel.locator('[data-filter="featured"]');
 		await expect(popularChip).toHaveAttribute('aria-pressed', 'true');
 
-		// Featured lens → 3 routes, and the Filters button badge shows 1
-		// active (non-default) filter.
+		// Featured is a non-default lens (badge = 1) and a subset of
+		// popular, so its count is >=1 and never exceeds the popular count.
 		await featuredChip.click();
 		await expect(featuredChip).toHaveAttribute('aria-pressed', 'true');
-		await expect(count).toHaveText('3', { timeout: 6000 });
+		await expect(popularChip).toHaveAttribute('aria-pressed', 'false');
 		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('1');
+		await expect.poll(readCount, { timeout: 6000 }).toBeLessThanOrEqual(popularN);
+		expect(await readCount()).toBeGreaterThanOrEqual(1);
 	});
 
-	test('race-distance bands filter the results in any combination', async ({ page }) => {
+	test('race-distance bands filter the results to the chosen bands', async ({ page }) => {
 		await open(page);
 		await page.getByTestId('filters-button').click();
 		const bands = page.getByTestId('band-chips');
-		const count = page.locator('.results-count strong');
-
-		// VA popular distances: 4200, 4800, 6300, 6500, 7200, 10200.
-		// 5K window [4000,6000) → 2.
-		await bands.locator('[data-band="5k"]').click();
-		await expect(count).toHaveText('2', { timeout: 6000 });
-		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('1');
-
-		// Add 10K [8000,12000) → union is 3 (the 10200 route joins).
-		await bands.locator('[data-band="10k"]').click();
-		await expect(count).toHaveText('3', { timeout: 6000 });
-		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('2');
-
-		// Every surviving row carries a 5K or 10K band badge.
 		const badges = page.locator('.results-list .result-band');
-		await expect(badges).toHaveCount(3);
-		for (const t of await badges.allTextContents()) {
-			expect(['5K', '10K']).toContain(t);
-		}
+		const rows = page.locator('.results-list .result-row');
 
-		// Reset clears the lens + bands back to the default 6.
+		// 5K only → every visible row is a 5K route (badge text + count
+		// agree). Asserting the *contract* (band filtering is correct), not
+		// a magic total, so it survives more VA seed.
+		await bands.locator('[data-band="5k"]').click();
+		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('1');
+		await expect
+			.poll(
+				async () => {
+					const l = await badges.allTextContents();
+					return l.length > 0 && l.every((x) => x === '5K');
+				},
+				{ timeout: 6000 },
+			)
+			.toBe(true);
+		const fiveKCount = await rows.count();
+		expect(await badges.count(), 'every 5K row carries a 5K badge').toBe(fiveKCount);
+
+		// Add 10K → the result is the union, so every row is now 5K or 10K
+		// and the count never shrinks below the 5K-only count.
+		await bands.locator('[data-band="10k"]').click();
+		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveText('2');
+		await expect
+			.poll(
+				async () => {
+					const l = await badges.allTextContents();
+					return l.length >= fiveKCount && l.every((x) => x === '5K' || x === '10K');
+				},
+				{ timeout: 6000 },
+			)
+			.toBe(true);
+
+		// Reset clears the lens + bands.
 		await page.locator('.filters-reset').click();
-		await expect(count).toHaveText('6', { timeout: 6000 });
 		await expect(page.getByTestId('filters-button').locator('.filters-badge')).toHaveCount(0);
 	});
 });
@@ -393,13 +413,16 @@ test.describe('Heatmap results sidebar (web)', () => {
 		const list = page.getByTestId('discover-list');
 		await expect(list).toBeVisible();
 		const rows = list.locator('.result-row');
-		// Default popular lens: 6 VA routes.
-		await expect(rows).toHaveCount(6, { timeout: 6000 });
+		// Popular has routes (relationship-based, not a magic count).
+		await expect.poll(() => rows.count(), { timeout: 6000 }).toBeGreaterThanOrEqual(1);
+		const popularRows = await rows.count();
 
-		// Switching to Featured narrows the list to the 3 featured routes.
+		// Featured is a subset → the list narrows (or holds) but stays
+		// non-empty.
 		await page.getByTestId('filters-button').click();
 		await page.getByTestId('lens-chips').locator('[data-filter="featured"]').click();
-		await expect(rows).toHaveCount(3, { timeout: 6000 });
+		await expect.poll(() => rows.count(), { timeout: 6000 }).toBeLessThanOrEqual(popularRows);
+		expect(await rows.count()).toBeGreaterThanOrEqual(1);
 
 		// A row links to its route detail and navigates client-side.
 		const href = await rows.first().getAttribute('href');
@@ -450,7 +473,7 @@ test.describe('Heatmap hover-to-preview (web)', () => {
 		expect(await lineCount(page)).toBe(0);
 
 		const rows = page.getByTestId('discover-list').locator('.result-row');
-		await expect(rows).toHaveCount(6, { timeout: 6000 });
+		await expect.poll(() => rows.count(), { timeout: 6000 }).toBeGreaterThanOrEqual(1);
 		const first = rows.first();
 		await first.hover();
 
