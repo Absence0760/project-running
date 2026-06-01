@@ -2,13 +2,17 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { fetchRuns } from '$lib/core/data';
+	import { fetchRuns, fetchRecapExtras } from '$lib/core/data';
 	import { buildYearInRunningRecap, type YearInRunningRecap } from '$lib/runs/recap';
 	import { buildRecapShareSvg } from '$lib/share/recap_share_image';
 	import { fmtKm, getUnit, fmtPace } from '$lib/format/units.svelte';
 	import type { Run } from '$lib/types';
 
 	let runs = $state<Run[]>([]);
+	let extras = $state<{ photoCount: number; personalRecordCount: number }>({
+		photoCount: 0,
+		personalRecordCount: 0
+	});
 	let loading = $state(true);
 	let recap = $state<YearInRunningRecap | null>(null);
 
@@ -23,13 +27,17 @@
 			loading = false;
 			return;
 		}
-		runs = await fetchRuns();
+		const yr = year;
+		[runs, extras] = await Promise.all([
+			fetchRuns(),
+			valid ? fetchRecapExtras(yr) : Promise.resolve({ photoCount: 0, personalRecordCount: 0 })
+		]);
 		loading = false;
 	});
 
 	$effect(() => {
 		if (!valid) return;
-		recap = buildYearInRunningRecap(runs, year);
+		recap = buildYearInRunningRecap(runs, year, extras);
 	});
 
 	function fmtTime(seconds: number): string {
@@ -218,7 +226,37 @@
 				<span class="card-value">{recap.earliestStartLocal ?? '—'}</span>
 				<span class="card-sub">local time</span>
 			</div>
+			<div class="card">
+				<span class="card-label">Personal records</span>
+				<span class="card-value">{recap.personalRecordCount}</span>
+				<span class="card-sub">set this year</span>
+			</div>
+			<div class="card">
+				<span class="card-label">Photos</span>
+				<span class="card-value">{recap.photoCount}</span>
+				<span class="card-sub">moments captured</span>
+			</div>
 		</section>
+
+		{#if recap.badges.length > 0}
+			<section class="badges">
+				<header class="badges-head">
+					<h2>Trophies</h2>
+					<span class="badges-meta">
+						{recap.badges.length} earned in {recap.year}
+					</span>
+				</header>
+				<div class="badge-grid">
+					{#each recap.badges as b (b.id)}
+						<div class="badge">
+							<span class="badge-icon material-symbols" aria-hidden="true">{b.icon}</span>
+							<span class="badge-label">{b.label}</span>
+							<span class="badge-detail">{b.detail}</span>
+						</div>
+					{/each}
+				</div>
+			</section>
+		{/if}
 
 		<section class="month-chart">
 			<header class="month-chart-head">
@@ -468,6 +506,71 @@
 		font-size: 0.75rem;
 		font-weight: 600;
 		color: var(--color-text-secondary);
+	}
+
+	.badges {
+		margin-bottom: var(--space-xl);
+	}
+	.badges-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.badges h2 {
+		font-size: 0.78rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--color-text-secondary);
+		margin: 0;
+	}
+	.badges-meta {
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.badge-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
+		gap: var(--space-md);
+	}
+	.badge {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: 0.3rem;
+		transition: transform 0.15s ease, border-color 0.15s ease;
+	}
+	.badge:hover {
+		transform: translateY(-2px);
+		border-color: color-mix(in srgb, var(--color-accent-orange) 45%, var(--color-border));
+	}
+	.badge-icon {
+		font-size: 2rem;
+		color: var(--color-accent-orange);
+		background: color-mix(in srgb, var(--color-accent-orange) 14%, transparent);
+		width: 3.25rem;
+		height: 3.25rem;
+		display: grid;
+		place-items: center;
+		border-radius: 999px;
+		margin-bottom: var(--space-2xs);
+	}
+	.badge-label {
+		font-weight: 800;
+		font-size: 0.98rem;
+	}
+	.badge-detail {
+		font-size: 0.8rem;
+		color: var(--color-text-tertiary);
+		line-height: 1.35;
 	}
 
 	.closing {

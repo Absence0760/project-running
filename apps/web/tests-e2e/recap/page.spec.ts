@@ -75,10 +75,17 @@ test.describe('/recap/[year] — signed-in seed user', () => {
 			'Best streak',
 			'Top week',
 			'Routes run',
-			'Earliest start'
+			'Earliest start',
+			'Personal records',
+			'Photos'
 		]) {
-			await expect(page.getByText(label)).toBeVisible();
+			// exact: the card labels "Personal records" / "Photos" also appear
+			// as substrings inside badge-detail text ("3 personal records").
+			await expect(page.getByText(label, { exact: true })).toBeVisible();
 		}
+
+		// The seed user logs enough this year to earn at least one trophy.
+		await expect(page.getByRole('heading', { name: 'Trophies' })).toBeVisible();
 
 		await expect(page.getByRole('heading', { name: 'Distance by month' })).toBeVisible();
 		const bars = page.locator('.bar-col');

@@ -240,3 +240,72 @@ test('buildYearInRunningRecap: elevation falls back to 0 when absent', () => {
 	const r = buildYearInRunningRecap(runs, 2026);
 	assert.equal(r.totalElevationM, 50);
 });
+
+// ─────────── Badges + extras (Year-in-Sport parity) ───────────
+
+test('buildYearInRunningRecap: extras default to 0 and emit no photo/PR badge', () => {
+	const r = buildYearInRunningRecap(
+		[mkRun({ startedAt: '2026-03-01T10:00:00', distance_m: 5000, duration_s: 1500 })],
+		2026,
+	);
+	assert.equal(r.photoCount, 0);
+	assert.equal(r.personalRecordCount, 0);
+	assert.ok(!r.badges.some((b) => b.id.startsWith('photo')));
+	assert.ok(!r.badges.some((b) => b.id.startsWith('pr')));
+});
+
+test('buildYearInRunningRecap: extras surface photo + PR counts and badges', () => {
+	const r = buildYearInRunningRecap(
+		[mkRun({ startedAt: '2026-03-01T10:00:00', distance_m: 5000, duration_s: 1500 })],
+		2026,
+		{ photoCount: 30, personalRecordCount: 6 },
+	);
+	assert.equal(r.photoCount, 30);
+	assert.equal(r.personalRecordCount, 6);
+	assert.equal(r.badges.find((b) => b.id.startsWith('photo'))?.id, 'photo-25');
+	assert.equal(r.badges.find((b) => b.id.startsWith('pr'))?.id, 'pr-5');
+});
+
+test('buildYearInRunningRecap: negative / fractional extras are clamped to a non-negative int', () => {
+	const r = buildYearInRunningRecap([], 2026, { photoCount: -3, personalRecordCount: 2.9 });
+	assert.equal(r.photoCount, 0);
+	assert.equal(r.personalRecordCount, 2);
+});
+
+test('badges: one badge per category — the highest tier reached wins', () => {
+	// 1,200 km should produce the 1,000 km badge, not 500 + 100 too.
+	const runs = Array.from({ length: 12 }, (_, i) =>
+		mkRun({
+			startedAt: `2026-0${(i % 9) + 1}-0${(i % 9) + 1}T10:00:00`,
+			distance_m: 100_000,
+			duration_s: 30_000,
+		}),
+	);
+	const r = buildYearInRunningRecap(runs, 2026);
+	const distBadges = r.badges.filter((b) => b.id.startsWith('dist-'));
+	assert.equal(distBadges.length, 1);
+	assert.equal(distBadges[0].id, 'dist-1000');
+});
+
+test('badges: a marathon-length longest run earns the Marathon trophy', () => {
+	const r = buildYearInRunningRecap(
+		[mkRun({ startedAt: '2026-04-01T08:00:00', distance_m: 42_300, duration_s: 14_400 })],
+		2026,
+	);
+	assert.ok(r.badges.some((b) => b.id === 'long-marathon'));
+	assert.ok(!r.badges.some((b) => b.id === 'long-ultra'));
+});
+
+test('badges: an early start before 06:00 earns the Early bird trophy', () => {
+	const r = buildYearInRunningRecap(
+		[mkRun({ startedAt: '2026-05-01T05:15:00', distance_m: 5000, duration_s: 1500 })],
+		2026,
+	);
+	assert.ok(r.badges.some((b) => b.id === 'early'));
+	assert.ok(!r.badges.some((b) => b.id === 'night'));
+});
+
+test('badges: an empty year earns no trophies', () => {
+	const r = buildYearInRunningRecap([], 2026);
+	assert.equal(r.badges.length, 0);
+});

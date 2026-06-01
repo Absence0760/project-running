@@ -26,6 +26,33 @@ export interface RecapWeekTop {
 	runCount: number;
 }
 
+/**
+ * A "trophy" earned over the year — the Strava-Year-in-Sport-style badge
+ * grid. Derived purely from the aggregate (plus the optional photo /
+ * personal-record counts the page supplies). Only *earned* badges are
+ * emitted; at most one per category (the highest tier reached).
+ */
+export interface RecapBadge {
+	id: string;
+	icon: string; // material-symbols glyph name
+	label: string;
+	detail: string;
+}
+
+/**
+ * Counts the recap can't derive from `Run` rows alone — the page fetches
+ * them and passes them in. Both optional so the pure aggregate still works
+ * standalone (e.g. the share-image builder, which doesn't fetch them).
+ */
+export interface RecapExtras {
+	/** run_photos attached to the year's runs. */
+	photoCount?: number;
+	/** personal_records rows achieved during the year (the app's
+	 * achievement primitive — segment KOM "crowns" need a global
+	 * leaderboard aggregation and are intentionally not counted here). */
+	personalRecordCount?: number;
+}
+
 export interface YearInRunningRecap {
 	year: number;
 	runCount: number;
@@ -42,6 +69,89 @@ export interface YearInRunningRecap {
 	topWeek: RecapWeekTop | null;
 	uniqueRouteCount: number;
 	mostUsedActivity: string | null; // "run" / "walk" / "hike" / "cycle"
+	photoCount: number;
+	personalRecordCount: number;
+	badges: RecapBadge[];
+}
+
+/** Inputs the badge tiers read, gathered once during the build. */
+interface BadgeInputs {
+	totalDistanceM: number;
+	runCount: number;
+	bestStreakDays: number;
+	totalElevationM: number;
+	longestRunM: number;
+	activeMonths: number;
+	distinctActivities: number;
+	earliestStartLocal: string | null;
+	latestStartLocal: string | null;
+	photoCount: number;
+	personalRecordCount: number;
+}
+
+/**
+ * Earned-only trophy grid. Each category lists tiers high→low; the first
+ * threshold met wins, so a 1,200 km year shows "1,000 km club", not three
+ * distance badges. Pure + deterministic so it's unit-testable.
+ */
+export function computeRecapBadges(i: BadgeInputs): RecapBadge[] {
+	const out: RecapBadge[] = [];
+	const km = i.totalDistanceM / 1000;
+	const pick = (
+		tiers: Array<{ when: boolean; id: string; icon: string; label: string; detail: string }>,
+	) => {
+		const hit = tiers.find((t) => t.when);
+		if (hit) out.push({ id: hit.id, icon: hit.icon, label: hit.label, detail: hit.detail });
+	};
+
+	pick([
+		{ when: km >= 2000, id: 'dist-2000', icon: 'public', label: '2,000 km', detail: 'Halfway round the planet' },
+		{ when: km >= 1000, id: 'dist-1000', icon: 'public', label: '1,000 km club', detail: 'A four-figure year' },
+		{ when: km >= 500, id: 'dist-500', icon: 'route', label: '500 km', detail: 'Serious mileage' },
+		{ when: km >= 100, id: 'dist-100', icon: 'route', label: 'Century', detail: '100 km on the year' },
+	]);
+	pick([
+		{ when: i.runCount >= 200, id: 'runs-200', icon: 'sprint', label: '200 runs', detail: 'Almost every other day' },
+		{ when: i.runCount >= 100, id: 'runs-100', icon: 'sprint', label: 'Centurion', detail: '100 runs logged' },
+		{ when: i.runCount >= 50, id: 'runs-50', icon: 'sprint', label: '50 runs', detail: 'A steady habit' },
+	]);
+	pick([
+		{ when: i.longestRunM >= 50000, id: 'long-ultra', icon: 'military_tech', label: 'Ultra', detail: '50 km+ in one run' },
+		{ when: i.longestRunM >= 42195, id: 'long-marathon', icon: 'military_tech', label: 'Marathon', detail: '42.2 km in one run' },
+		{ when: i.longestRunM >= 21097, id: 'long-half', icon: 'military_tech', label: 'Half marathon', detail: '21.1 km in one run' },
+	]);
+	pick([
+		{ when: i.bestStreakDays >= 30, id: 'streak-30', icon: 'local_fire_department', label: 'Month-long streak', detail: `${i.bestStreakDays} days in a row` },
+		{ when: i.bestStreakDays >= 14, id: 'streak-14', icon: 'local_fire_department', label: 'Fortnight streak', detail: `${i.bestStreakDays} days in a row` },
+		{ when: i.bestStreakDays >= 7, id: 'streak-7', icon: 'local_fire_department', label: 'Week streak', detail: `${i.bestStreakDays} days in a row` },
+	]);
+	pick([
+		{ when: i.totalElevationM >= 8849, id: 'elev-everest', icon: 'terrain', label: 'Everested', detail: 'Climbed an Everest' },
+		{ when: i.totalElevationM >= 5000, id: 'elev-5000', icon: 'terrain', label: '5,000 m climbed', detail: 'Vertical year' },
+	]);
+	pick([
+		{ when: i.activeMonths >= 12, id: 'months-12', icon: 'calendar_month', label: 'Every month', detail: 'Active all 12 months' },
+		{ when: i.activeMonths >= 6, id: 'months-6', icon: 'calendar_month', label: 'Half the year', detail: `Active in ${i.activeMonths} months` },
+	]);
+	pick([
+		{ when: i.personalRecordCount >= 5, id: 'pr-5', icon: 'trophy', label: 'Record breaker', detail: `${i.personalRecordCount} personal records` },
+		{ when: i.personalRecordCount >= 1, id: 'pr-1', icon: 'trophy', label: 'New PR', detail: `${i.personalRecordCount} personal record${i.personalRecordCount === 1 ? '' : 's'}` },
+	]);
+	pick([
+		{ when: i.photoCount >= 25, id: 'photo-25', icon: 'photo_camera', label: 'Storyteller', detail: `${i.photoCount} run photos` },
+		{ when: i.photoCount >= 1, id: 'photo-1', icon: 'photo_camera', label: 'Documented', detail: `${i.photoCount} run photo${i.photoCount === 1 ? '' : 's'}` },
+	]);
+	pick([
+		{ when: i.distinctActivities >= 3, id: 'variety', icon: 'category', label: 'All-rounder', detail: `${i.distinctActivities} activity types` },
+	]);
+	pick([
+		{ when: i.earliestStartLocal != null && i.earliestStartLocal < '06:00', id: 'early', icon: 'wb_twilight', label: 'Early bird', detail: `First steps at ${i.earliestStartLocal}` },
+	]);
+	pick([
+		{ when: i.latestStartLocal != null && i.latestStartLocal >= '21:00', id: 'night', icon: 'bedtime', label: 'Night owl', detail: `Out at ${i.latestStartLocal}` },
+	]);
+
+	return out;
 }
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -86,7 +196,11 @@ function elevationOf(r: Run): number {
  * across the year boundary (a streak that started in November counts
  * even though it crossed into the next year).
  */
-export function buildYearInRunningRecap(runs: Run[], year: number): YearInRunningRecap {
+export function buildYearInRunningRecap(
+	runs: Run[],
+	year: number,
+	extras: RecapExtras = {},
+): YearInRunningRecap {
 	const inYear: Run[] = [];
 	for (const r of runs) {
 		const d = new Date(r.started_at);
@@ -183,6 +297,25 @@ export function buildYearInRunningRecap(runs: Run[], year: number): YearInRunnin
 		endOfYear,
 	);
 
+	const photoCount = Math.max(0, Math.trunc(extras.photoCount ?? 0));
+	const personalRecordCount = Math.max(0, Math.trunc(extras.personalRecordCount ?? 0));
+	const earliestStartLocal = earliestRun ? hhmm(earliestRun) : null;
+	const latestStartLocal = latestRun ? hhmm(latestRun) : null;
+
+	const badges = computeRecapBadges({
+		totalDistanceM: totalDistance,
+		runCount: inYear.length,
+		bestStreakDays: streaks.best,
+		totalElevationM: totalElevation,
+		longestRunM: longest,
+		activeMonths: monthly.filter((m) => m.runCount > 0).length,
+		distinctActivities: activityCounts.size,
+		earliestStartLocal,
+		latestStartLocal,
+		photoCount,
+		personalRecordCount,
+	});
+
 	return {
 		year,
 		runCount: inYear.length,
@@ -193,12 +326,15 @@ export function buildYearInRunningRecap(runs: Run[], year: number): YearInRunnin
 		fastestPaceSecPerKm,
 		bestStreakDays: streaks.best,
 		currentStreakDays: streaks.current,
-		earliestStartLocal: earliestRun ? hhmm(earliestRun) : null,
-		latestStartLocal: latestRun ? hhmm(latestRun) : null,
+		earliestStartLocal,
+		latestStartLocal,
 		monthly,
 		topWeek,
 		uniqueRouteCount: uniqueRoutes.size,
 		mostUsedActivity,
+		photoCount,
+		personalRecordCount,
+		badges,
 	};
 }
 

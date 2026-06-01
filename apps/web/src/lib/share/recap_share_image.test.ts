@@ -25,6 +25,9 @@ function recap(over: Partial<YearInRunningRecap> = {}): YearInRunningRecap {
 		topWeek: { weekStart: '2026-03-09', distanceM: 95000, runCount: 6 },
 		uniqueRouteCount: 18,
 		mostUsedActivity: 'run',
+		photoCount: 0,
+		personalRecordCount: 0,
+		badges: [],
 		...over,
 	};
 }

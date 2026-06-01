@@ -109,6 +109,43 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	}));
 }
 
+/// Supplementary counts for the Year-in-Running recap that can't be
+/// derived from `Run` rows alone (see `recap.ts#RecapExtras`): photos
+/// attached to the year's runs, and personal records achieved during the
+/// year. Both are scoped to the signed-in user (RLS + an explicit filter,
+/// matching every other personal-data read here). Year bounds are UTC;
+/// the recap aggregate itself buckets runs by local year, so a run within
+/// a few hours of the boundary can disagree — acceptable for headline
+/// counts on a wrap-up card.
+export async function fetchRecapExtras(
+	year: number,
+): Promise<{ photoCount: number; personalRecordCount: number }> {
+	const userId = auth.user?.id;
+	if (!userId) return { photoCount: 0, personalRecordCount: 0 };
+	const start = `${year}-01-01T00:00:00Z`;
+	const end = `${year + 1}-01-01T00:00:00Z`;
+
+	const [photos, prs] = await Promise.all([
+		supabase
+			.from('run_photos')
+			.select('id, runs!inner(started_at)', { count: 'exact', head: true })
+			.eq('owner_id', userId)
+			.gte('runs.started_at', start)
+			.lt('runs.started_at', end),
+		supabase
+			.from('personal_records')
+			.select('user_id', { count: 'exact', head: true })
+			.eq('user_id', userId)
+			.gte('achieved_at', start)
+			.lt('achieved_at', end),
+	]);
+
+	return {
+		photoCount: photos.error ? 0 : photos.count ?? 0,
+		personalRecordCount: prs.error ? 0 : prs.count ?? 0,
+	};
+}
+
 export async function fetchRunById(id: string): Promise<Run | null> {
 	const userId = auth.user?.id;
 	if (!userId) return null;
