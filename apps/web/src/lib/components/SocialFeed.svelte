@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime } from '$lib/format/time';
+	import { currentLocale } from '$lib/i18n/store.svelte';
 	import {
 		fetchFollowingFeed,
 		fetchEngagementSummaries,
@@ -238,7 +239,7 @@
 							/>
 							<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
 						</a>
-						<span class="when">{formatRelativeTime(entry.started_at)}</span>
+						<span class="when">{formatRelativeTime(entry.started_at, undefined, currentLocale())}</span>
 					</header>
 					<a class="entry-body" href="/runs/{entry.id}">
 						{#if entry.has_track}

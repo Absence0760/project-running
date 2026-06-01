@@ -32,6 +32,7 @@
 	import { relativeAge } from '$lib/runs/pr_recency';
 	import type { LoadedSettings } from '$lib/settings/settings';
 	import { fmtKm, fmtPace, formatElevation, setUnit } from '$lib/format/units.svelte';
+	import { currentLocale } from '$lib/i18n/store.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
 		loadGoals,
@@ -258,7 +259,7 @@
 		goals = loadGoals(auth.user?.id);
 		[runs, weeklyMileage, personalRecords, planOverview, upcomingEvent, fitnessHistory] = await Promise.all([
 			fetchRuns(),
-			fetchWeeklyMileage(),
+			fetchWeeklyMileage(currentLocale()),
 			fetchPersonalRecords(),
 			fetchActivePlanOverview(),
 			fetchNextRsvpedEvent(48),

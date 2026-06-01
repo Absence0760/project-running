@@ -54,3 +54,26 @@ test('bucketWeeklyMileage — sorts unsorted input chronologically', () => {
 test('bucketWeeklyMileage — empty input → empty output', () => {
 	assert.deepEqual(bucketWeeklyMileage([]), []);
 });
+
+test('bucketWeeklyMileage — the week label honours the locale (W-10 label)', () => {
+	// 2026-01-05 is a Monday → the week label is that date.
+	const runs = [{ started_at: '2026-01-05T08:00:00Z', distance_m: 1000 }];
+	const en = bucketWeeklyMileage(runs, 12, 'en-GB')[0].week;
+	const ja = bucketWeeklyMileage(runs, 12, 'ja')[0].week;
+	const de = bucketWeeklyMileage(runs, 12, 'de')[0].week;
+	assert.match(en, /Jan/, 'en short month');
+	assert.match(ja, /月/, 'ja uses CJK month marker');
+	assert.doesNotMatch(ja, /Jan/);
+	assert.notEqual(en, de, 'de differs from en-GB (5. Jan. vs 5 Jan)');
+});
+
+test('bucketWeeklyMileage — the bucket KEY stays locale-independent (no cross-locale split)', () => {
+	const runs = [
+		{ started_at: '2026-01-05T08:00:00Z', distance_m: 1000 },
+		{ started_at: '2026-01-07T08:00:00Z', distance_m: 2000 },
+	];
+	// Same Monday-week regardless of label locale → one merged bar.
+	const out = bucketWeeklyMileage(runs, 12, 'ja');
+	assert.equal(out.length, 1);
+	assert.equal(out[0].distance_m, 3000);
+});

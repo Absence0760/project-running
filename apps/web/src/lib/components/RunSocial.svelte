@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatRelativeTime } from '$lib/format/time';
+	import { currentLocale } from '$lib/i18n/store.svelte';
 	import {
 		fetchKudosForRun,
 		giveKudos,
@@ -164,7 +165,7 @@
 							<a href="/u/{comment.author_id}" class="comment-author-link">
 								<strong>{comment.author.display_name ?? 'Runner'}</strong>
 							</a>
-							<span class="when">{formatRelativeTime(comment.created_at)}</span>
+							<span class="when">{formatRelativeTime(comment.created_at, undefined, currentLocale())}</span>
 							{#if auth.loggedIn && auth.user?.id !== comment.author_id}
 								<button
 									class="icon-btn report-btn"
@@ -211,7 +212,7 @@
 												<a href="/u/{reply.author_id}" class="comment-author-link">
 													<strong>{reply.author.display_name ?? 'Runner'}</strong>
 												</a>
-												<span class="when">{formatRelativeTime(reply.created_at)}</span>
+												<span class="when">{formatRelativeTime(reply.created_at, undefined, currentLocale())}</span>
 												{#if auth.loggedIn && auth.user?.id !== reply.author_id}
 													<button
 														class="icon-btn report-btn"

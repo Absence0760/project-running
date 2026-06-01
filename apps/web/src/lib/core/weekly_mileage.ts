@@ -17,6 +17,7 @@ export interface WeekBar {
 export function bucketWeeklyMileage(
 	runs: { started_at: string; distance_m: number }[],
 	maxWeeks = 12,
+	locale?: string,
 ): WeekBar[] {
 	const weeks = new Map<string, { label: string; distance_m: number }>();
 	for (const run of runs) {
@@ -25,7 +26,11 @@ export function bucketWeeklyMileage(
 		weekStart.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday-start, matches goals.ts
 		weekStart.setHours(0, 0, 0, 0);
 		const key = `${weekStart.getFullYear()}-${String(weekStart.getMonth() + 1).padStart(2, '0')}-${String(weekStart.getDate()).padStart(2, '0')}`;
-		const label = weekStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+		// The KEY stays year-stable ISO (locale-independent); only the
+		// human axis label is localised (i18n-readiness W-10 — the label
+		// was pinned to en-GB). `locale` is the active UI locale; undefined
+		// falls back to the runtime default.
+		const label = weekStart.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 		const cur = weeks.get(key);
 		if (cur) cur.distance_m += run.distance_m;
 		else weeks.set(key, { label, distance_m: run.distance_m });

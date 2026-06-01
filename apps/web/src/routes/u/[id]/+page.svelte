@@ -3,6 +3,7 @@
 	import { handleTablistKeydown } from '$lib/util/tablist';
 	import Avatar from '$lib/components/Avatar.svelte';
 	import { formatDuration, formatRelativeTime } from '$lib/format/time';
+	import { currentLocale } from '$lib/i18n/store.svelte';
 	import { goto } from '$app/navigation';
 	import { supabase } from '$lib/core/supabase';
 	import {
@@ -880,7 +881,7 @@
 									<Avatar url={entry.author.avatar_url} name={entry.author.display_name} size="2rem" font="0.85rem" />
 									<span class="author-name">{entry.author.display_name ?? 'Runner'}</span>
 								</a>
-								<span class="when">{formatRelativeTime(entry.started_at)}</span>
+								<span class="when">{formatRelativeTime(entry.started_at, undefined, currentLocale())}</span>
 							</header>
 							<button type="button" class="entry-body" onclick={() => (openRunId = entry.id)}>
 								{#if entry.has_track}
