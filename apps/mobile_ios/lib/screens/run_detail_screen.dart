@@ -29,6 +29,20 @@ import '../widgets/run_social_section.dart';
 import '../widgets/workout_review_section.dart';
 import '../widgets/top_banner.dart';
 
+/// Map a replay index that advances over the raw `run.track` onto the
+/// track actually drawn on the map. They diverge when the map shows the
+/// map-matched (road-snapped) line, which has a different length and
+/// coordinates than the raw GPS track — indexing the displayed line with
+/// a raw-track index drifts the replay dot off the polyline. A
+/// proportional remap keeps the dot on whatever line is rendered; when
+/// the two tracks are the same length (the no-match case) it round-trips
+/// to the original index exactly.
+int? replayDotIndex(int? replayIndex, int rawLength, int displayedLength) {
+  if (replayIndex == null || rawLength < 2 || displayedLength < 1) return null;
+  final frac = replayIndex / (rawLength - 1);
+  return (frac * (displayedLength - 1)).round().clamp(0, displayedLength - 1);
+}
+
 /// Detail view for a completed run, showing the route map, splits, and stats.
 class RunDetailScreen extends StatefulWidget {
   final Run run;
@@ -666,6 +680,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       final mapTrack = _matchInfo?.hasRenderableTrack == true
                           ? _matchInfo!.track!
                           : run.track;
+                      // The replay index advances over `run.track`, but
+                      // the line on screen is `mapTrack` — the matched
+                      // line when the worker produced one, with a
+                      // different length + coords. Feed the dot a point
+                      // and index that both reference the DISPLAYED
+                      // track so the smoothed-dot snap lands it on the
+                      // rendered polyline (same reasoning as the
+                      // `hoverIdx` gate below). Identity remap when the
+                      // map is showing the raw track.
+                      final dotIndex = replayDotIndex(
+                        replayIndex,
+                        run.track.length,
+                        mapTrack.length,
+                      );
                       return LiveRunMap(
                         track: mapTrack,
                         plannedRoute: mapTrack.isEmpty
@@ -673,19 +701,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                             : null,
                         followRunner: false,
                         activity: mapTrack.isNotEmpty ? _activityType : null,
-                        currentPosition: replayIndex != null &&
-                                replayIndex < run.track.length
-                            ? run.track[replayIndex]
-                            : null,
+                        currentPosition:
+                            dotIndex != null ? mapTrack[dotIndex] : null,
                         // Authoritative index for the smoothed-dot
                         // snap — loop routes (start == end coord)
                         // need the explicit index, otherwise the
                         // lat/lng scan would return the start point
                         // for every end-of-track scrub.
-                        currentPositionIndex: replayIndex != null &&
-                                replayIndex < run.track.length
-                            ? replayIndex
-                            : null,
+                        currentPositionIndex: dotIndex,
                         showDecorations: mapTrack.isNotEmpty,
                         useMilesForDecorations:
                             widget.preferences.unit == DistanceUnit.mi,
