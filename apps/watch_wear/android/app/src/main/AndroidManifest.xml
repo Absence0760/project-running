@@ -21,6 +21,12 @@
          the OS kills the recording the moment the watch goes ambient. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+    <!-- RunRecordingService reads heart rate via Health Services
+         (MeasureClient → BODY_SENSORS) while recording, so on targetSdk 35
+         it must hold FOREGROUND_SERVICE_HEALTH and enumerate the "health"
+         service type below; otherwise Android 14+ throws SecurityException
+         when the service starts. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <!-- Lets us prompt the user to whitelist this app from battery
          optimisation (Doze / App Standby), which otherwise throttles
@@ -61,7 +67,7 @@
         <service
             android:name=".recording.RunRecordingService"
             android:exported="false"
-            android:foregroundServiceType="location" />
+            android:foregroundServiceType="location|health" />
 
         <!-- Active-run glanceable tile. The BIND_TILE_PROVIDER permission
              is enforced by the platform: only the Wear OS Tiles host can
