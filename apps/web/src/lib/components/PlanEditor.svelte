@@ -5,6 +5,7 @@
 	import {
 		GOAL_DISTANCES_M,
 		defaultPlanWeeks,
+		walkRunDefaultWeeks,
 		generatePlan,
 		PHASE_LABEL,
 		WORKOUT_KIND_LABEL,
@@ -178,7 +179,13 @@
 	let goalDistance = $derived(
 		goalEvent === 'custom' ? 10_000 : GOAL_DISTANCES_M[goalEvent]
 	);
-	let weeks = $derived(weekOverride ?? defaultPlanWeeks(goalEvent));
+	// A beginner walk-run plan needs the full C25K progression length (9
+	// weeks), not the 5k continuous-run default (8) — otherwise the final
+	// graduation week is dropped. Persona round-5 runner-new. An explicit
+	// override still wins.
+	let weeks = $derived(
+		weekOverride ?? (beginnerWalkRun ? walkRunDefaultWeeks() : defaultPlanWeeks(goalEvent))
+	);
 
 	let goalTimeSec = $derived(
 		targetHours != null || targetMin != null || targetSec != null
@@ -438,6 +445,12 @@
 					<div class="pace-row"><span>Repetition</span><strong>{fmtPace(plan.paces.repetition)}</strong></div>
 				</div>
 
+				{#if plan.pacesAreFallback}
+					<p class="paces-estimated" role="status">
+						Estimated paces — add a recent run or a goal time for personalised targets.
+					</p>
+				{/if}
+
 				{#if plan.vdot}
 					<p class="vdot">Daniels VDOT: <strong>{plan.vdot.toFixed(1)}</strong></p>
 				{/if}
@@ -686,6 +699,14 @@
 		color: var(--color-text-secondary);
 		font-size: 0.9rem;
 		margin-top: -0.2rem;
+	}
+	/* Full-contrast body text (not --color-warning, which fails AA as body
+	   text on the surface); weight carries the "this is a caveat" emphasis. */
+	.paces-estimated {
+		color: var(--color-text);
+		font-weight: 500;
+		font-size: 0.82rem;
+		margin: 0;
 	}
 	.outline-hint {
 		font-size: 0.78rem;

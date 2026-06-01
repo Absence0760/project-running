@@ -40,13 +40,26 @@ class FitnessSnapshot {
   });
 }
 
+/// Minimum qualifying-run distance (metres) for fitness math. Lowered from
+/// 3 km to 1.5 km so a comeback / new runner rebuilding at 1-2 km per outing
+/// still gets a fitness + volume signal instead of an empty Fitness card
+/// forever (persona round-5 runner-comeback). 1.5 km paired with the 5-min
+/// duration floor below means a qualifying run is a sustained effort of at
+/// least ~3:20/km — noisy 1 km all-out sprints (which would inflate the VDOT
+/// ceiling, since [currentVdot] takes the max over runs) stay excluded, and a
+/// true sprint is also caught by [vdotFromRun]'s own 1 km / 2 min gate. We
+/// deliberately did NOT drop to 1 km: the gap between 1 and 1.5 km is where
+/// short all-out efforts produce the most VDOT inflation. Mirrors fitness.ts.
+const double kMinQualifyingDistanceM = 1500;
+
 /// Qualifying runs for fitness math: an actual recording or reliable
-/// import, distance >= 3 km, duration >= 5 min. Indoor / treadmill runs are
-/// excluded — belt-/estimate-derived distance must not feed VDOT (#16).
+/// import, distance >= kMinQualifyingDistanceM, duration >= 5 min. Indoor /
+/// treadmill runs are excluded — belt-/estimate-derived distance must not feed
+/// VDOT (#16).
 List<Run> qualifyingRuns(Iterable<Run> runs) {
   return [
     for (final r in runs)
-      if (r.distanceMetres >= 3000 &&
+      if (r.distanceMetres >= kMinQualifyingDistanceM &&
           r.duration.inSeconds >= 300 &&
           r.metadata?['indoor'] != true &&
           (r.source == RunSource.app ||

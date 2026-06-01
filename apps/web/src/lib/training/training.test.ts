@@ -27,6 +27,7 @@ import {
 	generatePlan,
 	isMastersAge,
 	defaultPlanWeeks,
+	walkRunDefaultWeeks,
 	GOAL_DISTANCES_M,
 	formatISO,
 	isWorkoutCompleted,
@@ -87,6 +88,63 @@ test('generatePlan(beginnerWalkRun): every session is a walk_run workout', () =>
 	const wk9 = plan.weeks[8].workouts.find((w) => w.kind === 'walk_run')!;
 	assert.equal(wk9.structure?.repeats?.count, 1);
 	assert.equal(wk9.structure?.repeats?.recovery_duration_s, undefined);
+});
+
+// Persona round-5 runner-new: a default 5k beginner plan arrives with
+// weeks=8 (defaultPlanWeeks('distance_5k')) against a 9-stage progression.
+// Without the engine floor, week index 8 — the single continuous-run
+// graduation week — was silently dropped.
+test('walkRunDefaultWeeks: matches the full progression length', () => {
+	// 9-stage C25K table → 9-week default for a beginner plan.
+	assert.equal(walkRunDefaultWeeks(), 9);
+});
+
+test('generatePlan(beginnerWalkRun, weeks=8): keeps the graduation week (off-by-one fix)', () => {
+	// Simulate the old PlanEditor path that forced weeks=defaultPlanWeeks('distance_5k')=8.
+	const plan = generatePlan({
+		goalEvent: 'distance_5k',
+		startDate: '2026-06-01',
+		daysPerWeek: 3,
+		weeks: 8,
+		beginnerWalkRun: true
+	});
+	// Floored up to the full progression so graduation isn't truncated.
+	assert.equal(plan.weeks.length, 9);
+	const wkLast = plan.weeks[plan.weeks.length - 1].workouts.find((w) => w.kind === 'walk_run')!;
+	assert.equal(wkLast.structure?.repeats?.count, 1);
+	assert.equal(wkLast.structure?.repeats?.recovery_duration_s, undefined);
+	assert.match(wkLast.notes ?? '', /Graduation week/);
+});
+
+// Persona round-5 runner-comeback: when the engine can't derive paces from a
+// recent race or a goal time it falls back to a conservative 10:00/km. The
+// plan must flag that so the wizard can disclose it rather than presenting a
+// placeholder as a real prescription.
+test('generatePlan: pacesAreFallback is true with no anchor, false with an anchor', () => {
+	const noAnchor = generatePlan({
+		goalEvent: 'distance_10k',
+		startDate: '2026-06-01',
+		daysPerWeek: 3
+	});
+	assert.equal(noAnchor.pacesAreFallback, true);
+
+	const withGoal = generatePlan({
+		goalEvent: 'distance_10k',
+		startDate: '2026-06-01',
+		daysPerWeek: 3,
+		goalTimeSec: 45 * 60
+	});
+	assert.equal(withGoal.pacesAreFallback, false);
+
+	const withRecent = generatePlan({
+		goalEvent: 'distance_10k',
+		startDate: '2026-06-01',
+		daysPerWeek: 3,
+		recent5kSec: 24 * 60
+	});
+	assert.equal(withRecent.pacesAreFallback, false);
+	// The fallback paces are still usable — the plan generates either way.
+	assert.ok(noAnchor.paces.easy > 0 && noAnchor.weeks.length > 0);
 });
 
 test('WorkoutStructure: a time-based walk-run rep block is well-typed', () => {

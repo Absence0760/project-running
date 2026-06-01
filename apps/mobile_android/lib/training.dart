@@ -41,6 +41,15 @@ const Map<GoalEvent, int> _defaultWeeks = {
 int defaultPlanWeeks(GoalEvent g) =>
     g == GoalEvent.custom ? 12 : _defaultWeeks[g]!;
 
+/// Default week count for a beginner C25K walk-run plan. The continuous-run
+/// default (`defaultPlanWeeks(GoalEvent.distance5k)` = 8) is one week shorter
+/// than the `kWalkRunProgression` table, so feeding it to the walk-run
+/// generator drops the final graduation week (the single continuous run).
+/// Callers that build a beginner plan should size `weeks` from this, not
+/// `defaultPlanWeeks`. Mirrors `walkRunDefaultWeeks` in training.ts. Persona
+/// round-5 runner-new.
+int walkRunDefaultWeeks() => kWalkRunProgression.length;
+
 String goalEventDbValue(GoalEvent g) => switch (g) {
       GoalEvent.distance5k => 'distance_5k',
       GoalEvent.distance10k => 'distance_10k',
@@ -198,22 +207,57 @@ TrainingPaces pacesFromGoalPace(
   );
 }
 
-TrainingPaces resolveTrainingPaces({
+/// The conservative goal pace (sec/km) used when the runner gave us neither a
+/// recent race nor a goal time. ~10:00/km. `resolveTrainingPacesWithMeta`
+/// flags when it's in play so the caller can disclose it instead of
+/// presenting it as real. Mirrors training.ts. Persona round-5
+/// runner-comeback.
+const double _kFallbackGoalPaceSecPerKm = 600;
+
+class ResolvedPaces {
+  final TrainingPaces paces;
+  final bool isFallback;
+  const ResolvedPaces(this.paces, this.isFallback);
+}
+
+/// Resolve the runner's training paces plus whether they came from a real
+/// fitness anchor or the conservative fallback. `isFallback` is true only when
+/// neither a recent 5k nor a goal time was given. The numbers are always
+/// usable; the flag lets the wizard label the preview "estimated — add a
+/// recent run for personalised paces". Mirrors `resolveTrainingPacesWithMeta`
+/// in training.ts. Persona round-5 runner-comeback.
+ResolvedPaces resolveTrainingPacesWithMeta({
   required double goalDistanceM,
   int? goalTimeSec,
   int? recent5kSec,
   TrainingGender gender,
 }) {
   double goalPace;
+  var isFallback = false;
   if (recent5kSec != null) {
     final predicted = riegelPredict(5000, recent5kSec, goalDistanceM);
     goalPace = predicted / (goalDistanceM / 1000);
   } else if (goalTimeSec != null) {
     goalPace = goalTimeSec / (goalDistanceM / 1000);
   } else {
-    goalPace = 600;
+    goalPace = _kFallbackGoalPaceSecPerKm;
+    isFallback = true;
   }
-  return pacesFromGoalPace(goalPace, gender);
+  return ResolvedPaces(pacesFromGoalPace(goalPace, gender), isFallback);
+}
+
+TrainingPaces resolveTrainingPaces({
+  required double goalDistanceM,
+  int? goalTimeSec,
+  int? recent5kSec,
+  TrainingGender gender,
+}) {
+  return resolveTrainingPacesWithMeta(
+    goalDistanceM: goalDistanceM,
+    goalTimeSec: goalTimeSec,
+    recent5kSec: recent5kSec,
+    gender: gender,
+  ).paces;
 }
 
 // ─────────────────────── Phases ───────────────────────
@@ -299,12 +343,19 @@ class GeneratedPlan {
   final DateTime endDate;
   final double goalDistanceM;
 
+  /// True when [paces] are the conservative 10:00/km fallback (no recent
+  /// race, no goal time) rather than derived from real fitness. The plan is
+  /// still valid; the caller should disclose the paces are estimated. Mirrors
+  /// training.ts. Persona round-5 runner-comeback.
+  final bool pacesAreFallback;
+
   const GeneratedPlan({
     required this.weeks,
     required this.paces,
     required this.vdot,
     required this.endDate,
     required this.goalDistanceM,
+    required this.pacesAreFallback,
   });
 }
 
@@ -351,12 +402,14 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
       ? input.goalDistanceM!
       : kGoalDistancesM[input.goalEvent]!;
   final totalWeeks = input.weeks ?? defaultPlanWeeks(input.goalEvent);
-  final paces = resolveTrainingPaces(
+  final resolved = resolveTrainingPacesWithMeta(
     goalDistanceM: goalDistance,
     goalTimeSec: input.goalTimeSec,
     recent5kSec: input.recent5kSec,
     gender: input.gender,
   );
+  final paces = resolved.paces;
+  final pacesAreFallback = resolved.isFallback;
   double? vdot;
   if (input.recent5kSec != null) {
     vdot = vdotFromRace(5000, input.recent5kSec!);
@@ -365,7 +418,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
   }
 
   if (input.beginnerWalkRun) {
-    return _generateWalkRunPlan(input, goalDistance, paces, vdot);
+    return _generateWalkRunPlan(input, goalDistance, paces, vdot, pacesAreFallback);
   }
 
   final weeks = <GeneratedWeek>[];
@@ -403,6 +456,7 @@ GeneratedPlan generatePlan(GeneratePlanInput input) {
     vdot: vdot,
     endDate: input.startDate.add(Duration(days: totalWeeks * 7 - 1)),
     goalDistanceM: goalDistance,
+    pacesAreFallback: pacesAreFallback,
   );
 }
 
@@ -466,8 +520,17 @@ GeneratedWorkout _walkRunWorkout(
 }
 
 GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
-    double goalDistanceM, TrainingPaces paces, double? vdot) {
-  final totalWeeks = input.weeks ?? kWalkRunProgression.length;
+    double goalDistanceM, TrainingPaces paces, double? vdot,
+    bool pacesAreFallback) {
+  // Never run fewer weeks than the progression has stages — truncating it
+  // drops the final graduation week (the single continuous run), which is the
+  // whole point of a C25K plan. A default 5k plan arrives here with weeks=8
+  // (defaultPlanWeeks(distance5k)) against a 9-stage table, so without this
+  // floor the graduation week silently vanishes. Persona round-5 runner-new.
+  // A longer request is honoured (the last stage repeats via the index clamp
+  // in _walkRunWorkout). Mirrors training.ts.
+  final totalWeeks =
+      max(input.weeks ?? kWalkRunProgression.length, kWalkRunProgression.length);
   final runDays = input.daysPerWeek.clamp(1, 3);
   final dayOffsets = [0, 2, 4, 1, 3, 5, 6].sublist(0, runDays)..sort();
   final runSet = dayOffsets.toSet();
@@ -503,6 +566,7 @@ GeneratedPlan _generateWalkRunPlan(GeneratePlanInput input,
     vdot: vdot,
     endDate: input.startDate.add(Duration(days: totalWeeks * 7 - 1)),
     goalDistanceM: goalDistanceM,
+    pacesAreFallback: pacesAreFallback,
   );
 }
 

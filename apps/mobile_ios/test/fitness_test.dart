@@ -42,6 +42,21 @@ void main() {
   });
 
   group('qualifyingRuns', () {
+    // Persona round-5 runner-comeback. Mirrors the distance-floor tests in
+    // fitness.test.ts — the floor dropped from 3 km to 1.5 km.
+    test('drops sub-1.5km runs (too noisy for VDOT)', () {
+      final longEnough = _r(distance: 5000, durationS: 1500);
+      final tooShort = _r(distance: 1000, durationS: 360);
+      final qualifying = qualifyingRuns([longEnough, tooShort]);
+      expect(qualifying, hasLength(1));
+      expect(qualifying.first.id, longEnough.id);
+    });
+
+    test('admits a sustained 1.5-2km comeback run', () {
+      final comeback = _r(distance: 1800, durationS: 600);
+      expect(qualifyingRuns([comeback]), hasLength(1));
+    });
+
     test('drops indoor/treadmill runs (belt distance is not VDOT-worthy)', () {
       // Mirrors the indoor-exclusion test in fitness.test.ts.
       final outdoor = _r(distance: 5000, durationS: 1500);

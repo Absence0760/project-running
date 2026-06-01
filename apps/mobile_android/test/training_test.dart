@@ -40,6 +40,60 @@ void main() {
       expect(weekVol(noAnchor, 0) < 15000, isTrue);
     });
 
+    // Persona round-5 runner-new. Mirrors the graduation-week tests in
+    // training.test.ts. A default 5k beginner plan arrives with weeks=8
+    // against a 9-stage progression; the engine floor keeps the graduation
+    // week from being truncated.
+    test('walkRunDefaultWeeks matches the full progression length', () {
+      expect(walkRunDefaultWeeks(), 9);
+    });
+
+    test('generatePlan(beginnerWalkRun, weeks=8) keeps the graduation week', () {
+      final plan = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance5k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 3,
+        weeks: 8,
+        beginnerWalkRun: true,
+      ));
+      expect(plan.weeks.length, 9);
+      final wkLast = plan.weeks.last.workouts
+          .firstWhere((w) => w.kind == WorkoutKind.walkRun);
+      expect(wkLast.structure!.repeats!['count'], 1);
+      expect(wkLast.structure!.repeats!.containsKey('recovery_duration_s'),
+          isFalse);
+      expect(wkLast.notes, contains('Graduation week'));
+    });
+
+    // Persona round-5 runner-comeback. Mirrors the pacesAreFallback test in
+    // training.test.ts.
+    test('pacesAreFallback is true with no anchor, false with an anchor', () {
+      final noAnchor = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance10k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 3,
+      ));
+      expect(noAnchor.pacesAreFallback, isTrue);
+
+      final withGoal = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance10k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 3,
+        goalTimeSec: 45 * 60,
+      ));
+      expect(withGoal.pacesAreFallback, isFalse);
+
+      final withRecent = generatePlan(GeneratePlanInput(
+        goalEvent: GoalEvent.distance10k,
+        startDate: DateTime(2026, 6, 1),
+        daysPerWeek: 3,
+        recent5kSec: 24 * 60,
+      ));
+      expect(withRecent.pacesAreFallback, isFalse);
+      expect(noAnchor.paces.easy > 0, isTrue);
+      expect(noAnchor.weeks.isNotEmpty, isTrue);
+    });
+
     test('generatePlan(beginnerWalkRun) yields a 9-week walk_run plan', () {
       // Mirrors generatePlan(beginnerWalkRun) in training.test.ts.
       final plan = generatePlan(GeneratePlanInput(
