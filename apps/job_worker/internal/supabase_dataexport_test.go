@@ -691,6 +691,51 @@ func TestFetchExportPersonalDataTables_IntegrationsSelectIncludesDisconnectColum
 	}
 }
 
+// persona round-5 privacy / GDPR Art 20 pinned that user_settings (the
+// universal per-user prefs bag: privacy zones, HR settings,
+// date-of-birth, week-start, units, …) was missing from the table-spec
+// list. The dataexport server also surfaces it as profile.json's
+// settings_prefs, but the EF rollback path has no profile.json, so the
+// spec list must carry user_settings too. It must turn up in the export
+// when the subject has a row, scoped to the subject's own user_id, and
+// ship in full (no redaction — it's the subject's own data).
+func TestFetchExportPersonalDataTables_IncludesUserSettings(t *testing.T) {
+	var userSettingsQ string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(r.URL.Path, "/rest/v1/user_settings") &&
+			!strings.Contains(r.URL.Path, "/rest/v1/user_device_settings") {
+			userSettingsQ = r.URL.RawQuery
+			_, _ = w.Write([]byte(`[{"user_id":"user-A","prefs":{"privacy_zones":[{"lat":51.5,"lng":-0.1,"radius_m":200}],"date_of_birth":"1990-01-01","week_start":"monday","unit":"km"}}]`))
+			return
+		}
+		_, _ = w.Write([]byte(`[]`))
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rows, ok := out["user_settings.json"]
+	if !ok || len(rows) != 1 {
+		t.Fatalf("user_settings.json must appear in the export manifest with the subject's row — persona round-5 GDPR Art 20; got out=%v", extraTableKeys(out))
+	}
+	if !strings.Contains(userSettingsQ, "user_id=eq.user-A") {
+		t.Errorf("user_settings must be scoped to the subject's user_id; got query=%q", userSettingsQ)
+	}
+	// select=* (full prefs ship — it's the subject's own data).
+	if !strings.Contains(userSettingsQ, "select=%2A") && !strings.Contains(userSettingsQ, "select=*") {
+		t.Errorf("user_settings select must be '*' so the full prefs bag ships; got query=%q", userSettingsQ)
+	}
+	// The prefs bag (privacy_zones, date_of_birth, …) survives verbatim.
+	prefs, _ := rows[0]["prefs"].(map[string]interface{})
+	if prefs == nil {
+		t.Fatalf("user_settings.prefs must be present; got row=%v", rows[0])
+	}
+	if _, present := prefs["privacy_zones"]; !present {
+		t.Errorf("user_settings.prefs must carry privacy_zones unredacted (the subject's own data); got prefs=%v", prefs)
+	}
+}
+
 func TestFetchExportPersonalDataTables_PerTableErrorIsTolerated(t *testing.T) {
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
