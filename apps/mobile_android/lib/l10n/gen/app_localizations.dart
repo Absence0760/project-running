@@ -8078,6 +8078,1410 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.'**
   String get fitnessStatTsbTooltip;
+
+  /// Section header above the kudos + comments on a run
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get runSocialActivity;
+
+  /// Empty state when a run has no comments
+  ///
+  /// In en, this message translates to:
+  /// **'No comments yet.'**
+  String get runSocialNoComments;
+
+  /// Hint text in the reply composer field
+  ///
+  /// In en, this message translates to:
+  /// **'Write a reply…'**
+  String get runSocialReplyHint;
+
+  /// Hint text in the comment composer field
+  ///
+  /// In en, this message translates to:
+  /// **'Add a comment…'**
+  String get runSocialCommentHint;
+
+  /// Fallback display name for a comment author with no name
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get runSocialRunnerFallback;
+
+  /// Button to reply to a comment
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get runSocialReply;
+
+  /// Button to delete a comment
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get runSocialDelete;
+
+  /// Button to post a comment
+  ///
+  /// In en, this message translates to:
+  /// **'Post'**
+  String get runSocialPost;
+
+  /// Button to cancel a reply
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runSocialCancel;
+
+  /// Banner when toggling kudos fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update kudos: {error}'**
+  String runSocialKudosError(String error);
+
+  /// Banner when posting a comment fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to post: {error}'**
+  String runSocialPostError(String error);
+
+  /// Banner when deleting a comment fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to delete: {error}'**
+  String runSocialDeleteError(String error);
+
+  /// Loading state for the run photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Loading photos…'**
+  String get runPhotosLoading;
+
+  /// Header for the run photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Photos'**
+  String get runPhotosTitle;
+
+  /// Button to add a photo to a run
+  ///
+  /// In en, this message translates to:
+  /// **'Add photo'**
+  String get runPhotosAdd;
+
+  /// Hint in the caption field for a photo about to be uploaded
+  ///
+  /// In en, this message translates to:
+  /// **'Caption (optional, 280 chars)'**
+  String get runPhotosCaptionPendingHint;
+
+  /// Hint in the inline caption-edit field
+  ///
+  /// In en, this message translates to:
+  /// **'Caption…'**
+  String get runPhotosCaptionHint;
+
+  /// Cancel button in the photo gallery
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runPhotosCancel;
+
+  /// Save button for an edited caption
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get runPhotosSave;
+
+  /// Button to upload the pending photo
+  ///
+  /// In en, this message translates to:
+  /// **'Upload'**
+  String get runPhotosUpload;
+
+  /// Button label while a photo is uploading
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading…'**
+  String get runPhotosUploading;
+
+  /// Tooltip on the edit-caption button
+  ///
+  /// In en, this message translates to:
+  /// **'Edit caption'**
+  String get runPhotosEditCaption;
+
+  /// Tooltip on the delete-photo button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo'**
+  String get runPhotosDeleteTooltip;
+
+  /// Title of the delete-photo confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo?'**
+  String get runPhotosDeleteTitle;
+
+  /// Body of the delete-photo confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This removes the photo from the run permanently.'**
+  String get runPhotosDeleteBody;
+
+  /// Confirm button in the delete-photo dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get runPhotosDeleteConfirm;
+
+  /// Banner when the image picker can't be opened
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open picker: {error}'**
+  String runPhotosPickerError(String error);
+
+  /// Banner when a photo upload fails
+  ///
+  /// In en, this message translates to:
+  /// **'Upload failed: {error}'**
+  String runPhotosUploadError(String error);
+
+  /// Banner when deleting a photo fails
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failed: {error}'**
+  String runPhotosDeleteError(String error);
+
+  /// Banner when updating a caption fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update caption: {error}'**
+  String runPhotosCaptionError(String error);
+
+  /// Loading state while segment efforts are computed
+  ///
+  /// In en, this message translates to:
+  /// **'Checking segments…'**
+  String get runSegEffortsChecking;
+
+  /// Hint when a run isn't linked to a route so no segments apply
+  ///
+  /// In en, this message translates to:
+  /// **'Segments are matched per route — link this run to a saved route to compete on its leaderboards.'**
+  String get runSegEffortsNoRoute;
+
+  /// Empty state when a run has no segment efforts
+  ///
+  /// In en, this message translates to:
+  /// **'No segment efforts on this run.'**
+  String get runSegEffortsEmpty;
+
+  /// Header for the post-run workout review section
+  ///
+  /// In en, this message translates to:
+  /// **'Workout'**
+  String get workoutReviewTitle;
+
+  /// Column header: workout step
+  ///
+  /// In en, this message translates to:
+  /// **'Step'**
+  String get workoutReviewColStep;
+
+  /// Column header: planned value
+  ///
+  /// In en, this message translates to:
+  /// **'Plan'**
+  String get workoutReviewColPlan;
+
+  /// Column header: actual value
+  ///
+  /// In en, this message translates to:
+  /// **'Actual'**
+  String get workoutReviewColActual;
+
+  /// Column header: pace
+  ///
+  /// In en, this message translates to:
+  /// **'Pace'**
+  String get workoutReviewColPace;
+
+  /// Column header: pace delta (uses the delta symbol)
+  ///
+  /// In en, this message translates to:
+  /// **'Δ'**
+  String get workoutReviewColDelta;
+
+  /// Label shown in the delta column for a skipped step
+  ///
+  /// In en, this message translates to:
+  /// **'skip'**
+  String get workoutReviewSkip;
+
+  /// Workout step label: warmup
+  ///
+  /// In en, this message translates to:
+  /// **'Warmup'**
+  String get workoutReviewLabelWarmup;
+
+  /// Workout step label: cooldown
+  ///
+  /// In en, this message translates to:
+  /// **'Cooldown'**
+  String get workoutReviewLabelCooldown;
+
+  /// Workout step label: steady
+  ///
+  /// In en, this message translates to:
+  /// **'Steady'**
+  String get workoutReviewLabelSteady;
+
+  /// Workout step label: a single rep with no index
+  ///
+  /// In en, this message translates to:
+  /// **'Rep'**
+  String get workoutReviewLabelRep;
+
+  /// Workout step label: rep i of n
+  ///
+  /// In en, this message translates to:
+  /// **'Rep {index}/{total}'**
+  String workoutReviewLabelRepN(int index, int total);
+
+  /// Workout step label: a single recovery with no index
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery'**
+  String get workoutReviewLabelRecovery;
+
+  /// Workout step label: recovery i of n
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery {index}/{total}'**
+  String workoutReviewLabelRecoveryN(int index, int total);
+
+  /// Workout step label: a single walk with no index
+  ///
+  /// In en, this message translates to:
+  /// **'Walk'**
+  String get workoutReviewLabelWalk;
+
+  /// Workout step label: walk i of n
+  ///
+  /// In en, this message translates to:
+  /// **'Walk {index}/{total}'**
+  String workoutReviewLabelWalkN(int index, int total);
+
+  /// Header for the route segments panel
+  ///
+  /// In en, this message translates to:
+  /// **'Segments'**
+  String get segmentsPanelTitle;
+
+  /// Button to start creating a new segment
+  ///
+  /// In en, this message translates to:
+  /// **'New segment'**
+  String get segmentsPanelNew;
+
+  /// Button to cancel the new-segment form
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get segmentsPanelCancel;
+
+  /// Loading state for the segments list
+  ///
+  /// In en, this message translates to:
+  /// **'Loading segments…'**
+  String get segmentsPanelLoading;
+
+  /// Empty state when a route has no segments
+  ///
+  /// In en, this message translates to:
+  /// **'No segments on this route yet.'**
+  String get segmentsPanelEmpty;
+
+  /// Label for the segment name field
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get segmentsPanelNameLabel;
+
+  /// Example hint for the segment name field
+  ///
+  /// In en, this message translates to:
+  /// **'Climb of doom'**
+  String get segmentsPanelNameHint;
+
+  /// Label for the segment start distance field (metres)
+  ///
+  /// In en, this message translates to:
+  /// **'Start (m)'**
+  String get segmentsPanelStartLabel;
+
+  /// Label for the segment end distance field (metres)
+  ///
+  /// In en, this message translates to:
+  /// **'End (m)'**
+  String get segmentsPanelEndLabel;
+
+  /// Helper text showing total route length in metres
+  ///
+  /// In en, this message translates to:
+  /// **'route is {metres} m'**
+  String segmentsPanelRouteHint(int metres);
+
+  /// Button to create the segment
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get segmentsPanelCreate;
+
+  /// Tooltip on the delete-segment button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete segment'**
+  String get segmentsPanelDeleteTooltip;
+
+  /// Title of the delete-segment confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete segment?'**
+  String get segmentsPanelDeleteTitle;
+
+  /// Body of the delete-segment dialog naming the segment
+  ///
+  /// In en, this message translates to:
+  /// **'“{name}” will be removed.'**
+  String segmentsPanelDeleteBody(String name);
+
+  /// Confirm button in the delete-segment dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get segmentsPanelDeleteConfirm;
+
+  /// Validation error: end must be after start
+  ///
+  /// In en, this message translates to:
+  /// **'End must be greater than start'**
+  String get segmentsPanelErrEndAfterStart;
+
+  /// Validation error: segment too short
+  ///
+  /// In en, this message translates to:
+  /// **'Segment must be at least 100 m'**
+  String get segmentsPanelErrMinLength;
+
+  /// Banner when creating a segment fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create segment: {error}'**
+  String segmentsPanelCreateError(String error);
+
+  /// Banner when deleting a segment fails
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failed: {error}'**
+  String segmentsPanelDeleteError(String error);
+
+  /// Leaderboard filter: all genders
+  ///
+  /// In en, this message translates to:
+  /// **'All genders'**
+  String get segmentsPanelAllGenders;
+
+  /// Leaderboard gender filter: men
+  ///
+  /// In en, this message translates to:
+  /// **'Men'**
+  String get segmentsPanelGenderMen;
+
+  /// Leaderboard gender filter: women
+  ///
+  /// In en, this message translates to:
+  /// **'Women'**
+  String get segmentsPanelGenderWomen;
+
+  /// Leaderboard gender filter: nonbinary
+  ///
+  /// In en, this message translates to:
+  /// **'Nonbinary'**
+  String get segmentsPanelGenderNonbinary;
+
+  /// Leaderboard filter: all age bands
+  ///
+  /// In en, this message translates to:
+  /// **'All ages'**
+  String get segmentsPanelAllAges;
+
+  /// Button to reset leaderboard filters
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get segmentsPanelResetFilters;
+
+  /// Loading state for a segment leaderboard
+  ///
+  /// In en, this message translates to:
+  /// **'Loading…'**
+  String get segmentsPanelLeaderboardLoading;
+
+  /// Empty leaderboard with a filter applied
+  ///
+  /// In en, this message translates to:
+  /// **'No efforts match this filter — try widening it.'**
+  String get segmentsPanelLeaderboardEmptyFiltered;
+
+  /// Empty leaderboard with no filter
+  ///
+  /// In en, this message translates to:
+  /// **'No efforts yet — be the first to run this segment.'**
+  String get segmentsPanelLeaderboardEmpty;
+
+  /// Banner shown when the viewer holds the segment crown
+  ///
+  /// In en, this message translates to:
+  /// **'You hold this crown — {label}.'**
+  String segmentsPanelCrownBanner(String label);
+
+  /// Fallback display name for a leaderboard athlete
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get segmentsPanelRunnerFallback;
+
+  /// AppBar title when creating a goal
+  ///
+  /// In en, this message translates to:
+  /// **'New goal'**
+  String get goalEditorTitleNew;
+
+  /// AppBar title when editing a goal
+  ///
+  /// In en, this message translates to:
+  /// **'Edit goal'**
+  String get goalEditorTitleEdit;
+
+  /// Section label for the optional goal name
+  ///
+  /// In en, this message translates to:
+  /// **'Name (optional)'**
+  String get goalEditorNameLabel;
+
+  /// Example hint for the goal name field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Base miles'**
+  String get goalEditorNameHint;
+
+  /// Section label for the goal period
+  ///
+  /// In en, this message translates to:
+  /// **'Period'**
+  String get goalEditorPeriod;
+
+  /// Goal period option: this week
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get goalEditorThisWeek;
+
+  /// Goal period option: this month
+  ///
+  /// In en, this message translates to:
+  /// **'This month'**
+  String get goalEditorThisMonth;
+
+  /// Section label for the goal targets
+  ///
+  /// In en, this message translates to:
+  /// **'Targets'**
+  String get goalEditorTargets;
+
+  /// Helper text under the targets section
+  ///
+  /// In en, this message translates to:
+  /// **'Set any combination. Blank fields are ignored.'**
+  String get goalEditorTargetsHelp;
+
+  /// Target field label: distance
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get goalEditorTargetDistance;
+
+  /// Target field label: time
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get goalEditorTargetTime;
+
+  /// Target field label: average pace
+  ///
+  /// In en, this message translates to:
+  /// **'Avg pace'**
+  String get goalEditorTargetPace;
+
+  /// Target field label: number of runs
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get goalEditorTargetRuns;
+
+  /// Suffix for the time-target field (minutes)
+  ///
+  /// In en, this message translates to:
+  /// **'min'**
+  String get goalEditorSuffixMin;
+
+  /// Suffix for the runs-target field
+  ///
+  /// In en, this message translates to:
+  /// **'runs'**
+  String get goalEditorSuffixRuns;
+
+  /// Button to delete a goal
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get goalEditorDelete;
+
+  /// Button to cancel the goal editor
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get goalEditorCancel;
+
+  /// Button to save the goal
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get goalEditorSave;
+
+  /// Validation error for the distance target
+  ///
+  /// In en, this message translates to:
+  /// **'Distance: enter a positive number'**
+  String get goalEditorErrDistance;
+
+  /// Validation error for the time target
+  ///
+  /// In en, this message translates to:
+  /// **'Time: enter a positive number of minutes'**
+  String get goalEditorErrTime;
+
+  /// Validation error for the pace target
+  ///
+  /// In en, this message translates to:
+  /// **'Pace: use mm:ss (e.g. 5:00)'**
+  String get goalEditorErrPace;
+
+  /// Validation error for the runs target
+  ///
+  /// In en, this message translates to:
+  /// **'Runs: enter a positive whole number'**
+  String get goalEditorErrRuns;
+
+  /// Validation error when no target is set
+  ///
+  /// In en, this message translates to:
+  /// **'Set at least one target'**
+  String get goalEditorErrNoTarget;
+
+  /// Screen-reader status when a goal is saved
+  ///
+  /// In en, this message translates to:
+  /// **'Goal saved'**
+  String get goalEditorSavedAnnounce;
+
+  /// Screen-reader status when a goal is deleted
+  ///
+  /// In en, this message translates to:
+  /// **'Goal deleted'**
+  String get goalEditorDeletedAnnounce;
+
+  /// Header of the create-event sheet
+  ///
+  /// In en, this message translates to:
+  /// **'New event'**
+  String get eventFormTitle;
+
+  /// Label for the event title field
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get eventFormTitleLabel;
+
+  /// Label for the event start date/time field
+  ///
+  /// In en, this message translates to:
+  /// **'Starts at'**
+  String get eventFormStartsAt;
+
+  /// Label for the optional event description field
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get eventFormDescriptionLabel;
+
+  /// Label for the optional meeting-point field
+  ///
+  /// In en, this message translates to:
+  /// **'Meeting point (optional)'**
+  String get eventFormMeetLabel;
+
+  /// Example hint for the meeting-point field
+  ///
+  /// In en, this message translates to:
+  /// **'Trailhead car park'**
+  String get eventFormMeetHint;
+
+  /// Label for the event distance field (km)
+  ///
+  /// In en, this message translates to:
+  /// **'Distance (km)'**
+  String get eventFormDistanceLabel;
+
+  /// Label for the event duration field (minutes)
+  ///
+  /// In en, this message translates to:
+  /// **'Duration (min)'**
+  String get eventFormDurationLabel;
+
+  /// Section label for recurrence options
+  ///
+  /// In en, this message translates to:
+  /// **'Recurrence'**
+  String get eventFormRecurrence;
+
+  /// Recurrence option: one-off
+  ///
+  /// In en, this message translates to:
+  /// **'One-off'**
+  String get eventFormRecurOneOff;
+
+  /// Recurrence option: weekly
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly'**
+  String get eventFormRecurWeekly;
+
+  /// Recurrence option: every two weeks
+  ///
+  /// In en, this message translates to:
+  /// **'Bi-weekly'**
+  String get eventFormRecurBiweekly;
+
+  /// Recurrence option: monthly
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly'**
+  String get eventFormRecurMonthly;
+
+  /// Button to cancel the event form
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get eventFormCancel;
+
+  /// Button to create the event
+  ///
+  /// In en, this message translates to:
+  /// **'Create event'**
+  String get eventFormCreate;
+
+  /// AppBar title of the create-club screen
+  ///
+  /// In en, this message translates to:
+  /// **'New club'**
+  String get clubFormTitle;
+
+  /// Label for the club name field
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get clubFormNameLabel;
+
+  /// Label for the optional club description field
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get clubFormDescriptionLabel;
+
+  /// Label for the optional club location field
+  ///
+  /// In en, this message translates to:
+  /// **'Location (optional)'**
+  String get clubFormLocationLabel;
+
+  /// Example hint for the club location field
+  ///
+  /// In en, this message translates to:
+  /// **'Edinburgh, UK'**
+  String get clubFormLocationHint;
+
+  /// Visibility option: public club
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get clubFormPublic;
+
+  /// Visibility option: private club
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get clubFormPrivate;
+
+  /// Section label for the join policy
+  ///
+  /// In en, this message translates to:
+  /// **'Join policy'**
+  String get clubFormJoinPolicy;
+
+  /// Join policy option: anyone can join
+  ///
+  /// In en, this message translates to:
+  /// **'Open — anyone joins'**
+  String get clubFormJoinOpen;
+
+  /// Join policy option: admins approve
+  ///
+  /// In en, this message translates to:
+  /// **'Request — admins approve'**
+  String get clubFormJoinRequest;
+
+  /// Join policy option: invite only
+  ///
+  /// In en, this message translates to:
+  /// **'Invite only'**
+  String get clubFormJoinInvite;
+
+  /// Button to cancel the club form
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get clubFormCancel;
+
+  /// Button to create the club
+  ///
+  /// In en, this message translates to:
+  /// **'Create'**
+  String get clubFormCreate;
+
+  /// Validation error when the name has no usable characters
+  ///
+  /// In en, this message translates to:
+  /// **'Name needs at least one letter or digit.'**
+  String get clubFormErrSlug;
+
+  /// Error when the server can't be reached during create
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server right now. Check your connection or sign in, then try again.'**
+  String get clubFormErrUnreachable;
+
+  /// Report reason label: spam
+  ///
+  /// In en, this message translates to:
+  /// **'Spam'**
+  String get reportReasonSpam;
+
+  /// Report reason label: harassment or abuse
+  ///
+  /// In en, this message translates to:
+  /// **'Harassment or abuse'**
+  String get reportReasonHarassment;
+
+  /// Report reason label: inappropriate content
+  ///
+  /// In en, this message translates to:
+  /// **'Inappropriate content'**
+  String get reportReasonInappropriate;
+
+  /// Report reason label: impersonation
+  ///
+  /// In en, this message translates to:
+  /// **'Impersonation'**
+  String get reportReasonImpersonation;
+
+  /// Report reason label: other
+  ///
+  /// In en, this message translates to:
+  /// **'Other'**
+  String get reportReasonOther;
+
+  /// Banner shown after a report is submitted
+  ///
+  /// In en, this message translates to:
+  /// **'Report submitted — thanks for flagging this for review.'**
+  String get reportSuccess;
+
+  /// Report sheet title when reporting a user
+  ///
+  /// In en, this message translates to:
+  /// **'Report user'**
+  String get reportTitleUser;
+
+  /// Report sheet title when reporting a club
+  ///
+  /// In en, this message translates to:
+  /// **'Report club'**
+  String get reportTitleClub;
+
+  /// Report sheet title when reporting a route
+  ///
+  /// In en, this message translates to:
+  /// **'Report route'**
+  String get reportTitleRoute;
+
+  /// Report sheet title fallback for generic content
+  ///
+  /// In en, this message translates to:
+  /// **'Report content'**
+  String get reportTitleContent;
+
+  /// Disclaimer text in the report sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Your report goes to a moderator. False reports are reviewed too — please only flag content that violates our community guidelines.'**
+  String get reportDisclaimer;
+
+  /// Section label for the report reason picker
+  ///
+  /// In en, this message translates to:
+  /// **'Reason'**
+  String get reportReason;
+
+  /// Label for the optional report notes field
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get reportNotesLabel;
+
+  /// Button to cancel the report sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get reportCancel;
+
+  /// Button to submit the report
+  ///
+  /// In en, this message translates to:
+  /// **'Submit report'**
+  String get reportSubmit;
+
+  /// Inline error: already have a pending report
+  ///
+  /// In en, this message translates to:
+  /// **'You already have a pending report against this content.'**
+  String get reportErrDuplicate;
+
+  /// Title of the backfill sheet asking to attach past runs
+  ///
+  /// In en, this message translates to:
+  /// **'Attach past runs to {gear}?'**
+  String gearBackfillTitle(String gear);
+
+  /// Body explaining the matched activities found
+  ///
+  /// In en, this message translates to:
+  /// **'We found {count, plural, one{{count} {activity} activity} other{{count} {activity} activities}} after you bought them. Uncheck any you weren\'t wearing them for.'**
+  String gearBackfillBody(int count, String activity);
+
+  /// Activity word for bikes in the backfill body
+  ///
+  /// In en, this message translates to:
+  /// **'cycling'**
+  String get gearBackfillActivityCycling;
+
+  /// Activity word for shoes in the backfill body
+  ///
+  /// In en, this message translates to:
+  /// **'running'**
+  String get gearBackfillActivityRunning;
+
+  /// Toggle label to deselect all candidate runs
+  ///
+  /// In en, this message translates to:
+  /// **'Select none'**
+  String get gearBackfillSelectNone;
+
+  /// Toggle label to select all candidate runs
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get gearBackfillSelectAll;
+
+  /// Counter showing how many runs are selected
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} of {total}'**
+  String gearBackfillSelectedCount(int selected, int total);
+
+  /// Button to skip the backfill prompt
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get gearBackfillSkip;
+
+  /// Button label while runs are being attached
+  ///
+  /// In en, this message translates to:
+  /// **'Attaching…'**
+  String get gearBackfillAttaching;
+
+  /// Button to attach the selected runs
+  ///
+  /// In en, this message translates to:
+  /// **'Attach {count}'**
+  String gearBackfillAttach(int count);
+
+  /// Banner when attaching runs fails
+  ///
+  /// In en, this message translates to:
+  /// **'Attach failed: {error}'**
+  String gearBackfillAttachError(String error);
+
+  /// Header of the workout edit sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Edit workout'**
+  String get workoutEditTitle;
+
+  /// Label for the workout kind dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Kind'**
+  String get workoutEditKindLabel;
+
+  /// Label for the target distance field (km)
+  ///
+  /// In en, this message translates to:
+  /// **'Target distance (km)'**
+  String get workoutEditDistanceLabel;
+
+  /// Example hint for the target distance field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 8.0'**
+  String get workoutEditDistanceHint;
+
+  /// Label for the target pace field
+  ///
+  /// In en, this message translates to:
+  /// **'Target pace (mm:ss /km)'**
+  String get workoutEditPaceLabel;
+
+  /// Example hint for the target pace field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. 5:30'**
+  String get workoutEditPaceHint;
+
+  /// Label for the workout notes field
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get workoutEditNotesLabel;
+
+  /// Button to cancel the workout edit sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get workoutEditCancel;
+
+  /// Button to save the workout
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get workoutEditSave;
+
+  /// Validation error for the distance field
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a positive distance in km'**
+  String get workoutEditErrDistance;
+
+  /// Validation error for the pace field
+  ///
+  /// In en, this message translates to:
+  /// **'Pace must look like 5:30'**
+  String get workoutEditErrPace;
+
+  /// Inline error when saving a workout fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String workoutEditSaveError(String error);
+
+  /// Badge above the event title showing it's RSVP'd
+  ///
+  /// In en, this message translates to:
+  /// **'RSVP\'D · {relative}'**
+  String upcomingEventBadge(String relative);
+
+  /// Relative time: event starting now
+  ///
+  /// In en, this message translates to:
+  /// **'Starting now'**
+  String get upcomingEventStartingNow;
+
+  /// Relative time: in N minutes
+  ///
+  /// In en, this message translates to:
+  /// **'In {count} min'**
+  String upcomingEventInMinutes(int count);
+
+  /// Relative time: in one hour
+  ///
+  /// In en, this message translates to:
+  /// **'In 1 hour'**
+  String get upcomingEventInOneHour;
+
+  /// Relative time: in N hours
+  ///
+  /// In en, this message translates to:
+  /// **'In {count} hours'**
+  String upcomingEventInHours(int count);
+
+  /// Relative time: tomorrow
+  ///
+  /// In en, this message translates to:
+  /// **'Tomorrow'**
+  String get upcomingEventTomorrow;
+
+  /// Relative time: in N days
+  ///
+  /// In en, this message translates to:
+  /// **'In {count} days'**
+  String upcomingEventInDays(int count);
+
+  /// Badge when today's workout is already done
+  ///
+  /// In en, this message translates to:
+  /// **'DONE TODAY'**
+  String get todaysWorkoutDone;
+
+  /// Badge for today's scheduled workout
+  ///
+  /// In en, this message translates to:
+  /// **'TODAY\'S WORKOUT'**
+  String get todaysWorkoutToday;
+
+  /// Retry button on the shared error state
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get errorStateRetry;
+
+  /// Title of the run share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Share run'**
+  String get shareCardRunTitle;
+
+  /// Button to export a run to a file format
+  ///
+  /// In en, this message translates to:
+  /// **'Export'**
+  String get shareCardExport;
+
+  /// Button to share the run as an image
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get shareCardImage;
+
+  /// Stat label on the share card: distance
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get shareCardStatDistance;
+
+  /// Stat label on the share card: time
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get shareCardStatTime;
+
+  /// Stat label on the share card: pace
+  ///
+  /// In en, this message translates to:
+  /// **'Pace'**
+  String get shareCardStatPace;
+
+  /// Stat label on the share card: speed
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get shareCardStatSpeed;
+
+  /// Branding wordmark on the run share card
+  ///
+  /// In en, this message translates to:
+  /// **'RUN'**
+  String get shareCardBrandRun;
+
+  /// Banner when the share image can't be created
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create share image'**
+  String get shareCardImageError;
+
+  /// Banner when exporting a run file fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not export file'**
+  String get shareCardFileError;
+
+  /// Title of the route share sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Share route'**
+  String get shareCardRouteTitle;
+
+  /// Button to share the route as an image
+  ///
+  /// In en, this message translates to:
+  /// **'Share image'**
+  String get shareCardRouteShareImage;
+
+  /// Button label while the route image is captured
+  ///
+  /// In en, this message translates to:
+  /// **'Capturing…'**
+  String get shareCardRouteCapturing;
+
+  /// Stat label on the route share card: distance
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get shareCardRouteStatDistance;
+
+  /// Stat label on the route share card: climb
+  ///
+  /// In en, this message translates to:
+  /// **'Climb'**
+  String get shareCardRouteStatClimb;
+
+  /// Relative time: today
+  ///
+  /// In en, this message translates to:
+  /// **'today'**
+  String get billingToday;
+
+  /// Relative time: yesterday
+  ///
+  /// In en, this message translates to:
+  /// **'yesterday'**
+  String get billingYesterday;
+
+  /// Relative time: N days ago
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days ago'**
+  String billingDaysAgo(int count);
+
+  /// Banner headline when a Pro renewal failed
+  ///
+  /// In en, this message translates to:
+  /// **'Pro renewal failed {relative}.'**
+  String billingRenewalFailed(String relative);
+
+  /// Banner body prompting the user to update their card
+  ///
+  /// In en, this message translates to:
+  /// **'Update your card or you\'ll be downgraded to Free.'**
+  String get billingRenewalBody;
+
+  /// Button to manage the subscription
+  ///
+  /// In en, this message translates to:
+  /// **'Manage'**
+  String get billingManage;
+
+  /// Tooltip on the previous-month chevron
+  ///
+  /// In en, this message translates to:
+  /// **'Previous month'**
+  String get planCalendarPrevMonth;
+
+  /// Tooltip on the next-month chevron
+  ///
+  /// In en, this message translates to:
+  /// **'Next month'**
+  String get planCalendarNextMonth;
+
+  /// Banner when the gear inventory can't load
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to load gear: {error}'**
+  String runGearChipsLoadError(String error);
+
+  /// Header of the tag-gear bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Tag gear used on this run'**
+  String get runGearChipsPickerTitle;
+
+  /// Empty state in the gear picker
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t registered any gear yet. Add some in Settings → Gear.'**
+  String get runGearChipsEmpty;
+
+  /// Cancel button in the gear picker
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runGearChipsCancel;
+
+  /// Save button in the gear picker
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get runGearChipsSave;
+
+  /// Button to tag gear when none is assigned
+  ///
+  /// In en, this message translates to:
+  /// **'+ Tag gear'**
+  String get runGearChipsTag;
+
+  /// Button to edit assigned gear
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get runGearChipsEdit;
+
+  /// Banner when saving tagged gear fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String runGearChipsSaveError(String error);
+
+  /// Header of the gear form when editing
+  ///
+  /// In en, this message translates to:
+  /// **'Edit gear'**
+  String get gearFormTitleEdit;
+
+  /// Header of the gear form when adding shoes
+  ///
+  /// In en, this message translates to:
+  /// **'Add shoes'**
+  String get gearFormTitleAddShoes;
+
+  /// Header of the gear form when adding a bike
+  ///
+  /// In en, this message translates to:
+  /// **'Add bike'**
+  String get gearFormTitleAddBike;
+
+  /// Label for the gear name field
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get gearFormNameLabel;
+
+  /// Example hint for the gear name field
+  ///
+  /// In en, this message translates to:
+  /// **'Pegasus 39'**
+  String get gearFormNameHint;
+
+  /// Label for the gear brand field
+  ///
+  /// In en, this message translates to:
+  /// **'Brand'**
+  String get gearFormBrandLabel;
+
+  /// Label for the gear model field
+  ///
+  /// In en, this message translates to:
+  /// **'Model'**
+  String get gearFormModelLabel;
+
+  /// Label for the gear purchase-date field
+  ///
+  /// In en, this message translates to:
+  /// **'Bought'**
+  String get gearFormBoughtLabel;
+
+  /// Placeholder when no purchase date is picked
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to pick'**
+  String get gearFormBoughtPick;
+
+  /// Label for the retirement target field with unit
+  ///
+  /// In en, this message translates to:
+  /// **'Retire at ({unit})'**
+  String gearFormRetireAt(String unit);
+
+  /// Example hint for the retirement target field
+  ///
+  /// In en, this message translates to:
+  /// **'500'**
+  String get gearFormRetireHint;
+
+  /// Label for the gear notes field
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get gearFormNotesLabel;
+
+  /// Button to cancel the gear form
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get gearFormCancel;
+
+  /// Button label while the gear is saving
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get gearFormSaving;
+
+  /// Button to save an edited gear row
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get gearFormSave;
+
+  /// Button to add a new gear row
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get gearFormAdd;
+
+  /// Banner when saving gear fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String gearFormSaveError(String error);
+
+  /// Tooltip on the notification bell
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get notificationBellTooltip;
+
+  /// Overlay shown while waiting for the first GPS fix
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for GPS...'**
+  String get liveRunMapWaitingGps;
+
+  /// Tooltip on the re-centre map button
+  ///
+  /// In en, this message translates to:
+  /// **'Re-centre on my location'**
+  String get liveRunMapRecentre;
 }
 
 class _AppLocalizationsDelegate

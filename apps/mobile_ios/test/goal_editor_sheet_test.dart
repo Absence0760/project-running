@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/goals.dart';
 import '../lib/preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/goal_editor_sheet.dart';
 
 Future<Preferences> _makePrefs() async {
@@ -20,6 +21,8 @@ Future<void> _pumpSheet(
   await tester.binding.setSurfaceSize(const Size(400, 900));
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Builder(
           builder: (ctx) => TextButton(
@@ -115,6 +118,8 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(400, 900));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Builder(
               builder: (ctx) => TextButton(
@@ -155,6 +160,8 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(400, 900));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: Builder(
               builder: (ctx) => TextButton(

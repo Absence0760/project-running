@@ -4632,7 +4632,6 @@
   "@coachCopied": {
     "description": "Top-banner shown after copying a message"
   },
-
   "settingsAccountTitle": "Account",
   "@settingsAccountTitle": {
     "description": "AppBar title for the Settings > Account screen"
@@ -4680,7 +4679,11 @@
   "settingsAccountPasswordUpdateFailed": "Could not update password: {error}",
   "@settingsAccountPasswordUpdateFailed": {
     "description": "Banner shown when the password change fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "settingsAccountDeleteTitle": "Delete account?",
   "@settingsAccountDeleteTitle": {
@@ -4697,7 +4700,11 @@
   "settingsAccountDeleteChallengeEmail": "Type your email ({email}) to confirm",
   "@settingsAccountDeleteChallengeEmail": {
     "description": "Challenge field label asking the user to type their email",
-    "placeholders": {"email": {"type": "String"}}
+    "placeholders": {
+      "email": {
+        "type": "String"
+      }
+    }
   },
   "settingsAccountDelete": "Delete",
   "@settingsAccountDelete": {
@@ -4714,7 +4721,11 @@
   "settingsAccountDeleteFailed": "Account deletion failed: {error}",
   "@settingsAccountDeleteFailed": {
     "description": "Banner shown when account deletion fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "settingsAccountNoRunsToExport": "No runs to export.",
   "@settingsAccountNoRunsToExport": {
@@ -4727,7 +4738,11 @@
   "settingsAccountCsvExportFailed": "CSV export failed: {error}",
   "@settingsAccountCsvExportFailed": {
     "description": "Banner shown when the CSV export fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "settingsAccountBackupSignInFirst": "Sign in first to back up your runs.",
   "@settingsAccountBackupSignInFirst": {
@@ -4744,7 +4759,11 @@
   "settingsAccountBackupFailed": "Backup failed: {error}",
   "@settingsAccountBackupFailed": {
     "description": "Banner shown when the backup fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "settingsAccountRestoreUnavailable": "Backup service unavailable.",
   "@settingsAccountRestoreUnavailable": {
@@ -4774,21 +4793,37 @@
   "@settingsAccountRestoreDone": {
     "description": "Banner summarising a successful restore; warnings is an optional suffix",
     "placeholders": {
-      "runs": {"type": "int"},
-      "tracks": {"type": "int"},
-      "routes": {"type": "int"},
-      "warnings": {"type": "String"}
+      "runs": {
+        "type": "int"
+      },
+      "tracks": {
+        "type": "int"
+      },
+      "routes": {
+        "type": "int"
+      },
+      "warnings": {
+        "type": "String"
+      }
     }
   },
   "settingsAccountRestoreWarningsSuffix": " · {count} warnings",
   "@settingsAccountRestoreWarningsSuffix": {
     "description": "Suffix appended to the restore summary when warnings occurred",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "settingsAccountRestoreFailed": "Restore failed: {error}",
   "@settingsAccountRestoreFailed": {
     "description": "Banner shown when restore fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "settingsAccountOfflineMode": "Offline mode",
   "@settingsAccountOfflineMode": {
@@ -4898,7 +4933,6 @@
   "@settingsAccountDeleteAccountSubtitle": {
     "description": "Subtitle of the Delete account tile"
   },
-
   "integrationsTitle": "Integrations",
   "@integrationsTitle": {
     "description": "AppBar title for the Settings > Integrations screen"
@@ -4910,27 +4944,47 @@
   "integrationsMinutesAgo": "{minutes}m ago",
   "@integrationsMinutesAgo": {
     "description": "Relative-time label in minutes",
-    "placeholders": {"minutes": {"type": "int"}}
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
   },
   "integrationsHoursAgo": "{hours}h ago",
   "@integrationsHoursAgo": {
     "description": "Relative-time label in hours",
-    "placeholders": {"hours": {"type": "int"}}
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
   },
   "integrationsDaysAgo": "{days}d ago",
   "@integrationsDaysAgo": {
     "description": "Relative-time label in days",
-    "placeholders": {"days": {"type": "int"}}
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "integrationsWeeksAgo": "{weeks}w ago",
   "@integrationsWeeksAgo": {
     "description": "Relative-time label in weeks",
-    "placeholders": {"weeks": {"type": "int"}}
+    "placeholders": {
+      "weeks": {
+        "type": "int"
+      }
+    }
   },
   "integrationsCouldNotOpen": "Could not open: {error}",
   "@integrationsCouldNotOpen": {
     "description": "Banner shown when an external URL can't be opened",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "integrationsStravaBrowserHint": "Complete the Strava sign-in in your browser, then return here and pull to refresh.",
   "@integrationsStravaBrowserHint": {
@@ -4943,7 +4997,11 @@
   "integrationsStravaSignInFailed": "Strava sign-in failed: {error}",
   "@integrationsStravaSignInFailed": {
     "description": "Banner shown when Strava sign-in fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "integrationsStravaCsrfMismatch": "Strava sign-in rejected: CSRF state mismatch. Please retry.",
   "@integrationsStravaCsrfMismatch": {
@@ -4952,7 +5010,11 @@
   "integrationsStravaConnectFailed": "Strava connect failed: {error}",
   "@integrationsStravaConnectFailed": {
     "description": "Banner shown when the Strava token exchange fails",
-    "placeholders": {"error": {"type": "String"}}
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
   "integrationsStravaConnected": "Strava connected.",
   "@integrationsStravaConnected": {
@@ -4962,14 +5024,22 @@
   "@integrationsSyncResult": {
     "description": "Banner summarising a Strava sync",
     "placeholders": {
-      "imported": {"type": "int"},
-      "skipped": {"type": "int"}
+      "imported": {
+        "type": "int"
+      },
+      "skipped": {
+        "type": "int"
+      }
     }
   },
   "integrationsSyncFailed": "Sync failed: {error}",
   "@integrationsSyncFailed": {
     "description": "Banner shown when a Strava sync fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "integrationsStravaDisconnectTitle": "Disconnect Strava?",
   "@integrationsStravaDisconnectTitle": {
@@ -4994,7 +5064,11 @@
   "integrationsDisconnectFailed": "Disconnect failed: {error}",
   "@integrationsDisconnectFailed": {
     "description": "Banner shown when disconnecting fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "integrationsParkrunTitle": "Import parkrun results",
   "@integrationsParkrunTitle": {
@@ -5019,7 +5093,11 @@
   "integrationsParkrunImported": "{count, plural, one{Imported {count} parkrun result.} other{Imported {count} parkrun results.}}",
   "@integrationsParkrunImported": {
     "description": "Banner summarising imported parkrun results",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "integrationsParkrunNoneNew": "No new parkrun results since last import.",
   "@integrationsParkrunNoneNew": {
@@ -5028,7 +5106,11 @@
   "integrationsImportFailed": "Import failed: {error}",
   "@integrationsImportFailed": {
     "description": "Banner shown when the parkrun import fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "integrationsStravaName": "Strava",
   "@integrationsStravaName": {
@@ -5045,7 +5127,11 @@
   "integrationsStravaLastSync": "Connected · last sync {time}",
   "@integrationsStravaLastSync": {
     "description": "Strava tile subtitle showing the last sync time",
-    "placeholders": {"time": {"type": "String"}}
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "integrationsSyncNow": "Sync now",
   "@integrationsSyncNow": {
@@ -5082,7 +5168,11 @@
   "integrationsHrPairFailed": "Pair failed: {error}",
   "@integrationsHrPairFailed": {
     "description": "Banner shown when pairing a heart-rate strap fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "integrationsHrTitle": "Heart rate monitor",
   "@integrationsHrTitle": {
@@ -5095,7 +5185,11 @@
   "integrationsHrPaired": "Paired: {name}",
   "@integrationsHrPaired": {
     "description": "HR tile subtitle showing the paired strap name",
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "integrationsHrNotPaired": "No strap paired — tap to scan",
   "@integrationsHrNotPaired": {
@@ -5120,9 +5214,12 @@
   "integrationsHrRssi": "RSSI {rssi} dBm",
   "@integrationsHrRssi": {
     "description": "Signal-strength subtitle for a discovered strap",
-    "placeholders": {"rssi": {"type": "int"}}
+    "placeholders": {
+      "rssi": {
+        "type": "int"
+      }
+    }
   },
-
   "proTitle": "Pro & support",
   "@proTitle": {
     "description": "AppBar title for the Settings > Pro & support screen"
@@ -5130,7 +5227,11 @@
   "proCouldNotOpen": "Could not open: {error}",
   "@proCouldNotOpen": {
     "description": "Banner shown when an external URL can't be opened",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "proWelcome": "Welcome to Pro! Pulling your benefits…",
   "@proWelcome": {
@@ -5163,7 +5264,11 @@
   "proSubscribeTitle": "Subscribe to Pro — {price}/month",
   "@proSubscribeTitle": {
     "description": "Tile title for the Pro subscription; price is a localized currency amount",
-    "placeholders": {"price": {"type": "String"}}
+    "placeholders": {
+      "price": {
+        "type": "String"
+      }
+    }
   },
   "proSubscribeSubtitleConfigured": "Unlimited AI coach + priority processing. Auto-renews monthly until cancelled in Settings → Subscriptions.",
   "@proSubscribeSubtitleConfigured": {
@@ -5201,7 +5306,6 @@
   "@proSupportSubtitle": {
     "description": "Subtitle of the Support the app tile"
   },
-
   "licensesTitle": "Licenses",
   "@licensesTitle": {
     "description": "AppBar title for the Settings > Licenses screen"
@@ -5218,7 +5322,6 @@
   "@licensesOpenSourceSubtitle": {
     "description": "Subtitle of the Open-source licenses tile"
   },
-
   "devicesTitle": "Devices",
   "@devicesTitle": {
     "description": "AppBar title for the Settings > Devices screen"
@@ -5238,7 +5341,11 @@
   "devicesRenameFailed": "Rename failed: {error}",
   "@devicesRenameFailed": {
     "description": "Banner shown when renaming a device fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "devicesRemoveTitle": "Remove device?",
   "@devicesRemoveTitle": {
@@ -5259,12 +5366,20 @@
   "devicesRemoveFailed": "Remove failed: {error}",
   "@devicesRemoveFailed": {
     "description": "Banner shown when removing a device fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "devicesSaveFailed": "Save failed: {error}",
   "@devicesSaveFailed": {
     "description": "Banner shown when saving device overrides fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "devicesLoadError": "Could not load devices.",
   "@devicesLoadError": {
@@ -5281,12 +5396,20 @@
   "devicesLastSeen": "Last seen {time}",
   "@devicesLastSeen": {
     "description": "Subtitle showing when a device was last active",
-    "placeholders": {"time": {"type": "String"}}
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
   },
   "devicesOverrideCount": "{count, plural, one{{count} override} other{{count} overrides}}",
   "@devicesOverrideCount": {
     "description": "Suffix showing the number of per-device overrides",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "devicesJustNow": "just now",
   "@devicesJustNow": {
@@ -5295,17 +5418,29 @@
   "devicesMinutesAgo": "{minutes}m ago",
   "@devicesMinutesAgo": {
     "description": "Relative-time label in minutes",
-    "placeholders": {"minutes": {"type": "int"}}
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
   },
   "devicesHoursAgo": "{hours}h ago",
   "@devicesHoursAgo": {
     "description": "Relative-time label in hours",
-    "placeholders": {"hours": {"type": "int"}}
+    "placeholders": {
+      "hours": {
+        "type": "int"
+      }
+    }
   },
   "devicesDaysAgo": "{days}d ago",
   "@devicesDaysAgo": {
     "description": "Relative-time label in days",
-    "placeholders": {"days": {"type": "int"}}
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
   },
   "devicesRename": "Rename",
   "@devicesRename": {
@@ -5423,7 +5558,6 @@
   "@devicesKeyKeepScreenOnHint": {
     "description": "Override key hint: keep screen on"
   },
-
   "gearTitle": "Gear",
   "@gearTitle": {
     "description": "AppBar title for the Settings > Gear screen"
@@ -5439,7 +5573,11 @@
   "gearDeleteBody": "Delete \"{name}\"? Mileage history on past runs will be lost. Retire instead to keep the records.",
   "@gearDeleteBody": {
     "description": "Body of the delete-gear confirmation dialog",
-    "placeholders": {"name": {"type": "String"}}
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "gearCancel": "Cancel",
   "@gearCancel": {
@@ -5457,14 +5595,22 @@
   "@gearAttached": {
     "description": "Banner shown after backfilling gear onto past runs",
     "placeholders": {
-      "name": {"type": "String"},
-      "count": {"type": "int"}
+      "name": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
     }
   },
   "gearOfflineQueued": "{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}",
   "@gearOfflineQueued": {
     "description": "Offline banner when edits are queued",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "gearOfflineCached": "Offline — showing cached gear.",
   "@gearOfflineCached": {
@@ -5497,7 +5643,11 @@
   "gearRunCount": "{count, plural, one{{count} run} other{{count} runs}}",
   "@gearRunCount": {
     "description": "Run count shown on a gear tile",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "gearRetire": "Retire",
   "@gearRetire": {
@@ -5507,7 +5657,6 @@
   "@gearRestore": {
     "description": "Popup-menu item to un-retire gear"
   },
-
   "privacyZonesTitle": "Privacy zones",
   "@privacyZonesTitle": {
     "description": "AppBar title for the Settings > Privacy zones screen"
@@ -5519,12 +5668,20 @@
   "privacyZonesSaveFailed": "Save failed: {error}",
   "@privacyZonesSaveFailed": {
     "description": "Banner shown when saving privacy zones fails",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "privacyZonesLocationUnavailable": "Location unavailable: {error}",
   "@privacyZonesLocationUnavailable": {
     "description": "Banner shown when the Locate FAB can't get a fix",
-    "placeholders": {"error": {"type": "Object"}}
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
   },
   "privacyZonesSave": "Save",
   "@privacyZonesSave": {
@@ -5549,18 +5706,25 @@
   "privacyZonesRadiusMeters": "{meters} m",
   "@privacyZonesRadiusMeters": {
     "description": "Radius value in metres",
-    "placeholders": {"meters": {"type": "int"}}
+    "placeholders": {
+      "meters": {
+        "type": "int"
+      }
+    }
   },
   "privacyZonesCount": "{count, plural, one{{count} zone — tap a marker to remove.} other{{count} zones — tap a marker to remove.}}",
   "@privacyZonesCount": {
     "description": "Footer summarising the number of zones",
-    "placeholders": {"count": {"type": "int"}}
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "privacyZonesClearAll": "Clear all",
   "@privacyZonesClearAll": {
     "description": "Button to remove all privacy zones"
   },
-
   "prefsTitle": "Preferences",
   "@prefsTitle": {
     "description": "AppBar title for the Settings > Preferences screen"
@@ -5576,7 +5740,11 @@
   "prefsSyncedSuffix": "{base} · synced to your other devices",
   "@prefsSyncedSuffix": {
     "description": "Unit subtitle with a note that the setting syncs across devices",
-    "placeholders": {"base": {"type": "String"}}
+    "placeholders": {
+      "base": {
+        "type": "String"
+      }
+    }
   },
   "prefsClear": "Clear",
   "@prefsClear": {
@@ -5622,8 +5790,12 @@
   "@prefsLivePaceAlertOn": {
     "description": "Live-pace-alert subtitle showing the target pace",
     "placeholders": {
-      "pace": {"type": "String"},
-      "paceLabel": {"type": "String"}
+      "pace": {
+        "type": "String"
+      },
+      "paceLabel": {
+        "type": "String"
+      }
     }
   },
   "prefsActivityRun": "Run",
@@ -5669,14 +5841,22 @@
   "prefsHrZonesSummary": "{zones} bpm",
   "@prefsHrZonesSummary": {
     "description": "HR-zones summary showing the upper bounds in bpm",
-    "placeholders": {"zones": {"type": "String"}}
+    "placeholders": {
+      "zones": {
+        "type": "String"
+      }
+    }
   },
   "prefsWeeklyGoalSummary": "{distance} {unit} / week",
   "@prefsWeeklyGoalSummary": {
     "description": "Weekly-goal summary showing the target distance per week",
     "placeholders": {
-      "distance": {"type": "String"},
-      "unit": {"type": "String"}
+      "distance": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      }
     }
   },
   "prefsMapStyle": "Map style",
@@ -5754,7 +5934,11 @@
   "prefsHrBpm": "{bpm} bpm",
   "@prefsHrBpm": {
     "description": "Heart-rate value with bpm unit",
-    "placeholders": {"bpm": {"type": "int"}}
+    "placeholders": {
+      "bpm": {
+        "type": "int"
+      }
+    }
   },
   "prefsHrZones": "Heart-rate zones",
   "@prefsHrZones": {
@@ -6329,5 +6513,1111 @@
   "fitnessStatTsbTooltip": "Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.",
   "@fitnessStatTsbTooltip": {
     "description": "Tooltip explaining TSB"
+  },
+  "runSocialActivity": "Activity",
+  "@runSocialActivity": {
+    "description": "Section header above the kudos + comments on a run"
+  },
+  "runSocialNoComments": "No comments yet.",
+  "@runSocialNoComments": {
+    "description": "Empty state when a run has no comments"
+  },
+  "runSocialReplyHint": "Write a reply…",
+  "@runSocialReplyHint": {
+    "description": "Hint text in the reply composer field"
+  },
+  "runSocialCommentHint": "Add a comment…",
+  "@runSocialCommentHint": {
+    "description": "Hint text in the comment composer field"
+  },
+  "runSocialRunnerFallback": "Runner",
+  "@runSocialRunnerFallback": {
+    "description": "Fallback display name for a comment author with no name"
+  },
+  "runSocialReply": "Reply",
+  "@runSocialReply": {
+    "description": "Button to reply to a comment"
+  },
+  "runSocialDelete": "Delete",
+  "@runSocialDelete": {
+    "description": "Button to delete a comment"
+  },
+  "runSocialPost": "Post",
+  "@runSocialPost": {
+    "description": "Button to post a comment"
+  },
+  "runSocialCancel": "Cancel",
+  "@runSocialCancel": {
+    "description": "Button to cancel a reply"
+  },
+  "runSocialKudosError": "Could not update kudos: {error}",
+  "@runSocialKudosError": {
+    "description": "Banner when toggling kudos fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runSocialPostError": "Failed to post: {error}",
+  "@runSocialPostError": {
+    "description": "Banner when posting a comment fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runSocialDeleteError": "Failed to delete: {error}",
+  "@runSocialDeleteError": {
+    "description": "Banner when deleting a comment fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runPhotosLoading": "Loading photos…",
+  "@runPhotosLoading": {
+    "description": "Loading state for the run photo gallery"
+  },
+  "runPhotosTitle": "Photos",
+  "@runPhotosTitle": {
+    "description": "Header for the run photo gallery"
+  },
+  "runPhotosAdd": "Add photo",
+  "@runPhotosAdd": {
+    "description": "Button to add a photo to a run"
+  },
+  "runPhotosCaptionPendingHint": "Caption (optional, 280 chars)",
+  "@runPhotosCaptionPendingHint": {
+    "description": "Hint in the caption field for a photo about to be uploaded"
+  },
+  "runPhotosCaptionHint": "Caption…",
+  "@runPhotosCaptionHint": {
+    "description": "Hint in the inline caption-edit field"
+  },
+  "runPhotosCancel": "Cancel",
+  "@runPhotosCancel": {
+    "description": "Cancel button in the photo gallery"
+  },
+  "runPhotosSave": "Save",
+  "@runPhotosSave": {
+    "description": "Save button for an edited caption"
+  },
+  "runPhotosUpload": "Upload",
+  "@runPhotosUpload": {
+    "description": "Button to upload the pending photo"
+  },
+  "runPhotosUploading": "Uploading…",
+  "@runPhotosUploading": {
+    "description": "Button label while a photo is uploading"
+  },
+  "runPhotosEditCaption": "Edit caption",
+  "@runPhotosEditCaption": {
+    "description": "Tooltip on the edit-caption button"
+  },
+  "runPhotosDeleteTooltip": "Delete photo",
+  "@runPhotosDeleteTooltip": {
+    "description": "Tooltip on the delete-photo button"
+  },
+  "runPhotosDeleteTitle": "Delete photo?",
+  "@runPhotosDeleteTitle": {
+    "description": "Title of the delete-photo confirmation dialog"
+  },
+  "runPhotosDeleteBody": "This removes the photo from the run permanently.",
+  "@runPhotosDeleteBody": {
+    "description": "Body of the delete-photo confirmation dialog"
+  },
+  "runPhotosDeleteConfirm": "Delete",
+  "@runPhotosDeleteConfirm": {
+    "description": "Confirm button in the delete-photo dialog"
+  },
+  "runPhotosPickerError": "Could not open picker: {error}",
+  "@runPhotosPickerError": {
+    "description": "Banner when the image picker can't be opened",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runPhotosUploadError": "Upload failed: {error}",
+  "@runPhotosUploadError": {
+    "description": "Banner when a photo upload fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runPhotosDeleteError": "Delete failed: {error}",
+  "@runPhotosDeleteError": {
+    "description": "Banner when deleting a photo fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runPhotosCaptionError": "Could not update caption: {error}",
+  "@runPhotosCaptionError": {
+    "description": "Banner when updating a caption fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runSegEffortsChecking": "Checking segments…",
+  "@runSegEffortsChecking": {
+    "description": "Loading state while segment efforts are computed"
+  },
+  "runSegEffortsNoRoute": "Segments are matched per route — link this run to a saved route to compete on its leaderboards.",
+  "@runSegEffortsNoRoute": {
+    "description": "Hint when a run isn't linked to a route so no segments apply"
+  },
+  "runSegEffortsEmpty": "No segment efforts on this run.",
+  "@runSegEffortsEmpty": {
+    "description": "Empty state when a run has no segment efforts"
+  },
+  "workoutReviewTitle": "Workout",
+  "@workoutReviewTitle": {
+    "description": "Header for the post-run workout review section"
+  },
+  "workoutReviewColStep": "Step",
+  "@workoutReviewColStep": {
+    "description": "Column header: workout step"
+  },
+  "workoutReviewColPlan": "Plan",
+  "@workoutReviewColPlan": {
+    "description": "Column header: planned value"
+  },
+  "workoutReviewColActual": "Actual",
+  "@workoutReviewColActual": {
+    "description": "Column header: actual value"
+  },
+  "workoutReviewColPace": "Pace",
+  "@workoutReviewColPace": {
+    "description": "Column header: pace"
+  },
+  "workoutReviewColDelta": "Δ",
+  "@workoutReviewColDelta": {
+    "description": "Column header: pace delta (uses the delta symbol)"
+  },
+  "workoutReviewSkip": "skip",
+  "@workoutReviewSkip": {
+    "description": "Label shown in the delta column for a skipped step"
+  },
+  "workoutReviewLabelWarmup": "Warmup",
+  "@workoutReviewLabelWarmup": {
+    "description": "Workout step label: warmup"
+  },
+  "workoutReviewLabelCooldown": "Cooldown",
+  "@workoutReviewLabelCooldown": {
+    "description": "Workout step label: cooldown"
+  },
+  "workoutReviewLabelSteady": "Steady",
+  "@workoutReviewLabelSteady": {
+    "description": "Workout step label: steady"
+  },
+  "workoutReviewLabelRep": "Rep",
+  "@workoutReviewLabelRep": {
+    "description": "Workout step label: a single rep with no index"
+  },
+  "workoutReviewLabelRepN": "Rep {index}/{total}",
+  "@workoutReviewLabelRepN": {
+    "description": "Workout step label: rep i of n",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "workoutReviewLabelRecovery": "Recovery",
+  "@workoutReviewLabelRecovery": {
+    "description": "Workout step label: a single recovery with no index"
+  },
+  "workoutReviewLabelRecoveryN": "Recovery {index}/{total}",
+  "@workoutReviewLabelRecoveryN": {
+    "description": "Workout step label: recovery i of n",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "workoutReviewLabelWalk": "Walk",
+  "@workoutReviewLabelWalk": {
+    "description": "Workout step label: a single walk with no index"
+  },
+  "workoutReviewLabelWalkN": "Walk {index}/{total}",
+  "@workoutReviewLabelWalkN": {
+    "description": "Workout step label: walk i of n",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "segmentsPanelTitle": "Segments",
+  "@segmentsPanelTitle": {
+    "description": "Header for the route segments panel"
+  },
+  "segmentsPanelNew": "New segment",
+  "@segmentsPanelNew": {
+    "description": "Button to start creating a new segment"
+  },
+  "segmentsPanelCancel": "Cancel",
+  "@segmentsPanelCancel": {
+    "description": "Button to cancel the new-segment form"
+  },
+  "segmentsPanelLoading": "Loading segments…",
+  "@segmentsPanelLoading": {
+    "description": "Loading state for the segments list"
+  },
+  "segmentsPanelEmpty": "No segments on this route yet.",
+  "@segmentsPanelEmpty": {
+    "description": "Empty state when a route has no segments"
+  },
+  "segmentsPanelNameLabel": "Name",
+  "@segmentsPanelNameLabel": {
+    "description": "Label for the segment name field"
+  },
+  "segmentsPanelNameHint": "Climb of doom",
+  "@segmentsPanelNameHint": {
+    "description": "Example hint for the segment name field"
+  },
+  "segmentsPanelStartLabel": "Start (m)",
+  "@segmentsPanelStartLabel": {
+    "description": "Label for the segment start distance field (metres)"
+  },
+  "segmentsPanelEndLabel": "End (m)",
+  "@segmentsPanelEndLabel": {
+    "description": "Label for the segment end distance field (metres)"
+  },
+  "segmentsPanelRouteHint": "route is {metres} m",
+  "@segmentsPanelRouteHint": {
+    "description": "Helper text showing total route length in metres",
+    "placeholders": {
+      "metres": {
+        "type": "int"
+      }
+    }
+  },
+  "segmentsPanelCreate": "Create",
+  "@segmentsPanelCreate": {
+    "description": "Button to create the segment"
+  },
+  "segmentsPanelDeleteTooltip": "Delete segment",
+  "@segmentsPanelDeleteTooltip": {
+    "description": "Tooltip on the delete-segment button"
+  },
+  "segmentsPanelDeleteTitle": "Delete segment?",
+  "@segmentsPanelDeleteTitle": {
+    "description": "Title of the delete-segment confirmation dialog"
+  },
+  "segmentsPanelDeleteBody": "“{name}” will be removed.",
+  "@segmentsPanelDeleteBody": {
+    "description": "Body of the delete-segment dialog naming the segment",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "segmentsPanelDeleteConfirm": "Delete",
+  "@segmentsPanelDeleteConfirm": {
+    "description": "Confirm button in the delete-segment dialog"
+  },
+  "segmentsPanelErrEndAfterStart": "End must be greater than start",
+  "@segmentsPanelErrEndAfterStart": {
+    "description": "Validation error: end must be after start"
+  },
+  "segmentsPanelErrMinLength": "Segment must be at least 100 m",
+  "@segmentsPanelErrMinLength": {
+    "description": "Validation error: segment too short"
+  },
+  "segmentsPanelCreateError": "Could not create segment: {error}",
+  "@segmentsPanelCreateError": {
+    "description": "Banner when creating a segment fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "segmentsPanelDeleteError": "Delete failed: {error}",
+  "@segmentsPanelDeleteError": {
+    "description": "Banner when deleting a segment fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "segmentsPanelAllGenders": "All genders",
+  "@segmentsPanelAllGenders": {
+    "description": "Leaderboard filter: all genders"
+  },
+  "segmentsPanelGenderMen": "Men",
+  "@segmentsPanelGenderMen": {
+    "description": "Leaderboard gender filter: men"
+  },
+  "segmentsPanelGenderWomen": "Women",
+  "@segmentsPanelGenderWomen": {
+    "description": "Leaderboard gender filter: women"
+  },
+  "segmentsPanelGenderNonbinary": "Nonbinary",
+  "@segmentsPanelGenderNonbinary": {
+    "description": "Leaderboard gender filter: nonbinary"
+  },
+  "segmentsPanelAllAges": "All ages",
+  "@segmentsPanelAllAges": {
+    "description": "Leaderboard filter: all age bands"
+  },
+  "segmentsPanelResetFilters": "Reset",
+  "@segmentsPanelResetFilters": {
+    "description": "Button to reset leaderboard filters"
+  },
+  "segmentsPanelLeaderboardLoading": "Loading…",
+  "@segmentsPanelLeaderboardLoading": {
+    "description": "Loading state for a segment leaderboard"
+  },
+  "segmentsPanelLeaderboardEmptyFiltered": "No efforts match this filter — try widening it.",
+  "@segmentsPanelLeaderboardEmptyFiltered": {
+    "description": "Empty leaderboard with a filter applied"
+  },
+  "segmentsPanelLeaderboardEmpty": "No efforts yet — be the first to run this segment.",
+  "@segmentsPanelLeaderboardEmpty": {
+    "description": "Empty leaderboard with no filter"
+  },
+  "segmentsPanelCrownBanner": "You hold this crown — {label}.",
+  "@segmentsPanelCrownBanner": {
+    "description": "Banner shown when the viewer holds the segment crown",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "segmentsPanelRunnerFallback": "Runner",
+  "@segmentsPanelRunnerFallback": {
+    "description": "Fallback display name for a leaderboard athlete"
+  },
+  "goalEditorTitleNew": "New goal",
+  "@goalEditorTitleNew": {
+    "description": "AppBar title when creating a goal"
+  },
+  "goalEditorTitleEdit": "Edit goal",
+  "@goalEditorTitleEdit": {
+    "description": "AppBar title when editing a goal"
+  },
+  "goalEditorNameLabel": "Name (optional)",
+  "@goalEditorNameLabel": {
+    "description": "Section label for the optional goal name"
+  },
+  "goalEditorNameHint": "e.g. Base miles",
+  "@goalEditorNameHint": {
+    "description": "Example hint for the goal name field"
+  },
+  "goalEditorPeriod": "Period",
+  "@goalEditorPeriod": {
+    "description": "Section label for the goal period"
+  },
+  "goalEditorThisWeek": "This week",
+  "@goalEditorThisWeek": {
+    "description": "Goal period option: this week"
+  },
+  "goalEditorThisMonth": "This month",
+  "@goalEditorThisMonth": {
+    "description": "Goal period option: this month"
+  },
+  "goalEditorTargets": "Targets",
+  "@goalEditorTargets": {
+    "description": "Section label for the goal targets"
+  },
+  "goalEditorTargetsHelp": "Set any combination. Blank fields are ignored.",
+  "@goalEditorTargetsHelp": {
+    "description": "Helper text under the targets section"
+  },
+  "goalEditorTargetDistance": "Distance",
+  "@goalEditorTargetDistance": {
+    "description": "Target field label: distance"
+  },
+  "goalEditorTargetTime": "Time",
+  "@goalEditorTargetTime": {
+    "description": "Target field label: time"
+  },
+  "goalEditorTargetPace": "Avg pace",
+  "@goalEditorTargetPace": {
+    "description": "Target field label: average pace"
+  },
+  "goalEditorTargetRuns": "Runs",
+  "@goalEditorTargetRuns": {
+    "description": "Target field label: number of runs"
+  },
+  "goalEditorSuffixMin": "min",
+  "@goalEditorSuffixMin": {
+    "description": "Suffix for the time-target field (minutes)"
+  },
+  "goalEditorSuffixRuns": "runs",
+  "@goalEditorSuffixRuns": {
+    "description": "Suffix for the runs-target field"
+  },
+  "goalEditorDelete": "Delete",
+  "@goalEditorDelete": {
+    "description": "Button to delete a goal"
+  },
+  "goalEditorCancel": "Cancel",
+  "@goalEditorCancel": {
+    "description": "Button to cancel the goal editor"
+  },
+  "goalEditorSave": "Save",
+  "@goalEditorSave": {
+    "description": "Button to save the goal"
+  },
+  "goalEditorErrDistance": "Distance: enter a positive number",
+  "@goalEditorErrDistance": {
+    "description": "Validation error for the distance target"
+  },
+  "goalEditorErrTime": "Time: enter a positive number of minutes",
+  "@goalEditorErrTime": {
+    "description": "Validation error for the time target"
+  },
+  "goalEditorErrPace": "Pace: use mm:ss (e.g. 5:00)",
+  "@goalEditorErrPace": {
+    "description": "Validation error for the pace target"
+  },
+  "goalEditorErrRuns": "Runs: enter a positive whole number",
+  "@goalEditorErrRuns": {
+    "description": "Validation error for the runs target"
+  },
+  "goalEditorErrNoTarget": "Set at least one target",
+  "@goalEditorErrNoTarget": {
+    "description": "Validation error when no target is set"
+  },
+  "goalEditorSavedAnnounce": "Goal saved",
+  "@goalEditorSavedAnnounce": {
+    "description": "Screen-reader status when a goal is saved"
+  },
+  "goalEditorDeletedAnnounce": "Goal deleted",
+  "@goalEditorDeletedAnnounce": {
+    "description": "Screen-reader status when a goal is deleted"
+  },
+  "eventFormTitle": "New event",
+  "@eventFormTitle": {
+    "description": "Header of the create-event sheet"
+  },
+  "eventFormTitleLabel": "Title",
+  "@eventFormTitleLabel": {
+    "description": "Label for the event title field"
+  },
+  "eventFormStartsAt": "Starts at",
+  "@eventFormStartsAt": {
+    "description": "Label for the event start date/time field"
+  },
+  "eventFormDescriptionLabel": "Description (optional)",
+  "@eventFormDescriptionLabel": {
+    "description": "Label for the optional event description field"
+  },
+  "eventFormMeetLabel": "Meeting point (optional)",
+  "@eventFormMeetLabel": {
+    "description": "Label for the optional meeting-point field"
+  },
+  "eventFormMeetHint": "Trailhead car park",
+  "@eventFormMeetHint": {
+    "description": "Example hint for the meeting-point field"
+  },
+  "eventFormDistanceLabel": "Distance (km)",
+  "@eventFormDistanceLabel": {
+    "description": "Label for the event distance field (km)"
+  },
+  "eventFormDurationLabel": "Duration (min)",
+  "@eventFormDurationLabel": {
+    "description": "Label for the event duration field (minutes)"
+  },
+  "eventFormRecurrence": "Recurrence",
+  "@eventFormRecurrence": {
+    "description": "Section label for recurrence options"
+  },
+  "eventFormRecurOneOff": "One-off",
+  "@eventFormRecurOneOff": {
+    "description": "Recurrence option: one-off"
+  },
+  "eventFormRecurWeekly": "Weekly",
+  "@eventFormRecurWeekly": {
+    "description": "Recurrence option: weekly"
+  },
+  "eventFormRecurBiweekly": "Bi-weekly",
+  "@eventFormRecurBiweekly": {
+    "description": "Recurrence option: every two weeks"
+  },
+  "eventFormRecurMonthly": "Monthly",
+  "@eventFormRecurMonthly": {
+    "description": "Recurrence option: monthly"
+  },
+  "eventFormCancel": "Cancel",
+  "@eventFormCancel": {
+    "description": "Button to cancel the event form"
+  },
+  "eventFormCreate": "Create event",
+  "@eventFormCreate": {
+    "description": "Button to create the event"
+  },
+  "clubFormTitle": "New club",
+  "@clubFormTitle": {
+    "description": "AppBar title of the create-club screen"
+  },
+  "clubFormNameLabel": "Name",
+  "@clubFormNameLabel": {
+    "description": "Label for the club name field"
+  },
+  "clubFormDescriptionLabel": "Description (optional)",
+  "@clubFormDescriptionLabel": {
+    "description": "Label for the optional club description field"
+  },
+  "clubFormLocationLabel": "Location (optional)",
+  "@clubFormLocationLabel": {
+    "description": "Label for the optional club location field"
+  },
+  "clubFormLocationHint": "Edinburgh, UK",
+  "@clubFormLocationHint": {
+    "description": "Example hint for the club location field"
+  },
+  "clubFormPublic": "Public",
+  "@clubFormPublic": {
+    "description": "Visibility option: public club"
+  },
+  "clubFormPrivate": "Private",
+  "@clubFormPrivate": {
+    "description": "Visibility option: private club"
+  },
+  "clubFormJoinPolicy": "Join policy",
+  "@clubFormJoinPolicy": {
+    "description": "Section label for the join policy"
+  },
+  "clubFormJoinOpen": "Open — anyone joins",
+  "@clubFormJoinOpen": {
+    "description": "Join policy option: anyone can join"
+  },
+  "clubFormJoinRequest": "Request — admins approve",
+  "@clubFormJoinRequest": {
+    "description": "Join policy option: admins approve"
+  },
+  "clubFormJoinInvite": "Invite only",
+  "@clubFormJoinInvite": {
+    "description": "Join policy option: invite only"
+  },
+  "clubFormCancel": "Cancel",
+  "@clubFormCancel": {
+    "description": "Button to cancel the club form"
+  },
+  "clubFormCreate": "Create",
+  "@clubFormCreate": {
+    "description": "Button to create the club"
+  },
+  "clubFormErrSlug": "Name needs at least one letter or digit.",
+  "@clubFormErrSlug": {
+    "description": "Validation error when the name has no usable characters"
+  },
+  "clubFormErrUnreachable": "Can't reach the server right now. Check your connection or sign in, then try again.",
+  "@clubFormErrUnreachable": {
+    "description": "Error when the server can't be reached during create"
+  },
+  "reportReasonSpam": "Spam",
+  "@reportReasonSpam": {
+    "description": "Report reason label: spam"
+  },
+  "reportReasonHarassment": "Harassment or abuse",
+  "@reportReasonHarassment": {
+    "description": "Report reason label: harassment or abuse"
+  },
+  "reportReasonInappropriate": "Inappropriate content",
+  "@reportReasonInappropriate": {
+    "description": "Report reason label: inappropriate content"
+  },
+  "reportReasonImpersonation": "Impersonation",
+  "@reportReasonImpersonation": {
+    "description": "Report reason label: impersonation"
+  },
+  "reportReasonOther": "Other",
+  "@reportReasonOther": {
+    "description": "Report reason label: other"
+  },
+  "reportSuccess": "Report submitted — thanks for flagging this for review.",
+  "@reportSuccess": {
+    "description": "Banner shown after a report is submitted"
+  },
+  "reportTitleUser": "Report user",
+  "@reportTitleUser": {
+    "description": "Report sheet title when reporting a user"
+  },
+  "reportTitleClub": "Report club",
+  "@reportTitleClub": {
+    "description": "Report sheet title when reporting a club"
+  },
+  "reportTitleRoute": "Report route",
+  "@reportTitleRoute": {
+    "description": "Report sheet title when reporting a route"
+  },
+  "reportTitleContent": "Report content",
+  "@reportTitleContent": {
+    "description": "Report sheet title fallback for generic content"
+  },
+  "reportDisclaimer": "Your report goes to a moderator. False reports are reviewed too — please only flag content that violates our community guidelines.",
+  "@reportDisclaimer": {
+    "description": "Disclaimer text in the report sheet"
+  },
+  "reportReason": "Reason",
+  "@reportReason": {
+    "description": "Section label for the report reason picker"
+  },
+  "reportNotesLabel": "Notes (optional)",
+  "@reportNotesLabel": {
+    "description": "Label for the optional report notes field"
+  },
+  "reportCancel": "Cancel",
+  "@reportCancel": {
+    "description": "Button to cancel the report sheet"
+  },
+  "reportSubmit": "Submit report",
+  "@reportSubmit": {
+    "description": "Button to submit the report"
+  },
+  "reportErrDuplicate": "You already have a pending report against this content.",
+  "@reportErrDuplicate": {
+    "description": "Inline error: already have a pending report"
+  },
+  "gearBackfillTitle": "Attach past runs to {gear}?",
+  "@gearBackfillTitle": {
+    "description": "Title of the backfill sheet asking to attach past runs",
+    "placeholders": {
+      "gear": {
+        "type": "String"
+      }
+    }
+  },
+  "gearBackfillBody": "We found {count, plural, one{{count} {activity} activity} other{{count} {activity} activities}} after you bought them. Uncheck any you weren't wearing them for.",
+  "@gearBackfillBody": {
+    "description": "Body explaining the matched activities found",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "activity": {
+        "type": "String"
+      }
+    }
+  },
+  "gearBackfillActivityCycling": "cycling",
+  "@gearBackfillActivityCycling": {
+    "description": "Activity word for bikes in the backfill body"
+  },
+  "gearBackfillActivityRunning": "running",
+  "@gearBackfillActivityRunning": {
+    "description": "Activity word for shoes in the backfill body"
+  },
+  "gearBackfillSelectNone": "Select none",
+  "@gearBackfillSelectNone": {
+    "description": "Toggle label to deselect all candidate runs"
+  },
+  "gearBackfillSelectAll": "Select all",
+  "@gearBackfillSelectAll": {
+    "description": "Toggle label to select all candidate runs"
+  },
+  "gearBackfillSelectedCount": "{selected} of {total}",
+  "@gearBackfillSelectedCount": {
+    "description": "Counter showing how many runs are selected",
+    "placeholders": {
+      "selected": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "gearBackfillSkip": "Skip",
+  "@gearBackfillSkip": {
+    "description": "Button to skip the backfill prompt"
+  },
+  "gearBackfillAttaching": "Attaching…",
+  "@gearBackfillAttaching": {
+    "description": "Button label while runs are being attached"
+  },
+  "gearBackfillAttach": "Attach {count}",
+  "@gearBackfillAttach": {
+    "description": "Button to attach the selected runs",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "gearBackfillAttachError": "Attach failed: {error}",
+  "@gearBackfillAttachError": {
+    "description": "Banner when attaching runs fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "workoutEditTitle": "Edit workout",
+  "@workoutEditTitle": {
+    "description": "Header of the workout edit sheet"
+  },
+  "workoutEditKindLabel": "Kind",
+  "@workoutEditKindLabel": {
+    "description": "Label for the workout kind dropdown"
+  },
+  "workoutEditDistanceLabel": "Target distance (km)",
+  "@workoutEditDistanceLabel": {
+    "description": "Label for the target distance field (km)"
+  },
+  "workoutEditDistanceHint": "e.g. 8.0",
+  "@workoutEditDistanceHint": {
+    "description": "Example hint for the target distance field"
+  },
+  "workoutEditPaceLabel": "Target pace (mm:ss /km)",
+  "@workoutEditPaceLabel": {
+    "description": "Label for the target pace field"
+  },
+  "workoutEditPaceHint": "e.g. 5:30",
+  "@workoutEditPaceHint": {
+    "description": "Example hint for the target pace field"
+  },
+  "workoutEditNotesLabel": "Notes",
+  "@workoutEditNotesLabel": {
+    "description": "Label for the workout notes field"
+  },
+  "workoutEditCancel": "Cancel",
+  "@workoutEditCancel": {
+    "description": "Button to cancel the workout edit sheet"
+  },
+  "workoutEditSave": "Save",
+  "@workoutEditSave": {
+    "description": "Button to save the workout"
+  },
+  "workoutEditErrDistance": "Enter a positive distance in km",
+  "@workoutEditErrDistance": {
+    "description": "Validation error for the distance field"
+  },
+  "workoutEditErrPace": "Pace must look like 5:30",
+  "@workoutEditErrPace": {
+    "description": "Validation error for the pace field"
+  },
+  "workoutEditSaveError": "Save failed: {error}",
+  "@workoutEditSaveError": {
+    "description": "Inline error when saving a workout fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "upcomingEventBadge": "RSVP'D · {relative}",
+  "@upcomingEventBadge": {
+    "description": "Badge above the event title showing it's RSVP'd",
+    "placeholders": {
+      "relative": {
+        "type": "String"
+      }
+    }
+  },
+  "upcomingEventStartingNow": "Starting now",
+  "@upcomingEventStartingNow": {
+    "description": "Relative time: event starting now"
+  },
+  "upcomingEventInMinutes": "In {count} min",
+  "@upcomingEventInMinutes": {
+    "description": "Relative time: in N minutes",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "upcomingEventInOneHour": "In 1 hour",
+  "@upcomingEventInOneHour": {
+    "description": "Relative time: in one hour"
+  },
+  "upcomingEventInHours": "In {count} hours",
+  "@upcomingEventInHours": {
+    "description": "Relative time: in N hours",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "upcomingEventTomorrow": "Tomorrow",
+  "@upcomingEventTomorrow": {
+    "description": "Relative time: tomorrow"
+  },
+  "upcomingEventInDays": "In {count} days",
+  "@upcomingEventInDays": {
+    "description": "Relative time: in N days",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "todaysWorkoutDone": "DONE TODAY",
+  "@todaysWorkoutDone": {
+    "description": "Badge when today's workout is already done"
+  },
+  "todaysWorkoutToday": "TODAY'S WORKOUT",
+  "@todaysWorkoutToday": {
+    "description": "Badge for today's scheduled workout"
+  },
+  "errorStateRetry": "Retry",
+  "@errorStateRetry": {
+    "description": "Retry button on the shared error state"
+  },
+  "shareCardRunTitle": "Share run",
+  "@shareCardRunTitle": {
+    "description": "Title of the run share sheet"
+  },
+  "shareCardExport": "Export",
+  "@shareCardExport": {
+    "description": "Button to export a run to a file format"
+  },
+  "shareCardImage": "Image",
+  "@shareCardImage": {
+    "description": "Button to share the run as an image"
+  },
+  "shareCardStatDistance": "Distance",
+  "@shareCardStatDistance": {
+    "description": "Stat label on the share card: distance"
+  },
+  "shareCardStatTime": "Time",
+  "@shareCardStatTime": {
+    "description": "Stat label on the share card: time"
+  },
+  "shareCardStatPace": "Pace",
+  "@shareCardStatPace": {
+    "description": "Stat label on the share card: pace"
+  },
+  "shareCardStatSpeed": "Speed",
+  "@shareCardStatSpeed": {
+    "description": "Stat label on the share card: speed"
+  },
+  "shareCardBrandRun": "RUN",
+  "@shareCardBrandRun": {
+    "description": "Branding wordmark on the run share card"
+  },
+  "shareCardImageError": "Could not create share image",
+  "@shareCardImageError": {
+    "description": "Banner when the share image can't be created"
+  },
+  "shareCardFileError": "Could not export file",
+  "@shareCardFileError": {
+    "description": "Banner when exporting a run file fails"
+  },
+  "shareCardRouteTitle": "Share route",
+  "@shareCardRouteTitle": {
+    "description": "Title of the route share sheet"
+  },
+  "shareCardRouteShareImage": "Share image",
+  "@shareCardRouteShareImage": {
+    "description": "Button to share the route as an image"
+  },
+  "shareCardRouteCapturing": "Capturing…",
+  "@shareCardRouteCapturing": {
+    "description": "Button label while the route image is captured"
+  },
+  "shareCardRouteStatDistance": "Distance",
+  "@shareCardRouteStatDistance": {
+    "description": "Stat label on the route share card: distance"
+  },
+  "shareCardRouteStatClimb": "Climb",
+  "@shareCardRouteStatClimb": {
+    "description": "Stat label on the route share card: climb"
+  },
+  "billingToday": "today",
+  "@billingToday": {
+    "description": "Relative time: today"
+  },
+  "billingYesterday": "yesterday",
+  "@billingYesterday": {
+    "description": "Relative time: yesterday"
+  },
+  "billingDaysAgo": "{count} days ago",
+  "@billingDaysAgo": {
+    "description": "Relative time: N days ago",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "billingRenewalFailed": "Pro renewal failed {relative}.",
+  "@billingRenewalFailed": {
+    "description": "Banner headline when a Pro renewal failed",
+    "placeholders": {
+      "relative": {
+        "type": "String"
+      }
+    }
+  },
+  "billingRenewalBody": "Update your card or you'll be downgraded to Free.",
+  "@billingRenewalBody": {
+    "description": "Banner body prompting the user to update their card"
+  },
+  "billingManage": "Manage",
+  "@billingManage": {
+    "description": "Button to manage the subscription"
+  },
+  "planCalendarPrevMonth": "Previous month",
+  "@planCalendarPrevMonth": {
+    "description": "Tooltip on the previous-month chevron"
+  },
+  "planCalendarNextMonth": "Next month",
+  "@planCalendarNextMonth": {
+    "description": "Tooltip on the next-month chevron"
+  },
+  "runGearChipsLoadError": "Failed to load gear: {error}",
+  "@runGearChipsLoadError": {
+    "description": "Banner when the gear inventory can't load",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runGearChipsPickerTitle": "Tag gear used on this run",
+  "@runGearChipsPickerTitle": {
+    "description": "Header of the tag-gear bottom sheet"
+  },
+  "runGearChipsEmpty": "You haven't registered any gear yet. Add some in Settings → Gear.",
+  "@runGearChipsEmpty": {
+    "description": "Empty state in the gear picker"
+  },
+  "runGearChipsCancel": "Cancel",
+  "@runGearChipsCancel": {
+    "description": "Cancel button in the gear picker"
+  },
+  "runGearChipsSave": "Save",
+  "@runGearChipsSave": {
+    "description": "Save button in the gear picker"
+  },
+  "runGearChipsTag": "+ Tag gear",
+  "@runGearChipsTag": {
+    "description": "Button to tag gear when none is assigned"
+  },
+  "runGearChipsEdit": "Edit",
+  "@runGearChipsEdit": {
+    "description": "Button to edit assigned gear"
+  },
+  "runGearChipsSaveError": "Save failed: {error}",
+  "@runGearChipsSaveError": {
+    "description": "Banner when saving tagged gear fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "gearFormTitleEdit": "Edit gear",
+  "@gearFormTitleEdit": {
+    "description": "Header of the gear form when editing"
+  },
+  "gearFormTitleAddShoes": "Add shoes",
+  "@gearFormTitleAddShoes": {
+    "description": "Header of the gear form when adding shoes"
+  },
+  "gearFormTitleAddBike": "Add bike",
+  "@gearFormTitleAddBike": {
+    "description": "Header of the gear form when adding a bike"
+  },
+  "gearFormNameLabel": "Name",
+  "@gearFormNameLabel": {
+    "description": "Label for the gear name field"
+  },
+  "gearFormNameHint": "Pegasus 39",
+  "@gearFormNameHint": {
+    "description": "Example hint for the gear name field"
+  },
+  "gearFormBrandLabel": "Brand",
+  "@gearFormBrandLabel": {
+    "description": "Label for the gear brand field"
+  },
+  "gearFormModelLabel": "Model",
+  "@gearFormModelLabel": {
+    "description": "Label for the gear model field"
+  },
+  "gearFormBoughtLabel": "Bought",
+  "@gearFormBoughtLabel": {
+    "description": "Label for the gear purchase-date field"
+  },
+  "gearFormBoughtPick": "Tap to pick",
+  "@gearFormBoughtPick": {
+    "description": "Placeholder when no purchase date is picked"
+  },
+  "gearFormRetireAt": "Retire at ({unit})",
+  "@gearFormRetireAt": {
+    "description": "Label for the retirement target field with unit",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "gearFormRetireHint": "500",
+  "@gearFormRetireHint": {
+    "description": "Example hint for the retirement target field"
+  },
+  "gearFormNotesLabel": "Notes",
+  "@gearFormNotesLabel": {
+    "description": "Label for the gear notes field"
+  },
+  "gearFormCancel": "Cancel",
+  "@gearFormCancel": {
+    "description": "Button to cancel the gear form"
+  },
+  "gearFormSaving": "Saving…",
+  "@gearFormSaving": {
+    "description": "Button label while the gear is saving"
+  },
+  "gearFormSave": "Save",
+  "@gearFormSave": {
+    "description": "Button to save an edited gear row"
+  },
+  "gearFormAdd": "Add",
+  "@gearFormAdd": {
+    "description": "Button to add a new gear row"
+  },
+  "gearFormSaveError": "Save failed: {error}",
+  "@gearFormSaveError": {
+    "description": "Banner when saving gear fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "notificationBellTooltip": "Notifications",
+  "@notificationBellTooltip": {
+    "description": "Tooltip on the notification bell"
+  },
+  "liveRunMapWaitingGps": "Waiting for GPS...",
+  "@liveRunMapWaitingGps": {
+    "description": "Overlay shown while waiting for the first GPS fix"
+  },
+  "liveRunMapRecentre": "Re-centre on my location",
+  "@liveRunMapRecentre": {
+    "description": "Tooltip on the re-centre map button"
   }
 }

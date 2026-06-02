@@ -10,6 +10,7 @@ import 'package:latlong2/latlong.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../tile_cache.dart';
 import 'live_run_map.dart' show currentTileUrl;
@@ -94,7 +95,8 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
     } catch (e) {
       debugPrint('Failed to capture route share card: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not create share image');
+        showTopBanner(
+            context, AppLocalizations.of(context).shareCardImageError);
       }
     } finally {
       if (mounted) setState(() => _capturing = false);
@@ -105,6 +107,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       top: false,
       child: Padding(
@@ -118,7 +121,7 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Share route', style: theme.textTheme.titleMedium),
+              Text(l10n.shareCardRouteTitle, style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -145,7 +148,9 @@ class _ShareRouteSheetState extends State<_ShareRouteSheet> {
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : const Icon(Icons.share),
-                  label: Text(_capturing ? 'Capturing…' : 'Share image'),
+                  label: Text(_capturing
+                      ? l10n.shareCardRouteCapturing
+                      : l10n.shareCardRouteShareImage),
                 ),
               ),
             ],
@@ -255,6 +260,7 @@ class _ShareCardContent extends StatelessWidget {
   }
 
   Widget _buildStats(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final unit = preferences.unit;
     final dist = UnitFormat.distance(route.distanceMetres, unit);
     final ele = route.elevationGainMetres > 0
@@ -298,8 +304,9 @@ class _ShareCardContent extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              _Stat(label: 'Distance', value: dist),
-              if (ele != null) _Stat(label: 'Climb', value: ele),
+              _Stat(label: l10n.shareCardRouteStatDistance, value: dist),
+              if (ele != null)
+                _Stat(label: l10n.shareCardRouteStatClimb, value: ele),
             ],
           ),
           const Text(

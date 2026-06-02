@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_errors.dart';
 import 'top_banner.dart';
 
@@ -49,24 +50,39 @@ Future<void> showReportSheet(
         Navigator.of(ctx).pop();
         showTopBanner(
           context,
-          "Report submitted — thanks for flagging this for review.",
+          AppLocalizations.of(context).reportSuccess,
         );
       },
     ),
   );
 }
 
-/// Each reason maps to a label shown in the picker. Values mirror
-/// the web `ReportReason` union; the migration's CHECK constraint
-/// rejects anything outside this set so keeping them in sync is
-/// load-bearing.
-const _reasonLabels = <String, String>{
-  'spam': 'Spam',
-  'harassment': 'Harassment or abuse',
-  'inappropriate': 'Inappropriate content',
-  'impersonation': 'Impersonation',
-  'other': 'Other',
-};
+/// The ordered reason VALUE keys shown in the picker. These mirror the
+/// web `ReportReason` union; the migration's CHECK constraint rejects
+/// anything outside this set so keeping them in sync is load-bearing.
+/// The human label for each is resolved per-locale at render time.
+const _reasonKeys = <String>[
+  'spam',
+  'harassment',
+  'inappropriate',
+  'impersonation',
+  'other',
+];
+
+String _reasonLabel(AppLocalizations l10n, String key) {
+  switch (key) {
+    case 'spam':
+      return l10n.reportReasonSpam;
+    case 'harassment':
+      return l10n.reportReasonHarassment;
+    case 'inappropriate':
+      return l10n.reportReasonInappropriate;
+    case 'impersonation':
+      return l10n.reportReasonImpersonation;
+    default:
+      return l10n.reportReasonOther;
+  }
+}
 
 class _ReportSheet extends StatefulWidget {
   final ApiClient api;
@@ -115,8 +131,8 @@ class _ReportSheetState extends State<_ReportSheet> {
     } on PostgrestException catch (e) {
       if (!mounted) return;
       if (e.code == '23505') {
-        setState(() => _error =
-            'You already have a pending report against this content.');
+        setState(() =>
+            _error = AppLocalizations.of(context).reportErrDuplicate);
         return;
       }
       final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
@@ -131,6 +147,7 @@ class _ReportSheetState extends State<_ReportSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final insets = MediaQuery.of(context).viewInsets;
     return SingleChildScrollView(
       padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + insets.bottom),
@@ -139,27 +156,27 @@ class _ReportSheetState extends State<_ReportSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Report ${_kindLabel(widget.targetKind)}',
+            _title(l10n, widget.targetKind),
             style: theme.textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
           Text(
-            'Your report goes to a moderator. False reports are reviewed too — please only flag content that violates our community guidelines.',
+            l10n.reportDisclaimer,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
           const SizedBox(height: 16),
-          Text('Reason', style: theme.textTheme.labelLarge),
+          Text(l10n.reportReason, style: theme.textTheme.labelLarge),
           const SizedBox(height: 8),
-          for (final entry in _reasonLabels.entries)
+          for (final key in _reasonKeys)
             RadioListTile<String>(
-              value: entry.key,
+              value: key,
               groupValue: _reason,
               onChanged: _busy
                   ? null
                   : (v) => setState(() => _reason = v ?? _reason),
-              title: Text(entry.value),
+              title: Text(_reasonLabel(l10n, key)),
               dense: true,
               contentPadding: EdgeInsets.zero,
             ),
@@ -168,9 +185,9 @@ class _ReportSheetState extends State<_ReportSheet> {
             controller: _notesCtl,
             maxLines: 3,
             enabled: !_busy,
-            decoration: const InputDecoration(
-              labelText: 'Notes (optional)',
-              border: OutlineInputBorder(),
+            decoration: InputDecoration(
+              labelText: l10n.reportNotesLabel,
+              border: const OutlineInputBorder(),
             ),
           ),
           if (_error != null) ...[
@@ -183,7 +200,7 @@ class _ReportSheetState extends State<_ReportSheet> {
               Expanded(
                 child: OutlinedButton(
                   onPressed: _busy ? null : () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.reportCancel),
                 ),
               ),
               const SizedBox(width: 12),
@@ -196,7 +213,7 @@ class _ReportSheetState extends State<_ReportSheet> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Submit report'),
+                      : Text(l10n.reportSubmit),
                 ),
               ),
             ],
@@ -206,15 +223,15 @@ class _ReportSheetState extends State<_ReportSheet> {
     );
   }
 
-  static String _kindLabel(String kind) {
+  static String _title(AppLocalizations l10n, String kind) {
     switch (kind) {
       case 'user':
-        return 'user';
+        return l10n.reportTitleUser;
       case 'club':
-        return 'club';
+        return l10n.reportTitleClub;
       case 'route':
-        return 'route';
+        return l10n.reportTitleRoute;
     }
-    return 'content';
+    return l10n.reportTitleContent;
   }
 }

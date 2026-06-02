@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/training.dart' show fmtPace;
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/workout_review_section.dart';
 
 Map<String, dynamic> _step({
@@ -31,6 +32,8 @@ Future<void> _pump(
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: SingleChildScrollView(
           child: WorkoutReviewSection(metadata: metadata),

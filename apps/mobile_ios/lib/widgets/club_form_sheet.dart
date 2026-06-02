@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
+import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_errors.dart';
 import '../social_service.dart';
 
@@ -74,9 +75,10 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
   Future<void> _submit() async {
     final name = _name.text.trim();
     if (name.isEmpty || _busy) return;
+    final l10n = AppLocalizations.of(context);
     final slug = _slugify(name);
     if (slug.isEmpty) {
-      setState(() => _error = 'Name needs at least one letter or digit.');
+      setState(() => _error = l10n.clubFormErrSlug);
       return;
     }
     // Pre-flight readiness check — without this the createClub call
@@ -86,9 +88,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
     // init failed silently. Surface a friendly inline error instead.
     if (!widget.social.isReady) {
       setState(() {
-        _error =
-            'Can\'t reach the server right now. Check your connection '
-            'or sign in, then try again.';
+        _error = l10n.clubFormErrUnreachable;
       });
       return;
     }
@@ -130,8 +130,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
       // instead of the raw "Bad state:" toString.
       if (e is StateError &&
           e.message.contains('Supabase.initialize')) {
-        message = 'Can\'t reach the server right now. Check your '
-            'connection or sign in, then try again.';
+        message = l10n.clubFormErrUnreachable;
       }
       setState(() {
         _busy = false;
@@ -143,12 +142,13 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       // resizeToAvoidBottomInset=true (the default) means the body
       // shrinks when the keyboard slides up so the SingleChildScrollView
       // can scroll its contents — no more 54-px RenderFlex overflow.
       appBar: AppBar(
-        title: const Text('New club'),
+        title: Text(l10n.clubFormTitle),
       ),
       body: SafeArea(
         // Clears the bottom system nav bar so Create / Cancel
@@ -162,9 +162,9 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 controller: _name,
                 autofocus: true,
                 maxLength: 80,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.clubFormNameLabel,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
@@ -172,33 +172,33 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 controller: _description,
                 maxLines: 3,
                 maxLength: 500,
-                decoration: const InputDecoration(
-                  labelText: 'Description (optional)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.clubFormDescriptionLabel,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 8),
               TextField(
                 controller: _location,
                 maxLength: 80,
-                decoration: const InputDecoration(
-                  labelText: 'Location (optional)',
-                  hintText: 'Edinburgh, UK',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.clubFormLocationLabel,
+                  hintText: l10n.clubFormLocationHint,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               SegmentedButton<bool>(
-                segments: const [
+                segments: [
                   ButtonSegment(
                     value: true,
-                    label: Text('Public'),
-                    icon: Icon(Icons.public),
+                    label: Text(l10n.clubFormPublic),
+                    icon: const Icon(Icons.public),
                   ),
                   ButtonSegment(
                     value: false,
-                    label: Text('Private'),
-                    icon: Icon(Icons.lock_outline),
+                    label: Text(l10n.clubFormPrivate),
+                    icon: const Icon(Icons.lock_outline),
                   ),
                 ],
                 selected: {_isPublic},
@@ -213,27 +213,27 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 }),
               ),
               const SizedBox(height: 12),
-              Text('Join policy', style: theme.textTheme.labelLarge),
+              Text(l10n.clubFormJoinPolicy, style: theme.textTheme.labelLarge),
               const SizedBox(height: 4),
               Wrap(
                 spacing: 8,
                 children: [
                   if (_isPublic) ...[
                     ChoiceChip(
-                      label: const Text('Open — anyone joins'),
+                      label: Text(l10n.clubFormJoinOpen),
                       selected: _joinPolicy == 'open',
                       onSelected: (_) =>
                           setState(() => _joinPolicy = 'open'),
                     ),
                     ChoiceChip(
-                      label: const Text('Request — admins approve'),
+                      label: Text(l10n.clubFormJoinRequest),
                       selected: _joinPolicy == 'request',
                       onSelected: (_) =>
                           setState(() => _joinPolicy = 'request'),
                     ),
                   ] else
                     ChoiceChip(
-                      label: const Text('Invite only'),
+                      label: Text(l10n.clubFormJoinInvite),
                       selected: _joinPolicy == 'invite',
                       onSelected: (_) =>
                           setState(() => _joinPolicy = 'invite'),
@@ -256,7 +256,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                   TextButton(
                     onPressed:
                         _busy ? null : () => Navigator.pop(context),
-                    child: const Text('Cancel'),
+                    child: Text(l10n.clubFormCancel),
                   ),
                   const SizedBox(width: 8),
                   FilledButton(
@@ -268,7 +268,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                             child:
                                 CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Text('Create'),
+                        : Text(l10n.clubFormCreate),
                   ),
                 ],
               ),

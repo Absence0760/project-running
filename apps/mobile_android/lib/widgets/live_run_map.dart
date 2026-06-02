@@ -5,6 +5,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:flutter_map_cache/flutter_map_cache.dart';
 import 'package:latlong2/latlong.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart' show ActivityType;
 import '../tile_cache.dart';
 import 'pace_segments.dart';
@@ -559,13 +560,13 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
 
     // No GPS fix yet and no planned route — wait for GPS
     if (currentLatLng == null && plannedLatLngs.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            CircularProgressIndicator(strokeWidth: 2),
-            SizedBox(height: 12),
-            Text('Waiting for GPS...'),
+            const CircularProgressIndicator(strokeWidth: 2),
+            const SizedBox(height: 12),
+            Text(AppLocalizations.of(context).liveRunMapWaitingGps),
           ],
         ),
       );
@@ -830,7 +831,7 @@ class _LiveRunMapState extends State<LiveRunMap> with TickerProviderStateMixin {
             bottom: widget.bottomPadding + 12,
             child: FloatingActionButton.small(
               heroTag: 'recenter',
-              tooltip: 'Re-centre on my location',
+              tooltip: AppLocalizations.of(context).liveRunMapRecentre,
               onPressed: () {
                 setState(() => _userPanned = false);
                 _moveCamera(currentLatLng, zoom: _mapController.camera.zoom);

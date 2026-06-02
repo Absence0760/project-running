@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 
 import '../lib/social_service.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/club_form_sheet.dart';
 
 /// Test double that bypasses Supabase entirely. Only `createClub` is
@@ -72,7 +73,10 @@ Future<void> _openSheet(WidgetTester tester, {SocialService? social}) async {
   await tester.binding.setSurfaceSize(const Size(600, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
-    MaterialApp(home: _Launcher(social: social ?? SocialService())),
+    MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: _Launcher(social: social ?? SocialService())),
   );
   await tester.tap(find.text('Open'));
   await tester.pumpAndSettle();

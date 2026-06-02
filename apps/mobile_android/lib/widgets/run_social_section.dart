@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
 /// Run-detail kudos pill + one-level comment thread + composer. Mirrors
@@ -123,7 +124,8 @@ class _RunSocialSectionState extends State<RunSocialSection> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _eng = before);
-      showTopBanner(context, 'Could not update kudos: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runSocialKudosError('$e'));
     } finally {
       if (mounted) setState(() => _kudosBusy = false);
     }
@@ -165,7 +167,8 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       });
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Failed to post: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runSocialPostError('$e'));
     } finally {
       if (mounted) setState(() => _posting = false);
     }
@@ -177,7 +180,8 @@ class _RunSocialSectionState extends State<RunSocialSection> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Failed to delete: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runSocialDeleteError('$e'));
     }
   }
 
@@ -193,6 +197,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     if (_loading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 24),
@@ -222,7 +227,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
           // Section header + kudos pill
           Row(
             children: [
-              Text('Activity', style: theme.textTheme.titleMedium),
+              Text(l10n.runSocialActivity, style: theme.textTheme.titleMedium),
               const Spacer(),
               _KudosPill(
                 count: _eng.kudosCount,
@@ -239,7 +244,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'No comments yet.',
+                l10n.runSocialNoComments,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -274,7 +279,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
                   padding: const EdgeInsets.fromLTRB(36, 4, 0, 8),
                   child: _Composer(
                     controller: _replyCtrl,
-                    hint: 'Write a reply…',
+                    hint: l10n.runSocialReplyHint,
                     posting: _posting,
                     onPost: () => _postComment(parentId: c.comment.id),
                     onCancel: () => setState(() => _replyTo = null),
@@ -286,7 +291,7 @@ class _RunSocialSectionState extends State<RunSocialSection> {
             const SizedBox(height: 12),
             _Composer(
               controller: _draftCtrl,
-              hint: 'Add a comment…',
+              hint: l10n.runSocialCommentHint,
               posting: _posting,
               onPost: () => _postComment(),
             ),
@@ -349,6 +354,7 @@ class _CommentTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: EdgeInsets.symmetric(vertical: isReply ? 6 : 8),
       child: Row(
@@ -367,7 +373,7 @@ class _CommentTile extends StatelessWidget {
                   children: [
                     Expanded(
                       child: Text(
-                        entry.author.displayName ?? 'Runner',
+                        entry.author.displayName ?? l10n.runSocialRunnerFallback,
                         style: theme.textTheme.titleSmall,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
@@ -393,7 +399,7 @@ class _CommentTile extends StatelessWidget {
                           visualDensity: VisualDensity.compact,
                           minimumSize: const Size(0, 28),
                         ),
-                        child: const Text('Reply'),
+                        child: Text(l10n.runSocialReply),
                       ),
                     if (canDelete)
                       TextButton(
@@ -404,7 +410,7 @@ class _CommentTile extends StatelessWidget {
                           minimumSize: const Size(0, 28),
                           foregroundColor: theme.colorScheme.error,
                         ),
-                        child: const Text('Delete'),
+                        child: Text(l10n.runSocialDelete),
                       ),
                   ],
                 ),
@@ -446,6 +452,7 @@ class _Composer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -473,10 +480,11 @@ class _Composer extends StatelessWidget {
                       height: 16,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Post'),
+                  : Text(l10n.runSocialPost),
             ),
             if (onCancel != null)
-              TextButton(onPressed: onCancel, child: const Text('Cancel')),
+              TextButton(
+                  onPressed: onCancel, child: Text(l10n.runSocialCancel)),
           ],
         ),
       ],

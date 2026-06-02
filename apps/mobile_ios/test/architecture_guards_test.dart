@@ -2817,8 +2817,16 @@ void main() {
           reason: 'crown gate missing');
       expect(source.contains('crownLabel'), isTrue,
           reason: 'crown tooltip not piped through crownLabel()');
-      expect(source.contains("'You hold this crown"), isTrue,
-          reason: 'viewer-holds-crown banner copy missing');
+      // The viewer-holds-crown banner copy was migrated to the i18n
+      // catalogue; pin the localized key wiring instead of the raw
+      // English string.
+      expect(source.contains('segmentsPanelCrownBanner'), isTrue,
+          reason: 'viewer-holds-crown banner copy not wired through l10n');
+      final arb =
+          File('lib/l10n/app_en.arb').readAsStringSync();
+      expect(arb.contains('"segmentsPanelCrownBanner": "You hold this crown'),
+          isTrue,
+          reason: 'viewer-holds-crown banner copy missing from app_en.arb');
     });
 
     test('Dashboard wires its streak card through computeRunStreaks()', () {

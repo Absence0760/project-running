@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 
@@ -14,6 +15,7 @@ class TodaysWorkoutCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final w = overview.todayWorkout!;
     final kind = workoutKindFromDb(w.kind);
     final done = w.completedRunId != null;
@@ -57,7 +59,7 @@ class TodaysWorkoutCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    done ? 'DONE TODAY' : "TODAY'S WORKOUT",
+                    done ? l10n.todaysWorkoutDone : l10n.todaysWorkoutToday,
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onPrimary,
                       letterSpacing: 0.7,

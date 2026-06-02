@@ -10,6 +10,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/notification_bell.dart';
 
 class _FakeApiClient extends ApiClient {
@@ -31,6 +32,8 @@ class _FakeApiClient extends ApiClient {
 Future<void> _pump(WidgetTester tester, ApiClient api) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         appBar: AppBar(
           actions: [NotificationBell(api: api)],

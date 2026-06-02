@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/report_sheet.dart';
 
 class _FakeApiClient extends ApiClient {
@@ -49,6 +50,8 @@ Future<void> _openSheet(
   // sheet itself is the test target.
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Builder(
         builder: (context) => Scaffold(
           body: Center(

@@ -4590,4 +4590,772 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get fitnessStatTsbTooltip =>
       'フィットネスから疲労を引いた値。プラス＝好調でレース向き、マイナス＝疲労が残る。';
+
+  @override
+  String get runSocialActivity => 'アクティビティ';
+
+  @override
+  String get runSocialNoComments => 'まだコメントはありません。';
+
+  @override
+  String get runSocialReplyHint => '返信を入力…';
+
+  @override
+  String get runSocialCommentHint => 'コメントを追加…';
+
+  @override
+  String get runSocialRunnerFallback => 'ランナー';
+
+  @override
+  String get runSocialReply => '返信';
+
+  @override
+  String get runSocialDelete => '削除';
+
+  @override
+  String get runSocialPost => '投稿';
+
+  @override
+  String get runSocialCancel => 'キャンセル';
+
+  @override
+  String runSocialKudosError(String error) {
+    return '称賛を更新できませんでした: $error';
+  }
+
+  @override
+  String runSocialPostError(String error) {
+    return '投稿に失敗しました: $error';
+  }
+
+  @override
+  String runSocialDeleteError(String error) {
+    return '削除に失敗しました: $error';
+  }
+
+  @override
+  String get runPhotosLoading => '写真を読み込み中…';
+
+  @override
+  String get runPhotosTitle => '写真';
+
+  @override
+  String get runPhotosAdd => '写真を追加';
+
+  @override
+  String get runPhotosCaptionPendingHint => 'キャプション（任意、280文字）';
+
+  @override
+  String get runPhotosCaptionHint => 'キャプション…';
+
+  @override
+  String get runPhotosCancel => 'キャンセル';
+
+  @override
+  String get runPhotosSave => '保存';
+
+  @override
+  String get runPhotosUpload => 'アップロード';
+
+  @override
+  String get runPhotosUploading => 'アップロード中…';
+
+  @override
+  String get runPhotosEditCaption => 'キャプションを編集';
+
+  @override
+  String get runPhotosDeleteTooltip => '写真を削除';
+
+  @override
+  String get runPhotosDeleteTitle => '写真を削除しますか？';
+
+  @override
+  String get runPhotosDeleteBody => 'この操作で写真はランから完全に削除されます。';
+
+  @override
+  String get runPhotosDeleteConfirm => '削除';
+
+  @override
+  String runPhotosPickerError(String error) {
+    return 'ピッカーを開けませんでした: $error';
+  }
+
+  @override
+  String runPhotosUploadError(String error) {
+    return 'アップロードに失敗しました: $error';
+  }
+
+  @override
+  String runPhotosDeleteError(String error) {
+    return '削除に失敗しました: $error';
+  }
+
+  @override
+  String runPhotosCaptionError(String error) {
+    return 'キャプションを更新できませんでした: $error';
+  }
+
+  @override
+  String get runSegEffortsChecking => 'セグメントを確認中…';
+
+  @override
+  String get runSegEffortsNoRoute =>
+      'セグメントはルートごとに対応します。このランを保存済みルートに紐付けるとリーダーボードで競えます。';
+
+  @override
+  String get runSegEffortsEmpty => 'このランにセグメント記録はありません。';
+
+  @override
+  String get workoutReviewTitle => 'ワークアウト';
+
+  @override
+  String get workoutReviewColStep => 'ステップ';
+
+  @override
+  String get workoutReviewColPlan => '計画';
+
+  @override
+  String get workoutReviewColActual => '実績';
+
+  @override
+  String get workoutReviewColPace => 'ペース';
+
+  @override
+  String get workoutReviewColDelta => 'Δ';
+
+  @override
+  String get workoutReviewSkip => 'スキップ';
+
+  @override
+  String get workoutReviewLabelWarmup => 'ウォームアップ';
+
+  @override
+  String get workoutReviewLabelCooldown => 'クールダウン';
+
+  @override
+  String get workoutReviewLabelSteady => '一定';
+
+  @override
+  String get workoutReviewLabelRep => 'レップ';
+
+  @override
+  String workoutReviewLabelRepN(int index, int total) {
+    return 'レップ $index/$total';
+  }
+
+  @override
+  String get workoutReviewLabelRecovery => '回復';
+
+  @override
+  String workoutReviewLabelRecoveryN(int index, int total) {
+    return '回復 $index/$total';
+  }
+
+  @override
+  String get workoutReviewLabelWalk => 'ウォーク';
+
+  @override
+  String workoutReviewLabelWalkN(int index, int total) {
+    return 'ウォーク $index/$total';
+  }
+
+  @override
+  String get segmentsPanelTitle => 'セグメント';
+
+  @override
+  String get segmentsPanelNew => '新しいセグメント';
+
+  @override
+  String get segmentsPanelCancel => 'キャンセル';
+
+  @override
+  String get segmentsPanelLoading => 'セグメントを読み込み中…';
+
+  @override
+  String get segmentsPanelEmpty => 'このルートにはまだセグメントがありません。';
+
+  @override
+  String get segmentsPanelNameLabel => '名前';
+
+  @override
+  String get segmentsPanelNameHint => '悪夢の登り';
+
+  @override
+  String get segmentsPanelStartLabel => '開始 (m)';
+
+  @override
+  String get segmentsPanelEndLabel => '終了 (m)';
+
+  @override
+  String segmentsPanelRouteHint(int metres) {
+    return 'ルートは $metres m';
+  }
+
+  @override
+  String get segmentsPanelCreate => '作成';
+
+  @override
+  String get segmentsPanelDeleteTooltip => 'セグメントを削除';
+
+  @override
+  String get segmentsPanelDeleteTitle => 'セグメントを削除しますか？';
+
+  @override
+  String segmentsPanelDeleteBody(String name) {
+    return '「$name」が削除されます。';
+  }
+
+  @override
+  String get segmentsPanelDeleteConfirm => '削除';
+
+  @override
+  String get segmentsPanelErrEndAfterStart => '終了は開始より大きくする必要があります';
+
+  @override
+  String get segmentsPanelErrMinLength => 'セグメントは少なくとも 100 m 必要です';
+
+  @override
+  String segmentsPanelCreateError(String error) {
+    return 'セグメントを作成できませんでした: $error';
+  }
+
+  @override
+  String segmentsPanelDeleteError(String error) {
+    return '削除に失敗しました: $error';
+  }
+
+  @override
+  String get segmentsPanelAllGenders => 'すべての性別';
+
+  @override
+  String get segmentsPanelGenderMen => '男性';
+
+  @override
+  String get segmentsPanelGenderWomen => '女性';
+
+  @override
+  String get segmentsPanelGenderNonbinary => 'ノンバイナリー';
+
+  @override
+  String get segmentsPanelAllAges => 'すべての年齢';
+
+  @override
+  String get segmentsPanelResetFilters => 'リセット';
+
+  @override
+  String get segmentsPanelLeaderboardLoading => '読み込み中…';
+
+  @override
+  String get segmentsPanelLeaderboardEmptyFiltered =>
+      'この絞り込みに一致する記録はありません。条件を広げてみてください。';
+
+  @override
+  String get segmentsPanelLeaderboardEmpty => 'まだ記録がありません。このセグメントを最初に走りましょう。';
+
+  @override
+  String segmentsPanelCrownBanner(String label) {
+    return 'あなたがこの王冠を保持しています — $label。';
+  }
+
+  @override
+  String get segmentsPanelRunnerFallback => 'ランナー';
+
+  @override
+  String get goalEditorTitleNew => '新しい目標';
+
+  @override
+  String get goalEditorTitleEdit => '目標を編集';
+
+  @override
+  String get goalEditorNameLabel => '名前（任意）';
+
+  @override
+  String get goalEditorNameHint => '例：ベース走行';
+
+  @override
+  String get goalEditorPeriod => '期間';
+
+  @override
+  String get goalEditorThisWeek => '今週';
+
+  @override
+  String get goalEditorThisMonth => '今月';
+
+  @override
+  String get goalEditorTargets => '目標値';
+
+  @override
+  String get goalEditorTargetsHelp => '任意の組み合わせを設定できます。空欄は無視されます。';
+
+  @override
+  String get goalEditorTargetDistance => '距離';
+
+  @override
+  String get goalEditorTargetTime => '時間';
+
+  @override
+  String get goalEditorTargetPace => '平均ペース';
+
+  @override
+  String get goalEditorTargetRuns => 'ラン数';
+
+  @override
+  String get goalEditorSuffixMin => '分';
+
+  @override
+  String get goalEditorSuffixRuns => 'ラン';
+
+  @override
+  String get goalEditorDelete => '削除';
+
+  @override
+  String get goalEditorCancel => 'キャンセル';
+
+  @override
+  String get goalEditorSave => '保存';
+
+  @override
+  String get goalEditorErrDistance => '距離：正の数を入力してください';
+
+  @override
+  String get goalEditorErrTime => '時間：正の分数を入力してください';
+
+  @override
+  String get goalEditorErrPace => 'ペース：mm:ss 形式で入力（例 5:00）';
+
+  @override
+  String get goalEditorErrRuns => 'ラン数：正の整数を入力してください';
+
+  @override
+  String get goalEditorErrNoTarget => '少なくとも 1 つの目標を設定してください';
+
+  @override
+  String get goalEditorSavedAnnounce => '目標を保存しました';
+
+  @override
+  String get goalEditorDeletedAnnounce => '目標を削除しました';
+
+  @override
+  String get eventFormTitle => '新しいイベント';
+
+  @override
+  String get eventFormTitleLabel => 'タイトル';
+
+  @override
+  String get eventFormStartsAt => '開始';
+
+  @override
+  String get eventFormDescriptionLabel => '説明（任意）';
+
+  @override
+  String get eventFormMeetLabel => '集合場所（任意）';
+
+  @override
+  String get eventFormMeetHint => '登山口の駐車場';
+
+  @override
+  String get eventFormDistanceLabel => '距離 (km)';
+
+  @override
+  String get eventFormDurationLabel => '所要時間 (分)';
+
+  @override
+  String get eventFormRecurrence => '繰り返し';
+
+  @override
+  String get eventFormRecurOneOff => '1回のみ';
+
+  @override
+  String get eventFormRecurWeekly => '毎週';
+
+  @override
+  String get eventFormRecurBiweekly => '隔週';
+
+  @override
+  String get eventFormRecurMonthly => '毎月';
+
+  @override
+  String get eventFormCancel => 'キャンセル';
+
+  @override
+  String get eventFormCreate => 'イベントを作成';
+
+  @override
+  String get clubFormTitle => '新しいクラブ';
+
+  @override
+  String get clubFormNameLabel => '名前';
+
+  @override
+  String get clubFormDescriptionLabel => '説明（任意）';
+
+  @override
+  String get clubFormLocationLabel => '場所（任意）';
+
+  @override
+  String get clubFormLocationHint => 'エディンバラ, 英国';
+
+  @override
+  String get clubFormPublic => '公開';
+
+  @override
+  String get clubFormPrivate => '非公開';
+
+  @override
+  String get clubFormJoinPolicy => '参加ポリシー';
+
+  @override
+  String get clubFormJoinOpen => 'オープン — 誰でも参加可';
+
+  @override
+  String get clubFormJoinRequest => 'リクエスト — 管理者が承認';
+
+  @override
+  String get clubFormJoinInvite => '招待制のみ';
+
+  @override
+  String get clubFormCancel => 'キャンセル';
+
+  @override
+  String get clubFormCreate => '作成';
+
+  @override
+  String get clubFormErrSlug => '名前には少なくとも 1 文字または数字が必要です。';
+
+  @override
+  String get clubFormErrUnreachable =>
+      '現在サーバーに接続できません。接続を確認するかサインインして、もう一度お試しください。';
+
+  @override
+  String get reportReasonSpam => 'スパム';
+
+  @override
+  String get reportReasonHarassment => '嫌がらせまたは虐待';
+
+  @override
+  String get reportReasonInappropriate => '不適切なコンテンツ';
+
+  @override
+  String get reportReasonImpersonation => 'なりすまし';
+
+  @override
+  String get reportReasonOther => 'その他';
+
+  @override
+  String get reportSuccess => '報告を送信しました — レビューのための報告ありがとうございます。';
+
+  @override
+  String get reportTitleUser => 'ユーザーを報告';
+
+  @override
+  String get reportTitleClub => 'クラブを報告';
+
+  @override
+  String get reportTitleRoute => 'ルートを報告';
+
+  @override
+  String get reportTitleContent => 'コンテンツを報告';
+
+  @override
+  String get reportDisclaimer =>
+      '報告はモデレーターに送られます。虚偽の報告も審査対象です。コミュニティガイドラインに違反するコンテンツのみ報告してください。';
+
+  @override
+  String get reportReason => '理由';
+
+  @override
+  String get reportNotesLabel => 'メモ（任意）';
+
+  @override
+  String get reportCancel => 'キャンセル';
+
+  @override
+  String get reportSubmit => '報告を送信';
+
+  @override
+  String get reportErrDuplicate => 'このコンテンツに対する保留中の報告がすでにあります。';
+
+  @override
+  String gearBackfillTitle(String gear) {
+    return '過去のランを $gear に紐付けますか？';
+  }
+
+  @override
+  String gearBackfillBody(int count, String activity) {
+    return '購入後に $activity のアクティビティが $count 件見つかりました。着用していないものはチェックを外してください。';
+  }
+
+  @override
+  String get gearBackfillActivityCycling => 'サイクリング';
+
+  @override
+  String get gearBackfillActivityRunning => 'ランニング';
+
+  @override
+  String get gearBackfillSelectNone => '選択を解除';
+
+  @override
+  String get gearBackfillSelectAll => 'すべて選択';
+
+  @override
+  String gearBackfillSelectedCount(int selected, int total) {
+    return '$total 件中 $selected 件';
+  }
+
+  @override
+  String get gearBackfillSkip => 'スキップ';
+
+  @override
+  String get gearBackfillAttaching => '紐付け中…';
+
+  @override
+  String gearBackfillAttach(int count) {
+    return '$count 件を紐付け';
+  }
+
+  @override
+  String gearBackfillAttachError(String error) {
+    return '紐付けに失敗しました: $error';
+  }
+
+  @override
+  String get workoutEditTitle => 'ワークアウトを編集';
+
+  @override
+  String get workoutEditKindLabel => '種類';
+
+  @override
+  String get workoutEditDistanceLabel => '目標距離 (km)';
+
+  @override
+  String get workoutEditDistanceHint => '例：8.0';
+
+  @override
+  String get workoutEditPaceLabel => '目標ペース (mm:ss /km)';
+
+  @override
+  String get workoutEditPaceHint => '例：5:30';
+
+  @override
+  String get workoutEditNotesLabel => 'メモ';
+
+  @override
+  String get workoutEditCancel => 'キャンセル';
+
+  @override
+  String get workoutEditSave => '保存';
+
+  @override
+  String get workoutEditErrDistance => '正の距離を km で入力してください';
+
+  @override
+  String get workoutEditErrPace => 'ペースは 5:30 の形式で入力してください';
+
+  @override
+  String workoutEditSaveError(String error) {
+    return '保存に失敗しました: $error';
+  }
+
+  @override
+  String upcomingEventBadge(String relative) {
+    return '参加予定 · $relative';
+  }
+
+  @override
+  String get upcomingEventStartingNow => 'まもなく開始';
+
+  @override
+  String upcomingEventInMinutes(int count) {
+    return '$count 分後';
+  }
+
+  @override
+  String get upcomingEventInOneHour => '1 時間後';
+
+  @override
+  String upcomingEventInHours(int count) {
+    return '$count 時間後';
+  }
+
+  @override
+  String get upcomingEventTomorrow => '明日';
+
+  @override
+  String upcomingEventInDays(int count) {
+    return '$count 日後';
+  }
+
+  @override
+  String get todaysWorkoutDone => '本日完了';
+
+  @override
+  String get todaysWorkoutToday => '今日のワークアウト';
+
+  @override
+  String get errorStateRetry => '再試行';
+
+  @override
+  String get shareCardRunTitle => 'ランを共有';
+
+  @override
+  String get shareCardExport => 'エクスポート';
+
+  @override
+  String get shareCardImage => '画像';
+
+  @override
+  String get shareCardStatDistance => '距離';
+
+  @override
+  String get shareCardStatTime => '時間';
+
+  @override
+  String get shareCardStatPace => 'ペース';
+
+  @override
+  String get shareCardStatSpeed => '速度';
+
+  @override
+  String get shareCardBrandRun => 'RUN';
+
+  @override
+  String get shareCardImageError => '共有画像を作成できませんでした';
+
+  @override
+  String get shareCardFileError => 'ファイルをエクスポートできませんでした';
+
+  @override
+  String get shareCardRouteTitle => 'ルートを共有';
+
+  @override
+  String get shareCardRouteShareImage => '画像を共有';
+
+  @override
+  String get shareCardRouteCapturing => 'キャプチャ中…';
+
+  @override
+  String get shareCardRouteStatDistance => '距離';
+
+  @override
+  String get shareCardRouteStatClimb => '獲得標高';
+
+  @override
+  String get billingToday => '今日';
+
+  @override
+  String get billingYesterday => '昨日';
+
+  @override
+  String billingDaysAgo(int count) {
+    return '$count 日前';
+  }
+
+  @override
+  String billingRenewalFailed(String relative) {
+    return 'Pro の更新が $relative に失敗しました。';
+  }
+
+  @override
+  String get billingRenewalBody => 'カードを更新しないと Free にダウングレードされます。';
+
+  @override
+  String get billingManage => '管理';
+
+  @override
+  String get planCalendarPrevMonth => '前の月';
+
+  @override
+  String get planCalendarNextMonth => '次の月';
+
+  @override
+  String runGearChipsLoadError(String error) {
+    return 'ギアの読み込みに失敗しました: $error';
+  }
+
+  @override
+  String get runGearChipsPickerTitle => 'このランで使用したギアをタグ付け';
+
+  @override
+  String get runGearChipsEmpty => 'ギアがまだ登録されていません。設定 → ギア で追加してください。';
+
+  @override
+  String get runGearChipsCancel => 'キャンセル';
+
+  @override
+  String get runGearChipsSave => '保存';
+
+  @override
+  String get runGearChipsTag => '+ ギアをタグ付け';
+
+  @override
+  String get runGearChipsEdit => '編集';
+
+  @override
+  String runGearChipsSaveError(String error) {
+    return '保存に失敗しました: $error';
+  }
+
+  @override
+  String get gearFormTitleEdit => 'ギアを編集';
+
+  @override
+  String get gearFormTitleAddShoes => 'シューズを追加';
+
+  @override
+  String get gearFormTitleAddBike => 'バイクを追加';
+
+  @override
+  String get gearFormNameLabel => '名前';
+
+  @override
+  String get gearFormNameHint => 'Pegasus 39';
+
+  @override
+  String get gearFormBrandLabel => 'ブランド';
+
+  @override
+  String get gearFormModelLabel => 'モデル';
+
+  @override
+  String get gearFormBoughtLabel => '購入日';
+
+  @override
+  String get gearFormBoughtPick => 'タップして選択';
+
+  @override
+  String gearFormRetireAt(String unit) {
+    return '交換目安 ($unit)';
+  }
+
+  @override
+  String get gearFormRetireHint => '500';
+
+  @override
+  String get gearFormNotesLabel => 'メモ';
+
+  @override
+  String get gearFormCancel => 'キャンセル';
+
+  @override
+  String get gearFormSaving => '保存中…';
+
+  @override
+  String get gearFormSave => '保存';
+
+  @override
+  String get gearFormAdd => '追加';
+
+  @override
+  String gearFormSaveError(String error) {
+    return '保存に失敗しました: $error';
+  }
+
+  @override
+  String get notificationBellTooltip => '通知';
+
+  @override
+  String get liveRunMapWaitingGps => 'GPS を待っています...';
+
+  @override
+  String get liveRunMapRecentre => '現在地に再センタリング';
 }

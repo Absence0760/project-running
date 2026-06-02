@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../training.dart' show fmtPace;
 
@@ -28,6 +29,7 @@ class WorkoutReviewSection extends StatelessWidget {
     if (steps.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -35,7 +37,7 @@ class WorkoutReviewSection extends StatelessWidget {
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
           child: Row(
             children: [
-              Text('Workout', style: theme.textTheme.titleMedium),
+              Text(l10n.workoutReviewTitle, style: theme.textTheme.titleMedium),
               const Spacer(),
               if (adherence != null) AdherencePill(adherence: adherence),
             ],
@@ -50,9 +52,10 @@ class WorkoutReviewSection extends StatelessWidget {
             ),
             child: Column(
               children: [
-                _headerRow(theme),
+                _headerRow(theme, l10n),
                 for (var i = 0; i < steps.length; i++)
-                  _stepRow(theme, steps[i], last: i == steps.length - 1),
+                  _stepRow(theme, l10n, steps[i],
+                      last: i == steps.length - 1),
               ],
             ),
           ),
@@ -63,7 +66,7 @@ class WorkoutReviewSection extends StatelessWidget {
     );
   }
 
-  Widget _headerRow(ThemeData theme) {
+  Widget _headerRow(ThemeData theme, AppLocalizations l10n) {
     final outline = theme.colorScheme.outline;
     Widget cell(String label,
         {int flex = 1, TextAlign align = TextAlign.start}) {
@@ -89,17 +92,18 @@ class WorkoutReviewSection extends StatelessWidget {
       ),
       child: Row(
         children: [
-          cell('Step', flex: 3),
-          cell('Plan', flex: 2, align: TextAlign.right),
-          cell('Actual', flex: 2, align: TextAlign.right),
-          cell('Pace', flex: 2, align: TextAlign.right),
-          cell('Δ', flex: 2, align: TextAlign.right),
+          cell(l10n.workoutReviewColStep, flex: 3),
+          cell(l10n.workoutReviewColPlan, flex: 2, align: TextAlign.right),
+          cell(l10n.workoutReviewColActual, flex: 2, align: TextAlign.right),
+          cell(l10n.workoutReviewColPace, flex: 2, align: TextAlign.right),
+          cell(l10n.workoutReviewColDelta, flex: 2, align: TextAlign.right),
         ],
       ),
     );
   }
 
-  Widget _stepRow(ThemeData theme, WorkoutStepReview s, {required bool last}) {
+  Widget _stepRow(ThemeData theme, AppLocalizations l10n, WorkoutStepReview s,
+      {required bool last}) {
     final divider = BorderSide(color: theme.dividerColor);
     final muted = theme.colorScheme.outline;
     final skipped = s.status == 'skipped';
@@ -133,7 +137,7 @@ class WorkoutReviewSection extends StatelessWidget {
       ),
       child: Row(
         children: [
-          cell(s.label, flex: 3, weight: FontWeight.w600),
+          cell(s.localizedLabel(l10n), flex: 3, weight: FontWeight.w600),
           cell(
             s.isDurationBased
                 ? formatStepDuration(s.targetDurationSec!)
@@ -153,7 +157,7 @@ class WorkoutReviewSection extends StatelessWidget {
           Expanded(
             flex: 2,
             child: Text(
-              skipped ? 'skip' : delta.label,
+              skipped ? l10n.workoutReviewSkip : delta.label,
               textAlign: TextAlign.right,
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w700,
@@ -170,6 +174,8 @@ class WorkoutReviewSection extends StatelessWidget {
 class WorkoutStepReview {
   final String label;
   final String kind;
+  final int? repIndex;
+  final int? repTotal;
   final double targetDistanceM;
   final double actualDistanceM;
   // Duration target in seconds. Non-null when this step was authored as
@@ -185,6 +191,8 @@ class WorkoutStepReview {
   const WorkoutStepReview({
     required this.label,
     required this.kind,
+    this.repIndex,
+    this.repTotal,
     required this.targetDistanceM,
     required this.actualDistanceM,
     this.targetDurationSec,
@@ -197,6 +205,35 @@ class WorkoutStepReview {
 
   bool get isDurationBased =>
       targetDurationSec != null && targetDurationSec! > 0;
+
+  /// Localized step label. Derives from [kind] (+ optional rep index /
+  /// total) so the label follows the device locale at render time;
+  /// falls back to the parsed [label] for unknown kinds.
+  String localizedLabel(AppLocalizations l10n) {
+    final hasReps = repIndex != null && repTotal != null;
+    switch (kind) {
+      case 'warmup':
+        return l10n.workoutReviewLabelWarmup;
+      case 'cooldown':
+        return l10n.workoutReviewLabelCooldown;
+      case 'steady':
+        return l10n.workoutReviewLabelSteady;
+      case 'rep':
+        return hasReps
+            ? l10n.workoutReviewLabelRepN(repIndex!, repTotal!)
+            : l10n.workoutReviewLabelRep;
+      case 'recovery':
+        return hasReps
+            ? l10n.workoutReviewLabelRecoveryN(repIndex!, repTotal!)
+            : l10n.workoutReviewLabelRecovery;
+      case 'walk':
+        return hasReps
+            ? l10n.workoutReviewLabelWalkN(repIndex!, repTotal!)
+            : l10n.workoutReviewLabelWalk;
+      default:
+        return label;
+    }
+  }
 
   factory WorkoutStepReview.fromMap(Map raw) {
     final kind = raw['kind']?.toString() ?? 'steady';
@@ -228,6 +265,8 @@ class WorkoutStepReview {
     return WorkoutStepReview(
       label: label,
       kind: kind,
+      repIndex: repIndex,
+      repTotal: repTotal,
       targetDistanceM: (raw['target_distance_m'] as num?)?.toDouble() ?? 0,
       actualDistanceM: (raw['actual_distance_m'] as num?)?.toDouble() ?? 0,
       targetDurationSec: (raw['target_duration_s'] as num?)?.toInt(),

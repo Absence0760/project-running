@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
 
 /// Small tappable card shown on the Run tab idle state when the user has
@@ -13,8 +14,9 @@ class UpcomingEventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final when = event.nextInstanceStart;
-    final relative = _relativeFromNow(when);
+    final relative = _relativeFromNow(l10n, when);
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -51,7 +53,7 @@ class UpcomingEventCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'RSVP\'D · $relative',
+                    l10n.upcomingEventBadge(relative),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.primary,
                       letterSpacing: 0.7,
@@ -102,15 +104,19 @@ class UpcomingEventCard extends StatelessWidget {
     );
   }
 
-  static String _relativeFromNow(DateTime when) {
+  static String _relativeFromNow(AppLocalizations l10n, DateTime when) {
     final diff = when.difference(DateTime.now());
     if (diff.inMinutes < 60) {
-      return diff.inMinutes <= 1 ? 'Starting now' : 'In ${diff.inMinutes} min';
+      return diff.inMinutes <= 1
+          ? l10n.upcomingEventStartingNow
+          : l10n.upcomingEventInMinutes(diff.inMinutes);
     }
     if (diff.inHours < 24) {
-      return diff.inHours == 1 ? 'In 1 hour' : 'In ${diff.inHours} hours';
+      return diff.inHours == 1
+          ? l10n.upcomingEventInOneHour
+          : l10n.upcomingEventInHours(diff.inHours);
     }
-    if (diff.inHours < 48) return 'Tomorrow';
-    return 'In ${diff.inDays} days';
+    if (diff.inHours < 48) return l10n.upcomingEventTomorrow;
+    return l10n.upcomingEventInDays(diff.inDays);
   }
 }

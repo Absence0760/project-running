@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../segments.dart';
 
@@ -70,12 +71,13 @@ class _RunSegmentEffortsState extends State<RunSegmentEfforts> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
 
     if (_loading) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Text(
-          'Checking segments…',
+          l10n.runSegEffortsChecking,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -85,8 +87,8 @@ class _RunSegmentEffortsState extends State<RunSegmentEfforts> {
 
     if (_efforts.isEmpty) {
       final hint = widget.routeId == null
-          ? 'Segments are matched per route — link this run to a saved route to compete on its leaderboards.'
-          : 'No segment efforts on this run.';
+          ? l10n.runSegEffortsNoRoute
+          : l10n.runSegEffortsEmpty;
       return Padding(
         padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
         child: Text(

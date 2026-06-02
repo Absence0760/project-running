@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../preferences.dart';
 import 'top_banner.dart';
@@ -169,13 +170,15 @@ class _GearFormSheetState extends State<_GearFormSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopBanner(context, 'Save failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).gearFormSaveError('$e'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unitLabel = widget.preferences.unit == DistanceUnit.mi ? 'mi' : 'km';
     // Mirror the goal_editor_sheet pattern: pad by whichever of the
     // soft-keyboard (viewInsets.bottom, when focused) or the system
@@ -196,16 +199,18 @@ class _GearFormSheetState extends State<_GearFormSheet> {
           children: [
             Text(
               widget.existing != null
-                  ? 'Edit gear'
-                  : 'Add ${widget.kind == 'shoe' ? 'shoes' : 'bike'}',
+                  ? l10n.gearFormTitleEdit
+                  : (widget.kind == 'shoe'
+                      ? l10n.gearFormTitleAddShoes
+                      : l10n.gearFormTitleAddBike),
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _name,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'Pegasus 39',
+              decoration: InputDecoration(
+                labelText: l10n.gearFormNameLabel,
+                hintText: l10n.gearFormNameHint,
               ),
               maxLength: 80,
             ),
@@ -214,7 +219,8 @@ class _GearFormSheetState extends State<_GearFormSheet> {
                 Expanded(
                   child: TextField(
                     controller: _brand,
-                    decoration: const InputDecoration(labelText: 'Brand'),
+                    decoration:
+                        InputDecoration(labelText: l10n.gearFormBrandLabel),
                     maxLength: 60,
                   ),
                 ),
@@ -222,7 +228,8 @@ class _GearFormSheetState extends State<_GearFormSheet> {
                 Expanded(
                   child: TextField(
                     controller: _model,
-                    decoration: const InputDecoration(labelText: 'Model'),
+                    decoration:
+                        InputDecoration(labelText: l10n.gearFormModelLabel),
                     maxLength: 60,
                   ),
                 ),
@@ -234,9 +241,10 @@ class _GearFormSheetState extends State<_GearFormSheet> {
                   child: InkWell(
                     onTap: _pickDate,
                     child: InputDecorator(
-                      decoration: const InputDecoration(labelText: 'Bought'),
+                      decoration:
+                          InputDecoration(labelText: l10n.gearFormBoughtLabel),
                       child: Text(_purchasedAt == null
-                          ? 'Tap to pick'
+                          ? l10n.gearFormBoughtPick
                           : _purchasedAt!.toIso8601String().substring(0, 10)),
                     ),
                   ),
@@ -247,8 +255,8 @@ class _GearFormSheetState extends State<_GearFormSheet> {
                     controller: _target,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: 'Retire at ($unitLabel)',
-                      hintText: '500',
+                      labelText: l10n.gearFormRetireAt(unitLabel),
+                      hintText: l10n.gearFormRetireHint,
                     ),
                   ),
                 ),
@@ -256,7 +264,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
             ),
             TextField(
               controller: _notes,
-              decoration: const InputDecoration(labelText: 'Notes'),
+              decoration: InputDecoration(labelText: l10n.gearFormNotesLabel),
               maxLength: 500,
               maxLines: 3,
             ),
@@ -266,16 +274,16 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               children: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.gearFormCancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _saving ? null : _save,
                   child: Text(_saving
-                      ? 'Saving…'
+                      ? l10n.gearFormSaving
                       : widget.existing != null
-                          ? 'Save'
-                          : 'Add'),
+                          ? l10n.gearFormSave
+                          : l10n.gearFormAdd),
                 ),
               ],
             ),

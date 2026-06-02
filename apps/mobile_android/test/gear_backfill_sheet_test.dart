@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/gear_backfill_sheet.dart';
 
 /// Fake [ApiClient] that records every addGearToRuns call. Lets the
@@ -59,6 +60,8 @@ void main() {
 
       late BuildContext capturedCtx;
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Builder(builder: (ctx) {
             capturedCtx = ctx;
@@ -96,6 +99,8 @@ void main() {
 
       late BuildContext capturedCtx;
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Builder(builder: (ctx) {
             capturedCtx = ctx;
@@ -135,6 +140,8 @@ void main() {
 
       late BuildContext capturedCtx;
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Builder(builder: (ctx) {
             capturedCtx = ctx;
@@ -182,6 +189,8 @@ void main() {
 
       late BuildContext capturedCtx;
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: Scaffold(
           body: Builder(builder: (ctx) {
             capturedCtx = ctx;

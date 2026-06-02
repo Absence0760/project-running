@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/social_service.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/event_form_sheet.dart';
 
 class _Launcher extends StatefulWidget {
@@ -44,7 +45,10 @@ Future<void> _openSheet(WidgetTester tester) async {
   // Larger viewport so the scrollable form actually paints all rows.
   await tester.binding.setSurfaceSize(const Size(600, 1200));
   addTearDown(() => tester.binding.setSurfaceSize(null));
-  await tester.pumpWidget(MaterialApp(home: _Launcher(social: SocialService())));
+  await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: _Launcher(social: SocialService())));
   await tester.tap(find.text('Open'));
   await tester.pumpAndSettle();
 }

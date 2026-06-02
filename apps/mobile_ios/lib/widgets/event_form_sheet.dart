@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
 
 /// Modal bottom sheet for creating a new event under a club. Mirrors
@@ -131,6 +132,7 @@ class _EventFormState extends State<_EventForm> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final inset = MediaQuery.of(context).viewInsets.bottom;
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + inset),
@@ -139,25 +141,25 @@ class _EventFormState extends State<_EventForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('New event', style: theme.textTheme.titleLarge),
+            Text(l10n.eventFormTitle, style: theme.textTheme.titleLarge),
             const SizedBox(height: 12),
             TextField(
               controller: _title,
               autofocus: true,
               maxLength: 120,
-              decoration: const InputDecoration(
-                labelText: 'Title',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.eventFormTitleLabel,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
             InkWell(
               onTap: _pickDateTime,
               child: InputDecorator(
-                decoration: const InputDecoration(
-                  labelText: 'Starts at',
-                  border: OutlineInputBorder(),
-                  suffixIcon: Icon(Icons.event),
+                decoration: InputDecoration(
+                  labelText: l10n.eventFormStartsAt,
+                  border: const OutlineInputBorder(),
+                  suffixIcon: const Icon(Icons.event),
                 ),
                 child: Text(_fmtDateTime(_starts)),
               ),
@@ -167,19 +169,19 @@ class _EventFormState extends State<_EventForm> {
               controller: _description,
               maxLines: 3,
               maxLength: 1000,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.eventFormDescriptionLabel,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _meetLabel,
               maxLength: 120,
-              decoration: const InputDecoration(
-                labelText: 'Meeting point (optional)',
-                hintText: 'Trailhead car park',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.eventFormMeetLabel,
+                hintText: l10n.eventFormMeetHint,
+                border: const OutlineInputBorder(),
               ),
             ),
             const SizedBox(height: 8),
@@ -189,9 +191,9 @@ class _EventFormState extends State<_EventForm> {
                   child: TextField(
                     controller: _distanceKm,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Distance (km)',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l10n.eventFormDistanceLabel,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),
@@ -200,25 +202,25 @@ class _EventFormState extends State<_EventForm> {
                   child: TextField(
                     controller: _durationMin,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Duration (min)',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l10n.eventFormDurationLabel,
+                      border: const OutlineInputBorder(),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 12),
-            Text('Recurrence', style: theme.textTheme.labelLarge),
+            Text(l10n.eventFormRecurrence, style: theme.textTheme.labelLarge),
             const SizedBox(height: 4),
             Wrap(
               spacing: 8,
               children: [
-                for (final option in const [
-                  ('none', 'One-off'),
-                  ('weekly', 'Weekly'),
-                  ('biweekly', 'Bi-weekly'),
-                  ('monthly', 'Monthly'),
+                for (final option in [
+                  ('none', l10n.eventFormRecurOneOff),
+                  ('weekly', l10n.eventFormRecurWeekly),
+                  ('biweekly', l10n.eventFormRecurBiweekly),
+                  ('monthly', l10n.eventFormRecurMonthly),
                 ])
                   ChoiceChip(
                     label: Text(option.$2),
@@ -243,7 +245,7 @@ class _EventFormState extends State<_EventForm> {
               children: [
                 TextButton(
                   onPressed: _busy ? null : () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.eventFormCancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
@@ -254,7 +256,7 @@ class _EventFormState extends State<_EventForm> {
                           height: 16,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Create event'),
+                      : Text(l10n.eventFormCreate),
                 ),
               ],
             ),

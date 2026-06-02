@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/plan_calendar.dart';
 
 void main() {
@@ -23,6 +24,8 @@ void main() {
     );
 
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: PlanCalendar(
           startDate: start,
@@ -45,6 +48,8 @@ void main() {
     final start = DateTime(2026, 1, 1);
     final end = DateTime(2026, 12, 31);
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: PlanCalendar(
           startDate: start,
@@ -79,6 +84,8 @@ void main() {
       manuallyCompleted: false,
     );
     await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: PlanCalendar(
           startDate: start,

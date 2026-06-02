@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import 'top_banner.dart';
 
@@ -101,7 +102,8 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopBanner(context, 'Attach failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).gearBackfillAttachError('$e'));
     }
   }
 
@@ -132,6 +134,7 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final mq = MediaQuery.of(context);
     final bottomInset = mq.viewInsets.bottom > 0
         ? mq.viewInsets.bottom
@@ -144,15 +147,17 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Attach past runs to ${widget.gearName}?',
+            l10n.gearBackfillTitle(widget.gearName),
             style: theme.textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
           Text(
-            'We found ${widget.candidates.length} '
-            '${widget.gearKind == 'bike' ? 'cycling' : 'running'} '
-            'activit${widget.candidates.length == 1 ? 'y' : 'ies'} '
-            'after you bought them. Uncheck any you weren\'t wearing them for.',
+            l10n.gearBackfillBody(
+              widget.candidates.length,
+              widget.gearKind == 'bike'
+                  ? l10n.gearBackfillActivityCycling
+                  : l10n.gearBackfillActivityRunning,
+            ),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -168,13 +173,16 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
               GestureDetector(
                 onTap: _saving ? null : () => _selectAll(!allSelected),
                 child: Text(
-                  allSelected ? 'Select none' : 'Select all',
+                  allSelected
+                      ? l10n.gearBackfillSelectNone
+                      : l10n.gearBackfillSelectAll,
                   style: theme.textTheme.bodyMedium,
                 ),
               ),
               const Spacer(),
               Text(
-                '${_selected.length} of ${widget.candidates.length}',
+                l10n.gearBackfillSelectedCount(
+                    _selected.length, widget.candidates.length),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -206,16 +214,16 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
             children: [
               TextButton(
                 onPressed: _saving ? null : () => Navigator.pop(context, null),
-                child: const Text('Skip'),
+                child: Text(l10n.gearBackfillSkip),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: _saving ? null : _attach,
                 child: Text(_saving
-                    ? 'Attaching…'
+                    ? l10n.gearBackfillAttaching
                     : _selected.isEmpty
-                        ? 'Skip'
-                        : 'Attach ${_selected.length}'),
+                        ? l10n.gearBackfillSkip
+                        : l10n.gearBackfillAttach(_selected.length)),
               ),
             ],
           ),

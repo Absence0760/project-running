@@ -4893,6 +4893,793 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get fitnessStatTsbTooltip =>
       'Forma menos fadiga. Positivo = descansado e pronto para competir; negativo = com fadiga acumulada.';
+
+  @override
+  String get runSocialActivity => 'Atividade';
+
+  @override
+  String get runSocialNoComments => 'Ainda não há comentários.';
+
+  @override
+  String get runSocialReplyHint => 'Escreva uma resposta…';
+
+  @override
+  String get runSocialCommentHint => 'Adicione um comentário…';
+
+  @override
+  String get runSocialRunnerFallback => 'Corredor';
+
+  @override
+  String get runSocialReply => 'Responder';
+
+  @override
+  String get runSocialDelete => 'Excluir';
+
+  @override
+  String get runSocialPost => 'Publicar';
+
+  @override
+  String get runSocialCancel => 'Cancelar';
+
+  @override
+  String runSocialKudosError(String error) {
+    return 'Não foi possível atualizar os kudos: $error';
+  }
+
+  @override
+  String runSocialPostError(String error) {
+    return 'Falha ao publicar: $error';
+  }
+
+  @override
+  String runSocialDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String get runPhotosLoading => 'Carregando fotos…';
+
+  @override
+  String get runPhotosTitle => 'Fotos';
+
+  @override
+  String get runPhotosAdd => 'Adicionar foto';
+
+  @override
+  String get runPhotosCaptionPendingHint =>
+      'Legenda (opcional, 280 caracteres)';
+
+  @override
+  String get runPhotosCaptionHint => 'Legenda…';
+
+  @override
+  String get runPhotosCancel => 'Cancelar';
+
+  @override
+  String get runPhotosSave => 'Salvar';
+
+  @override
+  String get runPhotosUpload => 'Enviar';
+
+  @override
+  String get runPhotosUploading => 'Enviando…';
+
+  @override
+  String get runPhotosEditCaption => 'Editar legenda';
+
+  @override
+  String get runPhotosDeleteTooltip => 'Excluir foto';
+
+  @override
+  String get runPhotosDeleteTitle => 'Excluir foto?';
+
+  @override
+  String get runPhotosDeleteBody =>
+      'Isto remove a foto da corrida permanentemente.';
+
+  @override
+  String get runPhotosDeleteConfirm => 'Excluir';
+
+  @override
+  String runPhotosPickerError(String error) {
+    return 'Não foi possível abrir o seletor: $error';
+  }
+
+  @override
+  String runPhotosUploadError(String error) {
+    return 'Falha no envio: $error';
+  }
+
+  @override
+  String runPhotosDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String runPhotosCaptionError(String error) {
+    return 'Não foi possível atualizar a legenda: $error';
+  }
+
+  @override
+  String get runSegEffortsChecking => 'Verificando segmentos…';
+
+  @override
+  String get runSegEffortsNoRoute =>
+      'Os segmentos são associados por rota — vincule esta corrida a uma rota salva para competir nos rankings dela.';
+
+  @override
+  String get runSegEffortsEmpty => 'Nenhum esforço de segmento nesta corrida.';
+
+  @override
+  String get workoutReviewTitle => 'Treino';
+
+  @override
+  String get workoutReviewColStep => 'Etapa';
+
+  @override
+  String get workoutReviewColPlan => 'Plano';
+
+  @override
+  String get workoutReviewColActual => 'Real';
+
+  @override
+  String get workoutReviewColPace => 'Ritmo';
+
+  @override
+  String get workoutReviewColDelta => 'Δ';
+
+  @override
+  String get workoutReviewSkip => 'pular';
+
+  @override
+  String get workoutReviewLabelWarmup => 'Aquecimento';
+
+  @override
+  String get workoutReviewLabelCooldown => 'Desaquecimento';
+
+  @override
+  String get workoutReviewLabelSteady => 'Constante';
+
+  @override
+  String get workoutReviewLabelRep => 'Rep.';
+
+  @override
+  String workoutReviewLabelRepN(int index, int total) {
+    return 'Rep. $index/$total';
+  }
+
+  @override
+  String get workoutReviewLabelRecovery => 'Recuperação';
+
+  @override
+  String workoutReviewLabelRecoveryN(int index, int total) {
+    return 'Recuperação $index/$total';
+  }
+
+  @override
+  String get workoutReviewLabelWalk => 'Caminhada';
+
+  @override
+  String workoutReviewLabelWalkN(int index, int total) {
+    return 'Caminhada $index/$total';
+  }
+
+  @override
+  String get segmentsPanelTitle => 'Segmentos';
+
+  @override
+  String get segmentsPanelNew => 'Novo segmento';
+
+  @override
+  String get segmentsPanelCancel => 'Cancelar';
+
+  @override
+  String get segmentsPanelLoading => 'Carregando segmentos…';
+
+  @override
+  String get segmentsPanelEmpty => 'Ainda não há segmentos nesta rota.';
+
+  @override
+  String get segmentsPanelNameLabel => 'Nome';
+
+  @override
+  String get segmentsPanelNameHint => 'Subida do terror';
+
+  @override
+  String get segmentsPanelStartLabel => 'Início (m)';
+
+  @override
+  String get segmentsPanelEndLabel => 'Fim (m)';
+
+  @override
+  String segmentsPanelRouteHint(int metres) {
+    return 'a rota tem $metres m';
+  }
+
+  @override
+  String get segmentsPanelCreate => 'Criar';
+
+  @override
+  String get segmentsPanelDeleteTooltip => 'Excluir segmento';
+
+  @override
+  String get segmentsPanelDeleteTitle => 'Excluir segmento?';
+
+  @override
+  String segmentsPanelDeleteBody(String name) {
+    return '“$name” será removido.';
+  }
+
+  @override
+  String get segmentsPanelDeleteConfirm => 'Excluir';
+
+  @override
+  String get segmentsPanelErrEndAfterStart =>
+      'O fim deve ser maior que o início';
+
+  @override
+  String get segmentsPanelErrMinLength =>
+      'O segmento deve ter pelo menos 100 m';
+
+  @override
+  String segmentsPanelCreateError(String error) {
+    return 'Não foi possível criar o segmento: $error';
+  }
+
+  @override
+  String segmentsPanelDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String get segmentsPanelAllGenders => 'Todos os gêneros';
+
+  @override
+  String get segmentsPanelGenderMen => 'Homens';
+
+  @override
+  String get segmentsPanelGenderWomen => 'Mulheres';
+
+  @override
+  String get segmentsPanelGenderNonbinary => 'Não binário';
+
+  @override
+  String get segmentsPanelAllAges => 'Todas as idades';
+
+  @override
+  String get segmentsPanelResetFilters => 'Redefinir';
+
+  @override
+  String get segmentsPanelLeaderboardLoading => 'Carregando…';
+
+  @override
+  String get segmentsPanelLeaderboardEmptyFiltered =>
+      'Nenhum esforço corresponde a este filtro — tente ampliá-lo.';
+
+  @override
+  String get segmentsPanelLeaderboardEmpty =>
+      'Ainda não há esforços — seja o primeiro a correr este segmento.';
+
+  @override
+  String segmentsPanelCrownBanner(String label) {
+    return 'Você detém esta coroa — $label.';
+  }
+
+  @override
+  String get segmentsPanelRunnerFallback => 'Corredor';
+
+  @override
+  String get goalEditorTitleNew => 'Nova meta';
+
+  @override
+  String get goalEditorTitleEdit => 'Editar meta';
+
+  @override
+  String get goalEditorNameLabel => 'Nome (opcional)';
+
+  @override
+  String get goalEditorNameHint => 'ex. Base de quilômetros';
+
+  @override
+  String get goalEditorPeriod => 'Período';
+
+  @override
+  String get goalEditorThisWeek => 'Esta semana';
+
+  @override
+  String get goalEditorThisMonth => 'Este mês';
+
+  @override
+  String get goalEditorTargets => 'Metas';
+
+  @override
+  String get goalEditorTargetsHelp =>
+      'Defina qualquer combinação. Campos em branco são ignorados.';
+
+  @override
+  String get goalEditorTargetDistance => 'Distância';
+
+  @override
+  String get goalEditorTargetTime => 'Tempo';
+
+  @override
+  String get goalEditorTargetPace => 'Ritmo médio';
+
+  @override
+  String get goalEditorTargetRuns => 'Corridas';
+
+  @override
+  String get goalEditorSuffixMin => 'min';
+
+  @override
+  String get goalEditorSuffixRuns => 'corridas';
+
+  @override
+  String get goalEditorDelete => 'Excluir';
+
+  @override
+  String get goalEditorCancel => 'Cancelar';
+
+  @override
+  String get goalEditorSave => 'Salvar';
+
+  @override
+  String get goalEditorErrDistance => 'Distância: insira um número positivo';
+
+  @override
+  String get goalEditorErrTime => 'Tempo: insira um número positivo de minutos';
+
+  @override
+  String get goalEditorErrPace => 'Ritmo: use mm:ss (ex. 5:00)';
+
+  @override
+  String get goalEditorErrRuns => 'Corridas: insira um número inteiro positivo';
+
+  @override
+  String get goalEditorErrNoTarget => 'Defina pelo menos uma meta';
+
+  @override
+  String get goalEditorSavedAnnounce => 'Meta salva';
+
+  @override
+  String get goalEditorDeletedAnnounce => 'Meta excluída';
+
+  @override
+  String get eventFormTitle => 'Novo evento';
+
+  @override
+  String get eventFormTitleLabel => 'Título';
+
+  @override
+  String get eventFormStartsAt => 'Começa em';
+
+  @override
+  String get eventFormDescriptionLabel => 'Descrição (opcional)';
+
+  @override
+  String get eventFormMeetLabel => 'Ponto de encontro (opcional)';
+
+  @override
+  String get eventFormMeetHint => 'Estacionamento do início da trilha';
+
+  @override
+  String get eventFormDistanceLabel => 'Distância (km)';
+
+  @override
+  String get eventFormDurationLabel => 'Duração (min)';
+
+  @override
+  String get eventFormRecurrence => 'Recorrência';
+
+  @override
+  String get eventFormRecurOneOff => 'Único';
+
+  @override
+  String get eventFormRecurWeekly => 'Semanal';
+
+  @override
+  String get eventFormRecurBiweekly => 'Quinzenal';
+
+  @override
+  String get eventFormRecurMonthly => 'Mensal';
+
+  @override
+  String get eventFormCancel => 'Cancelar';
+
+  @override
+  String get eventFormCreate => 'Criar evento';
+
+  @override
+  String get clubFormTitle => 'Novo clube';
+
+  @override
+  String get clubFormNameLabel => 'Nome';
+
+  @override
+  String get clubFormDescriptionLabel => 'Descrição (opcional)';
+
+  @override
+  String get clubFormLocationLabel => 'Localização (opcional)';
+
+  @override
+  String get clubFormLocationHint => 'Edimburgo, Reino Unido';
+
+  @override
+  String get clubFormPublic => 'Público';
+
+  @override
+  String get clubFormPrivate => 'Privado';
+
+  @override
+  String get clubFormJoinPolicy => 'Política de adesão';
+
+  @override
+  String get clubFormJoinOpen => 'Aberto — qualquer um entra';
+
+  @override
+  String get clubFormJoinRequest => 'Solicitação — admins aprovam';
+
+  @override
+  String get clubFormJoinInvite => 'Apenas por convite';
+
+  @override
+  String get clubFormCancel => 'Cancelar';
+
+  @override
+  String get clubFormCreate => 'Criar';
+
+  @override
+  String get clubFormErrSlug =>
+      'O nome precisa de pelo menos uma letra ou dígito.';
+
+  @override
+  String get clubFormErrUnreachable =>
+      'Não é possível acessar o servidor agora. Verifique sua conexão ou entre na conta e tente novamente.';
+
+  @override
+  String get reportReasonSpam => 'Spam';
+
+  @override
+  String get reportReasonHarassment => 'Assédio ou abuso';
+
+  @override
+  String get reportReasonInappropriate => 'Conteúdo impróprio';
+
+  @override
+  String get reportReasonImpersonation => 'Falsidade ideológica';
+
+  @override
+  String get reportReasonOther => 'Outro';
+
+  @override
+  String get reportSuccess =>
+      'Denúncia enviada — obrigado por sinalizar isto para revisão.';
+
+  @override
+  String get reportTitleUser => 'Denunciar usuário';
+
+  @override
+  String get reportTitleClub => 'Denunciar clube';
+
+  @override
+  String get reportTitleRoute => 'Denunciar rota';
+
+  @override
+  String get reportTitleContent => 'Denunciar conteúdo';
+
+  @override
+  String get reportDisclaimer =>
+      'Sua denúncia vai para um moderador. Denúncias falsas também são analisadas — sinalize apenas conteúdo que viole nossas diretrizes da comunidade.';
+
+  @override
+  String get reportReason => 'Motivo';
+
+  @override
+  String get reportNotesLabel => 'Notas (opcional)';
+
+  @override
+  String get reportCancel => 'Cancelar';
+
+  @override
+  String get reportSubmit => 'Enviar denúncia';
+
+  @override
+  String get reportErrDuplicate =>
+      'Você já tem uma denúncia pendente sobre este conteúdo.';
+
+  @override
+  String gearBackfillTitle(String gear) {
+    return 'Vincular corridas anteriores a $gear?';
+  }
+
+  @override
+  String gearBackfillBody(int count, String activity) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades de $activity',
+      one: '$count atividade de $activity',
+    );
+    return 'Encontramos $_temp0 após a compra. Desmarque aquelas em que você não os usou.';
+  }
+
+  @override
+  String get gearBackfillActivityCycling => 'ciclismo';
+
+  @override
+  String get gearBackfillActivityRunning => 'corrida';
+
+  @override
+  String get gearBackfillSelectNone => 'Desmarcar todas';
+
+  @override
+  String get gearBackfillSelectAll => 'Selecionar todas';
+
+  @override
+  String gearBackfillSelectedCount(int selected, int total) {
+    return '$selected de $total';
+  }
+
+  @override
+  String get gearBackfillSkip => 'Pular';
+
+  @override
+  String get gearBackfillAttaching => 'Vinculando…';
+
+  @override
+  String gearBackfillAttach(int count) {
+    return 'Vincular $count';
+  }
+
+  @override
+  String gearBackfillAttachError(String error) {
+    return 'Falha ao vincular: $error';
+  }
+
+  @override
+  String get workoutEditTitle => 'Editar treino';
+
+  @override
+  String get workoutEditKindLabel => 'Tipo';
+
+  @override
+  String get workoutEditDistanceLabel => 'Distância alvo (km)';
+
+  @override
+  String get workoutEditDistanceHint => 'ex. 8.0';
+
+  @override
+  String get workoutEditPaceLabel => 'Ritmo alvo (mm:ss /km)';
+
+  @override
+  String get workoutEditPaceHint => 'ex. 5:30';
+
+  @override
+  String get workoutEditNotesLabel => 'Notas';
+
+  @override
+  String get workoutEditCancel => 'Cancelar';
+
+  @override
+  String get workoutEditSave => 'Salvar';
+
+  @override
+  String get workoutEditErrDistance => 'Insira uma distância positiva em km';
+
+  @override
+  String get workoutEditErrPace => 'O ritmo deve ter o formato 5:30';
+
+  @override
+  String workoutEditSaveError(String error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String upcomingEventBadge(String relative) {
+    return 'CONFIRMADO · $relative';
+  }
+
+  @override
+  String get upcomingEventStartingNow => 'Começando agora';
+
+  @override
+  String upcomingEventInMinutes(int count) {
+    return 'Em $count min';
+  }
+
+  @override
+  String get upcomingEventInOneHour => 'Em 1 hora';
+
+  @override
+  String upcomingEventInHours(int count) {
+    return 'Em $count horas';
+  }
+
+  @override
+  String get upcomingEventTomorrow => 'Amanhã';
+
+  @override
+  String upcomingEventInDays(int count) {
+    return 'Em $count dias';
+  }
+
+  @override
+  String get todaysWorkoutDone => 'FEITO HOJE';
+
+  @override
+  String get todaysWorkoutToday => 'TREINO DE HOJE';
+
+  @override
+  String get errorStateRetry => 'Tentar novamente';
+
+  @override
+  String get shareCardRunTitle => 'Compartilhar corrida';
+
+  @override
+  String get shareCardExport => 'Exportar';
+
+  @override
+  String get shareCardImage => 'Imagem';
+
+  @override
+  String get shareCardStatDistance => 'Distância';
+
+  @override
+  String get shareCardStatTime => 'Tempo';
+
+  @override
+  String get shareCardStatPace => 'Ritmo';
+
+  @override
+  String get shareCardStatSpeed => 'Velocidade';
+
+  @override
+  String get shareCardBrandRun => 'RUN';
+
+  @override
+  String get shareCardImageError =>
+      'Não foi possível criar a imagem de compartilhamento';
+
+  @override
+  String get shareCardFileError => 'Não foi possível exportar o arquivo';
+
+  @override
+  String get shareCardRouteTitle => 'Compartilhar rota';
+
+  @override
+  String get shareCardRouteShareImage => 'Compartilhar imagem';
+
+  @override
+  String get shareCardRouteCapturing => 'Capturando…';
+
+  @override
+  String get shareCardRouteStatDistance => 'Distância';
+
+  @override
+  String get shareCardRouteStatClimb => 'Subida';
+
+  @override
+  String get billingToday => 'hoje';
+
+  @override
+  String get billingYesterday => 'ontem';
+
+  @override
+  String billingDaysAgo(int count) {
+    return 'há $count dias';
+  }
+
+  @override
+  String billingRenewalFailed(String relative) {
+    return 'A renovação Pro falhou $relative.';
+  }
+
+  @override
+  String get billingRenewalBody =>
+      'Atualize seu cartão ou você será rebaixado para o Free.';
+
+  @override
+  String get billingManage => 'Gerenciar';
+
+  @override
+  String get planCalendarPrevMonth => 'Mês anterior';
+
+  @override
+  String get planCalendarNextMonth => 'Próximo mês';
+
+  @override
+  String runGearChipsLoadError(String error) {
+    return 'Falha ao carregar equipamento: $error';
+  }
+
+  @override
+  String get runGearChipsPickerTitle =>
+      'Marcar o equipamento usado nesta corrida';
+
+  @override
+  String get runGearChipsEmpty =>
+      'Você ainda não registrou nenhum equipamento. Adicione em Configurações → Equipamento.';
+
+  @override
+  String get runGearChipsCancel => 'Cancelar';
+
+  @override
+  String get runGearChipsSave => 'Salvar';
+
+  @override
+  String get runGearChipsTag => '+ Marcar equipamento';
+
+  @override
+  String get runGearChipsEdit => 'Editar';
+
+  @override
+  String runGearChipsSaveError(String error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get gearFormTitleEdit => 'Editar equipamento';
+
+  @override
+  String get gearFormTitleAddShoes => 'Adicionar tênis';
+
+  @override
+  String get gearFormTitleAddBike => 'Adicionar bicicleta';
+
+  @override
+  String get gearFormNameLabel => 'Nome';
+
+  @override
+  String get gearFormNameHint => 'Pegasus 39';
+
+  @override
+  String get gearFormBrandLabel => 'Marca';
+
+  @override
+  String get gearFormModelLabel => 'Modelo';
+
+  @override
+  String get gearFormBoughtLabel => 'Comprado';
+
+  @override
+  String get gearFormBoughtPick => 'Toque para escolher';
+
+  @override
+  String gearFormRetireAt(String unit) {
+    return 'Aposentar em ($unit)';
+  }
+
+  @override
+  String get gearFormRetireHint => '500';
+
+  @override
+  String get gearFormNotesLabel => 'Notas';
+
+  @override
+  String get gearFormCancel => 'Cancelar';
+
+  @override
+  String get gearFormSaving => 'Salvando…';
+
+  @override
+  String get gearFormSave => 'Salvar';
+
+  @override
+  String get gearFormAdd => 'Adicionar';
+
+  @override
+  String gearFormSaveError(String error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get notificationBellTooltip => 'Notificações';
+
+  @override
+  String get liveRunMapWaitingGps => 'Aguardando GPS...';
+
+  @override
+  String get liveRunMapRecentre => 'Recentralizar na minha localização';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9784,4 +10571,791 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get fitnessStatTsbTooltip =>
       'Forma menos fadiga. Positivo = descansado e pronto para competir; negativo = com fadiga acumulada.';
+
+  @override
+  String get runSocialActivity => 'Atividade';
+
+  @override
+  String get runSocialNoComments => 'Ainda não há comentários.';
+
+  @override
+  String get runSocialReplyHint => 'Escreva uma resposta…';
+
+  @override
+  String get runSocialCommentHint => 'Adicione um comentário…';
+
+  @override
+  String get runSocialRunnerFallback => 'Corredor';
+
+  @override
+  String get runSocialReply => 'Responder';
+
+  @override
+  String get runSocialDelete => 'Excluir';
+
+  @override
+  String get runSocialPost => 'Publicar';
+
+  @override
+  String get runSocialCancel => 'Cancelar';
+
+  @override
+  String runSocialKudosError(String error) {
+    return 'Não foi possível atualizar os kudos: $error';
+  }
+
+  @override
+  String runSocialPostError(String error) {
+    return 'Falha ao publicar: $error';
+  }
+
+  @override
+  String runSocialDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String get runPhotosLoading => 'Carregando fotos…';
+
+  @override
+  String get runPhotosTitle => 'Fotos';
+
+  @override
+  String get runPhotosAdd => 'Adicionar foto';
+
+  @override
+  String get runPhotosCaptionPendingHint =>
+      'Legenda (opcional, 280 caracteres)';
+
+  @override
+  String get runPhotosCaptionHint => 'Legenda…';
+
+  @override
+  String get runPhotosCancel => 'Cancelar';
+
+  @override
+  String get runPhotosSave => 'Salvar';
+
+  @override
+  String get runPhotosUpload => 'Enviar';
+
+  @override
+  String get runPhotosUploading => 'Enviando…';
+
+  @override
+  String get runPhotosEditCaption => 'Editar legenda';
+
+  @override
+  String get runPhotosDeleteTooltip => 'Excluir foto';
+
+  @override
+  String get runPhotosDeleteTitle => 'Excluir foto?';
+
+  @override
+  String get runPhotosDeleteBody =>
+      'Isto remove a foto da corrida permanentemente.';
+
+  @override
+  String get runPhotosDeleteConfirm => 'Excluir';
+
+  @override
+  String runPhotosPickerError(String error) {
+    return 'Não foi possível abrir o seletor: $error';
+  }
+
+  @override
+  String runPhotosUploadError(String error) {
+    return 'Falha no envio: $error';
+  }
+
+  @override
+  String runPhotosDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String runPhotosCaptionError(String error) {
+    return 'Não foi possível atualizar a legenda: $error';
+  }
+
+  @override
+  String get runSegEffortsChecking => 'Verificando segmentos…';
+
+  @override
+  String get runSegEffortsNoRoute =>
+      'Os segmentos são associados por rota — vincule esta corrida a uma rota salva para competir nos rankings dela.';
+
+  @override
+  String get runSegEffortsEmpty => 'Nenhum esforço de segmento nesta corrida.';
+
+  @override
+  String get workoutReviewTitle => 'Treino';
+
+  @override
+  String get workoutReviewColStep => 'Etapa';
+
+  @override
+  String get workoutReviewColPlan => 'Plano';
+
+  @override
+  String get workoutReviewColActual => 'Real';
+
+  @override
+  String get workoutReviewColPace => 'Ritmo';
+
+  @override
+  String get workoutReviewColDelta => 'Δ';
+
+  @override
+  String get workoutReviewSkip => 'pular';
+
+  @override
+  String get workoutReviewLabelWarmup => 'Aquecimento';
+
+  @override
+  String get workoutReviewLabelCooldown => 'Desaquecimento';
+
+  @override
+  String get workoutReviewLabelSteady => 'Constante';
+
+  @override
+  String get workoutReviewLabelRep => 'Rep.';
+
+  @override
+  String workoutReviewLabelRepN(int index, int total) {
+    return 'Rep. $index/$total';
+  }
+
+  @override
+  String get workoutReviewLabelRecovery => 'Recuperação';
+
+  @override
+  String workoutReviewLabelRecoveryN(int index, int total) {
+    return 'Recuperação $index/$total';
+  }
+
+  @override
+  String get workoutReviewLabelWalk => 'Caminhada';
+
+  @override
+  String workoutReviewLabelWalkN(int index, int total) {
+    return 'Caminhada $index/$total';
+  }
+
+  @override
+  String get segmentsPanelTitle => 'Segmentos';
+
+  @override
+  String get segmentsPanelNew => 'Novo segmento';
+
+  @override
+  String get segmentsPanelCancel => 'Cancelar';
+
+  @override
+  String get segmentsPanelLoading => 'Carregando segmentos…';
+
+  @override
+  String get segmentsPanelEmpty => 'Ainda não há segmentos nesta rota.';
+
+  @override
+  String get segmentsPanelNameLabel => 'Nome';
+
+  @override
+  String get segmentsPanelNameHint => 'Subida do terror';
+
+  @override
+  String get segmentsPanelStartLabel => 'Início (m)';
+
+  @override
+  String get segmentsPanelEndLabel => 'Fim (m)';
+
+  @override
+  String segmentsPanelRouteHint(int metres) {
+    return 'a rota tem $metres m';
+  }
+
+  @override
+  String get segmentsPanelCreate => 'Criar';
+
+  @override
+  String get segmentsPanelDeleteTooltip => 'Excluir segmento';
+
+  @override
+  String get segmentsPanelDeleteTitle => 'Excluir segmento?';
+
+  @override
+  String segmentsPanelDeleteBody(String name) {
+    return '“$name” será removido.';
+  }
+
+  @override
+  String get segmentsPanelDeleteConfirm => 'Excluir';
+
+  @override
+  String get segmentsPanelErrEndAfterStart =>
+      'O fim deve ser maior que o início';
+
+  @override
+  String get segmentsPanelErrMinLength =>
+      'O segmento deve ter pelo menos 100 m';
+
+  @override
+  String segmentsPanelCreateError(String error) {
+    return 'Não foi possível criar o segmento: $error';
+  }
+
+  @override
+  String segmentsPanelDeleteError(String error) {
+    return 'Falha ao excluir: $error';
+  }
+
+  @override
+  String get segmentsPanelAllGenders => 'Todos os gêneros';
+
+  @override
+  String get segmentsPanelGenderMen => 'Homens';
+
+  @override
+  String get segmentsPanelGenderWomen => 'Mulheres';
+
+  @override
+  String get segmentsPanelGenderNonbinary => 'Não binário';
+
+  @override
+  String get segmentsPanelAllAges => 'Todas as idades';
+
+  @override
+  String get segmentsPanelResetFilters => 'Redefinir';
+
+  @override
+  String get segmentsPanelLeaderboardLoading => 'Carregando…';
+
+  @override
+  String get segmentsPanelLeaderboardEmptyFiltered =>
+      'Nenhum esforço corresponde a este filtro — tente ampliá-lo.';
+
+  @override
+  String get segmentsPanelLeaderboardEmpty =>
+      'Ainda não há esforços — seja o primeiro a correr este segmento.';
+
+  @override
+  String segmentsPanelCrownBanner(String label) {
+    return 'Você detém esta coroa — $label.';
+  }
+
+  @override
+  String get segmentsPanelRunnerFallback => 'Corredor';
+
+  @override
+  String get goalEditorTitleNew => 'Nova meta';
+
+  @override
+  String get goalEditorTitleEdit => 'Editar meta';
+
+  @override
+  String get goalEditorNameLabel => 'Nome (opcional)';
+
+  @override
+  String get goalEditorNameHint => 'ex. Base de quilômetros';
+
+  @override
+  String get goalEditorPeriod => 'Período';
+
+  @override
+  String get goalEditorThisWeek => 'Esta semana';
+
+  @override
+  String get goalEditorThisMonth => 'Este mês';
+
+  @override
+  String get goalEditorTargets => 'Metas';
+
+  @override
+  String get goalEditorTargetsHelp =>
+      'Defina qualquer combinação. Campos em branco são ignorados.';
+
+  @override
+  String get goalEditorTargetDistance => 'Distância';
+
+  @override
+  String get goalEditorTargetTime => 'Tempo';
+
+  @override
+  String get goalEditorTargetPace => 'Ritmo médio';
+
+  @override
+  String get goalEditorTargetRuns => 'Corridas';
+
+  @override
+  String get goalEditorSuffixMin => 'min';
+
+  @override
+  String get goalEditorSuffixRuns => 'corridas';
+
+  @override
+  String get goalEditorDelete => 'Excluir';
+
+  @override
+  String get goalEditorCancel => 'Cancelar';
+
+  @override
+  String get goalEditorSave => 'Salvar';
+
+  @override
+  String get goalEditorErrDistance => 'Distância: insira um número positivo';
+
+  @override
+  String get goalEditorErrTime => 'Tempo: insira um número positivo de minutos';
+
+  @override
+  String get goalEditorErrPace => 'Ritmo: use mm:ss (ex. 5:00)';
+
+  @override
+  String get goalEditorErrRuns => 'Corridas: insira um número inteiro positivo';
+
+  @override
+  String get goalEditorErrNoTarget => 'Defina pelo menos uma meta';
+
+  @override
+  String get goalEditorSavedAnnounce => 'Meta salva';
+
+  @override
+  String get goalEditorDeletedAnnounce => 'Meta excluída';
+
+  @override
+  String get eventFormTitle => 'Novo evento';
+
+  @override
+  String get eventFormTitleLabel => 'Título';
+
+  @override
+  String get eventFormStartsAt => 'Começa em';
+
+  @override
+  String get eventFormDescriptionLabel => 'Descrição (opcional)';
+
+  @override
+  String get eventFormMeetLabel => 'Ponto de encontro (opcional)';
+
+  @override
+  String get eventFormMeetHint => 'Estacionamento do início da trilha';
+
+  @override
+  String get eventFormDistanceLabel => 'Distância (km)';
+
+  @override
+  String get eventFormDurationLabel => 'Duração (min)';
+
+  @override
+  String get eventFormRecurrence => 'Recorrência';
+
+  @override
+  String get eventFormRecurOneOff => 'Único';
+
+  @override
+  String get eventFormRecurWeekly => 'Semanal';
+
+  @override
+  String get eventFormRecurBiweekly => 'Quinzenal';
+
+  @override
+  String get eventFormRecurMonthly => 'Mensal';
+
+  @override
+  String get eventFormCancel => 'Cancelar';
+
+  @override
+  String get eventFormCreate => 'Criar evento';
+
+  @override
+  String get clubFormTitle => 'Novo clube';
+
+  @override
+  String get clubFormNameLabel => 'Nome';
+
+  @override
+  String get clubFormDescriptionLabel => 'Descrição (opcional)';
+
+  @override
+  String get clubFormLocationLabel => 'Localização (opcional)';
+
+  @override
+  String get clubFormLocationHint => 'Edimburgo, Reino Unido';
+
+  @override
+  String get clubFormPublic => 'Público';
+
+  @override
+  String get clubFormPrivate => 'Privado';
+
+  @override
+  String get clubFormJoinPolicy => 'Política de adesão';
+
+  @override
+  String get clubFormJoinOpen => 'Aberto — qualquer um entra';
+
+  @override
+  String get clubFormJoinRequest => 'Solicitação — admins aprovam';
+
+  @override
+  String get clubFormJoinInvite => 'Apenas por convite';
+
+  @override
+  String get clubFormCancel => 'Cancelar';
+
+  @override
+  String get clubFormCreate => 'Criar';
+
+  @override
+  String get clubFormErrSlug =>
+      'O nome precisa de pelo menos uma letra ou dígito.';
+
+  @override
+  String get clubFormErrUnreachable =>
+      'Não é possível acessar o servidor agora. Verifique sua conexão ou entre na conta e tente novamente.';
+
+  @override
+  String get reportReasonSpam => 'Spam';
+
+  @override
+  String get reportReasonHarassment => 'Assédio ou abuso';
+
+  @override
+  String get reportReasonInappropriate => 'Conteúdo impróprio';
+
+  @override
+  String get reportReasonImpersonation => 'Falsidade ideológica';
+
+  @override
+  String get reportReasonOther => 'Outro';
+
+  @override
+  String get reportSuccess =>
+      'Denúncia enviada — obrigado por sinalizar isto para revisão.';
+
+  @override
+  String get reportTitleUser => 'Denunciar usuário';
+
+  @override
+  String get reportTitleClub => 'Denunciar clube';
+
+  @override
+  String get reportTitleRoute => 'Denunciar rota';
+
+  @override
+  String get reportTitleContent => 'Denunciar conteúdo';
+
+  @override
+  String get reportDisclaimer =>
+      'Sua denúncia vai para um moderador. Denúncias falsas também são analisadas — sinalize apenas conteúdo que viole nossas diretrizes da comunidade.';
+
+  @override
+  String get reportReason => 'Motivo';
+
+  @override
+  String get reportNotesLabel => 'Notas (opcional)';
+
+  @override
+  String get reportCancel => 'Cancelar';
+
+  @override
+  String get reportSubmit => 'Enviar denúncia';
+
+  @override
+  String get reportErrDuplicate =>
+      'Você já tem uma denúncia pendente sobre este conteúdo.';
+
+  @override
+  String gearBackfillTitle(String gear) {
+    return 'Vincular corridas anteriores a $gear?';
+  }
+
+  @override
+  String gearBackfillBody(int count, String activity) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count atividades de $activity',
+      one: '$count atividade de $activity',
+    );
+    return 'Encontramos $_temp0 após a compra. Desmarque aquelas em que você não os usou.';
+  }
+
+  @override
+  String get gearBackfillActivityCycling => 'ciclismo';
+
+  @override
+  String get gearBackfillActivityRunning => 'corrida';
+
+  @override
+  String get gearBackfillSelectNone => 'Desmarcar todas';
+
+  @override
+  String get gearBackfillSelectAll => 'Selecionar todas';
+
+  @override
+  String gearBackfillSelectedCount(int selected, int total) {
+    return '$selected de $total';
+  }
+
+  @override
+  String get gearBackfillSkip => 'Pular';
+
+  @override
+  String get gearBackfillAttaching => 'Vinculando…';
+
+  @override
+  String gearBackfillAttach(int count) {
+    return 'Vincular $count';
+  }
+
+  @override
+  String gearBackfillAttachError(String error) {
+    return 'Falha ao vincular: $error';
+  }
+
+  @override
+  String get workoutEditTitle => 'Editar treino';
+
+  @override
+  String get workoutEditKindLabel => 'Tipo';
+
+  @override
+  String get workoutEditDistanceLabel => 'Distância alvo (km)';
+
+  @override
+  String get workoutEditDistanceHint => 'ex. 8.0';
+
+  @override
+  String get workoutEditPaceLabel => 'Ritmo alvo (mm:ss /km)';
+
+  @override
+  String get workoutEditPaceHint => 'ex. 5:30';
+
+  @override
+  String get workoutEditNotesLabel => 'Notas';
+
+  @override
+  String get workoutEditCancel => 'Cancelar';
+
+  @override
+  String get workoutEditSave => 'Salvar';
+
+  @override
+  String get workoutEditErrDistance => 'Insira uma distância positiva em km';
+
+  @override
+  String get workoutEditErrPace => 'O ritmo deve ter o formato 5:30';
+
+  @override
+  String workoutEditSaveError(String error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String upcomingEventBadge(String relative) {
+    return 'CONFIRMADO · $relative';
+  }
+
+  @override
+  String get upcomingEventStartingNow => 'Começando agora';
+
+  @override
+  String upcomingEventInMinutes(int count) {
+    return 'Em $count min';
+  }
+
+  @override
+  String get upcomingEventInOneHour => 'Em 1 hora';
+
+  @override
+  String upcomingEventInHours(int count) {
+    return 'Em $count horas';
+  }
+
+  @override
+  String get upcomingEventTomorrow => 'Amanhã';
+
+  @override
+  String upcomingEventInDays(int count) {
+    return 'Em $count dias';
+  }
+
+  @override
+  String get todaysWorkoutDone => 'FEITO HOJE';
+
+  @override
+  String get todaysWorkoutToday => 'TREINO DE HOJE';
+
+  @override
+  String get errorStateRetry => 'Tentar novamente';
+
+  @override
+  String get shareCardRunTitle => 'Compartilhar corrida';
+
+  @override
+  String get shareCardExport => 'Exportar';
+
+  @override
+  String get shareCardImage => 'Imagem';
+
+  @override
+  String get shareCardStatDistance => 'Distância';
+
+  @override
+  String get shareCardStatTime => 'Tempo';
+
+  @override
+  String get shareCardStatPace => 'Ritmo';
+
+  @override
+  String get shareCardStatSpeed => 'Velocidade';
+
+  @override
+  String get shareCardBrandRun => 'RUN';
+
+  @override
+  String get shareCardImageError =>
+      'Não foi possível criar a imagem de compartilhamento';
+
+  @override
+  String get shareCardFileError => 'Não foi possível exportar o arquivo';
+
+  @override
+  String get shareCardRouteTitle => 'Compartilhar rota';
+
+  @override
+  String get shareCardRouteShareImage => 'Compartilhar imagem';
+
+  @override
+  String get shareCardRouteCapturing => 'Capturando…';
+
+  @override
+  String get shareCardRouteStatDistance => 'Distância';
+
+  @override
+  String get shareCardRouteStatClimb => 'Subida';
+
+  @override
+  String get billingToday => 'hoje';
+
+  @override
+  String get billingYesterday => 'ontem';
+
+  @override
+  String billingDaysAgo(int count) {
+    return 'há $count dias';
+  }
+
+  @override
+  String billingRenewalFailed(String relative) {
+    return 'A renovação Pro falhou $relative.';
+  }
+
+  @override
+  String get billingRenewalBody =>
+      'Atualize seu cartão ou você será rebaixado para o Free.';
+
+  @override
+  String get billingManage => 'Gerenciar';
+
+  @override
+  String get planCalendarPrevMonth => 'Mês anterior';
+
+  @override
+  String get planCalendarNextMonth => 'Próximo mês';
+
+  @override
+  String runGearChipsLoadError(String error) {
+    return 'Falha ao carregar equipamento: $error';
+  }
+
+  @override
+  String get runGearChipsPickerTitle =>
+      'Marcar o equipamento usado nesta corrida';
+
+  @override
+  String get runGearChipsEmpty =>
+      'Você ainda não registrou nenhum equipamento. Adicione em Configurações → Equipamento.';
+
+  @override
+  String get runGearChipsCancel => 'Cancelar';
+
+  @override
+  String get runGearChipsSave => 'Salvar';
+
+  @override
+  String get runGearChipsTag => '+ Marcar equipamento';
+
+  @override
+  String get runGearChipsEdit => 'Editar';
+
+  @override
+  String runGearChipsSaveError(String error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get gearFormTitleEdit => 'Editar equipamento';
+
+  @override
+  String get gearFormTitleAddShoes => 'Adicionar tênis';
+
+  @override
+  String get gearFormTitleAddBike => 'Adicionar bicicleta';
+
+  @override
+  String get gearFormNameLabel => 'Nome';
+
+  @override
+  String get gearFormNameHint => 'Pegasus 39';
+
+  @override
+  String get gearFormBrandLabel => 'Marca';
+
+  @override
+  String get gearFormModelLabel => 'Modelo';
+
+  @override
+  String get gearFormBoughtLabel => 'Comprado';
+
+  @override
+  String get gearFormBoughtPick => 'Toque para escolher';
+
+  @override
+  String gearFormRetireAt(String unit) {
+    return 'Aposentar em ($unit)';
+  }
+
+  @override
+  String get gearFormRetireHint => '500';
+
+  @override
+  String get gearFormNotesLabel => 'Notas';
+
+  @override
+  String get gearFormCancel => 'Cancelar';
+
+  @override
+  String get gearFormSaving => 'Salvando…';
+
+  @override
+  String get gearFormSave => 'Salvar';
+
+  @override
+  String get gearFormAdd => 'Adicionar';
+
+  @override
+  String gearFormSaveError(String error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get notificationBellTooltip => 'Notificações';
+
+  @override
+  String get liveRunMapWaitingGps => 'Aguardando GPS...';
+
+  @override
+  String get liveRunMapRecentre => 'Recentralizar na minha localização';
 }

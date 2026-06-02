@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/live_run_map.dart';
 
 Waypoint _w(double lat, double lng) => Waypoint(lat: lat, lng: lng);
@@ -14,6 +15,8 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: SizedBox(
           width: 400,
@@ -72,6 +75,8 @@ void main() {
       // preview would always be stuck on the GPS-waiting indicator.
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,
@@ -99,6 +104,8 @@ void main() {
       final track = [for (var i = 0; i < 10; i++) _w(51.5 + i * 0.0005, -0.1)];
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,
@@ -127,6 +134,8 @@ void main() {
       final ghost = _w(51.5005, -0.0995);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,
@@ -166,6 +175,8 @@ void main() {
       final track = [_w(51.5, -0.1), _w(51.6, -0.05)];
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,
@@ -196,6 +207,8 @@ void main() {
       final track = [_w(51.5, -0.1), _w(51.51, -0.099), _w(51.52, -0.098)];
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,
@@ -223,6 +236,8 @@ void main() {
       final track = [_w(51.5, -0.1), _w(51.51, -0.099)];
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,
@@ -248,6 +263,8 @@ void main() {
       final track = [_w(51.5, -0.1), _w(51.51, -0.099)];
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Scaffold(
             body: SizedBox(
               width: 400,

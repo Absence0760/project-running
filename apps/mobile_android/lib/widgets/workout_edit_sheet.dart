@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 
@@ -73,6 +74,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final mq = MediaQuery.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + mq.viewInsets.bottom),
@@ -80,11 +82,11 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Edit workout', style: theme.textTheme.titleMedium),
+          Text(l10n.workoutEditTitle, style: theme.textTheme.titleMedium),
           const SizedBox(height: 12),
           DropdownButtonFormField<WorkoutKind>(
             initialValue: _kind,
-            decoration: const InputDecoration(labelText: 'Kind'),
+            decoration: InputDecoration(labelText: l10n.workoutEditKindLabel),
             items: [
               for (final k in WorkoutKind.values)
                 DropdownMenuItem(value: k, child: Text(workoutKindLabel(k))),
@@ -97,25 +99,25 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
           TextField(
             controller: _distanceCtl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'Target distance (km)',
-              hintText: 'e.g. 8.0',
+            decoration: InputDecoration(
+              labelText: l10n.workoutEditDistanceLabel,
+              hintText: l10n.workoutEditDistanceHint,
             ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _paceCtl,
             keyboardType: TextInputType.text,
-            decoration: const InputDecoration(
-              labelText: 'Target pace (mm:ss /km)',
-              hintText: 'e.g. 5:30',
+            decoration: InputDecoration(
+              labelText: l10n.workoutEditPaceLabel,
+              hintText: l10n.workoutEditPaceHint,
             ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _notesCtl,
             maxLines: 2,
-            decoration: const InputDecoration(labelText: 'Notes'),
+            decoration: InputDecoration(labelText: l10n.workoutEditNotesLabel),
           ),
           if (_error != null) ...[
             const SizedBox(height: 8),
@@ -130,7 +132,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
                   onPressed: _saving
                       ? null
                       : () => Navigator.of(context).pop(false),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.workoutEditCancel),
                 ),
               ),
               const SizedBox(width: 12),
@@ -143,7 +145,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
                           height: 18,
                           child: CircularProgressIndicator(strokeWidth: 2),
                         )
-                      : const Text('Save'),
+                      : Text(l10n.workoutEditSave),
                 ),
               ),
             ],
@@ -154,12 +156,13 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final distanceText = _distanceCtl.text.trim();
     double? distanceM;
     if (distanceText.isNotEmpty) {
       final km = double.tryParse(distanceText);
       if (km == null || km <= 0) {
-        setState(() => _error = 'Enter a positive distance in km');
+        setState(() => _error = l10n.workoutEditErrDistance);
         return;
       }
       distanceM = km * 1000;
@@ -170,7 +173,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
     if (paceText.isNotEmpty) {
       paceSecPerKm = _parsePaceMmSs(paceText);
       if (paceSecPerKm == null) {
-        setState(() => _error = "Pace must look like 5:30");
+        setState(() => _error = l10n.workoutEditErrPace);
         return;
       }
     }
@@ -192,7 +195,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
       if (mounted) {
         setState(() {
           _saving = false;
-          _error = 'Save failed: $e';
+          _error = l10n.workoutEditSaveError('$e');
         });
       }
     }

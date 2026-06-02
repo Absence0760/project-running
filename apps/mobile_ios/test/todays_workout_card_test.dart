@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/training_service.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/todays_workout_card.dart';
 
 ActivePlanOverview _overview({
@@ -50,6 +51,8 @@ Future<void> _pump(
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: TodaysWorkoutCard(overview: overview, onTap: onTap),
       ),

@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../exif_strip.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
 /// Map a picked filename to the extension we'll store the upload under.
@@ -196,7 +197,8 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
       });
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not open picker: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runPhotosPickerError('$e'));
     }
   }
 
@@ -232,24 +234,26 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
     } catch (e) {
       if (!mounted) return;
       setState(() => _uploading = false);
-      showTopBanner(context, 'Upload failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runPhotosUploadError('$e'));
     }
   }
 
   Future<void> _deletePhoto(RunPhotoRow p) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Delete photo?'),
-            content: const Text('This removes the photo from the run permanently.'),
+            title: Text(l10n.runPhotosDeleteTitle),
+            content: Text(l10n.runPhotosDeleteBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(l10n.runPhotosCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Delete'),
+                child: Text(l10n.runPhotosDeleteConfirm),
               ),
             ],
           ),
@@ -262,7 +266,8 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
       setState(() => _photos = _photos.where((q) => q.id != p.id).toList());
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Delete failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runPhotosDeleteError('$e'));
     }
   }
 
@@ -299,7 +304,8 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
       });
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not update caption: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runPhotosCaptionError('$e'));
     }
   }
 
@@ -347,11 +353,12 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final cs = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
 
     if (_loading) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: Text('Loading photos…'),
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(l10n.runPhotosLoading),
       );
     }
     if (_photos.isEmpty && !_canManage) {
@@ -368,7 +375,7 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
               Icon(Icons.photo_library_outlined,
                   size: 18, color: cs.onSurfaceVariant),
               const SizedBox(width: 6),
-              Text('Photos', style: theme.textTheme.titleMedium),
+              Text(l10n.runPhotosTitle, style: theme.textTheme.titleMedium),
               if (_photos.isNotEmpty) ...[
                 const SizedBox(width: 6),
                 Text('(${_photos.length})',
@@ -380,7 +387,7 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
                 TextButton.icon(
                   onPressed: _pending == null ? _pickPhoto : null,
                   icon: const Icon(Icons.add_a_photo_outlined, size: 18),
-                  label: const Text('Add photo'),
+                  label: Text(l10n.runPhotosAdd),
                 ),
             ],
           ),
@@ -416,8 +423,8 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
                         controller: _pendingCaptionCtrl,
                         maxLength: 280,
                         enabled: !_uploading,
-                        decoration: const InputDecoration(
-                          hintText: 'Caption (optional, 280 chars)',
+                        decoration: InputDecoration(
+                          hintText: l10n.runPhotosCaptionPendingHint,
                           isDense: true,
                           counterText: '',
                         ),
@@ -433,12 +440,14 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
                                       _pending = null;
                                       _pendingCaptionCtrl.clear();
                                     }),
-                            child: const Text('Cancel'),
+                            child: Text(l10n.runPhotosCancel),
                           ),
                           const SizedBox(width: 8),
                           FilledButton(
                             onPressed: _uploading ? null : _uploadPending,
-                            child: Text(_uploading ? 'Uploading…' : 'Upload'),
+                            child: Text(_uploading
+                                ? l10n.runPhotosUploading
+                                : l10n.runPhotosUpload),
                           ),
                         ],
                       ),
@@ -467,6 +476,7 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
 
   Widget _buildTile(RunPhotoRow p, ThemeData theme) {
     final cs = theme.colorScheme;
+    final l10n = AppLocalizations.of(context);
     final editing = _editingId == p.id;
     return Stack(
       children: [
@@ -501,8 +511,8 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
                     TextField(
                       controller: _captionCtrl,
                       maxLength: 280,
-                      decoration: const InputDecoration(
-                        hintText: 'Caption…',
+                      decoration: InputDecoration(
+                        hintText: l10n.runPhotosCaptionHint,
                         isDense: true,
                         counterText: '',
                       ),
@@ -513,11 +523,11 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
                       children: [
                         TextButton(
                           onPressed: () => setState(() => _editingId = null),
-                          child: const Text('Cancel'),
+                          child: Text(l10n.runPhotosCancel),
                         ),
                         FilledButton(
                           onPressed: _saveCaption,
-                          child: const Text('Save'),
+                          child: Text(l10n.runPhotosSave),
                         ),
                       ],
                     ),
@@ -543,13 +553,13 @@ class _RunPhotosState extends State<RunPhotos> with WidgetsBindingObserver {
               children: [
                 _circleBtn(
                   icon: Icons.edit_outlined,
-                  tooltip: 'Edit caption',
+                  tooltip: l10n.runPhotosEditCaption,
                   onPressed: () => _startEdit(p),
                 ),
                 const SizedBox(width: 4),
                 _circleBtn(
                   icon: Icons.delete_outline,
-                  tooltip: 'Delete photo',
+                  tooltip: l10n.runPhotosDeleteTooltip,
                   onPressed: () => _deletePhoto(p),
                 ),
               ],

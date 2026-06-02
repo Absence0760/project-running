@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/run_share_card.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -32,6 +33,8 @@ Future<Preferences> _makePrefs() async {
 Future<void> _pump(WidgetTester tester, Run run, Preferences prefs) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: SizedBox(
           width: 400,

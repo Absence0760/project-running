@@ -2,6 +2,8 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/gen/app_localizations.dart';
+
 /// Persistent banner shown when the signed-in Pro user has a recent
 /// `BILLING_ISSUE` event from RevenueCat — a renewal payment failed
 /// but the entitlement is still active during the store's grace
@@ -34,12 +36,13 @@ bool shouldShowBillingIssueBanner({
 /// Pure for testability; wall-clock `now` is injectable so the
 /// boundary cases ("just now" + 23h59m, "1 day" + 24h00m) are
 /// pinnable without sleeping.
-String relativeDaysSince(DateTime since, [DateTime? now]) {
+String relativeDaysSince(AppLocalizations l10n, DateTime since,
+    [DateTime? now]) {
   final n = now ?? DateTime.now();
   final days = n.difference(since).inDays;
-  if (days <= 0) return 'today';
-  if (days == 1) return 'yesterday';
-  return '$days days ago';
+  if (days <= 0) return l10n.billingToday;
+  if (days == 1) return l10n.billingYesterday;
+  return l10n.billingDaysAgo(days);
 }
 
 class BillingIssueBanner extends StatefulWidget {
@@ -124,6 +127,7 @@ class _BillingIssueBannerState extends State<BillingIssueBanner>
 
     final since = _billingIssueAt!;
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Material(
       color: theme.colorScheme.errorContainer,
       child: Padding(
@@ -141,14 +145,15 @@ class _BillingIssueBannerState extends State<BillingIssueBanner>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Pro renewal failed ${relativeDaysSince(since)}.',
+                    l10n.billingRenewalFailed(
+                        relativeDaysSince(l10n, since)),
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: theme.colorScheme.onErrorContainer,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
-                    'Update your card or you\'ll be downgraded to Free.',
+                    l10n.billingRenewalBody,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onErrorContainer,
                     ),
@@ -162,7 +167,7 @@ class _BillingIssueBannerState extends State<BillingIssueBanner>
               style: FilledButton.styleFrom(
                 visualDensity: VisualDensity.compact,
               ),
-              child: const Text('Manage'),
+              child: Text(l10n.billingManage),
             ),
           ],
         ),

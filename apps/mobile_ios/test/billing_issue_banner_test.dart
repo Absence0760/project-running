@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:mobile_android/l10n/gen/app_localizations.dart';
+import 'package:mobile_android/l10n/gen/app_localizations_en.dart';
 import 'package:mobile_android/widgets/billing_issue_banner.dart';
 
 /// Pure-logic tests for the BillingIssueBanner visibility predicate
@@ -100,35 +102,36 @@ void main() {
 
   group('relativeDaysSince', () {
     final ref = DateTime(2026, 5, 1, 12, 0, 0);
+    final AppLocalizations l10n = AppLocalizationsEn();
 
     test('< 24 h ago → "today"', () {
       // The same calendar day from the user's POV. Difference.inDays
       // truncates to 0.
       expect(
-        relativeDaysSince(DateTime(2026, 5, 1, 6, 0, 0), ref),
+        relativeDaysSince(l10n, DateTime(2026, 5, 1, 6, 0, 0), ref),
         'today',
       );
       // 23h59m ago — still 0 calendar days under inDays.
       expect(
-        relativeDaysSince(DateTime(2026, 4, 30, 12, 0, 1), ref),
+        relativeDaysSince(l10n, DateTime(2026, 4, 30, 12, 0, 1), ref),
         'today',
       );
     });
 
     test('exactly 24 h ago → "yesterday"', () {
       expect(
-        relativeDaysSince(DateTime(2026, 4, 30, 12, 0, 0), ref),
+        relativeDaysSince(l10n, DateTime(2026, 4, 30, 12, 0, 0), ref),
         'yesterday',
       );
     });
 
     test('48 h+ → "N days ago"', () {
       expect(
-        relativeDaysSince(DateTime(2026, 4, 29, 12, 0, 0), ref),
+        relativeDaysSince(l10n, DateTime(2026, 4, 29, 12, 0, 0), ref),
         '2 days ago',
       );
       expect(
-        relativeDaysSince(DateTime(2026, 4, 1, 12, 0, 0), ref),
+        relativeDaysSince(l10n, DateTime(2026, 4, 1, 12, 0, 0), ref),
         '30 days ago',
       );
     });
@@ -137,7 +140,7 @@ void main() {
       // If the server's billing_issue_at is slightly ahead of local
       // wall clock, don't show "-1 days ago". Clamp to today.
       expect(
-        relativeDaysSince(DateTime(2026, 5, 2, 12, 0, 0), ref),
+        relativeDaysSince(l10n, DateTime(2026, 5, 2, 12, 0, 0), ref),
         'today',
       );
     });
@@ -146,7 +149,7 @@ void main() {
       // Smoke test that the optional second arg defaults sensibly.
       // We check the shape of the output, not the value, since
       // wall clock makes assertions brittle.
-      final out = relativeDaysSince(DateTime.now());
+      final out = relativeDaysSince(l10n, DateTime.now());
       expect(out, anyOf('today', startsWith('1'), startsWith('0')));
     });
   });

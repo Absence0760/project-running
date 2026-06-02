@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import 'live_run_map.dart' show currentTileUrl;
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../tile_cache.dart';
@@ -92,7 +93,8 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
     } catch (e) {
       debugPrint('Failed to capture run share card: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not create share image');
+        showTopBanner(
+            context, AppLocalizations.of(context).shareCardImageError);
       }
     } finally {
       if (mounted) setState(() => _capturing = false);
@@ -120,7 +122,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
     } catch (e) {
       debugPrint('Failed to export run file: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not export file');
+        showTopBanner(context, AppLocalizations.of(context).shareCardFileError);
       }
     }
   }
@@ -129,6 +131,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
   Widget build(BuildContext context) {
     final mq = MediaQuery.of(context);
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       top: false,
       child: Padding(
@@ -142,7 +145,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Share run', style: theme.textTheme.titleMedium),
+              Text(l10n.shareCardRunTitle, style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -172,7 +175,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
                       child: OutlinedButton.icon(
                         onPressed: _capturing ? null : () {},
                         icon: const Icon(Icons.route_outlined),
-                        label: const Text('Export'),
+                        label: Text(l10n.shareCardExport),
                       ),
                     ),
                   ),
@@ -190,7 +193,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
                               ),
                             )
                           : const Icon(Icons.image_outlined),
-                      label: const Text('Image'),
+                      label: Text(l10n.shareCardImage),
                     ),
                   ),
                 ],
@@ -230,6 +233,7 @@ class RunShareCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final unit = preferences.unit;
+    final l10n = AppLocalizations.of(context);
     final activity =
         ActivityType.fromName(run.metadata?['activity_type'] as String?);
     final moving = _movingTime();
@@ -243,7 +247,7 @@ class RunShareCard extends StatelessWidget {
           Expanded(flex: 3, child: _buildMap(track)),
           Expanded(
             flex: 2,
-            child: _buildStats(activity, unit, moving, pace),
+            child: _buildStats(l10n, activity, unit, moving, pace),
           ),
         ],
       ),
@@ -357,6 +361,7 @@ class RunShareCard extends StatelessWidget {
   }
 
   Widget _buildStats(
+    AppLocalizations l10n,
     ActivityType activity,
     DistanceUnit unit,
     Duration movingTime,
@@ -402,16 +407,18 @@ class RunShareCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               _stat(
-                label: 'Distance',
+                label: l10n.shareCardStatDistance,
                 value: UnitFormat.distanceValue(run.distanceMetres, unit),
                 unitLabel: UnitFormat.distanceLabel(unit),
               ),
               _stat(
-                label: 'Time',
+                label: l10n.shareCardStatTime,
                 value: _formatDuration(movingTime),
               ),
               _stat(
-                label: activity.usesSpeed ? 'Speed' : 'Pace',
+                label: activity.usesSpeed
+                    ? l10n.shareCardStatSpeed
+                    : l10n.shareCardStatPace,
                 value: activity.usesSpeed
                     ? UnitFormat.speed(pace, unit)
                     : UnitFormat.pace(pace, unit),
@@ -421,13 +428,13 @@ class RunShareCard extends StatelessWidget {
               ),
             ],
           ),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'RUN',
-                style: TextStyle(
+                l10n.shareCardBrandRun,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
@@ -435,7 +442,7 @@ class RunShareCard extends StatelessWidget {
                   height: 1.0,
                 ),
               ),
-              Text(
+              const Text(
                 '© MapTiler · OpenStreetMap',
                 style: TextStyle(
                   color: Color(0xFF6B7280),

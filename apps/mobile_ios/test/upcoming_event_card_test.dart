@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import '../lib/social_service.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/upcoming_event_card.dart';
 
 EventView _event({
@@ -34,6 +35,8 @@ Future<void> _pump(
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: UpcomingEventCard(event: event, onTap: onTap),
       ),

@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/training_service.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/workout_edit_sheet.dart';
 
 class _FakeTraining extends TrainingService {
@@ -59,6 +60,8 @@ Future<bool?> _pumpSheet(
   await tester.binding.setSurfaceSize(const Size(400, 700));
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: Builder(
           builder: (ctx) => TextButton(

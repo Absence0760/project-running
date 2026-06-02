@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
+
 /// Shared empty-but-errored state for any list/detail screen whose
 /// primary data fetch hit a backend failure or timeout. Keeps copy and
 /// layout consistent across tabs so users learn one recovery affordance.
@@ -47,7 +49,7 @@ class ErrorState extends StatelessWidget {
               FilledButton.tonalIcon(
                 onPressed: onRetry,
                 icon: const Icon(Icons.refresh),
-                label: const Text('Retry'),
+                label: Text(AppLocalizations.of(context).errorStateRetry),
               ),
             ],
           ),

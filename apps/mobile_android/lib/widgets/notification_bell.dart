@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../screens/profile_screen.dart';
 
 /// Notification bell icon for the dashboard action toolbar. Mirrors
@@ -72,7 +73,7 @@ class _NotificationBellState extends State<NotificationBell> {
       clipBehavior: Clip.none,
       children: [
         IconButton(
-          tooltip: 'Notifications',
+          tooltip: AppLocalizations.of(context).notificationBellTooltip,
           icon: const Icon(Icons.notifications_outlined),
           onPressed: _open,
         ),

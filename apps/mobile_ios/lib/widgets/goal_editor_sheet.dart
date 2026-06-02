@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../goals.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 
@@ -33,9 +34,11 @@ Future<String?> showGoalEditorSheet(
   return Navigator.of(context).push<String>(
     MaterialPageRoute<String>(
       fullscreenDialog: true,
-      builder: (_) => Scaffold(
+      builder: (ctx) => Scaffold(
         appBar: AppBar(
-          title: Text(existing == null ? 'New goal' : 'Edit goal'),
+          title: Text(existing == null
+              ? AppLocalizations.of(ctx).goalEditorTitleNew
+              : AppLocalizations.of(ctx).goalEditorTitleEdit),
         ),
         body: SafeArea(
           child: _GoalEditorSheet(
@@ -117,6 +120,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final mq = MediaQuery.of(context);
     final unit = widget.preferences.unit;
     final isEditing = widget.existing != null;
@@ -140,51 +144,51 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
             // Title now comes from the host Scaffold's AppBar (set
             // by showGoalEditorSheet's fullscreenDialog wrapper).
             // Drop the inline title so the heading isn't duplicated.
-            _sectionLabel(theme, 'Name (optional)'),
+            _sectionLabel(theme, l10n.goalEditorNameLabel),
             const SizedBox(height: 8),
             TextField(
               controller: _titleCtl,
               textInputAction: TextInputAction.next,
-              decoration: const InputDecoration(
+              decoration: InputDecoration(
                 isDense: true,
-                contentPadding: EdgeInsets.symmetric(
+                contentPadding: const EdgeInsets.symmetric(
                   horizontal: 12,
                   vertical: 12,
                 ),
-                border: OutlineInputBorder(),
-                hintText: 'e.g. Base miles',
+                border: const OutlineInputBorder(),
+                hintText: l10n.goalEditorNameHint,
               ),
             ),
             const SizedBox(height: 24),
-            _sectionLabel(theme, 'Period'),
+            _sectionLabel(theme, l10n.goalEditorPeriod),
             const SizedBox(height: 8),
             SegmentedButton<GoalPeriod>(
               showSelectedIcon: false,
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: GoalPeriod.week,
-                  label: Text('This week'),
+                  label: Text(l10n.goalEditorThisWeek),
                 ),
                 ButtonSegment(
                   value: GoalPeriod.month,
-                  label: Text('This month'),
+                  label: Text(l10n.goalEditorThisMonth),
                 ),
               ],
               selected: {_period},
               onSelectionChanged: (s) => setState(() => _period = s.first),
             ),
             const SizedBox(height: 24),
-            _sectionLabel(theme, 'Targets'),
+            _sectionLabel(theme, l10n.goalEditorTargets),
             const SizedBox(height: 4),
             Text(
-              'Set any combination. Blank fields are ignored.',
+              l10n.goalEditorTargetsHelp,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
             ),
             const SizedBox(height: 16),
             _targetField(
-              label: 'Distance',
+              label: l10n.goalEditorTargetDistance,
               icon: Icons.straighten,
               controller: _distanceCtl,
               hint: '-',
@@ -194,17 +198,17 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
             ),
             const SizedBox(height: 12),
             _targetField(
-              label: 'Time',
+              label: l10n.goalEditorTargetTime,
               icon: Icons.timer_outlined,
               controller: _timeCtl,
               hint: '-',
-              suffix: 'min',
+              suffix: l10n.goalEditorSuffixMin,
               keyboardType:
                   const TextInputType.numberWithOptions(decimal: true),
             ),
             const SizedBox(height: 12),
             _targetField(
-              label: 'Avg pace',
+              label: l10n.goalEditorTargetPace,
               icon: Icons.speed,
               controller: _paceCtl,
               hint: '-',
@@ -213,11 +217,11 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
             ),
             const SizedBox(height: 12),
             _targetField(
-              label: 'Runs',
+              label: l10n.goalEditorTargetRuns,
               icon: Icons.directions_run,
               controller: _countCtl,
               hint: '-',
-              suffix: 'runs',
+              suffix: l10n.goalEditorSuffixRuns,
               keyboardType: TextInputType.number,
             ),
             if (_error != null) ...[
@@ -235,18 +239,18 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
                   TextButton.icon(
                     onPressed: _delete,
                     icon: const Icon(Icons.delete_outline),
-                    label: const Text('Delete'),
+                    label: Text(l10n.goalEditorDelete),
                     style: TextButton.styleFrom(foregroundColor: Colors.red),
                   ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.pop(context),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.goalEditorCancel),
                 ),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _save,
-                  child: const Text('Save'),
+                  child: Text(l10n.goalEditorSave),
                 ),
               ],
             ),
@@ -311,6 +315,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
 
     // Distance
@@ -319,7 +324,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     if (distanceText.isNotEmpty) {
       final n = double.tryParse(distanceText);
       if (n == null || n <= 0) {
-        setState(() => _error = 'Distance: enter a positive number');
+        setState(() => _error = l10n.goalEditorErrDistance);
         return;
       }
       distance = unit == DistanceUnit.mi ? n * _metresPerMile : n * 1000;
@@ -331,7 +336,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     if (timeText.isNotEmpty) {
       final n = double.tryParse(timeText);
       if (n == null || n <= 0) {
-        setState(() => _error = 'Time: enter a positive number of minutes');
+        setState(() => _error = l10n.goalEditorErrTime);
         return;
       }
       time = n * 60;
@@ -343,7 +348,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     if (paceText.isNotEmpty) {
       final secPerUnit = _parsePace(paceText);
       if (secPerUnit == null || secPerUnit <= 0) {
-        setState(() => _error = 'Pace: use mm:ss (e.g. 5:00)');
+        setState(() => _error = l10n.goalEditorErrPace);
         return;
       }
       pace = unit == DistanceUnit.mi
@@ -357,14 +362,14 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     if (countText.isNotEmpty) {
       final n = int.tryParse(countText);
       if (n == null || n <= 0) {
-        setState(() => _error = 'Runs: enter a positive whole number');
+        setState(() => _error = l10n.goalEditorErrRuns);
         return;
       }
       count = n.toDouble();
     }
 
     if (distance == null && time == null && pace == null && count == null) {
-      setState(() => _error = 'Set at least one target');
+      setState(() => _error = l10n.goalEditorErrNoTarget);
       return;
     }
 
@@ -382,15 +387,16 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
     // Mirror the *single* weekly distance goal into the universal bag
     // so it roams to web/iOS. Other shapes stay client-only.
     await widget.settingsSync?.pushWeeklyDistanceGoal();
-    if (mounted) Navigator.pop(context, 'Goal saved');
+    if (mounted) Navigator.pop(context, l10n.goalEditorSavedAnnounce);
   }
 
   Future<void> _delete() async {
+    final l10n = AppLocalizations.of(context);
     final id = widget.existing?.id;
     if (id == null) return;
     await widget.preferences.removeGoal(id);
     await widget.settingsSync?.pushWeeklyDistanceGoal();
-    if (mounted) Navigator.pop(context, 'Goal deleted');
+    if (mounted) Navigator.pop(context, l10n.goalEditorDeletedAnnounce);
   }
 
   int? _parsePace(String s) {

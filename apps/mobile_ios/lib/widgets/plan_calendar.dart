@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 
 /// Month-by-month calendar projection of a training plan, mirroring the
@@ -60,6 +61,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final months = _months;
     if (months.isEmpty) return const SizedBox.shrink();
     final current = months[_currentIdx];
@@ -91,7 +93,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
                 onPressed: _currentIdx > 0
                     ? () => setState(() => _currentIdx -= 1)
                     : null,
-                tooltip: 'Previous month',
+                tooltip: l10n.planCalendarPrevMonth,
               ),
               Text(
                 '${_monthLabel(current.month)} ${current.year}',
@@ -102,7 +104,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
                 onPressed: _currentIdx < months.length - 1
                     ? () => setState(() => _currentIdx += 1)
                     : null,
-                tooltip: 'Next month',
+                tooltip: l10n.planCalendarNextMonth,
               ),
             ],
           ),

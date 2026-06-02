@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import 'top_banner.dart';
 
 /// Run-detail gear chips. Mirrors `apps/web/src/lib/components/
@@ -57,7 +58,8 @@ class _RunGearChipsState extends State<RunGearChips> {
       myGear = await widget.api.fetchMyGearWithDistance();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Failed to load gear: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runGearChipsLoadError('$e'));
       return;
     }
     if (!mounted) return;
@@ -67,6 +69,7 @@ class _RunGearChipsState extends State<RunGearChips> {
       isScrollControlled: true,
       builder: (ctx) {
         return StatefulBuilder(builder: (ctx, setLocal) {
+          final l10n = AppLocalizations.of(ctx);
           final active = myGear.where((g) => g['retired_at'] == null).toList();
           return Padding(
             padding: EdgeInsets.fromLTRB(
@@ -75,15 +78,14 @@ class _RunGearChipsState extends State<RunGearChips> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Tag gear used on this run',
+                Text(l10n.runGearChipsPickerTitle,
                     style: Theme.of(ctx).textTheme.titleMedium),
                 const SizedBox(height: 12),
                 if (active.isEmpty)
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 24),
                     child: Text(
-                      'You haven\'t registered any gear yet. Add some in '
-                      'Settings → Gear.',
+                      l10n.runGearChipsEmpty,
                       style: Theme.of(ctx).textTheme.bodyMedium,
                     ),
                   )
@@ -129,14 +131,14 @@ class _RunGearChipsState extends State<RunGearChips> {
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(ctx),
-                      child: const Text('Cancel'),
+                      child: Text(l10n.runGearChipsCancel),
                     ),
                     const SizedBox(width: 8),
                     FilledButton(
                       onPressed: active.isEmpty
                           ? null
                           : () => Navigator.pop(ctx, picked),
-                      child: const Text('Save'),
+                      child: Text(l10n.runGearChipsSave),
                     ),
                   ],
                 ),
@@ -152,7 +154,8 @@ class _RunGearChipsState extends State<RunGearChips> {
       await _load();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Save failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runGearChipsSaveError('$e'));
     }
   }
 
@@ -161,6 +164,7 @@ class _RunGearChipsState extends State<RunGearChips> {
     if (_loading) return const SizedBox.shrink();
     if (_assigned.isEmpty && !_canManage) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Wrap(
@@ -187,7 +191,9 @@ class _RunGearChipsState extends State<RunGearChips> {
                 visualDensity: VisualDensity.compact,
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
               ),
-              child: Text(_assigned.isEmpty ? '+ Tag gear' : 'Edit'),
+              child: Text(_assigned.isEmpty
+                  ? l10n.runGearChipsTag
+                  : l10n.runGearChipsEdit),
             ),
         ],
       ),

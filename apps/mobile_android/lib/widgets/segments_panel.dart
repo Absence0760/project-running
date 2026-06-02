@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import 'top_banner.dart';
 
@@ -119,12 +120,13 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
     if (name.isEmpty) return;
     final start = double.tryParse(_startCtrl.text) ?? 0;
     final end = double.tryParse(_endCtrl.text) ?? 0;
+    final l10n = AppLocalizations.of(context);
     if (end <= start) {
-      _toast('End must be greater than start');
+      _toast(l10n.segmentsPanelErrEndAfterStart);
       return;
     }
     if (end - start < 100) {
-      _toast('Segment must be at least 100 m');
+      _toast(l10n.segmentsPanelErrMinLength);
       return;
     }
     setState(() => _creating = true);
@@ -147,24 +149,25 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _creating = false);
-      _toast('Could not create segment: $e');
+      _toast(AppLocalizations.of(context).segmentsPanelCreateError('$e'));
     }
   }
 
   Future<void> _confirmDelete(SegmentRow seg) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete segment?'),
-        content: Text('“${seg.name}” will be removed.'),
+        title: Text(l10n.segmentsPanelDeleteTitle),
+        content: Text(l10n.segmentsPanelDeleteBody(seg.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.segmentsPanelCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete'),
+            child: Text(l10n.segmentsPanelDeleteConfirm),
           ),
         ],
       ),
@@ -179,7 +182,7 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
         if (_openSegmentId == seg.id) _openSegmentId = null;
       });
     } catch (e) {
-      _toast('Delete failed: $e');
+      _toast(AppLocalizations.of(context).segmentsPanelDeleteError('$e'));
     }
   }
 
@@ -191,6 +194,7 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
       child: Column(
@@ -198,14 +202,16 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
         children: [
           Row(
             children: [
-              Text('Segments', style: theme.textTheme.titleMedium),
+              Text(l10n.segmentsPanelTitle, style: theme.textTheme.titleMedium),
               const Spacer(),
               if (widget.canCreate)
                 OutlinedButton.icon(
                   onPressed: () =>
                       setState(() => _showCreate = !_showCreate),
                   icon: Icon(_showCreate ? Icons.close : Icons.add, size: 18),
-                  label: Text(_showCreate ? 'Cancel' : 'New segment'),
+                  label: Text(_showCreate
+                      ? l10n.segmentsPanelCancel
+                      : l10n.segmentsPanelNew),
                 ),
             ],
           ),
@@ -225,7 +231,7 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'Loading segments…',
+                l10n.segmentsPanelLoading,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -235,7 +241,7 @@ class _SegmentsPanelState extends State<SegmentsPanel> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
               child: Text(
-                'No segments on this route yet.',
+                l10n.segmentsPanelEmpty,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -294,7 +300,8 @@ class _CreateForm extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hint = 'route is ${routeDistanceM.round()} m';
+    final l10n = AppLocalizations.of(context);
+    final hint = l10n.segmentsPanelRouteHint(routeDistanceM.round());
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -304,10 +311,10 @@ class _CreateForm extends StatelessWidget {
             TextField(
               controller: nameCtrl,
               maxLength: 120,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'Climb of doom',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.segmentsPanelNameLabel,
+                hintText: l10n.segmentsPanelNameHint,
+                border: const OutlineInputBorder(),
                 isDense: true,
               ),
             ),
@@ -318,9 +325,9 @@ class _CreateForm extends StatelessWidget {
                   child: TextField(
                     controller: startCtrl,
                     keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Start (m)',
-                      border: OutlineInputBorder(),
+                    decoration: InputDecoration(
+                      labelText: l10n.segmentsPanelStartLabel,
+                      border: const OutlineInputBorder(),
                       isDense: true,
                     ),
                   ),
@@ -331,7 +338,7 @@ class _CreateForm extends StatelessWidget {
                     controller: endCtrl,
                     keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      labelText: 'End (m)',
+                      labelText: l10n.segmentsPanelEndLabel,
                       helperText: hint,
                       border: const OutlineInputBorder(),
                       isDense: true,
@@ -351,7 +358,7 @@ class _CreateForm extends StatelessWidget {
                         height: 16,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Create'),
+                    : Text(l10n.segmentsPanelCreate),
               ),
             ),
           ],
@@ -423,7 +430,8 @@ class _SegmentTile extends StatelessWidget {
                   ),
                   if (canDelete)
                     IconButton(
-                      tooltip: 'Delete segment',
+                      tooltip: AppLocalizations.of(context)
+                          .segmentsPanelDeleteTooltip,
                       icon: const Icon(Icons.delete_outline, size: 18),
                       onPressed: onDelete,
                     ),
@@ -494,6 +502,7 @@ class _TierFilters extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final hasFilter = genderFilter != null || ageFilter != null;
     return Container(
       padding: const EdgeInsets.all(8),
@@ -510,12 +519,18 @@ class _TierFilters extends StatelessWidget {
             child: DropdownButton<String?>(
               value: genderFilter,
               isDense: true,
-              hint: const Text('All genders'),
-              items: const [
-                DropdownMenuItem(value: null, child: Text('All genders')),
-                DropdownMenuItem(value: 'male', child: Text('Men')),
-                DropdownMenuItem(value: 'female', child: Text('Women')),
-                DropdownMenuItem(value: 'nonbinary', child: Text('Nonbinary')),
+              hint: Text(l10n.segmentsPanelAllGenders),
+              items: [
+                DropdownMenuItem(
+                    value: null, child: Text(l10n.segmentsPanelAllGenders)),
+                DropdownMenuItem(
+                    value: 'male', child: Text(l10n.segmentsPanelGenderMen)),
+                DropdownMenuItem(
+                    value: 'female',
+                    child: Text(l10n.segmentsPanelGenderWomen)),
+                DropdownMenuItem(
+                    value: 'nonbinary',
+                    child: Text(l10n.segmentsPanelGenderNonbinary)),
               ],
               onChanged: onGenderChanged,
             ),
@@ -524,9 +539,10 @@ class _TierFilters extends StatelessWidget {
             child: DropdownButton<String?>(
               value: ageFilter,
               isDense: true,
-              hint: const Text('All ages'),
+              hint: Text(l10n.segmentsPanelAllAges),
               items: [
-                const DropdownMenuItem(value: null, child: Text('All ages')),
+                DropdownMenuItem(
+                    value: null, child: Text(l10n.segmentsPanelAllAges)),
                 for (final b in kSegmentAgeBands)
                   DropdownMenuItem(value: b, child: Text(b)),
               ],
@@ -537,7 +553,7 @@ class _TierFilters extends StatelessWidget {
             TextButton.icon(
               onPressed: onReset,
               icon: const Icon(Icons.close, size: 16),
-              label: const Text('Reset'),
+              label: Text(l10n.segmentsPanelResetFilters),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -568,11 +584,12 @@ class _Leaderboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     if (entries == null) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          'Loading…',
+          l10n.segmentsPanelLeaderboardLoading,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -584,8 +601,8 @@ class _Leaderboard extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(
           filtered
-              ? 'No efforts match this filter — try widening it.'
-              : 'No efforts yet — be the first to run this segment.',
+              ? l10n.segmentsPanelLeaderboardEmptyFiltered
+              : l10n.segmentsPanelLeaderboardEmpty,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),
@@ -630,7 +647,7 @@ class _CrownBanner extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'You hold this crown — $label.',
+              AppLocalizations.of(context).segmentsPanelCrownBanner(label),
               style: theme.textTheme.bodySmall?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -694,7 +711,8 @@ class _LeaderboardRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              entry.athlete.displayName ?? 'Runner',
+              entry.athlete.displayName ??
+                  AppLocalizations.of(context).segmentsPanelRunnerFallback,
               style: theme.textTheme.bodyMedium,
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
