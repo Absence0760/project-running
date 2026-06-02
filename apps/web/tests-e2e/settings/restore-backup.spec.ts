@@ -154,17 +154,21 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 		async ({ page }) => {
 			const titleA = `e2e-restore-runs-A ${Date.now()}`;
 			const titleB = `e2e-restore-runs-B ${Date.now()}`;
+			// Date the imported runs to "just now" so they sort to the top of
+			// the (paginated, most-recent-first) all-time list — otherwise the
+			// two rows land on a later page behind the seed's ~200 runs and
+			// the by-href asserts below never see them on page 1.
 			const buf = await buildBackupZip([
 				runRow({
 					id: RESTORE_ID_2,
-					started_at: '2026-04-01T08:00:00.000Z',
+					started_at: new Date(Date.now() - 2 * 60_000).toISOString(),
 					duration_s: 1500,
 					distance_m: 5000,
 					title: titleA
 				}),
 				runRow({
 					id: RESTORE_ID_3,
-					started_at: '2026-04-02T08:00:00.000Z',
+					started_at: new Date(Date.now() - 60_000).toISOString(),
 					duration_s: 1800,
 					distance_m: 6000,
 					title: titleB
@@ -187,11 +191,9 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 			// rendered link text is "{date} {source} {distance} ..."
 			// and doesn't include the metadata title.
 			//
-			// /runs's "Date range" filter defaults to "Today" on a
-			// fresh load — our imported runs are dated April 2026, so
-			// flip to "All time" before asserting. This mirrors the
-			// realistic flow: restore, then widen the date range to
-			// find historical runs.
+			// /runs's "Date range" filter defaults to "Today" on a fresh
+			// load; flip to "All time" before asserting so the assert doesn't
+			// depend on the local-midnight boundary.
 			await page.goto('/runs');
 			await page.getByRole('combobox', { name: /Date range/i }).selectOption('all');
 			await expect(page.locator(`a[href="/runs/${RESTORE_ID_2}"]`))
