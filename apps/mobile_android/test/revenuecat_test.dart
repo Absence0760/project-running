@@ -67,4 +67,13 @@ void main() {
       expect(url, isNull);
     });
   });
+
+  group('proMonthlyPriceString', () {
+    test('returns null when SDK has no API key', () async {
+      // Unconfigured build → configureRevenueCat returns false → null, so the
+      // Pro tile falls back to the $9.99 USD list price (+ regional note).
+      final price = await proMonthlyPriceString('user-1');
+      expect(price, isNull);
+    });
+  });
 }

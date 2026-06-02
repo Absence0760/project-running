@@ -177,6 +177,29 @@ Future<String?> managementUrl(
   }
 }
 
+/// The store-localised monthly Pro price string (e.g. `$9.99`, `9,99 €`,
+/// `¥1,200`) from the current RevenueCat offering, or null when the SDK
+/// isn't configured / no Pro package is available. Apple Guideline 3.1.1 +
+/// Play subscription policy require the displayed price to come from the
+/// store — it varies by territory — so the UI shows this when configured and
+/// falls back to the USD list price only otherwise. Reuses [pickProPackage]
+/// so the priced package matches the one [startProCheckout] purchases.
+Future<String?> proMonthlyPriceString(
+  String userId, {
+  String? keyOverride,
+}) async {
+  if (!await configureRevenueCat(userId, keyOverride: keyOverride)) {
+    return null;
+  }
+  try {
+    final offerings = await Purchases.getOfferings();
+    return pickProPackage(offerings)?.storeProduct.priceString;
+  } catch (e) {
+    debugPrint('RevenueCat price fetch failed: $e');
+    return null;
+  }
+}
+
 /// Test-only reset — clears the cached configuration so a second test
 /// run sees `isConfigured == false` again.
 @visibleForTesting

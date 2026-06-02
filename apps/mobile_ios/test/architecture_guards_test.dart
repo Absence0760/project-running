@@ -2435,16 +2435,31 @@ void main() {
       final source =
           File('lib/screens/settings_pro_screen.dart').readAsStringSync();
       final arb = File('lib/l10n/app_en.arb').readAsStringSync();
-      // Title copy is localized: the screen passes the $9.99 price into
+      // Title copy is localized: the screen passes a price into
       // proSubscribeTitle, whose English template is "Subscribe to Pro —
-      // {price}/month". Pin the price arg at the call site AND the
-      // {price}/month shape in the ARB so the disclosure can't be stripped.
+      // {price}/month". The price is the STORE-localised amount (Apple 3.1.1 /
+      // Play policy: price varies by territory and must come from the store),
+      // with the $9.99 USD list price as a fallback. Pin all three so neither
+      // the store-price wiring nor the disclosure can be stripped.
       expect(
         source,
-        contains(r"l10n.proSubscribeTitle('\$9.99')"),
-        reason: 'Subscribe-to-Pro tile title must include the price '
-            '(\$9.99/month) for App Store + Play in-app disclosure '
-            'compliance.',
+        contains('l10n.proSubscribeTitle(priceLabel)'),
+        reason: 'Subscribe-to-Pro tile title must include the price for '
+            'App Store + Play in-app disclosure compliance.',
+      );
+      expect(
+        source,
+        contains('proMonthlyPriceString('),
+        reason: 'Subscribe-to-Pro tile must source the displayed price from '
+            'the store (RevenueCat proMonthlyPriceString) — Apple 3.1.1 / Play '
+            'policy forbid a hard-coded price that ignores the territory.',
+      );
+      expect(
+        source,
+        contains(r"$9.99"),
+        reason: 'settings_pro_screen.dart must keep the \$9.99 USD list price '
+            'as the fallback shown when RevenueCat is unconfigured or the '
+            'offering has not yet loaded.',
       );
       expect(
         arb,

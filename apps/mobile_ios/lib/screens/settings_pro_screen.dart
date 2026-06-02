@@ -7,8 +7,42 @@ import '../l10n/gen/app_localizations.dart';
 import '../revenuecat.dart';
 import '../widgets/top_banner.dart';
 
-class SettingsProScreen extends StatelessWidget {
+class SettingsProScreen extends StatefulWidget {
   const SettingsProScreen({super.key});
+
+  @override
+  State<SettingsProScreen> createState() => _SettingsProScreenState();
+}
+
+class _SettingsProScreenState extends State<SettingsProScreen> {
+  // USD list price — the fallback shown only until/unless RevenueCat returns
+  // the territory-localised price. Apple Guideline 3.1.1 / Play subscription
+  // policy require the displayed amount to come from the store (it varies by
+  // region), so this constant is a last resort for unconfigured builds and
+  // the brief window before the offering loads.
+  static const String _usdListPrice = r'$9.99';
+
+  // The store-localised monthly price once RevenueCat resolves the offering;
+  // null until then (and on unconfigured builds).
+  String? _storePrice;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadStorePrice();
+  }
+
+  Future<void> _loadStorePrice() async {
+    // Check configuration first: on unconfigured builds (dev / CI / tests)
+    // this returns before touching Supabase.instance, so the screen mounts
+    // without a live Supabase — matching the lazy access in the tap handlers.
+    if (!isRevenueCatConfigured()) return;
+    final userId = Supabase.instance.client.auth.currentUser?.id;
+    if (userId == null) return;
+    final price = await proMonthlyPriceString(userId);
+    if (!mounted || price == null) return;
+    setState(() => _storePrice = price);
+  }
 
   Future<void> _openExternal(BuildContext context, String url) async {
     final uri = Uri.parse(url);
@@ -95,6 +129,12 @@ class SettingsProScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context);
     final rcConfigured = isRevenueCatConfigured();
+    // Prefer the store-localised price; fall back to the USD list price until
+    // (or unless) the offering resolves. When we have the real localised
+    // price the USD-disclaimer note below is redundant + misleading, so it
+    // only shows on the fallback.
+    final priceLabel = _storePrice ?? _usdListPrice;
+    final showRegionalNote = _storePrice == null;
     return Scaffold(
       appBar: AppBar(title: Text(l10n.proTitle)),
       body: SafeArea(
@@ -102,7 +142,7 @@ class SettingsProScreen extends StatelessWidget {
           children: [
             ListTile(
               leading: const Icon(Icons.workspace_premium_outlined),
-              title: Text(l10n.proSubscribeTitle('\$9.99')),
+              title: Text(l10n.proSubscribeTitle(priceLabel)),
               subtitle: Text(
                 rcConfigured
                     ? l10n.proSubscribeSubtitleConfigured
@@ -115,20 +155,20 @@ class SettingsProScreen extends StatelessWidget {
               onTap: () => _startProCheckout(context),
             ),
             // Honesty note mirroring web /settings/upgrade (audit-findings
-            // 2026-05-30 Medium [regional]). The $9.99 figure is the USD
-            // list price; until a RevenueCat project is provisioned the
-            // store-localised price isn't available, so we disclose the
-            // billing currency + regional availability rather than imply a
-            // local-currency amount. See followups.md § Mobile.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
-              child: Text(
-                l10n.proRegionalNote,
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+            // 2026-05-30 Medium [regional]). Shown only when we're falling
+            // back to the $9.99 USD list price (RevenueCat unconfigured or
+            // offering not yet loaded); once the store returns a localised
+            // price the note is dropped. See followups.md § Mobile.
+            if (showRegionalNote)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
+                child: Text(
+                  l10n.proRegionalNote,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                ),
               ),
-            ),
             ListTile(
               leading: const Icon(Icons.restore),
               title: Text(l10n.proRestorePurchases),
