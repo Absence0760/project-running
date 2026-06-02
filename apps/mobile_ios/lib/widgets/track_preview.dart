@@ -244,7 +244,18 @@ class _StaticMapPreview extends StatelessWidget {
           final h = constraints.maxHeight.isFinite
               ? constraints.maxHeight.round().clamp(40, 1024)
               : 144;
-          final url = _buildUrl(w, h);
+          // The local tileserver-gl static endpoint has no `@2x` density
+          // suffix, so a thumbnail-sized request renders the sparse
+          // Protomaps `basic` style + the baked path at 1:1 — a chunky
+          // 3-px line on a soft, low-res map (the "blob" the user saw).
+          // Request it at 2x and let BoxFit.cover downsample for a crisp,
+          // thin line + sharper map. MapTiler gets density from its own
+          // `@2x` suffix in _buildUrl, so it stays at 1x here.
+          final scale = localTileUrlTemplate.isNotEmpty ? 2 : 1;
+          final url = _buildUrl(
+            (w * scale).clamp(40, 2048),
+            (h * scale).clamp(40, 2048),
+          );
           return Image.network(
             url,
             width: w.toDouble(),
