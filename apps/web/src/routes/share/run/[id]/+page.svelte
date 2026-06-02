@@ -17,6 +17,12 @@
 	let heroDistance = $derived(formatKmStable(data.run?.distance_m));
 	let heroDate = $derived(formatDateStable(data.run?.started_at));
 	let heroAthlete = $derived(data.displayName ?? '');
+	// The runner's own caption is the headline they screenshot for social
+	// (persona round-5); prefer it for the hero <h1>, falling back to the
+	// "<athlete>'s run" framing when the run has no caption.
+	let heroCaption = $derived(
+		(((data.run?.metadata as Record<string, unknown> | null)?.title as string) ?? '').trim()
+	);
 	let hasRun = $derived(!!data.run);
 </script>
 
@@ -45,7 +51,7 @@
 		<section class="hero">
 			<p class="kicker">{m('shareRun.heroKicker')}</p>
 			<h1>
-				{#if heroAthlete}{m('shareRun.heroAthleteRun', { name: heroAthlete })}{:else}{m('shareRun.heroPublicRun')}{/if}
+				{#if heroCaption}{heroCaption}{:else if heroAthlete}{m('shareRun.heroAthleteRun', { name: heroAthlete })}{:else}{m('shareRun.heroPublicRun')}{/if}
 			</h1>
 			<p class="subtitle">
 				{#if heroDistance}{heroDistance}{/if}
