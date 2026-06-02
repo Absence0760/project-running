@@ -49,6 +49,14 @@ function defineConfig() {
 				mode: 'hash',
 				directives: {
 					'script-src': ['self'],
+					// MapLibre GL spawns its tile-processing Web Worker from a
+					// blob: URL. Without an explicit worker-src the browser falls
+					// back to script-src ('self' + hashes), blocking the blob
+					// worker — every map (heatmap, run detail, route builder) then
+					// renders blank. The CloudFront header CSP
+					// (infra/modules/web-stack/main.tf) already allows this; the
+					// <meta> CSP must match or the stricter of the two wins.
+					'worker-src': ['self', 'blob:'],
 				},
 			},
 			inlineStyleThreshold: 0,

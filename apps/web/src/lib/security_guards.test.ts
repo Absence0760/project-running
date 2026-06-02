@@ -1266,6 +1266,32 @@ test('CloudFront CSP drops unsafe-eval and bounds XSS gadget surface', () => {
 	);
 });
 
+test('both CSP layers allow MapLibre blob: workers (worker-src)', () => {
+	// Reason: MapLibre GL spawns its tile-processing Web Worker from a
+	// blob: URL. A document must satisfy BOTH the CloudFront header CSP
+	// AND the SvelteKit <meta> CSP, so BOTH must allow blob: workers or
+	// every map renders blank. The audit-xss M2 hash-mode <meta> CSP
+	// (commit 8cddf96c) tightened script-src to 'self' + hashes but
+	// omitted worker-src, so the blob worker fell back to script-src and
+	// was blocked — the entire heatmap / run-map surface broke
+	// (run 26822355308). Pin worker-src blob: in both layers.
+	const tf = read('../../infra/modules/web-stack/main.tf');
+	assert.match(
+		tf,
+		/worker-src[^"]*blob:/,
+		'CloudFront header CSP must allow worker-src blob: for MapLibre.',
+	);
+	const sv = read('svelte.config.js');
+	const directives = sv.match(/directives:\s*\{([\s\S]*?)\}/);
+	assert.ok(directives, 'Could not locate the SvelteKit csp.directives block.');
+	assert.match(
+		directives![1],
+		/'worker-src':\s*\[[^\]]*'blob:'/,
+		"SvelteKit <meta> CSP directives must include 'worker-src': [..., 'blob:'] " +
+			'or MapLibre workers are blocked (the stricter of the two CSP layers wins).',
+	);
+});
+
 test('CloudFront Permissions-Policy disables sensors / payment / FLoC + Privacy Sandbox', () => {
 	// Reason: pass-2 commit 624bc00 added a Permissions-Policy header
 	// disabling APIs the app doesn't use. An XSS-injected
