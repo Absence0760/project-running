@@ -90,6 +90,15 @@ test.describe('/clubs/[slug]/events/[id] — bib-only approval', () => {
 			starts_at: instanceStart,
 			distance_m: 10000
 		});
+		// Manual-approval mode for this instance: the
+		// event_results_set_approval_default BEFORE-INSERT trigger
+		// (20260425_001) auto-approves imported results UNLESS a race_session
+		// for the (event, instance) has auto_approve=false. Without this row
+		// the trigger would flip organiser_approved back to true and the
+		// PENDING tag / Approve button would never appear.
+		await getAdminClient()
+			.from('race_sessions')
+			.insert({ event_id: eventId, instance_start: instanceStart, auto_approve: false });
 		await getAdminClient().from('event_results').insert({
 			id: resultId,
 			event_id: eventId,
