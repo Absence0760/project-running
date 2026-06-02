@@ -6,6 +6,14 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import '../lib/screens/coach_screen.dart';
 import '../lib/training_service.dart';
 
+/// Reports a non-null consent timestamp so the screen renders its main
+/// (consented) Scaffold — the one whose left drawer used to swallow the
+/// back button — instead of the GDPR consent gate.
+class _ConsentedApi extends ApiClient {
+  @override
+  Future<DateTime?> fetchCoachConsentAt() async => DateTime(2026, 1, 1);
+}
+
 bool _supabaseReady = false;
 
 Future<void> _ensureSupabase() async {
@@ -41,6 +49,21 @@ void main() {
       // pump past it before the test ends so the framework's
       // pending-timer invariant doesn't trip.
       await tester.pump(const Duration(milliseconds: 100));
+    });
+
+    testWidgets('the consented view renders an explicit back button (the left '
+        'drawer used to swallow it)', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: CoachScreen(api: _ConsentedApi(), training: TrainingService()),
+        ),
+      );
+      // Let the consent lookup resolve so the main Scaffold mounts.
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      // The archive drawer is reachable from an explicit history action
+      // instead, so the leading slot stays a real back affordance.
+      expect(find.byType(BackButton), findsOneWidget);
     });
 
     testWidgets('does not render the plan-switcher dropdown when there is at most one plan',

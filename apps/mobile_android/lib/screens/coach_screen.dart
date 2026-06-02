@@ -827,6 +827,11 @@ class _CoachScreenState extends State<CoachScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        // A left `drawer` makes AppBar auto-imply a hamburger in the
+        // leading slot, which swallowed the back button on this pushed
+        // route. Force the back arrow and open the archive drawer from an
+        // explicit action instead.
+        leading: const BackButton(),
         title: Row(
           children: [
             const Text('Coach'),
@@ -867,6 +872,13 @@ class _CoachScreenState extends State<CoachScreen> {
               icon: const Icon(Icons.add_comment_outlined),
               onPressed: _busy ? null : _archiveCurrent,
             ),
+          Builder(
+            builder: (ctx) => IconButton(
+              tooltip: 'Chat history',
+              icon: const Icon(Icons.history),
+              onPressed: () => Scaffold.of(ctx).openDrawer(),
+            ),
+          ),
         ],
       ),
       drawer: _buildArchivesDrawer(theme),
