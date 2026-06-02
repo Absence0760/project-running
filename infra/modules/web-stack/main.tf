@@ -561,12 +561,22 @@ resource "aws_cloudfront_response_headers_policy" "security" {
     # CSP — the app loads MapTiler tiles, calls Supabase, streams from
     # itself. `unsafe-eval` was dropped in this pass: SvelteKit's
     # production build does not eval; it was carried forward from a
-    # development-stage policy. `unsafe-inline` on script-src remains
-    # because the static build inlines the page-data hydration script;
-    # nonce-based tightening requires either switching off
-    # adapter-static or injecting nonces via a CloudFront Function at
-    # the edge. Tracked as accepted risk in `docs/architecture/decisions.md` §70
-    # alongside the DOMPurify-as-last-line-of-defence story —
+    # development-stage policy.
+    #
+    # `script-src 'unsafe-inline'` is kept HERE on purpose, but it is no
+    # longer the binding policy. The static build inlines a per-page
+    # hydration script, so this header must permit inline scripts at all —
+    # but SvelteKit's `kit.csp` (hash mode) now emits a SECOND CSP as a
+    # per-page `<meta http-equiv>` tag whose `script-src` is `'self'` plus
+    # the SHA-256 hash of that page's inline script and NOTHING else (no
+    # `'unsafe-inline'`). Browsers enforce header + meta as separate
+    # policies and a script must satisfy BOTH, so the meta is the binding
+    # `script-src` layer: an injected inline script has a hash absent from
+    # the meta and is blocked. This is the defence-in-depth behind DOMPurify
+    # that decisions §70 / audit-xss M2 wanted. Nonces are impossible for a
+    # fully prerendered site (a static file is byte-identical to every
+    # visitor, so a baked-in nonce is a constant), which is why hashes — not
+    # the once-deferred CloudFront-Function nonce injection — are the fix.
     # /audit/owasp May 2026 High #1.
     content_security_policy {
       content_security_policy = join("; ", [

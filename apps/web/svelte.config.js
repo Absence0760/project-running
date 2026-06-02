@@ -25,6 +25,32 @@ function defineConfig() {
 			paths: {
 				base: process.env.BASE_PATH || '',
 			},
+			// Hash-based CSP for the one inline script SvelteKit emits (the
+			// per-page hydration-data block). The site is fully prerendered
+			// (adapter-static), so a nonce is impossible — a static file is
+			// served byte-identical to every visitor, and a baked-in nonce
+			// would be a constant, i.e. no protection. Hashes are the correct
+			// mechanism for static inline scripts: SvelteKit computes the
+			// SHA-256 of each inline script at build time and emits the policy
+			// as a per-page `<meta http-equiv>` tag (there's no server to set a
+			// header). This `<meta>` is enforced alongside the CloudFront
+			// header CSP — a document must satisfy BOTH — so it is the binding
+			// `script-src` layer that finally drops `'unsafe-inline'` for
+			// scripts. An injected inline script has a hash absent from the
+			// meta and is blocked, which is the second-layer defence
+			// audit-xss M2 / decisions §70 wanted behind DOMPurify.
+			//
+			// Scoped to `script-src` only: `style-src` keeps `'unsafe-inline'`
+			// (Svelte's `style=""` attributes can't be hash-covered, and style
+			// injection is not script execution). `frame-ancestors`,
+			// `object-src`, HSTS etc. stay on the CloudFront header — several
+			// of those directives are ignored when delivered via `<meta>`.
+			csp: {
+				mode: 'hash',
+				directives: {
+					'script-src': ['self'],
+				},
+			},
 			inlineStyleThreshold: 0,
 			prerender: {
 				// /og/route/[id].png and /share/{run,route}/[id] are
