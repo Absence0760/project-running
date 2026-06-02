@@ -101,9 +101,13 @@ select is(
   (select count(*)::int from run_comments where run_id = 'cccccccc-0000-0000-0000-0000000000f1'),
   1, 'an active coach sees comments on the athlete''s private run');
 
+-- Photos are the exception: gated by is_run_photo_visible_to (owner-or-public,
+-- NO coach branch — 20261125_001), so the coach does NOT see photos on the
+-- athlete's PRIVATE run even though it inherits the rest. Full coverage of the
+-- photo-consent exclusion lives in coach_photo_consent_test.sql.
 select is(
   (select count(*)::int from run_photos where run_id = 'cccccccc-0000-0000-0000-0000000000f1'),
-  1, 'an active coach sees photos on the athlete''s private run');
+  0, 'an active coach does NOT see photos on the athlete''s private run (photos are owner-or-public only)');
 
 -- A coach can give feedback on the athlete's private run -- the INSERT
 -- policies gate on the same is_run_visible_to, so the coach branch enables it.

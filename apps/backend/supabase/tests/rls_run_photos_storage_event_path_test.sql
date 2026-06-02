@@ -39,9 +39,11 @@ select ok(
     select 1 from pg_policies
     where schemaname = 'storage' and tablename = 'objects'
       and policyname = 'run-photo bytes visible when run or event is visible'
-      and qual ilike '%is_run_visible_to%'
+      and qual ilike '%is_run_photo_visible_to%'
   ),
-  'policy still gates non-event photos on parent-run visibility'
+  -- 20261125_001 swapped is_run_visible_to → is_run_photo_visible_to so the
+  -- coaching link no longer leaks photo bytes (audit-storage).
+  'policy gates non-event photos on owner-or-public visibility (coach-excluded)'
 );
 
 -- The thumbnail path is preserved (added by 20260826_001) — a bare-body

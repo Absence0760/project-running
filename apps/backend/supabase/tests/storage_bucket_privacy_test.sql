@@ -142,20 +142,22 @@ select is(
 
 -- ─── 5. run-photos SELECT policy content pin ───────────────────────
 -- Pins the policy USING expression contains the
--- `private.is_run_visible_to` helper — that's the only path that
+-- `private.is_run_photo_visible_to` helper — that's the only path that
 -- joins back through the run_photos row to the parent run for
 -- visibility. A regression that silently swaps the SELECT policy
 -- to a bare `bucket_id = 'run-photos'` form would let any caller
 -- with the object path GET it, bypassing the private-run gate.
+-- 20261125_001 swapped is_run_visible_to → is_run_photo_visible_to
+-- (owner-or-public; the coaching link no longer leaks photo bytes).
 select ok(
   exists (
     select 1 from pg_policies
      where schemaname = 'storage'
        and tablename = 'objects'
        and cmd = 'SELECT'
-       and qual ilike '%is_run_visible_to%'
+       and qual ilike '%is_run_photo_visible_to%'
   ),
-  'run-photos SELECT policy MUST reference private.is_run_visible_to '
+  'run-photos SELECT policy MUST reference private.is_run_photo_visible_to '
   '— without it, the bytes for a private runs photo are reachable '
   'via a direct Storage GET with the object path'
 );

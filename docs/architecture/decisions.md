@@ -2418,6 +2418,8 @@ Pinning tests: `apps/web/src/lib/training.test.ts` (5) + `apps/mobile_android/te
 
 **Don't re-litigate unless** coaches need the track to render a map in the roster run-review UI (then add a coach branch to `clip-public-track` or a sibling EF that clips against the athlete's zones — keep it routed through `clip_track_for_user`, never a raw Storage grant), or athletes ask to share only a subset of runs with a coach (then a per-run or per-link visibility flag checked in the helper).
 
+**Amendment (2026-06-02) — run PHOTOS are also carved out of the coach tier (audit-storage).** The original net-effect above listed `run_photos` among the social rows a coach inherits via `is_run_visible_to`. On reflection that was inconsistent with the very same "raw track stays owner-only" trade-off in this entry: photos (faces, home interiors, kids, recognisable locations) are at least as sensitive as the track. Migration `20261125_001` adds `private.is_run_photo_visible_to(run_id, user_id)` (owner-or-public, **no** coach branch) and swaps it into both the `run_photos` table SELECT policy and the `run-photos` Storage SELECT policy. So a coach now reads the run row + stats + comments + kudos + segment efforts + live pings, but **not** the athlete's uploaded photos (private-run photos; public-run photos remain visible to everyone, and the event-gallery path is unchanged). Like the track, coach photo access — if ever wanted — should be an explicit `photo_sharing_consent` opt-in, not a side effect of the link. Pinned by `coach_photo_consent_test.sql`.
+
 ---
 
 ## 99. The community heatmap is a route browser, not just a density blob (web)
