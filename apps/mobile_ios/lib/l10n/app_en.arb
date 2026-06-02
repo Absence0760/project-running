@@ -1,0 +1,71 @@
+{
+  "@@locale": "en",
+  "prefsLanguage": "Language",
+  "@prefsLanguage": {
+    "description": "Settings > Preferences row title for the language picker"
+  },
+  "prefsLanguageSystem": "System default",
+  "@prefsLanguageSystem": {
+    "description": "Language-picker option that follows the device locale instead of an explicit choice"
+  },
+  "localeNameEn": "English",
+  "@localeNameEn": {
+    "description": "Endonym for English — never translated, identical across all catalogs"
+  },
+  "localeNameDe": "Deutsch",
+  "@localeNameDe": {
+    "description": "Endonym for German — never translated, identical across all catalogs"
+  },
+  "localeNameFr": "Français",
+  "@localeNameFr": {
+    "description": "Endonym for French — never translated, identical across all catalogs"
+  },
+  "localeNameEs": "Español",
+  "@localeNameEs": {
+    "description": "Endonym for Spanish — never translated, identical across all catalogs"
+  },
+  "localeNameJa": "日本語",
+  "@localeNameJa": {
+    "description": "Endonym for Japanese — never translated, identical across all catalogs"
+  },
+  "localeNamePtBR": "Português (Brasil)",
+  "@localeNamePtBR": {
+    "description": "Endonym for Brazilian Portuguese — never translated, identical across all catalogs"
+  },
+  "navHome": "Home",
+  "@navHome": {
+    "description": "Bottom-nav label for the dashboard/home tab"
+  },
+  "navRun": "Run",
+  "@navRun": {
+    "description": "Bottom-nav label for the run-recording tab"
+  },
+  "navHistory": "History",
+  "@navHistory": {
+    "description": "Bottom-nav label for the run-history tab"
+  },
+  "navSocial": "Social",
+  "@navSocial": {
+    "description": "Bottom-nav label for the social tab"
+  },
+  "navSettings": "Settings",
+  "@navSettings": {
+    "description": "Bottom-nav label for the settings tab"
+  },
+  "settingsSectionProfile": "Profile",
+  "@settingsSectionProfile": {
+    "description": "Settings landing section header grouping Account + Preferences"
+  },
+  "settingsSectionAppsData": "Apps & data",
+  "@settingsSectionAppsData": {
+    "description": "Settings landing section header grouping Integrations + Devices + Gear"
+  },
+  "settingsSectionAccountLegal": "Account & legal",
+  "@settingsSectionAccountLegal": {
+    "description": "Settings landing section header grouping Pro & support + Licenses"
+  },
+  "prefsSectionUnitsDisplay": "Units & display",
+  "@prefsSectionUnitsDisplay": {
+    "description": "Settings > Preferences section header for units, pace format, map style, language, theme"
+  }
+}

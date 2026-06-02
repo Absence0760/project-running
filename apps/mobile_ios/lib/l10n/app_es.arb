@@ -1,0 +1,20 @@
+{
+  "@@locale": "es",
+  "prefsLanguage": "Idioma",
+  "prefsLanguageSystem": "Predeterminado del sistema",
+  "localeNameEn": "English",
+  "localeNameDe": "Deutsch",
+  "localeNameFr": "Français",
+  "localeNameEs": "Español",
+  "localeNameJa": "日本語",
+  "localeNamePtBR": "Português (Brasil)",
+  "navHome": "Inicio",
+  "navRun": "Correr",
+  "navHistory": "Historial",
+  "navSocial": "Social",
+  "navSettings": "Ajustes",
+  "settingsSectionProfile": "Perfil",
+  "settingsSectionAppsData": "Apps y datos",
+  "settingsSectionAccountLegal": "Cuenta y aspectos legales",
+  "prefsSectionUnitsDisplay": "Unidades y pantalla"
+}

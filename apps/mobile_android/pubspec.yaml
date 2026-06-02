@@ -85,6 +85,12 @@ dependencies:
   # lib/main.dart's runZonedGuarded so unhandled errors land tagged with
   # the build's versionName; off when SENTRY_DSN is unset (dev / debug).
   sentry_flutter: ^9.0.0
+  flutter_localizations:
+    sdk: flutter
+  # Pinned by flutter_localizations; kept unconstrained so the resolver
+  # picks the exact intl the bundled Flutter wants (avoids a version
+  # conflict and keeps both twin pubspecs' dep sets identical).
+  intl: any
 
 dev_dependencies:
   flutter_test:
@@ -93,5 +99,6 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  generate: true
   assets:
     - .env.local
