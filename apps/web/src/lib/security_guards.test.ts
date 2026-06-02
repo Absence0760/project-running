@@ -2251,3 +2251,65 @@ test('/auth/reset signs out the recovery session on unmount when no password cha
 		'cleanupRecoverySession must run on at least one of onDestroy / beforeunload (both is the belt-and-braces shape, but either by itself catches the casual-user case)',
 	);
 });
+
+test('client user_profiles selects only touch public-safe columns', () => {
+	// Reason: migration 20260707_001 revoked table-level SELECT on
+	// user_profiles and re-granted only the public-safe columns
+	// (id, display_name, avatar_url, created_at). Every other column is
+	// deny-by-default, so a client `.from('user_profiles').select(<private>)`
+	// gets a 403 (42501) at runtime. Owner self-reads of private columns
+	// (gender, date_of_birth, health_data_consent_at, parkrun_number, …)
+	// MUST go through the get_my_profile() SECURITY DEFINER RPC instead.
+	//
+	// This caught the run-26822355308 regression where the settings,
+	// preferences, run-detail and plan-editor surfaces direct-selected
+	// private columns — the reads 403'd, the consent state read as false,
+	// and the save flow silently short-circuited. The web e2e suite that
+	// would normally catch it had been dark for ~2 days behind a broken
+	// stack. This unit guard fails fast instead.
+	const PUBLIC_SAFE = new Set(['id', 'display_name', 'avatar_url', 'created_at']);
+	const root = resolve(__dirname, '..');
+	const walk = (dir: string, out: string[] = []): string[] => {
+		for (const ent of readdirSync(dir, { withFileTypes: true })) {
+			const full = `${dir}/${ent.name}`;
+			if (ent.isDirectory()) walk(full, out);
+			else if (
+				(ent.name.endsWith('.svelte') || ent.name.endsWith('.ts')) &&
+				!ent.name.includes('.test.')
+			)
+				out.push(full);
+		}
+		return out;
+	};
+	// Matches `.from('user_profiles').select(<string-literal>)` with the
+	// column list captured. Dynamic (non-literal) selects are not matched —
+	// none exist today, and adding one should come with its own review.
+	const re =
+		/\.from\(\s*['"]user_profiles['"]\s*\)\s*\.select\(\s*([`'"])([\s\S]*?)\1/g;
+	const offenders: string[] = [];
+	for (const f of walk(root)) {
+		const src = readFileSync(f, 'utf-8');
+		let m: RegExpExecArray | null;
+		re.lastIndex = 0;
+		while ((m = re.exec(src)) !== null) {
+			const cols = m[2]
+				.split(/[,\n]/)
+				.map((c) => c.trim())
+				// strip embedded relation syntax `alias:table(cols)` → leading token
+				.map((c) => c.split(':')[0].split('(')[0].trim())
+				.filter(Boolean);
+			const bad = cols.filter((c) => !PUBLIC_SAFE.has(c));
+			if (bad.length > 0) {
+				const rel = f.replace(resolve(__dirname, '..', '..') + '/', '');
+				offenders.push(`${rel} — selects non-public column(s): ${bad.join(', ')}`);
+			}
+		}
+	}
+	assert.deepEqual(
+		offenders,
+		[],
+		'Client direct-selects of deny-by-default user_profiles columns (they ' +
+			'403 at runtime — route owner self-reads through get_my_profile()):\n  ' +
+			offenders.join('\n  '),
+	);
+});

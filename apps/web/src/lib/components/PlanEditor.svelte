@@ -39,11 +39,10 @@
 	let viewerAge = $state<number | null>(null);
 	onMount(async () => {
 		if (!auth.user) return;
-		const { data } = await supabase
-			.from('user_profiles')
-			.select('gender, date_of_birth')
-			.eq('id', auth.user.id)
-			.maybeSingle();
+		// Self-read via get_my_profile(): gender / date_of_birth are
+		// deny-by-default for direct authenticated SELECTs (column lockdown,
+		// 20260707_001).
+		const { data } = await supabase.rpc('get_my_profile');
 		const g = (data as { gender?: string | null } | null)?.gender;
 		if (g === 'male' || g === 'female' || g === 'nonbinary') viewerGender = g;
 		const dob = (data as { date_of_birth?: string | null } | null)?.date_of_birth;

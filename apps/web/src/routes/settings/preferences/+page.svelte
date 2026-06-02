@@ -249,11 +249,10 @@
 
 			privacyZones = effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
 
-			const { data: prof } = await supabase
-				.from('user_profiles')
-				.select('gender, date_of_birth, health_data_consent_at')
-				.eq('id', auth.user.id)
-				.maybeSingle();
+			// Self-read via get_my_profile(): gender / date_of_birth /
+			// health_data_consent_at are deny-by-default for direct
+			// authenticated SELECTs (column lockdown, 20260707_001).
+			const { data: prof } = await supabase.rpc('get_my_profile');
 			if (prof) {
 				gender = (prof.gender as typeof gender) ?? '';
 				dateOfBirth = prof.date_of_birth ?? '';

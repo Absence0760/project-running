@@ -179,11 +179,10 @@
 				p[TRUSTED_CONTACTS_KEY] as TrustedContact[] | null | undefined,
 			);
 		}
-		const { data: prof } = await supabase
-			.from('user_profiles')
-			.select('health_data_consent_at')
-			.eq('id', auth.user.id)
-			.maybeSingle();
+		// Self-read goes through the get_my_profile() SECURITY DEFINER RPC:
+		// health_data_consent_at is deny-by-default for direct authenticated
+		// SELECTs (column lockdown, 20260707_001) — a direct select 403s.
+		const { data: prof } = await supabase.rpc('get_my_profile');
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
 		// Pre-tick the box if consent is already on record so a user can
 		// edit DOB / HR without re-consenting on every visit.

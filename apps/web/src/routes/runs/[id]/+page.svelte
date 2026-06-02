@@ -200,11 +200,10 @@
 			// PlanEditor.svelte. L4 best-effort: if the row read fails
 			// the estimate just falls back to the unmodified curve.
 			try {
-				const { data: prof } = await supabase
-					.from('user_profiles')
-					.select('gender')
-					.eq('id', uid)
-					.maybeSingle();
+				// Self-read via get_my_profile(): `gender` is deny-by-default
+				// for direct authenticated SELECTs (column lockdown,
+				// 20260707_001). uid is the viewer's own id here.
+				const { data: prof } = await supabase.rpc('get_my_profile');
 				const g = (prof as { gender?: string | null } | null)?.gender;
 				if (g === 'male' || g === 'female' || g === 'nonbinary') {
 					viewerGender = g;
