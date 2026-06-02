@@ -818,6 +818,15 @@ export async function saveRun(input: {
 	// points, so a sidecar would be redundant. Failure is non-fatal (same
 	// contract as the track upload): the row's scalar avg_bpm still renders.
 	const trackHasBpm = !!input.track?.some((p) => p.bpm != null);
+	if (trackHasBpm && input.hrSeries && input.hrSeries.length > 0) {
+		// Mixed run (GPS records + fix-less HR records, e.g. a treadmill warm-up
+		// stretch). The track's per-point bpm drives the zone chart, so the
+		// fix-less hrSeries is intentionally dropped — but surface it so the
+		// partial-coverage case isn't silently invisible. (decisions §116)
+		console.warn(
+			`saveRun: ${input.hrSeries.length} fix-less HR samples dropped — track already carries per-point bpm`,
+		);
+	}
 	if (!trackHasBpm && input.hrSeries && input.hrSeries.length >= 1) {
 		try {
 			const path = `${userId}/${runId}.hr.json.gz`;
@@ -829,8 +838,19 @@ export async function saveRun(input: {
 					contentType: 'application/gzip',
 					upsert: true,
 				});
-			if (!upErr) {
-				await supabase.from('runs').update({ hr_series_url: path }).eq('id', runId);
+			if (upErr) {
+				console.warn('hr-series sidecar upload failed', upErr.message);
+			} else {
+				// Mirror the track-upload error handling: a PostgREST error here is
+				// a resolved { error }, not a throw, so the outer catch can't see
+				// it — check it explicitly or the sidecar orphans silently.
+				const { error: linkErr } = await supabase
+					.from('runs')
+					.update({ hr_series_url: path })
+					.eq('id', runId);
+				if (linkErr) {
+					console.warn('hr-series sidecar row-link failed', linkErr.message);
+				}
 			}
 		} catch (e) {
 			console.warn('hr-series sidecar upload failed', e);
