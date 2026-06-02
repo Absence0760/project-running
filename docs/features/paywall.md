@@ -277,6 +277,25 @@ watch inherits the phone's subscription via the paired Supabase session
 | `REVENUECAT_API_KEY_ANDROID` | Android app `.env` / CI secrets | RevenueCat project API key for Android |
 | `PUBLIC_REVENUECAT_WEB_API_KEY` | `apps/web/.env.local` / CI public env | RevenueCat project API key for web (read by `$lib/revenuecat.ts`); unset → Pro CTA falls back to placeholder |
 
+### Regional availability & international payments
+
+**RevenueCat is not the payment processor.** On mobile it sits on top of **Apple StoreKit** (App Store) and **Google Play Billing**; the charge runs through the buyer's Apple ID / Google account. That makes cross-border purchases work *for free* — but only once the store-side configuration exists. The split is:
+
+- **Handled by Apple / Google (no work for us):** local currency + payment methods (e.g. UPI / net-banking / cards / carrier billing in India), currency conversion, and — critically — **tax as merchant of record** (Apple/Google collect + remit GST/VAT/sales tax per territory; we never file foreign tax for IAP). They also own refunds and the auto-renewal mechanics. We're paid out in our configured currency after their 15–30% cut.
+- **The buyer always sees their store-localized price**, not a hard-coded USD figure. The mobile Subscribe tile reads it via `proMonthlyPriceString` → `storeProduct.priceString` (`apps/mobile_android/lib/screens/settings_pro_screen.dart` + iOS twin), falling back to the `$9.99` USD list price + a "billed in USD" note only when RevenueCat is unconfigured or the offering hasn't loaded. Apple Guideline 3.1.1 / the Play subscription policy require the displayed amount to come from the store (it varies by territory), which is why the price is never hard-coded.
+
+**Operator prerequisites — a purchase from (say) India only succeeds when all of these are set up (none are code):**
+
+1. **Storefront availability.** The app *and* the subscription product must be enabled for the buyer's country (App Store Connect → Availability; Play Console → Countries/regions). Excluding a country silently makes Pro unbuyable there — this is the most common gap, so any "is Pro reachable in country X?" check starts here. (`/audit/regional-availability` exercises this.)
+2. **Per-region price.** Apple via a price tier (auto-generates the local amount per storefront) or a custom per-region price; Play via per-country pricing. RevenueCat just reports whatever the store says.
+3. **RC project provisioned** — the `pro_monthly` package + `REVENUECAT_API_KEY_*` (followups.md §#9). Until then the tile falls through to the web URL.
+
+**Caveats:**
+
+- **The web Stripe path is a separate story.** When RevenueCat is unconfigured the app routes to `/settings/upgrade` (Stripe), which has its own international constraints — notably India's RBI e-mandate rules for recurring charges and Stripe-India entity requirements. That is *not* solved by the IAP path above.
+- **iOS effectively requires IAP for the Pro subscription** (Guideline 3.1.1 forbids routing users to an external processor for digital goods), so on iOS the RevenueCat → StoreKit path is mandatory, not optional. Play has similar rules with narrower external-link exceptions.
+- **Auto-renewal in India** broke ecosystem-wide under the 2021–22 RBI mandate rules; Apple and Google now implement compliant recurring billing *inside* IAP — another reason to go through them rather than a self-hosted recurring charge in those markets.
+
 ## One-off donation flow (user perspective)
 
 1. User navigates to `/settings/upgrade` (linked from sidebar and
