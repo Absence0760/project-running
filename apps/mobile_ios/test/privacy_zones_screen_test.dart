@@ -1,9 +1,25 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/privacy_zones_screen.dart';
 import '../lib/settings_sync.dart';
+
+Position _fakePosition({double lat = 37.53, double lng = -77.45}) => Position(
+      latitude: lat,
+      longitude: lng,
+      timestamp: DateTime.now(),
+      accuracy: 5,
+      altitude: 0,
+      altitudeAccuracy: 0,
+      heading: 0,
+      headingAccuracy: 0,
+      speed: 0,
+      speedAccuracy: 0,
+    );
 
 Future<({SettingsSyncService sync})> _makeSync() async {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -45,6 +61,65 @@ void main() {
       await _pump(tester, sync: s.sync);
       await tester.pump();
       expect(find.text('Save'), findsOneWidget);
+    });
+
+    testWidgets('renders a place-search field + a Locate-me FAB', (tester) async {
+      // Both were missing — the picker had no way to navigate to the
+      // user's area, so on a self-hosted-tiles setup it opened on a
+      // far-away default and looked like a blank map.
+      final s = await _makeSync();
+      await _pump(tester, sync: s.sync);
+      await tester.pump();
+      expect(find.widgetWithText(TextField, 'Search places…'), findsOneWidget);
+      expect(find.byType(FloatingActionButton), findsOneWidget);
+      expect(find.byIcon(Icons.my_location), findsOneWidget);
+    });
+
+    testWidgets('typing surfaces place results (Nominatim fallback)',
+        (tester) async {
+      final s = await _makeSync();
+      Future<String> stub(Uri _) async => jsonEncode([
+            {
+              'display_name': 'Richmond, Virginia',
+              'lat': '37.5407',
+              'lon': '-77.4360',
+            },
+          ]);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PrivacyZonesScreen(settingsSync: s.sync, geocodingFetcher: stub),
+        ),
+      );
+      await tester.pump();
+      await tester.enterText(
+        find.widgetWithText(TextField, 'Search places…'),
+        'Richmond',
+      );
+      await tester.pump(const Duration(milliseconds: 350));
+      expect(find.text('Richmond, Virginia'), findsOneWidget);
+      await tester.pump(const Duration(seconds: 1));
+    });
+
+    testWidgets('Locate FAB invokes the locate seam without crashing',
+        (tester) async {
+      final s = await _makeSync();
+      var calls = 0;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: PrivacyZonesScreen(
+            settingsSync: s.sync,
+            locateFn: () async {
+              calls++;
+              return _fakePosition();
+            },
+          ),
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
+      expect(calls, greaterThanOrEqualTo(1));
+      await tester.pump(const Duration(seconds: 1));
     });
   });
 }
