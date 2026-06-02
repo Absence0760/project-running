@@ -35,7 +35,9 @@ import 'public_route_screen.dart';
 ///   * AppBar Filters button — lens (popular/friends/featured/hidden
 ///     gems) + multi-select race-distance bands (5K/10K/Half/Marathon/
 ///     Ultra), with an active-filter badge.
-///   * Locate-me FAB — Geolocator current-position fix at zoom 14.
+///   * Locate-me FAB — Geolocator current-position fix at zoom 14. The
+///     map also auto-centres on the user's location once on open (until
+///     they pan), rather than sitting at the neutral London default.
 class RoutesHeatmapScreen extends StatefulWidget {
   final ApiClient api;
 
@@ -47,6 +49,11 @@ class RoutesHeatmapScreen extends StatefulWidget {
   /// Locate FAB can be exercised in unit tests.
   final Future<Position> Function()? locateFn;
 
+  /// Test seam — supplies the one-shot startup location fix so the
+  /// auto-centre-on-open path can be exercised without the platform
+  /// Geolocator. Production callers leave null.
+  final Future<Position?> Function()? backgroundLocateFn;
+
   /// Test seam — boots the screen at a specific zoom without driving the
   /// MapController. Production callers leave null (city-scale default).
   final double? initialZoom;
@@ -56,6 +63,7 @@ class RoutesHeatmapScreen extends StatefulWidget {
     required this.api,
     this.geocodingFetcher,
     this.locateFn,
+    this.backgroundLocateFn,
     this.initialZoom,
   });
 
@@ -101,6 +109,11 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   Timer? _debounce;
   Timer? _searchDebounce;
   bool _mapReady = false;
+
+  /// True once the user has panned/zoomed by hand. Suppresses the
+  /// one-shot auto-centre on the first location fix so we never yank the
+  /// camera out from under them.
+  bool _userMovedMap = false;
 
   /// Pixel radius for merging pins into a cluster at the current zoom.
   static const double _clusterRadiusPx = 50.0;
@@ -461,7 +474,21 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
     }
   }
 
+  /// One-shot location fix on open: centres the map on the user instead
+  /// of leaving it at the neutral London default. Sets the location dot
+  /// and, if the user hasn't already panned, moves the camera there.
   Future<void> _backgroundLocate() async {
+    if (widget.backgroundLocateFn != null) {
+      try {
+        final pos = await widget.backgroundLocateFn!();
+        if (pos == null || !mounted) return;
+        setState(() => _userLatLng = LatLng(pos.latitude, pos.longitude));
+        _maybeAutoCenter();
+      } catch (_) {
+        // Silent — the FAB is the user-initiated retry.
+      }
+      return;
+    }
     if (kIsWeb) return;
     try {
       final perm = await Geolocator.checkPermission();
@@ -469,13 +496,31 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           perm != LocationPermission.whileInUse) {
         return;
       }
+      // Fast path: a cached fix centres the map instantly so it doesn't
+      // open on London and then jump once the fresh fix lands.
+      final last = await Geolocator.getLastKnownPosition();
+      if (last != null && mounted) {
+        setState(() => _userLatLng = LatLng(last.latitude, last.longitude));
+        _maybeAutoCenter();
+      }
       final pos = await Geolocator.getCurrentPosition()
           .timeout(const Duration(seconds: 5));
       if (!mounted) return;
       setState(() => _userLatLng = LatLng(pos.latitude, pos.longitude));
+      _maybeAutoCenter();
     } catch (_) {
       // Silent — the FAB is the user-initiated retry.
     }
+  }
+
+  /// Centre the map on the known user location (zoom 14, matching the
+  /// Locate FAB) and refetch discovery there — but only on open, before
+  /// the user has taken control of the camera. Returns whether it moved.
+  bool _maybeAutoCenter() {
+    if (!_mapReady || _userMovedMap || _userLatLng == null) return false;
+    _mapController.move(_userLatLng!, 14);
+    _refresh();
+    return true;
   }
 
   Future<Position> _platformLocate() async {
@@ -576,10 +621,15 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
               initialZoom: widget.initialZoom ?? 11,
               onMapReady: () {
                 _mapReady = true;
-                _refresh();
+                // If a fix already arrived, open centred on it; otherwise
+                // load the default view until one does.
+                if (!_maybeAutoCenter()) _refresh();
               },
               onPositionChanged: (pos, hasGesture) {
-                if (hasGesture) _scheduleRefresh();
+                if (hasGesture) {
+                  _userMovedMap = true;
+                  _scheduleRefresh();
+                }
               },
               onTap: _onMapTap,
             ),

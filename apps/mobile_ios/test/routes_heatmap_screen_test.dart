@@ -95,6 +95,7 @@ Future<void> _pump(
   _FakeApiClient api, {
   Future<String> Function(Uri)? geocodingFetcher,
   Future<Position> Function()? locateFn,
+  Future<Position?> Function()? backgroundLocateFn,
 }) async {
   await tester.pumpWidget(
     MaterialApp(
@@ -102,6 +103,7 @@ Future<void> _pump(
         api: api,
         geocodingFetcher: geocodingFetcher,
         locateFn: locateFn,
+        backgroundLocateFn: backgroundLocateFn,
       ),
     ),
   );
@@ -247,6 +249,28 @@ void main() {
       // Pins render in a MarkerLayer (even when empty). Heat is off by
       // default, so there is no heat CircleLayer on mount.
       expect(find.byType(MarkerLayer), findsAtLeastNWidgets(1));
+    });
+
+    testWidgets('opens centred on the user location when a fix is available',
+        (tester) async {
+      final api = _FakeApiClient();
+      // New York City — far from the London default centre.
+      await _pump(
+        tester,
+        api,
+        backgroundLocateFn: () async => _fakePosition(
+          lat: 40.7128,
+          lng: -74.0060,
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(api.lastMinLng, isNotNull);
+      expect(api.lastMinLng! <= -74.0060 && api.lastMaxLng! >= -74.0060, isTrue,
+          reason: 'the map must open centred on the user fix, so the '
+              'discovery bbox brackets NYC longitude — not London.');
+      expect(api.lastMinLat! <= 40.7128 && api.lastMaxLat! >= 40.7128, isTrue,
+          reason: 'and the bbox brackets NYC latitude.');
     });
 
     testWidgets('fetches discovery on mount with a valid bbox; heat is off',
