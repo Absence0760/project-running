@@ -10,6 +10,7 @@ import 'package:uuid/uuid.dart';
 
 import '../backend_timeout.dart';
 import '../calories.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
@@ -226,11 +227,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         _suggestedRoute = null;
       });
       _loadLinkedRoute();
-      showTopBanner(context, 'Linked to ${candidate.name}');
+      showTopBanner(
+          context, AppLocalizations.of(context).runDetailRouteLinked(candidate.name));
     } catch (e) {
       debugPrint('linkRunToRoute failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not link route');
+        showTopBanner(
+            context, AppLocalizations.of(context).runDetailRouteLinkFailed);
       }
     } finally {
       if (mounted) setState(() => _linkingRoute = false);
@@ -268,10 +271,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       final info = await api.fetchRunMatchedTrack(run.id);
       if (!mounted) return;
       setState(() => _matchInfo = info);
-      showTopBanner(context, 'Re-snapping to roads…');
+      showTopBanner(context, AppLocalizations.of(context).runDetailReSnapping);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Re-match failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).runDetailRematchFailed(e.toString()));
     } finally {
       if (mounted) setState(() => _rematchBusy = false);
     }
@@ -389,6 +393,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   bool get _isDnf => run.metadata?['is_dnf'] == true;
 
   Future<void> _editDetails() async {
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final titleCtl = TextEditingController(text: _title);
     final notesCtl = TextEditingController(text: _notes);
@@ -416,7 +421,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-        title: const Text('Edit run'),
+        title: Text(l10n.runDetailEditTitle),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -424,12 +429,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             children: [
               TextField(
                 controller: titleCtl,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: InputDecoration(labelText: l10n.runDetailFieldTitle),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: notesCtl,
-                decoration: const InputDecoration(labelText: 'Notes'),
+                decoration: InputDecoration(labelText: l10n.runDetailFieldNotes),
                 maxLines: 4,
               ),
               if (canEditStats) ...[
@@ -442,12 +447,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     FilteringTextInputFormatter.allow(RegExp(r'[0-9.]')),
                   ],
                   decoration: InputDecoration(
-                    labelText: 'Distance',
+                    labelText: l10n.runDetailFieldDistance,
                     suffixText: UnitFormat.distanceLabel(unit),
                   ),
                 ),
                 const SizedBox(height: 12),
-                const Text('Duration'),
+                Text(l10n.runDetailFieldDuration),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -468,8 +473,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 controlAffinity: ListTileControlAffinity.leading,
                 value: dnf,
                 onChanged: (v) => setDialogState(() => dnf = v ?? false),
-                title: const Text('Mark as DNF'),
-                subtitle: const Text('Excludes this run from personal records'),
+                title: Text(l10n.runDetailMarkDnf),
+                subtitle: Text(l10n.runDetailMarkDnfSubtitle),
               ),
             ],
           ),
@@ -477,11 +482,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.runDetailCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
+            child: Text(l10n.runDetailSave),
           ),
         ],
       ),
@@ -500,7 +505,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       );
       if (parsedDistance == null || parsedDuration == null) {
         if (!mounted) return;
-        showTopBanner(context, 'Enter a valid distance and duration');
+        showTopBanner(context, l10n.runDetailEditInvalid);
         return;
       }
       newDistance = parsedDistance;
@@ -577,6 +582,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
 
     return Scaffold(
@@ -594,7 +600,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
-                  'DNF',
+                  l10n.runDetailDnfBadge,
                   style: Theme.of(context).textTheme.labelSmall?.copyWith(
                         color:
                             Theme.of(context).colorScheme.onErrorContainer,
@@ -614,16 +620,16 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
-            tooltip: 'Edit run',
+            tooltip: l10n.runDetailEditTooltip,
             onPressed: _editDetails,
           ),
           IconButton(
             icon: const Icon(Icons.share_outlined),
-            tooltip: 'Share run',
+            tooltip: l10n.runDetailShareTooltip,
             onPressed: _shareRun,
           ),
           PopupMenuButton<String>(
-            tooltip: 'More',
+            tooltip: l10n.runDetailMoreTooltip,
             onSelected: (action) {
               switch (action) {
                 case 'save_as_route':
@@ -632,23 +638,23 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   _confirmDelete(context);
               }
             },
-            itemBuilder: (_) => const [
+            itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'save_as_route',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.add_road_outlined),
-                  title: Text('Save as route'),
+                  leading: const Icon(Icons.add_road_outlined),
+                  title: Text(l10n.runDetailSaveAsRoute),
                 ),
               ),
-              PopupMenuDivider(),
+              const PopupMenuDivider(),
               PopupMenuItem(
                 value: 'delete',
                 child: ListTile(
                   contentPadding: EdgeInsets.zero,
-                  leading: Icon(Icons.delete_outline, color: Colors.red),
-                  title: Text('Delete run',
-                      style: TextStyle(color: Colors.red)),
+                  leading: const Icon(Icons.delete_outline, color: Colors.red),
+                  title: Text(l10n.runDetailDeleteRun,
+                      style: const TextStyle(color: Colors.red)),
                 ),
               ),
             ],
@@ -767,8 +773,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                         heroTag: 'run-trace-replay',
                         onPressed: _toggleReplay,
                         tooltip: _replayController?.isAnimating == true
-                            ? 'Pause replay'
-                            : 'Replay this run',
+                            ? l10n.runDetailPauseReplay
+                            : l10n.runDetailReplay,
                         child: Icon(
                           _replayController?.isAnimating == true
                               ? Icons.pause
@@ -777,23 +783,23 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       ),
                     ),
                   if (_loadingTrack)
-                    const Positioned(
+                    Positioned(
                       top: 12,
                       right: 12,
                       child: Card(
                         child: Padding(
-                          padding: EdgeInsets.all(8),
+                          padding: const EdgeInsets.all(8),
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              SizedBox(
+                              const SizedBox(
                                 width: 14,
                                 height: 14,
                                 child: CircularProgressIndicator(strokeWidth: 2),
                               ),
-                              SizedBox(width: 8),
-                              Text('Loading GPS data...',
-                                  style: TextStyle(fontSize: 12)),
+                              const SizedBox(width: 8),
+                              Text(l10n.runDetailLoadingGps,
+                                  style: const TextStyle(fontSize: 12)),
                             ],
                           ),
                         ),
@@ -812,8 +818,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                               Icon(Icons.cloud_off, size: 14,
                                   color: Theme.of(context).colorScheme.outline),
                               const SizedBox(width: 8),
-                              const Text('GPS track unavailable offline',
-                                  style: TextStyle(fontSize: 12)),
+                              Text(l10n.runDetailGpsUnavailable,
+                                  style: const TextStyle(fontSize: 12)),
                             ],
                           ),
                         ),
@@ -880,27 +886,29 @@ class _RunDetailScreenState extends State<RunDetailScreen>
               children: [
                 Expanded(
                   child: _StatBig(
-                    label: 'Distance',
+                    label: l10n.runStatDistance,
                     value: UnitFormat.distanceValue(run.distanceMetres, unit),
                     unit: UnitFormat.distanceLabel(unit),
                   ),
                 ),
                 Expanded(
                   child: _StatBig(
-                    label: 'Time',
+                    label: l10n.runStatTime,
                     value: _formatDuration(run.duration),
                   ),
                 ),
                 if (_showMovingTime)
                   Expanded(
                     child: _StatBig(
-                      label: 'Moving',
+                      label: l10n.runStatMoving,
                       value: _formatDuration(_movingTime),
                     ),
                   ),
                 Expanded(
                   child: _StatBig(
-                    label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
+                    label: _activityType.usesSpeed
+                        ? l10n.runStatAvgSpeed
+                        : l10n.runStatPace,
                     value: _activityType.usesSpeed
                         ? UnitFormat.speed(_movingPaceSecPerKm, unit)
                         : UnitFormat.pace(_movingPaceSecPerKm, unit),
@@ -923,14 +931,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     Expanded(
                       child: _StatSmall(
                         icon: Icons.trending_up,
-                        label: 'Elev Gain',
+                        label: l10n.runDetailStatElevGain,
                         value: '${_elevationGain.round()}m',
                       ),
                     ),
                     Expanded(
                       child: _StatSmall(
                         icon: Icons.trending_down,
-                        label: 'Elev Loss',
+                        label: l10n.runDetailStatElevLoss,
                         value: '${_elevationLoss.round()}m',
                       ),
                     ),
@@ -938,15 +946,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                   Expanded(
                     child: _StatSmall(
                       icon: Icons.local_fire_department,
-                      label: 'Calories',
-                      value: '$_estimatedCalories kcal',
+                      label: l10n.runStatCalories,
+                      value: '$_estimatedCalories ${l10n.runUnitKcal}',
                     ),
                   ),
                   if (_steps > 0)
                     Expanded(
                       child: _StatSmall(
                         icon: Icons.directions_walk,
-                        label: 'Steps',
+                        label: l10n.runStatSteps,
                         value: '$_steps',
                       ),
                     ),
@@ -954,23 +962,23 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     Expanded(
                       child: _StatSmall(
                         icon: Icons.speed,
-                        label: 'Cadence',
-                        value: '$_cadence spm',
+                        label: l10n.runStatCadence,
+                        value: '$_cadence ${l10n.runUnitSpm}',
                       ),
                     ),
                   if (_avgBpm > 0)
                     Expanded(
                       child: _StatSmall(
                         icon: Icons.favorite,
-                        label: 'Avg HR',
-                        value: '$_avgBpm bpm',
+                        label: l10n.runDetailStatAvgHr,
+                        value: '$_avgBpm ${l10n.runUnitBpm}',
                       ),
                     ),
                   if (_ageGrade != null)
                     Expanded(
                       child: _StatSmall(
                         icon: Icons.emoji_events,
-                        label: 'Age grade',
+                        label: l10n.runDetailStatAgeGrade,
                         value: _ageGrade!,
                       ),
                     ),
@@ -983,13 +991,14 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
           // Route comparison — show PB and attempt history when this run
           // was done on a saved route.
-          ..._buildRouteComparison(theme, unit),
+          ..._buildRouteComparison(theme, l10n, unit),
 
           // Elevation chart
           if (_hasElevation) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Elevation', style: theme.textTheme.titleMedium),
+              child: Text(l10n.runDetailSectionElevation,
+                  style: theme.textTheme.titleMedium),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1009,26 +1018,28 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           if (_laps.isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Laps', style: theme.textTheme.titleMedium),
+              child: Text(l10n.runDetailSectionLaps,
+                  style: theme.textTheme.titleMedium),
             ),
-            ..._buildLaps(theme, unit),
+            ..._buildLaps(theme, l10n, unit),
             const Divider(),
           ],
 
           // Running Dynamics — Garmin HRM-Pro / Run pod metrics off an
           // imported FIT session (persona round-5 garmin F2).
-          if (_buildRunningDynamics(theme).isNotEmpty) ...[
+          if (_buildRunningDynamics(theme, l10n).isNotEmpty) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Running Dynamics', style: theme.textTheme.titleMedium),
+              child: Text(l10n.runDetailSectionRunningDynamics,
+                  style: theme.textTheme.titleMedium),
             ),
-            ..._buildRunningDynamics(theme),
+            ..._buildRunningDynamics(theme, l10n),
             const Divider(),
           ],
 
           // Best efforts — auto-detect fastest 1k, 1mi, 5k, 10k, HM, M
           if (run.track.length >= 2) ...[
-            ..._buildBestEfforts(theme, unit),
+            ..._buildBestEfforts(theme, l10n, unit),
           ],
 
           // Structured-workout review — only when the recorder linked
@@ -1037,15 +1048,16 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
           // HR zone breakdown — only when the track carries per-point bpm
           // (Strava streams, FIT/TCX imports, future watch recorders).
-          ..._buildHrZoneBreakdown(theme),
+          ..._buildHrZoneBreakdown(theme, l10n),
 
           // Splits — only when there's a track to compute them from.
           if (run.track.length >= 2) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Splits', style: theme.textTheme.titleMedium),
+              child: Text(l10n.runDetailSectionSplits,
+                  style: theme.textTheme.titleMedium),
             ),
-            ..._buildSplits(theme, unit),
+            ..._buildSplits(theme, l10n, unit),
           ],
 
           // Segment efforts — auto-generated client-side when this run
@@ -1053,7 +1065,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           if (widget.apiClient != null) ...[
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-              child: Text('Segments', style: theme.textTheme.titleMedium),
+              child: Text(l10n.runDetailSectionSegments,
+                  style: theme.textTheme.titleMedium),
             ),
             RunSegmentEfforts(
               api: widget.apiClient!,
@@ -1122,7 +1135,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return rd is Map ? Map<String, dynamic>.from(rd) : null;
   }
 
-  List<Widget> _buildLaps(ThemeData theme, DistanceUnit unit) {
+  List<Widget> _buildLaps(
+      ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     // Canonical per-lap shape (`docs/backend/metadata.md` § laps):
     //   { index, start_offset_s, distance_m, duration_s }
     // `distance_m` and `duration_s` are the *per-lap* deltas, not the
@@ -1136,7 +1150,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           backgroundColor: theme.colorScheme.tertiaryContainer,
           child: Icon(Icons.flag, size: 18, color: theme.colorScheme.tertiary),
         ),
-        title: Text('Lap $number'),
+        title: Text(l10n.runDetailLapNumber(number)),
         subtitle: Text(UnitFormat.distance(distM, unit)),
         trailing: Text(
           _formatDuration(Duration(seconds: durS)),
@@ -1146,15 +1160,16 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     }).toList();
   }
 
-  List<Widget> _buildRunningDynamics(ThemeData theme) {
+  List<Widget> _buildRunningDynamics(ThemeData theme, AppLocalizations l10n) {
     final rd = _runningDynamics;
     if (rd == null) return const [];
     final rows = <Widget>[];
-    void addRow(String label, Object? value, String suffix) {
+    // `decimals` flags the stride-length row, the only metric formatted
+    // with two decimal places — the rest read as whole numbers.
+    void addRow(String label, Object? value, String suffix,
+        {bool decimals = false}) {
       if (value is! num) return;
-      final formatted = label == 'Stride length'
-          ? value.toStringAsFixed(2)
-          : value.toString();
+      final formatted = decimals ? value.toStringAsFixed(2) : value.toString();
       rows.add(ListTile(
         dense: true,
         title: Text(label),
@@ -1162,10 +1177,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ));
     }
 
-    addRow('Vertical oscillation', rd['vertical_oscillation_mm'], 'mm');
-    addRow('Ground contact', rd['gct_ms'], 'ms');
-    addRow('Stride length', rd['stride_length_m'], 'm');
-    addRow('Avg power', rd['power_w'], 'W');
+    addRow(l10n.runDetailDynVerticalOsc, rd['vertical_oscillation_mm'], 'mm');
+    addRow(l10n.runDetailDynGroundContact, rd['gct_ms'], 'ms');
+    addRow(l10n.runDetailDynStrideLength, rd['stride_length_m'], 'm',
+        decimals: true);
+    addRow(l10n.runDetailDynAvgPower, rd['power_w'], 'W');
     return rows;
   }
 
@@ -1308,14 +1324,16 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return out;
   }
 
-  List<Widget> _buildBestEfforts(ThemeData theme, DistanceUnit unit) {
+  List<Widget> _buildBestEfforts(
+      ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     final efforts = _bestEfforts;
     if (efforts.isEmpty) return const [];
 
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-        child: Text('Best Efforts', style: theme.textTheme.titleMedium),
+        child: Text(l10n.runDetailSectionBestEfforts,
+            style: theme.textTheme.titleMedium),
       ),
       ...efforts.map((e) {
         final paceSecPerKm =
@@ -1340,7 +1358,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     ];
   }
 
-  List<Widget> _buildRouteComparison(ThemeData theme, DistanceUnit unit) {
+  List<Widget> _buildRouteComparison(
+      ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     if (run.routeId == null) return const [];
 
     final thisActivity = run.metadata?['activity_type'] as String? ?? 'run';
@@ -1359,12 +1378,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final delta = run.duration - best.duration;
     final rank = attempts.indexWhere((r) => r.id == run.id) + 1;
 
-    final routeName = _linkedRoute?.name ?? 'this route';
+    final routeName = _linkedRoute?.name ?? l10n.runDetailThisRoute;
 
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-        child: Text('Route History', style: theme.textTheme.titleMedium),
+        child: Text(l10n.runDetailSectionRouteHistory,
+            style: theme.textTheme.titleMedium),
       ),
       Padding(
         padding: const EdgeInsets.symmetric(horizontal: 20),
@@ -1387,8 +1407,9 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     Expanded(
                       child: Text(
                         isBest
-                            ? 'Personal best on $routeName'
-                            : '${_formatDeltaDuration(delta)} behind PB',
+                            ? l10n.runDetailPersonalBest(routeName)
+                            : l10n.runDetailBehindPb(
+                                _formatDeltaDuration(delta)),
                         style: theme.textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                           color: isBest
@@ -1401,8 +1422,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Attempt $rank of ${attempts.length}  '
-                  '—  PB: ${_formatDuration(best.duration)}',
+                  l10n.runDetailAttemptOf(
+                      rank, attempts.length, _formatDuration(best.duration)),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -1428,7 +1449,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return '$prefix${s}s';
   }
 
-  List<Widget> _buildHrZoneBreakdown(ThemeData theme) {
+  List<Widget> _buildHrZoneBreakdown(ThemeData theme, AppLocalizations l10n) {
     _resetStatsCacheIfStale();
     if (!_hrCacheChecked) {
       _cachedBpmStats = bpmStatsOf(run.track);
@@ -1474,7 +1495,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return [
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-        child: Text('Heart rate zones', style: theme.textTheme.titleMedium),
+        child: Text(l10n.runDetailSectionHeartRateZones,
+            style: theme.textTheme.titleMedium),
       ),
       Padding(
         padding: const EdgeInsets.fromLTRB(20, 0, 20, 8),
@@ -1482,19 +1504,19 @@ class _RunDetailScreenState extends State<RunDetailScreen>
           children: [
             _StatSmall(
               icon: Icons.favorite,
-              label: 'Avg',
-              value: '${stats.avg} bpm',
+              label: l10n.runDetailHrAvg,
+              value: '${stats.avg} ${l10n.runUnitBpm}',
             ),
             const SizedBox(width: 16),
             _StatSmall(
               icon: Icons.south,
-              label: 'Min',
+              label: l10n.runDetailHrMin,
               value: '${stats.min}',
             ),
             const SizedBox(width: 16),
             _StatSmall(
               icon: Icons.north,
-              label: 'Max',
+              label: l10n.runDetailHrMax,
               value: '${stats.max}',
             ),
           ],
@@ -1525,7 +1547,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                     const SizedBox(width: 8),
                     Expanded(
                       child: Text(
-                        'Zone ${b.index + 1} · ${b.label}',
+                        l10n.runDetailZoneRow(b.index + 1, b.label),
                         style: theme.textTheme.bodySmall,
                       ),
                     ),
@@ -1634,12 +1656,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return splits;
   }
 
-  List<Widget> _buildSplits(ThemeData theme, DistanceUnit unit) {
+  List<Widget> _buildSplits(
+      ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     if (run.track.length < 2) {
-      return const [
+      return [
         Padding(
-          padding: EdgeInsets.symmetric(horizontal: 20),
-          child: Text('No GPS data for splits'),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Text(l10n.runDetailNoGpsForSplits),
         ),
       ];
     }
@@ -1654,7 +1677,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       return [
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20),
-          child: Text('Run too short for a full $unitLabel split'),
+          child: Text(l10n.runDetailRunTooShortSplit(unitLabel)),
         ),
       ];
     }
@@ -1747,8 +1770,9 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// (default: the run's title) and simplifies the track via
   /// Ramer–Douglas–Peucker so the saved route isn't noisy.
   Future<void> _saveAsRoute() async {
+    final l10n = AppLocalizations.of(context);
     if (run.track.length < 2) {
-      showTopBanner(context, "This run has no GPS track to save as a route");
+      showTopBanner(context, l10n.runDetailNoTrackToSave);
       return;
     }
 
@@ -1756,21 +1780,19 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final saved = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Save as route'),
+        title: Text(l10n.runDetailSaveAsRouteTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Save this GPS trace as a route you can follow again.',
-            ),
+            Text(l10n.runDetailSaveAsRouteBody),
             const SizedBox(height: 16),
             TextField(
               controller: nameCtl,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Route name',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.runDetailRouteNameLabel,
+                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.done,
               onSubmitted: (_) => Navigator.pop(ctx, true),
@@ -1780,11 +1802,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.runDetailCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Save'),
+            child: Text(l10n.runDetailSave),
           ),
         ],
       ),
@@ -1808,8 +1830,10 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     await widget.routeStore.save(route);
 
     if (!mounted) return;
-    showTopBanner(context, 'Saved "$name" — ${simplified.length} waypoints '
-          '(${run.track.length - simplified.length} smoothed out)',);
+    showTopBanner(
+        context,
+        l10n.runDetailRouteSaved(
+            name, simplified.length, run.track.length - simplified.length));
   }
 
   /// Open the share sheet — lets the user share an image of the run card or
@@ -1829,7 +1853,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       } catch (e) {
         debugPrint('makeRunPublic failed: $e');
         if (!mounted) return;
-        showTopBanner(context, 'Could not make run public: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).runDetailMakePublicFailed(e.toString()));
         return;
       }
     }
@@ -1847,38 +1872,31 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// whether this track passes through one of them — same shape as
   /// the web `handleShare` flow.
   Future<bool> _confirmMakePublic() async {
+    final l10n = AppLocalizations.of(context);
     final zones = _loadPrivacyZones();
     final hasZones = zones.isNotEmpty;
     final track = run.track;
     final intersectsZone = hasZones && track.isNotEmpty &&
         track.any((p) => isInAnyZone(p.lat, p.lng, zones));
     final body = intersectsZone
-        ? 'Sharing flips this run to public so anyone with the link '
-            'can view it. This run starts or ends inside one of your '
-            'privacy zones, so viewers will see a clipped track with '
-            'the in-zone segments hidden.'
+        ? l10n.runDetailMakePublicBodyZone
         : hasZones
-            ? 'Sharing flips this run to public so anyone with the link '
-                'can view it. None of your privacy zones intersect this '
-                'track, so the full track will be visible.'
-            : 'Sharing flips this run to public so anyone with the link '
-                'can view it — including the start and end points of '
-                'your run. You have no privacy zones set up. Consider '
-                'adding one around your home before sharing.';
+            ? l10n.runDetailMakePublicBodyHasZones
+            : l10n.runDetailMakePublicBodyNoZones;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         key: const ValueKey('share-confirm-dialog'),
-        title: const Text('Make this run public?'),
+        title: Text(l10n.runDetailMakePublicTitle),
         content: Text(body),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.runDetailCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Make public'),
+            child: Text(l10n.runDetailMakePublic),
           ),
         ],
       ),
@@ -1901,20 +1919,21 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete run?'),
-        content: const Text('This cannot be undone.'),
+        title: Text(l10n.runDetailDeleteTitle),
+        content: Text(l10n.runDetailDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.runDetailCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.runDetailDelete),
           ),
         ],
       ),
@@ -2414,6 +2433,7 @@ class _RouteSuggestBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
@@ -2431,7 +2451,7 @@ class _RouteSuggestBanner extends StatelessWidget {
               children: [
                 Text.rich(
                   TextSpan(children: [
-                    const TextSpan(text: 'Looks like you ran '),
+                    TextSpan(text: l10n.runDetailSuggestRanRoute),
                     TextSpan(
                       text: routeName,
                       style: const TextStyle(fontWeight: FontWeight.w600),
@@ -2440,7 +2460,7 @@ class _RouteSuggestBanner extends StatelessWidget {
                   style: theme.textTheme.bodyMedium,
                 ),
                 Text(
-                  'Link this run to that route?',
+                  l10n.runDetailSuggestLinkPrompt,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -2448,11 +2468,12 @@ class _RouteSuggestBanner extends StatelessWidget {
               ],
             ),
           ),
-          TextButton(onPressed: onDismiss, child: const Text('Dismiss')),
+          TextButton(
+              onPressed: onDismiss, child: Text(l10n.runDetailSuggestDismiss)),
           const SizedBox(width: 4),
           FilledButton(
             onPressed: onLink,
-            child: const Text('Link'),
+            child: Text(l10n.runDetailSuggestLink),
           ),
         ],
       ),
@@ -2484,11 +2505,12 @@ class _MatchStatusPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final (icon, label) = switch (status) {
-      MatchStatus.pending => (Icons.hourglass_top, 'Snapping to roads…'),
-      MatchStatus.skipped => (Icons.block, 'Not snapped (too few points)'),
-      MatchStatus.failed => (Icons.error_outline, 'Snap failed — showing raw track'),
-      MatchStatus.matched => (Icons.check_circle, 'Snapped'),
+      MatchStatus.pending => (Icons.hourglass_top, l10n.runDetailMatchPending),
+      MatchStatus.skipped => (Icons.block, l10n.runDetailMatchSkipped),
+      MatchStatus.failed => (Icons.error_outline, l10n.runDetailMatchFailed),
+      MatchStatus.matched => (Icons.check_circle, l10n.runDetailMatchMatched),
     };
     final showRematch =
         onRematch != null && status != MatchStatus.pending;
@@ -2530,7 +2552,7 @@ class _MatchStatusPill extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      busy ? 'Queueing…' : 'Re-match',
+                      busy ? l10n.runDetailRematchQueueing : l10n.runDetailRematch,
                       style: TextStyle(
                         color: busy ? Colors.white38 : Colors.white,
                         fontSize: 12,
@@ -2561,17 +2583,20 @@ class _SegmentStatsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final dur = segment.duration;
     final pace = segment.paceSecondsPerKm;
     final stats = <Widget>[
-      _stat('Distance', UnitFormat.distance(segment.distanceMetres, unit)),
-      if (dur != null) _stat('Time', _formatDur(dur)),
+      _stat(l10n.runDetailSegStatDistance,
+          UnitFormat.distance(segment.distanceMetres, unit)),
+      if (dur != null) _stat(l10n.runDetailSegStatTime, _formatDur(dur)),
       if (pace != null)
-        _stat('Pace',
+        _stat(l10n.runDetailSegStatPace,
             '${UnitFormat.pace(pace, unit)} ${UnitFormat.paceLabel(unit)}'),
-      if (segment.avgBpm != null) _stat('HR', '${segment.avgBpm} bpm'),
+      if (segment.avgBpm != null)
+        _stat(l10n.runDetailSegStatHr, '${segment.avgBpm} ${l10n.runUnitBpm}'),
       if (segment.eleGainMetres > 0)
-        _stat('Gain', '+${segment.eleGainMetres.round()} m'),
+        _stat(l10n.runDetailSegStatGain, '+${segment.eleGainMetres.round()} m'),
     ];
     return Card(
       elevation: 4,
@@ -2589,7 +2614,7 @@ class _SegmentStatsCard extends StatelessWidget {
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 18),
-              tooltip: 'Dismiss',
+              tooltip: l10n.runDetailSegDismiss,
               onPressed: onDismiss,
             ),
           ],

@@ -624,4 +624,634 @@ class AppLocalizationsEs extends AppLocalizations {
   String runWorkoutRemainingDuration(String duration) {
     return 'faltan $duration';
   }
+
+  @override
+  String get runsRangeToday => 'Hoy';
+
+  @override
+  String get runsRangeWeek => 'Esta semana';
+
+  @override
+  String get runsRangeMonth => 'Últimos 30 días';
+
+  @override
+  String get runsRangeYear => 'Este año';
+
+  @override
+  String get runsRangeAll => 'Todo el historial';
+
+  @override
+  String get runsRangeCustom => 'Personalizado…';
+
+  @override
+  String runsRangeFrom(String date) {
+    return 'Desde $date';
+  }
+
+  @override
+  String runsRangeUntil(String date) {
+    return 'Hasta $date';
+  }
+
+  @override
+  String runsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count carreras',
+      one: '$count carrera',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsDateRangeTooltip => 'Rango de fechas';
+
+  @override
+  String get runsSortTooltip => 'Ordenar';
+
+  @override
+  String get runsSortNewest => 'Más recientes primero';
+
+  @override
+  String get runsSortOldest => 'Más antiguas primero';
+
+  @override
+  String get runsSortLongest => 'Mayor distancia';
+
+  @override
+  String get runsSortFastest => 'Mejor ritmo';
+
+  @override
+  String runsSyncTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sincronizar $count carreras',
+      one: 'Sincronizar $count carrera',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsRefreshTooltip => 'Actualizar desde la nube';
+
+  @override
+  String get runsOfflineTooltip => 'Sin conexión';
+
+  @override
+  String runsSelectionTitle(int count) {
+    return '$count seleccionadas';
+  }
+
+  @override
+  String get runsSelectAllTooltip => 'Seleccionar todo';
+
+  @override
+  String get runsClearSelectionTooltip => 'Limpiar';
+
+  @override
+  String get runsDeleteTooltip => 'Eliminar';
+
+  @override
+  String get runsCancelTooltip => 'Cancelar';
+
+  @override
+  String get runsAddRun => 'Añadir carrera';
+
+  @override
+  String get runsAddRunTooltip => 'Añadir una carrera manualmente';
+
+  @override
+  String runsLoadMore(int count) {
+    return 'Cargar $count más';
+  }
+
+  @override
+  String get runsNoMatch => 'Ninguna carrera coincide con estos filtros';
+
+  @override
+  String get runsClearFilters => 'Limpiar filtros';
+
+  @override
+  String get runsEmptyTitle => 'Aún no hay carreras';
+
+  @override
+  String get runsEmptyBody =>
+      'Toca la pestaña Correr para iniciar tu primera carrera';
+
+  @override
+  String get runsFilterAll => 'Todas';
+
+  @override
+  String get runsSourceAll => 'Todas las fuentes';
+
+  @override
+  String runsSourceLabel(String source) {
+    return 'Fuente: $source';
+  }
+
+  @override
+  String get runsSourceFilterTooltip => 'Filtrar por fuente';
+
+  @override
+  String get runsSourceRecorded => 'Grabada';
+
+  @override
+  String get runsSourceWatch => 'Reloj';
+
+  @override
+  String get runsSourceStrava => 'Strava';
+
+  @override
+  String get runsSourceParkrun => 'parkrun';
+
+  @override
+  String get runsSourceHealthKit => 'HealthKit';
+
+  @override
+  String get runsSourceHealthConnect => 'Health Connect';
+
+  @override
+  String get runsRangePickerTitle => 'Seleccionar fechas';
+
+  @override
+  String get runsRangeStart => 'Inicio';
+
+  @override
+  String get runsRangeEnd => 'Fin';
+
+  @override
+  String get runsRangeTapDate => 'Toca una fecha';
+
+  @override
+  String get runsRangeApply => 'Aplicar';
+
+  @override
+  String get runsRangeClear => 'Limpiar';
+
+  @override
+  String get runsPrevMonth => 'Mes anterior';
+
+  @override
+  String get runsNextMonth => 'Mes siguiente';
+
+  @override
+  String get runsPrevYear => 'Año anterior';
+
+  @override
+  String get runsNextYear => 'Año siguiente';
+
+  @override
+  String runsDeleteConfirmTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '¿Eliminar $count carreras?',
+      one: '¿Eliminar $count carrera?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsDeleteConfirmBody => 'Esto no se puede deshacer.';
+
+  @override
+  String get runsCancel => 'Cancelar';
+
+  @override
+  String get runsDelete => 'Eliminar';
+
+  @override
+  String get runsQueuedToSync => 'En cola para sincronizar';
+
+  @override
+  String get runsSignInToSync =>
+      'Inicia sesión desde Ajustes para sincronizar las carreras';
+
+  @override
+  String get runsRefreshFailed =>
+      'No se pudo actualizar — comprueba tu conexión';
+
+  @override
+  String get runsLoadMoreFailed => 'No se pudieron cargar más carreras';
+
+  @override
+  String runsSyncPartial(int synced, int total, String error) {
+    return '$synced/$total sincronizadas. Error: $error';
+  }
+
+  @override
+  String runsSyncTrackFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count carreras no pudieron subir su trazado GPS — el resto se sincronizó. Las carreras fallidas se reintentarán en el próximo ciclo.',
+      one:
+          '$count carrera no pudo subir su trazado GPS — el resto se sincronizó. Se reintentará en el próximo ciclo.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runsSyncAllDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Las $count carreras sincronizadas',
+      one: '$count carrera sincronizada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runsDeletePartial(int deleted, int queued) {
+    return '$deleted eliminadas; $queued en cola — se reintentará al volver a estar en línea.';
+  }
+
+  @override
+  String runsDeleteDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count carreras eliminadas',
+      one: '$count carrera eliminada',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get addRunTitle => 'Añadir carrera';
+
+  @override
+  String get addRunSave => 'Guardar';
+
+  @override
+  String get addRunSectionWhen => 'Cuándo';
+
+  @override
+  String get addRunSectionActivity => 'Actividad';
+
+  @override
+  String get addRunSectionRoute => 'Ruta (opcional)';
+
+  @override
+  String get addRunSectionDistance => 'Distancia';
+
+  @override
+  String get addRunSectionDuration => 'Duración';
+
+  @override
+  String get addRunSectionTitle => 'Título (opcional)';
+
+  @override
+  String get addRunSectionNotes => 'Notas (opcional)';
+
+  @override
+  String get addRunClearRoute => 'Quitar ruta';
+
+  @override
+  String get addRunSearchRoutes => 'Buscar rutas guardadas';
+
+  @override
+  String get addRunNoRoutes =>
+      'Aún no hay rutas guardadas — crea o importa una para adjuntarla aquí';
+
+  @override
+  String get addRunDistanceInvalid => 'Introduce una distancia mayor que 0';
+
+  @override
+  String get addRunDurationInvalid => 'Introduce una duración';
+
+  @override
+  String get addRunTitleHint => 'p. ej. Vuelta del mediodía';
+
+  @override
+  String get addRunNotesHint => '¿Cómo te sentiste?';
+
+  @override
+  String get addRunSaveButton => 'Guardar carrera';
+
+  @override
+  String addRunSaveFailed(String error) {
+    return 'No se pudo guardar la carrera: $error';
+  }
+
+  @override
+  String get addRunSaved => 'Carrera añadida al historial';
+
+  @override
+  String get addRunPickerSearchHint => 'Buscar rutas';
+
+  @override
+  String get addRunPickerClear => 'Limpiar';
+
+  @override
+  String get addRunPickerCancel => 'Cancelar';
+
+  @override
+  String addRunPickerNoMatch(String query) {
+    return 'Ninguna ruta coincide con \"$query\"';
+  }
+
+  @override
+  String get addRunPickerNoRoute => 'Sin ruta';
+
+  @override
+  String get runDetailDnfBadge => 'DNF';
+
+  @override
+  String get runDetailEditTooltip => 'Editar carrera';
+
+  @override
+  String get runDetailShareTooltip => 'Compartir carrera';
+
+  @override
+  String get runDetailMoreTooltip => 'Más';
+
+  @override
+  String get runDetailSaveAsRoute => 'Guardar como ruta';
+
+  @override
+  String get runDetailDeleteRun => 'Eliminar carrera';
+
+  @override
+  String get runDetailEditTitle => 'Editar carrera';
+
+  @override
+  String get runDetailFieldTitle => 'Título';
+
+  @override
+  String get runDetailFieldNotes => 'Notas';
+
+  @override
+  String get runDetailFieldDistance => 'Distancia';
+
+  @override
+  String get runDetailFieldDuration => 'Duración';
+
+  @override
+  String get runDetailMarkDnf => 'Marcar como DNF';
+
+  @override
+  String get runDetailMarkDnfSubtitle =>
+      'Excluye esta carrera de los récords personales';
+
+  @override
+  String get runDetailEditInvalid =>
+      'Introduce una distancia y duración válidas';
+
+  @override
+  String get runDetailSave => 'Guardar';
+
+  @override
+  String get runDetailCancel => 'Cancelar';
+
+  @override
+  String get runDetailDelete => 'Eliminar';
+
+  @override
+  String get runDetailLoadingGps => 'Cargando datos GPS...';
+
+  @override
+  String get runDetailGpsUnavailable =>
+      'Trazado GPS no disponible sin conexión';
+
+  @override
+  String get runDetailPauseReplay => 'Pausar reproducción';
+
+  @override
+  String get runDetailReplay => 'Reproducir esta carrera';
+
+  @override
+  String get runDetailStatElevGain => 'Desnivel +';
+
+  @override
+  String get runDetailStatElevLoss => 'Desnivel -';
+
+  @override
+  String get runDetailStatAvgHr => 'FC media';
+
+  @override
+  String get runDetailStatAgeGrade => 'Grado por edad';
+
+  @override
+  String get runDetailSectionElevation => 'Desnivel';
+
+  @override
+  String get runDetailSectionLaps => 'Vueltas';
+
+  @override
+  String runDetailLapNumber(int number) {
+    return 'Vuelta $number';
+  }
+
+  @override
+  String get runDetailSectionRunningDynamics => 'Dinámica de carrera';
+
+  @override
+  String get runDetailDynVerticalOsc => 'Oscilación vertical';
+
+  @override
+  String get runDetailDynGroundContact => 'Contacto con el suelo';
+
+  @override
+  String get runDetailDynStrideLength => 'Longitud de zancada';
+
+  @override
+  String get runDetailDynAvgPower => 'Potencia media';
+
+  @override
+  String get runDetailSectionRouteHistory => 'Historial de la ruta';
+
+  @override
+  String get runDetailThisRoute => 'esta ruta';
+
+  @override
+  String runDetailPersonalBest(String route) {
+    return 'Récord personal en $route';
+  }
+
+  @override
+  String runDetailBehindPb(String delta) {
+    return '$delta detrás del récord';
+  }
+
+  @override
+  String runDetailAttemptOf(int rank, int total, String pb) {
+    return 'Intento $rank de $total  —  Récord: $pb';
+  }
+
+  @override
+  String get runDetailSectionBestEfforts => 'Mejores marcas';
+
+  @override
+  String get runDetailSectionHeartRateZones => 'Zonas de frecuencia cardíaca';
+
+  @override
+  String get runDetailHrAvg => 'Media';
+
+  @override
+  String get runDetailHrMin => 'Mín';
+
+  @override
+  String get runDetailHrMax => 'Máx';
+
+  @override
+  String runDetailZoneRow(int number, String label) {
+    return 'Zona $number · $label';
+  }
+
+  @override
+  String get runDetailSectionSplits => 'Parciales';
+
+  @override
+  String get runDetailNoGpsForSplits => 'Sin datos GPS para los parciales';
+
+  @override
+  String runDetailRunTooShortSplit(String unit) {
+    return 'Carrera demasiado corta para un parcial completo de $unit';
+  }
+
+  @override
+  String get runDetailSectionSegments => 'Segmentos';
+
+  @override
+  String get runDetailSaveAsRouteTitle => 'Guardar como ruta';
+
+  @override
+  String get runDetailSaveAsRouteBody =>
+      'Guarda este trazado GPS como una ruta que podrás seguir de nuevo.';
+
+  @override
+  String get runDetailRouteNameLabel => 'Nombre de la ruta';
+
+  @override
+  String get runDetailNoTrackToSave =>
+      'Esta carrera no tiene trazado GPS para guardar como ruta';
+
+  @override
+  String runDetailRouteLinked(String route) {
+    return 'Vinculada a $route';
+  }
+
+  @override
+  String get runDetailRouteLinkFailed => 'No se pudo vincular la ruta';
+
+  @override
+  String get runDetailReSnapping => 'Reajustando a las calles…';
+
+  @override
+  String runDetailRematchFailed(String error) {
+    return 'Reajuste fallido: $error';
+  }
+
+  @override
+  String runDetailRouteSaved(String name, int kept, int smoothed) {
+    return '\"$name\" guardada — $kept puntos de paso ($smoothed suavizados)';
+  }
+
+  @override
+  String runDetailMakePublicFailed(String error) {
+    return 'No se pudo hacer pública la carrera: $error';
+  }
+
+  @override
+  String get runDetailMakePublicTitle => '¿Hacer pública esta carrera?';
+
+  @override
+  String get runDetailMakePublicBodyZone =>
+      'Compartir convierte esta carrera en pública para que cualquiera con el enlace pueda verla. Esta carrera empieza o termina dentro de una de tus zonas de privacidad, así que los espectadores verán un trazado recortado con los segmentos dentro de la zona ocultos.';
+
+  @override
+  String get runDetailMakePublicBodyHasZones =>
+      'Compartir convierte esta carrera en pública para que cualquiera con el enlace pueda verla. Ninguna de tus zonas de privacidad se cruza con este trazado, así que el trazado completo será visible.';
+
+  @override
+  String get runDetailMakePublicBodyNoZones =>
+      'Compartir convierte esta carrera en pública para que cualquiera con el enlace pueda verla — incluidos los puntos de inicio y fin de tu carrera. No tienes zonas de privacidad configuradas. Considera añadir una alrededor de tu casa antes de compartir.';
+
+  @override
+  String get runDetailMakePublic => 'Hacer pública';
+
+  @override
+  String get runDetailDeleteTitle => '¿Eliminar carrera?';
+
+  @override
+  String get runDetailDeleteBody => 'Esto no se puede deshacer.';
+
+  @override
+  String get runDetailSuggestLink => 'Vincular';
+
+  @override
+  String get runDetailSuggestDismiss => 'Descartar';
+
+  @override
+  String get runDetailSuggestRanRoute => 'Parece que corriste ';
+
+  @override
+  String get runDetailSuggestLinkPrompt => '¿Vincular esta carrera a esa ruta?';
+
+  @override
+  String get runDetailMatchPending => 'Ajustando a las calles…';
+
+  @override
+  String get runDetailMatchSkipped => 'Sin ajustar (muy pocos puntos)';
+
+  @override
+  String get runDetailMatchFailed =>
+      'Ajuste fallido — mostrando el trazado sin procesar';
+
+  @override
+  String get runDetailMatchMatched => 'Ajustada';
+
+  @override
+  String get runDetailRematchQueueing => 'Encolando…';
+
+  @override
+  String get runDetailRematch => 'Reajustar';
+
+  @override
+  String get runDetailSegStatDistance => 'Distancia';
+
+  @override
+  String get runDetailSegStatTime => 'Tiempo';
+
+  @override
+  String get runDetailSegStatPace => 'Ritmo';
+
+  @override
+  String get runDetailSegStatHr => 'FC';
+
+  @override
+  String get runDetailSegStatGain => 'Desnivel +';
+
+  @override
+  String get runDetailSegDismiss => 'Descartar';
+
+  @override
+  String get publicRunTitle => 'Carrera';
+
+  @override
+  String get publicRunLoadError => 'No se pudo cargar esta carrera.';
+
+  @override
+  String get publicRunUnavailable =>
+      'Esta carrera es privada o ya no está disponible.';
+
+  @override
+  String get publicRunAuthorFallback => 'Corredor';
+
+  @override
+  String get publicRunStatDistance => 'Distancia';
+
+  @override
+  String get publicRunStatTime => 'Tiempo';
+
+  @override
+  String get publicRunStatPace => 'Ritmo';
+
+  @override
+  String get publicRunSectionSegments => 'Segmentos';
 }

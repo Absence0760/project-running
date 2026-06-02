@@ -620,4 +620,628 @@ class AppLocalizationsEn extends AppLocalizations {
   String runWorkoutRemainingDuration(String duration) {
     return '$duration to go';
   }
+
+  @override
+  String get runsRangeToday => 'Today';
+
+  @override
+  String get runsRangeWeek => 'This week';
+
+  @override
+  String get runsRangeMonth => 'Last 30 days';
+
+  @override
+  String get runsRangeYear => 'This year';
+
+  @override
+  String get runsRangeAll => 'All time';
+
+  @override
+  String get runsRangeCustom => 'Custom…';
+
+  @override
+  String runsRangeFrom(String date) {
+    return 'From $date';
+  }
+
+  @override
+  String runsRangeUntil(String date) {
+    return 'Until $date';
+  }
+
+  @override
+  String runsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count runs',
+      one: '$count run',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsDateRangeTooltip => 'Date range';
+
+  @override
+  String get runsSortTooltip => 'Sort';
+
+  @override
+  String get runsSortNewest => 'Newest first';
+
+  @override
+  String get runsSortOldest => 'Oldest first';
+
+  @override
+  String get runsSortLongest => 'Longest distance';
+
+  @override
+  String get runsSortFastest => 'Best pace';
+
+  @override
+  String runsSyncTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Sync $count runs',
+      one: 'Sync $count run',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsRefreshTooltip => 'Refresh from cloud';
+
+  @override
+  String get runsOfflineTooltip => 'Offline';
+
+  @override
+  String runsSelectionTitle(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String get runsSelectAllTooltip => 'Select all';
+
+  @override
+  String get runsClearSelectionTooltip => 'Clear';
+
+  @override
+  String get runsDeleteTooltip => 'Delete';
+
+  @override
+  String get runsCancelTooltip => 'Cancel';
+
+  @override
+  String get runsAddRun => 'Add run';
+
+  @override
+  String get runsAddRunTooltip => 'Add a run manually';
+
+  @override
+  String runsLoadMore(int count) {
+    return 'Load $count more';
+  }
+
+  @override
+  String get runsNoMatch => 'No runs match these filters';
+
+  @override
+  String get runsClearFilters => 'Clear filters';
+
+  @override
+  String get runsEmptyTitle => 'No runs yet';
+
+  @override
+  String get runsEmptyBody => 'Tap the Run tab to start your first run';
+
+  @override
+  String get runsFilterAll => 'All';
+
+  @override
+  String get runsSourceAll => 'All sources';
+
+  @override
+  String runsSourceLabel(String source) {
+    return 'Source: $source';
+  }
+
+  @override
+  String get runsSourceFilterTooltip => 'Filter by source';
+
+  @override
+  String get runsSourceRecorded => 'Recorded';
+
+  @override
+  String get runsSourceWatch => 'Watch';
+
+  @override
+  String get runsSourceStrava => 'Strava';
+
+  @override
+  String get runsSourceParkrun => 'parkrun';
+
+  @override
+  String get runsSourceHealthKit => 'HealthKit';
+
+  @override
+  String get runsSourceHealthConnect => 'Health Connect';
+
+  @override
+  String get runsRangePickerTitle => 'Select dates';
+
+  @override
+  String get runsRangeStart => 'Start';
+
+  @override
+  String get runsRangeEnd => 'End';
+
+  @override
+  String get runsRangeTapDate => 'Tap a date';
+
+  @override
+  String get runsRangeApply => 'Apply';
+
+  @override
+  String get runsRangeClear => 'Clear';
+
+  @override
+  String get runsPrevMonth => 'Previous month';
+
+  @override
+  String get runsNextMonth => 'Next month';
+
+  @override
+  String get runsPrevYear => 'Previous year';
+
+  @override
+  String get runsNextYear => 'Next year';
+
+  @override
+  String runsDeleteConfirmTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Delete $count runs?',
+      one: 'Delete $count run?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsDeleteConfirmBody => 'This cannot be undone.';
+
+  @override
+  String get runsCancel => 'Cancel';
+
+  @override
+  String get runsDelete => 'Delete';
+
+  @override
+  String get runsQueuedToSync => 'Queued to sync';
+
+  @override
+  String get runsSignInToSync => 'Sign in from Settings to sync runs';
+
+  @override
+  String get runsRefreshFailed => 'Could not refresh — check your connection';
+
+  @override
+  String get runsLoadMoreFailed => 'Could not load more runs';
+
+  @override
+  String runsSyncPartial(int synced, int total, String error) {
+    return 'Synced $synced/$total. Error: $error';
+  }
+
+  @override
+  String runsSyncTrackFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count runs failed to upload their GPS track — the rest were synced. The failed runs will retry on the next cycle.',
+      one:
+          '$count run failed to upload its GPS track — the rest were synced. It will retry on the next cycle.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runsSyncAllDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'All $count runs synced',
+      one: '$count run synced',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runsDeletePartial(int deleted, int queued) {
+    return '$deleted deleted; $queued queued — will retry when back online.';
+  }
+
+  @override
+  String runsDeleteDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Deleted $count runs',
+      one: 'Deleted $count run',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get addRunTitle => 'Add run';
+
+  @override
+  String get addRunSave => 'Save';
+
+  @override
+  String get addRunSectionWhen => 'When';
+
+  @override
+  String get addRunSectionActivity => 'Activity';
+
+  @override
+  String get addRunSectionRoute => 'Route (optional)';
+
+  @override
+  String get addRunSectionDistance => 'Distance';
+
+  @override
+  String get addRunSectionDuration => 'Duration';
+
+  @override
+  String get addRunSectionTitle => 'Title (optional)';
+
+  @override
+  String get addRunSectionNotes => 'Notes (optional)';
+
+  @override
+  String get addRunClearRoute => 'Clear route';
+
+  @override
+  String get addRunSearchRoutes => 'Search saved routes';
+
+  @override
+  String get addRunNoRoutes =>
+      'No saved routes yet — build or import one to attach it here';
+
+  @override
+  String get addRunDistanceInvalid => 'Enter a distance greater than 0';
+
+  @override
+  String get addRunDurationInvalid => 'Enter a duration';
+
+  @override
+  String get addRunTitleHint => 'e.g. Lunchtime loop';
+
+  @override
+  String get addRunNotesHint => 'How did it feel?';
+
+  @override
+  String get addRunSaveButton => 'Save run';
+
+  @override
+  String addRunSaveFailed(String error) {
+    return 'Failed to save run: $error';
+  }
+
+  @override
+  String get addRunSaved => 'Run added to history';
+
+  @override
+  String get addRunPickerSearchHint => 'Search routes';
+
+  @override
+  String get addRunPickerClear => 'Clear';
+
+  @override
+  String get addRunPickerCancel => 'Cancel';
+
+  @override
+  String addRunPickerNoMatch(String query) {
+    return 'No routes match \"$query\"';
+  }
+
+  @override
+  String get addRunPickerNoRoute => 'No route';
+
+  @override
+  String get runDetailDnfBadge => 'DNF';
+
+  @override
+  String get runDetailEditTooltip => 'Edit run';
+
+  @override
+  String get runDetailShareTooltip => 'Share run';
+
+  @override
+  String get runDetailMoreTooltip => 'More';
+
+  @override
+  String get runDetailSaveAsRoute => 'Save as route';
+
+  @override
+  String get runDetailDeleteRun => 'Delete run';
+
+  @override
+  String get runDetailEditTitle => 'Edit run';
+
+  @override
+  String get runDetailFieldTitle => 'Title';
+
+  @override
+  String get runDetailFieldNotes => 'Notes';
+
+  @override
+  String get runDetailFieldDistance => 'Distance';
+
+  @override
+  String get runDetailFieldDuration => 'Duration';
+
+  @override
+  String get runDetailMarkDnf => 'Mark as DNF';
+
+  @override
+  String get runDetailMarkDnfSubtitle =>
+      'Excludes this run from personal records';
+
+  @override
+  String get runDetailEditInvalid => 'Enter a valid distance and duration';
+
+  @override
+  String get runDetailSave => 'Save';
+
+  @override
+  String get runDetailCancel => 'Cancel';
+
+  @override
+  String get runDetailDelete => 'Delete';
+
+  @override
+  String get runDetailLoadingGps => 'Loading GPS data...';
+
+  @override
+  String get runDetailGpsUnavailable => 'GPS track unavailable offline';
+
+  @override
+  String get runDetailPauseReplay => 'Pause replay';
+
+  @override
+  String get runDetailReplay => 'Replay this run';
+
+  @override
+  String get runDetailStatElevGain => 'Elev Gain';
+
+  @override
+  String get runDetailStatElevLoss => 'Elev Loss';
+
+  @override
+  String get runDetailStatAvgHr => 'Avg HR';
+
+  @override
+  String get runDetailStatAgeGrade => 'Age grade';
+
+  @override
+  String get runDetailSectionElevation => 'Elevation';
+
+  @override
+  String get runDetailSectionLaps => 'Laps';
+
+  @override
+  String runDetailLapNumber(int number) {
+    return 'Lap $number';
+  }
+
+  @override
+  String get runDetailSectionRunningDynamics => 'Running Dynamics';
+
+  @override
+  String get runDetailDynVerticalOsc => 'Vertical oscillation';
+
+  @override
+  String get runDetailDynGroundContact => 'Ground contact';
+
+  @override
+  String get runDetailDynStrideLength => 'Stride length';
+
+  @override
+  String get runDetailDynAvgPower => 'Avg power';
+
+  @override
+  String get runDetailSectionRouteHistory => 'Route History';
+
+  @override
+  String get runDetailThisRoute => 'this route';
+
+  @override
+  String runDetailPersonalBest(String route) {
+    return 'Personal best on $route';
+  }
+
+  @override
+  String runDetailBehindPb(String delta) {
+    return '$delta behind PB';
+  }
+
+  @override
+  String runDetailAttemptOf(int rank, int total, String pb) {
+    return 'Attempt $rank of $total  —  PB: $pb';
+  }
+
+  @override
+  String get runDetailSectionBestEfforts => 'Best Efforts';
+
+  @override
+  String get runDetailSectionHeartRateZones => 'Heart rate zones';
+
+  @override
+  String get runDetailHrAvg => 'Avg';
+
+  @override
+  String get runDetailHrMin => 'Min';
+
+  @override
+  String get runDetailHrMax => 'Max';
+
+  @override
+  String runDetailZoneRow(int number, String label) {
+    return 'Zone $number · $label';
+  }
+
+  @override
+  String get runDetailSectionSplits => 'Splits';
+
+  @override
+  String get runDetailNoGpsForSplits => 'No GPS data for splits';
+
+  @override
+  String runDetailRunTooShortSplit(String unit) {
+    return 'Run too short for a full $unit split';
+  }
+
+  @override
+  String get runDetailSectionSegments => 'Segments';
+
+  @override
+  String get runDetailSaveAsRouteTitle => 'Save as route';
+
+  @override
+  String get runDetailSaveAsRouteBody =>
+      'Save this GPS trace as a route you can follow again.';
+
+  @override
+  String get runDetailRouteNameLabel => 'Route name';
+
+  @override
+  String get runDetailNoTrackToSave =>
+      'This run has no GPS track to save as a route';
+
+  @override
+  String runDetailRouteLinked(String route) {
+    return 'Linked to $route';
+  }
+
+  @override
+  String get runDetailRouteLinkFailed => 'Could not link route';
+
+  @override
+  String get runDetailReSnapping => 'Re-snapping to roads…';
+
+  @override
+  String runDetailRematchFailed(String error) {
+    return 'Re-match failed: $error';
+  }
+
+  @override
+  String runDetailRouteSaved(String name, int kept, int smoothed) {
+    return 'Saved \"$name\" — $kept waypoints ($smoothed smoothed out)';
+  }
+
+  @override
+  String runDetailMakePublicFailed(String error) {
+    return 'Could not make run public: $error';
+  }
+
+  @override
+  String get runDetailMakePublicTitle => 'Make this run public?';
+
+  @override
+  String get runDetailMakePublicBodyZone =>
+      'Sharing flips this run to public so anyone with the link can view it. This run starts or ends inside one of your privacy zones, so viewers will see a clipped track with the in-zone segments hidden.';
+
+  @override
+  String get runDetailMakePublicBodyHasZones =>
+      'Sharing flips this run to public so anyone with the link can view it. None of your privacy zones intersect this track, so the full track will be visible.';
+
+  @override
+  String get runDetailMakePublicBodyNoZones =>
+      'Sharing flips this run to public so anyone with the link can view it — including the start and end points of your run. You have no privacy zones set up. Consider adding one around your home before sharing.';
+
+  @override
+  String get runDetailMakePublic => 'Make public';
+
+  @override
+  String get runDetailDeleteTitle => 'Delete run?';
+
+  @override
+  String get runDetailDeleteBody => 'This cannot be undone.';
+
+  @override
+  String get runDetailSuggestLink => 'Link';
+
+  @override
+  String get runDetailSuggestDismiss => 'Dismiss';
+
+  @override
+  String get runDetailSuggestRanRoute => 'Looks like you ran ';
+
+  @override
+  String get runDetailSuggestLinkPrompt => 'Link this run to that route?';
+
+  @override
+  String get runDetailMatchPending => 'Snapping to roads…';
+
+  @override
+  String get runDetailMatchSkipped => 'Not snapped (too few points)';
+
+  @override
+  String get runDetailMatchFailed => 'Snap failed — showing raw track';
+
+  @override
+  String get runDetailMatchMatched => 'Snapped';
+
+  @override
+  String get runDetailRematchQueueing => 'Queueing…';
+
+  @override
+  String get runDetailRematch => 'Re-match';
+
+  @override
+  String get runDetailSegStatDistance => 'Distance';
+
+  @override
+  String get runDetailSegStatTime => 'Time';
+
+  @override
+  String get runDetailSegStatPace => 'Pace';
+
+  @override
+  String get runDetailSegStatHr => 'HR';
+
+  @override
+  String get runDetailSegStatGain => 'Gain';
+
+  @override
+  String get runDetailSegDismiss => 'Dismiss';
+
+  @override
+  String get publicRunTitle => 'Run';
+
+  @override
+  String get publicRunLoadError => 'Could not load this run.';
+
+  @override
+  String get publicRunUnavailable =>
+      'This run is private or no longer available.';
+
+  @override
+  String get publicRunAuthorFallback => 'Runner';
+
+  @override
+  String get publicRunStatDistance => 'Distance';
+
+  @override
+  String get publicRunStatTime => 'Time';
+
+  @override
+  String get publicRunStatPace => 'Pace';
+
+  @override
+  String get publicRunSectionSegments => 'Segments';
 }

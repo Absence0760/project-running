@@ -578,4 +578,615 @@ class AppLocalizationsJa extends AppLocalizations {
   String runWorkoutRemainingDuration(String duration) {
     return '残り $duration';
   }
+
+  @override
+  String get runsRangeToday => '今日';
+
+  @override
+  String get runsRangeWeek => '今週';
+
+  @override
+  String get runsRangeMonth => '過去30日間';
+
+  @override
+  String get runsRangeYear => '今年';
+
+  @override
+  String get runsRangeAll => '全期間';
+
+  @override
+  String get runsRangeCustom => 'カスタム…';
+
+  @override
+  String runsRangeFrom(String date) {
+    return '$date から';
+  }
+
+  @override
+  String runsRangeUntil(String date) {
+    return '$date まで';
+  }
+
+  @override
+  String runsCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のラン',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsDateRangeTooltip => '期間';
+
+  @override
+  String get runsSortTooltip => '並べ替え';
+
+  @override
+  String get runsSortNewest => '新しい順';
+
+  @override
+  String get runsSortOldest => '古い順';
+
+  @override
+  String get runsSortLongest => '距離が長い順';
+
+  @override
+  String get runsSortFastest => 'ペースが速い順';
+
+  @override
+  String runsSyncTooltip(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランを同期',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsRefreshTooltip => 'クラウドから更新';
+
+  @override
+  String get runsOfflineTooltip => 'オフライン';
+
+  @override
+  String runsSelectionTitle(int count) {
+    return '$count 件選択中';
+  }
+
+  @override
+  String get runsSelectAllTooltip => 'すべて選択';
+
+  @override
+  String get runsClearSelectionTooltip => 'クリア';
+
+  @override
+  String get runsDeleteTooltip => '削除';
+
+  @override
+  String get runsCancelTooltip => 'キャンセル';
+
+  @override
+  String get runsAddRun => 'ランを追加';
+
+  @override
+  String get runsAddRunTooltip => '手動でランを追加';
+
+  @override
+  String runsLoadMore(int count) {
+    return 'さらに $count 件読み込む';
+  }
+
+  @override
+  String get runsNoMatch => 'このフィルターに一致するランはありません';
+
+  @override
+  String get runsClearFilters => 'フィルターをクリア';
+
+  @override
+  String get runsEmptyTitle => 'まだランがありません';
+
+  @override
+  String get runsEmptyBody => '「ラン」タブをタップして最初のランを始めましょう';
+
+  @override
+  String get runsFilterAll => 'すべて';
+
+  @override
+  String get runsSourceAll => 'すべてのソース';
+
+  @override
+  String runsSourceLabel(String source) {
+    return 'ソース: $source';
+  }
+
+  @override
+  String get runsSourceFilterTooltip => 'ソースで絞り込む';
+
+  @override
+  String get runsSourceRecorded => '記録';
+
+  @override
+  String get runsSourceWatch => 'ウォッチ';
+
+  @override
+  String get runsSourceStrava => 'Strava';
+
+  @override
+  String get runsSourceParkrun => 'parkrun';
+
+  @override
+  String get runsSourceHealthKit => 'HealthKit';
+
+  @override
+  String get runsSourceHealthConnect => 'Health Connect';
+
+  @override
+  String get runsRangePickerTitle => '日付を選択';
+
+  @override
+  String get runsRangeStart => '開始';
+
+  @override
+  String get runsRangeEnd => '終了';
+
+  @override
+  String get runsRangeTapDate => '日付をタップ';
+
+  @override
+  String get runsRangeApply => '適用';
+
+  @override
+  String get runsRangeClear => 'クリア';
+
+  @override
+  String get runsPrevMonth => '前の月';
+
+  @override
+  String get runsNextMonth => '次の月';
+
+  @override
+  String get runsPrevYear => '前の年';
+
+  @override
+  String get runsNextYear => '次の年';
+
+  @override
+  String runsDeleteConfirmTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランを削除しますか？',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runsDeleteConfirmBody => 'この操作は元に戻せません。';
+
+  @override
+  String get runsCancel => 'キャンセル';
+
+  @override
+  String get runsDelete => '削除';
+
+  @override
+  String get runsQueuedToSync => '同期待ち';
+
+  @override
+  String get runsSignInToSync => 'ランを同期するには設定からサインインしてください';
+
+  @override
+  String get runsRefreshFailed => '更新できませんでした — 接続を確認してください';
+
+  @override
+  String get runsLoadMoreFailed => 'これ以上ランを読み込めませんでした';
+
+  @override
+  String runsSyncPartial(int synced, int total, String error) {
+    return '$synced/$total を同期しました。エラー: $error';
+  }
+
+  @override
+  String runsSyncTrackFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランで GPS トラックをアップロードできませんでした — 残りは同期されました。次のサイクルで再試行します。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runsSyncAllDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランをすべて同期しました',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runsDeletePartial(int deleted, int queued) {
+    return '$deleted 件削除、$queued 件は待機中 — オンライン復帰時に再試行します。';
+  }
+
+  @override
+  String runsDeleteDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のランを削除しました',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get addRunTitle => 'ランを追加';
+
+  @override
+  String get addRunSave => '保存';
+
+  @override
+  String get addRunSectionWhen => 'いつ';
+
+  @override
+  String get addRunSectionActivity => 'アクティビティ';
+
+  @override
+  String get addRunSectionRoute => 'ルート（任意）';
+
+  @override
+  String get addRunSectionDistance => '距離';
+
+  @override
+  String get addRunSectionDuration => '時間';
+
+  @override
+  String get addRunSectionTitle => 'タイトル（任意）';
+
+  @override
+  String get addRunSectionNotes => 'メモ（任意）';
+
+  @override
+  String get addRunClearRoute => 'ルートをクリア';
+
+  @override
+  String get addRunSearchRoutes => '保存したルートを検索';
+
+  @override
+  String get addRunNoRoutes => '保存したルートはまだありません — 作成またはインポートしてここに添付してください';
+
+  @override
+  String get addRunDistanceInvalid => '0 より大きい距離を入力してください';
+
+  @override
+  String get addRunDurationInvalid => '時間を入力してください';
+
+  @override
+  String get addRunTitleHint => '例: ランチタイムのループ';
+
+  @override
+  String get addRunNotesHint => 'どんな感じでしたか？';
+
+  @override
+  String get addRunSaveButton => 'ランを保存';
+
+  @override
+  String addRunSaveFailed(String error) {
+    return 'ランを保存できませんでした: $error';
+  }
+
+  @override
+  String get addRunSaved => 'ランを履歴に追加しました';
+
+  @override
+  String get addRunPickerSearchHint => 'ルートを検索';
+
+  @override
+  String get addRunPickerClear => 'クリア';
+
+  @override
+  String get addRunPickerCancel => 'キャンセル';
+
+  @override
+  String addRunPickerNoMatch(String query) {
+    return '\"$query\" に一致するルートはありません';
+  }
+
+  @override
+  String get addRunPickerNoRoute => 'ルートなし';
+
+  @override
+  String get runDetailDnfBadge => 'DNF';
+
+  @override
+  String get runDetailEditTooltip => 'ランを編集';
+
+  @override
+  String get runDetailShareTooltip => 'ランを共有';
+
+  @override
+  String get runDetailMoreTooltip => 'その他';
+
+  @override
+  String get runDetailSaveAsRoute => 'ルートとして保存';
+
+  @override
+  String get runDetailDeleteRun => 'ランを削除';
+
+  @override
+  String get runDetailEditTitle => 'ランを編集';
+
+  @override
+  String get runDetailFieldTitle => 'タイトル';
+
+  @override
+  String get runDetailFieldNotes => 'メモ';
+
+  @override
+  String get runDetailFieldDistance => '距離';
+
+  @override
+  String get runDetailFieldDuration => '時間';
+
+  @override
+  String get runDetailMarkDnf => 'DNF としてマーク';
+
+  @override
+  String get runDetailMarkDnfSubtitle => 'このランを自己ベストから除外します';
+
+  @override
+  String get runDetailEditInvalid => '有効な距離と時間を入力してください';
+
+  @override
+  String get runDetailSave => '保存';
+
+  @override
+  String get runDetailCancel => 'キャンセル';
+
+  @override
+  String get runDetailDelete => '削除';
+
+  @override
+  String get runDetailLoadingGps => 'GPS データを読み込み中...';
+
+  @override
+  String get runDetailGpsUnavailable => 'オフラインでは GPS トラックを利用できません';
+
+  @override
+  String get runDetailPauseReplay => '再生を一時停止';
+
+  @override
+  String get runDetailReplay => 'このランを再生';
+
+  @override
+  String get runDetailStatElevGain => '獲得標高';
+
+  @override
+  String get runDetailStatElevLoss => '下り標高';
+
+  @override
+  String get runDetailStatAvgHr => '平均心拍';
+
+  @override
+  String get runDetailStatAgeGrade => '年齢グレード';
+
+  @override
+  String get runDetailSectionElevation => '獲得標高';
+
+  @override
+  String get runDetailSectionLaps => 'ラップ';
+
+  @override
+  String runDetailLapNumber(int number) {
+    return 'ラップ $number';
+  }
+
+  @override
+  String get runDetailSectionRunningDynamics => 'ランニングダイナミクス';
+
+  @override
+  String get runDetailDynVerticalOsc => '上下動';
+
+  @override
+  String get runDetailDynGroundContact => '接地時間';
+
+  @override
+  String get runDetailDynStrideLength => 'ストライド長';
+
+  @override
+  String get runDetailDynAvgPower => '平均パワー';
+
+  @override
+  String get runDetailSectionRouteHistory => 'ルート履歴';
+
+  @override
+  String get runDetailThisRoute => 'このルート';
+
+  @override
+  String runDetailPersonalBest(String route) {
+    return '$route での自己ベスト';
+  }
+
+  @override
+  String runDetailBehindPb(String delta) {
+    return '自己ベストから $delta 遅れ';
+  }
+
+  @override
+  String runDetailAttemptOf(int rank, int total, String pb) {
+    return '$total 回中 $rank 回目  —  自己ベスト: $pb';
+  }
+
+  @override
+  String get runDetailSectionBestEfforts => 'ベストエフォート';
+
+  @override
+  String get runDetailSectionHeartRateZones => '心拍ゾーン';
+
+  @override
+  String get runDetailHrAvg => '平均';
+
+  @override
+  String get runDetailHrMin => '最小';
+
+  @override
+  String get runDetailHrMax => '最大';
+
+  @override
+  String runDetailZoneRow(int number, String label) {
+    return 'ゾーン $number · $label';
+  }
+
+  @override
+  String get runDetailSectionSplits => 'スプリット';
+
+  @override
+  String get runDetailNoGpsForSplits => 'スプリット用の GPS データがありません';
+
+  @override
+  String runDetailRunTooShortSplit(String unit) {
+    return 'ランが短すぎて $unit の完全なスプリットを作成できません';
+  }
+
+  @override
+  String get runDetailSectionSegments => 'セグメント';
+
+  @override
+  String get runDetailSaveAsRouteTitle => 'ルートとして保存';
+
+  @override
+  String get runDetailSaveAsRouteBody => 'この GPS トレースを、もう一度たどれるルートとして保存します。';
+
+  @override
+  String get runDetailRouteNameLabel => 'ルート名';
+
+  @override
+  String get runDetailNoTrackToSave => 'このランにはルートとして保存できる GPS トラックがありません';
+
+  @override
+  String runDetailRouteLinked(String route) {
+    return '$route にリンクしました';
+  }
+
+  @override
+  String get runDetailRouteLinkFailed => 'ルートをリンクできませんでした';
+
+  @override
+  String get runDetailReSnapping => '道路に再スナップ中…';
+
+  @override
+  String runDetailRematchFailed(String error) {
+    return '再マッチに失敗しました: $error';
+  }
+
+  @override
+  String runDetailRouteSaved(String name, int kept, int smoothed) {
+    return '\"$name\" を保存しました — $kept 個のウェイポイント（$smoothed 個を平滑化）';
+  }
+
+  @override
+  String runDetailMakePublicFailed(String error) {
+    return 'ランを公開できませんでした: $error';
+  }
+
+  @override
+  String get runDetailMakePublicTitle => 'このランを公開しますか？';
+
+  @override
+  String get runDetailMakePublicBodyZone =>
+      '共有すると、このランは公開され、リンクを知っている人なら誰でも閲覧できます。このランはプライバシーゾーンのいずれかの内側で開始または終了しているため、閲覧者にはゾーン内の区間が隠された切り取り済みのトラックが表示されます。';
+
+  @override
+  String get runDetailMakePublicBodyHasZones =>
+      '共有すると、このランは公開され、リンクを知っている人なら誰でも閲覧できます。このトラックに交差するプライバシーゾーンはないため、トラック全体が表示されます。';
+
+  @override
+  String get runDetailMakePublicBodyNoZones =>
+      '共有すると、このランは公開され、リンクを知っている人なら誰でも閲覧できます — ランの開始地点と終了地点も含まれます。プライバシーゾーンを設定していません。共有する前に自宅周辺に 1 つ追加することを検討してください。';
+
+  @override
+  String get runDetailMakePublic => '公開する';
+
+  @override
+  String get runDetailDeleteTitle => 'ランを削除しますか？';
+
+  @override
+  String get runDetailDeleteBody => 'この操作は元に戻せません。';
+
+  @override
+  String get runDetailSuggestLink => 'リンク';
+
+  @override
+  String get runDetailSuggestDismiss => '閉じる';
+
+  @override
+  String get runDetailSuggestRanRoute => '走ったのは ';
+
+  @override
+  String get runDetailSuggestLinkPrompt => 'このランをそのルートにリンクしますか？';
+
+  @override
+  String get runDetailMatchPending => '道路にスナップ中…';
+
+  @override
+  String get runDetailMatchSkipped => 'スナップなし（ポイントが少なすぎます）';
+
+  @override
+  String get runDetailMatchFailed => 'スナップに失敗 — 生のトラックを表示中';
+
+  @override
+  String get runDetailMatchMatched => 'スナップ済み';
+
+  @override
+  String get runDetailRematchQueueing => 'キューに追加中…';
+
+  @override
+  String get runDetailRematch => '再マッチ';
+
+  @override
+  String get runDetailSegStatDistance => '距離';
+
+  @override
+  String get runDetailSegStatTime => '時間';
+
+  @override
+  String get runDetailSegStatPace => 'ペース';
+
+  @override
+  String get runDetailSegStatHr => '心拍';
+
+  @override
+  String get runDetailSegStatGain => '獲得標高';
+
+  @override
+  String get runDetailSegDismiss => '閉じる';
+
+  @override
+  String get publicRunTitle => 'ラン';
+
+  @override
+  String get publicRunLoadError => 'このランを読み込めませんでした。';
+
+  @override
+  String get publicRunUnavailable => 'このランは非公開か、すでに利用できません。';
+
+  @override
+  String get publicRunAuthorFallback => 'ランナー';
+
+  @override
+  String get publicRunStatDistance => '距離';
+
+  @override
+  String get publicRunStatTime => '時間';
+
+  @override
+  String get publicRunStatPace => 'ペース';
+
+  @override
+  String get publicRunSectionSegments => 'セグメント';
 }

@@ -810,5 +810,858 @@
         "type": "String"
       }
     }
+  },
+  "runsRangeToday": "Today",
+  "@runsRangeToday": {
+    "description": "History date-range option / header label for runs from today"
+  },
+  "runsRangeWeek": "This week",
+  "@runsRangeWeek": {
+    "description": "History date-range option / header label for runs from the current week"
+  },
+  "runsRangeMonth": "Last 30 days",
+  "@runsRangeMonth": {
+    "description": "History date-range option / header label for runs from the last 30 days"
+  },
+  "runsRangeYear": "This year",
+  "@runsRangeYear": {
+    "description": "History date-range option / header label for runs from the current year"
+  },
+  "runsRangeAll": "All time",
+  "@runsRangeAll": {
+    "description": "History date-range option / header label for all runs ever"
+  },
+  "runsRangeCustom": "Custom…",
+  "@runsRangeCustom": {
+    "description": "History date-range option for picking a custom date range"
+  },
+  "runsRangeFrom": "From {date}",
+  "@runsRangeFrom": {
+    "description": "History header label for an open-ended custom range with only a start date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "runsRangeUntil": "Until {date}",
+  "@runsRangeUntil": {
+    "description": "History header label for an open-ended custom range with only an end date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+  "runsCount": "{count, plural, one{{count} run} other{{count} runs}}",
+  "@runsCount": {
+    "description": "Run-count chip next to the date-range label in the History AppBar title",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsDateRangeTooltip": "Date range",
+  "@runsDateRangeTooltip": {
+    "description": "Tooltip on the History AppBar date-range picker button"
+  },
+  "runsSortTooltip": "Sort",
+  "@runsSortTooltip": {
+    "description": "Tooltip on the History AppBar sort button"
+  },
+  "runsSortNewest": "Newest first",
+  "@runsSortNewest": {
+    "description": "History sort option: newest runs first"
+  },
+  "runsSortOldest": "Oldest first",
+  "@runsSortOldest": {
+    "description": "History sort option: oldest runs first"
+  },
+  "runsSortLongest": "Longest distance",
+  "@runsSortLongest": {
+    "description": "History sort option: longest distance first"
+  },
+  "runsSortFastest": "Best pace",
+  "@runsSortFastest": {
+    "description": "History sort option: fastest pace first"
+  },
+  "runsSyncTooltip": "{count, plural, one{Sync {count} run} other{Sync {count} runs}}",
+  "@runsSyncTooltip": {
+    "description": "Tooltip on the History AppBar sync button, showing how many runs are queued",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsRefreshTooltip": "Refresh from cloud",
+  "@runsRefreshTooltip": {
+    "description": "Tooltip on the History AppBar cloud-refresh button"
+  },
+  "runsOfflineTooltip": "Offline",
+  "@runsOfflineTooltip": {
+    "description": "Tooltip on the disabled cloud icon when signed out"
+  },
+  "runsSelectionTitle": "{count} selected",
+  "@runsSelectionTitle": {
+    "description": "AppBar title in History multi-select mode, showing how many runs are selected",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsSelectAllTooltip": "Select all",
+  "@runsSelectAllTooltip": {
+    "description": "Tooltip on the select-all button in History multi-select mode"
+  },
+  "runsClearSelectionTooltip": "Clear",
+  "@runsClearSelectionTooltip": {
+    "description": "Tooltip on the clear-selection button in History multi-select mode"
+  },
+  "runsDeleteTooltip": "Delete",
+  "@runsDeleteTooltip": {
+    "description": "Tooltip on the delete button in History multi-select mode"
+  },
+  "runsCancelTooltip": "Cancel",
+  "@runsCancelTooltip": {
+    "description": "Tooltip on the cancel button that exits History multi-select mode"
+  },
+  "runsAddRun": "Add run",
+  "@runsAddRun": {
+    "description": "Label on the floating action button that opens the manual add-run form"
+  },
+  "runsAddRunTooltip": "Add a run manually",
+  "@runsAddRunTooltip": {
+    "description": "Tooltip on the add-run floating action button"
+  },
+  "runsLoadMore": "Load {count} more",
+  "@runsLoadMore": {
+    "description": "Button at the bottom of the runs list that reveals the next page of runs",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsNoMatch": "No runs match these filters",
+  "@runsNoMatch": {
+    "description": "Empty-state shown when the active filters exclude every run"
+  },
+  "runsClearFilters": "Clear filters",
+  "@runsClearFilters": {
+    "description": "Button to reset all History filters when none match"
+  },
+  "runsEmptyTitle": "No runs yet",
+  "@runsEmptyTitle": {
+    "description": "Empty-state title shown when the store has no runs at all"
+  },
+  "runsEmptyBody": "Tap the Run tab to start your first run",
+  "@runsEmptyBody": {
+    "description": "Empty-state body shown when the store has no runs at all"
+  },
+  "runsFilterAll": "All",
+  "@runsFilterAll": {
+    "description": "Activity filter chip that clears the activity filter (shows all activities)"
+  },
+  "runsSourceAll": "All sources",
+  "@runsSourceAll": {
+    "description": "Source-filter option that clears the source filter"
+  },
+  "runsSourceLabel": "Source: {source}",
+  "@runsSourceLabel": {
+    "description": "Label on the History source-filter dropdown, showing the active source",
+    "placeholders": {
+      "source": {
+        "type": "String"
+      }
+    }
+  },
+  "runsSourceFilterTooltip": "Filter by source",
+  "@runsSourceFilterTooltip": {
+    "description": "Tooltip on the History source-filter dropdown"
+  },
+  "runsSourceRecorded": "Recorded",
+  "@runsSourceRecorded": {
+    "description": "Source-filter label for runs recorded in-app"
+  },
+  "runsSourceWatch": "Watch",
+  "@runsSourceWatch": {
+    "description": "Source-filter label for runs recorded on a paired watch"
+  },
+  "runsSourceStrava": "Strava",
+  "@runsSourceStrava": {
+    "description": "Source-filter label for runs imported from Strava — brand name, not translated"
+  },
+  "runsSourceParkrun": "parkrun",
+  "@runsSourceParkrun": {
+    "description": "Source-filter label for parkrun-imported runs — brand name, not translated"
+  },
+  "runsSourceHealthKit": "HealthKit",
+  "@runsSourceHealthKit": {
+    "description": "Source-filter label for HealthKit-imported runs — brand name, not translated"
+  },
+  "runsSourceHealthConnect": "Health Connect",
+  "@runsSourceHealthConnect": {
+    "description": "Source-filter label for Health Connect-imported runs — brand name, not translated"
+  },
+  "runsRangePickerTitle": "Select dates",
+  "@runsRangePickerTitle": {
+    "description": "Title of the custom date-range picker bottom sheet"
+  },
+  "runsRangeStart": "Start",
+  "@runsRangeStart": {
+    "description": "Label on the start-date chip in the date-range picker"
+  },
+  "runsRangeEnd": "End",
+  "@runsRangeEnd": {
+    "description": "Label on the end-date chip in the date-range picker"
+  },
+  "runsRangeTapDate": "Tap a date",
+  "@runsRangeTapDate": {
+    "description": "Placeholder on an unset endpoint chip in the date-range picker"
+  },
+  "runsRangeApply": "Apply",
+  "@runsRangeApply": {
+    "description": "Apply button in the date-range picker"
+  },
+  "runsRangeClear": "Clear",
+  "@runsRangeClear": {
+    "description": "Clear button in the date-range picker"
+  },
+  "runsPrevMonth": "Previous month",
+  "@runsPrevMonth": {
+    "description": "Tooltip on the previous-month chevron in the date-range picker"
+  },
+  "runsNextMonth": "Next month",
+  "@runsNextMonth": {
+    "description": "Tooltip on the next-month chevron in the date-range picker"
+  },
+  "runsPrevYear": "Previous year",
+  "@runsPrevYear": {
+    "description": "Tooltip on the previous-year chevron in the date-range picker"
+  },
+  "runsNextYear": "Next year",
+  "@runsNextYear": {
+    "description": "Tooltip on the next-year chevron in the date-range picker"
+  },
+  "runsDeleteConfirmTitle": "{count, plural, one{Delete {count} run?} other{Delete {count} runs?}}",
+  "@runsDeleteConfirmTitle": {
+    "description": "Title of the bulk-delete confirmation dialog",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsDeleteConfirmBody": "This cannot be undone.",
+  "@runsDeleteConfirmBody": {
+    "description": "Body of the bulk-delete confirmation dialog"
+  },
+  "runsCancel": "Cancel",
+  "@runsCancel": {
+    "description": "Cancel action in the bulk-delete confirmation dialog"
+  },
+  "runsDelete": "Delete",
+  "@runsDelete": {
+    "description": "Confirm action in the bulk-delete confirmation dialog"
+  },
+  "runsQueuedToSync": "Queued to sync",
+  "@runsQueuedToSync": {
+    "description": "Tooltip on the per-row unsynced icon in the runs list"
+  },
+  "runsSignInToSync": "Sign in from Settings to sync runs",
+  "@runsSignInToSync": {
+    "description": "Banner shown when tapping sync while signed out"
+  },
+  "runsRefreshFailed": "Could not refresh — check your connection",
+  "@runsRefreshFailed": {
+    "description": "Banner shown when a cloud refresh of the runs list fails"
+  },
+  "runsLoadMoreFailed": "Could not load more runs",
+  "@runsLoadMoreFailed": {
+    "description": "Banner shown when loading the next page of runs fails"
+  },
+  "runsSyncPartial": "Synced {synced}/{total}. Error: {error}",
+  "@runsSyncPartial": {
+    "description": "Banner shown after a sync that partially failed",
+    "placeholders": {
+      "synced": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runsSyncTrackFailed": "{count, plural, one{{count} run failed to upload its GPS track — the rest were synced. It will retry on the next cycle.} other{{count} runs failed to upload their GPS track — the rest were synced. The failed runs will retry on the next cycle.}}",
+  "@runsSyncTrackFailed": {
+    "description": "Detail message (used as the error in runsSyncPartial) when some runs' track uploads fail during a manual sync",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsSyncAllDone": "{count, plural, one{{count} run synced} other{All {count} runs synced}}",
+  "@runsSyncAllDone": {
+    "description": "Banner shown after every unsynced run uploads successfully",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runsDeletePartial": "{deleted} deleted; {queued} queued — will retry when back online.",
+  "@runsDeletePartial": {
+    "description": "Banner shown when some runs deleted but others were queued for retry",
+    "placeholders": {
+      "deleted": {
+        "type": "int"
+      },
+      "queued": {
+        "type": "int"
+      }
+    }
+  },
+  "runsDeleteDone": "{count, plural, one{Deleted {count} run} other{Deleted {count} runs}}",
+  "@runsDeleteDone": {
+    "description": "Banner shown after a successful bulk delete",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "addRunTitle": "Add run",
+  "@addRunTitle": {
+    "description": "AppBar title for the manual add-run form"
+  },
+  "addRunSave": "Save",
+  "@addRunSave": {
+    "description": "AppBar save button on the manual add-run form"
+  },
+  "addRunSectionWhen": "When",
+  "@addRunSectionWhen": {
+    "description": "Section header for the date/time pickers on the add-run form"
+  },
+  "addRunSectionActivity": "Activity",
+  "@addRunSectionActivity": {
+    "description": "Section header for the activity-type chips on the add-run form"
+  },
+  "addRunSectionRoute": "Route (optional)",
+  "@addRunSectionRoute": {
+    "description": "Section header for the optional route picker on the add-run form"
+  },
+  "addRunSectionDistance": "Distance",
+  "@addRunSectionDistance": {
+    "description": "Section header for the distance field on the add-run form"
+  },
+  "addRunSectionDuration": "Duration",
+  "@addRunSectionDuration": {
+    "description": "Section header for the duration fields on the add-run form"
+  },
+  "addRunSectionTitle": "Title (optional)",
+  "@addRunSectionTitle": {
+    "description": "Section header for the optional title field on the add-run form"
+  },
+  "addRunSectionNotes": "Notes (optional)",
+  "@addRunSectionNotes": {
+    "description": "Section header for the optional notes field on the add-run form"
+  },
+  "addRunClearRoute": "Clear route",
+  "@addRunClearRoute": {
+    "description": "Tooltip on the button that clears the selected route on the add-run form"
+  },
+  "addRunSearchRoutes": "Search saved routes",
+  "@addRunSearchRoutes": {
+    "description": "Placeholder in the route picker field when no route is selected"
+  },
+  "addRunNoRoutes": "No saved routes yet — build or import one to attach it here",
+  "@addRunNoRoutes": {
+    "description": "Empty-state hint shown in the route section when the user has no saved routes"
+  },
+  "addRunDistanceInvalid": "Enter a distance greater than 0",
+  "@addRunDistanceInvalid": {
+    "description": "Validation error for the distance field on the add-run form"
+  },
+  "addRunDurationInvalid": "Enter a duration",
+  "@addRunDurationInvalid": {
+    "description": "Validation error for the duration fields on the add-run form"
+  },
+  "addRunTitleHint": "e.g. Lunchtime loop",
+  "@addRunTitleHint": {
+    "description": "Hint text in the title field on the add-run form"
+  },
+  "addRunNotesHint": "How did it feel?",
+  "@addRunNotesHint": {
+    "description": "Hint text in the notes field on the add-run form"
+  },
+  "addRunSaveButton": "Save run",
+  "@addRunSaveButton": {
+    "description": "Primary save button at the bottom of the add-run form"
+  },
+  "addRunSaveFailed": "Failed to save run: {error}",
+  "@addRunSaveFailed": {
+    "description": "Banner shown when saving a manual run fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "addRunSaved": "Run added to history",
+  "@addRunSaved": {
+    "description": "Banner shown after a manual run is saved"
+  },
+  "addRunPickerSearchHint": "Search routes",
+  "@addRunPickerSearchHint": {
+    "description": "Search-field hint in the full-screen route picker"
+  },
+  "addRunPickerClear": "Clear",
+  "@addRunPickerClear": {
+    "description": "Tooltip on the clear-search button in the route picker"
+  },
+  "addRunPickerCancel": "Cancel",
+  "@addRunPickerCancel": {
+    "description": "Tooltip on the close button in the route picker"
+  },
+  "addRunPickerNoMatch": "No routes match \"{query}\"",
+  "@addRunPickerNoMatch": {
+    "description": "Empty-state in the route picker when the search matches nothing",
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "addRunPickerNoRoute": "No route",
+  "@addRunPickerNoRoute": {
+    "description": "Leading option in the route picker that attaches no route"
+  },
+  "runDetailDnfBadge": "DNF",
+  "@runDetailDnfBadge": {
+    "description": "Did-not-finish badge in the run-detail AppBar title — abbreviation, usually left as DNF"
+  },
+  "runDetailEditTooltip": "Edit run",
+  "@runDetailEditTooltip": {
+    "description": "Tooltip on the edit-run button in the run-detail AppBar"
+  },
+  "runDetailShareTooltip": "Share run",
+  "@runDetailShareTooltip": {
+    "description": "Tooltip on the share-run button in the run-detail AppBar"
+  },
+  "runDetailMoreTooltip": "More",
+  "@runDetailMoreTooltip": {
+    "description": "Tooltip on the overflow menu in the run-detail AppBar"
+  },
+  "runDetailSaveAsRoute": "Save as route",
+  "@runDetailSaveAsRoute": {
+    "description": "Overflow-menu / dialog title action to save the run's track as a reusable route"
+  },
+  "runDetailDeleteRun": "Delete run",
+  "@runDetailDeleteRun": {
+    "description": "Overflow-menu action to delete the run"
+  },
+  "runDetailEditTitle": "Edit run",
+  "@runDetailEditTitle": {
+    "description": "Title of the edit-run dialog"
+  },
+  "runDetailFieldTitle": "Title",
+  "@runDetailFieldTitle": {
+    "description": "Label for the title field in the edit-run dialog"
+  },
+  "runDetailFieldNotes": "Notes",
+  "@runDetailFieldNotes": {
+    "description": "Label for the notes field in the edit-run dialog"
+  },
+  "runDetailFieldDistance": "Distance",
+  "@runDetailFieldDistance": {
+    "description": "Label for the distance field in the edit-run dialog"
+  },
+  "runDetailFieldDuration": "Duration",
+  "@runDetailFieldDuration": {
+    "description": "Label for the duration fields in the edit-run dialog"
+  },
+  "runDetailMarkDnf": "Mark as DNF",
+  "@runDetailMarkDnf": {
+    "description": "Checkbox label in the edit-run dialog to mark the run did-not-finish"
+  },
+  "runDetailMarkDnfSubtitle": "Excludes this run from personal records",
+  "@runDetailMarkDnfSubtitle": {
+    "description": "Subtitle under the DNF checkbox in the edit-run dialog"
+  },
+  "runDetailEditInvalid": "Enter a valid distance and duration",
+  "@runDetailEditInvalid": {
+    "description": "Banner shown when the edit-run dialog has invalid distance/duration"
+  },
+  "runDetailSave": "Save",
+  "@runDetailSave": {
+    "description": "Save action in run-detail dialogs"
+  },
+  "runDetailCancel": "Cancel",
+  "@runDetailCancel": {
+    "description": "Cancel action in run-detail dialogs"
+  },
+  "runDetailDelete": "Delete",
+  "@runDetailDelete": {
+    "description": "Confirm action in the delete-run dialog"
+  },
+  "runDetailLoadingGps": "Loading GPS data...",
+  "@runDetailLoadingGps": {
+    "description": "Overlay shown on the run-detail map while the GPS track downloads"
+  },
+  "runDetailGpsUnavailable": "GPS track unavailable offline",
+  "@runDetailGpsUnavailable": {
+    "description": "Overlay shown on the run-detail map when the track can't be fetched offline"
+  },
+  "runDetailPauseReplay": "Pause replay",
+  "@runDetailPauseReplay": {
+    "description": "Tooltip on the trace-replay button while replaying"
+  },
+  "runDetailReplay": "Replay this run",
+  "@runDetailReplay": {
+    "description": "Tooltip on the trace-replay button while idle"
+  },
+  "runDetailStatElevGain": "Elev Gain",
+  "@runDetailStatElevGain": {
+    "description": "Secondary-stat label for elevation gain on run-detail"
+  },
+  "runDetailStatElevLoss": "Elev Loss",
+  "@runDetailStatElevLoss": {
+    "description": "Secondary-stat label for elevation loss on run-detail"
+  },
+  "runDetailStatAvgHr": "Avg HR",
+  "@runDetailStatAvgHr": {
+    "description": "Secondary-stat label for average heart rate on run-detail"
+  },
+  "runDetailStatAgeGrade": "Age grade",
+  "@runDetailStatAgeGrade": {
+    "description": "Secondary-stat label for parkrun age-graded percentage on run-detail"
+  },
+  "runDetailSectionElevation": "Elevation",
+  "@runDetailSectionElevation": {
+    "description": "Section header for the elevation chart on run-detail"
+  },
+  "runDetailSectionLaps": "Laps",
+  "@runDetailSectionLaps": {
+    "description": "Section header for the laps list on run-detail"
+  },
+  "runDetailLapNumber": "Lap {number}",
+  "@runDetailLapNumber": {
+    "description": "Title of a per-lap row on run-detail",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "runDetailSectionRunningDynamics": "Running Dynamics",
+  "@runDetailSectionRunningDynamics": {
+    "description": "Section header for Garmin running-dynamics metrics on run-detail"
+  },
+  "runDetailDynVerticalOsc": "Vertical oscillation",
+  "@runDetailDynVerticalOsc": {
+    "description": "Running-dynamics row label for vertical oscillation"
+  },
+  "runDetailDynGroundContact": "Ground contact",
+  "@runDetailDynGroundContact": {
+    "description": "Running-dynamics row label for ground-contact time"
+  },
+  "runDetailDynStrideLength": "Stride length",
+  "@runDetailDynStrideLength": {
+    "description": "Running-dynamics row label for stride length"
+  },
+  "runDetailDynAvgPower": "Avg power",
+  "@runDetailDynAvgPower": {
+    "description": "Running-dynamics row label for average running power"
+  },
+  "runDetailSectionRouteHistory": "Route History",
+  "@runDetailSectionRouteHistory": {
+    "description": "Section header for the route-comparison card on run-detail"
+  },
+  "runDetailThisRoute": "this route",
+  "@runDetailThisRoute": {
+    "description": "Fallback name used when the linked route has no name, in the route-history card"
+  },
+  "runDetailPersonalBest": "Personal best on {route}",
+  "@runDetailPersonalBest": {
+    "description": "Route-history card line shown when this run is the PB on the route",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailBehindPb": "{delta} behind PB",
+  "@runDetailBehindPb": {
+    "description": "Route-history card line showing how far behind the personal best this run was",
+    "placeholders": {
+      "delta": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailAttemptOf": "Attempt {rank} of {total}  —  PB: {pb}",
+  "@runDetailAttemptOf": {
+    "description": "Route-history card subtitle showing this run's rank among attempts and the PB time",
+    "placeholders": {
+      "rank": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "pb": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailSectionBestEfforts": "Best Efforts",
+  "@runDetailSectionBestEfforts": {
+    "description": "Section header for the auto-detected best-efforts list on run-detail"
+  },
+  "runDetailSectionHeartRateZones": "Heart rate zones",
+  "@runDetailSectionHeartRateZones": {
+    "description": "Section header for the HR-zone breakdown on run-detail"
+  },
+  "runDetailHrAvg": "Avg",
+  "@runDetailHrAvg": {
+    "description": "Stat label for average BPM in the HR-zone breakdown"
+  },
+  "runDetailHrMin": "Min",
+  "@runDetailHrMin": {
+    "description": "Stat label for minimum BPM in the HR-zone breakdown"
+  },
+  "runDetailHrMax": "Max",
+  "@runDetailHrMax": {
+    "description": "Stat label for maximum BPM in the HR-zone breakdown"
+  },
+  "runDetailZoneRow": "Zone {number} · {label}",
+  "@runDetailZoneRow": {
+    "description": "Per-zone legend row in the HR-zone breakdown",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      },
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailSectionSplits": "Splits",
+  "@runDetailSectionSplits": {
+    "description": "Section header for the splits list on run-detail"
+  },
+  "runDetailNoGpsForSplits": "No GPS data for splits",
+  "@runDetailNoGpsForSplits": {
+    "description": "Shown in the splits section when the run has no GPS track"
+  },
+  "runDetailRunTooShortSplit": "Run too short for a full {unit} split",
+  "@runDetailRunTooShortSplit": {
+    "description": "Shown in the splits section when the run is shorter than one full split unit",
+    "placeholders": {
+      "unit": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailSectionSegments": "Segments",
+  "@runDetailSectionSegments": {
+    "description": "Section header for the segment-efforts panel on run-detail"
+  },
+  "runDetailSaveAsRouteTitle": "Save as route",
+  "@runDetailSaveAsRouteTitle": {
+    "description": "Title of the save-as-route dialog"
+  },
+  "runDetailSaveAsRouteBody": "Save this GPS trace as a route you can follow again.",
+  "@runDetailSaveAsRouteBody": {
+    "description": "Body of the save-as-route dialog"
+  },
+  "runDetailRouteNameLabel": "Route name",
+  "@runDetailRouteNameLabel": {
+    "description": "Label for the name field in the save-as-route dialog"
+  },
+  "runDetailNoTrackToSave": "This run has no GPS track to save as a route",
+  "@runDetailNoTrackToSave": {
+    "description": "Banner shown when trying to save a trackless run as a route"
+  },
+  "runDetailRouteLinked": "Linked to {route}",
+  "@runDetailRouteLinked": {
+    "description": "Banner shown after accepting an auto-link route suggestion",
+    "placeholders": {
+      "route": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailRouteLinkFailed": "Could not link route",
+  "@runDetailRouteLinkFailed": {
+    "description": "Banner shown when linking a run to a suggested route fails"
+  },
+  "runDetailReSnapping": "Re-snapping to roads…",
+  "@runDetailReSnapping": {
+    "description": "Banner shown after enqueueing a re-match of the run's track"
+  },
+  "runDetailRematchFailed": "Re-match failed: {error}",
+  "@runDetailRematchFailed": {
+    "description": "Banner shown when the re-match request fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailRouteSaved": "Saved \"{name}\" — {kept} waypoints ({smoothed} smoothed out)",
+  "@runDetailRouteSaved": {
+    "description": "Banner shown after saving a run's track as a route, with waypoint counts",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "kept": {
+        "type": "int"
+      },
+      "smoothed": {
+        "type": "int"
+      }
+    }
+  },
+  "runDetailMakePublicFailed": "Could not make run public: {error}",
+  "@runDetailMakePublicFailed": {
+    "description": "Banner shown when flipping a run to public fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runDetailMakePublicTitle": "Make this run public?",
+  "@runDetailMakePublicTitle": {
+    "description": "Title of the make-run-public confirmation dialog"
+  },
+  "runDetailMakePublicBodyZone": "Sharing flips this run to public so anyone with the link can view it. This run starts or ends inside one of your privacy zones, so viewers will see a clipped track with the in-zone segments hidden.",
+  "@runDetailMakePublicBodyZone": {
+    "description": "Make-public dialog body when the track intersects a privacy zone"
+  },
+  "runDetailMakePublicBodyHasZones": "Sharing flips this run to public so anyone with the link can view it. None of your privacy zones intersect this track, so the full track will be visible.",
+  "@runDetailMakePublicBodyHasZones": {
+    "description": "Make-public dialog body when the user has zones but none intersect this track"
+  },
+  "runDetailMakePublicBodyNoZones": "Sharing flips this run to public so anyone with the link can view it — including the start and end points of your run. You have no privacy zones set up. Consider adding one around your home before sharing.",
+  "@runDetailMakePublicBodyNoZones": {
+    "description": "Make-public dialog body when the user has no privacy zones"
+  },
+  "runDetailMakePublic": "Make public",
+  "@runDetailMakePublic": {
+    "description": "Confirm action in the make-run-public dialog"
+  },
+  "runDetailDeleteTitle": "Delete run?",
+  "@runDetailDeleteTitle": {
+    "description": "Title of the single-run delete confirmation dialog"
+  },
+  "runDetailDeleteBody": "This cannot be undone.",
+  "@runDetailDeleteBody": {
+    "description": "Body of the single-run delete confirmation dialog"
+  },
+  "runDetailSuggestLink": "Link",
+  "@runDetailSuggestLink": {
+    "description": "Confirm action on the auto-link route-suggestion banner"
+  },
+  "runDetailSuggestDismiss": "Dismiss",
+  "@runDetailSuggestDismiss": {
+    "description": "Dismiss action on the auto-link route-suggestion banner"
+  },
+  "runDetailSuggestRanRoute": "Looks like you ran ",
+  "@runDetailSuggestRanRoute": {
+    "description": "Leading text of the auto-link route-suggestion banner, before the bold route name"
+  },
+  "runDetailSuggestLinkPrompt": "Link this run to that route?",
+  "@runDetailSuggestLinkPrompt": {
+    "description": "Sub-line of the auto-link route-suggestion banner"
+  },
+  "runDetailMatchPending": "Snapping to roads…",
+  "@runDetailMatchPending": {
+    "description": "Map-match status pill: snap job is queued"
+  },
+  "runDetailMatchSkipped": "Not snapped (too few points)",
+  "@runDetailMatchSkipped": {
+    "description": "Map-match status pill: snap skipped because the track had too few points"
+  },
+  "runDetailMatchFailed": "Snap failed — showing raw track",
+  "@runDetailMatchFailed": {
+    "description": "Map-match status pill: snap failed, raw track shown instead"
+  },
+  "runDetailMatchMatched": "Snapped",
+  "@runDetailMatchMatched": {
+    "description": "Map-match status pill: track was snapped to roads"
+  },
+  "runDetailRematchQueueing": "Queueing…",
+  "@runDetailRematchQueueing": {
+    "description": "Re-match button label while the enqueue is in flight"
+  },
+  "runDetailRematch": "Re-match",
+  "@runDetailRematch": {
+    "description": "Re-match button label on the map-match status pill"
+  },
+  "runDetailSegStatDistance": "Distance",
+  "@runDetailSegStatDistance": {
+    "description": "Stat label for distance in the tap-to-select segment card"
+  },
+  "runDetailSegStatTime": "Time",
+  "@runDetailSegStatTime": {
+    "description": "Stat label for time in the segment card"
+  },
+  "runDetailSegStatPace": "Pace",
+  "@runDetailSegStatPace": {
+    "description": "Stat label for pace in the segment card"
+  },
+  "runDetailSegStatHr": "HR",
+  "@runDetailSegStatHr": {
+    "description": "Stat label for heart rate in the segment card"
+  },
+  "runDetailSegStatGain": "Gain",
+  "@runDetailSegStatGain": {
+    "description": "Stat label for elevation gain in the segment card"
+  },
+  "runDetailSegDismiss": "Dismiss",
+  "@runDetailSegDismiss": {
+    "description": "Tooltip on the segment card's close button"
+  },
+  "publicRunTitle": "Run",
+  "@publicRunTitle": {
+    "description": "AppBar title for the read-only public run view"
+  },
+  "publicRunLoadError": "Could not load this run.",
+  "@publicRunLoadError": {
+    "description": "Error state shown when the public run fails to load"
+  },
+  "publicRunUnavailable": "This run is private or no longer available.",
+  "@publicRunUnavailable": {
+    "description": "Empty state shown when the public run is private or deleted"
+  },
+  "publicRunAuthorFallback": "Runner",
+  "@publicRunAuthorFallback": {
+    "description": "Fallback author name on the public run view when the profile has no display name"
+  },
+  "publicRunStatDistance": "Distance",
+  "@publicRunStatDistance": {
+    "description": "Stat label for distance on the public run view"
+  },
+  "publicRunStatTime": "Time",
+  "@publicRunStatTime": {
+    "description": "Stat label for time on the public run view"
+  },
+  "publicRunStatPace": "Pace",
+  "@publicRunStatPace": {
+    "description": "Stat label for pace on the public run view"
+  },
+  "publicRunSectionSegments": "Segments",
+  "@publicRunSectionSegments": {
+    "description": "Section header for the segments panel on the public run view"
   }
 }

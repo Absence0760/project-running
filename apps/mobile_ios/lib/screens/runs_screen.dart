@@ -7,6 +7,7 @@ import 'package:core_models/core_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../goals.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -385,36 +386,36 @@ class _RunsScreenState extends State<RunsScreen> {
     return null;
   }
 
-  static String _rangeLabel(_RunsRange range) {
+  static String _rangeLabel(_RunsRange range, AppLocalizations l10n) {
     switch (range) {
       case _RunsRange.today:
-        return 'Today';
+        return l10n.runsRangeToday;
       case _RunsRange.week:
-        return 'This week';
+        return l10n.runsRangeWeek;
       case _RunsRange.month:
-        return 'Last 30 days';
+        return l10n.runsRangeMonth;
       case _RunsRange.year:
-        return 'This year';
+        return l10n.runsRangeYear;
       case _RunsRange.all:
-        return 'All time';
+        return l10n.runsRangeAll;
       case _RunsRange.custom:
-        return 'Custom…';
+        return l10n.runsRangeCustom;
     }
   }
 
   /// Header label for the active range. For preset ranges we render
   /// the static label; for custom we format the picked bounds inline
   /// so the user always sees what window the list is showing.
-  String _activeRangeLabel() {
-    if (_range != _RunsRange.custom) return _rangeLabel(_range);
+  String _activeRangeLabel(AppLocalizations l10n) {
+    if (_range != _RunsRange.custom) return _rangeLabel(_range, l10n);
     final from = _customFrom;
     final to = _customTo;
-    if (from == null && to == null) return 'Custom…';
+    if (from == null && to == null) return l10n.runsRangeCustom;
     if (from != null && to != null) {
       return '${_formatRangeDate(from)} – ${_formatRangeDate(to)}';
     }
-    if (from != null) return 'From ${_formatRangeDate(from)}';
-    return 'Until ${_formatRangeDate(to!)}';
+    if (from != null) return l10n.runsRangeFrom(_formatRangeDate(from));
+    return l10n.runsRangeUntil(_formatRangeDate(to!));
   }
 
   /// Compact "May 1" / "May 1, 2025" date formatter for the header
@@ -461,7 +462,8 @@ class _RunsScreenState extends State<RunsScreen> {
     } catch (e) {
       debugPrint('Fetch remote runs failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not refresh — check your connection');
+        showTopBanner(
+            context, AppLocalizations.of(context).runsRefreshFailed);
       }
     } finally {
       if (mounted) setState(() => _fetching = false);
@@ -530,7 +532,8 @@ class _RunsScreenState extends State<RunsScreen> {
     } catch (e) {
       debugPrint('Load more runs failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not load more runs');
+        showTopBanner(
+            context, AppLocalizations.of(context).runsLoadMoreFailed);
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -538,9 +541,10 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   Future<void> _syncAll() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      showTopBanner(context, 'Sign in from Settings to sync runs');
+      showTopBanner(context, l10n.runsSignInToSync);
       return;
     }
 
@@ -560,9 +564,7 @@ class _RunsScreenState extends State<RunsScreen> {
       );
       synced = unsynced.length - failed.length;
       if (failed.isNotEmpty) {
-        lastError = '${failed.length} run(s) failed to upload their GPS '
-            'track — the rest were synced. The failed runs will retry '
-            'on the next cycle.';
+        lastError = l10n.runsSyncTrackFailed(failed.length);
       }
     } catch (e) {
       lastError = e.toString();
@@ -572,9 +574,10 @@ class _RunsScreenState extends State<RunsScreen> {
 
     if (!mounted) return;
     if (lastError != null) {
-      showTopBanner(context, 'Synced $synced/${unsynced.length}. Error: $lastError');
+      showTopBanner(
+          context, l10n.runsSyncPartial(synced, unsynced.length, lastError));
     } else {
-      showTopBanner(context, 'All $synced runs synced');
+      showTopBanner(context, l10n.runsSyncAllDone(synced));
     }
   }
 
@@ -616,22 +619,23 @@ class _RunsScreenState extends State<RunsScreen> {
   }
 
   Future<void> _deleteSelected() async {
+    final l10n = AppLocalizations.of(context);
     final count = _selected.length;
     if (count == 0) return;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete $count run${count == 1 ? '' : 's'}?'),
-        content: const Text('This cannot be undone.'),
+        title: Text(l10n.runsDeleteConfirmTitle(count)),
+        content: Text(l10n.runsDeleteConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.runsCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.runsDelete),
           ),
         ],
       ),
@@ -675,10 +679,12 @@ class _RunsScreenState extends State<RunsScreen> {
       _selected.clear();
     });
     if (failedIds.isNotEmpty) {
-      showTopBanner(context, '${ids.length - failedIds.length} deleted; '
-            '${failedIds.length} queued — will retry when back online.',);
+      showTopBanner(
+          context,
+          l10n.runsDeletePartial(
+              ids.length - failedIds.length, failedIds.length));
     } else {
-      showTopBanner(context, 'Deleted $count run${count == 1 ? '' : 's'}');
+      showTopBanner(context, l10n.runsDeleteDone(count));
     }
   }
 
@@ -687,6 +693,7 @@ class _RunsScreenState extends State<RunsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final totalCount = widget.runStore.runs.length;
 
@@ -696,16 +703,16 @@ class _RunsScreenState extends State<RunsScreen> {
         if (!didPop && _selecting) _clearSelection();
       },
       child: Scaffold(
-        appBar: _selecting ? _selectionAppBar() : _normalAppBar(),
-        body: _buildBody(theme, unit, totalCount),
+        appBar: _selecting ? _selectionAppBar(l10n) : _normalAppBar(l10n),
+        body: _buildBody(theme, l10n, unit, totalCount),
         floatingActionButton: _selecting
             ? null
             : FloatingActionButton.extended(
                 heroTag: 'history_add_run_fab',
                 onPressed: _openAddRun,
                 icon: const Icon(Icons.add),
-                label: const Text('Add run'),
-                tooltip: 'Add a run manually',
+                label: Text(l10n.runsAddRun),
+                tooltip: l10n.runsAddRunTooltip,
               ),
       ),
     );
@@ -759,7 +766,7 @@ class _RunsScreenState extends State<RunsScreen> {
     _persistFilters();
   }
 
-  AppBar _normalAppBar() {
+  AppBar _normalAppBar(AppLocalizations l10n) {
     final unsyncedCount = widget.runStore.unsyncedCount;
     final visibleCount = _visible.length;
     // Move the date-range label + visible-count into the AppBar
@@ -775,10 +782,10 @@ class _RunsScreenState extends State<RunsScreen> {
         crossAxisAlignment: CrossAxisAlignment.baseline,
         textBaseline: TextBaseline.alphabetic,
         children: [
-          Text(_activeRangeLabel()),
+          Text(_activeRangeLabel(l10n)),
           const SizedBox(width: 8),
           Text(
-            '$visibleCount run${visibleCount == 1 ? '' : 's'}',
+            l10n.runsCount(visibleCount),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
@@ -788,7 +795,7 @@ class _RunsScreenState extends State<RunsScreen> {
       actions: [
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
-          tooltip: 'Date range',
+          tooltip: l10n.runsDateRangeTooltip,
           onSelected: (v) async {
             // Custom always opens the picker, even when already selected
             // — that's the only way to change the bounds without first
@@ -808,13 +815,13 @@ class _RunsScreenState extends State<RunsScreen> {
               .map((r) => CheckedPopupMenuItem(
                     value: r,
                     checked: _range == r,
-                    child: Text(_rangeLabel(r)),
+                    child: Text(_rangeLabel(r, l10n)),
                   ))
               .toList(),
         ),
         PopupMenuButton<_RunsSort>(
           icon: const Icon(Icons.sort),
-          tooltip: 'Sort',
+          tooltip: l10n.runsSortTooltip,
           onSelected: (v) {
             setState(() {
               _sort = v;
@@ -827,22 +834,22 @@ class _RunsScreenState extends State<RunsScreen> {
             CheckedPopupMenuItem(
               value: _RunsSort.newest,
               checked: _sort == _RunsSort.newest,
-              child: const Text('Newest first'),
+              child: Text(l10n.runsSortNewest),
             ),
             CheckedPopupMenuItem(
               value: _RunsSort.oldest,
               checked: _sort == _RunsSort.oldest,
-              child: const Text('Oldest first'),
+              child: Text(l10n.runsSortOldest),
             ),
             CheckedPopupMenuItem(
               value: _RunsSort.longest,
               checked: _sort == _RunsSort.longest,
-              child: const Text('Longest distance'),
+              child: Text(l10n.runsSortLongest),
             ),
             CheckedPopupMenuItem(
               value: _RunsSort.fastest,
               checked: _sort == _RunsSort.fastest,
-              child: const Text('Best pace'),
+              child: Text(l10n.runsSortFastest),
             ),
           ],
         ),
@@ -868,7 +875,7 @@ class _RunsScreenState extends State<RunsScreen> {
               count: unsyncedCount,
               child: IconButton(
                 icon: const Icon(Icons.cloud_upload),
-                tooltip: 'Sync $unsyncedCount runs',
+                tooltip: l10n.runsSyncTooltip(unsyncedCount),
                 onPressed: _syncAll,
               ),
             ),
@@ -876,57 +883,59 @@ class _RunsScreenState extends State<RunsScreen> {
         else if (widget.apiClient?.userId != null)
           IconButton(
             icon: const Icon(Icons.cloud_download),
-            tooltip: 'Refresh from cloud',
+            tooltip: l10n.runsRefreshTooltip,
             onPressed: _fetchRemote,
           )
         else
-          const IconButton(
-            icon: Icon(Icons.cloud_off),
-            tooltip: 'Offline',
+          IconButton(
+            icon: const Icon(Icons.cloud_off),
+            tooltip: l10n.runsOfflineTooltip,
             onPressed: null,
           ),
       ],
     );
   }
 
-  AppBar _selectionAppBar() {
+  AppBar _selectionAppBar(AppLocalizations l10n) {
     final allSelected =
         _visible.isNotEmpty && _selected.length == _visible.length;
     return AppBar(
       leading: IconButton(
         icon: const Icon(Icons.close),
-        tooltip: 'Cancel',
+        tooltip: l10n.runsCancelTooltip,
         onPressed: _clearSelection,
       ),
-      title: Text('${_selected.length} selected'),
+      title: Text(l10n.runsSelectionTitle(_selected.length)),
       actions: [
         IconButton(
           icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
-          tooltip: allSelected ? 'Clear' : 'Select all',
+          tooltip:
+              allSelected ? l10n.runsClearSelectionTooltip : l10n.runsSelectAllTooltip,
           onPressed: allSelected
               ? () => setState(() => _selected.clear())
               : _selectAllVisible,
         ),
         IconButton(
           icon: const Icon(Icons.delete_outline),
-          tooltip: 'Delete',
+          tooltip: l10n.runsDeleteTooltip,
           onPressed: _selected.isEmpty ? null : _deleteSelected,
         ),
       ],
     );
   }
 
-  Widget _buildBody(ThemeData theme, DistanceUnit unit, int totalCount) {
+  Widget _buildBody(
+      ThemeData theme, AppLocalizations l10n, DistanceUnit unit, int totalCount) {
     if (totalCount == 0) {
-      return _EmptyRuns(theme: theme);
+      return _EmptyRuns(theme: theme, l10n: l10n);
     }
     return RefreshIndicator(
       onRefresh: _fetchRemote,
-      child: _buildRunList(theme, unit),
+      child: _buildRunList(theme, l10n, unit),
     );
   }
 
-  Widget _buildRunList(ThemeData theme, DistanceUnit unit) {
+  Widget _buildRunList(ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     // +1 for the header row; +1 for the empty-state message when filters
     // match nothing (so the filter chips stay visible and tappable);
     // +1 for the Load-more footer row when there's potentially another
@@ -972,14 +981,15 @@ class _RunsScreenState extends State<RunsScreen> {
                   : OutlinedButton.icon(
                       onPressed: _loadMore,
                       icon: const Icon(Icons.expand_more),
-                      label: Text('Load $_kRunsPageSize more'),
+                      label: Text(l10n.runsLoadMore(_kRunsPageSize)),
                     ),
             ),
           );
         }
         if (index == 0) {
           return _RunsFilterHeader(
-            rangeLabel: _activeRangeLabel(),
+            l10n: l10n,
+            rangeLabel: _activeRangeLabel(l10n),
             visibleCount: _visible.length,
             summary: summariseRuns(_filtered),
             unit: unit,
@@ -1012,7 +1022,7 @@ class _RunsScreenState extends State<RunsScreen> {
                     size: 48, color: theme.colorScheme.outline),
                 const SizedBox(height: 12),
                 Text(
-                  'No runs match these filters',
+                  l10n.runsNoMatch,
                   style: theme.textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 8),
@@ -1029,7 +1039,7 @@ class _RunsScreenState extends State<RunsScreen> {
                     });
                     _persistFilters();
                   },
-                  child: const Text('Clear filters'),
+                  child: Text(l10n.runsClearFilters),
                 ),
               ],
             ),
@@ -1257,7 +1267,7 @@ class _RunTile extends StatelessWidget {
                   if (isUnsynced) ...[
                     const SizedBox(width: 6),
                     Tooltip(
-                      message: 'Queued to sync',
+                      message: AppLocalizations.of(context).runsQueuedToSync,
                       child: Icon(
                         Icons.cloud_upload_outlined,
                         size: 16,
@@ -1303,7 +1313,8 @@ class _RunTile extends StatelessWidget {
 
 class _EmptyRuns extends StatelessWidget {
   final ThemeData theme;
-  const _EmptyRuns({required this.theme});
+  final AppLocalizations l10n;
+  const _EmptyRuns({required this.theme, required this.l10n});
 
   @override
   Widget build(BuildContext context) {
@@ -1313,10 +1324,10 @@ class _EmptyRuns extends StatelessWidget {
         children: [
           Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
           const SizedBox(height: 16),
-          Text('No runs yet', style: theme.textTheme.headlineSmall),
+          Text(l10n.runsEmptyTitle, style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            'Tap the Run tab to start your first run',
+            l10n.runsEmptyBody,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -1333,6 +1344,7 @@ class _EmptyRuns extends StatelessWidget {
 /// the parent supplies new selections + callbacks, but the widget tree
 /// itself is contained.
 class _RunsFilterHeader extends StatelessWidget {
+  final AppLocalizations l10n;
   final String rangeLabel;
   final int visibleCount;
   /// Aggregate over the *full filtered set* (not the paginated slice).
@@ -1348,6 +1360,7 @@ class _RunsFilterHeader extends StatelessWidget {
   final ValueChanged<RunSource?> onSourceChanged;
 
   const _RunsFilterHeader({
+    required this.l10n,
     required this.rangeLabel,
     required this.visibleCount,
     required this.summary,
@@ -1358,14 +1371,28 @@ class _RunsFilterHeader extends StatelessWidget {
     required this.onSourceChanged,
   });
 
-  static const _sources = <(RunSource, String)>[
-    (RunSource.app, 'Recorded'),
-    (RunSource.watch, 'Watch'),
-    (RunSource.strava, 'Strava'),
-    (RunSource.parkrun, 'parkrun'),
-    (RunSource.healthkit, 'HealthKit'),
-    (RunSource.healthconnect, 'Health Connect'),
+  /// The selectable run sources in display order. Labels are resolved
+  /// from [AppLocalizations] at build time rather than baked in here.
+  static const _sourceOrder = <RunSource>[
+    RunSource.app,
+    RunSource.watch,
+    RunSource.strava,
+    RunSource.parkrun,
+    RunSource.healthkit,
+    RunSource.healthconnect,
   ];
+
+  static String _sourceName(RunSource src, AppLocalizations l10n) {
+    return switch (src) {
+      RunSource.app => l10n.runsSourceRecorded,
+      RunSource.watch => l10n.runsSourceWatch,
+      RunSource.strava => l10n.runsSourceStrava,
+      RunSource.parkrun => l10n.runsSourceParkrun,
+      RunSource.healthkit => l10n.runsSourceHealthKit,
+      RunSource.healthconnect => l10n.runsSourceHealthConnect,
+      _ => l10n.runsSourceAll,
+    };
+  }
 
   /// Format the summary chip — e.g. "47.0 km · 5h 25m". The run
   /// count already prints to the right of the range label, so the
@@ -1378,12 +1405,9 @@ class _RunsFilterHeader extends StatelessWidget {
     return '$dist  ·  $time';
   }
 
-  static String _sourceLabel(RunSource? src) {
-    if (src == null) return 'All sources';
-    for (final s in _sources) {
-      if (s.$1 == src) return s.$2;
-    }
-    return 'All sources';
+  static String _sourceLabel(RunSource? src, AppLocalizations l10n) {
+    if (src == null) return l10n.runsSourceAll;
+    return _sourceName(src, l10n);
   }
 
   @override
@@ -1436,7 +1460,7 @@ class _RunsFilterHeader extends StatelessWidget {
             child: Row(
               children: [
                 FilterChip(
-                  label: const Text('All'),
+                  label: Text(l10n.runsFilterAll),
                   selected: activityFilter == null,
                   onSelected: (_) => onActivityChanged(null),
                 ),
@@ -1461,20 +1485,20 @@ class _RunsFilterHeader extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: PopupMenuButton<RunSource?>(
-            tooltip: 'Filter by source',
+            tooltip: l10n.runsSourceFilterTooltip,
             initialValue: sourceFilter,
             onSelected: onSourceChanged,
             itemBuilder: (_) => [
               CheckedPopupMenuItem(
                 value: null,
                 checked: sourceFilter == null,
-                child: const Text('All sources'),
+                child: Text(l10n.runsSourceAll),
               ),
-              for (final entry in _sources)
+              for (final src in _sourceOrder)
                 CheckedPopupMenuItem(
-                  value: entry.$1,
-                  checked: sourceFilter == entry.$1,
-                  child: Text(entry.$2),
+                  value: src,
+                  checked: sourceFilter == src,
+                  child: Text(_sourceName(src, l10n)),
                 ),
             ],
             child: Padding(
@@ -1486,7 +1510,7 @@ class _RunsFilterHeader extends StatelessWidget {
                       size: 16, color: theme.colorScheme.outline),
                   const SizedBox(width: 6),
                   Text(
-                    'Source: ${_sourceLabel(sourceFilter)}',
+                    l10n.runsSourceLabel(_sourceLabel(sourceFilter, l10n)),
                     style: theme.textTheme.bodyMedium,
                   ),
                   Icon(Icons.arrow_drop_down,
@@ -1642,6 +1666,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final cs = theme.colorScheme;
     final canApply = _pendingFrom != null && _pendingTo != null;
 
@@ -1658,11 +1683,12 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
               child: Row(
                 children: [
-                  Text('Select dates', style: theme.textTheme.titleMedium),
+                  Text(l10n.runsRangePickerTitle,
+                      style: theme.textTheme.titleMedium),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    tooltip: 'Cancel',
+                    tooltip: l10n.runsCancelTooltip,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -1676,7 +1702,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                 children: [
                   Expanded(
                     child: _EndpointChip(
-                      label: 'Start',
+                      label: l10n.runsRangeStart,
                       date: _pendingFrom,
                       active: _pendingFrom == null || !_selectingEnd,
                     ),
@@ -1684,7 +1710,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _EndpointChip(
-                      label: 'End',
+                      label: l10n.runsRangeEnd,
                       date: _pendingTo,
                       active: _selectingEnd,
                     ),
@@ -1704,8 +1730,8 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                     child: _NavGroup(
                       onPrev: _atFirstMonth ? null : () => _stepMonth(-1),
                       onNext: _atLastMonth ? null : () => _stepMonth(1),
-                      prevTooltip: 'Previous month',
-                      nextTooltip: 'Next month',
+                      prevTooltip: l10n.runsPrevMonth,
+                      nextTooltip: l10n.runsNextMonth,
                       child: DropdownButton<int>(
                         value: _viewMonth.month,
                         isExpanded: true,
@@ -1734,8 +1760,8 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                       onNext: _viewMonth.year >= _lastMonth.year
                           ? null
                           : () => _stepYear(1),
-                      prevTooltip: 'Previous year',
-                      nextTooltip: 'Next year',
+                      prevTooltip: l10n.runsPrevYear,
+                      nextTooltip: l10n.runsNextYear,
                       child: DropdownButton<int>(
                         value: _viewMonth.year,
                         isExpanded: true,
@@ -1809,7 +1835,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                   TextButton(
                     onPressed:
                         (_pendingFrom == null && _pendingTo == null) ? null : _clear,
-                    child: const Text('Clear'),
+                    child: Text(l10n.runsRangeClear),
                   ),
                   const Spacer(),
                   FilledButton(
@@ -1821,7 +1847,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                               ),
                             )
                         : null,
-                    child: const Text('Apply'),
+                    child: Text(l10n.runsRangeApply),
                   ),
                 ],
               ),
@@ -1930,7 +1956,9 @@ class _EndpointChip extends StatelessWidget {
           ),
           const SizedBox(height: 2),
           Text(
-            date == null ? 'Tap a date' : _formatChip(date!),
+            date == null
+                ? AppLocalizations.of(context).runsRangeTapDate
+                : _formatChip(date!),
             style: theme.textTheme.titleMedium?.copyWith(
               color: fg,
               fontWeight: FontWeight.w600,

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -186,24 +187,27 @@ class _AddRunScreenState extends State<AddRunScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      showTopBanner(context, 'Failed to save run: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).addRunSaveFailed(e.toString()));
       return;
     }
 
     if (!mounted) return;
+    final added = AppLocalizations.of(context).addRunSaved;
     Navigator.pop(context);
-    showTopBanner(context, 'Run added to history');
+    showTopBanner(context, added);
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final routes = widget.routeStore.routes;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Add run'),
+        title: Text(l10n.addRunTitle),
         actions: [
           TextButton(
             onPressed: _saving ? null : _save,
@@ -213,7 +217,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
                     height: 18,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Text('Save'),
+                : Text(l10n.addRunSave),
           ),
         ],
       ),
@@ -224,7 +228,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
           child: ListView(
             padding: const EdgeInsets.all(16),
           children: [
-            Text('When', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionWhen, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             Row(
               children: [
@@ -246,7 +250,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               ],
             ),
             const SizedBox(height: 20),
-            Text('Activity', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionActivity, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             Wrap(
               spacing: 8,
@@ -261,7 +265,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               }).toList(),
             ),
             const SizedBox(height: 20),
-            Text('Route (optional)', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionRoute, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             if (routes.isNotEmpty) ...[
               InkWell(
@@ -274,13 +278,13 @@ class _AddRunScreenState extends State<AddRunScreen> {
                         ? const Icon(Icons.search)
                         : IconButton(
                             icon: const Icon(Icons.clear),
-                            tooltip: 'Clear route',
+                            tooltip: l10n.addRunClearRoute,
                             onPressed: () => _onRouteSelected(null),
                           ),
                   ),
                   child: Text(
                     _selectedRoute == null
-                        ? 'Search saved routes'
+                        ? l10n.addRunSearchRoutes
                         : '${_selectedRoute!.name} • '
                             '${UnitFormat.distance(_selectedRoute!.distanceMetres, unit)}',
                     style: _selectedRoute == null
@@ -303,7 +307,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
                   suffixIcon: Icon(Icons.route_outlined),
                 ),
                 child: Text(
-                  'No saved routes yet — build or import one to attach it here',
+                  l10n.addRunNoRoutes,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -311,7 +315,7 @@ class _AddRunScreenState extends State<AddRunScreen> {
               ),
             ],
             const SizedBox(height: 20),
-            Text('Distance', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionDistance, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             TextFormField(
               controller: _distanceCtl,
@@ -325,17 +329,17 @@ class _AddRunScreenState extends State<AddRunScreen> {
               ),
               validator: (v) {
                 if (_parseDistanceMetres(v ?? '') == null) {
-                  return 'Enter a distance greater than 0';
+                  return l10n.addRunDistanceInvalid;
                 }
                 return null;
               },
             ),
             const SizedBox(height: 20),
-            Text('Duration', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionDuration, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             FormField<Duration>(
               validator: (_) =>
-                  _parseDuration() == null ? 'Enter a duration' : null,
+                  _parseDuration() == null ? l10n.addRunDurationInvalid : null,
               builder: (state) {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -365,31 +369,31 @@ class _AddRunScreenState extends State<AddRunScreen> {
               },
             ),
             const SizedBox(height: 20),
-            Text('Title (optional)', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionTitle, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             TextFormField(
               controller: _titleCtl,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'e.g. Lunchtime loop',
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: l10n.addRunTitleHint,
               ),
             ),
             const SizedBox(height: 20),
-            Text('Notes (optional)', style: theme.textTheme.labelLarge),
+            Text(l10n.addRunSectionNotes, style: theme.textTheme.labelLarge),
             const SizedBox(height: 8),
             TextFormField(
               controller: _notesCtl,
               maxLines: 3,
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                hintText: 'How did it feel?',
+              decoration: InputDecoration(
+                border: const OutlineInputBorder(),
+                hintText: l10n.addRunNotesHint,
               ),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: _saving ? null : _save,
               icon: const Icon(Icons.check),
-              label: const Text('Save run'),
+              label: Text(l10n.addRunSaveButton),
             ),
           ],
           ),
@@ -487,13 +491,14 @@ class _RoutePickerPageState extends State<_RoutePickerPage> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final filtered = _filtered();
 
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
           icon: const Icon(Icons.close),
-          tooltip: 'Cancel',
+          tooltip: l10n.addRunPickerCancel,
           onPressed: () => Navigator.pop(context),
         ),
         title: TextField(
@@ -501,8 +506,8 @@ class _RoutePickerPageState extends State<_RoutePickerPage> {
           autofocus: true,
           textInputAction: TextInputAction.search,
           style: theme.textTheme.titleMedium,
-          decoration: const InputDecoration(
-            hintText: 'Search routes',
+          decoration: InputDecoration(
+            hintText: l10n.addRunPickerSearchHint,
             border: InputBorder.none,
           ),
           onChanged: (v) => setState(() => _query = v),
@@ -511,7 +516,7 @@ class _RoutePickerPageState extends State<_RoutePickerPage> {
           if (_query.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.clear),
-              tooltip: 'Clear',
+              tooltip: l10n.addRunPickerClear,
               onPressed: () {
                 _searchCtl.clear();
                 setState(() => _query = '');
@@ -524,7 +529,7 @@ class _RoutePickerPageState extends State<_RoutePickerPage> {
         child: filtered.isEmpty
             ? Center(
                 child: Text(
-                  'No routes match "$_query"',
+                  l10n.addRunPickerNoMatch(_query),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -537,7 +542,7 @@ class _RoutePickerPageState extends State<_RoutePickerPage> {
                   if (index == 0) {
                     return ListTile(
                       leading: const Icon(Icons.block),
-                      title: const Text('No route'),
+                      title: Text(l10n.addRunPickerNoRoute),
                       onTap: () =>
                           Navigator.pop(context, const _RoutePick(null)),
                     );

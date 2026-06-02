@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
@@ -116,13 +117,14 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Run')),
+      appBar: AppBar(title: Text(l10n.publicRunTitle)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
               ? ErrorState(
-                  message: 'Could not load this run.',
+                  message: l10n.publicRunLoadError,
                   onRetry: _load,
                 )
               : _row == null
@@ -130,7 +132,7 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Text(
-                          'This run is private or no longer available.',
+                          l10n.publicRunUnavailable,
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
@@ -138,11 +140,11 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
                         ),
                       ),
                     )
-                  : _buildBody(theme, _row!),
+                  : _buildBody(theme, l10n, _row!),
     );
   }
 
-  Widget _buildBody(ThemeData theme, RunRow row) {
+  Widget _buildBody(ThemeData theme, AppLocalizations l10n, RunRow row) {
     final unit = activeDistanceUnit;
     final pace = (row.distanceM > 0 && row.durationS > 0)
         ? row.durationS / (row.distanceM / 1000)
@@ -163,7 +165,7 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
             child: Row(
               children: [
                 Text(
-                  _author!.displayName ?? 'Runner',
+                  _author!.displayName ?? l10n.publicRunAuthorFallback,
                   style: theme.textTheme.titleMedium,
                 ),
                 const Spacer(),
@@ -182,16 +184,16 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _StatBlock(
-                label: 'Distance',
+                label: l10n.publicRunStatDistance,
                 value: UnitFormat.distanceValue(row.distanceM, unit),
                 unit: UnitFormat.distanceLabel(unit),
               ),
               _StatBlock(
-                label: 'Time',
+                label: l10n.publicRunStatTime,
                 value: _fmtDuration(Duration(seconds: row.durationS)),
               ),
               _StatBlock(
-                label: 'Pace',
+                label: l10n.publicRunStatPace,
                 value: pace > 0 ? UnitFormat.pace(pace, unit) : '—',
                 unit: pace > 0 ? UnitFormat.paceLabel(unit) : null,
               ),
@@ -201,7 +203,8 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
         const Divider(),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
-          child: Text('Segments', style: theme.textTheme.titleMedium),
+          child: Text(l10n.publicRunSectionSegments,
+              style: theme.textTheme.titleMedium),
         ),
         RunSegmentEfforts(
           api: widget.api,

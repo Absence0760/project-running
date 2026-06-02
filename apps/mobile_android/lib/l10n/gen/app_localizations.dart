@@ -1150,6 +1150,1062 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{duration} to go'**
   String runWorkoutRemainingDuration(String duration);
+
+  /// History date-range option / header label for runs from today
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get runsRangeToday;
+
+  /// History date-range option / header label for runs from the current week
+  ///
+  /// In en, this message translates to:
+  /// **'This week'**
+  String get runsRangeWeek;
+
+  /// History date-range option / header label for runs from the last 30 days
+  ///
+  /// In en, this message translates to:
+  /// **'Last 30 days'**
+  String get runsRangeMonth;
+
+  /// History date-range option / header label for runs from the current year
+  ///
+  /// In en, this message translates to:
+  /// **'This year'**
+  String get runsRangeYear;
+
+  /// History date-range option / header label for all runs ever
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get runsRangeAll;
+
+  /// History date-range option for picking a custom date range
+  ///
+  /// In en, this message translates to:
+  /// **'Custom…'**
+  String get runsRangeCustom;
+
+  /// History header label for an open-ended custom range with only a start date
+  ///
+  /// In en, this message translates to:
+  /// **'From {date}'**
+  String runsRangeFrom(String date);
+
+  /// History header label for an open-ended custom range with only an end date
+  ///
+  /// In en, this message translates to:
+  /// **'Until {date}'**
+  String runsRangeUntil(String date);
+
+  /// Run-count chip next to the date-range label in the History AppBar title
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run} other{{count} runs}}'**
+  String runsCount(int count);
+
+  /// Tooltip on the History AppBar date-range picker button
+  ///
+  /// In en, this message translates to:
+  /// **'Date range'**
+  String get runsDateRangeTooltip;
+
+  /// Tooltip on the History AppBar sort button
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get runsSortTooltip;
+
+  /// History sort option: newest runs first
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get runsSortNewest;
+
+  /// History sort option: oldest runs first
+  ///
+  /// In en, this message translates to:
+  /// **'Oldest first'**
+  String get runsSortOldest;
+
+  /// History sort option: longest distance first
+  ///
+  /// In en, this message translates to:
+  /// **'Longest distance'**
+  String get runsSortLongest;
+
+  /// History sort option: fastest pace first
+  ///
+  /// In en, this message translates to:
+  /// **'Best pace'**
+  String get runsSortFastest;
+
+  /// Tooltip on the History AppBar sync button, showing how many runs are queued
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Sync {count} run} other{Sync {count} runs}}'**
+  String runsSyncTooltip(int count);
+
+  /// Tooltip on the History AppBar cloud-refresh button
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh from cloud'**
+  String get runsRefreshTooltip;
+
+  /// Tooltip on the disabled cloud icon when signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Offline'**
+  String get runsOfflineTooltip;
+
+  /// AppBar title in History multi-select mode, showing how many runs are selected
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String runsSelectionTitle(int count);
+
+  /// Tooltip on the select-all button in History multi-select mode
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get runsSelectAllTooltip;
+
+  /// Tooltip on the clear-selection button in History multi-select mode
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get runsClearSelectionTooltip;
+
+  /// Tooltip on the delete button in History multi-select mode
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get runsDeleteTooltip;
+
+  /// Tooltip on the cancel button that exits History multi-select mode
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runsCancelTooltip;
+
+  /// Label on the floating action button that opens the manual add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Add run'**
+  String get runsAddRun;
+
+  /// Tooltip on the add-run floating action button
+  ///
+  /// In en, this message translates to:
+  /// **'Add a run manually'**
+  String get runsAddRunTooltip;
+
+  /// Button at the bottom of the runs list that reveals the next page of runs
+  ///
+  /// In en, this message translates to:
+  /// **'Load {count} more'**
+  String runsLoadMore(int count);
+
+  /// Empty-state shown when the active filters exclude every run
+  ///
+  /// In en, this message translates to:
+  /// **'No runs match these filters'**
+  String get runsNoMatch;
+
+  /// Button to reset all History filters when none match
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get runsClearFilters;
+
+  /// Empty-state title shown when the store has no runs at all
+  ///
+  /// In en, this message translates to:
+  /// **'No runs yet'**
+  String get runsEmptyTitle;
+
+  /// Empty-state body shown when the store has no runs at all
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the Run tab to start your first run'**
+  String get runsEmptyBody;
+
+  /// Activity filter chip that clears the activity filter (shows all activities)
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get runsFilterAll;
+
+  /// Source-filter option that clears the source filter
+  ///
+  /// In en, this message translates to:
+  /// **'All sources'**
+  String get runsSourceAll;
+
+  /// Label on the History source-filter dropdown, showing the active source
+  ///
+  /// In en, this message translates to:
+  /// **'Source: {source}'**
+  String runsSourceLabel(String source);
+
+  /// Tooltip on the History source-filter dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Filter by source'**
+  String get runsSourceFilterTooltip;
+
+  /// Source-filter label for runs recorded in-app
+  ///
+  /// In en, this message translates to:
+  /// **'Recorded'**
+  String get runsSourceRecorded;
+
+  /// Source-filter label for runs recorded on a paired watch
+  ///
+  /// In en, this message translates to:
+  /// **'Watch'**
+  String get runsSourceWatch;
+
+  /// Source-filter label for runs imported from Strava — brand name, not translated
+  ///
+  /// In en, this message translates to:
+  /// **'Strava'**
+  String get runsSourceStrava;
+
+  /// Source-filter label for parkrun-imported runs — brand name, not translated
+  ///
+  /// In en, this message translates to:
+  /// **'parkrun'**
+  String get runsSourceParkrun;
+
+  /// Source-filter label for HealthKit-imported runs — brand name, not translated
+  ///
+  /// In en, this message translates to:
+  /// **'HealthKit'**
+  String get runsSourceHealthKit;
+
+  /// Source-filter label for Health Connect-imported runs — brand name, not translated
+  ///
+  /// In en, this message translates to:
+  /// **'Health Connect'**
+  String get runsSourceHealthConnect;
+
+  /// Title of the custom date-range picker bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Select dates'**
+  String get runsRangePickerTitle;
+
+  /// Label on the start-date chip in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get runsRangeStart;
+
+  /// Label on the end-date chip in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'End'**
+  String get runsRangeEnd;
+
+  /// Placeholder on an unset endpoint chip in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a date'**
+  String get runsRangeTapDate;
+
+  /// Apply button in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get runsRangeApply;
+
+  /// Clear button in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get runsRangeClear;
+
+  /// Tooltip on the previous-month chevron in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Previous month'**
+  String get runsPrevMonth;
+
+  /// Tooltip on the next-month chevron in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Next month'**
+  String get runsNextMonth;
+
+  /// Tooltip on the previous-year chevron in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Previous year'**
+  String get runsPrevYear;
+
+  /// Tooltip on the next-year chevron in the date-range picker
+  ///
+  /// In en, this message translates to:
+  /// **'Next year'**
+  String get runsNextYear;
+
+  /// Title of the bulk-delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Delete {count} run?} other{Delete {count} runs?}}'**
+  String runsDeleteConfirmTitle(int count);
+
+  /// Body of the bulk-delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This cannot be undone.'**
+  String get runsDeleteConfirmBody;
+
+  /// Cancel action in the bulk-delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runsCancel;
+
+  /// Confirm action in the bulk-delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get runsDelete;
+
+  /// Tooltip on the per-row unsynced icon in the runs list
+  ///
+  /// In en, this message translates to:
+  /// **'Queued to sync'**
+  String get runsQueuedToSync;
+
+  /// Banner shown when tapping sync while signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in from Settings to sync runs'**
+  String get runsSignInToSync;
+
+  /// Banner shown when a cloud refresh of the runs list fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not refresh — check your connection'**
+  String get runsRefreshFailed;
+
+  /// Banner shown when loading the next page of runs fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more runs'**
+  String get runsLoadMoreFailed;
+
+  /// Banner shown after a sync that partially failed
+  ///
+  /// In en, this message translates to:
+  /// **'Synced {synced}/{total}. Error: {error}'**
+  String runsSyncPartial(int synced, int total, String error);
+
+  /// Detail message (used as the error in runsSyncPartial) when some runs' track uploads fail during a manual sync
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run failed to upload its GPS track — the rest were synced. It will retry on the next cycle.} other{{count} runs failed to upload their GPS track — the rest were synced. The failed runs will retry on the next cycle.}}'**
+  String runsSyncTrackFailed(int count);
+
+  /// Banner shown after every unsynced run uploads successfully
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run synced} other{All {count} runs synced}}'**
+  String runsSyncAllDone(int count);
+
+  /// Banner shown when some runs deleted but others were queued for retry
+  ///
+  /// In en, this message translates to:
+  /// **'{deleted} deleted; {queued} queued — will retry when back online.'**
+  String runsDeletePartial(int deleted, int queued);
+
+  /// Banner shown after a successful bulk delete
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Deleted {count} run} other{Deleted {count} runs}}'**
+  String runsDeleteDone(int count);
+
+  /// AppBar title for the manual add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Add run'**
+  String get addRunTitle;
+
+  /// AppBar save button on the manual add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get addRunSave;
+
+  /// Section header for the date/time pickers on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'When'**
+  String get addRunSectionWhen;
+
+  /// Section header for the activity-type chips on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Activity'**
+  String get addRunSectionActivity;
+
+  /// Section header for the optional route picker on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Route (optional)'**
+  String get addRunSectionRoute;
+
+  /// Section header for the distance field on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get addRunSectionDistance;
+
+  /// Section header for the duration fields on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get addRunSectionDuration;
+
+  /// Section header for the optional title field on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Title (optional)'**
+  String get addRunSectionTitle;
+
+  /// Section header for the optional notes field on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Notes (optional)'**
+  String get addRunSectionNotes;
+
+  /// Tooltip on the button that clears the selected route on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Clear route'**
+  String get addRunClearRoute;
+
+  /// Placeholder in the route picker field when no route is selected
+  ///
+  /// In en, this message translates to:
+  /// **'Search saved routes'**
+  String get addRunSearchRoutes;
+
+  /// Empty-state hint shown in the route section when the user has no saved routes
+  ///
+  /// In en, this message translates to:
+  /// **'No saved routes yet — build or import one to attach it here'**
+  String get addRunNoRoutes;
+
+  /// Validation error for the distance field on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a distance greater than 0'**
+  String get addRunDistanceInvalid;
+
+  /// Validation error for the duration fields on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a duration'**
+  String get addRunDurationInvalid;
+
+  /// Hint text in the title field on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Lunchtime loop'**
+  String get addRunTitleHint;
+
+  /// Hint text in the notes field on the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'How did it feel?'**
+  String get addRunNotesHint;
+
+  /// Primary save button at the bottom of the add-run form
+  ///
+  /// In en, this message translates to:
+  /// **'Save run'**
+  String get addRunSaveButton;
+
+  /// Banner shown when saving a manual run fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to save run: {error}'**
+  String addRunSaveFailed(String error);
+
+  /// Banner shown after a manual run is saved
+  ///
+  /// In en, this message translates to:
+  /// **'Run added to history'**
+  String get addRunSaved;
+
+  /// Search-field hint in the full-screen route picker
+  ///
+  /// In en, this message translates to:
+  /// **'Search routes'**
+  String get addRunPickerSearchHint;
+
+  /// Tooltip on the clear-search button in the route picker
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get addRunPickerClear;
+
+  /// Tooltip on the close button in the route picker
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get addRunPickerCancel;
+
+  /// Empty-state in the route picker when the search matches nothing
+  ///
+  /// In en, this message translates to:
+  /// **'No routes match \"{query}\"'**
+  String addRunPickerNoMatch(String query);
+
+  /// Leading option in the route picker that attaches no route
+  ///
+  /// In en, this message translates to:
+  /// **'No route'**
+  String get addRunPickerNoRoute;
+
+  /// Did-not-finish badge in the run-detail AppBar title — abbreviation, usually left as DNF
+  ///
+  /// In en, this message translates to:
+  /// **'DNF'**
+  String get runDetailDnfBadge;
+
+  /// Tooltip on the edit-run button in the run-detail AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'Edit run'**
+  String get runDetailEditTooltip;
+
+  /// Tooltip on the share-run button in the run-detail AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'Share run'**
+  String get runDetailShareTooltip;
+
+  /// Tooltip on the overflow menu in the run-detail AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get runDetailMoreTooltip;
+
+  /// Overflow-menu / dialog title action to save the run's track as a reusable route
+  ///
+  /// In en, this message translates to:
+  /// **'Save as route'**
+  String get runDetailSaveAsRoute;
+
+  /// Overflow-menu action to delete the run
+  ///
+  /// In en, this message translates to:
+  /// **'Delete run'**
+  String get runDetailDeleteRun;
+
+  /// Title of the edit-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Edit run'**
+  String get runDetailEditTitle;
+
+  /// Label for the title field in the edit-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Title'**
+  String get runDetailFieldTitle;
+
+  /// Label for the notes field in the edit-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get runDetailFieldNotes;
+
+  /// Label for the distance field in the edit-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get runDetailFieldDistance;
+
+  /// Label for the duration fields in the edit-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get runDetailFieldDuration;
+
+  /// Checkbox label in the edit-run dialog to mark the run did-not-finish
+  ///
+  /// In en, this message translates to:
+  /// **'Mark as DNF'**
+  String get runDetailMarkDnf;
+
+  /// Subtitle under the DNF checkbox in the edit-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Excludes this run from personal records'**
+  String get runDetailMarkDnfSubtitle;
+
+  /// Banner shown when the edit-run dialog has invalid distance/duration
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid distance and duration'**
+  String get runDetailEditInvalid;
+
+  /// Save action in run-detail dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get runDetailSave;
+
+  /// Cancel action in run-detail dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runDetailCancel;
+
+  /// Confirm action in the delete-run dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get runDetailDelete;
+
+  /// Overlay shown on the run-detail map while the GPS track downloads
+  ///
+  /// In en, this message translates to:
+  /// **'Loading GPS data...'**
+  String get runDetailLoadingGps;
+
+  /// Overlay shown on the run-detail map when the track can't be fetched offline
+  ///
+  /// In en, this message translates to:
+  /// **'GPS track unavailable offline'**
+  String get runDetailGpsUnavailable;
+
+  /// Tooltip on the trace-replay button while replaying
+  ///
+  /// In en, this message translates to:
+  /// **'Pause replay'**
+  String get runDetailPauseReplay;
+
+  /// Tooltip on the trace-replay button while idle
+  ///
+  /// In en, this message translates to:
+  /// **'Replay this run'**
+  String get runDetailReplay;
+
+  /// Secondary-stat label for elevation gain on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Elev Gain'**
+  String get runDetailStatElevGain;
+
+  /// Secondary-stat label for elevation loss on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Elev Loss'**
+  String get runDetailStatElevLoss;
+
+  /// Secondary-stat label for average heart rate on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Avg HR'**
+  String get runDetailStatAvgHr;
+
+  /// Secondary-stat label for parkrun age-graded percentage on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Age grade'**
+  String get runDetailStatAgeGrade;
+
+  /// Section header for the elevation chart on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation'**
+  String get runDetailSectionElevation;
+
+  /// Section header for the laps list on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Laps'**
+  String get runDetailSectionLaps;
+
+  /// Title of a per-lap row on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Lap {number}'**
+  String runDetailLapNumber(int number);
+
+  /// Section header for Garmin running-dynamics metrics on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Running Dynamics'**
+  String get runDetailSectionRunningDynamics;
+
+  /// Running-dynamics row label for vertical oscillation
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical oscillation'**
+  String get runDetailDynVerticalOsc;
+
+  /// Running-dynamics row label for ground-contact time
+  ///
+  /// In en, this message translates to:
+  /// **'Ground contact'**
+  String get runDetailDynGroundContact;
+
+  /// Running-dynamics row label for stride length
+  ///
+  /// In en, this message translates to:
+  /// **'Stride length'**
+  String get runDetailDynStrideLength;
+
+  /// Running-dynamics row label for average running power
+  ///
+  /// In en, this message translates to:
+  /// **'Avg power'**
+  String get runDetailDynAvgPower;
+
+  /// Section header for the route-comparison card on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Route History'**
+  String get runDetailSectionRouteHistory;
+
+  /// Fallback name used when the linked route has no name, in the route-history card
+  ///
+  /// In en, this message translates to:
+  /// **'this route'**
+  String get runDetailThisRoute;
+
+  /// Route-history card line shown when this run is the PB on the route
+  ///
+  /// In en, this message translates to:
+  /// **'Personal best on {route}'**
+  String runDetailPersonalBest(String route);
+
+  /// Route-history card line showing how far behind the personal best this run was
+  ///
+  /// In en, this message translates to:
+  /// **'{delta} behind PB'**
+  String runDetailBehindPb(String delta);
+
+  /// Route-history card subtitle showing this run's rank among attempts and the PB time
+  ///
+  /// In en, this message translates to:
+  /// **'Attempt {rank} of {total}  —  PB: {pb}'**
+  String runDetailAttemptOf(int rank, int total, String pb);
+
+  /// Section header for the auto-detected best-efforts list on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Best Efforts'**
+  String get runDetailSectionBestEfforts;
+
+  /// Section header for the HR-zone breakdown on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Heart rate zones'**
+  String get runDetailSectionHeartRateZones;
+
+  /// Stat label for average BPM in the HR-zone breakdown
+  ///
+  /// In en, this message translates to:
+  /// **'Avg'**
+  String get runDetailHrAvg;
+
+  /// Stat label for minimum BPM in the HR-zone breakdown
+  ///
+  /// In en, this message translates to:
+  /// **'Min'**
+  String get runDetailHrMin;
+
+  /// Stat label for maximum BPM in the HR-zone breakdown
+  ///
+  /// In en, this message translates to:
+  /// **'Max'**
+  String get runDetailHrMax;
+
+  /// Per-zone legend row in the HR-zone breakdown
+  ///
+  /// In en, this message translates to:
+  /// **'Zone {number} · {label}'**
+  String runDetailZoneRow(int number, String label);
+
+  /// Section header for the splits list on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Splits'**
+  String get runDetailSectionSplits;
+
+  /// Shown in the splits section when the run has no GPS track
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS data for splits'**
+  String get runDetailNoGpsForSplits;
+
+  /// Shown in the splits section when the run is shorter than one full split unit
+  ///
+  /// In en, this message translates to:
+  /// **'Run too short for a full {unit} split'**
+  String runDetailRunTooShortSplit(String unit);
+
+  /// Section header for the segment-efforts panel on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Segments'**
+  String get runDetailSectionSegments;
+
+  /// Title of the save-as-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Save as route'**
+  String get runDetailSaveAsRouteTitle;
+
+  /// Body of the save-as-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Save this GPS trace as a route you can follow again.'**
+  String get runDetailSaveAsRouteBody;
+
+  /// Label for the name field in the save-as-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Route name'**
+  String get runDetailRouteNameLabel;
+
+  /// Banner shown when trying to save a trackless run as a route
+  ///
+  /// In en, this message translates to:
+  /// **'This run has no GPS track to save as a route'**
+  String get runDetailNoTrackToSave;
+
+  /// Banner shown after accepting an auto-link route suggestion
+  ///
+  /// In en, this message translates to:
+  /// **'Linked to {route}'**
+  String runDetailRouteLinked(String route);
+
+  /// Banner shown when linking a run to a suggested route fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not link route'**
+  String get runDetailRouteLinkFailed;
+
+  /// Banner shown after enqueueing a re-match of the run's track
+  ///
+  /// In en, this message translates to:
+  /// **'Re-snapping to roads…'**
+  String get runDetailReSnapping;
+
+  /// Banner shown when the re-match request fails
+  ///
+  /// In en, this message translates to:
+  /// **'Re-match failed: {error}'**
+  String runDetailRematchFailed(String error);
+
+  /// Banner shown after saving a run's track as a route, with waypoint counts
+  ///
+  /// In en, this message translates to:
+  /// **'Saved \"{name}\" — {kept} waypoints ({smoothed} smoothed out)'**
+  String runDetailRouteSaved(String name, int kept, int smoothed);
+
+  /// Banner shown when flipping a run to public fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not make run public: {error}'**
+  String runDetailMakePublicFailed(String error);
+
+  /// Title of the make-run-public confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Make this run public?'**
+  String get runDetailMakePublicTitle;
+
+  /// Make-public dialog body when the track intersects a privacy zone
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing flips this run to public so anyone with the link can view it. This run starts or ends inside one of your privacy zones, so viewers will see a clipped track with the in-zone segments hidden.'**
+  String get runDetailMakePublicBodyZone;
+
+  /// Make-public dialog body when the user has zones but none intersect this track
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing flips this run to public so anyone with the link can view it. None of your privacy zones intersect this track, so the full track will be visible.'**
+  String get runDetailMakePublicBodyHasZones;
+
+  /// Make-public dialog body when the user has no privacy zones
+  ///
+  /// In en, this message translates to:
+  /// **'Sharing flips this run to public so anyone with the link can view it — including the start and end points of your run. You have no privacy zones set up. Consider adding one around your home before sharing.'**
+  String get runDetailMakePublicBodyNoZones;
+
+  /// Confirm action in the make-run-public dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get runDetailMakePublic;
+
+  /// Title of the single-run delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete run?'**
+  String get runDetailDeleteTitle;
+
+  /// Body of the single-run delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This cannot be undone.'**
+  String get runDetailDeleteBody;
+
+  /// Confirm action on the auto-link route-suggestion banner
+  ///
+  /// In en, this message translates to:
+  /// **'Link'**
+  String get runDetailSuggestLink;
+
+  /// Dismiss action on the auto-link route-suggestion banner
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get runDetailSuggestDismiss;
+
+  /// Leading text of the auto-link route-suggestion banner, before the bold route name
+  ///
+  /// In en, this message translates to:
+  /// **'Looks like you ran '**
+  String get runDetailSuggestRanRoute;
+
+  /// Sub-line of the auto-link route-suggestion banner
+  ///
+  /// In en, this message translates to:
+  /// **'Link this run to that route?'**
+  String get runDetailSuggestLinkPrompt;
+
+  /// Map-match status pill: snap job is queued
+  ///
+  /// In en, this message translates to:
+  /// **'Snapping to roads…'**
+  String get runDetailMatchPending;
+
+  /// Map-match status pill: snap skipped because the track had too few points
+  ///
+  /// In en, this message translates to:
+  /// **'Not snapped (too few points)'**
+  String get runDetailMatchSkipped;
+
+  /// Map-match status pill: snap failed, raw track shown instead
+  ///
+  /// In en, this message translates to:
+  /// **'Snap failed — showing raw track'**
+  String get runDetailMatchFailed;
+
+  /// Map-match status pill: track was snapped to roads
+  ///
+  /// In en, this message translates to:
+  /// **'Snapped'**
+  String get runDetailMatchMatched;
+
+  /// Re-match button label while the enqueue is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Queueing…'**
+  String get runDetailRematchQueueing;
+
+  /// Re-match button label on the map-match status pill
+  ///
+  /// In en, this message translates to:
+  /// **'Re-match'**
+  String get runDetailRematch;
+
+  /// Stat label for distance in the tap-to-select segment card
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get runDetailSegStatDistance;
+
+  /// Stat label for time in the segment card
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get runDetailSegStatTime;
+
+  /// Stat label for pace in the segment card
+  ///
+  /// In en, this message translates to:
+  /// **'Pace'**
+  String get runDetailSegStatPace;
+
+  /// Stat label for heart rate in the segment card
+  ///
+  /// In en, this message translates to:
+  /// **'HR'**
+  String get runDetailSegStatHr;
+
+  /// Stat label for elevation gain in the segment card
+  ///
+  /// In en, this message translates to:
+  /// **'Gain'**
+  String get runDetailSegStatGain;
+
+  /// Tooltip on the segment card's close button
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get runDetailSegDismiss;
+
+  /// AppBar title for the read-only public run view
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get publicRunTitle;
+
+  /// Error state shown when the public run fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this run.'**
+  String get publicRunLoadError;
+
+  /// Empty state shown when the public run is private or deleted
+  ///
+  /// In en, this message translates to:
+  /// **'This run is private or no longer available.'**
+  String get publicRunUnavailable;
+
+  /// Fallback author name on the public run view when the profile has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get publicRunAuthorFallback;
+
+  /// Stat label for distance on the public run view
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get publicRunStatDistance;
+
+  /// Stat label for time on the public run view
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get publicRunStatTime;
+
+  /// Stat label for pace on the public run view
+  ///
+  /// In en, this message translates to:
+  /// **'Pace'**
+  String get publicRunStatPace;
+
+  /// Section header for the segments panel on the public run view
+  ///
+  /// In en, this message translates to:
+  /// **'Segments'**
+  String get publicRunSectionSegments;
 }
 
 class _AppLocalizationsDelegate

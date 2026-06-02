@@ -8,6 +8,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/run_detail_screen.dart';
 
 late Directory _runsDir;
@@ -63,6 +64,8 @@ Future<void> _pump(WidgetTester tester, Run run,
 
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: RunDetailScreen(
         run: run,
         runStore: runStore,

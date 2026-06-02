@@ -9,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/runs_screen.dart';
 import '../lib/screens/add_run_screen.dart';
 
@@ -60,6 +61,8 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: RunsScreen(
         apiClient: null,
         runStore: runStore,
@@ -164,6 +167,8 @@ void main() {
       final runStore = LocalRunStore()..debugSeed(threeRuns, dir: _runsDir);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
@@ -201,7 +206,10 @@ void main() {
       final twoRuns = [
         Run(
           id: 'r-current',
-          startedAt: now.subtract(const Duration(days: 1)),
+          // Anchor to mid-month, not `now - 1 day`: on the 1st of a month
+          // that subtraction rolls into the previous month and collides
+          // with `priorMonth`, leaving a single header (wall-clock flake).
+          startedAt: DateTime(now.year, now.month, 15),
           duration: const Duration(minutes: 25),
           distanceMetres: 5000,
           source: RunSource.app,
@@ -218,6 +226,8 @@ void main() {
       final runStore = LocalRunStore()..debugSeed(twoRuns, dir: _runsDir);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
@@ -419,6 +429,8 @@ void main() {
       final s = (runStore: runStore, routeStore: routeStore, prefs: prefs);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: s.runStore,
@@ -458,6 +470,8 @@ void main() {
       final s = (runStore: runStore, routeStore: routeStore, prefs: prefs);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: s.runStore,
@@ -487,6 +501,8 @@ void main() {
       final s = (runStore: runStore, routeStore: routeStore, prefs: prefs);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: s.runStore,
@@ -561,6 +577,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
@@ -592,6 +610,8 @@ void main() {
       final runStore = LocalRunStore()..debugSeed(_makeRuns(3), dir: _runsDir);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
@@ -733,6 +753,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
@@ -793,6 +815,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
@@ -869,6 +893,8 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunsScreen(
             apiClient: null,
             runStore: runStore,
