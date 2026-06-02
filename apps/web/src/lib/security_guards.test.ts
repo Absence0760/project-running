@@ -2191,28 +2191,32 @@ test('Nominatim fallback uses a reachable contact email (no protomaps placeholde
 	);
 });
 
-test('fetchRunGear enumerates only public-safe columns on the gear join', () => {
-	// Reason: audit/public-rows (May 2026). When run_gear visibility
-	// extends to non-owners of public runs (the SELECT policy is
-	// is_run_visible_to-gated), a `gear:gear_id(*)` join would
-	// stream owner-private columns (`notes`, `purchased_at`,
-	// `retired_at`, `target_distance_m`) to any viewer of the public
-	// run if the underlying `gear` RLS ever drifts. Pin the
-	// enumerated allowlist to prevent the column set from regressing
-	// back to `*`.
+test('fetchRunGear routes the non-owner gear read through the public_run_gear RPC', () => {
+	// Reason: audit/public-rows (May 2026). run_gear visibility extends to
+	// non-owners of public runs (the SELECT policy is is_run_visible_to-gated),
+	// so the public run-share page renders the gear chip for anon viewers. A
+	// client-side `run_gear` -> `gear` join can only enforce a column allowlist
+	// in TypeScript — owner-private columns (`notes`, `purchased_at`,
+	// `retired_at`, `target_distance_m`) would still leak the moment the `gear`
+	// RLS drifts or a writer regresses the join back to `*`. Migration
+	// 20261126_001 moved the projection server-side: the `public_run_gear`
+	// SECURITY DEFINER RPC gates on is_run_visible_to and returns ONLY
+	// (id, kind, name, brand, model). Pin that fetchRunGear calls the RPC and
+	// never joins the owner-only gear table directly.
 	const source = read('src/lib/core/data.ts');
 	assert.match(
 		source,
-		/PUBLIC_GEAR_COLUMNS\s*=\s*['"]id,\s*kind,\s*name,\s*brand,\s*model['"]/,
-		'data.ts must declare PUBLIC_GEAR_COLUMNS limited to ' +
-			'(id, kind, name, brand, model) — the gear join in fetchRunGear ' +
-			'is reachable from non-owner viewers of public runs.',
+		/supabase\.rpc\(\s*['"]public_run_gear['"]/,
+		'fetchRunGear must read non-owner gear via the public_run_gear ' +
+			'SECURITY DEFINER RPC (migration 20261126_001), which projects only ' +
+			'the public columns server-side — not a client-side gear-table join.',
 	);
 	assert.doesNotMatch(
 		source,
 		/\.select\(['"`]gear:gear_id\(\*\)['"`]\)/,
-		'fetchRunGear must not select gear:gear_id(*) — use ' +
-			'PUBLIC_GEAR_COLUMNS instead (audit/public-rows).',
+		'fetchRunGear must not select gear:gear_id(*) — that join streams ' +
+			'owner-private inventory columns to public-run viewers. Use the ' +
+			'public_run_gear RPC instead (audit/public-rows).',
 	);
 });
 
