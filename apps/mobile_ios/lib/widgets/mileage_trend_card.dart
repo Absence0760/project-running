@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../mileage_trend.dart';
 import '../preferences.dart';
 
@@ -47,6 +48,7 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
       now: widget.now,
       minBuckets: 3,
       padYearlyToMin: true,
+      localeTag: localeToTag(Localizations.localeOf(context)),
     );
     if (periods.isEmpty) return const SizedBox.shrink();
 

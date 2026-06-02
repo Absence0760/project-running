@@ -1,9 +1,12 @@
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import '../lib/screens/coach_screen.dart';
 
 void main() {
+  setUpAll(() => initializeDateFormatting());
+
   group('coachTitleFromMessage', () {
     test('returns the message verbatim when it fits in 48 chars', () {
       expect(coachTitleFromMessage('How was my last run?'),
@@ -46,16 +49,16 @@ void main() {
     final now = DateTime.utc(2026, 4, 28, 12, 0);
 
     test('returns Today for the same day', () {
-      expect(coachArchiveLabel(now, now: now), 'Today');
+      expect(coachArchiveLabel(now, 'en', now: now), 'Today');
       expect(
-        coachArchiveLabel(now.subtract(const Duration(hours: 6)), now: now),
+        coachArchiveLabel(now.subtract(const Duration(hours: 6)), 'en', now: now),
         'Today',
       );
     });
 
     test('returns Yesterday for 1 day ago', () {
       expect(
-        coachArchiveLabel(now.subtract(const Duration(days: 1)), now: now),
+        coachArchiveLabel(now.subtract(const Duration(days: 1)), 'en', now: now),
         'Yesterday',
       );
     });
@@ -63,21 +66,21 @@ void main() {
     test('returns N days ago for 2..6 days ago', () {
       for (var days = 2; days < 7; days++) {
         expect(
-          coachArchiveLabel(now.subtract(Duration(days: days)), now: now),
+          coachArchiveLabel(now.subtract(Duration(days: days)), 'en', now: now),
           '$days days ago',
         );
       }
     });
 
-    test('returns YYYY-MM-DD beyond a week', () {
+    test('returns a locale-formatted absolute date beyond a week', () {
       final twoWeeks = now.subtract(const Duration(days: 14));
-      expect(coachArchiveLabel(twoWeeks, now: now), '2026-04-14');
+      expect(coachArchiveLabel(twoWeeks, 'en', now: now), '14 Apr 2026');
     });
 
-    test('zero-pads month and day', () {
+    test('formats single-digit month and day', () {
       final earlyJan = DateTime.utc(2026, 1, 3, 12, 0);
       final muchLater = earlyJan.add(const Duration(days: 30));
-      expect(coachArchiveLabel(earlyJan, now: muchLater), '2026-01-03');
+      expect(coachArchiveLabel(earlyJan, 'en', now: muchLater), '3 Jan 2026');
     });
   });
 

@@ -1,5 +1,7 @@
 import 'package:core_models/core_models.dart';
 
+import 'l10n/date_format.dart';
+
 /// One item in the History tab's vertical scroll. Either a month
 /// section header ("May 2026") or a single run tile. Splitting the
 /// pre-computed list out of the ListView keeps the itemBuilder
@@ -42,6 +44,7 @@ class HistoryRun extends HistoryItem {
 List<HistoryItem> buildHistoryItems(
   List<Run> runs, {
   required DateTime now,
+  String localeTag = 'en',
 }) {
   final out = <HistoryItem>[];
   int? lastYear;
@@ -50,7 +53,7 @@ List<HistoryItem> buildHistoryItems(
     final d = r.startedAt.toLocal();
     if (d.year != lastYear || d.month != lastMonth) {
       out.add(HistoryMonthHeader(
-        label: _monthLabel(d, now),
+        label: _monthLabel(d, now, localeTag),
         year: d.year,
         month: d.month,
       ));
@@ -98,13 +101,7 @@ HistoryFilterSummary summariseRuns(List<Run> runs) {
   );
 }
 
-const _monthNames = <String>[
-  '', // 1-indexed
-  'January', 'February', 'March', 'April', 'May', 'June',
-  'July', 'August', 'September', 'October', 'November', 'December',
-];
-
-String _monthLabel(DateTime d, DateTime now) {
-  final name = _monthNames[d.month];
+String _monthLabel(DateTime d, DateTime now, String localeTag) {
+  final name = formatMonthName(d, localeTag);
   return d.year == now.year ? name : '$name ${d.year}';
 }

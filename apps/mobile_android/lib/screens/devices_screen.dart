@@ -2,7 +2,9 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
 
@@ -267,8 +269,9 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                 ],
                               ),
                               subtitle: Text(
-                                l10n.devicesLastSeen(
-                                        _fmtRelative(d.lastSeenAt, l10n)) +
+                                l10n.devicesLastSeen(_fmtRelative(d.lastSeenAt,
+                                        l10n,
+                                        localeToTag(Localizations.localeOf(context)))) +
                                     (overrideCount > 0
                                         ? '  •  ${l10n.devicesOverrideCount(overrideCount)}'
                                         : ''),
@@ -323,7 +326,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
-  static String _fmtRelative(DateTime d, AppLocalizations l10n) {
+  static String _fmtRelative(DateTime d, AppLocalizations l10n, String localeTag) {
     final ms = DateTime.now().toUtc().difference(d.toUtc()).inMilliseconds;
     final mins = ms ~/ 60000;
     if (mins < 1) return l10n.devicesJustNow;
@@ -332,7 +335,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
     if (hrs < 24) return l10n.devicesHoursAgo(hrs);
     final days = hrs ~/ 24;
     if (days < 30) return l10n.devicesDaysAgo(days);
-    return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+    return formatDateMed(d, localeTag);
   }
 }
 

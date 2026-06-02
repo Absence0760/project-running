@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import '../lib/screens/period_summary_screen.dart';
 import '../lib/preferences.dart';
 
@@ -19,6 +20,8 @@ Run _makeRun({
 }
 
 void main() {
+  setUpAll(() => initializeDateFormatting());
+
   // ── periodStart / periodEnd ──────────────────────────────────────────
 
   group('periodStart', () {
@@ -67,25 +70,25 @@ void main() {
   group('periodTitle', () {
     test('week: "Week of <day> <month>"', () {
       final anchor = DateTime(2026, 4, 15); // Wed -> week starts Mon 13 Apr
-      expect(periodTitle(PeriodType.week, anchor), 'Week of 13 Apr');
+      expect(periodTitle(PeriodType.week, anchor, 'en'), 'Week of 13 Apr');
     });
 
     test('month: "<month name> <year>"', () {
       final anchor = DateTime(2026, 11, 5);
-      expect(periodTitle(PeriodType.month, anchor), 'November 2026');
+      expect(periodTitle(PeriodType.month, anchor, 'en'), 'November 2026');
     });
   });
 
   group('periodLabel', () {
     test('week: date range "d Mon – d Mon"', () {
       final anchor = DateTime(2026, 4, 13); // Monday
-      final label = periodLabel(PeriodType.week, anchor);
+      final label = periodLabel(PeriodType.week, anchor, 'en');
       expect(label, '13 Apr – 19 Apr');
     });
 
     test('month: same as title format', () {
       final anchor = DateTime(2026, 2, 14);
-      expect(periodLabel(PeriodType.month, anchor), 'February 2026');
+      expect(periodLabel(PeriodType.month, anchor, 'en'), 'February 2026');
     });
   });
 
@@ -100,8 +103,8 @@ void main() {
     });
 
     test('title and label are both "All time"', () {
-      expect(periodTitle(PeriodType.all, anchor), 'All time');
-      expect(periodLabel(PeriodType.all, anchor), 'All time');
+      expect(periodTitle(PeriodType.all, anchor, 'en'), 'All time');
+      expect(periodLabel(PeriodType.all, anchor, 'en'), 'All time');
     });
 
     test('the [start, end) window brackets runs from any year', () {
@@ -203,6 +206,7 @@ void main() {
         anchor: DateTime(2026, 4, 14),
         runs: runs,
         unit: DistanceUnit.km,
+        localeTag: 'en',
       );
 
       expect(text, contains('Week of 13 Apr'));
@@ -228,6 +232,7 @@ void main() {
         anchor: DateTime(2026, 4, 14),
         runs: runs,
         unit: DistanceUnit.km,
+        localeTag: 'en',
       );
 
       expect(text, contains('April 2026'));
@@ -240,6 +245,7 @@ void main() {
         anchor: DateTime(2026, 4, 14),
         runs: [],
         unit: DistanceUnit.km,
+        localeTag: 'en',
       );
 
       expect(text, contains('0 runs'));
@@ -262,6 +268,7 @@ void main() {
         anchor: DateTime(2026, 4, 14),
         runs: runs,
         unit: DistanceUnit.mi,
+        localeTag: 'en',
       );
 
       expect(text, contains('1.00 mi'));
@@ -295,16 +302,16 @@ void main() {
 
   group('shortDate', () {
     test('formats day and abbreviated month', () {
-      expect(shortDate(DateTime(2026, 1, 5)), '5 Jan');
-      expect(shortDate(DateTime(2026, 12, 31)), '31 Dec');
+      expect(shortDate(DateTime(2026, 1, 5), 'en'), '5 Jan');
+      expect(shortDate(DateTime(2026, 12, 31), 'en'), '31 Dec');
     });
   });
 
   group('monthName', () {
     test('returns full month name', () {
-      expect(monthName(1), 'January');
-      expect(monthName(6), 'June');
-      expect(monthName(12), 'December');
+      expect(monthName(1, 'en'), 'January');
+      expect(monthName(6, 'en'), 'June');
+      expect(monthName(12, 'en'), 'December');
     });
   });
 }

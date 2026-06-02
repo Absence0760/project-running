@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../social_service.dart';
 
 /// Small tappable card shown on the Run tab idle state when the user has
@@ -76,7 +77,7 @@ class UpcomingEventCard extends StatelessWidget {
                           color: theme.colorScheme.outline),
                       const SizedBox(width: 3),
                       Text(
-                        fmtEventDate(when),
+                        fmtEventDate(when, localeToTag(Localizations.localeOf(context))),
                         style: theme.textTheme.bodySmall,
                       ),
                       if (event.row.meetLabel != null) ...[

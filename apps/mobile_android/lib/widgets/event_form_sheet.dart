@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../social_service.dart';
 
 /// Modal bottom sheet for creating a new event under a club. Mirrors
@@ -161,7 +163,8 @@ class _EventFormState extends State<_EventForm> {
                   border: const OutlineInputBorder(),
                   suffixIcon: const Icon(Icons.event),
                 ),
-                child: Text(_fmtDateTime(_starts)),
+                child: Text(formatDateTime(
+                    _starts, localeToTag(Localizations.localeOf(context)))),
               ),
             ),
             const SizedBox(height: 8),
@@ -266,8 +269,4 @@ class _EventFormState extends State<_EventForm> {
     );
   }
 
-  static String _fmtDateTime(DateTime d) {
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${d.year}-${two(d.month)}-${two(d.day)} ${two(d.hour)}:${two(d.minute)}';
-  }
 }

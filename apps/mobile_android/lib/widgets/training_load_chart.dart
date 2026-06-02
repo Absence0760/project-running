@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../training_load.dart';
 
 /// Dashboard "Fitness / Fatigue / Form" chart. Mirrors
@@ -68,13 +70,15 @@ class TrainingLoadChart extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Text(
-                    _fmtDate(points.first.date),
+                    formatMonthDayShort(points.first.date,
+                        localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
                   ),
                   Text(
-                    _fmtDate(points.last.date),
+                    formatMonthDayShort(points.last.date,
+                        localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -98,14 +102,6 @@ class TrainingLoadChart extends StatelessWidget {
         ),
       ),
     );
-  }
-
-  static String _fmtDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${months[d.month - 1]} ${d.day}';
   }
 
   static String _readingFor(AppLocalizations l10n, double tsb) {

@@ -7,7 +7,9 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../recurrence.dart';
 import '../social_service.dart';
@@ -406,7 +408,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   color: theme.colorScheme.outline),
               const SizedBox(width: 6),
               Text(
-                fmtEventDate(active),
+                fmtEventDate(active, localeToTag(Localizations.localeOf(context))),
                 style: theme.textTheme.titleMedium,
               ),
               if (e.row.durationMin != null) ...[
@@ -453,7 +455,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 for (final dt in _instances)
                   ChoiceChip(
                     showCheckmark: false,
-                    label: Text(_shortDate(dt)),
+                    label: Text(formatMonthDayShort(
+                        dt, localeToTag(Localizations.localeOf(context)))),
                     selected: dt == _activeInstance,
                     onSelected: (_) => _pickInstance(dt),
                   ),
@@ -626,12 +629,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     );
   }
 
-  String _shortDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${months[d.month - 1]} ${d.day}';
-  }
 
   /// Admin-only "Race control" panel. Visible to owners / admins /
   /// race directors. Renders the state machine as a single status line
@@ -728,8 +725,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ] else if (status == 'running') ...[
               if (race?.startedAt != null)
                 Text(
-                  l10n.eventRaceStartedAt(
-                      fmtEventDate(race!.startedAt!.toLocal())),
+                  l10n.eventRaceStartedAt(fmtEventDate(
+                      race!.startedAt!.toLocal(),
+                      localeToTag(Localizations.localeOf(context)))),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -1079,7 +1077,7 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
                     return ListTile(
                       dense: true,
                       title: Text(
-                        '${_dateLabel(r.startedAt)} · ${formatDistanceForPref(r.distanceM)}',
+                        '${_dateLabel(r.startedAt, localeToTag(Localizations.localeOf(context)))} · ${formatDistanceForPref(r.distanceM)}',
                       ),
                       subtitle: Text(
                         '${_ResultRow._formatDuration(r.durationS)} · ${r.activityType}',
@@ -1135,10 +1133,6 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
     );
   }
 
-  static String _dateLabel(DateTime dt) {
-    final local = dt.toLocal();
-    final m = local.month.toString().padLeft(2, '0');
-    final d = local.day.toString().padLeft(2, '0');
-    return '${local.year}-$m-$d';
-  }
+  static String _dateLabel(DateTime dt, String localeTag) =>
+      formatDateMed(dt.toLocal(), localeTag);
 }

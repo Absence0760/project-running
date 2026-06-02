@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'geocoding.dart';
+import 'l10n/date_format.dart';
 import 'recurrence.dart';
 
 // Column-level grant lockdown: `clubs.invite_token` is revoked from
@@ -1394,7 +1395,7 @@ String initialFor(String? name) {
   return c.isEmpty ? '?' : c.substring(0, 1).toUpperCase();
 }
 
-String fmtRelative(DateTime when) {
+String fmtRelative(DateTime when, String localeTag) {
   final diff = DateTime.now().difference(when);
   if (diff.inMinutes < 1) return 'Just now';
   if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
@@ -1403,18 +1404,11 @@ String fmtRelative(DateTime when) {
   if (diff.inDays < 7) return '${diff.inDays}d ago';
   final weeks = (diff.inDays / 7).floor();
   if (weeks < 5) return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
-  return '${when.year}-${when.month.toString().padLeft(2, '0')}-${when.day.toString().padLeft(2, '0')}';
+  return formatDateMed(when, localeTag);
 }
 
-String fmtEventDate(DateTime when) {
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
-  final hh = when.hour % 12 == 0 ? 12 : when.hour % 12;
-  final mm = when.minute.toString().padLeft(2, '0');
-  final ap = when.hour < 12 ? 'am' : 'pm';
-  return '${months[when.month - 1]} ${when.day}, $hh:$mm $ap';
-}
+String fmtEventDate(DateTime when, String localeTag) =>
+    '${formatMonthDayShort(when, localeTag)}, ${formatTime(when, localeTag)}';
 
 String fmtKm(num metres) => (metres / 1000).toStringAsFixed(2);
 

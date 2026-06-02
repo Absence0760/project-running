@@ -10,7 +10,9 @@ import 'package:uuid/uuid.dart';
 
 import '../backend_timeout.dart';
 import '../calories.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
@@ -385,7 +387,9 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     }
   }
 
-  String get _title => (run.metadata?['title'] as String?) ?? _formatDate(run.startedAt);
+  String get _title =>
+      (run.metadata?['title'] as String?) ??
+      formatDateMed(run.startedAt, localeToTag(Localizations.localeOf(context)));
   String get _notes => (run.metadata?['notes'] as String?) ?? '';
 
   static const _metresPerMile = 1609.344;
@@ -1952,13 +1956,6 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     }
   }
 
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
 
   static String _formatDuration(Duration d) {
     final h = d.inHours;

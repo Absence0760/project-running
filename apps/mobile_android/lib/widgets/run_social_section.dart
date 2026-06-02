@@ -1,7 +1,9 @@
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../widgets/top_banner.dart';
 
 /// Run-detail kudos pill + one-level comment thread + composer. Mirrors
@@ -380,7 +382,8 @@ class _CommentTile extends StatelessWidget {
                       ),
                     ),
                     Text(
-                      _fmtRelative(entry.comment.createdAt),
+                      _fmtRelative(entry.comment.createdAt,
+                          localeToTag(Localizations.localeOf(context))),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -422,7 +425,7 @@ class _CommentTile extends StatelessWidget {
     );
   }
 
-  static String _fmtRelative(DateTime started) {
+  static String _fmtRelative(DateTime started, String localeTag) {
     final ms = DateTime.now().difference(started).inMilliseconds;
     final mins = ms ~/ 60000;
     if (mins < 1) return 'just now';
@@ -431,7 +434,7 @@ class _CommentTile extends StatelessWidget {
     if (hrs < 24) return '${hrs}h ago';
     final days = hrs ~/ 24;
     if (days < 30) return '${days}d ago';
-    return '${started.day}/${started.month}/${started.year}';
+    return formatDateMed(started, localeTag);
   }
 }
 

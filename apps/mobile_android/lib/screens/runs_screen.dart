@@ -7,7 +7,9 @@ import 'package:core_models/core_models.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../goals.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -411,25 +413,23 @@ class _RunsScreenState extends State<RunsScreen> {
     final from = _customFrom;
     final to = _customTo;
     if (from == null && to == null) return l10n.runsRangeCustom;
+    final tag = localeToTag(Localizations.localeOf(context));
     if (from != null && to != null) {
-      return '${_formatRangeDate(from)} – ${_formatRangeDate(to)}';
+      return '${_formatRangeDate(from, tag)} – ${_formatRangeDate(to, tag)}';
     }
-    if (from != null) return l10n.runsRangeFrom(_formatRangeDate(from));
-    return l10n.runsRangeUntil(_formatRangeDate(to!));
+    if (from != null) return l10n.runsRangeFrom(_formatRangeDate(from, tag));
+    return l10n.runsRangeUntil(_formatRangeDate(to!, tag));
   }
 
   /// Compact "May 1" / "May 1, 2025" date formatter for the header
   /// label. Year is omitted when it matches the current year so the
   /// usual case stays terse; included otherwise so "Jan 5" doesn't
   /// silently mean a different year than the user expects.
-  static String _formatRangeDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
+  static String _formatRangeDate(DateTime d, String tag) {
     final now = DateTime.now();
-    final base = '${months[d.month - 1]} ${d.day}';
-    return d.year == now.year ? base : '$base, ${d.year}';
+    return d.year == now.year
+        ? formatMonthDayShort(d, tag)
+        : '${formatMonthDayShort(d, tag)}, ${d.year}';
   }
 
   Future<void> _fetchRemote() async {
@@ -962,7 +962,9 @@ class _RunsScreenState extends State<RunsScreen> {
     // shape can be unit-tested without a widget pump.
     final items = emptyAfterFilter
         ? const <HistoryItem>[]
-        : buildHistoryItems(_visible, now: DateTime.now());
+        : buildHistoryItems(_visible,
+            now: DateTime.now(),
+            localeTag: localeToTag(Localizations.localeOf(context)));
     return ListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount:
@@ -1153,7 +1155,8 @@ class _RunTile extends StatelessWidget {
     final trailingMetric = activity.usesSpeed
         ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
         : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
-    final date = _formatDate(run.startedAt);
+    final date = formatDateShort(
+        run.startedAt, localeToTag(Localizations.localeOf(context)));
     // Per-row vert chip — persona-hunt Round 3 finding Ultra #4
     // (mobile twin of web `/runs/+page.svelte`). Mirrors the web
     // condition: render only when `metadata.elevation_m` is positive
@@ -1302,13 +1305,6 @@ class _RunTile extends StatelessWidget {
     return '${m}m ${s}s';
   }
 
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${dt.day} ${months[dt.month - 1]}';
-  }
 }
 
 class _EmptyRuns extends StatelessWidget {
@@ -1547,12 +1543,6 @@ class _RangeCalendarSheet extends StatefulWidget {
 }
 
 class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
-  static const List<String> _kMonthNames = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-  static const List<String> _kDowLabels = ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
-
   /// Lower bound of the navigable range. 2 years back covers the vast
   /// majority of running history searches; older runs are reachable via
   /// the All-time preset.
@@ -1742,7 +1732,8 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                             DropdownMenuItem(
                               value: m,
                               alignment: Alignment.center,
-                              child: Text(_kMonthNames[m - 1]),
+                              child: Text(formatMonthName(DateTime(2000, m),
+                                  localeToTag(Localizations.localeOf(context)))),
                             ),
                         ],
                         onChanged: (m) {
@@ -1797,11 +1788,13 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
               ),
               child: Row(
                 children: [
-                  for (final dow in _kDowLabels)
+                  // 2026-01-05 is a Monday; step i days for a Monday-first row.
+                  for (var i = 0; i < 7; i++)
                     Expanded(
                       child: Center(
                         child: Text(
-                          dow,
+                          formatDowNarrow(DateTime(2026, 1, 5).add(Duration(days: i)),
+                              localeToTag(Localizations.localeOf(context))),
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: cs.onSurfaceVariant,
                             fontWeight: FontWeight.w600,
@@ -1958,7 +1951,7 @@ class _EndpointChip extends StatelessWidget {
           Text(
             date == null
                 ? AppLocalizations.of(context).runsRangeTapDate
-                : _formatChip(date!),
+                : _formatChip(date!, localeToTag(Localizations.localeOf(context))),
             style: theme.textTheme.titleMedium?.copyWith(
               color: fg,
               fontWeight: FontWeight.w600,
@@ -1969,14 +1962,9 @@ class _EndpointChip extends StatelessWidget {
     );
   }
 
-  static String _formatChip(DateTime d) {
-    const dows = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
+  static String _formatChip(DateTime d, String tag) {
     final now = DateTime.now();
-    final base = '${dows[d.weekday - 1]}, ${months[d.month - 1]} ${d.day}';
+    final base = formatDowDateShort(d, tag);
     return d.year == now.year ? base : '$base, ${d.year}';
   }
 }
@@ -2024,7 +2012,7 @@ class _MonthGrid extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
               child: Text(
-                '${_RangeCalendarSheetState._kMonthNames[month.month - 1]} '
+                '${formatMonthName(month, localeToTag(Localizations.localeOf(context)))} '
                 '${month.year}',
                 style: theme.textTheme.titleSmall?.copyWith(
                   color: cs.onSurface,

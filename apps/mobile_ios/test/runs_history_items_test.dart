@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import '../lib/runs_history_items.dart';
 
@@ -17,6 +18,8 @@ Run _r(DateTime startedAt, {String id = ''}) {
 }
 
 void main() {
+  setUpAll(() => initializeDateFormatting());
+
   final now = DateTime(2026, 5, 19);
 
   group('buildHistoryItems', () {

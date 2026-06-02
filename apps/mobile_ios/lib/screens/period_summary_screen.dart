@@ -9,7 +9,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../goals.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_run_store.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
@@ -50,27 +52,27 @@ DateTime periodEnd(PeriodType period, DateTime anchor,
   }
 }
 
-String periodTitle(PeriodType period, DateTime anchor,
+String periodTitle(PeriodType period, DateTime anchor, String localeTag,
     {String weekStartDay = 'monday'}) {
   switch (period) {
     case PeriodType.week:
-      return 'Week of ${shortDate(periodStart(period, anchor, weekStartDay: weekStartDay))}';
+      return 'Week of ${shortDate(periodStart(period, anchor, weekStartDay: weekStartDay), localeTag)}';
     case PeriodType.month:
-      return '${monthName(anchor.month)} ${anchor.year}';
+      return '${monthName(anchor.month, localeTag)} ${anchor.year}';
     case PeriodType.all:
       return 'All time';
   }
 }
 
-String periodLabel(PeriodType period, DateTime anchor,
+String periodLabel(PeriodType period, DateTime anchor, String localeTag,
     {String weekStartDay = 'monday'}) {
   final start = periodStart(period, anchor, weekStartDay: weekStartDay);
   switch (period) {
     case PeriodType.week:
       final end = start.add(const Duration(days: 6));
-      return '${shortDate(start)} – ${shortDate(end)}';
+      return '${shortDate(start, localeTag)} – ${shortDate(end, localeTag)}';
     case PeriodType.month:
-      return '${monthName(start.month)} ${start.year}';
+      return '${monthName(start.month, localeTag)} ${start.year}';
     case PeriodType.all:
       return 'All time';
   }
@@ -123,6 +125,7 @@ String buildPeriodShareText({
   required DateTime anchor,
   required List<Run> runs,
   required DistanceUnit unit,
+  required String localeTag,
   String weekStartDay = 'monday',
 }) {
   final stats = computePeriodStats(runs);
@@ -133,7 +136,7 @@ String buildPeriodShareText({
       : null;
 
   final buf = StringBuffer();
-  buf.writeln(periodTitle(period, anchor, weekStartDay: weekStartDay));
+  buf.writeln(periodTitle(period, anchor, localeTag, weekStartDay: weekStartDay));
   buf.writeln('${stats.runCount} run${stats.runCount == 1 ? '' : 's'}');
   buf.writeln('$dist  |  $dur');
   if (pace != null) buf.writeln('Avg pace: $pace');
@@ -143,28 +146,18 @@ String buildPeriodShareText({
     for (final r in runs) {
       final d = UnitFormat.distance(r.distanceMetres, unit);
       final t = formatDurationCoarse(r.duration);
-      buf.writeln('${shortDate(r.startedAt)}  $d  $t');
+      buf.writeln('${shortDate(r.startedAt, localeTag)}  $d  $t');
     }
   }
 
   return buf.toString().trimRight();
 }
 
-String shortDate(DateTime dt) {
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-  return '${dt.day} ${months[dt.month - 1]}';
-}
+String shortDate(DateTime dt, String localeTag) =>
+    formatDateShort(dt, localeTag);
 
-String monthName(int month) {
-  const names = [
-    'January', 'February', 'March', 'April', 'May', 'June',
-    'July', 'August', 'September', 'October', 'November', 'December',
-  ];
-  return names[month - 1];
-}
+String monthName(int month, String localeTag) =>
+    formatMonthName(DateTime(2000, month), localeTag);
 
 String formatDurationCoarse(Duration d) {
   final h = d.inHours;
@@ -292,14 +285,15 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   void _showShareSheet() {
     final unit = widget.preferences.unit;
     final stats = computePeriodStats(_periodRuns);
+    final tag = localeToTag(Localizations.localeOf(context));
 
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => _PeriodShareSheet(
-        periodTitle: periodTitle(_period, _anchor, weekStartDay: _weekStartDay),
-        periodLabel: periodLabel(_period, _anchor, weekStartDay: _weekStartDay),
+        periodTitle: periodTitle(_period, _anchor, tag, weekStartDay: _weekStartDay),
+        periodLabel: periodLabel(_period, _anchor, tag, weekStartDay: _weekStartDay),
         periodName: _period.name,
         periodStartIso: periodStart(_period, _anchor, weekStartDay: _weekStartDay)
             .toIso8601String(),
@@ -308,6 +302,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
           anchor: _anchor,
           runs: _periodRuns,
           unit: unit,
+          localeTag: tag,
           weekStartDay: _weekStartDay,
         ),
         stats: stats,
@@ -383,6 +378,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 
   Widget _buildPeriodNav(ThemeData theme) {
     final l10n = AppLocalizations.of(context);
+    final tag = localeToTag(Localizations.localeOf(context));
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -398,7 +394,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             child: Column(
               children: [
                 Text(
-                  periodTitle(_period, _anchor, weekStartDay: _weekStartDay),
+                  periodTitle(_period, _anchor, tag, weekStartDay: _weekStartDay),
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -576,7 +572,8 @@ class _RunTile extends StatelessWidget {
     final trailingMetric = activity.usesSpeed
         ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
         : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}';
-    final date = _formatDate(run.startedAt);
+    final date =
+        formatDateShort(run.startedAt, localeToTag(Localizations.localeOf(context)));
 
     return Card(
       child: ListTile(
@@ -598,14 +595,6 @@ class _RunTile extends StatelessWidget {
     final s = d.inSeconds % 60;
     if (h > 0) return '${h}h ${m}m';
     return '${m}m ${s}s';
-  }
-
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${dt.day} ${months[dt.month - 1]}';
   }
 }
 

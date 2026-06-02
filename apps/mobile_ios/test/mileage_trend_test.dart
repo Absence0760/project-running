@@ -1,5 +1,6 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import '../lib/mileage_trend.dart';
 
@@ -16,6 +17,8 @@ Run _run({
     );
 
 void main() {
+  setUpAll(() => initializeDateFormatting());
+
   final now = DateTime(2026, 5, 19, 12); // Tuesday
 
   group('aggregateMileage — weekly', () {

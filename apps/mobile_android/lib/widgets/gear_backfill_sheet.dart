@@ -2,7 +2,9 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import 'top_banner.dart';
 
@@ -110,8 +112,8 @@ class _GearBackfillSheetState extends State<_GearBackfillSheet> {
   String _formatRunLabel(cm.Run r) {
     final unit = widget.preferences.unit;
     final distance = UnitFormat.distance(r.distanceMetres, unit);
-    final date =
-        '${r.startedAt.toLocal().year}-${r.startedAt.toLocal().month.toString().padLeft(2, '0')}-${r.startedAt.toLocal().day.toString().padLeft(2, '0')}';
+    final date = formatDateMed(
+        r.startedAt.toLocal(), localeToTag(Localizations.localeOf(context)));
     return '$date  •  $distance';
   }
 

@@ -3,7 +3,9 @@ import 'package:flutter/material.dart' hide Route;
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -235,7 +237,8 @@ class _AddRunScreenState extends State<AddRunScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.calendar_today_outlined),
-                    label: Text(_formatDate(_startedAt)),
+                    label: Text(formatDateMed(
+                        _startedAt, localeToTag(Localizations.localeOf(context)))),
                     onPressed: _pickDate,
                   ),
                 ),
@@ -417,14 +420,6 @@ class _AddRunScreenState extends State<AddRunScreen> {
         suffixText: suffix,
       ),
     );
-  }
-
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 
   static String _formatTime(DateTime dt) {

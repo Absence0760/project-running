@@ -110,3 +110,33 @@ Locale negotiateLocale(String? stored, List<Locale> devicePreferred) {
   }
   return defaultLocale;
 }
+
+// The active app-locale tag, kept in sync by `main.dart` (mirrors the
+// `registerActivePreferences` pattern in `preferences.dart`). `main.dart`
+// owns the reactive `localeNotifier`; importing it here would cycle, so the
+// resolved tag is pushed in via [registerActiveLocaleTag] on every locale
+// change instead. Surfaces without a `BuildContext` (share cards,
+// notification text, period-summary share text) read [activeLocaleTag];
+// where a context exists, prefer `Localizations.localeOf(context)`.
+String _activeLocaleTag = localeToTag(defaultLocale);
+
+/// Register the resolved active-locale tag. Called from `main.dart` on
+/// startup and whenever `localeNotifier` changes. Idempotent.
+void registerActiveLocaleTag(String tag) {
+  _activeLocaleTag = tag;
+}
+
+/// The current active-locale tag (`en`, `pt-BR`). Falls back to the default
+/// locale's tag before `main.dart` has registered one (host-test runner,
+/// very early app start). Use this for date formatting on context-free
+/// surfaces; with a `BuildContext`, prefer `Localizations.localeOf(context)`.
+String get activeLocaleTag => _activeLocaleTag;
+
+/// Resolve the active-locale tag from the user's stored choice (null =
+/// follow device) negotiated against the device's preferred locales. Pure —
+/// `main.dart` calls this with `localeNotifier.value` + the platform
+/// locales to compute the tag it then registers.
+String resolveActiveLocaleTag(
+        Locale? stored, List<Locale> devicePreferred) =>
+    localeToTag(negotiateLocale(
+        stored == null ? null : localeToTag(stored), devicePreferred));

@@ -1,7 +1,9 @@
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../training.dart';
 
 /// Month-by-month calendar projection of a training plan, mirroring the
@@ -62,6 +64,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
+    final tag = localeToTag(Localizations.localeOf(context));
     final months = _months;
     if (months.isEmpty) return const SizedBox.shrink();
     final current = months[_currentIdx];
@@ -96,7 +99,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
                 tooltip: l10n.planCalendarPrevMonth,
               ),
               Text(
-                '${_monthLabel(current.month)} ${current.year}',
+                '${formatMonthName(DateTime(current.year, current.month + 1), tag)} ${current.year}',
                 style: theme.textTheme.titleMedium,
               ),
               IconButton(
@@ -111,11 +114,12 @@ class _PlanCalendarState extends State<PlanCalendar> {
           const SizedBox(height: 8),
           Row(
             children: [
-              for (final d in _dow)
+              for (var i = 0; i < 7; i++)
                 Expanded(
                   child: Center(
                     child: Text(
-                      d,
+                      // 2026-01-05 is a Monday; step i days for a Monday-first row.
+                      formatDow(DateTime(2026, 1, 5).add(Duration(days: i)), tag),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.outline,
                         fontWeight: FontWeight.w600,
@@ -276,15 +280,6 @@ class _PlanCalendarState extends State<PlanCalendar> {
     }
   }
 
-  static const _dow = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
-  static String _monthLabel(int m) {
-    const labels = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December'
-    ];
-    return labels[m];
-  }
 
   static String _toIso(DateTime d) {
     final y = d.year.toString().padLeft(4, '0');

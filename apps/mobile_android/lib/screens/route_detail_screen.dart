@@ -9,7 +9,9 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../backend_timeout.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
@@ -853,7 +855,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                                 const Spacer(),
                                 if (review.createdAt != null)
                                   Text(
-                                    _formatDate(review.createdAt!),
+                                    formatDateShort(review.createdAt!,
+                                        localeToTag(Localizations.localeOf(context))),
                                     style: theme.textTheme.bodySmall?.copyWith(
                                       color: theme.colorScheme.outline,
                                     ),
@@ -1054,13 +1057,6 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     if (context.mounted) Navigator.pop(context);
   }
 
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${dt.day} ${months[dt.month - 1]}';
-  }
 
   static IconData _surfaceIcon(String surface) {
     switch (surface) {

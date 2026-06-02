@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:api_client/api_client.dart';
 import 'package:sentry_flutter/sentry_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -44,6 +45,11 @@ StreamSubscription<AuthState>? _authStateSub;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Load the locale-specific date symbols so `intl`'s DateFormat renders
+  // month / weekday names in the active language. Cheap, idempotent, and
+  // required before any non-`en` DateFormat is constructed.
+  await initializeDateFormatting();
 
   // Replace Flutter's default red-screen error widget in release builds
   // with a quiet fallback card. A crash inside a single subtree (most
@@ -171,6 +177,19 @@ void main() async {
   // Null = follow the device locale (negotiated in MaterialApp). Must run
   // before runApp so the first frame paints in the chosen language.
   localeNotifier.value = prefs.locale;
+
+  // Keep the context-free active-locale tag in sync with the notifier so
+  // date formatting on surfaces without a BuildContext (share cards,
+  // notification text, period-summary share text) follows the user's
+  // language. Resolve once now, then on every locale change.
+  void syncActiveLocaleTag() {
+    registerActiveLocaleTag(resolveActiveLocaleTag(
+        localeNotifier.value,
+        PlatformDispatcher.instance.locales));
+  }
+
+  syncActiveLocaleTag();
+  localeNotifier.addListener(syncActiveLocaleTag);
 
   // Recover a run that was in progress when the app was last killed
   // (crash, force-stop, OOM). We promote the partial data to a regular

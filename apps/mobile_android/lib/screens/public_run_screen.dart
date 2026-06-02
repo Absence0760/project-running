@@ -2,7 +2,9 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
@@ -170,7 +172,8 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  _fmtDateTime(row.startedAt),
+                  formatDateTime(row.startedAt.toLocal(),
+                      localeToTag(Localizations.localeOf(context))),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -230,12 +233,6 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
         const SizedBox(height: 32),
       ],
     );
-  }
-
-  static String _fmtDateTime(DateTime d) {
-    final local = d.toLocal();
-    String two(int n) => n.toString().padLeft(2, '0');
-    return '${local.year}-${two(local.month)}-${two(local.day)} ${two(local.hour)}:${two(local.minute)}';
   }
 
   static String _fmtDuration(Duration d) {

@@ -12,7 +12,9 @@ import 'package:path_provider/path_provider.dart';
 import 'live_run_map.dart' show currentTileUrl;
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../tile_cache.dart';
@@ -390,7 +392,7 @@ class RunShareCard extends StatelessWidget {
               ),
               const SizedBox(height: 2),
               Text(
-                '${activity.label} · ${_formatDate(run.startedAt)}',
+                '${activity.label} · ${formatDateMed(run.startedAt, activeLocaleTag)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
@@ -730,10 +732,3 @@ String _formatDuration(Duration d) {
   return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
 }
 
-String _formatDate(DateTime dt) {
-  const months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-  ];
-  return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-}

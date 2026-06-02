@@ -4,7 +4,9 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../social_service.dart' show ClubView, SocialService;
 import '../training.dart';
@@ -456,8 +458,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     final kind = workoutKindFromDb(wo.kind);
     final isRest = kind == WorkoutKind.rest;
     final isToday = toIsoDate(wo.scheduledDate) == today;
-    final dow = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
-        [wo.scheduledDate.weekday % 7];
+    final dow = formatDow(
+        wo.scheduledDate, localeToTag(Localizations.localeOf(context)));
     return InkWell(
       onTap: isRest ? null : () => _openWorkout(wo),
       onLongPress: () => _editWorkout(wo),

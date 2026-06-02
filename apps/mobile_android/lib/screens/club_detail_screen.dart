@@ -8,7 +8,9 @@ import 'package:core_models/core_models.dart' hide Route;
 
 import 'package:api_client/api_client.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
@@ -583,7 +585,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     color: theme.colorScheme.outline),
                 const SizedBox(width: 4),
                 Text(
-                  fmtEventDate(e.nextInstanceStart),
+                  fmtEventDate(e.nextInstanceStart,
+                      localeToTag(Localizations.localeOf(context))),
                   style: theme.textTheme.bodySmall,
                 ),
                 const SizedBox(width: 12),
@@ -678,7 +681,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
-                      fmtRelative(p.row.createdAt ?? DateTime.now()),
+                      fmtRelative(p.row.createdAt ?? DateTime.now(),
+                          localeToTag(Localizations.localeOf(context))),
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
@@ -730,7 +734,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                                 l10n.clubDetailReplyAuthorLine(
                                     r.authorName ?? l10n.clubDetailMemberFallback,
                                     fmtRelative(
-                                        r.row.createdAt ?? DateTime.now())),
+                                        r.row.createdAt ?? DateTime.now(),
+                                        localeToTag(Localizations.localeOf(context)))),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: theme.colorScheme.outline,
@@ -865,14 +870,16 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     child: Column(
                       children: [
                         Text(
-                          fmtEventDate(e.nextInstanceStart).split(',').first,
+                          formatMonthDayShort(e.nextInstanceStart,
+                              localeToTag(Localizations.localeOf(context))),
                           style: theme.textTheme.titleSmall?.copyWith(
                             color: theme.colorScheme.primary,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
                         Text(
-                          fmtEventDate(e.nextInstanceStart).split(', ').last,
+                          formatTime(e.nextInstanceStart,
+                              localeToTag(Localizations.localeOf(context))),
                           style: theme.textTheme.bodySmall?.copyWith(
                             color: theme.colorScheme.outline,
                           ),

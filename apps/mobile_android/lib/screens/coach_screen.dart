@@ -12,7 +12,9 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend_timeout.dart';
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../training_service.dart';
 import '../widgets/top_banner.dart';
 
@@ -27,15 +29,15 @@ String coachTitleFromMessage(String content) {
 }
 
 /// Render a relative archive label ("Today", "Yesterday", "3 days ago",
-/// or YYYY-MM-DD beyond a week). The optional [now] is for tests; in
-/// production the call site uses `DateTime.now()` implicitly.
-String coachArchiveLabel(DateTime t, {DateTime? now}) {
+/// or a locale-formatted absolute date beyond a week). The optional [now]
+/// is for tests; in production the call site uses `DateTime.now()`.
+String coachArchiveLabel(DateTime t, String localeTag, {DateTime? now}) {
   final reference = now ?? DateTime.now();
   final diff = reference.difference(t);
   if (diff.inDays <= 0) return 'Today';
   if (diff.inDays == 1) return 'Yesterday';
   if (diff.inDays < 7) return '${diff.inDays} days ago';
-  return '${t.year}-${t.month.toString().padLeft(2, '0')}-${t.day.toString().padLeft(2, '0')}';
+  return formatDateMed(t, localeTag);
 }
 
 /// One parsed Server-Sent-Events block from the `/api/coach` stream.
@@ -787,7 +789,8 @@ class _CoachScreenState extends State<CoachScreen> {
     _subscribeRealtime();
   }
 
-  String _archiveLabel(DateTime t) => coachArchiveLabel(t);
+  String _archiveLabel(DateTime t) =>
+      coachArchiveLabel(t, localeToTag(Localizations.localeOf(context)));
 
   String _activeThreadTitle(AppLocalizations l10n) {
     for (final m in _messages) {

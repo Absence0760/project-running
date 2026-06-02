@@ -3,7 +3,9 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -583,7 +585,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                 Text(dist),
               ],
             ),
-            subtitle: Text('${_formatDate(r.startedAt)}  ·  $paceLine'),
+            subtitle: Text(
+                '${formatDateMed(r.startedAt, localeToTag(Localizations.localeOf(context)))}  ·  $paceLine'),
             onTap: () => Navigator.push(
               context,
               MaterialPageRoute(
@@ -794,15 +797,6 @@ class _ProfileScreenState extends State<ProfileScreen>
     }
   }
 
-  // ─────────────── format helpers ───────────────
-
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
 
   static String _formatDuration(Duration d) {
     final h = d.inHours;

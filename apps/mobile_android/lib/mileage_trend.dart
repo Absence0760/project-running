@@ -1,5 +1,7 @@
 import 'package:core_models/core_models.dart';
 
+import 'l10n/date_format.dart';
+
 /// One bucket on the mileage-trend chart. [label] is the short
 /// human-readable axis label (week start "5 May", month "May '26",
 /// year "2026"); [distanceM] is the summed run distance in metres
@@ -54,6 +56,7 @@ List<MileagePeriod> aggregateMileage(
   /// instead of `minBuckets`. Preserves the existing dashboard
   /// behaviour where the yearly card wanted 5-year context.
   bool padYearlyToMin = false,
+  String localeTag = 'en',
 }) {
   final groups = <String, _Bucket>{};
   for (final r in runs) {
@@ -63,7 +66,7 @@ List<MileagePeriod> aggregateMileage(
     if (bucket == null) {
       groups[key] = _Bucket(
         startsAt: _startOfBucket(d, view),
-        label: _labelFor(d, view),
+        label: _labelFor(d, view, localeTag),
         distanceM: r.distanceMetres.round(),
       );
     } else {
@@ -99,7 +102,7 @@ List<MileagePeriod> aggregateMileage(
     if (include) {
       ordered.add(_Bucket(
         startsAt: anchor,
-        label: _labelFor(anchor, view),
+        label: _labelFor(anchor, view, localeTag),
         distanceM: 0,
       ));
       existingKeys.add(_keyForDate(anchor, view));
@@ -111,7 +114,7 @@ List<MileagePeriod> aggregateMileage(
       if (existingKeys.contains(key)) continue;
       ordered.add(_Bucket(
         startsAt: cursor,
-        label: _labelFor(cursor, view),
+        label: _labelFor(cursor, view, localeTag),
         distanceM: 0,
       ));
       existingKeys.add(key);
@@ -195,14 +198,13 @@ DateTime _startOfBucket(DateTime d, MileageView view) {
   }
 }
 
-String _labelFor(DateTime d, MileageView view) {
+String _labelFor(DateTime d, MileageView view, String localeTag) {
   switch (view) {
     case MileageView.weekly:
-      final m = _mondayOf(d);
-      return '${m.day} ${_monthAbbr(m.month)}';
+      return formatDateShort(_mondayOf(d), localeTag);
     case MileageView.monthly:
       final yy = (d.year % 100).toString().padLeft(2, '0');
-      return "${_monthAbbr(d.month)} '$yy";
+      return "${formatMonthAbbr(d, localeTag)} '$yy";
     case MileageView.yearly:
       return d.year.toString();
   }
@@ -214,11 +216,3 @@ DateTime _mondayOf(DateTime d) {
   final local = DateTime(d.year, d.month, d.day);
   return local.subtract(Duration(days: local.weekday - 1));
 }
-
-const _monthAbbrs = <String>[
-  '', // 1-indexed
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
-String _monthAbbr(int month) => _monthAbbrs[month];

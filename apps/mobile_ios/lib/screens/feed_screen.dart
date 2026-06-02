@@ -2,7 +2,9 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
@@ -443,7 +445,8 @@ class _EntryCard extends StatelessWidget {
                     ),
                   ),
                   Text(
-                    _fmtRelative(entry.run.startedAt),
+                    _fmtRelative(entry.run.startedAt,
+                        localeToTag(Localizations.localeOf(context))),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.onSurfaceVariant,
                     ),
@@ -529,7 +532,7 @@ class _EntryCard extends StatelessWidget {
     return '$m:${s.toString().padLeft(2, '0')} /km';
   }
 
-  static String _fmtRelative(DateTime started) {
+  static String _fmtRelative(DateTime started, String localeTag) {
     final ms = DateTime.now().difference(started).inMilliseconds;
     final mins = ms ~/ 60000;
     if (mins < 1) return 'just now';
@@ -538,7 +541,7 @@ class _EntryCard extends StatelessWidget {
     if (hrs < 24) return '${hrs}h ago';
     final days = hrs ~/ 24;
     if (days < 30) return '${days}d ago';
-    return '${started.day}/${started.month}/${started.year}';
+    return formatDateMed(started, localeTag);
   }
 }
 
