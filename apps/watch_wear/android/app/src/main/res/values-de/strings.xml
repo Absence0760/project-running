@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_active_run_label">Aktiver Lauf</string>
+
+    <string name="distance_km">%1$s km</string>
+    <string name="distance_km_recorded">%1$s km aufgezeichnet</string>
+    <string name="distance_km_to_go">noch %1$s km</string>
+    <string name="pace_per_km">%1$s /km</string>
+    <string name="bpm">%1$d bpm</string>
+    <string name="bpm_zone">%1$d bpm · Z%2$d</string>
+    <string name="bpm_avg">%1$d bpm Ø</string>
+    <string name="kcal">%1$d kcal</string>
+    <plurals name="steps">
+        <item quantity="one">%1$d Schritt</item>
+        <item quantity="other">%1$d Schritte</item>
+    </plurals>
+    <string name="lap_number">Runde %1$d</string>
+    <string name="notif_time_distance">%1$s  ·  %2$s</string>
+    <string name="off_route_distance">Abseits der Route · %1$d m</string>
+
+    <string name="tile_run">LAUF</string>
+    <string name="tile_tap_to_start">Zum Starten tippen</string>
+    <string name="tile_running">LÄUFT</string>
+    <string name="tile_paused">PAUSIERT</string>
+    <string name="tile_stat_row">%1$s · %2$s</string>
+    <string name="pace_placeholder">—:—/km</string>
+    <string name="pace_per_km_compact">%1$s/km</string>
+
+    <string name="notif_recording_run">Lauf wird aufgezeichnet</string>
+    <string name="notif_paused">Pausiert</string>
+    <string name="notif_channel_name">Laufaufzeichnung</string>
+    <string name="notif_channel_description">Dauerhafte Benachrichtigung während der Aufzeichnung eines Laufs.</string>
+    <string name="ongoing_template_running">#time# · #distance#</string>
+    <string name="ongoing_template_paused">Pausiert · #distance#</string>
+
+    <string name="start">Start</string>
+    <string name="sync_count">%1$d synchronisieren</string>
+    <string name="offline">Offline</string>
+    <string name="race_armed">RENNEN BEREIT</string>
+    <string name="race_live">RENNEN LÄUFT</string>
+    <string name="event">Event</string>
+    <string name="race_wait_for_go">%1$s · auf GO warten</string>
+    <string name="race_tap_start">%1$s · Start tippen</string>
+    <string name="battery_consider_charging">Akku %1$d%% · laden empfohlen</string>
+    <string name="route">Route</string>
+    <string name="pace">Pace</string>
+    <string name="activity_run">Lauf</string>
+    <string name="activity_walk">Gehen</string>
+    <string name="activity_hike">Wandern</string>
+    <string name="activity_cycle">Radfahren</string>
+    <string name="sign_in">Anmelden</string>
+    <string name="sign_out">Abmelden</string>
+    <string name="cd_route_selected">Route %1$s ausgewählt, zum Ändern tippen</string>
+    <string name="cd_activity_type">Aktivitätstyp, aktuell %1$s, zum Ändern tippen</string>
+    <string name="cd_choose_route">Route wählen, keine ausgewählt</string>
+    <string name="cd_sign_in">Anmelden, um Läufe zu synchronisieren</string>
+    <string name="cd_target_pace_off">Ziel-Pace, aus, zum Einstellen tippen</string>
+    <string name="cd_target_pace">Ziel-Pace, aktuell %1$s pro Kilometer, zum Ändern tippen</string>
+
+    <string name="recover_unsaved_run">Nicht gespeicherten Lauf wiederherstellen?</string>
+    <string name="save_it">Speichern</string>
+    <string name="discard">Verwerfen</string>
+
+    <string name="battery_allow_background">Hintergrundaktivität erlauben</string>
+    <string name="battery_samsung_summary">Samsung-Uhren verwalten dies in Galaxy Wearable auf deinem Handy.</string>
+    <string name="battery_stock_summary">Nötig, damit GPS auf langen Läufen weiter aufzeichnet.</string>
+    <string name="battery_samsung_steps">Auf dem Handy: Galaxy Wearable → Uhreneinstellungen → Apps → Threkir → Akku → Hintergrundaktivität erlauben / Unbeschränkt.</string>
+    <string name="battery_stock_steps">Auf dem Handy: Wear OS / Galaxy Wearable öffnen → Threkir → Akku → Unbeschränkt.</string>
+    <string name="battery_on_watch_steps">Oder auf der Uhr: Einstellungen → Apps → Threkir → Akku → Unbeschränkt (falls angezeigt).</string>
+    <string name="battery_try_auto_open">Automatisch öffnen</string>
+    <string name="done">Fertig</string>
+
+    <string name="email">E-Mail</string>
+    <string name="password">Passwort</string>
+    <string name="tap_here">Hier tippen</string>
+    <string name="submit">Absenden</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="token_refresh_failed">Token-Aktualisierung fehlgeschlagen: %1$s</string>
+
+    <string name="no_gps_time_only">Kein GPS — nur Zeit</string>
+    <string name="gps_lost">GPS verloren</string>
+    <string name="paused_lower">pausiert</string>
+    <string name="resume_short">Los</string>
+    <string name="lap">Runde</string>
+    <string name="stop">Stopp</string>
+    <string name="cd_resume_run">Lauf fortsetzen</string>
+    <string name="cd_pause_run">Lauf pausieren</string>
+    <string name="cd_mark_lap">Runde markieren</string>
+
+    <string name="route_none">Keine</string>
+    <string name="route_picker_empty">Keine gespeicherten Routen. Erstelle zuerst eine Route auf dem Handy oder im Web.</string>
+
+    <string name="synced">Synchronisiert</string>
+    <string name="sync">Sync</string>
+    <string name="next">Weiter</string>
+    <string name="discard_short">×</string>
+    <string name="cd_syncing_run">Lauf wird synchronisiert</string>
+    <string name="cd_start_next_run">Nächsten Lauf starten</string>
+    <string name="cd_sync_run">Lauf synchronisieren</string>
+    <string name="cd_discard_unsaved_run">Nicht gespeicherten Lauf verwerfen</string>
+
+    <string name="tts_run_started">Lauf gestartet</string>
+    <plurals name="tts_split_unit">
+        <item quantity="one">%1$d Kilometer</item>
+        <item quantity="other">%1$d Kilometer</item>
+    </plurals>
+    <string name="tts_pace_tail">Pace %1$d Minuten %2$d Sekunden pro Kilometer</string>
+    <string name="tts_split_phrase">%1$s. %2$s</string>
+    <string name="tts_run_complete">Lauf beendet. %1$s Kilometer in %2$d Minuten.</string>
+    <string name="tts_pace_alert_fast">Tempo erhöhen</string>
+    <string name="tts_pace_alert_slow">Langsamer</string>
+</resources>

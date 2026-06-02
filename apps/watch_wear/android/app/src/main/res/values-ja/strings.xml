@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_active_run_label">実行中のラン</string>
+
+    <string name="distance_km">%1$s km</string>
+    <string name="distance_km_recorded">%1$s km 記録済み</string>
+    <string name="distance_km_to_go">残り %1$s km</string>
+    <string name="pace_per_km">%1$s /km</string>
+    <string name="bpm">%1$d bpm</string>
+    <string name="bpm_zone">%1$d bpm · Z%2$d</string>
+    <string name="bpm_avg">平均 %1$d bpm</string>
+    <string name="kcal">%1$d kcal</string>
+    <plurals name="steps">
+        <item quantity="other">%1$d 歩</item>
+    </plurals>
+    <string name="lap_number">ラップ %1$d</string>
+    <string name="notif_time_distance">%1$s  ·  %2$s</string>
+    <string name="off_route_distance">ルート外 · %1$d m</string>
+
+    <string name="tile_run">ラン</string>
+    <string name="tile_tap_to_start">タップして開始</string>
+    <string name="tile_running">実行中</string>
+    <string name="tile_paused">一時停止</string>
+    <string name="tile_stat_row">%1$s · %2$s</string>
+    <string name="pace_placeholder">—:—/km</string>
+    <string name="pace_per_km_compact">%1$s/km</string>
+
+    <string name="notif_recording_run">ランを記録中</string>
+    <string name="notif_paused">一時停止中</string>
+    <string name="notif_channel_name">ラン記録</string>
+    <string name="notif_channel_description">ランの記録中に表示される常駐通知です。</string>
+    <string name="ongoing_template_running">#time# · #distance#</string>
+    <string name="ongoing_template_paused">一時停止 · #distance#</string>
+
+    <string name="start">開始</string>
+    <string name="sync_count">%1$d 件を同期</string>
+    <string name="offline">オフライン</string>
+    <string name="race_armed">レース準備完了</string>
+    <string name="race_live">レース実施中</string>
+    <string name="event">イベント</string>
+    <string name="race_wait_for_go">%1$s · GO を待つ</string>
+    <string name="race_tap_start">%1$s · 開始をタップ</string>
+    <string name="battery_consider_charging">バッテリー %1$d%% · 充電を検討</string>
+    <string name="route">ルート</string>
+    <string name="pace">ペース</string>
+    <string name="activity_run">ラン</string>
+    <string name="activity_walk">ウォーク</string>
+    <string name="activity_hike">ハイク</string>
+    <string name="activity_cycle">サイクル</string>
+    <string name="sign_in">サインイン</string>
+    <string name="sign_out">サインアウト</string>
+    <string name="cd_route_selected">ルート %1$s を選択中、タップして変更</string>
+    <string name="cd_activity_type">アクティビティの種類、現在 %1$s、タップして変更</string>
+    <string name="cd_choose_route">ルートを選択、未選択</string>
+    <string name="cd_sign_in">サインインしてランを同期</string>
+    <string name="cd_target_pace_off">目標ペース、オフ、タップして設定</string>
+    <string name="cd_target_pace">目標ペース、現在 1キロメートルあたり %1$s、タップして変更</string>
+
+    <string name="recover_unsaved_run">未保存のランを復元しますか？</string>
+    <string name="save_it">保存</string>
+    <string name="discard">破棄</string>
+
+    <string name="battery_allow_background">バックグラウンド動作を許可</string>
+    <string name="battery_samsung_summary">Samsung のウォッチでは、スマートフォンの Galaxy Wearable で管理します。</string>
+    <string name="battery_stock_summary">長いランで GPS の記録を継続するために必要です。</string>
+    <string name="battery_samsung_steps">スマートフォンで：Galaxy Wearable → ウォッチ設定 → アプリ → Threkir → バッテリー → バックグラウンド動作を許可 / 制限なし。</string>
+    <string name="battery_stock_steps">スマートフォンで：Wear OS / Galaxy Wearable を開く → Threkir → バッテリー → 制限なし。</string>
+    <string name="battery_on_watch_steps">またはウォッチで：設定 → アプリ → Threkir → バッテリー → 制限なし（表示されている場合）。</string>
+    <string name="battery_try_auto_open">自動で開く</string>
+    <string name="done">完了</string>
+
+    <string name="email">メール</string>
+    <string name="password">パスワード</string>
+    <string name="tap_here">ここをタップ</string>
+    <string name="submit">送信</string>
+    <string name="cancel">キャンセル</string>
+    <string name="token_refresh_failed">トークンの更新に失敗しました：%1$s</string>
+
+    <string name="no_gps_time_only">GPS なし — 時間のみ</string>
+    <string name="gps_lost">GPS を喪失</string>
+    <string name="paused_lower">一時停止中</string>
+    <string name="resume_short">再開</string>
+    <string name="lap">ラップ</string>
+    <string name="stop">停止</string>
+    <string name="cd_resume_run">ランを再開</string>
+    <string name="cd_pause_run">ランを一時停止</string>
+    <string name="cd_mark_lap">ラップを記録</string>
+
+    <string name="route_none">なし</string>
+    <string name="route_picker_empty">保存済みのルートがありません。まずスマートフォンまたはウェブでルートを作成してください。</string>
+
+    <string name="synced">同期済み</string>
+    <string name="sync">同期</string>
+    <string name="next">次へ</string>
+    <string name="discard_short">×</string>
+    <string name="cd_syncing_run">ランを同期中</string>
+    <string name="cd_start_next_run">次のランを開始</string>
+    <string name="cd_sync_run">ランを同期</string>
+    <string name="cd_discard_unsaved_run">未保存のランを破棄</string>
+
+    <string name="tts_run_started">ランを開始しました</string>
+    <plurals name="tts_split_unit">
+        <item quantity="other">%1$dキロメートル</item>
+    </plurals>
+    <string name="tts_pace_tail">ペース、1キロメートルあたり%1$d分%2$d秒</string>
+    <string name="tts_split_phrase">%1$s。%2$s</string>
+    <string name="tts_run_complete">ラン完了。%2$d分で%1$sキロメートル。</string>
+    <string name="tts_pace_alert_fast">ペースを上げましょう</string>
+    <string name="tts_pace_alert_slow">ペースを落としましょう</string>
+</resources>

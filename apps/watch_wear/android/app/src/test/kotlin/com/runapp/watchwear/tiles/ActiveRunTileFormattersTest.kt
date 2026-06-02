@@ -3,6 +3,7 @@ package com.runapp.watchwear.tiles
 import com.runapp.watchwear.recording.RecordingRepository
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.util.Locale
 
 /// Pure-Kotlin tests for the active-run tile's text formatters. The
 /// ProtoLayout layouts themselves can't be unit-tested without a real
@@ -57,16 +58,25 @@ class ActiveRunTileFormattersTest {
         // 21 km a runner cares about "21" vs "21.5", not "21.07" vs
         // "21.13" — the second decimal is noise on a small screen.
         val under = makeMetrics(distanceM = 5_120.0, paceSecPerKm = 330.0)
-        assertEquals("5.12 km · 5:30/km", formatStatRow(under))
+        assertEquals("5.12 km · 5:30/km", formatStatRow(under, Locale.US))
 
         val over = makeMetrics(distanceM = 21_100.0, paceSecPerKm = 320.0)
-        assertEquals("21.1 km · 5:20/km", formatStatRow(over))
+        assertEquals("21.1 km · 5:20/km", formatStatRow(over, Locale.US))
     }
 
     @Test
     fun `formatStatRow handles a fresh start with zero distance and no pace`() {
         val fresh = makeMetrics(distanceM = 0.0, paceSecPerKm = null)
-        assertEquals("0.00 km · —:—/km", formatStatRow(fresh))
+        assertEquals("0.00 km · —:—/km", formatStatRow(fresh, Locale.US))
+    }
+
+    @Test
+    fun `formatStatRow honours the locale decimal separator`() {
+        // German uses a comma decimal separator — the distance figure must
+        // follow the device locale ("5,12 km") even though the unit word
+        // and the pace digits don't change.
+        val under = makeMetrics(distanceM = 5_120.0, paceSecPerKm = 330.0)
+        assertEquals("5,12 km · 5:30/km", formatStatRow(under, Locale.GERMANY))
     }
 
     private fun makeMetrics(

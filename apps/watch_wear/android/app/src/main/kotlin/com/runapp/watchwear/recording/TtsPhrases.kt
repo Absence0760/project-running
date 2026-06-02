@@ -1,56 +1,32 @@
 package com.runapp.watchwear.recording
 
-/// Pure string-formatting helpers for the watch's TTS announcements.
+/// Pure decomposition helpers for the watch's TTS announcements.
 ///
-/// Extracted from [TtsAnnouncer] (which is tied to Android's
-/// `TextToSpeech` engine) so the phrasing — the user-audible string —
-/// can be unit-tested without the platform dependency.
-///
-/// Same wording as `apps/mobile_android/lib/audio_cues.dart` so a
-/// runner carrying both devices hears the same cues from each. Pinning
-/// the strings in source means a future copy-edit can't accidentally
-/// diverge the dialect across platforms.
+/// The user-audible wording lives in `res/values*/strings.xml` (same dialect
+/// as `apps/mobile_android/lib/l10n/app_*.arb`, so a runner carrying both
+/// devices hears the same cues from each) and is assembled by [TtsAnnouncer]
+/// via the active locale's resources. These helpers only carry the
+/// platform-independent numeric decomposition — splitting a seconds-per-km
+/// value into integer minutes + seconds — so the truncation contract is
+/// unit-testable without the Android resource layer.
 
-/// "Pace 5 minutes 30 seconds per kilometre" — the conventional tail
-/// appended to split announcements. Returns the empty string when
-/// pace is unknown or non-positive so callers can append it
-/// unconditionally without producing a "Pace 0 minutes 0 seconds"
-/// awkward read-out.
-internal fun formatPaceTail(secondsPerKm: Double?): String {
-    if (secondsPerKm == null || secondsPerKm <= 0) return ""
+/// Integer minutes + seconds (floor, not round-half-up) for a
+/// seconds-per-km pace. Returns null when pace is unknown or non-positive,
+/// so the split caller can omit the pace tail entirely rather than speak a
+/// "0 minutes 0 seconds" awkward read-out.
+internal fun paceMinSec(secondsPerKm: Double?): Pair<Int, Int>? {
+    if (secondsPerKm == null || secondsPerKm <= 0) return null
     val m = (secondsPerKm / 60).toInt()
     val s = (secondsPerKm % 60).toInt()
-    return "Pace $m minutes $s seconds per kilometre"
+    return m to s
 }
 
-/// "1 kilometre. Pace 5 minutes 30 seconds per kilometre" / "2
-/// kilometres. ...". The singular / plural switch matters because
-/// English TTS engines mispronounce the wrong form for the count
-/// distinctly enough that the runner notices.
-internal fun formatSplitPhrase(km: Int, paceSecPerKm: Double?): String {
-    val unitWord = if (km == 1) "kilometre" else "kilometres"
-    val paceTail = formatPaceTail(paceSecPerKm)
-    return "$km $unitWord. $paceTail"
-}
+/// Whole minutes (floor) spoken for the run-complete summary. Matches the
+/// phone's "27 minutes" read-out — no half-minute rounding.
+internal fun finishMinutes(durationS: Int): Int = durationS / 60
 
-/// "Run complete. 5.32 kilometres in 27 minutes." — final summary
-/// spoken when the runner taps Stop. Distance is shown to two
-/// decimal places; minutes truncate (no half-minute rounding —
-/// "27 minutes" reads cleaner than "27.5 minutes").
-internal fun formatFinishPhrase(distanceM: Double, durationS: Int): String {
-    val km = distanceM / 1000.0
-    val mins = durationS / 60
-    return "Run complete. %.2f kilometres in %d minutes.".format(km, mins)
-}
-
-/// Pace-drift cue — short and distinct so a runner can recognise the
-/// direction without listening to a full sentence. The haptic
-/// pattern (single vs double pulse) gives the direction redundantly.
-internal fun formatPaceAlert(tooSlow: Boolean): String =
-    if (tooSlow) "Pick up the pace" else "Slow down"
-
-/// "Run started" — the announcement at the end of the 3-2-1
-/// countdown when recording actually begins. Pinned so a future
-/// refactor doesn't drift it to "Recording started" or similar
-/// (the runner's muscle memory associates the exact words).
-internal const val RUN_STARTED_PHRASE = "Run started"
+/// Distance for the run-complete phrase, formatted with a period decimal
+/// regardless of locale. The spoken distance must use a period: a comma
+/// would be read aloud as the literal word "comma" by most TTS engines.
+internal fun finishDistanceSpoken(distanceM: Double): String =
+    "%.2f".format(java.util.Locale.US, distanceM / 1000.0)

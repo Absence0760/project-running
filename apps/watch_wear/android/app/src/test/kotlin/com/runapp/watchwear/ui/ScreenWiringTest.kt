@@ -30,6 +30,13 @@ class ScreenWiringTest {
     private fun readSrc(rel: String): String =
         File("src/main/kotlin/com/runapp/watchwear/$rel").readText()
 
+    /// Default (English) string resources. User-facing copy moved out of
+    /// RunWatchApp.kt into `values/strings.xml` during i18n, so the wiring
+    /// guards below pin the resource reference in code AND the English copy
+    /// in the default catalogue.
+    private fun readDefaultStrings(): String =
+        File("src/main/res/values/strings.xml").readText()
+
     // ───────────────────── PreRunScreen ─────────────────────
 
     @Test fun `PreRunScreen exists as a Composable function`() {
@@ -94,7 +101,8 @@ class ScreenWiringTest {
         val src = readRunWatchApp()
         assertTrue(
             "PreRunScreen recovery-prompt copy lost — killed-process runs would silently vanish.",
-            src.contains("Recover unsaved run?"),
+            src.contains("R.string.recover_unsaved_run") &&
+                readDefaultStrings().contains("Recover unsaved run?"),
         )
         assertTrue(
             "PreRunScreen recover/discard callback wiring lost — recovery prompt becomes a no-op.",
@@ -254,23 +262,28 @@ class ScreenWiringTest {
         // Semantics(label:) in commit 6b2ef21 — this pins the Wear
         // twin so it stays in lockstep.
         val src = readRunWatchApp()
-        for (label in listOf(
-            "Pause run",
-            "Resume run",
-            "Mark lap",
-            "Discard unsaved run",
-            "Sync run",
-            "Start next run",
-        )) {
-            // Accept either form: `contentDescription = "Label"` (static
-            // assignment) or `"Label"` as a branch of a when-expression
-            // assigned to contentDescription (e.g. the Sync/Done/Syncing
-            // toggle). The label literal alone is unique enough; the
-            // surrounding code is the contentDescription assignment.
+        val strings = readDefaultStrings()
+        // contentDescription copy moved into resources. Pin both the
+        // resource reference in code (so the Button still announces a label)
+        // and the English copy in the default catalogue (so the announced
+        // label is still the right words). key → expected English copy.
+        val labels = mapOf(
+            "R.string.cd_pause_run" to "Pause run",
+            "R.string.cd_resume_run" to "Resume run",
+            "R.string.cd_mark_lap" to "Mark lap",
+            "R.string.cd_discard_unsaved_run" to "Discard unsaved run",
+            "R.string.cd_sync_run" to "Sync run",
+            "R.string.cd_start_next_run" to "Start next run",
+        )
+        for ((key, copy) in labels) {
             assertTrue(
-                "RunWatchApp.kt must reference \"$label\" as a Button " +
+                "RunWatchApp.kt must reference $key as a Button " +
                     "contentDescription so TalkBack announces it.",
-                src.contains("\"$label\""),
+                src.contains(key),
+            )
+            assertTrue(
+                "values/strings.xml must carry the English copy \"$copy\" for $key.",
+                strings.contains(copy),
             )
         }
         // Belt-and-braces: at least six Modifier.semantics blocks should

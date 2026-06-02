@@ -58,6 +58,8 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,9 +85,11 @@ import androidx.wear.compose.material.Text
 import androidx.wear.compose.material.TimeText
 import androidx.wear.compose.material.Vignette
 import androidx.wear.compose.material.VignettePosition
+import com.runapp.watchwear.R
 import com.runapp.watchwear.RunViewModel
 import com.runapp.watchwear.Stage
 import com.runapp.watchwear.hrZoneOf
+import com.runapp.watchwear.recording.formatKm
 import com.runapp.watchwear.system.BatteryOptimization
 import android.app.Activity
 import kotlinx.coroutines.Job
@@ -369,7 +373,7 @@ private fun BatteryInstructions(
     ) {
         item {
             Text(
-                "Allow background activity",
+                stringResource(R.string.battery_allow_background),
                 style = MaterialTheme.typography.title3,
                 textAlign = TextAlign.Center,
             )
@@ -377,9 +381,9 @@ private fun BatteryInstructions(
         item {
             Text(
                 if (samsung) {
-                    "Samsung watches manage this in Galaxy Wearable on your phone."
+                    stringResource(R.string.battery_samsung_summary)
                 } else {
-                    "Needed so GPS keeps recording on long runs."
+                    stringResource(R.string.battery_stock_summary)
                 },
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.haze,
@@ -392,9 +396,9 @@ private fun BatteryInstructions(
         item {
             Text(
                 if (samsung) {
-                    "On phone: Galaxy Wearable → Watch settings → Apps → Threkir → Battery → Allow background activity / Unrestricted."
+                    stringResource(R.string.battery_samsung_steps)
                 } else {
-                    "On phone: open Wear OS / Galaxy Wearable → Threkir → Battery → Unrestricted."
+                    stringResource(R.string.battery_stock_steps)
                 },
                 style = MaterialTheme.typography.caption2,
                 color = DuskPalette.parchment,
@@ -408,7 +412,7 @@ private fun BatteryInstructions(
         if (!samsung) {
             item {
                 Text(
-                    "Or on watch: Settings → Apps → Threkir → Battery → Unrestricted (if shown).",
+                    stringResource(R.string.battery_on_watch_steps),
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.haze,
                     textAlign = TextAlign.Start,
@@ -420,7 +424,7 @@ private fun BatteryInstructions(
                     onClick = onTryAutoOpen,
                     label = {
                         Text(
-                            "Try auto-open",
+                            stringResource(R.string.battery_try_auto_open),
                             style = MaterialTheme.typography.caption2,
                         )
                     },
@@ -432,7 +436,7 @@ private fun BatteryInstructions(
         item {
             Chip(
                 onClick = onClose,
-                label = { Text("Done") },
+                label = { Text(stringResource(R.string.done)) },
                 colors = ChipDefaults.primaryChipColors(),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -471,24 +475,24 @@ private fun PreRunScreen(
     if (pendingRecoveryDistance != null) {
         Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("Recover unsaved run?", style = MaterialTheme.typography.title3, textAlign = TextAlign.Center)
+                Text(stringResource(R.string.recover_unsaved_run), style = MaterialTheme.typography.title3, textAlign = TextAlign.Center)
                 Spacer(Modifier.height(4.dp))
                 Text(
-                    "%.2f km recorded".format(pendingRecoveryDistance / 1000.0),
+                    stringResource(R.string.distance_km_recorded, formatKm(pendingRecoveryDistance)),
                     style = MaterialTheme.typography.caption2,
                     color = DuskPalette.haze,
                 )
                 Spacer(Modifier.height(8.dp))
                 Chip(
                     onClick = onRecover,
-                    label = { Text("Save it") },
+                    label = { Text(stringResource(R.string.save_it)) },
                     colors = ChipDefaults.primaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Spacer(Modifier.height(4.dp))
                 Chip(
                     onClick = onDiscardRecovery,
-                    label = { Text("Discard") },
+                    label = { Text(stringResource(R.string.discard)) },
                     colors = ChipDefaults.secondaryChipColors(),
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -564,7 +568,7 @@ private fun PreRunScreen(
                             )
                         } else {
                             Text(
-                                "Sync $queuedCount",
+                                stringResource(R.string.sync_count, queuedCount),
                                 style = MaterialTheme.typography.caption3,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -579,14 +583,14 @@ private fun PreRunScreen(
                 )
             } else if (!online && authed) {
                 Text(
-                    "Offline",
+                    stringResource(R.string.offline),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
             }
             if (!authed) {
                 Text(
-                    "Offline",
+                    stringResource(R.string.offline),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
@@ -602,7 +606,7 @@ private fun PreRunScreen(
             if (batteryPercent != null &&
                 batteryPercent < com.runapp.watchwear.system.BatteryStatus.LOW_THRESHOLD_PERCENT) {
                 Text(
-                    "Battery $batteryPercent% · consider charging",
+                    stringResource(R.string.battery_consider_charging, batteryPercent),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                     textAlign = TextAlign.Center,
@@ -610,13 +614,14 @@ private fun PreRunScreen(
             }
             if (activeRace != null) {
                 Text(
-                    if (activeRace.isArmed) "RACE ARMED" else "RACE LIVE",
+                    if (activeRace.isArmed) stringResource(R.string.race_armed) else stringResource(R.string.race_live),
                     style = MaterialTheme.typography.caption2.copy(shadow = captionShadow),
                     color = MaterialTheme.colors.primary,
                 )
-                val title = activeRace.eventTitle ?: "Event"
+                val title = activeRace.eventTitle ?: stringResource(R.string.event)
                 Text(
-                    if (activeRace.isArmed) "$title · wait for GO" else "$title · tap Start",
+                    if (activeRace.isArmed) stringResource(R.string.race_wait_for_go, title)
+                    else stringResource(R.string.race_tap_start, title),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.parchment,
                     textAlign = TextAlign.Center,
@@ -628,6 +633,7 @@ private fun PreRunScreen(
             // re-opens the picker, same as the bottom chip would.
             if (authed && selectedRouteWaypoints.isNotEmpty() && selectedRouteName != null) {
                 Spacer(Modifier.height(2.dp))
+                val routeSelectedCd = stringResource(R.string.cd_route_selected, selectedRouteName)
                 CompactChip(
                     onClick = onOpenRoutePicker,
                     label = {
@@ -650,8 +656,7 @@ private fun PreRunScreen(
                     modifier = Modifier
                         .widthIn(max = 90.dp)
                         .semantics {
-                            contentDescription =
-                                "Route $selectedRouteName selected, tap to change"
+                            contentDescription = routeSelectedCd
                         },
                 )
             }
@@ -675,7 +680,7 @@ private fun PreRunScreen(
                     .size(ButtonDefaults.LargeButtonSize),
             ) {
                 Text(
-                    "Start",
+                    stringResource(R.string.start),
                     style = MaterialTheme.typography.title3,
                 )
             }
@@ -684,7 +689,7 @@ private fun PreRunScreen(
                 onClick = onStart,
                 label = {
                     Text(
-                        "Start",
+                        stringResource(R.string.start),
                         style = MaterialTheme.typography.caption2,
                     )
                 },
@@ -713,11 +718,13 @@ private fun PreRunScreen(
             backgroundColor = Color.White.copy(alpha = 0.15f),
             contentColor = DuskPalette.parchment,
         )
+        val activityLabel = activityLabel(activityType)
+        val activityCd = stringResource(R.string.cd_activity_type, activityLabel)
         CompactChip(
             onClick = onCycleActivity,
             label = {
                 Text(
-                    activityType.replaceFirstChar { it.uppercase() },
+                    activityLabel,
                     style = MaterialTheme.typography.caption3,
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -732,10 +739,7 @@ private fun PreRunScreen(
                 // this a TalkBack user can't tell it's a cycle control or
                 // what it does. Spell out the action + current value.
                 .semantics {
-                    contentDescription =
-                        "Activity type, currently " +
-                        activityType.replaceFirstChar { it.uppercase() } +
-                        ", tap to change"
+                    contentDescription = activityCd
                 },
         )
         if (authed && !routeSelected) {
@@ -743,11 +747,12 @@ private fun PreRunScreen(
             // is picked yet. When a route IS picked, Start takes
             // this slot in the curve and the route name pill
             // appears at the top arc.
+            val chooseRouteCd = stringResource(R.string.cd_choose_route)
             CompactChip(
                 onClick = onOpenRoutePicker,
                 label = {
                     Text(
-                        "Route",
+                        stringResource(R.string.route),
                         style = MaterialTheme.typography.caption3,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
@@ -759,18 +764,19 @@ private fun PreRunScreen(
                     .padding(bottom = 14.dp)
                     .widthIn(max = 100.dp)
                     .semantics {
-                        contentDescription = "Choose a route, none selected"
+                        contentDescription = chooseRouteCd
                     },
             )
         } else if (!authed) {
             // Replaces the Route chip with Sign-in when unauthed.
             // Same position so the curve looks identical regardless
             // of auth state.
+            val signInCd = stringResource(R.string.cd_sign_in)
             CompactChip(
                 onClick = onSignIn,
                 label = {
                     Text(
-                        "Sign in",
+                        stringResource(R.string.sign_in),
                         style = MaterialTheme.typography.caption3,
                         maxLines = 1,
                     )
@@ -780,15 +786,21 @@ private fun PreRunScreen(
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 14.dp)
                     .semantics {
-                        contentDescription = "Sign in to sync your runs"
+                        contentDescription = signInCd
                     },
             )
         }
+        val paceCd = if (targetPaceSecPerKm == null) {
+            stringResource(R.string.cd_target_pace_off)
+        } else {
+            stringResource(R.string.cd_target_pace, formatPace(targetPaceSecPerKm.toDouble()))
+        }
+        val paceOffLabel = stringResource(R.string.pace)
         CompactChip(
             onClick = onCyclePace,
             label = {
                 Text(
-                    if (targetPaceSecPerKm == null) "Pace"
+                    if (targetPaceSecPerKm == null) paceOffLabel
                     else formatPace(targetPaceSecPerKm.toDouble()),
                     style = MaterialTheme.typography.caption3,
                     maxLines = 1,
@@ -801,13 +813,7 @@ private fun PreRunScreen(
                 .padding(end = 22.dp, bottom = 36.dp)
                 .widthIn(max = 56.dp)
                 .semantics {
-                    contentDescription = if (targetPaceSecPerKm == null) {
-                        "Target pace, off, tap to set"
-                    } else {
-                        "Target pace, currently " +
-                            formatPace(targetPaceSecPerKm.toDouble()) +
-                            " per kilometre, tap to change"
-                    }
+                    contentDescription = paceCd
                 },
         )
 
@@ -854,7 +860,7 @@ private fun PreRunScreen(
             ) {
                 Icon(
                     imageVector = Icons.Filled.ExitToApp,
-                    contentDescription = "Sign out",
+                    contentDescription = stringResource(R.string.sign_out),
                     modifier = Modifier.size(14.dp),
                 )
             }
@@ -893,7 +899,7 @@ private fun SignInScreen(
     ) {
         item {
             Text(
-                "Sign in",
+                stringResource(R.string.sign_in),
                 style = MaterialTheme.typography.title3,
             )
         }
@@ -906,7 +912,7 @@ private fun SignInScreen(
                 // `TEST>COM` (shift-`.` = `>`). Belt-and-suspenders so the
                 // stored email is canonicalised regardless.
                 onValueChange = { email = it.trim().lowercase() },
-                label = "Email",
+                label = stringResource(R.string.email),
                 keyboardType = KeyboardType.Email,
                 // Done (not Next): Wear GBoard's right-arrow "Next" doesn't
                 // reliably commit the composing text before moving focus,
@@ -920,7 +926,7 @@ private fun SignInScreen(
             InlineTextField(
                 value = password,
                 onValueChange = { password = it },
-                label = "Password",
+                label = stringResource(R.string.password),
                 keyboardType = KeyboardType.Password,
                 imeAction = ImeAction.Done,
                 isPassword = true,
@@ -959,7 +965,7 @@ private fun SignInScreen(
                             modifier = Modifier.height(16.dp),
                         )
                     } else {
-                        Text("Submit")
+                        Text(stringResource(R.string.submit))
                     }
                 },
                 colors = ChipDefaults.primaryChipColors(),
@@ -970,7 +976,7 @@ private fun SignInScreen(
             Chip(
                 onClick = onCancel,
                 enabled = !loading,
-                label = { Text("Cancel") },
+                label = { Text(stringResource(R.string.cancel)) },
                 colors = ChipDefaults.secondaryChipColors(),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -1049,7 +1055,7 @@ private fun InlineTextField(
             Box {
                 if (value.isEmpty()) {
                     Text(
-                        "Tap here",
+                        stringResource(R.string.tap_here),
                         style = MaterialTheme.typography.body2,
                         color = DuskPalette.haze,
                     )
@@ -1170,14 +1176,14 @@ private fun RunningScreen(
                 )
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    "%.2f km".format(distanceM / 1000.0),
+                    stringResource(R.string.distance_km, formatKm(distanceM)),
                     style = MaterialTheme.typography.body1,
                     color = Color.White.copy(alpha = 0.72f),
                 )
                 if (paused) {
                     Spacer(Modifier.height(2.dp))
                     Text(
-                        "paused",
+                        stringResource(R.string.paused_lower),
                         style = MaterialTheme.typography.caption2,
                         color = Color.White.copy(alpha = 0.4f),
                     )
@@ -1263,14 +1269,14 @@ private fun RunningScreen(
         ) {
             if (!locationAvailable) {
                 Text(
-                    if (noGpsYet) "No GPS — time only" else "GPS lost",
+                    if (noGpsYet) stringResource(R.string.no_gps_time_only) else stringResource(R.string.gps_lost),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
             }
             if (wasOffRoute && offRouteDistanceM != null) {
                 Text(
-                    "Off route · ${offRouteDistanceM.toInt()} m",
+                    stringResource(R.string.off_route_distance, offRouteDistanceM.toInt()),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.warning,
                 )
@@ -1281,7 +1287,7 @@ private fun RunningScreen(
                 color = if (paused) DuskPalette.haze else DuskPalette.parchment,
             )
             Text(
-                "%.2f km".format(distanceM / 1000.0),
+                stringResource(R.string.distance_km, formatKm(distanceM)),
                 style = MaterialTheme.typography.body2.copy(shadow = captionShadow),
             )
         }
@@ -1298,14 +1304,14 @@ private fun RunningScreen(
         ) {
             if (paceSecPerKm != null && paceSecPerKm > 0 && !paused) {
                 Text(
-                    "${formatPace(paceSecPerKm)} /km",
+                    stringResource(R.string.pace_per_km, formatPace(paceSecPerKm)),
                     style = MaterialTheme.typography.caption2.copy(shadow = captionShadow),
                     color = DuskPalette.parchment,
                 )
             }
             if (routeRemainingM != null && routeRemainingM > 1.0) {
                 Text(
-                    "%.2f km to go".format(routeRemainingM / 1000.0),
+                    stringResource(R.string.distance_km_to_go, formatKm(routeRemainingM)),
                     style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                     color = DuskPalette.lilac,
                 )
@@ -1318,10 +1324,10 @@ private fun RunningScreen(
                 // session-restore prefs fetch hasn't returned yet).
                 bpm?.let { b ->
                     val z = hrZoneOf(b, hrZoneCutoffs)
-                    if (z != null) "$b bpm · Z$z" else "$b bpm"
+                    if (z != null) stringResource(R.string.bpm_zone, b, z) else stringResource(R.string.bpm, b)
                 },
-                steps?.takeIf { it > 0 }?.let { "$it steps" },
-                lapCount.takeIf { it > 0 }?.let { "Lap $it" },
+                steps?.takeIf { it > 0 }?.let { pluralStringResource(R.plurals.steps, it, it) },
+                lapCount.takeIf { it > 0 }?.let { stringResource(R.string.lap_number, it) },
             )
             if (secondary.isNotEmpty()) {
                 Text(
@@ -1355,6 +1361,11 @@ private fun RunningScreen(
             // announces a useful label instead of the visual content
             // ("||", "Go", "Lap"). Mirrors the recording-screen Semantics
             // fix on the mobile twin (commit 6b2ef21).
+            val resumeCd = stringResource(R.string.cd_resume_run)
+            val pauseCd = stringResource(R.string.cd_pause_run)
+            val lapCd = stringResource(R.string.cd_mark_lap)
+            val resumeLabel = stringResource(R.string.resume_short)
+            val lapLabel = stringResource(R.string.lap)
             Box(modifier = Modifier.fillMaxSize()) {
                 if (paused) {
                     Button(
@@ -1368,11 +1379,11 @@ private fun RunningScreen(
                             .padding(start = 28.dp, bottom = 32.dp)
                             .size(ButtonDefaults.SmallButtonSize)
                             .semantics {
-                                contentDescription = "Resume run"
+                                contentDescription = resumeCd
                                 role = Role.Button
                             },
                     ) {
-                        Text("Go", style = MaterialTheme.typography.caption3)
+                        Text(resumeLabel, style = MaterialTheme.typography.caption3)
                     }
                 } else {
                     Button(
@@ -1386,7 +1397,7 @@ private fun RunningScreen(
                             .padding(start = 28.dp, bottom = 32.dp)
                             .size(ButtonDefaults.SmallButtonSize)
                             .semantics {
-                                contentDescription = "Pause run"
+                                contentDescription = pauseCd
                                 role = Role.Button
                             },
                         colors = translucent,
@@ -1405,12 +1416,12 @@ private fun RunningScreen(
                         .padding(bottom = 12.dp)
                         .size(ButtonDefaults.SmallButtonSize)
                         .semantics {
-                            contentDescription = "Mark lap"
+                            contentDescription = lapCd
                             role = Role.Button
                         },
                     colors = translucent,
                 ) {
-                    Text("Lap", style = MaterialTheme.typography.caption3)
+                    Text(lapLabel, style = MaterialTheme.typography.caption3)
                 }
                 HoldToStopButton(
                     onStop = onStop,
@@ -1455,7 +1466,7 @@ private fun RoutePickerScreen(
     ) {
         item {
             Text(
-                "Route",
+                stringResource(R.string.route),
                 style = MaterialTheme.typography.title3,
             )
         }
@@ -1472,7 +1483,7 @@ private fun RoutePickerScreen(
                 onClick = onClear,
                 label = {
                     Text(
-                        "None",
+                        stringResource(R.string.route_none),
                         style = MaterialTheme.typography.caption2,
                     )
                 },
@@ -1495,7 +1506,7 @@ private fun RoutePickerScreen(
                             maxLines = 1,
                         )
                         Text(
-                            "%.2f km".format(r.distanceM / 1000.0),
+                            stringResource(R.string.distance_km, formatKm(r.distanceM)),
                             style = MaterialTheme.typography.caption3,
                             color = DuskPalette.haze,
                         )
@@ -1510,7 +1521,7 @@ private fun RoutePickerScreen(
         if (routes.isEmpty() && !loading) {
             item {
                 Text(
-                    "No saved routes. Build a route on the phone or web first.",
+                    stringResource(R.string.route_picker_empty),
                     style = MaterialTheme.typography.caption3,
                     color = DuskPalette.haze,
                     textAlign = TextAlign.Center,
@@ -1521,7 +1532,7 @@ private fun RoutePickerScreen(
         item {
             Chip(
                 onClick = onCancel,
-                label = { Text("Cancel") },
+                label = { Text(stringResource(R.string.cancel)) },
                 colors = ChipDefaults.secondaryChipColors(),
                 modifier = Modifier.fillMaxWidth(),
             )
@@ -1592,7 +1603,7 @@ private fun HoldToStopButton(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                "Stop",
+                stringResource(R.string.stop),
                 style = MaterialTheme.typography.caption2,
                 color = MaterialTheme.colors.onPrimary,
             )
@@ -1647,7 +1658,7 @@ private fun PostRunScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "%.2f km".format(summary.distanceM / 1000.0),
+                    stringResource(R.string.distance_km, formatKm(summary.distanceM)),
                     style = MaterialTheme.typography.title2.copy(shadow = titleShadow),
                     color = DuskPalette.parchment,
                 )
@@ -1658,7 +1669,7 @@ private fun PostRunScreen(
                 )
                 if (summary.avgBpm != null) {
                     Text(
-                        "${summary.avgBpm.toInt()} bpm avg",
+                        stringResource(R.string.bpm_avg, summary.avgBpm.toInt()),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.coral,
                     )
@@ -1673,7 +1684,7 @@ private fun PostRunScreen(
                     )
                     if (kcal > 0) {
                         Text(
-                            "$kcal kcal",
+                            stringResource(R.string.kcal, kcal),
                             style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                             color = DuskPalette.haze,
                         )
@@ -1681,7 +1692,7 @@ private fun PostRunScreen(
                 }
                 if (synced) {
                     Text(
-                        "Synced",
+                        stringResource(R.string.synced),
                         style = MaterialTheme.typography.caption3.copy(shadow = captionShadow),
                         color = DuskPalette.success,
                     )
@@ -1713,6 +1724,11 @@ private fun PostRunScreen(
         // pattern as the running-screen buttons above. "Sync" / "Done"
         // / "Next" / "×" announce as their visual content otherwise;
         // the contentDescription names each action explicitly.
+        val primaryCd = when {
+            syncing -> stringResource(R.string.cd_syncing_run)
+            synced -> stringResource(R.string.cd_start_next_run)
+            else -> stringResource(R.string.cd_sync_run)
+        }
         Button(
             onClick = if (synced) onStartNext else onSync,
             enabled = !syncing,
@@ -1721,11 +1737,7 @@ private fun PostRunScreen(
                 .padding(bottom = 14.dp)
                 .size(ButtonDefaults.SmallButtonSize)
                 .semantics {
-                    contentDescription = when {
-                        syncing -> "Syncing run"
-                        synced -> "Start next run"
-                        else -> "Sync run"
-                    }
+                    contentDescription = primaryCd
                     role = Role.Button
                 },
         ) {
@@ -1735,11 +1747,11 @@ private fun PostRunScreen(
                     modifier = Modifier.size(16.dp),
                 )
                 synced -> Text(
-                    "Done",
+                    stringResource(R.string.done),
                     style = MaterialTheme.typography.caption3,
                 )
                 else -> Text(
-                    "Sync",
+                    stringResource(R.string.sync),
                     style = MaterialTheme.typography.caption3,
                 )
             }
@@ -1750,6 +1762,7 @@ private fun PostRunScreen(
         // already routes to Next). Sits at the curve like Pause on
         // the running screen.
         if (!synced && summary != null) {
+            val nextCd = stringResource(R.string.cd_start_next_run)
             Button(
                 onClick = onStartNext,
                 modifier = Modifier
@@ -1757,12 +1770,12 @@ private fun PostRunScreen(
                     .padding(start = 22.dp, bottom = 36.dp)
                     .size(ButtonDefaults.SmallButtonSize)
                     .semantics {
-                        contentDescription = "Start next run"
+                        contentDescription = nextCd
                         role = Role.Button
                     },
                 colors = translucent,
             ) {
-                Text("Next", style = MaterialTheme.typography.caption3)
+                Text(stringResource(R.string.next), style = MaterialTheme.typography.caption3)
             }
         }
 
@@ -1772,6 +1785,7 @@ private fun PostRunScreen(
         // the run isn't running, just unsaved, and a Discard tap
         // can be re-triggered if dismissed by mistake.
         if (!synced && summary != null) {
+            val discardCd = stringResource(R.string.cd_discard_unsaved_run)
             Button(
                 onClick = onDiscard,
                 modifier = Modifier
@@ -1779,13 +1793,13 @@ private fun PostRunScreen(
                     .padding(end = 22.dp, bottom = 36.dp)
                     .size(ButtonDefaults.SmallButtonSize)
                     .semantics {
-                        contentDescription = "Discard unsaved run"
+                        contentDescription = discardCd
                         role = Role.Button
                     },
                 colors = translucent,
             ) {
                 Text(
-                    "×",
+                    stringResource(R.string.discard_short),
                     style = MaterialTheme.typography.body2,
                 )
             }
@@ -1804,7 +1818,8 @@ private fun formatDuration(totalS: Int): String {
     val h = totalS / 3600
     val m = (totalS % 3600) / 60
     val s = totalS % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
+    return if (h > 0) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", h, m, s)
+    else String.format(java.util.Locale.ROOT, "%d:%02d", m, s)
 }
 
 private fun formatElapsed(ms: Long): String {
@@ -1812,11 +1827,25 @@ private fun formatElapsed(ms: Long): String {
     val h = total / 3600
     val m = (total % 3600) / 60
     val s = total % 60
-    return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%02d:%02d".format(m, s)
+    return if (h > 0) String.format(java.util.Locale.ROOT, "%d:%02d:%02d", h, m, s)
+    else String.format(java.util.Locale.ROOT, "%02d:%02d", m, s)
 }
 
 private fun formatPace(secPerKm: Double): String {
     val m = (secPerKm / 60).toInt()
     val s = (secPerKm % 60).toInt()
-    return "%d:%02d".format(m, s)
+    return String.format(java.util.Locale.ROOT, "%d:%02d", m, s)
+}
+
+/// Resolve a localized label for a cycled activity type. Unknown values
+/// fall back to a capitalized form of the raw key so a future activity
+/// added to the cycle list still renders something readable before its
+/// string lands.
+@Composable
+private fun activityLabel(activityType: String): String = when (activityType) {
+    "run" -> stringResource(R.string.activity_run)
+    "walk" -> stringResource(R.string.activity_walk)
+    "hike" -> stringResource(R.string.activity_hike)
+    "cycle" -> stringResource(R.string.activity_cycle)
+    else -> activityType.replaceFirstChar { it.uppercase() }
 }

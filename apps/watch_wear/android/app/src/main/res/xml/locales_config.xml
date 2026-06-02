@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Per-app language support (Android 13+). Lists every locale the watch
+     ships translations for; the platform offers these in system Settings →
+     Apps → Threkir → Language. The UI otherwise follows the device locale —
+     there is no in-app picker (the platform norm on a tiny screen). -->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+    <locale android:name="fr" />
+    <locale android:name="es" />
+    <locale android:name="ja" />
+    <locale android:name="pt-BR" />
+</locale-config>

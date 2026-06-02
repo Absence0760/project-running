@@ -461,6 +461,44 @@ steal focus from typing). `RotaryScrollWiringTest` pins the call sites.
   `RunningScreen` surfaces the live count as a `"N steps"` caption
   beneath `bpm`.
 
+## Localization (i18n)
+
+The app ships in six locales (`en/de/fr/es/ja/pt-BR`) via **standard Android
+string resources** — no custom framework, no in-app picker (device-locale-follow
+is the platform norm on a tiny screen).
+
+- **Resources**: default English in `res/values/strings.xml`; translations in
+  `res/values-de/`, `-fr/`, `-es/`, `-ja/`, and `res/values-b+pt+BR/`
+  (BCP-47 qualifier for pt-BR). Every user-facing literal in `ui/RunWatchApp.kt`,
+  `recording/RunRecordingService.kt` (notification + ongoing-activity text),
+  `tiles/ActiveRunTileService.kt`, and the `Token refresh failed` error in
+  `RunViewModel` reads from resources. Compose uses `stringResource` /
+  `pluralStringResource`; services/tiles use `context.getString(...)`.
+- **Per-app language**: `res/xml/locales_config.xml` lists the six and is
+  referenced from `<application android:localeConfig=...>` so Android 13+
+  surfaces a per-app language toggle in system settings.
+- **Number formatting**: `recording/UnitFormat.kt` (`formatKm`) is the single
+  place the km decimal separator is decided — `NumberFormat` keyed to
+  `Locale.getDefault()`. The "km" word is the SI abbreviation (identical in all
+  six locales) and lives in `R.string.distance_km`. Time digits (`mm:ss`,
+  pace) are pinned to `Locale.ROOT` (locale-independent).
+- **TTS**: `recording/TtsAnnouncer.kt` sets the engine language to
+  `Locale.getDefault()` (best-effort — falls back to the engine default voice
+  if voice data is missing) and assembles spoken phrases from `tts_*` resources
+  / the `tts_split_unit` plural. Same dialect as the mobile
+  `apps/mobile_android/lib/l10n/app_*.arb` so a runner carrying both devices
+  hears identical cues. `recording/TtsPhrases.kt` keeps only the pure numeric
+  decomposition (`paceMinSec`, `finishMinutes`, `finishDistanceSpoken` — the
+  spoken distance uses a period decimal so no engine reads "comma").
+- **Tests**: `L10nResourceParityTest` (Wear-OS analogue of the mobile
+  `l10n_parity_test`) asserts every `values-xx` declares exactly the default
+  key set, no empty values, and matching format-arg sets. `UnitFormatTest`
+  pins the locale decimal separator; `TtsLocaleWiringTest` pins the
+  device-locale + resource-phrase wiring.
+- **When you add a user-facing string**: add it to `values/strings.xml` AND all
+  five `values-xx` files (the parity test fails otherwise), keep format args
+  (`%1$s` …) intact and in the right order, and escape apostrophes as `\'`.
+
 ## Testing convention
 
 Pure-JVM JUnit tests in `app/src/test/kotlin/com/runapp/watchwear/`. Run with `./gradlew testDebugUnitTest`. Current total: ~395 tests across ~32 files. No Robolectric, no Compose UI test instrumentation — deliberate. The pattern when a load-bearing piece of logic is bound to an Android API (foreground service, OkHttp, Health Services, SensorEventListener, Compose):

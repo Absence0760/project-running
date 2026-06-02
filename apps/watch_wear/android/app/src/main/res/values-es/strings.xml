@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_active_run_label">Carrera activa</string>
+
+    <string name="distance_km">%1$s km</string>
+    <string name="distance_km_recorded">%1$s km registrados</string>
+    <string name="distance_km_to_go">%1$s km restantes</string>
+    <string name="pace_per_km">%1$s /km</string>
+    <string name="bpm">%1$d ppm</string>
+    <string name="bpm_zone">%1$d ppm · Z%2$d</string>
+    <string name="bpm_avg">%1$d ppm media</string>
+    <string name="kcal">%1$d kcal</string>
+    <plurals name="steps">
+        <item quantity="one">%1$d paso</item>
+        <item quantity="other">%1$d pasos</item>
+    </plurals>
+    <string name="lap_number">Vuelta %1$d</string>
+    <string name="notif_time_distance">%1$s  ·  %2$s</string>
+    <string name="off_route_distance">Fuera de ruta · %1$d m</string>
+
+    <string name="tile_run">CORRER</string>
+    <string name="tile_tap_to_start">Toca para empezar</string>
+    <string name="tile_running">EN MARCHA</string>
+    <string name="tile_paused">EN PAUSA</string>
+    <string name="tile_stat_row">%1$s · %2$s</string>
+    <string name="pace_placeholder">—:—/km</string>
+    <string name="pace_per_km_compact">%1$s/km</string>
+
+    <string name="notif_recording_run">Registrando carrera</string>
+    <string name="notif_paused">En pausa</string>
+    <string name="notif_channel_name">Registro de carrera</string>
+    <string name="notif_channel_description">Notificación persistente mientras se registra una carrera.</string>
+    <string name="ongoing_template_running">#time# · #distance#</string>
+    <string name="ongoing_template_paused">En pausa · #distance#</string>
+
+    <string name="start">Empezar</string>
+    <string name="sync_count">Sincronizar %1$d</string>
+    <string name="offline">Sin conexión</string>
+    <string name="race_armed">CARRERA LISTA</string>
+    <string name="race_live">CARRERA EN VIVO</string>
+    <string name="event">Evento</string>
+    <string name="race_wait_for_go">%1$s · espera la salida</string>
+    <string name="race_tap_start">%1$s · toca Empezar</string>
+    <string name="battery_consider_charging">Batería %1$d%% · considera cargar</string>
+    <string name="route">Ruta</string>
+    <string name="pace">Ritmo</string>
+    <string name="activity_run">Correr</string>
+    <string name="activity_walk">Caminar</string>
+    <string name="activity_hike">Senderismo</string>
+    <string name="activity_cycle">Ciclismo</string>
+    <string name="sign_in">Iniciar sesión</string>
+    <string name="sign_out">Cerrar sesión</string>
+    <string name="cd_route_selected">Ruta %1$s seleccionada, toca para cambiar</string>
+    <string name="cd_activity_type">Tipo de actividad, actualmente %1$s, toca para cambiar</string>
+    <string name="cd_choose_route">Elige una ruta, ninguna seleccionada</string>
+    <string name="cd_sign_in">Inicia sesión para sincronizar tus carreras</string>
+    <string name="cd_target_pace_off">Ritmo objetivo, desactivado, toca para ajustar</string>
+    <string name="cd_target_pace">Ritmo objetivo, actualmente %1$s por kilómetro, toca para cambiar</string>
+
+    <string name="recover_unsaved_run">¿Recuperar carrera sin guardar?</string>
+    <string name="save_it">Guardar</string>
+    <string name="discard">Descartar</string>
+
+    <string name="battery_allow_background">Permitir actividad en segundo plano</string>
+    <string name="battery_samsung_summary">Los relojes Samsung gestionan esto en Galaxy Wearable en tu teléfono.</string>
+    <string name="battery_stock_summary">Necesario para que el GPS siga registrando en carreras largas.</string>
+    <string name="battery_samsung_steps">En el teléfono: Galaxy Wearable → Ajustes del reloj → Apps → Threkir → Batería → Permitir actividad en segundo plano / Sin restricciones.</string>
+    <string name="battery_stock_steps">En el teléfono: abre Wear OS / Galaxy Wearable → Threkir → Batería → Sin restricciones.</string>
+    <string name="battery_on_watch_steps">O en el reloj: Ajustes → Apps → Threkir → Batería → Sin restricciones (si se muestra).</string>
+    <string name="battery_try_auto_open">Abrir automáticamente</string>
+    <string name="done">Listo</string>
+
+    <string name="email">Correo electrónico</string>
+    <string name="password">Contraseña</string>
+    <string name="tap_here">Toca aquí</string>
+    <string name="submit">Enviar</string>
+    <string name="cancel">Cancelar</string>
+    <string name="token_refresh_failed">Error al renovar el token: %1$s</string>
+
+    <string name="no_gps_time_only">Sin GPS — solo tiempo</string>
+    <string name="gps_lost">GPS perdido</string>
+    <string name="paused_lower">en pausa</string>
+    <string name="resume_short">Ya</string>
+    <string name="lap">Vuelta</string>
+    <string name="stop">Parar</string>
+    <string name="cd_resume_run">Reanudar carrera</string>
+    <string name="cd_pause_run">Pausar carrera</string>
+    <string name="cd_mark_lap">Marcar vuelta</string>
+
+    <string name="route_none">Ninguna</string>
+    <string name="route_picker_empty">No hay rutas guardadas. Crea primero una ruta en el teléfono o en la web.</string>
+
+    <string name="synced">Sincronizado</string>
+    <string name="sync">Sinc.</string>
+    <string name="next">Siguiente</string>
+    <string name="discard_short">×</string>
+    <string name="cd_syncing_run">Sincronizando carrera</string>
+    <string name="cd_start_next_run">Empezar la siguiente carrera</string>
+    <string name="cd_sync_run">Sincronizar carrera</string>
+    <string name="cd_discard_unsaved_run">Descartar carrera sin guardar</string>
+
+    <string name="tts_run_started">Carrera iniciada</string>
+    <plurals name="tts_split_unit">
+        <item quantity="one">%1$d kilómetro</item>
+        <item quantity="other">%1$d kilómetros</item>
+    </plurals>
+    <string name="tts_pace_tail">Ritmo %1$d minutos %2$d segundos por kilómetro</string>
+    <string name="tts_split_phrase">%1$s. %2$s</string>
+    <string name="tts_run_complete">Carrera completada. %1$s kilómetros en %2$d minutos.</string>
+    <string name="tts_pace_alert_fast">Acelera el ritmo</string>
+    <string name="tts_pace_alert_slow">Reduce la velocidad</string>
+</resources>

@@ -21,7 +21,10 @@ import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.Futures
 import com.google.common.util.concurrent.ListenableFuture
 import com.runapp.watchwear.MainActivity
+import com.runapp.watchwear.R
 import com.runapp.watchwear.recording.RecordingRepository
+import com.runapp.watchwear.recording.formatKm
+import java.util.Locale
 
 /// Glanceable tile that shows the active-run summary on the runner's
 /// watch face. Exists in two visual states — chosen at request time
@@ -139,14 +142,14 @@ private fun buildIdleLayout(context: Context): LayoutElementBuilders.LayoutEleme
             LayoutElementBuilders.Column.Builder()
                 .setHorizontalAlignment(HORIZONTAL_ALIGN_CENTER)
                 .addContent(
-                    Text.Builder(context, "RUN")
+                    Text.Builder(context, context.getString(R.string.tile_run))
                         .setTypography(Typography.TYPOGRAPHY_TITLE3)
                         .setColor(argb(Colors.DEFAULT.primary))
                         .build(),
                 )
                 .addContent(verticalSpacer(8))
                 .addContent(
-                    Text.Builder(context, "Tap to start")
+                    Text.Builder(context, context.getString(R.string.tile_tap_to_start))
                         .setTypography(Typography.TYPOGRAPHY_CAPTION1)
                         .setColor(argb(Colors.DEFAULT.onSurface))
                         .build(),
@@ -178,7 +181,11 @@ private fun buildActiveLayout(
         )
         .build()
 
-    val statusLabel = if (metrics.stage == RecordingRepository.Stage.Paused) "PAUSED" else "RUNNING"
+    val statusLabel = if (metrics.stage == RecordingRepository.Stage.Paused) {
+        context.getString(R.string.tile_paused)
+    } else {
+        context.getString(R.string.tile_running)
+    }
 
     return LayoutElementBuilders.Box.Builder()
         .setWidth(androidx.wear.protolayout.DimensionBuilders.expand())
@@ -227,25 +234,35 @@ private fun verticalSpacer(heightDp: Int): LayoutElementBuilders.LayoutElement =
 
 /// Format `elapsedMs` as `H:MM:SS` (or `MM:SS` under an hour). Pure
 /// helper so the unit test can pin the tile's surfaces without
-/// running ProtoLayout.
+/// running ProtoLayout. Time digits are locale-independent (no decimal
+/// separator involved), so the format Locale is fixed for stability.
 internal fun formatElapsed(elapsedMs: Long): String {
     val totalSeconds = (elapsedMs / 1000L).coerceAtLeast(0L)
     val hours = totalSeconds / 3600L
     val minutes = (totalSeconds % 3600L) / 60L
     val seconds = totalSeconds % 60L
     return if (hours > 0) {
-        "%d:%02d:%02d".format(hours, minutes, seconds)
+        String.format(Locale.ROOT, "%d:%02d:%02d", hours, minutes, seconds)
     } else {
-        "%02d:%02d".format(minutes, seconds)
+        String.format(Locale.ROOT, "%02d:%02d", minutes, seconds)
     }
 }
 
 /// Render the secondary stat row: distance (km) and pace (min:ss/km)
 /// separated by a middle-dot. Pure helper so the layout file stays
-/// readable and the formatting is testable in isolation.
-internal fun formatStatRow(metrics: RecordingRepository.Metrics): String {
+/// readable and the formatting is testable in isolation. The distance
+/// decimal separator follows [locale] (device locale at the call site);
+/// "km" is the SI abbreviation, identical across all six shipped locales.
+internal fun formatStatRow(
+    metrics: RecordingRepository.Metrics,
+    locale: Locale = Locale.getDefault(),
+): String {
     val km = metrics.distanceM / 1000.0
-    val distLabel = if (km >= 10.0) "%.1f km".format(km) else "%.2f km".format(km)
+    val distLabel = if (km >= 10.0) {
+        "${formatKm(metrics.distanceM, 1, locale)} km"
+    } else {
+        "${formatKm(metrics.distanceM, 2, locale)} km"
+    }
     val paceLabel = formatPaceSecPerKm(metrics.paceSecPerKm)
     return "$distLabel · $paceLabel"
 }
@@ -255,7 +272,7 @@ internal fun formatPaceSecPerKm(secPerKm: Double?): String {
     val total = secPerKm.toLong()
     val mins = total / 60L
     val secs = total % 60L
-    return "%d:%02d/km".format(mins, secs)
+    return String.format(Locale.ROOT, "%d:%02d/km", mins, secs)
 }
 
 @Suppress("unused") // Reserved for a future per-tile launch action that

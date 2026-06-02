@@ -33,6 +33,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 import java.util.UUID
 import kotlin.math.cos
 import kotlin.math.pow
@@ -575,8 +576,10 @@ class RunRecordingService : Service() {
         )
         val mins = elapsedMs / 60_000
         val secs = (elapsedMs / 1000) % 60
-        val text = "%d:%02d  ·  %.2f km".format(mins, secs, distanceM / 1000.0)
-        val title = if (paused) "Paused" else "Recording run"
+        val timeStr = String.format(Locale.getDefault(), "%d:%02d", mins, secs)
+        val distStr = getString(R.string.distance_km, formatKm(distanceM))
+        val text = getString(R.string.notif_time_distance, timeStr, distStr)
+        val title = if (paused) getString(R.string.notif_paused) else getString(R.string.notif_recording_run)
 
         val baseBuilder = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
@@ -594,11 +597,16 @@ class RunRecordingService : Service() {
                 .setTouchIntent(tapIntent)
                 .setStatus(
                     Status.Builder()
-                        .addTemplate(if (paused) "Paused · #distance#" else "#time# · #distance#")
+                        .addTemplate(
+                            if (paused) getString(R.string.ongoing_template_paused)
+                            else getString(R.string.ongoing_template_running)
+                        )
                         .addPart("time", Status.StopwatchPart(startedAtMs - pausedAccumulatedMs))
                         .addPart(
                             "distance",
-                            Status.TextPart("%.2f km".format(distanceM / 1000.0)),
+                            Status.TextPart(
+                                getString(R.string.distance_km, formatKm(distanceM)),
+                            ),
                         )
                         .build()
                 )
@@ -614,10 +622,10 @@ class RunRecordingService : Service() {
         if (nm.getNotificationChannel(CHANNEL_ID) != null) return
         val ch = NotificationChannel(
             CHANNEL_ID,
-            "Run recording",
+            getString(R.string.notif_channel_name),
             NotificationManager.IMPORTANCE_LOW,
         ).apply {
-            description = "Persistent notification while a run is being recorded."
+            description = getString(R.string.notif_channel_description)
             setShowBadge(false)
         }
         nm.createNotificationChannel(ch)

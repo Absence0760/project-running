@@ -3,4 +3,140 @@
     <!-- Shown in the watch face's tile picker UI (Add tile → list).
          Keep short enough to fit a Wear OS row chip. -->
     <string name="tile_active_run_label">Active run</string>
+
+    <!-- ───────────── Units / formatted values ───────────── -->
+    <!-- "%1$s km" — the number is pre-formatted locale-aware by the caller
+         (NumberFormat / String.format(Locale.getDefault(), …)) so only the
+         unit word is translated here. -->
+    <string name="distance_km">%1$s km</string>
+    <string name="distance_km_recorded">%1$s km recorded</string>
+    <string name="distance_km_to_go">%1$s km to go</string>
+    <string name="pace_per_km">%1$s /km</string>
+    <string name="bpm">%1$d bpm</string>
+    <string name="bpm_zone">%1$d bpm · Z%2$d</string>
+    <string name="bpm_avg">%1$d bpm avg</string>
+    <string name="kcal">%1$d kcal</string>
+    <plurals name="steps">
+        <item quantity="one">%1$d step</item>
+        <item quantity="other">%1$d steps</item>
+    </plurals>
+    <string name="lap_number">Lap %1$d</string>
+    <!-- "12:34  ·  5.12 km" — elapsed time + distance in the foreground
+         notification. Both halves pre-formatted by the caller. -->
+    <string name="notif_time_distance">%1$s  ·  %2$s</string>
+    <string name="off_route_distance">Off route · %1$d m</string>
+
+    <!-- ───────────── Tile ───────────── -->
+    <string name="tile_run">RUN</string>
+    <string name="tile_tap_to_start">Tap to start</string>
+    <string name="tile_running">RUNNING</string>
+    <string name="tile_paused">PAUSED</string>
+    <!-- "5.12 km · 5:30/km" — both parts pre-formatted by the caller. -->
+    <string name="tile_stat_row">%1$s · %2$s</string>
+    <string name="pace_placeholder">—:—/km</string>
+    <!-- "5:30/km" — minutes:seconds pre-formatted, only the unit suffix here. -->
+    <string name="pace_per_km_compact">%1$s/km</string>
+
+    <!-- ───────────── Notification ───────────── -->
+    <string name="notif_recording_run">Recording run</string>
+    <string name="notif_paused">Paused</string>
+    <string name="notif_channel_name">Run recording</string>
+    <string name="notif_channel_description">Persistent notification while a run is being recorded.</string>
+    <!-- ProtoLayout ongoing-activity templates. #time# / #distance# are
+         literal ProtoLayout part placeholders, NOT format args — leave them
+         verbatim. -->
+    <string name="ongoing_template_running">#time# · #distance#</string>
+    <string name="ongoing_template_paused">Paused · #distance#</string>
+
+    <!-- ───────────── Pre-run screen ───────────── -->
+    <string name="start">Start</string>
+    <string name="sync_count">Sync %1$d</string>
+    <string name="offline">Offline</string>
+    <string name="race_armed">RACE ARMED</string>
+    <string name="race_live">RACE LIVE</string>
+    <string name="event">Event</string>
+    <string name="race_wait_for_go">%1$s · wait for GO</string>
+    <string name="race_tap_start">%1$s · tap Start</string>
+    <string name="battery_consider_charging">Battery %1$d%% · consider charging</string>
+    <string name="route">Route</string>
+    <string name="pace">Pace</string>
+    <!-- Activity types — cycled by the pre-run Activity chip. -->
+    <string name="activity_run">Run</string>
+    <string name="activity_walk">Walk</string>
+    <string name="activity_hike">Hike</string>
+    <string name="activity_cycle">Cycle</string>
+    <string name="sign_in">Sign in</string>
+    <string name="sign_out">Sign out</string>
+    <string name="cd_route_selected">Route %1$s selected, tap to change</string>
+    <string name="cd_activity_type">Activity type, currently %1$s, tap to change</string>
+    <string name="cd_choose_route">Choose a route, none selected</string>
+    <string name="cd_sign_in">Sign in to sync your runs</string>
+    <string name="cd_target_pace_off">Target pace, off, tap to set</string>
+    <string name="cd_target_pace">Target pace, currently %1$s per kilometre, tap to change</string>
+
+    <!-- Recovery prompt -->
+    <string name="recover_unsaved_run">Recover unsaved run?</string>
+    <string name="save_it">Save it</string>
+    <string name="discard">Discard</string>
+
+    <!-- Battery instructions card -->
+    <string name="battery_allow_background">Allow background activity</string>
+    <string name="battery_samsung_summary">Samsung watches manage this in Galaxy Wearable on your phone.</string>
+    <string name="battery_stock_summary">Needed so GPS keeps recording on long runs.</string>
+    <string name="battery_samsung_steps">On phone: Galaxy Wearable → Watch settings → Apps → Threkir → Battery → Allow background activity / Unrestricted.</string>
+    <string name="battery_stock_steps">On phone: open Wear OS / Galaxy Wearable → Threkir → Battery → Unrestricted.</string>
+    <string name="battery_on_watch_steps">Or on watch: Settings → Apps → Threkir → Battery → Unrestricted (if shown).</string>
+    <string name="battery_try_auto_open">Try auto-open</string>
+    <string name="done">Done</string>
+
+    <!-- ───────────── Sign-in screen ───────────── -->
+    <string name="email">Email</string>
+    <string name="password">Password</string>
+    <string name="tap_here">Tap here</string>
+    <string name="submit">Submit</string>
+    <string name="cancel">Cancel</string>
+    <string name="token_refresh_failed">Token refresh failed: %1$s</string>
+
+    <!-- ───────────── Running screen ───────────── -->
+    <string name="no_gps_time_only">No GPS — time only</string>
+    <string name="gps_lost">GPS lost</string>
+    <string name="paused_lower">paused</string>
+    <string name="resume_short">Go</string>
+    <string name="lap">Lap</string>
+    <string name="stop">Stop</string>
+    <string name="cd_resume_run">Resume run</string>
+    <string name="cd_pause_run">Pause run</string>
+    <string name="cd_mark_lap">Mark lap</string>
+
+    <!-- ───────────── Route picker ───────────── -->
+    <string name="route_none">None</string>
+    <string name="route_picker_empty">No saved routes. Build a route on the phone or web first.</string>
+
+    <!-- ───────────── Post-run screen ───────────── -->
+    <string name="synced">Synced</string>
+    <string name="sync">Sync</string>
+    <string name="next">Next</string>
+    <string name="discard_short">×</string>
+    <string name="cd_syncing_run">Syncing run</string>
+    <string name="cd_start_next_run">Start next run</string>
+    <string name="cd_sync_run">Sync run</string>
+    <string name="cd_discard_unsaved_run">Discard unsaved run</string>
+
+    <!-- ───────────── TTS spoken phrases ───────────── -->
+    <!-- Mirrors apps/mobile_android/lib/l10n/app_*.arb so a runner carrying
+         both devices hears the same cues. Numbers in %d positions are spoken
+         by the TTS engine; the distance %s in tts_run_complete is formatted
+         with a period decimal (locale-independent) so engines don't read a
+         comma as "comma". -->
+    <string name="tts_run_started">Run started</string>
+    <plurals name="tts_split_unit">
+        <item quantity="one">%1$d kilometre</item>
+        <item quantity="other">%1$d kilometres</item>
+    </plurals>
+    <string name="tts_pace_tail">Pace %1$d minutes %2$d seconds per kilometre</string>
+    <!-- "%1$s. %2$s" — split unit phrase + pace tail (tail may be empty). -->
+    <string name="tts_split_phrase">%1$s. %2$s</string>
+    <string name="tts_run_complete">Run complete. %1$s kilometres in %2$d minutes.</string>
+    <string name="tts_pace_alert_fast">Pick up the pace</string>
+    <string name="tts_pace_alert_slow">Slow down</string>
 </resources>

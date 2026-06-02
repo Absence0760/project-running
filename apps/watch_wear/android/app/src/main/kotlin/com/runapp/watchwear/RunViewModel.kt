@@ -714,7 +714,10 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
             )
         } catch (e: Throwable) {
             _state.value = _state.value.copy(
-                authError = "Token refresh failed: ${e.message ?: e.javaClass.simpleName}",
+                authError = getApplication<Application>().getString(
+                    R.string.token_refresh_failed,
+                    e.message ?: e.javaClass.simpleName,
+                ),
             )
         }
     }

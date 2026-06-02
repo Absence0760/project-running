@@ -6,6 +6,7 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
+import com.runapp.watchwear.R
 import java.util.Locale
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -25,8 +26,10 @@ class TtsAnnouncer(context: Context) {
     private var tts: TextToSpeech? = null
     @Volatile private var ready: Boolean = false
 
+    private val appContext = context.applicationContext
+
     private val audioManager =
-        context.applicationContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        appContext.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
     // USAGE_ASSISTANCE_NAVIGATION_GUIDANCE asks the platform to duck
     // (briefly lower) other audio rather than pause it. On Samsung One
@@ -62,7 +65,13 @@ class TtsAnnouncer(context: Context) {
         // doesn't block the caller.
         tts = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                tts?.language = Locale.US
+                // Speak in the device locale so split / pace cues match the
+                // UI language. If the engine has no voice data for that
+                // locale, setLanguage returns LANG_MISSING_DATA /
+                // LANG_NOT_SUPPORTED and the engine keeps its default voice —
+                // the cue is still spoken (best-effort), just in another
+                // accent, which beats silence.
+                tts?.language = Locale.getDefault()
                 tts?.setSpeechRate(0.5f)
                 tts?.setAudioAttributes(audioAttributes)
                 tts?.setOnUtteranceProgressListener(
@@ -85,19 +94,38 @@ class TtsAnnouncer(context: Context) {
         }
     }
 
-    fun announceStart() = speak(RUN_STARTED_PHRASE)
+    fun announceStart() = speak(appContext.getString(R.string.tts_run_started))
 
     fun announceFinish(distanceM: Double, durationS: Int) =
-        speak(formatFinishPhrase(distanceM, durationS))
+        speak(
+            appContext.getString(
+                R.string.tts_run_complete,
+                finishDistanceSpoken(distanceM),
+                finishMinutes(durationS),
+            ),
+        )
 
     /// Announce a split at the end of kilometre [km], pacing reported
     /// in seconds-per-km. Mirrors the Android wording so a runner
     /// carrying both devices doesn't hear two different dialects.
-    fun announceSplit(km: Int, paceSecPerKm: Double?) =
-        speak(formatSplitPhrase(km, paceSecPerKm))
+    fun announceSplit(km: Int, paceSecPerKm: Double?) {
+        val res = appContext.resources
+        val unit = res.getQuantityString(R.plurals.tts_split_unit, km, km)
+        val ms = paceMinSec(paceSecPerKm)
+        val tail = if (ms == null) {
+            ""
+        } else {
+            appContext.getString(R.string.tts_pace_tail, ms.first, ms.second)
+        }
+        speak(appContext.getString(R.string.tts_split_phrase, unit, tail))
+    }
 
     fun announcePaceAlert(tooSlow: Boolean) =
-        speak(formatPaceAlert(tooSlow))
+        speak(
+            appContext.getString(
+                if (tooSlow) R.string.tts_pace_alert_fast else R.string.tts_pace_alert_slow,
+            ),
+        )
 
     fun shutdown() {
         try {
