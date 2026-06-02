@@ -16,6 +16,8 @@ import 'audio_cues.dart';
 import 'background_sync.dart';
 import 'dev_auto_login.dart';
 import 'in_progress_recovery.dart';
+import 'l10n/gen/app_localizations.dart';
+import 'l10n/locale_support.dart';
 import 'local_gear_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
@@ -164,6 +166,11 @@ void main() async {
   // Must run before runApp so the first frame paints in the user's
   // chosen mode instead of flashing the default and then snapping over.
   themeModeNotifier.value = prefs.themeMode;
+
+  // Hydrate the locale notifier from the persisted per-device preference.
+  // Null = follow the device locale (negotiated in MaterialApp). Must run
+  // before runApp so the first frame paints in the chosen language.
+  localeNotifier.value = prefs.locale;
 
   // Recover a run that was in progress when the app was last killed
   // (crash, force-stop, OOM). We promote the partial data to a regular
@@ -448,6 +455,13 @@ class ThemeModeNotifier extends ValueNotifier<ThemeMode> {
 
 final themeModeNotifier = ThemeModeNotifier();
 
+/// Active app locale. `null` means "follow the device locale" (the default).
+/// Hydrated from [Preferences] in [main] and flipped by the language picker;
+/// drives [MaterialApp.locale] reactively, mirroring [themeModeNotifier].
+/// Per-device, never synced to the settings bag — matches web's
+/// localStorage-only locale model.
+final ValueNotifier<Locale?> localeNotifier = ValueNotifier<Locale?>(null);
+
 /// Cross-screen handoff for "start this workout now". Set by deep
 /// flows (e.g. plan_detail_screen's calendar → workout_detail →
 /// Start workout) that need to bring the user back to the Run tab and
@@ -502,14 +516,21 @@ class RunApp extends StatefulWidget {
 class _RunAppState extends State<RunApp> {
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeModeNotifier,
-      builder: (context, mode, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([themeModeNotifier, localeNotifier]),
+      builder: (context, _) {
         return MaterialApp(
           title: 'Threkir',
           theme: AppTheme.light,
           darkTheme: AppTheme.dark,
-          themeMode: mode,
+          themeMode: themeModeNotifier.value,
+          locale: localeNotifier.value,
+          supportedLocales: supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          // `locale` (when the user has picked) or the device's ordered
+          // locale list is negotiated down to one of our six catalogues.
+          localeListResolutionCallback: (locales, supported) =>
+              negotiateLocale(null, locales?.toList() ?? const []),
           home: widget.preferences.onboarded
               ? HomeScreen(
                   apiClient: widget.apiClient,

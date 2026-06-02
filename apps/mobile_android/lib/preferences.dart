@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'goals.dart';
+import 'l10n/locale_support.dart';
 
 enum DistanceUnit { km, mi }
 
@@ -205,6 +206,12 @@ class Preferences extends ChangeNotifier {
   // Defaults to 'dark' to preserve the original launch experience for
   // users who haven't explicitly chosen.
   static const _kThemeMode = 'theme_mode';
+  // Per-device app-language override, stored as a canonical tag ('en',
+  // 'pt-BR'). Absent / null means "follow the device locale" — mirrors
+  // web's localStorage-only model. Deliberately NOT routed through the
+  // synced settings bag: locale is a per-device choice, not a roaming
+  // account preference.
+  static const _kLocale = 'locale';
   // Mirrors the universal `body_weight_kg` settings-bag key. Drives
   // the run-detail calorie estimate. 0 / unset = use the 70 kg
   // fallback (documented in `_estimatedCalories`).
@@ -243,6 +250,7 @@ class Preferences extends ChangeNotifier {
   bool _keepScreenOn = true;
   bool _writeToHealthConnect = false;
   ThemeMode _themeMode = ThemeMode.dark;
+  Locale? _locale;
   double? _bodyWeightKg;
   String _privacyDefault = 'private';
   bool _sentryOptOut = false;
@@ -316,6 +324,22 @@ class Preferences extends ChangeNotifier {
     if (mode == _themeMode) return;
     _themeMode = mode;
     await _prefs.setString(_kThemeMode, _themeModeToString(mode));
+    notifyListeners();
+  }
+
+  /// Per-device app-language override. Null = follow the device locale.
+  /// Hydrated in [init] and updated via [setLocale]; survives restarts.
+  /// Written to SharedPreferences only — never the synced settings bag,
+  /// matching web's localStorage-only locale model.
+  Locale? get locale => _locale;
+
+  Future<void> setLocale(Locale? next) async {
+    _locale = next;
+    if (next == null) {
+      await _prefs.remove(_kLocale);
+    } else {
+      await _prefs.setString(_kLocale, localeToTag(next));
+    }
     notifyListeners();
   }
 
@@ -401,6 +425,7 @@ class Preferences extends ChangeNotifier {
         _prefs.getString(_kVoiceFeedbackVerbosity) ?? 'full';
     _keepScreenOn = _prefs.getBool(_kKeepScreenOn) ?? true;
     _themeMode = _themeModeFromString(_prefs.getString(_kThemeMode));
+    _locale = localeFromTag(_prefs.getString(_kLocale));
     final bw = _prefs.getDouble(_kBodyWeightKg);
     _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
     _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
