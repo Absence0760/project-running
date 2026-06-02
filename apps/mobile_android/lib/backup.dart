@@ -144,6 +144,12 @@ class BackupService {
             (r['track_url'] as String).isNotEmpty)
         .toList();
 
+    final runsWithHrSeries = runs
+        .where((r) =>
+            r['hr_series_url'] is String &&
+            (r['hr_series_url'] as String).isNotEmpty)
+        .toList();
+
     final prefsRow = userSettings;
     final settingsPrefs =
         (prefsRow != null && prefsRow['prefs'] is Map)
@@ -158,6 +164,7 @@ class BackupService {
       userId: userId,
       exportedFrom: 'mobile_android',
       runsWithTracks: runsWithTracks,
+      runsWithHrSeries: runsWithHrSeries,
       fetchTrackBytes: (path) => api.downloadTrackBytes(path),
       concurrency: _kTrackDownloadConcurrency,
       onProgress: onProgress,
@@ -233,6 +240,7 @@ class BackupService {
     required String exportedFrom,
     required List<Map<String, dynamic>> runsWithTracks,
     required Future<Uint8List> Function(String path) fetchTrackBytes,
+    List<Map<String, dynamic>> runsWithHrSeries = const [],
     int concurrency = _kTrackDownloadConcurrency,
     void Function(BackupProgress)? onProgress,
   }) async {
@@ -292,6 +300,34 @@ class BackupService {
         ));
       }
 
+      // HR sidecars (indoor/treadmill runs, decisions §116). Same gzipped
+      // bytes that live in Storage, archived verbatim under `hr/` so restore
+      // can re-home them. Same bounded-concurrency shape as the track loop.
+      var hrAdded = 0;
+      for (var i = 0; i < runsWithHrSeries.length; i += concurrency) {
+        final batch =
+            runsWithHrSeries.skip(i).take(concurrency).toList(growable: false);
+        final pulls = await Future.wait(
+          batch.map((r) async {
+            final url = r['hr_series_url'] as String;
+            final id = r['id'] as String;
+            try {
+              return (id, await fetchTrackBytes(url));
+            } catch (e) {
+              debugPrint('hr-series download failed $id: $e');
+              return null;
+            }
+          }),
+          eagerError: false,
+        );
+        for (final result in pulls) {
+          if (result == null) continue;
+          final (id, bytes) = result;
+          encoder.addArchiveFile(ArchiveFile.bytes('hr/$id.hr.json.gz', bytes));
+          hrAdded++;
+        }
+      }
+
       _writeJsonEntry(encoder, 'manifest.json', {
         'format': _format,
         'version': _version,
@@ -303,6 +339,7 @@ class BackupService {
           'routes': routesOut.length,
           'goals': 0,
           'tracks': tracksAdded,
+          'hr_series': hrAdded,
         },
       });
 
@@ -482,6 +519,27 @@ class BackupService {
           }
         }
 
+        // Re-home the HR sidecar (indoor/treadmill runs, decisions §116).
+        // ALWAYS overwrite hr_series_url: the archived value is the OLD
+        // owner/run path, which the runs_hr_series_url_path_shape CHECK would
+        // reject for the new uid/newId — so a stale value left in place fails
+        // the whole upsert. Null when there's no sidecar file in the archive.
+        String? hrSeriesUrl;
+        final hrFile = archive.findFile('hr/$origId.hr.json.gz');
+        if (hrFile != null) {
+          try {
+            final hrBytes = Uint8List.fromList(hrFile.content as List<int>);
+            await apiNonNull.uploadHrSeriesBytes(
+              userId: uid,
+              runId: newId,
+              gzippedBytes: hrBytes,
+            );
+            hrSeriesUrl = '$uid/$newId.hr.json.gz';
+          } catch (e) {
+            result.warnings.add('hr-series $origId: $e');
+          }
+        }
+
         final ev = r['event_id'];
         final eventId = (ev is String && validEventIds.contains(ev)) ? ev : null;
 
@@ -489,6 +547,7 @@ class BackupService {
         r['user_id'] = uid;
         r['event_id'] = eventId;
         r['track_url'] = trackUrl;
+        r['hr_series_url'] = hrSeriesUrl;
 
         try {
           await apiNonNull.upsertRunRowRaw(r);

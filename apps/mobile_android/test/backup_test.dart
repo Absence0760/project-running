@@ -604,6 +604,53 @@ void main() {
       expect(restored.track.last.lng, 8.541);
     });
 
+    test('archives indoor HR sidecars under hr/ + counts them (decisions §116)',
+        () async {
+      const trackUrl = 'uid/r-1.json.gz';
+      const hrUrl = 'uid/r-2.hr.json.gz';
+      trackBlobs[trackUrl] = gzipOf(const [
+        {'lat': 1.0, 'lng': 2.0},
+        {'lat': 1.0, 'lng': 2.001},
+      ]);
+      trackBlobs[hrUrl] = Uint8List.fromList(
+        GZipEncoder().encode(utf8.encode(jsonEncode(const [
+          {'bpm': 140},
+          {'bpm': 150},
+        ]))),
+      );
+
+      final out = File('${tempDir.path}/hr.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: [runRow(id: 'r-1', trackUrl: trackUrl), runRow(id: 'r-2')],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: [runRow(id: 'r-1', trackUrl: trackUrl)],
+        runsWithHrSeries: [
+          {'id': 'r-2', 'hr_series_url': hrUrl},
+        ],
+        fetchTrackBytes: fetcher,
+      );
+
+      final archive = ZipDecoder().decodeBytes(out.readAsBytesSync());
+      expect(archive.findFile('hr/r-2.hr.json.gz'), isNotNull,
+          reason: 'the indoor run\'s HR sidecar is archived under hr/');
+      expect(archive.findFile('tracks/r-1.json.gz'), isNotNull);
+      final manifest = jsonDecode(utf8
+              .decode(archive.findFile('manifest.json')!.content as List<int>))
+          as Map<String, dynamic>;
+      expect((manifest['counts'] as Map)['hr_series'], 1);
+      expect((manifest['counts'] as Map)['tracks'], 1);
+      // The HR bytes round-trip (gunzip -> the same {bpm} samples).
+      final hrEntry = archive.findFile('hr/r-2.hr.json.gz')!;
+      final decoded = jsonDecode(utf8
+          .decode(GZipDecoder().decodeBytes(hrEntry.content as List<int>))) as List;
+      expect(decoded.map((e) => (e as Map)['bpm']).toList(), [140, 150]);
+    });
+
     test('emits stage + tracks progress callbacks in order', () async {
       const trackUrl = 'uid/r-1.json.gz';
       trackBlobs[trackUrl] = gzipOf(const [

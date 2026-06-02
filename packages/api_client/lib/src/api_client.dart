@@ -903,6 +903,26 @@ class ApiClient {
         );
   }
 
+  /// Re-home a pre-gzipped HR sidecar to `{userId}/{runId}.hr.json.gz`
+  /// (decisions §116). Backup-restore twin of [uploadTrackBytes] for the
+  /// indoor/treadmill HR series. The caller then stamps the run's
+  /// `hr_series_url` to this path.
+  Future<void> uploadHrSeriesBytes({
+    required String userId,
+    required String runId,
+    required Uint8List gzippedBytes,
+  }) async {
+    final path = '$userId/$runId.hr.json.gz';
+    await _client.storage.from('runs').uploadBinary(
+          path,
+          gzippedBytes,
+          fileOptions: const FileOptions(
+            contentType: 'application/gzip',
+            upsert: true,
+          ),
+        );
+  }
+
   /// Raw-row read of the `runs` table. Returns the underlying row
   /// `Map<String, dynamic>` rather than a `Run` domain object — the
   /// backup writer needs every column verbatim so round-trips preserve
