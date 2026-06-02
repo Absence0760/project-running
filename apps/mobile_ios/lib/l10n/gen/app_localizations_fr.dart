@@ -5697,4 +5697,351 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get liveRunMapRecentre => 'Recentrer sur ma position';
+
+  @override
+  String get ttsRunStarted => 'Course démarrée';
+
+  @override
+  String ttsRunComplete(String distance, int mins) {
+    return 'Course terminée. $distance en $mins minutes.';
+  }
+
+  @override
+  String get ttsOffRoute => 'Hors itinéraire';
+
+  @override
+  String get ttsPaceAlertFast => 'Accélérez';
+
+  @override
+  String get ttsPaceAlertSlow => 'Ralentissez';
+
+  @override
+  String get ttsWorkoutComplete => 'Séance terminée. Beau travail.';
+
+  @override
+  String get ttsStepHalfway => 'Mi-parcours de cette répétition';
+
+  @override
+  String get ttsStepLastFifty => 'Plus que cinquante mètres';
+
+  @override
+  String ttsPaceDriftAhead(int delta) {
+    return 'Relâchez un peu — $delta secondes trop rapide.';
+  }
+
+  @override
+  String ttsPaceDriftBehind(int delta) {
+    return 'Accélérez un peu — $delta secondes trop lent.';
+  }
+
+  @override
+  String ttsSpeedKm(String value) {
+    return 'Vitesse, $value kilomètres heure';
+  }
+
+  @override
+  String ttsSpeedMi(String value) {
+    return 'Vitesse, $value miles à l’heure';
+  }
+
+  @override
+  String ttsPaceKm(int min, int sec) {
+    return 'Allure, $min minutes $sec secondes au kilomètre';
+  }
+
+  @override
+  String ttsPaceMi(int min, int sec) {
+    return 'Allure, $min minutes $sec secondes au mile';
+  }
+
+  @override
+  String ttsDistanceKm(String value) {
+    return '$value kilomètres';
+  }
+
+  @override
+  String ttsDistanceMetres(int value) {
+    return '$value mètres';
+  }
+
+  @override
+  String ttsDistanceMileSingular(String value) {
+    return '$value mile';
+  }
+
+  @override
+  String ttsDistanceMiles(String value) {
+    return '$value miles';
+  }
+
+  @override
+  String ttsDistanceYards(int value) {
+    return '$value yards';
+  }
+
+  @override
+  String ttsSplit(String count, String unit, String tail) {
+    return '$count $unit. $tail';
+  }
+
+  @override
+  String get ttsStepWarmup => 'Échauffement';
+
+  @override
+  String get ttsStepRecovery => 'Récupération';
+
+  @override
+  String get ttsStepSteady => 'Allure régulière';
+
+  @override
+  String get ttsStepCooldown => 'Retour au calme';
+
+  @override
+  String get ttsStepRep => 'Répétition';
+
+  @override
+  String get ttsStepRun => 'Course';
+
+  @override
+  String get ttsStepWalk => 'Marche';
+
+  @override
+  String ttsStepRepOf(int index, int total) {
+    return 'Répétition $index sur $total';
+  }
+
+  @override
+  String ttsStepRunOf(int index, int total) {
+    return 'Course $index sur $total';
+  }
+
+  @override
+  String ttsStepWalkOf(int index, int total) {
+    return 'Marche $index sur $total';
+  }
+
+  @override
+  String ttsStepPaceKm(int min, int sec) {
+    return '$min minutes $sec secondes au kilomètre';
+  }
+
+  @override
+  String ttsStepPaceKmWhole(int min) {
+    return '$min minutes au kilomètre';
+  }
+
+  @override
+  String ttsStepPaceMi(int min, int sec) {
+    return '$min minutes $sec secondes au mile';
+  }
+
+  @override
+  String ttsStepPaceMiWhole(int min) {
+    return '$min minutes au mile';
+  }
+
+  @override
+  String ttsDurationSeconds(int sec) {
+    return '$sec secondes';
+  }
+
+  @override
+  String ttsDurationMinutes(int min) {
+    String _temp0 = intl.Intl.pluralLogic(
+      min,
+      locale: localeName,
+      other: '$min minutes',
+      one: '1 minute',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ttsDurationMinutesSeconds(String minutes, int sec) {
+    return '$minutes $sec secondes';
+  }
+
+  @override
+  String ttsStepDuration(String intro, String duration) {
+    return '$intro. $duration.';
+  }
+
+  @override
+  String ttsStepDistancePace(String intro, String distance, String pace) {
+    return '$intro. $distance à $pace.';
+  }
+
+  @override
+  String get guidedEasy30Title => 'Course tranquille de 30 minutes';
+
+  @override
+  String get guidedEasy30Subtitle => 'Voix du coach · 30 min · effort facile';
+
+  @override
+  String get guidedEasy30Description =>
+      'Une course détendue à allure de conversation, pour un jour de récupération ou simplement pour se vider la tête. Le coach intervient toutes les cinq minutes avec un petit encouragement.';
+
+  @override
+  String get guidedEasy30Cue0 =>
+      'C’est parti. Commencez tranquillement — c’est votre allure de récupération.';
+
+  @override
+  String get guidedEasy30Cue1 =>
+      'Cinq minutes. Relâchez les épaules. Restez à allure de conversation.';
+
+  @override
+  String get guidedEasy30Cue2 =>
+      'Dix minutes. Vérifiez la cadence — pieds rapides, foulée légère.';
+
+  @override
+  String get guidedEasy30Cue3 =>
+      'Mi-parcours. Vous devez encore pouvoir parler en courant.';
+
+  @override
+  String get guidedEasy30Cue4 =>
+      'Vingt minutes. Surveillez votre respiration — inspiration lente par le nez, expiration par la bouche.';
+
+  @override
+  String get guidedEasy30Cue5 =>
+      'Encore cinq minutes. Restez détendu. N’accélérez pas.';
+
+  @override
+  String get guidedEasy30Cue6 => 'Plus qu’une minute. Terminez en douceur.';
+
+  @override
+  String get guidedEasy30Cue7 =>
+      'Terminé. Marchez une minute pour récupérer. Beau travail.';
+
+  @override
+  String get guidedTempo25Title => 'Développement de tempo de 25 minutes';
+
+  @override
+  String get guidedTempo25Subtitle => 'Voix du coach · 25 min · 5-15-5';
+
+  @override
+  String get guidedTempo25Description =>
+      'Cinq minutes d’échauffement facile, quinze minutes au tempo (confortablement difficile), cinq minutes de retour au calme. La séance de tempo hebdomadaire de base.';
+
+  @override
+  String get guidedTempo25Cue0 =>
+      'Échauffement. Cinq minutes tranquilles — réveillez les jambes.';
+
+  @override
+  String get guidedTempo25Cue1 =>
+      'Plus qu’une minute d’échauffement. Augmentez la cadence.';
+
+  @override
+  String get guidedTempo25Cue2 =>
+      'Passez au tempo. Confortablement difficile. Comme un effort de 10 km en course.';
+
+  @override
+  String get guidedTempo25Cue3 =>
+      'Cinq minutes au tempo. Fort mais maîtrisé. Gardez le rythme.';
+
+  @override
+  String get guidedTempo25Cue4 =>
+      'Dix minutes de tempo faites. Tenez l’allure.';
+
+  @override
+  String get guidedTempo25Cue5 =>
+      'Plus que deux minutes au tempo. Restez fluide.';
+
+  @override
+  String get guidedTempo25Cue6 =>
+      'Relâchez. Cinq minutes tranquilles pour récupérer.';
+
+  @override
+  String get guidedTempo25Cue7 =>
+      'Plus que deux minutes. Faites redescendre la fréquence cardiaque.';
+
+  @override
+  String get guidedTempo25Cue8 =>
+      'Terminé. Marchez et étirez-vous. Excellent travail.';
+
+  @override
+  String get guidedFirst15Title => 'Débutant : 15 minutes course/marche';
+
+  @override
+  String get guidedFirst15Subtitle =>
+      'Voix du coach · 15 min · intervalles course/marche';
+
+  @override
+  String get guidedFirst15Description =>
+      'Nouveau dans la course ? Trois séries d’une minute de course et une minute de marche, plus un échauffement et un retour au calme. Une mise en route en douceur ; tout le monde commence ici.';
+
+  @override
+  String get guidedFirst15Cue0 =>
+      'Commencez par trois minutes de marche rapide pour vous échauffer.';
+
+  @override
+  String get guidedFirst15Cue1 =>
+      'Passez à une minute de course facile. Allure de conversation.';
+
+  @override
+  String get guidedFirst15Cue2 => 'Marchez une minute.';
+
+  @override
+  String get guidedFirst15Cue3 => 'Courez une minute.';
+
+  @override
+  String get guidedFirst15Cue4 => 'Marchez une minute.';
+
+  @override
+  String get guidedFirst15Cue5 => 'Courez une minute.';
+
+  @override
+  String get guidedFirst15Cue6 => 'Marchez une minute.';
+
+  @override
+  String get guidedFirst15Cue7 => 'Courez une minute — la dernière.';
+
+  @override
+  String get guidedFirst15Cue8 =>
+      'Revenez à la marche. Cinq minutes de retour au calme.';
+
+  @override
+  String get guidedFirst15Cue9 => 'Plus qu’une minute. Marchez tranquillement.';
+
+  @override
+  String get guidedFirst15Cue10 =>
+      'Terminé. C’était une vraie course. Revenez vite courir.';
+
+  @override
+  String guidedRunMinutesBadge(int minutes) {
+    return '$minutes min';
+  }
+
+  @override
+  String guidedRunCueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count consignes sur la course',
+      one: '$count consigne sur la course',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guidedRunFullScript => 'LE SCRIPT COMPLET';
+
+  @override
+  String get guidedRunPreviewCue => 'Écouter la consigne';
+
+  @override
+  String guidedRunPreviewError(String error) {
+    return 'Impossible d’écouter : $error';
+  }
+
+  @override
+  String get ttsSplitUnitKilometre => 'kilomètre';
+
+  @override
+  String get ttsSplitUnitKilometres => 'kilomètres';
+
+  @override
+  String get ttsSplitUnitMile => 'mile';
+
+  @override
+  String get ttsSplitUnitMiles => 'miles';
 }

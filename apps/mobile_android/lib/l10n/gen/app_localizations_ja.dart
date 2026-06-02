@@ -5358,4 +5358,328 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get liveRunMapRecentre => '現在地に再センタリング';
+
+  @override
+  String get ttsRunStarted => 'ランを開始しました';
+
+  @override
+  String ttsRunComplete(String distance, int mins) {
+    return 'ラン完了。$mins分で$distance。';
+  }
+
+  @override
+  String get ttsOffRoute => 'ルートから外れています';
+
+  @override
+  String get ttsPaceAlertFast => 'ペースを上げましょう';
+
+  @override
+  String get ttsPaceAlertSlow => 'ペースを落としましょう';
+
+  @override
+  String get ttsWorkoutComplete => 'ワークアウト完了。お疲れさまでした。';
+
+  @override
+  String get ttsStepHalfway => 'このレップの折り返しです';
+
+  @override
+  String get ttsStepLastFifty => '残り五十メートル';
+
+  @override
+  String ttsPaceDriftAhead(int delta) {
+    return '少し緩めましょう — $delta秒速すぎます。';
+  }
+
+  @override
+  String ttsPaceDriftBehind(int delta) {
+    return '少し上げましょう — $delta秒遅れています。';
+  }
+
+  @override
+  String ttsSpeedKm(String value) {
+    return '速度、時速$valueキロメートル';
+  }
+
+  @override
+  String ttsSpeedMi(String value) {
+    return '速度、時速$valueマイル';
+  }
+
+  @override
+  String ttsPaceKm(int min, int sec) {
+    return 'ペース、1キロメートルあたり$min分$sec秒';
+  }
+
+  @override
+  String ttsPaceMi(int min, int sec) {
+    return 'ペース、1マイルあたり$min分$sec秒';
+  }
+
+  @override
+  String ttsDistanceKm(String value) {
+    return '$valueキロメートル';
+  }
+
+  @override
+  String ttsDistanceMetres(int value) {
+    return '$valueメートル';
+  }
+
+  @override
+  String ttsDistanceMileSingular(String value) {
+    return '$valueマイル';
+  }
+
+  @override
+  String ttsDistanceMiles(String value) {
+    return '$valueマイル';
+  }
+
+  @override
+  String ttsDistanceYards(int value) {
+    return '$valueヤード';
+  }
+
+  @override
+  String ttsSplit(String count, String unit, String tail) {
+    return '$count$unit。$tail';
+  }
+
+  @override
+  String get ttsStepWarmup => 'ウォームアップ';
+
+  @override
+  String get ttsStepRecovery => 'リカバリー';
+
+  @override
+  String get ttsStepSteady => '一定ペース';
+
+  @override
+  String get ttsStepCooldown => 'クールダウン';
+
+  @override
+  String get ttsStepRep => 'レップ';
+
+  @override
+  String get ttsStepRun => 'ラン';
+
+  @override
+  String get ttsStepWalk => 'ウォーク';
+
+  @override
+  String ttsStepRepOf(int index, int total) {
+    return 'レップ $total本中$index本目';
+  }
+
+  @override
+  String ttsStepRunOf(int index, int total) {
+    return 'ラン $total本中$index本目';
+  }
+
+  @override
+  String ttsStepWalkOf(int index, int total) {
+    return 'ウォーク $total本中$index本目';
+  }
+
+  @override
+  String ttsStepPaceKm(int min, int sec) {
+    return '1キロメートルあたり$min分$sec秒';
+  }
+
+  @override
+  String ttsStepPaceKmWhole(int min) {
+    return '1キロメートルあたり$min分';
+  }
+
+  @override
+  String ttsStepPaceMi(int min, int sec) {
+    return '1マイルあたり$min分$sec秒';
+  }
+
+  @override
+  String ttsStepPaceMiWhole(int min) {
+    return '1マイルあたり$min分';
+  }
+
+  @override
+  String ttsDurationSeconds(int sec) {
+    return '$sec秒';
+  }
+
+  @override
+  String ttsDurationMinutes(int min) {
+    String _temp0 = intl.Intl.pluralLogic(
+      min,
+      locale: localeName,
+      other: '$min分',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String ttsDurationMinutesSeconds(String minutes, int sec) {
+    return '$minutes$sec秒';
+  }
+
+  @override
+  String ttsStepDuration(String intro, String duration) {
+    return '$intro。$duration。';
+  }
+
+  @override
+  String ttsStepDistancePace(String intro, String distance, String pace) {
+    return '$intro。$distanceを$paceで。';
+  }
+
+  @override
+  String get guidedEasy30Title => '30分イージーラン';
+
+  @override
+  String get guidedEasy30Subtitle => 'コーチの声 · 30分 · イージーな強度';
+
+  @override
+  String get guidedEasy30Description =>
+      'リカバリーの日や頭をすっきりさせたいときに、会話できるペースでリラックスして走るランです。コーチが5分ごとにそっと声をかけます。';
+
+  @override
+  String get guidedEasy30Cue0 => 'さあ行きましょう。イージーに始めて — これがリカバリーペースです。';
+
+  @override
+  String get guidedEasy30Cue1 => '5分経過。肩の力を抜いて。会話できるペースを保ちましょう。';
+
+  @override
+  String get guidedEasy30Cue2 => '10分。ケイデンスを確認 — 速い足運び、軽い着地。';
+
+  @override
+  String get guidedEasy30Cue3 => '折り返しです。まだ走りながら話せるはずです。';
+
+  @override
+  String get guidedEasy30Cue4 => '20分。呼吸に意識を — 鼻からゆっくり吸って、口から吐きます。';
+
+  @override
+  String get guidedEasy30Cue5 => '残り5分。リラックスを保って。ペースを上げないで。';
+
+  @override
+  String get guidedEasy30Cue6 => '残り1分。イージーに仕上げましょう。';
+
+  @override
+  String get guidedEasy30Cue7 => '完了。1分ほど歩いてクールダウン。お見事です。';
+
+  @override
+  String get guidedTempo25Title => '25分テンポビルダー';
+
+  @override
+  String get guidedTempo25Subtitle => 'コーチの声 · 25分 · 5-15-5';
+
+  @override
+  String get guidedTempo25Description =>
+      '5分のイージーなウォームアップ、15分のテンポ（ややきつい）、5分のクールダウン。週の定番テンポセッションです。';
+
+  @override
+  String get guidedTempo25Cue0 => 'ウォームアップの時間です。5分イージーに — 脚を目覚めさせましょう。';
+
+  @override
+  String get guidedTempo25Cue1 => 'ウォームアップ残り1分。ケイデンスを上げて。';
+
+  @override
+  String get guidedTempo25Cue2 => 'テンポに上げましょう。ややきつく。10キロのレース強度くらいです。';
+
+  @override
+  String get guidedTempo25Cue3 => 'テンポ5分経過。力強く、でもコントロールして。リズムを保ちましょう。';
+
+  @override
+  String get guidedTempo25Cue4 => 'テンポ10分完了。ペースを維持しましょう。';
+
+  @override
+  String get guidedTempo25Cue5 => 'テンポ残り2分。スムーズに。';
+
+  @override
+  String get guidedTempo25Cue6 => '力を抜いて。5分イージーにクールダウン。';
+
+  @override
+  String get guidedTempo25Cue7 => '残り2分。心拍を落ち着かせましょう。';
+
+  @override
+  String get guidedTempo25Cue8 => '完了。歩いてストレッチを。素晴らしい出来です。';
+
+  @override
+  String get guidedFirst15Title => '初心者向け15分ラン／ウォーク';
+
+  @override
+  String get guidedFirst15Subtitle => 'コーチの声 · 15分 · ラン／ウォークのインターバル';
+
+  @override
+  String get guidedFirst15Description =>
+      'ランニングは初めて？1分ラン・1分ウォークを3セット、さらにウォームアップとクールダウン。やさしい入り口です。みんなここから始めます。';
+
+  @override
+  String get guidedFirst15Cue0 => 'まずは3分の速歩きでウォームアップしましょう。';
+
+  @override
+  String get guidedFirst15Cue1 => '1分のイージーランに切り替え。会話できるペースで。';
+
+  @override
+  String get guidedFirst15Cue2 => '1分歩きましょう。';
+
+  @override
+  String get guidedFirst15Cue3 => '1分走りましょう。';
+
+  @override
+  String get guidedFirst15Cue4 => '1分歩きましょう。';
+
+  @override
+  String get guidedFirst15Cue5 => '1分走りましょう。';
+
+  @override
+  String get guidedFirst15Cue6 => '1分歩きましょう。';
+
+  @override
+  String get guidedFirst15Cue7 => '1分走りましょう — 最後の1本です。';
+
+  @override
+  String get guidedFirst15Cue8 => '歩いて落ち着けましょう。5分のクールダウン。';
+
+  @override
+  String get guidedFirst15Cue9 => '残り1分。イージーに歩きましょう。';
+
+  @override
+  String get guidedFirst15Cue10 => '完了。これは立派なランでした。またすぐに走りに出ましょう。';
+
+  @override
+  String guidedRunMinutesBadge(int minutes) {
+    return '$minutes分';
+  }
+
+  @override
+  String guidedRunCueCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ラン中に$count件のキュー',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get guidedRunFullScript => '全スクリプト';
+
+  @override
+  String get guidedRunPreviewCue => 'キューを試聴';
+
+  @override
+  String guidedRunPreviewError(String error) {
+    return '試聴できませんでした: $error';
+  }
+
+  @override
+  String get ttsSplitUnitKilometre => 'キロメートル';
+
+  @override
+  String get ttsSplitUnitKilometres => 'キロメートル';
+
+  @override
+  String get ttsSplitUnitMile => 'マイル';
+
+  @override
+  String get ttsSplitUnitMiles => 'マイル';
 }

@@ -2,8 +2,15 @@
 /// sequence of timed cues; the recorder fires them via TTS as the
 /// runner crosses each second mark.
 ///
-/// Mirrors `apps/web/src/lib/guided_runs.ts`. Keep in lockstep — the
+/// Mirrors `apps/web/src/lib/training/guided_runs.ts`. Keep in lockstep — the
 /// shared-library-syncer agent watches the pair.
+///
+/// The cue scripts + titles are localized: the library is built from the
+/// gen-l10n catalogue for the active locale via [guidedRunLibrary]. The cue
+/// *timing* (atSec / durationSec) is locale-independent and stays inline; only
+/// the spoken/displayed text comes from the catalogue.
+
+import 'l10n/gen/app_localizations.dart';
 
 class GuidedCue {
   final int atSec;
@@ -57,72 +64,69 @@ bool isGuidedRunValid(GuidedRun g) {
   return true;
 }
 
-/// Library of MVP guided runs. The cue scripts are deliberately
-/// compact — TTS reads them at ~3 wps so each cue is under a
+/// Library of MVP guided runs, localized via [l10n]. The cue scripts are
+/// deliberately compact — TTS reads them at ~3 wps so each cue is under a
 /// sentence.
-const List<GuidedRun> kGuidedRunLibrary = [
-  GuidedRun(
-    id: 'easy-30',
-    title: '30-Minute Easy Run',
-    subtitle: 'Coach voice · 30 min · easy effort',
-    durationSec: 30 * 60,
-    description:
-        'A relaxed, conversational-pace run for a recovery day or just clearing your head. Coach checks in every five minutes with a gentle nudge.',
-    cues: [
-      GuidedCue(atSec: 0, text: 'Let’s go. Start easy — this is your recovery pace.'),
-      GuidedCue(atSec: 5 * 60, text: 'Five minutes in. Drop your shoulders. Keep it conversational.'),
-      GuidedCue(atSec: 10 * 60, text: 'Ten minutes. Cadence check — quick feet, light landing.'),
-      GuidedCue(atSec: 15 * 60, text: 'Halfway. You should still be able to talk through this.'),
-      GuidedCue(atSec: 20 * 60, text: 'Twenty minutes. Notice your breathing — slow nasal in, mouth out.'),
-      GuidedCue(atSec: 25 * 60, text: 'Five to go. Stay relaxed. Don’t pick it up.'),
-      GuidedCue(atSec: 29 * 60, text: 'One minute left. Easy finish.'),
-      GuidedCue(atSec: 30 * 60, text: 'Done. Walk it out for a minute. Nice job.'),
-    ],
-  ),
-  GuidedRun(
-    id: 'tempo-builder-25',
-    title: '25-Minute Tempo Builder',
-    subtitle: 'Coach voice · 25 min · 5-15-5',
-    durationSec: 25 * 60,
-    description:
-        'Five-minute easy warm-up, fifteen minutes at tempo (comfortably hard), five-minute cool-down. The bread-and-butter weekly tempo session.',
-    cues: [
-      GuidedCue(atSec: 0, text: 'Warm-up time. Five minutes easy — wake up the legs.'),
-      GuidedCue(atSec: 4 * 60, text: 'One minute left in the warm-up. Pick up the cadence.'),
-      GuidedCue(atSec: 5 * 60, text: 'Lift it to tempo. Comfortably hard. Like a 10K race effort.'),
-      GuidedCue(atSec: 10 * 60, text: 'Five minutes in tempo. Strong but controlled. Keep the rhythm.'),
-      GuidedCue(atSec: 15 * 60, text: 'Ten minutes of tempo done. Hold the pace.'),
-      GuidedCue(atSec: 18 * 60, text: 'Two minutes left at tempo. Stay smooth.'),
-      GuidedCue(atSec: 20 * 60, text: 'Ease off. Five minutes easy to cool down.'),
-      GuidedCue(atSec: 23 * 60, text: 'Two to go. Bring the heart rate back down.'),
-      GuidedCue(atSec: 25 * 60, text: 'Done. Walk and stretch. Great work.'),
-    ],
-  ),
-  GuidedRun(
-    id: 'first-timer-15',
-    title: 'First-Timer 15-Minute Run/Walk',
-    subtitle: 'Coach voice · 15 min · run/walk intervals',
-    durationSec: 15 * 60,
-    description:
-        'New to running? Three rounds of one-minute run, one-minute walk, plus a warm-up and cool-down. A gentle on-ramp; everyone starts here.',
-    cues: [
-      GuidedCue(atSec: 0, text: 'Start with a three-minute brisk walk to warm up.'),
-      GuidedCue(atSec: 3 * 60, text: 'Switch to a one-minute easy run. Conversational pace.'),
-      GuidedCue(atSec: 4 * 60, text: 'Walk one minute.'),
-      GuidedCue(atSec: 5 * 60, text: 'Run one minute.'),
-      GuidedCue(atSec: 6 * 60, text: 'Walk one minute.'),
-      GuidedCue(atSec: 7 * 60, text: 'Run one minute.'),
-      GuidedCue(atSec: 8 * 60, text: 'Walk one minute.'),
-      GuidedCue(atSec: 9 * 60, text: 'Run one minute — last one.'),
-      GuidedCue(atSec: 10 * 60, text: 'Walk it down. Five-minute cool-down.'),
-      GuidedCue(atSec: 14 * 60, text: 'One minute left. Walk easy.'),
-      GuidedCue(atSec: 15 * 60, text: 'Done. That was a real run. Get out there again soon.'),
-    ],
-  ),
-];
+List<GuidedRun> guidedRunLibrary(AppLocalizations l10n) => [
+      GuidedRun(
+        id: 'easy-30',
+        title: l10n.guidedEasy30Title,
+        subtitle: l10n.guidedEasy30Subtitle,
+        durationSec: 30 * 60,
+        description: l10n.guidedEasy30Description,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedEasy30Cue0),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedEasy30Cue1),
+          GuidedCue(atSec: 10 * 60, text: l10n.guidedEasy30Cue2),
+          GuidedCue(atSec: 15 * 60, text: l10n.guidedEasy30Cue3),
+          GuidedCue(atSec: 20 * 60, text: l10n.guidedEasy30Cue4),
+          GuidedCue(atSec: 25 * 60, text: l10n.guidedEasy30Cue5),
+          GuidedCue(atSec: 29 * 60, text: l10n.guidedEasy30Cue6),
+          GuidedCue(atSec: 30 * 60, text: l10n.guidedEasy30Cue7),
+        ],
+      ),
+      GuidedRun(
+        id: 'tempo-builder-25',
+        title: l10n.guidedTempo25Title,
+        subtitle: l10n.guidedTempo25Subtitle,
+        durationSec: 25 * 60,
+        description: l10n.guidedTempo25Description,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedTempo25Cue0),
+          GuidedCue(atSec: 4 * 60, text: l10n.guidedTempo25Cue1),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedTempo25Cue2),
+          GuidedCue(atSec: 10 * 60, text: l10n.guidedTempo25Cue3),
+          GuidedCue(atSec: 15 * 60, text: l10n.guidedTempo25Cue4),
+          GuidedCue(atSec: 18 * 60, text: l10n.guidedTempo25Cue5),
+          GuidedCue(atSec: 20 * 60, text: l10n.guidedTempo25Cue6),
+          GuidedCue(atSec: 23 * 60, text: l10n.guidedTempo25Cue7),
+          GuidedCue(atSec: 25 * 60, text: l10n.guidedTempo25Cue8),
+        ],
+      ),
+      GuidedRun(
+        id: 'first-timer-15',
+        title: l10n.guidedFirst15Title,
+        subtitle: l10n.guidedFirst15Subtitle,
+        durationSec: 15 * 60,
+        description: l10n.guidedFirst15Description,
+        cues: [
+          GuidedCue(atSec: 0, text: l10n.guidedFirst15Cue0),
+          GuidedCue(atSec: 3 * 60, text: l10n.guidedFirst15Cue1),
+          GuidedCue(atSec: 4 * 60, text: l10n.guidedFirst15Cue2),
+          GuidedCue(atSec: 5 * 60, text: l10n.guidedFirst15Cue3),
+          GuidedCue(atSec: 6 * 60, text: l10n.guidedFirst15Cue4),
+          GuidedCue(atSec: 7 * 60, text: l10n.guidedFirst15Cue5),
+          GuidedCue(atSec: 8 * 60, text: l10n.guidedFirst15Cue6),
+          GuidedCue(atSec: 9 * 60, text: l10n.guidedFirst15Cue7),
+          GuidedCue(atSec: 10 * 60, text: l10n.guidedFirst15Cue8),
+          GuidedCue(atSec: 14 * 60, text: l10n.guidedFirst15Cue9),
+          GuidedCue(atSec: 15 * 60, text: l10n.guidedFirst15Cue10),
+        ],
+      ),
+    ];
 
-GuidedRun? findGuidedRun(String id) {
-  for (final g in kGuidedRunLibrary) {
+GuidedRun? findGuidedRun(AppLocalizations l10n, String id) {
+  for (final g in guidedRunLibrary(l10n)) {
     if (g.id == id) return g;
   }
   return null;

@@ -9482,6 +9482,516 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Re-centre on my location'**
   String get liveRunMapRecentre;
+
+  /// Spoken cue when a run starts
+  ///
+  /// In en, this message translates to:
+  /// **'Run started'**
+  String get ttsRunStarted;
+
+  /// Spoken cue at the end of a run, with total distance and minutes
+  ///
+  /// In en, this message translates to:
+  /// **'Run complete. {distance} in {mins} minutes.'**
+  String ttsRunComplete(String distance, int mins);
+
+  /// Spoken cue when the runner drifts off the selected route
+  ///
+  /// In en, this message translates to:
+  /// **'Off route'**
+  String get ttsOffRoute;
+
+  /// Spoken cue telling the runner to speed up (too slow)
+  ///
+  /// In en, this message translates to:
+  /// **'Pick up the pace'**
+  String get ttsPaceAlertFast;
+
+  /// Spoken cue telling the runner to slow down (too fast)
+  ///
+  /// In en, this message translates to:
+  /// **'Slow down'**
+  String get ttsPaceAlertSlow;
+
+  /// Spoken cue when a structured workout finishes
+  ///
+  /// In en, this message translates to:
+  /// **'Workout complete. Nice work.'**
+  String get ttsWorkoutComplete;
+
+  /// Spoken in-step progress cue at the halfway point
+  ///
+  /// In en, this message translates to:
+  /// **'Halfway through this rep'**
+  String get ttsStepHalfway;
+
+  /// Spoken in-step progress cue near the end of a rep
+  ///
+  /// In en, this message translates to:
+  /// **'Fifty metres to go'**
+  String get ttsStepLastFifty;
+
+  /// Spoken nudge when the runner is ahead of target pace by delta seconds per km
+  ///
+  /// In en, this message translates to:
+  /// **'Ease up — {delta} seconds ahead pace.'**
+  String ttsPaceDriftAhead(int delta);
+
+  /// Spoken nudge when the runner is behind target pace by delta seconds per km
+  ///
+  /// In en, this message translates to:
+  /// **'Pick it up — {delta} seconds behind pace.'**
+  String ttsPaceDriftBehind(int delta);
+
+  /// Spoken speed in km/h appended to a split cue
+  ///
+  /// In en, this message translates to:
+  /// **'Speed, {value} kilometres per hour'**
+  String ttsSpeedKm(String value);
+
+  /// Spoken speed in mph appended to a split cue
+  ///
+  /// In en, this message translates to:
+  /// **'Speed, {value} miles per hour'**
+  String ttsSpeedMi(String value);
+
+  /// Spoken pace in minutes/seconds per kilometre appended to a split cue
+  ///
+  /// In en, this message translates to:
+  /// **'Pace, {min} minutes {sec} seconds per kilometre'**
+  String ttsPaceKm(int min, int sec);
+
+  /// Spoken pace in minutes/seconds per mile appended to a split cue
+  ///
+  /// In en, this message translates to:
+  /// **'Pace, {min} minutes {sec} seconds per mile'**
+  String ttsPaceMi(int min, int sec);
+
+  /// Spoken distance in kilometres (value may be integer or decimal string)
+  ///
+  /// In en, this message translates to:
+  /// **'{value} kilometres'**
+  String ttsDistanceKm(String value);
+
+  /// Spoken distance in metres
+  ///
+  /// In en, this message translates to:
+  /// **'{value} metres'**
+  String ttsDistanceMetres(int value);
+
+  /// Spoken distance of exactly one mile
+  ///
+  /// In en, this message translates to:
+  /// **'{value} mile'**
+  String ttsDistanceMileSingular(String value);
+
+  /// Spoken distance in miles (plural; value may be integer or decimal string)
+  ///
+  /// In en, this message translates to:
+  /// **'{value} miles'**
+  String ttsDistanceMiles(String value);
+
+  /// Spoken sub-mile distance in yards
+  ///
+  /// In en, this message translates to:
+  /// **'{value} yards'**
+  String ttsDistanceYards(int value);
+
+  /// Spoken split cue: distance count, unit word, then pace/speed tail
+  ///
+  /// In en, this message translates to:
+  /// **'{count} {unit}. {tail}'**
+  String ttsSplit(String count, String unit, String tail);
+
+  /// Spoken workout-step intro: warmup
+  ///
+  /// In en, this message translates to:
+  /// **'Warmup'**
+  String get ttsStepWarmup;
+
+  /// Spoken workout-step intro: recovery
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery'**
+  String get ttsStepRecovery;
+
+  /// Spoken workout-step intro: steady
+  ///
+  /// In en, this message translates to:
+  /// **'Steady'**
+  String get ttsStepSteady;
+
+  /// Spoken workout-step intro: cooldown
+  ///
+  /// In en, this message translates to:
+  /// **'Cooldown'**
+  String get ttsStepCooldown;
+
+  /// Spoken workout-step intro: a rep with no index
+  ///
+  /// In en, this message translates to:
+  /// **'Rep'**
+  String get ttsStepRep;
+
+  /// Spoken workout-step intro: a run interval with no index
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get ttsStepRun;
+
+  /// Spoken workout-step intro: a walk interval with no index
+  ///
+  /// In en, this message translates to:
+  /// **'Walk'**
+  String get ttsStepWalk;
+
+  /// Spoken workout-step intro: rep N of M
+  ///
+  /// In en, this message translates to:
+  /// **'Rep {index} of {total}'**
+  String ttsStepRepOf(int index, int total);
+
+  /// Spoken workout-step intro: run interval N of M
+  ///
+  /// In en, this message translates to:
+  /// **'Run {index} of {total}'**
+  String ttsStepRunOf(int index, int total);
+
+  /// Spoken workout-step intro: walk interval N of M
+  ///
+  /// In en, this message translates to:
+  /// **'Walk {index} of {total}'**
+  String ttsStepWalkOf(int index, int total);
+
+  /// Workout-step pace tail in min/sec per kilometre
+  ///
+  /// In en, this message translates to:
+  /// **'{min} minutes {sec} seconds per kilometre'**
+  String ttsStepPaceKm(int min, int sec);
+
+  /// Workout-step pace tail, whole minutes per kilometre
+  ///
+  /// In en, this message translates to:
+  /// **'{min} minutes per kilometre'**
+  String ttsStepPaceKmWhole(int min);
+
+  /// Workout-step pace tail in min/sec per mile
+  ///
+  /// In en, this message translates to:
+  /// **'{min} minutes {sec} seconds per mile'**
+  String ttsStepPaceMi(int min, int sec);
+
+  /// Workout-step pace tail, whole minutes per mile
+  ///
+  /// In en, this message translates to:
+  /// **'{min} minutes per mile'**
+  String ttsStepPaceMiWhole(int min);
+
+  /// Spoken duration: seconds only
+  ///
+  /// In en, this message translates to:
+  /// **'{sec} seconds'**
+  String ttsDurationSeconds(int sec);
+
+  /// Spoken duration: whole minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{min, plural, one{1 minute} other{{min} minutes}}'**
+  String ttsDurationMinutes(int min);
+
+  /// Spoken duration: a minutes phrase followed by seconds
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} {sec} seconds'**
+  String ttsDurationMinutesSeconds(String minutes, int sec);
+
+  /// Workout-step cue: intro then duration
+  ///
+  /// In en, this message translates to:
+  /// **'{intro}. {duration}.'**
+  String ttsStepDuration(String intro, String duration);
+
+  /// Workout-step cue: intro then distance at pace
+  ///
+  /// In en, this message translates to:
+  /// **'{intro}. {distance} at {pace}.'**
+  String ttsStepDistancePace(String intro, String distance, String pace);
+
+  /// Guided run title: 30-minute easy run
+  ///
+  /// In en, this message translates to:
+  /// **'30-Minute Easy Run'**
+  String get guidedEasy30Title;
+
+  /// Guided run subtitle: 30-minute easy run
+  ///
+  /// In en, this message translates to:
+  /// **'Coach voice · 30 min · easy effort'**
+  String get guidedEasy30Subtitle;
+
+  /// Guided run description: 30-minute easy run
+  ///
+  /// In en, this message translates to:
+  /// **'A relaxed, conversational-pace run for a recovery day or just clearing your head. Coach checks in every five minutes with a gentle nudge.'**
+  String get guidedEasy30Description;
+
+  /// Guided easy-30 cue at 0:00
+  ///
+  /// In en, this message translates to:
+  /// **'Let’s go. Start easy — this is your recovery pace.'**
+  String get guidedEasy30Cue0;
+
+  /// Guided easy-30 cue at 5:00
+  ///
+  /// In en, this message translates to:
+  /// **'Five minutes in. Drop your shoulders. Keep it conversational.'**
+  String get guidedEasy30Cue1;
+
+  /// Guided easy-30 cue at 10:00
+  ///
+  /// In en, this message translates to:
+  /// **'Ten minutes. Cadence check — quick feet, light landing.'**
+  String get guidedEasy30Cue2;
+
+  /// Guided easy-30 cue at 15:00
+  ///
+  /// In en, this message translates to:
+  /// **'Halfway. You should still be able to talk through this.'**
+  String get guidedEasy30Cue3;
+
+  /// Guided easy-30 cue at 20:00
+  ///
+  /// In en, this message translates to:
+  /// **'Twenty minutes. Notice your breathing — slow nasal in, mouth out.'**
+  String get guidedEasy30Cue4;
+
+  /// Guided easy-30 cue at 25:00
+  ///
+  /// In en, this message translates to:
+  /// **'Five to go. Stay relaxed. Don’t pick it up.'**
+  String get guidedEasy30Cue5;
+
+  /// Guided easy-30 cue at 29:00
+  ///
+  /// In en, this message translates to:
+  /// **'One minute left. Easy finish.'**
+  String get guidedEasy30Cue6;
+
+  /// Guided easy-30 cue at 30:00
+  ///
+  /// In en, this message translates to:
+  /// **'Done. Walk it out for a minute. Nice job.'**
+  String get guidedEasy30Cue7;
+
+  /// Guided run title: 25-minute tempo builder
+  ///
+  /// In en, this message translates to:
+  /// **'25-Minute Tempo Builder'**
+  String get guidedTempo25Title;
+
+  /// Guided run subtitle: 25-minute tempo builder
+  ///
+  /// In en, this message translates to:
+  /// **'Coach voice · 25 min · 5-15-5'**
+  String get guidedTempo25Subtitle;
+
+  /// Guided run description: 25-minute tempo builder
+  ///
+  /// In en, this message translates to:
+  /// **'Five-minute easy warm-up, fifteen minutes at tempo (comfortably hard), five-minute cool-down. The bread-and-butter weekly tempo session.'**
+  String get guidedTempo25Description;
+
+  /// Guided tempo-25 cue at 0:00
+  ///
+  /// In en, this message translates to:
+  /// **'Warm-up time. Five minutes easy — wake up the legs.'**
+  String get guidedTempo25Cue0;
+
+  /// Guided tempo-25 cue at 4:00
+  ///
+  /// In en, this message translates to:
+  /// **'One minute left in the warm-up. Pick up the cadence.'**
+  String get guidedTempo25Cue1;
+
+  /// Guided tempo-25 cue at 5:00
+  ///
+  /// In en, this message translates to:
+  /// **'Lift it to tempo. Comfortably hard. Like a 10K race effort.'**
+  String get guidedTempo25Cue2;
+
+  /// Guided tempo-25 cue at 10:00
+  ///
+  /// In en, this message translates to:
+  /// **'Five minutes in tempo. Strong but controlled. Keep the rhythm.'**
+  String get guidedTempo25Cue3;
+
+  /// Guided tempo-25 cue at 15:00
+  ///
+  /// In en, this message translates to:
+  /// **'Ten minutes of tempo done. Hold the pace.'**
+  String get guidedTempo25Cue4;
+
+  /// Guided tempo-25 cue at 18:00
+  ///
+  /// In en, this message translates to:
+  /// **'Two minutes left at tempo. Stay smooth.'**
+  String get guidedTempo25Cue5;
+
+  /// Guided tempo-25 cue at 20:00
+  ///
+  /// In en, this message translates to:
+  /// **'Ease off. Five minutes easy to cool down.'**
+  String get guidedTempo25Cue6;
+
+  /// Guided tempo-25 cue at 23:00
+  ///
+  /// In en, this message translates to:
+  /// **'Two to go. Bring the heart rate back down.'**
+  String get guidedTempo25Cue7;
+
+  /// Guided tempo-25 cue at 25:00
+  ///
+  /// In en, this message translates to:
+  /// **'Done. Walk and stretch. Great work.'**
+  String get guidedTempo25Cue8;
+
+  /// Guided run title: first-timer 15-minute run/walk
+  ///
+  /// In en, this message translates to:
+  /// **'First-Timer 15-Minute Run/Walk'**
+  String get guidedFirst15Title;
+
+  /// Guided run subtitle: first-timer 15-minute run/walk
+  ///
+  /// In en, this message translates to:
+  /// **'Coach voice · 15 min · run/walk intervals'**
+  String get guidedFirst15Subtitle;
+
+  /// Guided run description: first-timer 15-minute run/walk
+  ///
+  /// In en, this message translates to:
+  /// **'New to running? Three rounds of one-minute run, one-minute walk, plus a warm-up and cool-down. A gentle on-ramp; everyone starts here.'**
+  String get guidedFirst15Description;
+
+  /// Guided first-15 cue at 0:00
+  ///
+  /// In en, this message translates to:
+  /// **'Start with a three-minute brisk walk to warm up.'**
+  String get guidedFirst15Cue0;
+
+  /// Guided first-15 cue at 3:00
+  ///
+  /// In en, this message translates to:
+  /// **'Switch to a one-minute easy run. Conversational pace.'**
+  String get guidedFirst15Cue1;
+
+  /// Guided first-15 cue at 4:00
+  ///
+  /// In en, this message translates to:
+  /// **'Walk one minute.'**
+  String get guidedFirst15Cue2;
+
+  /// Guided first-15 cue at 5:00
+  ///
+  /// In en, this message translates to:
+  /// **'Run one minute.'**
+  String get guidedFirst15Cue3;
+
+  /// Guided first-15 cue at 6:00
+  ///
+  /// In en, this message translates to:
+  /// **'Walk one minute.'**
+  String get guidedFirst15Cue4;
+
+  /// Guided first-15 cue at 7:00
+  ///
+  /// In en, this message translates to:
+  /// **'Run one minute.'**
+  String get guidedFirst15Cue5;
+
+  /// Guided first-15 cue at 8:00
+  ///
+  /// In en, this message translates to:
+  /// **'Walk one minute.'**
+  String get guidedFirst15Cue6;
+
+  /// Guided first-15 cue at 9:00
+  ///
+  /// In en, this message translates to:
+  /// **'Run one minute — last one.'**
+  String get guidedFirst15Cue7;
+
+  /// Guided first-15 cue at 10:00
+  ///
+  /// In en, this message translates to:
+  /// **'Walk it down. Five-minute cool-down.'**
+  String get guidedFirst15Cue8;
+
+  /// Guided first-15 cue at 14:00
+  ///
+  /// In en, this message translates to:
+  /// **'One minute left. Walk easy.'**
+  String get guidedFirst15Cue9;
+
+  /// Guided first-15 cue at 15:00
+  ///
+  /// In en, this message translates to:
+  /// **'Done. That was a real run. Get out there again soon.'**
+  String get guidedFirst15Cue10;
+
+  /// Duration badge on a guided-run card
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes} min'**
+  String guidedRunMinutesBadge(int minutes);
+
+  /// Cue-count label on a guided-run card
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} cue across the run} other{{count} cues across the run}}'**
+  String guidedRunCueCount(int count);
+
+  /// Section header above the cue list on the guided-run detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'THE FULL SCRIPT'**
+  String get guidedRunFullScript;
+
+  /// Tooltip on the preview-cue button
+  ///
+  /// In en, this message translates to:
+  /// **'Preview cue'**
+  String get guidedRunPreviewCue;
+
+  /// Error banner when a cue preview fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not preview: {error}'**
+  String guidedRunPreviewError(String error);
+
+  /// Unit word for a split cue: singular kilometre
+  ///
+  /// In en, this message translates to:
+  /// **'kilometre'**
+  String get ttsSplitUnitKilometre;
+
+  /// Unit word for a split cue: plural kilometres
+  ///
+  /// In en, this message translates to:
+  /// **'kilometres'**
+  String get ttsSplitUnitKilometres;
+
+  /// Unit word for a split cue: singular mile
+  ///
+  /// In en, this message translates to:
+  /// **'mile'**
+  String get ttsSplitUnitMile;
+
+  /// Unit word for a split cue: plural miles
+  ///
+  /// In en, this message translates to:
+  /// **'miles'**
+  String get ttsSplitUnitMiles;
 }
 
 class _AppLocalizationsDelegate

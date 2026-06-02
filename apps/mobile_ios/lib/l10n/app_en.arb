@@ -7619,5 +7619,527 @@
   "liveRunMapRecentre": "Re-centre on my location",
   "@liveRunMapRecentre": {
     "description": "Tooltip on the re-centre map button"
+  },
+  "ttsRunStarted": "Run started",
+  "@ttsRunStarted": {
+    "description": "Spoken cue when a run starts"
+  },
+  "ttsRunComplete": "Run complete. {distance} in {mins} minutes.",
+  "@ttsRunComplete": {
+    "description": "Spoken cue at the end of a run, with total distance and minutes",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "mins": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsOffRoute": "Off route",
+  "@ttsOffRoute": {
+    "description": "Spoken cue when the runner drifts off the selected route"
+  },
+  "ttsPaceAlertFast": "Pick up the pace",
+  "@ttsPaceAlertFast": {
+    "description": "Spoken cue telling the runner to speed up (too slow)"
+  },
+  "ttsPaceAlertSlow": "Slow down",
+  "@ttsPaceAlertSlow": {
+    "description": "Spoken cue telling the runner to slow down (too fast)"
+  },
+  "ttsWorkoutComplete": "Workout complete. Nice work.",
+  "@ttsWorkoutComplete": {
+    "description": "Spoken cue when a structured workout finishes"
+  },
+  "ttsStepHalfway": "Halfway through this rep",
+  "@ttsStepHalfway": {
+    "description": "Spoken in-step progress cue at the halfway point"
+  },
+  "ttsStepLastFifty": "Fifty metres to go",
+  "@ttsStepLastFifty": {
+    "description": "Spoken in-step progress cue near the end of a rep"
+  },
+  "ttsPaceDriftAhead": "Ease up — {delta} seconds ahead pace.",
+  "@ttsPaceDriftAhead": {
+    "description": "Spoken nudge when the runner is ahead of target pace by delta seconds per km",
+    "placeholders": {
+      "delta": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsPaceDriftBehind": "Pick it up — {delta} seconds behind pace.",
+  "@ttsPaceDriftBehind": {
+    "description": "Spoken nudge when the runner is behind target pace by delta seconds per km",
+    "placeholders": {
+      "delta": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsSpeedKm": "Speed, {value} kilometres per hour",
+  "@ttsSpeedKm": {
+    "description": "Spoken speed in km/h appended to a split cue",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsSpeedMi": "Speed, {value} miles per hour",
+  "@ttsSpeedMi": {
+    "description": "Spoken speed in mph appended to a split cue",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsPaceKm": "Pace, {min} minutes {sec} seconds per kilometre",
+  "@ttsPaceKm": {
+    "description": "Spoken pace in minutes/seconds per kilometre appended to a split cue",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsPaceMi": "Pace, {min} minutes {sec} seconds per mile",
+  "@ttsPaceMi": {
+    "description": "Spoken pace in minutes/seconds per mile appended to a split cue",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsDistanceKm": "{value} kilometres",
+  "@ttsDistanceKm": {
+    "description": "Spoken distance in kilometres (value may be integer or decimal string)",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsDistanceMetres": "{value} metres",
+  "@ttsDistanceMetres": {
+    "description": "Spoken distance in metres",
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsDistanceMileSingular": "{value} mile",
+  "@ttsDistanceMileSingular": {
+    "description": "Spoken distance of exactly one mile",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsDistanceMiles": "{value} miles",
+  "@ttsDistanceMiles": {
+    "description": "Spoken distance in miles (plural; value may be integer or decimal string)",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsDistanceYards": "{value} yards",
+  "@ttsDistanceYards": {
+    "description": "Spoken sub-mile distance in yards",
+    "placeholders": {
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsSplit": "{count} {unit}. {tail}",
+  "@ttsSplit": {
+    "description": "Spoken split cue: distance count, unit word, then pace/speed tail",
+    "placeholders": {
+      "count": {
+        "type": "String"
+      },
+      "unit": {
+        "type": "String"
+      },
+      "tail": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsStepWarmup": "Warmup",
+  "@ttsStepWarmup": {
+    "description": "Spoken workout-step intro: warmup"
+  },
+  "ttsStepRecovery": "Recovery",
+  "@ttsStepRecovery": {
+    "description": "Spoken workout-step intro: recovery"
+  },
+  "ttsStepSteady": "Steady",
+  "@ttsStepSteady": {
+    "description": "Spoken workout-step intro: steady"
+  },
+  "ttsStepCooldown": "Cooldown",
+  "@ttsStepCooldown": {
+    "description": "Spoken workout-step intro: cooldown"
+  },
+  "ttsStepRep": "Rep",
+  "@ttsStepRep": {
+    "description": "Spoken workout-step intro: a rep with no index"
+  },
+  "ttsStepRun": "Run",
+  "@ttsStepRun": {
+    "description": "Spoken workout-step intro: a run interval with no index"
+  },
+  "ttsStepWalk": "Walk",
+  "@ttsStepWalk": {
+    "description": "Spoken workout-step intro: a walk interval with no index"
+  },
+  "ttsStepRepOf": "Rep {index} of {total}",
+  "@ttsStepRepOf": {
+    "description": "Spoken workout-step intro: rep N of M",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepRunOf": "Run {index} of {total}",
+  "@ttsStepRunOf": {
+    "description": "Spoken workout-step intro: run interval N of M",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepWalkOf": "Walk {index} of {total}",
+  "@ttsStepWalkOf": {
+    "description": "Spoken workout-step intro: walk interval N of M",
+    "placeholders": {
+      "index": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepPaceKm": "{min} minutes {sec} seconds per kilometre",
+  "@ttsStepPaceKm": {
+    "description": "Workout-step pace tail in min/sec per kilometre",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepPaceKmWhole": "{min} minutes per kilometre",
+  "@ttsStepPaceKmWhole": {
+    "description": "Workout-step pace tail, whole minutes per kilometre",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepPaceMi": "{min} minutes {sec} seconds per mile",
+  "@ttsStepPaceMi": {
+    "description": "Workout-step pace tail in min/sec per mile",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      },
+      "sec": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepPaceMiWhole": "{min} minutes per mile",
+  "@ttsStepPaceMiWhole": {
+    "description": "Workout-step pace tail, whole minutes per mile",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsDurationSeconds": "{sec} seconds",
+  "@ttsDurationSeconds": {
+    "description": "Spoken duration: seconds only",
+    "placeholders": {
+      "sec": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsDurationMinutes": "{min, plural, one{1 minute} other{{min} minutes}}",
+  "@ttsDurationMinutes": {
+    "description": "Spoken duration: whole minutes",
+    "placeholders": {
+      "min": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsDurationMinutesSeconds": "{minutes} {sec} seconds",
+  "@ttsDurationMinutesSeconds": {
+    "description": "Spoken duration: a minutes phrase followed by seconds",
+    "placeholders": {
+      "minutes": {
+        "type": "String"
+      },
+      "sec": {
+        "type": "int"
+      }
+    }
+  },
+  "ttsStepDuration": "{intro}. {duration}.",
+  "@ttsStepDuration": {
+    "description": "Workout-step cue: intro then duration",
+    "placeholders": {
+      "intro": {
+        "type": "String"
+      },
+      "duration": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsStepDistancePace": "{intro}. {distance} at {pace}.",
+  "@ttsStepDistancePace": {
+    "description": "Workout-step cue: intro then distance at pace",
+    "placeholders": {
+      "intro": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      },
+      "pace": {
+        "type": "String"
+      }
+    }
+  },
+  "guidedEasy30Title": "30-Minute Easy Run",
+  "@guidedEasy30Title": {
+    "description": "Guided run title: 30-minute easy run"
+  },
+  "guidedEasy30Subtitle": "Coach voice · 30 min · easy effort",
+  "@guidedEasy30Subtitle": {
+    "description": "Guided run subtitle: 30-minute easy run"
+  },
+  "guidedEasy30Description": "A relaxed, conversational-pace run for a recovery day or just clearing your head. Coach checks in every five minutes with a gentle nudge.",
+  "@guidedEasy30Description": {
+    "description": "Guided run description: 30-minute easy run"
+  },
+  "guidedEasy30Cue0": "Let’s go. Start easy — this is your recovery pace.",
+  "@guidedEasy30Cue0": {
+    "description": "Guided easy-30 cue at 0:00"
+  },
+  "guidedEasy30Cue1": "Five minutes in. Drop your shoulders. Keep it conversational.",
+  "@guidedEasy30Cue1": {
+    "description": "Guided easy-30 cue at 5:00"
+  },
+  "guidedEasy30Cue2": "Ten minutes. Cadence check — quick feet, light landing.",
+  "@guidedEasy30Cue2": {
+    "description": "Guided easy-30 cue at 10:00"
+  },
+  "guidedEasy30Cue3": "Halfway. You should still be able to talk through this.",
+  "@guidedEasy30Cue3": {
+    "description": "Guided easy-30 cue at 15:00"
+  },
+  "guidedEasy30Cue4": "Twenty minutes. Notice your breathing — slow nasal in, mouth out.",
+  "@guidedEasy30Cue4": {
+    "description": "Guided easy-30 cue at 20:00"
+  },
+  "guidedEasy30Cue5": "Five to go. Stay relaxed. Don’t pick it up.",
+  "@guidedEasy30Cue5": {
+    "description": "Guided easy-30 cue at 25:00"
+  },
+  "guidedEasy30Cue6": "One minute left. Easy finish.",
+  "@guidedEasy30Cue6": {
+    "description": "Guided easy-30 cue at 29:00"
+  },
+  "guidedEasy30Cue7": "Done. Walk it out for a minute. Nice job.",
+  "@guidedEasy30Cue7": {
+    "description": "Guided easy-30 cue at 30:00"
+  },
+  "guidedTempo25Title": "25-Minute Tempo Builder",
+  "@guidedTempo25Title": {
+    "description": "Guided run title: 25-minute tempo builder"
+  },
+  "guidedTempo25Subtitle": "Coach voice · 25 min · 5-15-5",
+  "@guidedTempo25Subtitle": {
+    "description": "Guided run subtitle: 25-minute tempo builder"
+  },
+  "guidedTempo25Description": "Five-minute easy warm-up, fifteen minutes at tempo (comfortably hard), five-minute cool-down. The bread-and-butter weekly tempo session.",
+  "@guidedTempo25Description": {
+    "description": "Guided run description: 25-minute tempo builder"
+  },
+  "guidedTempo25Cue0": "Warm-up time. Five minutes easy — wake up the legs.",
+  "@guidedTempo25Cue0": {
+    "description": "Guided tempo-25 cue at 0:00"
+  },
+  "guidedTempo25Cue1": "One minute left in the warm-up. Pick up the cadence.",
+  "@guidedTempo25Cue1": {
+    "description": "Guided tempo-25 cue at 4:00"
+  },
+  "guidedTempo25Cue2": "Lift it to tempo. Comfortably hard. Like a 10K race effort.",
+  "@guidedTempo25Cue2": {
+    "description": "Guided tempo-25 cue at 5:00"
+  },
+  "guidedTempo25Cue3": "Five minutes in tempo. Strong but controlled. Keep the rhythm.",
+  "@guidedTempo25Cue3": {
+    "description": "Guided tempo-25 cue at 10:00"
+  },
+  "guidedTempo25Cue4": "Ten minutes of tempo done. Hold the pace.",
+  "@guidedTempo25Cue4": {
+    "description": "Guided tempo-25 cue at 15:00"
+  },
+  "guidedTempo25Cue5": "Two minutes left at tempo. Stay smooth.",
+  "@guidedTempo25Cue5": {
+    "description": "Guided tempo-25 cue at 18:00"
+  },
+  "guidedTempo25Cue6": "Ease off. Five minutes easy to cool down.",
+  "@guidedTempo25Cue6": {
+    "description": "Guided tempo-25 cue at 20:00"
+  },
+  "guidedTempo25Cue7": "Two to go. Bring the heart rate back down.",
+  "@guidedTempo25Cue7": {
+    "description": "Guided tempo-25 cue at 23:00"
+  },
+  "guidedTempo25Cue8": "Done. Walk and stretch. Great work.",
+  "@guidedTempo25Cue8": {
+    "description": "Guided tempo-25 cue at 25:00"
+  },
+  "guidedFirst15Title": "First-Timer 15-Minute Run/Walk",
+  "@guidedFirst15Title": {
+    "description": "Guided run title: first-timer 15-minute run/walk"
+  },
+  "guidedFirst15Subtitle": "Coach voice · 15 min · run/walk intervals",
+  "@guidedFirst15Subtitle": {
+    "description": "Guided run subtitle: first-timer 15-minute run/walk"
+  },
+  "guidedFirst15Description": "New to running? Three rounds of one-minute run, one-minute walk, plus a warm-up and cool-down. A gentle on-ramp; everyone starts here.",
+  "@guidedFirst15Description": {
+    "description": "Guided run description: first-timer 15-minute run/walk"
+  },
+  "guidedFirst15Cue0": "Start with a three-minute brisk walk to warm up.",
+  "@guidedFirst15Cue0": {
+    "description": "Guided first-15 cue at 0:00"
+  },
+  "guidedFirst15Cue1": "Switch to a one-minute easy run. Conversational pace.",
+  "@guidedFirst15Cue1": {
+    "description": "Guided first-15 cue at 3:00"
+  },
+  "guidedFirst15Cue2": "Walk one minute.",
+  "@guidedFirst15Cue2": {
+    "description": "Guided first-15 cue at 4:00"
+  },
+  "guidedFirst15Cue3": "Run one minute.",
+  "@guidedFirst15Cue3": {
+    "description": "Guided first-15 cue at 5:00"
+  },
+  "guidedFirst15Cue4": "Walk one minute.",
+  "@guidedFirst15Cue4": {
+    "description": "Guided first-15 cue at 6:00"
+  },
+  "guidedFirst15Cue5": "Run one minute.",
+  "@guidedFirst15Cue5": {
+    "description": "Guided first-15 cue at 7:00"
+  },
+  "guidedFirst15Cue6": "Walk one minute.",
+  "@guidedFirst15Cue6": {
+    "description": "Guided first-15 cue at 8:00"
+  },
+  "guidedFirst15Cue7": "Run one minute — last one.",
+  "@guidedFirst15Cue7": {
+    "description": "Guided first-15 cue at 9:00"
+  },
+  "guidedFirst15Cue8": "Walk it down. Five-minute cool-down.",
+  "@guidedFirst15Cue8": {
+    "description": "Guided first-15 cue at 10:00"
+  },
+  "guidedFirst15Cue9": "One minute left. Walk easy.",
+  "@guidedFirst15Cue9": {
+    "description": "Guided first-15 cue at 14:00"
+  },
+  "guidedFirst15Cue10": "Done. That was a real run. Get out there again soon.",
+  "@guidedFirst15Cue10": {
+    "description": "Guided first-15 cue at 15:00"
+  },
+  "guidedRunMinutesBadge": "{minutes} min",
+  "@guidedRunMinutesBadge": {
+    "description": "Duration badge on a guided-run card",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "guidedRunCueCount": "{count, plural, one{{count} cue across the run} other{{count} cues across the run}}",
+  "@guidedRunCueCount": {
+    "description": "Cue-count label on a guided-run card",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "guidedRunFullScript": "THE FULL SCRIPT",
+  "@guidedRunFullScript": {
+    "description": "Section header above the cue list on the guided-run detail screen"
+  },
+  "guidedRunPreviewCue": "Preview cue",
+  "@guidedRunPreviewCue": {
+    "description": "Tooltip on the preview-cue button"
+  },
+  "guidedRunPreviewError": "Could not preview: {error}",
+  "@guidedRunPreviewError": {
+    "description": "Error banner when a cue preview fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "ttsSplitUnitKilometre": "kilometre",
+  "ttsSplitUnitKilometres": "kilometres",
+  "ttsSplitUnitMile": "mile",
+  "ttsSplitUnitMiles": "miles",
+  "@ttsSplitUnitKilometre": {
+    "description": "Unit word for a split cue: singular kilometre"
+  },
+  "@ttsSplitUnitKilometres": {
+    "description": "Unit word for a split cue: plural kilometres"
+  },
+  "@ttsSplitUnitMile": {
+    "description": "Unit word for a split cue: singular mile"
+  },
+  "@ttsSplitUnitMiles": {
+    "description": "Unit word for a split cue: plural miles"
   }
 }

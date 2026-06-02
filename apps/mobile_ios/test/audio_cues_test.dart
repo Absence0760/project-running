@@ -287,6 +287,33 @@ void main() {
     });
   });
 
+  group('localized utterances (de)', () {
+    WorkoutStep deStep() => WorkoutStep(
+          kind: WorkoutStepKind.warmup,
+          targetDistanceMetres: 1000,
+          targetPaceSecPerKm: 300,
+          toleranceSecPerKm: 10,
+          label: 'test',
+        );
+
+    // The same pure helpers read from the gen-l10n catalogue for the
+    // passed locale tag — a German runner hears German cues, not English.
+    test('pace utterance renders the German wording', () {
+      expect(formatPaceUtterance(330, DistanceUnit.km, 'de'),
+          'Pace, 5 Minuten 30 Sekunden pro Kilometer');
+    });
+
+    test('spoken distance renders the German unit word', () {
+      expect(formatSpokenDistance(5000, DistanceUnit.km, 'de'), '5 Kilometer');
+    });
+
+    test('workout-step intro is translated', () {
+      final r = formatWorkoutStepUtterance(deStep(), DistanceUnit.km, 'de');
+      expect(r, startsWith('Aufwärmen.'));
+      expect(r, contains('pro Kilometer'));
+    });
+  });
+
   group('ttsDuckingStrategyFor (persona #12)', () {
     test('Android → navigation-guidance ducking', () {
       expect(ttsDuckingStrategyFor(isAndroid: true, isIOS: false),

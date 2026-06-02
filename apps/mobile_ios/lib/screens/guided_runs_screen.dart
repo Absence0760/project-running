@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../audio_cues.dart';
 import '../guided_runs.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
 /// Browse the guided-runs library and preview each script. The
@@ -14,14 +15,15 @@ class GuidedRunsScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final library = guidedRunLibrary(l10n);
     return Scaffold(
-      appBar: AppBar(title: const Text('Guided runs')),
+      appBar: AppBar(title: Text(l10n.settingsAccountGuidedRuns)),
       body: ListView.builder(
         padding: const EdgeInsets.symmetric(vertical: 8),
-        itemCount: kGuidedRunLibrary.length,
+        itemCount: library.length,
         itemBuilder: (context, i) {
-          final g = kGuidedRunLibrary[i];
-          return _GuidedRunCard(run: g);
+          return _GuidedRunCard(run: library[i]);
         },
       ),
     );
@@ -35,6 +37,7 @@ class _GuidedRunCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final minutes = (run.durationSec / 60).round();
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 6, 16, 6),
@@ -59,7 +62,7 @@ class _GuidedRunCard extends StatelessWidget {
                       borderRadius: BorderRadius.circular(999),
                     ),
                     child: Text(
-                      '$minutes min',
+                      l10n.guidedRunMinutesBadge(minutes),
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.w700,
@@ -84,7 +87,7 @@ class _GuidedRunCard extends StatelessWidget {
               Text(run.description, style: theme.textTheme.bodyMedium),
               const SizedBox(height: 8),
               Text(
-                '${run.cues.length} cues across the run',
+                l10n.guidedRunCueCount(run.cues.length),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -125,13 +128,14 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
       await _audioCues.speakGuidedCue(text);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not preview: $e');
+      showTopBanner(context, AppLocalizations.of(context).guidedRunPreviewError('$e'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(title: Text(widget.run.title)),
       body: ListView(
@@ -146,7 +150,7 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
               style: theme.textTheme.bodyLarge?.copyWith(height: 1.4)),
           const SizedBox(height: 24),
           Text(
-            'THE FULL SCRIPT',
+            l10n.guidedRunFullScript,
             style: theme.textTheme.labelMedium?.copyWith(
               color: theme.colorScheme.outline,
               letterSpacing: 0.06,
@@ -170,7 +174,7 @@ class _GuidedRunDetailScreenState extends State<GuidedRunDetailScreen> {
                 ),
                 title: Text(cue.text),
                 trailing: IconButton(
-                  tooltip: 'Preview cue',
+                  tooltip: l10n.guidedRunPreviewCue,
                   icon: const Icon(Icons.volume_up),
                   onPressed: () => _previewCue(cue.text),
                 ),

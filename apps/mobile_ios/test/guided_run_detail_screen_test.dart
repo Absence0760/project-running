@@ -3,7 +3,17 @@ import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/audio_cues.dart';
 import '../lib/guided_runs.dart';
+import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/l10n/gen/app_localizations_en.dart';
 import '../lib/screens/guided_runs_screen.dart';
+
+final AppLocalizations _l10n = AppLocalizationsEn();
+
+Widget _app(Widget home) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: home,
+    );
 
 /// FakeAudioCues — records every speakGuidedCue call so the test can
 /// assert the Preview button on the detail screen wires through. Does
@@ -31,11 +41,9 @@ void main() {
 
   testWidgets('GuidedRunDetailScreen renders the title + subtitle + description',
       (tester) async {
-    final run = kGuidedRunLibrary.first;
+    final run = guidedRunLibrary(_l10n).first;
     await tester.pumpWidget(
-      MaterialApp(
-        home: GuidedRunDetailScreen(run: run, audioCues: FakeAudioCues()),
-      ),
+      _app(GuidedRunDetailScreen(run: run, audioCues: FakeAudioCues())),
     );
     expect(find.text(run.title), findsWidgets);
     expect(find.text(run.subtitle), findsOneWidget);
@@ -58,9 +66,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MaterialApp(
-        home: GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues()),
-      ),
+      _app(GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues())),
     );
     for (final cue in fixture.cues) {
       expect(find.text(cue.text), findsOneWidget, reason: 'cue "${cue.text}" missing');
@@ -83,9 +89,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MaterialApp(
-        home: GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues()),
-      ),
+      _app(GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues())),
     );
     expect(find.text('0:00'), findsOneWidget);
     expect(find.text('1:05'), findsOneWidget);
@@ -108,9 +112,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MaterialApp(
-        home: GuidedRunDetailScreen(run: fixture, audioCues: fake),
-      ),
+      _app(GuidedRunDetailScreen(run: fixture, audioCues: fake)),
     );
 
     // Tap the first volume_up icon — should speak the first cue's text.
@@ -134,9 +136,7 @@ void main() {
       ],
     );
     await tester.pumpWidget(
-      MaterialApp(
-        home: GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues()),
-      ),
+      _app(GuidedRunDetailScreen(run: fixture, audioCues: FakeAudioCues())),
     );
     expect(find.byIcon(Icons.volume_up), findsNWidgets(3));
   });

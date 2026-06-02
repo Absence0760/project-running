@@ -1,6 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 
 import '../lib/guided_runs.dart';
+import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/l10n/gen/app_localizations_en.dart';
+
+final AppLocalizations _l10n = AppLocalizationsEn();
 
 GuidedRun _mkRun(List<int> ats) => GuidedRun(
       id: 'test',
@@ -93,48 +97,60 @@ void main() {
     });
   });
 
-  group('kGuidedRunLibrary', () {
+  group('guidedRunLibrary', () {
+    final library = guidedRunLibrary(_l10n);
+
     test('every entry is valid', () {
-      expect(kGuidedRunLibrary.length, greaterThanOrEqualTo(3));
-      for (final g in kGuidedRunLibrary) {
+      expect(library.length, greaterThanOrEqualTo(3));
+      for (final g in library) {
         expect(isGuidedRunValid(g), isTrue, reason: '${g.id} is malformed');
       }
     });
 
     test('ids are unique', () {
-      final ids = kGuidedRunLibrary.map((g) => g.id).toList();
+      final ids = library.map((g) => g.id).toList();
       expect(ids.toSet().length, ids.length);
     });
 
     test('durations are sensible (5-90 min)', () {
-      for (final g in kGuidedRunLibrary) {
+      for (final g in library) {
         expect(g.durationSec, greaterThanOrEqualTo(5 * 60));
         expect(g.durationSec, lessThanOrEqualTo(90 * 60));
       }
     });
 
     test('every run has a kickoff cue at or near 0', () {
-      for (final g in kGuidedRunLibrary) {
+      for (final g in library) {
         expect(g.cues.isNotEmpty && g.cues.first.atSec <= 5, isTrue,
             reason: '${g.id} missing a kickoff cue in the first 5s');
       }
     });
 
     test('every run has a finish cue at exactly duration', () {
-      for (final g in kGuidedRunLibrary) {
+      for (final g in library) {
         expect(g.cues.last.atSec, g.durationSec,
             reason: '${g.id} missing a finish cue at duration');
+      }
+    });
+
+    test('cue + title text is populated (localized, non-empty)', () {
+      for (final g in library) {
+        expect(g.title.trim(), isNotEmpty);
+        expect(g.description.trim(), isNotEmpty);
+        for (final c in g.cues) {
+          expect(c.text.trim(), isNotEmpty);
+        }
       }
     });
   });
 
   test('findGuidedRun: returns null for unknown id', () {
-    expect(findGuidedRun('nope'), isNull);
+    expect(findGuidedRun(_l10n, 'nope'), isNull);
   });
 
   test('findGuidedRun: returns the run for a known id', () {
-    final id = kGuidedRunLibrary.first.id;
-    expect(findGuidedRun(id), isNotNull);
-    expect(findGuidedRun(id)!.id, id);
+    final id = guidedRunLibrary(_l10n).first.id;
+    expect(findGuidedRun(_l10n, id), isNotNull);
+    expect(findGuidedRun(_l10n, id)!.id, id);
   });
 }
