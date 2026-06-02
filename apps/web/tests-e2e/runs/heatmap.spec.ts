@@ -1,6 +1,19 @@
 import { expect, test } from '@playwright/test';
 
+import { insertRun, deleteRun } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
+
+// A short GPS track around Richmond, VA — enough distinct points to form
+// heat cells AND a polyline. The seed runs carry track_url values whose
+// gzipped blobs aren't staged in local Storage (downloads fail and are
+// swallowed as L4 best-effort), so the personal heatmap has no data to plot
+// unless a test stages a real track. This gives the legend + line layer
+// something to render.
+const HEATMAP_TRACK = Array.from({ length: 12 }, (_, i) => ({
+	lat: 37.5407 + i * 0.0008,
+	lng: -77.436 + i * 0.0006,
+	t: new Date(Date.UTC(2026, 0, 1, 8, i)).toISOString()
+}));
 
 test.describe('/runs/heatmap — anon visitor', () => {
 	test.use({ storageState: { cookies: [], origins: [] } });
@@ -25,6 +38,22 @@ test.describe('/runs/heatmap — anon visitor', () => {
 
 test.describe('/runs/heatmap — signed-in seed user', () => {
 	test.use({ storageState: USER_A.storageStatePath });
+
+	let heatRunId: string | null = null;
+	test.beforeEach(async () => {
+		// Stage one run with a real (uploaded) track so the heatmap resolves
+		// to data — the seed runs' track blobs aren't present in local Storage.
+		heatRunId = await insertRun({
+			user_id: USER_A.id,
+			duration_s: 1800,
+			distance_m: 5000,
+			track: HEATMAP_TRACK
+		});
+	});
+	test.afterEach(async () => {
+		if (heatRunId) await deleteRun(heatRunId);
+		heatRunId = null;
+	});
 
 	test('renders the heading + map and resolves loading to legend or empty', async ({ page }) => {
 		await page.goto('/runs/heatmap');
