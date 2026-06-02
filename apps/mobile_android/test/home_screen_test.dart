@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/audio_cues.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
@@ -62,6 +63,8 @@ Future<({
 Future<void> _pump(WidgetTester tester, dynamic s) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: HomeScreen(
         apiClient: null,
         runStore: s.runStore,

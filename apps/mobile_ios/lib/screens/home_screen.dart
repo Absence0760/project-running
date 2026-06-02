@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart' as cm;
 
 import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
@@ -262,15 +263,25 @@ class _HomeScreenState extends State<HomeScreen> {
         builder: (context, index, _) => NavigationBar(
           selectedIndex: index,
           onDestinationSelected: _onNavTapped,
-          destinations: const [
+          destinations: [
             // Routes lives as a sub-tab of Social on mobile — bottom nav
             // can't carry six items without crowding the labels. The web
             // side keeps Routes as a sidebar peer; mobile compresses.
-            NavigationDestination(icon: Icon(Icons.dashboard), label: 'Home'),
-            NavigationDestination(icon: Icon(Icons.play_arrow), label: 'Run'),
-            NavigationDestination(icon: Icon(Icons.history), label: 'History'),
-            NavigationDestination(icon: Icon(Icons.public), label: 'Social'),
-            NavigationDestination(icon: Icon(Icons.settings), label: 'Settings'),
+            NavigationDestination(
+                icon: const Icon(Icons.dashboard),
+                label: AppLocalizations.of(context).navHome),
+            NavigationDestination(
+                icon: const Icon(Icons.play_arrow),
+                label: AppLocalizations.of(context).navRun),
+            NavigationDestination(
+                icon: const Icon(Icons.history),
+                label: AppLocalizations.of(context).navHistory),
+            NavigationDestination(
+                icon: const Icon(Icons.public),
+                label: AppLocalizations.of(context).navSocial),
+            NavigationDestination(
+                icon: const Icon(Icons.settings),
+                label: AppLocalizations.of(context).navSettings),
           ],
         ),
       ),

@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../ble_heart_rate.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
@@ -89,7 +90,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
-            const _SectionHeader('Profile'),
+            _SectionHeader(AppLocalizations.of(context).settingsSectionProfile),
             _tab(
               icon: Icons.person_outline,
               label: 'Account',
@@ -115,7 +116,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     settingsSync: widget.settingsSync,
                   )),
             ),
-            const _SectionHeader('Apps & data'),
+            _SectionHeader(AppLocalizations.of(context).settingsSectionAppsData),
             _tab(
               icon: Icons.link,
               label: 'Integrations',
@@ -152,7 +153,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ));
               },
             ),
-            const _SectionHeader('Account & legal'),
+            _SectionHeader(
+                AppLocalizations.of(context).settingsSectionAccountLegal),
             _tab(
               icon: Icons.favorite_outline,
               label: 'Pro & support',

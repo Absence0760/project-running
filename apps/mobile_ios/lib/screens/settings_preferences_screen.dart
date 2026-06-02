@@ -2,7 +2,9 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../goals.dart';
-import '../main.dart' show themeModeNotifier;
+import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../settings_sync.dart';
 
@@ -358,6 +360,35 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  Future<void> _editLanguage() async {
+    final t = AppLocalizations.of(context);
+    // '' is the "follow device locale" sentinel; the rest are canonical tags.
+    const tags = ['', 'en', 'de', 'fr', 'es', 'ja', 'pt-BR'];
+    final labels = [
+      t.prefsLanguageSystem,
+      localeLabels['en']!,
+      localeLabels['de']!,
+      localeLabels['fr']!,
+      localeLabels['es']!,
+      localeLabels['ja']!,
+      localeLabels['pt-BR']!,
+    ];
+    final current = widget.preferences.locale == null
+        ? ''
+        : localeToTag(widget.preferences.locale!);
+    final picked = await _pickRadio<String>(
+      title: t.prefsLanguage,
+      options: tags,
+      labels: labels,
+      current: current,
+    );
+    if (picked == null) return;
+    final next = picked.isEmpty ? null : localeFromTag(picked);
+    await widget.preferences.setLocale(next);
+    localeNotifier.value = next;
+    if (mounted) setState(() {});
+  }
+
   Future<void> _editMapStyle() async {
     const opts = ['streets', 'satellite', 'outdoors', 'dark'];
     const labels = ['Streets', 'Satellite', 'Outdoors', 'Dark'];
@@ -641,7 +672,18 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                   ],
                 ),
               ),
-            _sectionLabel('Units & display'),
+            _sectionLabel(AppLocalizations.of(context).prefsSectionUnitsDisplay),
+            ListTile(
+              title: Text(AppLocalizations.of(context).prefsLanguage),
+              subtitle: Text(
+                widget.preferences.locale == null
+                    ? AppLocalizations.of(context).prefsLanguageSystem
+                    : localeLabels[localeToTag(widget.preferences.locale!)] ??
+                        '—',
+              ),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: _editLanguage,
+            ),
             SwitchListTile(
               title: const Text('Use miles'),
               subtitle: Text(_unitSubtitle()),
