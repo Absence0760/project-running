@@ -81,13 +81,15 @@ test.describe('/settings/preferences — privacy zones', () => {
 			await expect(zoneRow).toContainText('-33.86880, 151.20930');
 			await expect(zoneRow).toContainText('250 m radius');
 
-			// Remove → Save → expect the saved confirmation.
+			// Remove → preferences auto-save (no Save button since the
+			// auto-save pass; zone edits persist immediately via
+			// updateUniversal). Gate on the write actually landing in the DB
+			// before reloading, so the reload can't race the persist.
 			await zoneRow.getByRole('button', { name: 'Remove' }).click();
 			await expect(zoneRow).toHaveCount(0);
-			await page.getByRole('button', { name: /Save Preferences/ }).click();
-			await expect(
-				page.getByRole('button', { name: /Saved!/ })
-			).toBeVisible({ timeout: 5_000 });
+			await expect
+				.poll(async () => (await getUserPrivacyZones()).length, { timeout: 5_000 })
+				.toBe(0);
 
 			// Reload — zone stays gone in the UI.
 			await page.reload();
