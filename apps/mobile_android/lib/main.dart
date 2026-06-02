@@ -14,6 +14,7 @@ import 'package:ui_kit/ui_kit.dart';
 
 import 'audio_cues.dart';
 import 'background_sync.dart';
+import 'dev_auto_login.dart';
 import 'in_progress_recovery.dart';
 import 'local_gear_store.dart';
 import 'local_route_store.dart';
@@ -353,12 +354,15 @@ void main() async {
     final devEmail = dotenv.env['DEV_USER_EMAIL'];
     final devPassword = dotenv.env['DEV_USER_PASSWORD'];
     Future(() async {
-      if (devEmail != null &&
-          devEmail.isNotEmpty &&
-          devPassword != null &&
-          devPassword.isNotEmpty) {
+      // Gated on a loopback SUPABASE_URL — seed creds must never sign a
+      // user into a production backend. See dev_auto_login.dart.
+      if (shouldAutoLogin(
+        url: supabaseUrl,
+        email: devEmail,
+        password: devPassword,
+      )) {
         try {
-          await api!.signIn(email: devEmail, password: devPassword);
+          await api!.signIn(email: devEmail!, password: devPassword!);
         } catch (e) {
           debugPrint('Auto sign-in failed: $e');
         }

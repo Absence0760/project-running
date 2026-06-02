@@ -139,6 +139,24 @@ To find your emulator device ID:
 flutter devices
 ```
 
+### Sign in automatically as the seed runner
+
+To skip the sign-in screen and land in the app already authenticated as the
+seed user (`runner@test.com` / `testtest`), run from the repo root:
+
+```bash
+pnpm dev:run:android:seed
+```
+
+This passes `DEV_USER_EMAIL` / `DEV_USER_PASSWORD` via `--dart-define`; the app
+signs in after the first frame. Alternatively, set those two keys in
+`apps/mobile_android/.env.local` and any plain `flutter run` will auto-login.
+
+The auto-login only fires when `SUPABASE_URL` is a loopback address (the
+gate lives in `lib/dev_auto_login.dart`), so seed credentials can never sign
+you into a production backend. Make sure the local backend is up first
+(`pnpm dev:db:up`, then `pnpm dev:db:reset` if the runner account is missing).
+
 ---
 
 ## Installing on a physical phone (APK)

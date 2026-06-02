@@ -1772,6 +1772,24 @@ void main() {
             'call — no intermediate conditional.',
       );
     });
+
+    // Reason: the startup seed auto-login (DEV_USER_EMAIL/PASSWORD) must
+    // never sign a user into production. The gate lives in
+    // dev_auto_login.dart#shouldAutoLogin, which only returns true for a
+    // loopback SUPABASE_URL. Pin that main.dart routes the auto sign-in
+    // through it so the loopback rail can't be silently reverted to the
+    // old ungated inline credential check. See dev_prod_isolation.md.
+    test('main.dart gates the dev auto-login on shouldAutoLogin', () {
+      final source = File('lib/main.dart').readAsStringSync();
+      final gateIdx = source.indexOf('shouldAutoLogin(');
+      final signInIdx = source.indexOf('api!.signIn(');
+      expect(gateIdx, greaterThan(0),
+          reason: 'main.dart must call shouldAutoLogin(...) — the loopback '
+              'guard that stops seed creds reaching a production backend.');
+      expect(signInIdx, greaterThan(gateIdx),
+          reason: 'the auto api!.signIn(...) must sit inside the '
+              'shouldAutoLogin(...) gate, not before it.');
+    });
   });
 
   group('column-grant lockdown discipline (clubs + events)', () {
