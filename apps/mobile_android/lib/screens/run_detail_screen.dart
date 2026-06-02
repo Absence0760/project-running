@@ -123,6 +123,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   double? _cachedElevationGain;
   double? _cachedElevationLoss;
   Duration? _cachedMovingTime;
+  int? _cachedGap;
+  bool _gapCacheChecked = false;
   List<MapEntry<String, Duration>>? _cachedBestEfforts;
   List<_Split>? _cachedSplits;
   ({int min, int max, int avg})? _cachedBpmStats;
@@ -143,6 +145,8 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     _cachedElevationGain = null;
     _cachedElevationLoss = null;
     _cachedMovingTime = null;
+    _cachedGap = null;
+    _gapCacheChecked = false;
     _cachedBestEfforts = null;
     _cachedSplits = null;
     _statsCacheSplitsUnit = null;
@@ -1235,7 +1239,17 @@ class _RunDetailScreenState extends State<RunDetailScreen>
 
   /// Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
   /// terrain (Minetti 2002). Null on flat runs / tracks without elevation.
-  int? get _gradeAdjustedPaceSecPerKm => gradeAdjustedPaceSecPerKm(run.track);
+  /// Cached behind a checked-flag (not `??=`) because null is a valid result
+  /// the haversine walk shouldn't repeat — `_showGradeAdjustedPace` and the
+  /// stat cell both read it each build.
+  int? get _gradeAdjustedPaceSecPerKm {
+    _resetStatsCacheIfStale();
+    if (!_gapCacheChecked) {
+      _cachedGap = gradeAdjustedPaceSecPerKm(run.track);
+      _gapCacheChecked = true;
+    }
+    return _cachedGap;
+  }
 
   /// Only surface GAP when it differs from the run's average pace by a margin
   /// worth showing — a near-flat run's GAP is the raw pace, so the extra tile
