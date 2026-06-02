@@ -109,6 +109,7 @@ Uint8List buildBackupZip({
   List<Map<String, dynamic>>? runs,
   List<Map<String, dynamic>>? routes,
   Map<String, List<Map<String, dynamic>>>? tracksByRunId,
+  Map<String, List<Map<String, dynamic>>>? hrByRunId,
 }) {
   final archive = Archive();
   addJson(archive, 'manifest.json', manifestOverride ??
@@ -124,7 +125,41 @@ Uint8List buildBackupZip({
       addGzippedTrack(archive, entry.key, entry.value);
     }
   }
+  if (hrByRunId != null) {
+    for (final entry in hrByRunId.entries) {
+      final gz = Uint8List.fromList(
+          GZipEncoder().encode(utf8.encode(jsonEncode(entry.value))));
+      archive.addFile(ArchiveFile('hr/${entry.key}.hr.json.gz', gz.length, gz));
+    }
+  }
   return Uint8List.fromList(ZipEncoder().encode(archive));
+}
+
+/// Online-path fake: signed-in user, captures the restore re-home calls.
+/// The online restore only touches `_client` for profile/events/routes, so an
+/// archive with none of those drives the runs loop using just these overrides.
+class _CapturingOnlineApi extends ApiClient {
+  _CapturingOnlineApi(this._uid);
+  final String _uid;
+  final List<Map<String, dynamic>> upsertedRuns = [];
+  final List<(String userId, String runId)> hrUploads = [];
+
+  @override
+  String? get userId => _uid;
+
+  @override
+  Future<void> uploadHrSeriesBytes({
+    required String userId,
+    required String runId,
+    required Uint8List gzippedBytes,
+  }) async {
+    hrUploads.add((userId, runId));
+  }
+
+  @override
+  Future<void> upsertRunRowRaw(Map<String, dynamic> row) async {
+    upsertedRuns.add(Map<String, dynamic>.from(row));
+  }
 }
 
 void main() {
@@ -161,6 +196,80 @@ void main() {
       generateNewIds: generateNewIds,
     );
   }
+
+  group('online restore — hr_series_url re-stamp (decisions §116)', () {
+    // The online path ALWAYS overwrites hr_series_url (re-homed path or null).
+    // A stale archived path (old owner/run) left in place would fail the
+    // runs_hr_series_url_path_shape CHECK (23514) and sink the whole upsert.
+    const uid = 'aaaaaaaa-0000-0000-0000-0000000000a1';
+
+    test('re-homes the sidecar + re-stamps hr_series_url (id preserved)', () async {
+      final api = _CapturingOnlineApi(uid);
+      final bytes = buildBackupZip(
+        runs: [
+          {
+            ...runRow(id: 'run-1'),
+            'hr_series_url': 'old-owner/old-run.hr.json.gz', // stale archived path
+          },
+        ],
+        hrByRunId: {
+          'run-1': const [
+            {'bpm': 140},
+            {'bpm': 150},
+          ],
+        },
+      );
+      await zipFile.writeAsBytes(bytes);
+      final result = await BackupService(api: api).restore(zipFile: zipFile);
+
+      expect(result.runsImported, 1);
+      // Sidecar re-homed to the signed-in user's bucket under the kept id.
+      expect(api.hrUploads, [(uid, 'run-1')]);
+      // The upserted row carries the NEW canonical path, NOT the stale one.
+      expect(api.upsertedRuns.single['hr_series_url'], '$uid/run-1.hr.json.gz');
+    });
+
+    test('clears a stale hr_series_url to null when no sidecar file is present',
+        () async {
+      final api = _CapturingOnlineApi(uid);
+      final bytes = buildBackupZip(
+        runs: [
+          {
+            ...runRow(id: 'run-1'),
+            'hr_series_url': 'old-owner/old-run.hr.json.gz', // stale, but no hr/ file
+          },
+        ],
+      );
+      await zipFile.writeAsBytes(bytes);
+      final result = await BackupService(api: api).restore(zipFile: zipFile);
+
+      expect(result.runsImported, 1);
+      expect(api.hrUploads, isEmpty);
+      // Stale path MUST be nulled — otherwise the path-shape CHECK 23514s.
+      expect(api.upsertedRuns.single['hr_series_url'], isNull);
+    });
+
+    test('generateNewIds re-stamps hr_series_url to the new id', () async {
+      final api = _CapturingOnlineApi(uid);
+      final bytes = buildBackupZip(
+        runs: [runRow(id: 'orig-1')],
+        hrByRunId: {
+          'orig-1': const [
+            {'bpm': 130},
+          ],
+        },
+      );
+      await zipFile.writeAsBytes(bytes);
+      await BackupService(api: api).restore(zipFile: zipFile, generateNewIds: true);
+
+      // One upsert; its id is fresh (not orig-1) and hr_series_url matches it.
+      final row = api.upsertedRuns.single;
+      final newId = row['id'] as String;
+      expect(newId, isNot('orig-1'));
+      expect(row['hr_series_url'], '$uid/$newId.hr.json.gz');
+      expect(api.hrUploads, [(uid, newId)]);
+    });
+  });
 
   group('manifest validation', () {
     test('throws when manifest is missing entirely', () async {
