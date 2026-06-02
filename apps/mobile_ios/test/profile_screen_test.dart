@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/profile_screen.dart';
 
 bool _supabaseReady = false;
@@ -23,6 +24,8 @@ Future<void> _ensureSupabase() async {
 Future<void> _pump(WidgetTester tester, {required String userId}) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: ProfileScreen(api: ApiClient(), userId: userId),
     ),
   );
@@ -75,9 +78,10 @@ void main() {
     });
 
     test('verb string mirrors the web "RSVP\'d Going" phrasing', () {
-      // Source on disk encodes the apostrophe as `\'` inside a single-
-      // quoted string literal; match that literal byte sequence.
-      expect(source.contains(r"RSVP\'d Going to your event"), isTrue,
+      // The verb text now lives in the gen-l10n catalogues; the screen
+      // dispatches to the localized key. Pin the key reference so the
+      // event_rsvp verb can't silently drop off the inbox switch.
+      expect(source.contains('l10n.profileNotifEventRsvpTitled'), isTrue,
           reason:
               'Verb text must match NotificationsList.svelte so push / '
               'inbox / web stay in lockstep.');
@@ -108,9 +112,11 @@ void main() {
     });
 
     test('verb strings mirror the web NotificationsList phrasing', () {
-      expect(source.contains(r'posted in ${item.clubName}'), isTrue,
+      // Verb text moved into the gen-l10n catalogues; pin the localized
+      // key references so the club_post + run_completed verbs stay wired.
+      expect(source.contains('l10n.profileNotifClubPostNamed'), isTrue,
           reason: 'club_post verb must match the web "posted in <club>" line.');
-      expect(source.contains('completed a '), isTrue,
+      expect(source.contains('l10n.profileNotifRunCompletedDist'), isTrue,
           reason:
               'run_completed verb must match the web "completed a <dist> run" '
               'line.');
@@ -172,7 +178,8 @@ void main() {
         File('lib/screens/profile_screen.dart').readAsStringSync();
 
     test('Block IconButton renders in the AppBar for non-self viewers', () {
-      expect(source.contains("tooltip: _blocked ? 'Unblock this profile'"),
+      expect(
+          source.contains('tooltip: _blocked ? l10n.profileUnblock'),
           isTrue,
           reason:
               'AppBar must surface a Block / Unblock IconButton when the '

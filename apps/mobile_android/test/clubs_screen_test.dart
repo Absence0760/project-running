@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/clubs_screen.dart';
 import '../lib/social_service.dart';
 import '../lib/training_service.dart';
@@ -7,6 +8,8 @@ import '../lib/training_service.dart';
 Future<void> _pump(WidgetTester tester) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: ClubsScreen(
         social: SocialService(),
         training: TrainingService(),

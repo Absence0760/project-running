@@ -2113,4 +2113,765 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get routesLoadErrorRetry =>
       'Couldn\'t load your routes. Check your connection and try again.';
+
+  @override
+  String get feedTitle => 'Feed';
+
+  @override
+  String get feedFindPeople => 'Find people';
+
+  @override
+  String get feedActivityAll => 'All';
+
+  @override
+  String get feedActivityRun => 'Run';
+
+  @override
+  String get feedActivityWalk => 'Walk';
+
+  @override
+  String get feedActivityCycle => 'Cycle';
+
+  @override
+  String get feedActivityHike => 'Hike';
+
+  @override
+  String get feedLoadMore => 'Load more';
+
+  @override
+  String feedLoadMoreFailed(String error) {
+    return 'Could not load more: $error';
+  }
+
+  @override
+  String get feedLoadError => 'Could not load feed.';
+
+  @override
+  String get feedEveryoneYouFollow => 'Everyone you follow';
+
+  @override
+  String get feedRunnerFallback => 'Runner';
+
+  @override
+  String get feedLast14Days => 'Last 14 days';
+
+  @override
+  String get feedEmptyTitle => 'Your feed is empty';
+
+  @override
+  String get feedEmptyBody =>
+      'Follow other runners to see their public runs here.';
+
+  @override
+  String get feedNoMatchesTitle => 'No matches';
+
+  @override
+  String get feedNoMatchesBody =>
+      'Nothing matches the current filters in the last 14 days.';
+
+  @override
+  String get feedNoActivityTitle => 'No recent activity';
+
+  @override
+  String get feedNoActivityBody =>
+      'Nobody you follow has logged a public run in the last 14 days.';
+
+  @override
+  String get feedClearFilters => 'Clear filters';
+
+  @override
+  String feedKudosUpdateFailed(String error) {
+    return 'Could not update kudos: $error';
+  }
+
+  @override
+  String get profileTitle => 'Profile';
+
+  @override
+  String get profileRunnerFallback => 'Runner';
+
+  @override
+  String get profileTabRuns => 'Runs';
+
+  @override
+  String get profileTabFollowers => 'Followers';
+
+  @override
+  String get profileTabFollowing => 'Following';
+
+  @override
+  String get profileTabNotifications => 'Notifications';
+
+  @override
+  String get profileReportUser => 'Report user';
+
+  @override
+  String get profileUnblock => 'Unblock this profile';
+
+  @override
+  String get profileBlock => 'Block this profile';
+
+  @override
+  String get profileLoadError => 'Could not load profile.';
+
+  @override
+  String get profileNotFound => 'Profile not found.';
+
+  @override
+  String profileFollowStats(int followers, int following) {
+    String _temp0 = intl.Intl.pluralLogic(
+      followers,
+      locale: localeName,
+      other: '$followers followers',
+      one: '$followers follower',
+    );
+    return '$_temp0 · $following following';
+  }
+
+  @override
+  String get profileFollowing => 'Following';
+
+  @override
+  String get profileFollow => 'Follow';
+
+  @override
+  String get profileRunsEmptySelf => 'You haven\'t shared any runs yet.';
+
+  @override
+  String get profileRunsEmptyOther => 'No public runs yet.';
+
+  @override
+  String get profileFollowersEmpty => 'No followers yet.';
+
+  @override
+  String get profileFollowingEmpty => 'Not following anyone yet.';
+
+  @override
+  String profileLoadMore(int count) {
+    return 'Load $count more';
+  }
+
+  @override
+  String get profileLoadMoreFollowersFailed => 'Could not load more followers';
+
+  @override
+  String get profileLoadMoreFollowingFailed => 'Could not load more following';
+
+  @override
+  String profileFollowUpdateFailed(String error) {
+    return 'Could not update follow: $error';
+  }
+
+  @override
+  String profileBlockConfirmTitle(String name) {
+    return 'Block $name?';
+  }
+
+  @override
+  String get profileBlockConfirmBody =>
+      'They won\'t be able to follow you, give kudos to your runs, or comment on them. Any existing follow between you in either direction will be cleared. You can unblock from this page at any time.';
+
+  @override
+  String get profileBlockConfirmAction => 'Block';
+
+  @override
+  String get profileCancel => 'Cancel';
+
+  @override
+  String get profileThisRunner => 'this runner';
+
+  @override
+  String get profileRunnerNoun => 'runner';
+
+  @override
+  String profileBlocked(String name) {
+    return 'Blocked $name';
+  }
+
+  @override
+  String profileBlockFailed(String error) {
+    return 'Could not block: $error';
+  }
+
+  @override
+  String profileUnblocked(String name) {
+    return 'Unblocked $name';
+  }
+
+  @override
+  String profileUnblockFailed(String error) {
+    return 'Could not unblock: $error';
+  }
+
+  @override
+  String get profileNotifAll => 'All';
+
+  @override
+  String get profileNotifUnread => 'Unread';
+
+  @override
+  String get profileMarkAllRead => 'Mark all read';
+
+  @override
+  String profileMarkAllReadFailed(String error) {
+    return 'Failed to mark all read: $error';
+  }
+
+  @override
+  String get profileNotifsCaughtUp => 'You\'re all caught up.';
+
+  @override
+  String get profileNotifsEmpty => 'No notifications yet.';
+
+  @override
+  String get profileDismiss => 'Dismiss';
+
+  @override
+  String profileDismissFailed(String error) {
+    return 'Failed to dismiss: $error';
+  }
+
+  @override
+  String get profileNotifSomeone => 'Someone';
+
+  @override
+  String get profileNotifYourRun => 'your run';
+
+  @override
+  String profileNotifKudos(String name, String dist) {
+    return '$name gave kudos to your $dist';
+  }
+
+  @override
+  String profileNotifComment(String name, String dist) {
+    return '$name commented on your $dist';
+  }
+
+  @override
+  String profileNotifCommentReply(String name) {
+    return '$name replied to your comment';
+  }
+
+  @override
+  String profileNotifFollow(String name) {
+    return '$name started following you';
+  }
+
+  @override
+  String profileNotifEventRsvpTitled(String name, String title) {
+    return '$name RSVP\'d Going to your event \"$title\"';
+  }
+
+  @override
+  String profileNotifEventRsvp(String name) {
+    return '$name RSVP\'d Going to your event';
+  }
+
+  @override
+  String profileNotifPlanUpdate(String name) {
+    return '$name updated your training plan';
+  }
+
+  @override
+  String profileNotifMessage(String name) {
+    return '$name sent you a message';
+  }
+
+  @override
+  String profileNotifClubPostNamed(String name, String club) {
+    return '$name posted in $club';
+  }
+
+  @override
+  String profileNotifClubPost(String name) {
+    return '$name posted in a club you\'re in';
+  }
+
+  @override
+  String profileNotifRunCompletedDist(String name, String dist) {
+    return '$name completed a $dist run';
+  }
+
+  @override
+  String profileNotifRunCompleted(String name) {
+    return '$name completed a run';
+  }
+
+  @override
+  String profileNotifGeneric(String name) {
+    return '$name interacted with your activity';
+  }
+
+  @override
+  String get socialTabFeed => 'Feed';
+
+  @override
+  String get socialTabPeople => 'People';
+
+  @override
+  String get socialTabClubs => 'Clubs';
+
+  @override
+  String get socialTabRoutes => 'Routes';
+
+  @override
+  String get clubsTitle => 'Clubs';
+
+  @override
+  String get clubsFindPeople => 'Find people';
+
+  @override
+  String get clubsNewClub => 'New club';
+
+  @override
+  String get clubsTabBrowse => 'Browse';
+
+  @override
+  String get clubsTabMine => 'My clubs';
+
+  @override
+  String get clubsJoinWithCode => 'Join with invite code';
+
+  @override
+  String get clubsSearchHint => 'Search by name or location';
+
+  @override
+  String get clubsTimeoutError =>
+      'Connection timed out. Check your network and try again.';
+
+  @override
+  String get clubsLoadError => 'Couldn\'t load clubs. Tap retry to try again.';
+
+  @override
+  String get clubsBadgePrivate => 'PRIVATE';
+
+  @override
+  String clubsMemberCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '$count member',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get clubsEmptyBrowseTitle => 'No clubs match that search.';
+
+  @override
+  String get clubsEmptyMineTitle => 'You haven\'t joined a club yet.';
+
+  @override
+  String get clubsEmptyBrowseBody => 'Try a different name or location.';
+
+  @override
+  String get clubsEmptyMineBody => 'Head to Browse to find one.';
+
+  @override
+  String get clubDetailTabFeed => 'Feed';
+
+  @override
+  String get clubDetailTabEvents => 'Events';
+
+  @override
+  String get clubDetailTabMembers => 'Members';
+
+  @override
+  String get clubDetailTabRoutes => 'Routes';
+
+  @override
+  String get clubDetailTabTemplates => 'Templates';
+
+  @override
+  String get clubDetailReportClub => 'Report club';
+
+  @override
+  String get clubDetailLoadFailedTitle => 'Couldn\'t load this club.';
+
+  @override
+  String get clubDetailLoadFailedBody =>
+      'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.';
+
+  @override
+  String get clubDetailRetry => 'Retry';
+
+  @override
+  String get clubDetailTimeoutError =>
+      'Connection timed out. Check your network and try again.';
+
+  @override
+  String get clubDetailRequestSent => 'Request sent to admins.';
+
+  @override
+  String clubDetailLeaveTitle(String club) {
+    return 'Leave $club?';
+  }
+
+  @override
+  String get clubDetailCancel => 'Cancel';
+
+  @override
+  String get clubDetailLeave => 'Leave';
+
+  @override
+  String clubDetailReplyFailed(String error) {
+    return 'Could not post reply: $error';
+  }
+
+  @override
+  String get clubDetailMemberFallback => 'Member';
+
+  @override
+  String get clubDetailRequestPending => 'Request pending';
+
+  @override
+  String get clubDetailInviteOnly => 'Invite only';
+
+  @override
+  String get clubDetailRequest => 'Request';
+
+  @override
+  String get clubDetailJoin => 'Join';
+
+  @override
+  String get clubDetailOwner => 'Owner';
+
+  @override
+  String get clubDetailNextEvent => 'NEXT EVENT';
+
+  @override
+  String clubDetailGoingCount(int count) {
+    return '$count going';
+  }
+
+  @override
+  String get clubDetailNoPostsMember =>
+      'No posts yet. Share an update with members.';
+
+  @override
+  String get clubDetailNoPosts => 'No updates yet.';
+
+  @override
+  String get clubDetailShareUpdateHint => 'Share an update…';
+
+  @override
+  String get clubDetailPost => 'Post';
+
+  @override
+  String get clubDetailReply => 'Reply';
+
+  @override
+  String clubDetailHideReplies(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Hide $count replies',
+      one: 'Hide $count reply',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clubDetailShowReplies(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count replies',
+      one: '$count reply',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clubDetailReplyAuthorLine(String name, String time) {
+    return '$name · $time';
+  }
+
+  @override
+  String get clubDetailWriteReplyHint => 'Write a reply…';
+
+  @override
+  String get clubDetailSend => 'Send';
+
+  @override
+  String get clubDetailNoEventsAdmin =>
+      'No upcoming events. Tap Create to add one.';
+
+  @override
+  String get clubDetailNoEvents => 'No upcoming events.';
+
+  @override
+  String get clubDetailCreateEvent => 'Create event';
+
+  @override
+  String get clubDetailGoing => 'Going';
+
+  @override
+  String clubDetailApproveFailed(String error) {
+    return 'Approve failed: $error';
+  }
+
+  @override
+  String clubDetailDenyFailed(String error) {
+    return 'Deny failed: $error';
+  }
+
+  @override
+  String clubDetailPendingRequests(int count) {
+    return 'Pending requests ($count)';
+  }
+
+  @override
+  String clubDetailUserShort(String id) {
+    return 'User $id…';
+  }
+
+  @override
+  String get clubDetailDeny => 'Deny';
+
+  @override
+  String get clubDetailApprove => 'Approve';
+
+  @override
+  String clubDetailMemberCountLine(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members.',
+      one: '$count member.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String clubDetailRouteSaved(String name) {
+    return 'Saved \"$name\"';
+  }
+
+  @override
+  String get clubDetailBuildRoute => 'Build route for this club';
+
+  @override
+  String get clubDetailRoutesEmptyBuild =>
+      'No routes yet. Build the official course above, or transfer one of your personal routes from the route detail screen.';
+
+  @override
+  String get clubDetailRoutesEmptyAdmin =>
+      'No routes yet. Admins can transfer one of their personal routes from the route detail screen.';
+
+  @override
+  String get clubDetailRoutesEmpty => 'No routes shared with this club yet.';
+
+  @override
+  String get clubDetailTemplateAdded => 'Template added to your plans.';
+
+  @override
+  String clubDetailAdoptFailed(String error) {
+    return 'Adopt failed: $error';
+  }
+
+  @override
+  String get clubDetailNoTemplatesAdmin =>
+      'No templates yet. Publish one of your plans from its detail page.';
+
+  @override
+  String get clubDetailNoTemplates => 'No plan templates yet for this club.';
+
+  @override
+  String get clubDetailAdopt => 'Adopt';
+
+  @override
+  String get eventNotFound => 'Event not found.';
+
+  @override
+  String get eventLoadError =>
+      'Couldn\'t load this event. Tap retry to try again.';
+
+  @override
+  String get eventTimeoutError =>
+      'Connection timed out. Check your network and try again.';
+
+  @override
+  String eventDurationMin(int minutes) {
+    return '· $minutes min';
+  }
+
+  @override
+  String eventGetDirectionsTo(String label) {
+    return 'Get directions to $label';
+  }
+
+  @override
+  String get eventGetDirections => 'Get directions';
+
+  @override
+  String get eventCouldNotOpenMaps => 'Could not open maps.';
+
+  @override
+  String get eventPickOccurrence => 'PICK AN OCCURRENCE';
+
+  @override
+  String get eventTargetPace => 'Target pace';
+
+  @override
+  String get eventResultSubmitted => 'Result submitted.';
+
+  @override
+  String eventSubmitFailed(String error) {
+    return 'Submit failed: $error';
+  }
+
+  @override
+  String eventRaceControlFailed(String error) {
+    return 'Race control failed: $error';
+  }
+
+  @override
+  String eventAttendees(int count) {
+    return 'ATTENDEES ($count)';
+  }
+
+  @override
+  String get eventNoRsvps => 'No RSVPs yet — be the first.';
+
+  @override
+  String get eventAttendeeMember => 'Member';
+
+  @override
+  String eventAttendeeStatus(String status) {
+    return '($status)';
+  }
+
+  @override
+  String get eventRsvpGoing => 'I\'m in';
+
+  @override
+  String get eventRsvpMaybe => 'Maybe';
+
+  @override
+  String get eventRsvpDeclined => 'Can\'t make it';
+
+  @override
+  String get eventRaceArmed => 'Armed — waiting for GO';
+
+  @override
+  String get eventRaceRunning => 'Running — live';
+
+  @override
+  String get eventRaceFinished => 'Finished';
+
+  @override
+  String get eventRaceCancelled => 'Cancelled';
+
+  @override
+  String get eventRaceNotArmed => 'Not armed';
+
+  @override
+  String get eventRaceControlLabel => 'RACE CONTROL';
+
+  @override
+  String get eventRaceAutoApprove => 'Auto-approve submitted times';
+
+  @override
+  String get eventRaceArm => 'Arm race';
+
+  @override
+  String get eventRaceArmedHint =>
+      'Tap Fire Go when the race begins. Participants\' watches show the armed banner now.';
+
+  @override
+  String get eventRaceFireGo => 'Fire Go';
+
+  @override
+  String get eventRaceCancel => 'Cancel';
+
+  @override
+  String eventRaceStartedAt(String time) {
+    return 'Started at $time';
+  }
+
+  @override
+  String get eventRaceEnd => 'End race';
+
+  @override
+  String get eventRaceCancelRace => 'Cancel race';
+
+  @override
+  String get eventUpdatePosted => 'Update posted to the club feed.';
+
+  @override
+  String eventPostUpdateFailed(String error) {
+    return 'Could not post update: $error';
+  }
+
+  @override
+  String get eventPostUpdateLabel => 'POST AN UPDATE';
+
+  @override
+  String get eventUpdateHint => 'Weather call? Meeting at a different spot?';
+
+  @override
+  String get eventPostUpdate => 'Post update';
+
+  @override
+  String get eventResultsTitle => 'Results';
+
+  @override
+  String get eventRemoveMine => 'Remove mine';
+
+  @override
+  String get eventSubmitMyTime => 'Submit my time';
+
+  @override
+  String get eventSubmitting => 'Submitting…';
+
+  @override
+  String get eventNoResults =>
+      'No results yet. Submit your time after the event and others will see it here.';
+
+  @override
+  String get eventResultRunner => 'Runner';
+
+  @override
+  String get eventResultYou => '(you)';
+
+  @override
+  String get eventSubmitTimeTitle => 'Submit your time';
+
+  @override
+  String get eventSubmitTimeSubtitle =>
+      'Pick a run to attach, or record a DNF / DNS.';
+
+  @override
+  String get eventNoRecentRuns =>
+      'No recent runs found. Record a run first, then come back.';
+
+  @override
+  String get eventRecordDnf => 'Record DNF';
+
+  @override
+  String get eventRecordDns => 'Record DNS';
+
+  @override
+  String get eventSubmitCancel => 'Cancel';
+
+  @override
+  String get liveSpectatorTitle => 'Live tracking';
+
+  @override
+  String get liveSpectatorConnectError => 'Could not connect.';
+
+  @override
+  String get liveSpectatorWaiting =>
+      'Waiting for the runner to send the first ping…';
+
+  @override
+  String get liveSpectatorBadgeLive => 'Live';
+
+  @override
+  String get liveSpectatorBadgeIdle => 'Idle';
+
+  @override
+  String get liveSpectatorBadgeConnecting => 'Connecting';
 }

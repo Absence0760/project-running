@@ -8,6 +8,7 @@ import 'package:core_models/core_models.dart' hide Route;
 
 import 'package:api_client/api_client.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
@@ -60,6 +61,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   bool _templatesLoaded = false;
   bool _routesLoaded = false;
   String? _error;
+  bool _timedOut = false;
   late final TabController _tabs;
   final _postCtrl = TextEditingController();
   final Map<String, List<ClubPostView>> _threads = {};
@@ -80,6 +82,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     setState(() {
       _loading = true;
       _error = null;
+      _timedOut = false;
     });
     try {
       final club = await widget.social
@@ -114,7 +117,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Connection timed out. Check your network and try again.';
+          _timedOut = true;
         });
       }
     } catch (e, s) {
@@ -135,7 +138,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     try {
       final status = await widget.social.joinClub(c.row.id, c.joinPolicy);
       if (status == 'pending' && mounted) {
-        showTopBanner(context, 'Request sent to admins.');
+        showTopBanner(
+            context, AppLocalizations.of(context).clubDetailRequestSent);
       }
       await _load();
     } catch (e) {
@@ -151,15 +155,16 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Leave ${c.row.name}?'),
+        title: Text(
+            AppLocalizations.of(context).clubDetailLeaveTitle(c.row.name)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(AppLocalizations.of(context).clubDetailCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Leave'),
+            child: Text(AppLocalizations.of(context).clubDetailLeave),
           ),
         ],
       ),
@@ -231,7 +236,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       // so the user knows to retry; the controller text stays
       // because the `ctrl?.clear()` above only fires on success.
       if (!mounted) return;
-      showTopBanner(context, 'Could not post reply: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailReplyFailed('$e'));
     }
   }
 
@@ -277,15 +283,18 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 Icon(Icons.help_outline, size: 48,
                     color: Theme.of(context).colorScheme.outline),
                 const SizedBox(height: 12),
-                const Text(
-                  "Couldn't load this club.",
-                  style: TextStyle(fontWeight: FontWeight.w600),
+                Text(
+                  AppLocalizations.of(context).clubDetailLoadFailedTitle,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  _error != null
-                      ? _error!
-                      : 'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.',
+                  _timedOut
+                      ? AppLocalizations.of(context).clubDetailTimeoutError
+                      : _error != null
+                          ? _error!
+                          : AppLocalizations.of(context)
+                              .clubDetailLoadFailedBody,
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Theme.of(context).colorScheme.outline,
@@ -294,7 +303,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 const SizedBox(height: 16),
                 FilledButton(
                   onPressed: _load,
-                  child: const Text('Retry'),
+                  child: Text(AppLocalizations.of(context).clubDetailRetry),
                 ),
               ],
             ),
@@ -324,7 +333,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         ),
         actions: [
           IconButton(
-            tooltip: 'Report club',
+            tooltip: AppLocalizations.of(context).clubDetailReportClub,
             icon: const Icon(Icons.flag_outlined),
             onPressed: () => showReportSheet(
               context,
@@ -337,12 +346,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         bottom: TabBar(
           controller: _tabs,
           isScrollable: true,
-          tabs: const [
-            Tab(text: 'Feed'),
-            Tab(text: 'Events'),
-            Tab(text: 'Members'),
-            Tab(text: 'Routes'),
-            Tab(text: 'Templates'),
+          tabs: [
+            Tab(text: AppLocalizations.of(context).clubDetailTabFeed),
+            Tab(text: AppLocalizations.of(context).clubDetailTabEvents),
+            Tab(text: AppLocalizations.of(context).clubDetailTabMembers),
+            Tab(text: AppLocalizations.of(context).clubDetailTabRoutes),
+            Tab(text: AppLocalizations.of(context).clubDetailTabTemplates),
           ],
         ),
       ),
@@ -383,7 +392,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   }
 
   Widget _buildHero(ThemeData theme, ClubView c) {
-    final cta = _ctaFor(c);
+    final cta = _ctaFor(context, c);
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
       child: Row(
@@ -429,7 +438,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     ],
                   ),
                 Text(
-                  '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}',
+                  AppLocalizations.of(context)
+                      .clubsMemberCount(c.memberCount),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -452,34 +462,37 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     );
   }
 
-  Widget _ctaFor(ClubView c) {
+  Widget _ctaFor(BuildContext context, ClubView c) {
+    final l10n = AppLocalizations.of(context);
     if (c.viewerStatus == 'pending') {
-      return const OutlinedButton(
+      return OutlinedButton(
         onPressed: null,
-        child: Text('Request pending'),
+        child: Text(l10n.clubDetailRequestPending),
       );
     }
     if (!c.isMember && c.joinPolicy == 'invite') {
-      return const OutlinedButton(
+      return OutlinedButton(
         onPressed: null,
-        child: Text('Invite only'),
+        child: Text(l10n.clubDetailInviteOnly),
       );
     }
     if (!c.isMember) {
       return FilledButton(
         onPressed: _busy ? null : _join,
-        child: Text(c.joinPolicy == 'request' ? 'Request' : 'Join'),
+        child: Text(c.joinPolicy == 'request'
+            ? l10n.clubDetailRequest
+            : l10n.clubDetailJoin),
       );
     }
     if (c.viewerRole == 'owner') {
       return OutlinedButton(
         onPressed: () {},
-        child: const Text('Owner'),
+        child: Text(l10n.clubDetailOwner),
       );
     }
     return OutlinedButton(
       onPressed: _busy ? null : _leave,
-      child: const Text('Leave'),
+      child: Text(l10n.clubDetailLeave),
     );
   }
 
@@ -501,8 +514,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               child: Center(
                 child: Text(
                   c.isMember
-                      ? 'No posts yet. Share an update with members.'
-                      : 'No updates yet.',
+                      ? AppLocalizations.of(context).clubDetailNoPostsMember
+                      : AppLocalizations.of(context).clubDetailNoPosts,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -549,7 +562,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'NEXT EVENT',
+              AppLocalizations.of(context).clubDetailNextEvent,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.primary,
                 letterSpacing: 0.8,
@@ -578,7 +591,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     color: theme.colorScheme.outline),
                 const SizedBox(width: 4),
                 Text(
-                  '${e.attendeeCount} going',
+                  AppLocalizations.of(context)
+                      .clubDetailGoingCount(e.attendeeCount),
                   style: theme.textTheme.bodySmall,
                 ),
               ],
@@ -603,9 +617,9 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             controller: _postCtrl,
             maxLines: 3,
             maxLength: 1200,
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               border: InputBorder.none,
-              hintText: 'Share an update…',
+              hintText: AppLocalizations.of(context).clubDetailShareUpdateHint,
               counterText: '',
             ),
           ),
@@ -613,7 +627,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             alignment: Alignment.centerRight,
             child: FilledButton(
               onPressed: _busy ? null : _submitPost,
-              child: const Text('Post'),
+              child: Text(AppLocalizations.of(context).clubDetailPost),
             ),
           ),
         ],
@@ -622,6 +636,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
   }
 
   Widget _buildPostCard(ThemeData theme, ClubView c, ClubPostView p) {
+    final l10n = AppLocalizations.of(context);
     final replies = _threads[p.row.id];
     return Container(
       margin: const EdgeInsets.only(bottom: 10),
@@ -659,7 +674,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      p.authorName ?? 'Member',
+                      p.authorName ?? l10n.clubDetailMemberFallback,
                       style: const TextStyle(fontWeight: FontWeight.w600),
                     ),
                     Text(
@@ -682,10 +697,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               icon: const Icon(Icons.chat_bubble_outline, size: 16),
               label: Text(
                 p.replyCount == 0
-                    ? 'Reply'
+                    ? l10n.clubDetailReply
                     : replies != null
-                        ? 'Hide ${p.replyCount} repl${p.replyCount == 1 ? 'y' : 'ies'}'
-                        : '${p.replyCount} repl${p.replyCount == 1 ? 'y' : 'ies'}',
+                        ? l10n.clubDetailHideReplies(p.replyCount)
+                        : l10n.clubDetailShowReplies(p.replyCount),
               ),
               style: TextButton.styleFrom(
                 padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -712,7 +727,10 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                '${r.authorName ?? 'Member'} · ${fmtRelative(r.row.createdAt ?? DateTime.now())}',
+                                l10n.clubDetailReplyAuthorLine(
+                                    r.authorName ?? l10n.clubDetailMemberFallback,
+                                    fmtRelative(
+                                        r.row.createdAt ?? DateTime.now())),
                                 style: theme.textTheme.bodySmall?.copyWith(
                                   fontWeight: FontWeight.w600,
                                   color: theme.colorScheme.outline,
@@ -729,7 +747,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                               controller: _replyCtrls.putIfAbsent(
                                 p.row.id, () => TextEditingController()),
                               decoration: InputDecoration(
-                                hintText: 'Write a reply…',
+                                hintText: l10n.clubDetailWriteReplyHint,
                                 isDense: true,
                                 filled: true,
                                 fillColor: theme.colorScheme.surface,
@@ -747,7 +765,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                               minimumSize: const Size(0, 40),
                               padding: const EdgeInsets.symmetric(horizontal: 12),
                             ),
-                            child: const Text('Send'),
+                            child: Text(l10n.clubDetailSend),
                           ),
                         ],
                       ),
@@ -781,8 +799,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             children: [
               Text(
                 showCreate
-                    ? 'No upcoming events. Tap Create to add one.'
-                    : 'No upcoming events.',
+                    ? AppLocalizations.of(context).clubDetailNoEventsAdmin
+                    : AppLocalizations.of(context).clubDetailNoEvents,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.outline,
@@ -793,7 +811,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 FilledButton.icon(
                   onPressed: () => _createEvent(c),
                   icon: const Icon(Icons.add),
-                  label: const Text('Create event'),
+                  label: Text(AppLocalizations.of(context).clubDetailCreateEvent),
                 ),
               ],
             ],
@@ -814,7 +832,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
               child: OutlinedButton.icon(
                 onPressed: () => _createEvent(c),
                 icon: const Icon(Icons.add),
-                label: const Text('Create event'),
+                label: Text(AppLocalizations.of(context).clubDetailCreateEvent),
               ),
             );
           }
@@ -894,7 +912,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                               Icon(Icons.event, size: 13,
                                   color: theme.colorScheme.outline),
                             Text(
-                              '${e.attendeeCount} going',
+                              AppLocalizations.of(context)
+                                  .clubDetailGoingCount(e.attendeeCount),
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
@@ -913,7 +932,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
-                        'Going',
+                        AppLocalizations.of(context).clubDetailGoing,
                         style: theme.textTheme.labelSmall?.copyWith(
                           color: theme.colorScheme.onPrimaryContainer,
                           fontWeight: FontWeight.w700,
@@ -943,7 +962,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Approve failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailApproveFailed('$e'));
     }
   }
 
@@ -961,11 +981,13 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       }
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Deny failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailDenyFailed('$e'));
     }
   }
 
   Widget _buildMembersTab(ThemeData theme, ClubView c) {
+    final l10n = AppLocalizations.of(context);
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView(
@@ -973,7 +995,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
         children: [
           if (c.isAdmin && _pending.isNotEmpty) ...[
             Text(
-              'Pending requests (${_pending.length})',
+              l10n.clubDetailPendingRequests(_pending.length),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -985,7 +1007,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                     children: [
                       Expanded(
                         child: Text(
-                          'User ${m.userId.substring(0, 8)}…',
+                          l10n.clubDetailUserShort(m.userId.substring(0, 8)),
                           style: theme.textTheme.bodyMedium,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
@@ -993,12 +1015,12 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                       ),
                       TextButton(
                         onPressed: () => _deny(m.userId),
-                        child: const Text('Deny'),
+                        child: Text(l10n.clubDetailDeny),
                       ),
                       const SizedBox(width: 4),
                       FilledButton(
                         onPressed: () => _approve(m.userId),
-                        child: const Text('Approve'),
+                        child: Text(l10n.clubDetailApprove),
                       ),
                     ],
                   ),
@@ -1010,7 +1032,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 24),
               child: Text(
-                '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}.',
+                l10n.clubDetailMemberCountLine(c.memberCount),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -1068,7 +1090,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       ),
     );
     if (created == null || !mounted) return;
-    showTopBanner(context, 'Saved "${created.name}"');
+    showTopBanner(
+        context, AppLocalizations.of(context).clubDetailRouteSaved(created.name));
     // Reload the club's routes so the new one appears immediately
     // (the realtime channel doesn't subscribe to `routes`).
     await _loadRoutes();
@@ -1093,7 +1116,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
     try {
       final newId = await widget.training.clonePlanTemplate(templateId: t.id);
       if (!mounted) return;
-      showTopBanner(context, 'Template added to your plans.');
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailTemplateAdded);
       Navigator.push(
         context,
         MaterialPageRoute<void>(
@@ -1105,7 +1129,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
       );
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Adopt failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).clubDetailAdoptFailed('$e'));
     }
   }
 
@@ -1133,7 +1158,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 key: const Key('club-detail-build-route'),
                 onPressed: () => _buildClubRoute(c),
                 icon: const Icon(Icons.add_road),
-                label: const Text('Build route for this club'),
+                label: Text(AppLocalizations.of(context).clubDetailBuildRoute),
               ),
             ),
           )
@@ -1148,12 +1173,11 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                 padding: const EdgeInsets.all(32),
                 child: Text(
                   canBuild
-                      ? 'No routes yet. Build the official course above, or '
-                          'transfer one of your personal routes from the '
-                          'route detail screen.'
+                      ? AppLocalizations.of(context).clubDetailRoutesEmptyBuild
                       : c.isAdmin
-                          ? 'No routes yet. Admins can transfer one of their personal routes from the route detail screen.'
-                          : 'No routes shared with this club yet.',
+                          ? AppLocalizations.of(context)
+                              .clubDetailRoutesEmptyAdmin
+                          : AppLocalizations.of(context).clubDetailRoutesEmpty,
                   textAlign: TextAlign.center,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.outline,
@@ -1237,8 +1261,8 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
           padding: const EdgeInsets.all(32),
           child: Text(
             c.isAdmin
-                ? 'No templates yet. Publish one of your plans from its detail page.'
-                : 'No plan templates yet for this club.',
+                ? AppLocalizations.of(context).clubDetailNoTemplatesAdmin
+                : AppLocalizations.of(context).clubDetailNoTemplates,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.outline,
@@ -1280,7 +1304,7 @@ class _ClubDetailScreenState extends State<ClubDetailScreen>
                   const SizedBox(width: 8),
                   FilledButton(
                     onPressed: () => _adoptTemplate(t),
-                    child: const Text('Adopt'),
+                    child: Text(AppLocalizations.of(context).clubDetailAdopt),
                   ),
                 ],
               ),

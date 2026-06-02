@@ -7,6 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../recurrence.dart';
 import '../social_service.dart';
@@ -49,7 +50,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   /// the other.
   bool _raceBusy = false;
   bool _autoApproveOnArm = true;
-  String? _loadError;
+  _EventLoadError? _loadError;
 
   RealtimeChannel? _channel;
   Timer? _debounce;
@@ -114,8 +115,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _loadError =
-              'Connection timed out. Check your network and try again.';
+          _loadError = _EventLoadError.timeout;
         });
       }
     } catch (e, s) {
@@ -123,7 +123,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _loadError = 'Couldn\'t load this event. Tap retry to try again.';
+          _loadError = _EventLoadError.generic;
         });
       }
     }
@@ -172,7 +172,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       debugPrint('maps URL launch failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not open maps.');
+        showTopBanner(
+            context, AppLocalizations.of(context).eventCouldNotOpenMaps);
       }
     }
   }
@@ -204,7 +205,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         child: OutlinedButton.icon(
           onPressed: () => _navigateToMeetPoint(mp.lat, mp.lng, label),
           icon: const Icon(Icons.directions, size: 18),
-          label: Text(label != null ? 'Get directions to $label' : 'Get directions'),
+          label: Text(label != null
+              ? AppLocalizations.of(context).eventGetDirectionsTo(label)
+              : AppLocalizations.of(context).eventGetDirections),
         ),
       ),
     ];
@@ -257,12 +260,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         finisherStatus: picked.finisherStatus,
       );
       if (mounted) {
-        showTopBanner(context, 'Result submitted.');
+        showTopBanner(context, AppLocalizations.of(context).eventResultSubmitted);
       }
       await _load();
     } catch (err) {
       if (mounted) {
-        showTopBanner(context, 'Submit failed: $err');
+        showTopBanner(
+            context, AppLocalizations.of(context).eventSubmitFailed('$err'));
       }
     } finally {
       if (mounted) setState(() => _submittingResult = false);
@@ -315,7 +319,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       }
     } catch (err) {
       if (mounted) {
-        showTopBanner(context, 'Race control failed: $err');
+        showTopBanner(
+            context, AppLocalizations.of(context).eventRaceControlFailed('$err'));
       }
     } finally {
       if (mounted) setState(() => _raceBusy = false);
@@ -345,20 +350,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_loadError != null) {
       return Scaffold(
         appBar: AppBar(),
-        body: ErrorState(message: _loadError!, onRetry: _load),
+        body: ErrorState(
+          message: _loadError == _EventLoadError.timeout
+              ? l10n.eventTimeoutError
+              : l10n.eventLoadError,
+          onRetry: _load,
+        ),
       );
     }
     final e = _event;
     if (e == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('Event not found.')),
+        body: Center(child: Text(l10n.eventNotFound)),
       );
     }
     final desc = describeRecurrence(e.freq, e.byday);
@@ -401,7 +412,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               if (e.row.durationMin != null) ...[
                 const SizedBox(width: 6),
                 Text(
-                  '· ${e.row.durationMin} min',
+                  l10n.eventDurationMin(e.row.durationMin!),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -428,7 +439,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           const SizedBox(height: 16),
           if (_instances.length > 1) ...[
             Text(
-              'PICK AN OCCURRENCE',
+              l10n.eventPickOccurrence,
               style: theme.textTheme.labelSmall?.copyWith(
                 letterSpacing: 0.8,
                 color: theme.colorScheme.outline,
@@ -456,12 +467,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             Row(
               children: [
                 if (e.row.distanceM != null) ...[
-                  _metric(theme, 'Distance',
+                  _metric(theme, l10n.runStatDistance,
                       formatDistanceForPref(e.row.distanceM!)),
                   const SizedBox(width: 24),
                 ],
                 if (e.row.paceTargetSec != null)
-                  _metric(theme, 'Target pace',
+                  _metric(theme, l10n.eventTargetPace,
                       fmtPace(e.row.paceTargetSec!)),
               ],
             ),
@@ -472,7 +483,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ],
           const SizedBox(height: 24),
           Text(
-            'ATTENDEES (${_attendees.length})',
+            l10n.eventAttendees(_attendees.length),
             style: theme.textTheme.labelSmall?.copyWith(
               letterSpacing: 0.8,
               color: theme.colorScheme.outline,
@@ -481,7 +492,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           const SizedBox(height: 6),
           if (_attendees.isEmpty)
             Text(
-              'No RSVPs yet — be the first.',
+              l10n.eventNoRsvps,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -523,12 +534,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Text(a.displayName ?? 'Member',
+                        Text(a.displayName ?? l10n.eventAttendeeMember,
                             style: theme.textTheme.bodySmall),
                         if (a.status != 'going') ...[
                           const SizedBox(width: 4),
                           Text(
-                            '(${a.status})',
+                            l10n.eventAttendeeStatus(a.status),
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.outline,
                             ),
@@ -558,7 +569,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   body: body,
                 );
                 if (!mounted) return;
-                showTopBanner(context, 'Update posted to the club feed.');
+                showTopBanner(
+                    context, AppLocalizations.of(context).eventUpdatePosted);
               },
             ),
           ],
@@ -588,11 +600,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       );
     }
 
+    final l10n = AppLocalizations.of(context);
     return Row(
       children: [
-        chip('going', "I'm in"),
-        chip('maybe', 'Maybe'),
-        chip('declined', "Can't make it"),
+        chip('going', l10n.eventRsvpGoing),
+        chip('maybe', l10n.eventRsvpMaybe),
+        chip('declined', l10n.eventRsvpDeclined),
       ],
     );
   }
@@ -625,14 +638,15 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   /// + primary CTA; secondary destructive actions (cancel / reset)
   /// sit below at reduced visual weight.
   Widget _buildRaceControl(ThemeData theme, DateTime active) {
+    final l10n = AppLocalizations.of(context);
     final race = _raceSession;
     final status = race?.status ?? 'idle';
     final banner = switch (status) {
-      'armed' => 'Armed — waiting for GO',
-      'running' => 'Running — live',
-      'finished' => 'Finished',
-      'cancelled' => 'Cancelled',
-      _ => 'Not armed',
+      'armed' => l10n.eventRaceArmed,
+      'running' => l10n.eventRaceRunning,
+      'finished' => l10n.eventRaceFinished,
+      'cancelled' => l10n.eventRaceCancelled,
+      _ => l10n.eventRaceNotArmed,
     };
     final bannerColour = switch (status) {
       'armed' => theme.colorScheme.tertiary,
@@ -654,7 +668,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 Icon(Icons.sports_score, size: 18, color: bannerColour),
                 const SizedBox(width: 6),
                 Text(
-                  'RACE CONTROL',
+                  l10n.eventRaceControlLabel,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                     letterSpacing: 0.8,
@@ -674,7 +688,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 dense: true,
                 controlAffinity: ListTileControlAffinity.leading,
                 title: Text(
-                  'Auto-approve submitted times',
+                  l10n.eventRaceAutoApprove,
                   style: theme.textTheme.bodySmall,
                 ),
                 value: _autoApproveOnArm,
@@ -683,12 +697,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               FilledButton.icon(
                 onPressed: _raceBusy ? null : () => _raceMutation(_RaceAction.arm),
                 icon: const Icon(Icons.bolt),
-                label: const Text('Arm race'),
+                label: Text(l10n.eventRaceArm),
               ),
             ] else if (status == 'armed') ...[
               Text(
-                'Tap Fire Go when the race begins. Participants\' watches '
-                'show the armed banner now.',
+                l10n.eventRaceArmedHint,
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -701,21 +714,22 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ? null
                         : () => _raceMutation(_RaceAction.go),
                     icon: const Icon(Icons.flag),
-                    label: const Text('Fire Go'),
+                    label: Text(l10n.eventRaceFireGo),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
                     onPressed: _raceBusy
                         ? null
                         : () => _raceMutation(_RaceAction.cancel),
-                    child: const Text('Cancel'),
+                    child: Text(l10n.eventRaceCancel),
                   ),
                 ],
               ),
             ] else if (status == 'running') ...[
               if (race?.startedAt != null)
                 Text(
-                  'Started at ${fmtEventDate(race!.startedAt!.toLocal())}',
+                  l10n.eventRaceStartedAt(
+                      fmtEventDate(race!.startedAt!.toLocal())),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -728,14 +742,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         ? null
                         : () => _raceMutation(_RaceAction.end),
                     icon: const Icon(Icons.stop_circle),
-                    label: const Text('End race'),
+                    label: Text(l10n.eventRaceEnd),
                   ),
                   const SizedBox(width: 8),
                   TextButton(
                     onPressed: _raceBusy
                         ? null
                         : () => _raceMutation(_RaceAction.cancel),
-                    child: const Text('Cancel race'),
+                    child: Text(l10n.eventRaceCancelRace),
                   ),
                 ],
               ),
@@ -748,6 +762,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 }
 
 enum _RaceAction { arm, go, end, cancel }
+
+enum _EventLoadError { timeout, generic }
 
 class _AdminUpdateComposer extends StatefulWidget {
   final Future<void> Function(String body) onSubmit;
@@ -781,7 +797,8 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
       // composer text stays in `_ctrl` because the `_ctrl.clear()`
       // above only fires on success.
       if (mounted) {
-        showTopBanner(context, 'Could not post update: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).eventPostUpdateFailed('$e'));
       }
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -802,7 +819,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'POST AN UPDATE',
+            AppLocalizations.of(context).eventPostUpdateLabel,
             style: theme.textTheme.labelSmall?.copyWith(
               color: theme.colorScheme.outline,
               letterSpacing: 0.8,
@@ -813,8 +830,8 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
             controller: _ctrl,
             maxLines: 3,
             maxLength: 1200,
-            decoration: const InputDecoration(
-              hintText: "Weather call? Meeting at a different spot?",
+            decoration: InputDecoration(
+              hintText: AppLocalizations.of(context).eventUpdateHint,
               border: InputBorder.none,
               counterText: '',
             ),
@@ -823,7 +840,7 @@ class _AdminUpdateComposerState extends State<_AdminUpdateComposer> {
             alignment: Alignment.centerRight,
             child: FilledButton(
               onPressed: _busy ? null : _submit,
-              child: const Text('Post update'),
+              child: Text(AppLocalizations.of(context).eventPostUpdate),
             ),
           ),
         ],
@@ -865,6 +882,7 @@ class _ResultsSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final hasMine = myUserId != null && results.any((r) => r.userId == myUserId);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -874,25 +892,27 @@ class _ResultsSection extends StatelessWidget {
             Icon(Icons.emoji_events_outlined,
                 size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 6),
-            Text('Results', style: theme.textTheme.titleSmall),
+            Text(l10n.eventResultsTitle, style: theme.textTheme.titleSmall),
             const Spacer(),
             if (hasMine)
               TextButton(
                 onPressed: onRemove,
-                child: const Text('Remove mine'),
+                child: Text(l10n.eventRemoveMine),
               )
             else
               FilledButton.tonalIcon(
                 onPressed: submitting ? null : onSubmit,
                 icon: const Icon(Icons.timer_outlined, size: 16),
-                label: Text(submitting ? 'Submitting…' : 'Submit my time'),
+                label: Text(submitting
+                    ? l10n.eventSubmitting
+                    : l10n.eventSubmitMyTime),
               ),
           ],
         ),
         const SizedBox(height: 8),
         if (results.isEmpty)
           Text(
-            'No results yet. Submit your time after the event and others will see it here.',
+            l10n.eventNoResults,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -938,7 +958,7 @@ class _ResultRow extends StatelessWidget {
               children: [
                 Flexible(
                   child: Text(
-                    row.displayName ?? 'Runner',
+                    row.displayName ?? AppLocalizations.of(context).eventResultRunner,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: isMe ? FontWeight.w700 : FontWeight.w500,
                     ),
@@ -947,7 +967,7 @@ class _ResultRow extends StatelessWidget {
                 ),
                 if (isMe) ...[
                   const SizedBox(width: 4),
-                  Text('(you)',
+                  Text(AppLocalizations.of(context).eventResultYou,
                       style: theme.textTheme.labelSmall?.copyWith(
                         color: theme.colorScheme.outline,
                       )),
@@ -1020,6 +1040,7 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
@@ -1027,10 +1048,10 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Submit your time', style: theme.textTheme.titleMedium),
+            Text(l10n.eventSubmitTimeTitle, style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'Pick a run to attach, or record a DNF / DNS.',
+              l10n.eventSubmitTimeSubtitle,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -1043,7 +1064,7 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
               ))
             else if (_runs.isEmpty)
               Text(
-                'No recent runs found. Record a run first, then come back.',
+                l10n.eventNoRecentRuns,
                 style: theme.textTheme.bodySmall,
               )
             else
@@ -1088,7 +1109,7 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
                       finisherStatus: 'dnf',
                     ),
                   ),
-                  child: const Text('Record DNF'),
+                  child: Text(l10n.eventRecordDnf),
                 ),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(
@@ -1099,12 +1120,12 @@ class _SubmitTimeSheetState extends State<_SubmitTimeSheet> {
                       finisherStatus: 'dns',
                     ),
                   ),
-                  child: const Text('Record DNS'),
+                  child: Text(l10n.eventRecordDns),
                 ),
                 const Spacer(),
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.eventSubmitCancel),
                 ),
               ],
             ),

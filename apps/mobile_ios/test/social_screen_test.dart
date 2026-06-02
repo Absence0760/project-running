@@ -20,6 +20,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/social_screen.dart';
@@ -57,8 +58,11 @@ Future<Preferences> _makePreferences() async {
   return p;
 }
 
-Widget _wrap(SocialScreen child) =>
-    MaterialApp(home: child);
+Widget _wrap(SocialScreen child) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: child,
+    );
 
 Future<SocialScreen> _socialScreen({int initialTab = 0}) async {
   return SocialScreen(

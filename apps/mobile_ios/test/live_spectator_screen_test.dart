@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/live_spectator_screen.dart';
 import '../lib/widgets/error_state.dart';
 
@@ -23,6 +24,8 @@ Future<void> _ensureSupabase() async {
 Future<void> _pump(WidgetTester tester) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: LiveSpectatorScreen(
         api: ApiClient(),
         runId: 'fake-run-id',

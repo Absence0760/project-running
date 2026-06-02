@@ -2815,5 +2815,1085 @@
   "routesLoadErrorRetry": "Couldn't load your routes. Check your connection and try again.",
   "@routesLoadErrorRetry": {
     "description": "Full-page error state shown when the route library fails to load and there is nothing cached"
+  },
+  "feedTitle": "Feed",
+  "@feedTitle": {
+    "description": "AppBar title for the activity feed screen"
+  },
+  "feedFindPeople": "Find people",
+  "@feedFindPeople": {
+    "description": "Tooltip on the find-people button in the feed AppBar"
+  },
+  "feedActivityAll": "All",
+  "@feedActivityAll": {
+    "description": "Feed activity filter chip — all activity types"
+  },
+  "feedActivityRun": "Run",
+  "@feedActivityRun": {
+    "description": "Feed activity filter chip — running"
+  },
+  "feedActivityWalk": "Walk",
+  "@feedActivityWalk": {
+    "description": "Feed activity filter chip — walking"
+  },
+  "feedActivityCycle": "Cycle",
+  "@feedActivityCycle": {
+    "description": "Feed activity filter chip — cycling"
+  },
+  "feedActivityHike": "Hike",
+  "@feedActivityHike": {
+    "description": "Feed activity filter chip — hiking"
+  },
+  "feedLoadMore": "Load more",
+  "@feedLoadMore": {
+    "description": "Button to load the next page of feed entries"
+  },
+  "feedLoadMoreFailed": "Could not load more: {error}",
+  "@feedLoadMoreFailed": {
+    "description": "Banner shown when loading more feed entries fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "feedLoadError": "Could not load feed.",
+  "@feedLoadError": {
+    "description": "Error state shown when the feed fails to load"
+  },
+  "feedEveryoneYouFollow": "Everyone you follow",
+  "@feedEveryoneYouFollow": {
+    "description": "Default option in the feed author-filter dropdown"
+  },
+  "feedRunnerFallback": "Runner",
+  "@feedRunnerFallback": {
+    "description": "Fallback name shown in the feed when an author has no display name"
+  },
+  "feedLast14Days": "Last 14 days",
+  "@feedLast14Days": {
+    "description": "Label noting the feed only shows the last 14 days of activity"
+  },
+  "feedEmptyTitle": "Your feed is empty",
+  "@feedEmptyTitle": {
+    "description": "Empty-state title when the user follows nobody"
+  },
+  "feedEmptyBody": "Follow other runners to see their public runs here.",
+  "@feedEmptyBody": {
+    "description": "Empty-state body when the user follows nobody"
+  },
+  "feedNoMatchesTitle": "No matches",
+  "@feedNoMatchesTitle": {
+    "description": "Empty-state title when filters exclude all feed entries"
+  },
+  "feedNoMatchesBody": "Nothing matches the current filters in the last 14 days.",
+  "@feedNoMatchesBody": {
+    "description": "Empty-state body when filters exclude all feed entries"
+  },
+  "feedNoActivityTitle": "No recent activity",
+  "@feedNoActivityTitle": {
+    "description": "Empty-state title when followed users have no recent runs"
+  },
+  "feedNoActivityBody": "Nobody you follow has logged a public run in the last 14 days.",
+  "@feedNoActivityBody": {
+    "description": "Empty-state body when followed users have no recent runs"
+  },
+  "feedClearFilters": "Clear filters",
+  "@feedClearFilters": {
+    "description": "Button to clear feed filters in the empty state"
+  },
+  "feedKudosUpdateFailed": "Could not update kudos: {error}",
+  "@feedKudosUpdateFailed": {
+    "description": "Banner shown when toggling kudos fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileTitle": "Profile",
+  "@profileTitle": {
+    "description": "AppBar title fallback for the profile screen when the display name is unknown"
+  },
+  "profileRunnerFallback": "Runner",
+  "@profileRunnerFallback": {
+    "description": "Fallback name used when a profile has no display name"
+  },
+  "profileTabRuns": "Runs",
+  "@profileTabRuns": {
+    "description": "Profile tab label for the user's public runs"
+  },
+  "profileTabFollowers": "Followers",
+  "@profileTabFollowers": {
+    "description": "Profile tab label for the followers list"
+  },
+  "profileTabFollowing": "Following",
+  "@profileTabFollowing": {
+    "description": "Profile tab label for the following list"
+  },
+  "profileTabNotifications": "Notifications",
+  "@profileTabNotifications": {
+    "description": "Profile tab label for the notifications list (own profile only)"
+  },
+  "profileReportUser": "Report user",
+  "@profileReportUser": {
+    "description": "Tooltip on the report-user button in the profile AppBar"
+  },
+  "profileUnblock": "Unblock this profile",
+  "@profileUnblock": {
+    "description": "Tooltip on the block toggle when the profile is blocked"
+  },
+  "profileBlock": "Block this profile",
+  "@profileBlock": {
+    "description": "Tooltip on the block toggle when the profile is not blocked"
+  },
+  "profileLoadError": "Could not load profile.",
+  "@profileLoadError": {
+    "description": "Error state shown when the profile fails to load"
+  },
+  "profileNotFound": "Profile not found.",
+  "@profileNotFound": {
+    "description": "Shown when the profile does not exist"
+  },
+  "profileFollowStats": "{followers, plural, one{{followers} follower} other{{followers} followers}} · {following} following",
+  "@profileFollowStats": {
+    "description": "Header line summarising follower and following counts",
+    "placeholders": {
+      "followers": {
+        "type": "int"
+      },
+      "following": {
+        "type": "int"
+      }
+    }
+  },
+  "profileFollowing": "Following",
+  "@profileFollowing": {
+    "description": "Follow button label when the viewer already follows this user"
+  },
+  "profileFollow": "Follow",
+  "@profileFollow": {
+    "description": "Follow button label when the viewer does not follow this user"
+  },
+  "profileRunsEmptySelf": "You haven't shared any runs yet.",
+  "@profileRunsEmptySelf": {
+    "description": "Empty runs tab on the viewer's own profile"
+  },
+  "profileRunsEmptyOther": "No public runs yet.",
+  "@profileRunsEmptyOther": {
+    "description": "Empty runs tab on another user's profile"
+  },
+  "profileFollowersEmpty": "No followers yet.",
+  "@profileFollowersEmpty": {
+    "description": "Empty state for the followers tab"
+  },
+  "profileFollowingEmpty": "Not following anyone yet.",
+  "@profileFollowingEmpty": {
+    "description": "Empty state for the following tab"
+  },
+  "profileLoadMore": "Load {count} more",
+  "@profileLoadMore": {
+    "description": "Button to load the next page of followers/following",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "profileLoadMoreFollowersFailed": "Could not load more followers",
+  "@profileLoadMoreFollowersFailed": {
+    "description": "Banner when loading more followers fails"
+  },
+  "profileLoadMoreFollowingFailed": "Could not load more following",
+  "@profileLoadMoreFollowingFailed": {
+    "description": "Banner when loading more following fails"
+  },
+  "profileFollowUpdateFailed": "Could not update follow: {error}",
+  "@profileFollowUpdateFailed": {
+    "description": "Banner when toggling follow fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileBlockConfirmTitle": "Block {name}?",
+  "@profileBlockConfirmTitle": {
+    "description": "Title of the block-confirmation dialog",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileBlockConfirmBody": "They won't be able to follow you, give kudos to your runs, or comment on them. Any existing follow between you in either direction will be cleared. You can unblock from this page at any time.",
+  "@profileBlockConfirmBody": {
+    "description": "Body of the block-confirmation dialog"
+  },
+  "profileBlockConfirmAction": "Block",
+  "@profileBlockConfirmAction": {
+    "description": "Confirm action on the block-confirmation dialog"
+  },
+  "profileCancel": "Cancel",
+  "@profileCancel": {
+    "description": "Cancel action on profile dialogs"
+  },
+  "profileThisRunner": "this runner",
+  "@profileThisRunner": {
+    "description": "Fallback name used in block dialogs when the display name is unknown"
+  },
+  "profileRunnerNoun": "runner",
+  "@profileRunnerNoun": {
+    "description": "Lowercase fallback noun used in block/unblock confirmation banners"
+  },
+  "profileBlocked": "Blocked {name}",
+  "@profileBlocked": {
+    "description": "Banner shown after blocking a user",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileBlockFailed": "Could not block: {error}",
+  "@profileBlockFailed": {
+    "description": "Banner shown when blocking fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileUnblocked": "Unblocked {name}",
+  "@profileUnblocked": {
+    "description": "Banner shown after unblocking a user",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileUnblockFailed": "Could not unblock: {error}",
+  "@profileUnblockFailed": {
+    "description": "Banner shown when unblocking fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifAll": "All",
+  "@profileNotifAll": {
+    "description": "Notifications filter segment — all notifications"
+  },
+  "profileNotifUnread": "Unread",
+  "@profileNotifUnread": {
+    "description": "Notifications filter segment — unread only"
+  },
+  "profileMarkAllRead": "Mark all read",
+  "@profileMarkAllRead": {
+    "description": "Button to mark all notifications as read"
+  },
+  "profileMarkAllReadFailed": "Failed to mark all read: {error}",
+  "@profileMarkAllReadFailed": {
+    "description": "Banner when mark-all-read fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifsCaughtUp": "You're all caught up.",
+  "@profileNotifsCaughtUp": {
+    "description": "Empty state for the unread notifications filter"
+  },
+  "profileNotifsEmpty": "No notifications yet.",
+  "@profileNotifsEmpty": {
+    "description": "Empty state for the all notifications filter"
+  },
+  "profileDismiss": "Dismiss",
+  "@profileDismiss": {
+    "description": "Tooltip on the dismiss-notification button"
+  },
+  "profileDismissFailed": "Failed to dismiss: {error}",
+  "@profileDismissFailed": {
+    "description": "Banner when dismissing a notification fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifSomeone": "Someone",
+  "@profileNotifSomeone": {
+    "description": "Fallback actor name in notification text"
+  },
+  "profileNotifYourRun": "your run",
+  "@profileNotifYourRun": {
+    "description": "Fallback for a run reference in notification text when distance is unknown"
+  },
+  "profileNotifKudos": "{name} gave kudos to your {dist}",
+  "@profileNotifKudos": {
+    "description": "Notification text for a kudos",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifComment": "{name} commented on your {dist}",
+  "@profileNotifComment": {
+    "description": "Notification text for a comment",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifCommentReply": "{name} replied to your comment",
+  "@profileNotifCommentReply": {
+    "description": "Notification text for a comment reply",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifFollow": "{name} started following you",
+  "@profileNotifFollow": {
+    "description": "Notification text for a new follower",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifEventRsvpTitled": "{name} RSVP'd Going to your event \"{title}\"",
+  "@profileNotifEventRsvpTitled": {
+    "description": "Notification text for an event RSVP with a title",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifEventRsvp": "{name} RSVP'd Going to your event",
+  "@profileNotifEventRsvp": {
+    "description": "Notification text for an event RSVP without a title",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifPlanUpdate": "{name} updated your training plan",
+  "@profileNotifPlanUpdate": {
+    "description": "Notification text for a training-plan update",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifMessage": "{name} sent you a message",
+  "@profileNotifMessage": {
+    "description": "Notification text for a direct message",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifClubPostNamed": "{name} posted in {club}",
+  "@profileNotifClubPostNamed": {
+    "description": "Notification text for a club post with a known club name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "club": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifClubPost": "{name} posted in a club you're in",
+  "@profileNotifClubPost": {
+    "description": "Notification text for a club post with unknown club name",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifRunCompletedDist": "{name} completed a {dist} run",
+  "@profileNotifRunCompletedDist": {
+    "description": "Notification text for a completed run with distance",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "dist": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifRunCompleted": "{name} completed a run",
+  "@profileNotifRunCompleted": {
+    "description": "Notification text for a completed run without distance",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "profileNotifGeneric": "{name} interacted with your activity",
+  "@profileNotifGeneric": {
+    "description": "Fallback notification text for unknown kinds",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "socialTabFeed": "Feed",
+  "@socialTabFeed": {
+    "description": "Social hub sub-tab label — activity feed"
+  },
+  "socialTabPeople": "People",
+  "@socialTabPeople": {
+    "description": "Social hub sub-tab label — people search"
+  },
+  "socialTabClubs": "Clubs",
+  "@socialTabClubs": {
+    "description": "Social hub sub-tab label — clubs"
+  },
+  "socialTabRoutes": "Routes",
+  "@socialTabRoutes": {
+    "description": "Social hub sub-tab label — routes"
+  },
+  "clubsTitle": "Clubs",
+  "@clubsTitle": {
+    "description": "AppBar title for the standalone clubs screen"
+  },
+  "clubsFindPeople": "Find people",
+  "@clubsFindPeople": {
+    "description": "Tooltip on the find-people button in the clubs AppBar"
+  },
+  "clubsNewClub": "New club",
+  "@clubsNewClub": {
+    "description": "Label on the create-club FAB"
+  },
+  "clubsTabBrowse": "Browse",
+  "@clubsTabBrowse": {
+    "description": "Clubs segment — browse public clubs"
+  },
+  "clubsTabMine": "My clubs",
+  "@clubsTabMine": {
+    "description": "Clubs segment — the user's own clubs"
+  },
+  "clubsJoinWithCode": "Join with invite code",
+  "@clubsJoinWithCode": {
+    "description": "Button to redeem a club invite code"
+  },
+  "clubsSearchHint": "Search by name or location",
+  "@clubsSearchHint": {
+    "description": "Placeholder in the club search field"
+  },
+  "clubsTimeoutError": "Connection timed out. Check your network and try again.",
+  "@clubsTimeoutError": {
+    "description": "Error shown when loading clubs times out"
+  },
+  "clubsLoadError": "Couldn't load clubs. Tap retry to try again.",
+  "@clubsLoadError": {
+    "description": "Error shown when loading clubs fails"
+  },
+  "clubsBadgePrivate": "PRIVATE",
+  "@clubsBadgePrivate": {
+    "description": "Badge on a private club tile"
+  },
+  "clubsMemberCount": "{count, plural, one{{count} member} other{{count} members}}",
+  "@clubsMemberCount": {
+    "description": "Member count on a club tile",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clubsEmptyBrowseTitle": "No clubs match that search.",
+  "@clubsEmptyBrowseTitle": {
+    "description": "Empty state for the browse tab"
+  },
+  "clubsEmptyMineTitle": "You haven't joined a club yet.",
+  "@clubsEmptyMineTitle": {
+    "description": "Empty state for the my-clubs tab"
+  },
+  "clubsEmptyBrowseBody": "Try a different name or location.",
+  "@clubsEmptyBrowseBody": {
+    "description": "Empty-state hint for the browse tab"
+  },
+  "clubsEmptyMineBody": "Head to Browse to find one.",
+  "@clubsEmptyMineBody": {
+    "description": "Empty-state hint for the my-clubs tab"
+  },
+  "clubDetailTabFeed": "Feed",
+  "@clubDetailTabFeed": {
+    "description": "Club detail tab — feed"
+  },
+  "clubDetailTabEvents": "Events",
+  "@clubDetailTabEvents": {
+    "description": "Club detail tab — events"
+  },
+  "clubDetailTabMembers": "Members",
+  "@clubDetailTabMembers": {
+    "description": "Club detail tab — members"
+  },
+  "clubDetailTabRoutes": "Routes",
+  "@clubDetailTabRoutes": {
+    "description": "Club detail tab — routes"
+  },
+  "clubDetailTabTemplates": "Templates",
+  "@clubDetailTabTemplates": {
+    "description": "Club detail tab — plan templates"
+  },
+  "clubDetailReportClub": "Report club",
+  "@clubDetailReportClub": {
+    "description": "Tooltip on the report-club button"
+  },
+  "clubDetailLoadFailedTitle": "Couldn't load this club.",
+  "@clubDetailLoadFailedTitle": {
+    "description": "Title shown when the club fails to load"
+  },
+  "clubDetailLoadFailedBody": "It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.",
+  "@clubDetailLoadFailedBody": {
+    "description": "Body shown when the club fails to load"
+  },
+  "clubDetailRetry": "Retry",
+  "@clubDetailRetry": {
+    "description": "Retry button on the club load-error state"
+  },
+  "clubDetailTimeoutError": "Connection timed out. Check your network and try again.",
+  "@clubDetailTimeoutError": {
+    "description": "Error shown when loading the club times out"
+  },
+  "clubDetailRequestSent": "Request sent to admins.",
+  "@clubDetailRequestSent": {
+    "description": "Banner shown after requesting to join a club"
+  },
+  "clubDetailLeaveTitle": "Leave {club}?",
+  "@clubDetailLeaveTitle": {
+    "description": "Title of the leave-club confirmation dialog",
+    "placeholders": {
+      "club": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailCancel": "Cancel",
+  "@clubDetailCancel": {
+    "description": "Cancel action on club dialogs"
+  },
+  "clubDetailLeave": "Leave",
+  "@clubDetailLeave": {
+    "description": "Confirm action on the leave-club dialog / CTA when a member"
+  },
+  "clubDetailReplyFailed": "Could not post reply: {error}",
+  "@clubDetailReplyFailed": {
+    "description": "Banner when posting a reply fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailMemberFallback": "Member",
+  "@clubDetailMemberFallback": {
+    "description": "Fallback name for a club member with no display name"
+  },
+  "clubDetailRequestPending": "Request pending",
+  "@clubDetailRequestPending": {
+    "description": "CTA label when the viewer's join request is pending"
+  },
+  "clubDetailInviteOnly": "Invite only",
+  "@clubDetailInviteOnly": {
+    "description": "CTA label when the club is invite-only and the viewer is not a member"
+  },
+  "clubDetailRequest": "Request",
+  "@clubDetailRequest": {
+    "description": "CTA label to request to join a request-policy club"
+  },
+  "clubDetailJoin": "Join",
+  "@clubDetailJoin": {
+    "description": "CTA label to join an open club"
+  },
+  "clubDetailOwner": "Owner",
+  "@clubDetailOwner": {
+    "description": "CTA label shown to the club owner"
+  },
+  "clubDetailNextEvent": "NEXT EVENT",
+  "@clubDetailNextEvent": {
+    "description": "Section label on the next-event card"
+  },
+  "clubDetailGoingCount": "{count} going",
+  "@clubDetailGoingCount": {
+    "description": "Attendee count line on event cards",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clubDetailNoPostsMember": "No posts yet. Share an update with members.",
+  "@clubDetailNoPostsMember": {
+    "description": "Empty feed for members"
+  },
+  "clubDetailNoPosts": "No updates yet.",
+  "@clubDetailNoPosts": {
+    "description": "Empty feed for non-members"
+  },
+  "clubDetailShareUpdateHint": "Share an update…",
+  "@clubDetailShareUpdateHint": {
+    "description": "Hint in the club post composer"
+  },
+  "clubDetailPost": "Post",
+  "@clubDetailPost": {
+    "description": "Submit button in the club post composer"
+  },
+  "clubDetailReply": "Reply",
+  "@clubDetailReply": {
+    "description": "Button to reply to a post when there are no replies"
+  },
+  "clubDetailHideReplies": "{count, plural, one{Hide {count} reply} other{Hide {count} replies}}",
+  "@clubDetailHideReplies": {
+    "description": "Toggle to hide an expanded reply thread",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clubDetailShowReplies": "{count, plural, one{{count} reply} other{{count} replies}}",
+  "@clubDetailShowReplies": {
+    "description": "Toggle to show a reply thread",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clubDetailReplyAuthorLine": "{name} · {time}",
+  "@clubDetailReplyAuthorLine": {
+    "description": "Author and relative-time line on a reply",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailWriteReplyHint": "Write a reply…",
+  "@clubDetailWriteReplyHint": {
+    "description": "Hint in the reply composer"
+  },
+  "clubDetailSend": "Send",
+  "@clubDetailSend": {
+    "description": "Send button in the reply composer"
+  },
+  "clubDetailNoEventsAdmin": "No upcoming events. Tap Create to add one.",
+  "@clubDetailNoEventsAdmin": {
+    "description": "Empty events tab for admins"
+  },
+  "clubDetailNoEvents": "No upcoming events.",
+  "@clubDetailNoEvents": {
+    "description": "Empty events tab for non-admins"
+  },
+  "clubDetailCreateEvent": "Create event",
+  "@clubDetailCreateEvent": {
+    "description": "Button to create a club event"
+  },
+  "clubDetailGoing": "Going",
+  "@clubDetailGoing": {
+    "description": "RSVP badge on an event card"
+  },
+  "clubDetailApproveFailed": "Approve failed: {error}",
+  "@clubDetailApproveFailed": {
+    "description": "Banner when approving a join request fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailDenyFailed": "Deny failed: {error}",
+  "@clubDetailDenyFailed": {
+    "description": "Banner when denying a join request fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailPendingRequests": "Pending requests ({count})",
+  "@clubDetailPendingRequests": {
+    "description": "Header for the pending-requests panel",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clubDetailUserShort": "User {id}…",
+  "@clubDetailUserShort": {
+    "description": "Placeholder name for a pending member shown by id prefix",
+    "placeholders": {
+      "id": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailDeny": "Deny",
+  "@clubDetailDeny": {
+    "description": "Button to deny a join request"
+  },
+  "clubDetailApprove": "Approve",
+  "@clubDetailApprove": {
+    "description": "Button to approve a join request"
+  },
+  "clubDetailMemberCountLine": "{count, plural, one{{count} member.} other{{count} members.}}",
+  "@clubDetailMemberCountLine": {
+    "description": "Member count summary on the members tab",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "clubDetailRouteSaved": "Saved \"{name}\"",
+  "@clubDetailRouteSaved": {
+    "description": "Banner shown after saving a club route",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailBuildRoute": "Build route for this club",
+  "@clubDetailBuildRoute": {
+    "description": "CTA to build a route for the club"
+  },
+  "clubDetailRoutesEmptyBuild": "No routes yet. Build the official course above, or transfer one of your personal routes from the route detail screen.",
+  "@clubDetailRoutesEmptyBuild": {
+    "description": "Empty routes tab when the viewer can build"
+  },
+  "clubDetailRoutesEmptyAdmin": "No routes yet. Admins can transfer one of their personal routes from the route detail screen.",
+  "@clubDetailRoutesEmptyAdmin": {
+    "description": "Empty routes tab for admins who cannot build"
+  },
+  "clubDetailRoutesEmpty": "No routes shared with this club yet.",
+  "@clubDetailRoutesEmpty": {
+    "description": "Empty routes tab for members"
+  },
+  "clubDetailTemplateAdded": "Template added to your plans.",
+  "@clubDetailTemplateAdded": {
+    "description": "Banner shown after adopting a plan template"
+  },
+  "clubDetailAdoptFailed": "Adopt failed: {error}",
+  "@clubDetailAdoptFailed": {
+    "description": "Banner when adopting a template fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "clubDetailNoTemplatesAdmin": "No templates yet. Publish one of your plans from its detail page.",
+  "@clubDetailNoTemplatesAdmin": {
+    "description": "Empty templates tab for admins"
+  },
+  "clubDetailNoTemplates": "No plan templates yet for this club.",
+  "@clubDetailNoTemplates": {
+    "description": "Empty templates tab for members"
+  },
+  "clubDetailAdopt": "Adopt",
+  "@clubDetailAdopt": {
+    "description": "Button to adopt a plan template"
+  },
+  "eventNotFound": "Event not found.",
+  "@eventNotFound": {
+    "description": "Shown when the event does not exist"
+  },
+  "eventLoadError": "Couldn't load this event. Tap retry to try again.",
+  "@eventLoadError": {
+    "description": "Error shown when loading the event fails"
+  },
+  "eventTimeoutError": "Connection timed out. Check your network and try again.",
+  "@eventTimeoutError": {
+    "description": "Error shown when loading the event times out"
+  },
+  "eventDurationMin": "· {minutes} min",
+  "@eventDurationMin": {
+    "description": "Duration suffix next to the event date",
+    "placeholders": {
+      "minutes": {
+        "type": "int"
+      }
+    }
+  },
+  "eventGetDirectionsTo": "Get directions to {label}",
+  "@eventGetDirectionsTo": {
+    "description": "Button to navigate to the named meet point",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "eventGetDirections": "Get directions",
+  "@eventGetDirections": {
+    "description": "Button to navigate to the meet point (no label)"
+  },
+  "eventCouldNotOpenMaps": "Could not open maps.",
+  "@eventCouldNotOpenMaps": {
+    "description": "Banner when launching a maps app fails"
+  },
+  "eventPickOccurrence": "PICK AN OCCURRENCE",
+  "@eventPickOccurrence": {
+    "description": "Header above the occurrence picker for recurring events"
+  },
+  "eventTargetPace": "Target pace",
+  "@eventTargetPace": {
+    "description": "Stat label for the event target pace"
+  },
+  "eventResultSubmitted": "Result submitted.",
+  "@eventResultSubmitted": {
+    "description": "Banner shown after submitting an event result"
+  },
+  "eventSubmitFailed": "Submit failed: {error}",
+  "@eventSubmitFailed": {
+    "description": "Banner when submitting an event result fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "eventRaceControlFailed": "Race control failed: {error}",
+  "@eventRaceControlFailed": {
+    "description": "Banner when a race-control mutation fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "eventAttendees": "ATTENDEES ({count})",
+  "@eventAttendees": {
+    "description": "Header for the attendees section",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "eventNoRsvps": "No RSVPs yet — be the first.",
+  "@eventNoRsvps": {
+    "description": "Empty attendees state"
+  },
+  "eventAttendeeMember": "Member",
+  "@eventAttendeeMember": {
+    "description": "Fallback attendee name with no display name"
+  },
+  "eventAttendeeStatus": "({status})",
+  "@eventAttendeeStatus": {
+    "description": "Suffix showing a non-going attendee's RSVP status",
+    "placeholders": {
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "eventRsvpGoing": "I'm in",
+  "@eventRsvpGoing": {
+    "description": "RSVP chip — going"
+  },
+  "eventRsvpMaybe": "Maybe",
+  "@eventRsvpMaybe": {
+    "description": "RSVP chip — maybe"
+  },
+  "eventRsvpDeclined": "Can't make it",
+  "@eventRsvpDeclined": {
+    "description": "RSVP chip — declined"
+  },
+  "eventRaceArmed": "Armed — waiting for GO",
+  "@eventRaceArmed": {
+    "description": "Race control banner — armed"
+  },
+  "eventRaceRunning": "Running — live",
+  "@eventRaceRunning": {
+    "description": "Race control banner — running"
+  },
+  "eventRaceFinished": "Finished",
+  "@eventRaceFinished": {
+    "description": "Race control banner — finished"
+  },
+  "eventRaceCancelled": "Cancelled",
+  "@eventRaceCancelled": {
+    "description": "Race control banner — cancelled"
+  },
+  "eventRaceNotArmed": "Not armed",
+  "@eventRaceNotArmed": {
+    "description": "Race control banner — idle"
+  },
+  "eventRaceControlLabel": "RACE CONTROL",
+  "@eventRaceControlLabel": {
+    "description": "Section label on the race-control card"
+  },
+  "eventRaceAutoApprove": "Auto-approve submitted times",
+  "@eventRaceAutoApprove": {
+    "description": "Checkbox to auto-approve submitted times when arming"
+  },
+  "eventRaceArm": "Arm race",
+  "@eventRaceArm": {
+    "description": "Button to arm the race"
+  },
+  "eventRaceArmedHint": "Tap Fire Go when the race begins. Participants' watches show the armed banner now.",
+  "@eventRaceArmedHint": {
+    "description": "Hint shown when the race is armed"
+  },
+  "eventRaceFireGo": "Fire Go",
+  "@eventRaceFireGo": {
+    "description": "Button to start the race"
+  },
+  "eventRaceCancel": "Cancel",
+  "@eventRaceCancel": {
+    "description": "Button to cancel the race while armed"
+  },
+  "eventRaceStartedAt": "Started at {time}",
+  "@eventRaceStartedAt": {
+    "description": "Line showing when a running race started",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+  "eventRaceEnd": "End race",
+  "@eventRaceEnd": {
+    "description": "Button to end a running race"
+  },
+  "eventRaceCancelRace": "Cancel race",
+  "@eventRaceCancelRace": {
+    "description": "Button to cancel a running race"
+  },
+  "eventUpdatePosted": "Update posted to the club feed.",
+  "@eventUpdatePosted": {
+    "description": "Banner shown after posting an admin update"
+  },
+  "eventPostUpdateFailed": "Could not post update: {error}",
+  "@eventPostUpdateFailed": {
+    "description": "Banner when posting an admin update fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "eventPostUpdateLabel": "POST AN UPDATE",
+  "@eventPostUpdateLabel": {
+    "description": "Section label on the admin update composer"
+  },
+  "eventUpdateHint": "Weather call? Meeting at a different spot?",
+  "@eventUpdateHint": {
+    "description": "Hint in the admin update composer"
+  },
+  "eventPostUpdate": "Post update",
+  "@eventPostUpdate": {
+    "description": "Submit button on the admin update composer"
+  },
+  "eventResultsTitle": "Results",
+  "@eventResultsTitle": {
+    "description": "Title of the event results section"
+  },
+  "eventRemoveMine": "Remove mine",
+  "@eventRemoveMine": {
+    "description": "Button to remove the viewer's own result"
+  },
+  "eventSubmitMyTime": "Submit my time",
+  "@eventSubmitMyTime": {
+    "description": "Button to submit the viewer's result"
+  },
+  "eventSubmitting": "Submitting…",
+  "@eventSubmitting": {
+    "description": "Button label while submitting a result"
+  },
+  "eventNoResults": "No results yet. Submit your time after the event and others will see it here.",
+  "@eventNoResults": {
+    "description": "Empty results state"
+  },
+  "eventResultRunner": "Runner",
+  "@eventResultRunner": {
+    "description": "Fallback name in a result row"
+  },
+  "eventResultYou": "(you)",
+  "@eventResultYou": {
+    "description": "Marker on the viewer's own result row"
+  },
+  "eventSubmitTimeTitle": "Submit your time",
+  "@eventSubmitTimeTitle": {
+    "description": "Title of the submit-time bottom sheet"
+  },
+  "eventSubmitTimeSubtitle": "Pick a run to attach, or record a DNF / DNS.",
+  "@eventSubmitTimeSubtitle": {
+    "description": "Subtitle of the submit-time sheet"
+  },
+  "eventNoRecentRuns": "No recent runs found. Record a run first, then come back.",
+  "@eventNoRecentRuns": {
+    "description": "Empty state in the submit-time sheet"
+  },
+  "eventRecordDnf": "Record DNF",
+  "@eventRecordDnf": {
+    "description": "Button to record a DNF result"
+  },
+  "eventRecordDns": "Record DNS",
+  "@eventRecordDns": {
+    "description": "Button to record a DNS result"
+  },
+  "eventSubmitCancel": "Cancel",
+  "@eventSubmitCancel": {
+    "description": "Cancel button in the submit-time sheet"
+  },
+  "liveSpectatorTitle": "Live tracking",
+  "@liveSpectatorTitle": {
+    "description": "AppBar title for the live spectator screen"
+  },
+  "liveSpectatorConnectError": "Could not connect.",
+  "@liveSpectatorConnectError": {
+    "description": "Error state when the live feed fails to connect"
+  },
+  "liveSpectatorWaiting": "Waiting for the runner to send the first ping…",
+  "@liveSpectatorWaiting": {
+    "description": "Empty state before any ping arrives"
+  },
+  "liveSpectatorBadgeLive": "Live",
+  "@liveSpectatorBadgeLive": {
+    "description": "Status badge — live"
+  },
+  "liveSpectatorBadgeIdle": "Idle",
+  "@liveSpectatorBadgeIdle": {
+    "description": "Status badge — idle"
+  },
+  "liveSpectatorBadgeConnecting": "Connecting",
+  "@liveSpectatorBadgeConnecting": {
+    "description": "Status badge — connecting"
   }
 }

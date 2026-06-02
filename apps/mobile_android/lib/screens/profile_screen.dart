@@ -3,6 +3,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -154,7 +155,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Load more followers failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not load more followers');
+        showTopBanner(context,
+            AppLocalizations.of(context).profileLoadMoreFollowersFailed);
       }
     } finally {
       if (mounted) setState(() => _loadingMoreFollowers = false);
@@ -178,7 +180,8 @@ class _ProfileScreenState extends State<ProfileScreen>
     } catch (e) {
       debugPrint('Load more following failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not load more following');
+        showTopBanner(context,
+            AppLocalizations.of(context).profileLoadMoreFollowingFailed);
       }
     } finally {
       if (mounted) setState(() => _loadingMoreFollowing = false);
@@ -213,7 +216,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       if (!mounted) return;
       // Roll back on failure.
       setState(() => _summary = summary);
-      showTopBanner(context, 'Could not update follow: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).profileFollowUpdateFailed('$e'));
     } finally {
       if (mounted) setState(() => _followBusy = false);
     }
@@ -231,28 +235,24 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Future<bool?> _confirmBlock() {
-    final name = _summary?.displayName ?? 'this runner';
+    final l10n = AppLocalizations.of(context);
+    final name = _summary?.displayName ?? l10n.profileThisRunner;
     return showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Block $name?'),
-        content: const Text(
-          "They won't be able to follow you, give kudos to your runs, "
-          'or comment on them. Any existing follow between you in '
-          'either direction will be cleared. You can unblock from '
-          'this page at any time.',
-        ),
+        title: Text(l10n.profileBlockConfirmTitle(name)),
+        content: Text(l10n.profileBlockConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text(l10n.profileCancel),
           ),
           FilledButton.tonal(
             style: FilledButton.styleFrom(
               foregroundColor: Theme.of(ctx).colorScheme.error,
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Block'),
+            child: Text(l10n.profileBlockConfirmAction),
           ),
         ],
       ),
@@ -282,10 +282,14 @@ class _ProfileScreenState extends State<ProfileScreen>
           viewerFollows: false,
         );
       });
-      showTopBanner(context, 'Blocked ${summary.displayName ?? 'runner'}');
+      showTopBanner(
+          context,
+          AppLocalizations.of(context).profileBlocked(summary.displayName ??
+              AppLocalizations.of(context).profileRunnerNoun));
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not block: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).profileBlockFailed('$e'));
     } finally {
       if (mounted) setState(() => _blockBusy = false);
     }
@@ -300,11 +304,13 @@ class _ProfileScreenState extends State<ProfileScreen>
       setState(() => _blocked = false);
       showTopBanner(
         context,
-        'Unblocked ${summary?.displayName ?? 'runner'}',
+        AppLocalizations.of(context).profileUnblocked(summary?.displayName ??
+            AppLocalizations.of(context).profileRunnerNoun),
       );
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not unblock: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).profileUnblockFailed('$e'));
     } finally {
       if (mounted) setState(() => _blockBusy = false);
     }
@@ -373,7 +379,8 @@ class _ProfileScreenState extends State<ProfileScreen>
       });
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Failed to mark all read: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).profileMarkAllReadFailed('$e'));
     }
   }
 
@@ -389,27 +396,29 @@ class _ProfileScreenState extends State<ProfileScreen>
       setState(() {
         _dismissedNotifIds = _dismissedNotifIds.difference({id});
       });
-      showTopBanner(context, 'Failed to dismiss: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).profileDismissFailed('$e'));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final tabs = <Tab>[
-      const Tab(text: 'Runs'),
-      const Tab(text: 'Followers'),
-      const Tab(text: 'Following'),
-      if (_isSelf) const Tab(text: 'Notifications'),
+      Tab(text: l10n.profileTabRuns),
+      Tab(text: l10n.profileTabFollowers),
+      Tab(text: l10n.profileTabFollowing),
+      if (_isSelf) Tab(text: l10n.profileTabNotifications),
     ];
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_summary?.displayName ?? 'Profile'),
+        title: Text(_summary?.displayName ?? l10n.profileTitle),
         actions: [
           if (!_isSelf)
             IconButton(
-              tooltip: 'Report user',
+              tooltip: l10n.profileReportUser,
               icon: const Icon(Icons.flag_outlined),
               onPressed: () => showReportSheet(
                 context,
@@ -420,7 +429,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             ),
           if (!_isSelf)
             IconButton(
-              tooltip: _blocked ? 'Unblock this profile' : 'Block this profile',
+              tooltip: _blocked ? l10n.profileUnblock : l10n.profileBlock,
               icon: Icon(
                 Icons.block,
                 color: _blocked ? Theme.of(context).colorScheme.error : null,
@@ -435,11 +444,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
               ? ErrorState(
-                  message: 'Could not load profile.',
+                  message: l10n.profileLoadError,
                   onRetry: _load,
                 )
               : _summary == null
-                  ? const Center(child: Text('Profile not found.'))
+                  ? Center(child: Text(l10n.profileNotFound))
                   : Column(
                       children: [
                         _buildHeader(theme),
@@ -451,14 +460,14 @@ class _ProfileScreenState extends State<ProfileScreen>
                               _buildRunsTab(theme),
                               _buildPeopleTab(
                                 _followers,
-                                'No followers yet.',
+                                l10n.profileFollowersEmpty,
                                 hasMore: _followersHasMore,
                                 loadingMore: _loadingMoreFollowers,
                                 onLoadMore: _loadMoreFollowers,
                               ),
                               _buildPeopleTab(
                                 _following,
-                                'Not following anyone yet.',
+                                l10n.profileFollowingEmpty,
                                 hasMore: _followingHasMore,
                                 loadingMore: _loadingMoreFollowing,
                                 onLoadMore: _loadMoreFollowing,
@@ -473,6 +482,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildHeader(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final s = _summary!;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
@@ -485,13 +495,13 @@ class _ProfileScreenState extends State<ProfileScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  s.displayName ?? 'Runner',
+                  s.displayName ?? l10n.profileRunnerFallback,
                   style: theme.textTheme.titleMedium
                       ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  '${s.followerCount} follower${s.followerCount == 1 ? '' : 's'} · ${s.followingCount} following',
+                  l10n.profileFollowStats(s.followerCount, s.followingCount),
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -502,7 +512,8 @@ class _ProfileScreenState extends State<ProfileScreen>
           if (!_isSelf)
             FilledButton.tonal(
               onPressed: _followBusy ? null : _toggleFollow,
-              child: Text(s.viewerFollows ? 'Following' : 'Follow'),
+              child: Text(
+                  s.viewerFollows ? l10n.profileFollowing : l10n.profileFollow),
             ),
         ],
       ),
@@ -515,7 +526,9 @@ class _ProfileScreenState extends State<ProfileScreen>
         child: Padding(
           padding: const EdgeInsets.all(32),
           child: Text(
-            _isSelf ? "You haven't shared any runs yet." : 'No public runs yet.',
+            _isSelf
+                ? AppLocalizations.of(context).profileRunsEmptySelf
+                : AppLocalizations.of(context).profileRunsEmptyOther,
             style: theme.textTheme.bodyMedium,
           ),
         ),
@@ -621,7 +634,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     : OutlinedButton.icon(
                         onPressed: onLoadMore,
                         icon: const Icon(Icons.expand_more),
-                        label: const Text('Load $_kFollowsPageSize more'),
+                        label: Text(AppLocalizations.of(context)
+                            .profileLoadMore(_kFollowsPageSize)),
                       ),
               ),
             );
@@ -633,7 +647,8 @@ class _ProfileScreenState extends State<ProfileScreen>
               avatarUrl: p.avatarUrl,
               size: 40,
             ),
-            title: Text(p.displayName ?? 'Runner'),
+            title: Text(p.displayName ??
+                AppLocalizations.of(context).profileRunnerFallback),
             onTap: () {
               Navigator.push(
                 context,
@@ -650,6 +665,7 @@ class _ProfileScreenState extends State<ProfileScreen>
   }
 
   Widget _buildNotificationsTab(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final visible = (_notifFilter == 'unread'
             ? _notifications.where((n) => n.row.readAt == null)
             : _notifications)
@@ -664,9 +680,11 @@ class _ProfileScreenState extends State<ProfileScreen>
           child: Row(
             children: [
               SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'all', label: Text('All')),
-                  ButtonSegment(value: 'unread', label: Text('Unread')),
+                segments: [
+                  ButtonSegment(
+                      value: 'all', label: Text(l10n.profileNotifAll)),
+                  ButtonSegment(
+                      value: 'unread', label: Text(l10n.profileNotifUnread)),
                 ],
                 selected: {_notifFilter},
                 onSelectionChanged: (s) =>
@@ -677,7 +695,7 @@ class _ProfileScreenState extends State<ProfileScreen>
               if (hasUnread)
                 TextButton(
                   onPressed: _markAllNotifsRead,
-                  child: const Text('Mark all read'),
+                  child: Text(l10n.profileMarkAllRead),
                 ),
             ],
           ),
@@ -689,8 +707,8 @@ class _ProfileScreenState extends State<ProfileScreen>
                     padding: const EdgeInsets.all(32),
                     child: Text(
                       _notifFilter == 'unread'
-                          ? "You're all caught up."
-                          : 'No notifications yet.',
+                          ? l10n.profileNotifsCaughtUp
+                          : l10n.profileNotifsEmpty,
                     ),
                   ),
                 )
@@ -721,7 +739,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           avatarUrl: item.actor?.avatarUrl,
           size: 40,
         ),
-        title: Text(_verbFor(item)),
+        title: Text(_verbFor(AppLocalizations.of(context), item)),
         subtitle: item.commentExcerpt != null
             ? Text(
                 '"${item.commentExcerpt}"',
@@ -732,7 +750,7 @@ class _ProfileScreenState extends State<ProfileScreen>
             : null,
         trailing: IconButton(
           icon: const Icon(Icons.close, size: 18),
-          tooltip: 'Dismiss',
+          tooltip: AppLocalizations.of(context).profileDismiss,
           onPressed: () => _dismissNotif(item.row.id),
         ),
         onTap: () => _onNotifTap(item),
@@ -802,38 +820,39 @@ class _ProfileScreenState extends State<ProfileScreen>
     return '$m:${s.toString().padLeft(2, '0')} /km';
   }
 
-  String _verbFor(NotificationView item) {
-    final name = item.actor?.displayName ?? 'Someone';
+  String _verbFor(AppLocalizations l10n, NotificationView item) {
+    final name = item.actor?.displayName ?? l10n.profileNotifSomeone;
     final dist = item.runDistanceM != null
         ? formatDistanceForPref(item.runDistanceM!)
-        : 'your run';
+        : l10n.profileNotifYourRun;
     switch (item.row.kind) {
       case 'kudos':
-        return '$name gave kudos to your $dist';
+        return l10n.profileNotifKudos(name, dist);
       case 'comment':
-        return '$name commented on your $dist';
+        return l10n.profileNotifComment(name, dist);
       case 'comment_reply':
-        return '$name replied to your comment';
+        return l10n.profileNotifCommentReply(name);
       case 'follow':
-        return '$name started following you';
+        return l10n.profileNotifFollow(name);
       case 'event_rsvp':
         return item.eventTitle != null
-            ? '$name RSVP\'d Going to your event "${item.eventTitle}"'
-            : '$name RSVP\'d Going to your event';
+            ? l10n.profileNotifEventRsvpTitled(name, item.eventTitle!)
+            : l10n.profileNotifEventRsvp(name);
       case 'plan_update':
-        return '$name updated your training plan';
+        return l10n.profileNotifPlanUpdate(name);
       case 'message':
-        return '$name sent you a message';
+        return l10n.profileNotifMessage(name);
       case 'club_post':
         return item.clubName != null
-            ? '$name posted in ${item.clubName}'
-            : '$name posted in a club you\'re in';
+            ? l10n.profileNotifClubPostNamed(name, item.clubName!)
+            : l10n.profileNotifClubPost(name);
       case 'run_completed':
         return item.runDistanceM != null
-            ? '$name completed a ${formatDistanceForPref(item.runDistanceM!)} run'
-            : '$name completed a run';
+            ? l10n.profileNotifRunCompletedDist(
+                name, formatDistanceForPref(item.runDistanceM!))
+            : l10n.profileNotifRunCompleted(name);
       default:
-        return '$name interacted with your activity';
+        return l10n.profileNotifGeneric(name);
     }
   }
 }

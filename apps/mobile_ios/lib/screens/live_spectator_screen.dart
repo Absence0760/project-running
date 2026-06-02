@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
@@ -135,9 +136,10 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Live tracking'),
+        title: Text(l10n.liveSpectatorTitle),
         actions: [
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -148,7 +150,8 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
-              ? ErrorState(message: 'Could not connect.', onRetry: _hydrate)
+              ? ErrorState(
+                  message: l10n.liveSpectatorConnectError, onRetry: _hydrate)
               : Column(
                   children: [
                     Expanded(
@@ -157,7 +160,7 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                               child: Padding(
                                 padding: const EdgeInsets.all(32),
                                 child: Text(
-                                  'Waiting for the runner to send the first ping…',
+                                  l10n.liveSpectatorWaiting,
                                   textAlign: TextAlign.center,
                                   style: theme.textTheme.bodyMedium?.copyWith(
                                     color: theme.colorScheme.onSurfaceVariant,
@@ -179,15 +182,15 @@ class _LiveSpectatorScreenState extends State<LiveSpectatorScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
                           _Metric(
-                            label: 'Distance',
+                            label: l10n.runStatDistance,
                             value: formatDistanceForPref(_distanceM),
                           ),
                           _Metric(
-                            label: 'Time',
+                            label: l10n.runStatTime,
                             value: formatLiveDuration(Duration(seconds: _elapsedS)),
                           ),
                           _Metric(
-                            label: 'Pace',
+                            label: l10n.runStatPace,
                             value: _distanceM > 0 && _elapsedS > 0
                                 ? formatLivePace(_elapsedS / (_distanceM / 1000))
                                 : '—',
@@ -236,10 +239,11 @@ class _StatusBadge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final (label, color) = switch (status) {
-      'live' => ('Live', const Color(0xFF10B981)),
-      'idle' => ('Idle', theme.colorScheme.outline),
-      _ => ('Connecting', theme.colorScheme.outline),
+      'live' => (l10n.liveSpectatorBadgeLive, const Color(0xFF10B981)),
+      'idle' => (l10n.liveSpectatorBadgeIdle, theme.colorScheme.outline),
+      _ => (l10n.liveSpectatorBadgeConnecting, theme.colorScheme.outline),
     };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),

@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/run_track_preview.dart';
@@ -26,12 +27,27 @@ class FeedScreen extends StatefulWidget {
 
 class _FeedScreenState extends State<FeedScreen> {
   static const _activities = <_ActivityOption>[
-    _ActivityOption('all', 'All', Icons.apps),
-    _ActivityOption('run', 'Run', Icons.directions_run),
-    _ActivityOption('walk', 'Walk', Icons.directions_walk),
-    _ActivityOption('cycle', 'Cycle', Icons.directions_bike),
-    _ActivityOption('hike', 'Hike', Icons.terrain),
+    _ActivityOption('all', Icons.apps),
+    _ActivityOption('run', Icons.directions_run),
+    _ActivityOption('walk', Icons.directions_walk),
+    _ActivityOption('cycle', Icons.directions_bike),
+    _ActivityOption('hike', Icons.terrain),
   ];
+
+  String _activityLabel(AppLocalizations l10n, String value) {
+    switch (value) {
+      case 'run':
+        return l10n.feedActivityRun;
+      case 'walk':
+        return l10n.feedActivityWalk;
+      case 'cycle':
+        return l10n.feedActivityCycle;
+      case 'hike':
+        return l10n.feedActivityHike;
+      default:
+        return l10n.feedActivityAll;
+    }
+  }
 
   bool _loading = true;
   bool _loadingMore = false;
@@ -142,7 +158,8 @@ class _FeedScreenState extends State<FeedScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _loadingMore = false);
-      showTopBanner(context, 'Could not load more: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).feedLoadMoreFailed('$e'));
     }
   }
 
@@ -164,13 +181,14 @@ class _FeedScreenState extends State<FeedScreen> {
     if (widget.embedded) {
       return _buildBody(theme);
     }
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Feed'),
+        title: Text(l10n.feedTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_search),
-            tooltip: 'Find people',
+            tooltip: l10n.feedFindPeople,
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -190,7 +208,7 @@ class _FeedScreenState extends State<FeedScreen> {
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
               ? ErrorState(
-                  message: 'Could not load feed.',
+                  message: AppLocalizations.of(context).feedLoadError,
                   onRetry: _loadInitial,
                 )
               : Column(
@@ -227,7 +245,10 @@ class _FeedScreenState extends State<FeedScreen> {
                                               ? const CircularProgressIndicator()
                                               : TextButton(
                                                   onPressed: _loadMore,
-                                                  child: const Text('Load more'),
+                                                  child: Text(
+                                                      AppLocalizations.of(
+                                                              context)
+                                                          .feedLoadMore),
                                                 ),
                                         ),
                                       );
@@ -267,6 +288,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildToolbar(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
       child: Wrap(
@@ -279,7 +301,7 @@ class _FeedScreenState extends State<FeedScreen> {
                 .map((a) => ButtonSegment<String>(
                       value: a.value,
                       icon: Icon(a.icon),
-                      label: Text(a.label),
+                      label: Text(_activityLabel(l10n, a.value)),
                     ))
                 .toList(),
             selected: {_activityFilter},
@@ -290,20 +312,20 @@ class _FeedScreenState extends State<FeedScreen> {
             value: _authorFilter,
             onChanged: _setAuthor,
             items: [
-              const DropdownMenuItem(
+              DropdownMenuItem(
                 value: 'all',
-                child: Text('Everyone you follow'),
+                child: Text(l10n.feedEveryoneYouFollow),
               ),
               ..._followees.map(
                 (f) => DropdownMenuItem(
                   value: f.id,
-                  child: Text(f.displayName ?? 'Runner'),
+                  child: Text(f.displayName ?? l10n.feedRunnerFallback),
                 ),
               ),
             ],
           ),
           Text(
-            'Last 14 days',
+            l10n.feedLast14Days,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -314,6 +336,7 @@ class _FeedScreenState extends State<FeedScreen> {
   }
 
   Widget _buildEmpty(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final hasFollows = _followees.isNotEmpty;
     final filtered = _activityFilter != 'all' || _authorFilter != 'all';
     return Center(
@@ -330,20 +353,20 @@ class _FeedScreenState extends State<FeedScreen> {
             const SizedBox(height: 16),
             Text(
               !hasFollows
-                  ? 'Your feed is empty'
+                  ? l10n.feedEmptyTitle
                   : filtered
-                      ? 'No matches'
-                      : 'No recent activity',
+                      ? l10n.feedNoMatchesTitle
+                      : l10n.feedNoActivityTitle,
               style: theme.textTheme.titleMedium,
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               !hasFollows
-                  ? 'Follow other runners to see their public runs here.'
+                  ? l10n.feedEmptyBody
                   : filtered
-                      ? 'Nothing matches the current filters in the last 14 days.'
-                      : 'Nobody you follow has logged a public run in the last 14 days.',
+                      ? l10n.feedNoMatchesBody
+                      : l10n.feedNoActivityBody,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -359,7 +382,7 @@ class _FeedScreenState extends State<FeedScreen> {
                   });
                   _loadInitial();
                 },
-                child: const Text('Clear filters'),
+                child: Text(l10n.feedClearFilters),
               ),
             ],
           ],
@@ -371,9 +394,8 @@ class _FeedScreenState extends State<FeedScreen> {
 
 class _ActivityOption {
   final String value;
-  final String label;
   final IconData icon;
-  const _ActivityOption(this.value, this.label, this.icon);
+  const _ActivityOption(this.value, this.icon);
 }
 
 class _EntryCard extends StatelessWidget {
@@ -415,7 +437,8 @@ class _EntryCard extends StatelessWidget {
                   const SizedBox(width: 10),
                   Expanded(
                     child: Text(
-                      entry.author.displayName ?? 'Runner',
+                      entry.author.displayName ??
+                          AppLocalizations.of(context).feedRunnerFallback,
                       style: theme.textTheme.titleSmall,
                     ),
                   ),
@@ -459,16 +482,16 @@ class _EntryCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.spaceAround,
                 children: [
                   _Stat(
-                    label: 'Distance',
+                    label: AppLocalizations.of(context).runStatDistance,
                     value: formatDistanceForPref(entry.run.distanceM),
                   ),
                   _Stat(
-                    label: 'Time',
+                    label: AppLocalizations.of(context).runStatTime,
                     value:
                         _fmtDuration(Duration(seconds: entry.run.durationS)),
                   ),
                   _Stat(
-                    label: 'Pace',
+                    label: AppLocalizations.of(context).runStatPace,
                     value: _fmtPace(entry.run.distanceM, entry.run.durationS),
                   ),
                 ],
@@ -586,7 +609,8 @@ class _EngagementFooterState extends State<_EngagementFooter> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _eng = prev);
-      showTopBanner(context, 'Could not update kudos: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).feedKudosUpdateFailed('$e'));
     } finally {
       if (mounted) setState(() => _busy = false);
     }

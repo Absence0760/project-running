@@ -1974,4 +1974,721 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get routesLoadErrorRetry => 'ルートを読み込めませんでした。接続を確認して再試行してください。';
+
+  @override
+  String get feedTitle => 'フィード';
+
+  @override
+  String get feedFindPeople => 'ユーザーを探す';
+
+  @override
+  String get feedActivityAll => 'すべて';
+
+  @override
+  String get feedActivityRun => 'ラン';
+
+  @override
+  String get feedActivityWalk => 'ウォーク';
+
+  @override
+  String get feedActivityCycle => 'サイクリング';
+
+  @override
+  String get feedActivityHike => 'ハイク';
+
+  @override
+  String get feedLoadMore => 'もっと見る';
+
+  @override
+  String feedLoadMoreFailed(String error) {
+    return 'これ以上読み込めませんでした: $error';
+  }
+
+  @override
+  String get feedLoadError => 'フィードを読み込めませんでした。';
+
+  @override
+  String get feedEveryoneYouFollow => 'フォロー中の全員';
+
+  @override
+  String get feedRunnerFallback => 'ランナー';
+
+  @override
+  String get feedLast14Days => '過去14日間';
+
+  @override
+  String get feedEmptyTitle => 'フィードは空です';
+
+  @override
+  String get feedEmptyBody => '他のランナーをフォローすると、公開ランがここに表示されます。';
+
+  @override
+  String get feedNoMatchesTitle => '一致なし';
+
+  @override
+  String get feedNoMatchesBody => '過去14日間で現在のフィルターに一致するものはありません。';
+
+  @override
+  String get feedNoActivityTitle => '最近のアクティビティなし';
+
+  @override
+  String get feedNoActivityBody => 'フォロー中の誰も過去14日間に公開ランを記録していません。';
+
+  @override
+  String get feedClearFilters => 'フィルターをクリア';
+
+  @override
+  String feedKudosUpdateFailed(String error) {
+    return 'Kudosを更新できませんでした: $error';
+  }
+
+  @override
+  String get profileTitle => 'プロフィール';
+
+  @override
+  String get profileRunnerFallback => 'ランナー';
+
+  @override
+  String get profileTabRuns => 'ラン';
+
+  @override
+  String get profileTabFollowers => 'フォロワー';
+
+  @override
+  String get profileTabFollowing => 'フォロー中';
+
+  @override
+  String get profileTabNotifications => '通知';
+
+  @override
+  String get profileReportUser => 'ユーザーを報告';
+
+  @override
+  String get profileUnblock => 'このプロフィールのブロックを解除';
+
+  @override
+  String get profileBlock => 'このプロフィールをブロック';
+
+  @override
+  String get profileLoadError => 'プロフィールを読み込めませんでした。';
+
+  @override
+  String get profileNotFound => 'プロフィールが見つかりません。';
+
+  @override
+  String profileFollowStats(int followers, int following) {
+    return 'フォロワー $followers · フォロー中 $following';
+  }
+
+  @override
+  String get profileFollowing => 'フォロー中';
+
+  @override
+  String get profileFollow => 'フォロー';
+
+  @override
+  String get profileRunsEmptySelf => 'まだランを共有していません。';
+
+  @override
+  String get profileRunsEmptyOther => '公開ランはまだありません。';
+
+  @override
+  String get profileFollowersEmpty => 'フォロワーはまだいません。';
+
+  @override
+  String get profileFollowingEmpty => 'まだ誰もフォローしていません。';
+
+  @override
+  String profileLoadMore(int count) {
+    return 'さらに$count件読み込む';
+  }
+
+  @override
+  String get profileLoadMoreFollowersFailed => 'これ以上フォロワーを読み込めませんでした';
+
+  @override
+  String get profileLoadMoreFollowingFailed => 'これ以上フォロー中を読み込めませんでした';
+
+  @override
+  String profileFollowUpdateFailed(String error) {
+    return 'フォローを更新できませんでした: $error';
+  }
+
+  @override
+  String profileBlockConfirmTitle(String name) {
+    return '$nameをブロックしますか？';
+  }
+
+  @override
+  String get profileBlockConfirmBody =>
+      '相手はあなたをフォローしたり、あなたのランにKudosを付けたり、コメントしたりできなくなります。双方向の既存のフォロー関係はすべて解除されます。このページからいつでもブロックを解除できます。';
+
+  @override
+  String get profileBlockConfirmAction => 'ブロック';
+
+  @override
+  String get profileCancel => 'キャンセル';
+
+  @override
+  String get profileThisRunner => 'このランナー';
+
+  @override
+  String get profileRunnerNoun => 'ランナー';
+
+  @override
+  String profileBlocked(String name) {
+    return '$nameをブロックしました';
+  }
+
+  @override
+  String profileBlockFailed(String error) {
+    return 'ブロックできませんでした: $error';
+  }
+
+  @override
+  String profileUnblocked(String name) {
+    return '$nameのブロックを解除しました';
+  }
+
+  @override
+  String profileUnblockFailed(String error) {
+    return 'ブロック解除できませんでした: $error';
+  }
+
+  @override
+  String get profileNotifAll => 'すべて';
+
+  @override
+  String get profileNotifUnread => '未読';
+
+  @override
+  String get profileMarkAllRead => 'すべて既読にする';
+
+  @override
+  String profileMarkAllReadFailed(String error) {
+    return 'すべて既読にできませんでした: $error';
+  }
+
+  @override
+  String get profileNotifsCaughtUp => 'すべて確認済みです。';
+
+  @override
+  String get profileNotifsEmpty => '通知はまだありません。';
+
+  @override
+  String get profileDismiss => '閉じる';
+
+  @override
+  String profileDismissFailed(String error) {
+    return '閉じられませんでした: $error';
+  }
+
+  @override
+  String get profileNotifSomeone => '誰か';
+
+  @override
+  String get profileNotifYourRun => 'あなたのラン';
+
+  @override
+  String profileNotifKudos(String name, String dist) {
+    return '$nameがあなたの$distにKudosを付けました';
+  }
+
+  @override
+  String profileNotifComment(String name, String dist) {
+    return '$nameがあなたの$distにコメントしました';
+  }
+
+  @override
+  String profileNotifCommentReply(String name) {
+    return '$nameがあなたのコメントに返信しました';
+  }
+
+  @override
+  String profileNotifFollow(String name) {
+    return '$nameがあなたをフォローしました';
+  }
+
+  @override
+  String profileNotifEventRsvpTitled(String name, String title) {
+    return '$nameがあなたのイベント「$title」に参加表明しました';
+  }
+
+  @override
+  String profileNotifEventRsvp(String name) {
+    return '$nameがあなたのイベントに参加表明しました';
+  }
+
+  @override
+  String profileNotifPlanUpdate(String name) {
+    return '$nameがあなたのトレーニングプランを更新しました';
+  }
+
+  @override
+  String profileNotifMessage(String name) {
+    return '$nameがあなたにメッセージを送りました';
+  }
+
+  @override
+  String profileNotifClubPostNamed(String name, String club) {
+    return '$nameが$clubに投稿しました';
+  }
+
+  @override
+  String profileNotifClubPost(String name) {
+    return '$nameがあなたの所属クラブに投稿しました';
+  }
+
+  @override
+  String profileNotifRunCompletedDist(String name, String dist) {
+    return '$nameが$distのランを完了しました';
+  }
+
+  @override
+  String profileNotifRunCompleted(String name) {
+    return '$nameがランを完了しました';
+  }
+
+  @override
+  String profileNotifGeneric(String name) {
+    return '$nameがあなたのアクティビティに反応しました';
+  }
+
+  @override
+  String get socialTabFeed => 'フィード';
+
+  @override
+  String get socialTabPeople => 'ユーザー';
+
+  @override
+  String get socialTabClubs => 'クラブ';
+
+  @override
+  String get socialTabRoutes => 'ルート';
+
+  @override
+  String get clubsTitle => 'クラブ';
+
+  @override
+  String get clubsFindPeople => 'ユーザーを探す';
+
+  @override
+  String get clubsNewClub => '新しいクラブ';
+
+  @override
+  String get clubsTabBrowse => 'さがす';
+
+  @override
+  String get clubsTabMine => 'マイクラブ';
+
+  @override
+  String get clubsJoinWithCode => '招待コードで参加';
+
+  @override
+  String get clubsSearchHint => '名前または場所で検索';
+
+  @override
+  String get clubsTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String get clubsLoadError => 'クラブを読み込めませんでした。再試行してください。';
+
+  @override
+  String get clubsBadgePrivate => '非公開';
+
+  @override
+  String clubsMemberCount(int count) {
+    return 'メンバー$count人';
+  }
+
+  @override
+  String get clubsEmptyBrowseTitle => 'その検索に一致するクラブはありません。';
+
+  @override
+  String get clubsEmptyMineTitle => 'まだクラブに参加していません。';
+
+  @override
+  String get clubsEmptyBrowseBody => '別の名前または場所を試してください。';
+
+  @override
+  String get clubsEmptyMineBody => '「さがす」から探してみましょう。';
+
+  @override
+  String get clubDetailTabFeed => 'フィード';
+
+  @override
+  String get clubDetailTabEvents => 'イベント';
+
+  @override
+  String get clubDetailTabMembers => 'メンバー';
+
+  @override
+  String get clubDetailTabRoutes => 'ルート';
+
+  @override
+  String get clubDetailTabTemplates => 'テンプレート';
+
+  @override
+  String get clubDetailReportClub => 'クラブを報告';
+
+  @override
+  String get clubDetailLoadFailedTitle => 'このクラブを読み込めませんでした。';
+
+  @override
+  String get clubDetailLoadFailedBody =>
+      '削除されたか、セッションの更新が必要かもしれません。引っ張って再試行するか、設定からサインアウトして再度サインインしてください。';
+
+  @override
+  String get clubDetailRetry => '再試行';
+
+  @override
+  String get clubDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String get clubDetailRequestSent => '管理者にリクエストを送信しました。';
+
+  @override
+  String clubDetailLeaveTitle(String club) {
+    return '$clubから退会しますか？';
+  }
+
+  @override
+  String get clubDetailCancel => 'キャンセル';
+
+  @override
+  String get clubDetailLeave => '退会';
+
+  @override
+  String clubDetailReplyFailed(String error) {
+    return '返信を投稿できませんでした: $error';
+  }
+
+  @override
+  String get clubDetailMemberFallback => 'メンバー';
+
+  @override
+  String get clubDetailRequestPending => 'リクエスト保留中';
+
+  @override
+  String get clubDetailInviteOnly => '招待制';
+
+  @override
+  String get clubDetailRequest => 'リクエスト';
+
+  @override
+  String get clubDetailJoin => '参加';
+
+  @override
+  String get clubDetailOwner => 'オーナー';
+
+  @override
+  String get clubDetailNextEvent => '次のイベント';
+
+  @override
+  String clubDetailGoingCount(int count) {
+    return '$count人参加';
+  }
+
+  @override
+  String get clubDetailNoPostsMember => 'まだ投稿がありません。メンバーに最新情報を共有しましょう。';
+
+  @override
+  String get clubDetailNoPosts => 'まだ更新はありません。';
+
+  @override
+  String get clubDetailShareUpdateHint => '最新情報を共有…';
+
+  @override
+  String get clubDetailPost => '投稿';
+
+  @override
+  String get clubDetailReply => '返信';
+
+  @override
+  String clubDetailHideReplies(int count) {
+    return '$count件の返信を隠す';
+  }
+
+  @override
+  String clubDetailShowReplies(int count) {
+    return '$count件の返信';
+  }
+
+  @override
+  String clubDetailReplyAuthorLine(String name, String time) {
+    return '$name · $time';
+  }
+
+  @override
+  String get clubDetailWriteReplyHint => '返信を書く…';
+
+  @override
+  String get clubDetailSend => '送信';
+
+  @override
+  String get clubDetailNoEventsAdmin => '今後のイベントはありません。「作成」をタップして追加してください。';
+
+  @override
+  String get clubDetailNoEvents => '今後のイベントはありません。';
+
+  @override
+  String get clubDetailCreateEvent => 'イベントを作成';
+
+  @override
+  String get clubDetailGoing => '参加';
+
+  @override
+  String clubDetailApproveFailed(String error) {
+    return '承認できませんでした: $error';
+  }
+
+  @override
+  String clubDetailDenyFailed(String error) {
+    return '拒否できませんでした: $error';
+  }
+
+  @override
+  String clubDetailPendingRequests(int count) {
+    return '保留中のリクエスト ($count)';
+  }
+
+  @override
+  String clubDetailUserShort(String id) {
+    return 'ユーザー $id…';
+  }
+
+  @override
+  String get clubDetailDeny => '拒否';
+
+  @override
+  String get clubDetailApprove => '承認';
+
+  @override
+  String clubDetailMemberCountLine(int count) {
+    return 'メンバー$count人。';
+  }
+
+  @override
+  String clubDetailRouteSaved(String name) {
+    return '「$name」を保存しました';
+  }
+
+  @override
+  String get clubDetailBuildRoute => 'このクラブのルートを作成';
+
+  @override
+  String get clubDetailRoutesEmptyBuild =>
+      'まだルートがありません。上で公式コースを作成するか、ルート詳細画面から個人ルートを移行してください。';
+
+  @override
+  String get clubDetailRoutesEmptyAdmin =>
+      'まだルートがありません。管理者はルート詳細画面から個人ルートを移行できます。';
+
+  @override
+  String get clubDetailRoutesEmpty => 'このクラブと共有されたルートはまだありません。';
+
+  @override
+  String get clubDetailTemplateAdded => 'テンプレートをプランに追加しました。';
+
+  @override
+  String clubDetailAdoptFailed(String error) {
+    return '採用できませんでした: $error';
+  }
+
+  @override
+  String get clubDetailNoTemplatesAdmin => 'まだテンプレートがありません。プラン詳細ページから公開してください。';
+
+  @override
+  String get clubDetailNoTemplates => 'このクラブのプランテンプレートはまだありません。';
+
+  @override
+  String get clubDetailAdopt => '採用';
+
+  @override
+  String get eventNotFound => 'イベントが見つかりません。';
+
+  @override
+  String get eventLoadError => 'このイベントを読み込めませんでした。再試行してください。';
+
+  @override
+  String get eventTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String eventDurationMin(int minutes) {
+    return '· $minutes分';
+  }
+
+  @override
+  String eventGetDirectionsTo(String label) {
+    return '$labelへの経路';
+  }
+
+  @override
+  String get eventGetDirections => '経路を取得';
+
+  @override
+  String get eventCouldNotOpenMaps => '地図を開けませんでした。';
+
+  @override
+  String get eventPickOccurrence => '開催回を選択';
+
+  @override
+  String get eventTargetPace => '目標ペース';
+
+  @override
+  String get eventResultSubmitted => '結果を送信しました。';
+
+  @override
+  String eventSubmitFailed(String error) {
+    return '送信できませんでした: $error';
+  }
+
+  @override
+  String eventRaceControlFailed(String error) {
+    return 'レース管理に失敗しました: $error';
+  }
+
+  @override
+  String eventAttendees(int count) {
+    return '参加者 ($count)';
+  }
+
+  @override
+  String get eventNoRsvps => 'まだ参加表明はありません。最初になりましょう。';
+
+  @override
+  String get eventAttendeeMember => 'メンバー';
+
+  @override
+  String eventAttendeeStatus(String status) {
+    return '($status)';
+  }
+
+  @override
+  String get eventRsvpGoing => '参加する';
+
+  @override
+  String get eventRsvpMaybe => '未定';
+
+  @override
+  String get eventRsvpDeclined => '行けない';
+
+  @override
+  String get eventRaceArmed => '準備完了 — GO待ち';
+
+  @override
+  String get eventRaceRunning => '進行中 — ライブ';
+
+  @override
+  String get eventRaceFinished => '終了';
+
+  @override
+  String get eventRaceCancelled => '中止';
+
+  @override
+  String get eventRaceNotArmed => '未準備';
+
+  @override
+  String get eventRaceControlLabel => 'レース管理';
+
+  @override
+  String get eventRaceAutoApprove => '送信されたタイムを自動承認';
+
+  @override
+  String get eventRaceArm => 'レースを準備';
+
+  @override
+  String get eventRaceArmedHint =>
+      'レース開始時に「GO」をタップしてください。参加者のウォッチに準備バナーが表示されます。';
+
+  @override
+  String get eventRaceFireGo => 'GO';
+
+  @override
+  String get eventRaceCancel => 'キャンセル';
+
+  @override
+  String eventRaceStartedAt(String time) {
+    return '$timeに開始';
+  }
+
+  @override
+  String get eventRaceEnd => 'レースを終了';
+
+  @override
+  String get eventRaceCancelRace => 'レースを中止';
+
+  @override
+  String get eventUpdatePosted => 'クラブフィードに更新を投稿しました。';
+
+  @override
+  String eventPostUpdateFailed(String error) {
+    return '更新を投稿できませんでした: $error';
+  }
+
+  @override
+  String get eventPostUpdateLabel => '更新を投稿';
+
+  @override
+  String get eventUpdateHint => '天候判断？別の集合場所？';
+
+  @override
+  String get eventPostUpdate => '更新を投稿';
+
+  @override
+  String get eventResultsTitle => '結果';
+
+  @override
+  String get eventRemoveMine => '自分のを削除';
+
+  @override
+  String get eventSubmitMyTime => '自分のタイムを送信';
+
+  @override
+  String get eventSubmitting => '送信中…';
+
+  @override
+  String get eventNoResults => 'まだ結果がありません。イベント後にタイムを送信すると、ここに表示されます。';
+
+  @override
+  String get eventResultRunner => 'ランナー';
+
+  @override
+  String get eventResultYou => '(あなた)';
+
+  @override
+  String get eventSubmitTimeTitle => 'タイムを送信';
+
+  @override
+  String get eventSubmitTimeSubtitle => '添付するランを選ぶか、DNF / DNSを記録してください。';
+
+  @override
+  String get eventNoRecentRuns => '最近のランが見つかりません。先にランを記録してから戻ってください。';
+
+  @override
+  String get eventRecordDnf => 'DNFを記録';
+
+  @override
+  String get eventRecordDns => 'DNSを記録';
+
+  @override
+  String get eventSubmitCancel => 'キャンセル';
+
+  @override
+  String get liveSpectatorTitle => 'ライブトラッキング';
+
+  @override
+  String get liveSpectatorConnectError => '接続できませんでした。';
+
+  @override
+  String get liveSpectatorWaiting => 'ランナーの最初の位置情報を待っています…';
+
+  @override
+  String get liveSpectatorBadgeLive => 'ライブ';
+
+  @override
+  String get liveSpectatorBadgeIdle => '停止中';
+
+  @override
+  String get liveSpectatorBadgeConnecting => '接続中';
 }

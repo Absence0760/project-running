@@ -3598,6 +3598,1242 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t load your routes. Check your connection and try again.'**
   String get routesLoadErrorRetry;
+
+  /// AppBar title for the activity feed screen
+  ///
+  /// In en, this message translates to:
+  /// **'Feed'**
+  String get feedTitle;
+
+  /// Tooltip on the find-people button in the feed AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'Find people'**
+  String get feedFindPeople;
+
+  /// Feed activity filter chip — all activity types
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get feedActivityAll;
+
+  /// Feed activity filter chip — running
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get feedActivityRun;
+
+  /// Feed activity filter chip — walking
+  ///
+  /// In en, this message translates to:
+  /// **'Walk'**
+  String get feedActivityWalk;
+
+  /// Feed activity filter chip — cycling
+  ///
+  /// In en, this message translates to:
+  /// **'Cycle'**
+  String get feedActivityCycle;
+
+  /// Feed activity filter chip — hiking
+  ///
+  /// In en, this message translates to:
+  /// **'Hike'**
+  String get feedActivityHike;
+
+  /// Button to load the next page of feed entries
+  ///
+  /// In en, this message translates to:
+  /// **'Load more'**
+  String get feedLoadMore;
+
+  /// Banner shown when loading more feed entries fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more: {error}'**
+  String feedLoadMoreFailed(String error);
+
+  /// Error state shown when the feed fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load feed.'**
+  String get feedLoadError;
+
+  /// Default option in the feed author-filter dropdown
+  ///
+  /// In en, this message translates to:
+  /// **'Everyone you follow'**
+  String get feedEveryoneYouFollow;
+
+  /// Fallback name shown in the feed when an author has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get feedRunnerFallback;
+
+  /// Label noting the feed only shows the last 14 days of activity
+  ///
+  /// In en, this message translates to:
+  /// **'Last 14 days'**
+  String get feedLast14Days;
+
+  /// Empty-state title when the user follows nobody
+  ///
+  /// In en, this message translates to:
+  /// **'Your feed is empty'**
+  String get feedEmptyTitle;
+
+  /// Empty-state body when the user follows nobody
+  ///
+  /// In en, this message translates to:
+  /// **'Follow other runners to see their public runs here.'**
+  String get feedEmptyBody;
+
+  /// Empty-state title when filters exclude all feed entries
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get feedNoMatchesTitle;
+
+  /// Empty-state body when filters exclude all feed entries
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing matches the current filters in the last 14 days.'**
+  String get feedNoMatchesBody;
+
+  /// Empty-state title when followed users have no recent runs
+  ///
+  /// In en, this message translates to:
+  /// **'No recent activity'**
+  String get feedNoActivityTitle;
+
+  /// Empty-state body when followed users have no recent runs
+  ///
+  /// In en, this message translates to:
+  /// **'Nobody you follow has logged a public run in the last 14 days.'**
+  String get feedNoActivityBody;
+
+  /// Button to clear feed filters in the empty state
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get feedClearFilters;
+
+  /// Banner shown when toggling kudos fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update kudos: {error}'**
+  String feedKudosUpdateFailed(String error);
+
+  /// AppBar title fallback for the profile screen when the display name is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'Profile'**
+  String get profileTitle;
+
+  /// Fallback name used when a profile has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get profileRunnerFallback;
+
+  /// Profile tab label for the user's public runs
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get profileTabRuns;
+
+  /// Profile tab label for the followers list
+  ///
+  /// In en, this message translates to:
+  /// **'Followers'**
+  String get profileTabFollowers;
+
+  /// Profile tab label for the following list
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get profileTabFollowing;
+
+  /// Profile tab label for the notifications list (own profile only)
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get profileTabNotifications;
+
+  /// Tooltip on the report-user button in the profile AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'Report user'**
+  String get profileReportUser;
+
+  /// Tooltip on the block toggle when the profile is blocked
+  ///
+  /// In en, this message translates to:
+  /// **'Unblock this profile'**
+  String get profileUnblock;
+
+  /// Tooltip on the block toggle when the profile is not blocked
+  ///
+  /// In en, this message translates to:
+  /// **'Block this profile'**
+  String get profileBlock;
+
+  /// Error state shown when the profile fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load profile.'**
+  String get profileLoadError;
+
+  /// Shown when the profile does not exist
+  ///
+  /// In en, this message translates to:
+  /// **'Profile not found.'**
+  String get profileNotFound;
+
+  /// Header line summarising follower and following counts
+  ///
+  /// In en, this message translates to:
+  /// **'{followers, plural, one{{followers} follower} other{{followers} followers}} · {following} following'**
+  String profileFollowStats(int followers, int following);
+
+  /// Follow button label when the viewer already follows this user
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get profileFollowing;
+
+  /// Follow button label when the viewer does not follow this user
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get profileFollow;
+
+  /// Empty runs tab on the viewer's own profile
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t shared any runs yet.'**
+  String get profileRunsEmptySelf;
+
+  /// Empty runs tab on another user's profile
+  ///
+  /// In en, this message translates to:
+  /// **'No public runs yet.'**
+  String get profileRunsEmptyOther;
+
+  /// Empty state for the followers tab
+  ///
+  /// In en, this message translates to:
+  /// **'No followers yet.'**
+  String get profileFollowersEmpty;
+
+  /// Empty state for the following tab
+  ///
+  /// In en, this message translates to:
+  /// **'Not following anyone yet.'**
+  String get profileFollowingEmpty;
+
+  /// Button to load the next page of followers/following
+  ///
+  /// In en, this message translates to:
+  /// **'Load {count} more'**
+  String profileLoadMore(int count);
+
+  /// Banner when loading more followers fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more followers'**
+  String get profileLoadMoreFollowersFailed;
+
+  /// Banner when loading more following fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more following'**
+  String get profileLoadMoreFollowingFailed;
+
+  /// Banner when toggling follow fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update follow: {error}'**
+  String profileFollowUpdateFailed(String error);
+
+  /// Title of the block-confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Block {name}?'**
+  String profileBlockConfirmTitle(String name);
+
+  /// Body of the block-confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'They won\'t be able to follow you, give kudos to your runs, or comment on them. Any existing follow between you in either direction will be cleared. You can unblock from this page at any time.'**
+  String get profileBlockConfirmBody;
+
+  /// Confirm action on the block-confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Block'**
+  String get profileBlockConfirmAction;
+
+  /// Cancel action on profile dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get profileCancel;
+
+  /// Fallback name used in block dialogs when the display name is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'this runner'**
+  String get profileThisRunner;
+
+  /// Lowercase fallback noun used in block/unblock confirmation banners
+  ///
+  /// In en, this message translates to:
+  /// **'runner'**
+  String get profileRunnerNoun;
+
+  /// Banner shown after blocking a user
+  ///
+  /// In en, this message translates to:
+  /// **'Blocked {name}'**
+  String profileBlocked(String name);
+
+  /// Banner shown when blocking fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not block: {error}'**
+  String profileBlockFailed(String error);
+
+  /// Banner shown after unblocking a user
+  ///
+  /// In en, this message translates to:
+  /// **'Unblocked {name}'**
+  String profileUnblocked(String name);
+
+  /// Banner shown when unblocking fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not unblock: {error}'**
+  String profileUnblockFailed(String error);
+
+  /// Notifications filter segment — all notifications
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get profileNotifAll;
+
+  /// Notifications filter segment — unread only
+  ///
+  /// In en, this message translates to:
+  /// **'Unread'**
+  String get profileNotifUnread;
+
+  /// Button to mark all notifications as read
+  ///
+  /// In en, this message translates to:
+  /// **'Mark all read'**
+  String get profileMarkAllRead;
+
+  /// Banner when mark-all-read fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to mark all read: {error}'**
+  String profileMarkAllReadFailed(String error);
+
+  /// Empty state for the unread notifications filter
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re all caught up.'**
+  String get profileNotifsCaughtUp;
+
+  /// Empty state for the all notifications filter
+  ///
+  /// In en, this message translates to:
+  /// **'No notifications yet.'**
+  String get profileNotifsEmpty;
+
+  /// Tooltip on the dismiss-notification button
+  ///
+  /// In en, this message translates to:
+  /// **'Dismiss'**
+  String get profileDismiss;
+
+  /// Banner when dismissing a notification fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to dismiss: {error}'**
+  String profileDismissFailed(String error);
+
+  /// Fallback actor name in notification text
+  ///
+  /// In en, this message translates to:
+  /// **'Someone'**
+  String get profileNotifSomeone;
+
+  /// Fallback for a run reference in notification text when distance is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'your run'**
+  String get profileNotifYourRun;
+
+  /// Notification text for a kudos
+  ///
+  /// In en, this message translates to:
+  /// **'{name} gave kudos to your {dist}'**
+  String profileNotifKudos(String name, String dist);
+
+  /// Notification text for a comment
+  ///
+  /// In en, this message translates to:
+  /// **'{name} commented on your {dist}'**
+  String profileNotifComment(String name, String dist);
+
+  /// Notification text for a comment reply
+  ///
+  /// In en, this message translates to:
+  /// **'{name} replied to your comment'**
+  String profileNotifCommentReply(String name);
+
+  /// Notification text for a new follower
+  ///
+  /// In en, this message translates to:
+  /// **'{name} started following you'**
+  String profileNotifFollow(String name);
+
+  /// Notification text for an event RSVP with a title
+  ///
+  /// In en, this message translates to:
+  /// **'{name} RSVP\'d Going to your event \"{title}\"'**
+  String profileNotifEventRsvpTitled(String name, String title);
+
+  /// Notification text for an event RSVP without a title
+  ///
+  /// In en, this message translates to:
+  /// **'{name} RSVP\'d Going to your event'**
+  String profileNotifEventRsvp(String name);
+
+  /// Notification text for a training-plan update
+  ///
+  /// In en, this message translates to:
+  /// **'{name} updated your training plan'**
+  String profileNotifPlanUpdate(String name);
+
+  /// Notification text for a direct message
+  ///
+  /// In en, this message translates to:
+  /// **'{name} sent you a message'**
+  String profileNotifMessage(String name);
+
+  /// Notification text for a club post with a known club name
+  ///
+  /// In en, this message translates to:
+  /// **'{name} posted in {club}'**
+  String profileNotifClubPostNamed(String name, String club);
+
+  /// Notification text for a club post with unknown club name
+  ///
+  /// In en, this message translates to:
+  /// **'{name} posted in a club you\'re in'**
+  String profileNotifClubPost(String name);
+
+  /// Notification text for a completed run with distance
+  ///
+  /// In en, this message translates to:
+  /// **'{name} completed a {dist} run'**
+  String profileNotifRunCompletedDist(String name, String dist);
+
+  /// Notification text for a completed run without distance
+  ///
+  /// In en, this message translates to:
+  /// **'{name} completed a run'**
+  String profileNotifRunCompleted(String name);
+
+  /// Fallback notification text for unknown kinds
+  ///
+  /// In en, this message translates to:
+  /// **'{name} interacted with your activity'**
+  String profileNotifGeneric(String name);
+
+  /// Social hub sub-tab label — activity feed
+  ///
+  /// In en, this message translates to:
+  /// **'Feed'**
+  String get socialTabFeed;
+
+  /// Social hub sub-tab label — people search
+  ///
+  /// In en, this message translates to:
+  /// **'People'**
+  String get socialTabPeople;
+
+  /// Social hub sub-tab label — clubs
+  ///
+  /// In en, this message translates to:
+  /// **'Clubs'**
+  String get socialTabClubs;
+
+  /// Social hub sub-tab label — routes
+  ///
+  /// In en, this message translates to:
+  /// **'Routes'**
+  String get socialTabRoutes;
+
+  /// AppBar title for the standalone clubs screen
+  ///
+  /// In en, this message translates to:
+  /// **'Clubs'**
+  String get clubsTitle;
+
+  /// Tooltip on the find-people button in the clubs AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'Find people'**
+  String get clubsFindPeople;
+
+  /// Label on the create-club FAB
+  ///
+  /// In en, this message translates to:
+  /// **'New club'**
+  String get clubsNewClub;
+
+  /// Clubs segment — browse public clubs
+  ///
+  /// In en, this message translates to:
+  /// **'Browse'**
+  String get clubsTabBrowse;
+
+  /// Clubs segment — the user's own clubs
+  ///
+  /// In en, this message translates to:
+  /// **'My clubs'**
+  String get clubsTabMine;
+
+  /// Button to redeem a club invite code
+  ///
+  /// In en, this message translates to:
+  /// **'Join with invite code'**
+  String get clubsJoinWithCode;
+
+  /// Placeholder in the club search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search by name or location'**
+  String get clubsSearchHint;
+
+  /// Error shown when loading clubs times out
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get clubsTimeoutError;
+
+  /// Error shown when loading clubs fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load clubs. Tap retry to try again.'**
+  String get clubsLoadError;
+
+  /// Badge on a private club tile
+  ///
+  /// In en, this message translates to:
+  /// **'PRIVATE'**
+  String get clubsBadgePrivate;
+
+  /// Member count on a club tile
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} member} other{{count} members}}'**
+  String clubsMemberCount(int count);
+
+  /// Empty state for the browse tab
+  ///
+  /// In en, this message translates to:
+  /// **'No clubs match that search.'**
+  String get clubsEmptyBrowseTitle;
+
+  /// Empty state for the my-clubs tab
+  ///
+  /// In en, this message translates to:
+  /// **'You haven\'t joined a club yet.'**
+  String get clubsEmptyMineTitle;
+
+  /// Empty-state hint for the browse tab
+  ///
+  /// In en, this message translates to:
+  /// **'Try a different name or location.'**
+  String get clubsEmptyBrowseBody;
+
+  /// Empty-state hint for the my-clubs tab
+  ///
+  /// In en, this message translates to:
+  /// **'Head to Browse to find one.'**
+  String get clubsEmptyMineBody;
+
+  /// Club detail tab — feed
+  ///
+  /// In en, this message translates to:
+  /// **'Feed'**
+  String get clubDetailTabFeed;
+
+  /// Club detail tab — events
+  ///
+  /// In en, this message translates to:
+  /// **'Events'**
+  String get clubDetailTabEvents;
+
+  /// Club detail tab — members
+  ///
+  /// In en, this message translates to:
+  /// **'Members'**
+  String get clubDetailTabMembers;
+
+  /// Club detail tab — routes
+  ///
+  /// In en, this message translates to:
+  /// **'Routes'**
+  String get clubDetailTabRoutes;
+
+  /// Club detail tab — plan templates
+  ///
+  /// In en, this message translates to:
+  /// **'Templates'**
+  String get clubDetailTabTemplates;
+
+  /// Tooltip on the report-club button
+  ///
+  /// In en, this message translates to:
+  /// **'Report club'**
+  String get clubDetailReportClub;
+
+  /// Title shown when the club fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this club.'**
+  String get clubDetailLoadFailedTitle;
+
+  /// Body shown when the club fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'It may have been removed, or your session might need to be refreshed. Try pulling to retry, or sign out and back in from Settings.'**
+  String get clubDetailLoadFailedBody;
+
+  /// Retry button on the club load-error state
+  ///
+  /// In en, this message translates to:
+  /// **'Retry'**
+  String get clubDetailRetry;
+
+  /// Error shown when loading the club times out
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get clubDetailTimeoutError;
+
+  /// Banner shown after requesting to join a club
+  ///
+  /// In en, this message translates to:
+  /// **'Request sent to admins.'**
+  String get clubDetailRequestSent;
+
+  /// Title of the leave-club confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Leave {club}?'**
+  String clubDetailLeaveTitle(String club);
+
+  /// Cancel action on club dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get clubDetailCancel;
+
+  /// Confirm action on the leave-club dialog / CTA when a member
+  ///
+  /// In en, this message translates to:
+  /// **'Leave'**
+  String get clubDetailLeave;
+
+  /// Banner when posting a reply fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not post reply: {error}'**
+  String clubDetailReplyFailed(String error);
+
+  /// Fallback name for a club member with no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get clubDetailMemberFallback;
+
+  /// CTA label when the viewer's join request is pending
+  ///
+  /// In en, this message translates to:
+  /// **'Request pending'**
+  String get clubDetailRequestPending;
+
+  /// CTA label when the club is invite-only and the viewer is not a member
+  ///
+  /// In en, this message translates to:
+  /// **'Invite only'**
+  String get clubDetailInviteOnly;
+
+  /// CTA label to request to join a request-policy club
+  ///
+  /// In en, this message translates to:
+  /// **'Request'**
+  String get clubDetailRequest;
+
+  /// CTA label to join an open club
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get clubDetailJoin;
+
+  /// CTA label shown to the club owner
+  ///
+  /// In en, this message translates to:
+  /// **'Owner'**
+  String get clubDetailOwner;
+
+  /// Section label on the next-event card
+  ///
+  /// In en, this message translates to:
+  /// **'NEXT EVENT'**
+  String get clubDetailNextEvent;
+
+  /// Attendee count line on event cards
+  ///
+  /// In en, this message translates to:
+  /// **'{count} going'**
+  String clubDetailGoingCount(int count);
+
+  /// Empty feed for members
+  ///
+  /// In en, this message translates to:
+  /// **'No posts yet. Share an update with members.'**
+  String get clubDetailNoPostsMember;
+
+  /// Empty feed for non-members
+  ///
+  /// In en, this message translates to:
+  /// **'No updates yet.'**
+  String get clubDetailNoPosts;
+
+  /// Hint in the club post composer
+  ///
+  /// In en, this message translates to:
+  /// **'Share an update…'**
+  String get clubDetailShareUpdateHint;
+
+  /// Submit button in the club post composer
+  ///
+  /// In en, this message translates to:
+  /// **'Post'**
+  String get clubDetailPost;
+
+  /// Button to reply to a post when there are no replies
+  ///
+  /// In en, this message translates to:
+  /// **'Reply'**
+  String get clubDetailReply;
+
+  /// Toggle to hide an expanded reply thread
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Hide {count} reply} other{Hide {count} replies}}'**
+  String clubDetailHideReplies(int count);
+
+  /// Toggle to show a reply thread
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} reply} other{{count} replies}}'**
+  String clubDetailShowReplies(int count);
+
+  /// Author and relative-time line on a reply
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {time}'**
+  String clubDetailReplyAuthorLine(String name, String time);
+
+  /// Hint in the reply composer
+  ///
+  /// In en, this message translates to:
+  /// **'Write a reply…'**
+  String get clubDetailWriteReplyHint;
+
+  /// Send button in the reply composer
+  ///
+  /// In en, this message translates to:
+  /// **'Send'**
+  String get clubDetailSend;
+
+  /// Empty events tab for admins
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming events. Tap Create to add one.'**
+  String get clubDetailNoEventsAdmin;
+
+  /// Empty events tab for non-admins
+  ///
+  /// In en, this message translates to:
+  /// **'No upcoming events.'**
+  String get clubDetailNoEvents;
+
+  /// Button to create a club event
+  ///
+  /// In en, this message translates to:
+  /// **'Create event'**
+  String get clubDetailCreateEvent;
+
+  /// RSVP badge on an event card
+  ///
+  /// In en, this message translates to:
+  /// **'Going'**
+  String get clubDetailGoing;
+
+  /// Banner when approving a join request fails
+  ///
+  /// In en, this message translates to:
+  /// **'Approve failed: {error}'**
+  String clubDetailApproveFailed(String error);
+
+  /// Banner when denying a join request fails
+  ///
+  /// In en, this message translates to:
+  /// **'Deny failed: {error}'**
+  String clubDetailDenyFailed(String error);
+
+  /// Header for the pending-requests panel
+  ///
+  /// In en, this message translates to:
+  /// **'Pending requests ({count})'**
+  String clubDetailPendingRequests(int count);
+
+  /// Placeholder name for a pending member shown by id prefix
+  ///
+  /// In en, this message translates to:
+  /// **'User {id}…'**
+  String clubDetailUserShort(String id);
+
+  /// Button to deny a join request
+  ///
+  /// In en, this message translates to:
+  /// **'Deny'**
+  String get clubDetailDeny;
+
+  /// Button to approve a join request
+  ///
+  /// In en, this message translates to:
+  /// **'Approve'**
+  String get clubDetailApprove;
+
+  /// Member count summary on the members tab
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} member.} other{{count} members.}}'**
+  String clubDetailMemberCountLine(int count);
+
+  /// Banner shown after saving a club route
+  ///
+  /// In en, this message translates to:
+  /// **'Saved \"{name}\"'**
+  String clubDetailRouteSaved(String name);
+
+  /// CTA to build a route for the club
+  ///
+  /// In en, this message translates to:
+  /// **'Build route for this club'**
+  String get clubDetailBuildRoute;
+
+  /// Empty routes tab when the viewer can build
+  ///
+  /// In en, this message translates to:
+  /// **'No routes yet. Build the official course above, or transfer one of your personal routes from the route detail screen.'**
+  String get clubDetailRoutesEmptyBuild;
+
+  /// Empty routes tab for admins who cannot build
+  ///
+  /// In en, this message translates to:
+  /// **'No routes yet. Admins can transfer one of their personal routes from the route detail screen.'**
+  String get clubDetailRoutesEmptyAdmin;
+
+  /// Empty routes tab for members
+  ///
+  /// In en, this message translates to:
+  /// **'No routes shared with this club yet.'**
+  String get clubDetailRoutesEmpty;
+
+  /// Banner shown after adopting a plan template
+  ///
+  /// In en, this message translates to:
+  /// **'Template added to your plans.'**
+  String get clubDetailTemplateAdded;
+
+  /// Banner when adopting a template fails
+  ///
+  /// In en, this message translates to:
+  /// **'Adopt failed: {error}'**
+  String clubDetailAdoptFailed(String error);
+
+  /// Empty templates tab for admins
+  ///
+  /// In en, this message translates to:
+  /// **'No templates yet. Publish one of your plans from its detail page.'**
+  String get clubDetailNoTemplatesAdmin;
+
+  /// Empty templates tab for members
+  ///
+  /// In en, this message translates to:
+  /// **'No plan templates yet for this club.'**
+  String get clubDetailNoTemplates;
+
+  /// Button to adopt a plan template
+  ///
+  /// In en, this message translates to:
+  /// **'Adopt'**
+  String get clubDetailAdopt;
+
+  /// Shown when the event does not exist
+  ///
+  /// In en, this message translates to:
+  /// **'Event not found.'**
+  String get eventNotFound;
+
+  /// Error shown when loading the event fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this event. Tap retry to try again.'**
+  String get eventLoadError;
+
+  /// Error shown when loading the event times out
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get eventTimeoutError;
+
+  /// Duration suffix next to the event date
+  ///
+  /// In en, this message translates to:
+  /// **'· {minutes} min'**
+  String eventDurationMin(int minutes);
+
+  /// Button to navigate to the named meet point
+  ///
+  /// In en, this message translates to:
+  /// **'Get directions to {label}'**
+  String eventGetDirectionsTo(String label);
+
+  /// Button to navigate to the meet point (no label)
+  ///
+  /// In en, this message translates to:
+  /// **'Get directions'**
+  String get eventGetDirections;
+
+  /// Banner when launching a maps app fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open maps.'**
+  String get eventCouldNotOpenMaps;
+
+  /// Header above the occurrence picker for recurring events
+  ///
+  /// In en, this message translates to:
+  /// **'PICK AN OCCURRENCE'**
+  String get eventPickOccurrence;
+
+  /// Stat label for the event target pace
+  ///
+  /// In en, this message translates to:
+  /// **'Target pace'**
+  String get eventTargetPace;
+
+  /// Banner shown after submitting an event result
+  ///
+  /// In en, this message translates to:
+  /// **'Result submitted.'**
+  String get eventResultSubmitted;
+
+  /// Banner when submitting an event result fails
+  ///
+  /// In en, this message translates to:
+  /// **'Submit failed: {error}'**
+  String eventSubmitFailed(String error);
+
+  /// Banner when a race-control mutation fails
+  ///
+  /// In en, this message translates to:
+  /// **'Race control failed: {error}'**
+  String eventRaceControlFailed(String error);
+
+  /// Header for the attendees section
+  ///
+  /// In en, this message translates to:
+  /// **'ATTENDEES ({count})'**
+  String eventAttendees(int count);
+
+  /// Empty attendees state
+  ///
+  /// In en, this message translates to:
+  /// **'No RSVPs yet — be the first.'**
+  String get eventNoRsvps;
+
+  /// Fallback attendee name with no display name
+  ///
+  /// In en, this message translates to:
+  /// **'Member'**
+  String get eventAttendeeMember;
+
+  /// Suffix showing a non-going attendee's RSVP status
+  ///
+  /// In en, this message translates to:
+  /// **'({status})'**
+  String eventAttendeeStatus(String status);
+
+  /// RSVP chip — going
+  ///
+  /// In en, this message translates to:
+  /// **'I\'m in'**
+  String get eventRsvpGoing;
+
+  /// RSVP chip — maybe
+  ///
+  /// In en, this message translates to:
+  /// **'Maybe'**
+  String get eventRsvpMaybe;
+
+  /// RSVP chip — declined
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t make it'**
+  String get eventRsvpDeclined;
+
+  /// Race control banner — armed
+  ///
+  /// In en, this message translates to:
+  /// **'Armed — waiting for GO'**
+  String get eventRaceArmed;
+
+  /// Race control banner — running
+  ///
+  /// In en, this message translates to:
+  /// **'Running — live'**
+  String get eventRaceRunning;
+
+  /// Race control banner — finished
+  ///
+  /// In en, this message translates to:
+  /// **'Finished'**
+  String get eventRaceFinished;
+
+  /// Race control banner — cancelled
+  ///
+  /// In en, this message translates to:
+  /// **'Cancelled'**
+  String get eventRaceCancelled;
+
+  /// Race control banner — idle
+  ///
+  /// In en, this message translates to:
+  /// **'Not armed'**
+  String get eventRaceNotArmed;
+
+  /// Section label on the race-control card
+  ///
+  /// In en, this message translates to:
+  /// **'RACE CONTROL'**
+  String get eventRaceControlLabel;
+
+  /// Checkbox to auto-approve submitted times when arming
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-approve submitted times'**
+  String get eventRaceAutoApprove;
+
+  /// Button to arm the race
+  ///
+  /// In en, this message translates to:
+  /// **'Arm race'**
+  String get eventRaceArm;
+
+  /// Hint shown when the race is armed
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Fire Go when the race begins. Participants\' watches show the armed banner now.'**
+  String get eventRaceArmedHint;
+
+  /// Button to start the race
+  ///
+  /// In en, this message translates to:
+  /// **'Fire Go'**
+  String get eventRaceFireGo;
+
+  /// Button to cancel the race while armed
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get eventRaceCancel;
+
+  /// Line showing when a running race started
+  ///
+  /// In en, this message translates to:
+  /// **'Started at {time}'**
+  String eventRaceStartedAt(String time);
+
+  /// Button to end a running race
+  ///
+  /// In en, this message translates to:
+  /// **'End race'**
+  String get eventRaceEnd;
+
+  /// Button to cancel a running race
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel race'**
+  String get eventRaceCancelRace;
+
+  /// Banner shown after posting an admin update
+  ///
+  /// In en, this message translates to:
+  /// **'Update posted to the club feed.'**
+  String get eventUpdatePosted;
+
+  /// Banner when posting an admin update fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not post update: {error}'**
+  String eventPostUpdateFailed(String error);
+
+  /// Section label on the admin update composer
+  ///
+  /// In en, this message translates to:
+  /// **'POST AN UPDATE'**
+  String get eventPostUpdateLabel;
+
+  /// Hint in the admin update composer
+  ///
+  /// In en, this message translates to:
+  /// **'Weather call? Meeting at a different spot?'**
+  String get eventUpdateHint;
+
+  /// Submit button on the admin update composer
+  ///
+  /// In en, this message translates to:
+  /// **'Post update'**
+  String get eventPostUpdate;
+
+  /// Title of the event results section
+  ///
+  /// In en, this message translates to:
+  /// **'Results'**
+  String get eventResultsTitle;
+
+  /// Button to remove the viewer's own result
+  ///
+  /// In en, this message translates to:
+  /// **'Remove mine'**
+  String get eventRemoveMine;
+
+  /// Button to submit the viewer's result
+  ///
+  /// In en, this message translates to:
+  /// **'Submit my time'**
+  String get eventSubmitMyTime;
+
+  /// Button label while submitting a result
+  ///
+  /// In en, this message translates to:
+  /// **'Submitting…'**
+  String get eventSubmitting;
+
+  /// Empty results state
+  ///
+  /// In en, this message translates to:
+  /// **'No results yet. Submit your time after the event and others will see it here.'**
+  String get eventNoResults;
+
+  /// Fallback name in a result row
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get eventResultRunner;
+
+  /// Marker on the viewer's own result row
+  ///
+  /// In en, this message translates to:
+  /// **'(you)'**
+  String get eventResultYou;
+
+  /// Title of the submit-time bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Submit your time'**
+  String get eventSubmitTimeTitle;
+
+  /// Subtitle of the submit-time sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a run to attach, or record a DNF / DNS.'**
+  String get eventSubmitTimeSubtitle;
+
+  /// Empty state in the submit-time sheet
+  ///
+  /// In en, this message translates to:
+  /// **'No recent runs found. Record a run first, then come back.'**
+  String get eventNoRecentRuns;
+
+  /// Button to record a DNF result
+  ///
+  /// In en, this message translates to:
+  /// **'Record DNF'**
+  String get eventRecordDnf;
+
+  /// Button to record a DNS result
+  ///
+  /// In en, this message translates to:
+  /// **'Record DNS'**
+  String get eventRecordDns;
+
+  /// Cancel button in the submit-time sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get eventSubmitCancel;
+
+  /// AppBar title for the live spectator screen
+  ///
+  /// In en, this message translates to:
+  /// **'Live tracking'**
+  String get liveSpectatorTitle;
+
+  /// Error state when the live feed fails to connect
+  ///
+  /// In en, this message translates to:
+  /// **'Could not connect.'**
+  String get liveSpectatorConnectError;
+
+  /// Empty state before any ping arrives
+  ///
+  /// In en, this message translates to:
+  /// **'Waiting for the runner to send the first ping…'**
+  String get liveSpectatorWaiting;
+
+  /// Status badge — live
+  ///
+  /// In en, this message translates to:
+  /// **'Live'**
+  String get liveSpectatorBadgeLive;
+
+  /// Status badge — idle
+  ///
+  /// In en, this message translates to:
+  /// **'Idle'**
+  String get liveSpectatorBadgeIdle;
+
+  /// Status badge — connecting
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting'**
+  String get liveSpectatorBadgeConnecting;
 }
 
 class _AppLocalizationsDelegate

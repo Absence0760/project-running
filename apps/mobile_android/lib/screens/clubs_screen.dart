@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../social_service.dart';
 import '../training_service.dart';
@@ -48,7 +49,7 @@ class ClubsScreenState extends State<ClubsScreen> {
   // that points them at Browse.
   int _tab = 1; // 0 = Browse, 1 = My clubs
   bool _loading = true;
-  String? _error;
+  _ClubsLoadError? _error;
   List<ClubView> _browse = const [];
   List<ClubView> _mine = const [];
   final _searchCtrl = TextEditingController();
@@ -95,7 +96,7 @@ class ClubsScreenState extends State<ClubsScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Connection timed out. Check your network and try again.';
+          _error = _ClubsLoadError.timeout;
         });
       }
     } catch (e, s) {
@@ -103,7 +104,7 @@ class ClubsScreenState extends State<ClubsScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Couldn\'t load clubs. Tap retry to try again.';
+          _error = _ClubsLoadError.generic;
         });
       }
     }
@@ -138,7 +139,7 @@ class ClubsScreenState extends State<ClubsScreen> {
         _load();
       },
       icon: const Icon(Icons.add),
-      label: const Text('New club'),
+      label: Text(AppLocalizations.of(context).clubsNewClub),
     );
   }
 
@@ -147,6 +148,7 @@ class ClubsScreenState extends State<ClubsScreen> {
   /// TabBar without nesting two Material chrome surfaces.
   Widget _buildBody(BuildContext context, {required bool inlineSegments}) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final list = _tab == 0 ? _browse : _mine;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -155,9 +157,9 @@ class ClubsScreenState extends State<ClubsScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
             child: SegmentedButton<int>(
-              segments: const [
-                ButtonSegment(value: 0, label: Text('Browse')),
-                ButtonSegment(value: 1, label: Text('My clubs')),
+              segments: [
+                ButtonSegment(value: 0, label: Text(l10n.clubsTabBrowse)),
+                ButtonSegment(value: 1, label: Text(l10n.clubsTabMine)),
               ],
               selected: {_tab},
               onSelectionChanged: (s) => setState(() => _tab = s.first),
@@ -172,7 +174,7 @@ class ClubsScreenState extends State<ClubsScreen> {
             padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
             child: OutlinedButton.icon(
               icon: const Icon(Icons.qr_code, size: 18),
-              label: const Text('Join with invite code'),
+              label: Text(l10n.clubsJoinWithCode),
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute<void>(
@@ -192,7 +194,7 @@ class ClubsScreenState extends State<ClubsScreen> {
                 controller: _searchCtrl,
                 onSubmitted: (_) => _load(),
                 decoration: InputDecoration(
-                  hintText: 'Search by name or location',
+                  hintText: l10n.clubsSearchHint,
                   prefixIcon: const Icon(Icons.search, size: 20),
                   isDense: true,
                   filled: true,
@@ -211,10 +213,15 @@ class ClubsScreenState extends State<ClubsScreen> {
   }
 
   Widget _buildList(List<ClubView> list) {
+    final l10n = AppLocalizations.of(context);
     return _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? ErrorState(message: _error!, onRetry: _load)
+              ? ErrorState(
+                  message: _error == _ClubsLoadError.timeout
+                      ? l10n.clubsTimeoutError
+                      : l10n.clubsLoadError,
+                  onRetry: _load)
               : list.isEmpty
               ? _Empty(tab: _tab)
               : RefreshIndicator(
@@ -255,11 +262,11 @@ class ClubsScreenState extends State<ClubsScreen> {
     }
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Clubs'),
+        title: Text(AppLocalizations.of(context).clubsTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.person_search),
-            tooltip: 'Find people',
+            tooltip: AppLocalizations.of(context).clubsFindPeople,
             onPressed: () {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -335,7 +342,7 @@ class _ClubTile extends StatelessWidget {
                             border: Border.all(color: theme.dividerColor),
                           ),
                           child: Text(
-                            'PRIVATE',
+                            AppLocalizations.of(context).clubsBadgePrivate,
                             style: theme.textTheme.labelSmall?.copyWith(
                               fontSize: 9,
                               letterSpacing: 0.8,
@@ -371,7 +378,8 @@ class _ClubTile extends StatelessWidget {
                           color: theme.colorScheme.outline),
                       const SizedBox(width: 4),
                       Text(
-                        '${view.memberCount} member${view.memberCount == 1 ? '' : 's'}',
+                        AppLocalizations.of(context)
+                            .clubsMemberCount(view.memberCount),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.outline,
                         ),
@@ -414,6 +422,7 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -428,16 +437,16 @@ class _Empty extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               tab == 0
-                  ? 'No clubs match that search.'
-                  : "You haven't joined a club yet.",
+                  ? l10n.clubsEmptyBrowseTitle
+                  : l10n.clubsEmptyMineTitle,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 4),
             Text(
               tab == 0
-                  ? 'Try a different name or location.'
-                  : 'Head to Browse to find one.',
+                  ? l10n.clubsEmptyBrowseBody
+                  : l10n.clubsEmptyMineBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
@@ -449,6 +458,8 @@ class _Empty extends StatelessWidget {
     );
   }
 }
+
+enum _ClubsLoadError { timeout, generic }
 
 class _Avatar extends StatelessWidget {
   final String seed;

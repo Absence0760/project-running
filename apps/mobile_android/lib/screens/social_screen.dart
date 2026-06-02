@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
@@ -86,6 +87,7 @@ class _SocialScreenState extends State<SocialScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         // No title — the bottom-nav already labels the tab "Social",
@@ -95,11 +97,13 @@ class _SocialScreenState extends State<SocialScreen>
         toolbarHeight: 0,
         bottom: TabBar(
           controller: _controller,
-          tabs: const [
-            Tab(text: 'Feed', icon: Icon(Icons.dynamic_feed)),
-            Tab(text: 'People', icon: Icon(Icons.person_search)),
-            Tab(text: 'Clubs', icon: Icon(Icons.groups)),
-            Tab(text: 'Routes', icon: Icon(Icons.route)),
+          tabs: [
+            Tab(text: l10n.socialTabFeed, icon: const Icon(Icons.dynamic_feed)),
+            Tab(
+                text: l10n.socialTabPeople,
+                icon: const Icon(Icons.person_search)),
+            Tab(text: l10n.socialTabClubs, icon: const Icon(Icons.groups)),
+            Tab(text: l10n.socialTabRoutes, icon: const Icon(Icons.route)),
           ],
         ),
       ),
