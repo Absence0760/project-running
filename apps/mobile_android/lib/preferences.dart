@@ -6,6 +6,7 @@ import 'package:uuid/uuid.dart';
 
 import 'goals.dart';
 import 'l10n/locale_support.dart';
+import 'l10n/number_format.dart';
 
 enum DistanceUnit { km, mi }
 
@@ -596,20 +597,17 @@ class Preferences extends ChangeNotifier {
 class UnitFormat {
   static const _metresPerMile = 1609.344;
 
-  /// Format distance: "5.23 km" or "3.25 mi".
+  /// Format distance: "5.23 km" or "3.25 mi" (decimal separator follows the
+  /// active locale — "5,23 km" in de).
   static String distance(double metres, DistanceUnit unit) {
-    if (unit == DistanceUnit.mi) {
-      return '${(metres / _metresPerMile).toStringAsFixed(2)} mi';
-    }
-    return '${(metres / 1000).toStringAsFixed(2)} km';
+    return '${distanceValue(metres, unit)} ${distanceLabel(unit)}';
   }
 
-  /// Format distance value only (no unit suffix).
+  /// Format distance value only (no unit suffix), localised separator.
   static String distanceValue(double metres, DistanceUnit unit) {
-    if (unit == DistanceUnit.mi) {
-      return (metres / _metresPerMile).toStringAsFixed(2);
-    }
-    return (metres / 1000).toStringAsFixed(2);
+    final value =
+        unit == DistanceUnit.mi ? metres / _metresPerMile : metres / 1000;
+    return formatFixed(value, 2, activeLocaleTag);
   }
 
   /// Distance unit label.
@@ -644,15 +642,12 @@ class UnitFormat {
     return (metres / intervalMetres).floor();
   }
 
-  /// Format speed: "12.5 km/h" or "7.8 mph".
+  /// Format speed: "12.5 km/h" or "7.8 mph" (localised separator).
   static String speed(double? secondsPerKm, DistanceUnit unit) {
     if (secondsPerKm == null || secondsPerKm <= 0) return '--';
     final kmh = 3600 / secondsPerKm;
-    if (unit == DistanceUnit.mi) {
-      final mph = kmh / 1.609344;
-      return mph.toStringAsFixed(1);
-    }
-    return kmh.toStringAsFixed(1);
+    final value = unit == DistanceUnit.mi ? kmh / 1.609344 : kmh;
+    return formatFixed(value, 1, activeLocaleTag);
   }
 
   /// Speed unit label e.g. "km/h" or "mph".
@@ -668,9 +663,10 @@ class UnitFormat {
   static String elevation(double? metres, DistanceUnit unit) {
     if (metres == null) return '—';
     if (unit == DistanceUnit.mi) {
-      return '${(metres * _feetPerMetre).round()} ft';
+      final ft = (metres * _feetPerMetre).round().toDouble();
+      return '${formatFixed(ft, 0, activeLocaleTag)} ft';
     }
-    return '${metres.round()} m';
+    return '${formatFixed(metres.round().toDouble(), 0, activeLocaleTag)} m';
   }
 }
 

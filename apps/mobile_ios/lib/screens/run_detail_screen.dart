@@ -13,6 +13,7 @@ import '../calories.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../hr_zones.dart';
 import '../run_intensity.dart';
 import '../local_route_store.dart';
@@ -1173,7 +1174,9 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     void addRow(String label, Object? value, String suffix,
         {bool decimals = false}) {
       if (value is! num) return;
-      final formatted = decimals ? value.toStringAsFixed(2) : value.toString();
+      final formatted = decimals
+          ? formatFixed(value.toDouble(), 2, activeLocaleTag)
+          : value.toString();
       rows.add(ListTile(
         dense: true,
         title: Text(label),

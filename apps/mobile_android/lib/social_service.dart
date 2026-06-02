@@ -7,6 +7,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'geocoding.dart';
 import 'l10n/date_format.dart';
+import 'l10n/locale_support.dart';
+import 'l10n/number_format.dart';
 import 'recurrence.dart';
 
 // Column-level grant lockdown: `clubs.invite_token` is revoked from
@@ -1410,7 +1412,8 @@ String fmtRelative(DateTime when, String localeTag) {
 String fmtEventDate(DateTime when, String localeTag) =>
     '${formatMonthDayShort(when, localeTag)}, ${formatTime(when, localeTag)}';
 
-String fmtKm(num metres) => (metres / 1000).toStringAsFixed(2);
+String fmtKm(num metres) =>
+    formatFixed(metres / 1000, 2, activeLocaleTag);
 
 String fmtPace(int? secPerKm) {
   if (secPerKm == null) return '';

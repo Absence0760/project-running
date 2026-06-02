@@ -14,6 +14,9 @@
 
 import 'package:core_models/core_models.dart';
 
+import 'l10n/locale_support.dart';
+import 'l10n/number_format.dart';
+
 enum InProgressOutcome { none, recovered, discarded }
 
 class InProgressEvaluation {
@@ -96,8 +99,10 @@ InProgressEvaluation evaluateInProgressPartial(Run? partial) {
 }
 
 String _formatDistance(double m) {
-  if (m < 1000) return '${m.round()} m';
-  return '${(m / 1000).toStringAsFixed(1)} km';
+  if (m < 1000) {
+    return '${formatFixed(m.round().toDouble(), 0, activeLocaleTag)} m';
+  }
+  return '${formatFixed(m / 1000, 1, activeLocaleTag)} km';
 }
 
 String _formatDuration(Duration d) {

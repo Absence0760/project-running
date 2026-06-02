@@ -15,6 +15,7 @@ import '../backend_timeout.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../training_service.dart';
 import '../widgets/top_banner.dart';
 
@@ -1108,7 +1109,8 @@ class _CoachScreenState extends State<CoachScreen> {
       chips.add(_chip(cs, icon: Icons.monitor_heart, label: l10n.coachContextHr));
     }
     if (c.weeklyGoalMetres != null) {
-      final km = (c.weeklyGoalMetres! / 1000).toStringAsFixed(0);
+      final km =
+          formatFixed(c.weeklyGoalMetres! / 1000, 0, activeLocaleTag);
       chips.add(_chip(cs, icon: Icons.flag, label: l10n.coachContextWeeklyGoal(km)));
     }
     return Padding(

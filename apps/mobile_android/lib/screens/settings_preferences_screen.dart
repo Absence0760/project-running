@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../settings_sync.dart';
@@ -59,7 +60,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       if ((miles - miles.roundToDouble()).abs() < 0.01) {
         return '${miles.round()} mi';
       }
-      return '${miles.toStringAsFixed(1)} mi';
+      return '${formatFixed(miles, 1, activeLocaleTag)} mi';
     }
     if (metres >= 1000 && metres % 1000 == 0) {
       return '${metres ~/ 1000} km';
@@ -271,7 +272,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final useMiles = widget.preferences.useMiles;
     final display = useMiles ? metres / 1609.344 : metres / 1000;
     return l10n.prefsWeeklyGoalSummary(
-      display.toStringAsFixed(display < 10 ? 1 : 0),
+      formatFixed(display, display < 10 ? 1 : 0, activeLocaleTag),
       useMiles ? 'mi' : 'km',
     );
   }

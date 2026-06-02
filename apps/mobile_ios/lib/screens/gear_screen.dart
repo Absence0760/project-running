@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../gear_backfill.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../local_gear_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -218,14 +220,18 @@ class _GearScreenState extends State<GearScreen> {
     final unitLabel = unit == DistanceUnit.mi ? 'mi' : 'km';
     final accrued = (row['total_distance_m'] as num?)?.toDouble() ?? 0.0;
     final target = (row['target_distance_m'] as num?)?.toDouble() ?? 0.0;
+    final tag = activeLocaleTag;
     if (target <= 0) {
-      return (pct: 0, label: '${(accrued / div).toStringAsFixed(1)} $unitLabel');
+      return (
+        pct: 0,
+        label: '${formatFixed(accrued / div, 1, tag)} $unitLabel'
+      );
     }
     final pct = (accrued / target).clamp(0.0, 1.0);
     return (
       pct: pct,
       label:
-          '${(accrued / div).toStringAsFixed(1)} / ${(target / div).toStringAsFixed(0)} $unitLabel'
+          '${formatFixed(accrued / div, 1, tag)} / ${formatFixed(target / div, 0, tag)} $unitLabel'
     );
   }
 

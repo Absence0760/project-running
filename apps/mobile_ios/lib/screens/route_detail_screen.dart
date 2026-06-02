@@ -12,6 +12,7 @@ import '../backend_timeout.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
@@ -622,7 +623,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   if (_avgRating > 0)
                     _Stat(
                       label: l10n.routeDetailStatReviews(_reviews.length),
-                      value: _avgRating.toStringAsFixed(1),
+                      value: formatFixed(_avgRating, 1, activeLocaleTag),
                       unit: '/ 5',
                     )
                   else

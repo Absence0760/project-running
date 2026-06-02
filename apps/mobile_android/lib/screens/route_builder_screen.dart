@@ -16,6 +16,8 @@ import 'package:uuid/uuid.dart';
 import '../elevation.dart';
 import '../geocoding.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../rate_limit_errors.dart';
@@ -1212,7 +1214,7 @@ class _StatusPill extends StatelessWidget {
       // user can compose the toggle + next tap with confidence.
       label = l10n.routeBuilderOnePointHint(_modeLabel(l10n, mode));
     } else {
-      final km = (distanceM / 1000).toStringAsFixed(2);
+      final km = formatFixed(distanceM / 1000, 2, activeLocaleTag);
       label = elevationGainM > 0
           ? l10n.routeBuilderStatusGain(
               '$km km', elevationGainM.round(), waypointCount)

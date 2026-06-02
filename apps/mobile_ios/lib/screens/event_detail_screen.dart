@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../preferences.dart';
 import '../recurrence.dart';
 import '../social_service.dart';
@@ -932,7 +933,8 @@ class _ResultRow extends StatelessWidget {
     final theme = Theme.of(context);
     final rank = row.rank?.toString() ?? '—';
     final time = _formatDuration(row.durationS);
-    final distKm = (row.distanceM / 1000).toStringAsFixed(2);
+    final distKm =
+        formatFixed(row.distanceM / 1000, 2, activeLocaleTag);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 6),
       child: Row(

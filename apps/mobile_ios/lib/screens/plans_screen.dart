@@ -5,6 +5,8 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -263,7 +265,7 @@ class _PlanTile extends StatelessWidget {
                   _meta(theme, Icons.timer, fmtHms(plan.goalTimeSeconds)),
                 if (plan.vdot != null)
                   _meta(theme, Icons.trending_up,
-                      'VDOT ${plan.vdot!.toStringAsFixed(1)}'),
+                      'VDOT ${formatFixed(plan.vdot!, 1, activeLocaleTag)}'),
                 _meta(theme, Icons.calendar_today,
                     '${toIsoDate(plan.startDate)} → ${toIsoDate(plan.endDate)}'),
                 _meta(theme, Icons.event_repeat,

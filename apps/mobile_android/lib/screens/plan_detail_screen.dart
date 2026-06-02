@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../social_service.dart' show ClubView, SocialService;
 import '../training.dart';
@@ -271,7 +272,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                       _chip(theme, Icons.timer, fmtHms(p.goalTimeSeconds)),
                     if (p.vdot != null)
                       _chip(theme, Icons.trending_up,
-                          'VDOT ${p.vdot!.toStringAsFixed(1)}'),
+                          'VDOT ${formatFixed(p.vdot!, 1, activeLocaleTag)}'),
                   ],
                 ),
                 const SizedBox(height: 6),

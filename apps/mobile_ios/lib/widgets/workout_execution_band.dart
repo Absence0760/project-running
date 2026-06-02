@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../preferences.dart';
 import '../training.dart' show fmtPace;
 
@@ -245,17 +247,18 @@ class _Band extends StatelessWidget {
     // Mid-workout pill — honour the user's active distance pref so
     // a mi-mode runner sees miles + yards instead of km + metres.
     final unit = activeDistanceUnit;
+    final tag = activeLocaleTag;
     if (unit == DistanceUnit.mi) {
       const metresPerMile = 1609.344;
       if (metres >= metresPerMile) {
-        return '${(metres / metresPerMile).toStringAsFixed(1)} mi';
+        return '${formatFixed(metres / metresPerMile, 1, tag)} mi';
       }
-      return '${(metres * 1.09361).round()} yd';
+      return '${formatFixed((metres * 1.09361).round().toDouble(), 0, tag)} yd';
     }
     if (metres >= 1000) {
-      return '${(metres / 1000).toStringAsFixed(1)} km';
+      return '${formatFixed(metres / 1000, 1, tag)} km';
     }
-    return '${metres.round()} m';
+    return '${formatFixed(metres.round().toDouble(), 0, tag)} m';
   }
 
   static String _fmtDuration(Duration d) {

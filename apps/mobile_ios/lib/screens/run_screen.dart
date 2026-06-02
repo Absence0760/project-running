@@ -24,6 +24,8 @@ import '../ble_heart_rate.dart';
 import '../embedded_bests.dart';
 import '../health_connect_exporter.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
@@ -3422,7 +3424,8 @@ String _formatAgo(BuildContext context, DateTime when) {
   return l10n.runAgoMonths(months);
 }
 
-String _formatKm(double metres) => (metres / 1000).toStringAsFixed(2);
+String _formatKm(double metres) =>
+    formatFixed(metres / 1000, 2, activeLocaleTag);
 
 String _formatPace(Duration duration, double metres) {
   if (metres < 10) return '--:--';

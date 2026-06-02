@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../training.dart';
 import '../training_service.dart';
 import 'plan_detail_screen.dart';
@@ -392,7 +394,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ],
           if (p.vdot != null) ...[
             const SizedBox(height: 8),
-            Text(l10n.planNewVdot(p.vdot!.toStringAsFixed(1)),
+            Text(l10n.planNewVdot(formatFixed(p.vdot!, 1, activeLocaleTag)),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline)),
           ],

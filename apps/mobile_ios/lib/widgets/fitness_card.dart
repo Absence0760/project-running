@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 
 import '../fitness.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../l10n/locale_support.dart';
+import '../l10n/number_format.dart';
 import '../training_load.dart';
 
 /// Dashboard "Fitness" card — VO₂ max / VDOT / qualifying-run count
@@ -47,7 +49,7 @@ class FitnessCard extends StatelessWidget {
     );
 
     String fmt(double? v, {int digits = 1}) =>
-        v == null ? '—' : v.toStringAsFixed(digits);
+        v == null ? '—' : formatFixed(v, digits, activeLocaleTag);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

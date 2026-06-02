@@ -6,6 +6,8 @@
 
 import 'dart:math';
 
+import 'l10n/locale_support.dart' show activeLocaleTag;
+import 'l10n/number_format.dart' show formatFixed;
 import 'preferences.dart' show DistanceUnit, activeDistanceUnit;
 
 enum GoalEvent { distance5k, distance10k, distanceHalf, distanceFull, custom }
@@ -854,11 +856,12 @@ String fmtKm(num? metres, [int digits = 1]) {
   // implementation now reads activeDistanceUnit so a mi-mode user
   // sees "5.0 mi" instead of "5.0 km".
   final unit = activeDistanceUnit;
+  final tag = activeLocaleTag;
   if (unit == DistanceUnit.mi) {
     const metresPerMile = 1609.344;
-    return '${(metres / metresPerMile).toStringAsFixed(digits)} mi';
+    return '${formatFixed(metres / metresPerMile, digits, tag)} mi';
   }
-  return '${(metres / 1000).toStringAsFixed(digits)} km';
+  return '${formatFixed(metres / 1000, digits, tag)} km';
 }
 
 String fmtHms(int? sec) {
