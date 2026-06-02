@@ -2607,6 +2607,14 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **Why a shared helper, not a watch-only number.** GAP is a product metric, not a watch gimmick — keeping the algorithm identical across web, both mobile twins, and the Connect IQ field means the figure a runner sees on the wrist matches the one on run detail. The parity pair + mirror test suites (10 tests each side) are what hold that line.
 
+## 115. A run's public gear chip reads through a SECURITY DEFINER projection RPC, not a relaxed `gear` RLS policy
+
+**Decided (2026-06-02):** the gear chip on the public run-share page reads via `public_run_gear(p_run_id)` (migration `20261126_001`) — a `SECURITY DEFINER` function that checks `private.is_run_visible_to` and returns only the public columns (`id, kind, name, brand, model`) of gear linked to that run.
+
+**Why not just relax the `gear` SELECT policy?** The obvious "let non-owners read gear on a public run" RLS policy can't work: Postgres RLS is **row-level, not column-level**. Any policy that makes the gear *row* visible exposes every column on it — including the owner-private inventory metadata (`notes`, `purchased_at`, `target_distance_m`, `retired_at`). A definer function that hand-projects the safe columns is the only way to publish the shoe/bike model on a public run without leaking the rest of the owner's gear locker. (`fetchRunGear` had a defence-in-depth comment pinning a public-column list on the old table join *precisely* anticipating this; the RPC makes the projection structural instead of advisory.)
+
+**Secondary fix bundled in the same migration:** the original `run_gear` SELECT policy (`20260827_001`) wrapped `is_run_visible_to` in an `exists (select 1 from runs r …)` whose inner read was itself gated by the caller's base-`runs` RLS — which `20260701_001` had stripped of public-run exposure. So the policy silently returned nothing for the exact public-share audience it was written for, and the chip rendered for the owner only. The fix calls `is_run_visible_to` directly, matching the sibling social-table policies (kudos / comments / photos). General lesson: **a visibility helper that's already `SECURITY DEFINER` must be called directly in a policy — wrapping it in a subquery over an RLS-gated base table re-subjects it to the caller's RLS and defeats the point.**
+
 ---
 
 ## How to add an entry

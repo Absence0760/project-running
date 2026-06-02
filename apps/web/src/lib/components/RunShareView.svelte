@@ -7,6 +7,7 @@
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
 	import RunSocial from '$lib/components/RunSocial.svelte';
 	import RunPhotos from '$lib/components/RunPhotos.svelte';
+	import RunGearChips from '$lib/components/RunGearChips.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Run, TrackPoint } from '$lib/types';
@@ -157,6 +158,8 @@
 			/>
 		</section>
 	{/if}
+
+	<RunGearChips runId={run.id} runOwnerId={run.user_id} />
 
 	<RunPhotos runId={run.id} runOwnerId={run.user_id} />
 

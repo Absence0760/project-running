@@ -2798,6 +2798,16 @@ export type Database = {
           id: string
         }[]
       }
+      public_run_gear: {
+        Args: { p_run_id: string }
+        Returns: {
+          brand: string
+          id: string
+          kind: string
+          model: string
+          name: string
+        }[]
+      }
       recompute_event_ranks: {
         Args: { p_event_id: string; p_instance_start: string }
         Returns: undefined
