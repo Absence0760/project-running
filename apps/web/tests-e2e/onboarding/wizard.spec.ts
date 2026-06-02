@@ -55,14 +55,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 	// assume the seed baseline (notably the km-based plans tests), so snapshot
 	// the mutated rows in beforeEach and restore them in afterEach — leaving
 	// the user pristine regardless of which fields the wizard touched.
-	let savedProfile: { display_name: string | null; preferred_unit: string | null; onboarded_at: string | null; date_of_birth: string | null } | null = null;
+	let savedProfile: { display_name: string | null; preferred_unit: string | null; onboarded_at: string | null; date_of_birth: string | null; health_data_consent_at: string | null; gender: string | null } | null = null;
 	let savedPrefs: Record<string, unknown> | null = null;
 
 	test.beforeEach(async () => {
 		const admin = getAdminClient();
 		const { data: prof } = await admin
 			.from('user_profiles')
-			.select('display_name, preferred_unit, onboarded_at, date_of_birth')
+			.select('display_name, preferred_unit, onboarded_at, date_of_birth, health_data_consent_at, gender')
 			.eq('id', USER_A.id)
 			.single();
 		savedProfile = prof ?? null;
@@ -73,7 +73,14 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 			.maybeSingle();
 		savedPrefs = (settings?.prefs as Record<string, unknown> | null) ?? null;
 
-		await admin.from('user_profiles').update({ onboarded_at: null }).eq('id', USER_A.id);
+		// Reset the Art 9 fields too: USER_A is shared, and sibling specs (or
+		// the seed) may have stamped consent/gender. The DOB-without-consent
+		// test asserts these stay null, so it must START from null. The lock
+		// trigger (20261118) permits a direct null write.
+		await admin
+			.from('user_profiles')
+			.update({ onboarded_at: null, health_data_consent_at: null, gender: null })
+			.eq('id', USER_A.id);
 	});
 
 	test.afterEach(async () => {
@@ -85,6 +92,8 @@ test.describe('/onboarding gate — user whose onboarded_at is null', () => {
 				display_name: savedProfile?.display_name ?? null,
 				preferred_unit: savedProfile?.preferred_unit ?? 'km',
 				date_of_birth: savedProfile?.date_of_birth ?? null,
+				health_data_consent_at: savedProfile?.health_data_consent_at ?? null,
+				gender: savedProfile?.gender ?? null,
 			})
 			.eq('id', USER_A.id);
 		if (savedPrefs) {
