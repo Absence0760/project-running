@@ -1847,15 +1847,22 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 
 	const [countRes, rsvpRes] = await Promise.all([countsPromise, rsvpPromise]);
 
+	// Compare instants, not raw strings: nextMap holds toISOString() ('…Z')
+	// while Postgres returns timestamptz as '…+00:00', so a string `===`
+	// never matches and every count/RSVP would be dropped (regression from
+	// the client-side debatch in 7e386e57 — the prior per-event `.eq()`
+	// compared timestamptz server-side).
+	const sameInstant = (a: string, b: string | undefined): boolean =>
+		b != null && new Date(a).getTime() === new Date(b).getTime();
 	const counts = new Map<string, number>();
 	for (const row of (countRes.data ?? []) as { event_id: string; instance_start: string }[]) {
-		if (row.instance_start === nextMap.get(row.event_id)) {
+		if (sameInstant(row.instance_start, nextMap.get(row.event_id))) {
 			counts.set(row.event_id, (counts.get(row.event_id) ?? 0) + 1);
 		}
 	}
 	const rsvps = new Map<string, RsvpStatus | null>();
 	for (const row of (rsvpRes.data ?? []) as { event_id: string; status: string; instance_start: string }[]) {
-		if (row.instance_start === nextMap.get(row.event_id)) {
+		if (sameInstant(row.instance_start, nextMap.get(row.event_id))) {
 			rsvps.set(row.event_id, (row.status ?? null) as RsvpStatus | null);
 		}
 	}
