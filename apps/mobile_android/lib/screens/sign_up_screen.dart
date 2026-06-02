@@ -8,6 +8,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:sign_in_with_apple/sign_in_with_apple.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 
 /// Email/password account-creation screen with Google + Apple OAuth.
@@ -50,10 +51,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final url = 'https://threkir.com/$path';
     try {
       final ok = await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-      if (!ok && mounted) showTopBanner(context, 'Could not open $url');
+      if (!ok && mounted) {
+        showTopBanner(context, AppLocalizations.of(context).signUpCouldNotOpen(url));
+      }
     } catch (e) {
       debugPrint('sign_up: opening $url failed: $e');
-      if (mounted) showTopBanner(context, 'Could not open $url');
+      if (mounted) {
+        showTopBanner(context, AppLocalizations.of(context).signUpCouldNotOpen(url));
+      }
     }
   }
 
@@ -68,12 +73,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _signUp() async {
     if (!_confirmAdult) {
-      setState(() => _error = 'Please confirm you are 16 or older to continue.');
+      setState(() =>
+          _error = AppLocalizations.of(context).signUpErrorConfirmAge);
       return;
     }
     if (!_acceptTerms) {
-      setState(() => _error =
-          'Please accept the Terms of Service and Privacy Policy to continue.');
+      setState(() =>
+          _error = AppLocalizations.of(context).signUpErrorAcceptTerms);
       return;
     }
     setState(() {
@@ -108,12 +114,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   bool _checkGates() {
     if (!_confirmAdult) {
       setState(() =>
-          _error = 'Please confirm you are 16 or older to continue.');
+          _error = AppLocalizations.of(context).signUpErrorConfirmAge);
       return false;
     }
     if (!_acceptTerms) {
-      setState(() => _error =
-          'Please accept the Terms of Service and Privacy Policy to continue.');
+      setState(() =>
+          _error = AppLocalizations.of(context).signUpErrorAcceptTerms);
       return false;
     }
     return true;
@@ -212,9 +218,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final appleFirst = Platform.isIOS;
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Account')),
+      appBar: AppBar(title: Text(l10n.signUpTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
@@ -226,13 +233,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   size: 64, color: theme.colorScheme.primary),
               const SizedBox(height: 16),
               Text(
-                'Start tracking your runs',
+                l10n.signUpHeadline,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall,
               ),
               const SizedBox(height: 8),
               Text(
-                'Create an account to back up runs and view them on the web app.',
+                l10n.signUpSubtitle,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.outline,
@@ -243,18 +250,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 controller: _emailController,
                 keyboardType: TextInputType.emailAddress,
                 autocorrect: false,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.authEmailLabel,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               const SizedBox(height: 12),
               TextField(
                 controller: _passwordController,
                 obscureText: true,
-                decoration: const InputDecoration(
-                  labelText: 'Password',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.authPasswordLabel,
+                  border: const OutlineInputBorder(),
                 ),
               ),
               if (_error != null) ...[
@@ -275,7 +282,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     : (v) => setState(() => _confirmAdult = v ?? false),
                 controlAffinity: ListTileControlAffinity.leading,
                 contentPadding: EdgeInsets.zero,
-                title: const Text('I am 16 years of age or older'),
+                title: Text(l10n.signUpConfirmAge),
               ),
               // Terms + Privacy acceptance — mirrors web `acceptTerms`.
               CheckboxListTile(
@@ -288,18 +295,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 title: Text.rich(
                   TextSpan(
                     children: [
-                      const TextSpan(text: 'I accept the '),
+                      TextSpan(text: l10n.signUpAcceptPrefix),
                       TextSpan(
-                        text: 'Terms of Service',
+                        text: l10n.signUpTermsLink,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           decoration: TextDecoration.underline,
                         ),
                         recognizer: _termsTap,
                       ),
-                      const TextSpan(text: ' and '),
+                      TextSpan(text: l10n.signUpAcceptConjunction),
                       TextSpan(
-                        text: 'Privacy Policy',
+                        text: l10n.signUpPrivacyLink,
                         style: TextStyle(
                           color: Theme.of(context).colorScheme.primary,
                           decoration: TextDecoration.underline,
@@ -322,7 +329,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Text('Create Account'),
+                    : Text(l10n.signUpButton),
               ),
               const SizedBox(height: 12),
               Row(
@@ -331,7 +338,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
-                      'OR',
+                      l10n.authOrDivider,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
@@ -348,7 +355,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   icon: const Icon(Icons.apple, size: 18),
-                  label: const Text('Continue with Apple'),
+                  label: Text(l10n.signUpContinueWithApple),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -357,7 +364,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   icon: const Icon(Icons.login, size: 18),
-                  label: const Text('Continue with Google'),
+                  label: Text(l10n.signUpContinueWithGoogle),
                 ),
               ] else ...[
                 OutlinedButton.icon(
@@ -366,7 +373,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   icon: const Icon(Icons.login, size: 18),
-                  label: const Text('Continue with Google'),
+                  label: Text(l10n.signUpContinueWithGoogle),
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
@@ -375,13 +382,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 14),
                   ),
                   icon: const Icon(Icons.apple, size: 18),
-                  label: const Text('Continue with Apple'),
+                  label: Text(l10n.signUpContinueWithApple),
                 ),
               ],
               const SizedBox(height: 16),
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Already have an account? Sign in'),
+                child: Text(l10n.signUpSignInPrompt),
               ),
             ],
           ),

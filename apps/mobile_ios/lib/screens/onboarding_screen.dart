@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
 
@@ -36,50 +37,40 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   /// matches the web wizard's default so cross-device sync agrees.
   String _privacyDefault = 'private';
 
-  /// Total onboarding pages: the info pages + the privacy chooser.
-  int get _pageCount => _pages.length + 1;
-  bool get _onPrivacyPage => _page == _pages.length;
+  /// The three info pages before the privacy chooser.
+  static const int _infoPageCount = 3;
 
-  final _pages = const [
-    _PageData(
-      icon: Icons.directions_run,
-      title: 'Track every run',
-      description:
-          'GPS recording with live map, splits, pace, cadence, and elevation. '
-          'Works fully offline — sign in later to sync across devices.',
-    ),
-    _PageData(
-      icon: Icons.route,
-      title: 'Follow routes',
-      description:
-          'Import GPX or KML files, or sync routes from the web app. '
-          'Get off-route alerts while you run.',
-    ),
-    // Background-location disclosure copy mandated by Google Play's
-    // location policy: the in-app rationale must run BEFORE the OS
-    // permission dialog, must name the specific feature using
-    // background location, and must explain what happens if the user
-    // declines. Apple's App Review Guideline 5.1.5 also requires the
-    // same disclosure in the location strings (covered by
-    // NSLocationAlwaysAndWhenInUseUsageDescription on iOS, but the
-    // pre-prompt rationale here doubles as the cross-platform copy
-    // for the Play disclosure surface). /audit/app-store-privacy May
-    // 2026 High closeout.
-    _PageData(
-      icon: Icons.location_on,
-      title: 'Location access',
-      description:
-          'Threkir records your runs by sampling your GPS location while '
-          'the app is in the foreground AND in the background (so it '
-          'keeps tracking when your screen is off or you switch apps to '
-          'take a photo). Location data is stored on your device and '
-          'only uploaded to Threkir\'s servers when you choose to share '
-          'or sync a run. If you decline background location, runs will '
-          'stop recording the moment you switch away from the app — '
-          'you can change this later in Settings → Apps → Threkir → '
-          'Permissions.',
-    ),
-  ];
+  /// Total onboarding pages: the info pages + the privacy chooser.
+  int get _pageCount => _infoPageCount + 1;
+  bool get _onPrivacyPage => _page == _infoPageCount;
+
+  // Background-location disclosure copy mandated by Google Play's
+  // location policy: the in-app rationale must run BEFORE the OS
+  // permission dialog, must name the specific feature using
+  // background location, and must explain what happens if the user
+  // declines. Apple's App Review Guideline 5.1.5 also requires the
+  // same disclosure in the location strings (covered by
+  // NSLocationAlwaysAndWhenInUseUsageDescription on iOS, but the
+  // pre-prompt rationale here doubles as the cross-platform copy
+  // for the Play disclosure surface). /audit/app-store-privacy May
+  // 2026 High closeout.
+  List<_PageData> _infoPages(AppLocalizations l10n) => [
+        _PageData(
+          icon: Icons.directions_run,
+          title: l10n.onboardingTrackTitle,
+          description: l10n.onboardingTrackBody,
+        ),
+        _PageData(
+          icon: Icons.route,
+          title: l10n.onboardingRoutesTitle,
+          description: l10n.onboardingRoutesBody,
+        ),
+        _PageData(
+          icon: Icons.location_on,
+          title: l10n.onboardingLocationTitle,
+          description: l10n.onboardingLocationBody,
+        ),
+      ];
 
   Future<void> _next() async {
     if (_page < _pageCount - 1) {
@@ -122,6 +113,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
+    final infoPages = _infoPages(l10n);
     // WCAG 2.3.3 — honour the OS "reduce motion" setting: collapse the
     // page-indicator width tween to an instant swap when animations
     // are disabled.
@@ -136,8 +129,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 itemCount: _pageCount,
                 onPageChanged: (i) => setState(() => _page = i),
                 itemBuilder: (context, index) {
-                  if (index == _pages.length) return _buildPrivacyPage(theme);
-                  final p = _pages[index];
+                  if (index == infoPages.length) {
+                    return _buildPrivacyPage(theme, l10n);
+                  }
+                  final p = infoPages[index];
                   // The Location page's Play-policy disclosure copy is
                   // long enough to overflow a small phone viewport when
                   // centered in a fixed-height Column. LayoutBuilder +
@@ -222,7 +217,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                   child: Text(
-                    _onPrivacyPage ? 'Grant permission' : 'Next',
+                    _onPrivacyPage
+                        ? l10n.onboardingGrantPermission
+                        : l10n.onboardingNext,
                     style: const TextStyle(fontSize: 16),
                   ),
                 ),
@@ -234,25 +231,25 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     );
   }
 
-  Widget _buildPrivacyPage(ThemeData theme) {
-    const options = [
+  Widget _buildPrivacyPage(ThemeData theme, AppLocalizations l10n) {
+    final options = [
       (
         value: 'private',
         icon: Icons.lock_outline,
-        title: 'Private',
-        subtitle: 'Only you can see your runs. You can share any run later.',
+        title: l10n.privacyPrivateTitle,
+        subtitle: l10n.privacyPrivateSubtitle,
       ),
       (
         value: 'followers',
         icon: Icons.group_outlined,
-        title: 'Followers',
-        subtitle: 'People who follow you see new runs in their feed.',
+        title: l10n.privacyFollowersTitle,
+        subtitle: l10n.privacyFollowersSubtitle,
       ),
       (
         value: 'public',
         icon: Icons.public,
-        title: 'Public',
-        subtitle: 'Anyone can find and view your runs.',
+        title: l10n.privacyPublicTitle,
+        subtitle: l10n.privacyPublicSubtitle,
       ),
     ];
     return SingleChildScrollView(
@@ -262,15 +259,14 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         children: [
           const SizedBox(height: 8),
           Text(
-            'Who sees your runs?',
+            l10n.onboardingPrivacyTitle,
             textAlign: TextAlign.center,
             style: theme.textTheme.headlineMedium
                 ?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           Text(
-            'Pick a default for new runs. You can change it any time in '
-            'Settings, and override it on any single run.',
+            l10n.onboardingPrivacyBody,
             textAlign: TextAlign.center,
             style: theme.textTheme.bodyMedium
                 ?.copyWith(color: theme.colorScheme.outline, height: 1.4),

@@ -67,5 +67,190 @@
   "prefsSectionUnitsDisplay": "Units & display",
   "@prefsSectionUnitsDisplay": {
     "description": "Settings > Preferences section header for units, pace format, map style, language, theme"
+  },
+  "authEmailLabel": "Email",
+  "@authEmailLabel": {
+    "description": "Label for the email field on the sign-in and sign-up screens"
+  },
+  "authPasswordLabel": "Password",
+  "@authPasswordLabel": {
+    "description": "Label for the password field on the sign-in and sign-up screens"
+  },
+  "authOrDivider": "OR",
+  "@authOrDivider": {
+    "description": "Divider text between the email/password form and the OAuth buttons"
+  },
+  "signInTitle": "Sign In",
+  "@signInTitle": {
+    "description": "AppBar title for the sign-in screen"
+  },
+  "signInHeadline": "Sync runs across devices",
+  "@signInHeadline": {
+    "description": "Headline on the sign-in screen"
+  },
+  "signInSubtitle": "Sign in to back up runs and view them on the web app.",
+  "@signInSubtitle": {
+    "description": "Subtitle under the sign-in headline"
+  },
+  "signInButton": "Sign In",
+  "@signInButton": {
+    "description": "Primary submit button on the sign-in screen"
+  },
+  "signInForgotPassword": "Forgot password?",
+  "@signInForgotPassword": {
+    "description": "Forgot-password link on the sign-in screen"
+  },
+  "signInResetNeedEmail": "Enter your email above first, then tap Forgot password.",
+  "@signInResetNeedEmail": {
+    "description": "Validation message shown when the user taps Forgot password without a valid email in the field"
+  },
+  "signInResetSent": "If that email is registered, we've sent a reset link.",
+  "@signInResetSent": {
+    "description": "Privacy-preserving confirmation shown after requesting a password reset email"
+  },
+  "signInWithApple": "Sign in with Apple",
+  "@signInWithApple": {
+    "description": "Apple OAuth button label on the sign-in screen"
+  },
+  "signInWithGoogle": "Sign in with Google",
+  "@signInWithGoogle": {
+    "description": "Google OAuth button label on the sign-in screen"
+  },
+  "signInContinueOffline": "Continue offline",
+  "@signInContinueOffline": {
+    "description": "Button to dismiss the sign-in screen and use the app without an account"
+  },
+  "signInCreateAccountPrompt": "Don't have an account? Create one",
+  "@signInCreateAccountPrompt": {
+    "description": "Link from the sign-in screen to the sign-up screen"
+  },
+  "signUpTitle": "Create Account",
+  "@signUpTitle": {
+    "description": "AppBar title for the sign-up screen"
+  },
+  "signUpHeadline": "Start tracking your runs",
+  "@signUpHeadline": {
+    "description": "Headline on the sign-up screen"
+  },
+  "signUpSubtitle": "Create an account to back up runs and view them on the web app.",
+  "@signUpSubtitle": {
+    "description": "Subtitle under the sign-up headline"
+  },
+  "signUpButton": "Create Account",
+  "@signUpButton": {
+    "description": "Primary submit button on the sign-up screen"
+  },
+  "signUpConfirmAge": "I am 16 years of age or older",
+  "@signUpConfirmAge": {
+    "description": "Checkbox label for the age-confirmation gate on sign-up (GDPR Art 8)"
+  },
+  "signUpAcceptPrefix": "I accept the ",
+  "@signUpAcceptPrefix": {
+    "description": "Leading text of the terms-acceptance checkbox label, before the Terms of Service link"
+  },
+  "signUpTermsLink": "Terms of Service",
+  "@signUpTermsLink": {
+    "description": "Tappable Terms of Service link text inside the terms-acceptance checkbox label"
+  },
+  "signUpAcceptConjunction": " and ",
+  "@signUpAcceptConjunction": {
+    "description": "Conjunction between the Terms of Service and Privacy Policy links in the terms-acceptance checkbox label"
+  },
+  "signUpPrivacyLink": "Privacy Policy",
+  "@signUpPrivacyLink": {
+    "description": "Tappable Privacy Policy link text inside the terms-acceptance checkbox label"
+  },
+  "signUpErrorConfirmAge": "Please confirm you are 16 or older to continue.",
+  "@signUpErrorConfirmAge": {
+    "description": "Validation error shown when the age gate is not confirmed"
+  },
+  "signUpErrorAcceptTerms": "Please accept the Terms of Service and Privacy Policy to continue.",
+  "@signUpErrorAcceptTerms": {
+    "description": "Validation error shown when the terms gate is not accepted"
+  },
+  "signUpContinueWithApple": "Continue with Apple",
+  "@signUpContinueWithApple": {
+    "description": "Apple OAuth button label on the sign-up screen"
+  },
+  "signUpContinueWithGoogle": "Continue with Google",
+  "@signUpContinueWithGoogle": {
+    "description": "Google OAuth button label on the sign-up screen"
+  },
+  "signUpSignInPrompt": "Already have an account? Sign in",
+  "@signUpSignInPrompt": {
+    "description": "Link from the sign-up screen back to the sign-in screen"
+  },
+  "signUpCouldNotOpen": "Could not open {url}",
+  "@signUpCouldNotOpen": {
+    "description": "Banner shown when a legal-document link (Terms / Privacy) fails to open",
+    "placeholders": {
+      "url": {
+        "type": "String"
+      }
+    }
+  },
+  "onboardingTrackTitle": "Track every run",
+  "@onboardingTrackTitle": {
+    "description": "Title of the first onboarding slide"
+  },
+  "onboardingTrackBody": "GPS recording with live map, splits, pace, cadence, and elevation. Works fully offline — sign in later to sync across devices.",
+  "@onboardingTrackBody": {
+    "description": "Body of the first onboarding slide"
+  },
+  "onboardingRoutesTitle": "Follow routes",
+  "@onboardingRoutesTitle": {
+    "description": "Title of the second onboarding slide"
+  },
+  "onboardingRoutesBody": "Import GPX or KML files, or sync routes from the web app. Get off-route alerts while you run.",
+  "@onboardingRoutesBody": {
+    "description": "Body of the second onboarding slide"
+  },
+  "onboardingLocationTitle": "Location access",
+  "@onboardingLocationTitle": {
+    "description": "Title of the location-disclosure onboarding slide"
+  },
+  "onboardingLocationBody": "Threkir records your runs by sampling your GPS location while the app is in the foreground AND in the background (so it keeps tracking when your screen is off or you switch apps to take a photo). Location data is stored on your device and only uploaded to Threkir's servers when you choose to share or sync a run. If you decline background location, runs will stop recording the moment you switch away from the app — you can change this later in Settings → Apps → Threkir → Permissions.",
+  "@onboardingLocationBody": {
+    "description": "Play-policy background-location disclosure body on the location onboarding slide"
+  },
+  "onboardingPrivacyTitle": "Who sees your runs?",
+  "@onboardingPrivacyTitle": {
+    "description": "Title of the privacy-default chooser onboarding page"
+  },
+  "onboardingPrivacyBody": "Pick a default for new runs. You can change it any time in Settings, and override it on any single run.",
+  "@onboardingPrivacyBody": {
+    "description": "Body of the privacy-default chooser onboarding page"
+  },
+  "onboardingGrantPermission": "Grant permission",
+  "@onboardingGrantPermission": {
+    "description": "Bottom button label on the final onboarding page"
+  },
+  "onboardingNext": "Next",
+  "@onboardingNext": {
+    "description": "Bottom button label advancing to the next onboarding page"
+  },
+  "privacyPrivateTitle": "Private",
+  "@privacyPrivateTitle": {
+    "description": "Title of the Private visibility default option"
+  },
+  "privacyPrivateSubtitle": "Only you can see your runs. You can share any run later.",
+  "@privacyPrivateSubtitle": {
+    "description": "Subtitle of the Private visibility default option"
+  },
+  "privacyFollowersTitle": "Followers",
+  "@privacyFollowersTitle": {
+    "description": "Title of the Followers visibility default option"
+  },
+  "privacyFollowersSubtitle": "People who follow you see new runs in their feed.",
+  "@privacyFollowersSubtitle": {
+    "description": "Subtitle of the Followers visibility default option"
+  },
+  "privacyPublicTitle": "Public",
+  "@privacyPublicTitle": {
+    "description": "Title of the Public visibility default option"
+  },
+  "privacyPublicSubtitle": "Anyone can find and view your runs.",
+  "@privacyPublicSubtitle": {
+    "description": "Subtitle of the Public visibility default option"
   }
 }

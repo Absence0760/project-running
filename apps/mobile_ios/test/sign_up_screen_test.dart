@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/sign_up_screen.dart';
 
 class _FakeApiClient extends ApiClient {
@@ -35,6 +36,8 @@ Future<void> _pump(WidgetTester tester, _FakeApiClient client) async {
   await tester.binding.setSurfaceSize(const Size(400, 1200));
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: SignUpScreen(apiClient: client),
     ),
   );
@@ -193,6 +196,8 @@ void main() {
       // Wrap in a Navigator so there is a previous route to pop back to.
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: const Scaffold(body: Text('previous')),
           routes: {
             '/signup': (_) => SignUpScreen(apiClient: _FakeApiClient()),
@@ -202,6 +207,8 @@ void main() {
       // Navigate to sign-up.
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: SignUpScreen(apiClient: _FakeApiClient()),
           builder: (context, child) => Scaffold(body: child),
         ),
@@ -209,6 +216,8 @@ void main() {
       await tester.binding.setSurfaceSize(const Size(400, 900));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Builder(
             builder: (ctx) => Scaffold(
               body: TextButton(

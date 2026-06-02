@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/onboarding_screen.dart';
 
@@ -34,6 +35,8 @@ Future<void> _pump(
 }) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: OnboardingScreen(
         preferences: prefs,
         onDone: onDone ?? () {},
@@ -89,6 +92,8 @@ void main() {
       final prefs = await _makePrefs();
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: MediaQuery(
             data: const MediaQueryData(disableAnimations: true),
             child: OnboardingScreen(preferences: prefs, onDone: () {}),

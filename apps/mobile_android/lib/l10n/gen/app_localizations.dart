@@ -208,6 +208,276 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Units & display'**
   String get prefsSectionUnitsDisplay;
+
+  /// Label for the email field on the sign-in and sign-up screens
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get authEmailLabel;
+
+  /// Label for the password field on the sign-in and sign-up screens
+  ///
+  /// In en, this message translates to:
+  /// **'Password'**
+  String get authPasswordLabel;
+
+  /// Divider text between the email/password form and the OAuth buttons
+  ///
+  /// In en, this message translates to:
+  /// **'OR'**
+  String get authOrDivider;
+
+  /// AppBar title for the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In'**
+  String get signInTitle;
+
+  /// Headline on the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sync runs across devices'**
+  String get signInHeadline;
+
+  /// Subtitle under the sign-in headline
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to back up runs and view them on the web app.'**
+  String get signInSubtitle;
+
+  /// Primary submit button on the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign In'**
+  String get signInButton;
+
+  /// Forgot-password link on the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Forgot password?'**
+  String get signInForgotPassword;
+
+  /// Validation message shown when the user taps Forgot password without a valid email in the field
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your email above first, then tap Forgot password.'**
+  String get signInResetNeedEmail;
+
+  /// Privacy-preserving confirmation shown after requesting a password reset email
+  ///
+  /// In en, this message translates to:
+  /// **'If that email is registered, we\'ve sent a reset link.'**
+  String get signInResetSent;
+
+  /// Apple OAuth button label on the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Apple'**
+  String get signInWithApple;
+
+  /// Google OAuth button label on the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in with Google'**
+  String get signInWithGoogle;
+
+  /// Button to dismiss the sign-in screen and use the app without an account
+  ///
+  /// In en, this message translates to:
+  /// **'Continue offline'**
+  String get signInContinueOffline;
+
+  /// Link from the sign-in screen to the sign-up screen
+  ///
+  /// In en, this message translates to:
+  /// **'Don\'t have an account? Create one'**
+  String get signInCreateAccountPrompt;
+
+  /// AppBar title for the sign-up screen
+  ///
+  /// In en, this message translates to:
+  /// **'Create Account'**
+  String get signUpTitle;
+
+  /// Headline on the sign-up screen
+  ///
+  /// In en, this message translates to:
+  /// **'Start tracking your runs'**
+  String get signUpHeadline;
+
+  /// Subtitle under the sign-up headline
+  ///
+  /// In en, this message translates to:
+  /// **'Create an account to back up runs and view them on the web app.'**
+  String get signUpSubtitle;
+
+  /// Primary submit button on the sign-up screen
+  ///
+  /// In en, this message translates to:
+  /// **'Create Account'**
+  String get signUpButton;
+
+  /// Checkbox label for the age-confirmation gate on sign-up (GDPR Art 8)
+  ///
+  /// In en, this message translates to:
+  /// **'I am 16 years of age or older'**
+  String get signUpConfirmAge;
+
+  /// Leading text of the terms-acceptance checkbox label, before the Terms of Service link
+  ///
+  /// In en, this message translates to:
+  /// **'I accept the '**
+  String get signUpAcceptPrefix;
+
+  /// Tappable Terms of Service link text inside the terms-acceptance checkbox label
+  ///
+  /// In en, this message translates to:
+  /// **'Terms of Service'**
+  String get signUpTermsLink;
+
+  /// Conjunction between the Terms of Service and Privacy Policy links in the terms-acceptance checkbox label
+  ///
+  /// In en, this message translates to:
+  /// **' and '**
+  String get signUpAcceptConjunction;
+
+  /// Tappable Privacy Policy link text inside the terms-acceptance checkbox label
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy Policy'**
+  String get signUpPrivacyLink;
+
+  /// Validation error shown when the age gate is not confirmed
+  ///
+  /// In en, this message translates to:
+  /// **'Please confirm you are 16 or older to continue.'**
+  String get signUpErrorConfirmAge;
+
+  /// Validation error shown when the terms gate is not accepted
+  ///
+  /// In en, this message translates to:
+  /// **'Please accept the Terms of Service and Privacy Policy to continue.'**
+  String get signUpErrorAcceptTerms;
+
+  /// Apple OAuth button label on the sign-up screen
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Apple'**
+  String get signUpContinueWithApple;
+
+  /// Google OAuth button label on the sign-up screen
+  ///
+  /// In en, this message translates to:
+  /// **'Continue with Google'**
+  String get signUpContinueWithGoogle;
+
+  /// Link from the sign-up screen back to the sign-in screen
+  ///
+  /// In en, this message translates to:
+  /// **'Already have an account? Sign in'**
+  String get signUpSignInPrompt;
+
+  /// Banner shown when a legal-document link (Terms / Privacy) fails to open
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open {url}'**
+  String signUpCouldNotOpen(String url);
+
+  /// Title of the first onboarding slide
+  ///
+  /// In en, this message translates to:
+  /// **'Track every run'**
+  String get onboardingTrackTitle;
+
+  /// Body of the first onboarding slide
+  ///
+  /// In en, this message translates to:
+  /// **'GPS recording with live map, splits, pace, cadence, and elevation. Works fully offline — sign in later to sync across devices.'**
+  String get onboardingTrackBody;
+
+  /// Title of the second onboarding slide
+  ///
+  /// In en, this message translates to:
+  /// **'Follow routes'**
+  String get onboardingRoutesTitle;
+
+  /// Body of the second onboarding slide
+  ///
+  /// In en, this message translates to:
+  /// **'Import GPX or KML files, or sync routes from the web app. Get off-route alerts while you run.'**
+  String get onboardingRoutesBody;
+
+  /// Title of the location-disclosure onboarding slide
+  ///
+  /// In en, this message translates to:
+  /// **'Location access'**
+  String get onboardingLocationTitle;
+
+  /// Play-policy background-location disclosure body on the location onboarding slide
+  ///
+  /// In en, this message translates to:
+  /// **'Threkir records your runs by sampling your GPS location while the app is in the foreground AND in the background (so it keeps tracking when your screen is off or you switch apps to take a photo). Location data is stored on your device and only uploaded to Threkir\'s servers when you choose to share or sync a run. If you decline background location, runs will stop recording the moment you switch away from the app — you can change this later in Settings → Apps → Threkir → Permissions.'**
+  String get onboardingLocationBody;
+
+  /// Title of the privacy-default chooser onboarding page
+  ///
+  /// In en, this message translates to:
+  /// **'Who sees your runs?'**
+  String get onboardingPrivacyTitle;
+
+  /// Body of the privacy-default chooser onboarding page
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a default for new runs. You can change it any time in Settings, and override it on any single run.'**
+  String get onboardingPrivacyBody;
+
+  /// Bottom button label on the final onboarding page
+  ///
+  /// In en, this message translates to:
+  /// **'Grant permission'**
+  String get onboardingGrantPermission;
+
+  /// Bottom button label advancing to the next onboarding page
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get onboardingNext;
+
+  /// Title of the Private visibility default option
+  ///
+  /// In en, this message translates to:
+  /// **'Private'**
+  String get privacyPrivateTitle;
+
+  /// Subtitle of the Private visibility default option
+  ///
+  /// In en, this message translates to:
+  /// **'Only you can see your runs. You can share any run later.'**
+  String get privacyPrivateSubtitle;
+
+  /// Title of the Followers visibility default option
+  ///
+  /// In en, this message translates to:
+  /// **'Followers'**
+  String get privacyFollowersTitle;
+
+  /// Subtitle of the Followers visibility default option
+  ///
+  /// In en, this message translates to:
+  /// **'People who follow you see new runs in their feed.'**
+  String get privacyFollowersSubtitle;
+
+  /// Title of the Public visibility default option
+  ///
+  /// In en, this message translates to:
+  /// **'Public'**
+  String get privacyPublicTitle;
+
+  /// Subtitle of the Public visibility default option
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone can find and view your runs.'**
+  String get privacyPublicSubtitle;
 }
 
 class _AppLocalizationsDelegate

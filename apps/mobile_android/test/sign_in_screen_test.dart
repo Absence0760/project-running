@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/sign_in_screen.dart';
 import '../lib/screens/sign_up_screen.dart';
 
@@ -32,6 +33,8 @@ class _FakeApiClient extends ApiClient {
 Future<void> _pump(WidgetTester tester, _FakeApiClient client) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: SignInScreen(apiClient: client),
     ),
   );
