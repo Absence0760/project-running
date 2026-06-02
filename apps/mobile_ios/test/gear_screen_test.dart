@@ -100,6 +100,8 @@ void main() {
       final f = await _makeFixtures();
       try {
         await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: Builder(builder: (ctx) {
             return Scaffold(
               body: Center(
