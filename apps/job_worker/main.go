@@ -61,7 +61,7 @@ func (b *dataexportBackend) FetchExportRuns(ctx context.Context, userID string, 
 			ID: r.ID, UserID: r.UserID, StartedAt: r.StartedAt,
 			DurationS: r.DurationS, DistanceM: r.DistanceM,
 			Source: r.Source, ExternalID: r.ExternalID,
-			Metadata: r.Metadata, TrackURL: r.TrackURL,
+			Metadata: r.Metadata, TrackURL: r.TrackURL, HrSeriesURL: r.HrSeriesURL,
 			IsPublic: r.IsPublic, EventID: r.EventID, RouteID: r.RouteID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		}

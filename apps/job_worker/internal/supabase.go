@@ -956,7 +956,7 @@ func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, lim
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
 	q.Set("select",
-		"id,user_id,started_at,duration_s,distance_m,source,external_id,metadata,track_url,is_public,event_id,route_id,created_at,updated_at")
+		"id,user_id,started_at,duration_s,distance_m,source,external_id,metadata,track_url,hr_series_url,is_public,event_id,route_id,created_at,updated_at")
 	q.Set("order", "started_at.desc")
 	q.Set("limit", strconv.Itoa(limit))
 	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
@@ -979,20 +979,21 @@ func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, lim
 // dataexport package here to keep `internal` a leaf (the adapter
 // in main.go bridges across).
 type dataexportRow struct {
-	ID         string                 `json:"id"`
-	UserID     string                 `json:"user_id"`
-	StartedAt  string                 `json:"started_at"`
-	DurationS  int                    `json:"duration_s"`
-	DistanceM  float64                `json:"distance_m"`
-	Source     string                 `json:"source"`
-	ExternalID *string                `json:"external_id"`
-	Metadata   map[string]interface{} `json:"metadata"`
-	TrackURL   *string                `json:"track_url"`
-	IsPublic   *bool                  `json:"is_public"`
-	EventID    *string                `json:"event_id"`
-	RouteID    *string                `json:"route_id"`
-	CreatedAt  string                 `json:"created_at"`
-	UpdatedAt  string                 `json:"updated_at"`
+	ID          string                 `json:"id"`
+	UserID      string                 `json:"user_id"`
+	StartedAt   string                 `json:"started_at"`
+	DurationS   int                    `json:"duration_s"`
+	DistanceM   float64                `json:"distance_m"`
+	Source      string                 `json:"source"`
+	ExternalID  *string                `json:"external_id"`
+	Metadata    map[string]interface{} `json:"metadata"`
+	TrackURL    *string                `json:"track_url"`
+	HrSeriesURL *string                `json:"hr_series_url"`
+	IsPublic    *bool                  `json:"is_public"`
+	EventID     *string                `json:"event_id"`
+	RouteID     *string                `json:"route_id"`
+	CreatedAt   string                 `json:"created_at"`
+	UpdatedAt   string                 `json:"updated_at"`
 }
 
 // UploadExportArtifact stores the assembled CSV / GPX-zip body to
@@ -1075,22 +1076,22 @@ func (c *SupabaseClient) FetchExportRoutes(ctx context.Context, userID string) (
 // reasoning as `dataexportRow` — keep `internal` from importing
 // `dataexport`.
 type exportRouteRow struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Waypoints   interface{}            `json:"waypoints"`
-	DistanceM   *float64               `json:"distance_m,omitempty"`
-	ElevationM  *float64               `json:"elevation_m,omitempty"`
-	Surface     *string                `json:"surface,omitempty"`
-	IsPublic    *bool                  `json:"is_public,omitempty"`
-	Slug        *string                `json:"slug,omitempty"`
-	Tags        []string               `json:"tags,omitempty"`
-	Featured    *bool                  `json:"featured,omitempty"`
-	RunCount    *int                   `json:"run_count,omitempty"`
-	IsStarred   *bool                  `json:"is_starred,omitempty"`
-	Description *string                `json:"description,omitempty"`
-	ClubID      *string                `json:"club_id,omitempty"`
-	CreatedAt   *string                `json:"created_at,omitempty"`
-	UpdatedAt   *string                `json:"updated_at,omitempty"`
+	ID          string      `json:"id"`
+	Name        string      `json:"name"`
+	Waypoints   interface{} `json:"waypoints"`
+	DistanceM   *float64    `json:"distance_m,omitempty"`
+	ElevationM  *float64    `json:"elevation_m,omitempty"`
+	Surface     *string     `json:"surface,omitempty"`
+	IsPublic    *bool       `json:"is_public,omitempty"`
+	Slug        *string     `json:"slug,omitempty"`
+	Tags        []string    `json:"tags,omitempty"`
+	Featured    *bool       `json:"featured,omitempty"`
+	RunCount    *int        `json:"run_count,omitempty"`
+	IsStarred   *bool       `json:"is_starred,omitempty"`
+	Description *string     `json:"description,omitempty"`
+	ClubID      *string     `json:"club_id,omitempty"`
+	CreatedAt   *string     `json:"created_at,omitempty"`
+	UpdatedAt   *string     `json:"updated_at,omitempty"`
 }
 
 // FetchExportProfile reads the user's profile with a direct

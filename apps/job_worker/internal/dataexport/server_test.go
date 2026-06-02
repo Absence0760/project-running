@@ -727,6 +727,75 @@ func TestBuildBackupZip_PartialTrackFailureDoesNotSinkArchive(t *testing.T) {
 	}
 }
 
+func TestBuildBackupZip_ArchivesHrSidecar(t *testing.T) {
+	// Indoor/treadmill run: no track, an HR sidecar at the canonical path.
+	// The backup must carry hr/{id}.hr.json.gz so restore can re-home it
+	// (decisions §116).
+	hrURL := "uid/run-hr.hr.json.gz"
+	rawHr := gzipString(t, `[{"bpm":140},{"bpm":150}]`)
+	runs := []ExportRun{{
+		ID: "run-hr", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
+		DurationS: 1800, DistanceM: 5000, Source: "app", HrSeriesURL: &hrURL,
+		Metadata: map[string]interface{}{"activity_type": "run", "indoor": true},
+	}}
+	fetcher := func(_ context.Context, path string) ([]byte, error) {
+		if path == hrURL {
+			return rawHr, nil
+		}
+		return nil, nil
+	}
+
+	body, err := BuildBackupZip(context.Background(), BuildBackupZipInput{
+		Runs: runs, UserID: "uid", ExportedFrom: "test",
+	}, fetcher, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	zr, err := zip.NewReader(bytes.NewReader(body), int64(len(body)))
+	if err != nil {
+		t.Fatalf("zip parse failed: %v", err)
+	}
+	files := map[string][]byte{}
+	for _, f := range zr.File {
+		rc, _ := f.Open()
+		buf, _ := io.ReadAll(rc)
+		rc.Close()
+		files[f.Name] = buf
+	}
+
+	if _, ok := files["hr/run-hr.hr.json.gz"]; !ok {
+		t.Fatalf("expected hr/run-hr.hr.json.gz in archive, got %v", keysOf(files))
+	}
+	// Bytes archived verbatim — gunzip back to the same samples.
+	gr, err := gzip.NewReader(bytes.NewReader(files["hr/run-hr.hr.json.gz"]))
+	if err != nil {
+		t.Fatalf("hr gunzip: %v", err)
+	}
+	hrJSON, _ := io.ReadAll(gr)
+	if string(hrJSON) != `[{"bpm":140},{"bpm":150}]` {
+		t.Errorf("hr sidecar bytes=%s", hrJSON)
+	}
+
+	var manifest map[string]any
+	if err := json.Unmarshal(files["manifest.json"], &manifest); err != nil {
+		t.Fatalf("manifest parse: %v", err)
+	}
+	counts := manifest["counts"].(map[string]any)
+	if counts["hr_series"] != float64(1) {
+		t.Errorf("counts[hr_series]=%v, want 1", counts["hr_series"])
+	}
+
+	// runs.json carries the hr_series_url field for completeness.
+	var runsOut []map[string]any
+	if err := json.Unmarshal(files["runs.json"], &runsOut); err != nil {
+		t.Fatalf("runs.json parse: %v", err)
+	}
+	if len(runsOut) != 1 || runsOut[0]["hr_series_url"] != hrURL {
+		t.Errorf("runs.json hr_series_url=%v, want %s", runsOut[0]["hr_series_url"], hrURL)
+	}
+}
+
 func TestBuildBackupZip_BundlesRunPhotoBytes(t *testing.T) {
 	// audit-findings 2026-05-30 High: the Art 20 export must carry the
 	// photo bytes, not just `run_photos.json` metadata. The rows come in

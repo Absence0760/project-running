@@ -168,42 +168,43 @@ type Backend interface {
 // `routes.json`. `user_id` deliberately omitted — the caller strips
 // it for re-homeability; restore stamps the new owner's uid.
 type ExportRoute struct {
-	ID                 string                 `json:"id"`
-	Name               string                 `json:"name"`
-	Waypoints          interface{}            `json:"waypoints"`
-	DistanceM          *float64               `json:"distance_m,omitempty"`
-	ElevationM         *float64               `json:"elevation_m,omitempty"`
-	Surface            *string                `json:"surface,omitempty"`
-	IsPublic           *bool                  `json:"is_public,omitempty"`
-	Slug               *string                `json:"slug,omitempty"`
-	Tags               []string               `json:"tags,omitempty"`
-	Featured           *bool                  `json:"featured,omitempty"`
-	RunCount           *int                   `json:"run_count,omitempty"`
-	IsStarred          *bool                  `json:"is_starred,omitempty"`
-	Description        *string                `json:"description,omitempty"`
-	ClubID             *string                `json:"club_id,omitempty"`
-	CreatedAt          *string                `json:"created_at,omitempty"`
-	UpdatedAt          *string                `json:"updated_at,omitempty"`
-	Extra              map[string]interface{} `json:"-"`
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Waypoints   interface{}            `json:"waypoints"`
+	DistanceM   *float64               `json:"distance_m,omitempty"`
+	ElevationM  *float64               `json:"elevation_m,omitempty"`
+	Surface     *string                `json:"surface,omitempty"`
+	IsPublic    *bool                  `json:"is_public,omitempty"`
+	Slug        *string                `json:"slug,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Featured    *bool                  `json:"featured,omitempty"`
+	RunCount    *int                   `json:"run_count,omitempty"`
+	IsStarred   *bool                  `json:"is_starred,omitempty"`
+	Description *string                `json:"description,omitempty"`
+	ClubID      *string                `json:"club_id,omitempty"`
+	CreatedAt   *string                `json:"created_at,omitempty"`
+	UpdatedAt   *string                `json:"updated_at,omitempty"`
+	Extra       map[string]interface{} `json:"-"`
 }
 
 // ExportRun is the row projection the export builder consumes.
 // Mirrors the EF's RunRow shape at export-data/index.ts.
 type ExportRun struct {
-	ID         string                 `json:"id"`
-	UserID     string                 `json:"user_id"`
-	StartedAt  string                 `json:"started_at"`
-	DurationS  int                    `json:"duration_s"`
-	DistanceM  float64                `json:"distance_m"`
-	Source     string                 `json:"source"`
-	ExternalID *string                `json:"external_id"`
-	Metadata   map[string]interface{} `json:"metadata"`
-	TrackURL   *string                `json:"track_url"`
-	IsPublic   *bool                  `json:"is_public"`
-	EventID    *string                `json:"event_id"`
-	RouteID    *string                `json:"route_id"`
-	CreatedAt  string                 `json:"created_at"`
-	UpdatedAt  string                 `json:"updated_at"`
+	ID          string                 `json:"id"`
+	UserID      string                 `json:"user_id"`
+	StartedAt   string                 `json:"started_at"`
+	DurationS   int                    `json:"duration_s"`
+	DistanceM   float64                `json:"distance_m"`
+	Source      string                 `json:"source"`
+	ExternalID  *string                `json:"external_id"`
+	Metadata    map[string]interface{} `json:"metadata"`
+	TrackURL    *string                `json:"track_url"`
+	HrSeriesURL *string                `json:"hr_series_url"`
+	IsPublic    *bool                  `json:"is_public"`
+	EventID     *string                `json:"event_id"`
+	RouteID     *string                `json:"route_id"`
+	CreatedAt   string                 `json:"created_at"`
+	UpdatedAt   string                 `json:"updated_at"`
 }
 
 // TrackPoint is the wire shape inside each gzipped Storage track.
@@ -688,19 +689,20 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 	runsOut := make([]map[string]interface{}, 0, len(in.Runs))
 	for _, r := range in.Runs {
 		runsOut = append(runsOut, map[string]interface{}{
-			"id":          r.ID,
-			"started_at":  r.StartedAt,
-			"duration_s":  r.DurationS,
-			"distance_m":  r.DistanceM,
-			"source":      r.Source,
-			"external_id": r.ExternalID,
-			"metadata":    r.Metadata,
-			"track_url":   r.TrackURL,
-			"is_public":   r.IsPublic,
-			"event_id":    r.EventID,
-			"route_id":    r.RouteID,
-			"created_at":  r.CreatedAt,
-			"updated_at":  r.UpdatedAt,
+			"id":            r.ID,
+			"started_at":    r.StartedAt,
+			"duration_s":    r.DurationS,
+			"distance_m":    r.DistanceM,
+			"source":        r.Source,
+			"external_id":   r.ExternalID,
+			"metadata":      r.Metadata,
+			"track_url":     r.TrackURL,
+			"hr_series_url": r.HrSeriesURL,
+			"is_public":     r.IsPublic,
+			"event_id":      r.EventID,
+			"route_id":      r.RouteID,
+			"created_at":    r.CreatedAt,
+			"updated_at":    r.UpdatedAt,
 		})
 	}
 	if err := writeJSONEntry(zw, "runs.json", runsOut); err != nil {
@@ -800,6 +802,36 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 		tracksAdded++
 	}
 
+	// HR sidecars (indoor/treadmill runs, decisions §116). Same verbatim-bytes
+	// + path-shape-assertion + STORE shape as the tracks loop. Lets restore
+	// re-home the per-point HR for trackless runs.
+	hrAdded := 0
+	for _, r := range in.Runs {
+		if r.HrSeriesURL == nil || *r.HrSeriesURL == "" {
+			continue
+		}
+		expected := fmt.Sprintf("%s/%s.hr.json.gz", r.UserID, r.ID)
+		if *r.HrSeriesURL != expected {
+			continue
+		}
+		bytes, err := rawTrackFetcher(ctx, *r.HrSeriesURL)
+		if err != nil || len(bytes) == 0 {
+			continue
+		}
+		header := &zip.FileHeader{
+			Name:   fmt.Sprintf("hr/%s.hr.json.gz", r.ID),
+			Method: zip.Store,
+		}
+		fw, err := zw.CreateHeader(header)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := fw.Write(bytes); err != nil {
+			return nil, err
+		}
+		hrAdded++
+	}
+
 	// Extra personal-data tables. Stable sort so the zip is
 	// reproducible byte-for-byte for tests (and so a restore tool
 	// can rely on entry order if it ever wants to).
@@ -869,10 +901,11 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 	// manifest last so the counts include the actual tracks + photos
 	// + extra tables that made it in.
 	counts := map[string]interface{}{
-		"runs":   len(in.Runs),
-		"routes": len(in.Routes),
-		"tracks": tracksAdded,
-		"photos": photosAdded,
+		"runs":      len(in.Runs),
+		"routes":    len(in.Routes),
+		"tracks":    tracksAdded,
+		"hr_series": hrAdded,
+		"photos":    photosAdded,
 	}
 	for k, v := range extraCounts {
 		counts[k] = v
