@@ -2582,6 +2582,19 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 113. Mobile i18n uses Flutter gen-l10n + ARB, with committed (non-synthetic) output and a per-device locale
+
+**Decided (2026-06-01):** the Flutter apps localize via the **standard** stack — `flutter_localizations` + `intl` + `.arb` catalogues + gen-l10n — rather than a hand-rolled runtime like web's ([§108](#108-web-i18n-is-detected-client-side-with-a-lazy-loaded-message-catalogue--not-an-accept-language-ssr-framework)). The six locales match web (`en/de/fr/es/ja/pt-BR`, plus the base `pt` fallback gen-l10n requires for `pt_BR`). Two non-obvious choices:
+
+- **Generated output is committed under `lib/l10n/gen/`, not synthetic.** `l10n.yaml` sets `output-dir: lib/l10n/gen` (synthetic-package mode is removed in current Flutter). gen-l10n output is **package-name independent**, so the generated Dart is byte-identical between the `mobile_android` / `mobile_ios` twins and rides the existing `lib/` mirror with zero special-casing — `diff -rq` stays clean and the only pubspec delta remains `name` + `description`. Committing (vs per-machine regen) removes any risk of a Flutter-patch-version difference emitting divergent output on one twin.
+- **Locale is a per-device setting, never DB-synced.** Mirrors web's localStorage-only model: stored in `Preferences` (`_kLocale`, a canonical tag; absent = follow device), driven reactively through a global `localeNotifier` into `MaterialApp.locale`, **not** routed through `SettingsSyncService.updateUniversal`. `locale_support.dart` is the pure Dart twin of web's `locale.ts` (`negotiateLocale` etc.), unit-tested alongside an ARB key-parity test that mirrors web's `messages_parity.test.ts`.
+
+**Why.** gen-l10n is the idiomatic Flutter path (plural/placeholder/ICU support, tooling, `Localizations.localeOf` integration) and avoids reinventing web's runtime in Dart. Per-device locale matches the existing theme/unit prefs and web's behaviour — language is a device choice, not a roaming account preference.
+
+**The trade-off.** ARB keys can't contain dots, so web's dotted keys map to camelCase (`nav.dashboard` → `navDashboard`) — a mechanical transform that keeps web↔mobile coverage cross-checkable. The catalogues are **separate** from web's `.ts` (no shared source of truth); the parity tests on each side are what keep them honest. RTL (`EdgeInsetsDirectional` sweep) is deferred until an RTL catalogue is added — same call web made.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

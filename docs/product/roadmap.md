@@ -594,6 +594,21 @@ If during early Phase 4 development it becomes obvious that nutrition has a very
 
 ---
 
+## In progress — Multi-language (i18n) on the non-web clients
+
+Web already ships six locales (`en/de/fr/es/ja/pt-BR`) — see [decisions.md § 108](../architecture/decisions.md#108-web-i18n-is-detected-client-side-with-a-lazy-loaded-message-catalogue--not-an-accept-language-ssr-framework). This epic brings the same six to mobile + the two watches, each via its platform-standard mechanism, with a per-device locale that defaults to the device locale (never DB-synced). Tracked in [parity.md § App-level settings](parity.md#app-level-settings-not-in-the-registry). Mobile design: [decisions.md § 113](../architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale).
+
+- [x] Mobile (Flutter): gen-l10n + ARB framework, `localeNotifier` + per-device `Preferences.locale`, language picker in Settings → Preferences, parity + negotiation + picker tests
+- [x] Mobile: pilot strings migrated (nav + settings section headers) proving the path
+- [ ] Mobile: bulk migration of the remaining ~463 hard-coded strings to ARB (one commit per surface group)
+- [ ] Mobile: `intl` `DateFormat`/`NumberFormat` replacing the hand-rolled English month-name + `.` -decimal formatters
+- [ ] Mobile: TTS announcement locale follows the active app locale (was hard-coded `en-US`)
+- [ ] Wear OS (Kotlin): `values-<locale>/strings.xml` resources, `stringResource` migration, locale-aware number formatting + `TtsAnnouncer` locale
+- [ ] watchOS (SwiftUI): `Localizable.xcstrings` catalogue + project regions + `Measurement`/`NumberFormatter` locale formatting
+- [ ] RTL (`EdgeInsetsDirectional` sweep) — deferred until an RTL catalogue is added
+
+---
+
 ## Future — Protomaps self-hosted tiles
 
 Migrate from MapTiler to self-hosted map tiles using Protomaps (PMTiles format on S3 or Cloudflare R2). Eliminates per-request tile costs entirely — pay only for storage and bandwidth. Evaluate once tile API usage exceeds MapTiler free tier.

@@ -33,6 +33,17 @@ When closing a parity gap, the order is: row classes (already generated) → `ap
 - **Recording:** delegates to `packages/run_recorder` — state machine, GPS filter chain, auto-pause, off-route detection, all live there. This app holds the UI and the screens; the recording logic is a package so the iOS and Wear OS apps can eventually reuse it.
 - **Auth / backend:** `packages/api_client` for Supabase. Google Sign-In is wired via the native `google_sign_in` package → exchanges the ID token through `ApiClient.signInWithGoogleIdToken`. Apple Sign-In is wired via `sign_in_with_apple` → `ApiClient.signInWithAppleIdToken`. Both buttons render on `sign_in_screen.dart` and `sign_up_screen.dart`. parkrun athlete-number import lives behind a Settings tile rather than a true OAuth flow (parkrun has no public OAuth surface).
 
+## Internationalization (i18n)
+
+Localized via the standard Flutter stack — `flutter_localizations` + `intl` + gen-l10n. See [decisions.md § 113](../../docs/architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale).
+
+- **Catalogues:** `lib/l10n/app_<locale>.arb` for the six locales `en/de/fr/es/ja/pt_BR` (plus a base `pt` fallback gen-l10n requires). `app_en.arb` is the template (carries the `@key` metadata); the rest are value-only.
+- **Generated code is committed** under `lib/l10n/gen/` (config in `l10n.yaml`, `output-dir: lib/l10n/gen`). After editing any ARB, run `flutter gen-l10n` and **mirror the regenerated files to the iOS twin** — they're byte-identical (gen-l10n output is package-name independent).
+- **Adding a string:** add the key to **all six** ARBs (real translations, not English placeholders — `test/l10n_parity_test.dart` enforces non-empty + key parity + faithful `{placeholders}`), regenerate, then `AppLocalizations.of(context).<key>` at the call site. ARB keys are camelCase derived from web's dotted keys (`nav.dashboard` → `navDashboard`).
+- **Locale selection:** per-device, **not** DB-synced — `Preferences.locale` (`_kLocale`, canonical tag; null = follow device) drives the global `localeNotifier` → `MaterialApp.locale`. Picker is in Settings → Preferences. Pure negotiation lives in `lib/l10n/locale_support.dart` (Dart twin of web's `locale.ts`).
+- **Test harnesses** that pump a screen using `AppLocalizations` must set `localizationsDelegates: AppLocalizations.localizationsDelegates` + `supportedLocales: AppLocalizations.supportedLocales` on the test `MaterialApp`, or `AppLocalizations.of(context)` throws.
+- **In progress:** bulk migration of the remaining ~463 strings, `intl` `DateFormat`/`NumberFormat` replacing the hand-rolled formatters, and TTS-locale follow-through. RTL (`EdgeInsetsDirectional`) deferred — no RTL locale ships yet.
+
 ## What's real vs stubbed
 
 Nearly everything under Phase 1 "Android" in `roadmap.md` is implemented. Specifically:

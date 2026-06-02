@@ -48,6 +48,10 @@ Flutter iOS app. **`lib/` and `test/` are now byte-for-byte identical to `apps/m
 - `AppDelegate.swift` — activates the `WatchIngestBridge` singleton at launch + attaches its method channel when the Flutter engine spins up.
 - `WatchIngestBridge.swift` — **live**: `WCSessionDelegate` that receives `WCSessionFile` transfers from the watch, reads the gzipped-JSON track contents, and forwards to Dart via the `run_app/watch_ingest` method channel. Payloads arriving before Flutter is ready are buffered in-process and flushed on attach.
 
+## Internationalization (i18n)
+
+Shares the Flutter gen-l10n setup with the Android twin ([decisions.md § 113](../../docs/architecture/decisions.md#113-mobile-i18n-uses-flutter-gen-l10n--arb-with-committed-non-synthetic-output-and-a-per-device-locale); full notes in [apps/mobile_android/CLAUDE.md § Internationalization](../mobile_android/CLAUDE.md#internationalization-i18n)). The `lib/l10n/` ARB catalogues + committed `lib/l10n/gen/` output are part of the byte-identical `lib/` surface — they ride the same mirror. iOS-specific: the six locales are advertised in `ios/Runner/Info.plist` via `CFBundleLocalizations`. After regenerating l10n on Android, copy `lib/l10n/gen/` here in the same commit.
+
 ## What "done" means
 
 Structurally identical to `mobile_android` (same stack, same `StatefulWidget + setState` pattern, same dependence on `packages/run_recorder` and `packages/api_client`). Every module in `mobile_android/lib/` that isn't Android-specific is a candidate to hoist into a shared package before the iOS port — ask before doing that; the team may prefer copy-then-converge.
