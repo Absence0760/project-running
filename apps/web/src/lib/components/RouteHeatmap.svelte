@@ -22,6 +22,7 @@
 		type DistanceBandKey,
 	} from '$lib/routes/distance_bands';
 	import { m } from '$lib/i18n/store.svelte';
+	import { escapeHtml, safeHref } from '$lib/util/html_escape';
 
 	let mapEl: HTMLDivElement;
 	let map: maplibregl.Map | null = null;
@@ -706,15 +707,6 @@
 	let currentPopup: maplibregl.Popup | null = null;
 	let hoverPopup: maplibregl.Popup | null = null;
 
-	function escapeHtml(s: string): string {
-		return s
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#39;');
-	}
-
 	/// Two initials from a name, e.g. "Richmond Run Club" → "RR".
 	/// Falls back to the first letter for single-word names.
 	function initialsOf(name: string): string {
@@ -788,7 +780,7 @@
 					</div>
 				</div>
 				${subtitle}
-				<a class="pin-popup-action" href="${escapeHtml(d.href)}"
+				<a class="pin-popup-action" href="${escapeHtml(safeHref(d.href))}"
 					data-sveltekit-preload-data="hover">
 					${escapeHtml(m('routeHeatmap.viewClub'))} &rarr;
 				</a>

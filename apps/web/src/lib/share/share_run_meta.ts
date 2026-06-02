@@ -9,6 +9,7 @@
 
 import { buildRunShareTitle, buildRunShareDescription } from './share_meta';
 import type { SharedRun } from './share_run_lookup';
+import { escapeHtml } from '../util/html_escape';
 
 /// Public site origin used as the `og:url` base. Read from
 /// `PUBLIC_SITE_URL` env var with a `https://threkir.com` fallback so
@@ -55,7 +56,7 @@ export function buildShareRunMeta(input: ShareRunMetaInput): ShareRunMeta {
 /// run id can't break out of the attribute (the `content=` value is
 /// the realistic injection surface).
 export function renderShareRunHeadTags(meta: ShareRunMeta): string {
-	const e = htmlAttrEscape;
+	const e = escapeHtml;
 	return [
 		`<title>${escapeHtml(meta.title)}</title>`,
 		`<meta name="description" content="${e(meta.description)}">`,
@@ -72,20 +73,4 @@ export function renderShareRunHeadTags(meta: ShareRunMeta): string {
 		`<meta name="twitter:description" content="${e(meta.description)}">`,
 		`<meta name="twitter:image" content="${e(meta.ogImageUrl)}">`,
 	].join('\n\t');
-}
-
-function htmlAttrEscape(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&#39;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
-}
-
-function escapeHtml(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;');
 }

@@ -4,6 +4,8 @@
 /// turns into a PNG download — no server PDF service, no new dependency.
 /// Pure string concatenation so the wire shape is unit-testable.
 
+import { escapeHtml } from '../util/html_escape';
+
 export interface FinisherCertificateInput {
 	eventTitle: string;
 	finisherName: string;
@@ -50,15 +52,6 @@ function ordinal(n: number): string {
 	return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
 }
 
-function xmlEscape(s: string): string {
-	return s
-		.replace(/&/g, '&amp;')
-		.replace(/</g, '&lt;')
-		.replace(/>/g, '&gt;')
-		.replace(/"/g, '&quot;')
-		.replace(/'/g, '&apos;');
-}
-
 /// Build the finisher-certificate SVG. Landscape, cream background with a
 /// brand-accent border; finisher name is the hero, time + distance +
 /// placing sit below.
@@ -99,7 +92,7 @@ export function buildFinisherCertificateSvg(input: FinisherCertificateInput): st
 	);
 
 	parts.push(
-		`<text x="${W / 2}" y="430" font-family="${F}" font-size="84" font-weight="700" fill="${INK}" text-anchor="middle">${xmlEscape(input.finisherName)}</text>`,
+		`<text x="${W / 2}" y="430" font-family="${F}" font-size="84" font-weight="700" fill="${INK}" text-anchor="middle">${escapeHtml(input.finisherName)}</text>`,
 	);
 	// Underline rule beneath the name.
 	parts.push(
@@ -110,7 +103,7 @@ export function buildFinisherCertificateSvg(input: FinisherCertificateInput): st
 		`<text x="${W / 2}" y="540" font-family="${SANS}" font-size="30" fill="${MUTED}" text-anchor="middle">completed</text>`,
 	);
 	parts.push(
-		`<text x="${W / 2}" y="600" font-family="${F}" font-size="46" font-weight="700" fill="${ACCENT}" text-anchor="middle">${xmlEscape(input.eventTitle)}</text>`,
+		`<text x="${W / 2}" y="600" font-family="${F}" font-size="46" font-weight="700" fill="${ACCENT}" text-anchor="middle">${escapeHtml(input.eventTitle)}</text>`,
 	);
 
 	// Stat row: time · distance · (place).
@@ -120,18 +113,18 @@ export function buildFinisherCertificateSvg(input: FinisherCertificateInput): st
 	];
 	if (input.rank != null && input.rank > 0) stats.push(`${ordinal(input.rank)} place`);
 	parts.push(
-		`<text x="${W / 2}" y="690" font-family="${SANS}" font-size="34" font-weight="600" fill="${INK}" text-anchor="middle">${xmlEscape(stats.join('   •   '))}</text>`,
+		`<text x="${W / 2}" y="690" font-family="${SANS}" font-size="34" font-weight="600" fill="${INK}" text-anchor="middle">${escapeHtml(stats.join('   •   '))}</text>`,
 	);
 
 	const dateStr = fmtDate(input.dateIso);
 	if (dateStr) {
 		parts.push(
-			`<text x="${W / 2}" y="850" font-family="${SANS}" font-size="26" fill="${MUTED}" text-anchor="middle">${xmlEscape(dateStr)}</text>`,
+			`<text x="${W / 2}" y="850" font-family="${SANS}" font-size="26" fill="${MUTED}" text-anchor="middle">${escapeHtml(dateStr)}</text>`,
 		);
 	}
 	if (input.clubName) {
 		parts.push(
-			`<text x="${W / 2}" y="888" font-family="${SANS}" font-size="22" fill="${MUTED}" text-anchor="middle">${xmlEscape(input.clubName)}</text>`,
+			`<text x="${W / 2}" y="888" font-family="${SANS}" font-size="22" fill="${MUTED}" text-anchor="middle">${escapeHtml(input.clubName)}</text>`,
 		);
 	}
 
