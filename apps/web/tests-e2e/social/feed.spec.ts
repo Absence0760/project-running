@@ -178,14 +178,19 @@ test.describe('/social?tab=feed — feed surface', () => {
 	});
 
 	test('untitled run renders no empty title element', async ({ page }) => {
-		// The beforeEach plants a run with NO title. Assert the feed shows
-		// at least one card but renders zero `.entry-title` nodes, so an
-		// untitled run doesn't leave an empty heading on the card.
+		// The beforeEach plants a run with NO title. The feed also surfaces
+		// other (titled) runs, so rather than asserting zero titles globally,
+		// assert the invariant the untitled run must honour: the feed renders
+		// no EMPTY `.entry-title` node (an untitled run omits the heading
+		// entirely rather than emitting a blank one).
 		await page.goto('/social?tab=feed');
 		await expect(page.locator('article').first()).toBeVisible({
 			timeout: 10_000
 		});
-		await expect(page.locator('.entry-title')).toHaveCount(0);
+		const titles = page.locator('.entry-title');
+		for (let i = 0; i < (await titles.count()); i++) {
+			expect((await titles.nth(i).textContent())?.trim()).toBeTruthy();
+		}
 	});
 
 	test('private run from a followed user does not appear', async ({ page }) => {

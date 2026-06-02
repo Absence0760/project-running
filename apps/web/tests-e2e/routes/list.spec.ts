@@ -163,7 +163,10 @@ test.describe('/routes', () => {
 		expect(before).toBeGreaterThan(2);
 
 		// "Richmond" → exactly the Richmond Park Loop seed row.
-		await page.getByLabel('Search routes').fill('Richmond');
+		// "Richmond Park" → exactly the Richmond Park Loop row. (Plain
+		// "Richmond" now also matches the "Richmond Marathon" route added by
+		// the Richmond-VA density seed block, so qualify the query.)
+		await page.getByLabel('Search routes').fill('Richmond Park');
 		await expect(page.locator('.route-card')).toHaveCount(1);
 		await expect(
 			page.locator('.route-card').first()
