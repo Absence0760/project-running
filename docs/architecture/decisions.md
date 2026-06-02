@@ -2597,6 +2597,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **The trade-off.** ARB keys can't contain dots, so web's dotted keys map to camelCase (`nav.dashboard` → `navDashboard`) — a mechanical transform that keeps web↔mobile coverage cross-checkable. The catalogues are **separate** from web's `.ts` (no shared source of truth); the parity tests on each side are what keep them honest. RTL (`EdgeInsetsDirectional` sweep) is deferred until an RTL catalogue is added — same call web made.
 
+## 114. Grade-adjusted pace lands on web/mobile first as a shared Minetti parity helper, computed over ≥5 m segments and shown only when it diverges from raw pace
+
+**Decided (2026-06-02):** grade-adjusted pace (GAP) — the effort-equivalent flat pace over hilly terrain — ships as a pure TS↔Dart parity pair (`apps/web/src/lib/runs/grade_adjusted_pace.ts` ↔ `apps/mobile_android/lib/grade_adjusted_pace.dart`) surfaced on run detail, ported from the on-watch Connect IQ field (`apps/watch_garmin/source/GradeAdjustedPaceView.mc`). This satisfies the web-first prerequisite [§107](#107-vector-1-starts-as-a-connect-iq-data-field-grade-adjusted-pace-not-a-full-watch-app) put on shipping that field to real users. Non-obvious choices:
+
+- **Energy model is Minetti et al. 2002** (the same 5th-order polynomial the watch field already uses): GAP factor = `C(grade)/C(0)`, equivalent-flat distance for a segment = horizontal distance × factor, and overall GAP = total time / total equivalent-flat distance. Grade is clamped to ±45% (Minetti's fitted range) so a GPS-altitude spike can't manufacture an absurd factor.
+- **Grade is measured over ≥5 m segments, not point-to-point.** GPS altitude is jittery between consecutive ~1 s fixes; accumulating horizontal distance to a 5 m floor before taking a grade sample (mirroring the watch field's `MIN_SEGMENT_M`) is what keeps the aggregate honest. Segments missing elevation fall back to factor 1 rather than dropping out.
+- **The cell is hidden unless GAP differs from raw average pace by ≥2 s/km**, and the helper returns null without elevation or timestamps. A flat run's GAP *is* its raw pace, so an always-on cell would be noise on the most common run; GAP earns its place only when terrain actually moved the number.
+
+**Why a shared helper, not a watch-only number.** GAP is a product metric, not a watch gimmick — keeping the algorithm identical across web, both mobile twins, and the Connect IQ field means the figure a runner sees on the wrist matches the one on run detail. The parity pair + mirror test suites (10 tests each side) are what hold that line.
+
 ---
 
 ## How to add an entry

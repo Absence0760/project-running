@@ -286,6 +286,7 @@
   "runDetailStatElevLoss": "Dénivelé -",
   "runDetailStatAvgHr": "FC moy.",
   "runDetailStatAgeGrade": "Indice d'âge",
+  "runDetailStatGradeAdjPace": "Allure corrigée",
   "runDetailSectionElevation": "Dénivelé",
   "runDetailSectionLaps": "Tours",
   "runDetailLapNumber": "Tour {number}",

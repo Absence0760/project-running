@@ -1823,6 +1823,12 @@ abstract class AppLocalizations {
   /// **'Age grade'**
   String get runDetailStatAgeGrade;
 
+  /// Secondary-stat label for grade-adjusted pace on run-detail
+  ///
+  /// In en, this message translates to:
+  /// **'Grade-Adj. Pace'**
+  String get runDetailStatGradeAdjPace;
+
   /// Section header for the elevation chart on run-detail
   ///
   /// In en, this message translates to:

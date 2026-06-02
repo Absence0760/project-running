@@ -286,6 +286,7 @@
   "runDetailStatElevLoss": "Abstieg",
   "runDetailStatAvgHr": "Ø HF",
   "runDetailStatAgeGrade": "Altersklassen-Wertung",
+  "runDetailStatGradeAdjPace": "Höhenkorr. Pace",
   "runDetailSectionElevation": "Höhenmeter",
   "runDetailSectionLaps": "Runden",
   "runDetailLapNumber": "Runde {number}",

@@ -21,6 +21,7 @@ import '../local_run_store.dart';
 import '../preferences.dart';
 import '../privacy.dart';
 import '../route_simplify.dart';
+import '../grade_adjusted_pace.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
 import '../widgets/live_run_map.dart';
@@ -948,6 +949,15 @@ class _RunDetailScreenState extends State<RunDetailScreen>
                       ),
                     ),
                   ],
+                  if (_showGradeAdjustedPace)
+                    Expanded(
+                      child: _StatSmall(
+                        icon: Icons.terrain,
+                        label: l10n.runDetailStatGradeAdjPace,
+                        value:
+                            '${UnitFormat.pace(_gradeAdjustedPaceSecPerKm!.toDouble(), unit)} ${UnitFormat.paceLabel(unit)}',
+                      ),
+                    ),
                   Expanded(
                     child: _StatSmall(
                       icon: Icons.local_fire_department,
@@ -1221,6 +1231,20 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     final seconds = _movingTime.inSeconds;
     if (seconds < 1) return null;
     return seconds / (run.distanceMetres / 1000);
+  }
+
+  /// Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
+  /// terrain (Minetti 2002). Null on flat runs / tracks without elevation.
+  int? get _gradeAdjustedPaceSecPerKm => gradeAdjustedPaceSecPerKm(run.track);
+
+  /// Only surface GAP when it differs from the run's average pace by a margin
+  /// worth showing — a near-flat run's GAP is the raw pace, so the extra tile
+  /// would just be noise. 2 s/km threshold.
+  bool get _showGradeAdjustedPace {
+    final gap = _gradeAdjustedPaceSecPerKm;
+    final raw = _movingPaceSecPerKm;
+    if (gap == null || raw == null) return false;
+    return (gap - raw).abs() >= 2;
   }
 
   double get _elevationGain {

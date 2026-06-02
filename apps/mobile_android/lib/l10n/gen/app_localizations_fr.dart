@@ -1039,6 +1039,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get runDetailStatAgeGrade => 'Indice d\'âge';
 
   @override
+  String get runDetailStatGradeAdjPace => 'Allure corrigée';
+
+  @override
   String get runDetailSectionElevation => 'Dénivelé';
 
   @override

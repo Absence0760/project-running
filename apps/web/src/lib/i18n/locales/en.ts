@@ -806,6 +806,7 @@ export const en = {
 	"runDetail.save": "Save",
 	"runDetail.moving": "Moving",
 	"runDetail.avgPace": "Avg Pace",
+	"runDetail.gradeAdjustedPace": "Grade-Adj. Pace",
 	"runDetail.avgSpeed": "Avg Speed",
 	"runDetail.elevation": "Elevation",
 	"runDetail.steps": "Steps",

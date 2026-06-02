@@ -286,6 +286,7 @@
   "runDetailStatElevLoss": "Perda de elev.",
   "runDetailStatAvgHr": "FC média",
   "runDetailStatAgeGrade": "Índice por idade",
+  "runDetailStatGradeAdjPace": "Ritmo ajustado",
   "runDetailSectionElevation": "Elevação",
   "runDetailSectionLaps": "Voltas",
   "runDetailLapNumber": "Volta {number}",

@@ -1037,6 +1037,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get runDetailStatAgeGrade => 'Grado por edad';
 
   @override
+  String get runDetailStatGradeAdjPace => 'Ritmo ajustado';
+
+  @override
   String get runDetailSectionElevation => 'Desnivel';
 
   @override

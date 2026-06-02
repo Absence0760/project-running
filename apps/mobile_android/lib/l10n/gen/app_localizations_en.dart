@@ -1028,6 +1028,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get runDetailStatAgeGrade => 'Age grade';
 
   @override
+  String get runDetailStatGradeAdjPace => 'Grade-Adj. Pace';
+
+  @override
   String get runDetailSectionElevation => 'Elevation';
 
   @override

@@ -35,6 +35,7 @@
 	import type { PlanWorkout } from '$lib/types';
 	import { toRunGpx, downloadFile } from '$lib/routes/gpx';
 	import { movingTimeSeconds, elevationGainMetres, computeRealSplits } from '$lib/runs/run_stats';
+	import { gradeAdjustedPaceSecPerKm } from '$lib/runs/grade_adjusted_pace';
 	import { defaultZoneCutoffs } from '$lib/training/hr_zones';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -661,6 +662,20 @@
 	 *  mock value. Falls back to 0 for runs without elevation data. */
 	let realElevationGain = $derived(run?.track ? elevationGainMetres(run.track) : 0);
 
+	/** Grade-adjusted pace (sec/km) — effort-equivalent flat pace over hilly
+	 *  terrain (Minetti 2002). Null on flat runs / tracks without elevation. */
+	let gradeAdjustedPace = $derived(run?.track ? gradeAdjustedPaceSecPerKm(run.track) : null);
+
+	/** Only surface GAP when it differs from raw average pace by a margin
+	 *  worth showing — a near-flat run's GAP is the raw pace and the extra
+	 *  cell is just noise. 2 s/km threshold. */
+	let showGradeAdjustedPace = $derived.by(() => {
+		if (gradeAdjustedPace == null || !run || run.distance_m <= 0) return false;
+		const secs = movingSeconds > 0 ? movingSeconds : run.duration_s;
+		const rawPaceSecPerKm = secs / (run.distance_m / 1000);
+		return Math.abs(gradeAdjustedPace - rawPaceSecPerKm) >= 2;
+	});
+
 	/** Total steps are stored on mobile save in `metadata.steps`. */
 	let totalSteps = $derived.by(() => {
 		const v = run?.metadata?.['steps'];
@@ -701,10 +716,12 @@
 	/// Always-rendered stats: Distance, Time, Pace, Speed, Elevation,
 	/// Calories (Calories uses the body-weight fallback so it never
 	/// hides) = 6.
-	/// Conditional: Moving, Steps, Cadence, AvgBpm.
+	/// Conditional: Moving, Grade-adjusted pace, Steps, Cadence, AvgBpm,
+	/// AgeGrade.
 	let keyStatsCount = $derived(
 		6 +
 			(run && movingSeconds > 0 && movingSeconds !== run.duration_s ? 1 : 0) +
+			(showGradeAdjustedPace ? 1 : 0) +
 			(totalSteps != null ? 1 : 0) +
 			(avgCadence != null ? 1 : 0) +
 			(avgBpm != null ? 1 : 0) +
@@ -1268,6 +1285,12 @@
 				>
 				<span class="key-stat-label">{m('runDetail.avgPace')}</span>
 			</div>
+			{#if showGradeAdjustedPace && gradeAdjustedPace != null}
+				<div class="key-stat">
+					<span class="key-stat-value">{formatPace(gradeAdjustedPace, 1000)}</span>
+					<span class="key-stat-label">{m('runDetail.gradeAdjustedPace')}</span>
+				</div>
+			{/if}
 			<div class="key-stat">
 				<span class="key-stat-value">{formatSpeed(
 					movingSeconds > 0 ? movingSeconds : run.duration_s,

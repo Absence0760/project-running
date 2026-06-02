@@ -1343,6 +1343,10 @@
   "@runDetailStatAgeGrade": {
     "description": "Secondary-stat label for parkrun age-graded percentage on run-detail"
   },
+  "runDetailStatGradeAdjPace": "Grade-Adj. Pace",
+  "@runDetailStatGradeAdjPace": {
+    "description": "Secondary-stat label for grade-adjusted pace on run-detail"
+  },
   "runDetailSectionElevation": "Elevation",
   "@runDetailSectionElevation": {
     "description": "Section header for the elevation chart on run-detail"

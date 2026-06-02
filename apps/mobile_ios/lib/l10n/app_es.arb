@@ -286,6 +286,7 @@
   "runDetailStatElevLoss": "Desnivel -",
   "runDetailStatAvgHr": "FC media",
   "runDetailStatAgeGrade": "Grado por edad",
+  "runDetailStatGradeAdjPace": "Ritmo ajustado",
   "runDetailSectionElevation": "Desnivel",
   "runDetailSectionLaps": "Vueltas",
   "runDetailLapNumber": "Vuelta {number}",

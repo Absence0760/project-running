@@ -798,6 +798,7 @@ export const messages = {
 	"runDetail.save": "Speichern",
 	"runDetail.moving": "In Bewegung",
 	"runDetail.avgPace": "Ø Tempo",
+	"runDetail.gradeAdjustedPace": "Höhenkorr. Pace",
 	"runDetail.avgSpeed": "Ø Geschwindigkeit",
 	"runDetail.elevation": "Höhenmeter",
 	"runDetail.steps": "Schritte",

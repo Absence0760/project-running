@@ -286,6 +286,7 @@
   "runDetailStatElevLoss": "下り標高",
   "runDetailStatAvgHr": "平均心拍",
   "runDetailStatAgeGrade": "年齢グレード",
+  "runDetailStatGradeAdjPace": "勾配調整ペース",
   "runDetailSectionElevation": "獲得標高",
   "runDetailSectionLaps": "ラップ",
   "runDetailLapNumber": "ラップ {number}",

@@ -1035,6 +1035,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get runDetailStatAgeGrade => 'Índice por idade';
 
   @override
+  String get runDetailStatGradeAdjPace => 'Ritmo ajustado';
+
+  @override
   String get runDetailSectionElevation => 'Elevação';
 
   @override
@@ -7058,6 +7061,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get runDetailStatAgeGrade => 'Índice por idade';
+
+  @override
+  String get runDetailStatGradeAdjPace => 'Ritmo ajustado';
 
   @override
   String get runDetailSectionElevation => 'Elevação';

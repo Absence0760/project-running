@@ -976,6 +976,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get runDetailStatAgeGrade => '年齢グレード';
 
   @override
+  String get runDetailStatGradeAdjPace => '勾配調整ペース';
+
+  @override
   String get runDetailSectionElevation => '獲得標高';
 
   @override

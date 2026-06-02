@@ -794,6 +794,7 @@ export const messages = {
 	"runDetail.save": "保存",
 	"runDetail.moving": "移動中",
 	"runDetail.avgPace": "平均ペース",
+	"runDetail.gradeAdjustedPace": "勾配調整ペース",
 	"runDetail.avgSpeed": "平均速度",
 	"runDetail.elevation": "獲得標高",
 	"runDetail.steps": "歩数",
