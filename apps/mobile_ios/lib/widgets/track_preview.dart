@@ -306,8 +306,11 @@ class _TrackPreviewPainter extends CustomPainter {
   static const int _arrowCount = 4;
   // Stroke widths and marker sizes are expressed in the same "viewBox
   // units" the web SVG uses (short axis = 100), then scaled to the
-  // canvas. Keeping the geometry identical means the mobile thumbnail
-  // is visually indistinguishable from the web one.
+  // canvas. The projection geometry (projectTrack) stays identical to
+  // web, but the line is deliberately drawn thinner here than web's
+  // 4.5/2.6: at the small size these thumbnails render on the routes
+  // list a 2.6%-of-width stroke reads as a solid blob, so mobile uses
+  // a slimmer line that reads as a route. Web keeps its thicker line.
   static const double _viewBoxShort = 100;
 
   final List<Waypoint> points;
@@ -337,7 +340,7 @@ class _TrackPreviewPainter extends CustomPainter {
 
     final casing = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.5 * pxPerVb
+      ..strokeWidth = 2.6 * pxPerVb
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = Colors.white.withValues(alpha: 0.85);
@@ -345,7 +348,7 @@ class _TrackPreviewPainter extends CustomPainter {
 
     final line = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.6 * pxPerVb
+      ..strokeWidth = 1.4 * pxPerVb
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = color;
