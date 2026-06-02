@@ -143,6 +143,96 @@ function buildSyntheticTrailFit(): ArrayBuffer {
 	return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
 }
 
+/// A treadmill session: records carry heart_rate but NO position (Garmin's
+/// indoor shape), sub_sport=treadmill. Exercises the hr_series collection path.
+function buildSyntheticIndoorFit(): ArrayBuffer {
+	const chunks: Buffer[] = [];
+	function defMsg(localNum: number, globalNum: number, fields: [number, number, number][]) {
+		const def = Buffer.alloc(6 + fields.length * 3);
+		def[0] = 0x40 | localNum;
+		def.writeUInt16LE(globalNum, 3);
+		def[5] = fields.length;
+		fields.forEach(([num, size, base], i) => {
+			def[6 + i * 3] = num;
+			def[6 + i * 3 + 1] = size;
+			def[6 + i * 3 + 2] = base;
+		});
+		chunks.push(def);
+	}
+	const t0 = 1000000000;
+
+	// file_id (global 0): type(enum)=4 activity, time_created(u32), serial(u32z)
+	defMsg(0, 0, [[0, 1, 0x00], [4, 4, 0x86], [3, 4, 0x8c]]);
+	{
+		const d = Buffer.alloc(1 + 1 + 4 + 4);
+		d[0] = 0; d[1] = 4; d.writeUInt32LE(t0, 2); d.writeUInt32LE(98765, 6);
+		chunks.push(d);
+	}
+
+	// record (global 20): timestamp(u32) + heart_rate(u8). No position.
+	defMsg(1, 20, [[253, 4, 0x86], [3, 1, 0x02]]);
+	for (const [dt, hr] of [[0, 140], [1, 150], [2, 160]] as const) {
+		const d = Buffer.alloc(1 + 4 + 1);
+		d[0] = 1; d.writeUInt32LE(t0 + dt, 1); d[5] = hr;
+		chunks.push(d);
+	}
+
+	// session (global 18): start_time(u32), sport(enum)=1 running,
+	// sub_sport(enum)=1 treadmill, total_timer_time(u32 /1000),
+	// total_distance(u32 /100), avg_heart_rate(u8).
+	defMsg(2, 18, [
+		[2, 4, 0x86], [5, 1, 0x00], [6, 1, 0x00], [7, 4, 0x86], [9, 4, 0x86], [16, 1, 0x02],
+	]);
+	{
+		const d = Buffer.alloc(1 + 4 + 1 + 1 + 4 + 4 + 1);
+		let o = 0;
+		d[o] = 2; o += 1;
+		d.writeUInt32LE(t0, o); o += 4;
+		d[o] = 1; o += 1; // sport running
+		d[o] = 1; o += 1; // sub_sport treadmill
+		d.writeUInt32LE(1800 * 1000, o); o += 4;
+		d.writeUInt32LE(5000 * 100, o); o += 4;
+		d[o] = 150; // avg_heart_rate
+		chunks.push(d);
+	}
+
+	const body = Buffer.concat(chunks);
+	const header = Buffer.alloc(14);
+	header[0] = 14;
+	header[1] = 0x10;
+	header.writeUInt16LE(2140, 2);
+	header.writeUInt32LE(body.length, 4);
+	header.write('.FIT', 8, 'ascii');
+	header.writeUInt16LE(crc16(header.subarray(0, 12)), 12);
+	const full = Buffer.concat([header, body]);
+	const crc = Buffer.alloc(2);
+	crc.writeUInt16LE(crc16(full), 0);
+	const out = Buffer.concat([full, crc]);
+	return out.buffer.slice(out.byteOffset, out.byteOffset + out.byteLength) as ArrayBuffer;
+}
+
+test('parseFitBuffer — outdoor run has an empty hr_series (HR rides on the track)', async () => {
+	const parsed = await parseFitBuffer(buildSyntheticTrailFit());
+	assert.ok(parsed);
+	assert.equal(parsed!.track.length, 2, 'outdoor records become track points');
+	assert.equal(parsed!.hr_series.length, 0, 'no trackless HR samples on an outdoor run');
+});
+
+test('parseFitBuffer — treadmill run yields hr_series + empty track (indoor HR-zone path)', async () => {
+	const parsed = await parseFitBuffer(buildSyntheticIndoorFit());
+	assert.ok(parsed);
+	assert.equal(parsed!.track.length, 0, 'no GPS records → empty track');
+	assert.equal(parsed!.indoor, true, 'treadmill sub_sport flags indoor');
+	assert.deepEqual(
+		parsed!.hr_series.map((s) => s.bpm),
+		[140, 150, 160],
+		'every HR-bearing trackless record lands in hr_series',
+	);
+	// `ts` mirrors the track path: fit-file-parser returns a Date (not an ISO
+	// string) since `timestamps` isn't enabled, so the string-guard leaves it
+	// unset — the HR-zone breakdown falls back to sample-count weighting.
+});
+
 test('parseFitBuffer — trail run preserves sub_sport + activity_type=run (F1)', async () => {
 	const parsed = await parseFitBuffer(buildSyntheticTrailFit());
 	assert.ok(parsed, 'expected a parsed run');

@@ -167,6 +167,13 @@ export interface ParsedFitRun {
 	/// `hr_zones` setting on import. `null` when the file had no zones.
 	hr_zones: FitHrZones | null;
 	track: TrackPoint[];
+	/// Per-point HR for records that carried no GPS fix (indoor / treadmill).
+	/// On an outdoor run every record has a fix and its HR rides on the
+	/// `track` point, so this is empty; on an indoor run `track` is empty and
+	/// the HR lives here instead. The writer uploads it as the
+	/// `{user_id}/{run_id}.hr.json.gz` sidecar only when `track` has no bpm, so
+	/// the run-detail HR-zone chart works for trackless runs (decisions §116).
+	hr_series: { bpm: number; ts?: string }[];
 }
 
 /// The five HR-zone upper boundaries, matching the app's
@@ -239,34 +246,36 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 	const records = data.records ?? [];
 
 	const track: TrackPoint[] = [];
+	const hrSeries: { bpm: number; ts?: string }[] = [];
 	for (const r of records) {
 		// FIT positions arrive in semicircles by default but the parser
-		// converts them to degrees once `lengthUnit` is set. Skip
-		// records without a fix — Garmin emits indoor records with no
-		// lat/lng but with HR / pace.
-		if (
+		// converts them to degrees once `lengthUnit` is set.
+		const hasFix =
 			typeof r.position_lat === 'number' &&
 			typeof r.position_long === 'number' &&
 			Number.isFinite(r.position_lat) &&
-			Number.isFinite(r.position_long)
-		) {
+			Number.isFinite(r.position_long);
+		const validHr =
+			typeof r.heart_rate === 'number' && r.heart_rate >= 30 && r.heart_rate <= 230;
+		const ts = (r as { timestamp?: string }).timestamp;
+		if (hasFix) {
 			const tp: TrackPoint = {
-				lat: r.position_lat,
-				lng: r.position_long,
+				lat: r.position_lat as number,
+				lng: r.position_long as number,
 			};
 			if (typeof r.altitude === 'number' && Number.isFinite(r.altitude)) {
 				tp.ele = r.altitude;
 			}
-			const ts = (r as { timestamp?: string }).timestamp;
 			if (typeof ts === 'string') tp.ts = ts;
-			if (
-				typeof r.heart_rate === 'number' &&
-				r.heart_rate >= 30 &&
-				r.heart_rate <= 230
-			) {
-				tp.bpm = r.heart_rate;
-			}
+			if (validHr) tp.bpm = r.heart_rate as number;
 			track.push(tp);
+		} else if (validHr) {
+			// Indoor / treadmill record: HR but no GPS. Garmin emits these on
+			// every belt session. Collect the HR so the run-detail zone chart
+			// has a series even though `track` will be empty.
+			const sample: { bpm: number; ts?: string } = { bpm: r.heart_rate as number };
+			if (typeof ts === 'string') sample.ts = ts;
+			hrSeries.push(sample);
 		}
 	}
 
@@ -328,5 +337,6 @@ export async function parseFitBuffer(buf: ArrayBuffer): Promise<ParsedFitRun | n
 			(data as { hr_zone?: { high_bpm?: unknown }[] }).hr_zone,
 		),
 		track,
+		hr_series: hrSeries,
 	};
 }

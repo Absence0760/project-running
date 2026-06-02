@@ -434,19 +434,24 @@ export async function deleteRun(id: string): Promise<void> {
 	// orphan bytes still occupy the bucket.) Audit/storage Medium fix.
 	const { data: run } = await supabase
 		.from('runs')
-		.select('track_url')
+		.select('track_url, hr_series_url')
 		.eq('id', id)
 		.single();
-	if (run?.track_url) {
+	// Both Storage sidecars (GPS track + indoor HR series) are removed
+	// alongside the row so the bucket doesn't accumulate orphans.
+	const orphanPaths = [run?.track_url, run?.hr_series_url].filter(
+		(p): p is string => !!p,
+	);
+	if (orphanPaths.length > 0) {
 		try {
-			await supabase.storage.from('runs').remove([run.track_url]);
+			await supabase.storage.from('runs').remove(orphanPaths);
 		} catch (e) {
 			// Don't log the storage path — it embeds the user's auth
 			// UUID and would land in Sentry breadcrumbs. The Sentry
 			// hook redacts known signed-URL patterns but the row's
 			// storage path doesn't match those. The run id is
 			// sufficient to triangulate from server logs.
-			console.warn('deleteRun: track storage removal failed (orphaned file)', { run_id: id, error: e });
+			console.warn('deleteRun: storage removal failed (orphaned file)', { run_id: id, error: e });
 		}
 	}
 	const { data: photos } = await supabase
@@ -708,6 +713,11 @@ export async function saveRun(input: {
 	source: string;
 	metadata: Record<string, unknown> | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
+	/// Per-point HR for a trackless (indoor / treadmill) run. Uploaded as the
+	/// `{user_id}/{run_id}.hr.json.gz` sidecar only when `track` carries no bpm,
+	/// so the run-detail HR-zone chart has a series without faking coordinates
+	/// (decisions §116). Ignored when the track already has per-point bpm.
+	hrSeries?: Array<{ bpm: number; ts?: string }>;
 	title?: string | null;
 	/// Cross-source dedupe key (e.g. `strava:1234567`, `csv:<iso>-<dist>-<dur>`).
 	/// Saved into runs.external_id so a subsequent import of the same
@@ -783,6 +793,30 @@ export async function saveRun(input: {
 			}
 		} catch (e) {
 			trackError = e instanceof Error ? e.message : String(e);
+		}
+	}
+
+	// HR sidecar for a trackless run (indoor / treadmill). Only when the track
+	// carries no per-point bpm — an outdoor run's HR already rides on the track
+	// points, so a sidecar would be redundant. Failure is non-fatal (same
+	// contract as the track upload): the row's scalar avg_bpm still renders.
+	const trackHasBpm = !!input.track?.some((p) => p.bpm != null);
+	if (!trackHasBpm && input.hrSeries && input.hrSeries.length >= 1) {
+		try {
+			const path = `${userId}/${runId}.hr.json.gz`;
+			const encoded = new TextEncoder().encode(JSON.stringify(input.hrSeries));
+			const gzipped = await gzipBytes(encoded);
+			const { error: upErr } = await supabase.storage
+				.from('runs')
+				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
+					contentType: 'application/gzip',
+					upsert: true,
+				});
+			if (!upErr) {
+				await supabase.from('runs').update({ hr_series_url: path }).eq('id', runId);
+			}
+		} catch (e) {
+			console.warn('hr-series sidecar upload failed', e);
 		}
 	}
 

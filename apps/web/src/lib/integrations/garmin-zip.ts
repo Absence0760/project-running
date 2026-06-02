@@ -247,6 +247,9 @@ async function importFitFile(
 		source: 'garmin',
 		metadata,
 		track: parsed.track.length > 0 ? parsed.track : undefined,
+		// Indoor / treadmill runs have no track but carry per-point HR; saveRun
+		// uploads it as a sidecar so the HR-zone chart renders (decisions §116).
+		hrSeries: parsed.hr_series.length > 0 ? parsed.hr_series : undefined,
 		title: null,
 		// Cross-source dedupe key so a re-import (ZIP or future OAuth) of the
 		// same FIT activity is skipped by the per-user runs.external_id unique

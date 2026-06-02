@@ -8,6 +8,7 @@ function makeRun(overrides: Partial<Run> & { started_at: string; duration_s: num
 		user_id: 'mock-user',
 		track: null,
 		track_url: null,
+		hr_series_url: null,
 		route_id: null,
 		event_id: null,
 		external_id: null,
