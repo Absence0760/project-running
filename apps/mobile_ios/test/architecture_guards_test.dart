@@ -2246,6 +2246,10 @@ void main() {
           // ExerciseSessionRecord + a DistanceRecord.
           'android.permission.health.WRITE_EXERCISE',
           'android.permission.health.WRITE_DISTANCE',
+          // Raw per-point HR is written too: _writeHeartRate fans
+          // HeartRateRecord samples onto Health Connect (persona round-5),
+          // which needs WRITE_HEART_RATE — not covered by WRITE_EXERCISE.
+          'android.permission.health.WRITE_HEART_RATE',
         ]) {
           expect(
             xml,
@@ -2256,6 +2260,20 @@ void main() {
                 '($perm missing).',
           );
         }
+        // WRITE_HEART_RATE is runtime-critical, so it must ALSO be a
+        // manifest uses-permission (the Play form reads the XML, but the OS
+        // grant the exporter needs comes from the manifest). Guarding only
+        // the XML would let a manifest-only drop break HR write-back
+        // silently (the L4 try/catch swallows the resulting failure).
+        expect(
+          body,
+          contains('android.permission.health.WRITE_HEART_RATE'),
+          reason:
+              'AndroidManifest.xml must declare the WRITE_HEART_RATE '
+              'uses-permission — the exporter writes raw HeartRateRecord '
+              'samples (_writeHeartRate); without the grant the HR '
+              'write-back silently fails.',
+        );
       }
     });
 
@@ -2708,6 +2726,9 @@ void main() {
       final required = <String, String>{
         'NSPrivacyCollectedDataTypePreciseLocation':
             'geolocator GPS recording',
+        'NSPrivacyCollectedDataTypeCoarseLocation':
+            'CLLocationManager under an Approximate-Location grant (iOS 14+) '
+                '+ ACCESS_COARSE_LOCATION on Android',
         'NSPrivacyCollectedDataTypeHealth':
             'health (HealthKit reads/writes for HR + workout import)',
         'NSPrivacyCollectedDataTypeFitness':
