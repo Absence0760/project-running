@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../goals.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_run_store.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
@@ -320,21 +321,22 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final stats = computePeriodStats(_periodRuns);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(switch (_period) {
-          PeriodType.week => 'Weekly Summary',
-          PeriodType.month => 'Monthly Summary',
-          PeriodType.all => 'All-Time Summary',
+          PeriodType.week => l10n.periodWeeklySummary,
+          PeriodType.month => l10n.periodMonthlySummary,
+          PeriodType.all => l10n.periodAllTimeSummary,
         }),
         actions: [
           if (_periodRuns.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.share_outlined),
-              tooltip: 'Share',
+              tooltip: l10n.periodShareTooltip,
               onPressed: _showShareSheet,
             ),
         ],
@@ -350,7 +352,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             _buildEmptyState(theme)
           else ...[
             Text(
-              '${_periodRuns.length} run${_periodRuns.length == 1 ? '' : 's'}',
+              l10n.runsCount(_periodRuns.length),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
@@ -380,12 +382,13 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   }
 
   Widget _buildPeriodNav(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         IconButton(
           icon: const Icon(Icons.chevron_left),
-          tooltip: 'Previous',
+          tooltip: l10n.periodPreviousTooltip,
           // All-time spans everything — there's no adjacent period to step to.
           onPressed: _period == PeriodType.all ? null : _previous,
         ),
@@ -403,11 +406,11 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Tap to switch to ${switch (_period) {
-                    PeriodType.week => 'monthly',
-                    PeriodType.month => 'all-time',
-                    PeriodType.all => 'weekly',
-                  }}',
+                  switch (_period) {
+                    PeriodType.week => l10n.periodSwitchToMonthly,
+                    PeriodType.month => l10n.periodSwitchToAllTime,
+                    PeriodType.all => l10n.periodSwitchToWeekly,
+                  },
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -419,7 +422,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
         ),
         IconButton(
           icon: const Icon(Icons.chevron_right),
-          tooltip: 'Next',
+          tooltip: l10n.periodNextTooltip,
           onPressed:
               (_isFuture || _period == PeriodType.all) ? null : _next,
         ),
@@ -439,6 +442,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   }
 
   Widget _buildStatsCard(ThemeData theme, DistanceUnit unit, PeriodStats stats) {
+    final l10n = AppLocalizations.of(context);
     final dur = formatDurationCoarse(Duration(seconds: stats.totalDurationSec));
     return Card(
       child: Padding(
@@ -449,16 +453,16 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
               mainAxisAlignment: MainAxisAlignment.spaceAround,
               children: [
                 _SummaryStat(
-                  label: 'Distance',
+                  label: l10n.periodStatDistance,
                   value: UnitFormat.distanceValue(stats.totalDistanceMetres, unit),
                   unit: UnitFormat.distanceLabel(unit),
                 ),
                 _SummaryStat(
-                  label: 'Runs',
+                  label: l10n.periodStatRuns,
                   value: '${stats.runCount}',
                 ),
                 _SummaryStat(
-                  label: 'Time',
+                  label: l10n.periodStatTime,
                   value: dur,
                 ),
               ],
@@ -469,7 +473,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   _SummaryStat(
-                    label: 'Avg pace',
+                    label: l10n.periodStatAvgPace,
                     value: UnitFormat.pace(stats.avgPaceSecPerKm, unit),
                     unit: UnitFormat.paceLabel(unit),
                   ),
@@ -483,6 +487,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
   }
 
   Widget _buildEmptyState(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 48),
       child: Column(
@@ -490,7 +495,9 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
           Icon(Icons.event_busy, size: 48, color: theme.colorScheme.outline),
           const SizedBox(height: 12),
           Text(
-            'No runs this ${_period == PeriodType.week ? 'week' : 'month'}',
+            _period == PeriodType.week
+                ? l10n.periodEmptyWeek
+                : l10n.periodEmptyMonth,
             style: theme.textTheme.bodyLarge?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -633,6 +640,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
 
   Future<void> _shareImage() async {
     if (_capturing) return;
+    final l10n = AppLocalizations.of(context);
     setState(() => _capturing = true);
     try {
       await WidgetsBinding.instance.endOfFrame;
@@ -658,7 +666,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
     } catch (e) {
       debugPrint('Failed to capture period share card: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not create share image');
+        showTopBanner(context, l10n.periodShareImageFailed);
       }
     } finally {
       if (mounted) setState(() => _capturing = false);
@@ -672,6 +680,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final mq = MediaQuery.of(context);
     return SafeArea(
       top: false,
@@ -686,7 +695,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('Share summary', style: theme.textTheme.titleMedium),
+              Text(l10n.periodShareSummary, style: theme.textTheme.titleMedium),
               const SizedBox(height: 12),
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
@@ -710,7 +719,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
                     child: OutlinedButton.icon(
                       onPressed: _capturing ? null : _shareText,
                       icon: const Icon(Icons.text_snippet_outlined),
-                      label: const Text('Text'),
+                      label: Text(l10n.periodShareText),
                     ),
                   ),
                   const SizedBox(width: 12),
@@ -727,7 +736,7 @@ class _PeriodShareSheetState extends State<_PeriodShareSheet> {
                               ),
                             )
                           : const Icon(Icons.image_outlined),
-                      label: const Text('Image'),
+                      label: Text(l10n.periodShareImage),
                     ),
                   ),
                 ],
@@ -757,6 +766,7 @@ class _PeriodShareCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final dist = UnitFormat.distanceValue(stats.totalDistanceMetres, unit);
     final distLabel = UnitFormat.distanceLabel(unit);
     final dur = formatDurationCoarse(Duration(seconds: stats.totalDurationSec));
@@ -801,20 +811,28 @@ class _PeriodShareCard extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              _shareCardStat(label: 'DISTANCE', value: dist, unitLabel: distLabel),
-              _shareCardStat(label: 'RUNS', value: '${stats.runCount}'),
-              _shareCardStat(label: 'TIME', value: dur),
+              _shareCardStat(
+                  label: l10n.periodShareStatDistance,
+                  value: dist,
+                  unitLabel: distLabel),
+              _shareCardStat(
+                  label: l10n.periodShareStatRuns,
+                  value: '${stats.runCount}'),
+              _shareCardStat(label: l10n.periodShareStatTime, value: dur),
               if (pace != null)
-                _shareCardStat(label: 'AVG PACE', value: pace, unitLabel: paceLabel),
+                _shareCardStat(
+                    label: l10n.periodShareStatAvgPace,
+                    value: pace,
+                    unitLabel: paceLabel),
             ],
           ),
-          const Row(
+          Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'BETTER RUNNER',
-                style: TextStyle(
+                l10n.periodShareCardTagline,
+                style: const TextStyle(
                   color: Colors.white,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,

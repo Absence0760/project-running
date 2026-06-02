@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
 import '../fitness.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../training_load.dart';
 
 /// Dashboard "Fitness" card — VO₂ max / VDOT / qualifying-run count
@@ -29,6 +30,7 @@ class FitnessCard extends StatelessWidget {
     final snapshot = computeSnapshot(runs, now: now);
     if (snapshot.qualifyingRunCount == 0) return const SizedBox.shrink();
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     // CTL / ATL / TSB + the advice come from the SAME training-load series
     // the chart below uses, so the number, the advice, and the curve can't
     // contradict each other (round-5 pro). VO₂max / VDOT / qualifying stay
@@ -50,7 +52,7 @@ class FitnessCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Text('Fitness', style: theme.textTheme.titleMedium),
+        Text(l10n.fitnessTitle, style: theme.textTheme.titleMedium),
         const SizedBox(height: 8),
         Card(
           child: Padding(
@@ -62,22 +64,19 @@ class FitnessCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     FitnessStat(
-                      label: 'VO₂ max',
+                      label: l10n.fitnessStatVo2Max,
                       value: fmt(snapshot.vo2Max),
-                      tooltip:
-                          'Your aerobic engine: how much oxygen your body can use per minute. Higher is fitter.',
+                      tooltip: l10n.fitnessStatVo2MaxTooltip,
                     ),
                     FitnessStat(
-                      label: 'VDOT',
+                      label: l10n.fitnessStatVdot,
                       value: fmt(snapshot.vdot),
-                      tooltip:
-                          "Daniels' running-fitness score from your best recent race effort. Drives your training paces.",
+                      tooltip: l10n.fitnessStatVdotTooltip,
                     ),
                     FitnessStat(
-                      label: 'Runs',
+                      label: l10n.fitnessStatRuns,
                       value: '${snapshot.qualifyingRunCount}',
-                      tooltip:
-                          'Recent runs long enough to count toward your fitness estimate.',
+                      tooltip: l10n.fitnessStatRunsTooltip,
                     ),
                   ],
                 ),
@@ -86,22 +85,19 @@ class FitnessCard extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
                     FitnessStat(
-                      label: 'Fitness (CTL)',
+                      label: l10n.fitnessStatCtl,
                       value: fmt(load?.ctl, digits: 0),
-                      tooltip:
-                          'Your rolling 42-day training load. Builds slowly; this is your endurance base.',
+                      tooltip: l10n.fitnessStatCtlTooltip,
                     ),
                     FitnessStat(
-                      label: 'Fatigue (ATL)',
+                      label: l10n.fitnessStatAtl,
                       value: fmt(load?.atl, digits: 0),
-                      tooltip:
-                          'Your last 7 days of load. Rises fast after hard sessions and drops with rest.',
+                      tooltip: l10n.fitnessStatAtlTooltip,
                     ),
                     FitnessStat(
-                      label: 'Form (TSB)',
+                      label: l10n.fitnessStatTsb,
                       value: fmt(load?.tsb, digits: 0),
-                      tooltip:
-                          'Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.',
+                      tooltip: l10n.fitnessStatTsbTooltip,
                     ),
                   ],
                 ),

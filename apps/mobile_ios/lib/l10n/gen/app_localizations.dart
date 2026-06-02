@@ -7467,6 +7467,617 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'When off, your account won\'t appear when other runners search by display name. Your public runs and profile remain reachable to anyone with the URL.'**
   String get prefsDiscoverableSubtitle;
+
+  /// Dashboard toolbar tooltip for the AI Coach action
+  ///
+  /// In en, this message translates to:
+  /// **'Coach'**
+  String get dashboardCoachTooltip;
+
+  /// Dashboard toolbar tooltip for the activity-feed action
+  ///
+  /// In en, this message translates to:
+  /// **'Activity feed'**
+  String get dashboardFeedTooltip;
+
+  /// Dashboard toolbar tooltip for the year-in-running recap action
+  ///
+  /// In en, this message translates to:
+  /// **'Year in running'**
+  String get dashboardRecapTooltip;
+
+  /// Dashboard toolbar tooltip for opening the user's own profile
+  ///
+  /// In en, this message translates to:
+  /// **'My profile'**
+  String get dashboardProfileTooltip;
+
+  /// Dashboard empty-state welcome headline
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome!'**
+  String get dashboardWelcomeTitle;
+
+  /// Dashboard empty-state explanatory body
+  ///
+  /// In en, this message translates to:
+  /// **'Your dashboard fills in once you record a run, set a goal, or import your history.'**
+  String get dashboardWelcomeBody;
+
+  /// Dashboard empty-state primary button to create a goal
+  ///
+  /// In en, this message translates to:
+  /// **'Set a goal'**
+  String get dashboardSetGoal;
+
+  /// Dashboard empty-state secondary button to bulk-import runs
+  ///
+  /// In en, this message translates to:
+  /// **'Import runs'**
+  String get dashboardImportRuns;
+
+  /// Label for the weekly period stat card on the dashboard
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get dashboardPeriodWeek;
+
+  /// Label for the monthly period stat card on the dashboard
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get dashboardPeriodMonth;
+
+  /// Label for the all-time period stat card on the dashboard
+  ///
+  /// In en, this message translates to:
+  /// **'All time'**
+  String get dashboardPeriodAllTime;
+
+  /// Section header above the run-streak card
+  ///
+  /// In en, this message translates to:
+  /// **'Streak'**
+  String get dashboardSectionStreak;
+
+  /// Section header above the 20-week activity heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Last 20 Weeks'**
+  String get dashboardSectionLast20Weeks;
+
+  /// Section header above the personal-bests card
+  ///
+  /// In en, this message translates to:
+  /// **'Personal Bests'**
+  String get dashboardSectionPersonalBests;
+
+  /// Personal-best row label for the longest single run
+  ///
+  /// In en, this message translates to:
+  /// **'Longest run'**
+  String get dashboardLongestRun;
+
+  /// Personal-best row label for the fastest effort at a named distance
+  ///
+  /// In en, this message translates to:
+  /// **'Fastest {distance}'**
+  String dashboardFastestDistance(String distance);
+
+  /// Section header above the goals list
+  ///
+  /// In en, this message translates to:
+  /// **'Goals'**
+  String get dashboardGoals;
+
+  /// Button label to add a new goal from the goals section header
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get dashboardAdd;
+
+  /// Uppercase period badge on a weekly goal card
+  ///
+  /// In en, this message translates to:
+  /// **'WEEKLY'**
+  String get dashboardGoalWeekly;
+
+  /// Uppercase period badge on a monthly goal card
+  ///
+  /// In en, this message translates to:
+  /// **'MONTHLY'**
+  String get dashboardGoalMonthly;
+
+  /// Fallback goal-card title when no custom title is set, e.g. WEEKLY GOAL
+  ///
+  /// In en, this message translates to:
+  /// **'{period} GOAL'**
+  String dashboardGoalTitleFallback(String period);
+
+  /// Accessibility label for the empty-goals call-to-action card
+  ///
+  /// In en, this message translates to:
+  /// **'Set a weekly running goal'**
+  String get dashboardSetWeeklyGoalA11y;
+
+  /// Title of the empty-goals call-to-action card
+  ///
+  /// In en, this message translates to:
+  /// **'Set your first goal'**
+  String get dashboardSetFirstGoal;
+
+  /// Body of the empty-goals call-to-action card
+  ///
+  /// In en, this message translates to:
+  /// **'Track distance, time, pace, or number of runs each week or month.'**
+  String get dashboardSetFirstGoalBody;
+
+  /// Accessibility fragment used when a goal card has no custom title
+  ///
+  /// In en, this message translates to:
+  /// **'tap to edit'**
+  String get dashboardGoalTapToEdit;
+
+  /// Accessibility fragment when a goal is complete
+  ///
+  /// In en, this message translates to:
+  /// **'Complete.'**
+  String get dashboardGoalComplete;
+
+  /// Accessibility fragment when a goal is still in progress
+  ///
+  /// In en, this message translates to:
+  /// **'In progress.'**
+  String get dashboardGoalInProgress;
+
+  /// Accessibility label for a goal card, combining period badge, title fragment and status fragment
+  ///
+  /// In en, this message translates to:
+  /// **'{period} goal — {title} {status}'**
+  String dashboardGoalA11y(String period, String title, String status);
+
+  /// Run-count line under a period stat card
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run} other{{count} runs}}'**
+  String dashboardRunCount(int count);
+
+  /// Elevation-gain line under a period stat card; value is pre-formatted with the user's unit
+  ///
+  /// In en, this message translates to:
+  /// **'{value} vert'**
+  String dashboardVert(String value);
+
+  /// Accessibility label for a tappable period stat card; distance, runs and elevation are pre-formatted strings
+  ///
+  /// In en, this message translates to:
+  /// **'{label} summary, {distance} across {runs}{elevation}'**
+  String dashboardPeriodSummaryA11y(
+    String label,
+    String distance,
+    String runs,
+    String elevation,
+  );
+
+  /// Optional elevation-gain clause appended to the period-summary accessibility label; value is pre-formatted
+  ///
+  /// In en, this message translates to:
+  /// **', {value} elevation gain'**
+  String dashboardElevationGainSuffix(String value);
+
+  /// Caption under the current run-streak figure
+  ///
+  /// In en, this message translates to:
+  /// **'Current'**
+  String get dashboardStreakCurrent;
+
+  /// Caption under the best/history run-streak figure
+  ///
+  /// In en, this message translates to:
+  /// **'History'**
+  String get dashboardStreakHistory;
+
+  /// Singular day unit beside the current streak count
+  ///
+  /// In en, this message translates to:
+  /// **'day'**
+  String get dashboardStreakDayUnit;
+
+  /// Plural days unit beside the current streak count
+  ///
+  /// In en, this message translates to:
+  /// **'days'**
+  String get dashboardStreakDaysUnit;
+
+  /// Best run-streak readout when the best exceeds the current
+  ///
+  /// In en, this message translates to:
+  /// **'best {count, plural, one{{count} day} other{{count} days}}'**
+  String dashboardStreakBest(int count);
+
+  /// Run-streak readout when the current streak is also the best
+  ///
+  /// In en, this message translates to:
+  /// **'all-time best'**
+  String get dashboardStreakAllTimeBest;
+
+  /// Encouraging run-streak readout when there is a prior streak but none current
+  ///
+  /// In en, this message translates to:
+  /// **'run today to restart it'**
+  String get dashboardStreakRestart;
+
+  /// Encouraging run-streak readout when the user has never had a streak
+  ///
+  /// In en, this message translates to:
+  /// **'run today to start one'**
+  String get dashboardStreakStart;
+
+  /// Low-intensity end label of the activity-heatmap legend
+  ///
+  /// In en, this message translates to:
+  /// **'Less'**
+  String get dashboardHeatmapLess;
+
+  /// High-intensity end label of the activity-heatmap legend
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get dashboardHeatmapMore;
+
+  /// Hint under the tappable activity heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Tap a week for its summary'**
+  String get dashboardHeatmapTapHint;
+
+  /// App bar title for the weekly period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly Summary'**
+  String get periodWeeklySummary;
+
+  /// App bar title for the monthly period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Monthly Summary'**
+  String get periodMonthlySummary;
+
+  /// App bar title for the all-time period summary
+  ///
+  /// In en, this message translates to:
+  /// **'All-Time Summary'**
+  String get periodAllTimeSummary;
+
+  /// Tooltip for the share action on the period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get periodShareTooltip;
+
+  /// Tooltip for the previous-period navigation arrow
+  ///
+  /// In en, this message translates to:
+  /// **'Previous'**
+  String get periodPreviousTooltip;
+
+  /// Tooltip for the next-period navigation arrow
+  ///
+  /// In en, this message translates to:
+  /// **'Next'**
+  String get periodNextTooltip;
+
+  /// Hint under the period title to switch to the weekly view
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to switch to weekly'**
+  String get periodSwitchToWeekly;
+
+  /// Hint under the period title to switch to the monthly view
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to switch to monthly'**
+  String get periodSwitchToMonthly;
+
+  /// Hint under the period title to switch to the all-time view
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to switch to all-time'**
+  String get periodSwitchToAllTime;
+
+  /// Stat label for total distance on the period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get periodStatDistance;
+
+  /// Stat label for the run count on the period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get periodStatRuns;
+
+  /// Stat label for total time on the period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get periodStatTime;
+
+  /// Stat label for average pace on the period summary
+  ///
+  /// In en, this message translates to:
+  /// **'Avg pace'**
+  String get periodStatAvgPace;
+
+  /// Empty-state text for a week with no runs
+  ///
+  /// In en, this message translates to:
+  /// **'No runs this week'**
+  String get periodEmptyWeek;
+
+  /// Empty-state text for a month with no runs
+  ///
+  /// In en, this message translates to:
+  /// **'No runs this month'**
+  String get periodEmptyMonth;
+
+  /// Title of the period share bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Share summary'**
+  String get periodShareSummary;
+
+  /// Button to share the period summary as plain text
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get periodShareText;
+
+  /// Button to share the period summary as an image
+  ///
+  /// In en, this message translates to:
+  /// **'Image'**
+  String get periodShareImage;
+
+  /// Error banner when the period share image cannot be captured
+  ///
+  /// In en, this message translates to:
+  /// **'Could not create share image'**
+  String get periodShareImageFailed;
+
+  /// Tagline footer on the shareable period summary card
+  ///
+  /// In en, this message translates to:
+  /// **'BETTER RUNNER'**
+  String get periodShareCardTagline;
+
+  /// Uppercase distance label on the shareable period card
+  ///
+  /// In en, this message translates to:
+  /// **'DISTANCE'**
+  String get periodShareStatDistance;
+
+  /// Uppercase runs label on the shareable period card
+  ///
+  /// In en, this message translates to:
+  /// **'RUNS'**
+  String get periodShareStatRuns;
+
+  /// Uppercase time label on the shareable period card
+  ///
+  /// In en, this message translates to:
+  /// **'TIME'**
+  String get periodShareStatTime;
+
+  /// Uppercase average-pace label on the shareable period card
+  ///
+  /// In en, this message translates to:
+  /// **'AVG PACE'**
+  String get periodShareStatAvgPace;
+
+  /// Title of the training-load chart card
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness, Fatigue & Form'**
+  String get trainingLoadTitle;
+
+  /// Training-load subtitle when HR-based TRIMP is available
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate TRIMP over the last {days} days.'**
+  String trainingLoadSubtitleHr(int days);
+
+  /// Training-load subtitle when only volume-based load is available
+  ///
+  /// In en, this message translates to:
+  /// **'Volume-based — set resting + max HR in preferences and record with a strap to upgrade to TRIMP.'**
+  String get trainingLoadSubtitleVolume;
+
+  /// Empty-state text for the training-load chart
+  ///
+  /// In en, this message translates to:
+  /// **'Record a few runs to see your fitness trend.'**
+  String get trainingLoadEmpty;
+
+  /// Legend label for the CTL (fitness) series
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness'**
+  String get trainingLoadLegendFitness;
+
+  /// Legend label for the ATL (fatigue) series
+  ///
+  /// In en, this message translates to:
+  /// **'Fatigue'**
+  String get trainingLoadLegendFatigue;
+
+  /// Legend label for the TSB (form) series
+  ///
+  /// In en, this message translates to:
+  /// **'Form'**
+  String get trainingLoadLegendForm;
+
+  /// Legend entry combining a series label and its rounded value
+  ///
+  /// In en, this message translates to:
+  /// **'{label} · {value}'**
+  String trainingLoadLegendEntry(String label, int value);
+
+  /// Training-load reading when form (TSB) is strongly negative
+  ///
+  /// In en, this message translates to:
+  /// **'Loaded up — push through and recover when you\'re ready.'**
+  String get trainingLoadReadingLoaded;
+
+  /// Training-load reading when form (TSB) is strongly positive
+  ///
+  /// In en, this message translates to:
+  /// **'Tapered — a hard session won\'t break you.'**
+  String get trainingLoadReadingTapered;
+
+  /// Training-load reading when form (TSB) is near zero
+  ///
+  /// In en, this message translates to:
+  /// **'Balanced — easy day or hard day, your call.'**
+  String get trainingLoadReadingBalanced;
+
+  /// Title of the dashboard training-intensity card
+  ///
+  /// In en, this message translates to:
+  /// **'TRAINING INTENSITY'**
+  String get intensityTitle;
+
+  /// Window caption on the intensity card
+  ///
+  /// In en, this message translates to:
+  /// **'last {days} days'**
+  String intensityWindow(int days);
+
+  /// Caption stating how many HR-tracked runs the intensity breakdown is based on
+  ///
+  /// In en, this message translates to:
+  /// **'Based on {count, plural, one{{count} HR-tracked run} other{{count} HR-tracked runs}}'**
+  String intensityBasedOn(int count);
+
+  /// Title of the dashboard mileage card
+  ///
+  /// In en, this message translates to:
+  /// **'MILEAGE'**
+  String get mileageTitle;
+
+  /// Weekly segment label on the mileage view toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Week'**
+  String get mileageWeek;
+
+  /// Monthly segment label on the mileage view toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Month'**
+  String get mileageMonth;
+
+  /// Yearly segment label on the mileage view toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Year'**
+  String get mileageYear;
+
+  /// Suffix on the mileage spotlight headline in weekly view
+  ///
+  /// In en, this message translates to:
+  /// **'this week'**
+  String get mileageThisWeek;
+
+  /// Suffix on the mileage spotlight headline in monthly view
+  ///
+  /// In en, this message translates to:
+  /// **'this month'**
+  String get mileageThisMonth;
+
+  /// Suffix on the mileage spotlight headline in yearly view
+  ///
+  /// In en, this message translates to:
+  /// **'this year'**
+  String get mileageThisYear;
+
+  /// Title of the dashboard fitness card
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness'**
+  String get fitnessTitle;
+
+  /// Fitness card stat label for VO2 max
+  ///
+  /// In en, this message translates to:
+  /// **'VO₂ max'**
+  String get fitnessStatVo2Max;
+
+  /// Tooltip explaining VO2 max
+  ///
+  /// In en, this message translates to:
+  /// **'Your aerobic engine: how much oxygen your body can use per minute. Higher is fitter.'**
+  String get fitnessStatVo2MaxTooltip;
+
+  /// Fitness card stat label for VDOT
+  ///
+  /// In en, this message translates to:
+  /// **'VDOT'**
+  String get fitnessStatVdot;
+
+  /// Tooltip explaining VDOT
+  ///
+  /// In en, this message translates to:
+  /// **'Daniels\' running-fitness score from your best recent race effort. Drives your training paces.'**
+  String get fitnessStatVdotTooltip;
+
+  /// Fitness card stat label for the qualifying run count
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get fitnessStatRuns;
+
+  /// Tooltip explaining the qualifying run count
+  ///
+  /// In en, this message translates to:
+  /// **'Recent runs long enough to count toward your fitness estimate.'**
+  String get fitnessStatRunsTooltip;
+
+  /// Fitness card stat label for CTL (chronic training load)
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness (CTL)'**
+  String get fitnessStatCtl;
+
+  /// Tooltip explaining CTL
+  ///
+  /// In en, this message translates to:
+  /// **'Your rolling 42-day training load. Builds slowly; this is your endurance base.'**
+  String get fitnessStatCtlTooltip;
+
+  /// Fitness card stat label for ATL (acute training load)
+  ///
+  /// In en, this message translates to:
+  /// **'Fatigue (ATL)'**
+  String get fitnessStatAtl;
+
+  /// Tooltip explaining ATL
+  ///
+  /// In en, this message translates to:
+  /// **'Your last 7 days of load. Rises fast after hard sessions and drops with rest.'**
+  String get fitnessStatAtlTooltip;
+
+  /// Fitness card stat label for TSB (training stress balance)
+  ///
+  /// In en, this message translates to:
+  /// **'Form (TSB)'**
+  String get fitnessStatTsb;
+
+  /// Tooltip explaining TSB
+  ///
+  /// In en, this message translates to:
+  /// **'Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.'**
+  String get fitnessStatTsbTooltip;
 }
 
 class _AppLocalizationsDelegate

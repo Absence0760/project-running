@@ -5847,5 +5847,487 @@
   "prefsDiscoverableSubtitle": "When off, your account won't appear when other runners search by display name. Your public runs and profile remain reachable to anyone with the URL.",
   "@prefsDiscoverableSubtitle": {
     "description": "Subtitle of the discoverable-in-search toggle"
+  },
+  "dashboardCoachTooltip": "Coach",
+  "@dashboardCoachTooltip": {
+    "description": "Dashboard toolbar tooltip for the AI Coach action"
+  },
+  "dashboardFeedTooltip": "Activity feed",
+  "@dashboardFeedTooltip": {
+    "description": "Dashboard toolbar tooltip for the activity-feed action"
+  },
+  "dashboardRecapTooltip": "Year in running",
+  "@dashboardRecapTooltip": {
+    "description": "Dashboard toolbar tooltip for the year-in-running recap action"
+  },
+  "dashboardProfileTooltip": "My profile",
+  "@dashboardProfileTooltip": {
+    "description": "Dashboard toolbar tooltip for opening the user's own profile"
+  },
+  "dashboardWelcomeTitle": "Welcome!",
+  "@dashboardWelcomeTitle": {
+    "description": "Dashboard empty-state welcome headline"
+  },
+  "dashboardWelcomeBody": "Your dashboard fills in once you record a run, set a goal, or import your history.",
+  "@dashboardWelcomeBody": {
+    "description": "Dashboard empty-state explanatory body"
+  },
+  "dashboardSetGoal": "Set a goal",
+  "@dashboardSetGoal": {
+    "description": "Dashboard empty-state primary button to create a goal"
+  },
+  "dashboardImportRuns": "Import runs",
+  "@dashboardImportRuns": {
+    "description": "Dashboard empty-state secondary button to bulk-import runs"
+  },
+  "dashboardPeriodWeek": "Week",
+  "@dashboardPeriodWeek": {
+    "description": "Label for the weekly period stat card on the dashboard"
+  },
+  "dashboardPeriodMonth": "Month",
+  "@dashboardPeriodMonth": {
+    "description": "Label for the monthly period stat card on the dashboard"
+  },
+  "dashboardPeriodAllTime": "All time",
+  "@dashboardPeriodAllTime": {
+    "description": "Label for the all-time period stat card on the dashboard"
+  },
+  "dashboardSectionStreak": "Streak",
+  "@dashboardSectionStreak": {
+    "description": "Section header above the run-streak card"
+  },
+  "dashboardSectionLast20Weeks": "Last 20 Weeks",
+  "@dashboardSectionLast20Weeks": {
+    "description": "Section header above the 20-week activity heatmap"
+  },
+  "dashboardSectionPersonalBests": "Personal Bests",
+  "@dashboardSectionPersonalBests": {
+    "description": "Section header above the personal-bests card"
+  },
+  "dashboardLongestRun": "Longest run",
+  "@dashboardLongestRun": {
+    "description": "Personal-best row label for the longest single run"
+  },
+  "dashboardFastestDistance": "Fastest {distance}",
+  "@dashboardFastestDistance": {
+    "description": "Personal-best row label for the fastest effort at a named distance",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardGoals": "Goals",
+  "@dashboardGoals": {
+    "description": "Section header above the goals list"
+  },
+  "dashboardAdd": "Add",
+  "@dashboardAdd": {
+    "description": "Button label to add a new goal from the goals section header"
+  },
+  "dashboardGoalWeekly": "WEEKLY",
+  "@dashboardGoalWeekly": {
+    "description": "Uppercase period badge on a weekly goal card"
+  },
+  "dashboardGoalMonthly": "MONTHLY",
+  "@dashboardGoalMonthly": {
+    "description": "Uppercase period badge on a monthly goal card"
+  },
+  "dashboardGoalTitleFallback": "{period} GOAL",
+  "@dashboardGoalTitleFallback": {
+    "description": "Fallback goal-card title when no custom title is set, e.g. WEEKLY GOAL",
+    "placeholders": {
+      "period": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardSetWeeklyGoalA11y": "Set a weekly running goal",
+  "@dashboardSetWeeklyGoalA11y": {
+    "description": "Accessibility label for the empty-goals call-to-action card"
+  },
+  "dashboardSetFirstGoal": "Set your first goal",
+  "@dashboardSetFirstGoal": {
+    "description": "Title of the empty-goals call-to-action card"
+  },
+  "dashboardSetFirstGoalBody": "Track distance, time, pace, or number of runs each week or month.",
+  "@dashboardSetFirstGoalBody": {
+    "description": "Body of the empty-goals call-to-action card"
+  },
+  "dashboardGoalTapToEdit": "tap to edit",
+  "@dashboardGoalTapToEdit": {
+    "description": "Accessibility fragment used when a goal card has no custom title"
+  },
+  "dashboardGoalComplete": "Complete.",
+  "@dashboardGoalComplete": {
+    "description": "Accessibility fragment when a goal is complete"
+  },
+  "dashboardGoalInProgress": "In progress.",
+  "@dashboardGoalInProgress": {
+    "description": "Accessibility fragment when a goal is still in progress"
+  },
+  "dashboardGoalA11y": "{period} goal — {title} {status}",
+  "@dashboardGoalA11y": {
+    "description": "Accessibility label for a goal card, combining period badge, title fragment and status fragment",
+    "placeholders": {
+      "period": {
+        "type": "String"
+      },
+      "title": {
+        "type": "String"
+      },
+      "status": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardRunCount": "{count, plural, one{{count} run} other{{count} runs}}",
+  "@dashboardRunCount": {
+    "description": "Run-count line under a period stat card",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardVert": "{value} vert",
+  "@dashboardVert": {
+    "description": "Elevation-gain line under a period stat card; value is pre-formatted with the user's unit",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardPeriodSummaryA11y": "{label} summary, {distance} across {runs}{elevation}",
+  "@dashboardPeriodSummaryA11y": {
+    "description": "Accessibility label for a tappable period stat card; distance, runs and elevation are pre-formatted strings",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "distance": {
+        "type": "String"
+      },
+      "runs": {
+        "type": "String"
+      },
+      "elevation": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardElevationGainSuffix": ", {value} elevation gain",
+  "@dashboardElevationGainSuffix": {
+    "description": "Optional elevation-gain clause appended to the period-summary accessibility label; value is pre-formatted",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "dashboardStreakCurrent": "Current",
+  "@dashboardStreakCurrent": {
+    "description": "Caption under the current run-streak figure"
+  },
+  "dashboardStreakHistory": "History",
+  "@dashboardStreakHistory": {
+    "description": "Caption under the best/history run-streak figure"
+  },
+  "dashboardStreakDayUnit": "day",
+  "@dashboardStreakDayUnit": {
+    "description": "Singular day unit beside the current streak count"
+  },
+  "dashboardStreakDaysUnit": "days",
+  "@dashboardStreakDaysUnit": {
+    "description": "Plural days unit beside the current streak count"
+  },
+  "dashboardStreakBest": "best {count, plural, one{{count} day} other{{count} days}}",
+  "@dashboardStreakBest": {
+    "description": "Best run-streak readout when the best exceeds the current",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dashboardStreakAllTimeBest": "all-time best",
+  "@dashboardStreakAllTimeBest": {
+    "description": "Run-streak readout when the current streak is also the best"
+  },
+  "dashboardStreakRestart": "run today to restart it",
+  "@dashboardStreakRestart": {
+    "description": "Encouraging run-streak readout when there is a prior streak but none current"
+  },
+  "dashboardStreakStart": "run today to start one",
+  "@dashboardStreakStart": {
+    "description": "Encouraging run-streak readout when the user has never had a streak"
+  },
+  "dashboardHeatmapLess": "Less",
+  "@dashboardHeatmapLess": {
+    "description": "Low-intensity end label of the activity-heatmap legend"
+  },
+  "dashboardHeatmapMore": "More",
+  "@dashboardHeatmapMore": {
+    "description": "High-intensity end label of the activity-heatmap legend"
+  },
+  "dashboardHeatmapTapHint": "Tap a week for its summary",
+  "@dashboardHeatmapTapHint": {
+    "description": "Hint under the tappable activity heatmap"
+  },
+  "periodWeeklySummary": "Weekly Summary",
+  "@periodWeeklySummary": {
+    "description": "App bar title for the weekly period summary"
+  },
+  "periodMonthlySummary": "Monthly Summary",
+  "@periodMonthlySummary": {
+    "description": "App bar title for the monthly period summary"
+  },
+  "periodAllTimeSummary": "All-Time Summary",
+  "@periodAllTimeSummary": {
+    "description": "App bar title for the all-time period summary"
+  },
+  "periodShareTooltip": "Share",
+  "@periodShareTooltip": {
+    "description": "Tooltip for the share action on the period summary"
+  },
+  "periodPreviousTooltip": "Previous",
+  "@periodPreviousTooltip": {
+    "description": "Tooltip for the previous-period navigation arrow"
+  },
+  "periodNextTooltip": "Next",
+  "@periodNextTooltip": {
+    "description": "Tooltip for the next-period navigation arrow"
+  },
+  "periodSwitchToWeekly": "Tap to switch to weekly",
+  "@periodSwitchToWeekly": {
+    "description": "Hint under the period title to switch to the weekly view"
+  },
+  "periodSwitchToMonthly": "Tap to switch to monthly",
+  "@periodSwitchToMonthly": {
+    "description": "Hint under the period title to switch to the monthly view"
+  },
+  "periodSwitchToAllTime": "Tap to switch to all-time",
+  "@periodSwitchToAllTime": {
+    "description": "Hint under the period title to switch to the all-time view"
+  },
+  "periodStatDistance": "Distance",
+  "@periodStatDistance": {
+    "description": "Stat label for total distance on the period summary"
+  },
+  "periodStatRuns": "Runs",
+  "@periodStatRuns": {
+    "description": "Stat label for the run count on the period summary"
+  },
+  "periodStatTime": "Time",
+  "@periodStatTime": {
+    "description": "Stat label for total time on the period summary"
+  },
+  "periodStatAvgPace": "Avg pace",
+  "@periodStatAvgPace": {
+    "description": "Stat label for average pace on the period summary"
+  },
+  "periodEmptyWeek": "No runs this week",
+  "@periodEmptyWeek": {
+    "description": "Empty-state text for a week with no runs"
+  },
+  "periodEmptyMonth": "No runs this month",
+  "@periodEmptyMonth": {
+    "description": "Empty-state text for a month with no runs"
+  },
+  "periodShareSummary": "Share summary",
+  "@periodShareSummary": {
+    "description": "Title of the period share bottom sheet"
+  },
+  "periodShareText": "Text",
+  "@periodShareText": {
+    "description": "Button to share the period summary as plain text"
+  },
+  "periodShareImage": "Image",
+  "@periodShareImage": {
+    "description": "Button to share the period summary as an image"
+  },
+  "periodShareImageFailed": "Could not create share image",
+  "@periodShareImageFailed": {
+    "description": "Error banner when the period share image cannot be captured"
+  },
+  "periodShareCardTagline": "BETTER RUNNER",
+  "@periodShareCardTagline": {
+    "description": "Tagline footer on the shareable period summary card"
+  },
+  "periodShareStatDistance": "DISTANCE",
+  "@periodShareStatDistance": {
+    "description": "Uppercase distance label on the shareable period card"
+  },
+  "periodShareStatRuns": "RUNS",
+  "@periodShareStatRuns": {
+    "description": "Uppercase runs label on the shareable period card"
+  },
+  "periodShareStatTime": "TIME",
+  "@periodShareStatTime": {
+    "description": "Uppercase time label on the shareable period card"
+  },
+  "periodShareStatAvgPace": "AVG PACE",
+  "@periodShareStatAvgPace": {
+    "description": "Uppercase average-pace label on the shareable period card"
+  },
+  "trainingLoadTitle": "Fitness, Fatigue & Form",
+  "@trainingLoadTitle": {
+    "description": "Title of the training-load chart card"
+  },
+  "trainingLoadSubtitleHr": "Heart-rate TRIMP over the last {days} days.",
+  "@trainingLoadSubtitleHr": {
+    "description": "Training-load subtitle when HR-based TRIMP is available",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "trainingLoadSubtitleVolume": "Volume-based — set resting + max HR in preferences and record with a strap to upgrade to TRIMP.",
+  "@trainingLoadSubtitleVolume": {
+    "description": "Training-load subtitle when only volume-based load is available"
+  },
+  "trainingLoadEmpty": "Record a few runs to see your fitness trend.",
+  "@trainingLoadEmpty": {
+    "description": "Empty-state text for the training-load chart"
+  },
+  "trainingLoadLegendFitness": "Fitness",
+  "@trainingLoadLegendFitness": {
+    "description": "Legend label for the CTL (fitness) series"
+  },
+  "trainingLoadLegendFatigue": "Fatigue",
+  "@trainingLoadLegendFatigue": {
+    "description": "Legend label for the ATL (fatigue) series"
+  },
+  "trainingLoadLegendForm": "Form",
+  "@trainingLoadLegendForm": {
+    "description": "Legend label for the TSB (form) series"
+  },
+  "trainingLoadLegendEntry": "{label} · {value}",
+  "@trainingLoadLegendEntry": {
+    "description": "Legend entry combining a series label and its rounded value",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "value": {
+        "type": "int"
+      }
+    }
+  },
+  "trainingLoadReadingLoaded": "Loaded up — push through and recover when you're ready.",
+  "@trainingLoadReadingLoaded": {
+    "description": "Training-load reading when form (TSB) is strongly negative"
+  },
+  "trainingLoadReadingTapered": "Tapered — a hard session won't break you.",
+  "@trainingLoadReadingTapered": {
+    "description": "Training-load reading when form (TSB) is strongly positive"
+  },
+  "trainingLoadReadingBalanced": "Balanced — easy day or hard day, your call.",
+  "@trainingLoadReadingBalanced": {
+    "description": "Training-load reading when form (TSB) is near zero"
+  },
+  "intensityTitle": "TRAINING INTENSITY",
+  "@intensityTitle": {
+    "description": "Title of the dashboard training-intensity card"
+  },
+  "intensityWindow": "last {days} days",
+  "@intensityWindow": {
+    "description": "Window caption on the intensity card",
+    "placeholders": {
+      "days": {
+        "type": "int"
+      }
+    }
+  },
+  "intensityBasedOn": "Based on {count, plural, one{{count} HR-tracked run} other{{count} HR-tracked runs}}",
+  "@intensityBasedOn": {
+    "description": "Caption stating how many HR-tracked runs the intensity breakdown is based on",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "mileageTitle": "MILEAGE",
+  "@mileageTitle": {
+    "description": "Title of the dashboard mileage card"
+  },
+  "mileageWeek": "Week",
+  "@mileageWeek": {
+    "description": "Weekly segment label on the mileage view toggle"
+  },
+  "mileageMonth": "Month",
+  "@mileageMonth": {
+    "description": "Monthly segment label on the mileage view toggle"
+  },
+  "mileageYear": "Year",
+  "@mileageYear": {
+    "description": "Yearly segment label on the mileage view toggle"
+  },
+  "mileageThisWeek": "this week",
+  "@mileageThisWeek": {
+    "description": "Suffix on the mileage spotlight headline in weekly view"
+  },
+  "mileageThisMonth": "this month",
+  "@mileageThisMonth": {
+    "description": "Suffix on the mileage spotlight headline in monthly view"
+  },
+  "mileageThisYear": "this year",
+  "@mileageThisYear": {
+    "description": "Suffix on the mileage spotlight headline in yearly view"
+  },
+  "fitnessTitle": "Fitness",
+  "@fitnessTitle": {
+    "description": "Title of the dashboard fitness card"
+  },
+  "fitnessStatVo2Max": "VO₂ max",
+  "@fitnessStatVo2Max": {
+    "description": "Fitness card stat label for VO2 max"
+  },
+  "fitnessStatVo2MaxTooltip": "Your aerobic engine: how much oxygen your body can use per minute. Higher is fitter.",
+  "@fitnessStatVo2MaxTooltip": {
+    "description": "Tooltip explaining VO2 max"
+  },
+  "fitnessStatVdot": "VDOT",
+  "@fitnessStatVdot": {
+    "description": "Fitness card stat label for VDOT"
+  },
+  "fitnessStatVdotTooltip": "Daniels' running-fitness score from your best recent race effort. Drives your training paces.",
+  "@fitnessStatVdotTooltip": {
+    "description": "Tooltip explaining VDOT"
+  },
+  "fitnessStatRuns": "Runs",
+  "@fitnessStatRuns": {
+    "description": "Fitness card stat label for the qualifying run count"
+  },
+  "fitnessStatRunsTooltip": "Recent runs long enough to count toward your fitness estimate.",
+  "@fitnessStatRunsTooltip": {
+    "description": "Tooltip explaining the qualifying run count"
+  },
+  "fitnessStatCtl": "Fitness (CTL)",
+  "@fitnessStatCtl": {
+    "description": "Fitness card stat label for CTL (chronic training load)"
+  },
+  "fitnessStatCtlTooltip": "Your rolling 42-day training load. Builds slowly; this is your endurance base.",
+  "@fitnessStatCtlTooltip": {
+    "description": "Tooltip explaining CTL"
+  },
+  "fitnessStatAtl": "Fatigue (ATL)",
+  "@fitnessStatAtl": {
+    "description": "Fitness card stat label for ATL (acute training load)"
+  },
+  "fitnessStatAtlTooltip": "Your last 7 days of load. Rises fast after hard sessions and drops with rest.",
+  "@fitnessStatAtlTooltip": {
+    "description": "Tooltip explaining ATL"
+  },
+  "fitnessStatTsb": "Form (TSB)",
+  "@fitnessStatTsb": {
+    "description": "Fitness card stat label for TSB (training stress balance)"
+  },
+  "fitnessStatTsbTooltip": "Fitness minus fatigue. Positive = fresh and race-ready; negative = carrying fatigue.",
+  "@fitnessStatTsbTooltip": {
+    "description": "Tooltip explaining TSB"
   }
 }

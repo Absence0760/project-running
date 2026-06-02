@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 
 import '../goals.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -222,6 +223,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final runs = widget.runStore.runs;
     final goals = widget.preferences.goals;
@@ -290,7 +292,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       if (api != null) ...[
         if (widget.training != null)
           IconButton(
-            tooltip: 'Coach',
+            tooltip: l10n.dashboardCoachTooltip,
             icon: const Icon(Icons.psychology_outlined),
             onPressed: () => Navigator.push(
               context,
@@ -303,7 +305,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
           ),
         IconButton(
-          tooltip: 'Activity feed',
+          tooltip: l10n.dashboardFeedTooltip,
           icon: const Icon(Icons.dynamic_feed_outlined),
           onPressed: () => Navigator.push(
             context,
@@ -311,7 +313,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
         IconButton(
-          tooltip: 'Year in running',
+          tooltip: l10n.dashboardRecapTooltip,
           icon: const Icon(Icons.calendar_today_outlined),
           onPressed: () => Navigator.push(
             context,
@@ -326,7 +328,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (viewerId != null) NotificationBell(api: api),
         if (viewerId != null)
           IconButton(
-            tooltip: 'My profile',
+            tooltip: l10n.dashboardProfileTooltip,
             icon: const Icon(Icons.person_outline),
             onPressed: () => Navigator.push(
               context,
@@ -394,7 +396,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   children: [
                     Expanded(
                       child: _PeriodStatCard(
-                        label: 'Week',
+                        label: l10n.dashboardPeriodWeek,
                         distanceMetres: weekDistance,
                         runCount: weekRunCount,
                         vertMetres: weekVert,
@@ -405,7 +407,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _PeriodStatCard(
-                        label: 'Month',
+                        label: l10n.dashboardPeriodMonth,
                         distanceMetres: monthDistance,
                         runCount: monthRunCount,
                         vertMetres: monthVert,
@@ -416,7 +418,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: _PeriodStatCard(
-                        label: 'All time',
+                        label: l10n.dashboardPeriodAllTime,
                         distanceMetres: allDistance,
                         runCount: runs.length,
                         vertMetres: allVert,
@@ -427,7 +429,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ],
                 ),
                 _kSectionGap,
-                const _SectionHeader('Streak'),
+                _SectionHeader(l10n.dashboardSectionStreak),
                 Card(
                   child: Padding(
                     padding: _kCardPadding,
@@ -437,7 +439,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 _kSectionGap,
                 MileageTrendCard(runs: runs, unit: unit, now: now),
                 _kSectionGap,
-                const _SectionHeader('Last 20 Weeks'),
+                _SectionHeader(l10n.dashboardSectionLast20Weeks),
                 Card(
                   child: Padding(
                     padding: _kCardPadding,
@@ -451,7 +453,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
                 _kSectionGap,
                 if (hasAnyPb) ...[
-                  const _SectionHeader('Personal Bests'),
+                  _SectionHeader(l10n.dashboardSectionPersonalBests),
                   Card(
                     child: Padding(
                       padding: _kCardPadding,
@@ -460,7 +462,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           if (longest != null)
                             _PbRow(
                               icon: Icons.straighten,
-                              label: 'Longest run',
+                              label: l10n.dashboardLongestRun,
                               value: UnitFormat.distance(
                                   longest.distanceMetres, unit),
                             ),
@@ -468,7 +470,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(height: 12),
                             _PbRow(
                               icon: Icons.emoji_events,
-                              label: 'Fastest ${e.key}',
+                              label: l10n.dashboardFastestDistance(e.key),
                               value: _formatDuration(e.value),
                             ),
                           ],
@@ -500,16 +502,17 @@ class _DashboardScreenState extends State<DashboardScreen> {
     List<RunGoal> goals,
     DateTime now,
   ) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SectionHeader(
-          'Goals',
+          l10n.dashboardGoals,
           trailing: goals.isNotEmpty
               ? TextButton.icon(
                   onPressed: _newGoal,
                   icon: const Icon(Icons.add, size: 18),
-                  label: const Text('Add'),
+                  label: Text(l10n.dashboardAdd),
                   style: TextButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 8),
                     visualDensity: VisualDensity.compact,
@@ -597,6 +600,7 @@ class _WelcomeEmpty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 32),
@@ -606,11 +610,11 @@ class _WelcomeEmpty extends StatelessWidget {
             Icon(Icons.directions_run,
                 size: 64, color: theme.colorScheme.outline),
             const SizedBox(height: 16),
-            Text('Welcome!', style: theme.textTheme.headlineSmall),
+            Text(l10n.dashboardWelcomeTitle,
+                style: theme.textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              'Your dashboard fills in once you record a run, '
-              'set a goal, or import your history.',
+              l10n.dashboardWelcomeBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.outline,
@@ -627,13 +631,13 @@ class _WelcomeEmpty extends StatelessWidget {
                 FilledButton.tonalIcon(
                   onPressed: onAddGoal,
                   icon: const Icon(Icons.flag_outlined),
-                  label: const Text('Set a goal'),
+                  label: Text(l10n.dashboardSetGoal),
                 ),
                 const SizedBox(width: 12),
                 OutlinedButton.icon(
                   onPressed: onImport,
                   icon: const Icon(Icons.upload_file_outlined),
-                  label: const Text('Import runs'),
+                  label: Text(l10n.dashboardImportRuns),
                 ),
               ],
             ),
@@ -651,6 +655,7 @@ class _EmptyGoalsCta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     // audit/accessibility (2026-05-25) High — WCAG 4.1.2. Tappable
     // `InkWell` carries no role for TalkBack; without Semantics it
     // reads as a generic tappable region. The label summarises the
@@ -658,7 +663,7 @@ class _EmptyGoalsCta extends StatelessWidget {
     return Card(
       child: Semantics(
         button: true,
-        label: 'Set a weekly running goal',
+        label: l10n.dashboardSetWeeklyGoalA11y,
         child: InkWell(
         onTap: onAdd,
         borderRadius: BorderRadius.circular(12),
@@ -681,12 +686,12 @@ class _EmptyGoalsCta extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('Set your first goal',
+                    Text(l10n.dashboardSetFirstGoal,
                         style: theme.textTheme.titleMedium
                             ?.copyWith(fontWeight: FontWeight.w700)),
                     const SizedBox(height: 4),
                     Text(
-                      'Track distance, time, pace, or number of runs each week or month.',
+                      l10n.dashboardSetFirstGoalBody,
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.outline,
                       ),
@@ -719,13 +724,15 @@ class _GoalCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final completeColor = theme.brightness == Brightness.dark
         ? Colors.green.shade300
         : Colors.green.shade600;
     final accent =
         progress.complete ? completeColor : theme.colorScheme.primary;
-    final periodLabel =
-        goal.period == GoalPeriod.week ? 'WEEKLY' : 'MONTHLY';
+    final periodLabel = goal.period == GoalPeriod.week
+        ? l10n.dashboardGoalWeekly
+        : l10n.dashboardGoalMonthly;
     final customTitle = goal.title;
 
     // Look up per-kind progress so the card can render every kind in order,
@@ -735,9 +742,13 @@ class _GoalCard extends StatelessWidget {
       for (final t in progress.targets) t.kind: t,
     };
 
-    final a11yLabel = '$periodLabel goal — '
-        '${customTitle ?? "tap to edit"}. '
-        '${progress.complete ? "Complete." : "In progress."}';
+    final a11yLabel = l10n.dashboardGoalA11y(
+      periodLabel,
+      customTitle ?? l10n.dashboardGoalTapToEdit,
+      progress.complete
+          ? l10n.dashboardGoalComplete
+          : l10n.dashboardGoalInProgress,
+    );
 
     return Card(
       child: Semantics(
@@ -759,7 +770,8 @@ class _GoalCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          customTitle ?? '$periodLabel GOAL',
+                          customTitle ??
+                              l10n.dashboardGoalTitleFallback(periodLabel),
                           style: (customTitle != null
                                   ? theme.textTheme.titleMedium
                                   : theme.textTheme.labelMedium)
@@ -996,6 +1008,7 @@ class _PeriodStatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final value = UnitFormat.distanceValue(distanceMetres, unit);
     final unitLabel = UnitFormat.distanceLabel(unit);
     final inner = Padding(
@@ -1038,7 +1051,7 @@ class _PeriodStatCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '$runCount ${runCount == 1 ? "run" : "runs"}',
+            l10n.dashboardRunCount(runCount),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -1056,7 +1069,7 @@ class _PeriodStatCard extends StatelessWidget {
                 const SizedBox(width: 3),
                 Flexible(
                   child: Text(
-                    '${UnitFormat.elevation(vertMetres, unit)} vert',
+                    l10n.dashboardVert(UnitFormat.elevation(vertMetres, unit)),
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                     ),
@@ -1124,10 +1137,16 @@ class _PeriodStatCard extends StatelessWidget {
       child: isTappable
           ? Semantics(
               button: true,
-              label: '$label summary, ${UnitFormat.distanceValue(distanceMetres, unit)} '
-                  '${UnitFormat.distanceLabel(unit)} across '
-                  '$runCount ${runCount == 1 ? "run" : "runs"}'
-                  '${vertMetres > 0 ? ", ${UnitFormat.elevation(vertMetres, unit)} elevation gain" : ""}',
+              label: l10n.dashboardPeriodSummaryA11y(
+                label,
+                '${UnitFormat.distanceValue(distanceMetres, unit)} '
+                    '${UnitFormat.distanceLabel(unit)}',
+                l10n.dashboardRunCount(runCount),
+                vertMetres > 0
+                    ? l10n.dashboardElevationGainSuffix(
+                        UnitFormat.elevation(vertMetres, unit))
+                    : '',
+              ),
               child: InkWell(onTap: onTap, child: body),
             )
           : body,
@@ -1146,6 +1165,7 @@ class _StreakRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final streaks = computeRunStreaks(
       runs.map((r) => r.startedAt).toList(),
       DateTime.now(),
@@ -1153,14 +1173,14 @@ class _StreakRow extends StatelessWidget {
     final crown = streaks.current > 0;
     final color = crown ? const Color(0xFFF5B30A) : theme.colorScheme.outline;
     final bestText = streaks.best > streaks.current
-        ? 'best ${streaks.best} ${streaks.best == 1 ? "day" : "days"}'
+        ? l10n.dashboardStreakBest(streaks.best)
         : streaks.current > 0
-            ? 'all-time best'
+            ? l10n.dashboardStreakAllTimeBest
             // Encourage rather than guilt a beginner with no current streak
             // (new persona #26).
             : streaks.best > 0
-                ? 'run today to restart it'
-                : 'run today to start one';
+                ? l10n.dashboardStreakRestart
+                : l10n.dashboardStreakStart;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceAround,
       children: [
@@ -1182,7 +1202,9 @@ class _StreakRow extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 Text(
-                  streaks.current == 1 ? 'day' : 'days',
+                  streaks.current == 1
+                      ? l10n.dashboardStreakDayUnit
+                      : l10n.dashboardStreakDaysUnit,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -1191,7 +1213,7 @@ class _StreakRow extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Current',
+              l10n.dashboardStreakCurrent,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -1206,7 +1228,7 @@ class _StreakRow extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'History',
+              l10n.dashboardStreakHistory,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -1250,6 +1272,7 @@ class _RunHeatmap extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final weekStart = weekStartLocal(now);
@@ -1319,7 +1342,7 @@ class _RunHeatmap extends StatelessWidget {
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
-              Text('Less',
+              Text(l10n.dashboardHeatmapLess,
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline)),
               const SizedBox(width: 6),
@@ -1335,14 +1358,14 @@ class _RunHeatmap extends StatelessWidget {
                 const SizedBox(width: 3),
               ],
               const SizedBox(width: 3),
-              Text('More',
+              Text(l10n.dashboardHeatmapMore,
                   style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline)),
             ],
           ),
           if (onWeekTap != null) ...[
             const SizedBox(height: 6),
-            Text('Tap a week for its summary',
+            Text(l10n.dashboardHeatmapTapHint,
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline)),
           ],

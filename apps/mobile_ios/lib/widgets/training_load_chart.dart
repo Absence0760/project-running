@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training_load.dart';
 
 /// Dashboard "Fitness / Fatigue / Form" chart. Mirrors
@@ -17,6 +18,7 @@ class TrainingLoadChart extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final last = points.isEmpty ? null : points.last;
 
     return Card(
@@ -26,12 +28,12 @@ class TrainingLoadChart extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Fitness, Fatigue & Form', style: theme.textTheme.titleMedium),
+            Text(l10n.trainingLoadTitle, style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
               hasHr
-                  ? 'Heart-rate TRIMP over the last ${points.length} days.'
-                  : 'Volume-based — set resting + max HR in preferences and record with a strap to upgrade to TRIMP.',
+                  ? l10n.trainingLoadSubtitleHr(points.length)
+                  : l10n.trainingLoadSubtitleVolume,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -41,7 +43,7 @@ class TrainingLoadChart extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 24),
                 child: Text(
-                  'Record a few runs to see your fitness trend.',
+                  l10n.trainingLoadEmpty,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -87,7 +89,7 @@ class TrainingLoadChart extends StatelessWidget {
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
-                  _readingFor(last.tsb),
+                  _readingFor(l10n, last.tsb),
                   style: theme.textTheme.bodySmall,
                 ),
               ),
@@ -106,10 +108,10 @@ class TrainingLoadChart extends StatelessWidget {
     return '${months[d.month - 1]} ${d.day}';
   }
 
-  static String _readingFor(double tsb) {
-    if (tsb < -10) return "Loaded up — push through and recover when you're ready.";
-    if (tsb > 10) return "Tapered — a hard session won't break you.";
-    return 'Balanced — easy day or hard day, your call.';
+  static String _readingFor(AppLocalizations l10n, double tsb) {
+    if (tsb < -10) return l10n.trainingLoadReadingLoaded;
+    if (tsb > 10) return l10n.trainingLoadReadingTapered;
+    return l10n.trainingLoadReadingBalanced;
   }
 }
 
@@ -119,6 +121,7 @@ class _Legend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final formColor =
         last.tsb >= 0 ? const Color(0xFF10B981) : const Color(0xFFEF4444);
     return Wrap(
@@ -127,15 +130,18 @@ class _Legend extends StatelessWidget {
       children: [
         _LegendKey(
           color: const Color(0xFF4F46E5),
-          label: 'Fitness',
+          label: l10n.trainingLoadLegendFitness,
           value: last.ctl,
         ),
         _LegendKey(
           color: const Color(0xFFF59E0B),
-          label: 'Fatigue',
+          label: l10n.trainingLoadLegendFatigue,
           value: last.atl,
         ),
-        _LegendKey(color: formColor, label: 'Form', value: last.tsb),
+        _LegendKey(
+            color: formColor,
+            label: l10n.trainingLoadLegendForm,
+            value: last.tsb),
       ],
     );
   }
@@ -167,7 +173,8 @@ class _LegendKey extends StatelessWidget {
         ),
         const SizedBox(width: 6),
         Text(
-          '$label · ${value.round()}',
+          AppLocalizations.of(context)
+              .trainingLoadLegendEntry(label, value.round()),
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
           ),

@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -105,6 +106,8 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: DashboardScreen(
         runStore: runStore,
         routeStore: routeStore,
@@ -261,6 +264,8 @@ void main() {
 
           await tester.pumpWidget(
             MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
@@ -314,6 +319,8 @@ void main() {
 
           await tester.pumpWidget(
             MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
@@ -359,6 +366,8 @@ void main() {
 
           await tester.pumpWidget(
             MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
@@ -405,6 +414,8 @@ void main() {
 
           await tester.pumpWidget(
             MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
@@ -444,6 +455,8 @@ void main() {
 
           await tester.pumpWidget(
             MaterialApp(
+              localizationsDelegates: AppLocalizations.localizationsDelegates,
+              supportedLocales: AppLocalizations.supportedLocales,
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),

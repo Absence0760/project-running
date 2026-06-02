@@ -4528,6 +4528,371 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get prefsDiscoverableSubtitle =>
       'Quando desativado, sua conta não aparece quando outros corredores buscam pelo nome de exibição. Suas corridas públicas e seu perfil continuam acessíveis para qualquer pessoa com o URL.';
+
+  @override
+  String get dashboardCoachTooltip => 'Treinador';
+
+  @override
+  String get dashboardFeedTooltip => 'Feed de atividades';
+
+  @override
+  String get dashboardRecapTooltip => 'Ano em corrida';
+
+  @override
+  String get dashboardProfileTooltip => 'Meu perfil';
+
+  @override
+  String get dashboardWelcomeTitle => 'Bem-vindo!';
+
+  @override
+  String get dashboardWelcomeBody =>
+      'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
+
+  @override
+  String get dashboardSetGoal => 'Definir meta';
+
+  @override
+  String get dashboardImportRuns => 'Importar corridas';
+
+  @override
+  String get dashboardPeriodWeek => 'Semana';
+
+  @override
+  String get dashboardPeriodMonth => 'Mês';
+
+  @override
+  String get dashboardPeriodAllTime => 'Total';
+
+  @override
+  String get dashboardSectionStreak => 'Sequência';
+
+  @override
+  String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';
+
+  @override
+  String get dashboardSectionPersonalBests => 'Recordes pessoais';
+
+  @override
+  String get dashboardLongestRun => 'Corrida mais longa';
+
+  @override
+  String dashboardFastestDistance(String distance) {
+    return 'Mais rápido em $distance';
+  }
+
+  @override
+  String get dashboardGoals => 'Metas';
+
+  @override
+  String get dashboardAdd => 'Adicionar';
+
+  @override
+  String get dashboardGoalWeekly => 'SEMANAL';
+
+  @override
+  String get dashboardGoalMonthly => 'MENSAL';
+
+  @override
+  String dashboardGoalTitleFallback(String period) {
+    return 'META $period';
+  }
+
+  @override
+  String get dashboardSetWeeklyGoalA11y =>
+      'Definir uma meta semanal de corrida';
+
+  @override
+  String get dashboardSetFirstGoal => 'Defina sua primeira meta';
+
+  @override
+  String get dashboardSetFirstGoalBody =>
+      'Acompanhe distância, tempo, ritmo ou número de corridas por semana ou mês.';
+
+  @override
+  String get dashboardGoalTapToEdit => 'toque para editar';
+
+  @override
+  String get dashboardGoalComplete => 'Concluída.';
+
+  @override
+  String get dashboardGoalInProgress => 'Em andamento.';
+
+  @override
+  String dashboardGoalA11y(String period, String title, String status) {
+    return 'Meta $period — $title $status';
+  }
+
+  @override
+  String dashboardRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas',
+      one: '$count corrida',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardVert(String value) {
+    return '$value de elevação';
+  }
+
+  @override
+  String dashboardPeriodSummaryA11y(
+    String label,
+    String distance,
+    String runs,
+    String elevation,
+  ) {
+    return 'Resumo de $label, $distance em $runs$elevation';
+  }
+
+  @override
+  String dashboardElevationGainSuffix(String value) {
+    return ', $value de ganho de elevação';
+  }
+
+  @override
+  String get dashboardStreakCurrent => 'Atual';
+
+  @override
+  String get dashboardStreakHistory => 'Histórico';
+
+  @override
+  String get dashboardStreakDayUnit => 'dia';
+
+  @override
+  String get dashboardStreakDaysUnit => 'dias';
+
+  @override
+  String dashboardStreakBest(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dias',
+      one: '$count dia',
+    );
+    return 'melhor $_temp0';
+  }
+
+  @override
+  String get dashboardStreakAllTimeBest => 'recorde de todos os tempos';
+
+  @override
+  String get dashboardStreakRestart => 'corra hoje para reiniciá-la';
+
+  @override
+  String get dashboardStreakStart => 'corra hoje para começar uma';
+
+  @override
+  String get dashboardHeatmapLess => 'Menos';
+
+  @override
+  String get dashboardHeatmapMore => 'Mais';
+
+  @override
+  String get dashboardHeatmapTapHint => 'Toque em uma semana para ver o resumo';
+
+  @override
+  String get periodWeeklySummary => 'Resumo semanal';
+
+  @override
+  String get periodMonthlySummary => 'Resumo mensal';
+
+  @override
+  String get periodAllTimeSummary => 'Resumo geral';
+
+  @override
+  String get periodShareTooltip => 'Compartilhar';
+
+  @override
+  String get periodPreviousTooltip => 'Anterior';
+
+  @override
+  String get periodNextTooltip => 'Próximo';
+
+  @override
+  String get periodSwitchToWeekly => 'Toque para mudar para semanal';
+
+  @override
+  String get periodSwitchToMonthly => 'Toque para mudar para mensal';
+
+  @override
+  String get periodSwitchToAllTime => 'Toque para mudar para total';
+
+  @override
+  String get periodStatDistance => 'Distância';
+
+  @override
+  String get periodStatRuns => 'Corridas';
+
+  @override
+  String get periodStatTime => 'Tempo';
+
+  @override
+  String get periodStatAvgPace => 'Ritmo médio';
+
+  @override
+  String get periodEmptyWeek => 'Nenhuma corrida esta semana';
+
+  @override
+  String get periodEmptyMonth => 'Nenhuma corrida este mês';
+
+  @override
+  String get periodShareSummary => 'Compartilhar resumo';
+
+  @override
+  String get periodShareText => 'Texto';
+
+  @override
+  String get periodShareImage => 'Imagem';
+
+  @override
+  String get periodShareImageFailed =>
+      'Não foi possível criar a imagem de compartilhamento';
+
+  @override
+  String get periodShareCardTagline => 'CORREDOR MELHOR';
+
+  @override
+  String get periodShareStatDistance => 'DISTÂNCIA';
+
+  @override
+  String get periodShareStatRuns => 'CORRIDAS';
+
+  @override
+  String get periodShareStatTime => 'TEMPO';
+
+  @override
+  String get periodShareStatAvgPace => 'RITMO MÉDIO';
+
+  @override
+  String get trainingLoadTitle => 'Forma, Fadiga e Frescor';
+
+  @override
+  String trainingLoadSubtitleHr(int days) {
+    return 'TRIMP de frequência cardíaca dos últimos $days dias.';
+  }
+
+  @override
+  String get trainingLoadSubtitleVolume =>
+      'Baseado em volume — defina FC de repouso e máxima nas preferências e registre com uma cinta para mudar para TRIMP.';
+
+  @override
+  String get trainingLoadEmpty =>
+      'Registre algumas corridas para ver sua tendência de forma.';
+
+  @override
+  String get trainingLoadLegendFitness => 'Forma';
+
+  @override
+  String get trainingLoadLegendFatigue => 'Fadiga';
+
+  @override
+  String get trainingLoadLegendForm => 'Frescor';
+
+  @override
+  String trainingLoadLegendEntry(String label, int value) {
+    return '$label · $value';
+  }
+
+  @override
+  String get trainingLoadReadingLoaded =>
+      'Carregado — siga em frente e recupere quando estiver pronto.';
+
+  @override
+  String get trainingLoadReadingTapered =>
+      'Em afunilamento — uma sessão difícil não vai te quebrar.';
+
+  @override
+  String get trainingLoadReadingBalanced =>
+      'Equilibrado — dia leve ou dia difícil, você decide.';
+
+  @override
+  String get intensityTitle => 'INTENSIDADE DE TREINO';
+
+  @override
+  String intensityWindow(int days) {
+    return 'últimos $days dias';
+  }
+
+  @override
+  String intensityBasedOn(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas com FC',
+      one: '$count corrida com FC',
+    );
+    return 'Com base em $_temp0';
+  }
+
+  @override
+  String get mileageTitle => 'QUILOMETRAGEM';
+
+  @override
+  String get mileageWeek => 'Semana';
+
+  @override
+  String get mileageMonth => 'Mês';
+
+  @override
+  String get mileageYear => 'Ano';
+
+  @override
+  String get mileageThisWeek => 'esta semana';
+
+  @override
+  String get mileageThisMonth => 'este mês';
+
+  @override
+  String get mileageThisYear => 'este ano';
+
+  @override
+  String get fitnessTitle => 'Forma';
+
+  @override
+  String get fitnessStatVo2Max => 'VO₂ máx';
+
+  @override
+  String get fitnessStatVo2MaxTooltip =>
+      'Seu motor aeróbico: quanto oxigênio seu corpo consegue usar por minuto. Quanto maior, melhor a forma.';
+
+  @override
+  String get fitnessStatVdot => 'VDOT';
+
+  @override
+  String get fitnessStatVdotTooltip =>
+      'A pontuação de forma de Daniels com base no seu melhor esforço recente. Define seus ritmos de treino.';
+
+  @override
+  String get fitnessStatRuns => 'Corridas';
+
+  @override
+  String get fitnessStatRunsTooltip =>
+      'Corridas recentes longas o suficiente para contar na sua estimativa de forma.';
+
+  @override
+  String get fitnessStatCtl => 'Forma (CTL)';
+
+  @override
+  String get fitnessStatCtlTooltip =>
+      'Sua carga de treino móvel de 42 dias. Cresce devagar; é sua base de resistência.';
+
+  @override
+  String get fitnessStatAtl => 'Fadiga (ATL)';
+
+  @override
+  String get fitnessStatAtlTooltip =>
+      'Sua carga dos últimos 7 dias. Sobe rápido após sessões difíceis e cai com o descanso.';
+
+  @override
+  String get fitnessStatTsb => 'Frescor (TSB)';
+
+  @override
+  String get fitnessStatTsbTooltip =>
+      'Forma menos fadiga. Positivo = descansado e pronto para competir; negativo = com fadiga acumulada.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -9054,4 +9419,369 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get prefsDiscoverableSubtitle =>
       'Quando desativado, sua conta não aparece quando outros corredores buscam pelo nome de exibição. Suas corridas públicas e seu perfil continuam acessíveis para qualquer pessoa com o URL.';
+
+  @override
+  String get dashboardCoachTooltip => 'Treinador';
+
+  @override
+  String get dashboardFeedTooltip => 'Feed de atividades';
+
+  @override
+  String get dashboardRecapTooltip => 'Ano em corrida';
+
+  @override
+  String get dashboardProfileTooltip => 'Meu perfil';
+
+  @override
+  String get dashboardWelcomeTitle => 'Bem-vindo!';
+
+  @override
+  String get dashboardWelcomeBody =>
+      'Seu painel é preenchido assim que você registra uma corrida, define uma meta ou importa seu histórico.';
+
+  @override
+  String get dashboardSetGoal => 'Definir meta';
+
+  @override
+  String get dashboardImportRuns => 'Importar corridas';
+
+  @override
+  String get dashboardPeriodWeek => 'Semana';
+
+  @override
+  String get dashboardPeriodMonth => 'Mês';
+
+  @override
+  String get dashboardPeriodAllTime => 'Total';
+
+  @override
+  String get dashboardSectionStreak => 'Sequência';
+
+  @override
+  String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';
+
+  @override
+  String get dashboardSectionPersonalBests => 'Recordes pessoais';
+
+  @override
+  String get dashboardLongestRun => 'Corrida mais longa';
+
+  @override
+  String dashboardFastestDistance(String distance) {
+    return 'Mais rápido em $distance';
+  }
+
+  @override
+  String get dashboardGoals => 'Metas';
+
+  @override
+  String get dashboardAdd => 'Adicionar';
+
+  @override
+  String get dashboardGoalWeekly => 'SEMANAL';
+
+  @override
+  String get dashboardGoalMonthly => 'MENSAL';
+
+  @override
+  String dashboardGoalTitleFallback(String period) {
+    return 'META $period';
+  }
+
+  @override
+  String get dashboardSetWeeklyGoalA11y =>
+      'Definir uma meta semanal de corrida';
+
+  @override
+  String get dashboardSetFirstGoal => 'Defina sua primeira meta';
+
+  @override
+  String get dashboardSetFirstGoalBody =>
+      'Acompanhe distância, tempo, ritmo ou número de corridas por semana ou mês.';
+
+  @override
+  String get dashboardGoalTapToEdit => 'toque para editar';
+
+  @override
+  String get dashboardGoalComplete => 'Concluída.';
+
+  @override
+  String get dashboardGoalInProgress => 'Em andamento.';
+
+  @override
+  String dashboardGoalA11y(String period, String title, String status) {
+    return 'Meta $period — $title $status';
+  }
+
+  @override
+  String dashboardRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas',
+      one: '$count corrida',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardVert(String value) {
+    return '$value de elevação';
+  }
+
+  @override
+  String dashboardPeriodSummaryA11y(
+    String label,
+    String distance,
+    String runs,
+    String elevation,
+  ) {
+    return 'Resumo de $label, $distance em $runs$elevation';
+  }
+
+  @override
+  String dashboardElevationGainSuffix(String value) {
+    return ', $value de ganho de elevação';
+  }
+
+  @override
+  String get dashboardStreakCurrent => 'Atual';
+
+  @override
+  String get dashboardStreakHistory => 'Histórico';
+
+  @override
+  String get dashboardStreakDayUnit => 'dia';
+
+  @override
+  String get dashboardStreakDaysUnit => 'dias';
+
+  @override
+  String dashboardStreakBest(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count dias',
+      one: '$count dia',
+    );
+    return 'melhor $_temp0';
+  }
+
+  @override
+  String get dashboardStreakAllTimeBest => 'recorde de todos os tempos';
+
+  @override
+  String get dashboardStreakRestart => 'corra hoje para reiniciá-la';
+
+  @override
+  String get dashboardStreakStart => 'corra hoje para começar uma';
+
+  @override
+  String get dashboardHeatmapLess => 'Menos';
+
+  @override
+  String get dashboardHeatmapMore => 'Mais';
+
+  @override
+  String get dashboardHeatmapTapHint => 'Toque em uma semana para ver o resumo';
+
+  @override
+  String get periodWeeklySummary => 'Resumo semanal';
+
+  @override
+  String get periodMonthlySummary => 'Resumo mensal';
+
+  @override
+  String get periodAllTimeSummary => 'Resumo geral';
+
+  @override
+  String get periodShareTooltip => 'Compartilhar';
+
+  @override
+  String get periodPreviousTooltip => 'Anterior';
+
+  @override
+  String get periodNextTooltip => 'Próximo';
+
+  @override
+  String get periodSwitchToWeekly => 'Toque para mudar para semanal';
+
+  @override
+  String get periodSwitchToMonthly => 'Toque para mudar para mensal';
+
+  @override
+  String get periodSwitchToAllTime => 'Toque para mudar para total';
+
+  @override
+  String get periodStatDistance => 'Distância';
+
+  @override
+  String get periodStatRuns => 'Corridas';
+
+  @override
+  String get periodStatTime => 'Tempo';
+
+  @override
+  String get periodStatAvgPace => 'Ritmo médio';
+
+  @override
+  String get periodEmptyWeek => 'Nenhuma corrida esta semana';
+
+  @override
+  String get periodEmptyMonth => 'Nenhuma corrida este mês';
+
+  @override
+  String get periodShareSummary => 'Compartilhar resumo';
+
+  @override
+  String get periodShareText => 'Texto';
+
+  @override
+  String get periodShareImage => 'Imagem';
+
+  @override
+  String get periodShareImageFailed =>
+      'Não foi possível criar a imagem de compartilhamento';
+
+  @override
+  String get periodShareCardTagline => 'CORREDOR MELHOR';
+
+  @override
+  String get periodShareStatDistance => 'DISTÂNCIA';
+
+  @override
+  String get periodShareStatRuns => 'CORRIDAS';
+
+  @override
+  String get periodShareStatTime => 'TEMPO';
+
+  @override
+  String get periodShareStatAvgPace => 'RITMO MÉDIO';
+
+  @override
+  String get trainingLoadTitle => 'Forma, Fadiga e Frescor';
+
+  @override
+  String trainingLoadSubtitleHr(int days) {
+    return 'TRIMP de frequência cardíaca dos últimos $days dias.';
+  }
+
+  @override
+  String get trainingLoadSubtitleVolume =>
+      'Baseado em volume — defina FC de repouso e máxima nas preferências e registre com uma cinta para mudar para TRIMP.';
+
+  @override
+  String get trainingLoadEmpty =>
+      'Registre algumas corridas para ver sua tendência de forma.';
+
+  @override
+  String get trainingLoadLegendFitness => 'Forma';
+
+  @override
+  String get trainingLoadLegendFatigue => 'Fadiga';
+
+  @override
+  String get trainingLoadLegendForm => 'Frescor';
+
+  @override
+  String trainingLoadLegendEntry(String label, int value) {
+    return '$label · $value';
+  }
+
+  @override
+  String get trainingLoadReadingLoaded =>
+      'Carregado — siga em frente e recupere quando estiver pronto.';
+
+  @override
+  String get trainingLoadReadingTapered =>
+      'Em afunilamento — uma sessão difícil não vai te quebrar.';
+
+  @override
+  String get trainingLoadReadingBalanced =>
+      'Equilibrado — dia leve ou dia difícil, você decide.';
+
+  @override
+  String get intensityTitle => 'INTENSIDADE DE TREINO';
+
+  @override
+  String intensityWindow(int days) {
+    return 'últimos $days dias';
+  }
+
+  @override
+  String intensityBasedOn(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas com FC',
+      one: '$count corrida com FC',
+    );
+    return 'Com base em $_temp0';
+  }
+
+  @override
+  String get mileageTitle => 'QUILOMETRAGEM';
+
+  @override
+  String get mileageWeek => 'Semana';
+
+  @override
+  String get mileageMonth => 'Mês';
+
+  @override
+  String get mileageYear => 'Ano';
+
+  @override
+  String get mileageThisWeek => 'esta semana';
+
+  @override
+  String get mileageThisMonth => 'este mês';
+
+  @override
+  String get mileageThisYear => 'este ano';
+
+  @override
+  String get fitnessTitle => 'Forma';
+
+  @override
+  String get fitnessStatVo2Max => 'VO₂ máx';
+
+  @override
+  String get fitnessStatVo2MaxTooltip =>
+      'Seu motor aeróbico: quanto oxigênio seu corpo consegue usar por minuto. Quanto maior, melhor a forma.';
+
+  @override
+  String get fitnessStatVdot => 'VDOT';
+
+  @override
+  String get fitnessStatVdotTooltip =>
+      'A pontuação de forma de Daniels com base no seu melhor esforço recente. Define seus ritmos de treino.';
+
+  @override
+  String get fitnessStatRuns => 'Corridas';
+
+  @override
+  String get fitnessStatRunsTooltip =>
+      'Corridas recentes longas o suficiente para contar na sua estimativa de forma.';
+
+  @override
+  String get fitnessStatCtl => 'Forma (CTL)';
+
+  @override
+  String get fitnessStatCtlTooltip =>
+      'Sua carga de treino móvel de 42 dias. Cresce devagar; é sua base de resistência.';
+
+  @override
+  String get fitnessStatAtl => 'Fadiga (ATL)';
+
+  @override
+  String get fitnessStatAtlTooltip =>
+      'Sua carga dos últimos 7 dias. Sobe rápido após sessões difíceis e cai com o descanso.';
+
+  @override
+  String get fitnessStatTsb => 'Frescor (TSB)';
+
+  @override
+  String get fitnessStatTsbTooltip =>
+      'Forma menos fadiga. Positivo = descansado e pronto para competir; negativo = com fadiga acumulada.';
 }

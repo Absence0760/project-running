@@ -4239,4 +4239,355 @@ class AppLocalizationsJa extends AppLocalizations {
   @override
   String get prefsDiscoverableSubtitle =>
       'オフにすると、他のランナーが表示名で検索してもアカウントは表示されません。公開ランとプロフィールはURLを知っている人なら誰でもアクセスできます。';
+
+  @override
+  String get dashboardCoachTooltip => 'コーチ';
+
+  @override
+  String get dashboardFeedTooltip => 'アクティビティフィード';
+
+  @override
+  String get dashboardRecapTooltip => 'ランニングの一年';
+
+  @override
+  String get dashboardProfileTooltip => 'マイプロフィール';
+
+  @override
+  String get dashboardWelcomeTitle => 'ようこそ！';
+
+  @override
+  String get dashboardWelcomeBody =>
+      'ランを記録したり、目標を設定したり、履歴をインポートすると、ダッシュボードが充実します。';
+
+  @override
+  String get dashboardSetGoal => '目標を設定';
+
+  @override
+  String get dashboardImportRuns => 'ランをインポート';
+
+  @override
+  String get dashboardPeriodWeek => '週';
+
+  @override
+  String get dashboardPeriodMonth => '月';
+
+  @override
+  String get dashboardPeriodAllTime => '全期間';
+
+  @override
+  String get dashboardSectionStreak => '連続記録';
+
+  @override
+  String get dashboardSectionLast20Weeks => '直近20週間';
+
+  @override
+  String get dashboardSectionPersonalBests => '自己ベスト';
+
+  @override
+  String get dashboardLongestRun => '最長ラン';
+
+  @override
+  String dashboardFastestDistance(String distance) {
+    return '最速の$distance';
+  }
+
+  @override
+  String get dashboardGoals => '目標';
+
+  @override
+  String get dashboardAdd => '追加';
+
+  @override
+  String get dashboardGoalWeekly => '毎週';
+
+  @override
+  String get dashboardGoalMonthly => '毎月';
+
+  @override
+  String dashboardGoalTitleFallback(String period) {
+    return '$periodの目標';
+  }
+
+  @override
+  String get dashboardSetWeeklyGoalA11y => '週間ランニング目標を設定';
+
+  @override
+  String get dashboardSetFirstGoal => '最初の目標を設定';
+
+  @override
+  String get dashboardSetFirstGoalBody => '週ごと・月ごとに距離、時間、ペース、ラン回数を記録できます。';
+
+  @override
+  String get dashboardGoalTapToEdit => 'タップして編集';
+
+  @override
+  String get dashboardGoalComplete => '達成。';
+
+  @override
+  String get dashboardGoalInProgress => '進行中。';
+
+  @override
+  String dashboardGoalA11y(String period, String title, String status) {
+    return '$periodの目標 — $title $status';
+  }
+
+  @override
+  String dashboardRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 件のラン',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String dashboardVert(String value) {
+    return '獲得標高 $value';
+  }
+
+  @override
+  String dashboardPeriodSummaryA11y(
+    String label,
+    String distance,
+    String runs,
+    String elevation,
+  ) {
+    return '$labelのサマリー、$runsで$distance$elevation';
+  }
+
+  @override
+  String dashboardElevationGainSuffix(String value) {
+    return '、獲得標高 $value';
+  }
+
+  @override
+  String get dashboardStreakCurrent => '現在';
+
+  @override
+  String get dashboardStreakHistory => '履歴';
+
+  @override
+  String get dashboardStreakDayUnit => '日';
+
+  @override
+  String get dashboardStreakDaysUnit => '日';
+
+  @override
+  String dashboardStreakBest(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '最高 $count 日',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get dashboardStreakAllTimeBest => '歴代最高';
+
+  @override
+  String get dashboardStreakRestart => '今日走って再開しよう';
+
+  @override
+  String get dashboardStreakStart => '今日走って始めよう';
+
+  @override
+  String get dashboardHeatmapLess => '少ない';
+
+  @override
+  String get dashboardHeatmapMore => '多い';
+
+  @override
+  String get dashboardHeatmapTapHint => '週をタップするとサマリーを表示';
+
+  @override
+  String get periodWeeklySummary => '週間サマリー';
+
+  @override
+  String get periodMonthlySummary => '月間サマリー';
+
+  @override
+  String get periodAllTimeSummary => '全期間サマリー';
+
+  @override
+  String get periodShareTooltip => '共有';
+
+  @override
+  String get periodPreviousTooltip => '前へ';
+
+  @override
+  String get periodNextTooltip => '次へ';
+
+  @override
+  String get periodSwitchToWeekly => 'タップして週間表示に切り替え';
+
+  @override
+  String get periodSwitchToMonthly => 'タップして月間表示に切り替え';
+
+  @override
+  String get periodSwitchToAllTime => 'タップして全期間表示に切り替え';
+
+  @override
+  String get periodStatDistance => '距離';
+
+  @override
+  String get periodStatRuns => 'ラン';
+
+  @override
+  String get periodStatTime => '時間';
+
+  @override
+  String get periodStatAvgPace => '平均ペース';
+
+  @override
+  String get periodEmptyWeek => '今週はランがありません';
+
+  @override
+  String get periodEmptyMonth => '今月はランがありません';
+
+  @override
+  String get periodShareSummary => 'サマリーを共有';
+
+  @override
+  String get periodShareText => 'テキスト';
+
+  @override
+  String get periodShareImage => '画像';
+
+  @override
+  String get periodShareImageFailed => '共有画像を作成できませんでした';
+
+  @override
+  String get periodShareCardTagline => 'ベターランナー';
+
+  @override
+  String get periodShareStatDistance => '距離';
+
+  @override
+  String get periodShareStatRuns => 'ラン';
+
+  @override
+  String get periodShareStatTime => '時間';
+
+  @override
+  String get periodShareStatAvgPace => '平均ペース';
+
+  @override
+  String get trainingLoadTitle => 'フィットネス・疲労・調子';
+
+  @override
+  String trainingLoadSubtitleHr(int days) {
+    return '過去$days日間の心拍TRIMP。';
+  }
+
+  @override
+  String get trainingLoadSubtitleVolume =>
+      '走行量ベース — 設定で安静時・最大心拍を入力し、ストラップで記録するとTRIMPに切り替わります。';
+
+  @override
+  String get trainingLoadEmpty => '数回ランを記録するとフィットネスの推移が見られます。';
+
+  @override
+  String get trainingLoadLegendFitness => 'フィットネス';
+
+  @override
+  String get trainingLoadLegendFatigue => '疲労';
+
+  @override
+  String get trainingLoadLegendForm => '調子';
+
+  @override
+  String trainingLoadLegendEntry(String label, int value) {
+    return '$label · $value';
+  }
+
+  @override
+  String get trainingLoadReadingLoaded => '負荷が高い — 無理なく続けて、準備ができたら回復しよう。';
+
+  @override
+  String get trainingLoadReadingTapered => '調整済み — ハードな練習でも問題なし。';
+
+  @override
+  String get trainingLoadReadingBalanced => 'バランス良好 — 楽な日もハードな日もお好みで。';
+
+  @override
+  String get intensityTitle => 'トレーニング強度';
+
+  @override
+  String intensityWindow(int days) {
+    return '直近$days日';
+  }
+
+  @override
+  String intensityBasedOn(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件のラン',
+    );
+    return '心拍記録のある$_temp0に基づく';
+  }
+
+  @override
+  String get mileageTitle => '走行距離';
+
+  @override
+  String get mileageWeek => '週';
+
+  @override
+  String get mileageMonth => '月';
+
+  @override
+  String get mileageYear => '年';
+
+  @override
+  String get mileageThisWeek => '今週';
+
+  @override
+  String get mileageThisMonth => '今月';
+
+  @override
+  String get mileageThisYear => '今年';
+
+  @override
+  String get fitnessTitle => 'フィットネス';
+
+  @override
+  String get fitnessStatVo2Max => 'VO₂ max';
+
+  @override
+  String get fitnessStatVo2MaxTooltip => '有酸素能力の指標：1分間に体が使える酸素量。高いほど高フィットネス。';
+
+  @override
+  String get fitnessStatVdot => 'VDOT';
+
+  @override
+  String get fitnessStatVdotTooltip =>
+      'ダニエルズのランニングフィットネススコア。直近のベスト走から算出し、トレーニングペースを決定します。';
+
+  @override
+  String get fitnessStatRuns => 'ラン';
+
+  @override
+  String get fitnessStatRunsTooltip => 'フィットネス推定に反映できる十分な長さの直近のラン。';
+
+  @override
+  String get fitnessStatCtl => 'フィットネス (CTL)';
+
+  @override
+  String get fitnessStatCtlTooltip => '42日間移動平均のトレーニング負荷。ゆっくり積み上がる持久力の土台。';
+
+  @override
+  String get fitnessStatAtl => '疲労 (ATL)';
+
+  @override
+  String get fitnessStatAtlTooltip => '直近7日間の負荷。ハードな練習で急上昇し、休養で下がります。';
+
+  @override
+  String get fitnessStatTsb => '調子 (TSB)';
+
+  @override
+  String get fitnessStatTsbTooltip =>
+      'フィットネスから疲労を引いた値。プラス＝好調でレース向き、マイナス＝疲労が残る。';
 }

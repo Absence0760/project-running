@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../run_intensity.dart';
 
 /// Dashboard card surfacing how much of the runner's recent training
@@ -47,6 +48,7 @@ class IntensityCard extends StatelessWidget {
     if (breakdown.hrTrackedRuns == 0) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Card(
       margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       child: Padding(
@@ -57,7 +59,7 @@ class IntensityCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'TRAINING INTENSITY',
+                  l10n.intensityTitle,
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.06,
@@ -66,7 +68,7 @@ class IntensityCard extends StatelessWidget {
                 ),
                 const Spacer(),
                 Text(
-                  'last $windowDays days',
+                  l10n.intensityWindow(windowDays),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -79,8 +81,7 @@ class IntensityCard extends StatelessWidget {
             _ZoneLegend(breakdown: breakdown),
             const SizedBox(height: 8),
             Text(
-              'Based on ${breakdown.hrTrackedRuns} HR-tracked '
-              '${breakdown.hrTrackedRuns == 1 ? "run" : "runs"}',
+              l10n.intensityBasedOn(breakdown.hrTrackedRuns),
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),

@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../mileage_trend.dart';
 import '../preferences.dart';
 
@@ -50,11 +51,12 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
     if (periods.isEmpty) return const SizedBox.shrink();
 
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final maxDistance = periods
         .map((p) => p.distanceM)
         .fold<int>(0, (a, b) => a > b ? a : b);
     final latest = periods.last;
-    final latestLabel = _latestLabel(_view);
+    final latestLabel = _latestLabel(l10n, _view);
 
     return Card(
       // Use the Card default margin (EdgeInsets.all(4)) so this card
@@ -72,7 +74,7 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
             Row(
               children: [
                 Text(
-                  'MILEAGE',
+                  l10n.mileageTitle,
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.06,
@@ -130,10 +132,11 @@ class _MileageTrendCardState extends State<MileageTrendCard> {
 
   /// "this week" / "this month" / "this year" — the suffix on the
   /// spotlight headline so the user reads the value in context.
-  static String _latestLabel(MileageView v) => switch (v) {
-        MileageView.weekly => 'this week',
-        MileageView.monthly => 'this month',
-        MileageView.yearly => 'this year',
+  static String _latestLabel(AppLocalizations l10n, MileageView v) =>
+      switch (v) {
+        MileageView.weekly => l10n.mileageThisWeek,
+        MileageView.monthly => l10n.mileageThisMonth,
+        MileageView.yearly => l10n.mileageThisYear,
       };
 }
 
@@ -144,11 +147,14 @@ class _ViewToggle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SegmentedButton<MileageView>(
-      segments: const [
-        ButtonSegment(value: MileageView.weekly, label: Text('Week')),
-        ButtonSegment(value: MileageView.monthly, label: Text('Month')),
-        ButtonSegment(value: MileageView.yearly, label: Text('Year')),
+      segments: [
+        ButtonSegment(
+            value: MileageView.weekly, label: Text(l10n.mileageWeek)),
+        ButtonSegment(
+            value: MileageView.monthly, label: Text(l10n.mileageMonth)),
+        ButtonSegment(value: MileageView.yearly, label: Text(l10n.mileageYear)),
       ],
       selected: {view},
       onSelectionChanged: (s) => onChanged(s.first),
