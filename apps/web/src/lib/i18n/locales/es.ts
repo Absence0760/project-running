@@ -1764,6 +1764,8 @@ export const messages = {
 	"periodSummary.runsThisMonth": "Carreras este mes",
 	"periodSummary.emptyWeek": "No hay carreras registradas esta semana. Usa Anterior / Siguiente arriba para ver otras semanas, o cierra esto y registra una nueva carrera.",
 	"periodSummary.emptyMonth": "No hay carreras registradas este mes. Usa Anterior / Siguiente arriba para ver otros meses, o cierra esto y registra una nueva carrera.",
+	"periodSummary.runsAllTime": "Todas las carreras",
+	"periodSummary.emptyAll": "Aún no hay carreras. Registra o importa una carrera y aparecerá aquí.",
 	"periodSummary.weekOf": "Semana del",
 	"periodSummary.shareDistance": "Distancia",
 	"periodSummary.shareTime": "Tiempo",

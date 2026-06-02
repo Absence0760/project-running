@@ -7,7 +7,7 @@
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 
-	type PeriodType = 'week' | 'month';
+	type PeriodType = 'week' | 'month' | 'all';
 
 	interface Props {
 		runs: Run[];
@@ -76,6 +76,7 @@
 	}
 
 	function periodLabel(d: Date, t: PeriodType): string {
+		if (t === 'all') return m('dash.allTime');
 		if (t === 'week') {
 			const end = periodEnd(d, t);
 			return `${d.toLocaleDateString(activeFormatLocale(), { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(
@@ -87,6 +88,11 @@
 	}
 
 	let periodRuns = $derived.by(() => {
+		if (type === 'all') {
+			return [...runs].sort(
+				(a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime(),
+			);
+		}
 		const start = startDate.getTime();
 		const end = periodEnd(startDate, type).getTime();
 		return runs.filter((r) => {
@@ -131,7 +137,13 @@
 
 <div class="summary">
 	<div class="nav-row">
-		<button class="nav-btn" onclick={() => shiftPeriod(-1)} type="button">
+		<button
+			class="nav-btn"
+			onclick={() => shiftPeriod(-1)}
+			type="button"
+			disabled={type === 'all'}
+			style:visibility={type === 'all' ? 'hidden' : 'visible'}
+		>
 			<span class="material-symbols">chevron_left</span>
 			{m('periodSummary.previous')}
 		</button>
@@ -149,10 +161,22 @@
 					onclick={() => setType('month')}
 					type="button"
 				>{m('periodSummary.month')}</button>
+				<button
+					class="toggle-btn"
+					class:active={type === 'all'}
+					onclick={() => setType('all')}
+					type="button"
+				>{m('dash.allTime')}</button>
 			</div>
 			<h2>{periodLabel(startDate, type)}</h2>
 		</div>
-		<button class="nav-btn" onclick={() => shiftPeriod(1)} type="button">
+		<button
+			class="nav-btn"
+			onclick={() => shiftPeriod(1)}
+			type="button"
+			disabled={type === 'all'}
+			style:visibility={type === 'all' ? 'hidden' : 'visible'}
+		>
 			{m('periodSummary.next')}
 			<span class="material-symbols">chevron_right</span>
 		</button>
@@ -193,10 +217,24 @@
 	</div>
 
 	<section class="card">
-		<h3>{m(type === 'week' ? 'periodSummary.runsThisWeek' : 'periodSummary.runsThisMonth')}</h3>
+		<h3>
+			{m(
+				type === 'week'
+					? 'periodSummary.runsThisWeek'
+					: type === 'month'
+						? 'periodSummary.runsThisMonth'
+						: 'periodSummary.runsAllTime',
+			)}
+		</h3>
 		{#if periodRuns.length === 0}
 			<p class="muted">
-				{m(type === 'week' ? 'periodSummary.emptyWeek' : 'periodSummary.emptyMonth')}
+				{m(
+					type === 'week'
+						? 'periodSummary.emptyWeek'
+						: type === 'month'
+							? 'periodSummary.emptyMonth'
+							: 'periodSummary.emptyAll',
+				)}
 			</p>
 		{:else}
 			<div class="run-list">

@@ -1764,6 +1764,8 @@ export const messages = {
 	"periodSummary.runsThisMonth": "Läufe diesen Monat",
 	"periodSummary.emptyWeek": "Für diese Woche sind keine Läufe erfasst. Nutze oben Zurück / Weiter, um andere Wochen anzusehen, oder schließe dies und zeichne einen neuen Lauf auf.",
 	"periodSummary.emptyMonth": "Für diesen Monat sind keine Läufe erfasst. Nutze oben Zurück / Weiter, um andere Monate anzusehen, oder schließe dies und zeichne einen neuen Lauf auf.",
+	"periodSummary.runsAllTime": "Alle Läufe",
+	"periodSummary.emptyAll": "Noch keine Läufe. Zeichne einen Lauf auf oder importiere einen, dann erscheint er hier.",
 	"periodSummary.weekOf": "Woche vom",
 	"periodSummary.shareDistance": "Distanz",
 	"periodSummary.shareTime": "Zeit",

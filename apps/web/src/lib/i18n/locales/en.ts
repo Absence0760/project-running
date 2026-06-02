@@ -1772,6 +1772,8 @@ export const en = {
 	"periodSummary.runsThisMonth": "Runs this month",
 	"periodSummary.emptyWeek": "No runs logged for this week. Use Previous / Next above to browse other weeks, or close this and record a new run.",
 	"periodSummary.emptyMonth": "No runs logged for this month. Use Previous / Next above to browse other months, or close this and record a new run.",
+	"periodSummary.runsAllTime": "All runs",
+	"periodSummary.emptyAll": "No runs yet. Record or import a run and it'll show up here.",
 	"periodSummary.weekOf": "Week of",
 	"periodSummary.shareDistance": "Distance",
 	"periodSummary.shareTime": "Time",

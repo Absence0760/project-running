@@ -154,6 +154,28 @@ test.describe('/dashboard', () => {
 		).toBeVisible();
 	});
 
+	test('clicking the "All time" (Longest Run) stat tile opens the all-time summary', async ({
+		page
+	}) => {
+		// The Longest Run / "All time" card is now a button that opens the
+		// shared <PeriodSummary> in all-time mode (periodModal type 'all').
+		await page.goto('/dashboard');
+
+		const allTimeCard = page.getByRole('button', { name: /Longest Run/ }).first();
+		await expect(allTimeCard).toBeVisible({ timeout: 10_000 });
+		await allTimeCard.click();
+
+		await expect(
+			page.locator('.modal-header h2', { hasText: 'Period summary' })
+		).toBeVisible({ timeout: 5_000 });
+
+		// The all-time toggle inside the modal confirms it opened in
+		// all-time mode, not week/month.
+		await expect(
+			page.locator('.modal').getByRole('button', { name: 'All time' })
+		).toBeVisible();
+	});
+
 	test('the four stat cards (This Week / Total Runs / Longest Run / Pace) render', async ({
 		page
 	}) => {

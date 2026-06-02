@@ -208,10 +208,10 @@
 	/// /plans/[id] with a `?edit=` query.
 	let editingWorkout = $state<PlanWorkout | null>(null);
 
-	/// Period-summary modal state. The stat cards (This Week / This Month)
+	/// Period-summary modal state. The stat cards (This Week / All time)
 	/// open the same `<PeriodSummary>` component that the standalone
 	/// /dashboard/period/... page uses, so deep-linking still works.
-	let periodModal = $state<{ type: 'week' | 'month'; date: Date } | null>(null);
+	let periodModal = $state<{ type: 'week' | 'month' | 'all'; date: Date } | null>(null);
 
 	function openNewGoal() {
 		editingGoal = {
@@ -855,11 +855,15 @@
 				<span class="stat-value">{totalRuns}</span>
 				<span class="stat-sub">{m('dash.allSources')}</span>
 			</div>
-			<div class="stat-card">
+			<button
+				type="button"
+				class="stat-card stat-card-button"
+				onclick={() => (periodModal = { type: 'all', date: new Date() })}
+			>
 				<span class="stat-label">{m('dash.statLongestRun')}</span>
 				<span class="stat-value">{formatDistance(longestRun)}</span>
 				<span class="stat-sub">{m('dash.allTime')}</span>
-			</div>
+			</button>
 			<div class="stat-card">
 				<span class="stat-label">{m('dash.statThisWeekVert')}</span>
 				<span class="stat-value">{formatElevation(thisWeekVertMetres)}</span>

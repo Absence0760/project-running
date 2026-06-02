@@ -1763,6 +1763,8 @@ export const messages = {
 	"periodSummary.runsThisMonth": "Corridas deste mês",
 	"periodSummary.emptyWeek": "Nenhuma corrida registrada nesta semana. Use Anterior / Próximo acima para ver outras semanas, ou feche isto e registre uma nova corrida.",
 	"periodSummary.emptyMonth": "Nenhuma corrida registrada neste mês. Use Anterior / Próximo acima para ver outros meses, ou feche isto e registre uma nova corrida.",
+	"periodSummary.runsAllTime": "Todas as corridas",
+	"periodSummary.emptyAll": "Nenhuma corrida ainda. Registre ou importe uma corrida e ela aparecerá aqui.",
 	"periodSummary.weekOf": "Semana de",
 	"periodSummary.shareDistance": "Distância",
 	"periodSummary.shareTime": "Tempo",

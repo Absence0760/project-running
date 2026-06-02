@@ -43,6 +43,19 @@ test.describe('/dashboard/period/[type]/[date]', () => {
 		).toBeVisible({ timeout: 10_000 });
 	});
 
+	test('all-time deep-link with type=all mounts the summary', async ({
+		page
+	}) => {
+		// `all` is the third period type — no date filter, lifetime totals.
+		// The date segment is irrelevant for all-time but must still parse;
+		// the "All time" toggle being active is the signal it mounted.
+		await page.goto('/dashboard/period/all/2026-04-01');
+
+		await expect(
+			page.getByRole('button', { name: 'All time' })
+		).toBeVisible({ timeout: 10_000 });
+	});
+
 	test('invalid date string falls back to today (no crash)', async ({
 		page
 	}) => {

@@ -1760,6 +1760,8 @@ export const messages = {
 	"periodSummary.runsThisMonth": "今月のラン",
 	"periodSummary.emptyWeek": "今週のランは記録されていません。上の「前へ／次へ」で他の週を見るか、これを閉じて新しいランを記録してください。",
 	"periodSummary.emptyMonth": "今月のランは記録されていません。上の「前へ／次へ」で他の月を見るか、これを閉じて新しいランを記録してください。",
+	"periodSummary.runsAllTime": "すべてのラン",
+	"periodSummary.emptyAll": "まだランがありません。ランを記録またはインポートすると、ここに表示されます。",
 	"periodSummary.weekOf": "週",
 	"periodSummary.shareDistance": "距離",
 	"periodSummary.shareTime": "時間",

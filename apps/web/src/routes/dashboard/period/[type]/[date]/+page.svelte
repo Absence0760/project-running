@@ -7,10 +7,14 @@
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import type { Run } from '$lib/types';
 
-	type PeriodType = 'week' | 'month';
+	type PeriodType = 'week' | 'month' | 'all';
 
 	let type = $derived<PeriodType>(
-		$page.params.type === 'month' ? 'month' : 'week',
+		$page.params.type === 'month'
+			? 'month'
+			: $page.params.type === 'all'
+				? 'all'
+				: 'week',
 	);
 	let initialDate = $derived<Date>(parsePeriodDate($page.params.date ?? ''));
 
@@ -52,12 +56,18 @@
 	</a>
 
 	<header class="page-header">
-		<span class="kicker">{type === 'week' ? 'Weekly summary' : 'Monthly summary'}</span>
+		<span class="kicker"
+			>{type === 'week'
+				? 'Weekly summary'
+				: type === 'month'
+					? 'Monthly summary'
+					: 'All-time summary'}</span
+		>
 		<h1>Period summary</h1>
 		<p class="tagline">
 			Mileage, time, pace, and a chronological run list for the
-			{type === 'week' ? 'week' : 'month'} you picked. Use the toggle below to
-			switch view — the URL updates so you can share or bookmark.
+			{type === 'week' ? 'week' : type === 'month' ? 'month' : 'period'} you picked. Use the
+			toggle below to switch view — the URL updates so you can share or bookmark.
 		</p>
 	</header>
 

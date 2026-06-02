@@ -1764,6 +1764,8 @@ export const messages = {
 	"periodSummary.runsThisMonth": "Courses ce mois-ci",
 	"periodSummary.emptyWeek": "Aucune course enregistrée pour cette semaine. Utilise Précédent / Suivant ci-dessus pour parcourir d'autres semaines, ou ferme ceci et enregistre une nouvelle course.",
 	"periodSummary.emptyMonth": "Aucune course enregistrée pour ce mois-ci. Utilise Précédent / Suivant ci-dessus pour parcourir d'autres mois, ou ferme ceci et enregistre une nouvelle course.",
+	"periodSummary.runsAllTime": "Toutes les courses",
+	"periodSummary.emptyAll": "Aucune course pour l'instant. Enregistre ou importe une course et elle apparaîtra ici.",
 	"periodSummary.weekOf": "Semaine du",
 	"periodSummary.shareDistance": "Distance",
 	"periodSummary.shareTime": "Temps",
