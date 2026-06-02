@@ -207,10 +207,12 @@ test.describe('/runs', () => {
 
 		await page.getByLabel('Source').selectOption('parkrun');
 		const cards = page.locator('.run-card');
-		// Wait for the list to settle on the narrowed set.
-		await expect.poll(() => cards.count(), { timeout: 5_000 }).toBeLessThan(beforeCount);
+		// Adding a filter triggers a FULL refetch (the list briefly empties
+		// while it loads), so poll for the settled parkrun set rather than
+		// `< beforeCount` — the latter is satisfied by the transient empty
+		// loading state and reads 0 before the rows land.
+		await expect.poll(() => cards.count(), { timeout: 10_000 }).toBeGreaterThanOrEqual(3);
 		const parkrunCount = await cards.count();
-		expect(parkrunCount).toBeGreaterThanOrEqual(3);
 		expect(parkrunCount).toBeLessThan(beforeCount);
 
 		// Restore.
