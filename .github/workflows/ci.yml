@@ -74,6 +74,18 @@ jobs:
         run: |
           node apps/backend/scripts/check_migration_versions.mjs
           node --test apps/backend/scripts/check_migration_versions.test.mjs
+      # These two checks parse source files only (no DB), so they run BEFORE
+      # the Supabase stack starts. Keeping them after it meant a broken stack
+      # — e.g. the run-26820381977 migration-version collision — silently
+      # SKIPPED the entire web unit suite, so ~2 days of guard drift from the
+      # i18n string-extraction work landed unnoticed and only surfaced once
+      # the stack was fixed. Running them up front makes web-unit / constraint
+      # regressions fail fast and independent of stack health.
+      - name: CHECK constraints vs TS unions
+        run: npm run check:check-constraints --workspace=apps/web
+      - name: Web TS unit tests
+        working-directory: apps/web
+        run: npx tsx --test 'src/lib/**/*.test.ts'
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
@@ -97,11 +109,6 @@ jobs:
         run: |
           echo "::error::apps/web/src/lib/database.types.ts is out of sync with the Supabase schema."
           echo "Run 'npm run gen:types' locally and commit the result."
-      - name: CHECK constraints vs TS unions
-        run: npm run check:check-constraints --workspace=apps/web
-      - name: Web TS unit tests
-        working-directory: apps/web
-        run: npx tsx --test 'src/lib/**/*.test.ts'
 
   parity-matrix:
     name: Parity matrix drift

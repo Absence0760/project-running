@@ -30,11 +30,22 @@ test('Dashboard readiness card hides when TSB is null', () => {
 	// Reason: showing the card with zero contributors and the
 	// "Connect sleep + HR" placeholder is a worse signal than not
 	// showing it at all. Hide when there's no real input.
+	//
+	// Since 944f1f7b ("one training-load source for the card, advice,
+	// and chart") the gate reads the unified `loadNow` derivation rather
+	// than `liveSnap.trainingStressBal` directly; `loadNow` is null
+	// exactly when there is no TSB to score, and readiness is fed from
+	// `loadNow.tsb`. Same invariant (hide when no TSB), single source.
 	const source = read('src/routes/dashboard/+page.svelte');
 	assert.match(
 		source,
-		/\{#if liveSnap\.trainingStressBal != null\}/,
-		'readiness card must gate on TSB presence',
+		/\{#if loadNow != null\}\s*<section class="readiness-card/,
+		'readiness card must gate on the unified training-load source (loadNow)',
+	);
+	assert.match(
+		source,
+		/computeReadiness\(\{\s*tsb: loadNow\?\.tsb/,
+		'readiness score must be fed from loadNow.tsb (the gated TSB source)',
 	);
 });
 
@@ -131,8 +142,20 @@ test('/guided makes clear that recording happens on mobile', () => {
 	// Reason: web has no live recording (decisions §24). If the page
 	// silently implied otherwise, users would expect a Start button
 	// that can't exist here.
+	//
+	// The literal note was extracted into the i18n catalogue (key
+	// `guidedList.note`) when the page was localised, so the guard now
+	// checks the page renders that key AND the English catalogue copy
+	// still spells out the mobile hand-off. Same invariant, across the
+	// translation indirection.
 	const source = read('src/routes/guided/+page.svelte');
-	assert.match(source, /Open these on the mobile app|mobile app/i, 'mobile hand-off note missing');
+	assert.match(source, /guidedList\.note/, 'page must render the mobile hand-off note key');
+	const en = read('src/lib/i18n/locales/en.ts');
+	assert.match(
+		en,
+		/"guidedList\.note":\s*"[^"]*mobile app[^"]*"/i,
+		'guidedList.note copy must still make clear runs happen on the mobile app',
+	);
 });
 
 test('/guided/[id] uses findGuidedRun for the lookup', () => {

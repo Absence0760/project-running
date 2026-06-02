@@ -150,7 +150,16 @@ test('SegmentsPanel.svelte announces a self-held crown above the list', () => {
 	// rank-1 holder under the current filter.
 	const source = read('src/lib/components/SegmentsPanel.svelte');
 	assert.match(source, /class="crown-banner"/, 'crown banner class missing');
-	assert.match(source, /You hold this crown/, 'crown banner copy missing');
+	// Copy was extracted into the i18n catalogue (segments.youHoldCrown);
+	// assert the banner renders that key and the English copy still
+	// confirms self-ownership.
+	assert.match(source, /t\('segments\.youHoldCrown'/, 'crown banner must render the youHoldCrown key');
+	const en = read('src/lib/i18n/locales/en.ts');
+	assert.match(
+		en,
+		/"segments\.youHoldCrown":\s*"You hold this crown/,
+		'segments.youHoldCrown copy must confirm the viewer holds the crown',
+	);
 });
 
 test('data.ts re-exports the moved constants from segments.ts', () => {

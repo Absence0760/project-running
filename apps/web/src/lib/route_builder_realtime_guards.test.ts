@@ -322,41 +322,45 @@ test('/routes/new wires picked start/end into RouteBuilder markers', () => {
 // hover, fills the viewport.
 
 test('RouteHeatmap exposes route polylines clickable to /routes/[id]', () => {
+	// The heatmap was redesigned (57b9d588 + 18fdee4c): clicking a route
+	// now PINS it on the map for comparison instead of navigating away,
+	// and routes are opened from the discover sidebar's result list via
+	// an explicit "view" link. The invariant the guard protects is
+	// unchanged — a route spotted on the heatmap must be openable at
+	// /routes/[id] — so it now pins the explicit view link rather than
+	// the old goto()-on-click + min-zoom overlay.
 	const src = read('src/lib/components/RouteHeatmap.svelte');
 	assert.match(
 		src,
-		/ROUTES_OVERLAY_MIN_ZOOM/,
-		'RouteHeatmap should gate the polyline overlay on a min-zoom ' +
-			"threshold so the heatmap stays the dominant signal at city scale.",
-	);
-	assert.match(
-		src,
-		/nearbyPublicRoutes/,
-		'RouteHeatmap should use the existing nearbyPublicRoutes RPC ' +
-			'to populate the clickable polyline overlay.',
-	);
-	assert.match(
-		src,
-		/goto\(`\/routes\/\$\{[^}]+\}`\)/,
-		'Clicking a polyline must navigate to /routes/[id] so the user ' +
+		/href="\/routes\/\{[^}]+\}"/,
+		'The result list must link each route to /routes/[id] so the user ' +
 			'can open the route they spotted on the heatmap.',
+	);
+	assert.match(
+		src,
+		/data-testid="result-view"/,
+		'The per-route "view" link must keep its result-view testid so the ' +
+			'e2e suite can assert routes are openable from the heatmap.',
 	);
 });
 
-test('RouteHeatmap legend fades when the cursor enters the map', () => {
+test('RouteHeatmap legend collapses out of the way', () => {
+	// The hover-to-dim legend was replaced by a collapsible discover
+	// sidebar (same goal: get the route list out of the way while the
+	// user inspects the map). The invariant is now a toggleable sidebar
+	// whose collapsed state is driven by `sidebarOpen`.
 	const src = read('src/lib/components/RouteHeatmap.svelte');
 	assert.match(
 		src,
-		/onpointerenter=\{\(\)\s*=>\s*\(pointerOnMap = true\)\}/,
-		'RouteHeatmap must set pointerOnMap=true on pointerenter so the ' +
-			'legend dims out of the way while the user inspects the map.',
+		/class:collapsed=\{!sidebarOpen\}/,
+		'The discover sidebar must collapse when sidebarOpen is false so it ' +
+			'gets out of the way of the map.',
 	);
 	assert.match(
 		src,
-		/class:dimmed=\{pointerOnMap\b/,
-		"The legend must carry the class:dimmed binding (driven by " +
-			'pointerOnMap, optionally gated on the expanded state) so the ' +
-			'CSS opacity transition fires when the cursor enters the map.',
+		/data-testid="sidebar-toggle"[\s\S]*?aria-expanded=\{sidebarOpen\}/,
+		'The sidebar toggle must reflect open/closed state via aria-expanded ' +
+			'(accessible collapse control).',
 	);
 });
 

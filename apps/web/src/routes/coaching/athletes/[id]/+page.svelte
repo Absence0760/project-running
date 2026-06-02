@@ -336,7 +336,7 @@
 		flex: 0 0 5rem;
 	}
 	.r-private {
-		margin-left: auto;
+		margin-inline-start: auto;
 		font-size: 0.72rem;
 		color: var(--color-text-tertiary);
 		border: 1px solid var(--color-border);
@@ -344,7 +344,7 @@
 		padding: 1px 8px;
 	}
 	.status-pill {
-		margin-left: auto;
+		margin-inline-start: auto;
 		flex-shrink: 0;
 		font-size: 0.72rem;
 		font-weight: 600;

@@ -1686,9 +1686,15 @@ test('accessibility: sidebar profile popover has focus trap + ESC close + focus 
 	);
 	assert.match(
 		src,
-		/aria-label="Account menu"/,
-		'popover root must carry an aria-label so screen readers ' +
-			'announce the menu region.',
+		/aria-label=\{m\('shell\.accountMenu'\)\}/,
+		'popover root must carry an aria-label (now via the i18n key ' +
+			'shell.accountMenu) so screen readers announce the menu region.',
+	);
+	const en = read('src/lib/i18n/locales/en.ts');
+	assert.match(
+		en,
+		/'shell\.accountMenu':\s*'Account menu'/,
+		'shell.accountMenu copy must still name the account menu region.',
 	);
 });
 
@@ -1707,17 +1713,31 @@ test('accessibility: chart svgs + map canvas carry role + aria-label', () => {
 		'CalendarHeatmap.svelte <svg> must carry role="img" + an ' +
 			'aria-label.',
 	);
+	// TrainingLoadChart + RunMap had their accessible names extracted
+	// into the i18n catalogue, so assert the labelled-landmark wiring
+	// (via the m()/t() key) plus the English copy that names each.
 	assert.match(
 		train,
-		/<svg[^>]*role="img"[^>]*aria-label="Training load chart/s,
+		/<svg[^>]*role="img"[^>]*aria-label=\{t\('trainingLoad\.chartAriaLabel'\)\}/s,
 		'TrainingLoadChart.svelte <svg> must carry role="img" + an ' +
 			'aria-label that names the chart.',
 	);
+	const en = read('src/lib/i18n/locales/en.ts');
+	assert.match(
+		en,
+		/"trainingLoad\.chartAriaLabel":\s*"Training load chart/,
+		'trainingLoad.chartAriaLabel copy must name the training-load chart.',
+	);
 	assert.match(
 		map,
-		/<div\s+class="run-map-wrapper"\s+role="region"\s+aria-label="Run map">/,
-		'RunMap.svelte wrapper must carry role="region" + aria-label="Run map" ' +
-			'so AT users can skip past it or into it.',
+		/<div\s+class="run-map-wrapper"\s+role="region"\s+aria-label=\{m\('runMap\.regionLabel'\)\}>/,
+		'RunMap.svelte wrapper must carry role="region" + an aria-label ' +
+			'(runMap.regionLabel) so AT users can skip past it or into it.',
+	);
+	assert.match(
+		en,
+		/"runMap\.regionLabel":\s*"Run map"/,
+		'runMap.regionLabel copy must name the run map region.',
 	);
 });
 
@@ -1793,18 +1813,27 @@ test('accessibility: every top-level page renders an h1 (WCAG 1.3.1 + 2.4.6)', (
 	// couldn't identify which route they were on. visually-hidden
 	// h1s preserve the visual design while giving the heading-by-
 	// headings flow an anchor.
-	for (const [path, expectedText] of [
-		['src/routes/dashboard/+page.svelte', 'Dashboard'],
-		['src/routes/runs/+page.svelte', 'Run history'],
-		['src/routes/coach/+page.svelte', 'AI Coach'],
+	// The h1 text was extracted into the i18n catalogue, so assert each
+	// page renders a visually-hidden h1 bound to its heading key AND the
+	// English copy still names the route. Same heading-by-headings anchor.
+	const en = read('src/lib/i18n/locales/en.ts');
+	for (const [path, key, expectedText] of [
+		['src/routes/dashboard/+page.svelte', 'dash.pageHeading', 'Dashboard'],
+		['src/routes/runs/+page.svelte', 'runs.heading', 'Run history'],
+		['src/routes/coach/+page.svelte', 'coachPage.h1', 'AI Coach'],
 	] as const) {
 		const src = read(path);
 		assert.match(
 			src,
 			new RegExp(
-				`<h1\\s+class="visually-hidden">${expectedText}</h1>`,
+				`<h1\\s+class="visually-hidden">\\{m\\('${key.replace('.', '\\.')}'\\)\\}</h1>`,
 			),
-			`${path} must render <h1 class="visually-hidden">${expectedText}</h1>`,
+			`${path} must render a visually-hidden h1 bound to m('${key}')`,
+		);
+		assert.match(
+			en,
+			new RegExp(`"${key.replace('.', '\\.')}":\\s*"${expectedText}"`),
+			`${key} copy must name the route ("${expectedText}")`,
 		);
 	}
 });
