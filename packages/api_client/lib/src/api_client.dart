@@ -2355,20 +2355,36 @@ class ApiClient {
     return rows.length;
   }
 
-  /// Fetch the gear assigned to a single run. RLS gates the read to
-  /// runs the viewer can see (owner OR public run). Drives the gear
-  /// chip on run-detail screens. Returns the joined `gear` rows
-  /// directly so the caller doesn't need a second round-trip.
+  /// Fetch the gear assigned to a single run. Goes through the
+  /// `public_run_gear` SECURITY DEFINER RPC (migration 20261126_001) — the
+  /// same path the web `fetchRunGear` uses — NOT a `run_gear -> gear` join.
+  /// The `gear` SELECT policy is owner-only, so a join returns NULL gear rows
+  /// for any non-owner (the chip would never render on a shared/public run);
+  /// the RPC gates on `is_run_visible_to` and projects ONLY the public columns
+  /// (id / kind / name / brand / model), so it's leak-free even for a public
+  /// run. Drives the gear chip on run-detail screens (decisions §116).
+  ///
+  /// The non-projected `GearRow` fields (ownerId / dates / isDefault / notes /
+  /// target / retired) are owner-private and deliberately absent from the RPC;
+  /// they're filled with placeholders here and are NEVER read on the chip path
+  /// (run_gear_chips reads only id / kind / name). For the owner's editable
+  /// inventory use [fetchMyGear], which returns full rows via the owner policy.
   Future<List<GearRow>> fetchRunGear(String runId) async {
-    final data = await _client
-        .from(RunGearRow.table)
-        .select('gear:gear_id(*)')
-        .eq(RunGearRow.colRunId, runId);
+    final data = await _client.rpc('public_run_gear', params: {'p_run_id': runId});
     final rows = (data as List).cast<Map<String, dynamic>>();
+    final epoch = DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     return rows
-        .map((r) => r['gear'])
-        .where((g) => g is Map)
-        .map<GearRow>((g) => GearRow.fromJson((g as Map).cast<String, dynamic>()))
+        .map<GearRow>((g) => GearRow(
+              id: g['id'] as String,
+              ownerId: '',
+              kind: g['kind'] as String,
+              name: g['name'] as String,
+              brand: g['brand'] as String?,
+              model: g['model'] as String?,
+              createdAt: epoch,
+              updatedAt: epoch,
+              isDefault: false,
+            ))
         .toList();
   }
 

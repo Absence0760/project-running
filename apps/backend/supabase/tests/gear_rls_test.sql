@@ -15,7 +15,7 @@
 --   4. auto_tag_default_gear tags run/walk/hike with the default shoe and
 --      cycle with the default bike, and is a no-op when no default exists.
 begin;
-select plan(16);
+select plan(19);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -156,6 +156,29 @@ select lives_ok(
        values ('99999999-0000-0000-0000-00000000ff03', '99999999-0000-0000-0000-00000000ee01')
        on conflict do nothing $$,
   'a duplicate run_gear link is a no-op, not an error');
+
+-- ============================================================
+-- anon role: the share-page audience the fix actually serves
+-- ============================================================
+-- The public share page hits PostgREST as `anon` (auth.uid() = null). This
+-- pins the anon EXECUTE grant on public_run_gear + the anon SELECT grant/policy
+-- on run_gear together, so a future migration that revokes either is caught
+-- here at the cheap backend layer (not only in the e2e shard). ff01 is public
+-- with an auto-tagged shoe link; ff02 is private.
+set local role anon;
+set local "request.jwt.claims" = '{"role":"anon"}';
+
+select is(
+  (select count(*)::int from public.public_run_gear('99999999-0000-0000-0000-00000000ff01')),
+  1, 'anon sees gear on a PUBLIC run via public_run_gear (the share-page path)');
+
+select is(
+  (select count(*)::int from public.public_run_gear('99999999-0000-0000-0000-00000000ff02')),
+  0, 'anon sees no gear on a PRIVATE run via public_run_gear');
+
+select is(
+  (select count(*)::int from run_gear where run_id = '99999999-0000-0000-0000-00000000ff01'),
+  1, 'anon sees the run_gear link on a PUBLIC run directly (RLS policy)');
 
 reset role;
 select * from finish();
