@@ -12,6 +12,7 @@ import 'package:wakelock_plus_platform_interface/wakelock_plus_platform_interfac
 
 import '../lib/audio_cues.dart';
 import '../lib/ble_heart_rate.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -286,6 +287,8 @@ void main() {
     final s = await makeStores();
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: RunScreen(
           apiClient: null,
           runStore: s.runStore,
@@ -442,6 +445,8 @@ void main() {
       await s.prefs.setTargetPaceSecPerKm(300);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunScreen(
             apiClient: null,
             runStore: s.runStore,
@@ -520,6 +525,8 @@ void main() {
       final s = await makeStores();
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RunScreen(
             apiClient: null,
             runStore: runStore,

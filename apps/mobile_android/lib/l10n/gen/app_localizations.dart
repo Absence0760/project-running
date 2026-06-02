@@ -478,6 +478,678 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Anyone can find and view your runs.'**
   String get privacyPublicSubtitle;
+
+  /// Label on the big circular start-run button on the idle run screen
+  ///
+  /// In en, this message translates to:
+  /// **'START'**
+  String get runStart;
+
+  /// Screen-reader label for the start-run button
+  ///
+  /// In en, this message translates to:
+  /// **'Start run'**
+  String get runStartA11yLabel;
+
+  /// Idle-screen button to pick a route to follow when no route is selected
+  ///
+  /// In en, this message translates to:
+  /// **'Choose route'**
+  String get runChooseRoute;
+
+  /// Idle-screen button to change the selected route
+  ///
+  /// In en, this message translates to:
+  /// **'Change route'**
+  String get runChangeRoute;
+
+  /// Idle-screen button that shares a live spectator link for the run
+  ///
+  /// In en, this message translates to:
+  /// **'Share live link'**
+  String get runShareLiveLink;
+
+  /// Idle-screen button opening the training-plans list when no active plan exists
+  ///
+  /// In en, this message translates to:
+  /// **'Training plans'**
+  String get runTrainingPlans;
+
+  /// Hint shown during the pre-run countdown — tapping anywhere aborts the start
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to cancel'**
+  String get runTapToCancel;
+
+  /// Empty-state encouragement on the idle run screen when there is no recent run, event, or plan
+  ///
+  /// In en, this message translates to:
+  /// **'Your first run is one tap away.'**
+  String get runFirstRunPrompt;
+
+  /// Label on the last-run card when the recorded distance is negligible (treated as a generic activity)
+  ///
+  /// In en, this message translates to:
+  /// **'Last activity'**
+  String get runLastActivity;
+
+  /// Label on the last-run card on the idle run screen
+  ///
+  /// In en, this message translates to:
+  /// **'Last run'**
+  String get runLastRun;
+
+  /// Uppercase label on the route-preview card indicating the run will follow this route
+  ///
+  /// In en, this message translates to:
+  /// **'FOLLOWING'**
+  String get runFollowing;
+
+  /// Fallback name for a live race when the event has no title
+  ///
+  /// In en, this message translates to:
+  /// **'Race'**
+  String get runRaceFallbackTitle;
+
+  /// Status label on the race banner when the race is armed but not yet started
+  ///
+  /// In en, this message translates to:
+  /// **'Race armed'**
+  String get runRaceArmed;
+
+  /// Status label on the race banner when the race is running
+  ///
+  /// In en, this message translates to:
+  /// **'Race LIVE'**
+  String get runRaceLive;
+
+  /// Race banner subtitle while armed, awaiting the start signal
+  ///
+  /// In en, this message translates to:
+  /// **'{label} — waiting for GO'**
+  String runRaceWaitingForGo(String label);
+
+  /// Race banner subtitle while running, showing elapsed time and prompting the user to start
+  ///
+  /// In en, this message translates to:
+  /// **'{label} — {elapsed} elapsed · tap Start'**
+  String runRaceElapsedTapStart(String label, String elapsed);
+
+  /// Heading on the finished-run summary screen
+  ///
+  /// In en, this message translates to:
+  /// **'Run Complete'**
+  String get runComplete;
+
+  /// Stat label for distance on the recording overlay and finish summary
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get runStatDistance;
+
+  /// Stat label for elapsed time on the finish summary
+  ///
+  /// In en, this message translates to:
+  /// **'Time'**
+  String get runStatTime;
+
+  /// Stat label for moving time (elapsed minus stops) on the finish summary
+  ///
+  /// In en, this message translates to:
+  /// **'Moving'**
+  String get runStatMoving;
+
+  /// Stat label for pace
+  ///
+  /// In en, this message translates to:
+  /// **'Pace'**
+  String get runStatPace;
+
+  /// Stat label for speed (cycling activities)
+  ///
+  /// In en, this message translates to:
+  /// **'Speed'**
+  String get runStatSpeed;
+
+  /// Stat label for average pace on the recording overlay
+  ///
+  /// In en, this message translates to:
+  /// **'Avg Pace'**
+  String get runStatAvgPace;
+
+  /// Stat label for average speed (cycling activities)
+  ///
+  /// In en, this message translates to:
+  /// **'Avg Speed'**
+  String get runStatAvgSpeed;
+
+  /// Stat label for estimated calories burned
+  ///
+  /// In en, this message translates to:
+  /// **'Calories'**
+  String get runStatCalories;
+
+  /// Stat label for elevation gain
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation'**
+  String get runStatElevation;
+
+  /// Stat label for step count
+  ///
+  /// In en, this message translates to:
+  /// **'Steps'**
+  String get runStatSteps;
+
+  /// Stat label for cadence (steps per minute)
+  ///
+  /// In en, this message translates to:
+  /// **'Cadence'**
+  String get runStatCadence;
+
+  /// Stat label for heart rate
+  ///
+  /// In en, this message translates to:
+  /// **'Heart Rate'**
+  String get runStatHeartRate;
+
+  /// Unit suffix for the calories stat
+  ///
+  /// In en, this message translates to:
+  /// **'kcal'**
+  String get runUnitKcal;
+
+  /// Unit suffix for the elevation stat (metres)
+  ///
+  /// In en, this message translates to:
+  /// **'m'**
+  String get runUnitMetres;
+
+  /// Unit suffix for the cadence stat (steps per minute)
+  ///
+  /// In en, this message translates to:
+  /// **'spm'**
+  String get runUnitSpm;
+
+  /// Unit suffix for the heart-rate stat (beats per minute)
+  ///
+  /// In en, this message translates to:
+  /// **'bpm'**
+  String get runUnitBpm;
+
+  /// Toggle on the recording overlay to silence spoken pace cues for this run
+  ///
+  /// In en, this message translates to:
+  /// **'Mute pace cues'**
+  String get runMutePaceCues;
+
+  /// State of the pace-cue toggle when spoken pace cues are silenced
+  ///
+  /// In en, this message translates to:
+  /// **'Pace cues muted'**
+  String get runPaceCuesMuted;
+
+  /// Status on the finish summary when the run uploaded successfully
+  ///
+  /// In en, this message translates to:
+  /// **'Synced'**
+  String get runSynced;
+
+  /// Status on the finish summary while the run is uploading
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing...'**
+  String get runSyncing;
+
+  /// Button on the finish summary that dismisses back to the idle run screen
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get runDone;
+
+  /// Screen-reader label for the discard-run control on the recording overlay
+  ///
+  /// In en, this message translates to:
+  /// **'Discard run'**
+  String get runDiscardA11yLabel;
+
+  /// Screen-reader hint for the discard-run control
+  ///
+  /// In en, this message translates to:
+  /// **'Throws away the current recording without saving'**
+  String get runDiscardA11yHint;
+
+  /// Screen-reader label for the pause/resume control when paused
+  ///
+  /// In en, this message translates to:
+  /// **'Resume run'**
+  String get runResumeA11yLabel;
+
+  /// Screen-reader label for the pause/resume control when running
+  ///
+  /// In en, this message translates to:
+  /// **'Pause run'**
+  String get runPauseA11yLabel;
+
+  /// Screen-reader hint for the resume control
+  ///
+  /// In en, this message translates to:
+  /// **'Resumes the paused recording'**
+  String get runResumeA11yHint;
+
+  /// Screen-reader hint for the pause control
+  ///
+  /// In en, this message translates to:
+  /// **'Pauses the recording without ending it'**
+  String get runPauseA11yHint;
+
+  /// Screen-reader label for the mark-lap control when no laps yet
+  ///
+  /// In en, this message translates to:
+  /// **'Mark lap'**
+  String get runMarkLapA11yLabel;
+
+  /// Screen-reader label for the mark-lap control, including the count of laps marked so far
+  ///
+  /// In en, this message translates to:
+  /// **'Mark lap, {count} so far'**
+  String runMarkLapWithCountA11yLabel(int count);
+
+  /// Screen-reader hint for the mark-lap control
+  ///
+  /// In en, this message translates to:
+  /// **'Records the current split'**
+  String get runMarkLapA11yHint;
+
+  /// Screen-reader label for the drag handle when the stats panel is expanded
+  ///
+  /// In en, this message translates to:
+  /// **'Collapse stats panel'**
+  String get runCollapseStatsPanel;
+
+  /// Screen-reader label for the drag handle when the stats panel is collapsed
+  ///
+  /// In en, this message translates to:
+  /// **'Expand stats panel'**
+  String get runExpandStatsPanel;
+
+  /// Badge showing remaining distance to the end of the selected route
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} to go'**
+  String runRouteRemaining(String distance);
+
+  /// Banner shown when the runner has strayed from the selected route
+  ///
+  /// In en, this message translates to:
+  /// **'Off route — {metres}m away'**
+  String runOffRoute(int metres);
+
+  /// Banner shown when location permission is turned off mid-run
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission revoked'**
+  String get runPermissionRevoked;
+
+  /// Banner shown when GPS fixes stop arriving mid-run
+  ///
+  /// In en, this message translates to:
+  /// **'GPS signal lost — move to open sky'**
+  String get runGpsLost;
+
+  /// Banner shown when GPS accuracy is too low and distance stops advancing
+  ///
+  /// In en, this message translates to:
+  /// **'Weak GPS — distance paused'**
+  String get runWeakGps;
+
+  /// Screen-reader status announcement when recording begins
+  ///
+  /// In en, this message translates to:
+  /// **'Run started'**
+  String get runA11yStarted;
+
+  /// Screen-reader status announcement when a paused run resumes
+  ///
+  /// In en, this message translates to:
+  /// **'Run resumed'**
+  String get runA11yResumed;
+
+  /// Screen-reader status announcement when a run is paused
+  ///
+  /// In en, this message translates to:
+  /// **'Run paused'**
+  String get runA11yPaused;
+
+  /// Screen-reader status announcement when a run finishes
+  ///
+  /// In en, this message translates to:
+  /// **'Run finished'**
+  String get runA11yFinished;
+
+  /// Banner and screen-reader announcement when a lap is recorded
+  ///
+  /// In en, this message translates to:
+  /// **'Lap {count} marked'**
+  String runLapMarked(int count);
+
+  /// Title of the confirm-discard dialog shown mid-run
+  ///
+  /// In en, this message translates to:
+  /// **'Discard run?'**
+  String get runDiscardDialogTitle;
+
+  /// Body of the confirm-discard dialog shown mid-run
+  ///
+  /// In en, this message translates to:
+  /// **'Your progress will be lost.'**
+  String get runDiscardDialogBody;
+
+  /// Cancel action on the confirm-discard dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Keep running'**
+  String get runKeepRunning;
+
+  /// Confirm action on the confirm-discard dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Discard'**
+  String get runDiscard;
+
+  /// Option in the workout-entry sheet to begin a structured workout
+  ///
+  /// In en, this message translates to:
+  /// **'Start workout'**
+  String get runStartWorkout;
+
+  /// Subtitle of the Start-workout option in the workout-entry sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Run with live step targets, audio cues, and a planned-vs-actual review.'**
+  String get runStartWorkoutSubtitle;
+
+  /// Option in the workout-entry sheet to open the workout detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'View details'**
+  String get runViewWorkoutDetails;
+
+  /// Banner shown when a selected workout has no runnable steps
+  ///
+  /// In en, this message translates to:
+  /// **'This workout has no runnable structure.'**
+  String get runWorkoutNoStructure;
+
+  /// Banner shown when a structured workout is loaded and ready to start
+  ///
+  /// In en, this message translates to:
+  /// **'Workout loaded · {count, plural, one{{count} step} other{{count} steps}} — tap GO to start'**
+  String runWorkoutLoaded(int count);
+
+  /// Title of the confirm-abandon-workout dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon workout?'**
+  String get runAbandonWorkoutTitle;
+
+  /// Body of the confirm-abandon-workout dialog
+  ///
+  /// In en, this message translates to:
+  /// **'The structured plan stops here; the recorder keeps running as a free run. You can stop anytime to save what you did.'**
+  String get runAbandonWorkoutBody;
+
+  /// Generic cancel action in run-screen dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get runCancel;
+
+  /// Confirm action on the abandon-workout dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon'**
+  String get runAbandon;
+
+  /// Banner shown when the user taps Choose route but has no saved routes
+  ///
+  /// In en, this message translates to:
+  /// **'No routes saved. Import one from the Routes tab.'**
+  String get runNoRoutesSaved;
+
+  /// One-time hint shown when notification permission is denied at run start
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications are off — the live run notification won\'t show. Recording still works.'**
+  String get runNotificationsOffHint;
+
+  /// Action label on banners that deep-link to system or app settings
+  ///
+  /// In en, this message translates to:
+  /// **'Settings'**
+  String get runSettings;
+
+  /// Dismiss action on the background-location nudge dialog — start the run without granting all-time location
+  ///
+  /// In en, this message translates to:
+  /// **'Start anyway'**
+  String get runStartAnyway;
+
+  /// Confirm action on dialogs that deep-link to app settings
+  ///
+  /// In en, this message translates to:
+  /// **'Open settings'**
+  String get runOpenSettings;
+
+  /// Dismiss action on the battery-optimisation hint dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Not now'**
+  String get runNotNow;
+
+  /// Subject line of the OS share sheet when sharing a live run link
+  ///
+  /// In en, this message translates to:
+  /// **'Track me live'**
+  String get runShareSubject;
+
+  /// Banner shown when sharing the live link fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share live link: {error}'**
+  String runCouldNotShareLink(String error);
+
+  /// Banner shown when the BLE heart-rate strap drops and is reconnecting
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate strap lost — reconnecting…'**
+  String get runHrStrapLostReconnecting;
+
+  /// Banner shown when the BLE heart-rate strap reconnects
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate strap reconnected'**
+  String get runHrStrapReconnected;
+
+  /// Banner shown when the BLE heart-rate strap drops and does not reconnect
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate strap lost — recording continues without HR.'**
+  String get runHrStrapLostNoHr;
+
+  /// Banner shown when the BLE heart-rate strap was not found at launch
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate strap not found — put it on, then reconnect.'**
+  String get runHrStrapNotFound;
+
+  /// Action label to manually reconnect the heart-rate strap
+  ///
+  /// In en, this message translates to:
+  /// **'Reconnect'**
+  String get runReconnect;
+
+  /// Banner shown when a manual heart-rate strap reconnect attempt fails
+  ///
+  /// In en, this message translates to:
+  /// **'Still no strap — recording continues without HR.'**
+  String get runHrStrapStillNotFound;
+
+  /// Finish-summary error shown when the local save of a run failed
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save locally. Relaunch the app to recover.'**
+  String get runSaveFailedRelaunch;
+
+  /// Finish-summary status shown when cloud sync failed but the run is saved locally
+  ///
+  /// In en, this message translates to:
+  /// **'Saved offline. Sync from Runs.'**
+  String get runSyncFailedSaveOffline;
+
+  /// Finish-summary status shown when the user is signed out and the run is saved locally only
+  ///
+  /// In en, this message translates to:
+  /// **'Saved offline.'**
+  String get runSavedOffline;
+
+  /// Banner shown at each split/distance tick during a run, showing total distance and current pace or speed
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} — {pace}'**
+  String runSplitTick(String distance, String pace);
+
+  /// Banner shown when location services are disabled at run start
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS — tracking will start when Location is on.'**
+  String get runGpsNoServiceSettings;
+
+  /// Banner shown when location permission is permanently denied at run start
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS — permission is blocked. Enable it to track route.'**
+  String get runGpsBlockedSettings;
+
+  /// Banner shown when location permission is denied (not permanently) at run start
+  ///
+  /// In en, this message translates to:
+  /// **'No GPS — tracking will start when permission is granted.'**
+  String get runGpsPermissionPending;
+
+  /// Banner shown when only while-in-use location permission is granted at run start
+  ///
+  /// In en, this message translates to:
+  /// **'Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.'**
+  String get runGpsAllowAllTheTime;
+
+  /// Banner shown when the GPS sensor could not start for an unknown reason
+  ///
+  /// In en, this message translates to:
+  /// **'Recording without GPS — could not start the sensor.'**
+  String get runGpsSensorFailed;
+
+  /// Relative-time label for an event within the last minute
+  ///
+  /// In en, this message translates to:
+  /// **'Just now'**
+  String get runAgoJustNow;
+
+  /// Relative-time label in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{count} min ago'**
+  String runAgoMinutes(int count);
+
+  /// Relative-time label in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} hour ago} other{{count} hours ago}}'**
+  String runAgoHours(int count);
+
+  /// Relative-time label for one day ago
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get runAgoYesterday;
+
+  /// Relative-time label in days (2-6 days)
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days ago'**
+  String runAgoDays(int count);
+
+  /// Relative-time label in weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} week ago} other{{count} weeks ago}}'**
+  String runAgoWeeks(int count);
+
+  /// Relative-time label in months
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} month ago} other{{count} months ago}}'**
+  String runAgoMonths(int count);
+
+  /// Workout-execution band text after the structured workout is abandoned
+  ///
+  /// In en, this message translates to:
+  /// **'Workout abandoned · running freely'**
+  String get runWorkoutAbandonedBand;
+
+  /// Workout-execution band text when all steps are complete
+  ///
+  /// In en, this message translates to:
+  /// **'Workout complete · tap stop to save'**
+  String get runWorkoutCompleteBand;
+
+  /// Workout-execution band header: step label, target distance/duration, and target pace
+  ///
+  /// In en, this message translates to:
+  /// **'{label} · {target} @ {pace}'**
+  String runWorkoutStepHeader(String label, String target, String pace);
+
+  /// Workout-execution band step counter (current step of total)
+  ///
+  /// In en, this message translates to:
+  /// **'{current}/{total}'**
+  String runWorkoutStepCounter(int current, int total);
+
+  /// Button to step back to the previous workout step
+  ///
+  /// In en, this message translates to:
+  /// **'Rewind'**
+  String get runWorkoutRewind;
+
+  /// Button to skip to the next workout step
+  ///
+  /// In en, this message translates to:
+  /// **'Skip'**
+  String get runWorkoutSkip;
+
+  /// Button to abandon the structured workout and continue as a free run
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon'**
+  String get runWorkoutAbandon;
+
+  /// Workout-execution band remaining-distance label in yards
+  ///
+  /// In en, this message translates to:
+  /// **'{yards} yd to go'**
+  String runWorkoutRemainingYards(int yards);
+
+  /// Workout-execution band remaining-distance label in metres
+  ///
+  /// In en, this message translates to:
+  /// **'{metres} m to go'**
+  String runWorkoutRemainingMetres(int metres);
+
+  /// Workout-execution band remaining-time label for duration-based steps
+  ///
+  /// In en, this message translates to:
+  /// **'{duration} to go'**
+  String runWorkoutRemainingDuration(String duration);
 }
 
 class _AppLocalizationsDelegate

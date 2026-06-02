@@ -208,4 +208,422 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get privacyPublicSubtitle =>
       'Jeder kann deine Läufe finden und ansehen.';
+
+  @override
+  String get runStart => 'START';
+
+  @override
+  String get runStartA11yLabel => 'Lauf starten';
+
+  @override
+  String get runChooseRoute => 'Route wählen';
+
+  @override
+  String get runChangeRoute => 'Route ändern';
+
+  @override
+  String get runShareLiveLink => 'Live-Link teilen';
+
+  @override
+  String get runTrainingPlans => 'Trainingspläne';
+
+  @override
+  String get runTapToCancel => 'Zum Abbrechen tippen';
+
+  @override
+  String get runFirstRunPrompt =>
+      'Dein erster Lauf ist nur einen Tipp entfernt.';
+
+  @override
+  String get runLastActivity => 'Letzte Aktivität';
+
+  @override
+  String get runLastRun => 'Letzter Lauf';
+
+  @override
+  String get runFollowing => 'FOLGT';
+
+  @override
+  String get runRaceFallbackTitle => 'Rennen';
+
+  @override
+  String get runRaceArmed => 'Rennen bereit';
+
+  @override
+  String get runRaceLive => 'Rennen LIVE';
+
+  @override
+  String runRaceWaitingForGo(String label) {
+    return '$label — warten auf START';
+  }
+
+  @override
+  String runRaceElapsedTapStart(String label, String elapsed) {
+    return '$label — $elapsed vergangen · auf Start tippen';
+  }
+
+  @override
+  String get runComplete => 'Lauf beendet';
+
+  @override
+  String get runStatDistance => 'Distanz';
+
+  @override
+  String get runStatTime => 'Zeit';
+
+  @override
+  String get runStatMoving => 'Bewegung';
+
+  @override
+  String get runStatPace => 'Tempo';
+
+  @override
+  String get runStatSpeed => 'Geschwindigkeit';
+
+  @override
+  String get runStatAvgPace => 'Ø Tempo';
+
+  @override
+  String get runStatAvgSpeed => 'Ø Geschwindigkeit';
+
+  @override
+  String get runStatCalories => 'Kalorien';
+
+  @override
+  String get runStatElevation => 'Höhenmeter';
+
+  @override
+  String get runStatSteps => 'Schritte';
+
+  @override
+  String get runStatCadence => 'Schrittfrequenz';
+
+  @override
+  String get runStatHeartRate => 'Herzfrequenz';
+
+  @override
+  String get runUnitKcal => 'kcal';
+
+  @override
+  String get runUnitMetres => 'm';
+
+  @override
+  String get runUnitSpm => 'S/min';
+
+  @override
+  String get runUnitBpm => 'S/min';
+
+  @override
+  String get runMutePaceCues => 'Tempohinweise stumm';
+
+  @override
+  String get runPaceCuesMuted => 'Tempohinweise stumm';
+
+  @override
+  String get runSynced => 'Synchronisiert';
+
+  @override
+  String get runSyncing => 'Synchronisiere …';
+
+  @override
+  String get runDone => 'Fertig';
+
+  @override
+  String get runDiscardA11yLabel => 'Lauf verwerfen';
+
+  @override
+  String get runDiscardA11yHint =>
+      'Verwirft die aktuelle Aufzeichnung, ohne sie zu speichern';
+
+  @override
+  String get runResumeA11yLabel => 'Lauf fortsetzen';
+
+  @override
+  String get runPauseA11yLabel => 'Lauf pausieren';
+
+  @override
+  String get runResumeA11yHint => 'Setzt die pausierte Aufzeichnung fort';
+
+  @override
+  String get runPauseA11yHint =>
+      'Pausiert die Aufzeichnung, ohne sie zu beenden';
+
+  @override
+  String get runMarkLapA11yLabel => 'Runde markieren';
+
+  @override
+  String runMarkLapWithCountA11yLabel(int count) {
+    return 'Runde markieren, bisher $count';
+  }
+
+  @override
+  String get runMarkLapA11yHint => 'Zeichnet die aktuelle Zwischenzeit auf';
+
+  @override
+  String get runCollapseStatsPanel => 'Statistik einklappen';
+
+  @override
+  String get runExpandStatsPanel => 'Statistik ausklappen';
+
+  @override
+  String runRouteRemaining(String distance) {
+    return 'noch $distance';
+  }
+
+  @override
+  String runOffRoute(int metres) {
+    return 'Abseits der Route — $metres m entfernt';
+  }
+
+  @override
+  String get runPermissionRevoked => 'Standortberechtigung entzogen';
+
+  @override
+  String get runGpsLost => 'GPS-Signal verloren — geh ins Freie';
+
+  @override
+  String get runWeakGps => 'Schwaches GPS — Distanz pausiert';
+
+  @override
+  String get runA11yStarted => 'Lauf gestartet';
+
+  @override
+  String get runA11yResumed => 'Lauf fortgesetzt';
+
+  @override
+  String get runA11yPaused => 'Lauf pausiert';
+
+  @override
+  String get runA11yFinished => 'Lauf beendet';
+
+  @override
+  String runLapMarked(int count) {
+    return 'Runde $count markiert';
+  }
+
+  @override
+  String get runDiscardDialogTitle => 'Lauf verwerfen?';
+
+  @override
+  String get runDiscardDialogBody => 'Dein Fortschritt geht verloren.';
+
+  @override
+  String get runKeepRunning => 'Weiterlaufen';
+
+  @override
+  String get runDiscard => 'Verwerfen';
+
+  @override
+  String get runStartWorkout => 'Workout starten';
+
+  @override
+  String get runStartWorkoutSubtitle =>
+      'Laufe mit Live-Schrittzielen, Audiohinweisen und einem Soll-Ist-Vergleich.';
+
+  @override
+  String get runViewWorkoutDetails => 'Details ansehen';
+
+  @override
+  String get runWorkoutNoStructure =>
+      'Dieses Workout hat keine lauffähige Struktur.';
+
+  @override
+  String runWorkoutLoaded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Schritte',
+      one: '$count Schritt',
+    );
+    return 'Workout geladen · $_temp0 — zum Starten GO tippen';
+  }
+
+  @override
+  String get runAbandonWorkoutTitle => 'Workout abbrechen?';
+
+  @override
+  String get runAbandonWorkoutBody =>
+      'Der strukturierte Plan endet hier; die Aufzeichnung läuft als freier Lauf weiter. Du kannst jederzeit stoppen, um das Geschaffte zu speichern.';
+
+  @override
+  String get runCancel => 'Abbrechen';
+
+  @override
+  String get runAbandon => 'Abbrechen';
+
+  @override
+  String get runNoRoutesSaved =>
+      'Keine Routen gespeichert. Importiere eine im Routen-Tab.';
+
+  @override
+  String get runNotificationsOffHint =>
+      'Benachrichtigungen sind aus — die Live-Laufbenachrichtigung wird nicht angezeigt. Die Aufzeichnung funktioniert trotzdem.';
+
+  @override
+  String get runSettings => 'Einstellungen';
+
+  @override
+  String get runStartAnyway => 'Trotzdem starten';
+
+  @override
+  String get runOpenSettings => 'Einstellungen öffnen';
+
+  @override
+  String get runNotNow => 'Nicht jetzt';
+
+  @override
+  String get runShareSubject => 'Verfolge mich live';
+
+  @override
+  String runCouldNotShareLink(String error) {
+    return 'Live-Link konnte nicht geteilt werden: $error';
+  }
+
+  @override
+  String get runHrStrapLostReconnecting =>
+      'Herzfrequenzgurt verloren — verbinde neu …';
+
+  @override
+  String get runHrStrapReconnected => 'Herzfrequenzgurt wieder verbunden';
+
+  @override
+  String get runHrStrapLostNoHr =>
+      'Herzfrequenzgurt verloren — Aufzeichnung läuft ohne HF weiter.';
+
+  @override
+  String get runHrStrapNotFound =>
+      'Herzfrequenzgurt nicht gefunden — anlegen und neu verbinden.';
+
+  @override
+  String get runReconnect => 'Neu verbinden';
+
+  @override
+  String get runHrStrapStillNotFound =>
+      'Weiterhin kein Gurt — Aufzeichnung läuft ohne HF weiter.';
+
+  @override
+  String get runSaveFailedRelaunch =>
+      'Lokales Speichern fehlgeschlagen. Starte die App neu, um wiederherzustellen.';
+
+  @override
+  String get runSyncFailedSaveOffline =>
+      'Offline gespeichert. Synchronisiere unter Läufe.';
+
+  @override
+  String get runSavedOffline => 'Offline gespeichert.';
+
+  @override
+  String runSplitTick(String distance, String pace) {
+    return '$distance — $pace';
+  }
+
+  @override
+  String get runGpsNoServiceSettings =>
+      'Kein GPS — die Aufzeichnung startet, sobald der Standort aktiv ist.';
+
+  @override
+  String get runGpsBlockedSettings =>
+      'Kein GPS — Berechtigung blockiert. Aktiviere sie, um die Route aufzuzeichnen.';
+
+  @override
+  String get runGpsPermissionPending =>
+      'Kein GPS — die Aufzeichnung startet, sobald die Berechtigung erteilt ist.';
+
+  @override
+  String get runGpsAllowAllTheTime =>
+      'Stelle den Standort auf „Immer zulassen“ — Läufe stoppen die Aufzeichnung, wenn du ohne Hintergrundberechtigung die App wechselst.';
+
+  @override
+  String get runGpsSensorFailed =>
+      'Aufzeichnung ohne GPS — der Sensor konnte nicht gestartet werden.';
+
+  @override
+  String get runAgoJustNow => 'Gerade eben';
+
+  @override
+  String runAgoMinutes(int count) {
+    return 'vor $count Min.';
+  }
+
+  @override
+  String runAgoHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'vor $count Stunden',
+      one: 'vor $count Stunde',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runAgoYesterday => 'Gestern';
+
+  @override
+  String runAgoDays(int count) {
+    return 'vor $count Tagen';
+  }
+
+  @override
+  String runAgoWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'vor $count Wochen',
+      one: 'vor $count Woche',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runAgoMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'vor $count Monaten',
+      one: 'vor $count Monat',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runWorkoutAbandonedBand => 'Workout abgebrochen · freier Lauf';
+
+  @override
+  String get runWorkoutCompleteBand =>
+      'Workout fertig · zum Speichern Stopp tippen';
+
+  @override
+  String runWorkoutStepHeader(String label, String target, String pace) {
+    return '$label · $target @ $pace';
+  }
+
+  @override
+  String runWorkoutStepCounter(int current, int total) {
+    return '$current/$total';
+  }
+
+  @override
+  String get runWorkoutRewind => 'Zurück';
+
+  @override
+  String get runWorkoutSkip => 'Überspringen';
+
+  @override
+  String get runWorkoutAbandon => 'Abbrechen';
+
+  @override
+  String runWorkoutRemainingYards(int yards) {
+    return 'noch $yards yd';
+  }
+
+  @override
+  String runWorkoutRemainingMetres(int metres) {
+    return 'noch $metres m';
+  }
+
+  @override
+  String runWorkoutRemainingDuration(String duration) {
+    return 'noch $duration';
+  }
 }

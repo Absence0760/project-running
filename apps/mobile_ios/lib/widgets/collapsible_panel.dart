@@ -2,6 +2,8 @@ import 'dart:ui';
 
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
+
 /// A bottom-pinned panel with a drag handle that can be toggled between a
 /// collapsed (minimal) state and an expanded (full) state.
 ///
@@ -59,7 +61,9 @@ class _CollapsiblePanelState extends State<CollapsiblePanel> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Semantics(
-                label: _expanded ? 'Collapse stats panel' : 'Expand stats panel',
+                label: _expanded
+                    ? AppLocalizations.of(context).runCollapseStatsPanel
+                    : AppLocalizations.of(context).runExpandStatsPanel,
                 button: true,
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,

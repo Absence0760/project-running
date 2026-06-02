@@ -23,6 +23,7 @@ import '../backend_timeout.dart';
 import '../ble_heart_rate.dart';
 import '../embedded_bests.dart';
 import '../health_connect_exporter.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../live_broadcaster.dart';
@@ -292,6 +293,19 @@ class _RunScreenState extends State<RunScreen> {
   // "no GPS") render via the shared `showTopBanner` Overlay helper
   // (lib/widgets/top_banner.dart). The recording surface keeps no
   // local banner state — single global entry, single dismiss path.
+
+  // Localizations resolved once per dependency change (locale / theme
+  // swap) and reused everywhere on the recording hot path — the
+  // per-second `_onSnapshot` handler and the status announcers must never
+  // call `AppLocalizations.of(context)` at GPS rate. See
+  // apps/mobile_android/CLAUDE.md "Hot-path exception".
+  late AppLocalizations _l10n;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _l10n = AppLocalizations.of(context);
+  }
 
   @override
   void initState() {
@@ -600,10 +614,9 @@ class _RunScreenState extends State<RunScreen> {
       }
       if (mounted) {
         _showTopBanner(
-          'Notifications are off — the live run notification won\'t show. '
-          'Recording still works.',
+          _l10n.runNotificationsOffHint,
           duration: const Duration(seconds: 6),
-          actionLabel: 'Settings',
+          actionLabel: _l10n.runSettings,
           onAction: () => openAppSettings(),
         );
       }
@@ -636,11 +649,11 @@ class _RunScreenState extends State<RunScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Start anyway'),
+            child: Text(_l10n.runStartAnyway),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open settings'),
+            child: Text(_l10n.runOpenSettings),
           ),
         ],
       ),
@@ -680,11 +693,11 @@ class _RunScreenState extends State<RunScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Not now'),
+            child: Text(_l10n.runNotNow),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Open settings'),
+            child: Text(_l10n.runOpenSettings),
           ),
         ],
       ),
@@ -701,7 +714,7 @@ class _RunScreenState extends State<RunScreen> {
   Future<void> _selectRoute() async {
     final routes = widget.routeStore.routes;
     if (routes.isEmpty) {
-      showTopBanner(context, 'No routes saved. Import one from the Routes tab.');
+      showTopBanner(context, _l10n.runNoRoutesSaved);
       return;
     }
     final unit = widget.preferences.unit;
@@ -897,13 +910,13 @@ class _RunScreenState extends State<RunScreen> {
     }
 
     try {
-      await Share.share(url, subject: 'Track me live');
+      await Share.share(url, subject: _l10n.runShareSubject);
     } catch (e) {
       // The user-facing banner is the primary signal, but also log
       // so a Share.share regression is observable in dev/release
       // logs without us reproducing the user's exact moment.
       debugPrint('Share.share live link failed: $e');
-      if (mounted) _showTopBanner('Could not share live link: $e');
+      if (mounted) _showTopBanner(_l10n.runCouldNotShareLink('$e'));
     }
   }
 
@@ -986,17 +999,17 @@ class _RunScreenState extends State<RunScreen> {
       switch (s) {
         case BleHrStatus.reconnecting:
           if (prev == BleHrStatus.connected) {
-            _showTopBanner('Heart-rate strap lost — reconnecting…');
+            _showTopBanner(_l10n.runHrStrapLostReconnecting);
           }
           setState(() => _currentBpm = null);
         case BleHrStatus.connected:
           if (prev == BleHrStatus.reconnecting) {
-            _showTopBanner('Heart-rate strap reconnected',
+            _showTopBanner(_l10n.runHrStrapReconnected,
                 duration: const Duration(seconds: 2));
           }
         case BleHrStatus.disconnected:
           if (prev == BleHrStatus.reconnecting) {
-            _showTopBanner('Heart-rate strap lost — recording continues without HR.');
+            _showTopBanner(_l10n.runHrStrapLostNoHr);
           }
           setState(() => _currentBpm = null);
         case BleHrStatus.connectFailed:
@@ -1005,9 +1018,9 @@ class _RunScreenState extends State<RunScreen> {
           // leaving the runner with a silently-dead HR readout.
           setState(() => _currentBpm = null);
           _showTopBanner(
-            'Heart-rate strap not found — put it on, then reconnect.',
+            _l10n.runHrStrapNotFound,
             duration: const Duration(seconds: 6),
-            actionLabel: 'Reconnect',
+            actionLabel: _l10n.runReconnect,
             onAction: _reconnectHeartRate,
           );
         case BleHrStatus.connecting:
@@ -1036,7 +1049,7 @@ class _RunScreenState extends State<RunScreen> {
     }
 
     setState(() => _state = _ScreenState.recording);
-    _announceA11yState('Run started');
+    _announceA11yState(_l10n.runA11yStarted);
 
     // If a live race is running, attach this recorder so pings flow and
     // the finished run auto-submits to the leaderboard.
@@ -1059,7 +1072,7 @@ class _RunScreenState extends State<RunScreen> {
       if (!mounted) return;
       if (!ok) {
         _showTopBanner(
-          'Still no strap — recording continues without HR.',
+          _l10n.runHrStrapStillNotFound,
           duration: const Duration(seconds: 4),
         );
       }
@@ -1278,7 +1291,10 @@ class _RunScreenState extends State<RunScreen> {
               ? '${UnitFormat.speed(_pace, unit)} ${UnitFormat.speedLabel(unit)}'
               : '${UnitFormat.pace(_pace, unit)} ${UnitFormat.paceLabel(unit)}';
           _showTopBanner(
-            '${UnitFormat.distance(totalDistanceMetres, unit)} — $tail',
+            _l10n.runSplitTick(
+              UnitFormat.distance(totalDistanceMetres, unit),
+              tail,
+            ),
           );
           if (widget.preferences.audioCues) {
             _ttsCue('announceSplit', () => widget.audioCues.announceSplit(
@@ -1458,22 +1474,21 @@ class _RunScreenState extends State<RunScreen> {
     String? actionLabel;
     VoidCallback? onAction;
     if (error is LocationServiceDisabledError) {
-      message = 'No GPS — tracking will start when Location is on.';
-      actionLabel = 'Settings';
+      message = _l10n.runGpsNoServiceSettings;
+      actionLabel = _l10n.runSettings;
       onAction = () => Geolocator.openLocationSettings();
     } else if (error is LocationPermissionDeniedError) {
       message = error.forever
-          ? 'No GPS — permission is blocked. Enable it to track route.'
-          : 'No GPS — tracking will start when permission is granted.';
-      actionLabel = 'Settings';
+          ? _l10n.runGpsBlockedSettings
+          : _l10n.runGpsPermissionPending;
+      actionLabel = _l10n.runSettings;
       onAction = () => Geolocator.openAppSettings();
     } else if (error is LocationPermissionWhileInUseError) {
-      message = 'Set Location to "Allow all the time" — runs stop recording '
-          'when you switch apps without background permission.';
-      actionLabel = 'Settings';
+      message = _l10n.runGpsAllowAllTheTime;
+      actionLabel = _l10n.runSettings;
       onAction = () => Geolocator.openAppSettings();
     } else {
-      message = 'Recording without GPS — could not start the sensor.';
+      message = _l10n.runGpsSensorFailed;
     }
 
     // Top-anchored banner instead of a SnackBar so we don't cover the
@@ -1537,11 +1552,11 @@ class _RunScreenState extends State<RunScreen> {
     if (_manualPaused) {
       _recorder!.resume();
       setState(() => _manualPaused = false);
-      _announceA11yState('Run resumed');
+      _announceA11yState(_l10n.runA11yResumed);
     } else {
       _recorder!.pause();
       setState(() => _manualPaused = true);
-      _announceA11yState('Run paused');
+      _announceA11yState(_l10n.runA11yPaused);
     }
   }
 
@@ -1550,8 +1565,9 @@ class _RunScreenState extends State<RunScreen> {
     final n = _recorder!.lap();
     if (n > 0) {
       setState(() => _lapCount = n);
-      _showTopBanner('Lap $n marked', duration: const Duration(seconds: 2));
-      _announceA11yState('Lap $n marked');
+      _showTopBanner(_l10n.runLapMarked(n),
+          duration: const Duration(seconds: 2));
+      _announceA11yState(_l10n.runLapMarked(n));
     }
   }
 
@@ -1703,10 +1719,10 @@ class _RunScreenState extends State<RunScreen> {
       _finishedRun = run;
       _state = _ScreenState.finished;
       if (!localSaved) {
-        _syncError = 'Couldn\'t save locally. Relaunch the app to recover.';
+        _syncError = _l10n.runSaveFailedRelaunch;
       }
     });
-    _announceA11yState('Run finished');
+    _announceA11yState(_l10n.runA11yFinished);
 
     if (widget.preferences.audioCues) {
       try {
@@ -1750,10 +1766,12 @@ class _RunScreenState extends State<RunScreen> {
         if (mounted) setState(() => _synced = true);
       } catch (e) {
         debugPrint('Auto-sync failed: $e');
-        if (mounted) setState(() => _syncError = 'Saved offline. Sync from Runs.');
+        if (mounted) {
+          setState(() => _syncError = _l10n.runSyncFailedSaveOffline);
+        }
       }
     } else {
-      if (mounted) setState(() => _syncError = 'Saved offline.');
+      if (mounted) setState(() => _syncError = _l10n.runSavedOffline);
     }
 
     // Live broadcast wind-down. Three things to do, all best-effort:
@@ -1795,17 +1813,17 @@ class _RunScreenState extends State<RunScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Discard run?'),
-        content: const Text('Your progress will be lost.'),
+        title: Text(_l10n.runDiscardDialogTitle),
+        content: Text(_l10n.runDiscardDialogBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Keep running'),
+            child: Text(_l10n.runKeepRunning),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Discard'),
+            child: Text(_l10n.runDiscard),
           ),
         ],
       ),
@@ -1909,15 +1927,13 @@ class _RunScreenState extends State<RunScreen> {
           children: [
             ListTile(
               leading: const Icon(Icons.play_arrow),
-              title: const Text('Start workout'),
-              subtitle: const Text(
-                'Run with live step targets, audio cues, and a planned-vs-actual review.',
-              ),
+              title: Text(_l10n.runStartWorkout),
+              subtitle: Text(_l10n.runStartWorkoutSubtitle),
               onTap: () => Navigator.pop(ctx, 'start'),
             ),
             ListTile(
               leading: const Icon(Icons.info_outline),
-              title: const Text('View details'),
+              title: Text(_l10n.runViewWorkoutDetails),
               onTap: () => Navigator.pop(ctx, 'detail'),
             ),
           ],
@@ -1977,7 +1993,7 @@ class _RunScreenState extends State<RunScreen> {
     );
     if (steps.isEmpty) {
       if (mounted) {
-        showTopBanner(context, 'This workout has no runnable structure.');
+        showTopBanner(context, _l10n.runWorkoutNoStructure);
       }
       return;
     }
@@ -1991,7 +2007,7 @@ class _RunScreenState extends State<RunScreen> {
     });
     _publishWorkoutBand();
     if (mounted) {
-      showTopBanner(context, 'Workout loaded · ${steps.length} step${steps.length == 1 ? '' : 's'} — tap GO to start');
+      showTopBanner(context, _l10n.runWorkoutLoaded(steps.length));
     }
   }
 
@@ -2014,22 +2030,19 @@ class _RunScreenState extends State<RunScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Abandon workout?'),
-        content: const Text(
-          'The structured plan stops here; the recorder keeps running '
-          'as a free run. You can stop anytime to save what you did.',
-        ),
+        title: Text(_l10n.runAbandonWorkoutTitle),
+        content: Text(_l10n.runAbandonWorkoutBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(_l10n.runCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(
               backgroundColor: Theme.of(ctx).colorScheme.error,
             ),
-            child: const Text('Abandon'),
+            child: Text(_l10n.runAbandon),
           ),
         ],
       ),
@@ -2149,6 +2162,7 @@ class _RunScreenState extends State<RunScreen> {
 
   Widget _buildIdle(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final lastRun = _mostRecentRun();
     return SafeArea(
       child: LayoutBuilder(
@@ -2200,14 +2214,14 @@ class _RunScreenState extends State<RunScreen> {
                             icon: const Icon(Icons.route),
                             label: Text(
                               _selectedRoute == null
-                                  ? 'Choose route'
-                                  : 'Change route',
+                                  ? l10n.runChooseRoute
+                                  : l10n.runChangeRoute,
                             ),
                           ),
                           TextButton.icon(
                             onPressed: _shareLiveLink,
                             icon: const Icon(Icons.podcasts),
-                            label: const Text('Share live link'),
+                            label: Text(l10n.runShareLiveLink),
                           ),
                           TextButton.icon(
                             onPressed: () async {
@@ -2235,7 +2249,7 @@ class _RunScreenState extends State<RunScreen> {
                             },
                             icon: const Icon(Icons.calendar_month),
                             label: Text(_planOverview == null
-                                ? 'Training plans'
+                                ? l10n.runTrainingPlans
                                 : _planOverview!.plan.name),
                           ),
                         ],
@@ -2330,7 +2344,7 @@ class _RunScreenState extends State<RunScreen> {
                   // as a discrete control with a meaningful label.
                   child: Semantics(
                     button: true,
-                    label: 'Start run',
+                    label: l10n.runStartA11yLabel,
                     child: GestureDetector(
                       onTap: _beginCountdown,
                       child: Container(
@@ -2360,10 +2374,10 @@ class _RunScreenState extends State<RunScreen> {
                               ),
                             ],
                           ),
-                          child: const Center(
+                          child: Center(
                             child: Text(
-                              'START',
-                              style: TextStyle(
+                              l10n.runStart,
+                              style: const TextStyle(
                                 fontSize: 22,
                                 fontWeight: FontWeight.w800,
                                 color: Colors.white,
@@ -2403,6 +2417,7 @@ class _RunScreenState extends State<RunScreen> {
     // (RunWatchApp.kt:264) which solves the same problem by keeping the
     // RouteMiniMap mounted under the digit.
     final isCountdown = _state == _ScreenState.countdown;
+    final l10n = AppLocalizations.of(context);
     return Stack(
       children: [
         // Always-mounted map. During countdown stats.currentPosition may
@@ -2487,7 +2502,7 @@ class _RunScreenState extends State<RunScreen> {
                       right: 0,
                       child: Center(
                         child: Text(
-                          'Tap to cancel',
+                          l10n.runTapToCancel,
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.7),
                             fontSize: 14,
@@ -2555,7 +2570,8 @@ class _RunScreenState extends State<RunScreen> {
                     ),
                     const SizedBox(width: 6),
                     Text(
-                      '${UnitFormat.distance(rem, _unit)} to go',
+                      l10n.runRouteRemaining(
+                          UnitFormat.distance(rem, _unit)),
                       style: const TextStyle(
                           fontWeight: FontWeight.w600, fontSize: 13),
                     ),
@@ -2585,7 +2601,7 @@ class _RunScreenState extends State<RunScreen> {
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 8),
                     child: Text(
-                      'Off route — ${off.round()}m away',
+                      l10n.runOffRoute(off.round()),
                       style: const TextStyle(
                           color: Colors.white, fontWeight: FontWeight.w600),
                     ),
@@ -2596,23 +2612,25 @@ class _RunScreenState extends State<RunScreen> {
           },
         ),
         if (_permissionLost)
-          const Positioned(
+          Positioned(
             top: 60,
             left: 0,
             right: 0,
             child: Center(
               child: Card(
-                color: Color(0xFFDC2626),
+                color: const Color(0xFFDC2626),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.location_off, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.location_off,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'Location permission revoked',
-                        style: TextStyle(
+                        l10n.runPermissionRevoked,
+                        style: const TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -2622,23 +2640,25 @@ class _RunScreenState extends State<RunScreen> {
             ),
           )
         else if (_gpsLost)
-          const Positioned(
+          Positioned(
             top: 60,
             left: 0,
             right: 0,
             child: Center(
               child: Card(
-                color: Color(0xFFEF4444),
+                color: const Color(0xFFEF4444),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.gps_off, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.gps_off,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'GPS signal lost — move to open sky',
-                        style: TextStyle(
+                        l10n.runGpsLost,
+                        style: const TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -2648,23 +2668,25 @@ class _RunScreenState extends State<RunScreen> {
             ),
           )
         else if (_weakGps)
-          const Positioned(
+          Positioned(
             top: 60,
             left: 0,
             right: 0,
             child: Center(
               child: Card(
-                color: Color(0xFFD97706),
+                color: const Color(0xFFD97706),
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 16, vertical: 10),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.gps_not_fixed, color: Colors.white, size: 18),
-                      SizedBox(width: 8),
+                      const Icon(Icons.gps_not_fixed,
+                          color: Colors.white, size: 18),
+                      const SizedBox(width: 8),
                       Text(
-                        'Weak GPS — distance paused',
-                        style: TextStyle(
+                        l10n.runWeakGps,
+                        style: const TextStyle(
                             color: Colors.white, fontWeight: FontWeight.w600),
                       ),
                     ],
@@ -2716,13 +2738,15 @@ class _RunScreenState extends State<RunScreen> {
                     primaryUnit: _activityType.usesSpeed
                         ? UnitFormat.speedLabel(_unit)
                         : UnitFormat.paceLabel(_unit),
-                    primaryLabel:
-                        _activityType.usesSpeed ? 'Speed' : 'Pace',
+                    primaryLabel: _activityType.usesSpeed
+                        ? l10n.runStatSpeed
+                        : l10n.runStatPace,
                     secondaryValue: _activityType.usesSpeed
                         ? _formattedAvgSpeedValue
                         : _formattedAvgPaceValue,
-                    secondaryLabel:
-                        _activityType.usesSpeed ? 'Avg Speed' : 'Avg Pace',
+                    secondaryLabel: _activityType.usesSpeed
+                        ? l10n.runStatAvgSpeed
+                        : l10n.runStatAvgPace,
                     calories: _formattedCalories,
                     elevation: _formattedElevation,
                     steps: '$_steps',
@@ -2777,6 +2801,7 @@ class _RunScreenState extends State<RunScreen> {
 
   Widget _buildFinished(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final track = _finishedRun?.track ?? <cm.Waypoint>[];
     // Derived metric: "moving time" — elapsed with stops excluded, computed
     // from the GPS track. Replaces the old live auto-pause.
@@ -2797,19 +2822,23 @@ class _RunScreenState extends State<RunScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text('Run Complete', style: theme.textTheme.headlineSmall),
+                  Text(l10n.runComplete, style: theme.textTheme.headlineSmall),
                   const SizedBox(height: 24),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                     children: [
-                      _StatColumn(label: 'Distance', value: _formattedDistance),
-                      _StatColumn(label: 'Time', value: _formattedTime),
                       _StatColumn(
-                        label: 'Moving',
+                          label: l10n.runStatDistance,
+                          value: _formattedDistance),
+                      _StatColumn(label: l10n.runStatTime, value: _formattedTime),
+                      _StatColumn(
+                        label: l10n.runStatMoving,
                         value: _formatDuration(movingTime),
                       ),
                       _StatColumn(
-                        label: _activityType.usesSpeed ? 'Avg Speed' : 'Pace',
+                        label: _activityType.usesSpeed
+                            ? l10n.runStatAvgSpeed
+                            : l10n.runStatPace,
                         value: _activityType.usesSpeed
                             ? _formattedAvgSpeedValue
                             : _formattedAvgPaceValueFromMoving(movingTime),
@@ -2823,7 +2852,7 @@ class _RunScreenState extends State<RunScreen> {
                   if (_synced) ...[
                     const Icon(Icons.cloud_done, color: Colors.green, size: 36),
                     const SizedBox(height: 4),
-                    const Text('Synced'),
+                    Text(l10n.runSynced),
                   ] else if (_syncError != null) ...[
                     const Icon(Icons.cloud_off, size: 36, color: Colors.orange),
                     const SizedBox(height: 4),
@@ -2836,10 +2865,10 @@ class _RunScreenState extends State<RunScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                     const SizedBox(height: 4),
-                    const Text('Syncing...'),
+                    Text(l10n.runSyncing),
                   ],
                   const SizedBox(height: 16),
-                  FilledButton(onPressed: _discard, child: const Text('Done')),
+                  FilledButton(onPressed: _discard, child: Text(l10n.runDone)),
                 ],
               ),
             ),
@@ -2907,6 +2936,7 @@ class _StatsOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 4),
       child: Column(
@@ -2924,7 +2954,7 @@ class _StatsOverlay extends StatelessWidget {
                 children: [
                   Expanded(
                       child: _StatColumn(
-                          label: 'Distance', value: distanceValue, unit: distanceUnit)),
+                          label: l10n.runStatDistance, value: distanceValue, unit: distanceUnit)),
                   _divider(theme),
                   Expanded(
                       child: _StatColumn(
@@ -2938,13 +2968,13 @@ class _StatsOverlay extends StatelessWidget {
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(child: _StatColumn(label: 'Calories', value: calories, unit: 'kcal')),
+                  Expanded(child: _StatColumn(label: l10n.runStatCalories, value: calories, unit: l10n.runUnitKcal)),
                   _divider(theme),
-                  Expanded(child: _StatColumn(label: 'Elevation', value: elevation, unit: 'm')),
+                  Expanded(child: _StatColumn(label: l10n.runStatElevation, value: elevation, unit: l10n.runUnitMetres)),
                   _divider(theme),
-                  Expanded(child: _StatColumn(label: 'Steps', value: steps)),
+                  Expanded(child: _StatColumn(label: l10n.runStatSteps, value: steps)),
                   _divider(theme),
-                  Expanded(child: _StatColumn(label: 'Cadence', value: cadence, unit: 'spm')),
+                  Expanded(child: _StatColumn(label: l10n.runStatCadence, value: cadence, unit: l10n.runUnitSpm)),
                 ],
               ),
               // Heart rate row — only renders when a BLE chest strap is
@@ -2957,9 +2987,9 @@ class _StatsOverlay extends StatelessWidget {
                   children: [
                     Expanded(
                       child: _StatColumn(
-                        label: 'Heart Rate',
+                        label: l10n.runStatHeartRate,
                         value: '$bpm',
-                        unit: 'bpm',
+                        unit: l10n.runUnitBpm,
                       ),
                     ),
                   ],
@@ -2974,7 +3004,7 @@ class _StatsOverlay extends StatelessWidget {
                     size: 18,
                   ),
                   label: Text(
-                    paceCuesMuted ? 'Pace cues muted' : 'Mute pace cues',
+                    paceCuesMuted ? l10n.runPaceCuesMuted : l10n.runMutePaceCues,
                   ),
                 ),
               ],
@@ -2991,8 +3021,8 @@ class _StatsOverlay extends StatelessWidget {
                   Semantics(
                     button: true,
                     enabled: true,
-                    label: 'Discard run',
-                    hint: 'Throws away the current recording without saving',
+                    label: l10n.runDiscardA11yLabel,
+                    hint: l10n.runDiscardA11yHint,
                     child: GestureDetector(
                       onTap: onDiscard,
                       child: Container(
@@ -3019,10 +3049,10 @@ class _StatsOverlay extends StatelessWidget {
                     button: true,
                     enabled: true,
                     toggled: paused,
-                    label: paused ? 'Resume run' : 'Pause run',
+                    label: paused ? l10n.runResumeA11yLabel : l10n.runPauseA11yLabel,
                     hint: paused
-                        ? 'Resumes the paused recording'
-                        : 'Pauses the recording without ending it',
+                        ? l10n.runResumeA11yHint
+                        : l10n.runPauseA11yHint,
                     child: GestureDetector(
                       onTap: onPauseToggle,
                       child: Container(
@@ -3056,8 +3086,10 @@ class _StatsOverlay extends StatelessWidget {
                   Semantics(
                     button: true,
                     enabled: true,
-                    label: lapCount > 0 ? 'Mark lap, $lapCount so far' : 'Mark lap',
-                    hint: 'Records the current split',
+                    label: lapCount > 0
+                        ? l10n.runMarkLapWithCountA11yLabel(lapCount)
+                        : l10n.runMarkLapA11yLabel,
+                    hint: l10n.runMarkLapA11yHint,
                     child: GestureDetector(
                       onTap: onLap,
                       child: Container(
@@ -3369,22 +3401,25 @@ class _HoldToStopButtonState extends State<_HoldToStopButton>
   }
 }
 
-String _formatAgo(DateTime when) {
+String _formatAgo(BuildContext context, DateTime when) {
+  final l10n = AppLocalizations.of(context);
   final diff = DateTime.now().difference(when);
   if (diff.inMinutes < 60) {
-    return diff.inMinutes <= 1 ? 'Just now' : '${diff.inMinutes} min ago';
+    return diff.inMinutes <= 1
+        ? l10n.runAgoJustNow
+        : l10n.runAgoMinutes(diff.inMinutes);
   }
   if (diff.inHours < 24) {
-    return diff.inHours == 1 ? '1 hour ago' : '${diff.inHours} hours ago';
+    return l10n.runAgoHours(diff.inHours);
   }
-  if (diff.inDays == 1) return 'Yesterday';
-  if (diff.inDays < 7) return '${diff.inDays} days ago';
+  if (diff.inDays == 1) return l10n.runAgoYesterday;
+  if (diff.inDays < 7) return l10n.runAgoDays(diff.inDays);
   if (diff.inDays < 30) {
     final weeks = (diff.inDays / 7).floor();
-    return weeks == 1 ? '1 week ago' : '$weeks weeks ago';
+    return l10n.runAgoWeeks(weeks);
   }
   final months = (diff.inDays / 30).floor();
-  return months == 1 ? '1 month ago' : '$months months ago';
+  return l10n.runAgoMonths(months);
 }
 
 String _formatKm(double metres) => (metres / 1000).toStringAsFixed(2);
@@ -3404,6 +3439,7 @@ class _LastRunCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
@@ -3444,7 +3480,9 @@ class _LastRunCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'Last ${run.distanceMetres < 50 ? "activity" : "run"}',
+                  run.distanceMetres < 50
+                      ? l10n.runLastActivity
+                      : l10n.runLastRun,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                     letterSpacing: 0.6,
@@ -3452,7 +3490,7 @@ class _LastRunCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  _formatAgo(run.startedAt),
+                  _formatAgo(context, run.startedAt),
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),
@@ -3545,12 +3583,13 @@ class _RaceBannerState extends State<_RaceBanner> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final race = widget.race;
     final isRunning = race.isRunning && race.startedAt != null;
     final elapsed = isRunning
         ? DateTime.now().difference(race.startedAt!).inSeconds
         : 0;
-    final label = race.eventTitle ?? 'Race';
+    final label = race.eventTitle ?? l10n.runRaceFallbackTitle;
     final primary = theme.colorScheme.primary;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -3571,7 +3610,7 @@ class _RaceBannerState extends State<_RaceBanner> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  race.isArmed ? 'Race armed' : 'Race LIVE',
+                  race.isArmed ? l10n.runRaceArmed : l10n.runRaceLive,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: primary,
                     fontWeight: FontWeight.w700,
@@ -3580,8 +3619,8 @@ class _RaceBannerState extends State<_RaceBanner> {
                 ),
                 Text(
                   race.isArmed
-                      ? '$label — waiting for GO'
-                      : '$label — ${_fmt(elapsed)} elapsed · tap Start',
+                      ? l10n.runRaceWaitingForGo(label)
+                      : l10n.runRaceElapsedTapStart(label, _fmt(elapsed)),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -3610,6 +3649,7 @@ class _RoutePreviewCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
@@ -3638,7 +3678,7 @@ class _RoutePreviewCard extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'FOLLOWING',
+                  l10n.runFollowing,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.outline,
                     letterSpacing: 0.6,
@@ -3711,7 +3751,7 @@ class _FirstRunPrompt extends StatelessWidget {
           const SizedBox(width: 12),
           Expanded(
             child: Text(
-              'Your first run is one tap away.',
+              AppLocalizations.of(context).runFirstRunPrompt,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),

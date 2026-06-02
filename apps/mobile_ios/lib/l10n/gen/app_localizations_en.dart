@@ -207,4 +207,417 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get privacyPublicSubtitle => 'Anyone can find and view your runs.';
+
+  @override
+  String get runStart => 'START';
+
+  @override
+  String get runStartA11yLabel => 'Start run';
+
+  @override
+  String get runChooseRoute => 'Choose route';
+
+  @override
+  String get runChangeRoute => 'Change route';
+
+  @override
+  String get runShareLiveLink => 'Share live link';
+
+  @override
+  String get runTrainingPlans => 'Training plans';
+
+  @override
+  String get runTapToCancel => 'Tap to cancel';
+
+  @override
+  String get runFirstRunPrompt => 'Your first run is one tap away.';
+
+  @override
+  String get runLastActivity => 'Last activity';
+
+  @override
+  String get runLastRun => 'Last run';
+
+  @override
+  String get runFollowing => 'FOLLOWING';
+
+  @override
+  String get runRaceFallbackTitle => 'Race';
+
+  @override
+  String get runRaceArmed => 'Race armed';
+
+  @override
+  String get runRaceLive => 'Race LIVE';
+
+  @override
+  String runRaceWaitingForGo(String label) {
+    return '$label — waiting for GO';
+  }
+
+  @override
+  String runRaceElapsedTapStart(String label, String elapsed) {
+    return '$label — $elapsed elapsed · tap Start';
+  }
+
+  @override
+  String get runComplete => 'Run Complete';
+
+  @override
+  String get runStatDistance => 'Distance';
+
+  @override
+  String get runStatTime => 'Time';
+
+  @override
+  String get runStatMoving => 'Moving';
+
+  @override
+  String get runStatPace => 'Pace';
+
+  @override
+  String get runStatSpeed => 'Speed';
+
+  @override
+  String get runStatAvgPace => 'Avg Pace';
+
+  @override
+  String get runStatAvgSpeed => 'Avg Speed';
+
+  @override
+  String get runStatCalories => 'Calories';
+
+  @override
+  String get runStatElevation => 'Elevation';
+
+  @override
+  String get runStatSteps => 'Steps';
+
+  @override
+  String get runStatCadence => 'Cadence';
+
+  @override
+  String get runStatHeartRate => 'Heart Rate';
+
+  @override
+  String get runUnitKcal => 'kcal';
+
+  @override
+  String get runUnitMetres => 'm';
+
+  @override
+  String get runUnitSpm => 'spm';
+
+  @override
+  String get runUnitBpm => 'bpm';
+
+  @override
+  String get runMutePaceCues => 'Mute pace cues';
+
+  @override
+  String get runPaceCuesMuted => 'Pace cues muted';
+
+  @override
+  String get runSynced => 'Synced';
+
+  @override
+  String get runSyncing => 'Syncing...';
+
+  @override
+  String get runDone => 'Done';
+
+  @override
+  String get runDiscardA11yLabel => 'Discard run';
+
+  @override
+  String get runDiscardA11yHint =>
+      'Throws away the current recording without saving';
+
+  @override
+  String get runResumeA11yLabel => 'Resume run';
+
+  @override
+  String get runPauseA11yLabel => 'Pause run';
+
+  @override
+  String get runResumeA11yHint => 'Resumes the paused recording';
+
+  @override
+  String get runPauseA11yHint => 'Pauses the recording without ending it';
+
+  @override
+  String get runMarkLapA11yLabel => 'Mark lap';
+
+  @override
+  String runMarkLapWithCountA11yLabel(int count) {
+    return 'Mark lap, $count so far';
+  }
+
+  @override
+  String get runMarkLapA11yHint => 'Records the current split';
+
+  @override
+  String get runCollapseStatsPanel => 'Collapse stats panel';
+
+  @override
+  String get runExpandStatsPanel => 'Expand stats panel';
+
+  @override
+  String runRouteRemaining(String distance) {
+    return '$distance to go';
+  }
+
+  @override
+  String runOffRoute(int metres) {
+    return 'Off route — ${metres}m away';
+  }
+
+  @override
+  String get runPermissionRevoked => 'Location permission revoked';
+
+  @override
+  String get runGpsLost => 'GPS signal lost — move to open sky';
+
+  @override
+  String get runWeakGps => 'Weak GPS — distance paused';
+
+  @override
+  String get runA11yStarted => 'Run started';
+
+  @override
+  String get runA11yResumed => 'Run resumed';
+
+  @override
+  String get runA11yPaused => 'Run paused';
+
+  @override
+  String get runA11yFinished => 'Run finished';
+
+  @override
+  String runLapMarked(int count) {
+    return 'Lap $count marked';
+  }
+
+  @override
+  String get runDiscardDialogTitle => 'Discard run?';
+
+  @override
+  String get runDiscardDialogBody => 'Your progress will be lost.';
+
+  @override
+  String get runKeepRunning => 'Keep running';
+
+  @override
+  String get runDiscard => 'Discard';
+
+  @override
+  String get runStartWorkout => 'Start workout';
+
+  @override
+  String get runStartWorkoutSubtitle =>
+      'Run with live step targets, audio cues, and a planned-vs-actual review.';
+
+  @override
+  String get runViewWorkoutDetails => 'View details';
+
+  @override
+  String get runWorkoutNoStructure => 'This workout has no runnable structure.';
+
+  @override
+  String runWorkoutLoaded(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count steps',
+      one: '$count step',
+    );
+    return 'Workout loaded · $_temp0 — tap GO to start';
+  }
+
+  @override
+  String get runAbandonWorkoutTitle => 'Abandon workout?';
+
+  @override
+  String get runAbandonWorkoutBody =>
+      'The structured plan stops here; the recorder keeps running as a free run. You can stop anytime to save what you did.';
+
+  @override
+  String get runCancel => 'Cancel';
+
+  @override
+  String get runAbandon => 'Abandon';
+
+  @override
+  String get runNoRoutesSaved =>
+      'No routes saved. Import one from the Routes tab.';
+
+  @override
+  String get runNotificationsOffHint =>
+      'Notifications are off — the live run notification won\'t show. Recording still works.';
+
+  @override
+  String get runSettings => 'Settings';
+
+  @override
+  String get runStartAnyway => 'Start anyway';
+
+  @override
+  String get runOpenSettings => 'Open settings';
+
+  @override
+  String get runNotNow => 'Not now';
+
+  @override
+  String get runShareSubject => 'Track me live';
+
+  @override
+  String runCouldNotShareLink(String error) {
+    return 'Could not share live link: $error';
+  }
+
+  @override
+  String get runHrStrapLostReconnecting =>
+      'Heart-rate strap lost — reconnecting…';
+
+  @override
+  String get runHrStrapReconnected => 'Heart-rate strap reconnected';
+
+  @override
+  String get runHrStrapLostNoHr =>
+      'Heart-rate strap lost — recording continues without HR.';
+
+  @override
+  String get runHrStrapNotFound =>
+      'Heart-rate strap not found — put it on, then reconnect.';
+
+  @override
+  String get runReconnect => 'Reconnect';
+
+  @override
+  String get runHrStrapStillNotFound =>
+      'Still no strap — recording continues without HR.';
+
+  @override
+  String get runSaveFailedRelaunch =>
+      'Couldn\'t save locally. Relaunch the app to recover.';
+
+  @override
+  String get runSyncFailedSaveOffline => 'Saved offline. Sync from Runs.';
+
+  @override
+  String get runSavedOffline => 'Saved offline.';
+
+  @override
+  String runSplitTick(String distance, String pace) {
+    return '$distance — $pace';
+  }
+
+  @override
+  String get runGpsNoServiceSettings =>
+      'No GPS — tracking will start when Location is on.';
+
+  @override
+  String get runGpsBlockedSettings =>
+      'No GPS — permission is blocked. Enable it to track route.';
+
+  @override
+  String get runGpsPermissionPending =>
+      'No GPS — tracking will start when permission is granted.';
+
+  @override
+  String get runGpsAllowAllTheTime =>
+      'Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.';
+
+  @override
+  String get runGpsSensorFailed =>
+      'Recording without GPS — could not start the sensor.';
+
+  @override
+  String get runAgoJustNow => 'Just now';
+
+  @override
+  String runAgoMinutes(int count) {
+    return '$count min ago';
+  }
+
+  @override
+  String runAgoHours(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count hours ago',
+      one: '$count hour ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runAgoYesterday => 'Yesterday';
+
+  @override
+  String runAgoDays(int count) {
+    return '$count days ago';
+  }
+
+  @override
+  String runAgoWeeks(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count weeks ago',
+      one: '$count week ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String runAgoMonths(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count months ago',
+      one: '$count month ago',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get runWorkoutAbandonedBand => 'Workout abandoned · running freely';
+
+  @override
+  String get runWorkoutCompleteBand => 'Workout complete · tap stop to save';
+
+  @override
+  String runWorkoutStepHeader(String label, String target, String pace) {
+    return '$label · $target @ $pace';
+  }
+
+  @override
+  String runWorkoutStepCounter(int current, int total) {
+    return '$current/$total';
+  }
+
+  @override
+  String get runWorkoutRewind => 'Rewind';
+
+  @override
+  String get runWorkoutSkip => 'Skip';
+
+  @override
+  String get runWorkoutAbandon => 'Abandon';
+
+  @override
+  String runWorkoutRemainingYards(int yards) {
+    return '$yards yd to go';
+  }
+
+  @override
+  String runWorkoutRemainingMetres(int metres) {
+    return '$metres m to go';
+  }
+
+  @override
+  String runWorkoutRemainingDuration(String duration) {
+    return '$duration to go';
+  }
 }

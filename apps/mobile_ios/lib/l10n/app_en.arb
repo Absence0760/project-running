@@ -252,5 +252,563 @@
   "privacyPublicSubtitle": "Anyone can find and view your runs.",
   "@privacyPublicSubtitle": {
     "description": "Subtitle of the Public visibility default option"
+  },
+  "runStart": "START",
+  "@runStart": {
+    "description": "Label on the big circular start-run button on the idle run screen"
+  },
+  "runStartA11yLabel": "Start run",
+  "@runStartA11yLabel": {
+    "description": "Screen-reader label for the start-run button"
+  },
+  "runChooseRoute": "Choose route",
+  "@runChooseRoute": {
+    "description": "Idle-screen button to pick a route to follow when no route is selected"
+  },
+  "runChangeRoute": "Change route",
+  "@runChangeRoute": {
+    "description": "Idle-screen button to change the selected route"
+  },
+  "runShareLiveLink": "Share live link",
+  "@runShareLiveLink": {
+    "description": "Idle-screen button that shares a live spectator link for the run"
+  },
+  "runTrainingPlans": "Training plans",
+  "@runTrainingPlans": {
+    "description": "Idle-screen button opening the training-plans list when no active plan exists"
+  },
+  "runTapToCancel": "Tap to cancel",
+  "@runTapToCancel": {
+    "description": "Hint shown during the pre-run countdown — tapping anywhere aborts the start"
+  },
+  "runFirstRunPrompt": "Your first run is one tap away.",
+  "@runFirstRunPrompt": {
+    "description": "Empty-state encouragement on the idle run screen when there is no recent run, event, or plan"
+  },
+  "runLastActivity": "Last activity",
+  "@runLastActivity": {
+    "description": "Label on the last-run card when the recorded distance is negligible (treated as a generic activity)"
+  },
+  "runLastRun": "Last run",
+  "@runLastRun": {
+    "description": "Label on the last-run card on the idle run screen"
+  },
+  "runFollowing": "FOLLOWING",
+  "@runFollowing": {
+    "description": "Uppercase label on the route-preview card indicating the run will follow this route"
+  },
+  "runRaceFallbackTitle": "Race",
+  "@runRaceFallbackTitle": {
+    "description": "Fallback name for a live race when the event has no title"
+  },
+  "runRaceArmed": "Race armed",
+  "@runRaceArmed": {
+    "description": "Status label on the race banner when the race is armed but not yet started"
+  },
+  "runRaceLive": "Race LIVE",
+  "@runRaceLive": {
+    "description": "Status label on the race banner when the race is running"
+  },
+  "runRaceWaitingForGo": "{label} — waiting for GO",
+  "@runRaceWaitingForGo": {
+    "description": "Race banner subtitle while armed, awaiting the start signal",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "runRaceElapsedTapStart": "{label} — {elapsed} elapsed · tap Start",
+  "@runRaceElapsedTapStart": {
+    "description": "Race banner subtitle while running, showing elapsed time and prompting the user to start",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "elapsed": {
+        "type": "String"
+      }
+    }
+  },
+  "runComplete": "Run Complete",
+  "@runComplete": {
+    "description": "Heading on the finished-run summary screen"
+  },
+  "runStatDistance": "Distance",
+  "@runStatDistance": {
+    "description": "Stat label for distance on the recording overlay and finish summary"
+  },
+  "runStatTime": "Time",
+  "@runStatTime": {
+    "description": "Stat label for elapsed time on the finish summary"
+  },
+  "runStatMoving": "Moving",
+  "@runStatMoving": {
+    "description": "Stat label for moving time (elapsed minus stops) on the finish summary"
+  },
+  "runStatPace": "Pace",
+  "@runStatPace": {
+    "description": "Stat label for pace"
+  },
+  "runStatSpeed": "Speed",
+  "@runStatSpeed": {
+    "description": "Stat label for speed (cycling activities)"
+  },
+  "runStatAvgPace": "Avg Pace",
+  "@runStatAvgPace": {
+    "description": "Stat label for average pace on the recording overlay"
+  },
+  "runStatAvgSpeed": "Avg Speed",
+  "@runStatAvgSpeed": {
+    "description": "Stat label for average speed (cycling activities)"
+  },
+  "runStatCalories": "Calories",
+  "@runStatCalories": {
+    "description": "Stat label for estimated calories burned"
+  },
+  "runStatElevation": "Elevation",
+  "@runStatElevation": {
+    "description": "Stat label for elevation gain"
+  },
+  "runStatSteps": "Steps",
+  "@runStatSteps": {
+    "description": "Stat label for step count"
+  },
+  "runStatCadence": "Cadence",
+  "@runStatCadence": {
+    "description": "Stat label for cadence (steps per minute)"
+  },
+  "runStatHeartRate": "Heart Rate",
+  "@runStatHeartRate": {
+    "description": "Stat label for heart rate"
+  },
+  "runUnitKcal": "kcal",
+  "@runUnitKcal": {
+    "description": "Unit suffix for the calories stat"
+  },
+  "runUnitMetres": "m",
+  "@runUnitMetres": {
+    "description": "Unit suffix for the elevation stat (metres)"
+  },
+  "runUnitSpm": "spm",
+  "@runUnitSpm": {
+    "description": "Unit suffix for the cadence stat (steps per minute)"
+  },
+  "runUnitBpm": "bpm",
+  "@runUnitBpm": {
+    "description": "Unit suffix for the heart-rate stat (beats per minute)"
+  },
+  "runMutePaceCues": "Mute pace cues",
+  "@runMutePaceCues": {
+    "description": "Toggle on the recording overlay to silence spoken pace cues for this run"
+  },
+  "runPaceCuesMuted": "Pace cues muted",
+  "@runPaceCuesMuted": {
+    "description": "State of the pace-cue toggle when spoken pace cues are silenced"
+  },
+  "runSynced": "Synced",
+  "@runSynced": {
+    "description": "Status on the finish summary when the run uploaded successfully"
+  },
+  "runSyncing": "Syncing...",
+  "@runSyncing": {
+    "description": "Status on the finish summary while the run is uploading"
+  },
+  "runDone": "Done",
+  "@runDone": {
+    "description": "Button on the finish summary that dismisses back to the idle run screen"
+  },
+  "runDiscardA11yLabel": "Discard run",
+  "@runDiscardA11yLabel": {
+    "description": "Screen-reader label for the discard-run control on the recording overlay"
+  },
+  "runDiscardA11yHint": "Throws away the current recording without saving",
+  "@runDiscardA11yHint": {
+    "description": "Screen-reader hint for the discard-run control"
+  },
+  "runResumeA11yLabel": "Resume run",
+  "@runResumeA11yLabel": {
+    "description": "Screen-reader label for the pause/resume control when paused"
+  },
+  "runPauseA11yLabel": "Pause run",
+  "@runPauseA11yLabel": {
+    "description": "Screen-reader label for the pause/resume control when running"
+  },
+  "runResumeA11yHint": "Resumes the paused recording",
+  "@runResumeA11yHint": {
+    "description": "Screen-reader hint for the resume control"
+  },
+  "runPauseA11yHint": "Pauses the recording without ending it",
+  "@runPauseA11yHint": {
+    "description": "Screen-reader hint for the pause control"
+  },
+  "runMarkLapA11yLabel": "Mark lap",
+  "@runMarkLapA11yLabel": {
+    "description": "Screen-reader label for the mark-lap control when no laps yet"
+  },
+  "runMarkLapWithCountA11yLabel": "Mark lap, {count} so far",
+  "@runMarkLapWithCountA11yLabel": {
+    "description": "Screen-reader label for the mark-lap control, including the count of laps marked so far",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runMarkLapA11yHint": "Records the current split",
+  "@runMarkLapA11yHint": {
+    "description": "Screen-reader hint for the mark-lap control"
+  },
+  "runCollapseStatsPanel": "Collapse stats panel",
+  "@runCollapseStatsPanel": {
+    "description": "Screen-reader label for the drag handle when the stats panel is expanded"
+  },
+  "runExpandStatsPanel": "Expand stats panel",
+  "@runExpandStatsPanel": {
+    "description": "Screen-reader label for the drag handle when the stats panel is collapsed"
+  },
+  "runRouteRemaining": "{distance} to go",
+  "@runRouteRemaining": {
+    "description": "Badge showing remaining distance to the end of the selected route",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "runOffRoute": "Off route — {metres}m away",
+  "@runOffRoute": {
+    "description": "Banner shown when the runner has strayed from the selected route",
+    "placeholders": {
+      "metres": {
+        "type": "int"
+      }
+    }
+  },
+  "runPermissionRevoked": "Location permission revoked",
+  "@runPermissionRevoked": {
+    "description": "Banner shown when location permission is turned off mid-run"
+  },
+  "runGpsLost": "GPS signal lost — move to open sky",
+  "@runGpsLost": {
+    "description": "Banner shown when GPS fixes stop arriving mid-run"
+  },
+  "runWeakGps": "Weak GPS — distance paused",
+  "@runWeakGps": {
+    "description": "Banner shown when GPS accuracy is too low and distance stops advancing"
+  },
+  "runA11yStarted": "Run started",
+  "@runA11yStarted": {
+    "description": "Screen-reader status announcement when recording begins"
+  },
+  "runA11yResumed": "Run resumed",
+  "@runA11yResumed": {
+    "description": "Screen-reader status announcement when a paused run resumes"
+  },
+  "runA11yPaused": "Run paused",
+  "@runA11yPaused": {
+    "description": "Screen-reader status announcement when a run is paused"
+  },
+  "runA11yFinished": "Run finished",
+  "@runA11yFinished": {
+    "description": "Screen-reader status announcement when a run finishes"
+  },
+  "runLapMarked": "Lap {count} marked",
+  "@runLapMarked": {
+    "description": "Banner and screen-reader announcement when a lap is recorded",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runDiscardDialogTitle": "Discard run?",
+  "@runDiscardDialogTitle": {
+    "description": "Title of the confirm-discard dialog shown mid-run"
+  },
+  "runDiscardDialogBody": "Your progress will be lost.",
+  "@runDiscardDialogBody": {
+    "description": "Body of the confirm-discard dialog shown mid-run"
+  },
+  "runKeepRunning": "Keep running",
+  "@runKeepRunning": {
+    "description": "Cancel action on the confirm-discard dialog"
+  },
+  "runDiscard": "Discard",
+  "@runDiscard": {
+    "description": "Confirm action on the confirm-discard dialog"
+  },
+  "runStartWorkout": "Start workout",
+  "@runStartWorkout": {
+    "description": "Option in the workout-entry sheet to begin a structured workout"
+  },
+  "runStartWorkoutSubtitle": "Run with live step targets, audio cues, and a planned-vs-actual review.",
+  "@runStartWorkoutSubtitle": {
+    "description": "Subtitle of the Start-workout option in the workout-entry sheet"
+  },
+  "runViewWorkoutDetails": "View details",
+  "@runViewWorkoutDetails": {
+    "description": "Option in the workout-entry sheet to open the workout detail screen"
+  },
+  "runWorkoutNoStructure": "This workout has no runnable structure.",
+  "@runWorkoutNoStructure": {
+    "description": "Banner shown when a selected workout has no runnable steps"
+  },
+  "runWorkoutLoaded": "Workout loaded · {count, plural, one{{count} step} other{{count} steps}} — tap GO to start",
+  "@runWorkoutLoaded": {
+    "description": "Banner shown when a structured workout is loaded and ready to start",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runAbandonWorkoutTitle": "Abandon workout?",
+  "@runAbandonWorkoutTitle": {
+    "description": "Title of the confirm-abandon-workout dialog"
+  },
+  "runAbandonWorkoutBody": "The structured plan stops here; the recorder keeps running as a free run. You can stop anytime to save what you did.",
+  "@runAbandonWorkoutBody": {
+    "description": "Body of the confirm-abandon-workout dialog"
+  },
+  "runCancel": "Cancel",
+  "@runCancel": {
+    "description": "Generic cancel action in run-screen dialogs"
+  },
+  "runAbandon": "Abandon",
+  "@runAbandon": {
+    "description": "Confirm action on the abandon-workout dialog"
+  },
+  "runNoRoutesSaved": "No routes saved. Import one from the Routes tab.",
+  "@runNoRoutesSaved": {
+    "description": "Banner shown when the user taps Choose route but has no saved routes"
+  },
+  "runNotificationsOffHint": "Notifications are off — the live run notification won't show. Recording still works.",
+  "@runNotificationsOffHint": {
+    "description": "One-time hint shown when notification permission is denied at run start"
+  },
+  "runSettings": "Settings",
+  "@runSettings": {
+    "description": "Action label on banners that deep-link to system or app settings"
+  },
+  "runStartAnyway": "Start anyway",
+  "@runStartAnyway": {
+    "description": "Dismiss action on the background-location nudge dialog — start the run without granting all-time location"
+  },
+  "runOpenSettings": "Open settings",
+  "@runOpenSettings": {
+    "description": "Confirm action on dialogs that deep-link to app settings"
+  },
+  "runNotNow": "Not now",
+  "@runNotNow": {
+    "description": "Dismiss action on the battery-optimisation hint dialog"
+  },
+  "runShareSubject": "Track me live",
+  "@runShareSubject": {
+    "description": "Subject line of the OS share sheet when sharing a live run link"
+  },
+  "runCouldNotShareLink": "Could not share live link: {error}",
+  "@runCouldNotShareLink": {
+    "description": "Banner shown when sharing the live link fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "runHrStrapLostReconnecting": "Heart-rate strap lost — reconnecting…",
+  "@runHrStrapLostReconnecting": {
+    "description": "Banner shown when the BLE heart-rate strap drops and is reconnecting"
+  },
+  "runHrStrapReconnected": "Heart-rate strap reconnected",
+  "@runHrStrapReconnected": {
+    "description": "Banner shown when the BLE heart-rate strap reconnects"
+  },
+  "runHrStrapLostNoHr": "Heart-rate strap lost — recording continues without HR.",
+  "@runHrStrapLostNoHr": {
+    "description": "Banner shown when the BLE heart-rate strap drops and does not reconnect"
+  },
+  "runHrStrapNotFound": "Heart-rate strap not found — put it on, then reconnect.",
+  "@runHrStrapNotFound": {
+    "description": "Banner shown when the BLE heart-rate strap was not found at launch"
+  },
+  "runReconnect": "Reconnect",
+  "@runReconnect": {
+    "description": "Action label to manually reconnect the heart-rate strap"
+  },
+  "runHrStrapStillNotFound": "Still no strap — recording continues without HR.",
+  "@runHrStrapStillNotFound": {
+    "description": "Banner shown when a manual heart-rate strap reconnect attempt fails"
+  },
+  "runSaveFailedRelaunch": "Couldn't save locally. Relaunch the app to recover.",
+  "@runSaveFailedRelaunch": {
+    "description": "Finish-summary error shown when the local save of a run failed"
+  },
+  "runSyncFailedSaveOffline": "Saved offline. Sync from Runs.",
+  "@runSyncFailedSaveOffline": {
+    "description": "Finish-summary status shown when cloud sync failed but the run is saved locally"
+  },
+  "runSavedOffline": "Saved offline.",
+  "@runSavedOffline": {
+    "description": "Finish-summary status shown when the user is signed out and the run is saved locally only"
+  },
+  "runSplitTick": "{distance} — {pace}",
+  "@runSplitTick": {
+    "description": "Banner shown at each split/distance tick during a run, showing total distance and current pace or speed",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "pace": {
+        "type": "String"
+      }
+    }
+  },
+  "runGpsNoServiceSettings": "No GPS — tracking will start when Location is on.",
+  "@runGpsNoServiceSettings": {
+    "description": "Banner shown when location services are disabled at run start"
+  },
+  "runGpsBlockedSettings": "No GPS — permission is blocked. Enable it to track route.",
+  "@runGpsBlockedSettings": {
+    "description": "Banner shown when location permission is permanently denied at run start"
+  },
+  "runGpsPermissionPending": "No GPS — tracking will start when permission is granted.",
+  "@runGpsPermissionPending": {
+    "description": "Banner shown when location permission is denied (not permanently) at run start"
+  },
+  "runGpsAllowAllTheTime": "Set Location to \"Allow all the time\" — runs stop recording when you switch apps without background permission.",
+  "@runGpsAllowAllTheTime": {
+    "description": "Banner shown when only while-in-use location permission is granted at run start"
+  },
+  "runGpsSensorFailed": "Recording without GPS — could not start the sensor.",
+  "@runGpsSensorFailed": {
+    "description": "Banner shown when the GPS sensor could not start for an unknown reason"
+  },
+  "runAgoJustNow": "Just now",
+  "@runAgoJustNow": {
+    "description": "Relative-time label for an event within the last minute"
+  },
+  "runAgoMinutes": "{count} min ago",
+  "@runAgoMinutes": {
+    "description": "Relative-time label in minutes",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runAgoHours": "{count, plural, one{{count} hour ago} other{{count} hours ago}}",
+  "@runAgoHours": {
+    "description": "Relative-time label in hours",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runAgoYesterday": "Yesterday",
+  "@runAgoYesterday": {
+    "description": "Relative-time label for one day ago"
+  },
+  "runAgoDays": "{count} days ago",
+  "@runAgoDays": {
+    "description": "Relative-time label in days (2-6 days)",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runAgoWeeks": "{count, plural, one{{count} week ago} other{{count} weeks ago}}",
+  "@runAgoWeeks": {
+    "description": "Relative-time label in weeks",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runAgoMonths": "{count, plural, one{{count} month ago} other{{count} months ago}}",
+  "@runAgoMonths": {
+    "description": "Relative-time label in months",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "runWorkoutAbandonedBand": "Workout abandoned · running freely",
+  "@runWorkoutAbandonedBand": {
+    "description": "Workout-execution band text after the structured workout is abandoned"
+  },
+  "runWorkoutCompleteBand": "Workout complete · tap stop to save",
+  "@runWorkoutCompleteBand": {
+    "description": "Workout-execution band text when all steps are complete"
+  },
+  "runWorkoutStepHeader": "{label} · {target} @ {pace}",
+  "@runWorkoutStepHeader": {
+    "description": "Workout-execution band header: step label, target distance/duration, and target pace",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      },
+      "target": {
+        "type": "String"
+      },
+      "pace": {
+        "type": "String"
+      }
+    }
+  },
+  "runWorkoutStepCounter": "{current}/{total}",
+  "@runWorkoutStepCounter": {
+    "description": "Workout-execution band step counter (current step of total)",
+    "placeholders": {
+      "current": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "runWorkoutRewind": "Rewind",
+  "@runWorkoutRewind": {
+    "description": "Button to step back to the previous workout step"
+  },
+  "runWorkoutSkip": "Skip",
+  "@runWorkoutSkip": {
+    "description": "Button to skip to the next workout step"
+  },
+  "runWorkoutAbandon": "Abandon",
+  "@runWorkoutAbandon": {
+    "description": "Button to abandon the structured workout and continue as a free run"
+  },
+  "runWorkoutRemainingYards": "{yards} yd to go",
+  "@runWorkoutRemainingYards": {
+    "description": "Workout-execution band remaining-distance label in yards",
+    "placeholders": {
+      "yards": {
+        "type": "int"
+      }
+    }
+  },
+  "runWorkoutRemainingMetres": "{metres} m to go",
+  "@runWorkoutRemainingMetres": {
+    "description": "Workout-execution band remaining-distance label in metres",
+    "placeholders": {
+      "metres": {
+        "type": "int"
+      }
+    }
+  },
+  "runWorkoutRemainingDuration": "{duration} to go",
+  "@runWorkoutRemainingDuration": {
+    "description": "Workout-execution band remaining-time label for duration-based steps",
+    "placeholders": {
+      "duration": {
+        "type": "String"
+      }
+    }
   }
 }

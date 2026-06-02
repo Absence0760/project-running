@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:run_recorder/run_recorder.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../training.dart' show fmtPace;
 
@@ -95,9 +96,10 @@ class _Band extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     if (state.abandoned) {
       return _shell(theme,
-          child: Text('Workout abandoned · running freely',
+          child: Text(l10n.runWorkoutAbandonedBand,
               style: theme.textTheme.bodyMedium));
     }
     final step = state.step;
@@ -105,7 +107,7 @@ class _Band extends StatelessWidget {
       if (state.complete) {
         return _shell(theme,
             child: Text(
-              'Workout complete · tap stop to save',
+              l10n.runWorkoutCompleteBand,
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: theme.colorScheme.primary,
                 fontWeight: FontWeight.w600,
@@ -125,8 +127,11 @@ class _Band extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  '${step.label} · ${_fmtTarget(step)} '
-                  '@ ${fmtPace(step.targetPaceSecPerKm)}',
+                  l10n.runWorkoutStepHeader(
+                    step.label,
+                    _fmtTarget(step),
+                    fmtPace(step.targetPaceSecPerKm),
+                  ),
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                   ),
@@ -149,13 +154,14 @@ class _Band extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                '${state.currentIndex + 1}/${state.totalSteps}',
+                l10n.runWorkoutStepCounter(
+                    state.currentIndex + 1, state.totalSteps),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
               ),
               Text(
-                _fmtRemaining(step),
+                _fmtRemaining(l10n, step),
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -173,7 +179,7 @@ class _Band extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: state.currentIndex == 0 ? null : onRewind,
                   icon: const Icon(Icons.skip_previous, size: 16),
-                  label: const Text('Rewind'),
+                  label: Text(l10n.runWorkoutRewind),
                   style: OutlinedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                   ),
@@ -184,7 +190,7 @@ class _Band extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: onSkip,
                   icon: const Icon(Icons.skip_next, size: 16),
-                  label: const Text('Skip'),
+                  label: Text(l10n.runWorkoutSkip),
                   style: OutlinedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                   ),
@@ -195,7 +201,7 @@ class _Band extends StatelessWidget {
                 child: OutlinedButton.icon(
                   onPressed: onAbandon,
                   icon: const Icon(Icons.cancel_outlined, size: 16),
-                  label: const Text('Abandon'),
+                  label: Text(l10n.runWorkoutAbandon),
                   style: OutlinedButton.styleFrom(
                     visualDensity: VisualDensity.compact,
                     foregroundColor: theme.colorScheme.error,
@@ -272,17 +278,18 @@ class _Band extends StatelessWidget {
     return _fmtDistance(step.targetDistanceMetres);
   }
 
-  String _fmtRemaining(WorkoutStep step) {
+  String _fmtRemaining(AppLocalizations l10n, WorkoutStep step) {
     if (step.isDurationBased) {
-      return '${_fmtDuration(state.remainingDuration)} to go';
+      return l10n.runWorkoutRemainingDuration(
+          _fmtDuration(state.remainingDuration));
     }
     // Sub-1-unit fragments are the typical case mid-rep, so always
     // render in the small unit (m / yd).
     if (activeDistanceUnit == DistanceUnit.mi) {
       final yards = (state.remainingMetres * 1.09361).round();
-      return '$yards yd to go';
+      return l10n.runWorkoutRemainingYards(yards);
     }
-    return '${state.remainingMetres.round()} m to go';
+    return l10n.runWorkoutRemainingMetres(state.remainingMetres.round());
   }
 }
 

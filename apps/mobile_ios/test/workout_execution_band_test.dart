@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/widgets/workout_execution_band.dart';
 import 'package:run_recorder/run_recorder.dart';
@@ -45,6 +46,8 @@ Future<void> _pumpBand(
   final notifier = ValueNotifier<WorkoutBandState>(state);
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: Scaffold(
         body: WorkoutExecutionBand(
           state: notifier,

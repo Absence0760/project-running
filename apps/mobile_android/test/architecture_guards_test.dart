@@ -2478,23 +2478,30 @@ void main() {
     // button: true, label: ...).
     test('Discard / Pause / Lap GestureDetectors are wrapped in Semantics', () {
       final source = File('lib/screens/run_screen.dart').readAsStringSync();
-      // Discard + Mark lap have static labels.
-      for (final label in const ['Discard run', 'Mark lap']) {
+      // Discard + Mark lap labels are localized (gen-l10n) — pin the
+      // l10n key references so a refactor that drops the accessible
+      // label still trips this guard. (Migrated to AppLocalizations in
+      // the i18n run-recording pass; the English copy now lives in the
+      // ARB catalogues.)
+      for (final key in const [
+        'l10n.runDiscardA11yLabel',
+        'l10n.runMarkLapA11yLabel',
+      ]) {
         expect(
           source,
-          contains("'$label'"),
+          contains(key),
           reason: 'run_screen.dart must wrap the matching control in '
-              "Semantics(label: '$label') so TalkBack / VoiceOver "
-              "announce it correctly. audit/accessibility Critical.",
+              "Semantics(label: $key) so TalkBack / VoiceOver "
+              'announce it correctly. audit/accessibility Critical.',
         );
       }
       // Pause/Resume is a toggle: the label flips on `paused` so the
-      // announcement reflects current state. Pin the full ternary so
-      // a future refactor that collapses to a single static label
-      // fires this guard.
+      // announcement reflects current state. Pin the full localized
+      // ternary so a future refactor that collapses to a single static
+      // label fires this guard.
       expect(
         source,
-        contains("paused ? 'Resume run' : 'Pause run'"),
+        contains('paused ? l10n.runResumeA11yLabel : l10n.runPauseA11yLabel'),
         reason: 'Pause/Resume Semantics label must flip on `paused` '
             'so a screen reader announces the current state. '
             'audit/accessibility Critical.',
@@ -2524,9 +2531,10 @@ void main() {
       // tappable region with no role. Pin the Semantics wrap in place.
       expect(
         source,
-        contains("label: 'Start run'"),
+        contains('label: l10n.runStartA11yLabel'),
         reason: 'run_screen.dart must wrap the idle-surface START '
-            "button in Semantics(label: 'Start run').",
+            'button in Semantics(label: l10n.runStartA11yLabel). '
+            '(Label localized via gen-l10n in the i18n run-recording pass.)',
       );
     });
 
@@ -2542,17 +2550,21 @@ void main() {
             'cues are gated on a user pref and cannot satisfy '
             'WCAG 4.1.3.',
       );
-      for (final phrase in const [
-        'Run started',
-        'Run paused',
-        'Run resumed',
-        'Lap \$n marked',
-        'Run finished',
+      // Status phrases are localized (gen-l10n) — pin the l10n key
+      // references that feed _announceA11yState so a refactor dropping
+      // a status announcement still trips this guard. (Migrated to
+      // AppLocalizations in the i18n run-recording pass.)
+      for (final key in const [
+        '_l10n.runA11yStarted',
+        '_l10n.runA11yPaused',
+        '_l10n.runA11yResumed',
+        '_l10n.runLapMarked(n)',
+        '_l10n.runA11yFinished',
       ]) {
         expect(
           source,
-          contains(phrase),
-          reason: 'run_screen.dart must announce "$phrase" via '
+          contains(key),
+          reason: 'run_screen.dart must announce $key via '
               'SemanticsService.announce — see audit/accessibility '
               '(2026-05-25).',
         );

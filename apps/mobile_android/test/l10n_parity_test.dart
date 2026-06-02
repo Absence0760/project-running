@@ -16,9 +16,17 @@ Set<String> _messageKeys(Map<String, dynamic> arb) => arb.keys
     .where((k) => !k.startsWith('@'))
     .toSet();
 
-/// Extract `{placeholder}` token names from a message value so we can check
-/// translations didn't drop or rename an interpolation arg.
-Set<String> _placeholders(String value) => RegExp(r'\{(\w+)')
+/// Extract `{placeholder}` argument names from a message value so we can
+/// check translations didn't drop or rename an interpolation arg.
+///
+/// ICU-plural aware: a real argument is `{name}` (simple interpolation) or
+/// `{name, plural, ...}` (the head of a plural/select block). The literal
+/// text inside `one{...}` / `other{...}` branches is NOT an argument, so we
+/// only accept a `{` followed by an identifier that is immediately followed
+/// by `}` or `,`. This keeps the contract on the args that actually flow in
+/// (e.g. `count`) without flagging translated branch wording ("vor", "há")
+/// as a spurious placeholder.
+Set<String> _placeholders(String value) => RegExp(r'\{(\w+)\s*[},]')
     .allMatches(value)
     .map((m) => m.group(1)!)
     .toSet();
