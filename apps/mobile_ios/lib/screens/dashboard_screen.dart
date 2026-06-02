@@ -421,7 +421,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                         runCount: runs.length,
                         vertMetres: allVert,
                         unit: unit,
-                        onTap: null,
+                        onTap: () => _openPeriodSummary(PeriodType.all),
                       ),
                     ),
                   ],

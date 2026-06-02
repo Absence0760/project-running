@@ -16,7 +16,7 @@ import '../settings_sync.dart';
 import 'run_detail_screen.dart';
 import '../widgets/top_banner.dart';
 
-enum PeriodType { week, month }
+enum PeriodType { week, month, all }
 
 // ── Pure helpers (testable without widget infrastructure) ────────────────
 
@@ -27,6 +27,10 @@ DateTime periodStart(PeriodType period, DateTime anchor,
       return weekStartLocal(anchor, weekStartDay: weekStartDay);
     case PeriodType.month:
       return DateTime(anchor.year, anchor.month, 1);
+    case PeriodType.all:
+      // Epoch sentinel — the run filter in _recompute uses
+      // [periodStart, periodEnd) so a 1970→9999 window includes every run.
+      return DateTime(1970);
   }
 }
 
@@ -40,6 +44,8 @@ DateTime periodEnd(PeriodType period, DateTime anchor,
       final nextMonth = anchor.month == 12 ? 1 : anchor.month + 1;
       final year = anchor.month == 12 ? anchor.year + 1 : anchor.year;
       return DateTime(year, nextMonth, 1);
+    case PeriodType.all:
+      return DateTime(9999);
   }
 }
 
@@ -50,6 +56,8 @@ String periodTitle(PeriodType period, DateTime anchor,
       return 'Week of ${shortDate(periodStart(period, anchor, weekStartDay: weekStartDay))}';
     case PeriodType.month:
       return '${monthName(anchor.month)} ${anchor.year}';
+    case PeriodType.all:
+      return 'All time';
   }
 }
 
@@ -62,6 +70,8 @@ String periodLabel(PeriodType period, DateTime anchor,
       return '${shortDate(start)} – ${shortDate(end)}';
     case PeriodType.month:
       return '${monthName(start.month)} ${start.year}';
+    case PeriodType.all:
+      return 'All time';
   }
 }
 
@@ -250,6 +260,8 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             _anchor.month == 1 ? 12 : _anchor.month - 1,
             1,
           );
+        case PeriodType.all:
+          break; // all-time has no previous; the arrows are disabled.
       }
       _recompute();
     });
@@ -267,6 +279,8 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             _anchor.month == 12 ? 1 : _anchor.month + 1,
             1,
           );
+        case PeriodType.all:
+          break; // all-time has no next; the arrows are disabled.
       }
       _recompute();
     });
@@ -311,7 +325,11 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(_period == PeriodType.week ? 'Weekly Summary' : 'Monthly Summary'),
+        title: Text(switch (_period) {
+          PeriodType.week => 'Weekly Summary',
+          PeriodType.month => 'Monthly Summary',
+          PeriodType.all => 'All-Time Summary',
+        }),
         actions: [
           if (_periodRuns.isNotEmpty)
             IconButton(
@@ -368,7 +386,8 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
         IconButton(
           icon: const Icon(Icons.chevron_left),
           tooltip: 'Previous',
-          onPressed: _previous,
+          // All-time spans everything — there's no adjacent period to step to.
+          onPressed: _period == PeriodType.all ? null : _previous,
         ),
         Expanded(
           child: GestureDetector(
@@ -384,7 +403,11 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  'Tap to switch to ${_period == PeriodType.week ? 'monthly' : 'weekly'}',
+                  'Tap to switch to ${switch (_period) {
+                    PeriodType.week => 'monthly',
+                    PeriodType.month => 'all-time',
+                    PeriodType.all => 'weekly',
+                  }}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -397,7 +420,8 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
         IconButton(
           icon: const Icon(Icons.chevron_right),
           tooltip: 'Next',
-          onPressed: _isFuture ? null : _next,
+          onPressed:
+              (_isFuture || _period == PeriodType.all) ? null : _next,
         ),
       ],
     );
@@ -405,7 +429,11 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
 
   void _switchPeriodType() {
     setState(() {
-      _period = _period == PeriodType.week ? PeriodType.month : PeriodType.week;
+      _period = switch (_period) {
+        PeriodType.week => PeriodType.month,
+        PeriodType.month => PeriodType.all,
+        PeriodType.all => PeriodType.week,
+      };
       _recompute();
     });
   }

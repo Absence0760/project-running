@@ -89,6 +89,35 @@ void main() {
     });
   });
 
+  // ── all-time period ──────────────────────────────────────────────────
+
+  group('all-time period', () {
+    final anchor = DateTime(2026, 4, 15);
+
+    test('periodStart/periodEnd are the epoch→far-future sentinels', () {
+      expect(periodStart(PeriodType.all, anchor), DateTime(1970));
+      expect(periodEnd(PeriodType.all, anchor), DateTime(9999));
+    });
+
+    test('title and label are both "All time"', () {
+      expect(periodTitle(PeriodType.all, anchor), 'All time');
+      expect(periodLabel(PeriodType.all, anchor), 'All time');
+    });
+
+    test('the [start, end) window brackets runs from any year', () {
+      final start = periodStart(PeriodType.all, anchor);
+      final end = periodEnd(PeriodType.all, anchor);
+      for (final d in [
+        DateTime(2001, 1, 1),
+        DateTime(2026, 6, 1),
+        DateTime(2030, 12, 31),
+      ]) {
+        expect(!d.isBefore(start) && d.isBefore(end), isTrue,
+            reason: '$d must fall inside the all-time window');
+      }
+    });
+  });
+
   // ── computePeriodStats ───────────────────────────────────────────────
 
   group('computePeriodStats', () {
