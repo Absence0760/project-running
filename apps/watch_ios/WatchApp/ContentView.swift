@@ -177,7 +177,7 @@ struct PreRunView: View {
                     .font(.headline)
 
                 if queuedCount > 0 {
-                    Text("\(queuedCount) run\(queuedCount == 1 ? "" : "s") queued to sync")
+                    Text("\(queuedCount) run queued to sync")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -335,7 +335,7 @@ struct RecoveryView: View {
 
                 if let cp = CheckpointStore.peekCheckpoint() {
                     let dateStr = Self.formatDate(cp.startedAt)
-                    let distStr = String(format: "%.1f km", cp.distanceMetres / 1000)
+                    let distStr = RunFormat.distance(metres: cp.distanceMetres, fractionDigits: 1)
                     let durStr = Self.formatDuration(cp.activeDurationSeconds)
                     Text("Recover unsaved run from \(dateStr), \(distStr), \(durStr)?")
                         .font(.caption)
@@ -361,7 +361,8 @@ struct RecoveryView: View {
 
     private static func formatDate(_ date: Date) -> String {
         let f = DateFormatter()
-        f.dateFormat = "MMM d"
+        f.locale = Locale.current
+        f.setLocalizedDateFormatFromTemplate("MMMd")
         return f.string(from: date)
     }
 
@@ -369,8 +370,10 @@ struct RecoveryView: View {
         let total = Int(seconds)
         let h = total / 3600
         let m = (total % 3600) / 60
-        if h > 0 { return "\(h)h \(m)m" }
-        return "\(m) min"
+        let f = DateComponentsFormatter()
+        f.unitsStyle = .abbreviated
+        f.allowedUnits = h > 0 ? [.hour, .minute] : [.minute]
+        return f.string(from: DateComponents(hour: h, minute: m)) ?? "\(m)"
     }
 }
 
@@ -466,9 +469,9 @@ struct PostRunView: View {
 
     private var syncedStatusText: String {
         switch transferState {
-        case .completed: return "Sent to phone"
-        case .failed: return "Queued — will retry"
-        default: return "Queued for sync"
+        case .completed: return String(localized: "Sent to phone")
+        case .failed: return String(localized: "Queued — will retry")
+        default: return String(localized: "Queued for sync")
         }
     }
 

@@ -60,6 +60,47 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 - `ActiveRunBridge.swift` — App-Group-backed `UserDefaults` write/read shared with the active-run complication target. `WorkoutManager.publishComplicationSnapshot()` writes here on every workout state transition. See `apps/watch_ios/Complications/README.md` for the one-time Xcode wiring
 - `AppTheme.swift` — `Color` palette + reusable text styles for the watch UI (single source of truth so the SwiftUI subviews — `PreRunView`, `RunningView`, `PausedView`, `RecoveryView`, `PostRunView` — share dimensions and colours rather than each redefining their own)
 
+## Localization
+
+The watch UI is localised to the same six locales as web / Flutter / Wear OS:
+**en, de, fr, es, ja, pt-BR**. There is **no in-app language picker** — the watch
+follows the device / paired-iPhone locale (`Locale.current`), as Apple intends.
+
+- **String Catalog**: `WatchApp/Localizable.xcstrings` (modern `.xcstrings`, source
+  string is the key). SwiftUI `Text("Ready to Run")` is a `LocalizedStringKey` and
+  localises automatically against the catalog with no code change. Non-`Text` surfaces
+  (the sync-status strings in `ContentView.syncedStatusText`) are wrapped in
+  `String(localized:)` so they pull from the catalog too. Translations match the
+  dialect / wording already used in `apps/mobile_android/lib/l10n/app_*.arb` and
+  `apps/watch_wear/.../res/values-*/strings.xml`. "Threkir" stays untranslated.
+- **Number / unit formatting**: `WatchApp/RunFormat.swift` is the single source of
+  truth — `RunFormat.distance(...)` and `RunFormat.pace(...)`. Distance uses
+  `NumberFormatter` (locale decimal separator: `5,12 km` on a German watch) +
+  `MeasurementFormatter` (localised unit word) and honours the km/mi preference
+  (`UserDefaults preferred_unit`, same key the pre-run pace presets read). Pace is
+  `m:ss` + a `/km`|`/mi` suffix (the m:ss part is a stopwatch reading, not a decimal,
+  so it isn't locale-separated — matching Wear OS / Flutter). `formattedElapsed`
+  stays `%d:%02d:%02d` for the same reason. The complication
+  (`Complications/ActiveRunComplication.swift`) carries its own copy of the same
+  formatting logic because it builds in a **separate** Widget Extension target that
+  can't link `RunFormat.swift`; keep the two in lockstep.
+- **`CFBundleLocalizations`** lists all six locales in `WatchApp/Info.plist`; the six
+  locales are also in the project's `knownRegions` (`WatchApp.xcodeproj/project.pbxproj`).
+  `SWIFT_EMIT_LOC_STRINGS = YES` is already set so Xcode keeps the catalog populated
+  from source on build.
+- **Parity check (no Xcode needed)**: `scripts/check_xcstrings_parity.sh` parses the
+  catalog and fails if any string lacks a non-empty translation for all six locales
+  (ja is exempt from the plural `one` category by design). Pure `python3` — runs on
+  Linux / CI without a Mac. Run it after editing the catalog.
+- **Complication caveat**: the complication's `.xcstrings` localisation only takes
+  effect once `Localizable.xcstrings` is added to the Widget Extension target's bundle
+  — see step 5 in `Complications/README.md`. Until that target exists in Xcode the
+  complication source isn't built at all.
+- **Remaining verification**: this work was done on a Linux workstation with no Xcode,
+  so it is **correct-by-construction but not compiled**. A Mac/Xcode build
+  (`xcodebuild -project apps/watch_ios/WatchApp.xcodeproj -scheme WatchApp …`) plus a
+  spot-check of each locale in the simulator is the outstanding verification step.
+
 ## What's real vs stubbed
 
 More than a stub — there's a multi-file architecture with `@StateObject` / `@ObservedObject` / `@Published` state flow, a working Supabase client, and cross-device sync via Watch Connectivity. Specific "real" features: workout session start/stop, GPS tracking with background location updates, pause/resume, crash checkpoint recovery, haptic pace alerts, route navigation scaffolding, phone-to-watch message passing.

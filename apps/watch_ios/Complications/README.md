@@ -28,7 +28,10 @@ This note is the one-time wiring. Once it's done, the complication ticks up in [
    - Repeat on the `WatchAppComplication` target. The identifier must match `ActiveRunBridge.appGroup` exactly.
 4. **Set deployment target.**
    - WatchAppComplication → General → Minimum Deployments → watchOS 10.0 (or whatever the host app uses; staying in lockstep avoids `@available` annotations).
-5. **Build for watchOS Simulator.** First build will pull `WidgetKit`. The complication shows up in the watch face customisation UI under "Active Run" with a circular preview; tap to add to a face.
+5. **Add the String Catalog to the extension's bundle.**
+   - Drag `apps/watch_ios/WatchApp/Localizable.xcstrings` into the `WatchAppComplication` group as a *reference* (don't copy); **target membership** = both `WatchApp` and `WatchAppComplication`.
+   - This is required: the complication's `Text("RUN")` / `Text("Tap to start")` / `configurationDisplayName("Active Run")` strings localise against the catalog only if it lives in the extension's own bundle. Without it the complication renders English regardless of locale even though the host app is localised.
+6. **Build for watchOS Simulator.** First build will pull `WidgetKit`. The complication shows up in the watch face customisation UI under "Active Run" (localised) with a circular preview; tap to add to a face.
 
 After step 5, `xcodebuild -scheme WatchApp build` from CI should still pass (the new scheme `WatchAppComplication` is built as a target dependency of WatchApp).
 

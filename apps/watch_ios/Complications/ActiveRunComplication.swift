@@ -260,19 +260,35 @@ func formatElapsed(_ seconds: Int) -> String {
 }
 
 func formatDistanceKm(_ meters: Double) -> String {
-    let km = meters / 1000.0
-    if km >= 10.0 {
-        return String(format: "%.1f km", km)
-    }
-    return String(format: "%.2f km", km)
+    let miles = UserDefaults.standard.string(forKey: "preferred_unit") == "mi"
+    let metresPerMile = 1609.344
+    let value = miles ? meters / metresPerMile : meters / 1000.0
+    let digits = value >= 10.0 ? 1 : 2
+
+    let number = NumberFormatter()
+    number.locale = Locale.current
+    number.numberStyle = .decimal
+    number.minimumFractionDigits = digits
+    number.maximumFractionDigits = digits
+    number.usesGroupingSeparator = false
+    let numberStr = number.string(from: NSNumber(value: value)) ?? "\(value)"
+
+    let measurement = MeasurementFormatter()
+    measurement.locale = Locale.current
+    measurement.unitOptions = .providedUnit
+    let unitStr = measurement.string(from: miles ? UnitLength.miles : UnitLength.kilometers)
+    return "\(numberStr) \(unitStr)"
 }
 
 func formatPaceSecPerKm(_ secPerKm: Double?) -> String {
+    let miles = UserDefaults.standard.string(forKey: "preferred_unit") == "mi"
     guard let p = secPerKm, p.isFinite, p > 0 else {
-        return "—:—/km"
+        return miles ? "—:—/mi" : "—:—/km"
     }
-    let total = Int(p)
+    let metresPerMile = 1609.344
+    let perUnit = miles ? p * (metresPerMile / 1000.0) : p
+    let total = Int(perUnit.rounded())
     let m = total / 60
     let s = total % 60
-    return String(format: "%d:%02d/km", m, s)
+    return String(format: "%d:%02d%@", m, s, miles ? "/mi" : "/km")
 }

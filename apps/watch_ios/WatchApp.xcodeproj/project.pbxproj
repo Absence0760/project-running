@@ -17,7 +17,9 @@
 		A1B2C3D4E5F60001000A000C /* AppTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A000A /* AppTheme.swift */; };
 		A1B2C3D4E5F60001000A000D /* HealthKitManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A000B /* HealthKitManager.swift */; };
 		A1B2C3D4E5F60001000A000F /* ActiveRunBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A000F /* ActiveRunBridge.swift */; };
+		A1B2C3D4E5F60001000A0011 /* RunFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0011 /* RunFormat.swift */; };
 		A1B2C3D4E5F60001000A0007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0007 /* Assets.xcassets */; };
+		A1B2C3D4E5F60001000A0010 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60002000A0010 /* Localizable.xcstrings */; };
 		A1B2C3D4E5F60001000A0008 /* HealthKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0001 /* HealthKit.framework */; };
 		A1B2C3D4E5F60001000A0009 /* CoreLocation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0002 /* CoreLocation.framework */; };
 		A1B2C3D4E5F60001000A000A /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A1B2C3D4E5F60003000A0003 /* WatchConnectivity.framework */; };
@@ -34,6 +36,8 @@
 		A1B2C3D4E5F60002000A000A /* AppTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTheme.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A000B /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A000F /* ActiveRunBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveRunBridge.swift; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002000A0010 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		A1B2C3D4E5F60002000A0011 /* RunFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RunFormat.swift; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A000C /* WatchApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = WatchApp.entitlements; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A1B2C3D4E5F60002000A0008 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -79,6 +83,8 @@
 				A1B2C3D4E5F60002000A000A /* AppTheme.swift */,
 				A1B2C3D4E5F60002000A000B /* HealthKitManager.swift */,
 				A1B2C3D4E5F60002000A000F /* ActiveRunBridge.swift */,
+				A1B2C3D4E5F60002000A0011 /* RunFormat.swift */,
+				A1B2C3D4E5F60002000A0010 /* Localizable.xcstrings */,
 				A1B2C3D4E5F60002000A0007 /* Assets.xcassets */,
 				A1B2C3D4E5F60002000A0008 /* Info.plist */,
 				A1B2C3D4E5F60002000A000C /* WatchApp.entitlements */,
@@ -147,6 +153,11 @@
 			knownRegions = (
 				en,
 				Base,
+				de,
+				fr,
+				es,
+				ja,
+				"pt-BR",
 			);
 			mainGroup = A1B2C3D4E5F60006000A0001;
 			productRefGroup = A1B2C3D4E5F60006000A0004 /* Products */;
@@ -164,6 +175,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1B2C3D4E5F60001000A0007 /* Assets.xcassets in Resources */,
+				A1B2C3D4E5F60001000A0010 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -184,6 +196,7 @@
 				A1B2C3D4E5F60001000A000C /* AppTheme.swift in Sources */,
 				A1B2C3D4E5F60001000A000D /* HealthKitManager.swift in Sources */,
 				A1B2C3D4E5F60001000A000F /* ActiveRunBridge.swift in Sources */,
+				A1B2C3D4E5F60001000A0011 /* RunFormat.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -234,14 +234,11 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     var formattedDistance: String {
-        String(format: "%.2f km", distanceMetres / 1000)
+        RunFormat.distance(metres: distanceMetres, fractionDigits: 2)
     }
 
     var formattedPace: String {
-        guard let pace = currentPace, pace > 0 else { return "--:--" }
-        let minutes = Int(pace) / 60
-        let seconds = Int(pace) % 60
-        return String(format: "%d:%02d /km", minutes, seconds)
+        RunFormat.pace(secondsPerKm: currentPace)
     }
 
     // MARK: - CLLocationManagerDelegate
