@@ -113,15 +113,17 @@ test('Settings → preferences writes gender + date_of_birth to user_profiles', 
 
 test('Settings → preferences hydrates gender + dob from user_profiles on load', () => {
 	const source = read('src/routes/settings/preferences/+page.svelte');
-	// The select string also carries health_data_consent_at since the
-	// GDPR consent commit — accept either the pre-consent two-column
-	// shape or the post-consent three-column shape so we don't break
-	// every time a sibling column is added to the demographic select.
+	// gender / date_of_birth / health_data_consent_at are deny-by-default
+	// columns for direct authenticated SELECTs (column lockdown,
+	// 20260707_001) — a direct .select() 403s, so the self-read goes through
+	// the get_my_profile() RPC, then the form reads each field off the row.
 	assert.match(
 		source,
-		/\.select\('gender,\s*date_of_birth(,[^']*)?'\)/,
-		'preferences page must select gender + DOB to populate the form',
+		/get_my_profile/,
+		'preferences must self-read the profile via get_my_profile() (direct column select 403s)',
 	);
+	assert.match(source, /prof\.gender/, 'preferences must read gender to populate the form');
+	assert.match(source, /prof\.date_of_birth/, 'preferences must read DOB to populate the form');
 });
 
 test('SegmentsPanel.svelte renders a KOM/QOM crown on the rank-1 row', () => {

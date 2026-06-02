@@ -52,9 +52,18 @@ test('account page only persists DOB to prefs when consented', () => {
 
 test('account page hydrates consent state from user_profiles on load', () => {
 	const source = read(SOURCE);
+	// health_data_consent_at is a deny-by-default column for direct
+	// authenticated SELECTs (column lockdown, 20260707_001) — a direct
+	// .select('health_data_consent_at') 403s, so the self-read goes through
+	// the get_my_profile() RPC. Pin that path + the consent-state read.
 	assert.match(
 		source,
-		/\.select\('health_data_consent_at'\)/,
+		/get_my_profile/,
+		'page must self-read the profile via get_my_profile() (direct column select 403s)',
+	);
+	assert.match(
+		source,
+		/health_data_consent_at/,
 		'page must read health_data_consent_at to pre-tick the box',
 	);
 });
