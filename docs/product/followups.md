@@ -202,11 +202,13 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   (GPX export, clip RPC, map-match) is untouched — the sidecar carries no location and is
   owner-only (never in `public_runs` / clip). Tests: FIT-parser unit tests + an anon-safe
   HR-zone e2e (`hr-zones.spec.ts` indoor case) + the path-forgery pgtap; twins byte-identical.
-  **Remaining (small, completeness):** backup/restore plumbing — the Go `BuildBackupZip`
-  and Dart `backup.dart` restore archive the GPS track but not the HR sidecar, so an indoor
-  run's per-point HR is dropped on a device-swap backup→restore (the cloud copy is
-  unaffected). Add an `hr/{id}.hr.json.gz` entry + an `hr_series_url` field to the backup
-  manifest and the restore re-home logic.
+  **Backup/restore done (2026-06-02):** both backup builders (Dart `writeBackupZipStreaming`
+  + Go `BuildBackupZip`) archive the sidecar under `hr/{id}.hr.json.gz` and count it in the
+  manifest; the Dart restore re-homes it and always re-stamps `hr_series_url` (the archived
+  value is the old owner/run path, which the path-shape CHECK would reject). Per-point HR now
+  survives a device-swap backup→restore. **Fully shipped** — no remaining sub-items. (Offline
+  restore still doesn't reconstruct per-point HR, the same documented caveat the GPS track has
+  on that path; the cloud copy + online restore are complete.)
 - [ ] **Health Connect import brings tracks (garmin/android, mobile + device)** —
   `health_connect_importer.dart` hard-codes `track: []`, so every HC-imported run is
   trackless/lapless/cadenceless. Reading the HC ExerciseRoute + sample series into a
