@@ -1085,8 +1085,12 @@ class ApiClient {
   Future<List<Route>> getRoutes({
     int limit = 200,
     DateTime? before,
+    bool starredOnly = false,
   }) async {
     var query = _client.from(RouteRow.table).select();
+    if (starredOnly) {
+      query = query.eq(RouteRow.colIsStarred, true);
+    }
     if (before != null) {
       query = query.lt(RouteRow.colCreatedAt, before.toIso8601String());
     }

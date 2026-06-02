@@ -112,6 +112,13 @@ class RoutesScreenState extends State<RoutesScreen> {
   final Set<String> _selected = <String>{};
   bool _deleting = false;
 
+  /// One-shot: the cursor-paged owned fetch only has the first page in
+  /// memory, so a client-side `is_starred` filter would only ever surface
+  /// the starred routes that happen to sit on page 1. When the Starred
+  /// filter is engaged we pull the user's full starred set server-side
+  /// once so every starred route is present, not just the first page's.
+  bool _starredLoaded = false;
+
   @override
   void initState() {
     super.initState();
@@ -131,6 +138,25 @@ class RoutesScreenState extends State<RoutesScreen> {
 
   void _onChange() {
     if (mounted) setState(() {});
+  }
+
+  /// Pull every starred route the user owns (server-side `is_starred`
+  /// filter) so the Starred toggle isn't limited to whatever starred
+  /// routes happened to be on the first cursor page. Idempotent.
+  Future<void> _ensureStarredLoaded() async {
+    if (_starredLoaded) return;
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final starred = await api
+          .getRoutes(starredOnly: true, limit: 500)
+          .timeout(kBackendLoadTimeout);
+      await widget.routeStore.saveBatch(starred);
+      _starredLoaded = true;
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('fetch starred routes failed: $e');
+    }
   }
 
   Future<void> _fetchBookmarks() async {
@@ -275,6 +301,9 @@ class RoutesScreenState extends State<RoutesScreen> {
         // Reset paging — the filtered list might be smaller.
         _visibleCount = _kRoutesPageSize;
       });
+      // Restored into the Starred view → make sure the full starred set
+      // is loaded, not just whatever sits on the first cursor page.
+      if (_starredOnly) _ensureStarredLoaded();
     } catch (_) {
       // Corrupt blob; leave defaults.
     }
@@ -800,11 +829,13 @@ class RoutesScreenState extends State<RoutesScreen> {
                       _persistFilters();
                     },
                     onStarredOnlyToggled: () {
+                      final turningOn = !_starredOnly;
                       setState(() {
-                        _starredOnly = !_starredOnly;
+                        _starredOnly = turningOn;
                         _visibleCount = _kRoutesPageSize;
                       });
                       _persistFilters();
+                      if (turningOn) _ensureStarredLoaded();
                     },
                     onClearFilters: _clearFilters,
                   );
