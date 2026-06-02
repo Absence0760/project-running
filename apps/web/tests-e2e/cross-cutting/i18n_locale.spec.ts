@@ -136,6 +136,11 @@ test.describe('i18n language picker (settings → preferences)', () => {
 
 		await page.goto('/settings/preferences');
 		await page.locator('[data-testid="language-select"]').selectOption('de');
+		// setLocale is async (it loads the locale chunk before writing the
+		// choice to localStorage + flipping <html lang>). Wait for that to
+		// land before navigating, otherwise the goto races the persist and
+		// /plans loads back in English.
+		await expect(page.locator('html')).toHaveAttribute('lang', 'de');
 		await page.goto(planUrl);
 		// German weekday abbreviation + localised long month header.
 		await expect(page.locator('.dow-row span').first()).toHaveText('Mo');
