@@ -9,6 +9,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../backend_timeout.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../route_geometry.dart' show interpolateAlongRoute;
@@ -183,7 +184,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _bookmarked = before);
-      showTopBanner(context, 'Bookmark failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailBookmarkFailed('$e'));
     } finally {
       if (mounted) setState(() => _bookmarkBusy = false);
     }
@@ -253,8 +255,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         showTopBanner(
           context,
           newValue
-              ? 'Route set to public. Will sync next time.'
-              : 'Route set to private. Will sync next time.',
+              ? AppLocalizations.of(context).routeDetailPublicWillSync
+              : AppLocalizations.of(context).routeDetailPrivateWillSync,
         );
       }
       return;
@@ -270,7 +272,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       if (mounted) {
         setState(() => _isPublic = !newValue);
         await widget.routeStore.save(buildRoute(!newValue));
-        showTopBanner(context, 'Could not update visibility: $e');
+        showTopBanner(context,
+            AppLocalizations.of(context).routeDetailVisibilityFailed('$e'));
       }
     }
   }
@@ -292,7 +295,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     if (mounted) {
       showTopBanner(
         context,
-        next ? 'Saved for offline use.' : 'Removed from offline saves.',
+        next
+            ? AppLocalizations.of(context).routeDetailOfflineSaved
+            : AppLocalizations.of(context).routeDetailOfflineRemoved,
       );
     }
   }
@@ -326,7 +331,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       if (mounted) setState(() => _isStarred = !newValue);
       await widget.routeStore.save(buildRoute(!newValue));
       if (mounted) {
-        showTopBanner(context, 'Could not update star: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).routeDetailStarFailed('$e'));
       }
     }
   }
@@ -334,7 +340,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   Future<void> _submitReview() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      showTopBanner(context, 'Sign in to leave a review');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailSignInToReview);
       return;
     }
 
@@ -349,11 +356,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       commentCtl.text = existing.comment ?? '';
     }
 
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('Rate this route'),
+          title: Text(l10n.routeDetailRateDialogTitle),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -377,9 +385,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               const SizedBox(height: 12),
               TextField(
                 controller: commentCtl,
-                decoration: const InputDecoration(
-                  labelText: 'Comment (optional)',
-                  border: OutlineInputBorder(),
+                decoration: InputDecoration(
+                  labelText: l10n.routeDetailCommentLabel,
+                  border: const OutlineInputBorder(),
                 ),
                 maxLines: 3,
               ),
@@ -388,11 +396,11 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(ctx, false),
-              child: const Text('Cancel'),
+              child: Text(l10n.routeDetailCancel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(ctx, true),
-              child: const Text('Submit'),
+              child: Text(l10n.routeDetailSubmit),
             ),
           ],
         ),
@@ -411,7 +419,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       await _fetchReviews();
     } catch (e) {
       if (mounted) {
-        showTopBanner(context, 'Failed to submit review: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).routeDetailReviewFailed('$e'));
       }
     }
   }
@@ -419,6 +428,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final route = widget.route;
     // Surface the primary "Start run" CTA as a floating action
@@ -437,9 +447,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               backgroundColor: const Color(0xFF22C55E),
               foregroundColor: Colors.white,
               icon: const Icon(Icons.play_arrow),
-              label: const Text(
-                'Start run',
-                style: TextStyle(fontWeight: FontWeight.w600),
+              label: Text(
+                l10n.routeDetailStartRun,
+                style: const TextStyle(fontWeight: FontWeight.w600),
               ),
             )
           : null,
@@ -448,12 +458,13 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         actions: [
           PopupMenuButton<String>(
             icon: const Icon(Icons.ios_share),
-            tooltip: 'Share',
+            tooltip: l10n.routeDetailShare,
             onSelected: (fmt) => _shareAs(context, fmt),
-            itemBuilder: (_) => const [
-              PopupMenuItem(value: 'image', child: Text('Share as image')),
-              PopupMenuItem(value: 'gpx', child: Text('Share as GPX')),
-              PopupMenuItem(value: 'kml', child: Text('Share as KML')),
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                  value: 'image', child: Text(l10n.routeDetailShareAsImage)),
+              PopupMenuItem(value: 'gpx', child: Text(l10n.routeDetailShareAsGpx)),
+              PopupMenuItem(value: 'kml', child: Text(l10n.routeDetailShareAsKml)),
             ],
           ),
           // Offline-pin affordance — local-only flag (never synced).
@@ -468,8 +479,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   : Theme.of(context).colorScheme.onSurfaceVariant,
             ),
             tooltip: _isOfflinePinned
-                ? 'Remove offline save'
-                : 'Save for offline use',
+                ? l10n.routeDetailRemoveOfflineSave
+                : l10n.routeDetailSaveForOffline,
             onPressed: _toggleOfflinePin,
           ),
           if (_isOwner)
@@ -480,7 +491,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     ? const Color(0xFFFBBF24)
                     : Theme.of(context).colorScheme.onSurfaceVariant,
               ),
-              tooltip: _isStarred ? 'Unstar route' : 'Star to show on watch',
+              tooltip: _isStarred
+                  ? l10n.routeDetailUnstarRoute
+                  : l10n.routeDetailStarForWatch,
               onPressed: _toggleStar,
             ),
           // Show the visibility toggle whenever the local store
@@ -492,7 +505,9 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
           if (widget.isOwner)
             IconButton(
               icon: Icon(_isPublic ? Icons.public : Icons.public_off),
-              tooltip: _isPublic ? 'Make private' : 'Make public',
+              tooltip: _isPublic
+                  ? l10n.routeDetailMakePrivate
+                  : l10n.routeDetailMakePublic,
               onPressed: _togglePublic,
             ),
           if (!widget.isOwner &&
@@ -502,12 +517,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               icon: Icon(
                 (_bookmarked ?? false) ? Icons.bookmark : Icons.bookmark_border,
               ),
-              tooltip: (_bookmarked ?? false) ? 'Remove bookmark' : 'Bookmark route',
+              tooltip: (_bookmarked ?? false)
+                  ? l10n.routeDetailRemoveBookmark
+                  : l10n.routeDetailBookmarkRoute,
               onPressed: _bookmarkBusy ? null : _toggleBookmark,
             ),
           if (!widget.isOwner && widget.apiClient != null)
             IconButton(
-              tooltip: 'Report route',
+              tooltip: l10n.routeDetailReportRoute,
               icon: const Icon(Icons.flag_outlined),
               onPressed: () => showReportSheet(
                 context,
@@ -528,14 +545,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ? Icons.group_add_outlined
                       : Icons.group),
               tooltip: _clubId == null
-                  ? 'Transfer to club'
-                  : 'Detach or move to another club',
+                  ? l10n.routeDetailTransferToClub
+                  : l10n.routeDetailManageClub,
               onPressed: _transferBusy ? null : _transferToClub,
             ),
           if (_isOwner)
             IconButton(
               icon: const Icon(Icons.delete_outline),
-              tooltip: 'Delete route',
+              tooltip: l10n.routeDetailDeleteRoute,
               onPressed: () => _confirmDelete(context),
             ),
         ],
@@ -591,24 +608,24 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _Stat(
-                    label: 'Distance',
+                    label: l10n.routeDetailStatDistance,
                     value: UnitFormat.distanceValue(route.distanceMetres, unit),
                     unit: UnitFormat.distanceLabel(unit),
                   ),
                   _Stat(
-                    label: 'Elevation',
+                    label: l10n.routeDetailStatElevation,
                     value: '${route.elevationGainMetres.round()}',
                     unit: 'm',
                   ),
                   if (_avgRating > 0)
                     _Stat(
-                      label: '${_reviews.length} reviews',
+                      label: l10n.routeDetailStatReviews(_reviews.length),
                       value: _avgRating.toStringAsFixed(1),
                       unit: '/ 5',
                     )
                   else
                     _Stat(
-                      label: 'Waypoints',
+                      label: l10n.routeDetailStatWaypoints,
                       value: '${route.waypoints.length}',
                     ),
                 ],
@@ -637,14 +654,16 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                       ),
                       const SizedBox(width: 8),
                       Text(
-                        _isPublic ? 'Public route' : 'Private route',
+                        _isPublic
+                            ? l10n.routeDetailPublicRoute
+                            : l10n.routeDetailPrivateRoute,
                       ),
                     ],
                   ),
                   subtitle: Text(
                     _isPublic
-                        ? 'Anyone with the share link can view this route'
-                        : 'Only you can see this route',
+                        ? l10n.routeDetailPublicSubtitle
+                        : l10n.routeDetailPrivateSubtitle,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
@@ -671,14 +690,14 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     ),
                     const SizedBox(width: 8),
                     Text(_isOfflinePinned
-                        ? 'Saved for offline'
-                        : 'Save for offline'),
+                        ? l10n.routeDetailSavedForOffline
+                        : l10n.routeDetailSaveForOfflineTitle),
                   ],
                 ),
                 subtitle: Text(
                   _isOfflinePinned
-                      ? 'Route stays on this phone so you can run it without a connection.'
-                      : 'Keep this route on your phone for use without a network.',
+                      ? l10n.routeDetailOfflinePinnedSubtitle
+                      : l10n.routeDetailOfflineUnpinnedSubtitle,
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
@@ -695,7 +714,7 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Description',
+                      l10n.routeDetailDescriptionHeading,
                       style: theme.textTheme.labelMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                         fontWeight: FontWeight.w600,
@@ -729,20 +748,19 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                     if (route.surface != null)
                       _MetaChip(
                         icon: _surfaceIcon(route.surface!),
-                        label: _surfaceLabel(route.surface!),
+                        label: _surfaceLabel(l10n, route.surface!),
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
                     if (route.runCount > 0)
                       _MetaChip(
                         icon: Icons.directions_run,
-                        label:
-                            '${route.runCount} ${route.runCount == 1 ? 'run' : 'runs'}',
+                        label: l10n.routeDetailRunCount(route.runCount),
                         color: theme.colorScheme.primary,
                       ),
                     if (route.featured)
                       _MetaChip(
                         icon: Icons.star,
-                        label: 'Featured',
+                        label: l10n.routeDetailFeatured,
                         color: const Color(0xFFFBBF24),
                       ),
                   ],
@@ -780,11 +798,12 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Text('Reviews', style: theme.textTheme.titleMedium),
+                  Text(l10n.routeDetailReviewsHeading,
+                      style: theme.textTheme.titleMedium),
                   TextButton.icon(
                     onPressed: _submitReview,
                     icon: const Icon(Icons.rate_review, size: 18),
-                    label: const Text('Rate'),
+                    label: Text(l10n.routeDetailRate),
                   ),
                 ],
               ),
@@ -802,8 +821,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
                 padding: const EdgeInsets.fromLTRB(24, 0, 24, 16),
                 child: Text(
                   _reviewsOffline
-                      ? 'Reviews unavailable offline'
-                      : 'No reviews yet',
+                      ? l10n.routeDetailReviewsOffline
+                      : l10n.routeDetailNoReviews,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -911,7 +930,10 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       );
     } catch (e) {
       if (context.mounted) {
-        showTopBanner(context, 'Could not share ${format.toUpperCase()}: $e');
+        showTopBanner(
+            context,
+            AppLocalizations.of(context)
+                .routeDetailShareFailed(format.toUpperCase(), '$e'));
       }
     }
   }
@@ -929,13 +951,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     } on TimeoutException {
       if (!mounted) return;
       setState(() => _transferBusy = false);
-      showTopBanner(context, 'Couldn\'t load your clubs — check your network.');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailClubsLoadTimeout);
       return;
     } catch (e, s) {
       debugPrint('transferToClub: fetchMyClubs failed: $e\n$s');
       if (!mounted) return;
       setState(() => _transferBusy = false);
-      showTopBanner(context, 'Couldn\'t load your clubs.');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailClubsLoadFailed);
       return;
     }
     if (!mounted) return;
@@ -973,32 +997,34 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
       showTopBanner(
         context,
         targetClubId == null
-            ? 'Detached from club; route is now personal.'
-            : 'Route moved into the club library.',
+            ? AppLocalizations.of(context).routeDetailDetached
+            : AppLocalizations.of(context).routeDetailMovedToClub,
       );
     } catch (e, s) {
       debugPrint('setRouteClub failed: $e\n$s');
       if (!mounted) return;
       setState(() => _transferBusy = false);
-      showTopBanner(context, 'Transfer failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeDetailTransferFailed('$e'));
     }
   }
 
   Future<void> _confirmDelete(BuildContext context) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Delete route?'),
-        content: const Text('This cannot be undone.'),
+        title: Text(l10n.routeDetailDeleteTitle),
+        content: Text(l10n.routeDetailDeleteBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.routeDetailCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.routeDetailDelete),
           ),
         ],
       ),
@@ -1019,7 +1045,8 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
         await api.deleteRoute(widget.route.id);
       } catch (e) {
         if (!context.mounted) return;
-        showTopBanner(context, 'Delete failed: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).routeDetailDeleteFailed('$e'));
         return;
       }
     }
@@ -1047,15 +1074,15 @@ class _RouteDetailScreenState extends State<RouteDetailScreen> {
     }
   }
 
-  static String _surfaceLabel(String surface) {
+  static String _surfaceLabel(AppLocalizations l10n, String surface) {
     switch (surface) {
       case 'trail':
-        return 'TRAIL';
+        return l10n.routeDetailSurfaceTrail;
       case 'mixed':
-        return 'MIXED';
+        return l10n.routeDetailSurfaceMixed;
       case 'road':
       default:
-        return 'ROAD';
+        return l10n.routeDetailSurfaceRoad;
     }
   }
 }
@@ -1157,6 +1184,7 @@ class _RoutePreviewScrubber extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final reachedM = totalDistanceM * fraction;
     final reachedLabel =
         UnitFormat.distance(reachedM, unit);
@@ -1174,7 +1202,7 @@ class _RoutePreviewScrubber extends StatelessWidget {
               ),
               const SizedBox(width: 6),
               Text(
-                'Preview',
+                l10n.routeDetailPreview,
                 style: theme.textTheme.labelMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontWeight: FontWeight.w600,
@@ -1207,13 +1235,13 @@ class _RoutePreviewScrubber extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  'Start',
+                  l10n.routeDetailPreviewStart,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                 ),
                 Text(
-                  'Finish',
+                  l10n.routeDetailPreviewFinish,
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1352,7 +1380,8 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
     } catch (e) {
       setState(() => _saving = false);
       if (mounted) {
-        showTopBanner(context, 'Could not save tag: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).routeDetailTagSaveFailed('$e'));
       }
     }
   }
@@ -1400,7 +1429,7 @@ class _RouteTagsRowState extends State<_RouteTagsRow> {
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _add(),
                 decoration: InputDecoration(
-                  hintText: 'add tag',
+                  hintText: AppLocalizations.of(context).routeDetailAddTagHint,
                   isDense: true,
                   contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12,
@@ -1448,6 +1477,7 @@ class RouteTransferClubPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -1456,14 +1486,16 @@ class RouteTransferClubPicker extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              currentClubId == null ? 'Transfer to club' : 'Manage club ownership',
+              currentClubId == null
+                  ? l10n.routeDetailTransferDialogTitle
+                  : l10n.routeDetailManageClubTitle,
               style: theme.textTheme.titleLarge,
             ),
             const SizedBox(height: 4),
             Text(
               currentClubId == null
-                  ? 'Members of the club will see this route in the club library and can adopt it onto their plans.'
-                  : 'Move this route into another club you admin, or detach it back to personal.',
+                  ? l10n.routeDetailTransferDialogBody
+                  : l10n.routeDetailManageClubBody,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -1473,9 +1505,9 @@ class RouteTransferClubPicker extends StatelessWidget {
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.person),
-                title: const Text('Detach to personal'),
+                title: Text(l10n.routeDetailDetachToPersonal),
                 subtitle: Text(
-                  'Removes the route from the current club\'s library.',
+                  l10n.routeDetailDetachSubtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
@@ -1487,7 +1519,7 @@ class RouteTransferClubPicker extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 child: Text(
-                  'You don\'t own or admin any clubs yet.',
+                  l10n.routeDetailNoAdminClubs,
                   style: theme.textTheme.bodyMedium,
                 ),
               )
@@ -1506,9 +1538,10 @@ class RouteTransferClubPicker extends StatelessWidget {
                       title: Text(c.row.name),
                       subtitle: Text(
                         isCurrent
-                            ? 'Current club'
-                            : '${c.row.locationLabel ?? c.row.slug} · '
-                                '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}',
+                            ? l10n.routeDetailCurrentClub
+                            : l10n.routeDetailClubMemberCount(
+                                c.row.locationLabel ?? c.row.slug,
+                                c.memberCount),
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
                         ),
@@ -1531,7 +1564,7 @@ class RouteTransferClubPicker extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.routeDetailCancel),
               ),
             ),
           ],

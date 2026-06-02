@@ -1189,4 +1189,789 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get publicRunSectionSegments => 'セグメント';
+
+  @override
+  String get routesSyncFailedOffline => 'ルートを同期できませんでした — オフラインで動作中';
+
+  @override
+  String get routesLoadMoreFailed => 'これ以上ルートを読み込めませんでした';
+
+  @override
+  String routesStarUpdateFailed(String error) {
+    return 'スターを更新できませんでした: $error';
+  }
+
+  @override
+  String get routesImportFailedLocalOnly =>
+      'インポートに失敗しました: クラウド専用のドキュメント選択ではなく、ローカルストレージからファイルを選んでください。';
+
+  @override
+  String routesImported(String name) {
+    return '「$name」をインポートしました';
+  }
+
+  @override
+  String routesImportFailed(String error) {
+    return 'インポートに失敗しました: $error';
+  }
+
+  @override
+  String routesSaved(String name) {
+    return '「$name」を保存しました';
+  }
+
+  @override
+  String get routesEmptyTitle => 'まだルートがありません';
+
+  @override
+  String get routesEmptyBody =>
+      '「作成」をタップして地図上にルートを描くか、GPX・KML・TCX ファイルをインポートしてください。';
+
+  @override
+  String get routesBuild => '作成';
+
+  @override
+  String get routesImport => 'インポート';
+
+  @override
+  String get routesNoMatch => 'これらのフィルターに一致するルートはありません';
+
+  @override
+  String get routesClearFilters => 'フィルターをクリア';
+
+  @override
+  String routesLoadMore(int count) {
+    return 'さらに $count 件読み込む';
+  }
+
+  @override
+  String get routesQueuedToSync => '同期待ち';
+
+  @override
+  String get routesSavedForOffline => 'オフライン用に保存済み';
+
+  @override
+  String get routesUnstarRoute => 'ルートのスターを外す';
+
+  @override
+  String get routesStarForWatch => 'ウォッチに表示するためにスターを付ける';
+
+  @override
+  String get routesDiscover => '見つける';
+
+  @override
+  String get routesSyncFromCloud => 'クラウドから同期';
+
+  @override
+  String get routesPublicRoutes => '公開ルート';
+
+  @override
+  String get routesHeatmap => 'ヒートマップ';
+
+  @override
+  String get routesExplorePublic => '公開ルートを探索';
+
+  @override
+  String get routesHeatmapTooltip => 'ルートのヒートマップ';
+
+  @override
+  String get routesSearchHint => '名前でルートを検索…';
+
+  @override
+  String get routesClearSearch => '検索をクリア';
+
+  @override
+  String get routesStarred => 'スター付き';
+
+  @override
+  String routesCountMeta(int visible, int total) {
+    return '$total 件中 $visible 件のルート';
+  }
+
+  @override
+  String get routesSurfaceAny => 'すべての路面';
+
+  @override
+  String get routesSurfaceRoad => 'ロード';
+
+  @override
+  String get routesSurfaceTrail => 'トレイル';
+
+  @override
+  String get routesSurfaceMixed => 'ミックス';
+
+  @override
+  String get routesDistanceAny => 'すべての距離';
+
+  @override
+  String get routesSortNewest => '新しい順';
+
+  @override
+  String get routesSortLongest => '長い順';
+
+  @override
+  String get routesSortShortest => '短い順';
+
+  @override
+  String get routesSortMostRun => '走行回数が多い順';
+
+  @override
+  String get routesSortAlpha => 'A–Z';
+
+  @override
+  String routesDeleteConfirmTitle(int count) {
+    return '$count 件のルートを削除しますか？';
+  }
+
+  @override
+  String get routesDeleteConfirmBody => 'この操作は取り消せません。';
+
+  @override
+  String routesSelectionTitle(int count) {
+    return '$count 件選択中';
+  }
+
+  @override
+  String routesDeletePartial(int deleted, int failed) {
+    return '$deleted 件削除、$failed 件失敗 — 接続を確認してください。';
+  }
+
+  @override
+  String routesDeleteDone(int count) {
+    return '$count 件のルートを削除しました。';
+  }
+
+  @override
+  String get routeBuilderRouteCleared => 'ルートをクリアしました';
+
+  @override
+  String routeBuilderPointsSummary(int count, String distance) {
+    return '$count ポイント、$distance';
+  }
+
+  @override
+  String get routeBuilderRouteFailedStraightLines =>
+      'ルートを計算できませんでした — ピン間を直線で表示します。';
+
+  @override
+  String routeBuilderSegmentsFailed(int count) {
+    return '$count 個の区間を道路に合わせられませんでした。該当するピンをドラッグして調整してください。';
+  }
+
+  @override
+  String routeBuilderRoutingFailed(String error) {
+    return 'ルート計算に失敗しました: $error';
+  }
+
+  @override
+  String get routeBuilderTooCloseToPin => '他のピンに近すぎます — もう少し離してドラッグしてください。';
+
+  @override
+  String get routeBuilderPinAlreadyThere =>
+      'すでにピンがあります — 別のピンを追加するには離れた場所をタップしてください。';
+
+  @override
+  String get routeBuilderTargetTooLong => '目標距離は 1000 km まで入力してください。';
+
+  @override
+  String get routeBuilderSaveNeedTwo => 'まず少なくとも 2 つのウェイポイントを置いてください。';
+
+  @override
+  String routeBuilderSavedLocally(String detail) {
+    return 'ローカルに保存しました。$detail 次回同期されます。';
+  }
+
+  @override
+  String routeBuilderLocationUnavailable(String error) {
+    return '位置情報を取得できません: $error';
+  }
+
+  @override
+  String get routeBuilderServerUnreachable =>
+      'サーバーに接続できません。サインインするか接続を確認して再試行してください。';
+
+  @override
+  String routeBuilderSaveFailed(String error) {
+    return '保存に失敗しました: $error';
+  }
+
+  @override
+  String get routeBuilderSearchHint => '場所を検索…';
+
+  @override
+  String get routeBuilderMore => 'その他';
+
+  @override
+  String get routeBuilderGenerateLoop => 'ループを生成';
+
+  @override
+  String get routeBuilderUndo => '元に戻す';
+
+  @override
+  String get routeBuilderClear => 'クリア';
+
+  @override
+  String get routeBuilderSaving => '保存中…';
+
+  @override
+  String get routeBuilderSave => '保存';
+
+  @override
+  String get routeBuilderLocateMe => '現在地を表示';
+
+  @override
+  String routeBuilderTapToMovePoint(int number) {
+    return 'ポイント $number を移動するにはタップするか、アイコンを使ってください';
+  }
+
+  @override
+  String routeBuilderEmptyHint(String mode) {
+    return '地図をタップしてウェイポイントを配置 · $mode';
+  }
+
+  @override
+  String routeBuilderOnePointHint(String mode) {
+    return 'もう 1 つ置いて線を描く · $mode';
+  }
+
+  @override
+  String routeBuilderStatusGain(String distance, int gain, int count) {
+    return '$distance · $gain m ↑ · $count ポイント';
+  }
+
+  @override
+  String routeBuilderStatusNoGain(String distance, int count) {
+    return '$distance · $count ポイント';
+  }
+
+  @override
+  String routeBuilderDeletePoint(int number) {
+    return 'ポイント $number を削除';
+  }
+
+  @override
+  String get routeBuilderCancelDrag => 'ドラッグをキャンセル';
+
+  @override
+  String get routeBuilderModeTrail => 'トレイル';
+
+  @override
+  String get routeBuilderModeRoad => 'ロード';
+
+  @override
+  String get routeBuilderModeStraight => '直線';
+
+  @override
+  String get routeBuilderLoopDialogBody => '目標距離 — 現在の地図の中心を基点に放射状のループを作成します。';
+
+  @override
+  String get routeBuilderCancel => 'キャンセル';
+
+  @override
+  String get routeBuilderGenerate => '生成';
+
+  @override
+  String get routeBuilderSaveDialogTitle => 'ルートを保存';
+
+  @override
+  String get routeBuilderNameLabel => '名前';
+
+  @override
+  String get routeBuilderNameHint => '例: 川沿いループ';
+
+  @override
+  String get routeBuilderDescriptionLabel => '説明（任意）';
+
+  @override
+  String get routeBuilderDescriptionHint => '路面、坂、駐車場など、メモしておきたいこと';
+
+  @override
+  String get routeBuilderSaveToLabel => '保存先';
+
+  @override
+  String get routeBuilderSaveToPersonal => '個人';
+
+  @override
+  String get routeBuilderMakePublic => '公開する';
+
+  @override
+  String get routeBuilderMakePublicSubtitle => '他のユーザーが「見つける」で見つけられます';
+
+  @override
+  String get routeDetailStartRun => 'ランを開始';
+
+  @override
+  String get routeDetailShare => '共有';
+
+  @override
+  String get routeDetailShareAsImage => '画像として共有';
+
+  @override
+  String get routeDetailShareAsGpx => 'GPX として共有';
+
+  @override
+  String get routeDetailShareAsKml => 'KML として共有';
+
+  @override
+  String get routeDetailRemoveOfflineSave => 'オフライン保存を解除';
+
+  @override
+  String get routeDetailSaveForOffline => 'オフライン用に保存';
+
+  @override
+  String get routeDetailUnstarRoute => 'ルートのスターを外す';
+
+  @override
+  String get routeDetailStarForWatch => 'ウォッチに表示するためにスターを付ける';
+
+  @override
+  String get routeDetailMakePrivate => '非公開にする';
+
+  @override
+  String get routeDetailMakePublic => '公開する';
+
+  @override
+  String get routeDetailRemoveBookmark => 'ブックマークを削除';
+
+  @override
+  String get routeDetailBookmarkRoute => 'ルートをブックマーク';
+
+  @override
+  String get routeDetailReportRoute => 'ルートを報告';
+
+  @override
+  String get routeDetailTransferToClub => 'クラブに移管';
+
+  @override
+  String get routeDetailManageClub => '切り離すか別のクラブに移動';
+
+  @override
+  String get routeDetailDeleteRoute => 'ルートを削除';
+
+  @override
+  String get routeDetailStatDistance => '距離';
+
+  @override
+  String get routeDetailStatElevation => '標高';
+
+  @override
+  String routeDetailStatReviews(int count) {
+    return '$count 件のレビュー';
+  }
+
+  @override
+  String get routeDetailStatWaypoints => 'ウェイポイント';
+
+  @override
+  String get routeDetailPublicRoute => '公開ルート';
+
+  @override
+  String get routeDetailPrivateRoute => '非公開ルート';
+
+  @override
+  String get routeDetailPublicSubtitle => '共有リンクを持つ全員がこのルートを見られます';
+
+  @override
+  String get routeDetailPrivateSubtitle => 'あなただけがこのルートを見られます';
+
+  @override
+  String get routeDetailSavedForOffline => 'オフライン用に保存済み';
+
+  @override
+  String get routeDetailSaveForOfflineTitle => 'オフライン用に保存';
+
+  @override
+  String get routeDetailOfflinePinnedSubtitle => 'ルートはこの端末に保存され、接続なしで走れます。';
+
+  @override
+  String get routeDetailOfflineUnpinnedSubtitle =>
+      'ネットワークなしで使えるよう、このルートを端末に保存します。';
+
+  @override
+  String get routeDetailDescriptionHeading => '説明';
+
+  @override
+  String routeDetailRunCount(int count) {
+    return '$count 回の実行';
+  }
+
+  @override
+  String get routeDetailFeatured => 'おすすめ';
+
+  @override
+  String get routeDetailSurfaceTrail => 'トレイル';
+
+  @override
+  String get routeDetailSurfaceMixed => 'ミックス';
+
+  @override
+  String get routeDetailSurfaceRoad => 'ロード';
+
+  @override
+  String get routeDetailAddTagHint => 'タグを追加';
+
+  @override
+  String get routeDetailReviewsHeading => 'レビュー';
+
+  @override
+  String get routeDetailRate => '評価';
+
+  @override
+  String get routeDetailReviewsOffline => 'レビューはオフラインでは利用できません';
+
+  @override
+  String get routeDetailNoReviews => 'まだレビューがありません';
+
+  @override
+  String get routeDetailRateDialogTitle => 'このルートを評価';
+
+  @override
+  String get routeDetailCommentLabel => 'コメント（任意）';
+
+  @override
+  String get routeDetailCancel => 'キャンセル';
+
+  @override
+  String get routeDetailSubmit => '送信';
+
+  @override
+  String get routeDetailSignInToReview => 'レビューを残すにはサインインしてください';
+
+  @override
+  String routeDetailReviewFailed(String error) {
+    return 'レビューの送信に失敗しました: $error';
+  }
+
+  @override
+  String routeDetailBookmarkFailed(String error) {
+    return 'ブックマークに失敗しました: $error';
+  }
+
+  @override
+  String get routeDetailPublicWillSync => 'ルートを公開に設定しました。次回同期されます。';
+
+  @override
+  String get routeDetailPrivateWillSync => 'ルートを非公開に設定しました。次回同期されます。';
+
+  @override
+  String routeDetailVisibilityFailed(String error) {
+    return '公開設定を更新できませんでした: $error';
+  }
+
+  @override
+  String routeDetailStarFailed(String error) {
+    return 'スターを更新できませんでした: $error';
+  }
+
+  @override
+  String get routeDetailOfflineSaved => 'オフライン用に保存しました。';
+
+  @override
+  String get routeDetailOfflineRemoved => 'オフライン保存から削除しました。';
+
+  @override
+  String routeDetailTagSaveFailed(String error) {
+    return 'タグを保存できませんでした: $error';
+  }
+
+  @override
+  String routeDetailShareFailed(String format, String error) {
+    return '$format を共有できませんでした: $error';
+  }
+
+  @override
+  String get routeDetailClubsLoadTimeout => 'クラブを読み込めませんでした — ネットワークを確認してください。';
+
+  @override
+  String get routeDetailClubsLoadFailed => 'クラブを読み込めませんでした。';
+
+  @override
+  String get routeDetailDetached => 'クラブから切り離しました。ルートは個人用になりました。';
+
+  @override
+  String get routeDetailMovedToClub => 'ルートをクラブのライブラリに移動しました。';
+
+  @override
+  String routeDetailTransferFailed(String error) {
+    return '移管に失敗しました: $error';
+  }
+
+  @override
+  String get routeDetailDeleteTitle => 'ルートを削除しますか？';
+
+  @override
+  String get routeDetailDeleteBody => 'この操作は取り消せません。';
+
+  @override
+  String get routeDetailDelete => '削除';
+
+  @override
+  String routeDetailDeleteFailed(String error) {
+    return '削除に失敗しました: $error';
+  }
+
+  @override
+  String get routeDetailPreview => 'プレビュー';
+
+  @override
+  String get routeDetailPreviewStart => 'スタート';
+
+  @override
+  String get routeDetailPreviewFinish => 'ゴール';
+
+  @override
+  String get routeDetailTransferDialogTitle => 'クラブに移管';
+
+  @override
+  String get routeDetailManageClubTitle => 'クラブ所属を管理';
+
+  @override
+  String get routeDetailTransferDialogBody =>
+      'クラブのメンバーはこのルートをクラブのライブラリで見られ、自分のプランに取り込めます。';
+
+  @override
+  String get routeDetailManageClubBody => '管理している別のクラブにこのルートを移動するか、個人用に戻します。';
+
+  @override
+  String get routeDetailDetachToPersonal => '個人用に切り離す';
+
+  @override
+  String get routeDetailDetachSubtitle => '現在のクラブのライブラリからルートを削除します。';
+
+  @override
+  String get routeDetailNoAdminClubs => 'まだ所有または管理しているクラブはありません。';
+
+  @override
+  String get routeDetailCurrentClub => '現在のクラブ';
+
+  @override
+  String routeDetailClubMemberCount(String location, int count) {
+    return '$location · $count 人のメンバー';
+  }
+
+  @override
+  String get exploreRoutesTitle => 'ルートを探索';
+
+  @override
+  String get exploreRoutesModeSearch => '検索';
+
+  @override
+  String get exploreRoutesModeNearMe => '近くで探す';
+
+  @override
+  String get exploreRoutesSearchHint => '名前でルートを検索...';
+
+  @override
+  String get exploreRoutesFeatured => 'おすすめ';
+
+  @override
+  String get exploreRoutesSignInRequired => 'ルートを探索するにはサインインしてインターネットに接続してください';
+
+  @override
+  String get exploreRoutesTimeout => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String get exploreRoutesSearchFailed => '検索に失敗しました。再試行をタップしてもう一度試してください。';
+
+  @override
+  String get exploreRoutesLoadMoreFailed => 'これ以上読み込めませんでした — 接続を確認してください';
+
+  @override
+  String get exploreRoutesLocationPermissionRequired =>
+      '近くのルートを探すには位置情報の許可が必要です';
+
+  @override
+  String get exploreRoutesNearbyFailed =>
+      '近くのルートが見つかりませんでした。再試行をタップしてもう一度試してください。';
+
+  @override
+  String get exploreRoutesEmptyNoPublic => 'まだ公開ルートがありません';
+
+  @override
+  String get exploreRoutesEmptyNoMatch => '検索に一致するルートはありません';
+
+  @override
+  String get exploreRoutesEmptyBody => 'ウェブアプリから共有されたルートがここに表示されます';
+
+  @override
+  String get exploreRoutesDistanceAny => 'すべての距離';
+
+  @override
+  String get exploreRoutesSurfaceAny => 'すべての路面';
+
+  @override
+  String get exploreRoutesSurfaceRoad => 'ロード';
+
+  @override
+  String get exploreRoutesSurfaceTrail => 'トレイル';
+
+  @override
+  String get exploreRoutesSurfaceMixed => 'ミックス';
+
+  @override
+  String get exploreRoutesSortMostRun => '走行回数が多い順';
+
+  @override
+  String get exploreRoutesSortNewest => '新しい順';
+
+  @override
+  String get exploreRoutesSortFeatured => 'おすすめ';
+
+  @override
+  String get exploreRoutesSort => '並べ替え';
+
+  @override
+  String exploreRoutesSaveCheckConnection(String name) {
+    return '「$name」を保存できませんでした — 接続を確認して再試行してください。';
+  }
+
+  @override
+  String exploreRoutesSaveFailed(String name) {
+    return '「$name」を保存できませんでした。';
+  }
+
+  @override
+  String exploreRoutesSaved(String name) {
+    return '「$name」をライブラリに保存しました';
+  }
+
+  @override
+  String get exploreRoutesAlreadySaved => '保存済み';
+
+  @override
+  String get exploreRoutesSaveToLibrary => 'ライブラリに保存';
+
+  @override
+  String get exploreRoutesSurfaceTrailShort => 'トレイル';
+
+  @override
+  String get exploreRoutesSurfaceMixedShort => 'ミックス';
+
+  @override
+  String get exploreRoutesSurfaceRoadShort => 'ロード';
+
+  @override
+  String get exploreRoutesDistanceUnderKm => '5 km 未満';
+
+  @override
+  String get exploreRoutesDistanceMidKm => '5〜10 km';
+
+  @override
+  String get exploreRoutesDistanceLongKm => '10〜21 km';
+
+  @override
+  String get exploreRoutesDistanceUltraKm => '21 km 以上';
+
+  @override
+  String get exploreRoutesDistanceUnderMi => '3 マイル未満';
+
+  @override
+  String get exploreRoutesDistanceMidMi => '3〜6 マイル';
+
+  @override
+  String get exploreRoutesDistanceLongMi => '6〜13 マイル';
+
+  @override
+  String get exploreRoutesDistanceUltraMi => '13 マイル以上';
+
+  @override
+  String get heatmapSearchHint => '場所を検索…';
+
+  @override
+  String get heatmapFilters => 'フィルター';
+
+  @override
+  String heatmapRoutesStartHere(int count) {
+    return '$count 件のルートがここから始まります';
+  }
+
+  @override
+  String heatmapRouteCount(int count) {
+    return '$count 件のルート';
+  }
+
+  @override
+  String get heatmapNoRoutesHere => 'ここにルートはありません';
+
+  @override
+  String get heatmapNoRoutesHint => 'ここにルートはありません。地図を移動するかフィルターを変更してください。';
+
+  @override
+  String heatmapClearKept(int count) {
+    return '保持中の $count 件をクリア';
+  }
+
+  @override
+  String get heatmapUnpinFromMap => '地図から外す';
+
+  @override
+  String get heatmapKeepOnMap => '地図に残す';
+
+  @override
+  String get heatmapLocateMe => '現在地を表示';
+
+  @override
+  String heatmapLocationUnavailable(String error) {
+    return '位置情報を取得できません: $error';
+  }
+
+  @override
+  String get heatmapBackToList => 'リストに戻る';
+
+  @override
+  String get heatmapViewRoute => 'ルートを見る';
+
+  @override
+  String get heatmapKept => '保持中';
+
+  @override
+  String get heatmapKeep => '残す';
+
+  @override
+  String get heatmapLensShow => '表示';
+
+  @override
+  String get heatmapLensDistance => '距離';
+
+  @override
+  String get heatmapLensMap => '地図';
+
+  @override
+  String get heatmapHeatDensity => 'ヒート密度';
+
+  @override
+  String get heatmapResetFilters => 'フィルターをリセット';
+
+  @override
+  String get heatmapLensPopular => '人気';
+
+  @override
+  String get heatmapLensFriends => 'フレンド';
+
+  @override
+  String get heatmapLensFeatured => 'おすすめ';
+
+  @override
+  String get heatmapLensHiddenGems => '隠れた名所';
+
+  @override
+  String get publicRouteFallbackTitle => 'ルート';
+
+  @override
+  String get publicRouteLoadError => 'このルートを読み込めませんでした。';
+
+  @override
+  String get publicRouteUnavailable => 'このルートは非公開か、もう利用できません。';
+
+  @override
+  String get publicRouteStatDistance => '距離';
+
+  @override
+  String get publicRouteStatElevation => '標高';
+
+  @override
+  String get publicRouteStatWaypoints => 'ウェイポイント';
+
+  @override
+  String get routesLoadErrorRetry => 'ルートを読み込めませんでした。接続を確認して再試行してください。';
 }

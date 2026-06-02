@@ -2206,6 +2206,1398 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Segments'**
   String get publicRunSectionSegments;
+
+  /// Banner shown when the initial route sync fails and the app falls back to the cached list
+  ///
+  /// In en, this message translates to:
+  /// **'Could not sync routes — working offline'**
+  String get routesSyncFailedOffline;
+
+  /// Banner shown when loading the next page of routes fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more routes'**
+  String get routesLoadMoreFailed;
+
+  /// Banner shown when toggling a route's star fails to persist to the cloud
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update star: {error}'**
+  String routesStarUpdateFailed(String error);
+
+  /// Banner shown when an imported route file resolves to an unreadable cloud-only content URI
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: pick the file from local storage, not a cloud-only document picker.'**
+  String get routesImportFailedLocalOnly;
+
+  /// Banner shown after a route file is successfully imported
+  ///
+  /// In en, this message translates to:
+  /// **'Imported \"{name}\"'**
+  String routesImported(String name);
+
+  /// Banner shown when importing a route file fails for any other reason
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: {error}'**
+  String routesImportFailed(String error);
+
+  /// Banner shown after a route built in the in-app builder is saved
+  ///
+  /// In en, this message translates to:
+  /// **'Saved \"{name}\"'**
+  String routesSaved(String name);
+
+  /// Empty-state title shown when the route library is empty
+  ///
+  /// In en, this message translates to:
+  /// **'No routes yet'**
+  String get routesEmptyTitle;
+
+  /// Empty-state body shown when the route library is empty
+  ///
+  /// In en, this message translates to:
+  /// **'Tap Build to draw a route on the map, or Import a GPX, KML, or TCX file.'**
+  String get routesEmptyBody;
+
+  /// Label on the build-route FAB and the empty-state legend reminder
+  ///
+  /// In en, this message translates to:
+  /// **'Build'**
+  String get routesBuild;
+
+  /// Label on the import-route FAB and the empty-state legend reminder
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get routesImport;
+
+  /// Empty-state shown when the active filters exclude every route
+  ///
+  /// In en, this message translates to:
+  /// **'No routes match these filters'**
+  String get routesNoMatch;
+
+  /// Button to reset all route filters when none match
+  ///
+  /// In en, this message translates to:
+  /// **'Clear filters'**
+  String get routesClearFilters;
+
+  /// Button that reveals the next page of routes
+  ///
+  /// In en, this message translates to:
+  /// **'Load {count} more'**
+  String routesLoadMore(int count);
+
+  /// Tooltip on the per-row will-sync icon for locally-built routes
+  ///
+  /// In en, this message translates to:
+  /// **'Queued to sync'**
+  String get routesQueuedToSync;
+
+  /// Tooltip on the per-row offline-pin icon in the routes list
+  ///
+  /// In en, this message translates to:
+  /// **'Saved for offline'**
+  String get routesSavedForOffline;
+
+  /// Tooltip on the per-row star button when the route is starred
+  ///
+  /// In en, this message translates to:
+  /// **'Unstar route'**
+  String get routesUnstarRoute;
+
+  /// Tooltip on the per-row star button when the route is not starred
+  ///
+  /// In en, this message translates to:
+  /// **'Star to show on watch'**
+  String get routesStarForWatch;
+
+  /// Section header for the Explore / Heatmap discovery strip in the embedded routes view
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get routesDiscover;
+
+  /// Tooltip on the cloud-download sync button in the routes list
+  ///
+  /// In en, this message translates to:
+  /// **'Sync from cloud'**
+  String get routesSyncFromCloud;
+
+  /// Label on the button that opens the Explore public-routes screen from the embedded routes view
+  ///
+  /// In en, this message translates to:
+  /// **'Public routes'**
+  String get routesPublicRoutes;
+
+  /// Label on the button that opens the routes heatmap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Heatmap'**
+  String get routesHeatmap;
+
+  /// Tooltip on the standalone-AppBar Explore action in the routes list
+  ///
+  /// In en, this message translates to:
+  /// **'Explore public routes'**
+  String get routesExplorePublic;
+
+  /// Tooltip on the standalone-AppBar heatmap action in the routes list
+  ///
+  /// In en, this message translates to:
+  /// **'Routes heatmap'**
+  String get routesHeatmapTooltip;
+
+  /// Placeholder in the routes-list search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search routes by name…'**
+  String get routesSearchHint;
+
+  /// Tooltip on the clear-search button in the routes-list search field
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get routesClearSearch;
+
+  /// Filter-chip label for the starred-only route filter
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get routesStarred;
+
+  /// Meta row showing how many routes are visible out of the total
+  ///
+  /// In en, this message translates to:
+  /// **'{total, plural, one{{visible} of {total} route} other{{visible} of {total} routes}}'**
+  String routesCountMeta(int visible, int total);
+
+  /// Surface-filter dropdown option that clears the surface filter
+  ///
+  /// In en, this message translates to:
+  /// **'Any surface'**
+  String get routesSurfaceAny;
+
+  /// Surface-filter dropdown option for road routes
+  ///
+  /// In en, this message translates to:
+  /// **'Road'**
+  String get routesSurfaceRoad;
+
+  /// Surface-filter dropdown option for trail routes
+  ///
+  /// In en, this message translates to:
+  /// **'Trail'**
+  String get routesSurfaceTrail;
+
+  /// Surface-filter dropdown option for mixed-surface routes
+  ///
+  /// In en, this message translates to:
+  /// **'Mixed'**
+  String get routesSurfaceMixed;
+
+  /// Distance-filter dropdown option that clears the distance filter
+  ///
+  /// In en, this message translates to:
+  /// **'Any distance'**
+  String get routesDistanceAny;
+
+  /// Sort dropdown option: newest routes first
+  ///
+  /// In en, this message translates to:
+  /// **'Newest first'**
+  String get routesSortNewest;
+
+  /// Sort dropdown option: longest distance first
+  ///
+  /// In en, this message translates to:
+  /// **'Longest'**
+  String get routesSortLongest;
+
+  /// Sort dropdown option: shortest distance first
+  ///
+  /// In en, this message translates to:
+  /// **'Shortest'**
+  String get routesSortShortest;
+
+  /// Sort dropdown option: most-run routes first
+  ///
+  /// In en, this message translates to:
+  /// **'Most-run'**
+  String get routesSortMostRun;
+
+  /// Sort dropdown option: alphabetical by name
+  ///
+  /// In en, this message translates to:
+  /// **'A–Z'**
+  String get routesSortAlpha;
+
+  /// Title of the bulk-delete confirmation dialog in the routes list
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Delete {count} route?} other{Delete {count} routes?}}'**
+  String routesDeleteConfirmTitle(int count);
+
+  /// Body of the bulk-delete confirmation dialog in the routes list
+  ///
+  /// In en, this message translates to:
+  /// **'This cannot be undone.'**
+  String get routesDeleteConfirmBody;
+
+  /// Title in the routes-list selection banner showing how many are selected
+  ///
+  /// In en, this message translates to:
+  /// **'{count} selected'**
+  String routesSelectionTitle(int count);
+
+  /// Banner shown when some routes deleted but others failed
+  ///
+  /// In en, this message translates to:
+  /// **'{deleted} deleted; {failed} failed — check your connection.'**
+  String routesDeletePartial(int deleted, int failed);
+
+  /// Banner shown after a successful bulk delete of routes
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} route deleted.} other{{count} routes deleted.}}'**
+  String routesDeleteDone(int count);
+
+  /// Screen-reader announcement when the builder's route is cleared
+  ///
+  /// In en, this message translates to:
+  /// **'Route cleared'**
+  String get routeBuilderRouteCleared;
+
+  /// Screen-reader announcement summarising the current route after a mutation
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} point, {distance}} other{{count} points, {distance}}}'**
+  String routeBuilderPointsSummary(int count, String distance);
+
+  /// Banner shown when every routing segment fell back to a straight line
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t route — showing straight lines through your pins.'**
+  String get routeBuilderRouteFailedStraightLines;
+
+  /// Banner shown when some routing segments couldn't snap to a road
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} segment couldn\'t snap to a road. Drag the affected pin to adjust.} other{{count} segments couldn\'t snap to a road. Drag the affected pins to adjust.}}'**
+  String routeBuilderSegmentsFailed(int count);
+
+  /// Banner shown when a routing pass throws
+  ///
+  /// In en, this message translates to:
+  /// **'Routing failed: {error}'**
+  String routeBuilderRoutingFailed(String error);
+
+  /// Banner shown when a dragged waypoint lands too close to another
+  ///
+  /// In en, this message translates to:
+  /// **'Too close to another pin — drag a bit further.'**
+  String get routeBuilderTooCloseToPin;
+
+  /// Banner shown when a tapped waypoint would duplicate an existing one
+  ///
+  /// In en, this message translates to:
+  /// **'Pin already there — tap further apart to add another.'**
+  String get routeBuilderPinAlreadyThere;
+
+  /// Banner shown when the generate-loop target distance is out of range
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a target distance up to 1000 km.'**
+  String get routeBuilderTargetTooLong;
+
+  /// Banner shown when saving with fewer than two waypoints
+  ///
+  /// In en, this message translates to:
+  /// **'Place at least two waypoints first.'**
+  String get routeBuilderSaveNeedTwo;
+
+  /// Banner shown when a built route saved locally but the cloud push failed
+  ///
+  /// In en, this message translates to:
+  /// **'Saved locally. {detail} Will sync next time.'**
+  String routeBuilderSavedLocally(String detail);
+
+  /// Banner shown when the Locate-me FAB can't get a position
+  ///
+  /// In en, this message translates to:
+  /// **'Location unavailable: {error}'**
+  String routeBuilderLocationUnavailable(String error);
+
+  /// Friendly save-route error message when Supabase couldn't be reached
+  ///
+  /// In en, this message translates to:
+  /// **'Can\'t reach the server. Sign in or check your connection and try again.'**
+  String get routeBuilderServerUnreachable;
+
+  /// Generic save-route error message
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String routeBuilderSaveFailed(String error);
+
+  /// Placeholder in the route builder's place-search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search places…'**
+  String get routeBuilderSearchHint;
+
+  /// Tooltip on the route builder's overflow menu while searching
+  ///
+  /// In en, this message translates to:
+  /// **'More'**
+  String get routeBuilderMore;
+
+  /// Generate-loop action label (AppBar tooltip, menu item, and dialog title)
+  ///
+  /// In en, this message translates to:
+  /// **'Generate loop'**
+  String get routeBuilderGenerateLoop;
+
+  /// Undo action label in the route builder
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get routeBuilderUndo;
+
+  /// Clear action label in the route builder
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get routeBuilderClear;
+
+  /// Save button label while a save is in progress
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get routeBuilderSaving;
+
+  /// Save button label in the route builder
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get routeBuilderSave;
+
+  /// Tooltip on the route builder's Locate-me FAB
+  ///
+  /// In en, this message translates to:
+  /// **'Locate me'**
+  String get routeBuilderLocateMe;
+
+  /// Status pill text while a waypoint is lifted for dragging
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to move point {number}, or use the icons'**
+  String routeBuilderTapToMovePoint(int number);
+
+  /// Status pill text when no waypoints are placed yet, showing the active mode
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the map to place waypoints · {mode}'**
+  String routeBuilderEmptyHint(String mode);
+
+  /// Status pill text when exactly one waypoint is placed, showing the active mode
+  ///
+  /// In en, this message translates to:
+  /// **'Place another to draw the line · {mode}'**
+  String routeBuilderOnePointHint(String mode);
+
+  /// Status pill text with distance, elevation gain, and waypoint count
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} · {gain} m ↑ · {count, plural, one{{count} point} other{{count} points}}'**
+  String routeBuilderStatusGain(String distance, int gain, int count);
+
+  /// Status pill text with distance and waypoint count when elevation gain is unknown
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} · {count, plural, one{{count} point} other{{count} points}}'**
+  String routeBuilderStatusNoGain(String distance, int count);
+
+  /// Tooltip on the delete-dragged-waypoint button in the status pill
+  ///
+  /// In en, this message translates to:
+  /// **'Delete point {number}'**
+  String routeBuilderDeletePoint(int number);
+
+  /// Tooltip on the cancel-drag button in the status pill
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel drag'**
+  String get routeBuilderCancelDrag;
+
+  /// Mode-toggle label for the trail (foot) routing profile
+  ///
+  /// In en, this message translates to:
+  /// **'Trail'**
+  String get routeBuilderModeTrail;
+
+  /// Mode-toggle label for the road (car) routing profile
+  ///
+  /// In en, this message translates to:
+  /// **'Road'**
+  String get routeBuilderModeRoad;
+
+  /// Mode-toggle label for the straight-line (no routing) profile
+  ///
+  /// In en, this message translates to:
+  /// **'Straight'**
+  String get routeBuilderModeStraight;
+
+  /// Body text of the generate-loop dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Target distance — we\'ll build a radial loop around the current map centre.'**
+  String get routeBuilderLoopDialogBody;
+
+  /// Cancel action in route builder dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get routeBuilderCancel;
+
+  /// Confirm action in the generate-loop dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Generate'**
+  String get routeBuilderGenerate;
+
+  /// Title of the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Save route'**
+  String get routeBuilderSaveDialogTitle;
+
+  /// Label for the name field in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get routeBuilderNameLabel;
+
+  /// Hint for the name field in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. River loop'**
+  String get routeBuilderNameHint;
+
+  /// Label for the description field in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Description (optional)'**
+  String get routeBuilderDescriptionLabel;
+
+  /// Hint for the description field in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Surface, hills, parking, anything worth noting'**
+  String get routeBuilderDescriptionHint;
+
+  /// Label for the club picker in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Save to'**
+  String get routeBuilderSaveToLabel;
+
+  /// Default option in the save-route club picker
+  ///
+  /// In en, this message translates to:
+  /// **'Personal'**
+  String get routeBuilderSaveToPersonal;
+
+  /// Title of the make-public toggle in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get routeBuilderMakePublic;
+
+  /// Subtitle of the make-public toggle in the save-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Others can find it on Explore'**
+  String get routeBuilderMakePublicSubtitle;
+
+  /// Label on the route-detail Start-run FAB
+  ///
+  /// In en, this message translates to:
+  /// **'Start run'**
+  String get routeDetailStartRun;
+
+  /// Tooltip on the route-detail share menu
+  ///
+  /// In en, this message translates to:
+  /// **'Share'**
+  String get routeDetailShare;
+
+  /// Share-menu option to share the route as an image
+  ///
+  /// In en, this message translates to:
+  /// **'Share as image'**
+  String get routeDetailShareAsImage;
+
+  /// Share-menu option to share the route as a GPX file
+  ///
+  /// In en, this message translates to:
+  /// **'Share as GPX'**
+  String get routeDetailShareAsGpx;
+
+  /// Share-menu option to share the route as a KML file
+  ///
+  /// In en, this message translates to:
+  /// **'Share as KML'**
+  String get routeDetailShareAsKml;
+
+  /// Tooltip on the offline-pin button when the route is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Remove offline save'**
+  String get routeDetailRemoveOfflineSave;
+
+  /// Tooltip on the offline-pin button when the route is not pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Save for offline use'**
+  String get routeDetailSaveForOffline;
+
+  /// Tooltip on the route-detail star button when starred
+  ///
+  /// In en, this message translates to:
+  /// **'Unstar route'**
+  String get routeDetailUnstarRoute;
+
+  /// Tooltip on the route-detail star button when not starred
+  ///
+  /// In en, this message translates to:
+  /// **'Star to show on watch'**
+  String get routeDetailStarForWatch;
+
+  /// Tooltip on the route-detail visibility toggle when public
+  ///
+  /// In en, this message translates to:
+  /// **'Make private'**
+  String get routeDetailMakePrivate;
+
+  /// Tooltip on the route-detail visibility toggle when private
+  ///
+  /// In en, this message translates to:
+  /// **'Make public'**
+  String get routeDetailMakePublic;
+
+  /// Tooltip on the route-detail bookmark button when bookmarked
+  ///
+  /// In en, this message translates to:
+  /// **'Remove bookmark'**
+  String get routeDetailRemoveBookmark;
+
+  /// Tooltip on the route-detail bookmark button when not bookmarked
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark route'**
+  String get routeDetailBookmarkRoute;
+
+  /// Tooltip on the route-detail report button
+  ///
+  /// In en, this message translates to:
+  /// **'Report route'**
+  String get routeDetailReportRoute;
+
+  /// Tooltip on the route-detail transfer button when the route is personal
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer to club'**
+  String get routeDetailTransferToClub;
+
+  /// Tooltip on the route-detail transfer button when the route belongs to a club
+  ///
+  /// In en, this message translates to:
+  /// **'Detach or move to another club'**
+  String get routeDetailManageClub;
+
+  /// Tooltip on the route-detail delete button
+  ///
+  /// In en, this message translates to:
+  /// **'Delete route'**
+  String get routeDetailDeleteRoute;
+
+  /// Stat label for distance on the route-detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get routeDetailStatDistance;
+
+  /// Stat label for elevation on the route-detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation'**
+  String get routeDetailStatElevation;
+
+  /// Stat label for the review count on the route-detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'{count} reviews'**
+  String routeDetailStatReviews(int count);
+
+  /// Stat label for the waypoint count on the route-detail screen
+  ///
+  /// In en, this message translates to:
+  /// **'Waypoints'**
+  String get routeDetailStatWaypoints;
+
+  /// Title of the inline visibility row when the route is public
+  ///
+  /// In en, this message translates to:
+  /// **'Public route'**
+  String get routeDetailPublicRoute;
+
+  /// Title of the inline visibility row when the route is private
+  ///
+  /// In en, this message translates to:
+  /// **'Private route'**
+  String get routeDetailPrivateRoute;
+
+  /// Subtitle of the inline visibility row when the route is public
+  ///
+  /// In en, this message translates to:
+  /// **'Anyone with the share link can view this route'**
+  String get routeDetailPublicSubtitle;
+
+  /// Subtitle of the inline visibility row when the route is private
+  ///
+  /// In en, this message translates to:
+  /// **'Only you can see this route'**
+  String get routeDetailPrivateSubtitle;
+
+  /// Title of the inline offline-save row when the route is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Saved for offline'**
+  String get routeDetailSavedForOffline;
+
+  /// Title of the inline offline-save row when the route is not pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Save for offline'**
+  String get routeDetailSaveForOfflineTitle;
+
+  /// Subtitle of the inline offline-save row when the route is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Route stays on this phone so you can run it without a connection.'**
+  String get routeDetailOfflinePinnedSubtitle;
+
+  /// Subtitle of the inline offline-save row when the route is not pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Keep this route on your phone for use without a network.'**
+  String get routeDetailOfflineUnpinnedSubtitle;
+
+  /// Section heading for the route description
+  ///
+  /// In en, this message translates to:
+  /// **'Description'**
+  String get routeDetailDescriptionHeading;
+
+  /// Meta chip showing how many runs used this route
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run} other{{count} runs}}'**
+  String routeDetailRunCount(int count);
+
+  /// Meta chip shown for featured routes
+  ///
+  /// In en, this message translates to:
+  /// **'Featured'**
+  String get routeDetailFeatured;
+
+  /// Uppercase surface label for trail routes in the meta chip
+  ///
+  /// In en, this message translates to:
+  /// **'TRAIL'**
+  String get routeDetailSurfaceTrail;
+
+  /// Uppercase surface label for mixed-surface routes in the meta chip
+  ///
+  /// In en, this message translates to:
+  /// **'MIXED'**
+  String get routeDetailSurfaceMixed;
+
+  /// Uppercase surface label for road routes in the meta chip
+  ///
+  /// In en, this message translates to:
+  /// **'ROAD'**
+  String get routeDetailSurfaceRoad;
+
+  /// Hint for the owner-only add-tag field on route detail
+  ///
+  /// In en, this message translates to:
+  /// **'add tag'**
+  String get routeDetailAddTagHint;
+
+  /// Section heading for the reviews list on route detail
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews'**
+  String get routeDetailReviewsHeading;
+
+  /// Label on the button that opens the rate-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Rate'**
+  String get routeDetailRate;
+
+  /// Empty-state shown when reviews can't be loaded offline
+  ///
+  /// In en, this message translates to:
+  /// **'Reviews unavailable offline'**
+  String get routeDetailReviewsOffline;
+
+  /// Empty-state shown when a route has no reviews
+  ///
+  /// In en, this message translates to:
+  /// **'No reviews yet'**
+  String get routeDetailNoReviews;
+
+  /// Title of the rate-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Rate this route'**
+  String get routeDetailRateDialogTitle;
+
+  /// Label for the comment field in the rate-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Comment (optional)'**
+  String get routeDetailCommentLabel;
+
+  /// Cancel action in route-detail dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get routeDetailCancel;
+
+  /// Submit action in the rate-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Submit'**
+  String get routeDetailSubmit;
+
+  /// Banner shown when a signed-out user tries to review a route
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to leave a review'**
+  String get routeDetailSignInToReview;
+
+  /// Banner shown when submitting a review fails
+  ///
+  /// In en, this message translates to:
+  /// **'Failed to submit review: {error}'**
+  String routeDetailReviewFailed(String error);
+
+  /// Banner shown when toggling a bookmark fails
+  ///
+  /// In en, this message translates to:
+  /// **'Bookmark failed: {error}'**
+  String routeDetailBookmarkFailed(String error);
+
+  /// Banner shown when a route is made public while offline
+  ///
+  /// In en, this message translates to:
+  /// **'Route set to public. Will sync next time.'**
+  String get routeDetailPublicWillSync;
+
+  /// Banner shown when a route is made private while offline
+  ///
+  /// In en, this message translates to:
+  /// **'Route set to private. Will sync next time.'**
+  String get routeDetailPrivateWillSync;
+
+  /// Banner shown when toggling route visibility fails on the cloud
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update visibility: {error}'**
+  String routeDetailVisibilityFailed(String error);
+
+  /// Banner shown when toggling the route star fails on the cloud
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update star: {error}'**
+  String routeDetailStarFailed(String error);
+
+  /// Banner shown when a route is pinned for offline use
+  ///
+  /// In en, this message translates to:
+  /// **'Saved for offline use.'**
+  String get routeDetailOfflineSaved;
+
+  /// Banner shown when a route is unpinned from offline use
+  ///
+  /// In en, this message translates to:
+  /// **'Removed from offline saves.'**
+  String get routeDetailOfflineRemoved;
+
+  /// Banner shown when adding a route tag fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not save tag: {error}'**
+  String routeDetailTagSaveFailed(String error);
+
+  /// Banner shown when sharing a route as a file fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not share {format}: {error}'**
+  String routeDetailShareFailed(String format, String error);
+
+  /// Banner shown when the transfer-to-club club fetch times out
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your clubs — check your network.'**
+  String get routeDetailClubsLoadTimeout;
+
+  /// Banner shown when the transfer-to-club club fetch fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your clubs.'**
+  String get routeDetailClubsLoadFailed;
+
+  /// Banner shown after detaching a route from a club
+  ///
+  /// In en, this message translates to:
+  /// **'Detached from club; route is now personal.'**
+  String get routeDetailDetached;
+
+  /// Banner shown after moving a route into a club library
+  ///
+  /// In en, this message translates to:
+  /// **'Route moved into the club library.'**
+  String get routeDetailMovedToClub;
+
+  /// Banner shown when transferring a route to/from a club fails
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer failed: {error}'**
+  String routeDetailTransferFailed(String error);
+
+  /// Title of the single-route delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete route?'**
+  String get routeDetailDeleteTitle;
+
+  /// Body of the single-route delete confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This cannot be undone.'**
+  String get routeDetailDeleteBody;
+
+  /// Confirm action in the delete-route dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get routeDetailDelete;
+
+  /// Banner shown when deleting a route fails
+  ///
+  /// In en, this message translates to:
+  /// **'Delete failed: {error}'**
+  String routeDetailDeleteFailed(String error);
+
+  /// Label on the route-detail preview scrubber
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get routeDetailPreview;
+
+  /// Start endpoint label under the route-detail preview scrubber
+  ///
+  /// In en, this message translates to:
+  /// **'Start'**
+  String get routeDetailPreviewStart;
+
+  /// Finish endpoint label under the route-detail preview scrubber
+  ///
+  /// In en, this message translates to:
+  /// **'Finish'**
+  String get routeDetailPreviewFinish;
+
+  /// Title of the transfer-route sheet when the route is currently personal
+  ///
+  /// In en, this message translates to:
+  /// **'Transfer to club'**
+  String get routeDetailTransferDialogTitle;
+
+  /// Title of the transfer-route sheet when the route already belongs to a club
+  ///
+  /// In en, this message translates to:
+  /// **'Manage club ownership'**
+  String get routeDetailManageClubTitle;
+
+  /// Body of the transfer-route sheet when the route is currently personal
+  ///
+  /// In en, this message translates to:
+  /// **'Members of the club will see this route in the club library and can adopt it onto their plans.'**
+  String get routeDetailTransferDialogBody;
+
+  /// Body of the transfer-route sheet when the route already belongs to a club
+  ///
+  /// In en, this message translates to:
+  /// **'Move this route into another club you admin, or detach it back to personal.'**
+  String get routeDetailManageClubBody;
+
+  /// Title of the detach-to-personal option in the transfer-route sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Detach to personal'**
+  String get routeDetailDetachToPersonal;
+
+  /// Subtitle of the detach-to-personal option in the transfer-route sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Removes the route from the current club\'s library.'**
+  String get routeDetailDetachSubtitle;
+
+  /// Empty-state shown in the transfer-route sheet when the user has no admin clubs
+  ///
+  /// In en, this message translates to:
+  /// **'You don\'t own or admin any clubs yet.'**
+  String get routeDetailNoAdminClubs;
+
+  /// Subtitle marking the route's current club in the transfer-route sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Current club'**
+  String get routeDetailCurrentClub;
+
+  /// Subtitle showing a club's location and member count in the transfer-route sheet
+  ///
+  /// In en, this message translates to:
+  /// **'{location} · {count, plural, one{{count} member} other{{count} members}}'**
+  String routeDetailClubMemberCount(String location, int count);
+
+  /// AppBar title for the explore-public-routes screen
+  ///
+  /// In en, this message translates to:
+  /// **'Explore Routes'**
+  String get exploreRoutesTitle;
+
+  /// Mode-toggle label for the search-by-name mode
+  ///
+  /// In en, this message translates to:
+  /// **'Search'**
+  String get exploreRoutesModeSearch;
+
+  /// Mode-toggle label for the near-me mode
+  ///
+  /// In en, this message translates to:
+  /// **'Near Me'**
+  String get exploreRoutesModeNearMe;
+
+  /// Placeholder in the explore search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search routes by name...'**
+  String get exploreRoutesSearchHint;
+
+  /// Featured-only filter-chip label on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Featured'**
+  String get exploreRoutesFeatured;
+
+  /// Error state shown when exploring routes while signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in and connect to the internet to explore routes'**
+  String get exploreRoutesSignInRequired;
+
+  /// Error state shown when an explore search times out
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get exploreRoutesTimeout;
+
+  /// Error state shown when an explore search fails
+  ///
+  /// In en, this message translates to:
+  /// **'Search failed. Tap retry to try again.'**
+  String get exploreRoutesSearchFailed;
+
+  /// Banner shown when loading the next page of explore results fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load more — check your connection'**
+  String get exploreRoutesLoadMoreFailed;
+
+  /// Error state shown when location permission is denied in near-me mode
+  ///
+  /// In en, this message translates to:
+  /// **'Location permission required to find nearby routes'**
+  String get exploreRoutesLocationPermissionRequired;
+
+  /// Error state shown when a near-me search fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not find nearby routes. Tap retry to try again.'**
+  String get exploreRoutesNearbyFailed;
+
+  /// Empty-state title when there are no public routes and no search query
+  ///
+  /// In en, this message translates to:
+  /// **'No public routes yet'**
+  String get exploreRoutesEmptyNoPublic;
+
+  /// Empty-state title when a search returns no results
+  ///
+  /// In en, this message translates to:
+  /// **'No routes match your search'**
+  String get exploreRoutesEmptyNoMatch;
+
+  /// Empty-state body on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Routes shared from the web app appear here'**
+  String get exploreRoutesEmptyBody;
+
+  /// Distance-filter option that clears the distance filter on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Any distance'**
+  String get exploreRoutesDistanceAny;
+
+  /// Surface-filter option that clears the surface filter on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Any surface'**
+  String get exploreRoutesSurfaceAny;
+
+  /// Surface-filter option for road routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Road'**
+  String get exploreRoutesSurfaceRoad;
+
+  /// Surface-filter option for trail routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Trail'**
+  String get exploreRoutesSurfaceTrail;
+
+  /// Surface-filter option for mixed-surface routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Mixed'**
+  String get exploreRoutesSurfaceMixed;
+
+  /// Sort option: most-run routes first on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Most run'**
+  String get exploreRoutesSortMostRun;
+
+  /// Sort option: newest routes first on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Newest'**
+  String get exploreRoutesSortNewest;
+
+  /// Sort option: featured routes first on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Featured'**
+  String get exploreRoutesSortFeatured;
+
+  /// Fallback label on the sort filter chip on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sort'**
+  String get exploreRoutesSort;
+
+  /// Banner shown when a saved explore route can't fetch its geometry
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save \"{name}\" — check your connection and try again.'**
+  String exploreRoutesSaveCheckConnection(String name);
+
+  /// Banner shown when persisting a saved explore route fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save \"{name}\".'**
+  String exploreRoutesSaveFailed(String name);
+
+  /// Banner shown after a route is saved to the user's library from explore
+  ///
+  /// In en, this message translates to:
+  /// **'Saved \"{name}\" to your library'**
+  String exploreRoutesSaved(String name);
+
+  /// Tooltip on the save button when an explore route is already in the library
+  ///
+  /// In en, this message translates to:
+  /// **'Already saved'**
+  String get exploreRoutesAlreadySaved;
+
+  /// Tooltip on the save button on an explore route card
+  ///
+  /// In en, this message translates to:
+  /// **'Save to library'**
+  String get exploreRoutesSaveToLibrary;
+
+  /// Surface badge label for trail routes on an explore route card
+  ///
+  /// In en, this message translates to:
+  /// **'Trail'**
+  String get exploreRoutesSurfaceTrailShort;
+
+  /// Surface badge label for mixed-surface routes on an explore route card
+  ///
+  /// In en, this message translates to:
+  /// **'Mixed'**
+  String get exploreRoutesSurfaceMixedShort;
+
+  /// Surface badge label for road routes on an explore route card
+  ///
+  /// In en, this message translates to:
+  /// **'Road'**
+  String get exploreRoutesSurfaceRoadShort;
+
+  /// Distance-filter label (km) for short routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Under 5 km'**
+  String get exploreRoutesDistanceUnderKm;
+
+  /// Distance-filter label (km) for medium routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'5-10 km'**
+  String get exploreRoutesDistanceMidKm;
+
+  /// Distance-filter label (km) for long routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'10-21 km'**
+  String get exploreRoutesDistanceLongKm;
+
+  /// Distance-filter label (km) for ultra routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'21 km+'**
+  String get exploreRoutesDistanceUltraKm;
+
+  /// Distance-filter label (mi) for short routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'Under 3 mi'**
+  String get exploreRoutesDistanceUnderMi;
+
+  /// Distance-filter label (mi) for medium routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'3-6 mi'**
+  String get exploreRoutesDistanceMidMi;
+
+  /// Distance-filter label (mi) for long routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'6-13 mi'**
+  String get exploreRoutesDistanceLongMi;
+
+  /// Distance-filter label (mi) for ultra routes on the explore screen
+  ///
+  /// In en, this message translates to:
+  /// **'13 mi+'**
+  String get exploreRoutesDistanceUltraMi;
+
+  /// Placeholder in the heatmap place-search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search places…'**
+  String get heatmapSearchHint;
+
+  /// Tooltip on the heatmap Filters button
+  ///
+  /// In en, this message translates to:
+  /// **'Filters'**
+  String get heatmapFilters;
+
+  /// Header of the cluster sheet listing routes that share a start point
+  ///
+  /// In en, this message translates to:
+  /// **'{count} routes start here'**
+  String heatmapRoutesStartHere(int count);
+
+  /// Route-count text on the heatmap results pill and list header
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} route} other{{count} routes}}'**
+  String heatmapRouteCount(int count);
+
+  /// Pill text shown when no routes are in view on the heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'No routes here'**
+  String get heatmapNoRoutesHere;
+
+  /// Empty-state shown in the heatmap results list
+  ///
+  /// In en, this message translates to:
+  /// **'No routes here. Pan the map or change the filters.'**
+  String get heatmapNoRoutesHint;
+
+  /// Button to clear the pinned (kept-on-map) routes in the heatmap results list
+  ///
+  /// In en, this message translates to:
+  /// **'Clear {count} kept'**
+  String heatmapClearKept(int count);
+
+  /// Tooltip on the keep-on-map toggle when a heatmap route is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Unpin from map'**
+  String get heatmapUnpinFromMap;
+
+  /// Tooltip on the keep-on-map toggle when a heatmap route is not pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Keep on map'**
+  String get heatmapKeepOnMap;
+
+  /// Tooltip on the heatmap Locate-me FAB
+  ///
+  /// In en, this message translates to:
+  /// **'Locate me'**
+  String get heatmapLocateMe;
+
+  /// Banner shown when the heatmap Locate-me FAB can't get a position
+  ///
+  /// In en, this message translates to:
+  /// **'Location unavailable: {error}'**
+  String heatmapLocationUnavailable(String error);
+
+  /// Tooltip on the close button of the heatmap selection card
+  ///
+  /// In en, this message translates to:
+  /// **'Back to list'**
+  String get heatmapBackToList;
+
+  /// Label on the View-route button in the heatmap selection card
+  ///
+  /// In en, this message translates to:
+  /// **'View route'**
+  String get heatmapViewRoute;
+
+  /// Label on the keep button when a heatmap route is pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Kept'**
+  String get heatmapKept;
+
+  /// Label on the keep button when a heatmap route is not pinned
+  ///
+  /// In en, this message translates to:
+  /// **'Keep'**
+  String get heatmapKeep;
+
+  /// Filter-group label for the discovery-lens chips in the heatmap filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Show'**
+  String get heatmapLensShow;
+
+  /// Filter-group label for the race-distance chips in the heatmap filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get heatmapLensDistance;
+
+  /// Filter-group label for the map-display chips in the heatmap filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Map'**
+  String get heatmapLensMap;
+
+  /// Filter chip toggling the heat-density layer in the heatmap filter sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Heat density'**
+  String get heatmapHeatDensity;
+
+  /// Button to reset all heatmap filters
+  ///
+  /// In en, this message translates to:
+  /// **'Reset filters'**
+  String get heatmapResetFilters;
+
+  /// Discovery-lens label for popular routes on the heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Popular'**
+  String get heatmapLensPopular;
+
+  /// Discovery-lens label for friends' routes on the heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Friends'**
+  String get heatmapLensFriends;
+
+  /// Discovery-lens label for featured routes on the heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Featured'**
+  String get heatmapLensFeatured;
+
+  /// Discovery-lens label for hidden-gem routes on the heatmap
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden gems'**
+  String get heatmapLensHiddenGems;
+
+  /// AppBar title for the public route view before the route name loads
+  ///
+  /// In en, this message translates to:
+  /// **'Route'**
+  String get publicRouteFallbackTitle;
+
+  /// Error state shown when the public route fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load this route.'**
+  String get publicRouteLoadError;
+
+  /// Empty state shown when the public route is private or deleted
+  ///
+  /// In en, this message translates to:
+  /// **'This route is private or no longer available.'**
+  String get publicRouteUnavailable;
+
+  /// Stat label for distance on the public route view
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get publicRouteStatDistance;
+
+  /// Stat label for elevation on the public route view
+  ///
+  /// In en, this message translates to:
+  /// **'Elevation'**
+  String get publicRouteStatElevation;
+
+  /// Stat label for the waypoint count on the public route view
+  ///
+  /// In en, this message translates to:
+  /// **'Waypoints'**
+  String get publicRouteStatWaypoints;
+
+  /// Full-page error state shown when the route library fails to load and there is nothing cached
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your routes. Check your connection and try again.'**
+  String get routesLoadErrorRetry;
 }
 
 class _AppLocalizationsDelegate

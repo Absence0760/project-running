@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
@@ -104,18 +105,20 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(_route?.name ?? 'Route')),
+      appBar: AppBar(title: Text(_route?.name ?? l10n.publicRouteFallbackTitle)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
-              ? ErrorState(message: 'Could not load this route.', onRetry: _load)
+              ? ErrorState(
+                  message: l10n.publicRouteLoadError, onRetry: _load)
               : _route == null
                   ? Center(
                       child: Padding(
                         padding: const EdgeInsets.all(32),
                         child: Text(
-                          'This route is private or no longer available.',
+                          l10n.publicRouteUnavailable,
                           textAlign: TextAlign.center,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             color: theme.colorScheme.onSurfaceVariant,
@@ -128,6 +131,7 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
   }
 
   Widget _buildBody(ThemeData theme, cm.Route route) {
+    final l10n = AppLocalizations.of(context);
     return ListView(
       children: [
         SizedBox(
@@ -155,18 +159,18 @@ class _PublicRouteScreenState extends State<PublicRouteScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
             children: [
               _Stat(
-                label: 'Distance',
+                label: l10n.publicRouteStatDistance,
                 value: UnitFormat.distanceValue(
                     route.distanceMetres, activeDistanceUnit),
                 unit: UnitFormat.distanceLabel(activeDistanceUnit),
               ),
               _Stat(
-                label: 'Elevation',
+                label: l10n.publicRouteStatElevation,
                 value: '${route.elevationGainMetres.round()}',
                 unit: 'm',
               ),
               _Stat(
-                label: 'Waypoints',
+                label: l10n.publicRouteStatWaypoints,
                 value: '${_waypoints.length}',
               ),
             ],

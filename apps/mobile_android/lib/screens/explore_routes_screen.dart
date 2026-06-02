@@ -5,6 +5,7 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../backend_timeout.dart';
@@ -60,7 +61,12 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
-    _search();
+    // Defer the first search to after the first frame: the signed-out
+    // early-return reads AppLocalizations.of(context), which isn't
+    // available synchronously during initState.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _search();
+    });
     _loadPopularTags();
   }
 
@@ -94,7 +100,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   Future<void> _search() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      setState(() => _error = 'Sign in and connect to the internet to explore routes');
+      setState(() =>
+          _error = AppLocalizations.of(context).exploreRoutesSignInRequired);
       return;
     }
 
@@ -129,14 +136,14 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
       debugPrint('ExploreRoutesScreen._search timed out: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Connection timed out. Check your network and try again.';
+        _error = AppLocalizations.of(context).exploreRoutesTimeout;
         _loading = false;
       });
     } catch (e, s) {
       debugPrint('ExploreRoutesScreen._search failed: $e\n$s');
       if (!mounted) return;
       setState(() {
-        _error = 'Search failed. Tap retry to try again.';
+        _error = AppLocalizations.of(context).exploreRoutesSearchFailed;
         _loading = false;
       });
     }
@@ -174,7 +181,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           _loading = false;
           _hasMore = false;
         });
-        showTopBanner(context, 'Could not load more — check your connection');
+        showTopBanner(context,
+            AppLocalizations.of(context).exploreRoutesLoadMoreFailed);
       }
     }
   }
@@ -182,7 +190,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   Future<void> _searchNearby() async {
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      setState(() => _error = 'Sign in and connect to the internet to explore routes');
+      setState(() =>
+          _error = AppLocalizations.of(context).exploreRoutesSignInRequired);
       return;
     }
 
@@ -202,7 +211,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           perm == LocationPermission.deniedForever) {
         if (mounted) {
           setState(() {
-            _error = 'Location permission required to find nearby routes';
+            _error = AppLocalizations.of(context)
+                .exploreRoutesLocationPermissionRequired;
             _loading = false;
           });
         }
@@ -231,14 +241,14 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
       debugPrint('ExploreRoutesScreen._searchNearby timed out: $e');
       if (!mounted) return;
       setState(() {
-        _error = 'Connection timed out. Check your network and try again.';
+        _error = AppLocalizations.of(context).exploreRoutesTimeout;
         _loading = false;
       });
     } catch (e, s) {
       debugPrint('ExploreRoutesScreen._searchNearby failed: $e\n$s');
       if (!mounted) return;
       setState(() {
-        _error = 'Could not find nearby routes. Tap retry to try again.';
+        _error = AppLocalizations.of(context).exploreRoutesNearbyFailed;
         _loading = false;
       });
     }
@@ -328,7 +338,8 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
       if (!mounted) return;
       showTopBanner(
         context,
-        "Couldn't save \"${route.name}\" — check your connection and try again.",
+        AppLocalizations.of(context)
+            .exploreRoutesSaveCheckConnection(route.name),
       );
       return;
     }
@@ -337,36 +348,39 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
     } catch (e) {
       debugPrint('save-route persist failed: $e');
       if (!mounted) return;
-      showTopBanner(context, "Couldn't save \"${route.name}\".");
+      showTopBanner(
+          context, AppLocalizations.of(context).exploreRoutesSaveFailed(route.name));
       return;
     }
     if (!mounted) return;
-    showTopBanner(context, 'Saved "${route.name}" to your library');
+    showTopBanner(
+        context, AppLocalizations.of(context).exploreRoutesSaved(route.name));
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Explore Routes')),
+      appBar: AppBar(title: Text(l10n.exploreRoutesTitle)),
       body: Column(
         children: [
           // Mode toggle
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SegmentedButton<_ExploreMode>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: _ExploreMode.search,
-                  icon: Icon(Icons.search, size: 18),
-                  label: Text('Search'),
+                  icon: const Icon(Icons.search, size: 18),
+                  label: Text(l10n.exploreRoutesModeSearch),
                 ),
                 ButtonSegment(
                   value: _ExploreMode.nearMe,
-                  icon: Icon(Icons.near_me, size: 18),
-                  label: Text('Near Me'),
+                  icon: const Icon(Icons.near_me, size: 18),
+                  label: Text(l10n.exploreRoutesModeNearMe),
                 ),
               ],
               selected: {_mode},
@@ -388,7 +402,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
             child: TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search routes by name...',
+                hintText: l10n.exploreRoutesSearchHint,
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _searchController.text.isNotEmpty
                     ? IconButton(
@@ -425,7 +439,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
                     const SizedBox(width: 8),
                     FilterChip(
                       avatar: const Icon(Icons.star_border, size: 16),
-                      label: const Text('Featured'),
+                      label: Text(l10n.exploreRoutesFeatured),
                       selected: _featuredOnly,
                       onSelected: (v) {
                         setState(() => _featuredOnly = v);
@@ -473,13 +487,18 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   }
 
   Widget _buildDistanceChip(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final mi = widget.preferences.useMiles;
     final labels = {
-      _DistanceFilter.any: 'Any distance',
-      _DistanceFilter.short: mi ? 'Under 3 mi' : 'Under 5 km',
-      _DistanceFilter.medium: mi ? '3-6 mi' : '5-10 km',
-      _DistanceFilter.long: mi ? '6-13 mi' : '10-21 km',
-      _DistanceFilter.ultra: mi ? '13 mi+' : '21 km+',
+      _DistanceFilter.any: l10n.exploreRoutesDistanceAny,
+      _DistanceFilter.short:
+          mi ? l10n.exploreRoutesDistanceUnderMi : l10n.exploreRoutesDistanceUnderKm,
+      _DistanceFilter.medium:
+          mi ? l10n.exploreRoutesDistanceMidMi : l10n.exploreRoutesDistanceMidKm,
+      _DistanceFilter.long:
+          mi ? l10n.exploreRoutesDistanceLongMi : l10n.exploreRoutesDistanceLongKm,
+      _DistanceFilter.ultra:
+          mi ? l10n.exploreRoutesDistanceUltraMi : l10n.exploreRoutesDistanceUltraKm,
     };
     return PopupMenuButton<_DistanceFilter>(
       onSelected: (v) {
@@ -504,10 +523,11 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   }
 
   Widget _buildSortChip(ThemeData theme) {
-    const labels = {
-      'popular': 'Most run',
-      'newest': 'Newest',
-      'featured': 'Featured',
+    final l10n = AppLocalizations.of(context);
+    final labels = {
+      'popular': l10n.exploreRoutesSortMostRun,
+      'newest': l10n.exploreRoutesSortNewest,
+      'featured': l10n.exploreRoutesSortFeatured,
     };
     return PopupMenuButton<String>(
       onSelected: (v) {
@@ -523,17 +543,18 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
           .toList(),
       child: Chip(
         avatar: const Icon(Icons.sort, size: 16),
-        label: Text(labels[_sort] ?? 'Sort'),
+        label: Text(labels[_sort] ?? l10n.exploreRoutesSort),
       ),
     );
   }
 
   Widget _buildSurfaceChip(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final labels = {
-      _SurfaceFilter.any: 'Any surface',
-      _SurfaceFilter.road: 'Road',
-      _SurfaceFilter.trail: 'Trail',
-      _SurfaceFilter.mixed: 'Mixed',
+      _SurfaceFilter.any: l10n.exploreRoutesSurfaceAny,
+      _SurfaceFilter.road: l10n.exploreRoutesSurfaceRoad,
+      _SurfaceFilter.trail: l10n.exploreRoutesSurfaceTrail,
+      _SurfaceFilter.mixed: l10n.exploreRoutesSurfaceMixed,
     };
     return PopupMenuButton<_SurfaceFilter>(
       onSelected: (v) {
@@ -558,6 +579,7 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
   }
 
   Widget _buildBody(ThemeData theme, DistanceUnit unit) {
+    final l10n = AppLocalizations.of(context);
     if (_error != null) {
       return ErrorState(
         message: _error!,
@@ -574,13 +596,13 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
             const SizedBox(height: 16),
             Text(
               _searchController.text.isEmpty
-                  ? 'No public routes yet'
-                  : 'No routes match your search',
+                  ? l10n.exploreRoutesEmptyNoPublic
+                  : l10n.exploreRoutesEmptyNoMatch,
               style: theme.textTheme.bodyLarge,
             ),
             const SizedBox(height: 8),
             Text(
-              'Routes shared from the web app appear here',
+              l10n.exploreRoutesEmptyBody,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
               ),
@@ -653,6 +675,7 @@ class _RouteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       clipBehavior: Clip.antiAlias,
@@ -727,7 +750,7 @@ class _RouteCard extends StatelessWidget {
                               '${route.elevationGainMetres.round()}m'),
                         if (route.surface != null)
                           _tag(_surfaceIcon(route.surface),
-                              _surfaceLabel(route.surface)),
+                              _surfaceLabel(l10n, route.surface)),
                         if (route.runCount > 0)
                           _tag(Icons.directions_run, '${route.runCount}'),
                       ],
@@ -769,7 +792,9 @@ class _RouteCard extends StatelessWidget {
                       ? theme.colorScheme.primary
                       : theme.colorScheme.outline,
                 ),
-                tooltip: alreadySaved ? 'Already saved' : 'Save to library',
+                tooltip: alreadySaved
+                    ? l10n.exploreRoutesAlreadySaved
+                    : l10n.exploreRoutesSaveToLibrary,
                 onPressed: alreadySaved ? null : onSave,
               ),
             ],
@@ -806,14 +831,14 @@ class _RouteCard extends StatelessWidget {
     }
   }
 
-  static String _surfaceLabel(String? surface) {
+  static String _surfaceLabel(AppLocalizations l10n, String? surface) {
     switch (surface) {
       case 'trail':
-        return 'Trail';
+        return l10n.exploreRoutesSurfaceTrailShort;
       case 'mixed':
-        return 'Mixed';
+        return l10n.exploreRoutesSurfaceMixedShort;
       default:
-        return 'Road';
+        return l10n.exploreRoutesSurfaceRoadShort;
     }
   }
 }

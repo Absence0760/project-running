@@ -1257,4 +1257,883 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get publicRunSectionSegments => 'Segments';
+
+  @override
+  String get routesSyncFailedOffline =>
+      'Impossible de synchroniser les itinéraires — hors ligne';
+
+  @override
+  String get routesLoadMoreFailed =>
+      'Impossible de charger plus d\'itinéraires';
+
+  @override
+  String routesStarUpdateFailed(String error) {
+    return 'Impossible de mettre à jour le favori : $error';
+  }
+
+  @override
+  String get routesImportFailedLocalOnly =>
+      'Échec de l\'import : choisissez le fichier dans le stockage local, pas dans un sélecteur de documents uniquement cloud.';
+
+  @override
+  String routesImported(String name) {
+    return '« $name » importé';
+  }
+
+  @override
+  String routesImportFailed(String error) {
+    return 'Échec de l\'import : $error';
+  }
+
+  @override
+  String routesSaved(String name) {
+    return '« $name » enregistré';
+  }
+
+  @override
+  String get routesEmptyTitle => 'Aucun itinéraire pour l\'instant';
+
+  @override
+  String get routesEmptyBody =>
+      'Appuyez sur Créer pour tracer un itinéraire sur la carte, ou importez un fichier GPX, KML ou TCX.';
+
+  @override
+  String get routesBuild => 'Créer';
+
+  @override
+  String get routesImport => 'Importer';
+
+  @override
+  String get routesNoMatch => 'Aucun itinéraire ne correspond à ces filtres';
+
+  @override
+  String get routesClearFilters => 'Effacer les filtres';
+
+  @override
+  String routesLoadMore(int count) {
+    return 'Charger $count de plus';
+  }
+
+  @override
+  String get routesQueuedToSync => 'En attente de synchronisation';
+
+  @override
+  String get routesSavedForOffline => 'Enregistré hors ligne';
+
+  @override
+  String get routesUnstarRoute => 'Retirer l\'itinéraire des favoris';
+
+  @override
+  String get routesStarForWatch => 'Marquer pour afficher sur la montre';
+
+  @override
+  String get routesDiscover => 'Découvrir';
+
+  @override
+  String get routesSyncFromCloud => 'Synchroniser depuis le cloud';
+
+  @override
+  String get routesPublicRoutes => 'Itinéraires publics';
+
+  @override
+  String get routesHeatmap => 'Carte de chaleur';
+
+  @override
+  String get routesExplorePublic => 'Explorer les itinéraires publics';
+
+  @override
+  String get routesHeatmapTooltip => 'Carte de chaleur des itinéraires';
+
+  @override
+  String get routesSearchHint => 'Rechercher des itinéraires par nom…';
+
+  @override
+  String get routesClearSearch => 'Effacer la recherche';
+
+  @override
+  String get routesStarred => 'Favoris';
+
+  @override
+  String routesCountMeta(int visible, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$visible sur $total itinéraires',
+      one: '$visible sur $total itinéraire',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routesSurfaceAny => 'Toute surface';
+
+  @override
+  String get routesSurfaceRoad => 'Route';
+
+  @override
+  String get routesSurfaceTrail => 'Sentier';
+
+  @override
+  String get routesSurfaceMixed => 'Mixte';
+
+  @override
+  String get routesDistanceAny => 'Toute distance';
+
+  @override
+  String get routesSortNewest => 'Plus récents d\'abord';
+
+  @override
+  String get routesSortLongest => 'Plus long';
+
+  @override
+  String get routesSortShortest => 'Plus court';
+
+  @override
+  String get routesSortMostRun => 'Les plus parcourus';
+
+  @override
+  String get routesSortAlpha => 'A–Z';
+
+  @override
+  String routesDeleteConfirmTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Supprimer $count itinéraires ?',
+      one: 'Supprimer $count itinéraire ?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routesDeleteConfirmBody => 'Cette action est irréversible.';
+
+  @override
+  String routesSelectionTitle(int count) {
+    return '$count sélectionné(s)';
+  }
+
+  @override
+  String routesDeletePartial(int deleted, int failed) {
+    return '$deleted supprimé(s) ; $failed échec(s) — vérifiez votre connexion.';
+  }
+
+  @override
+  String routesDeleteDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count itinéraires supprimés.',
+      one: '$count itinéraire supprimé.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeBuilderRouteCleared => 'Itinéraire effacé';
+
+  @override
+  String routeBuilderPointsSummary(int count, String distance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points, $distance',
+      one: '$count point, $distance',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeBuilderRouteFailedStraightLines =>
+      'Échec du calcul d\'itinéraire — affichage de lignes droites entre vos points.';
+
+  @override
+  String routeBuilderSegmentsFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count segments n\'ont pas pu s\'aligner sur une route. Déplacez les points concernés pour ajuster.',
+      one:
+          '$count segment n\'a pas pu s\'aligner sur une route. Déplacez le point concerné pour ajuster.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String routeBuilderRoutingFailed(String error) {
+    return 'Échec du calcul d\'itinéraire : $error';
+  }
+
+  @override
+  String get routeBuilderTooCloseToPin =>
+      'Trop proche d\'un autre point — déplacez un peu plus loin.';
+
+  @override
+  String get routeBuilderPinAlreadyThere =>
+      'Un point est déjà là — appuyez plus loin pour en ajouter un autre.';
+
+  @override
+  String get routeBuilderTargetTooLong =>
+      'Saisissez une distance cible jusqu\'à 1000 km.';
+
+  @override
+  String get routeBuilderSaveNeedTwo => 'Placez d\'abord au moins deux points.';
+
+  @override
+  String routeBuilderSavedLocally(String detail) {
+    return 'Enregistré localement. $detail Sera synchronisé la prochaine fois.';
+  }
+
+  @override
+  String routeBuilderLocationUnavailable(String error) {
+    return 'Position indisponible : $error';
+  }
+
+  @override
+  String get routeBuilderServerUnreachable =>
+      'Serveur injoignable. Connectez-vous ou vérifiez votre connexion, puis réessayez.';
+
+  @override
+  String routeBuilderSaveFailed(String error) {
+    return 'Échec de l\'enregistrement : $error';
+  }
+
+  @override
+  String get routeBuilderSearchHint => 'Rechercher des lieux…';
+
+  @override
+  String get routeBuilderMore => 'Plus';
+
+  @override
+  String get routeBuilderGenerateLoop => 'Générer une boucle';
+
+  @override
+  String get routeBuilderUndo => 'Annuler';
+
+  @override
+  String get routeBuilderClear => 'Effacer';
+
+  @override
+  String get routeBuilderSaving => 'Enregistrement…';
+
+  @override
+  String get routeBuilderSave => 'Enregistrer';
+
+  @override
+  String get routeBuilderLocateMe => 'Me localiser';
+
+  @override
+  String routeBuilderTapToMovePoint(int number) {
+    return 'Appuyez pour déplacer le point $number, ou utilisez les icônes';
+  }
+
+  @override
+  String routeBuilderEmptyHint(String mode) {
+    return 'Appuyez sur la carte pour placer des points · $mode';
+  }
+
+  @override
+  String routeBuilderOnePointHint(String mode) {
+    return 'Placez-en un autre pour tracer la ligne · $mode';
+  }
+
+  @override
+  String routeBuilderStatusGain(String distance, int gain, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points',
+      one: '$count point',
+    );
+    return '$distance · $gain m ↑ · $_temp0';
+  }
+
+  @override
+  String routeBuilderStatusNoGain(String distance, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points',
+      one: '$count point',
+    );
+    return '$distance · $_temp0';
+  }
+
+  @override
+  String routeBuilderDeletePoint(int number) {
+    return 'Supprimer le point $number';
+  }
+
+  @override
+  String get routeBuilderCancelDrag => 'Annuler le déplacement';
+
+  @override
+  String get routeBuilderModeTrail => 'Sentier';
+
+  @override
+  String get routeBuilderModeRoad => 'Route';
+
+  @override
+  String get routeBuilderModeStraight => 'Droite';
+
+  @override
+  String get routeBuilderLoopDialogBody =>
+      'Distance cible — nous créerons une boucle radiale autour du centre actuel de la carte.';
+
+  @override
+  String get routeBuilderCancel => 'Annuler';
+
+  @override
+  String get routeBuilderGenerate => 'Générer';
+
+  @override
+  String get routeBuilderSaveDialogTitle => 'Enregistrer l\'itinéraire';
+
+  @override
+  String get routeBuilderNameLabel => 'Nom';
+
+  @override
+  String get routeBuilderNameHint => 'p. ex. Boucle de la rivière';
+
+  @override
+  String get routeBuilderDescriptionLabel => 'Description (facultatif)';
+
+  @override
+  String get routeBuilderDescriptionHint =>
+      'Surface, dénivelé, stationnement, tout ce qui mérite d\'être noté';
+
+  @override
+  String get routeBuilderSaveToLabel => 'Enregistrer dans';
+
+  @override
+  String get routeBuilderSaveToPersonal => 'Personnel';
+
+  @override
+  String get routeBuilderMakePublic => 'Rendre public';
+
+  @override
+  String get routeBuilderMakePublicSubtitle =>
+      'Les autres peuvent la trouver dans Découvrir';
+
+  @override
+  String get routeDetailStartRun => 'Démarrer la course';
+
+  @override
+  String get routeDetailShare => 'Partager';
+
+  @override
+  String get routeDetailShareAsImage => 'Partager en image';
+
+  @override
+  String get routeDetailShareAsGpx => 'Partager en GPX';
+
+  @override
+  String get routeDetailShareAsKml => 'Partager en KML';
+
+  @override
+  String get routeDetailRemoveOfflineSave =>
+      'Supprimer l\'enregistrement hors ligne';
+
+  @override
+  String get routeDetailSaveForOffline =>
+      'Enregistrer pour une utilisation hors ligne';
+
+  @override
+  String get routeDetailUnstarRoute => 'Retirer l\'itinéraire des favoris';
+
+  @override
+  String get routeDetailStarForWatch => 'Marquer pour afficher sur la montre';
+
+  @override
+  String get routeDetailMakePrivate => 'Rendre privé';
+
+  @override
+  String get routeDetailMakePublic => 'Rendre public';
+
+  @override
+  String get routeDetailRemoveBookmark => 'Retirer le signet';
+
+  @override
+  String get routeDetailBookmarkRoute => 'Ajouter aux signets';
+
+  @override
+  String get routeDetailReportRoute => 'Signaler l\'itinéraire';
+
+  @override
+  String get routeDetailTransferToClub => 'Transférer à un club';
+
+  @override
+  String get routeDetailManageClub => 'Détacher ou déplacer vers un autre club';
+
+  @override
+  String get routeDetailDeleteRoute => 'Supprimer l\'itinéraire';
+
+  @override
+  String get routeDetailStatDistance => 'Distance';
+
+  @override
+  String get routeDetailStatElevation => 'Dénivelé';
+
+  @override
+  String routeDetailStatReviews(int count) {
+    return '$count avis';
+  }
+
+  @override
+  String get routeDetailStatWaypoints => 'Points';
+
+  @override
+  String get routeDetailPublicRoute => 'Itinéraire public';
+
+  @override
+  String get routeDetailPrivateRoute => 'Itinéraire privé';
+
+  @override
+  String get routeDetailPublicSubtitle =>
+      'Toute personne disposant du lien de partage peut voir cet itinéraire';
+
+  @override
+  String get routeDetailPrivateSubtitle =>
+      'Vous seul pouvez voir cet itinéraire';
+
+  @override
+  String get routeDetailSavedForOffline => 'Enregistré hors ligne';
+
+  @override
+  String get routeDetailSaveForOfflineTitle => 'Enregistrer hors ligne';
+
+  @override
+  String get routeDetailOfflinePinnedSubtitle =>
+      'L\'itinéraire reste sur ce téléphone pour que vous puissiez le parcourir sans connexion.';
+
+  @override
+  String get routeDetailOfflineUnpinnedSubtitle =>
+      'Conservez cet itinéraire sur votre téléphone pour une utilisation sans réseau.';
+
+  @override
+  String get routeDetailDescriptionHeading => 'Description';
+
+  @override
+  String routeDetailRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count courses',
+      one: '$count course',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeDetailFeatured => 'En vedette';
+
+  @override
+  String get routeDetailSurfaceTrail => 'SENTIER';
+
+  @override
+  String get routeDetailSurfaceMixed => 'MIXTE';
+
+  @override
+  String get routeDetailSurfaceRoad => 'ROUTE';
+
+  @override
+  String get routeDetailAddTagHint => 'ajouter une étiquette';
+
+  @override
+  String get routeDetailReviewsHeading => 'Avis';
+
+  @override
+  String get routeDetailRate => 'Noter';
+
+  @override
+  String get routeDetailReviewsOffline => 'Avis indisponibles hors ligne';
+
+  @override
+  String get routeDetailNoReviews => 'Aucun avis pour l\'instant';
+
+  @override
+  String get routeDetailRateDialogTitle => 'Noter cet itinéraire';
+
+  @override
+  String get routeDetailCommentLabel => 'Commentaire (facultatif)';
+
+  @override
+  String get routeDetailCancel => 'Annuler';
+
+  @override
+  String get routeDetailSubmit => 'Envoyer';
+
+  @override
+  String get routeDetailSignInToReview => 'Connectez-vous pour laisser un avis';
+
+  @override
+  String routeDetailReviewFailed(String error) {
+    return 'Échec de l\'envoi de l\'avis : $error';
+  }
+
+  @override
+  String routeDetailBookmarkFailed(String error) {
+    return 'Échec du signet : $error';
+  }
+
+  @override
+  String get routeDetailPublicWillSync =>
+      'Itinéraire défini comme public. Sera synchronisé la prochaine fois.';
+
+  @override
+  String get routeDetailPrivateWillSync =>
+      'Itinéraire défini comme privé. Sera synchronisé la prochaine fois.';
+
+  @override
+  String routeDetailVisibilityFailed(String error) {
+    return 'Impossible de mettre à jour la visibilité : $error';
+  }
+
+  @override
+  String routeDetailStarFailed(String error) {
+    return 'Impossible de mettre à jour le favori : $error';
+  }
+
+  @override
+  String get routeDetailOfflineSaved =>
+      'Enregistré pour une utilisation hors ligne.';
+
+  @override
+  String get routeDetailOfflineRemoved =>
+      'Retiré des enregistrements hors ligne.';
+
+  @override
+  String routeDetailTagSaveFailed(String error) {
+    return 'Impossible d\'enregistrer l\'étiquette : $error';
+  }
+
+  @override
+  String routeDetailShareFailed(String format, String error) {
+    return 'Impossible de partager $format : $error';
+  }
+
+  @override
+  String get routeDetailClubsLoadTimeout =>
+      'Impossible de charger vos clubs — vérifiez votre réseau.';
+
+  @override
+  String get routeDetailClubsLoadFailed => 'Impossible de charger vos clubs.';
+
+  @override
+  String get routeDetailDetached =>
+      'Détaché du club ; l\'itinéraire est désormais personnel.';
+
+  @override
+  String get routeDetailMovedToClub =>
+      'Itinéraire déplacé dans la bibliothèque du club.';
+
+  @override
+  String routeDetailTransferFailed(String error) {
+    return 'Échec du transfert : $error';
+  }
+
+  @override
+  String get routeDetailDeleteTitle => 'Supprimer l\'itinéraire ?';
+
+  @override
+  String get routeDetailDeleteBody => 'Cette action est irréversible.';
+
+  @override
+  String get routeDetailDelete => 'Supprimer';
+
+  @override
+  String routeDetailDeleteFailed(String error) {
+    return 'Échec de la suppression : $error';
+  }
+
+  @override
+  String get routeDetailPreview => 'Aperçu';
+
+  @override
+  String get routeDetailPreviewStart => 'Départ';
+
+  @override
+  String get routeDetailPreviewFinish => 'Arrivée';
+
+  @override
+  String get routeDetailTransferDialogTitle => 'Transférer à un club';
+
+  @override
+  String get routeDetailManageClubTitle => 'Gérer l\'appartenance au club';
+
+  @override
+  String get routeDetailTransferDialogBody =>
+      'Les membres du club verront cet itinéraire dans la bibliothèque du club et pourront l\'ajouter à leurs plans.';
+
+  @override
+  String get routeDetailManageClubBody =>
+      'Déplacez cet itinéraire vers un autre club que vous administrez, ou détachez-le pour le rendre personnel.';
+
+  @override
+  String get routeDetailDetachToPersonal => 'Détacher vers personnel';
+
+  @override
+  String get routeDetailDetachSubtitle =>
+      'Retire l\'itinéraire de la bibliothèque du club actuel.';
+
+  @override
+  String get routeDetailNoAdminClubs =>
+      'Vous ne possédez ni n\'administrez encore aucun club.';
+
+  @override
+  String get routeDetailCurrentClub => 'Club actuel';
+
+  @override
+  String routeDetailClubMemberCount(String location, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count membres',
+      one: '$count membre',
+    );
+    return '$location · $_temp0';
+  }
+
+  @override
+  String get exploreRoutesTitle => 'Explorer les itinéraires';
+
+  @override
+  String get exploreRoutesModeSearch => 'Recherche';
+
+  @override
+  String get exploreRoutesModeNearMe => 'À proximité';
+
+  @override
+  String get exploreRoutesSearchHint => 'Rechercher des itinéraires par nom...';
+
+  @override
+  String get exploreRoutesFeatured => 'En vedette';
+
+  @override
+  String get exploreRoutesSignInRequired =>
+      'Connectez-vous et accédez à Internet pour explorer les itinéraires';
+
+  @override
+  String get exploreRoutesTimeout =>
+      'Délai de connexion dépassé. Vérifiez votre réseau et réessayez.';
+
+  @override
+  String get exploreRoutesSearchFailed =>
+      'Échec de la recherche. Appuyez sur Réessayer pour recommencer.';
+
+  @override
+  String get exploreRoutesLoadMoreFailed =>
+      'Impossible de charger plus — vérifiez votre connexion';
+
+  @override
+  String get exploreRoutesLocationPermissionRequired =>
+      'Autorisation de localisation requise pour trouver des itinéraires à proximité';
+
+  @override
+  String get exploreRoutesNearbyFailed =>
+      'Impossible de trouver des itinéraires à proximité. Appuyez sur Réessayer pour recommencer.';
+
+  @override
+  String get exploreRoutesEmptyNoPublic =>
+      'Aucun itinéraire public pour l\'instant';
+
+  @override
+  String get exploreRoutesEmptyNoMatch =>
+      'Aucun itinéraire ne correspond à votre recherche';
+
+  @override
+  String get exploreRoutesEmptyBody =>
+      'Les itinéraires partagés depuis l\'application web apparaissent ici';
+
+  @override
+  String get exploreRoutesDistanceAny => 'Toute distance';
+
+  @override
+  String get exploreRoutesSurfaceAny => 'Toute surface';
+
+  @override
+  String get exploreRoutesSurfaceRoad => 'Route';
+
+  @override
+  String get exploreRoutesSurfaceTrail => 'Sentier';
+
+  @override
+  String get exploreRoutesSurfaceMixed => 'Mixte';
+
+  @override
+  String get exploreRoutesSortMostRun => 'Les plus parcourus';
+
+  @override
+  String get exploreRoutesSortNewest => 'Plus récents';
+
+  @override
+  String get exploreRoutesSortFeatured => 'En vedette';
+
+  @override
+  String get exploreRoutesSort => 'Trier';
+
+  @override
+  String exploreRoutesSaveCheckConnection(String name) {
+    return 'Impossible d\'enregistrer « $name » — vérifiez votre connexion et réessayez.';
+  }
+
+  @override
+  String exploreRoutesSaveFailed(String name) {
+    return 'Impossible d\'enregistrer « $name ».';
+  }
+
+  @override
+  String exploreRoutesSaved(String name) {
+    return '« $name » enregistré dans votre bibliothèque';
+  }
+
+  @override
+  String get exploreRoutesAlreadySaved => 'Déjà enregistré';
+
+  @override
+  String get exploreRoutesSaveToLibrary => 'Enregistrer dans la bibliothèque';
+
+  @override
+  String get exploreRoutesSurfaceTrailShort => 'Sentier';
+
+  @override
+  String get exploreRoutesSurfaceMixedShort => 'Mixte';
+
+  @override
+  String get exploreRoutesSurfaceRoadShort => 'Route';
+
+  @override
+  String get exploreRoutesDistanceUnderKm => 'Moins de 5 km';
+
+  @override
+  String get exploreRoutesDistanceMidKm => '5–10 km';
+
+  @override
+  String get exploreRoutesDistanceLongKm => '10–21 km';
+
+  @override
+  String get exploreRoutesDistanceUltraKm => '21 km+';
+
+  @override
+  String get exploreRoutesDistanceUnderMi => 'Moins de 3 mi';
+
+  @override
+  String get exploreRoutesDistanceMidMi => '3–6 mi';
+
+  @override
+  String get exploreRoutesDistanceLongMi => '6–13 mi';
+
+  @override
+  String get exploreRoutesDistanceUltraMi => '13 mi+';
+
+  @override
+  String get heatmapSearchHint => 'Rechercher des lieux…';
+
+  @override
+  String get heatmapFilters => 'Filtres';
+
+  @override
+  String heatmapRoutesStartHere(int count) {
+    return '$count itinéraires commencent ici';
+  }
+
+  @override
+  String heatmapRouteCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count itinéraires',
+      one: '$count itinéraire',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get heatmapNoRoutesHere => 'Aucun itinéraire ici';
+
+  @override
+  String get heatmapNoRoutesHint =>
+      'Aucun itinéraire ici. Déplacez la carte ou modifiez les filtres.';
+
+  @override
+  String heatmapClearKept(int count) {
+    return 'Effacer $count conservé(s)';
+  }
+
+  @override
+  String get heatmapUnpinFromMap => 'Retirer de la carte';
+
+  @override
+  String get heatmapKeepOnMap => 'Conserver sur la carte';
+
+  @override
+  String get heatmapLocateMe => 'Me localiser';
+
+  @override
+  String heatmapLocationUnavailable(String error) {
+    return 'Position indisponible : $error';
+  }
+
+  @override
+  String get heatmapBackToList => 'Retour à la liste';
+
+  @override
+  String get heatmapViewRoute => 'Voir l\'itinéraire';
+
+  @override
+  String get heatmapKept => 'Conservé';
+
+  @override
+  String get heatmapKeep => 'Conserver';
+
+  @override
+  String get heatmapLensShow => 'Afficher';
+
+  @override
+  String get heatmapLensDistance => 'Distance';
+
+  @override
+  String get heatmapLensMap => 'Carte';
+
+  @override
+  String get heatmapHeatDensity => 'Densité de chaleur';
+
+  @override
+  String get heatmapResetFilters => 'Réinitialiser les filtres';
+
+  @override
+  String get heatmapLensPopular => 'Populaire';
+
+  @override
+  String get heatmapLensFriends => 'Amis';
+
+  @override
+  String get heatmapLensFeatured => 'En vedette';
+
+  @override
+  String get heatmapLensHiddenGems => 'Trésors cachés';
+
+  @override
+  String get publicRouteFallbackTitle => 'Itinéraire';
+
+  @override
+  String get publicRouteLoadError => 'Impossible de charger cet itinéraire.';
+
+  @override
+  String get publicRouteUnavailable =>
+      'Cet itinéraire est privé ou n\'est plus disponible.';
+
+  @override
+  String get publicRouteStatDistance => 'Distance';
+
+  @override
+  String get publicRouteStatElevation => 'Dénivelé';
+
+  @override
+  String get publicRouteStatWaypoints => 'Points';
+
+  @override
+  String get routesLoadErrorRetry =>
+      'Impossible de charger vos itinéraires. Vérifiez votre connexion et réessayez.';
 }

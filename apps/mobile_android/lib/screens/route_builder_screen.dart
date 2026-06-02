@@ -15,6 +15,7 @@ import 'package:uuid/uuid.dart';
 
 import '../elevation.dart';
 import '../geocoding.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../rate_limit_errors.dart';
@@ -234,13 +235,14 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   /// Spoken summary of the current route after a mutation settles —
   /// "3 points, 2.40 km" / "Route cleared".
   void _announceRouteState() {
+    final l10n = AppLocalizations.of(context);
     if (_waypoints.isEmpty) {
-      _announceA11yState('Route cleared');
+      _announceA11yState(l10n.routeBuilderRouteCleared);
       return;
     }
     final n = _waypoints.length;
     _announceA11yState(
-      '$n point${n == 1 ? '' : 's'}, ${formatDistanceForPref(_distanceM)}',
+      l10n.routeBuilderPointsSummary(n, formatDistanceForPref(_distanceM)),
     );
   }
 
@@ -312,9 +314,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         showTopBanner(
           context,
           failed == routed.totalSegments
-              ? 'Couldn\'t route — showing straight lines through your pins.'
-              : '$failed segment${failed == 1 ? '' : 's'} couldn\'t snap '
-                  'to a road. Drag the affected pins to adjust.',
+              ? AppLocalizations.of(context).routeBuilderRouteFailedStraightLines
+              : AppLocalizations.of(context).routeBuilderSegmentsFailed(failed),
         );
       }
       unawaited(_refreshElevation());
@@ -324,7 +325,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       // current generation owns the user-visible banner.
       if (myGen != _routeGeneration) return;
       setState(() => _routing = false);
-      showTopBanner(context, 'Routing failed: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeBuilderRoutingFailed('$e'));
     }
   }
 
@@ -388,7 +390,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
         if (!mounted) return;
         showTopBanner(
           context,
-          'Too close to another pin — drag a bit further.',
+          AppLocalizations.of(context).routeBuilderTooCloseToPin,
         );
         return;
       }
@@ -433,7 +435,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       if (!mounted) return;
       showTopBanner(
         context,
-        'Pin already there — tap further apart to add another.',
+        AppLocalizations.of(context).routeBuilderPinAlreadyThere,
       );
       return;
     }
@@ -498,7 +500,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
     final picked = await _pickLoopDistance(unit);
     if (picked == null || !mounted) return;
     if (!isValidTargetDistance(picked)) {
-      showTopBanner(context, 'Enter a target distance up to 1000 km.');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeBuilderTargetTooLong);
       return;
     }
 
@@ -612,7 +615,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 
   Future<void> _save() async {
     if (_polyline.length < 2) {
-      showTopBanner(context, 'Place at least two waypoints first.');
+      showTopBanner(
+          context, AppLocalizations.of(context).routeBuilderSaveNeedTwo);
       return;
     }
     final result = await showDialog<SaveDialogResult>(
@@ -664,7 +668,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       if (!mounted) return;
       showTopBanner(
         context,
-        'Saved locally. ${formatSaveRouteError(e)} Will sync next time.',
+        AppLocalizations.of(context)
+            .routeBuilderSavedLocally(formatSaveRouteError(e, context)),
       );
       Navigator.of(context).pop<cm.Route>(route);
     }
@@ -680,7 +685,8 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       _map.move(LatLng(pos.latitude, pos.longitude), 15);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Location unavailable: $e');
+      showTopBanner(context,
+          AppLocalizations.of(context).routeBuilderLocationUnavailable('$e'));
     }
   }
 
@@ -765,6 +771,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final waypointLatLngs = [
       for (final w in _waypoints) LatLng(w.lat, w.lng),
     ];
@@ -795,10 +802,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
           controller: _searchCtl,
           focusNode: _searchFocus,
           onChanged: _onSearchChanged,
-          decoration: const InputDecoration(
-            hintText: 'Search places…',
+          decoration: InputDecoration(
+            hintText: l10n.routeBuilderSearchHint,
             border: InputBorder.none,
-            prefixIcon: Icon(Icons.search, size: 20),
+            prefixIcon: const Icon(Icons.search, size: 20),
           ),
           style: theme.textTheme.bodyLarge,
         ),
@@ -809,10 +816,11 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                 // else.
                 TextButton(
                   onPressed: canSave ? _save : null,
-                  child: Text(_saving ? 'Saving…' : 'Save'),
+                  child: Text(
+                      _saving ? l10n.routeBuilderSaving : l10n.routeBuilderSave),
                 ),
                 PopupMenuButton<String>(
-                  tooltip: 'More',
+                  tooltip: l10n.routeBuilderMore,
                   onSelected: (a) {
                     switch (a) {
                       case 'loop':
@@ -827,28 +835,28 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                     PopupMenuItem(
                       value: 'loop',
                       enabled: canGenerate,
-                      child: const ListTile(
+                      child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.all_inclusive),
-                        title: Text('Generate loop'),
+                        leading: const Icon(Icons.all_inclusive),
+                        title: Text(l10n.routeBuilderGenerateLoop),
                       ),
                     ),
                     PopupMenuItem(
                       value: 'undo',
                       enabled: canUndo,
-                      child: const ListTile(
+                      child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.undo),
-                        title: Text('Undo'),
+                        leading: const Icon(Icons.undo),
+                        title: Text(l10n.routeBuilderUndo),
                       ),
                     ),
                     PopupMenuItem(
                       value: 'clear',
                       enabled: canClear,
-                      child: const ListTile(
+                      child: ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: Icon(Icons.delete_outline),
-                        title: Text('Clear'),
+                        leading: const Icon(Icons.delete_outline),
+                        title: Text(l10n.routeBuilderClear),
                       ),
                     ),
                   ],
@@ -856,7 +864,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
               ]
             : [
                 IconButton(
-                  tooltip: 'Generate loop',
+                  tooltip: l10n.routeBuilderGenerateLoop,
                   onPressed: canGenerate ? _generateLoop : null,
                   // Was Icons.refresh_outlined — looked like a retry
                   // / reload button. Icons.all_inclusive reads as
@@ -864,18 +872,19 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
                   icon: const Icon(Icons.all_inclusive),
                 ),
                 IconButton(
-                  tooltip: 'Undo',
+                  tooltip: l10n.routeBuilderUndo,
                   onPressed: canUndo ? _undo : null,
                   icon: const Icon(Icons.undo),
                 ),
                 IconButton(
-                  tooltip: 'Clear',
+                  tooltip: l10n.routeBuilderClear,
                   onPressed: canClear ? _clear : null,
                   icon: const Icon(Icons.delete_outline),
                 ),
                 TextButton(
                   onPressed: canSave ? _save : null,
-                  child: Text(_saving ? 'Saving…' : 'Save'),
+                  child: Text(
+                      _saving ? l10n.routeBuilderSaving : l10n.routeBuilderSave),
                 ),
               ],
       ),
@@ -1052,7 +1061,7 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         heroTag: 'route_builder_locate_fab',
-        tooltip: 'Locate me',
+        tooltip: l10n.routeBuilderLocateMe,
         onPressed: _routing || _saving ? null : _locate,
         child: const Icon(Icons.my_location),
       ),
@@ -1064,10 +1073,10 @@ class _RouteBuilderScreenState extends State<RouteBuilderScreen> {
 /// [OsrmProfile] for road/trail and bypasses OSRM for straight.
 enum RouteBuilderMode { trail, road, straight }
 
-String _modeLabel(RouteBuilderMode m) => switch (m) {
-      RouteBuilderMode.trail => 'Trail',
-      RouteBuilderMode.road => 'Road',
-      RouteBuilderMode.straight => 'Straight',
+String _modeLabel(AppLocalizations l10n, RouteBuilderMode m) => switch (m) {
+      RouteBuilderMode.trail => l10n.routeBuilderModeTrail,
+      RouteBuilderMode.road => l10n.routeBuilderModeRoad,
+      RouteBuilderMode.straight => l10n.routeBuilderModeStraight,
     };
 
 /// Format the user-visible message for a saveRoute failure. Pure
@@ -1089,7 +1098,7 @@ String _modeLabel(RouteBuilderMode m) => switch (m) {
 ///   - Anything else falls through to `Save failed: <toString>` so
 ///     debugging information (RLS denials, FK violations, network
 ///     errors) isn't hidden by an over-eager translation.
-String formatSaveRouteError(Object e) {
+String formatSaveRouteError(Object e, [BuildContext? context]) {
   if (e is PostgrestException) {
     final friendly = rateLimitErrorMessage(code: e.code, message: e.message);
     if (friendly != null) return friendly;
@@ -1103,9 +1112,13 @@ String formatSaveRouteError(Object e) {
   if ((e is Error && e.toString().startsWith('LateInitializationError')) ||
       (e is StateError &&
           e.message.contains('Supabase.initialize'))) {
-    return "Can't reach the server. Sign in or check your connection and try again.";
+    return context != null
+        ? AppLocalizations.of(context).routeBuilderServerUnreachable
+        : "Can't reach the server. Sign in or check your connection and try again.";
   }
-  return 'Save failed: $e';
+  return context != null
+      ? AppLocalizations.of(context).routeBuilderSaveFailed('$e')
+      : 'Save failed: $e';
 }
 
 String _surfaceFor(RouteBuilderMode mode) {
@@ -1180,30 +1193,30 @@ class _StatusPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     String label;
     if (dragIndex != null) {
       // Pinning the affordance hierarchy: PRIMARY action is move,
       // SECONDARY is delete, TERTIARY is cancel. The label leads with
       // "Tap anywhere" because that's the move gesture; the two
       // icons cover the other two intents.
-      label = 'Tap to move point ${dragIndex! + 1}, or use the icons';
+      label = l10n.routeBuilderTapToMovePoint(dragIndex! + 1);
     } else if (waypointCount == 0) {
       // Surface the current routing mode in the empty hint so flipping
       // Trail / Road / Straight gives immediate visual feedback even
       // before the user places two waypoints (otherwise the mode
       // toggle looks dead until there's a polyline to reshape).
-      label = 'Tap the map to place waypoints · ${_modeLabel(mode)}';
+      label = l10n.routeBuilderEmptyHint(_modeLabel(l10n, mode));
     } else if (waypointCount == 1) {
       // One waypoint placed — same rationale: show the mode so the
       // user can compose the toggle + next tap with confidence.
-      label = 'Place another to draw the line · ${_modeLabel(mode)}';
+      label = l10n.routeBuilderOnePointHint(_modeLabel(l10n, mode));
     } else {
       final km = (distanceM / 1000).toStringAsFixed(2);
-      final pointsLabel =
-          '$waypointCount ${waypointCount == 1 ? "point" : "points"}';
       label = elevationGainM > 0
-          ? '$km km · ${elevationGainM.round()} m ↑ · $pointsLabel'
-          : '$km km · $pointsLabel';
+          ? l10n.routeBuilderStatusGain(
+              '$km km', elevationGainM.round(), waypointCount)
+          : l10n.routeBuilderStatusNoGain('$km km', waypointCount);
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -1218,14 +1231,14 @@ class _StatusPill extends StatelessWidget {
           if (dragIndex != null) ...[
             IconButton(
               icon: const Icon(Icons.delete_outline, size: 20),
-              tooltip: 'Delete point ${dragIndex! + 1}',
+              tooltip: l10n.routeBuilderDeletePoint(dragIndex! + 1),
               color: theme.colorScheme.error,
               onPressed: onDeleteDragged,
               visualDensity: VisualDensity.compact,
             ),
             IconButton(
               icon: const Icon(Icons.close, size: 18),
-              tooltip: 'Cancel drag',
+              tooltip: l10n.routeBuilderCancelDrag,
               onPressed: onCancelDrag,
               visualDensity: VisualDensity.compact,
             ),
@@ -1281,15 +1294,15 @@ class _GenerateLoopDialogState extends State<_GenerateLoopDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final label = widget.unit == DistanceUnit.mi ? 'mi' : 'km';
     return AlertDialog(
-      title: const Text('Generate loop'),
+      title: Text(l10n.routeBuilderGenerateLoop),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            'Target distance — we\'ll build a radial loop around '
-            'the current map centre.',
+            l10n.routeBuilderLoopDialogBody,
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -1306,11 +1319,11 @@ class _GenerateLoopDialogState extends State<_GenerateLoopDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.routeBuilderCancel),
         ),
         FilledButton(
           onPressed: _submit,
-          child: const Text('Generate'),
+          child: Text(l10n.routeBuilderGenerate),
         ),
       ],
     );
@@ -1326,6 +1339,7 @@ class _ModeToggle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -1341,36 +1355,36 @@ class _ModeToggle extends StatelessWidget {
         // labels stay on a single line; the icon stays inline,
         // so a really cramped viewport still reads "🏔 Trail",
         // "🚗 Road", "📏 Straight" each as one chip.
-        segments: const [
+        segments: [
           ButtonSegment(
             value: RouteBuilderMode.trail,
             label: Text(
-              'Trail',
+              l10n.routeBuilderModeTrail,
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.fade,
             ),
-            icon: Icon(Icons.terrain),
+            icon: const Icon(Icons.terrain),
           ),
           ButtonSegment(
             value: RouteBuilderMode.road,
             label: Text(
-              'Road',
+              l10n.routeBuilderModeRoad,
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.fade,
             ),
-            icon: Icon(Icons.directions_car),
+            icon: const Icon(Icons.directions_car),
           ),
           ButtonSegment(
             value: RouteBuilderMode.straight,
             label: Text(
-              'Straight',
+              l10n.routeBuilderModeStraight,
               maxLines: 1,
               softWrap: false,
               overflow: TextOverflow.fade,
             ),
-            icon: Icon(Icons.straighten),
+            icon: const Icon(Icons.straighten),
           ),
         ],
         selected: {mode},
@@ -1593,9 +1607,10 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final hasClubs = widget.clubChoices.isNotEmpty;
     return AlertDialog(
-      title: const Text('Save route'),
+      title: Text(l10n.routeBuilderSaveDialogTitle),
       // SingleChildScrollView so the Make public toggle isn't clipped
       // behind the Save / Cancel actions on short screens (or when
       // the keyboard opens). Without it, AlertDialog overflows its
@@ -1607,17 +1622,17 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
             TextField(
               controller: _name,
               autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'e.g. River loop',
+              decoration: InputDecoration(
+                labelText: l10n.routeBuilderNameLabel,
+                hintText: l10n.routeBuilderNameHint,
               ),
             ),
             const SizedBox(height: 8),
             TextField(
               controller: _description,
-              decoration: const InputDecoration(
-                labelText: 'Description (optional)',
-                hintText: 'Surface, hills, parking, anything worth noting',
+              decoration: InputDecoration(
+                labelText: l10n.routeBuilderDescriptionLabel,
+                hintText: l10n.routeBuilderDescriptionHint,
               ),
               maxLines: 3,
             ),
@@ -1626,13 +1641,13 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
               DropdownButtonFormField<String?>(
                 key: const Key('save-route-dialog-club-picker'),
                 initialValue: _clubId,
-                decoration: const InputDecoration(
-                  labelText: 'Save to',
+                decoration: InputDecoration(
+                  labelText: l10n.routeBuilderSaveToLabel,
                 ),
                 items: <DropdownMenuItem<String?>>[
-                  const DropdownMenuItem<String?>(
+                  DropdownMenuItem<String?>(
                     value: null,
-                    child: Text('Personal'),
+                    child: Text(l10n.routeBuilderSaveToPersonal),
                   ),
                   for (final c in widget.clubChoices)
                     DropdownMenuItem<String?>(
@@ -1646,8 +1661,8 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
             const SizedBox(height: 8),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Make public'),
-              subtitle: const Text('Others can find it on Explore'),
+              title: Text(l10n.routeBuilderMakePublic),
+              subtitle: Text(l10n.routeBuilderMakePublicSubtitle),
               value: _isPublic,
               onChanged: (v) => setState(() => _isPublic = v),
             ),
@@ -1657,7 +1672,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text(l10n.routeBuilderCancel),
         ),
         FilledButton(
           onPressed: () {
@@ -1671,7 +1686,7 @@ class _SaveRouteDialogState extends State<SaveRouteDialog> {
               clubId: _clubId,
             ));
           },
-          child: const Text('Save'),
+          child: Text(l10n.routeBuilderSave),
         ),
       ],
     );

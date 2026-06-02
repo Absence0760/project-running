@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:gpx_parser/gpx_parser.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../preferences.dart';
 import '../social_service.dart';
@@ -192,7 +193,8 @@ class RoutesScreenState extends State<RoutesScreen> {
       debugPrint('Fetch routes failed: $e');
       if (mounted) {
         setState(() => _fetchError = true);
-        showTopBanner(context, 'Could not sync routes — working offline');
+        showTopBanner(
+            context, AppLocalizations.of(context).routesSyncFailedOffline);
       }
     } finally {
       if (mounted) setState(() => _syncing = false);
@@ -256,7 +258,8 @@ class RoutesScreenState extends State<RoutesScreen> {
     } catch (e) {
       debugPrint('Load more routes failed: $e');
       if (mounted) {
-        showTopBanner(context, 'Could not load more routes');
+        showTopBanner(
+            context, AppLocalizations.of(context).routesLoadMoreFailed);
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -463,20 +466,21 @@ class RoutesScreenState extends State<RoutesScreen> {
   Future<void> _deleteSelected() async {
     final count = _selected.length;
     if (count == 0) return;
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Delete $count route${count == 1 ? '' : 's'}?'),
-        content: const Text('This cannot be undone.'),
+        title: Text(l10n.routesDeleteConfirmTitle(count)),
+        content: Text(l10n.routesDeleteConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.routeBuilderCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: const Text('Delete'),
+            child: Text(l10n.routeDetailDelete),
           ),
         ],
       ),
@@ -507,12 +511,12 @@ class RoutesScreenState extends State<RoutesScreen> {
     if (failedIds.isNotEmpty) {
       showTopBanner(
         context,
-        '${ok2.length} deleted; ${failedIds.length} failed — check your connection.',
+        l10n.routesDeletePartial(ok2.length, failedIds.length),
       );
     } else {
       showTopBanner(
         context,
-        '$count route${count == 1 ? '' : 's'} deleted.',
+        l10n.routesDeleteDone(count),
       );
     }
   }
@@ -522,6 +526,7 @@ class RoutesScreenState extends State<RoutesScreen> {
     required List<cm.Route> visible,
     required Set<String> ownedIds,
   }) {
+    final l10n = AppLocalizations.of(context);
     final ownedVisibleIds =
         visible.where((r) => ownedIds.contains(r.id)).map((r) => r.id).toSet();
     final allSelected = ownedVisibleIds.isNotEmpty &&
@@ -537,18 +542,20 @@ class RoutesScreenState extends State<RoutesScreen> {
             children: [
               IconButton(
                 icon: const Icon(Icons.close),
-                tooltip: 'Cancel',
+                tooltip: l10n.routeBuilderCancel,
                 onPressed: _deleting ? null : _clearSelection,
               ),
               Expanded(
                 child: Text(
-                  '${_selected.length} selected',
+                  l10n.routesSelectionTitle(_selected.length),
                   style: theme.textTheme.titleSmall,
                 ),
               ),
               IconButton(
                 icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
-                tooltip: allSelected ? 'Clear' : 'Select all',
+                tooltip: allSelected
+                    ? l10n.runsClearSelectionTooltip
+                    : l10n.runsSelectAllTooltip,
                 onPressed: _deleting
                     ? null
                     : (allSelected
@@ -563,7 +570,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.delete_outline),
-                tooltip: 'Delete',
+                tooltip: l10n.runsDeleteTooltip,
                 onPressed: (_selected.isEmpty || _deleting)
                     ? null
                     : _deleteSelected,
@@ -621,7 +628,8 @@ class RoutesScreenState extends State<RoutesScreen> {
       await widget.routeStore.save(route);
       if (mounted) {
         setState(() {});
-        showTopBanner(context, 'Could not update star: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).routesStarUpdateFailed('$e'));
       }
     }
   }
@@ -643,8 +651,8 @@ class RoutesScreenState extends State<RoutesScreen> {
       final path = result.files.first.path;
       if (path == null) {
         if (mounted) {
-          showTopBanner(context, 'Import failed: pick the file from local storage, '
-              'not a cloud-only document picker.',);
+          showTopBanner(context,
+              AppLocalizations.of(context).routesImportFailedLocalOnly);
         }
         return;
       }
@@ -653,11 +661,13 @@ class RoutesScreenState extends State<RoutesScreen> {
       final route = await compute(_parseRouteFile, _RouteParseRequest(ext, content));
       await widget.routeStore.save(route);
       if (mounted) {
-        showTopBanner(context, 'Imported "${route.name}"');
+        showTopBanner(
+            context, AppLocalizations.of(context).routesImported(route.name));
       }
     } catch (e) {
       if (mounted) {
-        showTopBanner(context, 'Import failed: $e');
+        showTopBanner(
+            context, AppLocalizations.of(context).routesImportFailed('$e'));
       }
     }
   }
@@ -675,13 +685,15 @@ class RoutesScreenState extends State<RoutesScreen> {
       ),
     );
     if (created != null && mounted) {
-      showTopBanner(context, 'Saved "${created.name}"');
+      showTopBanner(
+          context, AppLocalizations.of(context).routesSaved(created.name));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final unit = widget.preferences.unit;
     final owned = widget.routeStore.routes;
     final ownedIds = {for (final r in owned) r.id};
@@ -707,8 +719,7 @@ class RoutesScreenState extends State<RoutesScreen> {
 
     final body = mergedRoutes.isEmpty && _fetchError && !_syncing
         ? ErrorState(
-            message: "Couldn't load your routes. Check your connection "
-                'and try again.',
+            message: l10n.routesLoadErrorRetry,
             onRetry: _fetchRemoteRoutes,
           )
         : mergedRoutes.isEmpty
@@ -726,7 +737,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'No routes yet',
+                      l10n.routesEmptyTitle,
                       style: theme.textTheme.titleMedium,
                     ),
                     const SizedBox(height: 8),
@@ -736,8 +747,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                       // covers GPX / KML / KMZ / GeoJSON / TCX files.
                       // The old copy only mentioned Import — users
                       // missed the in-app builder.
-                      'Tap Build to draw a route on the map, or '
-                      'Import a GPX, KML, or TCX file.',
+                      l10n.routesEmptyBody,
                       textAlign: TextAlign.center,
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
@@ -756,7 +766,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                             color: theme.colorScheme.outline),
                         const SizedBox(width: 4),
                         Text(
-                          'Build',
+                          l10n.routesBuild,
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.outline,
                           ),
@@ -767,7 +777,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                             color: theme.colorScheme.outline),
                         const SizedBox(width: 4),
                         Text(
-                          'Import',
+                          l10n.routesImport,
                           style: theme.textTheme.labelSmall?.copyWith(
                             color: theme.colorScheme.outline,
                           ),
@@ -849,13 +859,13 @@ class RoutesScreenState extends State<RoutesScreen> {
                             size: 48, color: theme.colorScheme.outline),
                         const SizedBox(height: 12),
                         Text(
-                          'No routes match these filters',
+                          l10n.routesNoMatch,
                           style: theme.textTheme.bodyLarge,
                         ),
                         const SizedBox(height: 8),
                         TextButton(
                           onPressed: _clearFilters,
-                          child: const Text('Clear filters'),
+                          child: Text(l10n.routesClearFilters),
                         ),
                       ],
                     ),
@@ -875,7 +885,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                           : OutlinedButton.icon(
                               onPressed: _loadMore,
                               icon: const Icon(Icons.expand_more),
-                              label: const Text('Load $_kRoutesPageSize more'),
+                              label: Text(l10n.routesLoadMore(_kRoutesPageSize)),
                             ),
                     ),
                   );
@@ -999,7 +1009,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                         // "couldn't be uploaded").
                         if (isUnsynced) ...[
                           Tooltip(
-                            message: 'Queued to sync',
+                            message: l10n.routesQueuedToSync,
                             child: Icon(
                               Icons.cloud_upload_outlined,
                               size: 16,
@@ -1009,9 +1019,9 @@ class RoutesScreenState extends State<RoutesScreen> {
                           const SizedBox(width: 4),
                         ],
                         if (isOfflinePinned) ...[
-                          const Tooltip(
-                            message: 'Saved for offline',
-                            child: Icon(
+                          Tooltip(
+                            message: l10n.routesSavedForOffline,
+                            child: const Icon(
                               Icons.download_done,
                               size: 16,
                               color: Color(0xFF22C55E),
@@ -1028,8 +1038,8 @@ class RoutesScreenState extends State<RoutesScreen> {
                                   : theme.colorScheme.onSurfaceVariant,
                             ),
                             tooltip: route.isStarred
-                                ? 'Unstar route'
-                                : 'Star to show on watch',
+                                ? l10n.routesUnstarRoute
+                                : l10n.routesStarForWatch,
                             onPressed: () => _toggleStar(route),
                           ),
                         const Icon(Icons.chevron_right),
@@ -1088,7 +1098,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                 ),
                 const SizedBox(width: 6),
                 Text(
-                  'Discover',
+                  l10n.routesDiscover,
                   style: theme.textTheme.labelMedium?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                     fontWeight: FontWeight.w600,
@@ -1107,7 +1117,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                 else if (widget.apiClient?.userId != null)
                   IconButton(
                     icon: const Icon(Icons.cloud_download, size: 20),
-                    tooltip: 'Sync from cloud',
+                    tooltip: l10n.routesSyncFromCloud,
                     visualDensity: VisualDensity.compact,
                     onPressed: _fetchRemoteRoutes,
                   ),
@@ -1121,7 +1131,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                 Expanded(
                   child: OutlinedButton.icon(
                     icon: const Icon(Icons.explore, size: 18),
-                    label: const Text('Public routes'),
+                    label: Text(l10n.routesPublicRoutes),
                     onPressed: () {
                       Navigator.push(
                         context,
@@ -1145,7 +1155,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                         Icons.local_fire_department_outlined,
                         size: 18,
                       ),
-                      label: const Text('Heatmap'),
+                      label: Text(l10n.routesHeatmap),
                       onPressed: () => Navigator.push(
                         context,
                         MaterialPageRoute(
@@ -1186,10 +1196,11 @@ class RoutesScreenState extends State<RoutesScreen> {
   /// and a Sync indicator. Used by both the standalone AppBar (when
   /// `embedded: false`) and the inline toolbar row (when embedded).
   List<Widget> _buildActions(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return [
       IconButton(
         icon: const Icon(Icons.explore),
-        tooltip: 'Explore public routes',
+        tooltip: l10n.routesExplorePublic,
         onPressed: () {
           Navigator.push(
             context,
@@ -1207,7 +1218,7 @@ class RoutesScreenState extends State<RoutesScreen> {
       if (widget.apiClient != null)
         IconButton(
           icon: const Icon(Icons.local_fire_department_outlined),
-          tooltip: 'Routes heatmap',
+          tooltip: l10n.routesHeatmapTooltip,
           onPressed: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -1229,7 +1240,7 @@ class RoutesScreenState extends State<RoutesScreen> {
       else if (widget.apiClient?.userId != null)
         IconButton(
           icon: const Icon(Icons.cloud_download),
-          tooltip: 'Sync from cloud',
+          tooltip: l10n.routesSyncFromCloud,
           onPressed: _fetchRemoteRoutes,
         ),
     ];
@@ -1239,6 +1250,7 @@ class RoutesScreenState extends State<RoutesScreen> {
   /// (`SocialScreen`) can hoist it into its own Scaffold's
   /// `floatingActionButton` slot when the Routes sub-tab is active.
   Widget buildRouteFabs(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -1248,14 +1260,14 @@ class RoutesScreenState extends State<RoutesScreen> {
             heroTag: 'routes_build_fab',
             onPressed: _openBuilder,
             icon: const Icon(Icons.add_location_alt),
-            label: const Text('Build'),
+            label: Text(l10n.routesBuild),
           ),
         const SizedBox(height: 12),
         FloatingActionButton.extended(
           heroTag: 'routes_import_fab',
           onPressed: _importFile,
           icon: const Icon(Icons.upload_file),
-          label: const Text('Import'),
+          label: Text(l10n.routesImport),
         ),
       ],
     );
@@ -1344,23 +1356,25 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
     super.dispose();
   }
 
-  static String _surfaceLabel(_SurfaceFilter v) {
+  static String _surfaceLabel(AppLocalizations l10n, _SurfaceFilter v) {
     switch (v) {
       case _SurfaceFilter.any:
-        return 'Any surface';
+        return l10n.routesSurfaceAny;
       case _SurfaceFilter.road:
-        return 'Road';
+        return l10n.routesSurfaceRoad;
       case _SurfaceFilter.trail:
-        return 'Trail';
+        return l10n.routesSurfaceTrail;
       case _SurfaceFilter.mixed:
-        return 'Mixed';
+        return l10n.routesSurfaceMixed;
     }
   }
 
-  static String _distanceLabel(_DistanceBucket v) {
+  // Distance-bucket labels stay raw — the km/mi thresholds are numeric
+  // formatting owned by Epic C, not UI copy.
+  static String _distanceLabel(AppLocalizations l10n, _DistanceBucket v) {
     switch (v) {
       case _DistanceBucket.any:
-        return 'Any distance';
+        return l10n.routesDistanceAny;
       case _DistanceBucket.lt5:
         return '< 5 km';
       case _DistanceBucket.t5to10:
@@ -1372,24 +1386,25 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
     }
   }
 
-  static String _sortLabel(_RouteSort v) {
+  static String _sortLabel(AppLocalizations l10n, _RouteSort v) {
     switch (v) {
       case _RouteSort.newest:
-        return 'Newest first';
+        return l10n.routesSortNewest;
       case _RouteSort.longest:
-        return 'Longest';
+        return l10n.routesSortLongest;
       case _RouteSort.shortest:
-        return 'Shortest';
+        return l10n.routesSortShortest;
       case _RouteSort.mostRun:
-        return 'Most-run';
+        return l10n.routesSortMostRun;
       case _RouteSort.az:
-        return 'A–Z';
+        return l10n.routesSortAlpha;
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Padding(
       padding: const EdgeInsets.only(bottom: 12),
       child: Column(
@@ -1405,13 +1420,13 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
                   ? null
                   : IconButton(
                       icon: const Icon(Icons.close),
-                      tooltip: 'Clear search',
+                      tooltip: l10n.routesClearSearch,
                       onPressed: () {
                         _searchCtl.clear();
                         widget.onSearchChanged('');
                       },
                     ),
-              hintText: 'Search routes by name…',
+              hintText: l10n.routesSearchHint,
               border: const OutlineInputBorder(),
             ),
           ),
@@ -1429,7 +1444,7 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
               child: Row(
                 children: [
                   FilterChip(
-                    label: const Text('Starred'),
+                    label: Text(l10n.routesStarred),
                     avatar: Icon(
                       widget.starredOnly
                           ? Icons.star
@@ -1446,21 +1461,21 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
                   _DropdownChip<_SurfaceFilter>(
                     value: widget.surfaceFilter,
                     items: _SurfaceFilter.values,
-                    labelOf: _surfaceLabel,
+                    labelOf: (v) => _surfaceLabel(l10n, v),
                     onChanged: widget.onSurfaceChanged,
                   ),
                   const SizedBox(width: 8),
                   _DropdownChip<_DistanceBucket>(
                     value: widget.distanceFilter,
                     items: _DistanceBucket.values,
-                    labelOf: _distanceLabel,
+                    labelOf: (v) => _distanceLabel(l10n, v),
                     onChanged: widget.onDistanceChanged,
                   ),
                   const SizedBox(width: 8),
                   _DropdownChip<_RouteSort>(
                     value: widget.sort,
                     items: _RouteSort.values,
-                    labelOf: _sortLabel,
+                    labelOf: (v) => _sortLabel(l10n, v),
                     onChanged: widget.onSortChanged,
                   ),
                 ],
@@ -1471,8 +1486,7 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
           Row(
             children: [
               Text(
-                '${widget.visibleCount} of ${widget.totalCount} '
-                '${widget.totalCount == 1 ? 'route' : 'routes'}',
+                l10n.routesCountMeta(widget.visibleCount, widget.totalCount),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                 ),
@@ -1481,7 +1495,7 @@ class _RoutesFilterHeaderState extends State<_RoutesFilterHeader> {
               if (widget.filtersActive)
                 TextButton(
                   onPressed: widget.onClearFilters,
-                  child: const Text('Clear filters'),
+                  child: Text(l10n.routesClearFilters),
                 ),
             ],
           ),

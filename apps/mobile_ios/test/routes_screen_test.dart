@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/routes_screen.dart';
@@ -33,6 +34,8 @@ Future<Preferences> _makePrefs() async {
 Future<void> _pump(WidgetTester tester, {required Preferences prefs}) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: RoutesScreen(
         apiClient: null,
         routeStore: LocalRouteStore(),
@@ -130,6 +133,8 @@ void main() {
           ..debugSeed(_makeRoutes(1), markSynced: false);
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: RoutesScreen(
               apiClient: null,
               routeStore: routeStore,
@@ -155,6 +160,8 @@ void main() {
           ..debugSeed(_makeRoutes(1));
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: RoutesScreen(
               apiClient: null,
               routeStore: routeStore,
@@ -189,6 +196,8 @@ void main() {
           ..debugSeed([publicRoute]);
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: RoutesScreen(
               apiClient: null,
               routeStore: routeStore,
@@ -213,6 +222,8 @@ void main() {
           ..debugSeed(_makeRoutes(1));
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: RoutesScreen(
               apiClient: null,
               routeStore: routeStore,
@@ -240,6 +251,8 @@ void main() {
           ..debugSeed(_makeRoutes(1));
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: RoutesScreen(
               apiClient: null,
               routeStore: routeStore,
@@ -322,6 +335,8 @@ void main() {
       final routeStore = LocalRouteStore()..debugSeed(_makeRoutes(25));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RoutesScreen(
             apiClient: null,
             routeStore: routeStore,
@@ -348,6 +363,8 @@ void main() {
       final routeStore = LocalRouteStore()..debugSeed(_makeRoutes(5));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RoutesScreen(
             apiClient: null,
             routeStore: routeStore,
@@ -367,6 +384,8 @@ void main() {
       final routeStore = LocalRouteStore()..debugSeed(_makeRoutes(25));
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: RoutesScreen(
             apiClient: null,
             routeStore: routeStore,
@@ -406,6 +425,8 @@ void main() {
         // ignore: invalid_use_of_visible_for_testing_member
         ..debugSeed(_makeRoutes(3));
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: RoutesScreen(
           apiClient: null,
           routeStore: routeStore,
@@ -435,6 +456,8 @@ void main() {
         // ignore: invalid_use_of_visible_for_testing_member
         ..debugSeed(_makeRoutes(3));
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: RoutesScreen(
           apiClient: null,
           routeStore: routeStore,
@@ -458,6 +481,8 @@ void main() {
         // ignore: invalid_use_of_visible_for_testing_member
         ..debugSeed(_makeRoutes(2));
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: RoutesScreen(
           apiClient: null,
           routeStore: routeStore,
@@ -493,6 +518,8 @@ void main() {
         // ignore: invalid_use_of_visible_for_testing_member
         ..debugSeed(_makeRoutes(3));
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: RoutesScreen(
           apiClient: null,
           routeStore: routeStore,

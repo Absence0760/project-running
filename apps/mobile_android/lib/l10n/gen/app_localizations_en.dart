@@ -1244,4 +1244,873 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get publicRunSectionSegments => 'Segments';
+
+  @override
+  String get routesSyncFailedOffline =>
+      'Could not sync routes — working offline';
+
+  @override
+  String get routesLoadMoreFailed => 'Could not load more routes';
+
+  @override
+  String routesStarUpdateFailed(String error) {
+    return 'Could not update star: $error';
+  }
+
+  @override
+  String get routesImportFailedLocalOnly =>
+      'Import failed: pick the file from local storage, not a cloud-only document picker.';
+
+  @override
+  String routesImported(String name) {
+    return 'Imported \"$name\"';
+  }
+
+  @override
+  String routesImportFailed(String error) {
+    return 'Import failed: $error';
+  }
+
+  @override
+  String routesSaved(String name) {
+    return 'Saved \"$name\"';
+  }
+
+  @override
+  String get routesEmptyTitle => 'No routes yet';
+
+  @override
+  String get routesEmptyBody =>
+      'Tap Build to draw a route on the map, or Import a GPX, KML, or TCX file.';
+
+  @override
+  String get routesBuild => 'Build';
+
+  @override
+  String get routesImport => 'Import';
+
+  @override
+  String get routesNoMatch => 'No routes match these filters';
+
+  @override
+  String get routesClearFilters => 'Clear filters';
+
+  @override
+  String routesLoadMore(int count) {
+    return 'Load $count more';
+  }
+
+  @override
+  String get routesQueuedToSync => 'Queued to sync';
+
+  @override
+  String get routesSavedForOffline => 'Saved for offline';
+
+  @override
+  String get routesUnstarRoute => 'Unstar route';
+
+  @override
+  String get routesStarForWatch => 'Star to show on watch';
+
+  @override
+  String get routesDiscover => 'Discover';
+
+  @override
+  String get routesSyncFromCloud => 'Sync from cloud';
+
+  @override
+  String get routesPublicRoutes => 'Public routes';
+
+  @override
+  String get routesHeatmap => 'Heatmap';
+
+  @override
+  String get routesExplorePublic => 'Explore public routes';
+
+  @override
+  String get routesHeatmapTooltip => 'Routes heatmap';
+
+  @override
+  String get routesSearchHint => 'Search routes by name…';
+
+  @override
+  String get routesClearSearch => 'Clear search';
+
+  @override
+  String get routesStarred => 'Starred';
+
+  @override
+  String routesCountMeta(int visible, int total) {
+    String _temp0 = intl.Intl.pluralLogic(
+      total,
+      locale: localeName,
+      other: '$visible of $total routes',
+      one: '$visible of $total route',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routesSurfaceAny => 'Any surface';
+
+  @override
+  String get routesSurfaceRoad => 'Road';
+
+  @override
+  String get routesSurfaceTrail => 'Trail';
+
+  @override
+  String get routesSurfaceMixed => 'Mixed';
+
+  @override
+  String get routesDistanceAny => 'Any distance';
+
+  @override
+  String get routesSortNewest => 'Newest first';
+
+  @override
+  String get routesSortLongest => 'Longest';
+
+  @override
+  String get routesSortShortest => 'Shortest';
+
+  @override
+  String get routesSortMostRun => 'Most-run';
+
+  @override
+  String get routesSortAlpha => 'A–Z';
+
+  @override
+  String routesDeleteConfirmTitle(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Delete $count routes?',
+      one: 'Delete $count route?',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routesDeleteConfirmBody => 'This cannot be undone.';
+
+  @override
+  String routesSelectionTitle(int count) {
+    return '$count selected';
+  }
+
+  @override
+  String routesDeletePartial(int deleted, int failed) {
+    return '$deleted deleted; $failed failed — check your connection.';
+  }
+
+  @override
+  String routesDeleteDone(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count routes deleted.',
+      one: '$count route deleted.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeBuilderRouteCleared => 'Route cleared';
+
+  @override
+  String routeBuilderPointsSummary(int count, String distance) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points, $distance',
+      one: '$count point, $distance',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeBuilderRouteFailedStraightLines =>
+      'Couldn\'t route — showing straight lines through your pins.';
+
+  @override
+  String routeBuilderSegmentsFailed(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count segments couldn\'t snap to a road. Drag the affected pins to adjust.',
+      one:
+          '$count segment couldn\'t snap to a road. Drag the affected pin to adjust.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String routeBuilderRoutingFailed(String error) {
+    return 'Routing failed: $error';
+  }
+
+  @override
+  String get routeBuilderTooCloseToPin =>
+      'Too close to another pin — drag a bit further.';
+
+  @override
+  String get routeBuilderPinAlreadyThere =>
+      'Pin already there — tap further apart to add another.';
+
+  @override
+  String get routeBuilderTargetTooLong =>
+      'Enter a target distance up to 1000 km.';
+
+  @override
+  String get routeBuilderSaveNeedTwo => 'Place at least two waypoints first.';
+
+  @override
+  String routeBuilderSavedLocally(String detail) {
+    return 'Saved locally. $detail Will sync next time.';
+  }
+
+  @override
+  String routeBuilderLocationUnavailable(String error) {
+    return 'Location unavailable: $error';
+  }
+
+  @override
+  String get routeBuilderServerUnreachable =>
+      'Can\'t reach the server. Sign in or check your connection and try again.';
+
+  @override
+  String routeBuilderSaveFailed(String error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get routeBuilderSearchHint => 'Search places…';
+
+  @override
+  String get routeBuilderMore => 'More';
+
+  @override
+  String get routeBuilderGenerateLoop => 'Generate loop';
+
+  @override
+  String get routeBuilderUndo => 'Undo';
+
+  @override
+  String get routeBuilderClear => 'Clear';
+
+  @override
+  String get routeBuilderSaving => 'Saving…';
+
+  @override
+  String get routeBuilderSave => 'Save';
+
+  @override
+  String get routeBuilderLocateMe => 'Locate me';
+
+  @override
+  String routeBuilderTapToMovePoint(int number) {
+    return 'Tap to move point $number, or use the icons';
+  }
+
+  @override
+  String routeBuilderEmptyHint(String mode) {
+    return 'Tap the map to place waypoints · $mode';
+  }
+
+  @override
+  String routeBuilderOnePointHint(String mode) {
+    return 'Place another to draw the line · $mode';
+  }
+
+  @override
+  String routeBuilderStatusGain(String distance, int gain, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points',
+      one: '$count point',
+    );
+    return '$distance · $gain m ↑ · $_temp0';
+  }
+
+  @override
+  String routeBuilderStatusNoGain(String distance, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count points',
+      one: '$count point',
+    );
+    return '$distance · $_temp0';
+  }
+
+  @override
+  String routeBuilderDeletePoint(int number) {
+    return 'Delete point $number';
+  }
+
+  @override
+  String get routeBuilderCancelDrag => 'Cancel drag';
+
+  @override
+  String get routeBuilderModeTrail => 'Trail';
+
+  @override
+  String get routeBuilderModeRoad => 'Road';
+
+  @override
+  String get routeBuilderModeStraight => 'Straight';
+
+  @override
+  String get routeBuilderLoopDialogBody =>
+      'Target distance — we\'ll build a radial loop around the current map centre.';
+
+  @override
+  String get routeBuilderCancel => 'Cancel';
+
+  @override
+  String get routeBuilderGenerate => 'Generate';
+
+  @override
+  String get routeBuilderSaveDialogTitle => 'Save route';
+
+  @override
+  String get routeBuilderNameLabel => 'Name';
+
+  @override
+  String get routeBuilderNameHint => 'e.g. River loop';
+
+  @override
+  String get routeBuilderDescriptionLabel => 'Description (optional)';
+
+  @override
+  String get routeBuilderDescriptionHint =>
+      'Surface, hills, parking, anything worth noting';
+
+  @override
+  String get routeBuilderSaveToLabel => 'Save to';
+
+  @override
+  String get routeBuilderSaveToPersonal => 'Personal';
+
+  @override
+  String get routeBuilderMakePublic => 'Make public';
+
+  @override
+  String get routeBuilderMakePublicSubtitle => 'Others can find it on Explore';
+
+  @override
+  String get routeDetailStartRun => 'Start run';
+
+  @override
+  String get routeDetailShare => 'Share';
+
+  @override
+  String get routeDetailShareAsImage => 'Share as image';
+
+  @override
+  String get routeDetailShareAsGpx => 'Share as GPX';
+
+  @override
+  String get routeDetailShareAsKml => 'Share as KML';
+
+  @override
+  String get routeDetailRemoveOfflineSave => 'Remove offline save';
+
+  @override
+  String get routeDetailSaveForOffline => 'Save for offline use';
+
+  @override
+  String get routeDetailUnstarRoute => 'Unstar route';
+
+  @override
+  String get routeDetailStarForWatch => 'Star to show on watch';
+
+  @override
+  String get routeDetailMakePrivate => 'Make private';
+
+  @override
+  String get routeDetailMakePublic => 'Make public';
+
+  @override
+  String get routeDetailRemoveBookmark => 'Remove bookmark';
+
+  @override
+  String get routeDetailBookmarkRoute => 'Bookmark route';
+
+  @override
+  String get routeDetailReportRoute => 'Report route';
+
+  @override
+  String get routeDetailTransferToClub => 'Transfer to club';
+
+  @override
+  String get routeDetailManageClub => 'Detach or move to another club';
+
+  @override
+  String get routeDetailDeleteRoute => 'Delete route';
+
+  @override
+  String get routeDetailStatDistance => 'Distance';
+
+  @override
+  String get routeDetailStatElevation => 'Elevation';
+
+  @override
+  String routeDetailStatReviews(int count) {
+    return '$count reviews';
+  }
+
+  @override
+  String get routeDetailStatWaypoints => 'Waypoints';
+
+  @override
+  String get routeDetailPublicRoute => 'Public route';
+
+  @override
+  String get routeDetailPrivateRoute => 'Private route';
+
+  @override
+  String get routeDetailPublicSubtitle =>
+      'Anyone with the share link can view this route';
+
+  @override
+  String get routeDetailPrivateSubtitle => 'Only you can see this route';
+
+  @override
+  String get routeDetailSavedForOffline => 'Saved for offline';
+
+  @override
+  String get routeDetailSaveForOfflineTitle => 'Save for offline';
+
+  @override
+  String get routeDetailOfflinePinnedSubtitle =>
+      'Route stays on this phone so you can run it without a connection.';
+
+  @override
+  String get routeDetailOfflineUnpinnedSubtitle =>
+      'Keep this route on your phone for use without a network.';
+
+  @override
+  String get routeDetailDescriptionHeading => 'Description';
+
+  @override
+  String routeDetailRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count runs',
+      one: '$count run',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get routeDetailFeatured => 'Featured';
+
+  @override
+  String get routeDetailSurfaceTrail => 'TRAIL';
+
+  @override
+  String get routeDetailSurfaceMixed => 'MIXED';
+
+  @override
+  String get routeDetailSurfaceRoad => 'ROAD';
+
+  @override
+  String get routeDetailAddTagHint => 'add tag';
+
+  @override
+  String get routeDetailReviewsHeading => 'Reviews';
+
+  @override
+  String get routeDetailRate => 'Rate';
+
+  @override
+  String get routeDetailReviewsOffline => 'Reviews unavailable offline';
+
+  @override
+  String get routeDetailNoReviews => 'No reviews yet';
+
+  @override
+  String get routeDetailRateDialogTitle => 'Rate this route';
+
+  @override
+  String get routeDetailCommentLabel => 'Comment (optional)';
+
+  @override
+  String get routeDetailCancel => 'Cancel';
+
+  @override
+  String get routeDetailSubmit => 'Submit';
+
+  @override
+  String get routeDetailSignInToReview => 'Sign in to leave a review';
+
+  @override
+  String routeDetailReviewFailed(String error) {
+    return 'Failed to submit review: $error';
+  }
+
+  @override
+  String routeDetailBookmarkFailed(String error) {
+    return 'Bookmark failed: $error';
+  }
+
+  @override
+  String get routeDetailPublicWillSync =>
+      'Route set to public. Will sync next time.';
+
+  @override
+  String get routeDetailPrivateWillSync =>
+      'Route set to private. Will sync next time.';
+
+  @override
+  String routeDetailVisibilityFailed(String error) {
+    return 'Could not update visibility: $error';
+  }
+
+  @override
+  String routeDetailStarFailed(String error) {
+    return 'Could not update star: $error';
+  }
+
+  @override
+  String get routeDetailOfflineSaved => 'Saved for offline use.';
+
+  @override
+  String get routeDetailOfflineRemoved => 'Removed from offline saves.';
+
+  @override
+  String routeDetailTagSaveFailed(String error) {
+    return 'Could not save tag: $error';
+  }
+
+  @override
+  String routeDetailShareFailed(String format, String error) {
+    return 'Could not share $format: $error';
+  }
+
+  @override
+  String get routeDetailClubsLoadTimeout =>
+      'Couldn\'t load your clubs — check your network.';
+
+  @override
+  String get routeDetailClubsLoadFailed => 'Couldn\'t load your clubs.';
+
+  @override
+  String get routeDetailDetached =>
+      'Detached from club; route is now personal.';
+
+  @override
+  String get routeDetailMovedToClub => 'Route moved into the club library.';
+
+  @override
+  String routeDetailTransferFailed(String error) {
+    return 'Transfer failed: $error';
+  }
+
+  @override
+  String get routeDetailDeleteTitle => 'Delete route?';
+
+  @override
+  String get routeDetailDeleteBody => 'This cannot be undone.';
+
+  @override
+  String get routeDetailDelete => 'Delete';
+
+  @override
+  String routeDetailDeleteFailed(String error) {
+    return 'Delete failed: $error';
+  }
+
+  @override
+  String get routeDetailPreview => 'Preview';
+
+  @override
+  String get routeDetailPreviewStart => 'Start';
+
+  @override
+  String get routeDetailPreviewFinish => 'Finish';
+
+  @override
+  String get routeDetailTransferDialogTitle => 'Transfer to club';
+
+  @override
+  String get routeDetailManageClubTitle => 'Manage club ownership';
+
+  @override
+  String get routeDetailTransferDialogBody =>
+      'Members of the club will see this route in the club library and can adopt it onto their plans.';
+
+  @override
+  String get routeDetailManageClubBody =>
+      'Move this route into another club you admin, or detach it back to personal.';
+
+  @override
+  String get routeDetailDetachToPersonal => 'Detach to personal';
+
+  @override
+  String get routeDetailDetachSubtitle =>
+      'Removes the route from the current club\'s library.';
+
+  @override
+  String get routeDetailNoAdminClubs =>
+      'You don\'t own or admin any clubs yet.';
+
+  @override
+  String get routeDetailCurrentClub => 'Current club';
+
+  @override
+  String routeDetailClubMemberCount(String location, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count members',
+      one: '$count member',
+    );
+    return '$location · $_temp0';
+  }
+
+  @override
+  String get exploreRoutesTitle => 'Explore Routes';
+
+  @override
+  String get exploreRoutesModeSearch => 'Search';
+
+  @override
+  String get exploreRoutesModeNearMe => 'Near Me';
+
+  @override
+  String get exploreRoutesSearchHint => 'Search routes by name...';
+
+  @override
+  String get exploreRoutesFeatured => 'Featured';
+
+  @override
+  String get exploreRoutesSignInRequired =>
+      'Sign in and connect to the internet to explore routes';
+
+  @override
+  String get exploreRoutesTimeout =>
+      'Connection timed out. Check your network and try again.';
+
+  @override
+  String get exploreRoutesSearchFailed =>
+      'Search failed. Tap retry to try again.';
+
+  @override
+  String get exploreRoutesLoadMoreFailed =>
+      'Could not load more — check your connection';
+
+  @override
+  String get exploreRoutesLocationPermissionRequired =>
+      'Location permission required to find nearby routes';
+
+  @override
+  String get exploreRoutesNearbyFailed =>
+      'Could not find nearby routes. Tap retry to try again.';
+
+  @override
+  String get exploreRoutesEmptyNoPublic => 'No public routes yet';
+
+  @override
+  String get exploreRoutesEmptyNoMatch => 'No routes match your search';
+
+  @override
+  String get exploreRoutesEmptyBody =>
+      'Routes shared from the web app appear here';
+
+  @override
+  String get exploreRoutesDistanceAny => 'Any distance';
+
+  @override
+  String get exploreRoutesSurfaceAny => 'Any surface';
+
+  @override
+  String get exploreRoutesSurfaceRoad => 'Road';
+
+  @override
+  String get exploreRoutesSurfaceTrail => 'Trail';
+
+  @override
+  String get exploreRoutesSurfaceMixed => 'Mixed';
+
+  @override
+  String get exploreRoutesSortMostRun => 'Most run';
+
+  @override
+  String get exploreRoutesSortNewest => 'Newest';
+
+  @override
+  String get exploreRoutesSortFeatured => 'Featured';
+
+  @override
+  String get exploreRoutesSort => 'Sort';
+
+  @override
+  String exploreRoutesSaveCheckConnection(String name) {
+    return 'Couldn\'t save \"$name\" — check your connection and try again.';
+  }
+
+  @override
+  String exploreRoutesSaveFailed(String name) {
+    return 'Couldn\'t save \"$name\".';
+  }
+
+  @override
+  String exploreRoutesSaved(String name) {
+    return 'Saved \"$name\" to your library';
+  }
+
+  @override
+  String get exploreRoutesAlreadySaved => 'Already saved';
+
+  @override
+  String get exploreRoutesSaveToLibrary => 'Save to library';
+
+  @override
+  String get exploreRoutesSurfaceTrailShort => 'Trail';
+
+  @override
+  String get exploreRoutesSurfaceMixedShort => 'Mixed';
+
+  @override
+  String get exploreRoutesSurfaceRoadShort => 'Road';
+
+  @override
+  String get exploreRoutesDistanceUnderKm => 'Under 5 km';
+
+  @override
+  String get exploreRoutesDistanceMidKm => '5-10 km';
+
+  @override
+  String get exploreRoutesDistanceLongKm => '10-21 km';
+
+  @override
+  String get exploreRoutesDistanceUltraKm => '21 km+';
+
+  @override
+  String get exploreRoutesDistanceUnderMi => 'Under 3 mi';
+
+  @override
+  String get exploreRoutesDistanceMidMi => '3-6 mi';
+
+  @override
+  String get exploreRoutesDistanceLongMi => '6-13 mi';
+
+  @override
+  String get exploreRoutesDistanceUltraMi => '13 mi+';
+
+  @override
+  String get heatmapSearchHint => 'Search places…';
+
+  @override
+  String get heatmapFilters => 'Filters';
+
+  @override
+  String heatmapRoutesStartHere(int count) {
+    return '$count routes start here';
+  }
+
+  @override
+  String heatmapRouteCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count routes',
+      one: '$count route',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get heatmapNoRoutesHere => 'No routes here';
+
+  @override
+  String get heatmapNoRoutesHint =>
+      'No routes here. Pan the map or change the filters.';
+
+  @override
+  String heatmapClearKept(int count) {
+    return 'Clear $count kept';
+  }
+
+  @override
+  String get heatmapUnpinFromMap => 'Unpin from map';
+
+  @override
+  String get heatmapKeepOnMap => 'Keep on map';
+
+  @override
+  String get heatmapLocateMe => 'Locate me';
+
+  @override
+  String heatmapLocationUnavailable(String error) {
+    return 'Location unavailable: $error';
+  }
+
+  @override
+  String get heatmapBackToList => 'Back to list';
+
+  @override
+  String get heatmapViewRoute => 'View route';
+
+  @override
+  String get heatmapKept => 'Kept';
+
+  @override
+  String get heatmapKeep => 'Keep';
+
+  @override
+  String get heatmapLensShow => 'Show';
+
+  @override
+  String get heatmapLensDistance => 'Distance';
+
+  @override
+  String get heatmapLensMap => 'Map';
+
+  @override
+  String get heatmapHeatDensity => 'Heat density';
+
+  @override
+  String get heatmapResetFilters => 'Reset filters';
+
+  @override
+  String get heatmapLensPopular => 'Popular';
+
+  @override
+  String get heatmapLensFriends => 'Friends';
+
+  @override
+  String get heatmapLensFeatured => 'Featured';
+
+  @override
+  String get heatmapLensHiddenGems => 'Hidden gems';
+
+  @override
+  String get publicRouteFallbackTitle => 'Route';
+
+  @override
+  String get publicRouteLoadError => 'Could not load this route.';
+
+  @override
+  String get publicRouteUnavailable =>
+      'This route is private or no longer available.';
+
+  @override
+  String get publicRouteStatDistance => 'Distance';
+
+  @override
+  String get publicRouteStatElevation => 'Elevation';
+
+  @override
+  String get publicRouteStatWaypoints => 'Waypoints';
+
+  @override
+  String get routesLoadErrorRetry =>
+      'Couldn\'t load your routes. Check your connection and try again.';
 }

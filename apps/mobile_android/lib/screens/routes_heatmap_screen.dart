@@ -13,6 +13,7 @@ import 'package:latlong2/latlong.dart';
 import '../distance_bands.dart';
 import '../geocoding.dart';
 import '../heatmap_clustering.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart' show formatDistanceForPref;
 import '../tile_cache.dart';
 import '../widgets/live_run_map.dart' show currentTileUrl;
@@ -121,12 +122,27 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   /// Pixel radius for tap-on-pin hit testing.
   static const double _tapHitRadiusPx = 34.0;
 
-  static const List<(String, String)> _lenses = [
-    ('popular', 'Popular'),
-    ('friends', 'Friends'),
-    ('featured', 'Featured'),
-    ('hidden_gems', 'Hidden gems'),
+  static const List<String> _lenses = [
+    'popular',
+    'friends',
+    'featured',
+    'hidden_gems',
   ];
+
+  String _lensLabel(String key) {
+    final l10n = AppLocalizations.of(context);
+    switch (key) {
+      case 'friends':
+        return l10n.heatmapLensFriends;
+      case 'featured':
+        return l10n.heatmapLensFeatured;
+      case 'hidden_gems':
+        return l10n.heatmapLensHiddenGems;
+      case 'popular':
+      default:
+        return l10n.heatmapLensPopular;
+    }
+  }
 
   List<PlaceResult> _searchResults = const [];
   bool _searchOpen = false;
@@ -138,9 +154,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   int get _activeFilterCount =>
       (_filter != 'popular' ? 1 : 0) + _bands.length;
 
-  String get _filterLabel => _lenses
-      .firstWhere((l) => l.$1 == _filter, orElse: () => _lenses.first)
-      .$2;
+  String get _filterLabel => _lensLabel(_filter);
 
   @override
   void initState() {
@@ -256,7 +270,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
               child: Text(
-                '${routes.length} routes start here',
+                AppLocalizations.of(ctx).heatmapRoutesStartHere(routes.length),
                 style: Theme.of(ctx).textTheme.titleSmall,
               ),
             ),
@@ -374,17 +388,17 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const _FilterGroupLabel('Show'),
+                  _FilterGroupLabel(AppLocalizations.of(context).heatmapLensShow),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
                       for (final l in _lenses)
                         FilterChip(
-                          label: Text(l.$2),
-                          selected: _filter == l.$1,
+                          label: Text(_lensLabel(l)),
+                          selected: _filter == l,
                           onSelected: (_) {
-                            setState(() => _filter = l.$1);
+                            setState(() => _filter = l);
                             setSheet(() {});
                             _refresh();
                           },
@@ -392,7 +406,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const _FilterGroupLabel('Distance'),
+                  _FilterGroupLabel(
+                      AppLocalizations.of(context).heatmapLensDistance),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
@@ -412,13 +427,14 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  const _FilterGroupLabel('Map'),
+                  _FilterGroupLabel(AppLocalizations.of(context).heatmapLensMap),
                   Wrap(
                     spacing: 8,
                     runSpacing: 8,
                     children: [
                       FilterChip(
-                        label: const Text('Heat density'),
+                        label: Text(
+                            AppLocalizations.of(context).heatmapHeatDensity),
                         selected: _showHeat,
                         onSelected: (_) {
                           setState(() => _showHeat = !_showHeat);
@@ -441,7 +457,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                           setSheet(() {});
                           _refresh();
                         },
-                        child: const Text('Reset filters'),
+                        child: Text(
+                            AppLocalizations.of(context).heatmapResetFilters),
                       ),
                     ),
                 ],
@@ -470,7 +487,8 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
       _scheduleRefresh();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Location unavailable: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).heatmapLocationUnavailable('$e'));
     }
   }
 
@@ -577,15 +595,16 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           controller: _searchCtl,
           onChanged: _onSearchChanged,
-          decoration: const InputDecoration(
-            hintText: 'Search places…',
+          decoration: InputDecoration(
+            hintText: l10n.heatmapSearchHint,
             border: InputBorder.none,
-            prefixIcon: Icon(Icons.search, size: 20),
+            prefixIcon: const Icon(Icons.search, size: 20),
           ),
           style: theme.textTheme.bodyLarge,
         ),
@@ -606,7 +625,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
             label: Text('$_activeFilterCount'),
             child: IconButton(
               icon: const Icon(Icons.tune),
-              tooltip: 'Filters',
+              tooltip: l10n.heatmapFilters,
               onPressed: _openFilterSheet,
             ),
           ),
@@ -806,7 +825,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                       alignment: Alignment.centerRight,
                       child: FloatingActionButton.small(
                         heroTag: 'routes_heatmap_locate_fab',
-                        tooltip: 'Locate me',
+                        tooltip: l10n.heatmapLocateMe,
                         onPressed: _locate,
                         child: const Icon(Icons.my_location),
                       ),
@@ -830,9 +849,10 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   /// Bottom pill showing the in-view route count; tap to open the list.
   Widget _resultsPill() {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final count = _pins.length;
     final label =
-        count == 0 ? 'No routes here' : '$count ${count == 1 ? 'route' : 'routes'}';
+        count == 0 ? l10n.heatmapNoRoutesHere : l10n.heatmapRouteCount(count);
     return Material(
       elevation: 6,
       borderRadius: BorderRadius.circular(999),
@@ -892,6 +912,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
 
   Widget _resultsList(BuildContext sheetCtx, StateSetter setSheet) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return ListView(
       padding: EdgeInsets.zero,
       shrinkWrap: true,
@@ -901,7 +922,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           child: Row(
             children: [
               Text(
-                '${_pins.length} ${_pins.length == 1 ? 'route' : 'routes'}',
+                l10n.heatmapRouteCount(_pins.length),
                 style: theme.textTheme.titleSmall,
               ),
               const SizedBox(width: 8),
@@ -923,16 +944,16 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                     foregroundColor: const Color(0xFF8B5CF6),
                     visualDensity: VisualDensity.compact,
                   ),
-                  child: Text('Clear ${_pinnedIds.length} kept'),
+                  child: Text(l10n.heatmapClearKept(_pinnedIds.length)),
                 ),
             ],
           ),
         ),
         const Divider(height: 1),
         if (_pins.isEmpty)
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 24, 16, 24),
-            child: Text('No routes here. Pan the map or change the filters.'),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 24, 16, 24),
+            child: Text(l10n.heatmapNoRoutesHint),
           )
         else
           for (final p in _pins) _routeRow(sheetCtx, setSheet, p),
@@ -975,7 +996,9 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
           size: 20,
           color: _pinnedIds.contains(p.id) ? const Color(0xFF8B5CF6) : null,
         ),
-        tooltip: _pinnedIds.contains(p.id) ? 'Unpin from map' : 'Keep on map',
+        tooltip: _pinnedIds.contains(p.id)
+            ? AppLocalizations.of(context).heatmapUnpinFromMap
+            : AppLocalizations.of(context).heatmapKeepOnMap,
         onPressed: () async {
           await _togglePin(p);
           setSheet(() {});
@@ -993,6 +1016,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
   /// results pill.
   Widget _selectionCard(cm.DiscoverableRoutePin p) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final band = bandForDistance(p.distanceM);
     final meta = <String>[
       formatDistanceForPref(p.distanceM),
@@ -1024,7 +1048,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.close),
-                  tooltip: 'Back to list',
+                  tooltip: l10n.heatmapBackToList,
                   onPressed: _clearSelection,
                 ),
               ],
@@ -1062,7 +1086,7 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                         );
                       },
                       icon: const Icon(Icons.arrow_forward),
-                      label: const Text('View route'),
+                      label: Text(l10n.heatmapViewRoute),
                     ),
                   ),
                   const SizedBox(width: 8),
@@ -1074,7 +1098,9 @@ class _RoutesHeatmapScreenState extends State<RoutesHeatmapScreen> {
                           : Icons.push_pin_outlined,
                       size: 18,
                     ),
-                    label: Text(_pinnedIds.contains(p.id) ? 'Kept' : 'Keep'),
+                    label: Text(_pinnedIds.contains(p.id)
+                        ? l10n.heatmapKept
+                        : l10n.heatmapKeep),
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF8B5CF6),
                       side: const BorderSide(color: Color(0xFF8B5CF6)),

@@ -16,6 +16,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/routes_heatmap_screen.dart';
 
 class _FakeApiClient extends ApiClient {
@@ -99,6 +100,8 @@ Future<void> _pump(
 }) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: RoutesHeatmapScreen(
         api: api,
         geocodingFetcher: geocodingFetcher,

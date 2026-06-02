@@ -14,6 +14,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     show PostgrestException, Supabase;
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_route_store.dart';
 import '../lib/route_overlap.dart';
 import '../lib/screens/route_builder_screen.dart';
@@ -144,6 +145,8 @@ void main() {
   Future<void> _pumpScreen(WidgetTester tester, LocalRouteStore store) async {
     await tester.pumpWidget(
       MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: SizedBox(
           width: 400,
           height: 800,
@@ -420,14 +423,12 @@ void main() {
       final source =
           File('lib/screens/route_builder_screen.dart').readAsStringSync();
       expect(
-        source.contains(
-            r"'Tap the map to place waypoints · ${_modeLabel(mode)}'"),
+        source.contains('routeBuilderEmptyHint(_modeLabel(l10n, mode))'),
         isTrue,
         reason: 'Empty-state hint must surface the mode label.',
       );
       expect(
-        source.contains(
-            r"'Place another to draw the line · ${_modeLabel(mode)}'"),
+        source.contains('routeBuilderOnePointHint(_modeLabel(l10n, mode))'),
         isTrue,
         reason: 'Single-waypoint hint must surface the mode label.',
       );
@@ -463,7 +464,7 @@ void main() {
       // Tooltip carries the 1-based waypoint number so screen-reader
       // users + tooltip hovers get the affordance unambiguously.
       expect(
-        source.contains(r"tooltip: 'Delete point ${dragIndex! + 1}'"),
+        source.contains('routeBuilderDeletePoint(dragIndex! + 1)'),
         isTrue,
         reason:
             'Delete-button tooltip must include the 1-based waypoint '
@@ -541,6 +542,8 @@ void main() {
       late Future<SaveDialogResult?> resultFuture;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: MediaQuery(
             data: MediaQueryData(size: viewport),
             child: Builder(

@@ -1663,5 +1663,1157 @@
   "publicRunSectionSegments": "Segments",
   "@publicRunSectionSegments": {
     "description": "Section header for the segments panel on the public run view"
+  },
+  "routesSyncFailedOffline": "Could not sync routes — working offline",
+  "@routesSyncFailedOffline": {
+    "description": "Banner shown when the initial route sync fails and the app falls back to the cached list"
+  },
+  "routesLoadMoreFailed": "Could not load more routes",
+  "@routesLoadMoreFailed": {
+    "description": "Banner shown when loading the next page of routes fails"
+  },
+  "routesStarUpdateFailed": "Could not update star: {error}",
+  "@routesStarUpdateFailed": {
+    "description": "Banner shown when toggling a route's star fails to persist to the cloud",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routesImportFailedLocalOnly": "Import failed: pick the file from local storage, not a cloud-only document picker.",
+  "@routesImportFailedLocalOnly": {
+    "description": "Banner shown when an imported route file resolves to an unreadable cloud-only content URI"
+  },
+  "routesImported": "Imported \"{name}\"",
+  "@routesImported": {
+    "description": "Banner shown after a route file is successfully imported",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routesImportFailed": "Import failed: {error}",
+  "@routesImportFailed": {
+    "description": "Banner shown when importing a route file fails for any other reason",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routesSaved": "Saved \"{name}\"",
+  "@routesSaved": {
+    "description": "Banner shown after a route built in the in-app builder is saved",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "routesEmptyTitle": "No routes yet",
+  "@routesEmptyTitle": {
+    "description": "Empty-state title shown when the route library is empty"
+  },
+  "routesEmptyBody": "Tap Build to draw a route on the map, or Import a GPX, KML, or TCX file.",
+  "@routesEmptyBody": {
+    "description": "Empty-state body shown when the route library is empty"
+  },
+  "routesBuild": "Build",
+  "@routesBuild": {
+    "description": "Label on the build-route FAB and the empty-state legend reminder"
+  },
+  "routesImport": "Import",
+  "@routesImport": {
+    "description": "Label on the import-route FAB and the empty-state legend reminder"
+  },
+  "routesNoMatch": "No routes match these filters",
+  "@routesNoMatch": {
+    "description": "Empty-state shown when the active filters exclude every route"
+  },
+  "routesClearFilters": "Clear filters",
+  "@routesClearFilters": {
+    "description": "Button to reset all route filters when none match"
+  },
+  "routesLoadMore": "Load {count} more",
+  "@routesLoadMore": {
+    "description": "Button that reveals the next page of routes",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesQueuedToSync": "Queued to sync",
+  "@routesQueuedToSync": {
+    "description": "Tooltip on the per-row will-sync icon for locally-built routes"
+  },
+  "routesSavedForOffline": "Saved for offline",
+  "@routesSavedForOffline": {
+    "description": "Tooltip on the per-row offline-pin icon in the routes list"
+  },
+  "routesUnstarRoute": "Unstar route",
+  "@routesUnstarRoute": {
+    "description": "Tooltip on the per-row star button when the route is starred"
+  },
+  "routesStarForWatch": "Star to show on watch",
+  "@routesStarForWatch": {
+    "description": "Tooltip on the per-row star button when the route is not starred"
+  },
+  "routesDiscover": "Discover",
+  "@routesDiscover": {
+    "description": "Section header for the Explore / Heatmap discovery strip in the embedded routes view"
+  },
+  "routesSyncFromCloud": "Sync from cloud",
+  "@routesSyncFromCloud": {
+    "description": "Tooltip on the cloud-download sync button in the routes list"
+  },
+  "routesPublicRoutes": "Public routes",
+  "@routesPublicRoutes": {
+    "description": "Label on the button that opens the Explore public-routes screen from the embedded routes view"
+  },
+  "routesHeatmap": "Heatmap",
+  "@routesHeatmap": {
+    "description": "Label on the button that opens the routes heatmap screen"
+  },
+  "routesExplorePublic": "Explore public routes",
+  "@routesExplorePublic": {
+    "description": "Tooltip on the standalone-AppBar Explore action in the routes list"
+  },
+  "routesHeatmapTooltip": "Routes heatmap",
+  "@routesHeatmapTooltip": {
+    "description": "Tooltip on the standalone-AppBar heatmap action in the routes list"
+  },
+  "routesSearchHint": "Search routes by name…",
+  "@routesSearchHint": {
+    "description": "Placeholder in the routes-list search field"
+  },
+  "routesClearSearch": "Clear search",
+  "@routesClearSearch": {
+    "description": "Tooltip on the clear-search button in the routes-list search field"
+  },
+  "routesStarred": "Starred",
+  "@routesStarred": {
+    "description": "Filter-chip label for the starred-only route filter"
+  },
+  "routesCountMeta": "{total, plural, one{{visible} of {total} route} other{{visible} of {total} routes}}",
+  "@routesCountMeta": {
+    "description": "Meta row showing how many routes are visible out of the total",
+    "placeholders": {
+      "visible": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
+  },
+  "routesSurfaceAny": "Any surface",
+  "@routesSurfaceAny": {
+    "description": "Surface-filter dropdown option that clears the surface filter"
+  },
+  "routesSurfaceRoad": "Road",
+  "@routesSurfaceRoad": {
+    "description": "Surface-filter dropdown option for road routes"
+  },
+  "routesSurfaceTrail": "Trail",
+  "@routesSurfaceTrail": {
+    "description": "Surface-filter dropdown option for trail routes"
+  },
+  "routesSurfaceMixed": "Mixed",
+  "@routesSurfaceMixed": {
+    "description": "Surface-filter dropdown option for mixed-surface routes"
+  },
+  "routesDistanceAny": "Any distance",
+  "@routesDistanceAny": {
+    "description": "Distance-filter dropdown option that clears the distance filter"
+  },
+  "routesSortNewest": "Newest first",
+  "@routesSortNewest": {
+    "description": "Sort dropdown option: newest routes first"
+  },
+  "routesSortLongest": "Longest",
+  "@routesSortLongest": {
+    "description": "Sort dropdown option: longest distance first"
+  },
+  "routesSortShortest": "Shortest",
+  "@routesSortShortest": {
+    "description": "Sort dropdown option: shortest distance first"
+  },
+  "routesSortMostRun": "Most-run",
+  "@routesSortMostRun": {
+    "description": "Sort dropdown option: most-run routes first"
+  },
+  "routesSortAlpha": "A–Z",
+  "@routesSortAlpha": {
+    "description": "Sort dropdown option: alphabetical by name"
+  },
+  "routesDeleteConfirmTitle": "{count, plural, one{Delete {count} route?} other{Delete {count} routes?}}",
+  "@routesDeleteConfirmTitle": {
+    "description": "Title of the bulk-delete confirmation dialog in the routes list",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesDeleteConfirmBody": "This cannot be undone.",
+  "@routesDeleteConfirmBody": {
+    "description": "Body of the bulk-delete confirmation dialog in the routes list"
+  },
+  "routesSelectionTitle": "{count} selected",
+  "@routesSelectionTitle": {
+    "description": "Title in the routes-list selection banner showing how many are selected",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routesDeletePartial": "{deleted} deleted; {failed} failed — check your connection.",
+  "@routesDeletePartial": {
+    "description": "Banner shown when some routes deleted but others failed",
+    "placeholders": {
+      "deleted": {
+        "type": "int"
+      },
+      "failed": {
+        "type": "int"
+      }
+    }
+  },
+  "routesDeleteDone": "{count, plural, one{{count} route deleted.} other{{count} routes deleted.}}",
+  "@routesDeleteDone": {
+    "description": "Banner shown after a successful bulk delete of routes",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderRouteCleared": "Route cleared",
+  "@routeBuilderRouteCleared": {
+    "description": "Screen-reader announcement when the builder's route is cleared"
+  },
+  "routeBuilderPointsSummary": "{count, plural, one{{count} point, {distance}} other{{count} points, {distance}}}",
+  "@routeBuilderPointsSummary": {
+    "description": "Screen-reader announcement summarising the current route after a mutation",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderRouteFailedStraightLines": "Couldn't route — showing straight lines through your pins.",
+  "@routeBuilderRouteFailedStraightLines": {
+    "description": "Banner shown when every routing segment fell back to a straight line"
+  },
+  "routeBuilderSegmentsFailed": "{count, plural, one{{count} segment couldn't snap to a road. Drag the affected pin to adjust.} other{{count} segments couldn't snap to a road. Drag the affected pins to adjust.}}",
+  "@routeBuilderSegmentsFailed": {
+    "description": "Banner shown when some routing segments couldn't snap to a road",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderRoutingFailed": "Routing failed: {error}",
+  "@routeBuilderRoutingFailed": {
+    "description": "Banner shown when a routing pass throws",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderTooCloseToPin": "Too close to another pin — drag a bit further.",
+  "@routeBuilderTooCloseToPin": {
+    "description": "Banner shown when a dragged waypoint lands too close to another"
+  },
+  "routeBuilderPinAlreadyThere": "Pin already there — tap further apart to add another.",
+  "@routeBuilderPinAlreadyThere": {
+    "description": "Banner shown when a tapped waypoint would duplicate an existing one"
+  },
+  "routeBuilderTargetTooLong": "Enter a target distance up to 1000 km.",
+  "@routeBuilderTargetTooLong": {
+    "description": "Banner shown when the generate-loop target distance is out of range"
+  },
+  "routeBuilderSaveNeedTwo": "Place at least two waypoints first.",
+  "@routeBuilderSaveNeedTwo": {
+    "description": "Banner shown when saving with fewer than two waypoints"
+  },
+  "routeBuilderSavedLocally": "Saved locally. {detail} Will sync next time.",
+  "@routeBuilderSavedLocally": {
+    "description": "Banner shown when a built route saved locally but the cloud push failed",
+    "placeholders": {
+      "detail": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderLocationUnavailable": "Location unavailable: {error}",
+  "@routeBuilderLocationUnavailable": {
+    "description": "Banner shown when the Locate-me FAB can't get a position",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderServerUnreachable": "Can't reach the server. Sign in or check your connection and try again.",
+  "@routeBuilderServerUnreachable": {
+    "description": "Friendly save-route error message when Supabase couldn't be reached"
+  },
+  "routeBuilderSaveFailed": "Save failed: {error}",
+  "@routeBuilderSaveFailed": {
+    "description": "Generic save-route error message",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderSearchHint": "Search places…",
+  "@routeBuilderSearchHint": {
+    "description": "Placeholder in the route builder's place-search field"
+  },
+  "routeBuilderMore": "More",
+  "@routeBuilderMore": {
+    "description": "Tooltip on the route builder's overflow menu while searching"
+  },
+  "routeBuilderGenerateLoop": "Generate loop",
+  "@routeBuilderGenerateLoop": {
+    "description": "Generate-loop action label (AppBar tooltip, menu item, and dialog title)"
+  },
+  "routeBuilderUndo": "Undo",
+  "@routeBuilderUndo": {
+    "description": "Undo action label in the route builder"
+  },
+  "routeBuilderClear": "Clear",
+  "@routeBuilderClear": {
+    "description": "Clear action label in the route builder"
+  },
+  "routeBuilderSaving": "Saving…",
+  "@routeBuilderSaving": {
+    "description": "Save button label while a save is in progress"
+  },
+  "routeBuilderSave": "Save",
+  "@routeBuilderSave": {
+    "description": "Save button label in the route builder"
+  },
+  "routeBuilderLocateMe": "Locate me",
+  "@routeBuilderLocateMe": {
+    "description": "Tooltip on the route builder's Locate-me FAB"
+  },
+  "routeBuilderTapToMovePoint": "Tap to move point {number}, or use the icons",
+  "@routeBuilderTapToMovePoint": {
+    "description": "Status pill text while a waypoint is lifted for dragging",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderEmptyHint": "Tap the map to place waypoints · {mode}",
+  "@routeBuilderEmptyHint": {
+    "description": "Status pill text when no waypoints are placed yet, showing the active mode",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderOnePointHint": "Place another to draw the line · {mode}",
+  "@routeBuilderOnePointHint": {
+    "description": "Status pill text when exactly one waypoint is placed, showing the active mode",
+    "placeholders": {
+      "mode": {
+        "type": "String"
+      }
+    }
+  },
+  "routeBuilderStatusGain": "{distance} · {gain} m ↑ · {count, plural, one{{count} point} other{{count} points}}",
+  "@routeBuilderStatusGain": {
+    "description": "Status pill text with distance, elevation gain, and waypoint count",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "gain": {
+        "type": "int"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderStatusNoGain": "{distance} · {count, plural, one{{count} point} other{{count} points}}",
+  "@routeBuilderStatusNoGain": {
+    "description": "Status pill text with distance and waypoint count when elevation gain is unknown",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderDeletePoint": "Delete point {number}",
+  "@routeBuilderDeletePoint": {
+    "description": "Tooltip on the delete-dragged-waypoint button in the status pill",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "routeBuilderCancelDrag": "Cancel drag",
+  "@routeBuilderCancelDrag": {
+    "description": "Tooltip on the cancel-drag button in the status pill"
+  },
+  "routeBuilderModeTrail": "Trail",
+  "@routeBuilderModeTrail": {
+    "description": "Mode-toggle label for the trail (foot) routing profile"
+  },
+  "routeBuilderModeRoad": "Road",
+  "@routeBuilderModeRoad": {
+    "description": "Mode-toggle label for the road (car) routing profile"
+  },
+  "routeBuilderModeStraight": "Straight",
+  "@routeBuilderModeStraight": {
+    "description": "Mode-toggle label for the straight-line (no routing) profile"
+  },
+  "routeBuilderLoopDialogBody": "Target distance — we'll build a radial loop around the current map centre.",
+  "@routeBuilderLoopDialogBody": {
+    "description": "Body text of the generate-loop dialog"
+  },
+  "routeBuilderCancel": "Cancel",
+  "@routeBuilderCancel": {
+    "description": "Cancel action in route builder dialogs"
+  },
+  "routeBuilderGenerate": "Generate",
+  "@routeBuilderGenerate": {
+    "description": "Confirm action in the generate-loop dialog"
+  },
+  "routeBuilderSaveDialogTitle": "Save route",
+  "@routeBuilderSaveDialogTitle": {
+    "description": "Title of the save-route dialog"
+  },
+  "routeBuilderNameLabel": "Name",
+  "@routeBuilderNameLabel": {
+    "description": "Label for the name field in the save-route dialog"
+  },
+  "routeBuilderNameHint": "e.g. River loop",
+  "@routeBuilderNameHint": {
+    "description": "Hint for the name field in the save-route dialog"
+  },
+  "routeBuilderDescriptionLabel": "Description (optional)",
+  "@routeBuilderDescriptionLabel": {
+    "description": "Label for the description field in the save-route dialog"
+  },
+  "routeBuilderDescriptionHint": "Surface, hills, parking, anything worth noting",
+  "@routeBuilderDescriptionHint": {
+    "description": "Hint for the description field in the save-route dialog"
+  },
+  "routeBuilderSaveToLabel": "Save to",
+  "@routeBuilderSaveToLabel": {
+    "description": "Label for the club picker in the save-route dialog"
+  },
+  "routeBuilderSaveToPersonal": "Personal",
+  "@routeBuilderSaveToPersonal": {
+    "description": "Default option in the save-route club picker"
+  },
+  "routeBuilderMakePublic": "Make public",
+  "@routeBuilderMakePublic": {
+    "description": "Title of the make-public toggle in the save-route dialog"
+  },
+  "routeBuilderMakePublicSubtitle": "Others can find it on Explore",
+  "@routeBuilderMakePublicSubtitle": {
+    "description": "Subtitle of the make-public toggle in the save-route dialog"
+  },
+  "routeDetailStartRun": "Start run",
+  "@routeDetailStartRun": {
+    "description": "Label on the route-detail Start-run FAB"
+  },
+  "routeDetailShare": "Share",
+  "@routeDetailShare": {
+    "description": "Tooltip on the route-detail share menu"
+  },
+  "routeDetailShareAsImage": "Share as image",
+  "@routeDetailShareAsImage": {
+    "description": "Share-menu option to share the route as an image"
+  },
+  "routeDetailShareAsGpx": "Share as GPX",
+  "@routeDetailShareAsGpx": {
+    "description": "Share-menu option to share the route as a GPX file"
+  },
+  "routeDetailShareAsKml": "Share as KML",
+  "@routeDetailShareAsKml": {
+    "description": "Share-menu option to share the route as a KML file"
+  },
+  "routeDetailRemoveOfflineSave": "Remove offline save",
+  "@routeDetailRemoveOfflineSave": {
+    "description": "Tooltip on the offline-pin button when the route is pinned"
+  },
+  "routeDetailSaveForOffline": "Save for offline use",
+  "@routeDetailSaveForOffline": {
+    "description": "Tooltip on the offline-pin button when the route is not pinned"
+  },
+  "routeDetailUnstarRoute": "Unstar route",
+  "@routeDetailUnstarRoute": {
+    "description": "Tooltip on the route-detail star button when starred"
+  },
+  "routeDetailStarForWatch": "Star to show on watch",
+  "@routeDetailStarForWatch": {
+    "description": "Tooltip on the route-detail star button when not starred"
+  },
+  "routeDetailMakePrivate": "Make private",
+  "@routeDetailMakePrivate": {
+    "description": "Tooltip on the route-detail visibility toggle when public"
+  },
+  "routeDetailMakePublic": "Make public",
+  "@routeDetailMakePublic": {
+    "description": "Tooltip on the route-detail visibility toggle when private"
+  },
+  "routeDetailRemoveBookmark": "Remove bookmark",
+  "@routeDetailRemoveBookmark": {
+    "description": "Tooltip on the route-detail bookmark button when bookmarked"
+  },
+  "routeDetailBookmarkRoute": "Bookmark route",
+  "@routeDetailBookmarkRoute": {
+    "description": "Tooltip on the route-detail bookmark button when not bookmarked"
+  },
+  "routeDetailReportRoute": "Report route",
+  "@routeDetailReportRoute": {
+    "description": "Tooltip on the route-detail report button"
+  },
+  "routeDetailTransferToClub": "Transfer to club",
+  "@routeDetailTransferToClub": {
+    "description": "Tooltip on the route-detail transfer button when the route is personal"
+  },
+  "routeDetailManageClub": "Detach or move to another club",
+  "@routeDetailManageClub": {
+    "description": "Tooltip on the route-detail transfer button when the route belongs to a club"
+  },
+  "routeDetailDeleteRoute": "Delete route",
+  "@routeDetailDeleteRoute": {
+    "description": "Tooltip on the route-detail delete button"
+  },
+  "routeDetailStatDistance": "Distance",
+  "@routeDetailStatDistance": {
+    "description": "Stat label for distance on the route-detail screen"
+  },
+  "routeDetailStatElevation": "Elevation",
+  "@routeDetailStatElevation": {
+    "description": "Stat label for elevation on the route-detail screen"
+  },
+  "routeDetailStatReviews": "{count} reviews",
+  "@routeDetailStatReviews": {
+    "description": "Stat label for the review count on the route-detail screen",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeDetailStatWaypoints": "Waypoints",
+  "@routeDetailStatWaypoints": {
+    "description": "Stat label for the waypoint count on the route-detail screen"
+  },
+  "routeDetailPublicRoute": "Public route",
+  "@routeDetailPublicRoute": {
+    "description": "Title of the inline visibility row when the route is public"
+  },
+  "routeDetailPrivateRoute": "Private route",
+  "@routeDetailPrivateRoute": {
+    "description": "Title of the inline visibility row when the route is private"
+  },
+  "routeDetailPublicSubtitle": "Anyone with the share link can view this route",
+  "@routeDetailPublicSubtitle": {
+    "description": "Subtitle of the inline visibility row when the route is public"
+  },
+  "routeDetailPrivateSubtitle": "Only you can see this route",
+  "@routeDetailPrivateSubtitle": {
+    "description": "Subtitle of the inline visibility row when the route is private"
+  },
+  "routeDetailSavedForOffline": "Saved for offline",
+  "@routeDetailSavedForOffline": {
+    "description": "Title of the inline offline-save row when the route is pinned"
+  },
+  "routeDetailSaveForOfflineTitle": "Save for offline",
+  "@routeDetailSaveForOfflineTitle": {
+    "description": "Title of the inline offline-save row when the route is not pinned"
+  },
+  "routeDetailOfflinePinnedSubtitle": "Route stays on this phone so you can run it without a connection.",
+  "@routeDetailOfflinePinnedSubtitle": {
+    "description": "Subtitle of the inline offline-save row when the route is pinned"
+  },
+  "routeDetailOfflineUnpinnedSubtitle": "Keep this route on your phone for use without a network.",
+  "@routeDetailOfflineUnpinnedSubtitle": {
+    "description": "Subtitle of the inline offline-save row when the route is not pinned"
+  },
+  "routeDetailDescriptionHeading": "Description",
+  "@routeDetailDescriptionHeading": {
+    "description": "Section heading for the route description"
+  },
+  "routeDetailRunCount": "{count, plural, one{{count} run} other{{count} runs}}",
+  "@routeDetailRunCount": {
+    "description": "Meta chip showing how many runs used this route",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "routeDetailFeatured": "Featured",
+  "@routeDetailFeatured": {
+    "description": "Meta chip shown for featured routes"
+  },
+  "routeDetailSurfaceTrail": "TRAIL",
+  "@routeDetailSurfaceTrail": {
+    "description": "Uppercase surface label for trail routes in the meta chip"
+  },
+  "routeDetailSurfaceMixed": "MIXED",
+  "@routeDetailSurfaceMixed": {
+    "description": "Uppercase surface label for mixed-surface routes in the meta chip"
+  },
+  "routeDetailSurfaceRoad": "ROAD",
+  "@routeDetailSurfaceRoad": {
+    "description": "Uppercase surface label for road routes in the meta chip"
+  },
+  "routeDetailAddTagHint": "add tag",
+  "@routeDetailAddTagHint": {
+    "description": "Hint for the owner-only add-tag field on route detail"
+  },
+  "routeDetailReviewsHeading": "Reviews",
+  "@routeDetailReviewsHeading": {
+    "description": "Section heading for the reviews list on route detail"
+  },
+  "routeDetailRate": "Rate",
+  "@routeDetailRate": {
+    "description": "Label on the button that opens the rate-route dialog"
+  },
+  "routeDetailReviewsOffline": "Reviews unavailable offline",
+  "@routeDetailReviewsOffline": {
+    "description": "Empty-state shown when reviews can't be loaded offline"
+  },
+  "routeDetailNoReviews": "No reviews yet",
+  "@routeDetailNoReviews": {
+    "description": "Empty-state shown when a route has no reviews"
+  },
+  "routeDetailRateDialogTitle": "Rate this route",
+  "@routeDetailRateDialogTitle": {
+    "description": "Title of the rate-route dialog"
+  },
+  "routeDetailCommentLabel": "Comment (optional)",
+  "@routeDetailCommentLabel": {
+    "description": "Label for the comment field in the rate-route dialog"
+  },
+  "routeDetailCancel": "Cancel",
+  "@routeDetailCancel": {
+    "description": "Cancel action in route-detail dialogs"
+  },
+  "routeDetailSubmit": "Submit",
+  "@routeDetailSubmit": {
+    "description": "Submit action in the rate-route dialog"
+  },
+  "routeDetailSignInToReview": "Sign in to leave a review",
+  "@routeDetailSignInToReview": {
+    "description": "Banner shown when a signed-out user tries to review a route"
+  },
+  "routeDetailReviewFailed": "Failed to submit review: {error}",
+  "@routeDetailReviewFailed": {
+    "description": "Banner shown when submitting a review fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailBookmarkFailed": "Bookmark failed: {error}",
+  "@routeDetailBookmarkFailed": {
+    "description": "Banner shown when toggling a bookmark fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailPublicWillSync": "Route set to public. Will sync next time.",
+  "@routeDetailPublicWillSync": {
+    "description": "Banner shown when a route is made public while offline"
+  },
+  "routeDetailPrivateWillSync": "Route set to private. Will sync next time.",
+  "@routeDetailPrivateWillSync": {
+    "description": "Banner shown when a route is made private while offline"
+  },
+  "routeDetailVisibilityFailed": "Could not update visibility: {error}",
+  "@routeDetailVisibilityFailed": {
+    "description": "Banner shown when toggling route visibility fails on the cloud",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailStarFailed": "Could not update star: {error}",
+  "@routeDetailStarFailed": {
+    "description": "Banner shown when toggling the route star fails on the cloud",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailOfflineSaved": "Saved for offline use.",
+  "@routeDetailOfflineSaved": {
+    "description": "Banner shown when a route is pinned for offline use"
+  },
+  "routeDetailOfflineRemoved": "Removed from offline saves.",
+  "@routeDetailOfflineRemoved": {
+    "description": "Banner shown when a route is unpinned from offline use"
+  },
+  "routeDetailTagSaveFailed": "Could not save tag: {error}",
+  "@routeDetailTagSaveFailed": {
+    "description": "Banner shown when adding a route tag fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailShareFailed": "Could not share {format}: {error}",
+  "@routeDetailShareFailed": {
+    "description": "Banner shown when sharing a route as a file fails",
+    "placeholders": {
+      "format": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailClubsLoadTimeout": "Couldn't load your clubs — check your network.",
+  "@routeDetailClubsLoadTimeout": {
+    "description": "Banner shown when the transfer-to-club club fetch times out"
+  },
+  "routeDetailClubsLoadFailed": "Couldn't load your clubs.",
+  "@routeDetailClubsLoadFailed": {
+    "description": "Banner shown when the transfer-to-club club fetch fails"
+  },
+  "routeDetailDetached": "Detached from club; route is now personal.",
+  "@routeDetailDetached": {
+    "description": "Banner shown after detaching a route from a club"
+  },
+  "routeDetailMovedToClub": "Route moved into the club library.",
+  "@routeDetailMovedToClub": {
+    "description": "Banner shown after moving a route into a club library"
+  },
+  "routeDetailTransferFailed": "Transfer failed: {error}",
+  "@routeDetailTransferFailed": {
+    "description": "Banner shown when transferring a route to/from a club fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailDeleteTitle": "Delete route?",
+  "@routeDetailDeleteTitle": {
+    "description": "Title of the single-route delete confirmation dialog"
+  },
+  "routeDetailDeleteBody": "This cannot be undone.",
+  "@routeDetailDeleteBody": {
+    "description": "Body of the single-route delete confirmation dialog"
+  },
+  "routeDetailDelete": "Delete",
+  "@routeDetailDelete": {
+    "description": "Confirm action in the delete-route dialog"
+  },
+  "routeDetailDeleteFailed": "Delete failed: {error}",
+  "@routeDetailDeleteFailed": {
+    "description": "Banner shown when deleting a route fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "routeDetailPreview": "Preview",
+  "@routeDetailPreview": {
+    "description": "Label on the route-detail preview scrubber"
+  },
+  "routeDetailPreviewStart": "Start",
+  "@routeDetailPreviewStart": {
+    "description": "Start endpoint label under the route-detail preview scrubber"
+  },
+  "routeDetailPreviewFinish": "Finish",
+  "@routeDetailPreviewFinish": {
+    "description": "Finish endpoint label under the route-detail preview scrubber"
+  },
+  "routeDetailTransferDialogTitle": "Transfer to club",
+  "@routeDetailTransferDialogTitle": {
+    "description": "Title of the transfer-route sheet when the route is currently personal"
+  },
+  "routeDetailManageClubTitle": "Manage club ownership",
+  "@routeDetailManageClubTitle": {
+    "description": "Title of the transfer-route sheet when the route already belongs to a club"
+  },
+  "routeDetailTransferDialogBody": "Members of the club will see this route in the club library and can adopt it onto their plans.",
+  "@routeDetailTransferDialogBody": {
+    "description": "Body of the transfer-route sheet when the route is currently personal"
+  },
+  "routeDetailManageClubBody": "Move this route into another club you admin, or detach it back to personal.",
+  "@routeDetailManageClubBody": {
+    "description": "Body of the transfer-route sheet when the route already belongs to a club"
+  },
+  "routeDetailDetachToPersonal": "Detach to personal",
+  "@routeDetailDetachToPersonal": {
+    "description": "Title of the detach-to-personal option in the transfer-route sheet"
+  },
+  "routeDetailDetachSubtitle": "Removes the route from the current club's library.",
+  "@routeDetailDetachSubtitle": {
+    "description": "Subtitle of the detach-to-personal option in the transfer-route sheet"
+  },
+  "routeDetailNoAdminClubs": "You don't own or admin any clubs yet.",
+  "@routeDetailNoAdminClubs": {
+    "description": "Empty-state shown in the transfer-route sheet when the user has no admin clubs"
+  },
+  "routeDetailCurrentClub": "Current club",
+  "@routeDetailCurrentClub": {
+    "description": "Subtitle marking the route's current club in the transfer-route sheet"
+  },
+  "routeDetailClubMemberCount": "{location} · {count, plural, one{{count} member} other{{count} members}}",
+  "@routeDetailClubMemberCount": {
+    "description": "Subtitle showing a club's location and member count in the transfer-route sheet",
+    "placeholders": {
+      "location": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "exploreRoutesTitle": "Explore Routes",
+  "@exploreRoutesTitle": {
+    "description": "AppBar title for the explore-public-routes screen"
+  },
+  "exploreRoutesModeSearch": "Search",
+  "@exploreRoutesModeSearch": {
+    "description": "Mode-toggle label for the search-by-name mode"
+  },
+  "exploreRoutesModeNearMe": "Near Me",
+  "@exploreRoutesModeNearMe": {
+    "description": "Mode-toggle label for the near-me mode"
+  },
+  "exploreRoutesSearchHint": "Search routes by name...",
+  "@exploreRoutesSearchHint": {
+    "description": "Placeholder in the explore search field"
+  },
+  "exploreRoutesFeatured": "Featured",
+  "@exploreRoutesFeatured": {
+    "description": "Featured-only filter-chip label on the explore screen"
+  },
+  "exploreRoutesSignInRequired": "Sign in and connect to the internet to explore routes",
+  "@exploreRoutesSignInRequired": {
+    "description": "Error state shown when exploring routes while signed out"
+  },
+  "exploreRoutesTimeout": "Connection timed out. Check your network and try again.",
+  "@exploreRoutesTimeout": {
+    "description": "Error state shown when an explore search times out"
+  },
+  "exploreRoutesSearchFailed": "Search failed. Tap retry to try again.",
+  "@exploreRoutesSearchFailed": {
+    "description": "Error state shown when an explore search fails"
+  },
+  "exploreRoutesLoadMoreFailed": "Could not load more — check your connection",
+  "@exploreRoutesLoadMoreFailed": {
+    "description": "Banner shown when loading the next page of explore results fails"
+  },
+  "exploreRoutesLocationPermissionRequired": "Location permission required to find nearby routes",
+  "@exploreRoutesLocationPermissionRequired": {
+    "description": "Error state shown when location permission is denied in near-me mode"
+  },
+  "exploreRoutesNearbyFailed": "Could not find nearby routes. Tap retry to try again.",
+  "@exploreRoutesNearbyFailed": {
+    "description": "Error state shown when a near-me search fails"
+  },
+  "exploreRoutesEmptyNoPublic": "No public routes yet",
+  "@exploreRoutesEmptyNoPublic": {
+    "description": "Empty-state title when there are no public routes and no search query"
+  },
+  "exploreRoutesEmptyNoMatch": "No routes match your search",
+  "@exploreRoutesEmptyNoMatch": {
+    "description": "Empty-state title when a search returns no results"
+  },
+  "exploreRoutesEmptyBody": "Routes shared from the web app appear here",
+  "@exploreRoutesEmptyBody": {
+    "description": "Empty-state body on the explore screen"
+  },
+  "exploreRoutesDistanceAny": "Any distance",
+  "@exploreRoutesDistanceAny": {
+    "description": "Distance-filter option that clears the distance filter on the explore screen"
+  },
+  "exploreRoutesSurfaceAny": "Any surface",
+  "@exploreRoutesSurfaceAny": {
+    "description": "Surface-filter option that clears the surface filter on the explore screen"
+  },
+  "exploreRoutesSurfaceRoad": "Road",
+  "@exploreRoutesSurfaceRoad": {
+    "description": "Surface-filter option for road routes on the explore screen"
+  },
+  "exploreRoutesSurfaceTrail": "Trail",
+  "@exploreRoutesSurfaceTrail": {
+    "description": "Surface-filter option for trail routes on the explore screen"
+  },
+  "exploreRoutesSurfaceMixed": "Mixed",
+  "@exploreRoutesSurfaceMixed": {
+    "description": "Surface-filter option for mixed-surface routes on the explore screen"
+  },
+  "exploreRoutesSortMostRun": "Most run",
+  "@exploreRoutesSortMostRun": {
+    "description": "Sort option: most-run routes first on the explore screen"
+  },
+  "exploreRoutesSortNewest": "Newest",
+  "@exploreRoutesSortNewest": {
+    "description": "Sort option: newest routes first on the explore screen"
+  },
+  "exploreRoutesSortFeatured": "Featured",
+  "@exploreRoutesSortFeatured": {
+    "description": "Sort option: featured routes first on the explore screen"
+  },
+  "exploreRoutesSort": "Sort",
+  "@exploreRoutesSort": {
+    "description": "Fallback label on the sort filter chip on the explore screen"
+  },
+  "exploreRoutesSaveCheckConnection": "Couldn't save \"{name}\" — check your connection and try again.",
+  "@exploreRoutesSaveCheckConnection": {
+    "description": "Banner shown when a saved explore route can't fetch its geometry",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "exploreRoutesSaveFailed": "Couldn't save \"{name}\".",
+  "@exploreRoutesSaveFailed": {
+    "description": "Banner shown when persisting a saved explore route fails",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "exploreRoutesSaved": "Saved \"{name}\" to your library",
+  "@exploreRoutesSaved": {
+    "description": "Banner shown after a route is saved to the user's library from explore",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "exploreRoutesAlreadySaved": "Already saved",
+  "@exploreRoutesAlreadySaved": {
+    "description": "Tooltip on the save button when an explore route is already in the library"
+  },
+  "exploreRoutesSaveToLibrary": "Save to library",
+  "@exploreRoutesSaveToLibrary": {
+    "description": "Tooltip on the save button on an explore route card"
+  },
+  "exploreRoutesSurfaceTrailShort": "Trail",
+  "@exploreRoutesSurfaceTrailShort": {
+    "description": "Surface badge label for trail routes on an explore route card"
+  },
+  "exploreRoutesSurfaceMixedShort": "Mixed",
+  "@exploreRoutesSurfaceMixedShort": {
+    "description": "Surface badge label for mixed-surface routes on an explore route card"
+  },
+  "exploreRoutesSurfaceRoadShort": "Road",
+  "@exploreRoutesSurfaceRoadShort": {
+    "description": "Surface badge label for road routes on an explore route card"
+  },
+  "exploreRoutesDistanceUnderKm": "Under 5 km",
+  "@exploreRoutesDistanceUnderKm": {
+    "description": "Distance-filter label (km) for short routes on the explore screen"
+  },
+  "exploreRoutesDistanceMidKm": "5-10 km",
+  "@exploreRoutesDistanceMidKm": {
+    "description": "Distance-filter label (km) for medium routes on the explore screen"
+  },
+  "exploreRoutesDistanceLongKm": "10-21 km",
+  "@exploreRoutesDistanceLongKm": {
+    "description": "Distance-filter label (km) for long routes on the explore screen"
+  },
+  "exploreRoutesDistanceUltraKm": "21 km+",
+  "@exploreRoutesDistanceUltraKm": {
+    "description": "Distance-filter label (km) for ultra routes on the explore screen"
+  },
+  "exploreRoutesDistanceUnderMi": "Under 3 mi",
+  "@exploreRoutesDistanceUnderMi": {
+    "description": "Distance-filter label (mi) for short routes on the explore screen"
+  },
+  "exploreRoutesDistanceMidMi": "3-6 mi",
+  "@exploreRoutesDistanceMidMi": {
+    "description": "Distance-filter label (mi) for medium routes on the explore screen"
+  },
+  "exploreRoutesDistanceLongMi": "6-13 mi",
+  "@exploreRoutesDistanceLongMi": {
+    "description": "Distance-filter label (mi) for long routes on the explore screen"
+  },
+  "exploreRoutesDistanceUltraMi": "13 mi+",
+  "@exploreRoutesDistanceUltraMi": {
+    "description": "Distance-filter label (mi) for ultra routes on the explore screen"
+  },
+  "heatmapSearchHint": "Search places…",
+  "@heatmapSearchHint": {
+    "description": "Placeholder in the heatmap place-search field"
+  },
+  "heatmapFilters": "Filters",
+  "@heatmapFilters": {
+    "description": "Tooltip on the heatmap Filters button"
+  },
+  "heatmapRoutesStartHere": "{count} routes start here",
+  "@heatmapRoutesStartHere": {
+    "description": "Header of the cluster sheet listing routes that share a start point",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "heatmapRouteCount": "{count, plural, one{{count} route} other{{count} routes}}",
+  "@heatmapRouteCount": {
+    "description": "Route-count text on the heatmap results pill and list header",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "heatmapNoRoutesHere": "No routes here",
+  "@heatmapNoRoutesHere": {
+    "description": "Pill text shown when no routes are in view on the heatmap"
+  },
+  "heatmapNoRoutesHint": "No routes here. Pan the map or change the filters.",
+  "@heatmapNoRoutesHint": {
+    "description": "Empty-state shown in the heatmap results list"
+  },
+  "heatmapClearKept": "Clear {count} kept",
+  "@heatmapClearKept": {
+    "description": "Button to clear the pinned (kept-on-map) routes in the heatmap results list",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "heatmapUnpinFromMap": "Unpin from map",
+  "@heatmapUnpinFromMap": {
+    "description": "Tooltip on the keep-on-map toggle when a heatmap route is pinned"
+  },
+  "heatmapKeepOnMap": "Keep on map",
+  "@heatmapKeepOnMap": {
+    "description": "Tooltip on the keep-on-map toggle when a heatmap route is not pinned"
+  },
+  "heatmapLocateMe": "Locate me",
+  "@heatmapLocateMe": {
+    "description": "Tooltip on the heatmap Locate-me FAB"
+  },
+  "heatmapLocationUnavailable": "Location unavailable: {error}",
+  "@heatmapLocationUnavailable": {
+    "description": "Banner shown when the heatmap Locate-me FAB can't get a position",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "heatmapBackToList": "Back to list",
+  "@heatmapBackToList": {
+    "description": "Tooltip on the close button of the heatmap selection card"
+  },
+  "heatmapViewRoute": "View route",
+  "@heatmapViewRoute": {
+    "description": "Label on the View-route button in the heatmap selection card"
+  },
+  "heatmapKept": "Kept",
+  "@heatmapKept": {
+    "description": "Label on the keep button when a heatmap route is pinned"
+  },
+  "heatmapKeep": "Keep",
+  "@heatmapKeep": {
+    "description": "Label on the keep button when a heatmap route is not pinned"
+  },
+  "heatmapLensShow": "Show",
+  "@heatmapLensShow": {
+    "description": "Filter-group label for the discovery-lens chips in the heatmap filter sheet"
+  },
+  "heatmapLensDistance": "Distance",
+  "@heatmapLensDistance": {
+    "description": "Filter-group label for the race-distance chips in the heatmap filter sheet"
+  },
+  "heatmapLensMap": "Map",
+  "@heatmapLensMap": {
+    "description": "Filter-group label for the map-display chips in the heatmap filter sheet"
+  },
+  "heatmapHeatDensity": "Heat density",
+  "@heatmapHeatDensity": {
+    "description": "Filter chip toggling the heat-density layer in the heatmap filter sheet"
+  },
+  "heatmapResetFilters": "Reset filters",
+  "@heatmapResetFilters": {
+    "description": "Button to reset all heatmap filters"
+  },
+  "heatmapLensPopular": "Popular",
+  "@heatmapLensPopular": {
+    "description": "Discovery-lens label for popular routes on the heatmap"
+  },
+  "heatmapLensFriends": "Friends",
+  "@heatmapLensFriends": {
+    "description": "Discovery-lens label for friends' routes on the heatmap"
+  },
+  "heatmapLensFeatured": "Featured",
+  "@heatmapLensFeatured": {
+    "description": "Discovery-lens label for featured routes on the heatmap"
+  },
+  "heatmapLensHiddenGems": "Hidden gems",
+  "@heatmapLensHiddenGems": {
+    "description": "Discovery-lens label for hidden-gem routes on the heatmap"
+  },
+  "publicRouteFallbackTitle": "Route",
+  "@publicRouteFallbackTitle": {
+    "description": "AppBar title for the public route view before the route name loads"
+  },
+  "publicRouteLoadError": "Could not load this route.",
+  "@publicRouteLoadError": {
+    "description": "Error state shown when the public route fails to load"
+  },
+  "publicRouteUnavailable": "This route is private or no longer available.",
+  "@publicRouteUnavailable": {
+    "description": "Empty state shown when the public route is private or deleted"
+  },
+  "publicRouteStatDistance": "Distance",
+  "@publicRouteStatDistance": {
+    "description": "Stat label for distance on the public route view"
+  },
+  "publicRouteStatElevation": "Elevation",
+  "@publicRouteStatElevation": {
+    "description": "Stat label for elevation on the public route view"
+  },
+  "publicRouteStatWaypoints": "Waypoints",
+  "@publicRouteStatWaypoints": {
+    "description": "Stat label for the waypoint count on the public route view"
+  },
+  "routesLoadErrorRetry": "Couldn't load your routes. Check your connection and try again.",
+  "@routesLoadErrorRetry": {
+    "description": "Full-page error state shown when the route library fails to load and there is nothing cached"
   }
 }

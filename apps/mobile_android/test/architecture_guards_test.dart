@@ -582,9 +582,10 @@ void main() {
       );
       expect(
         source,
-        contains('Make this run public?'),
+        contains('runDetailMakePublicTitle'),
         reason: 'The consent dialog title is the canonical surface a '
-            'regression would mangle; pin the literal copy.',
+            'regression would mangle; pin the localized key (the English '
+            'copy now lives in the ARB catalogues).',
       );
       // makeRunPublic must NOT appear ahead of the dialog gate. The
       // gate-then-call ordering: _confirmMakePublic completes first,
@@ -3021,7 +3022,7 @@ void main() {
       // And the toggle still needs to be inside that scrollable content
       // so users can reach it via scroll.
       expect(
-        tail.contains("title: const Text('Make public')"),
+        tail.contains('title: Text(l10n.routeBuilderMakePublic)'),
         isTrue,
         reason:
             'The Make-public SwitchListTile is the field most prone to '

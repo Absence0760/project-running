@@ -96,7 +96,7 @@ void main() {
         'Column (not just a bare paragraph)',
         () {
       expect(
-        src.contains("'Description'"),
+        src.contains('routeDetailDescriptionHeading'),
         isTrue,
         reason: 'Description block must have a label heading so it '
             'reads as a deliberate section.',
