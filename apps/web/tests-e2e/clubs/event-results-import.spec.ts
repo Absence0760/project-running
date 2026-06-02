@@ -51,7 +51,7 @@ test.describe('/clubs/[slug]/events/[id] — bulk results import', () => {
 
 		await page.getByRole('button', { name: 'Import results CSV' }).click();
 
-		await page.locator('input[type="file"]').setInputFiles({
+		await page.locator('input[type="file"][accept*=".csv"]').setInputFiles({
 			name: 'results.csv',
 			mimeType: 'text/csv',
 			buffer: Buffer.from(CSV)
@@ -72,7 +72,7 @@ test.describe('/clubs/[slug]/events/[id] — bulk results import', () => {
 		await page.getByRole('button', { name: 'Import results CSV' }).click();
 
 		// Missing the required time column.
-		await page.locator('input[type="file"]').setInputFiles({
+		await page.locator('input[type="file"][accept*=".csv"]').setInputFiles({
 			name: 'bad.csv',
 			mimeType: 'text/csv',
 			buffer: Buffer.from('bib,name\n101,Alice\n')
@@ -130,7 +130,7 @@ test.describe('bulk results import — re-import preserves a claimed owner', () 
 		await expect(page.getByRole('heading', { level: 1 })).toBeVisible({ timeout: 10_000 });
 
 		await page.getByRole('button', { name: 'Import results CSV' }).click();
-		await page.locator('input[type="file"]').setInputFiles({
+		await page.locator('input[type="file"][accept*=".csv"]').setInputFiles({
 			name: 'results.csv',
 			mimeType: 'text/csv',
 			buffer: Buffer.from(CSV)

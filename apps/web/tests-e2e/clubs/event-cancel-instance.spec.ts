@@ -56,7 +56,13 @@ test.describe('/clubs/[slug]/events/[id] — cancel one occurrence', () => {
 		// Cancel the next occurrence (the active instance) with a reason.
 		await page.getByRole('button', { name: 'Cancel this occurrence' }).click();
 		await page.getByPlaceholder(/Course flooded/).fill('Marshal shortage');
-		await page.getByRole('button', { name: 'Cancel occurrence' }).click();
+		// The confirm button inside the modal shares the trigger's label
+		// ("Cancel this occurrence"), so scope to the open dialog to pick the
+		// modal's confirm rather than the now-background trigger.
+		await page
+			.getByRole('dialog')
+			.getByRole('button', { name: 'Cancel this occurrence' })
+			.click();
 
 		// Audit row written with the reason + actor.
 		await expect
