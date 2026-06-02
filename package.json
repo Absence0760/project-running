@@ -58,6 +58,9 @@
   "dependencies": {
     "html-to-image": "^1.11.13"
   },
+  "devDependencies": {
+    "svelte": "5.56.1"
+  },
   "overrides": {
     "cookie": "^1.0.2",
     "devalue": "^5.8.1",
@@ -74,5 +77,6 @@
       "@sveltejs/kit>devalue": "^5.8.1"
     }
   },
-  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Top-level override deduplicates direct copies but npm leaves SvelteKit's nested node_modules/@sveltejs/kit/node_modules/cookie@0.6.0 in place because the v0.x → v1.x range jump is outside SvelteKit's declared dependency range. The nested @sveltejs/kit > cookie override forces that transitive copy too. The API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop both entries once @sveltejs/kit ships its own bump. devalue override: @sveltejs/kit@2.59.1 declares devalue ^5.6.4 which still resolves to 5.8.0 (GHSA-77vg-94rm-hx3p — sparse-array DoS). Patch fix is in 5.8.1, inside Kit's declared range, so the override just nudges resolution to the patched version. Drop once Kit's lockfile picks it up upstream."
+  "_overrides_rationale": "/audit/all High (deps): @sveltejs/kit@2.59.x pulls cookie@^0.6.0, which has GHSA-pxg6-pf52-xh8x (out-of-bounds chars in name/path/domain). Upstream hasn't bumped yet. Top-level override deduplicates direct copies but npm leaves SvelteKit's nested node_modules/@sveltejs/kit/node_modules/cookie@0.6.0 in place because the v0.x → v1.x range jump is outside SvelteKit's declared dependency range. The nested @sveltejs/kit > cookie override forces that transitive copy too. The API surface SvelteKit uses is the v0.x compatible subset, so the bump is safe in practice. Drop both entries once @sveltejs/kit ships its own bump. devalue override: @sveltejs/kit@2.59.1 declares devalue ^5.6.4 which still resolves to 5.8.0 (GHSA-77vg-94rm-hx3p — sparse-array DoS). Patch fix is in 5.8.1, inside Kit's declared range, so the override just nudges resolution to the patched version. Drop once Kit's lockfile picks it up upstream.",
+  "_svelte_root_pin_rationale": "svelte is declared here at the workspace root (not only in apps/web) so the copy @sveltejs/vite-plugin-svelte resolves from the hoisted root node_modules is pinned. apps/web's own svelte dep lands nested in apps/web/node_modules, invisible to the hoisted build tooling, so the plugin would otherwise resolve a separate root peer copy that npm settled on 5.56.0. 5.56.0 has a parser regression that misparses a text-expression tag starting with the bare identifier `type` (`{type === ...}`) as a declaration tag — it broke the web build in run 26844715187; 5.56.1 fixes it. An `overrides` entry can't do this because npm overrides don't rewrite peerDependencies edges, which is what the tooling's svelte is. Keep this in lockstep with apps/web's svelte pin; drop once both move past 5.56.x."
 }
