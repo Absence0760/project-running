@@ -4,6 +4,7 @@ import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../social_service.dart' show ClubView, SocialService;
 import '../training.dart';
@@ -49,7 +50,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   List<PlanWeekRow> _weeks = const [];
   Map<String, List<PlanWorkoutRow>> _byWeek = const {};
   bool _loading = true;
-  String? _error;
+  _PlanDetailLoadError? _error;
   bool _publishing = false;
 
   // Lazily construct a SocialService against the global Supabase client
@@ -87,7 +88,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Connection timed out. Check your network and try again.';
+          _error = _PlanDetailLoadError.timeout;
         });
       }
     } catch (e, s) {
@@ -95,7 +96,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Couldn\'t load this plan. Tap retry to try again.';
+          _error = _PlanDetailLoadError.generic;
         });
       }
     }
@@ -103,6 +104,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
 
   Future<void> _publishToClub(TrainingPlanRow plan) async {
     if (_publishing) return;
+    final l10n = AppLocalizations.of(context);
     setState(() => _publishing = true);
 
     List<ClubView> myClubs;
@@ -111,14 +113,14 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     } on TimeoutException {
       if (mounted) {
         setState(() => _publishing = false);
-        showTopBanner(context, 'Couldn\'t load your clubs — check your network.');
+        showTopBanner(context, l10n.planDetailPublishLoadClubsTimeout);
       }
       return;
     } catch (e, s) {
       debugPrint('publish: fetchMyClubs failed: $e\n$s');
       if (mounted) {
         setState(() => _publishing = false);
-        showTopBanner(context, 'Couldn\'t load your clubs.');
+        showTopBanner(context, l10n.planDetailPublishLoadClubsFailed);
       }
       return;
     }
@@ -129,7 +131,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
       setState(() => _publishing = false);
       showTopBanner(
         context,
-        'You need to own or admin a club before you can publish a template.',
+        l10n.planDetailPublishNoClubs,
       );
       return;
     }
@@ -150,31 +152,36 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
           .timeout(kBackendLoadTimeout);
       if (!mounted) return;
       setState(() => _publishing = false);
-      showTopBanner(context, 'Published "${plan.name}" as a club template.');
+      showTopBanner(context, l10n.planDetailPublishSuccess(plan.name));
     } catch (e, s) {
       debugPrint('publishPlanAsTemplate failed: $e\n$s');
       if (!mounted) return;
       setState(() => _publishing = false);
-      showTopBanner(context, 'Publish failed: $e');
+      showTopBanner(context, l10n.planDetailPublishFailed(e.toString()));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(),
-        body: ErrorState(message: _error!, onRetry: _load),
+        body: ErrorState(
+            message: _error == _PlanDetailLoadError.timeout
+                ? l10n.planDetailTimeoutError
+                : l10n.planDetailLoadError,
+            onRetry: _load),
       );
     }
     final p = _plan;
     if (p == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('Plan not found.')),
+        body: Center(child: Text(l10n.planDetailNotFound)),
       );
     }
     final theme = Theme.of(context);
@@ -207,7 +214,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.publish),
-            tooltip: 'Publish as club template',
+            tooltip: l10n.planDetailPublishTooltip,
             onPressed: _publishing ? null : () => _publishToClub(p),
           ),
         ],
@@ -217,10 +224,10 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
           children: [
-            _heroCard(theme, p, pct, done, allActive.length),
+            _heroCard(theme, l10n, p, pct, done, allActive.length),
             if (todayWorkout != null) ...[
               const SizedBox(height: 12),
-              _todayCard(theme, p, todayWorkout),
+              _todayCard(theme, l10n, p, todayWorkout),
             ],
             const SizedBox(height: 16),
             PlanCalendar(
@@ -231,14 +238,15 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ),
             const SizedBox(height: 16),
             for (final w in _weeks)
-              _weekCard(theme, p, w, currentWeek),
+              _weekCard(theme, l10n, p, w, currentWeek),
           ],
         ),
       ),
     );
   }
 
-  Widget _heroCard(ThemeData theme, TrainingPlanRow p, int pct, int done, int total) {
+  Widget _heroCard(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
+      int pct, int done, int total) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -267,7 +275,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                 const SizedBox(height: 6),
                 Text(
                   '${toIsoDate(p.startDate)} → ${toIsoDate(p.endDate)} · '
-                  '${p.daysPerWeek} days/wk',
+                  '${l10n.planDetailDaysPerWeek(p.daysPerWeek)}',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -327,8 +335,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     );
   }
 
-  Widget _todayCard(
-      ThemeData theme, TrainingPlanRow p, PlanWorkoutRow wo) {
+  Widget _todayCard(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
+      PlanWorkoutRow wo) {
     final kind = workoutKindFromDb(wo.kind);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -350,7 +358,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('TODAY',
+            Text(l10n.planDetailToday,
                 style: theme.textTheme.labelSmall?.copyWith(
                   color: theme.colorScheme.primary,
                   letterSpacing: 0.8,
@@ -375,7 +383,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   Icon(Icons.check_circle,
                       color: theme.colorScheme.primary, size: 18),
                   const SizedBox(width: 3),
-                  Text('Completed',
+                  Text(l10n.planDetailCompleted,
                       style: TextStyle(color: theme.colorScheme.primary)),
                 ],
               ],
@@ -386,8 +394,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
     );
   }
 
-  Widget _weekCard(
-      ThemeData theme, TrainingPlanRow p, PlanWeekRow w, int currentWeek) {
+  Widget _weekCard(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
+      PlanWeekRow w, int currentWeek) {
     final phase = planPhaseFromDb(w.phase);
     final today = toIsoDate(DateTime.now());
     final workouts = _byWeek[w.id] ?? const [];
@@ -410,7 +418,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
         children: [
           Row(
             children: [
-              Text('Week ${w.weekIndex + 1}',
+              Text(l10n.planDetailWeek(w.weekIndex + 1),
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(width: 8),
@@ -437,14 +445,14 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
             ),
           const SizedBox(height: 8),
           for (final wo in workouts)
-            _workoutRow(theme, p, wo, today),
+            _workoutRow(theme, l10n, p, wo, today),
         ],
       ),
     );
   }
 
-  Widget _workoutRow(ThemeData theme, TrainingPlanRow p, PlanWorkoutRow wo,
-      String today) {
+  Widget _workoutRow(ThemeData theme, AppLocalizations l10n, TrainingPlanRow p,
+      PlanWorkoutRow wo, String today) {
     final kind = workoutKindFromDb(wo.kind);
     final isRest = kind == WorkoutKind.rest;
     final isToday = toIsoDate(wo.scheduledDate) == today;
@@ -497,7 +505,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   padding: EdgeInsets.zero,
                   splashRadius: 18,
                   visualDensity: VisualDensity.compact,
-                  tooltip: 'Edit workout',
+                  tooltip: l10n.planDetailEditTooltip,
                   icon: Icon(Icons.edit_outlined,
                       color: theme.colorScheme.outline),
                   onPressed: () => _editWorkout(wo),
@@ -543,6 +551,8 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
   }
 }
 
+enum _PlanDetailLoadError { timeout, generic }
+
 /// Modal that lists the viewer's admin-able clubs and pops the picked
 /// club id (or `null` on cancel). Pure presentation — the parent does
 /// the fetch + commit so cancel doesn't leave a half-state.
@@ -553,6 +563,7 @@ class PublishClubPicker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
@@ -560,10 +571,11 @@ class PublishClubPicker extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Publish to club', style: theme.textTheme.titleLarge),
+            Text(l10n.planDetailPublishPickerTitle,
+                style: theme.textTheme.titleLarge),
             const SizedBox(height: 4),
             Text(
-              'Members of the club will be able to adopt this plan as their own.',
+              l10n.planDetailPublishPickerBody,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -582,7 +594,7 @@ class PublishClubPicker extends StatelessWidget {
                     title: Text(c.row.name),
                     subtitle: Text(
                       '${c.row.locationLabel ?? c.row.slug} · '
-                      '${c.memberCount} member${c.memberCount == 1 ? '' : 's'}',
+                      '${l10n.planDetailPublishPickerMembers(c.memberCount)}',
                       style: theme.textTheme.bodySmall?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -598,7 +610,7 @@ class PublishClubPicker extends StatelessWidget {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.planDetailPublishCancel),
               ),
             ),
           ],

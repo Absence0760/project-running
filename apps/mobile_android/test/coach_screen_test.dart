@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/coach_screen.dart';
 import '../lib/training_service.dart';
 
@@ -30,6 +31,8 @@ Future<void> _ensureSupabase() async {
 Future<void> _pump(WidgetTester tester) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: CoachScreen(
         api: ApiClient(),
         training: TrainingService(),
@@ -55,6 +58,8 @@ void main() {
         'drawer used to swallow it)', (tester) async {
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: CoachScreen(api: _ConsentedApi(), training: TrainingService()),
         ),
       );

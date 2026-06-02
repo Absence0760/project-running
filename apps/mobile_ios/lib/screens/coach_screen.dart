@@ -12,6 +12,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../backend_timeout.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../training_service.dart';
 import '../widgets/top_banner.dart';
 
@@ -129,18 +130,6 @@ class _CoachScreenState extends State<CoachScreen> {
   // "10 of 10" for a free user's first paint.
   static const _freeDailyLimit = 2;
   static const _proDailyLimit = 10;
-  static const _planSuggestions = [
-    "Should I run tomorrow or take a rest day?",
-    "Am I on track for my goal time?",
-    "Why does this week's long run matter?",
-    "What should I focus on for today's workout?",
-  ];
-  static const _noPlanSuggestions = [
-    "How was my last run?",
-    "What pace should my easy runs be?",
-    "I haven't run in a week — what should I do?",
-    "What is a tempo run?",
-  ];
 
   final _scrollCtrl = ScrollController();
   final _draftCtrl = TextEditingController();
@@ -444,6 +433,7 @@ class _CoachScreenState extends State<CoachScreen> {
     String? userText,
     String? anchorId,
   }) async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _busy = true;
       _error = null;
@@ -460,7 +450,7 @@ class _CoachScreenState extends State<CoachScreen> {
       String? token =
           Supabase.instance.client.auth.currentSession?.accessToken;
       if (token == null) {
-        setState(() => _error = 'Please sign in first.');
+        setState(() => _error = l10n.coachSignInFirst);
         _rollback(assistantIdx, userText != null);
         return;
       }
@@ -532,7 +522,7 @@ class _CoachScreenState extends State<CoachScreen> {
         }
         if (res.statusCode == 401) {
           if (mounted) {
-            setState(() => _error = 'Your session expired. Please sign in again.');
+            setState(() => _error = l10n.coachSessionExpired);
           }
         } else if (res.statusCode == 429) {
           final used = (j['used'] as num?)?.toInt() ?? _dailyLimit;
@@ -546,14 +536,13 @@ class _CoachScreenState extends State<CoachScreen> {
                 _dailyLimit = (j['limit'] as num).toInt();
               }
               _error = (j['message'] as String?) ??
-                  'Daily limit reached ($_dailyLimit messages). '
-                      'Come back tomorrow!';
+                  l10n.coachDailyLimitError(_dailyLimit);
             });
           }
         } else {
           if (mounted) {
             setState(() => _error = (j['error'] as String?) ??
-                'Coach error (${res.statusCode})');
+                l10n.coachGenericError(res.statusCode));
           }
         }
         _rollback(assistantIdx, userText != null);
@@ -567,8 +556,7 @@ class _CoachScreenState extends State<CoachScreen> {
       // Audit/coach May 2026 Low #16.
       debugPrint('coach_screen: transport error: $e');
       if (mounted) {
-        setState(() => _error =
-            'Could not reach the Coach. Check your connection and try again.');
+        setState(() => _error = l10n.coachTransportError);
       }
       _rollback(assistantIdx, userText != null);
     } finally {
@@ -660,26 +648,27 @@ class _CoachScreenState extends State<CoachScreen> {
         setState(() => _messages[assistantIdx].id = id);
       }
     } else if (event == 'error') {
-      setState(() => _error = (data['message'] as String?) ?? 'stream failed');
+      setState(() => _error = (data['message'] as String?) ??
+          AppLocalizations.of(context).coachStreamFailed);
     }
   }
 
   Future<void> _archiveCurrent() async {
     if (_messages.isEmpty || _viewingArchiveAt != null) return;
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Start a new conversation?'),
-            content: const Text(
-                'The current chat moves to history. You can revisit it from the sidebar.'),
+            title: Text(l10n.coachArchiveTitle),
+            content: Text(l10n.coachArchiveBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(l10n.coachArchiveCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('New chat'),
+                child: Text(l10n.coachArchiveConfirm),
               ),
             ],
           ),
@@ -697,11 +686,12 @@ class _CoachScreenState extends State<CoachScreen> {
       if (mounted) setState(() => _archives = archives);
     } catch (e) {
       if (!mounted) return;
-      setState(() => _error = 'Could not start a new conversation: $e');
+      setState(() => _error = l10n.coachNewConversationFailed(e.toString()));
     }
   }
 
   Future<void> _viewArchive(DateTime t) async {
+    final l10n = AppLocalizations.of(context);
     try {
       final rows =
           await widget.api.fetchCoachArchive(archivedAt: t, planId: _planId);
@@ -720,7 +710,7 @@ class _CoachScreenState extends State<CoachScreen> {
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not open archive: $e');
+      showTopBanner(context, l10n.coachOpenArchiveFailed(e.toString()));
     }
   }
 
@@ -760,7 +750,8 @@ class _CoachScreenState extends State<CoachScreen> {
   Future<void> _copy(String content) async {
     await Clipboard.setData(ClipboardData(text: content));
     if (!mounted) return;
-    showTopBanner(context, 'Copied to clipboard', duration: Duration(seconds: 1));
+    showTopBanner(context, AppLocalizations.of(context).coachCopied,
+        duration: Duration(seconds: 1));
   }
 
   /// flutter_markdown's default `onTapLink` calls `url_launcher` on every
@@ -798,16 +789,17 @@ class _CoachScreenState extends State<CoachScreen> {
 
   String _archiveLabel(DateTime t) => coachArchiveLabel(t);
 
-  String _activeThreadTitle() {
+  String _activeThreadTitle(AppLocalizations l10n) {
     for (final m in _messages) {
       if (m.role == 'user') return coachTitleFromMessage(m.content.value);
     }
-    return 'New conversation';
+    return l10n.coachNewConversation;
   }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final cs = theme.colorScheme;
     final hasPlan = _planId != null;
 
@@ -817,12 +809,12 @@ class _CoachScreenState extends State<CoachScreen> {
     // user must accept the disclosure before any chat fans out.
     if (!_consentChecked) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Coach')),
+        appBar: AppBar(title: Text(l10n.coachTitle)),
         body: const Center(child: CircularProgressIndicator()),
       );
     }
     if (_consentAt == null) {
-      return _buildCoachConsentScaffold(theme);
+      return _buildCoachConsentScaffold(theme, l10n);
     }
 
     return Scaffold(
@@ -834,7 +826,7 @@ class _CoachScreenState extends State<CoachScreen> {
         leading: const BackButton(),
         title: Row(
           children: [
-            const Text('Coach'),
+            Text(l10n.coachTitle),
             if (_plans.length > 1) ...[
               const SizedBox(width: 12),
               Flexible(
@@ -843,17 +835,17 @@ class _CoachScreenState extends State<CoachScreen> {
                   isExpanded: true,
                   underline: const SizedBox.shrink(),
                   items: [
-                    const DropdownMenuItem(
+                    DropdownMenuItem(
                       value: '',
-                      child: Text('No plan (recent runs only)'),
+                      child: Text(l10n.coachNoPlanOption),
                     ),
                     ..._plans.map((p) => DropdownMenuItem(
                           value: p.id,
                           child: Text(
                             p.status == 'active'
-                                ? '${p.name} · active'
+                                ? l10n.coachPlanActive(p.name)
                                 : (p.status == 'completed'
-                                    ? '${p.name} · done'
+                                    ? l10n.coachPlanDone(p.name)
                                     : p.name),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -868,44 +860,44 @@ class _CoachScreenState extends State<CoachScreen> {
         actions: [
           if (_messages.isNotEmpty && _viewingArchiveAt == null)
             IconButton(
-              tooltip: 'New chat',
+              tooltip: l10n.coachNewChatTooltip,
               icon: const Icon(Icons.add_comment_outlined),
               onPressed: _busy ? null : _archiveCurrent,
             ),
           Builder(
             builder: (ctx) => IconButton(
-              tooltip: 'Chat history',
+              tooltip: l10n.coachHistoryTooltip,
               icon: const Icon(Icons.history),
               onPressed: () => Scaffold.of(ctx).openDrawer(),
             ),
           ),
         ],
       ),
-      drawer: _buildArchivesDrawer(theme),
+      drawer: _buildArchivesDrawer(theme, l10n),
       body: Column(
         children: [
-          if (_ctx != null) _buildContextStrip(theme),
-          if (_viewingArchiveAt != null) _buildArchiveBanner(theme),
-          if (_remaining <= 3) _buildLimitBanner(theme, cs),
+          if (_ctx != null) _buildContextStrip(theme, l10n),
+          if (_viewingArchiveAt != null) _buildArchiveBanner(theme, l10n),
+          if (_remaining <= 3) _buildLimitBanner(theme, l10n, cs),
           if (_error != null) _buildErrorBanner(theme, cs),
           Expanded(
             child: _threadLoaded
-                ? _buildScroll(theme, hasPlan)
+                ? _buildScroll(theme, l10n, hasPlan)
                 : const Center(child: CircularProgressIndicator()),
           ),
-          if (_viewingArchiveAt == null) _buildComposer(theme, cs),
+          if (_viewingArchiveAt == null) _buildComposer(theme, l10n, cs),
         ],
       ),
     );
   }
 
-  Widget _buildCoachConsentScaffold(ThemeData theme) {
+  Widget _buildCoachConsentScaffold(ThemeData theme, AppLocalizations l10n) {
     // GDPR Art 6(1)(a) first-use disclosure. Renders instead of the
     // chat surface until the user clicks "I consent". Mirrors the
     // /coach disclosure modal on web. See audit/gdpr (2026-05-25).
     final cs = theme.colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Coach')),
+      appBar: AppBar(title: Text(l10n.coachTitle)),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
@@ -913,14 +905,12 @@ class _CoachScreenState extends State<CoachScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Before you chat with Coach',
+                l10n.coachConsentHeadline,
                 style: theme.textTheme.headlineSmall,
               ),
               const SizedBox(height: 12),
               Text(
-                'To give you grounded advice, Coach forwards a slice of your '
-                'training data to Anthropic, our AI model provider in the '
-                'United States. That slice includes:',
+                l10n.coachConsentIntro,
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 8),
@@ -928,30 +918,25 @@ class _CoachScreenState extends State<CoachScreen> {
                 padding: const EdgeInsets.only(left: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
-                    Text('• Your date of birth, gender, and HR zones if set.'),
-                    SizedBox(height: 4),
-                    Text('• A window of your most recent runs.'),
-                    SizedBox(height: 4),
-                    Text('• The active training plan you have selected.'),
-                    SizedBox(height: 4),
-                    Text('• The chat messages you type in the screen below.'),
+                  children: [
+                    Text('• ${l10n.coachConsentBulletProfile}'),
+                    const SizedBox(height: 4),
+                    Text('• ${l10n.coachConsentBulletRuns}'),
+                    const SizedBox(height: 4),
+                    Text('• ${l10n.coachConsentBulletPlan}'),
+                    const SizedBox(height: 4),
+                    Text('• ${l10n.coachConsentBulletMessages}'),
                   ],
                 ),
               ),
               const SizedBox(height: 12),
               Text(
-                'Anthropic processes the data on Threkir\'s behalf under '
-                'their data-processing terms; they do not train their '
-                'models on Threkir customer data by default. Full details '
-                '— including transfer mechanism, retention, and your '
-                'withdrawal rights — are in our privacy policy.',
+                l10n.coachConsentProcessing,
                 style: theme.textTheme.bodyMedium,
               ),
               const SizedBox(height: 12),
               Text(
-                'Tap "I consent" to continue. Tap cancel to leave the page '
-                'with no data sent.',
+                l10n.coachConsentAction,
                 style: theme.textTheme.bodyMedium,
               ),
               if (_consentError != null) ...[
@@ -968,14 +953,14 @@ class _CoachScreenState extends State<CoachScreen> {
                   TextButton(
                     onPressed:
                         _consentSaving ? null : () => Navigator.maybePop(context),
-                    child: const Text('Cancel'),
+                    child: Text(l10n.coachConsentCancel),
                   ),
                   const SizedBox(width: 12),
                   FilledButton(
                     onPressed: _consentSaving ? null : _acceptCoachConsent,
                     child: Text(_consentSaving
-                        ? 'Recording consent…'
-                        : 'I consent — start Coach'),
+                        ? l10n.coachConsentSaving
+                        : l10n.coachConsentAccept),
                   ),
                 ],
               ),
@@ -986,7 +971,7 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildArchivesDrawer(ThemeData theme) {
+  Widget _buildArchivesDrawer(ThemeData theme, AppLocalizations l10n) {
     return Drawer(
       child: SafeArea(
         child: Column(
@@ -996,7 +981,7 @@ class _CoachScreenState extends State<CoachScreen> {
               padding: const EdgeInsets.all(12),
               child: FilledButton.icon(
                 icon: const Icon(Icons.add),
-                label: const Text('New chat'),
+                label: Text(l10n.coachNewChat),
                 onPressed: (_messages.isEmpty && _viewingArchiveAt == null) ||
                         _busy
                     ? null
@@ -1015,9 +1000,9 @@ class _CoachScreenState extends State<CoachScreen> {
               child: ListView(
                 children: [
                   ListTile(
-                    title: Text(_activeThreadTitle()),
-                    subtitle: Text(
-                        'Active${_messages.isNotEmpty ? " · ${_messages.length}" : ""}'),
+                    title: Text(_activeThreadTitle(l10n)),
+                    subtitle: Text(l10n.coachActiveThread(
+                        _messages.isNotEmpty ? ' · ${_messages.length}' : '')),
                     selected: _viewingArchiveAt == null,
                     onTap: () {
                       if (_viewingArchiveAt != null) {
@@ -1041,7 +1026,7 @@ class _CoachScreenState extends State<CoachScreen> {
                       onDismissed: (_) => _deleteArchive(t),
                       child: ListTile(
                         title: Text(_archiveLabel(t)),
-                        subtitle: const Text('Tap to view · swipe to delete'),
+                        subtitle: Text(l10n.coachArchiveTapToView),
                         selected: _viewingArchiveAt == t,
                         onTap: () => _viewArchive(t),
                       ),
@@ -1055,7 +1040,7 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildContextStrip(ThemeData theme) {
+  Widget _buildContextStrip(ThemeData theme, AppLocalizations l10n) {
     final c = _ctx!;
     final cs = theme.colorScheme;
     final chips = <Widget>[];
@@ -1063,10 +1048,13 @@ class _CoachScreenState extends State<CoachScreen> {
       chips.add(_chip(
         cs,
         icon: Icons.calendar_month,
-        label: c.planWeeks != null ? '${c.planName} · ${c.planWeeks}w' : c.planName!,
+        label: c.planWeeks != null
+            ? l10n.coachContextPlanWeeks(c.planName!, c.planWeeks!)
+            : c.planName!,
       ));
     } else {
-      chips.add(_chip(cs, icon: Icons.calendar_month, label: 'No plan', muted: true));
+      chips.add(_chip(cs,
+          icon: Icons.calendar_month, label: l10n.coachContextNoPlan, muted: true));
     }
     chips.add(
       Padding(
@@ -1082,7 +1070,10 @@ class _CoachScreenState extends State<CoachScreen> {
             children: [
               Icon(Icons.directions_run, size: 14, color: cs.onSurfaceVariant),
               const SizedBox(width: 6),
-              Text(c.runCount == 0 ? 'No runs' : 'Last',
+              Text(
+                  c.runCount == 0
+                      ? l10n.coachContextNoRuns
+                      : l10n.coachContextLast,
                   style: theme.textTheme.bodySmall),
               if (c.runCount > 0) ...[
                 const SizedBox(width: 4),
@@ -1111,11 +1102,11 @@ class _CoachScreenState extends State<CoachScreen> {
       ),
     );
     if (c.hrZonesLoaded) {
-      chips.add(_chip(cs, icon: Icons.monitor_heart, label: 'HR'));
+      chips.add(_chip(cs, icon: Icons.monitor_heart, label: l10n.coachContextHr));
     }
     if (c.weeklyGoalMetres != null) {
       final km = (c.weeklyGoalMetres! / 1000).toStringAsFixed(0);
-      chips.add(_chip(cs, icon: Icons.flag, label: '$km km/wk'));
+      chips.add(_chip(cs, icon: Icons.flag, label: l10n.coachContextWeeklyGoal(km)));
     }
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
@@ -1149,7 +1140,7 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildArchiveBanner(ThemeData theme) {
+  Widget _buildArchiveBanner(ThemeData theme, AppLocalizations l10n) {
     return Container(
       color: theme.colorScheme.surfaceContainerHighest,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -1159,28 +1150,29 @@ class _CoachScreenState extends State<CoachScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              'Viewing archive · ${_archiveLabel(_viewingArchiveAt!)} · read-only',
+              l10n.coachArchiveBanner(_archiveLabel(_viewingArchiveAt!)),
               style: theme.textTheme.bodySmall,
             ),
           ),
           TextButton.icon(
             onPressed: _backToActive,
             icon: const Icon(Icons.arrow_back, size: 16),
-            label: const Text('Back to active'),
+            label: Text(l10n.coachBackToActive),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildLimitBanner(ThemeData theme, ColorScheme cs) {
+  Widget _buildLimitBanner(
+      ThemeData theme, AppLocalizations l10n, ColorScheme cs) {
     final String text;
     if (_limitReached) {
       text = _tier == 'pro'
-          ? 'Daily limit reached. Come back tomorrow.'
-          : 'Daily limit reached. Pro gets a higher cap — upgrade in Settings.';
+          ? l10n.coachLimitReachedPro
+          : l10n.coachLimitReachedFree;
     } else {
-      text = '$_remaining message${_remaining == 1 ? "" : "s"} left today';
+      text = l10n.coachMessagesLeft(_remaining);
     }
     return Container(
       width: double.infinity,
@@ -1219,9 +1211,21 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildScroll(ThemeData theme, bool hasPlan) {
+  Widget _buildScroll(ThemeData theme, AppLocalizations l10n, bool hasPlan) {
     if (_messages.isEmpty && _viewingArchiveAt == null) {
-      final suggestions = hasPlan ? _planSuggestions : _noPlanSuggestions;
+      final suggestions = hasPlan
+          ? [
+              l10n.coachSuggestPlanRest,
+              l10n.coachSuggestPlanOnTrack,
+              l10n.coachSuggestPlanLongRun,
+              l10n.coachSuggestPlanToday,
+            ]
+          : [
+              l10n.coachSuggestNoPlanLastRun,
+              l10n.coachSuggestNoPlanEasyPace,
+              l10n.coachSuggestNoPlanWeekOff,
+              l10n.coachSuggestNoPlanTempo,
+            ];
       return ListView(
         controller: _scrollCtrl,
         padding: const EdgeInsets.all(16),
@@ -1230,8 +1234,8 @@ class _CoachScreenState extends State<CoachScreen> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               hasPlan
-                  ? "Ask about today's workout, your pace, or how recent runs compare to plan."
-                  : 'Ask about your recent runs, easy-run pacing, or training basics.',
+                  ? l10n.coachEmptyPromptPlan
+                  : l10n.coachEmptyPromptNoPlan,
               style: theme.textTheme.bodyMedium?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant),
             ),
@@ -1258,11 +1262,11 @@ class _CoachScreenState extends State<CoachScreen> {
       controller: _scrollCtrl,
       padding: const EdgeInsets.all(12),
       itemCount: _messages.length,
-      itemBuilder: (context, i) => _buildBubble(theme, _messages[i]),
+      itemBuilder: (context, i) => _buildBubble(theme, l10n, _messages[i]),
     );
   }
 
-  Widget _buildBubble(ThemeData theme, _Msg m) {
+  Widget _buildBubble(ThemeData theme, AppLocalizations l10n, _Msg m) {
     final cs = theme.colorScheme;
     final isUser = m.role == 'user';
     final bg = isUser ? cs.primaryContainer : cs.surfaceContainerHigh;
@@ -1289,7 +1293,7 @@ class _CoachScreenState extends State<CoachScreen> {
                     borderRadius: BorderRadius.circular(16),
                   ),
                   child: isEditing
-                      ? _buildEditForm()
+                      ? _buildEditForm(l10n)
                       : ValueListenableBuilder<String>(
                           valueListenable: m.content,
                           builder: (context, content, _) => isUser
@@ -1324,7 +1328,7 @@ class _CoachScreenState extends State<CoachScreen> {
                         ),
                 ),
                 if (m.id != null && _viewingArchiveAt == null)
-                  _buildBubbleActions(theme, m, isUser),
+                  _buildBubbleActions(theme, l10n, m, isUser),
               ],
             ),
           ),
@@ -1333,7 +1337,7 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildEditForm() {
+  Widget _buildEditForm(AppLocalizations l10n) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
@@ -1350,12 +1354,12 @@ class _CoachScreenState extends State<CoachScreen> {
           children: [
             TextButton(
               onPressed: () => setState(() => _editingId = null),
-              child: const Text('Cancel'),
+              child: Text(l10n.coachEditCancel),
             ),
             const SizedBox(width: 4),
             FilledButton(
               onPressed: _busy ? null : _commitEdit,
-              child: const Text('Save & resend'),
+              child: Text(l10n.coachEditSaveResend),
             ),
           ],
         ),
@@ -1379,7 +1383,8 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildBubbleActions(ThemeData theme, _Msg m, bool isUser) {
+  Widget _buildBubbleActions(
+      ThemeData theme, AppLocalizations l10n, _Msg m, bool isUser) {
     final cs = theme.colorScheme;
     final iconColor = cs.onSurfaceVariant;
     return Padding(
@@ -1388,7 +1393,7 @@ class _CoachScreenState extends State<CoachScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           IconButton(
-            tooltip: 'Copy',
+            tooltip: l10n.coachActionCopy,
             icon: Icon(Icons.copy_all_outlined, size: 16, color: iconColor),
             visualDensity: VisualDensity.compact,
             padding: EdgeInsets.zero,
@@ -1397,7 +1402,7 @@ class _CoachScreenState extends State<CoachScreen> {
           ),
           if (isUser)
             IconButton(
-              tooltip: 'Edit',
+              tooltip: l10n.coachActionEdit,
               icon: Icon(Icons.edit_outlined, size: 16, color: iconColor),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -1411,7 +1416,7 @@ class _CoachScreenState extends State<CoachScreen> {
             )
           else ...[
             IconButton(
-              tooltip: 'Regenerate',
+              tooltip: l10n.coachActionRegenerate,
               icon: Icon(Icons.refresh, size: 16, color: iconColor),
               visualDensity: VisualDensity.compact,
               padding: EdgeInsets.zero,
@@ -1419,7 +1424,7 @@ class _CoachScreenState extends State<CoachScreen> {
               onPressed: _busy ? null : () => _regenerate(m.id!),
             ),
             IconButton(
-              tooltip: 'Helpful',
+              tooltip: l10n.coachActionHelpful,
               icon: Icon(
                 m.reaction == 'up'
                     ? Icons.thumb_up
@@ -1433,7 +1438,7 @@ class _CoachScreenState extends State<CoachScreen> {
               onPressed: () => _react(m.id!, 'up'),
             ),
             IconButton(
-              tooltip: 'Not helpful',
+              tooltip: l10n.coachActionNotHelpful,
               icon: Icon(
                 m.reaction == 'down'
                     ? Icons.thumb_down
@@ -1452,7 +1457,8 @@ class _CoachScreenState extends State<CoachScreen> {
     );
   }
 
-  Widget _buildComposer(ThemeData theme, ColorScheme cs) {
+  Widget _buildComposer(
+      ThemeData theme, AppLocalizations l10n, ColorScheme cs) {
     return SafeArea(
       top: false,
       child: Padding(
@@ -1469,8 +1475,8 @@ class _CoachScreenState extends State<CoachScreen> {
                 textInputAction: TextInputAction.newline,
                 decoration: InputDecoration(
                   hintText: _limitReached
-                      ? 'Daily limit reached'
-                      : 'Ask Coach…',
+                      ? l10n.coachComposerHintLimit
+                      : l10n.coachComposerHint,
                   border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(20)),
                   isDense: true,

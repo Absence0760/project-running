@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -26,7 +27,7 @@ class WorkoutDetailScreen extends StatefulWidget {
 class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
   PlanWorkoutRow? _workout;
   bool _loading = true;
-  String? _error;
+  _WorkoutLoadError? _error;
 
   @override
   void initState() {
@@ -53,7 +54,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Connection timed out. Check your network and try again.';
+          _error = _WorkoutLoadError.timeout;
         });
       }
     } catch (e, s) {
@@ -61,7 +62,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Couldn\'t load this workout. Tap retry to try again.';
+          _error = _WorkoutLoadError.generic;
         });
       }
     }
@@ -69,20 +70,25 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (_error != null) {
       return Scaffold(
         appBar: AppBar(),
-        body: ErrorState(message: _error!, onRetry: _load),
+        body: ErrorState(
+            message: _error == _WorkoutLoadError.timeout
+                ? l10n.workoutTimeoutError
+                : l10n.workoutLoadError,
+            onRetry: _load),
       );
     }
     final w = _workout;
     if (w == null) {
       return Scaffold(
         appBar: AppBar(),
-        body: const Center(child: Text('Workout not found.')),
+        body: Center(child: Text(l10n.workoutNotFound)),
       );
     }
     final theme = Theme.of(context);
@@ -112,13 +118,15 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
             runSpacing: 10,
             children: [
               if (w.targetDistanceM != null)
-                _metric(theme, 'Distance', fmtKm(w.targetDistanceM, 2)),
+                _metric(theme, l10n.workoutMetricDistance,
+                    fmtKm(w.targetDistanceM, 2)),
               if (w.targetDurationSeconds != null)
-                _metric(theme, 'Duration', fmtHms(w.targetDurationSeconds)),
+                _metric(theme, l10n.workoutMetricDuration,
+                    fmtHms(w.targetDurationSeconds)),
               if (w.targetPaceSecPerKm != null)
                 _metric(
                   theme,
-                  'Target pace',
+                  l10n.workoutMetricTargetPace,
                   w.targetPaceEndSecPerKm != null &&
                           w.targetPaceEndSecPerKm != w.targetPaceSecPerKm
                       ? '${fmtPace(w.targetPaceSecPerKm)} → ${fmtPace(w.targetPaceEndSecPerKm)}'
@@ -142,7 +150,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                   Icon(Icons.check_circle,
                       size: 18, color: theme.colorScheme.onPrimaryContainer),
                   const SizedBox(width: 6),
-                  Text('Completed',
+                  Text(l10n.workoutCompleted,
                       style: TextStyle(
                         color: theme.colorScheme.onPrimaryContainer,
                         fontWeight: FontWeight.w700,
@@ -154,7 +162,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                           .markCompleted(widget.workoutId, null);
                       _load();
                     },
-                    child: const Text('Unlink'),
+                    child: Text(l10n.workoutUnlink),
                   ),
                 ],
               ),
@@ -171,7 +179,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
               child: FilledButton.icon(
                 onPressed: () => Navigator.of(context).pop(w),
                 icon: const Icon(Icons.play_arrow),
-                label: const Text('Start workout'),
+                label: Text(l10n.workoutStart),
                 style: FilledButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -180,20 +188,20 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
           ],
           if (w.notes != null && w.notes!.isNotEmpty) ...[
             const SizedBox(height: 16),
-            _section(theme, 'Notes'),
+            _section(theme, l10n.workoutSectionNotes),
             const SizedBox(height: 4),
             Text(w.notes!, style: theme.textTheme.bodyMedium),
           ],
           if (structure != null) ...[
             const SizedBox(height: 16),
-            _section(theme, 'Structure'),
+            _section(theme, l10n.workoutSectionStructure),
             const SizedBox(height: 4),
-            _structureList(theme, structure),
+            _structureList(theme, l10n, structure),
           ],
           const SizedBox(height: 20),
-          _section(theme, 'How to run it'),
+          _section(theme, l10n.workoutSectionHowTo),
           const SizedBox(height: 4),
-          Text(_advice(kind), style: theme.textTheme.bodyMedium),
+          Text(_advice(l10n, kind), style: theme.textTheme.bodyMedium),
         ],
       ),
     );
@@ -257,7 +265,8 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
-  Widget _structureList(ThemeData theme, WorkoutStructure s) {
+  Widget _structureList(
+      ThemeData theme, AppLocalizations l10n, WorkoutStructure s) {
     final items = <Widget>[];
     void add(String title, String body) {
       items.add(Container(
@@ -285,25 +294,26 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     }
 
     if (s.warmup != null) {
-      add('Warmup',
-          '${fmtKm(s.warmup!['distance_m'] as num, 1)} @ easy');
+      add(l10n.workoutStructWarmup,
+          l10n.workoutStructWarmupValue(fmtKm(s.warmup!['distance_m'] as num, 1)));
     }
     if (s.repeats != null) {
       final r = s.repeats!;
-      add('Repeats',
+      add(l10n.workoutStructRepeats,
           '${r['count']}× ${fmtKm(r['distance_m'] as num, 2)} @ '
           '${fmtPace((r['pace_sec_per_km'] as num).toInt())} with '
           '${fmtKm(r['recovery_distance_m'] as num, 2)} ${r['recovery_pace']}');
     }
     if (s.steady != null) {
       final st = s.steady!;
-      add('Steady',
+      add(l10n.workoutStructSteady,
           '${fmtKm(st['distance_m'] as num, 1)} @ '
           '${fmtPace((st['pace_sec_per_km'] as num).toInt())}');
     }
     if (s.cooldown != null) {
-      add('Cooldown',
-          '${fmtKm(s.cooldown!['distance_m'] as num, 1)} @ easy');
+      add(l10n.workoutStructCooldown,
+          l10n.workoutStructCooldownValue(
+              fmtKm(s.cooldown!['distance_m'] as num, 1)));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -311,23 +321,16 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
     );
   }
 
-  String _advice(WorkoutKind k) => switch (k) {
-        WorkoutKind.easy ||
-        WorkoutKind.recovery =>
-          "Conversational pace. If you can't hold a conversation, you're running it too fast.",
-        WorkoutKind.long =>
-          'Stay relaxed. Aim for steady breathing. Drop 10% of the distance if weather is rough or you\'re sore — don\'t skip.',
-        WorkoutKind.tempo =>
-          '"Comfortably hard". You should feel like you could hold the pace for about an hour at peak effort, but no longer.',
-        WorkoutKind.interval =>
-          "Run the reps hard enough that the last one feels like the first. Don't pick a pace you can only hold for two or three reps.",
-        WorkoutKind.marathonPace =>
-          'Lock into goal marathon pace exactly. This is a rehearsal session — no faster, no slower.',
-        WorkoutKind.walkRun =>
-          'Alternate easy running and walking on the timed intervals. The walk breaks are part of the workout — take them even when you feel fresh.',
-        WorkoutKind.race =>
-          "Trust the plan. Don't chase a PB in the first mile.",
-        WorkoutKind.rest =>
-          'Rest day — if you need to move, walk or stretch.',
+  String _advice(AppLocalizations l10n, WorkoutKind k) => switch (k) {
+        WorkoutKind.easy || WorkoutKind.recovery => l10n.workoutAdviceEasy,
+        WorkoutKind.long => l10n.workoutAdviceLong,
+        WorkoutKind.tempo => l10n.workoutAdviceTempo,
+        WorkoutKind.interval => l10n.workoutAdviceInterval,
+        WorkoutKind.marathonPace => l10n.workoutAdviceMarathonPace,
+        WorkoutKind.walkRun => l10n.workoutAdviceWalkRun,
+        WorkoutKind.race => l10n.workoutAdviceRace,
+        WorkoutKind.rest => l10n.workoutAdviceRest,
       };
 }
+
+enum _WorkoutLoadError { timeout, generic }

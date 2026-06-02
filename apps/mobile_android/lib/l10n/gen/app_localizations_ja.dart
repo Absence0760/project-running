@@ -2691,4 +2691,536 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeConnecting => '接続中';
+
+  @override
+  String get plansTitle => 'トレーニングプラン';
+
+  @override
+  String get plansNewPlan => '新しいプラン';
+
+  @override
+  String plansDeleteTitle(String name) {
+    return '「$name」を削除しますか？';
+  }
+
+  @override
+  String get plansDeleteBody => 'すべての週とワークアウトが削除されます。';
+
+  @override
+  String get plansCancel => 'キャンセル';
+
+  @override
+  String get plansDelete => '削除';
+
+  @override
+  String get plansAbandon => '中止';
+
+  @override
+  String plansDaysPerWeek(int count) {
+    return '週$count日';
+  }
+
+  @override
+  String get plansSignInTitle => 'ログインしてトレーニングプランを使用';
+
+  @override
+  String get plansSignInBody =>
+      'プランはアカウントに同期され、すべてのデバイスで利用できます。設定 → ログインから接続してください。';
+
+  @override
+  String get plansEmptyTitle => 'まだプランがありません。';
+
+  @override
+  String get plansEmptyBody => '目標レースを選べば、週ごとの予定を作成します。';
+
+  @override
+  String get plansTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String get plansLoadError => 'トレーニングプランを読み込めませんでした。再試行をタップしてください。';
+
+  @override
+  String get planNewTitle => '新しいプラン';
+
+  @override
+  String get planNewNameLabel => 'プラン名';
+
+  @override
+  String get planNewNameHint => '例：秋のハーフマラソン';
+
+  @override
+  String get planNewGoalRace => '目標レース';
+
+  @override
+  String get planNewStartDate => '開始日';
+
+  @override
+  String get planNewDaysPerWeek => '週あたりの日数';
+
+  @override
+  String planNewDaysOption(int count) {
+    return '$count日';
+  }
+
+  @override
+  String get planNewGoalTimeSection => '目標タイム · 任意';
+
+  @override
+  String get planNewBeginnerTitle => 'ランニング初心者ですか？ウォークラン プランを使用';
+
+  @override
+  String get planNewBeginnerSubtitle =>
+      'タイム管理されたラン/ウォークのインターバルから連続走へと段階的に進む、C25K 形式の穏やかなプランです。目標タイムのペース設定を上書きします。';
+
+  @override
+  String get planNewRecent5kSection => '最近の5kmタイム · 任意';
+
+  @override
+  String get planNewRecent5kHelp => '目標ではなく実際の結果にペースを合わせます。リーゲル換算で目標距離に換算します。';
+
+  @override
+  String get planNewRecent5kConfirm => 'これは今日でも走れるタイムで、現在の体力を反映しています。';
+
+  @override
+  String get planNewRecent5kWarning =>
+      '確認するまで、ペースは目標に基づく控えめな推定値のままです。古い結果を基準にすると、復帰ランナーには速すぎるペースが設定される恐れがあります。';
+
+  @override
+  String get planNewOverrideHint => '合計週数を上書き';
+
+  @override
+  String planNewOverrideLabel(int count) {
+    return '週数を上書き（既定 $count）';
+  }
+
+  @override
+  String get planNewCancel => 'キャンセル';
+
+  @override
+  String get planNewCreate => 'プランを作成';
+
+  @override
+  String get planNewCreating => '作成中…';
+
+  @override
+  String get planNewPreviewTitle => 'プレビュー';
+
+  @override
+  String get planNewPaceEasy => 'イージー';
+
+  @override
+  String get planNewPaceMarathon => 'マラソン';
+
+  @override
+  String get planNewPaceTempo => 'テンポ';
+
+  @override
+  String get planNewPaceInterval => 'インターバル';
+
+  @override
+  String get planNewPaceRep => 'レペティション';
+
+  @override
+  String get planNewPacesFallback =>
+      '推定ペースです。最近のランや目標タイムを追加すると、より個別化された目標になります。';
+
+  @override
+  String planNewVdot(String value) {
+    return 'ダニエルズ VDOT：$value';
+  }
+
+  @override
+  String get planNewWeekOutline => '週の概要';
+
+  @override
+  String planNewMoreWeeks(int count) {
+    return '+ さらに$count週';
+  }
+
+  @override
+  String planNewSessions(int count) {
+    return '$countセッション';
+  }
+
+  @override
+  String get planDetailTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String get planDetailLoadError => 'このプランを読み込めませんでした。再試行をタップしてください。';
+
+  @override
+  String get planDetailNotFound => 'プランが見つかりません。';
+
+  @override
+  String get planDetailPublishTooltip => 'クラブテンプレートとして公開';
+
+  @override
+  String planDetailDaysPerWeek(int count) {
+    return '週$count日';
+  }
+
+  @override
+  String get planDetailToday => '今日';
+
+  @override
+  String get planDetailCompleted => '完了';
+
+  @override
+  String planDetailWeek(int number) {
+    return '第$number週';
+  }
+
+  @override
+  String get planDetailEditTooltip => 'ワークアウトを編集';
+
+  @override
+  String get planDetailPublishLoadClubsTimeout =>
+      'クラブを読み込めませんでした。ネットワークを確認してください。';
+
+  @override
+  String get planDetailPublishLoadClubsFailed => 'クラブを読み込めませんでした。';
+
+  @override
+  String get planDetailPublishNoClubs =>
+      'テンプレートを公開するには、クラブのオーナーまたは管理者である必要があります。';
+
+  @override
+  String planDetailPublishSuccess(String name) {
+    return '「$name」をクラブテンプレートとして公開しました。';
+  }
+
+  @override
+  String planDetailPublishFailed(String error) {
+    return '公開に失敗しました：$error';
+  }
+
+  @override
+  String get planDetailPublishPickerTitle => 'クラブに公開';
+
+  @override
+  String get planDetailPublishPickerBody => 'クラブのメンバーはこのプランを自分のものとして取り込めます。';
+
+  @override
+  String planDetailPublishPickerMembers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'メンバー$count人',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailPublishCancel => 'キャンセル';
+
+  @override
+  String get workoutTimeoutError => '接続がタイムアウトしました。ネットワークを確認して再試行してください。';
+
+  @override
+  String get workoutLoadError => 'このワークアウトを読み込めませんでした。再試行をタップしてください。';
+
+  @override
+  String get workoutNotFound => 'ワークアウトが見つかりません。';
+
+  @override
+  String get workoutMetricDistance => '距離';
+
+  @override
+  String get workoutMetricDuration => '時間';
+
+  @override
+  String get workoutMetricTargetPace => '目標ペース';
+
+  @override
+  String get workoutCompleted => '完了';
+
+  @override
+  String get workoutUnlink => 'リンク解除';
+
+  @override
+  String get workoutStart => 'ワークアウトを開始';
+
+  @override
+  String get workoutSectionNotes => 'メモ';
+
+  @override
+  String get workoutSectionStructure => '構成';
+
+  @override
+  String get workoutSectionHowTo => '走り方';
+
+  @override
+  String get workoutStructWarmup => 'ウォームアップ';
+
+  @override
+  String get workoutStructRepeats => 'リピート';
+
+  @override
+  String get workoutStructSteady => '一定';
+
+  @override
+  String get workoutStructCooldown => 'クールダウン';
+
+  @override
+  String workoutStructWarmupValue(String distance) {
+    return '$distance @ イージー';
+  }
+
+  @override
+  String workoutStructCooldownValue(String distance) {
+    return '$distance @ イージー';
+  }
+
+  @override
+  String get workoutAdviceEasy => '会話できるペースで。会話を続けられないなら速すぎます。';
+
+  @override
+  String get workoutAdviceLong =>
+      'リラックスして、呼吸を一定に保ちましょう。天候が悪いときや筋肉痛のときは距離を10%減らし、スキップはしないでください。';
+
+  @override
+  String get workoutAdviceTempo =>
+      '「快適にきつい」ペース。全力で約1時間は維持できそう、それ以上は無理という感覚が目安です。';
+
+  @override
+  String get workoutAdviceInterval =>
+      '最後のレペティションが最初と同じように感じられる強度で走りましょう。2〜3本しか維持できないペースは選ばないこと。';
+
+  @override
+  String get workoutAdviceMarathonPace =>
+      '目標マラソンペースに正確に合わせましょう。これはリハーサルです。速くも遅くもしないこと。';
+
+  @override
+  String get workoutAdviceWalkRun =>
+      'タイム管理されたインターバルで、イージーランとウォークを交互に行いましょう。歩く休憩もワークアウトの一部です。元気でも必ず取ってください。';
+
+  @override
+  String get workoutAdviceRace => '計画を信じましょう。最初の1マイルで自己ベストを狙わないこと。';
+
+  @override
+  String get workoutAdviceRest => '休養日です。動きたいなら、ウォーキングやストレッチを。';
+
+  @override
+  String get coachTitle => 'コーチ';
+
+  @override
+  String get coachNewConversation => '新しい会話';
+
+  @override
+  String get coachConsentHeadline => 'コーチとチャットする前に';
+
+  @override
+  String get coachConsentIntro =>
+      '的確なアドバイスのため、コーチはあなたのトレーニングデータの一部を、米国のAIモデルプロバイダーである Anthropic に送信します。その一部には以下が含まれます：';
+
+  @override
+  String get coachConsentBulletProfile => '生年月日、性別、設定済みの心拍ゾーン。';
+
+  @override
+  String get coachConsentBulletRuns => '直近のランの一部。';
+
+  @override
+  String get coachConsentBulletPlan => '選択中のアクティブなトレーニングプラン。';
+
+  @override
+  String get coachConsentBulletMessages => '下の画面で入力するチャットメッセージ。';
+
+  @override
+  String get coachConsentProcessing =>
+      'Anthropic は Threkir に代わってデータ処理条件に基づきデータを処理します。既定では Threkir の顧客データでモデルを学習しません。移転の仕組み、保持期間、撤回の権利を含む詳細は、プライバシーポリシーをご覧ください。';
+
+  @override
+  String get coachConsentAction =>
+      '「同意する」をタップして続行します。キャンセルをタップすると、データを送信せずにページを離れます。';
+
+  @override
+  String get coachConsentCancel => 'キャンセル';
+
+  @override
+  String get coachConsentAccept => '同意する — コーチを開始';
+
+  @override
+  String get coachConsentSaving => '同意を記録中…';
+
+  @override
+  String get coachNoPlanOption => 'プランなし（最近のランのみ）';
+
+  @override
+  String coachPlanActive(String name) {
+    return '$name · 進行中';
+  }
+
+  @override
+  String coachPlanDone(String name) {
+    return '$name · 完了';
+  }
+
+  @override
+  String get coachNewChatTooltip => '新しいチャット';
+
+  @override
+  String get coachHistoryTooltip => 'チャット履歴';
+
+  @override
+  String get coachNewChat => '新しいチャット';
+
+  @override
+  String coachActiveThread(String suffix) {
+    return '進行中$suffix';
+  }
+
+  @override
+  String get coachArchiveTapToView => 'タップで表示 · スワイプで削除';
+
+  @override
+  String get coachContextNoPlan => 'プランなし';
+
+  @override
+  String coachContextPlanWeeks(String name, int weeks) {
+    return '$name · $weeks週';
+  }
+
+  @override
+  String get coachContextNoRuns => 'ランなし';
+
+  @override
+  String get coachContextLast => '直近';
+
+  @override
+  String get coachContextHr => '心拍';
+
+  @override
+  String coachContextWeeklyGoal(String km) {
+    return '週${km}km';
+  }
+
+  @override
+  String coachArchiveBanner(String label) {
+    return 'アーカイブを表示中 · $label · 読み取り専用';
+  }
+
+  @override
+  String get coachBackToActive => '進行中に戻る';
+
+  @override
+  String get coachLimitReachedPro => '1日の上限に達しました。明日また来てください。';
+
+  @override
+  String get coachLimitReachedFree =>
+      '1日の上限に達しました。Pro ならより高い上限になります。設定からアップグレードしてください。';
+
+  @override
+  String coachMessagesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '本日あと$countメッセージ',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachEmptyPromptPlan => '今日のワークアウト、ペース、最近のランと計画の比較について質問してください。';
+
+  @override
+  String get coachEmptyPromptNoPlan =>
+      '最近のラン、イージーランのペース、トレーニングの基本について質問してください。';
+
+  @override
+  String get coachSuggestPlanRest => '明日は走るべき？それとも休養日にすべき？';
+
+  @override
+  String get coachSuggestPlanOnTrack => '目標タイムに向けて順調ですか？';
+
+  @override
+  String get coachSuggestPlanLongRun => '今週のロングランはなぜ大切なの？';
+
+  @override
+  String get coachSuggestPlanToday => '今日のワークアウトでは何に集中すべき？';
+
+  @override
+  String get coachSuggestNoPlanLastRun => '前回のランはどうだった？';
+
+  @override
+  String get coachSuggestNoPlanEasyPace => 'イージーランはどのくらいのペースがいい？';
+
+  @override
+  String get coachSuggestNoPlanWeekOff => '1週間走っていません。どうすればいい？';
+
+  @override
+  String get coachSuggestNoPlanTempo => 'テンポランとは？';
+
+  @override
+  String get coachEditCancel => 'キャンセル';
+
+  @override
+  String get coachEditSaveResend => '保存して再送信';
+
+  @override
+  String get coachActionCopy => 'コピー';
+
+  @override
+  String get coachActionEdit => '編集';
+
+  @override
+  String get coachActionRegenerate => '再生成';
+
+  @override
+  String get coachActionHelpful => '役に立った';
+
+  @override
+  String get coachActionNotHelpful => '役に立たなかった';
+
+  @override
+  String get coachComposerHintLimit => '1日の上限に達しました';
+
+  @override
+  String get coachComposerHint => 'コーチに質問…';
+
+  @override
+  String get coachArchiveTitle => '新しい会話を始めますか？';
+
+  @override
+  String get coachArchiveBody => '現在のチャットは履歴に移動します。サイドバーからまた見られます。';
+
+  @override
+  String get coachArchiveCancel => 'キャンセル';
+
+  @override
+  String get coachArchiveConfirm => '新しいチャット';
+
+  @override
+  String get coachSignInFirst => '先にログインしてください。';
+
+  @override
+  String get coachSessionExpired => 'セッションの有効期限が切れました。再度ログインしてください。';
+
+  @override
+  String coachDailyLimitError(int limit) {
+    return '1日の上限に達しました（$limitメッセージ）。明日また来てください！';
+  }
+
+  @override
+  String coachGenericError(int code) {
+    return 'コーチのエラー（$code）';
+  }
+
+  @override
+  String get coachTransportError => 'コーチに接続できませんでした。接続を確認して再試行してください。';
+
+  @override
+  String get coachStreamFailed => 'ストリームに失敗しました';
+
+  @override
+  String coachNewConversationFailed(String error) {
+    return '新しい会話を開始できませんでした：$error';
+  }
+
+  @override
+  String coachOpenArchiveFailed(String error) {
+    return 'アーカイブを開けませんでした：$error';
+  }
+
+  @override
+  String get coachCopied => 'クリップボードにコピーしました';
 }

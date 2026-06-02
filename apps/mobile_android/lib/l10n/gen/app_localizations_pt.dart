@@ -2899,6 +2899,568 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get liveSpectatorBadgeConnecting => 'Conectando';
+
+  @override
+  String get plansTitle => 'Planos de treino';
+
+  @override
+  String get plansNewPlan => 'Novo plano';
+
+  @override
+  String plansDeleteTitle(String name) {
+    return 'Excluir \"$name\"?';
+  }
+
+  @override
+  String get plansDeleteBody => 'Todas as semanas e treinos serão removidos.';
+
+  @override
+  String get plansCancel => 'Cancelar';
+
+  @override
+  String get plansDelete => 'Excluir';
+
+  @override
+  String get plansAbandon => 'Abandonar';
+
+  @override
+  String plansDaysPerWeek(int count) {
+    return '$count dias/sem.';
+  }
+
+  @override
+  String get plansSignInTitle => 'Entre para usar os planos de treino';
+
+  @override
+  String get plansSignInBody =>
+      'Os planos sincronizam com a sua conta e acompanham você em todos os dispositivos. Vá em Configurações → Entrar para conectar.';
+
+  @override
+  String get plansEmptyTitle => 'Nenhum plano ainda.';
+
+  @override
+  String get plansEmptyBody =>
+      'Escolha uma prova-alvo e montaremos as semanas para você.';
+
+  @override
+  String get plansTimeoutError =>
+      'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
+
+  @override
+  String get plansLoadError =>
+      'Não foi possível carregar os planos de treino. Toque em tentar novamente.';
+
+  @override
+  String get planNewTitle => 'Novo plano';
+
+  @override
+  String get planNewNameLabel => 'Nome do plano';
+
+  @override
+  String get planNewNameHint => 'ex. Meia maratona de outono';
+
+  @override
+  String get planNewGoalRace => 'Prova-alvo';
+
+  @override
+  String get planNewStartDate => 'Data de início';
+
+  @override
+  String get planNewDaysPerWeek => 'Dias por semana';
+
+  @override
+  String planNewDaysOption(int count) {
+    return '$count dias';
+  }
+
+  @override
+  String get planNewGoalTimeSection => 'Tempo-alvo · opcional';
+
+  @override
+  String get planNewBeginnerTitle =>
+      'Começando a correr? Use um plano de caminhada-corrida';
+
+  @override
+  String get planNewBeginnerSubtitle =>
+      'Um cronograma suave no estilo C25K de intervalos cronometrados de corrida/caminhada que evolui até uma corrida contínua. Substitui o ritmo do tempo-alvo.';
+
+  @override
+  String get planNewRecent5kSection => 'Tempo recente de 5K · opcional';
+
+  @override
+  String get planNewRecent5kHelp =>
+      'Baseie os ritmos em um resultado real em vez da meta. Usa a equivalência de Riegel para projetar até a distância-alvo.';
+
+  @override
+  String get planNewRecent5kConfirm =>
+      'É um tempo que eu conseguiria correr hoje — reflete meu condicionamento atual.';
+
+  @override
+  String get planNewRecent5kWarning =>
+      'Até você confirmar, os ritmos permanecem na estimativa conservadora baseada na meta. Basear-se em um resultado antigo pode prescrever ritmos rápidos demais para quem está voltando.';
+
+  @override
+  String get planNewOverrideHint => 'Substituir o total de semanas';
+
+  @override
+  String planNewOverrideLabel(int count) {
+    return 'Substituir semanas (padrão: $count)';
+  }
+
+  @override
+  String get planNewCancel => 'Cancelar';
+
+  @override
+  String get planNewCreate => 'Criar plano';
+
+  @override
+  String get planNewCreating => 'Criando…';
+
+  @override
+  String get planNewPreviewTitle => 'Prévia';
+
+  @override
+  String get planNewPaceEasy => 'Leve';
+
+  @override
+  String get planNewPaceMarathon => 'Maratona';
+
+  @override
+  String get planNewPaceTempo => 'Tempo';
+
+  @override
+  String get planNewPaceInterval => 'Intervalo';
+
+  @override
+  String get planNewPaceRep => 'Repetição';
+
+  @override
+  String get planNewPacesFallback =>
+      'Ritmos estimados — adicione uma corrida recente ou um tempo-alvo para metas personalizadas.';
+
+  @override
+  String planNewVdot(String value) {
+    return 'VDOT de Daniels: $value';
+  }
+
+  @override
+  String get planNewWeekOutline => 'Resumo das semanas';
+
+  @override
+  String planNewMoreWeeks(int count) {
+    return '+ $count semanas a mais';
+  }
+
+  @override
+  String planNewSessions(int count) {
+    return '$count sessões';
+  }
+
+  @override
+  String get planDetailTimeoutError =>
+      'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
+
+  @override
+  String get planDetailLoadError =>
+      'Não foi possível carregar este plano. Toque em tentar novamente.';
+
+  @override
+  String get planDetailNotFound => 'Plano não encontrado.';
+
+  @override
+  String get planDetailPublishTooltip => 'Publicar como modelo do clube';
+
+  @override
+  String planDetailDaysPerWeek(int count) {
+    return '$count dias/sem.';
+  }
+
+  @override
+  String get planDetailToday => 'HOJE';
+
+  @override
+  String get planDetailCompleted => 'Concluído';
+
+  @override
+  String planDetailWeek(int number) {
+    return 'Semana $number';
+  }
+
+  @override
+  String get planDetailEditTooltip => 'Editar treino';
+
+  @override
+  String get planDetailPublishLoadClubsTimeout =>
+      'Não foi possível carregar seus clubes — verifique sua rede.';
+
+  @override
+  String get planDetailPublishLoadClubsFailed =>
+      'Não foi possível carregar seus clubes.';
+
+  @override
+  String get planDetailPublishNoClubs =>
+      'Você precisa ser dono ou administrador de um clube para publicar um modelo.';
+
+  @override
+  String planDetailPublishSuccess(String name) {
+    return '\"$name\" publicado como modelo do clube.';
+  }
+
+  @override
+  String planDetailPublishFailed(String error) {
+    return 'Falha ao publicar: $error';
+  }
+
+  @override
+  String get planDetailPublishPickerTitle => 'Publicar no clube';
+
+  @override
+  String get planDetailPublishPickerBody =>
+      'Os membros do clube poderão adotar este plano como seu.';
+
+  @override
+  String planDetailPublishPickerMembers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count membros',
+      one: '$count membro',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailPublishCancel => 'Cancelar';
+
+  @override
+  String get workoutTimeoutError =>
+      'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
+
+  @override
+  String get workoutLoadError =>
+      'Não foi possível carregar este treino. Toque em tentar novamente.';
+
+  @override
+  String get workoutNotFound => 'Treino não encontrado.';
+
+  @override
+  String get workoutMetricDistance => 'Distância';
+
+  @override
+  String get workoutMetricDuration => 'Duração';
+
+  @override
+  String get workoutMetricTargetPace => 'Ritmo-alvo';
+
+  @override
+  String get workoutCompleted => 'Concluído';
+
+  @override
+  String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutStart => 'Iniciar treino';
+
+  @override
+  String get workoutSectionNotes => 'Notas';
+
+  @override
+  String get workoutSectionStructure => 'Estrutura';
+
+  @override
+  String get workoutSectionHowTo => 'Como correr';
+
+  @override
+  String get workoutStructWarmup => 'Aquecimento';
+
+  @override
+  String get workoutStructRepeats => 'Repetições';
+
+  @override
+  String get workoutStructSteady => 'Constante';
+
+  @override
+  String get workoutStructCooldown => 'Desaquecimento';
+
+  @override
+  String workoutStructWarmupValue(String distance) {
+    return '$distance @ leve';
+  }
+
+  @override
+  String workoutStructCooldownValue(String distance) {
+    return '$distance @ leve';
+  }
+
+  @override
+  String get workoutAdviceEasy =>
+      'Ritmo de conversa. Se você não consegue conversar, está correndo rápido demais.';
+
+  @override
+  String get workoutAdviceLong =>
+      'Fique relaxado. Busque uma respiração constante. Reduza 10% da distância se o clima estiver ruim ou você estiver dolorido — mas não pule.';
+
+  @override
+  String get workoutAdviceTempo =>
+      '\"Confortavelmente difícil\". Você deve sentir que conseguiria manter o ritmo por cerca de uma hora em esforço máximo, mas não mais.';
+
+  @override
+  String get workoutAdviceInterval =>
+      'Corra as repetições com intensidade suficiente para que a última pareça a primeira. Não escolha um ritmo que você só consiga manter por duas ou três repetições.';
+
+  @override
+  String get workoutAdviceMarathonPace =>
+      'Trave exatamente no ritmo-alvo de maratona. Esta é uma sessão de ensaio — nem mais rápido, nem mais devagar.';
+
+  @override
+  String get workoutAdviceWalkRun =>
+      'Alterne corrida leve e caminhada nos intervalos cronometrados. As pausas para caminhar fazem parte do treino — faça-as mesmo se estiver descansado.';
+
+  @override
+  String get workoutAdviceRace =>
+      'Confie no plano. Não persiga um recorde no primeiro quilômetro.';
+
+  @override
+  String get workoutAdviceRest =>
+      'Dia de descanso — se precisar se mexer, caminhe ou alongue.';
+
+  @override
+  String get coachTitle => 'Coach';
+
+  @override
+  String get coachNewConversation => 'Nova conversa';
+
+  @override
+  String get coachConsentHeadline => 'Antes de conversar com o Coach';
+
+  @override
+  String get coachConsentIntro =>
+      'Para dar conselhos fundamentados, o Coach envia uma parte dos seus dados de treino à Anthropic, nosso provedor de modelos de IA nos Estados Unidos. Essa parte inclui:';
+
+  @override
+  String get coachConsentBulletProfile =>
+      'Sua data de nascimento, gênero e zonas de FC, se definidas.';
+
+  @override
+  String get coachConsentBulletRuns =>
+      'Uma amostra das suas corridas mais recentes.';
+
+  @override
+  String get coachConsentBulletPlan =>
+      'O plano de treino ativo que você selecionou.';
+
+  @override
+  String get coachConsentBulletMessages =>
+      'As mensagens de chat que você digita na tela abaixo.';
+
+  @override
+  String get coachConsentProcessing =>
+      'A Anthropic processa os dados em nome da Threkir conforme seus termos de processamento; por padrão, não treinam seus modelos com dados de clientes da Threkir. Todos os detalhes — incluindo o mecanismo de transferência, a retenção e seus direitos de retirada — estão na nossa política de privacidade.';
+
+  @override
+  String get coachConsentAction =>
+      'Toque em \"Eu consinto\" para continuar. Toque em cancelar para sair da página sem enviar dados.';
+
+  @override
+  String get coachConsentCancel => 'Cancelar';
+
+  @override
+  String get coachConsentAccept => 'Eu consinto — iniciar o Coach';
+
+  @override
+  String get coachConsentSaving => 'Registrando consentimento…';
+
+  @override
+  String get coachNoPlanOption => 'Sem plano (apenas corridas recentes)';
+
+  @override
+  String coachPlanActive(String name) {
+    return '$name · ativo';
+  }
+
+  @override
+  String coachPlanDone(String name) {
+    return '$name · concluído';
+  }
+
+  @override
+  String get coachNewChatTooltip => 'Novo chat';
+
+  @override
+  String get coachHistoryTooltip => 'Histórico de chat';
+
+  @override
+  String get coachNewChat => 'Novo chat';
+
+  @override
+  String coachActiveThread(String suffix) {
+    return 'Ativo$suffix';
+  }
+
+  @override
+  String get coachArchiveTapToView => 'Toque para ver · deslize para excluir';
+
+  @override
+  String get coachContextNoPlan => 'Sem plano';
+
+  @override
+  String coachContextPlanWeeks(String name, int weeks) {
+    return '$name · $weeks sem.';
+  }
+
+  @override
+  String get coachContextNoRuns => 'Sem corridas';
+
+  @override
+  String get coachContextLast => 'Últimas';
+
+  @override
+  String get coachContextHr => 'FC';
+
+  @override
+  String coachContextWeeklyGoal(String km) {
+    return '$km km/sem.';
+  }
+
+  @override
+  String coachArchiveBanner(String label) {
+    return 'Visualizando arquivo · $label · somente leitura';
+  }
+
+  @override
+  String get coachBackToActive => 'Voltar ao ativo';
+
+  @override
+  String get coachLimitReachedPro => 'Limite diário atingido. Volte amanhã.';
+
+  @override
+  String get coachLimitReachedFree =>
+      'Limite diário atingido. O Pro tem um teto maior — atualize nas Configurações.';
+
+  @override
+  String coachMessagesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'restam $count mensagens hoje',
+      one: 'resta $count mensagem hoje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachEmptyPromptPlan =>
+      'Pergunte sobre o treino de hoje, seu ritmo ou como as corridas recentes se comparam ao plano.';
+
+  @override
+  String get coachEmptyPromptNoPlan =>
+      'Pergunte sobre suas corridas recentes, o ritmo de corridas leves ou o básico do treino.';
+
+  @override
+  String get coachSuggestPlanRest =>
+      'Devo correr amanhã ou fazer um dia de descanso?';
+
+  @override
+  String get coachSuggestPlanOnTrack =>
+      'Estou no caminho para o meu tempo-alvo?';
+
+  @override
+  String get coachSuggestPlanLongRun =>
+      'Por que o longão desta semana importa?';
+
+  @override
+  String get coachSuggestPlanToday => 'No que devo focar no treino de hoje?';
+
+  @override
+  String get coachSuggestNoPlanLastRun => 'Como foi minha última corrida?';
+
+  @override
+  String get coachSuggestNoPlanEasyPace =>
+      'Em que ritmo devem ser minhas corridas leves?';
+
+  @override
+  String get coachSuggestNoPlanWeekOff =>
+      'Não corro há uma semana — o que devo fazer?';
+
+  @override
+  String get coachSuggestNoPlanTempo => 'O que é uma corrida de tempo?';
+
+  @override
+  String get coachEditCancel => 'Cancelar';
+
+  @override
+  String get coachEditSaveResend => 'Salvar e reenviar';
+
+  @override
+  String get coachActionCopy => 'Copiar';
+
+  @override
+  String get coachActionEdit => 'Editar';
+
+  @override
+  String get coachActionRegenerate => 'Regenerar';
+
+  @override
+  String get coachActionHelpful => 'Útil';
+
+  @override
+  String get coachActionNotHelpful => 'Não útil';
+
+  @override
+  String get coachComposerHintLimit => 'Limite diário atingido';
+
+  @override
+  String get coachComposerHint => 'Pergunte ao Coach…';
+
+  @override
+  String get coachArchiveTitle => 'Iniciar uma nova conversa?';
+
+  @override
+  String get coachArchiveBody =>
+      'O chat atual vai para o histórico. Você pode revê-lo na barra lateral.';
+
+  @override
+  String get coachArchiveCancel => 'Cancelar';
+
+  @override
+  String get coachArchiveConfirm => 'Novo chat';
+
+  @override
+  String get coachSignInFirst => 'Por favor, entre primeiro.';
+
+  @override
+  String get coachSessionExpired =>
+      'Sua sessão expirou. Por favor, entre novamente.';
+
+  @override
+  String coachDailyLimitError(int limit) {
+    return 'Limite diário atingido ($limit mensagens). Volte amanhã!';
+  }
+
+  @override
+  String coachGenericError(int code) {
+    return 'Erro do Coach ($code)';
+  }
+
+  @override
+  String get coachTransportError =>
+      'Não foi possível alcançar o Coach. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get coachStreamFailed => 'falha no fluxo';
+
+  @override
+  String coachNewConversationFailed(String error) {
+    return 'Não foi possível iniciar uma nova conversa: $error';
+  }
+
+  @override
+  String coachOpenArchiveFailed(String error) {
+    return 'Não foi possível abrir o arquivo: $error';
+  }
+
+  @override
+  String get coachCopied => 'Copiado para a área de transferência';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -5796,4 +6358,566 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get liveSpectatorBadgeConnecting => 'Conectando';
+
+  @override
+  String get plansTitle => 'Planos de treino';
+
+  @override
+  String get plansNewPlan => 'Novo plano';
+
+  @override
+  String plansDeleteTitle(String name) {
+    return 'Excluir \"$name\"?';
+  }
+
+  @override
+  String get plansDeleteBody => 'Todas as semanas e treinos serão removidos.';
+
+  @override
+  String get plansCancel => 'Cancelar';
+
+  @override
+  String get plansDelete => 'Excluir';
+
+  @override
+  String get plansAbandon => 'Abandonar';
+
+  @override
+  String plansDaysPerWeek(int count) {
+    return '$count dias/sem.';
+  }
+
+  @override
+  String get plansSignInTitle => 'Entre para usar os planos de treino';
+
+  @override
+  String get plansSignInBody =>
+      'Os planos sincronizam com a sua conta e acompanham você em todos os dispositivos. Vá em Configurações → Entrar para conectar.';
+
+  @override
+  String get plansEmptyTitle => 'Nenhum plano ainda.';
+
+  @override
+  String get plansEmptyBody =>
+      'Escolha uma prova-alvo e montaremos as semanas para você.';
+
+  @override
+  String get plansTimeoutError =>
+      'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
+
+  @override
+  String get plansLoadError =>
+      'Não foi possível carregar os planos de treino. Toque em tentar novamente.';
+
+  @override
+  String get planNewTitle => 'Novo plano';
+
+  @override
+  String get planNewNameLabel => 'Nome do plano';
+
+  @override
+  String get planNewNameHint => 'ex. Meia maratona de outono';
+
+  @override
+  String get planNewGoalRace => 'Prova-alvo';
+
+  @override
+  String get planNewStartDate => 'Data de início';
+
+  @override
+  String get planNewDaysPerWeek => 'Dias por semana';
+
+  @override
+  String planNewDaysOption(int count) {
+    return '$count dias';
+  }
+
+  @override
+  String get planNewGoalTimeSection => 'Tempo-alvo · opcional';
+
+  @override
+  String get planNewBeginnerTitle =>
+      'Começando a correr? Use um plano de caminhada-corrida';
+
+  @override
+  String get planNewBeginnerSubtitle =>
+      'Um cronograma suave no estilo C25K de intervalos cronometrados de corrida/caminhada que evolui até uma corrida contínua. Substitui o ritmo do tempo-alvo.';
+
+  @override
+  String get planNewRecent5kSection => 'Tempo recente de 5K · opcional';
+
+  @override
+  String get planNewRecent5kHelp =>
+      'Baseie os ritmos em um resultado real em vez da meta. Usa a equivalência de Riegel para projetar até a distância-alvo.';
+
+  @override
+  String get planNewRecent5kConfirm =>
+      'É um tempo que eu conseguiria correr hoje — reflete meu condicionamento atual.';
+
+  @override
+  String get planNewRecent5kWarning =>
+      'Até você confirmar, os ritmos permanecem na estimativa conservadora baseada na meta. Basear-se em um resultado antigo pode prescrever ritmos rápidos demais para quem está voltando.';
+
+  @override
+  String get planNewOverrideHint => 'Substituir o total de semanas';
+
+  @override
+  String planNewOverrideLabel(int count) {
+    return 'Substituir semanas (padrão: $count)';
+  }
+
+  @override
+  String get planNewCancel => 'Cancelar';
+
+  @override
+  String get planNewCreate => 'Criar plano';
+
+  @override
+  String get planNewCreating => 'Criando…';
+
+  @override
+  String get planNewPreviewTitle => 'Prévia';
+
+  @override
+  String get planNewPaceEasy => 'Leve';
+
+  @override
+  String get planNewPaceMarathon => 'Maratona';
+
+  @override
+  String get planNewPaceTempo => 'Tempo';
+
+  @override
+  String get planNewPaceInterval => 'Intervalo';
+
+  @override
+  String get planNewPaceRep => 'Repetição';
+
+  @override
+  String get planNewPacesFallback =>
+      'Ritmos estimados — adicione uma corrida recente ou um tempo-alvo para metas personalizadas.';
+
+  @override
+  String planNewVdot(String value) {
+    return 'VDOT de Daniels: $value';
+  }
+
+  @override
+  String get planNewWeekOutline => 'Resumo das semanas';
+
+  @override
+  String planNewMoreWeeks(int count) {
+    return '+ $count semanas a mais';
+  }
+
+  @override
+  String planNewSessions(int count) {
+    return '$count sessões';
+  }
+
+  @override
+  String get planDetailTimeoutError =>
+      'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
+
+  @override
+  String get planDetailLoadError =>
+      'Não foi possível carregar este plano. Toque em tentar novamente.';
+
+  @override
+  String get planDetailNotFound => 'Plano não encontrado.';
+
+  @override
+  String get planDetailPublishTooltip => 'Publicar como modelo do clube';
+
+  @override
+  String planDetailDaysPerWeek(int count) {
+    return '$count dias/sem.';
+  }
+
+  @override
+  String get planDetailToday => 'HOJE';
+
+  @override
+  String get planDetailCompleted => 'Concluído';
+
+  @override
+  String planDetailWeek(int number) {
+    return 'Semana $number';
+  }
+
+  @override
+  String get planDetailEditTooltip => 'Editar treino';
+
+  @override
+  String get planDetailPublishLoadClubsTimeout =>
+      'Não foi possível carregar seus clubes — verifique sua rede.';
+
+  @override
+  String get planDetailPublishLoadClubsFailed =>
+      'Não foi possível carregar seus clubes.';
+
+  @override
+  String get planDetailPublishNoClubs =>
+      'Você precisa ser dono ou administrador de um clube para publicar um modelo.';
+
+  @override
+  String planDetailPublishSuccess(String name) {
+    return '\"$name\" publicado como modelo do clube.';
+  }
+
+  @override
+  String planDetailPublishFailed(String error) {
+    return 'Falha ao publicar: $error';
+  }
+
+  @override
+  String get planDetailPublishPickerTitle => 'Publicar no clube';
+
+  @override
+  String get planDetailPublishPickerBody =>
+      'Os membros do clube poderão adotar este plano como seu.';
+
+  @override
+  String planDetailPublishPickerMembers(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count membros',
+      one: '$count membro',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get planDetailPublishCancel => 'Cancelar';
+
+  @override
+  String get workoutTimeoutError =>
+      'Tempo de conexão esgotado. Verifique sua rede e tente novamente.';
+
+  @override
+  String get workoutLoadError =>
+      'Não foi possível carregar este treino. Toque em tentar novamente.';
+
+  @override
+  String get workoutNotFound => 'Treino não encontrado.';
+
+  @override
+  String get workoutMetricDistance => 'Distância';
+
+  @override
+  String get workoutMetricDuration => 'Duração';
+
+  @override
+  String get workoutMetricTargetPace => 'Ritmo-alvo';
+
+  @override
+  String get workoutCompleted => 'Concluído';
+
+  @override
+  String get workoutUnlink => 'Desvincular';
+
+  @override
+  String get workoutStart => 'Iniciar treino';
+
+  @override
+  String get workoutSectionNotes => 'Notas';
+
+  @override
+  String get workoutSectionStructure => 'Estrutura';
+
+  @override
+  String get workoutSectionHowTo => 'Como correr';
+
+  @override
+  String get workoutStructWarmup => 'Aquecimento';
+
+  @override
+  String get workoutStructRepeats => 'Repetições';
+
+  @override
+  String get workoutStructSteady => 'Constante';
+
+  @override
+  String get workoutStructCooldown => 'Desaquecimento';
+
+  @override
+  String workoutStructWarmupValue(String distance) {
+    return '$distance @ leve';
+  }
+
+  @override
+  String workoutStructCooldownValue(String distance) {
+    return '$distance @ leve';
+  }
+
+  @override
+  String get workoutAdviceEasy =>
+      'Ritmo de conversa. Se você não consegue conversar, está correndo rápido demais.';
+
+  @override
+  String get workoutAdviceLong =>
+      'Fique relaxado. Busque uma respiração constante. Reduza 10% da distância se o clima estiver ruim ou você estiver dolorido — mas não pule.';
+
+  @override
+  String get workoutAdviceTempo =>
+      '\"Confortavelmente difícil\". Você deve sentir que conseguiria manter o ritmo por cerca de uma hora em esforço máximo, mas não mais.';
+
+  @override
+  String get workoutAdviceInterval =>
+      'Corra as repetições com intensidade suficiente para que a última pareça a primeira. Não escolha um ritmo que você só consiga manter por duas ou três repetições.';
+
+  @override
+  String get workoutAdviceMarathonPace =>
+      'Trave exatamente no ritmo-alvo de maratona. Esta é uma sessão de ensaio — nem mais rápido, nem mais devagar.';
+
+  @override
+  String get workoutAdviceWalkRun =>
+      'Alterne corrida leve e caminhada nos intervalos cronometrados. As pausas para caminhar fazem parte do treino — faça-as mesmo se estiver descansado.';
+
+  @override
+  String get workoutAdviceRace =>
+      'Confie no plano. Não persiga um recorde no primeiro quilômetro.';
+
+  @override
+  String get workoutAdviceRest =>
+      'Dia de descanso — se precisar se mexer, caminhe ou alongue.';
+
+  @override
+  String get coachTitle => 'Coach';
+
+  @override
+  String get coachNewConversation => 'Nova conversa';
+
+  @override
+  String get coachConsentHeadline => 'Antes de conversar com o Coach';
+
+  @override
+  String get coachConsentIntro =>
+      'Para dar conselhos fundamentados, o Coach envia uma parte dos seus dados de treino à Anthropic, nosso provedor de modelos de IA nos Estados Unidos. Essa parte inclui:';
+
+  @override
+  String get coachConsentBulletProfile =>
+      'Sua data de nascimento, gênero e zonas de FC, se definidas.';
+
+  @override
+  String get coachConsentBulletRuns =>
+      'Uma amostra das suas corridas mais recentes.';
+
+  @override
+  String get coachConsentBulletPlan =>
+      'O plano de treino ativo que você selecionou.';
+
+  @override
+  String get coachConsentBulletMessages =>
+      'As mensagens de chat que você digita na tela abaixo.';
+
+  @override
+  String get coachConsentProcessing =>
+      'A Anthropic processa os dados em nome da Threkir conforme seus termos de processamento; por padrão, não treinam seus modelos com dados de clientes da Threkir. Todos os detalhes — incluindo o mecanismo de transferência, a retenção e seus direitos de retirada — estão na nossa política de privacidade.';
+
+  @override
+  String get coachConsentAction =>
+      'Toque em \"Eu consinto\" para continuar. Toque em cancelar para sair da página sem enviar dados.';
+
+  @override
+  String get coachConsentCancel => 'Cancelar';
+
+  @override
+  String get coachConsentAccept => 'Eu consinto — iniciar o Coach';
+
+  @override
+  String get coachConsentSaving => 'Registrando consentimento…';
+
+  @override
+  String get coachNoPlanOption => 'Sem plano (apenas corridas recentes)';
+
+  @override
+  String coachPlanActive(String name) {
+    return '$name · ativo';
+  }
+
+  @override
+  String coachPlanDone(String name) {
+    return '$name · concluído';
+  }
+
+  @override
+  String get coachNewChatTooltip => 'Novo chat';
+
+  @override
+  String get coachHistoryTooltip => 'Histórico de chat';
+
+  @override
+  String get coachNewChat => 'Novo chat';
+
+  @override
+  String coachActiveThread(String suffix) {
+    return 'Ativo$suffix';
+  }
+
+  @override
+  String get coachArchiveTapToView => 'Toque para ver · deslize para excluir';
+
+  @override
+  String get coachContextNoPlan => 'Sem plano';
+
+  @override
+  String coachContextPlanWeeks(String name, int weeks) {
+    return '$name · $weeks sem.';
+  }
+
+  @override
+  String get coachContextNoRuns => 'Sem corridas';
+
+  @override
+  String get coachContextLast => 'Últimas';
+
+  @override
+  String get coachContextHr => 'FC';
+
+  @override
+  String coachContextWeeklyGoal(String km) {
+    return '$km km/sem.';
+  }
+
+  @override
+  String coachArchiveBanner(String label) {
+    return 'Visualizando arquivo · $label · somente leitura';
+  }
+
+  @override
+  String get coachBackToActive => 'Voltar ao ativo';
+
+  @override
+  String get coachLimitReachedPro => 'Limite diário atingido. Volte amanhã.';
+
+  @override
+  String get coachLimitReachedFree =>
+      'Limite diário atingido. O Pro tem um teto maior — atualize nas Configurações.';
+
+  @override
+  String coachMessagesLeft(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'restam $count mensagens hoje',
+      one: 'resta $count mensagem hoje',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get coachEmptyPromptPlan =>
+      'Pergunte sobre o treino de hoje, seu ritmo ou como as corridas recentes se comparam ao plano.';
+
+  @override
+  String get coachEmptyPromptNoPlan =>
+      'Pergunte sobre suas corridas recentes, o ritmo de corridas leves ou o básico do treino.';
+
+  @override
+  String get coachSuggestPlanRest =>
+      'Devo correr amanhã ou fazer um dia de descanso?';
+
+  @override
+  String get coachSuggestPlanOnTrack =>
+      'Estou no caminho para o meu tempo-alvo?';
+
+  @override
+  String get coachSuggestPlanLongRun =>
+      'Por que o longão desta semana importa?';
+
+  @override
+  String get coachSuggestPlanToday => 'No que devo focar no treino de hoje?';
+
+  @override
+  String get coachSuggestNoPlanLastRun => 'Como foi minha última corrida?';
+
+  @override
+  String get coachSuggestNoPlanEasyPace =>
+      'Em que ritmo devem ser minhas corridas leves?';
+
+  @override
+  String get coachSuggestNoPlanWeekOff =>
+      'Não corro há uma semana — o que devo fazer?';
+
+  @override
+  String get coachSuggestNoPlanTempo => 'O que é uma corrida de tempo?';
+
+  @override
+  String get coachEditCancel => 'Cancelar';
+
+  @override
+  String get coachEditSaveResend => 'Salvar e reenviar';
+
+  @override
+  String get coachActionCopy => 'Copiar';
+
+  @override
+  String get coachActionEdit => 'Editar';
+
+  @override
+  String get coachActionRegenerate => 'Regenerar';
+
+  @override
+  String get coachActionHelpful => 'Útil';
+
+  @override
+  String get coachActionNotHelpful => 'Não útil';
+
+  @override
+  String get coachComposerHintLimit => 'Limite diário atingido';
+
+  @override
+  String get coachComposerHint => 'Pergunte ao Coach…';
+
+  @override
+  String get coachArchiveTitle => 'Iniciar uma nova conversa?';
+
+  @override
+  String get coachArchiveBody =>
+      'O chat atual vai para o histórico. Você pode revê-lo na barra lateral.';
+
+  @override
+  String get coachArchiveCancel => 'Cancelar';
+
+  @override
+  String get coachArchiveConfirm => 'Novo chat';
+
+  @override
+  String get coachSignInFirst => 'Por favor, entre primeiro.';
+
+  @override
+  String get coachSessionExpired =>
+      'Sua sessão expirou. Por favor, entre novamente.';
+
+  @override
+  String coachDailyLimitError(int limit) {
+    return 'Limite diário atingido ($limit mensagens). Volte amanhã!';
+  }
+
+  @override
+  String coachGenericError(int code) {
+    return 'Erro do Coach ($code)';
+  }
+
+  @override
+  String get coachTransportError =>
+      'Não foi possível alcançar o Coach. Verifique sua conexão e tente novamente.';
+
+  @override
+  String get coachStreamFailed => 'falha no fluxo';
+
+  @override
+  String coachNewConversationFailed(String error) {
+    return 'Não foi possível iniciar uma nova conversa: $error';
+  }
+
+  @override
+  String coachOpenArchiveFailed(String error) {
+    return 'Não foi possível abrir o arquivo: $error';
+  }
+
+  @override
+  String get coachCopied => 'Copiado para a área de transferência';
 }

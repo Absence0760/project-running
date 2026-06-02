@@ -4834,6 +4834,918 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Connecting'**
   String get liveSpectatorBadgeConnecting;
+
+  /// Plans list AppBar title
+  ///
+  /// In en, this message translates to:
+  /// **'Training plans'**
+  String get plansTitle;
+
+  /// FAB label to create a new plan
+  ///
+  /// In en, this message translates to:
+  /// **'New plan'**
+  String get plansNewPlan;
+
+  /// Confirm-delete dialog title for a plan
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\"?'**
+  String plansDeleteTitle(String name);
+
+  /// Confirm-delete dialog body for a plan
+  ///
+  /// In en, this message translates to:
+  /// **'All weeks and workouts will be removed.'**
+  String get plansDeleteBody;
+
+  /// Cancel button in the delete-plan dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get plansCancel;
+
+  /// Delete button in the delete-plan dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get plansDelete;
+
+  /// Abandon button on an active plan tile
+  ///
+  /// In en, this message translates to:
+  /// **'Abandon'**
+  String get plansAbandon;
+
+  /// Days-per-week meta chip on a plan tile
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days/wk'**
+  String plansDaysPerWeek(int count);
+
+  /// Sign-in prompt title on plans list
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to use training plans'**
+  String get plansSignInTitle;
+
+  /// Sign-in prompt body on plans list
+  ///
+  /// In en, this message translates to:
+  /// **'Plans sync to your account so they follow you across devices. Head to Settings → Sign in to connect.'**
+  String get plansSignInBody;
+
+  /// Empty-state title on plans list
+  ///
+  /// In en, this message translates to:
+  /// **'No plans yet.'**
+  String get plansEmptyTitle;
+
+  /// Empty-state body on plans list
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a goal race and we\'ll schedule the weeks for you.'**
+  String get plansEmptyBody;
+
+  /// Plans list load timeout error
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get plansTimeoutError;
+
+  /// Plans list generic load error
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load training plans. Tap retry to try again.'**
+  String get plansLoadError;
+
+  /// New-plan wizard AppBar title
+  ///
+  /// In en, this message translates to:
+  /// **'New plan'**
+  String get planNewTitle;
+
+  /// Plan-name field label
+  ///
+  /// In en, this message translates to:
+  /// **'Plan name'**
+  String get planNewNameLabel;
+
+  /// Plan-name field hint
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Autumn half marathon'**
+  String get planNewNameHint;
+
+  /// Goal-race dropdown label
+  ///
+  /// In en, this message translates to:
+  /// **'Goal race'**
+  String get planNewGoalRace;
+
+  /// Start-date tile title
+  ///
+  /// In en, this message translates to:
+  /// **'Start date'**
+  String get planNewStartDate;
+
+  /// Days-per-week dropdown label
+  ///
+  /// In en, this message translates to:
+  /// **'Days per week'**
+  String get planNewDaysPerWeek;
+
+  /// Days-per-week dropdown option
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days'**
+  String planNewDaysOption(int count);
+
+  /// Goal-time section label
+  ///
+  /// In en, this message translates to:
+  /// **'Goal time · optional'**
+  String get planNewGoalTimeSection;
+
+  /// Beginner walk-run checkbox title
+  ///
+  /// In en, this message translates to:
+  /// **'New to running? Use a walk-run plan'**
+  String get planNewBeginnerTitle;
+
+  /// Beginner walk-run checkbox subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'A gentle C25K-style schedule of timed run/walk intervals that builds to a continuous run. Overrides goal-time pacing.'**
+  String get planNewBeginnerSubtitle;
+
+  /// Recent-5K section label
+  ///
+  /// In en, this message translates to:
+  /// **'Recent 5K time · optional'**
+  String get planNewRecent5kSection;
+
+  /// Recent-5K help text
+  ///
+  /// In en, this message translates to:
+  /// **'Anchor paces on a real result instead of the goal. Uses Riegel equivalence to project to the goal distance.'**
+  String get planNewRecent5kHelp;
+
+  /// Recent-5K current-fitness confirmation checkbox
+  ///
+  /// In en, this message translates to:
+  /// **'This is a time I could run today — it reflects my current fitness.'**
+  String get planNewRecent5kConfirm;
+
+  /// Recent-5K unconfirmed warning
+  ///
+  /// In en, this message translates to:
+  /// **'Until you confirm, paces stay on the conservative goal-based estimate. Anchoring on an old result can prescribe paces that are too fast for a returning runner.'**
+  String get planNewRecent5kWarning;
+
+  /// Override-weeks field hint
+  ///
+  /// In en, this message translates to:
+  /// **'Override total weeks'**
+  String get planNewOverrideHint;
+
+  /// Override-weeks field label with default count
+  ///
+  /// In en, this message translates to:
+  /// **'Override weeks ({count} default)'**
+  String planNewOverrideLabel(int count);
+
+  /// Cancel button in the new-plan wizard
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planNewCancel;
+
+  /// Create-plan button label
+  ///
+  /// In en, this message translates to:
+  /// **'Create plan'**
+  String get planNewCreate;
+
+  /// Create-plan button label while busy
+  ///
+  /// In en, this message translates to:
+  /// **'Creating…'**
+  String get planNewCreating;
+
+  /// Preview section title
+  ///
+  /// In en, this message translates to:
+  /// **'Preview'**
+  String get planNewPreviewTitle;
+
+  /// Easy-pace pill label
+  ///
+  /// In en, this message translates to:
+  /// **'Easy'**
+  String get planNewPaceEasy;
+
+  /// Marathon-pace pill label
+  ///
+  /// In en, this message translates to:
+  /// **'Marathon'**
+  String get planNewPaceMarathon;
+
+  /// Tempo-pace pill label
+  ///
+  /// In en, this message translates to:
+  /// **'Tempo'**
+  String get planNewPaceTempo;
+
+  /// Interval-pace pill label
+  ///
+  /// In en, this message translates to:
+  /// **'Interval'**
+  String get planNewPaceInterval;
+
+  /// Repetition-pace pill label
+  ///
+  /// In en, this message translates to:
+  /// **'Rep'**
+  String get planNewPaceRep;
+
+  /// Fallback-paces preview note
+  ///
+  /// In en, this message translates to:
+  /// **'Estimated paces — add a recent run or a goal time for personalised targets.'**
+  String get planNewPacesFallback;
+
+  /// VDOT preview line
+  ///
+  /// In en, this message translates to:
+  /// **'Daniels VDOT: {value}'**
+  String planNewVdot(String value);
+
+  /// Week-outline preview section label
+  ///
+  /// In en, this message translates to:
+  /// **'Week outline'**
+  String get planNewWeekOutline;
+
+  /// More-weeks preview footer
+  ///
+  /// In en, this message translates to:
+  /// **'+ {count} more weeks'**
+  String planNewMoreWeeks(int count);
+
+  /// Active-sessions count on a preview week row
+  ///
+  /// In en, this message translates to:
+  /// **'{count} sessions'**
+  String planNewSessions(int count);
+
+  /// Plan-detail load timeout error
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get planDetailTimeoutError;
+
+  /// Plan-detail generic load error
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this plan. Tap retry to try again.'**
+  String get planDetailLoadError;
+
+  /// Plan-detail not-found body
+  ///
+  /// In en, this message translates to:
+  /// **'Plan not found.'**
+  String get planDetailNotFound;
+
+  /// Publish-as-template AppBar action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Publish as club template'**
+  String get planDetailPublishTooltip;
+
+  /// Days-per-week meta on the hero card
+  ///
+  /// In en, this message translates to:
+  /// **'{count} days/wk'**
+  String planDetailDaysPerWeek(int count);
+
+  /// Today-card eyebrow label
+  ///
+  /// In en, this message translates to:
+  /// **'TODAY'**
+  String get planDetailToday;
+
+  /// Completed marker on the today card
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get planDetailCompleted;
+
+  /// Week-card title
+  ///
+  /// In en, this message translates to:
+  /// **'Week {number}'**
+  String planDetailWeek(int number);
+
+  /// Edit-workout button tooltip on a workout row
+  ///
+  /// In en, this message translates to:
+  /// **'Edit workout'**
+  String get planDetailEditTooltip;
+
+  /// Publish flow: clubs-load timeout banner
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your clubs — check your network.'**
+  String get planDetailPublishLoadClubsTimeout;
+
+  /// Publish flow: clubs-load generic banner
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load your clubs.'**
+  String get planDetailPublishLoadClubsFailed;
+
+  /// Publish flow: no eligible clubs banner
+  ///
+  /// In en, this message translates to:
+  /// **'You need to own or admin a club before you can publish a template.'**
+  String get planDetailPublishNoClubs;
+
+  /// Publish flow: success banner
+  ///
+  /// In en, this message translates to:
+  /// **'Published \"{name}\" as a club template.'**
+  String planDetailPublishSuccess(String name);
+
+  /// Publish flow: failure banner
+  ///
+  /// In en, this message translates to:
+  /// **'Publish failed: {error}'**
+  String planDetailPublishFailed(String error);
+
+  /// Publish-club picker sheet title
+  ///
+  /// In en, this message translates to:
+  /// **'Publish to club'**
+  String get planDetailPublishPickerTitle;
+
+  /// Publish-club picker sheet body
+  ///
+  /// In en, this message translates to:
+  /// **'Members of the club will be able to adopt this plan as their own.'**
+  String get planDetailPublishPickerBody;
+
+  /// Member-count subtitle in the publish-club picker
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} member} other{{count} members}}'**
+  String planDetailPublishPickerMembers(int count);
+
+  /// Cancel button in the publish-club picker
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get planDetailPublishCancel;
+
+  /// Workout-detail load timeout error
+  ///
+  /// In en, this message translates to:
+  /// **'Connection timed out. Check your network and try again.'**
+  String get workoutTimeoutError;
+
+  /// Workout-detail generic load error
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t load this workout. Tap retry to try again.'**
+  String get workoutLoadError;
+
+  /// Workout-detail not-found body
+  ///
+  /// In en, this message translates to:
+  /// **'Workout not found.'**
+  String get workoutNotFound;
+
+  /// Workout-detail distance metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Distance'**
+  String get workoutMetricDistance;
+
+  /// Workout-detail duration metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Duration'**
+  String get workoutMetricDuration;
+
+  /// Workout-detail target-pace metric label
+  ///
+  /// In en, this message translates to:
+  /// **'Target pace'**
+  String get workoutMetricTargetPace;
+
+  /// Completed badge on workout detail
+  ///
+  /// In en, this message translates to:
+  /// **'Completed'**
+  String get workoutCompleted;
+
+  /// Unlink-completed-run button
+  ///
+  /// In en, this message translates to:
+  /// **'Unlink'**
+  String get workoutUnlink;
+
+  /// Start-workout button on workout detail
+  ///
+  /// In en, this message translates to:
+  /// **'Start workout'**
+  String get workoutStart;
+
+  /// Workout-detail Notes section header
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get workoutSectionNotes;
+
+  /// Workout-detail Structure section header
+  ///
+  /// In en, this message translates to:
+  /// **'Structure'**
+  String get workoutSectionStructure;
+
+  /// Workout-detail advice section header
+  ///
+  /// In en, this message translates to:
+  /// **'How to run it'**
+  String get workoutSectionHowTo;
+
+  /// Structure-list warmup label
+  ///
+  /// In en, this message translates to:
+  /// **'Warmup'**
+  String get workoutStructWarmup;
+
+  /// Structure-list repeats label
+  ///
+  /// In en, this message translates to:
+  /// **'Repeats'**
+  String get workoutStructRepeats;
+
+  /// Structure-list steady label
+  ///
+  /// In en, this message translates to:
+  /// **'Steady'**
+  String get workoutStructSteady;
+
+  /// Structure-list cooldown label
+  ///
+  /// In en, this message translates to:
+  /// **'Cooldown'**
+  String get workoutStructCooldown;
+
+  /// Structure-list warmup value (distance at easy pace)
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} @ easy'**
+  String workoutStructWarmupValue(String distance);
+
+  /// Structure-list cooldown value (distance at easy pace)
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} @ easy'**
+  String workoutStructCooldownValue(String distance);
+
+  /// Advice text for easy / recovery workouts
+  ///
+  /// In en, this message translates to:
+  /// **'Conversational pace. If you can\'t hold a conversation, you\'re running it too fast.'**
+  String get workoutAdviceEasy;
+
+  /// Advice text for long runs
+  ///
+  /// In en, this message translates to:
+  /// **'Stay relaxed. Aim for steady breathing. Drop 10% of the distance if weather is rough or you\'re sore — don\'t skip.'**
+  String get workoutAdviceLong;
+
+  /// Advice text for tempo runs
+  ///
+  /// In en, this message translates to:
+  /// **'\"Comfortably hard\". You should feel like you could hold the pace for about an hour at peak effort, but no longer.'**
+  String get workoutAdviceTempo;
+
+  /// Advice text for interval workouts
+  ///
+  /// In en, this message translates to:
+  /// **'Run the reps hard enough that the last one feels like the first. Don\'t pick a pace you can only hold for two or three reps.'**
+  String get workoutAdviceInterval;
+
+  /// Advice text for marathon-pace workouts
+  ///
+  /// In en, this message translates to:
+  /// **'Lock into goal marathon pace exactly. This is a rehearsal session — no faster, no slower.'**
+  String get workoutAdviceMarathonPace;
+
+  /// Advice text for walk-run workouts
+  ///
+  /// In en, this message translates to:
+  /// **'Alternate easy running and walking on the timed intervals. The walk breaks are part of the workout — take them even when you feel fresh.'**
+  String get workoutAdviceWalkRun;
+
+  /// Advice text for race workouts
+  ///
+  /// In en, this message translates to:
+  /// **'Trust the plan. Don\'t chase a PB in the first mile.'**
+  String get workoutAdviceRace;
+
+  /// Advice text for rest days
+  ///
+  /// In en, this message translates to:
+  /// **'Rest day — if you need to move, walk or stretch.'**
+  String get workoutAdviceRest;
+
+  /// Coach screen AppBar title
+  ///
+  /// In en, this message translates to:
+  /// **'Coach'**
+  String get coachTitle;
+
+  /// Default active-thread title when empty
+  ///
+  /// In en, this message translates to:
+  /// **'New conversation'**
+  String get coachNewConversation;
+
+  /// Consent gate headline
+  ///
+  /// In en, this message translates to:
+  /// **'Before you chat with Coach'**
+  String get coachConsentHeadline;
+
+  /// Consent gate intro paragraph
+  ///
+  /// In en, this message translates to:
+  /// **'To give you grounded advice, Coach forwards a slice of your training data to Anthropic, our AI model provider in the United States. That slice includes:'**
+  String get coachConsentIntro;
+
+  /// Consent gate bullet: profile data
+  ///
+  /// In en, this message translates to:
+  /// **'Your date of birth, gender, and HR zones if set.'**
+  String get coachConsentBulletProfile;
+
+  /// Consent gate bullet: recent runs
+  ///
+  /// In en, this message translates to:
+  /// **'A window of your most recent runs.'**
+  String get coachConsentBulletRuns;
+
+  /// Consent gate bullet: active plan
+  ///
+  /// In en, this message translates to:
+  /// **'The active training plan you have selected.'**
+  String get coachConsentBulletPlan;
+
+  /// Consent gate bullet: chat messages
+  ///
+  /// In en, this message translates to:
+  /// **'The chat messages you type in the screen below.'**
+  String get coachConsentBulletMessages;
+
+  /// Consent gate data-processing paragraph
+  ///
+  /// In en, this message translates to:
+  /// **'Anthropic processes the data on Threkir\'s behalf under their data-processing terms; they do not train their models on Threkir customer data by default. Full details — including transfer mechanism, retention, and your withdrawal rights — are in our privacy policy.'**
+  String get coachConsentProcessing;
+
+  /// Consent gate action paragraph
+  ///
+  /// In en, this message translates to:
+  /// **'Tap \"I consent\" to continue. Tap cancel to leave the page with no data sent.'**
+  String get coachConsentAction;
+
+  /// Consent gate cancel button
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get coachConsentCancel;
+
+  /// Consent gate accept button
+  ///
+  /// In en, this message translates to:
+  /// **'I consent — start Coach'**
+  String get coachConsentAccept;
+
+  /// Consent gate accept button while saving
+  ///
+  /// In en, this message translates to:
+  /// **'Recording consent…'**
+  String get coachConsentSaving;
+
+  /// Plan-switcher dropdown: no plan option
+  ///
+  /// In en, this message translates to:
+  /// **'No plan (recent runs only)'**
+  String get coachNoPlanOption;
+
+  /// Plan-switcher dropdown: active plan label
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · active'**
+  String coachPlanActive(String name);
+
+  /// Plan-switcher dropdown: completed plan label
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · done'**
+  String coachPlanDone(String name);
+
+  /// New-chat AppBar action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get coachNewChatTooltip;
+
+  /// Chat-history AppBar action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Chat history'**
+  String get coachHistoryTooltip;
+
+  /// New-chat button in the drawer
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get coachNewChat;
+
+  /// Drawer subtitle for the active thread, with optional ' · N' message-count suffix
+  ///
+  /// In en, this message translates to:
+  /// **'Active{suffix}'**
+  String coachActiveThread(String suffix);
+
+  /// Drawer subtitle on an archived thread row
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to view · swipe to delete'**
+  String get coachArchiveTapToView;
+
+  /// Context-strip chip when no plan is active
+  ///
+  /// In en, this message translates to:
+  /// **'No plan'**
+  String get coachContextNoPlan;
+
+  /// Context-strip chip: plan name with week count
+  ///
+  /// In en, this message translates to:
+  /// **'{name} · {weeks}w'**
+  String coachContextPlanWeeks(String name, int weeks);
+
+  /// Context-strip runs chip when there are no runs
+  ///
+  /// In en, this message translates to:
+  /// **'No runs'**
+  String get coachContextNoRuns;
+
+  /// Context-strip runs chip prefix before the run-count selector
+  ///
+  /// In en, this message translates to:
+  /// **'Last'**
+  String get coachContextLast;
+
+  /// Context-strip heart-rate-zones chip
+  ///
+  /// In en, this message translates to:
+  /// **'HR'**
+  String get coachContextHr;
+
+  /// Context-strip weekly-goal chip
+  ///
+  /// In en, this message translates to:
+  /// **'{km} km/wk'**
+  String coachContextWeeklyGoal(String km);
+
+  /// Archive-view banner text
+  ///
+  /// In en, this message translates to:
+  /// **'Viewing archive · {label} · read-only'**
+  String coachArchiveBanner(String label);
+
+  /// Back-to-active button in the archive banner
+  ///
+  /// In en, this message translates to:
+  /// **'Back to active'**
+  String get coachBackToActive;
+
+  /// Daily-cap banner for Pro tier
+  ///
+  /// In en, this message translates to:
+  /// **'Daily limit reached. Come back tomorrow.'**
+  String get coachLimitReachedPro;
+
+  /// Daily-cap banner for free tier
+  ///
+  /// In en, this message translates to:
+  /// **'Daily limit reached. Pro gets a higher cap — upgrade in Settings.'**
+  String get coachLimitReachedFree;
+
+  /// Daily-cap banner: messages remaining today
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} message left today} other{{count} messages left today}}'**
+  String coachMessagesLeft(int count);
+
+  /// Empty-chat prompt when a plan is active
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about today\'s workout, your pace, or how recent runs compare to plan.'**
+  String get coachEmptyPromptPlan;
+
+  /// Empty-chat prompt when no plan is active
+  ///
+  /// In en, this message translates to:
+  /// **'Ask about your recent runs, easy-run pacing, or training basics.'**
+  String get coachEmptyPromptNoPlan;
+
+  /// Suggestion chip (plan)
+  ///
+  /// In en, this message translates to:
+  /// **'Should I run tomorrow or take a rest day?'**
+  String get coachSuggestPlanRest;
+
+  /// Suggestion chip (plan)
+  ///
+  /// In en, this message translates to:
+  /// **'Am I on track for my goal time?'**
+  String get coachSuggestPlanOnTrack;
+
+  /// Suggestion chip (plan)
+  ///
+  /// In en, this message translates to:
+  /// **'Why does this week\'s long run matter?'**
+  String get coachSuggestPlanLongRun;
+
+  /// Suggestion chip (plan)
+  ///
+  /// In en, this message translates to:
+  /// **'What should I focus on for today\'s workout?'**
+  String get coachSuggestPlanToday;
+
+  /// Suggestion chip (no plan)
+  ///
+  /// In en, this message translates to:
+  /// **'How was my last run?'**
+  String get coachSuggestNoPlanLastRun;
+
+  /// Suggestion chip (no plan)
+  ///
+  /// In en, this message translates to:
+  /// **'What pace should my easy runs be?'**
+  String get coachSuggestNoPlanEasyPace;
+
+  /// Suggestion chip (no plan)
+  ///
+  /// In en, this message translates to:
+  /// **'I haven\'t run in a week — what should I do?'**
+  String get coachSuggestNoPlanWeekOff;
+
+  /// Suggestion chip (no plan)
+  ///
+  /// In en, this message translates to:
+  /// **'What is a tempo run?'**
+  String get coachSuggestNoPlanTempo;
+
+  /// Cancel button in the inline message-edit form
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get coachEditCancel;
+
+  /// Save-and-resend button in the inline message-edit form
+  ///
+  /// In en, this message translates to:
+  /// **'Save & resend'**
+  String get coachEditSaveResend;
+
+  /// Copy bubble-action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get coachActionCopy;
+
+  /// Edit bubble-action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get coachActionEdit;
+
+  /// Regenerate bubble-action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Regenerate'**
+  String get coachActionRegenerate;
+
+  /// Thumbs-up bubble-action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Helpful'**
+  String get coachActionHelpful;
+
+  /// Thumbs-down bubble-action tooltip
+  ///
+  /// In en, this message translates to:
+  /// **'Not helpful'**
+  String get coachActionNotHelpful;
+
+  /// Composer hint when the daily cap is hit
+  ///
+  /// In en, this message translates to:
+  /// **'Daily limit reached'**
+  String get coachComposerHintLimit;
+
+  /// Composer hint
+  ///
+  /// In en, this message translates to:
+  /// **'Ask Coach…'**
+  String get coachComposerHint;
+
+  /// Archive-current dialog title
+  ///
+  /// In en, this message translates to:
+  /// **'Start a new conversation?'**
+  String get coachArchiveTitle;
+
+  /// Archive-current dialog body
+  ///
+  /// In en, this message translates to:
+  /// **'The current chat moves to history. You can revisit it from the sidebar.'**
+  String get coachArchiveBody;
+
+  /// Cancel button in the archive-current dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get coachArchiveCancel;
+
+  /// Confirm button in the archive-current dialog
+  ///
+  /// In en, this message translates to:
+  /// **'New chat'**
+  String get coachArchiveConfirm;
+
+  /// Error when sending without a session
+  ///
+  /// In en, this message translates to:
+  /// **'Please sign in first.'**
+  String get coachSignInFirst;
+
+  /// Error on 401 from /api/coach
+  ///
+  /// In en, this message translates to:
+  /// **'Your session expired. Please sign in again.'**
+  String get coachSessionExpired;
+
+  /// Error on 429: daily limit reached
+  ///
+  /// In en, this message translates to:
+  /// **'Daily limit reached ({limit} messages). Come back tomorrow!'**
+  String coachDailyLimitError(int limit);
+
+  /// Generic error with HTTP status code
+  ///
+  /// In en, this message translates to:
+  /// **'Coach error ({code})'**
+  String coachGenericError(int code);
+
+  /// Error on transport-layer failure
+  ///
+  /// In en, this message translates to:
+  /// **'Could not reach the Coach. Check your connection and try again.'**
+  String get coachTransportError;
+
+  /// Fallback error message from the SSE error event
+  ///
+  /// In en, this message translates to:
+  /// **'stream failed'**
+  String get coachStreamFailed;
+
+  /// Error starting a new conversation
+  ///
+  /// In en, this message translates to:
+  /// **'Could not start a new conversation: {error}'**
+  String coachNewConversationFailed(String error);
+
+  /// Error opening an archive
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open archive: {error}'**
+  String coachOpenArchiveFailed(String error);
+
+  /// Top-banner shown after copying a message
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get coachCopied;
 }
 
 class _AppLocalizationsDelegate

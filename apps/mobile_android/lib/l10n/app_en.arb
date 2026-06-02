@@ -3895,5 +3895,741 @@
   "liveSpectatorBadgeConnecting": "Connecting",
   "@liveSpectatorBadgeConnecting": {
     "description": "Status badge — connecting"
+  },
+  "plansTitle": "Training plans",
+  "@plansTitle": {
+    "description": "Plans list AppBar title"
+  },
+  "plansNewPlan": "New plan",
+  "@plansNewPlan": {
+    "description": "FAB label to create a new plan"
+  },
+  "plansDeleteTitle": "Delete \"{name}\"?",
+  "@plansDeleteTitle": {
+    "description": "Confirm-delete dialog title for a plan",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "plansDeleteBody": "All weeks and workouts will be removed.",
+  "@plansDeleteBody": {
+    "description": "Confirm-delete dialog body for a plan"
+  },
+  "plansCancel": "Cancel",
+  "@plansCancel": {
+    "description": "Cancel button in the delete-plan dialog"
+  },
+  "plansDelete": "Delete",
+  "@plansDelete": {
+    "description": "Delete button in the delete-plan dialog"
+  },
+  "plansAbandon": "Abandon",
+  "@plansAbandon": {
+    "description": "Abandon button on an active plan tile"
+  },
+  "plansDaysPerWeek": "{count} days/wk",
+  "@plansDaysPerWeek": {
+    "description": "Days-per-week meta chip on a plan tile",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "plansSignInTitle": "Sign in to use training plans",
+  "@plansSignInTitle": {
+    "description": "Sign-in prompt title on plans list"
+  },
+  "plansSignInBody": "Plans sync to your account so they follow you across devices. Head to Settings → Sign in to connect.",
+  "@plansSignInBody": {
+    "description": "Sign-in prompt body on plans list"
+  },
+  "plansEmptyTitle": "No plans yet.",
+  "@plansEmptyTitle": {
+    "description": "Empty-state title on plans list"
+  },
+  "plansEmptyBody": "Pick a goal race and we'll schedule the weeks for you.",
+  "@plansEmptyBody": {
+    "description": "Empty-state body on plans list"
+  },
+  "plansTimeoutError": "Connection timed out. Check your network and try again.",
+  "@plansTimeoutError": {
+    "description": "Plans list load timeout error"
+  },
+  "plansLoadError": "Couldn't load training plans. Tap retry to try again.",
+  "@plansLoadError": {
+    "description": "Plans list generic load error"
+  },
+  "planNewTitle": "New plan",
+  "@planNewTitle": {
+    "description": "New-plan wizard AppBar title"
+  },
+  "planNewNameLabel": "Plan name",
+  "@planNewNameLabel": {
+    "description": "Plan-name field label"
+  },
+  "planNewNameHint": "e.g. Autumn half marathon",
+  "@planNewNameHint": {
+    "description": "Plan-name field hint"
+  },
+  "planNewGoalRace": "Goal race",
+  "@planNewGoalRace": {
+    "description": "Goal-race dropdown label"
+  },
+  "planNewStartDate": "Start date",
+  "@planNewStartDate": {
+    "description": "Start-date tile title"
+  },
+  "planNewDaysPerWeek": "Days per week",
+  "@planNewDaysPerWeek": {
+    "description": "Days-per-week dropdown label"
+  },
+  "planNewDaysOption": "{count} days",
+  "@planNewDaysOption": {
+    "description": "Days-per-week dropdown option",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planNewGoalTimeSection": "Goal time · optional",
+  "@planNewGoalTimeSection": {
+    "description": "Goal-time section label"
+  },
+  "planNewBeginnerTitle": "New to running? Use a walk-run plan",
+  "@planNewBeginnerTitle": {
+    "description": "Beginner walk-run checkbox title"
+  },
+  "planNewBeginnerSubtitle": "A gentle C25K-style schedule of timed run/walk intervals that builds to a continuous run. Overrides goal-time pacing.",
+  "@planNewBeginnerSubtitle": {
+    "description": "Beginner walk-run checkbox subtitle"
+  },
+  "planNewRecent5kSection": "Recent 5K time · optional",
+  "@planNewRecent5kSection": {
+    "description": "Recent-5K section label"
+  },
+  "planNewRecent5kHelp": "Anchor paces on a real result instead of the goal. Uses Riegel equivalence to project to the goal distance.",
+  "@planNewRecent5kHelp": {
+    "description": "Recent-5K help text"
+  },
+  "planNewRecent5kConfirm": "This is a time I could run today — it reflects my current fitness.",
+  "@planNewRecent5kConfirm": {
+    "description": "Recent-5K current-fitness confirmation checkbox"
+  },
+  "planNewRecent5kWarning": "Until you confirm, paces stay on the conservative goal-based estimate. Anchoring on an old result can prescribe paces that are too fast for a returning runner.",
+  "@planNewRecent5kWarning": {
+    "description": "Recent-5K unconfirmed warning"
+  },
+  "planNewOverrideHint": "Override total weeks",
+  "@planNewOverrideHint": {
+    "description": "Override-weeks field hint"
+  },
+  "planNewOverrideLabel": "Override weeks ({count} default)",
+  "@planNewOverrideLabel": {
+    "description": "Override-weeks field label with default count",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planNewCancel": "Cancel",
+  "@planNewCancel": {
+    "description": "Cancel button in the new-plan wizard"
+  },
+  "planNewCreate": "Create plan",
+  "@planNewCreate": {
+    "description": "Create-plan button label"
+  },
+  "planNewCreating": "Creating…",
+  "@planNewCreating": {
+    "description": "Create-plan button label while busy"
+  },
+  "planNewPreviewTitle": "Preview",
+  "@planNewPreviewTitle": {
+    "description": "Preview section title"
+  },
+  "planNewPaceEasy": "Easy",
+  "@planNewPaceEasy": {
+    "description": "Easy-pace pill label"
+  },
+  "planNewPaceMarathon": "Marathon",
+  "@planNewPaceMarathon": {
+    "description": "Marathon-pace pill label"
+  },
+  "planNewPaceTempo": "Tempo",
+  "@planNewPaceTempo": {
+    "description": "Tempo-pace pill label"
+  },
+  "planNewPaceInterval": "Interval",
+  "@planNewPaceInterval": {
+    "description": "Interval-pace pill label"
+  },
+  "planNewPaceRep": "Rep",
+  "@planNewPaceRep": {
+    "description": "Repetition-pace pill label"
+  },
+  "planNewPacesFallback": "Estimated paces — add a recent run or a goal time for personalised targets.",
+  "@planNewPacesFallback": {
+    "description": "Fallback-paces preview note"
+  },
+  "planNewVdot": "Daniels VDOT: {value}",
+  "@planNewVdot": {
+    "description": "VDOT preview line",
+    "placeholders": {
+      "value": {
+        "type": "String"
+      }
+    }
+  },
+  "planNewWeekOutline": "Week outline",
+  "@planNewWeekOutline": {
+    "description": "Week-outline preview section label"
+  },
+  "planNewMoreWeeks": "+ {count} more weeks",
+  "@planNewMoreWeeks": {
+    "description": "More-weeks preview footer",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planNewSessions": "{count} sessions",
+  "@planNewSessions": {
+    "description": "Active-sessions count on a preview week row",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planDetailTimeoutError": "Connection timed out. Check your network and try again.",
+  "@planDetailTimeoutError": {
+    "description": "Plan-detail load timeout error"
+  },
+  "planDetailLoadError": "Couldn't load this plan. Tap retry to try again.",
+  "@planDetailLoadError": {
+    "description": "Plan-detail generic load error"
+  },
+  "planDetailNotFound": "Plan not found.",
+  "@planDetailNotFound": {
+    "description": "Plan-detail not-found body"
+  },
+  "planDetailPublishTooltip": "Publish as club template",
+  "@planDetailPublishTooltip": {
+    "description": "Publish-as-template AppBar action tooltip"
+  },
+  "planDetailDaysPerWeek": "{count} days/wk",
+  "@planDetailDaysPerWeek": {
+    "description": "Days-per-week meta on the hero card",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planDetailToday": "TODAY",
+  "@planDetailToday": {
+    "description": "Today-card eyebrow label"
+  },
+  "planDetailCompleted": "Completed",
+  "@planDetailCompleted": {
+    "description": "Completed marker on the today card"
+  },
+  "planDetailWeek": "Week {number}",
+  "@planDetailWeek": {
+    "description": "Week-card title",
+    "placeholders": {
+      "number": {
+        "type": "int"
+      }
+    }
+  },
+  "planDetailEditTooltip": "Edit workout",
+  "@planDetailEditTooltip": {
+    "description": "Edit-workout button tooltip on a workout row"
+  },
+  "planDetailPublishLoadClubsTimeout": "Couldn't load your clubs — check your network.",
+  "@planDetailPublishLoadClubsTimeout": {
+    "description": "Publish flow: clubs-load timeout banner"
+  },
+  "planDetailPublishLoadClubsFailed": "Couldn't load your clubs.",
+  "@planDetailPublishLoadClubsFailed": {
+    "description": "Publish flow: clubs-load generic banner"
+  },
+  "planDetailPublishNoClubs": "You need to own or admin a club before you can publish a template.",
+  "@planDetailPublishNoClubs": {
+    "description": "Publish flow: no eligible clubs banner"
+  },
+  "planDetailPublishSuccess": "Published \"{name}\" as a club template.",
+  "@planDetailPublishSuccess": {
+    "description": "Publish flow: success banner",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "planDetailPublishFailed": "Publish failed: {error}",
+  "@planDetailPublishFailed": {
+    "description": "Publish flow: failure banner",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "planDetailPublishPickerTitle": "Publish to club",
+  "@planDetailPublishPickerTitle": {
+    "description": "Publish-club picker sheet title"
+  },
+  "planDetailPublishPickerBody": "Members of the club will be able to adopt this plan as their own.",
+  "@planDetailPublishPickerBody": {
+    "description": "Publish-club picker sheet body"
+  },
+  "planDetailPublishPickerMembers": "{count, plural, one{{count} member} other{{count} members}}",
+  "@planDetailPublishPickerMembers": {
+    "description": "Member-count subtitle in the publish-club picker",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "planDetailPublishCancel": "Cancel",
+  "@planDetailPublishCancel": {
+    "description": "Cancel button in the publish-club picker"
+  },
+  "workoutTimeoutError": "Connection timed out. Check your network and try again.",
+  "@workoutTimeoutError": {
+    "description": "Workout-detail load timeout error"
+  },
+  "workoutLoadError": "Couldn't load this workout. Tap retry to try again.",
+  "@workoutLoadError": {
+    "description": "Workout-detail generic load error"
+  },
+  "workoutNotFound": "Workout not found.",
+  "@workoutNotFound": {
+    "description": "Workout-detail not-found body"
+  },
+  "workoutMetricDistance": "Distance",
+  "@workoutMetricDistance": {
+    "description": "Workout-detail distance metric label"
+  },
+  "workoutMetricDuration": "Duration",
+  "@workoutMetricDuration": {
+    "description": "Workout-detail duration metric label"
+  },
+  "workoutMetricTargetPace": "Target pace",
+  "@workoutMetricTargetPace": {
+    "description": "Workout-detail target-pace metric label"
+  },
+  "workoutCompleted": "Completed",
+  "@workoutCompleted": {
+    "description": "Completed badge on workout detail"
+  },
+  "workoutUnlink": "Unlink",
+  "@workoutUnlink": {
+    "description": "Unlink-completed-run button"
+  },
+  "workoutStart": "Start workout",
+  "@workoutStart": {
+    "description": "Start-workout button on workout detail"
+  },
+  "workoutSectionNotes": "Notes",
+  "@workoutSectionNotes": {
+    "description": "Workout-detail Notes section header"
+  },
+  "workoutSectionStructure": "Structure",
+  "@workoutSectionStructure": {
+    "description": "Workout-detail Structure section header"
+  },
+  "workoutSectionHowTo": "How to run it",
+  "@workoutSectionHowTo": {
+    "description": "Workout-detail advice section header"
+  },
+  "workoutStructWarmup": "Warmup",
+  "@workoutStructWarmup": {
+    "description": "Structure-list warmup label"
+  },
+  "workoutStructRepeats": "Repeats",
+  "@workoutStructRepeats": {
+    "description": "Structure-list repeats label"
+  },
+  "workoutStructSteady": "Steady",
+  "@workoutStructSteady": {
+    "description": "Structure-list steady label"
+  },
+  "workoutStructCooldown": "Cooldown",
+  "@workoutStructCooldown": {
+    "description": "Structure-list cooldown label"
+  },
+  "workoutStructWarmupValue": "{distance} @ easy",
+  "@workoutStructWarmupValue": {
+    "description": "Structure-list warmup value (distance at easy pace)",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "workoutStructCooldownValue": "{distance} @ easy",
+  "@workoutStructCooldownValue": {
+    "description": "Structure-list cooldown value (distance at easy pace)",
+    "placeholders": {
+      "distance": {
+        "type": "String"
+      }
+    }
+  },
+  "workoutAdviceEasy": "Conversational pace. If you can't hold a conversation, you're running it too fast.",
+  "@workoutAdviceEasy": {
+    "description": "Advice text for easy / recovery workouts"
+  },
+  "workoutAdviceLong": "Stay relaxed. Aim for steady breathing. Drop 10% of the distance if weather is rough or you're sore — don't skip.",
+  "@workoutAdviceLong": {
+    "description": "Advice text for long runs"
+  },
+  "workoutAdviceTempo": "\"Comfortably hard\". You should feel like you could hold the pace for about an hour at peak effort, but no longer.",
+  "@workoutAdviceTempo": {
+    "description": "Advice text for tempo runs"
+  },
+  "workoutAdviceInterval": "Run the reps hard enough that the last one feels like the first. Don't pick a pace you can only hold for two or three reps.",
+  "@workoutAdviceInterval": {
+    "description": "Advice text for interval workouts"
+  },
+  "workoutAdviceMarathonPace": "Lock into goal marathon pace exactly. This is a rehearsal session — no faster, no slower.",
+  "@workoutAdviceMarathonPace": {
+    "description": "Advice text for marathon-pace workouts"
+  },
+  "workoutAdviceWalkRun": "Alternate easy running and walking on the timed intervals. The walk breaks are part of the workout — take them even when you feel fresh.",
+  "@workoutAdviceWalkRun": {
+    "description": "Advice text for walk-run workouts"
+  },
+  "workoutAdviceRace": "Trust the plan. Don't chase a PB in the first mile.",
+  "@workoutAdviceRace": {
+    "description": "Advice text for race workouts"
+  },
+  "workoutAdviceRest": "Rest day — if you need to move, walk or stretch.",
+  "@workoutAdviceRest": {
+    "description": "Advice text for rest days"
+  },
+  "coachTitle": "Coach",
+  "@coachTitle": {
+    "description": "Coach screen AppBar title"
+  },
+  "coachNewConversation": "New conversation",
+  "@coachNewConversation": {
+    "description": "Default active-thread title when empty"
+  },
+  "coachConsentHeadline": "Before you chat with Coach",
+  "@coachConsentHeadline": {
+    "description": "Consent gate headline"
+  },
+  "coachConsentIntro": "To give you grounded advice, Coach forwards a slice of your training data to Anthropic, our AI model provider in the United States. That slice includes:",
+  "@coachConsentIntro": {
+    "description": "Consent gate intro paragraph"
+  },
+  "coachConsentBulletProfile": "Your date of birth, gender, and HR zones if set.",
+  "@coachConsentBulletProfile": {
+    "description": "Consent gate bullet: profile data"
+  },
+  "coachConsentBulletRuns": "A window of your most recent runs.",
+  "@coachConsentBulletRuns": {
+    "description": "Consent gate bullet: recent runs"
+  },
+  "coachConsentBulletPlan": "The active training plan you have selected.",
+  "@coachConsentBulletPlan": {
+    "description": "Consent gate bullet: active plan"
+  },
+  "coachConsentBulletMessages": "The chat messages you type in the screen below.",
+  "@coachConsentBulletMessages": {
+    "description": "Consent gate bullet: chat messages"
+  },
+  "coachConsentProcessing": "Anthropic processes the data on Threkir's behalf under their data-processing terms; they do not train their models on Threkir customer data by default. Full details — including transfer mechanism, retention, and your withdrawal rights — are in our privacy policy.",
+  "@coachConsentProcessing": {
+    "description": "Consent gate data-processing paragraph"
+  },
+  "coachConsentAction": "Tap \"I consent\" to continue. Tap cancel to leave the page with no data sent.",
+  "@coachConsentAction": {
+    "description": "Consent gate action paragraph"
+  },
+  "coachConsentCancel": "Cancel",
+  "@coachConsentCancel": {
+    "description": "Consent gate cancel button"
+  },
+  "coachConsentAccept": "I consent — start Coach",
+  "@coachConsentAccept": {
+    "description": "Consent gate accept button"
+  },
+  "coachConsentSaving": "Recording consent…",
+  "@coachConsentSaving": {
+    "description": "Consent gate accept button while saving"
+  },
+  "coachNoPlanOption": "No plan (recent runs only)",
+  "@coachNoPlanOption": {
+    "description": "Plan-switcher dropdown: no plan option"
+  },
+  "coachPlanActive": "{name} · active",
+  "@coachPlanActive": {
+    "description": "Plan-switcher dropdown: active plan label",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "coachPlanDone": "{name} · done",
+  "@coachPlanDone": {
+    "description": "Plan-switcher dropdown: completed plan label",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
+  "coachNewChatTooltip": "New chat",
+  "@coachNewChatTooltip": {
+    "description": "New-chat AppBar action tooltip"
+  },
+  "coachHistoryTooltip": "Chat history",
+  "@coachHistoryTooltip": {
+    "description": "Chat-history AppBar action tooltip"
+  },
+  "coachNewChat": "New chat",
+  "@coachNewChat": {
+    "description": "New-chat button in the drawer"
+  },
+  "coachActiveThread": "Active{suffix}",
+  "@coachActiveThread": {
+    "description": "Drawer subtitle for the active thread, with optional ' · N' message-count suffix",
+    "placeholders": {
+      "suffix": {
+        "type": "String"
+      }
+    }
+  },
+  "coachArchiveTapToView": "Tap to view · swipe to delete",
+  "@coachArchiveTapToView": {
+    "description": "Drawer subtitle on an archived thread row"
+  },
+  "coachContextNoPlan": "No plan",
+  "@coachContextNoPlan": {
+    "description": "Context-strip chip when no plan is active"
+  },
+  "coachContextPlanWeeks": "{name} · {weeks}w",
+  "@coachContextPlanWeeks": {
+    "description": "Context-strip chip: plan name with week count",
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "weeks": {
+        "type": "int"
+      }
+    }
+  },
+  "coachContextNoRuns": "No runs",
+  "@coachContextNoRuns": {
+    "description": "Context-strip runs chip when there are no runs"
+  },
+  "coachContextLast": "Last",
+  "@coachContextLast": {
+    "description": "Context-strip runs chip prefix before the run-count selector"
+  },
+  "coachContextHr": "HR",
+  "@coachContextHr": {
+    "description": "Context-strip heart-rate-zones chip"
+  },
+  "coachContextWeeklyGoal": "{km} km/wk",
+  "@coachContextWeeklyGoal": {
+    "description": "Context-strip weekly-goal chip",
+    "placeholders": {
+      "km": {
+        "type": "String"
+      }
+    }
+  },
+  "coachArchiveBanner": "Viewing archive · {label} · read-only",
+  "@coachArchiveBanner": {
+    "description": "Archive-view banner text",
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "coachBackToActive": "Back to active",
+  "@coachBackToActive": {
+    "description": "Back-to-active button in the archive banner"
+  },
+  "coachLimitReachedPro": "Daily limit reached. Come back tomorrow.",
+  "@coachLimitReachedPro": {
+    "description": "Daily-cap banner for Pro tier"
+  },
+  "coachLimitReachedFree": "Daily limit reached. Pro gets a higher cap — upgrade in Settings.",
+  "@coachLimitReachedFree": {
+    "description": "Daily-cap banner for free tier"
+  },
+  "coachMessagesLeft": "{count, plural, one{{count} message left today} other{{count} messages left today}}",
+  "@coachMessagesLeft": {
+    "description": "Daily-cap banner: messages remaining today",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "coachEmptyPromptPlan": "Ask about today's workout, your pace, or how recent runs compare to plan.",
+  "@coachEmptyPromptPlan": {
+    "description": "Empty-chat prompt when a plan is active"
+  },
+  "coachEmptyPromptNoPlan": "Ask about your recent runs, easy-run pacing, or training basics.",
+  "@coachEmptyPromptNoPlan": {
+    "description": "Empty-chat prompt when no plan is active"
+  },
+  "coachSuggestPlanRest": "Should I run tomorrow or take a rest day?",
+  "@coachSuggestPlanRest": {
+    "description": "Suggestion chip (plan)"
+  },
+  "coachSuggestPlanOnTrack": "Am I on track for my goal time?",
+  "@coachSuggestPlanOnTrack": {
+    "description": "Suggestion chip (plan)"
+  },
+  "coachSuggestPlanLongRun": "Why does this week's long run matter?",
+  "@coachSuggestPlanLongRun": {
+    "description": "Suggestion chip (plan)"
+  },
+  "coachSuggestPlanToday": "What should I focus on for today's workout?",
+  "@coachSuggestPlanToday": {
+    "description": "Suggestion chip (plan)"
+  },
+  "coachSuggestNoPlanLastRun": "How was my last run?",
+  "@coachSuggestNoPlanLastRun": {
+    "description": "Suggestion chip (no plan)"
+  },
+  "coachSuggestNoPlanEasyPace": "What pace should my easy runs be?",
+  "@coachSuggestNoPlanEasyPace": {
+    "description": "Suggestion chip (no plan)"
+  },
+  "coachSuggestNoPlanWeekOff": "I haven't run in a week — what should I do?",
+  "@coachSuggestNoPlanWeekOff": {
+    "description": "Suggestion chip (no plan)"
+  },
+  "coachSuggestNoPlanTempo": "What is a tempo run?",
+  "@coachSuggestNoPlanTempo": {
+    "description": "Suggestion chip (no plan)"
+  },
+  "coachEditCancel": "Cancel",
+  "@coachEditCancel": {
+    "description": "Cancel button in the inline message-edit form"
+  },
+  "coachEditSaveResend": "Save & resend",
+  "@coachEditSaveResend": {
+    "description": "Save-and-resend button in the inline message-edit form"
+  },
+  "coachActionCopy": "Copy",
+  "@coachActionCopy": {
+    "description": "Copy bubble-action tooltip"
+  },
+  "coachActionEdit": "Edit",
+  "@coachActionEdit": {
+    "description": "Edit bubble-action tooltip"
+  },
+  "coachActionRegenerate": "Regenerate",
+  "@coachActionRegenerate": {
+    "description": "Regenerate bubble-action tooltip"
+  },
+  "coachActionHelpful": "Helpful",
+  "@coachActionHelpful": {
+    "description": "Thumbs-up bubble-action tooltip"
+  },
+  "coachActionNotHelpful": "Not helpful",
+  "@coachActionNotHelpful": {
+    "description": "Thumbs-down bubble-action tooltip"
+  },
+  "coachComposerHintLimit": "Daily limit reached",
+  "@coachComposerHintLimit": {
+    "description": "Composer hint when the daily cap is hit"
+  },
+  "coachComposerHint": "Ask Coach…",
+  "@coachComposerHint": {
+    "description": "Composer hint"
+  },
+  "coachArchiveTitle": "Start a new conversation?",
+  "@coachArchiveTitle": {
+    "description": "Archive-current dialog title"
+  },
+  "coachArchiveBody": "The current chat moves to history. You can revisit it from the sidebar.",
+  "@coachArchiveBody": {
+    "description": "Archive-current dialog body"
+  },
+  "coachArchiveCancel": "Cancel",
+  "@coachArchiveCancel": {
+    "description": "Cancel button in the archive-current dialog"
+  },
+  "coachArchiveConfirm": "New chat",
+  "@coachArchiveConfirm": {
+    "description": "Confirm button in the archive-current dialog"
+  },
+  "coachSignInFirst": "Please sign in first.",
+  "@coachSignInFirst": {
+    "description": "Error when sending without a session"
+  },
+  "coachSessionExpired": "Your session expired. Please sign in again.",
+  "@coachSessionExpired": {
+    "description": "Error on 401 from /api/coach"
+  },
+  "coachDailyLimitError": "Daily limit reached ({limit} messages). Come back tomorrow!",
+  "@coachDailyLimitError": {
+    "description": "Error on 429: daily limit reached",
+    "placeholders": {
+      "limit": {
+        "type": "int"
+      }
+    }
+  },
+  "coachGenericError": "Coach error ({code})",
+  "@coachGenericError": {
+    "description": "Generic error with HTTP status code",
+    "placeholders": {
+      "code": {
+        "type": "int"
+      }
+    }
+  },
+  "coachTransportError": "Could not reach the Coach. Check your connection and try again.",
+  "@coachTransportError": {
+    "description": "Error on transport-layer failure"
+  },
+  "coachStreamFailed": "stream failed",
+  "@coachStreamFailed": {
+    "description": "Fallback error message from the SSE error event"
+  },
+  "coachNewConversationFailed": "Could not start a new conversation: {error}",
+  "@coachNewConversationFailed": {
+    "description": "Error starting a new conversation",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "coachOpenArchiveFailed": "Could not open archive: {error}",
+  "@coachOpenArchiveFailed": {
+    "description": "Error opening an archive",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+  "coachCopied": "Copied to clipboard",
+  "@coachCopied": {
+    "description": "Top-banner shown after copying a message"
   }
 }

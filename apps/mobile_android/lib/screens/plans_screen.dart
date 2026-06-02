@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
@@ -23,7 +24,7 @@ class PlansScreen extends StatefulWidget {
 class _PlansScreenState extends State<PlansScreen> {
   List<TrainingPlanRow> _plans = const [];
   bool _loading = true;
-  String? _error;
+  _PlansLoadError? _error;
 
   @override
   void initState() {
@@ -60,7 +61,7 @@ class _PlansScreenState extends State<PlansScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Connection timed out. Check your network and try again.';
+          _error = _PlansLoadError.timeout;
         });
       }
     } catch (e, s) {
@@ -68,7 +69,7 @@ class _PlansScreenState extends State<PlansScreen> {
       if (mounted) {
         setState(() {
           _loading = false;
-          _error = 'Couldn\'t load training plans. Tap retry to try again.';
+          _error = _PlansLoadError.generic;
         });
       }
     }
@@ -76,13 +77,14 @@ class _PlansScreenState extends State<PlansScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final signedIn = widget.apiClient?.userId != null;
     // Samsung devices with the 3-button nav bar report a bottom viewPadding
     // the Scaffold does NOT automatically pad FABs for (that auto-pad only
     // applies when a bottomNavigationBar is present). Apply it manually.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
-      appBar: AppBar(title: const Text('Training plans')),
+      appBar: AppBar(title: Text(l10n.plansTitle)),
       floatingActionButton: signedIn
           ? Padding(
               padding: EdgeInsets.only(bottom: bottomInset),
@@ -96,7 +98,7 @@ class _PlansScreenState extends State<PlansScreen> {
                   );
                 },
                 icon: const Icon(Icons.add),
-                label: const Text('New plan'),
+                label: Text(l10n.plansNewPlan),
               ),
             )
           : null,
@@ -105,7 +107,11 @@ class _PlansScreenState extends State<PlansScreen> {
           : _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? ErrorState(message: _error!, onRetry: _load)
+              ? ErrorState(
+                  message: _error == _PlansLoadError.timeout
+                      ? l10n.plansTimeoutError
+                      : l10n.plansLoadError,
+                  onRetry: _load)
               : _plans.isEmpty
               ? _Empty()
               : RefreshIndicator(
@@ -142,8 +148,8 @@ class _PlansScreenState extends State<PlansScreen> {
                         onDelete: () async {
                           final ok = await _confirm(
                             context,
-                            'Delete "${p.name}"?',
-                            'All weeks and workouts will be removed.',
+                            l10n.plansDeleteTitle(p.name),
+                            l10n.plansDeleteBody,
                           );
                           if (ok) {
                             await widget.training.deletePlan(p.id);
@@ -161,20 +167,23 @@ class _PlansScreenState extends State<PlansScreen> {
 Future<bool> _confirm(BuildContext context, String title, String body) async {
   final res = await showDialog<bool>(
     context: context,
-    builder: (ctx) => AlertDialog(
-      title: Text(title),
-      content: Text(body),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(ctx, false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Delete'),
-        ),
-      ],
-    ),
+    builder: (ctx) {
+      final l10n = AppLocalizations.of(ctx);
+      return AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(l10n.plansCancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(l10n.plansDelete),
+          ),
+        ],
+      );
+    },
   );
   return res == true;
 }
@@ -195,6 +204,7 @@ class _PlanTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -256,7 +266,8 @@ class _PlanTile extends StatelessWidget {
                       'VDOT ${plan.vdot!.toStringAsFixed(1)}'),
                 _meta(theme, Icons.calendar_today,
                     '${toIsoDate(plan.startDate)} → ${toIsoDate(plan.endDate)}'),
-                _meta(theme, Icons.event_repeat, '${plan.daysPerWeek} days/wk'),
+                _meta(theme, Icons.event_repeat,
+                    l10n.plansDaysPerWeek(plan.daysPerWeek)),
               ],
             ),
             const SizedBox(height: 6),
@@ -266,14 +277,14 @@ class _PlanTile extends StatelessWidget {
                 if (onAbandon != null)
                   TextButton(
                     onPressed: onAbandon,
-                    child: const Text('Abandon'),
+                    child: Text(l10n.plansAbandon),
                   ),
                 TextButton(
                   onPressed: onDelete,
                   style: TextButton.styleFrom(
                     foregroundColor: theme.colorScheme.error,
                   ),
-                  child: const Text('Delete'),
+                  child: Text(l10n.plansDelete),
                 ),
               ],
             ),
@@ -298,12 +309,15 @@ class _PlanTile extends StatelessWidget {
   }
 }
 
+enum _PlansLoadError { timeout, generic }
+
 class _SignInPrompt extends StatelessWidget {
   const _SignInPrompt();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -313,12 +327,11 @@ class _SignInPrompt extends StatelessWidget {
             Icon(Icons.lock_outline, size: 48,
                 color: theme.colorScheme.outline),
             const SizedBox(height: 12),
-            Text('Sign in to use training plans',
+            Text(l10n.plansSignInTitle,
                 style: theme.textTheme.titleMedium),
             const SizedBox(height: 4),
             Text(
-              'Plans sync to your account so they follow you across devices. '
-              'Head to Settings → Sign in to connect.',
+              l10n.plansSignInBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,
@@ -335,6 +348,7 @@ class _Empty extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -345,12 +359,12 @@ class _Empty extends StatelessWidget {
                 color: theme.colorScheme.outline),
             const SizedBox(height: 12),
             Text(
-              'No plans yet.',
+              l10n.plansEmptyTitle,
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 4),
             Text(
-              'Pick a goal race and we\'ll schedule the weeks for you.',
+              l10n.plansEmptyBody,
               textAlign: TextAlign.center,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.outline,

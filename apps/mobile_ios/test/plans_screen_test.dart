@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/screens/plans_screen.dart';
 import '../lib/training_service.dart';
 
 Future<void> _pump(WidgetTester tester, {required TrainingService training}) {
   return tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: PlansScreen(training: training, apiClient: null),
     ),
   );

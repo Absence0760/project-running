@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_service.dart';
 import 'plan_detail_screen.dart';
@@ -160,28 +161,29 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final preview = _preview();
     // See plans_screen.dart — Samsung's 3-button nav bar isn't auto-padded
     // on screens without a bottom nav. Include it in the ListView bottom
     // padding so the Cancel/Create row sits above the system buttons.
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     return Scaffold(
-      appBar: AppBar(title: const Text('New plan')),
+      appBar: AppBar(title: Text(l10n.planNewTitle)),
       body: ListView(
         padding: EdgeInsets.fromLTRB(16, 12, 16, 32 + bottomInset),
         children: [
           TextField(
             controller: _nameCtrl,
-            decoration: const InputDecoration(
-              labelText: 'Plan name',
-              hintText: 'e.g. Autumn half marathon',
+            decoration: InputDecoration(
+              labelText: l10n.planNewNameLabel,
+              hintText: l10n.planNewNameHint,
             ),
             maxLength: 80,
           ),
           const SizedBox(height: 12),
           DropdownButtonFormField<GoalEvent>(
             initialValue: _goal,
-            decoration: const InputDecoration(labelText: 'Goal race'),
+            decoration: InputDecoration(labelText: l10n.planNewGoalRace),
             items: const [
               GoalEvent.distance5k,
               GoalEvent.distance10k,
@@ -199,7 +201,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ListTile(
             contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.calendar_today),
-            title: const Text('Start date'),
+            title: Text(l10n.planNewStartDate),
             subtitle: Text(toIsoDate(_startDate)),
             trailing: const Icon(Icons.edit),
             onTap: () async {
@@ -214,17 +216,17 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ),
           DropdownButtonFormField<int>(
             initialValue: _daysPerWeek,
-            decoration: const InputDecoration(labelText: 'Days per week'),
+            decoration: InputDecoration(labelText: l10n.planNewDaysPerWeek),
             items: [3, 4, 5, 6, 7]
-                .map((n) =>
-                    DropdownMenuItem(value: n, child: Text('$n days')))
+                .map((n) => DropdownMenuItem(
+                    value: n, child: Text(l10n.planNewDaysOption(n))))
                 .toList(),
             onChanged: (v) {
               if (v != null) setState(() => _daysPerWeek = v);
             },
           ),
           const SizedBox(height: 12),
-          _SectionLabel('Goal time · optional'),
+          _SectionLabel(l10n.planNewGoalTimeSection),
           Row(
             children: [
               Expanded(
@@ -253,14 +255,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             dense: true,
             contentPadding: EdgeInsets.zero,
             controlAffinity: ListTileControlAffinity.leading,
-            title: const Text('New to running? Use a walk-run plan'),
-            subtitle: const Text(
-              'A gentle C25K-style schedule of timed run/walk intervals that '
-              'builds to a continuous run. Overrides goal-time pacing.',
-            ),
+            title: Text(l10n.planNewBeginnerTitle),
+            subtitle: Text(l10n.planNewBeginnerSubtitle),
           ),
           const SizedBox(height: 12),
-          _SectionLabel('Recent 5K time · optional'),
+          _SectionLabel(l10n.planNewRecent5kSection),
           Row(
             children: [
               Expanded(
@@ -278,7 +277,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ),
           const SizedBox(height: 4),
           Text(
-            'Anchor paces on a real result instead of the goal. Uses Riegel equivalence to project to the goal distance.',
+            l10n.planNewRecent5kHelp,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -290,17 +289,13 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
               dense: true,
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-              title: const Text(
-                'This is a time I could run today — it reflects my current fitness.',
-              ),
+              title: Text(l10n.planNewRecent5kConfirm),
             ),
           if (_recent5kNeedsConfirm)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                'Until you confirm, paces stay on the conservative goal-based '
-                'estimate. Anchoring on an old result can prescribe paces that '
-                'are too fast for a returning runner.',
+                l10n.planNewRecent5kWarning,
                 style: theme.textTheme.bodySmall?.copyWith(
                   fontWeight: FontWeight.w600,
                 ),
@@ -309,11 +304,11 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           const SizedBox(height: 16),
           _numField(
             _weekOverrideCtrl,
-            'Override total weeks',
+            l10n.planNewOverrideHint,
             (v) => setState(() => _weekOverride = v),
             4,
             24,
-            labelText: 'Override weeks (${defaultPlanWeeks(_goal)} default)',
+            labelText: l10n.planNewOverrideLabel(defaultPlanWeeks(_goal)),
           ),
           if (_error != null) ...[
             const SizedBox(height: 12),
@@ -330,14 +325,14 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             ),
           ],
           const SizedBox(height: 24),
-          if (preview != null) _buildPreview(theme, preview),
+          if (preview != null) _buildPreview(theme, l10n, preview),
           const SizedBox(height: 20),
           Row(
             children: [
               Expanded(
                 child: OutlinedButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancel'),
+                  child: Text(l10n.planNewCancel),
                 ),
               ),
               const SizedBox(width: 12),
@@ -347,7 +342,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                       (_nameCtrl.text.trim().isEmpty || _busy || preview == null)
                           ? null
                           : _submit,
-                  child: Text(_busy ? 'Creating…' : 'Create plan'),
+                  child: Text(
+                      _busy ? l10n.planNewCreating : l10n.planNewCreate),
                 ),
               ),
             ],
@@ -357,7 +353,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     );
   }
 
-  Widget _buildPreview(ThemeData theme, GeneratedPlan p) {
+  Widget _buildPreview(
+      ThemeData theme, AppLocalizations l10n, GeneratedPlan p) {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
@@ -368,7 +365,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Preview',
+          Text(l10n.planNewPreviewTitle,
               style: theme.textTheme.titleSmall
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
@@ -376,18 +373,17 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
             spacing: 10,
             runSpacing: 6,
             children: [
-              _pacePill(theme, 'Easy', p.paces.easy),
-              _pacePill(theme, 'Marathon', p.paces.marathon),
-              _pacePill(theme, 'Tempo', p.paces.tempo),
-              _pacePill(theme, 'Interval', p.paces.interval),
-              _pacePill(theme, 'Rep', p.paces.repetition),
+              _pacePill(theme, l10n.planNewPaceEasy, p.paces.easy),
+              _pacePill(theme, l10n.planNewPaceMarathon, p.paces.marathon),
+              _pacePill(theme, l10n.planNewPaceTempo, p.paces.tempo),
+              _pacePill(theme, l10n.planNewPaceInterval, p.paces.interval),
+              _pacePill(theme, l10n.planNewPaceRep, p.paces.repetition),
             ],
           ),
           if (p.pacesAreFallback) ...[
             const SizedBox(height: 6),
             Text(
-              'Estimated paces — add a recent run or a goal time for '
-              'personalised targets.',
+              l10n.planNewPacesFallback,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurface,
                 fontWeight: FontWeight.w500,
@@ -396,23 +392,23 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ],
           if (p.vdot != null) ...[
             const SizedBox(height: 8),
-            Text('Daniels VDOT: ${p.vdot!.toStringAsFixed(1)}',
+            Text(l10n.planNewVdot(p.vdot!.toStringAsFixed(1)),
                 style: theme.textTheme.bodySmall
                     ?.copyWith(color: theme.colorScheme.outline)),
           ],
           const SizedBox(height: 10),
-          Text('Week outline',
+          Text(l10n.planNewWeekOutline,
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.outline,
                 letterSpacing: 0.6,
               )),
           const SizedBox(height: 4),
-          for (final w in p.weeks.take(6)) _previewRow(theme, w),
+          for (final w in p.weeks.take(6)) _previewRow(theme, l10n, w),
           if (p.weeks.length > 6)
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
-                '+ ${p.weeks.length - 6} more weeks',
+                l10n.planNewMoreWeeks(p.weeks.length - 6),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.outline,
                 ),
@@ -446,7 +442,8 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
     );
   }
 
-  Widget _previewRow(ThemeData theme, GeneratedWeek w) {
+  Widget _previewRow(
+      ThemeData theme, AppLocalizations l10n, GeneratedWeek w) {
     final active = w.workouts.where((x) => x.kind != WorkoutKind.rest).length;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
@@ -469,7 +466,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
                   fontFeatures: const [FontFeature.tabularFigures()],
                 )),
           ),
-          Text('$active sessions',
+          Text(l10n.planNewSessions(active),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: theme.colorScheme.outline,
               )),
