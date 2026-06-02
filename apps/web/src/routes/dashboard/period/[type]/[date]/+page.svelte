@@ -18,6 +18,21 @@
 	);
 	let initialDate = $derived<Date>(parsePeriodDate($page.params.date ?? ''));
 
+	// Resolve the heading copy in the script rather than inline in the
+	// markup. A text-expression tag whose body starts with the bare
+	// identifier `type` (`{type === ...}`) is misparsed as a declaration
+	// tag by the Svelte 5.56.0 compiler ("Declaration tags must be `let`
+	// or `const`"), which broke the production build. Deriving here keeps
+	// the template free of that trigger.
+	let kicker = $derived(
+		type === 'week'
+			? 'Weekly summary'
+			: type === 'month'
+				? 'Monthly summary'
+				: 'All-time summary',
+	);
+	let periodWord = $derived(type === 'week' ? 'week' : type === 'month' ? 'month' : 'period');
+
 	let runs = $state<Run[]>([]);
 	let loading = $state(true);
 
@@ -56,18 +71,12 @@
 	</a>
 
 	<header class="page-header">
-		<span class="kicker"
-			>{type === 'week'
-				? 'Weekly summary'
-				: type === 'month'
-					? 'Monthly summary'
-					: 'All-time summary'}</span
-		>
+		<span class="kicker">{kicker}</span>
 		<h1>Period summary</h1>
 		<p class="tagline">
 			Mileage, time, pace, and a chronological run list for the
-			{type === 'week' ? 'week' : type === 'month' ? 'month' : 'period'} you picked. Use the
-			toggle below to switch view — the URL updates so you can share or bookmark.
+			{periodWord} you picked. Use the toggle below to switch view — the URL updates so you can
+			share or bookmark.
 		</p>
 	</header>
 
