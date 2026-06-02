@@ -64,6 +64,16 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # Cheap, deterministic guard ahead of the stack start: two migrations
+      # sharing a version key (the CLI parses only the leading digits before
+      # the first underscore, so `_NNN` does not disambiguate) make
+      # `supabase start` die mid-apply with an opaque schema_migrations_pkey
+      # collision — that took down five jobs in run 26820381977. Fail here in
+      # milliseconds with a named error instead.
+      - name: Migration version keys are unique
+        run: |
+          node apps/backend/scripts/check_migration_versions.mjs
+          node --test apps/backend/scripts/check_migration_versions.test.mjs
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
