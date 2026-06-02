@@ -122,6 +122,67 @@ void main() {
     _runsDir = null;
   });
 
+  group('heatmapWeekAnchor', () {
+    final gridStart = DateTime(2026, 1, 5); // a Monday
+    const cell = 12.0;
+    const gap = 2.0;
+    const weeks = 20;
+
+    test('leftmost column maps to the oldest week (gridStart)', () {
+      expect(
+        heatmapWeekAnchor(
+            localDx: 0,
+            cellSize: cell,
+            gap: gap,
+            weeks: weeks,
+            gridStart: gridStart),
+        gridStart,
+      );
+    });
+
+    test('a middle column maps to that week start', () {
+      final a = heatmapWeekAnchor(
+          localDx: 3 * (cell + gap) + 1,
+          cellSize: cell,
+          gap: gap,
+          weeks: weeks,
+          gridStart: gridStart);
+      expect(a, gridStart.add(const Duration(days: 21)));
+    });
+
+    test('rightmost column maps to the current week', () {
+      final a = heatmapWeekAnchor(
+          localDx: (weeks - 1) * (cell + gap) + 1,
+          cellSize: cell,
+          gap: gap,
+          weeks: weeks,
+          gridStart: gridStart);
+      expect(a, gridStart.add(const Duration(days: 7 * (weeks - 1))));
+    });
+
+    test('a tap past the right edge clamps to the last week', () {
+      final a = heatmapWeekAnchor(
+          localDx: 9999,
+          cellSize: cell,
+          gap: gap,
+          weeks: weeks,
+          gridStart: gridStart);
+      expect(a, gridStart.add(const Duration(days: 7 * (weeks - 1))));
+    });
+
+    test('a negative offset clamps to the first week', () {
+      expect(
+        heatmapWeekAnchor(
+            localDx: -5,
+            cellSize: cell,
+            gap: gap,
+            weeks: weeks,
+            gridStart: gridStart),
+        gridStart,
+      );
+    });
+  });
+
   group('DashboardScreen', () {
     testWidgets('Dashboard renders no AppBar (actions hoist into the body)',
         (tester) async {

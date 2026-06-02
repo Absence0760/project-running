@@ -203,13 +203,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  void _openPeriodSummary(PeriodType period) {
+  void _openPeriodSummary(PeriodType period, [DateTime? anchor]) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => PeriodSummaryScreen(
           initialPeriod: period,
-          initialAnchor: DateTime.now(),
+          initialAnchor: anchor ?? DateTime.now(),
           runStore: widget.runStore,
           routeStore: widget.routeStore,
           preferences: widget.preferences,
@@ -441,7 +441,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 Card(
                   child: Padding(
                     padding: _kCardPadding,
-                    child: _RunHeatmap(runs: runs, weeks: 20),
+                    child: _RunHeatmap(
+                      runs: runs,
+                      weeks: 20,
+                      onWeekTap: (anchor) =>
+                          _openPeriodSummary(PeriodType.week, anchor),
+                    ),
                   ),
                 ),
                 _kSectionGap,
@@ -1218,10 +1223,29 @@ class _StreakRow extends StatelessWidget {
 /// leftmost is `weeks - 1` weeks ago. Mirrors the web dashboard's
 /// calendar-heatmap component so a runner switching between devices
 /// sees the same shape.
+/// Maps a horizontal tap offset on the run-heatmap grid to the start
+/// date (week anchor) of the column it landed in. Columns are weeks;
+/// the offset is clamped so a tap past either edge resolves to the
+/// first or last visible week rather than off-grid.
+DateTime heatmapWeekAnchor({
+  required double localDx,
+  required double cellSize,
+  required double gap,
+  required int weeks,
+  required DateTime gridStart,
+}) {
+  final col = (localDx / (cellSize + gap)).floor().clamp(0, weeks - 1);
+  return gridStart.add(Duration(days: 7 * col));
+}
+
 class _RunHeatmap extends StatelessWidget {
   final List<Run> runs;
   final int weeks;
-  const _RunHeatmap({required this.runs, this.weeks = 20});
+
+  /// Tapping a week column opens that week's summary. Null leaves the
+  /// heatmap a static read-only grid.
+  final void Function(DateTime weekAnchor)? onWeekTap;
+  const _RunHeatmap({required this.runs, this.weeks = 20, this.onWeekTap});
 
   @override
   Widget build(BuildContext context) {
@@ -1261,21 +1285,33 @@ class _RunHeatmap extends StatelessWidget {
         children: [
           // Single CustomPaint replaces the previous 7×20=140 Container +
           // Builder + EdgeInsets allocations per dashboard rebuild.
-          SizedBox(
-            width: gridWidth,
-            height: gridHeight,
-            child: CustomPaint(
-              painter: _HeatmapPainter(
-                counts: counts,
-                gridStart: gridStart,
-                today: today,
-                weeks: weeks,
-                cellSize: cellSize,
-                gap: gap,
-                emptyColour: emptyColour,
-                l1: l1Colour,
-                l2: l2Colour,
-                l3: l3Colour,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTapUp: onWeekTap == null
+                ? null
+                : (details) => onWeekTap!(heatmapWeekAnchor(
+                      localDx: details.localPosition.dx,
+                      cellSize: cellSize,
+                      gap: gap,
+                      weeks: weeks,
+                      gridStart: gridStart,
+                    )),
+            child: SizedBox(
+              width: gridWidth,
+              height: gridHeight,
+              child: CustomPaint(
+                painter: _HeatmapPainter(
+                  counts: counts,
+                  gridStart: gridStart,
+                  today: today,
+                  weeks: weeks,
+                  cellSize: cellSize,
+                  gap: gap,
+                  emptyColour: emptyColour,
+                  l1: l1Colour,
+                  l2: l2Colour,
+                  l3: l3Colour,
+                ),
               ),
             ),
           ),
@@ -1304,6 +1340,12 @@ class _RunHeatmap extends StatelessWidget {
                       color: theme.colorScheme.outline)),
             ],
           ),
+          if (onWeekTap != null) ...[
+            const SizedBox(height: 6),
+            Text('Tap a week for its summary',
+                style: theme.textTheme.bodySmall
+                    ?.copyWith(color: theme.colorScheme.outline)),
+          ],
         ],
       );
     });
