@@ -771,6 +771,35 @@ class ApiClient {
     return _downloadTrack(path);
   }
 
+  /// Download the indoor/treadmill HR sidecar
+  /// (`metadata['hr_series_url']` -> `{user_id}/{run_id}.hr.json.gz`) and decode
+  /// it to `Waypoint`s carrying only bpm + timestamp (lat/lng default to 0;
+  /// these never reach a map — they feed the HR-zone breakdown, which reads
+  /// only bpm/timestamp). Owner-only, like the track: the sidecar holds no
+  /// location and has no clipped/public variant (decisions §116). Empty list
+  /// when the run has no sidecar.
+  Future<List<Waypoint>> fetchHrSeries(Run run) async {
+    final url = run.metadata?['hr_series_url'] as String?;
+    if (url == null || url.isEmpty) return const [];
+    final bytes = await _client.storage.from('runs').download(url);
+    final json = utf8.decode(gzip.decode(bytes));
+    final list = jsonDecode(json) as List<dynamic>;
+    final out = <Waypoint>[];
+    for (final e in list) {
+      if (e is! Map) continue;
+      final bpm = e['bpm'];
+      if (bpm is! num) continue;
+      final ts = e['ts'];
+      out.add(Waypoint(
+        lat: 0,
+        lng: 0,
+        bpm: bpm.round(),
+        timestamp: ts is String ? DateTime.tryParse(ts) : null,
+      ));
+    }
+    return out;
+  }
+
   /// Privacy-aware non-owner track fetcher. Calls the
   /// `clip-public-track` Edge Function which downloads the gzipped
   /// track via service-role, passes the points through
@@ -3559,6 +3588,10 @@ class ApiClient {
     // stays empty until fetched.
     final metadata = Map<String, dynamic>.from(r.metadata ?? const {});
     if (r.trackUrl != null) metadata['track_url'] = r.trackUrl;
+    // Same lazy-load stash for the indoor/treadmill HR sidecar
+    // ({user_id}/{run_id}.hr.json.gz) so run-detail can fall back to it for the
+    // HR-zone chart when the GPS track has no per-point bpm (decisions §116).
+    if (r.hrSeriesUrl != null) metadata['hr_series_url'] = r.hrSeriesUrl;
 
     return Run(
       id: r.id,

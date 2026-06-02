@@ -76,6 +76,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   late Run run = widget.run;
   bool _loadingTrack = false;
   bool _trackFetchFailed = false;
+  /// Indoor/treadmill HR sidecar samples (bpm + timestamp, no coordinates),
+  /// fetched lazily when the GPS track has no per-point bpm but the run has an
+  /// `hr_series_url`. Feeds the HR-zone breakdown so trackless runs still show
+  /// zones (decisions §116). Empty when not applicable / not yet loaded.
+  List<Waypoint> _hrSeries = const [];
   Route? _linkedRoute;
   /// Map-match metadata + matched track. L4 per docs/architecture/conventions.md
   /// § Layered resilience — the raw `run.track` keeps rendering on
@@ -160,6 +165,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     super.initState();
     _loadLinkedRoute();
     _maybeFetchTrack();
+    _maybeFetchHrSeries();
     _maybeFetchMatchedTrack();
     _maybeSuggestRoute();
     _loadViewerGender();
@@ -390,6 +396,41 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       if (mounted) setState(() => _trackFetchFailed = true);
     } finally {
       if (mounted) setState(() => _loadingTrack = false);
+    }
+  }
+
+  /// The waypoint list the HR-zone breakdown reads: the GPS track when it
+  /// carries per-point bpm (outdoor), otherwise the indoor HR sidecar.
+  List<Waypoint> get _hrSource {
+    final trackHasBpm = run.track.any((w) {
+      final b = w.bpm;
+      return b != null && b >= 30 && b <= 230;
+    });
+    return trackHasBpm ? run.track : _hrSeries;
+  }
+
+  /// Download the indoor HR sidecar when the track has no bpm but the run has
+  /// an `hr_series_url`. Mirrors the web run-detail reader (decisions §116).
+  Future<void> _maybeFetchHrSeries() async {
+    final trackHasBpm = run.track.any((w) {
+      final b = w.bpm;
+      return b != null && b >= 30 && b <= 230;
+    });
+    if (trackHasBpm) return;
+    final url = run.metadata?['hr_series_url'] as String?;
+    if (url == null || url.isEmpty) return;
+    final api = widget.apiClient;
+    if (api == null) return;
+    try {
+      final series = await api.fetchHrSeries(run).timeout(kBackendLoadTimeout);
+      if (series.isNotEmpty && mounted) {
+        setState(() {
+          _hrSeries = series;
+          _hrCacheChecked = false; // recompute the zone breakdown off the sidecar
+        });
+      }
+    } catch (e) {
+      debugPrint('Failed to fetch HR series for ${run.id}: $e');
     }
   }
 
@@ -1497,10 +1538,11 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   List<Widget> _buildHrZoneBreakdown(ThemeData theme, AppLocalizations l10n) {
     _resetStatsCacheIfStale();
     if (!_hrCacheChecked) {
-      _cachedBpmStats = bpmStatsOf(run.track);
+      final hrSource = _hrSource;
+      _cachedBpmStats = bpmStatsOf(hrSource);
       _cachedHrBuckets = _cachedBpmStats == null
           ? const []
-          : hrZoneBreakdown(run.track, cutoffs: _userHrCutoffs());
+          : hrZoneBreakdown(hrSource, cutoffs: _userHrCutoffs());
       _hrCacheChecked = true;
     }
     final stats = _cachedBpmStats;
