@@ -303,7 +303,9 @@ class _Placeholder extends StatelessWidget {
 
 class _TrackPreviewPainter extends CustomPainter {
   static const double _pad = 4;
-  static const int _arrowCount = 4;
+  // Two arrows is plenty of direction cue on a list-sized thumbnail —
+  // four crowded the line into noise.
+  static const int _arrowCount = 2;
   // Stroke widths and marker sizes are expressed in the same "viewBox
   // units" the web SVG uses (short axis = 100), then scaled to the
   // canvas. The projection geometry (projectTrack) stays identical to
@@ -340,7 +342,7 @@ class _TrackPreviewPainter extends CustomPainter {
 
     final casing = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.6 * pxPerVb
+      ..strokeWidth = 1.7 * pxPerVb
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = Colors.white.withValues(alpha: 0.85);
@@ -348,7 +350,7 @@ class _TrackPreviewPainter extends CustomPainter {
 
     final line = Paint()
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4 * pxPerVb
+      ..strokeWidth = 1.0 * pxPerVb
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
       ..color = color;
@@ -372,10 +374,10 @@ class _TrackPreviewPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1 * pxPerVb
       ..color = Colors.white;
-    canvas.drawCircle(projected.first, 2.6 * pxPerVb, startCap);
-    canvas.drawCircle(projected.first, 2.6 * pxPerVb, capBorder);
-    canvas.drawCircle(projected.last, 2.6 * pxPerVb, endCap);
-    canvas.drawCircle(projected.last, 2.6 * pxPerVb, capBorder);
+    canvas.drawCircle(projected.first, 1.9 * pxPerVb, startCap);
+    canvas.drawCircle(projected.first, 1.9 * pxPerVb, capBorder);
+    canvas.drawCircle(projected.last, 1.9 * pxPerVb, endCap);
+    canvas.drawCircle(projected.last, 1.9 * pxPerVb, capBorder);
   }
 
   void _drawChevron(Canvas canvas, Offset at, double angle, double pxPerVb) {
@@ -386,9 +388,9 @@ class _TrackPreviewPainter extends CustomPainter {
           at.dy + (x * sin_ + y * cos_) * pxPerVb,
         );
     final p = Path()
-      ..moveTo(rot(-1.8, -1.8).dx, rot(-1.8, -1.8).dy)
-      ..lineTo(rot(1.6, 0).dx, rot(1.6, 0).dy)
-      ..lineTo(rot(-1.8, 1.8).dx, rot(-1.8, 1.8).dy)
+      ..moveTo(rot(-1.3, -1.3).dx, rot(-1.3, -1.3).dy)
+      ..lineTo(rot(1.2, 0).dx, rot(1.2, 0).dy)
+      ..lineTo(rot(-1.3, 1.3).dx, rot(-1.3, 1.3).dy)
       ..close();
     canvas.drawPath(p, Paint()..color = color);
     canvas.drawPath(
