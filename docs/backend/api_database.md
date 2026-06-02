@@ -29,6 +29,7 @@ create table runs (
   external_id   text unique,                -- deduplication key
   metadata      jsonb,                      -- source-specific extra fields
   track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz
+  hr_series_url text,                        -- Storage path: {user_id}/{run_id}.hr.json.gz (indoor/trackless HR series)
   is_public     boolean default false,      -- visible at /share/run/{id}
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
@@ -45,6 +46,8 @@ create index runs_public on runs (is_public, started_at desc) where is_public = 
 ```
 
 **GPS tracks** are stored as gzipped JSON files in the `runs` Storage bucket at `{user_id}/{run_id}.json.gz`. The `track_url` column points to the file. Tracks are never returned by list queries -- they are fetched on demand when the run detail screen is opened.
+
+**Indoor/trackless HR series** live in a sibling sidecar object in the *same* `runs` bucket at `{user_id}/{run_id}.hr.json.gz` (gzipped JSON array of `{ bpm, ts? }`), pointed to by `hr_series_url`. An indoor or treadmill FIT carries heart rate but no GPS fix, so the run imports with an empty `track` and the per-point `bpm` the HR-zone breakdown needs would otherwise be lost. The sidecar is owner-only audit data: it carries **no location**, is gated by the same `{user_id}/...` bucket RLS as the track, is pinned to its canonical path by the `runs_hr_series_url_path_shape` CHECK (mirrors `runs_track_url_path_shape`), and is **never** exposed through `public_runs` or `clip_track_for_user` (it never enters the coordinate pipeline). See [decisions.md § 116](../architecture/decisions.md). Migration `20261127_001`.
 
 **`source` values:**
 

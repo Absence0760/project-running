@@ -1701,6 +1701,7 @@ export type Database = {
           duration_s: number
           event_id: string | null
           external_id: string | null
+          hr_series_url: string | null
           id: string
           is_public: boolean | null
           metadata: Json | null
@@ -1717,6 +1718,7 @@ export type Database = {
           duration_s: number
           event_id?: string | null
           external_id?: string | null
+          hr_series_url?: string | null
           id?: string
           is_public?: boolean | null
           metadata?: Json | null
@@ -1733,6 +1735,7 @@ export type Database = {
           duration_s?: number
           event_id?: string | null
           external_id?: string | null
+          hr_series_url?: string | null
           id?: string
           is_public?: boolean | null
           metadata?: Json | null

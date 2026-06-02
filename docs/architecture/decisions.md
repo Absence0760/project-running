@@ -2615,6 +2615,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **Secondary fix bundled in the same migration:** the original `run_gear` SELECT policy (`20260827_001`) wrapped `is_run_visible_to` in an `exists (select 1 from runs r …)` whose inner read was itself gated by the caller's base-`runs` RLS — which `20260701_001` had stripped of public-run exposure. So the policy silently returned nothing for the exact public-share audience it was written for, and the chip rendered for the owner only. The fix calls `is_run_visible_to` directly, matching the sibling social-table policies (kudos / comments / photos). General lesson: **a visibility helper that's already `SECURITY DEFINER` must be called directly in a policy — wrapping it in a subquery over an RLS-gated base table re-subjects it to the caller's RLS and defeats the point.**
 
+## 116. Indoor/trackless HR series live in a sidecar Storage object, not synthetic TrackPoints or a metadata blob
+
+**Decided (2026-06-02):** per-point heart rate for an indoor / treadmill run (HR but no GPS fix) is stored as its own gzipped Storage object `{user_id}/{run_id}.hr.json.gz` in the existing `runs` bucket, pointed to by a new `runs.hr_series_url` column (migration `20261127_001`). The HR-zone breakdown reads it when the run's `track` carries no `bpm` samples.
+
+**Why a sidecar, not the two obvious alternatives:**
+
+- **Not HR-only `TrackPoint`s** (emit a waypoint with `bpm` and no lat/lng). The zone consumers (web `bpmTimedSamples`, Dart `hrZoneBreakdown`) read only `bpm`/`ts` and would be happy — but every *coordinate* consumer would break: Go `BuildGpx` emits `lat="0" lon="0"` for zero-value floats, the EF `buildGpx` emits `lat="undefined"`, and `Waypoint.fromJson` throws on a null/absent `lat`. A wide blast radius for zero benefit to the chart.
+- **Not `metadata.hr_series`.** The `metadata` jsonb bag is pulled by `SELECT *` on every list/dashboard query; a few thousand HR samples per run would bloat the hot path that never needs them.
+- **A sidecar** keeps the samples out of the row and off the coordinate pipeline entirely. It reuses the `runs`-bucket RLS (`{user_id}/...` keyed on `auth.uid()`), so no new bucket or policy — only a path-shape CHECK mirroring `track_url`'s.
+
+**The privacy line that falls out of it:** the HR sidecar carries **no location**, so unlike the track it is plain owner-only audit data — it is deliberately never routed through `public_runs` or `clip_track_for_user`. Exposing your average HR is a different (and not-yet-made) product decision from exposing where you ran.
+
 ---
 
 ## How to add an entry

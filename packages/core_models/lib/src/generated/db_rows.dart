@@ -1755,6 +1755,7 @@ class RunRow {
   static const String colTrackUrl = 'track_url';
   static const String colIsPublic = 'is_public';
   static const String colEventId = 'event_id';
+  static const String colHrSeriesUrl = 'hr_series_url';
 
   final String id;
   final String userId;
@@ -1770,6 +1771,7 @@ class RunRow {
   final String? trackUrl;
   final bool? isPublic;
   final String? eventId;
+  final String? hrSeriesUrl;
 
   const RunRow({
     required this.id,
@@ -1786,6 +1788,7 @@ class RunRow {
     this.trackUrl,
     this.isPublic,
     this.eventId,
+    this.hrSeriesUrl,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -1803,6 +1806,7 @@ class RunRow {
     trackUrl: json['track_url'] as String?,
     isPublic: json['is_public'] as bool?,
     eventId: json['event_id'] as String?,
+    hrSeriesUrl: json['hr_series_url'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1820,6 +1824,7 @@ class RunRow {
     colTrackUrl: trackUrl,
     colIsPublic: isPublic,
     colEventId: eventId,
+    colHrSeriesUrl: hrSeriesUrl,
   };
 }
 
