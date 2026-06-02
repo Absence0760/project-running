@@ -5746,6 +5746,1727 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Copied to clipboard'**
   String get coachCopied;
+
+  /// AppBar title for the Settings > Account screen
+  ///
+  /// In en, this message translates to:
+  /// **'Account'**
+  String get settingsAccountTitle;
+
+  /// Banner shown when sign-in is attempted but no backend is configured
+  ///
+  /// In en, this message translates to:
+  /// **'Backend not configured'**
+  String get settingsAccountBackendNotConfigured;
+
+  /// Banner shown when signing out fails
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out failed — check your connection'**
+  String get settingsAccountSignOutFailed;
+
+  /// Tile title and dialog title for changing the account password
+  ///
+  /// In en, this message translates to:
+  /// **'Change password'**
+  String get settingsAccountChangePassword;
+
+  /// Label for the new-password field
+  ///
+  /// In en, this message translates to:
+  /// **'New password'**
+  String get settingsAccountNewPassword;
+
+  /// Label for the confirm-password field
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get settingsAccountConfirm;
+
+  /// Cancel button on the Account screen dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get settingsAccountCancel;
+
+  /// Save button on the Account screen dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get settingsAccountSave;
+
+  /// Validation error when the new password is shorter than 8 characters
+  ///
+  /// In en, this message translates to:
+  /// **'Password must be at least 8 characters'**
+  String get settingsAccountPasswordTooShort;
+
+  /// Validation error when the password and confirmation differ
+  ///
+  /// In en, this message translates to:
+  /// **'Passwords do not match'**
+  String get settingsAccountPasswordsMismatch;
+
+  /// Banner shown after the password is changed successfully
+  ///
+  /// In en, this message translates to:
+  /// **'Password updated'**
+  String get settingsAccountPasswordUpdated;
+
+  /// Banner shown when the password change fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update password: {error}'**
+  String settingsAccountPasswordUpdateFailed(Object error);
+
+  /// Title of the delete-account confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account?'**
+  String get settingsAccountDeleteTitle;
+
+  /// Body copy of the delete-account confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently removes your runs, routes, and profile from the server. Local device data is kept unless you sign in as a new user. This cannot be undone.'**
+  String get settingsAccountDeleteBody;
+
+  /// Challenge field label when the account has no email on file
+  ///
+  /// In en, this message translates to:
+  /// **'Type \"DELETE\" to confirm'**
+  String get settingsAccountDeleteChallengeText;
+
+  /// Challenge field label asking the user to type their email
+  ///
+  /// In en, this message translates to:
+  /// **'Type your email ({email}) to confirm'**
+  String settingsAccountDeleteChallengeEmail(String email);
+
+  /// Confirm button on the delete-account dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get settingsAccountDelete;
+
+  /// Banner shown when the user tries to delete an account while signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in first to delete your account.'**
+  String get settingsAccountDeleteSignInFirst;
+
+  /// Banner shown after the account is deleted
+  ///
+  /// In en, this message translates to:
+  /// **'Account deleted'**
+  String get settingsAccountDeleted;
+
+  /// Banner shown when account deletion fails
+  ///
+  /// In en, this message translates to:
+  /// **'Account deletion failed: {error}'**
+  String settingsAccountDeleteFailed(Object error);
+
+  /// Banner shown when CSV export is requested but there are no runs
+  ///
+  /// In en, this message translates to:
+  /// **'No runs to export.'**
+  String get settingsAccountNoRunsToExport;
+
+  /// Share-sheet caption for the CSV runs export
+  ///
+  /// In en, this message translates to:
+  /// **'Run app — runs export'**
+  String get settingsAccountCsvShareText;
+
+  /// Banner shown when the CSV export fails
+  ///
+  /// In en, this message translates to:
+  /// **'CSV export failed: {error}'**
+  String settingsAccountCsvExportFailed(Object error);
+
+  /// Banner shown when backup is requested while signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in first to back up your runs.'**
+  String get settingsAccountBackupSignInFirst;
+
+  /// Banner shown while the backup archive is being prepared
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing backup…'**
+  String get settingsAccountBackupPreparing;
+
+  /// Share-sheet caption for the full backup archive
+  ///
+  /// In en, this message translates to:
+  /// **'Run app backup'**
+  String get settingsAccountBackupShareText;
+
+  /// Banner shown when the backup fails
+  ///
+  /// In en, this message translates to:
+  /// **'Backup failed: {error}'**
+  String settingsAccountBackupFailed(Object error);
+
+  /// Banner shown when restore can't run because the local store is missing
+  ///
+  /// In en, this message translates to:
+  /// **'Backup service unavailable.'**
+  String get settingsAccountRestoreUnavailable;
+
+  /// Title of the restore-from-backup confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from backup?'**
+  String get settingsAccountRestoreTitle;
+
+  /// Restore dialog body shown when the user is signed out
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re not signed in. Runs will be restored to this device and synced to your account the next time you sign in.'**
+  String get settingsAccountRestoreBodyOffline;
+
+  /// Restore dialog body shown when the user is signed in
+  ///
+  /// In en, this message translates to:
+  /// **'This adds or overwrites runs and routes matching IDs in the backup. It will not delete runs or routes that aren\'t in the backup.'**
+  String get settingsAccountRestoreBodyOnline;
+
+  /// Confirm button on the restore dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get settingsAccountRestore;
+
+  /// Banner shown while a backup is being restored
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring…'**
+  String get settingsAccountRestoring;
+
+  /// Banner summarising a successful restore; warnings is an optional suffix
+  ///
+  /// In en, this message translates to:
+  /// **'Restored {runs} runs · {tracks} tracks · {routes} routes{warnings}'**
+  String settingsAccountRestoreDone(
+    int runs,
+    int tracks,
+    int routes,
+    String warnings,
+  );
+
+  /// Suffix appended to the restore summary when warnings occurred
+  ///
+  /// In en, this message translates to:
+  /// **' · {count} warnings'**
+  String settingsAccountRestoreWarningsSuffix(int count);
+
+  /// Banner shown when restore fails
+  ///
+  /// In en, this message translates to:
+  /// **'Restore failed: {error}'**
+  String settingsAccountRestoreFailed(Object error);
+
+  /// Account-row title shown when no email is on file
+  ///
+  /// In en, this message translates to:
+  /// **'Offline mode'**
+  String get settingsAccountOfflineMode;
+
+  /// Account-row subtitle when the user is signed in
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in — runs will sync'**
+  String get settingsAccountSignedInSync;
+
+  /// Account-row subtitle when the user is signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to sync runs across devices'**
+  String get settingsAccountSignInToSync;
+
+  /// Tooltip on the sign-out button
+  ///
+  /// In en, this message translates to:
+  /// **'Sign out'**
+  String get settingsAccountSignOut;
+
+  /// Sign-in button on the Account screen
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in'**
+  String get settingsAccountSignIn;
+
+  /// Tile title that opens the user's own profile
+  ///
+  /// In en, this message translates to:
+  /// **'View profile'**
+  String get settingsAccountViewProfile;
+
+  /// Subtitle of the View profile tile
+  ///
+  /// In en, this message translates to:
+  /// **'Your runs, followers, following, notifications'**
+  String get settingsAccountViewProfileSubtitle;
+
+  /// Tile title for guided runs
+  ///
+  /// In en, this message translates to:
+  /// **'Guided runs'**
+  String get settingsAccountGuidedRuns;
+
+  /// Subtitle of the Guided runs tile
+  ///
+  /// In en, this message translates to:
+  /// **'Coach-voice scripted workouts with TTS cues'**
+  String get settingsAccountGuidedRunsSubtitle;
+
+  /// Tile title for privacy zones
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy zones'**
+  String get settingsAccountPrivacyZones;
+
+  /// Subtitle of the Privacy zones tile
+  ///
+  /// In en, this message translates to:
+  /// **'Clip start/end of public tracks near home'**
+  String get settingsAccountPrivacyZonesSubtitle;
+
+  /// Tile title for trusted contacts
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted contacts'**
+  String get settingsAccountTrustedContacts;
+
+  /// Subtitle of the Trusted contacts tile
+  ///
+  /// In en, this message translates to:
+  /// **'Designated people for the planned overdue-run / panic surface'**
+  String get settingsAccountTrustedContactsSubtitle;
+
+  /// Toggle title for Sentry error reporting
+  ///
+  /// In en, this message translates to:
+  /// **'Send error reports'**
+  String get settingsAccountSendErrorReports;
+
+  /// Subtitle of the error-reporting toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.'**
+  String get settingsAccountSendErrorReportsSubtitle;
+
+  /// Banner shown after enabling error reporting
+  ///
+  /// In en, this message translates to:
+  /// **'Error reporting enabled — restart the app to apply.'**
+  String get settingsAccountErrorReportingEnabled;
+
+  /// Banner shown after disabling error reporting
+  ///
+  /// In en, this message translates to:
+  /// **'Error reporting disabled — restart the app to apply.'**
+  String get settingsAccountErrorReportingDisabled;
+
+  /// Tile title for importing runs
+  ///
+  /// In en, this message translates to:
+  /// **'Import from another app'**
+  String get settingsAccountImport;
+
+  /// Subtitle of the Import tile
+  ///
+  /// In en, this message translates to:
+  /// **'Strava, GPX, TCX'**
+  String get settingsAccountImportSubtitle;
+
+  /// Tile title for the full backup export
+  ///
+  /// In en, this message translates to:
+  /// **'Full backup'**
+  String get settingsAccountFullBackup;
+
+  /// Subtitle of the Full backup tile
+  ///
+  /// In en, this message translates to:
+  /// **'Every run with its GPS trace, plus routes, profile, and preferences. Restores on web or Android.'**
+  String get settingsAccountFullBackupSubtitle;
+
+  /// Tile title for the CSV runs export
+  ///
+  /// In en, this message translates to:
+  /// **'Export runs as CSV'**
+  String get settingsAccountExportCsv;
+
+  /// Subtitle of the Export runs as CSV tile
+  ///
+  /// In en, this message translates to:
+  /// **'date, distance, duration, pace, source — one row per run. Same shape as the web GDPR export.'**
+  String get settingsAccountExportCsvSubtitle;
+
+  /// Tile title for restoring from a backup file
+  ///
+  /// In en, this message translates to:
+  /// **'Restore from backup'**
+  String get settingsAccountRestoreTile;
+
+  /// Subtitle of the Restore from backup tile
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a previously saved .zip backup.'**
+  String get settingsAccountRestoreTileSubtitle;
+
+  /// Tile title for deleting the account
+  ///
+  /// In en, this message translates to:
+  /// **'Delete account'**
+  String get settingsAccountDeleteAccount;
+
+  /// Subtitle of the Delete account tile
+  ///
+  /// In en, this message translates to:
+  /// **'Permanently removes server data'**
+  String get settingsAccountDeleteAccountSubtitle;
+
+  /// AppBar title for the Settings > Integrations screen
+  ///
+  /// In en, this message translates to:
+  /// **'Integrations'**
+  String get integrationsTitle;
+
+  /// Relative-time label for an event less than a minute ago
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get integrationsJustNow;
+
+  /// Relative-time label in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m ago'**
+  String integrationsMinutesAgo(int minutes);
+
+  /// Relative-time label in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h ago'**
+  String integrationsHoursAgo(int hours);
+
+  /// Relative-time label in days
+  ///
+  /// In en, this message translates to:
+  /// **'{days}d ago'**
+  String integrationsDaysAgo(int days);
+
+  /// Relative-time label in weeks
+  ///
+  /// In en, this message translates to:
+  /// **'{weeks}w ago'**
+  String integrationsWeeksAgo(int weeks);
+
+  /// Banner shown when an external URL can't be opened
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open: {error}'**
+  String integrationsCouldNotOpen(Object error);
+
+  /// Banner shown when Strava connect falls back to the browser flow
+  ///
+  /// In en, this message translates to:
+  /// **'Complete the Strava sign-in in your browser, then return here and pull to refresh.'**
+  String get integrationsStravaBrowserHint;
+
+  /// Banner shown when the user cancels the Strava OAuth flow
+  ///
+  /// In en, this message translates to:
+  /// **'Strava sign-in cancelled.'**
+  String get integrationsStravaCancelled;
+
+  /// Banner shown when Strava sign-in fails
+  ///
+  /// In en, this message translates to:
+  /// **'Strava sign-in failed: {error}'**
+  String integrationsStravaSignInFailed(Object error);
+
+  /// Banner shown when the Strava OAuth state doesn't match
+  ///
+  /// In en, this message translates to:
+  /// **'Strava sign-in rejected: CSRF state mismatch. Please retry.'**
+  String get integrationsStravaCsrfMismatch;
+
+  /// Banner shown when the Strava token exchange fails
+  ///
+  /// In en, this message translates to:
+  /// **'Strava connect failed: {error}'**
+  String integrationsStravaConnectFailed(String error);
+
+  /// Banner shown after Strava connects successfully
+  ///
+  /// In en, this message translates to:
+  /// **'Strava connected.'**
+  String get integrationsStravaConnected;
+
+  /// Banner summarising a Strava sync
+  ///
+  /// In en, this message translates to:
+  /// **'Synced. {imported} new, {skipped} already present.'**
+  String integrationsSyncResult(int imported, int skipped);
+
+  /// Banner shown when a Strava sync fails
+  ///
+  /// In en, this message translates to:
+  /// **'Sync failed: {error}'**
+  String integrationsSyncFailed(Object error);
+
+  /// Title of the disconnect-Strava confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect Strava?'**
+  String get integrationsStravaDisconnectTitle;
+
+  /// Body of the disconnect-Strava confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Future activities will stop syncing automatically. Already-imported runs stay in your history.'**
+  String get integrationsStravaDisconnectBody;
+
+  /// Cancel button on Integrations dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get integrationsCancel;
+
+  /// Disconnect button and popup-menu item
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect'**
+  String get integrationsDisconnect;
+
+  /// Banner shown after Strava is disconnected
+  ///
+  /// In en, this message translates to:
+  /// **'Strava disconnected.'**
+  String get integrationsStravaDisconnected;
+
+  /// Banner shown when disconnecting fails
+  ///
+  /// In en, this message translates to:
+  /// **'Disconnect failed: {error}'**
+  String integrationsDisconnectFailed(Object error);
+
+  /// Title of the parkrun import dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Import parkrun results'**
+  String get integrationsParkrunTitle;
+
+  /// Body of the parkrun import dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Enter your parkrun athlete number (e.g. A123456). We\'ll fetch your finish history and add any new results to your runs list.'**
+  String get integrationsParkrunBody;
+
+  /// Label for the parkrun athlete-number field
+  ///
+  /// In en, this message translates to:
+  /// **'Athlete number'**
+  String get integrationsParkrunFieldLabel;
+
+  /// Import button on the parkrun dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Import'**
+  String get integrationsImport;
+
+  /// Progress text while parkrun results are imported
+  ///
+  /// In en, this message translates to:
+  /// **'Importing parkrun results…'**
+  String get integrationsParkrunImporting;
+
+  /// Banner summarising imported parkrun results
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Imported {count} parkrun result.} other{Imported {count} parkrun results.}}'**
+  String integrationsParkrunImported(int count);
+
+  /// Banner shown when no new parkrun results were found
+  ///
+  /// In en, this message translates to:
+  /// **'No new parkrun results since last import.'**
+  String get integrationsParkrunNoneNew;
+
+  /// Banner shown when the parkrun import fails
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: {error}'**
+  String integrationsImportFailed(Object error);
+
+  /// Strava integration tile title (brand name)
+  ///
+  /// In en, this message translates to:
+  /// **'Strava'**
+  String get integrationsStravaName;
+
+  /// Strava tile subtitle when not connected
+  ///
+  /// In en, this message translates to:
+  /// **'Connect to auto-sync activities'**
+  String get integrationsStravaConnectSubtitle;
+
+  /// Strava tile subtitle when connected but never synced
+  ///
+  /// In en, this message translates to:
+  /// **'Connected · waiting for first sync'**
+  String get integrationsStravaWaitingFirstSync;
+
+  /// Strava tile subtitle showing the last sync time
+  ///
+  /// In en, this message translates to:
+  /// **'Connected · last sync {time}'**
+  String integrationsStravaLastSync(String time);
+
+  /// Popup-menu item to trigger a Strava sync
+  ///
+  /// In en, this message translates to:
+  /// **'Sync now'**
+  String get integrationsSyncNow;
+
+  /// parkrun integration tile title (brand name)
+  ///
+  /// In en, this message translates to:
+  /// **'parkrun'**
+  String get integrationsParkrunName;
+
+  /// parkrun tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Import results by athlete number'**
+  String get integrationsParkrunTileSubtitle;
+
+  /// Tile title shown when signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to connect services'**
+  String get integrationsSignInTitle;
+
+  /// Tile subtitle shown when signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Strava + parkrun require an account so synced activities land in your history.'**
+  String get integrationsSignInSubtitle;
+
+  /// Toggle title for writing runs to Health Connect (Android)
+  ///
+  /// In en, this message translates to:
+  /// **'Write runs to Health Connect'**
+  String get integrationsHealthConnectTitle;
+
+  /// Subtitle of the Health Connect write toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Send each finished run to Health Connect so it appears in Google Fit, Samsung Health, Fitbit and others.'**
+  String get integrationsHealthConnectSubtitle;
+
+  /// Banner shown when the Health Connect write permission is denied
+  ///
+  /// In en, this message translates to:
+  /// **'Health Connect permission not granted — runs won\'t be written.'**
+  String get integrationsHealthConnectDenied;
+
+  /// Banner shown when pairing a heart-rate strap fails
+  ///
+  /// In en, this message translates to:
+  /// **'Pair failed: {error}'**
+  String integrationsHrPairFailed(Object error);
+
+  /// Tile title for the BLE heart-rate monitor
+  ///
+  /// In en, this message translates to:
+  /// **'Heart rate monitor'**
+  String get integrationsHrTitle;
+
+  /// HR tile subtitle while checking for a paired strap
+  ///
+  /// In en, this message translates to:
+  /// **'Checking…'**
+  String get integrationsHrChecking;
+
+  /// HR tile subtitle showing the paired strap name
+  ///
+  /// In en, this message translates to:
+  /// **'Paired: {name}'**
+  String integrationsHrPaired(String name);
+
+  /// HR tile subtitle when no strap is paired
+  ///
+  /// In en, this message translates to:
+  /// **'No strap paired — tap to scan'**
+  String get integrationsHrNotPaired;
+
+  /// Tooltip on the forget-strap button
+  ///
+  /// In en, this message translates to:
+  /// **'Forget'**
+  String get integrationsHrForget;
+
+  /// Title of the HR scan bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Scan for heart rate monitor'**
+  String get integrationsHrScanTitle;
+
+  /// Hint text on the HR scan sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Wake your strap / chest band. Apps typically take 3–8 seconds.'**
+  String get integrationsHrScanHint;
+
+  /// Empty-state text on the HR scan sheet
+  ///
+  /// In en, this message translates to:
+  /// **'No straps found. Make sure it\'s nearby and awake.'**
+  String get integrationsHrScanEmpty;
+
+  /// Signal-strength subtitle for a discovered strap
+  ///
+  /// In en, this message translates to:
+  /// **'RSSI {rssi} dBm'**
+  String integrationsHrRssi(int rssi);
+
+  /// AppBar title for the Settings > Pro & support screen
+  ///
+  /// In en, this message translates to:
+  /// **'Pro & support'**
+  String get proTitle;
+
+  /// Banner shown when an external URL can't be opened
+  ///
+  /// In en, this message translates to:
+  /// **'Could not open: {error}'**
+  String proCouldNotOpen(Object error);
+
+  /// Banner shown after a successful Pro purchase
+  ///
+  /// In en, this message translates to:
+  /// **'Welcome to Pro! Pulling your benefits…'**
+  String get proWelcome;
+
+  /// Banner shown when a Pro purchase fails
+  ///
+  /// In en, this message translates to:
+  /// **'Purchase failed. Try again later.'**
+  String get proPurchaseFailed;
+
+  /// Banner shown when restore can't run because RevenueCat is unconfigured
+  ///
+  /// In en, this message translates to:
+  /// **'Restore needs you to be signed in with RevenueCat configured. Manage your subscription on the web upgrade page instead.'**
+  String get proRestoreNeedsSignIn;
+
+  /// Banner shown after purchases are restored
+  ///
+  /// In en, this message translates to:
+  /// **'Restored your Pro subscription.'**
+  String get proRestored;
+
+  /// Banner shown when no purchases are found to restore
+  ///
+  /// In en, this message translates to:
+  /// **'No active purchases found on this store account.'**
+  String get proRestoreNone;
+
+  /// Banner shown when restore fails
+  ///
+  /// In en, this message translates to:
+  /// **'Restore failed. Try again later.'**
+  String get proRestoreFailed;
+
+  /// Banner shown when restore isn't available in the build
+  ///
+  /// In en, this message translates to:
+  /// **'Restore unavailable in this build.'**
+  String get proRestoreUnavailable;
+
+  /// Tile title for the Pro subscription; price is a localized currency amount
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe to Pro — {price}/month'**
+  String proSubscribeTitle(String price);
+
+  /// Pro tile subtitle when in-app purchase is configured
+  ///
+  /// In en, this message translates to:
+  /// **'Unlimited AI coach + priority processing. Auto-renews monthly until cancelled in Settings → Subscriptions.'**
+  String get proSubscribeSubtitleConfigured;
+
+  /// Pro tile subtitle when falling back to the web portal
+  ///
+  /// In en, this message translates to:
+  /// **'Opens the subscription portal in your browser. Auto-renews monthly until cancelled.'**
+  String get proSubscribeSubtitleWeb;
+
+  /// Honesty note about billing currency and regional availability
+  ///
+  /// In en, this message translates to:
+  /// **'Billed in US dollars. Availability depends on your country and payment method — some regions can\'t be served by our payment processor.'**
+  String get proRegionalNote;
+
+  /// Tile title to restore purchases
+  ///
+  /// In en, this message translates to:
+  /// **'Restore purchases'**
+  String get proRestorePurchases;
+
+  /// Subtitle of the Restore purchases tile
+  ///
+  /// In en, this message translates to:
+  /// **'Re-link purchases from a previous install or another device'**
+  String get proRestorePurchasesSubtitle;
+
+  /// Tile title to manage the subscription
+  ///
+  /// In en, this message translates to:
+  /// **'Manage subscription'**
+  String get proManageSubscription;
+
+  /// Subtitle of the Manage subscription tile
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel, change plan, or update payment method'**
+  String get proManageSubscriptionSubtitle;
+
+  /// Tile title for a one-off donation
+  ///
+  /// In en, this message translates to:
+  /// **'Support the app'**
+  String get proSupport;
+
+  /// Subtitle of the Support the app tile
+  ///
+  /// In en, this message translates to:
+  /// **'One-off donation in your browser'**
+  String get proSupportSubtitle;
+
+  /// AppBar title for the Settings > Licenses screen
+  ///
+  /// In en, this message translates to:
+  /// **'Licenses'**
+  String get licensesTitle;
+
+  /// Tile title showing the app version
+  ///
+  /// In en, this message translates to:
+  /// **'Version'**
+  String get licensesVersion;
+
+  /// Tile title that opens the bundled-licenses page
+  ///
+  /// In en, this message translates to:
+  /// **'Open-source licenses'**
+  String get licensesOpenSource;
+
+  /// Subtitle of the Open-source licenses tile
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party packages bundled with this app'**
+  String get licensesOpenSourceSubtitle;
+
+  /// AppBar title for the Settings > Devices screen
+  ///
+  /// In en, this message translates to:
+  /// **'Devices'**
+  String get devicesTitle;
+
+  /// Title of the rename-device dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Rename device'**
+  String get devicesRenameTitle;
+
+  /// Cancel button on Devices dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get devicesCancel;
+
+  /// Save button on Devices dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get devicesSave;
+
+  /// Banner shown when renaming a device fails
+  ///
+  /// In en, this message translates to:
+  /// **'Rename failed: {error}'**
+  String devicesRenameFailed(Object error);
+
+  /// Title of the remove-device confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Remove device?'**
+  String get devicesRemoveTitle;
+
+  /// Remove dialog body when removing the current device
+  ///
+  /// In en, this message translates to:
+  /// **'This is the device you\'re using. Removing it wipes the per-device preference overrides; the device stays signed in.'**
+  String get devicesRemoveBodyCurrent;
+
+  /// Remove dialog body when removing another device
+  ///
+  /// In en, this message translates to:
+  /// **'Removes the device entry and any per-device preference overrides. The device stays signed in until it next opens the app.'**
+  String get devicesRemoveBodyOther;
+
+  /// Confirm button and popup-menu item to remove a device
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get devicesRemove;
+
+  /// Banner shown when removing a device fails
+  ///
+  /// In en, this message translates to:
+  /// **'Remove failed: {error}'**
+  String devicesRemoveFailed(Object error);
+
+  /// Banner shown when saving device overrides fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String devicesSaveFailed(Object error);
+
+  /// Error-state message when the device list fails to load
+  ///
+  /// In en, this message translates to:
+  /// **'Could not load devices.'**
+  String get devicesLoadError;
+
+  /// Empty-state text when there are no registered devices
+  ///
+  /// In en, this message translates to:
+  /// **'No devices yet — they\'re registered the first time a device opens the app while signed in.'**
+  String get devicesEmpty;
+
+  /// Badge marking the current device
+  ///
+  /// In en, this message translates to:
+  /// **'This device'**
+  String get devicesThisDevice;
+
+  /// Subtitle showing when a device was last active
+  ///
+  /// In en, this message translates to:
+  /// **'Last seen {time}'**
+  String devicesLastSeen(String time);
+
+  /// Suffix showing the number of per-device overrides
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} override} other{{count} overrides}}'**
+  String devicesOverrideCount(int count);
+
+  /// Relative-time label for an event less than a minute ago
+  ///
+  /// In en, this message translates to:
+  /// **'just now'**
+  String get devicesJustNow;
+
+  /// Relative-time label in minutes
+  ///
+  /// In en, this message translates to:
+  /// **'{minutes}m ago'**
+  String devicesMinutesAgo(int minutes);
+
+  /// Relative-time label in hours
+  ///
+  /// In en, this message translates to:
+  /// **'{hours}h ago'**
+  String devicesHoursAgo(int hours);
+
+  /// Relative-time label in days
+  ///
+  /// In en, this message translates to:
+  /// **'{days}d ago'**
+  String devicesDaysAgo(int days);
+
+  /// Popup-menu item to rename a device
+  ///
+  /// In en, this message translates to:
+  /// **'Rename'**
+  String get devicesRename;
+
+  /// Popup-menu item to edit a device's overrides
+  ///
+  /// In en, this message translates to:
+  /// **'Edit overrides…'**
+  String get devicesEditOverrides;
+
+  /// Banner shown when no more override keys are available to add
+  ///
+  /// In en, this message translates to:
+  /// **'Every overridable key is already set; remove one before adding another.'**
+  String get devicesEveryKeySet;
+
+  /// Title of the overrides bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Per-device overrides'**
+  String get devicesOverridesSheetTitle;
+
+  /// Description on the overrides bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'These keys override the universal settings on this device only.'**
+  String get devicesOverridesSheetDesc;
+
+  /// Empty-state text in the overrides sheet
+  ///
+  /// In en, this message translates to:
+  /// **'No overrides on this device.'**
+  String get devicesNoOverrides;
+
+  /// Button to add a per-device override
+  ///
+  /// In en, this message translates to:
+  /// **'Add override'**
+  String get devicesAddOverride;
+
+  /// Title of the key-picker step in the add-override sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a key'**
+  String get devicesPickKey;
+
+  /// Validation error for an integer override value
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a whole number.'**
+  String get devicesEnterWholeNumber;
+
+  /// Validation error for a decimal override value
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a number (e.g. 0.8).'**
+  String get devicesEnterNumber;
+
+  /// Label for the override value field
+  ///
+  /// In en, this message translates to:
+  /// **'Value'**
+  String get devicesValue;
+
+  /// Back button in the add-override sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Back'**
+  String get devicesBack;
+
+  /// Confirm button in the add-override sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get devicesAdd;
+
+  /// Override key label: preferred unit
+  ///
+  /// In en, this message translates to:
+  /// **'Preferred unit'**
+  String get devicesKeyPreferredUnitLabel;
+
+  /// Override key hint: preferred unit
+  ///
+  /// In en, this message translates to:
+  /// **'Distance unit for all displays.'**
+  String get devicesKeyPreferredUnitHint;
+
+  /// Override key label: default activity type
+  ///
+  /// In en, this message translates to:
+  /// **'Default activity type'**
+  String get devicesKeyDefaultActivityLabel;
+
+  /// Override key hint: default activity type
+  ///
+  /// In en, this message translates to:
+  /// **'Pre-selected activity on the start screen.'**
+  String get devicesKeyDefaultActivityHint;
+
+  /// Override key label: map style
+  ///
+  /// In en, this message translates to:
+  /// **'Map style'**
+  String get devicesKeyMapStyleLabel;
+
+  /// Override key hint: map style
+  ///
+  /// In en, this message translates to:
+  /// **'MapLibre style for the map view.'**
+  String get devicesKeyMapStyleHint;
+
+  /// Override key label: pace format
+  ///
+  /// In en, this message translates to:
+  /// **'Pace format'**
+  String get devicesKeyPaceFormatLabel;
+
+  /// Override key hint: pace format
+  ///
+  /// In en, this message translates to:
+  /// **'Display format for pace.'**
+  String get devicesKeyPaceFormatHint;
+
+  /// Override key label: voice feedback
+  ///
+  /// In en, this message translates to:
+  /// **'Voice feedback'**
+  String get devicesKeyVoiceFeedbackLabel;
+
+  /// Override key hint: voice feedback
+  ///
+  /// In en, this message translates to:
+  /// **'Speak pace / distance callouts during a run.'**
+  String get devicesKeyVoiceFeedbackHint;
+
+  /// Override key label: voice feedback interval
+  ///
+  /// In en, this message translates to:
+  /// **'Voice feedback interval (km)'**
+  String get devicesKeyVoiceIntervalLabel;
+
+  /// Override key hint: voice feedback interval
+  ///
+  /// In en, this message translates to:
+  /// **'Distance between spoken callouts.'**
+  String get devicesKeyVoiceIntervalHint;
+
+  /// Override key label: haptic feedback
+  ///
+  /// In en, this message translates to:
+  /// **'Haptic feedback'**
+  String get devicesKeyHapticLabel;
+
+  /// Override key hint: haptic feedback
+  ///
+  /// In en, this message translates to:
+  /// **'Vibration on lap + pace-zone changes.'**
+  String get devicesKeyHapticHint;
+
+  /// Override key label: keep screen on
+  ///
+  /// In en, this message translates to:
+  /// **'Keep screen on'**
+  String get devicesKeyKeepScreenOnLabel;
+
+  /// Override key hint: keep screen on
+  ///
+  /// In en, this message translates to:
+  /// **'Disable OS auto-dim while recording.'**
+  String get devicesKeyKeepScreenOnHint;
+
+  /// AppBar title for the Settings > Gear screen
+  ///
+  /// In en, this message translates to:
+  /// **'Gear'**
+  String get gearTitle;
+
+  /// Tooltip and button label to add gear
+  ///
+  /// In en, this message translates to:
+  /// **'Add gear'**
+  String get gearAddGear;
+
+  /// Title of the delete-gear confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete gear?'**
+  String get gearDeleteTitle;
+
+  /// Body of the delete-gear confirmation dialog
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\"? Mileage history on past runs will be lost. Retire instead to keep the records.'**
+  String gearDeleteBody(String name);
+
+  /// Cancel button on Gear dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get gearCancel;
+
+  /// Delete button and popup-menu item on the Gear screen
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get gearDelete;
+
+  /// Banner shown after deleting gear while offline
+  ///
+  /// In en, this message translates to:
+  /// **'Deleted locally — will sync when you reconnect.'**
+  String get gearDeletedOffline;
+
+  /// Banner shown after backfilling gear onto past runs
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Attached {name} to {count} run.} other{Attached {name} to {count} runs.}}'**
+  String gearAttached(String name, int count);
+
+  /// Offline banner when edits are queued
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}'**
+  String gearOfflineQueued(int count);
+
+  /// Offline banner when no edits are queued
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing cached gear.'**
+  String get gearOfflineCached;
+
+  /// Segmented-button label for shoes
+  ///
+  /// In en, this message translates to:
+  /// **'Shoes'**
+  String get gearShoes;
+
+  /// Segmented-button label for bikes
+  ///
+  /// In en, this message translates to:
+  /// **'Bikes'**
+  String get gearBikes;
+
+  /// Section header for retired gear
+  ///
+  /// In en, this message translates to:
+  /// **'RETIRED'**
+  String get gearRetired;
+
+  /// Empty-state title for shoes
+  ///
+  /// In en, this message translates to:
+  /// **'No shoes yet'**
+  String get gearEmptyShoes;
+
+  /// Empty-state title for bikes
+  ///
+  /// In en, this message translates to:
+  /// **'No bikes yet'**
+  String get gearEmptyBikes;
+
+  /// Empty-state subtitle on the Gear screen
+  ///
+  /// In en, this message translates to:
+  /// **'Add a pair to track mileage and get retirement reminders.'**
+  String get gearEmptySubtitle;
+
+  /// Run count shown on a gear tile
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} run} other{{count} runs}}'**
+  String gearRunCount(int count);
+
+  /// Popup-menu item to retire gear
+  ///
+  /// In en, this message translates to:
+  /// **'Retire'**
+  String get gearRetire;
+
+  /// Popup-menu item to un-retire gear
+  ///
+  /// In en, this message translates to:
+  /// **'Restore'**
+  String get gearRestore;
+
+  /// AppBar title for the Settings > Privacy zones screen
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy zones'**
+  String get privacyZonesTitle;
+
+  /// Banner shown after saving privacy zones
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy zones saved.'**
+  String get privacyZonesSaved;
+
+  /// Banner shown when saving privacy zones fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String privacyZonesSaveFailed(Object error);
+
+  /// Banner shown when the Locate FAB can't get a fix
+  ///
+  /// In en, this message translates to:
+  /// **'Location unavailable: {error}'**
+  String privacyZonesLocationUnavailable(Object error);
+
+  /// Save button in the AppBar
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get privacyZonesSave;
+
+  /// Tooltip on the Locate FAB
+  ///
+  /// In en, this message translates to:
+  /// **'Locate me'**
+  String get privacyZonesLocateMe;
+
+  /// Instructional copy above the privacy-zones map
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the map to add a zone. Tracks on public surfaces have their start and end clipped past the zone radius.'**
+  String get privacyZonesHint;
+
+  /// Hint text in the place-search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search places…'**
+  String get privacyZonesSearchHint;
+
+  /// Label for the zone-radius slider
+  ///
+  /// In en, this message translates to:
+  /// **'Radius'**
+  String get privacyZonesRadius;
+
+  /// Radius value in metres
+  ///
+  /// In en, this message translates to:
+  /// **'{meters} m'**
+  String privacyZonesRadiusMeters(int meters);
+
+  /// Footer summarising the number of zones
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} zone — tap a marker to remove.} other{{count} zones — tap a marker to remove.}}'**
+  String privacyZonesCount(int count);
+
+  /// Button to remove all privacy zones
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all'**
+  String get privacyZonesClearAll;
+
+  /// AppBar title for the Settings > Preferences screen
+  ///
+  /// In en, this message translates to:
+  /// **'Preferences'**
+  String get prefsTitle;
+
+  /// Unit subtitle when kilometres are selected
+  ///
+  /// In en, this message translates to:
+  /// **'km, m'**
+  String get prefsUnitMetric;
+
+  /// Unit subtitle when miles are selected
+  ///
+  /// In en, this message translates to:
+  /// **'mi, ft'**
+  String get prefsUnitImperial;
+
+  /// Unit subtitle with a note that the setting syncs across devices
+  ///
+  /// In en, this message translates to:
+  /// **'{base} · synced to your other devices'**
+  String prefsSyncedSuffix(String base);
+
+  /// Clear button in Preferences dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get prefsClear;
+
+  /// Cancel button in Preferences dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get prefsCancel;
+
+  /// Save button in Preferences dialogs
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get prefsSave;
+
+  /// Tile and dialog title for the split interval
+  ///
+  /// In en, this message translates to:
+  /// **'Split interval'**
+  String get prefsSplitInterval;
+
+  /// Split-interval option meaning the app default
+  ///
+  /// In en, this message translates to:
+  /// **'Default'**
+  String get prefsSplitIntervalDefault;
+
+  /// Subtitle shown when the split interval is at its default
+  ///
+  /// In en, this message translates to:
+  /// **'Default (1 km for running, 5 km for cycling)'**
+  String get prefsSplitIntervalDefaultSubtitle;
+
+  /// Tile and dialog title for the live pace alert
+  ///
+  /// In en, this message translates to:
+  /// **'Live pace alert'**
+  String get prefsLivePaceAlert;
+
+  /// Minutes field label in the live-pace-alert dialog
+  ///
+  /// In en, this message translates to:
+  /// **'min'**
+  String get prefsLivePaceAlertMin;
+
+  /// Seconds field label in the live-pace-alert dialog
+  ///
+  /// In en, this message translates to:
+  /// **'sec'**
+  String get prefsLivePaceAlertSec;
+
+  /// Live-pace-alert subtitle when no target pace is set
+  ///
+  /// In en, this message translates to:
+  /// **'Off — set a pace to get spoken alerts during a run'**
+  String get prefsLivePaceAlertOff;
+
+  /// Live-pace-alert subtitle showing the target pace
+  ///
+  /// In en, this message translates to:
+  /// **'{pace} {paceLabel} — spoken alert during a run when 30s+ off'**
+  String prefsLivePaceAlertOn(String pace, String paceLabel);
+
+  /// Activity-type label: run
+  ///
+  /// In en, this message translates to:
+  /// **'Run'**
+  String get prefsActivityRun;
+
+  /// Activity-type label: walk
+  ///
+  /// In en, this message translates to:
+  /// **'Walk'**
+  String get prefsActivityWalk;
+
+  /// Activity-type label: hike
+  ///
+  /// In en, this message translates to:
+  /// **'Hike'**
+  String get prefsActivityHike;
+
+  /// Activity-type label: cycle
+  ///
+  /// In en, this message translates to:
+  /// **'Cycle'**
+  String get prefsActivityCycle;
+
+  /// Tile and picker title for the pace format
+  ///
+  /// In en, this message translates to:
+  /// **'Pace format'**
+  String get prefsPaceFormat;
+
+  /// Pace-format option: minutes per kilometre
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes per km'**
+  String get prefsPaceFormatMinPerKm;
+
+  /// Pace-format option: minutes per mile
+  ///
+  /// In en, this message translates to:
+  /// **'Minutes per mile'**
+  String get prefsPaceFormatMinPerMi;
+
+  /// Pace-format option: kilometres per hour
+  ///
+  /// In en, this message translates to:
+  /// **'km/h'**
+  String get prefsPaceFormatKph;
+
+  /// Pace-format option: miles per hour
+  ///
+  /// In en, this message translates to:
+  /// **'mph'**
+  String get prefsPaceFormatMph;
+
+  /// Placeholder shown when a setting has no value
+  ///
+  /// In en, this message translates to:
+  /// **'Not set'**
+  String get prefsNotSet;
+
+  /// HR-zones summary showing the upper bounds in bpm
+  ///
+  /// In en, this message translates to:
+  /// **'{zones} bpm'**
+  String prefsHrZonesSummary(String zones);
+
+  /// Weekly-goal summary showing the target distance per week
+  ///
+  /// In en, this message translates to:
+  /// **'{distance} {unit} / week'**
+  String prefsWeeklyGoalSummary(String distance, String unit);
+
+  /// Tile and picker title for the map style
+  ///
+  /// In en, this message translates to:
+  /// **'Map style'**
+  String get prefsMapStyle;
+
+  /// Map-style option: streets
+  ///
+  /// In en, this message translates to:
+  /// **'Streets'**
+  String get prefsMapStyleStreets;
+
+  /// Map-style option: satellite
+  ///
+  /// In en, this message translates to:
+  /// **'Satellite'**
+  String get prefsMapStyleSatellite;
+
+  /// Map-style option: outdoors
+  ///
+  /// In en, this message translates to:
+  /// **'Outdoors'**
+  String get prefsMapStyleOutdoors;
+
+  /// Map-style option: dark
+  ///
+  /// In en, this message translates to:
+  /// **'Dark'**
+  String get prefsMapStyleDark;
+
+  /// Picker title for the default run visibility
+  ///
+  /// In en, this message translates to:
+  /// **'Default run visibility'**
+  String get prefsDefaultRunVisibility;
+
+  /// Tile and picker title for the coach personality
+  ///
+  /// In en, this message translates to:
+  /// **'Coach personality'**
+  String get prefsCoachPersonality;
+
+  /// Coach-personality option: supportive
+  ///
+  /// In en, this message translates to:
+  /// **'Supportive'**
+  String get prefsCoachSupportive;
+
+  /// Coach-personality option: drill sergeant
+  ///
+  /// In en, this message translates to:
+  /// **'Drill sergeant'**
+  String get prefsCoachDrillSergeant;
+
+  /// Coach-personality option: analytical
+  ///
+  /// In en, this message translates to:
+  /// **'Analytical'**
+  String get prefsCoachAnalytical;
+
+  /// Tile and picker title for the week-start day
+  ///
+  /// In en, this message translates to:
+  /// **'Week starts on'**
+  String get prefsWeekStart;
+
+  /// Week-start option: Monday
+  ///
+  /// In en, this message translates to:
+  /// **'Monday'**
+  String get prefsWeekStartMonday;
+
+  /// Week-start option: Sunday
+  ///
+  /// In en, this message translates to:
+  /// **'Sunday'**
+  String get prefsWeekStartSunday;
+
+  /// Tile and picker title for the default activity
+  ///
+  /// In en, this message translates to:
+  /// **'Default activity'**
+  String get prefsDefaultActivity;
+
+  /// Tile title and date-picker help text for date of birth
+  ///
+  /// In en, this message translates to:
+  /// **'Date of birth'**
+  String get prefsDateOfBirth;
+
+  /// Tile and dialog title for resting heart rate
+  ///
+  /// In en, this message translates to:
+  /// **'Resting heart rate'**
+  String get prefsRestingHr;
+
+  /// Tile and dialog title for max heart rate
+  ///
+  /// In en, this message translates to:
+  /// **'Max heart rate'**
+  String get prefsMaxHr;
+
+  /// Max-HR subtitle when no value is set
+  ///
+  /// In en, this message translates to:
+  /// **'Not set — falls back to 208 − 0.7 × age'**
+  String get prefsMaxHrNotSet;
+
+  /// Heart-rate value with bpm unit
+  ///
+  /// In en, this message translates to:
+  /// **'{bpm} bpm'**
+  String prefsHrBpm(int bpm);
+
+  /// Tile title for heart-rate zones
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate zones'**
+  String get prefsHrZones;
+
+  /// Dialog title for editing heart-rate zones
+  ///
+  /// In en, this message translates to:
+  /// **'Heart-rate zones (upper bounds, bpm)'**
+  String get prefsHrZonesDialogTitle;
+
+  /// Tile and dialog title for the weekly mileage goal
+  ///
+  /// In en, this message translates to:
+  /// **'Weekly mileage goal'**
+  String get prefsWeeklyGoal;
+
+  /// Section header for activity and recording settings
+  ///
+  /// In en, this message translates to:
+  /// **'Activity & recording'**
+  String get prefsSectionActivityRecording;
+
+  /// Section header for training and demographics settings
+  ///
+  /// In en, this message translates to:
+  /// **'Training & demographics'**
+  String get prefsSectionTrainingDemographics;
+
+  /// Section header for privacy and sharing settings
+  ///
+  /// In en, this message translates to:
+  /// **'Privacy & sharing'**
+  String get prefsSectionPrivacySharing;
+
+  /// Section header for AI coach settings
+  ///
+  /// In en, this message translates to:
+  /// **'AI coach'**
+  String get prefsSectionAiCoach;
+
+  /// Notice shown when the bag-backed settings are not yet available
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to edit profile-level settings that sync across devices.'**
+  String get prefsSignInToEdit;
+
+  /// Toggle title for using miles instead of kilometres
+  ///
+  /// In en, this message translates to:
+  /// **'Use miles'**
+  String get prefsUseMiles;
+
+  /// Toggle title for dark mode
+  ///
+  /// In en, this message translates to:
+  /// **'Dark mode'**
+  String get prefsDarkMode;
+
+  /// Toggle title for spoken audio cues
+  ///
+  /// In en, this message translates to:
+  /// **'Audio cues'**
+  String get prefsAudioCues;
+
+  /// Subtitle of the audio-cues toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Spoken split announcements'**
+  String get prefsAudioCuesSubtitle;
+
+  /// Toggle title for minimal voice cues
+  ///
+  /// In en, this message translates to:
+  /// **'Minimal voice cues'**
+  String get prefsMinimalVoiceCues;
+
+  /// Subtitle of the minimal-voice-cues toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Skip the chatty mid-rep and pace-drift nudges'**
+  String get prefsMinimalVoiceCuesSubtitle;
+
+  /// Toggle title for keeping the screen on during a run
+  ///
+  /// In en, this message translates to:
+  /// **'Keep screen on'**
+  String get prefsKeepScreenOn;
+
+  /// Subtitle of the keep-screen-on toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Hold a wakelock during a run'**
+  String get prefsKeepScreenOnSubtitle;
+
+  /// Toggle title for advanced GPS
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced GPS'**
+  String get prefsAdvancedGps;
+
+  /// Subtitle of the advanced-GPS toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Higher accuracy, finer track detail, more battery usage'**
+  String get prefsAdvancedGpsSubtitle;
+
+  /// Tile title for the default run privacy
+  ///
+  /// In en, this message translates to:
+  /// **'Default run privacy'**
+  String get prefsDefaultRunPrivacy;
+
+  /// Toggle title for Strava auto-share
+  ///
+  /// In en, this message translates to:
+  /// **'Strava auto-share'**
+  String get prefsStravaAutoShare;
+
+  /// Subtitle of the Strava auto-share toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-push every new run to Strava. Requires a connected Strava integration once that lands.'**
+  String get prefsStravaAutoShareSubtitle;
+
+  /// Toggle title for being discoverable in name search
+  ///
+  /// In en, this message translates to:
+  /// **'Show me in name search'**
+  String get prefsDiscoverable;
+
+  /// Subtitle of the discoverable-in-search toggle
+  ///
+  /// In en, this message translates to:
+  /// **'When off, your account won\'t appear when other runners search by display name. Your public runs and profile remain reachable to anyone with the URL.'**
+  String get prefsDiscoverableSubtitle;
 }
 
 class _AppLocalizationsDelegate

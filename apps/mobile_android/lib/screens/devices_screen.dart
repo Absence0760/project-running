@@ -2,8 +2,59 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart' hide Route;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../widgets/error_state.dart';
 import '../widgets/top_banner.dart';
+
+/// Localized display label for an [OverrideKeySpec] — the const registry
+/// can't carry localized strings, so the key drives a lookup at render
+/// time. Falls back to the registry's English label for unknown keys.
+String overrideKeyLabel(AppLocalizations l10n, OverrideKeySpec spec) {
+  switch (spec.key) {
+    case 'preferred_unit':
+      return l10n.devicesKeyPreferredUnitLabel;
+    case 'default_activity_type':
+      return l10n.devicesKeyDefaultActivityLabel;
+    case 'map_style':
+      return l10n.devicesKeyMapStyleLabel;
+    case 'units_pace_format':
+      return l10n.devicesKeyPaceFormatLabel;
+    case 'voice_feedback_enabled':
+      return l10n.devicesKeyVoiceFeedbackLabel;
+    case 'voice_feedback_interval_km':
+      return l10n.devicesKeyVoiceIntervalLabel;
+    case 'haptic_feedback_enabled':
+      return l10n.devicesKeyHapticLabel;
+    case 'keep_screen_on':
+      return l10n.devicesKeyKeepScreenOnLabel;
+    default:
+      return spec.label;
+  }
+}
+
+/// Localized hint for an [OverrideKeySpec]; see [overrideKeyLabel].
+String overrideKeyHint(AppLocalizations l10n, OverrideKeySpec spec) {
+  switch (spec.key) {
+    case 'preferred_unit':
+      return l10n.devicesKeyPreferredUnitHint;
+    case 'default_activity_type':
+      return l10n.devicesKeyDefaultActivityHint;
+    case 'map_style':
+      return l10n.devicesKeyMapStyleHint;
+    case 'units_pace_format':
+      return l10n.devicesKeyPaceFormatHint;
+    case 'voice_feedback_enabled':
+      return l10n.devicesKeyVoiceFeedbackHint;
+    case 'voice_feedback_interval_km':
+      return l10n.devicesKeyVoiceIntervalHint;
+    case 'haptic_feedback_enabled':
+      return l10n.devicesKeyHapticHint;
+    case 'keep_screen_on':
+      return l10n.devicesKeyKeepScreenOnHint;
+    default:
+      return spec.hint;
+  }
+}
 
 /// Settings → Devices: the list of devices the current user has signed
 /// in on, with rename + remove + per-device override-editor surfaces.
@@ -55,11 +106,12 @@ class _DevicesScreenState extends State<DevicesScreen> {
   }
 
   Future<void> _rename(UserDeviceSettingRow d) async {
+    final l10n = AppLocalizations.of(context);
     final ctrl = TextEditingController(text: d.label ?? '');
     final next = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Rename device'),
+        title: Text(l10n.devicesRenameTitle),
         content: TextField(
           controller: ctrl,
           autofocus: true,
@@ -69,11 +121,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(l10n.devicesCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Save'),
+            child: Text(l10n.devicesSave),
           ),
         ],
       ),
@@ -84,29 +136,30 @@ class _DevicesScreenState extends State<DevicesScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Rename failed: $e');
+      showTopBanner(context, l10n.devicesRenameFailed(e));
     }
   }
 
   Future<void> _remove(UserDeviceSettingRow d) async {
+    final l10n = AppLocalizations.of(context);
     final isCurrent = d.deviceId == widget.currentDeviceId;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Remove device?'),
+        title: Text(l10n.devicesRemoveTitle),
         content: Text(
           isCurrent
-              ? 'This is the device you\'re using. Removing it wipes the per-device preference overrides; the device stays signed in.'
-              : 'Removes the device entry and any per-device preference overrides. The device stays signed in until it next opens the app.',
+              ? l10n.devicesRemoveBodyCurrent
+              : l10n.devicesRemoveBodyOther,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.devicesCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Remove'),
+            child: Text(l10n.devicesRemove),
           ),
         ],
       ),
@@ -117,7 +170,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Remove failed: $e');
+      showTopBanner(context, l10n.devicesRemoveFailed(e));
     }
   }
 
@@ -146,26 +199,26 @@ class _DevicesScreenState extends State<DevicesScreen> {
       _load();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Save failed: $e');
+      showTopBanner(context, AppLocalizations.of(context).devicesSaveFailed(e));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Devices')),
+      appBar: AppBar(title: Text(l10n.devicesTitle)),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _loadError != null
-              ? ErrorState(message: 'Could not load devices.', onRetry: _load)
+              ? ErrorState(message: l10n.devicesLoadError, onRetry: _load)
               : _devices.isEmpty
-                  ? const Center(
+                  ? Center(
                       child: Padding(
-                        padding: EdgeInsets.all(32),
+                        padding: const EdgeInsets.all(32),
                         child: Text(
-                          'No devices yet — they\'re registered the first time '
-                          'a device opens the app while signed in.',
+                          l10n.devicesEmpty,
                           textAlign: TextAlign.center,
                         ),
                       ),
@@ -203,7 +256,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                             BorderRadius.circular(999),
                                       ),
                                       child: Text(
-                                        'This device',
+                                        l10n.devicesThisDevice,
                                         style: theme.textTheme.labelSmall
                                             ?.copyWith(
                                           color: theme
@@ -214,8 +267,11 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                 ],
                               ),
                               subtitle: Text(
-                                'Last seen ${_fmtRelative(d.lastSeenAt)}'
-                                '${overrideCount > 0 ? '  •  $overrideCount override${overrideCount == 1 ? '' : 's'}' : ''}',
+                                l10n.devicesLastSeen(
+                                        _fmtRelative(d.lastSeenAt, l10n)) +
+                                    (overrideCount > 0
+                                        ? '  •  ${l10n.devicesOverrideCount(overrideCount)}'
+                                        : ''),
                               ),
                               trailing: PopupMenuButton<String>(
                                 onSelected: (v) async {
@@ -231,14 +287,16 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                       break;
                                   }
                                 },
-                                itemBuilder: (_) => const [
+                                itemBuilder: (_) => [
                                   PopupMenuItem(
-                                      value: 'rename', child: Text('Rename')),
+                                      value: 'rename',
+                                      child: Text(l10n.devicesRename)),
                                   PopupMenuItem(
                                       value: 'overrides',
-                                      child: Text('Edit overrides…')),
+                                      child: Text(l10n.devicesEditOverrides)),
                                   PopupMenuItem(
-                                      value: 'remove', child: Text('Remove')),
+                                      value: 'remove',
+                                      child: Text(l10n.devicesRemove)),
                                 ],
                               ),
                             ),
@@ -265,15 +323,15 @@ class _DevicesScreenState extends State<DevicesScreen> {
     }
   }
 
-  static String _fmtRelative(DateTime d) {
+  static String _fmtRelative(DateTime d, AppLocalizations l10n) {
     final ms = DateTime.now().toUtc().difference(d.toUtc()).inMilliseconds;
     final mins = ms ~/ 60000;
-    if (mins < 1) return 'just now';
-    if (mins < 60) return '${mins}m ago';
+    if (mins < 1) return l10n.devicesJustNow;
+    if (mins < 60) return l10n.devicesMinutesAgo(mins);
     final hrs = mins ~/ 60;
-    if (hrs < 24) return '${hrs}h ago';
+    if (hrs < 24) return l10n.devicesHoursAgo(hrs);
     final days = hrs ~/ 24;
-    if (days < 30) return '${days}d ago';
+    if (days < 30) return l10n.devicesDaysAgo(days);
     return '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
   }
 }
@@ -386,10 +444,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
     final eligible =
         overrideKeyRegistry.where((s) => !taken.contains(s.key)).toList();
     if (eligible.isEmpty) {
-      showTopBanner(
-        context,
-        'Every overridable key is already set; remove one before adding another.',
-      );
+      showTopBanner(context, AppLocalizations.of(context).devicesEveryKeySet);
       return;
     }
     final entry = await showModalBottomSheet<MapEntry<String, dynamic>>(
@@ -403,6 +458,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.fromLTRB(
@@ -411,10 +467,11 @@ class _OverridesSheetState extends State<_OverridesSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('Per-device overrides', style: theme.textTheme.titleLarge),
+          Text(l10n.devicesOverridesSheetTitle,
+              style: theme.textTheme.titleLarge),
           const SizedBox(height: 4),
           Text(
-            'These keys override the universal settings on this device only.',
+            l10n.devicesOverridesSheetDesc,
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -424,7 +481,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 16),
               child: Text(
-                'No overrides on this device.',
+                l10n.devicesNoOverrides,
                 style: theme.textTheme.bodyMedium,
               ),
             )
@@ -445,7 +502,7 @@ class _OverridesSheetState extends State<_OverridesSheet> {
             child: TextButton.icon(
               onPressed: _addOverride,
               icon: const Icon(Icons.add),
-              label: const Text('Add override'),
+              label: Text(l10n.devicesAddOverride),
             ),
           ),
           const SizedBox(height: 16),
@@ -454,12 +511,12 @@ class _OverridesSheetState extends State<_OverridesSheet> {
             children: [
               TextButton(
                 onPressed: () => Navigator.pop(context),
-                child: const Text('Cancel'),
+                child: Text(l10n.devicesCancel),
               ),
               const SizedBox(width: 8),
               FilledButton(
                 onPressed: () => Navigator.pop(context, _current),
-                child: const Text('Save'),
+                child: Text(l10n.devicesSave),
               ),
             ],
           ),
@@ -495,6 +552,7 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
   }
 
   void _commit() {
+    final l10n = AppLocalizations.of(context);
     final spec = _picked;
     if (spec == null) return;
     dynamic value;
@@ -507,14 +565,14 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
       case 'int':
         final parsed = int.tryParse(_numCtrl.text.trim());
         if (parsed == null) {
-          setState(() => _numError = 'Enter a whole number.');
+          setState(() => _numError = l10n.devicesEnterWholeNumber);
           return;
         }
         value = parsed;
       case 'double':
         final parsed = double.tryParse(_numCtrl.text.trim());
         if (parsed == null) {
-          setState(() => _numError = 'Enter a number (e.g. 0.8).');
+          setState(() => _numError = l10n.devicesEnterNumber);
           return;
         }
         value = parsed;
@@ -526,6 +584,7 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final spec = _picked;
     return Padding(
@@ -535,11 +594,11 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text(spec == null ? 'Pick a key' : spec.label,
+          Text(spec == null ? l10n.devicesPickKey : overrideKeyLabel(l10n, spec),
               style: theme.textTheme.titleLarge),
           if (spec != null) ...[
             const SizedBox(height: 4),
-            Text(spec.hint, style: theme.textTheme.bodySmall),
+            Text(overrideKeyHint(l10n, spec), style: theme.textTheme.bodySmall),
           ],
           const SizedBox(height: 12),
           if (spec == null)
@@ -553,7 +612,7 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
                   final s = widget.eligible[i];
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
-                    title: Text(s.label),
+                    title: Text(overrideKeyLabel(l10n, s)),
                     subtitle: Text(s.key,
                         style: theme.textTheme.bodySmall?.copyWith(
                           color: theme.colorScheme.onSurfaceVariant,
@@ -566,7 +625,7 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
             )
           else
             // Value-editor pass — switch on the spec's declared kind.
-            _buildEditor(spec, theme),
+            _buildEditor(spec, theme, l10n),
           const SizedBox(height: 16),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -585,13 +644,13 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
                     Navigator.pop(context);
                   }
                 },
-                child: Text(spec == null ? 'Cancel' : 'Back'),
+                child: Text(spec == null ? l10n.devicesCancel : l10n.devicesBack),
               ),
               if (spec != null) ...[
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _commit,
-                  child: const Text('Add'),
+                  child: Text(l10n.devicesAdd),
                 ),
               ],
             ],
@@ -601,12 +660,13 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
     );
   }
 
-  Widget _buildEditor(OverrideKeySpec spec, ThemeData theme) {
+  Widget _buildEditor(
+      OverrideKeySpec spec, ThemeData theme, AppLocalizations l10n) {
     switch (spec.kind) {
       case 'bool':
         return SwitchListTile(
           contentPadding: EdgeInsets.zero,
-          title: Text(spec.label),
+          title: Text(overrideKeyLabel(l10n, spec)),
           value: _boolValue,
           onChanged: (v) => setState(() => _boolValue = v),
         );
@@ -632,7 +692,7 @@ class _AddOverrideSheetState extends State<_AddOverrideSheet> {
             decimal: spec.kind == 'double',
           ),
           decoration: InputDecoration(
-            labelText: 'Value',
+            labelText: l10n.devicesValue,
             errorText: _numError,
             border: const OutlineInputBorder(),
           ),

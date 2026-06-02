@@ -3223,4 +3223,1020 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get coachCopied => 'クリップボードにコピーしました';
+
+  @override
+  String get settingsAccountTitle => 'アカウント';
+
+  @override
+  String get settingsAccountBackendNotConfigured => 'バックエンドが設定されていません';
+
+  @override
+  String get settingsAccountSignOutFailed => 'サインアウトに失敗しました — 接続を確認してください';
+
+  @override
+  String get settingsAccountChangePassword => 'パスワードを変更';
+
+  @override
+  String get settingsAccountNewPassword => '新しいパスワード';
+
+  @override
+  String get settingsAccountConfirm => '確認';
+
+  @override
+  String get settingsAccountCancel => 'キャンセル';
+
+  @override
+  String get settingsAccountSave => '保存';
+
+  @override
+  String get settingsAccountPasswordTooShort => 'パスワードは8文字以上で入力してください';
+
+  @override
+  String get settingsAccountPasswordsMismatch => 'パスワードが一致しません';
+
+  @override
+  String get settingsAccountPasswordUpdated => 'パスワードを更新しました';
+
+  @override
+  String settingsAccountPasswordUpdateFailed(Object error) {
+    return 'パスワードを更新できませんでした：$error';
+  }
+
+  @override
+  String get settingsAccountDeleteTitle => 'アカウントを削除しますか？';
+
+  @override
+  String get settingsAccountDeleteBody =>
+      'これにより、ラン、ルート、プロフィールがサーバーから完全に削除されます。新しいユーザーとしてサインインしない限り、端末のローカルデータは保持されます。この操作は取り消せません。';
+
+  @override
+  String get settingsAccountDeleteChallengeText => '確認するには「DELETE」と入力してください';
+
+  @override
+  String settingsAccountDeleteChallengeEmail(String email) {
+    return '確認するにはメールアドレス（$email）を入力してください';
+  }
+
+  @override
+  String get settingsAccountDelete => '削除';
+
+  @override
+  String get settingsAccountDeleteSignInFirst => 'アカウントを削除するには、まずサインインしてください。';
+
+  @override
+  String get settingsAccountDeleted => 'アカウントを削除しました';
+
+  @override
+  String settingsAccountDeleteFailed(Object error) {
+    return 'アカウントの削除に失敗しました：$error';
+  }
+
+  @override
+  String get settingsAccountNoRunsToExport => 'エクスポートするランがありません。';
+
+  @override
+  String get settingsAccountCsvShareText => 'Run app — ランのエクスポート';
+
+  @override
+  String settingsAccountCsvExportFailed(Object error) {
+    return 'CSVエクスポートに失敗しました：$error';
+  }
+
+  @override
+  String get settingsAccountBackupSignInFirst => 'ランをバックアップするには、まずサインインしてください。';
+
+  @override
+  String get settingsAccountBackupPreparing => 'バックアップを準備しています…';
+
+  @override
+  String get settingsAccountBackupShareText => 'Run app バックアップ';
+
+  @override
+  String settingsAccountBackupFailed(Object error) {
+    return 'バックアップに失敗しました：$error';
+  }
+
+  @override
+  String get settingsAccountRestoreUnavailable => 'バックアップサービスを利用できません。';
+
+  @override
+  String get settingsAccountRestoreTitle => 'バックアップから復元しますか？';
+
+  @override
+  String get settingsAccountRestoreBodyOffline =>
+      'サインインしていません。ランはこの端末に復元され、次回サインインしたときにアカウントと同期されます。';
+
+  @override
+  String get settingsAccountRestoreBodyOnline =>
+      'バックアップ内のIDが一致するランとルートを追加または上書きします。バックアップに含まれていないランやルートは削除されません。';
+
+  @override
+  String get settingsAccountRestore => '復元';
+
+  @override
+  String get settingsAccountRestoring => '復元しています…';
+
+  @override
+  String settingsAccountRestoreDone(
+    int runs,
+    int tracks,
+    int routes,
+    String warnings,
+  ) {
+    return '$runs 件のラン・$tracks 件のトラック・$routes 件のルートを復元しました$warnings';
+  }
+
+  @override
+  String settingsAccountRestoreWarningsSuffix(int count) {
+    return ' · 警告 $count 件';
+  }
+
+  @override
+  String settingsAccountRestoreFailed(Object error) {
+    return '復元に失敗しました：$error';
+  }
+
+  @override
+  String get settingsAccountOfflineMode => 'オフラインモード';
+
+  @override
+  String get settingsAccountSignedInSync => 'サインイン済み — ランが同期されます';
+
+  @override
+  String get settingsAccountSignInToSync => 'サインインすると、複数の端末でランを同期できます';
+
+  @override
+  String get settingsAccountSignOut => 'サインアウト';
+
+  @override
+  String get settingsAccountSignIn => 'サインイン';
+
+  @override
+  String get settingsAccountViewProfile => 'プロフィールを表示';
+
+  @override
+  String get settingsAccountViewProfileSubtitle => 'ラン、フォロワー、フォロー中、通知';
+
+  @override
+  String get settingsAccountGuidedRuns => 'ガイド付きラン';
+
+  @override
+  String get settingsAccountGuidedRunsSubtitle =>
+      'コーチの音声とTTSキューによるスクリプト式ワークアウト';
+
+  @override
+  String get settingsAccountPrivacyZones => 'プライバシーゾーン';
+
+  @override
+  String get settingsAccountPrivacyZonesSubtitle => '自宅付近で公開トラックの開始・終了を切り取る';
+
+  @override
+  String get settingsAccountTrustedContacts => '信頼できる連絡先';
+
+  @override
+  String get settingsAccountTrustedContactsSubtitle =>
+      '予定の遅延ラン／緊急通知のために指定する連絡先';
+
+  @override
+  String get settingsAccountSendErrorReports => 'エラーレポートを送信';
+
+  @override
+  String get settingsAccountSendErrorReportsSubtitle =>
+      '匿名化されたクラッシュ・エラーデータをSentry（米国）に送信します。オフにすると同意を撤回できます。次回起動時に適用されます。';
+
+  @override
+  String get settingsAccountErrorReportingEnabled =>
+      'エラーレポートを有効にしました — 適用するにはアプリを再起動してください。';
+
+  @override
+  String get settingsAccountErrorReportingDisabled =>
+      'エラーレポートを無効にしました — 適用するにはアプリを再起動してください。';
+
+  @override
+  String get settingsAccountImport => '別のアプリからインポート';
+
+  @override
+  String get settingsAccountImportSubtitle => 'Strava、GPX、TCX';
+
+  @override
+  String get settingsAccountFullBackup => '完全バックアップ';
+
+  @override
+  String get settingsAccountFullBackupSubtitle =>
+      'GPSトラック付きの全ラン、ルート、プロフィール、設定。ウェブまたはAndroidで復元できます。';
+
+  @override
+  String get settingsAccountExportCsv => 'ランをCSVでエクスポート';
+
+  @override
+  String get settingsAccountExportCsvSubtitle =>
+      '日付、距離、時間、ペース、ソース — 1ランにつき1行。ウェブのGDPRエクスポートと同じ形式です。';
+
+  @override
+  String get settingsAccountRestoreTile => 'バックアップから復元';
+
+  @override
+  String get settingsAccountRestoreTileSubtitle =>
+      '以前に保存した.zipバックアップを選択してください。';
+
+  @override
+  String get settingsAccountDeleteAccount => 'アカウントを削除';
+
+  @override
+  String get settingsAccountDeleteAccountSubtitle => 'サーバーデータを完全に削除します';
+
+  @override
+  String get integrationsTitle => '連携';
+
+  @override
+  String get integrationsJustNow => 'たった今';
+
+  @override
+  String integrationsMinutesAgo(int minutes) {
+    return '$minutes分前';
+  }
+
+  @override
+  String integrationsHoursAgo(int hours) {
+    return '$hours時間前';
+  }
+
+  @override
+  String integrationsDaysAgo(int days) {
+    return '$days日前';
+  }
+
+  @override
+  String integrationsWeeksAgo(int weeks) {
+    return '$weeks週間前';
+  }
+
+  @override
+  String integrationsCouldNotOpen(Object error) {
+    return '開けませんでした：$error';
+  }
+
+  @override
+  String get integrationsStravaBrowserHint =>
+      'ブラウザでStravaのサインインを完了し、ここに戻って引っ張って更新してください。';
+
+  @override
+  String get integrationsStravaCancelled => 'Stravaのサインインをキャンセルしました。';
+
+  @override
+  String integrationsStravaSignInFailed(Object error) {
+    return 'Stravaのサインインに失敗しました：$error';
+  }
+
+  @override
+  String get integrationsStravaCsrfMismatch =>
+      'Stravaのサインインが拒否されました：CSRFステートが一致しません。もう一度お試しください。';
+
+  @override
+  String integrationsStravaConnectFailed(String error) {
+    return 'Stravaの接続に失敗しました：$error';
+  }
+
+  @override
+  String get integrationsStravaConnected => 'Stravaを接続しました。';
+
+  @override
+  String integrationsSyncResult(int imported, int skipped) {
+    return '同期しました。新規 $imported 件、既存 $skipped 件。';
+  }
+
+  @override
+  String integrationsSyncFailed(Object error) {
+    return '同期に失敗しました：$error';
+  }
+
+  @override
+  String get integrationsStravaDisconnectTitle => 'Stravaの接続を解除しますか？';
+
+  @override
+  String get integrationsStravaDisconnectBody =>
+      '今後のアクティビティは自動同期されなくなります。すでにインポートされたランは履歴に残ります。';
+
+  @override
+  String get integrationsCancel => 'キャンセル';
+
+  @override
+  String get integrationsDisconnect => '接続を解除';
+
+  @override
+  String get integrationsStravaDisconnected => 'Stravaの接続を解除しました。';
+
+  @override
+  String integrationsDisconnectFailed(Object error) {
+    return '接続解除に失敗しました：$error';
+  }
+
+  @override
+  String get integrationsParkrunTitle => 'parkrunの結果をインポート';
+
+  @override
+  String get integrationsParkrunBody =>
+      'parkrunのアスリート番号（例：A123456）を入力してください。フィニッシュ履歴を取得し、新しい結果をランのリストに追加します。';
+
+  @override
+  String get integrationsParkrunFieldLabel => 'アスリート番号';
+
+  @override
+  String get integrationsImport => 'インポート';
+
+  @override
+  String get integrationsParkrunImporting => 'parkrunの結果をインポートしています…';
+
+  @override
+  String integrationsParkrunImported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'parkrunの結果を$count件インポートしました。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get integrationsParkrunNoneNew => '前回のインポート以降、新しいparkrunの結果はありません。';
+
+  @override
+  String integrationsImportFailed(Object error) {
+    return 'インポートに失敗しました：$error';
+  }
+
+  @override
+  String get integrationsStravaName => 'Strava';
+
+  @override
+  String get integrationsStravaConnectSubtitle => '接続してアクティビティを自動同期';
+
+  @override
+  String get integrationsStravaWaitingFirstSync => '接続済み · 初回同期を待機中';
+
+  @override
+  String integrationsStravaLastSync(String time) {
+    return '接続済み · 最終同期 $time';
+  }
+
+  @override
+  String get integrationsSyncNow => '今すぐ同期';
+
+  @override
+  String get integrationsParkrunName => 'parkrun';
+
+  @override
+  String get integrationsParkrunTileSubtitle => 'アスリート番号で結果をインポート';
+
+  @override
+  String get integrationsSignInTitle => 'サインインしてサービスを接続';
+
+  @override
+  String get integrationsSignInSubtitle =>
+      '同期したアクティビティを履歴に取り込むには、Strava + parkrunにアカウントが必要です。';
+
+  @override
+  String get integrationsHealthConnectTitle => 'ランをHealth Connectに書き込む';
+
+  @override
+  String get integrationsHealthConnectSubtitle =>
+      '完了した各ランをHealth Connectに送信し、Google Fit、Samsung Health、Fitbitなどに表示します。';
+
+  @override
+  String get integrationsHealthConnectDenied =>
+      'Health Connectの権限が許可されていません — ランは書き込まれません。';
+
+  @override
+  String integrationsHrPairFailed(Object error) {
+    return 'ペアリングに失敗しました：$error';
+  }
+
+  @override
+  String get integrationsHrTitle => '心拍計';
+
+  @override
+  String get integrationsHrChecking => '確認中…';
+
+  @override
+  String integrationsHrPaired(String name) {
+    return 'ペアリング済み：$name';
+  }
+
+  @override
+  String get integrationsHrNotPaired => 'ストラップ未ペアリング — タップしてスキャン';
+
+  @override
+  String get integrationsHrForget => '削除';
+
+  @override
+  String get integrationsHrScanTitle => '心拍計をスキャン';
+
+  @override
+  String get integrationsHrScanHint => 'ストラップ／チェストバンドを起動してください。通常3〜8秒かかります。';
+
+  @override
+  String get integrationsHrScanEmpty =>
+      'ストラップが見つかりません。近くにあり、起動していることを確認してください。';
+
+  @override
+  String integrationsHrRssi(int rssi) {
+    return 'RSSI $rssi dBm';
+  }
+
+  @override
+  String get proTitle => 'Pro とサポート';
+
+  @override
+  String proCouldNotOpen(Object error) {
+    return '開けませんでした：$error';
+  }
+
+  @override
+  String get proWelcome => 'Proへようこそ！特典を取得しています…';
+
+  @override
+  String get proPurchaseFailed => '購入に失敗しました。後でもう一度お試しください。';
+
+  @override
+  String get proRestoreNeedsSignIn =>
+      '復元するには、RevenueCatが設定された状態でサインインしている必要があります。代わりにウェブのアップグレードページでサブスクリプションを管理してください。';
+
+  @override
+  String get proRestored => 'Proサブスクリプションを復元しました。';
+
+  @override
+  String get proRestoreNone => 'このストアアカウントに有効な購入が見つかりませんでした。';
+
+  @override
+  String get proRestoreFailed => '復元に失敗しました。後でもう一度お試しください。';
+
+  @override
+  String get proRestoreUnavailable => 'このビルドでは復元を利用できません。';
+
+  @override
+  String proSubscribeTitle(String price) {
+    return 'Proに登録 — $price/月';
+  }
+
+  @override
+  String get proSubscribeSubtitleConfigured =>
+      '無制限のAIコーチ + 優先処理。設定 → サブスクリプションで解約するまで毎月自動更新されます。';
+
+  @override
+  String get proSubscribeSubtitleWeb =>
+      'ブラウザでサブスクリプションポータルを開きます。解約するまで毎月自動更新されます。';
+
+  @override
+  String get proRegionalNote =>
+      '米ドルで請求されます。利用可否はお住まいの国や支払い方法によって異なります — 一部の地域では決済代行業者が対応できません。';
+
+  @override
+  String get proRestorePurchases => '購入を復元';
+
+  @override
+  String get proRestorePurchasesSubtitle => '以前のインストールや別の端末の購入を再リンク';
+
+  @override
+  String get proManageSubscription => 'サブスクリプションを管理';
+
+  @override
+  String get proManageSubscriptionSubtitle => '解約、プラン変更、支払い方法の更新';
+
+  @override
+  String get proSupport => 'アプリを支援する';
+
+  @override
+  String get proSupportSubtitle => 'ブラウザで一回限りの寄付';
+
+  @override
+  String get licensesTitle => 'ライセンス';
+
+  @override
+  String get licensesVersion => 'バージョン';
+
+  @override
+  String get licensesOpenSource => 'オープンソースライセンス';
+
+  @override
+  String get licensesOpenSourceSubtitle => 'このアプリに同梱されているサードパーティパッケージ';
+
+  @override
+  String get devicesTitle => 'デバイス';
+
+  @override
+  String get devicesRenameTitle => 'デバイス名を変更';
+
+  @override
+  String get devicesCancel => 'キャンセル';
+
+  @override
+  String get devicesSave => '保存';
+
+  @override
+  String devicesRenameFailed(Object error) {
+    return '名前の変更に失敗しました：$error';
+  }
+
+  @override
+  String get devicesRemoveTitle => 'デバイスを削除しますか？';
+
+  @override
+  String get devicesRemoveBodyCurrent =>
+      'これは現在使用中のデバイスです。削除するとデバイスごとの設定オーバーライドが消去されますが、デバイスはサインインしたままです。';
+
+  @override
+  String get devicesRemoveBodyOther =>
+      'デバイスのエントリとデバイスごとの設定オーバーライドを削除します。デバイスは次回アプリを開くまでサインインしたままです。';
+
+  @override
+  String get devicesRemove => '削除';
+
+  @override
+  String devicesRemoveFailed(Object error) {
+    return '削除に失敗しました：$error';
+  }
+
+  @override
+  String devicesSaveFailed(Object error) {
+    return '保存に失敗しました：$error';
+  }
+
+  @override
+  String get devicesLoadError => 'デバイスを読み込めませんでした。';
+
+  @override
+  String get devicesEmpty => 'まだデバイスがありません — サインインした状態でアプリを初めて開いたときに登録されます。';
+
+  @override
+  String get devicesThisDevice => 'このデバイス';
+
+  @override
+  String devicesLastSeen(String time) {
+    return '最終アクセス $time';
+  }
+
+  @override
+  String devicesOverrideCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'オーバーライド $count 件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get devicesJustNow => 'たった今';
+
+  @override
+  String devicesMinutesAgo(int minutes) {
+    return '$minutes分前';
+  }
+
+  @override
+  String devicesHoursAgo(int hours) {
+    return '$hours時間前';
+  }
+
+  @override
+  String devicesDaysAgo(int days) {
+    return '$days日前';
+  }
+
+  @override
+  String get devicesRename => '名前を変更';
+
+  @override
+  String get devicesEditOverrides => 'オーバーライドを編集…';
+
+  @override
+  String get devicesEveryKeySet =>
+      'オーバーライド可能なキーはすべて設定済みです。別のキーを追加する前に1つ削除してください。';
+
+  @override
+  String get devicesOverridesSheetTitle => 'デバイスごとのオーバーライド';
+
+  @override
+  String get devicesOverridesSheetDesc => 'これらのキーは、この端末でのみ共通設定を上書きします。';
+
+  @override
+  String get devicesNoOverrides => 'この端末にオーバーライドはありません。';
+
+  @override
+  String get devicesAddOverride => 'オーバーライドを追加';
+
+  @override
+  String get devicesPickKey => 'キーを選択';
+
+  @override
+  String get devicesEnterWholeNumber => '整数を入力してください。';
+
+  @override
+  String get devicesEnterNumber => '数値を入力してください（例：0.8）。';
+
+  @override
+  String get devicesValue => '値';
+
+  @override
+  String get devicesBack => '戻る';
+
+  @override
+  String get devicesAdd => '追加';
+
+  @override
+  String get devicesKeyPreferredUnitLabel => '優先する単位';
+
+  @override
+  String get devicesKeyPreferredUnitHint => 'すべての表示で使う距離の単位。';
+
+  @override
+  String get devicesKeyDefaultActivityLabel => 'デフォルトのアクティビティ';
+
+  @override
+  String get devicesKeyDefaultActivityHint => 'スタート画面であらかじめ選択されるアクティビティ。';
+
+  @override
+  String get devicesKeyMapStyleLabel => '地図スタイル';
+
+  @override
+  String get devicesKeyMapStyleHint => '地図ビューのMapLibreスタイル。';
+
+  @override
+  String get devicesKeyPaceFormatLabel => 'ペース形式';
+
+  @override
+  String get devicesKeyPaceFormatHint => 'ペースの表示形式。';
+
+  @override
+  String get devicesKeyVoiceFeedbackLabel => '音声フィードバック';
+
+  @override
+  String get devicesKeyVoiceFeedbackHint => 'ラン中にペース・距離のアナウンスを読み上げます。';
+
+  @override
+  String get devicesKeyVoiceIntervalLabel => '音声フィードバックの間隔（km）';
+
+  @override
+  String get devicesKeyVoiceIntervalHint => '読み上げアナウンスの間隔。';
+
+  @override
+  String get devicesKeyHapticLabel => '触覚フィードバック';
+
+  @override
+  String get devicesKeyHapticHint => 'ラップやペースゾーンの変化時に振動します。';
+
+  @override
+  String get devicesKeyKeepScreenOnLabel => '画面をオンのままにする';
+
+  @override
+  String get devicesKeyKeepScreenOnHint => '記録中はOSの自動減光を無効にします。';
+
+  @override
+  String get gearTitle => 'ギア';
+
+  @override
+  String get gearAddGear => 'ギアを追加';
+
+  @override
+  String get gearDeleteTitle => 'ギアを削除しますか？';
+
+  @override
+  String gearDeleteBody(String name) {
+    return '「$name」を削除しますか？過去のランの走行距離履歴が失われます。記録を残すには代わりに引退させてください。';
+  }
+
+  @override
+  String get gearCancel => 'キャンセル';
+
+  @override
+  String get gearDelete => '削除';
+
+  @override
+  String get gearDeletedOffline => 'ローカルで削除しました — 再接続時に同期されます。';
+
+  @override
+  String gearAttached(String name, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$nameを$count件のランに紐付けました。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gearOfflineQueued(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'オフライン — $count件の編集をキューに登録、キャッシュされたギアを表示中。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearOfflineCached => 'オフライン — キャッシュされたギアを表示中。';
+
+  @override
+  String get gearShoes => 'シューズ';
+
+  @override
+  String get gearBikes => 'バイク';
+
+  @override
+  String get gearRetired => '引退済み';
+
+  @override
+  String get gearEmptyShoes => 'まだシューズがありません';
+
+  @override
+  String get gearEmptyBikes => 'まだバイクがありません';
+
+  @override
+  String get gearEmptySubtitle => '1足追加すると走行距離を記録し、交換のリマインダーを受け取れます。';
+
+  @override
+  String gearRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ラン',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRetire => '引退させる';
+
+  @override
+  String get gearRestore => '復帰させる';
+
+  @override
+  String get privacyZonesTitle => 'プライバシーゾーン';
+
+  @override
+  String get privacyZonesSaved => 'プライバシーゾーンを保存しました。';
+
+  @override
+  String privacyZonesSaveFailed(Object error) {
+    return '保存に失敗しました：$error';
+  }
+
+  @override
+  String privacyZonesLocationUnavailable(Object error) {
+    return '位置情報を利用できません：$error';
+  }
+
+  @override
+  String get privacyZonesSave => '保存';
+
+  @override
+  String get privacyZonesLocateMe => '現在地を取得';
+
+  @override
+  String get privacyZonesHint =>
+      '地図をタップしてゾーンを追加します。公開面のトラックは、ゾーン半径を超える開始部分と終了部分が切り取られます。';
+
+  @override
+  String get privacyZonesSearchHint => '場所を検索…';
+
+  @override
+  String get privacyZonesRadius => '半径';
+
+  @override
+  String privacyZonesRadiusMeters(int meters) {
+    return '$meters m';
+  }
+
+  @override
+  String privacyZonesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'ゾーン $count 件 — マーカーをタップして削除します。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get privacyZonesClearAll => 'すべて消去';
+
+  @override
+  String get prefsTitle => '環境設定';
+
+  @override
+  String get prefsUnitMetric => 'km、m';
+
+  @override
+  String get prefsUnitImperial => 'mi、ft';
+
+  @override
+  String prefsSyncedSuffix(String base) {
+    return '$base · 他の端末と同期済み';
+  }
+
+  @override
+  String get prefsClear => 'クリア';
+
+  @override
+  String get prefsCancel => 'キャンセル';
+
+  @override
+  String get prefsSave => '保存';
+
+  @override
+  String get prefsSplitInterval => 'スプリット間隔';
+
+  @override
+  String get prefsSplitIntervalDefault => 'デフォルト';
+
+  @override
+  String get prefsSplitIntervalDefaultSubtitle => 'デフォルト（ランニングは1km、サイクリングは5km）';
+
+  @override
+  String get prefsLivePaceAlert => 'ライブペースアラート';
+
+  @override
+  String get prefsLivePaceAlertMin => '分';
+
+  @override
+  String get prefsLivePaceAlertSec => '秒';
+
+  @override
+  String get prefsLivePaceAlertOff => 'オフ — ペースを設定すると、ラン中に音声アラートを受け取れます';
+
+  @override
+  String prefsLivePaceAlertOn(String pace, String paceLabel) {
+    return '$pace $paceLabel — ラン中に30秒以上ずれたら音声でアラート';
+  }
+
+  @override
+  String get prefsActivityRun => 'ラン';
+
+  @override
+  String get prefsActivityWalk => 'ウォーク';
+
+  @override
+  String get prefsActivityHike => 'ハイク';
+
+  @override
+  String get prefsActivityCycle => 'サイクリング';
+
+  @override
+  String get prefsPaceFormat => 'ペース形式';
+
+  @override
+  String get prefsPaceFormatMinPerKm => '分/km';
+
+  @override
+  String get prefsPaceFormatMinPerMi => '分/マイル';
+
+  @override
+  String get prefsPaceFormatKph => 'km/h';
+
+  @override
+  String get prefsPaceFormatMph => 'mph';
+
+  @override
+  String get prefsNotSet => '未設定';
+
+  @override
+  String prefsHrZonesSummary(String zones) {
+    return '$zones bpm';
+  }
+
+  @override
+  String prefsWeeklyGoalSummary(String distance, String unit) {
+    return '$distance $unit / 週';
+  }
+
+  @override
+  String get prefsMapStyle => '地図スタイル';
+
+  @override
+  String get prefsMapStyleStreets => 'ストリート';
+
+  @override
+  String get prefsMapStyleSatellite => '衛星';
+
+  @override
+  String get prefsMapStyleOutdoors => 'アウトドア';
+
+  @override
+  String get prefsMapStyleDark => 'ダーク';
+
+  @override
+  String get prefsDefaultRunVisibility => 'ランのデフォルト公開範囲';
+
+  @override
+  String get prefsCoachPersonality => 'コーチの性格';
+
+  @override
+  String get prefsCoachSupportive => '支援的';
+
+  @override
+  String get prefsCoachDrillSergeant => '鬼軍曹';
+
+  @override
+  String get prefsCoachAnalytical => '分析的';
+
+  @override
+  String get prefsWeekStart => '週の開始曜日';
+
+  @override
+  String get prefsWeekStartMonday => '月曜日';
+
+  @override
+  String get prefsWeekStartSunday => '日曜日';
+
+  @override
+  String get prefsDefaultActivity => 'デフォルトのアクティビティ';
+
+  @override
+  String get prefsDateOfBirth => '生年月日';
+
+  @override
+  String get prefsRestingHr => '安静時心拍数';
+
+  @override
+  String get prefsMaxHr => '最大心拍数';
+
+  @override
+  String get prefsMaxHrNotSet => '未設定 — 208 − 0.7 × 年齢で代替';
+
+  @override
+  String prefsHrBpm(int bpm) {
+    return '$bpm bpm';
+  }
+
+  @override
+  String get prefsHrZones => '心拍ゾーン';
+
+  @override
+  String get prefsHrZonesDialogTitle => '心拍ゾーン（上限、bpm）';
+
+  @override
+  String get prefsWeeklyGoal => '週間走行距離の目標';
+
+  @override
+  String get prefsSectionActivityRecording => 'アクティビティと記録';
+
+  @override
+  String get prefsSectionTrainingDemographics => 'トレーニングと属性情報';
+
+  @override
+  String get prefsSectionPrivacySharing => 'プライバシーと共有';
+
+  @override
+  String get prefsSectionAiCoach => 'AIコーチ';
+
+  @override
+  String get prefsSignInToEdit => '複数の端末で同期されるプロフィールレベルの設定を編集するには、サインインしてください。';
+
+  @override
+  String get prefsUseMiles => 'マイルを使用';
+
+  @override
+  String get prefsDarkMode => 'ダークモード';
+
+  @override
+  String get prefsAudioCues => '音声キュー';
+
+  @override
+  String get prefsAudioCuesSubtitle => 'スプリットの読み上げアナウンス';
+
+  @override
+  String get prefsMinimalVoiceCues => '最小限の音声キュー';
+
+  @override
+  String get prefsMinimalVoiceCuesSubtitle => 'おしゃべりなレップ途中やペースのずれの通知を省きます';
+
+  @override
+  String get prefsKeepScreenOn => '画面をオンのままにする';
+
+  @override
+  String get prefsKeepScreenOnSubtitle => 'ラン中はウェイクロックを保持します';
+
+  @override
+  String get prefsAdvancedGps => '高度なGPS';
+
+  @override
+  String get prefsAdvancedGpsSubtitle => '高精度、より細かいトラック、バッテリー消費増';
+
+  @override
+  String get prefsDefaultRunPrivacy => 'ランのデフォルトプライバシー';
+
+  @override
+  String get prefsStravaAutoShare => 'Stravaへ自動共有';
+
+  @override
+  String get prefsStravaAutoShareSubtitle =>
+      '新しいランをすべてStravaに自動送信します。実装後はStrava連携の接続が必要です。';
+
+  @override
+  String get prefsDiscoverable => '名前検索に表示する';
+
+  @override
+  String get prefsDiscoverableSubtitle =>
+      'オフにすると、他のランナーが表示名で検索してもアカウントは表示されません。公開ランとプロフィールはURLを知っている人なら誰でもアクセスできます。';
 }

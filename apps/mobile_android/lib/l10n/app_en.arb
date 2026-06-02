@@ -4631,5 +4631,1221 @@
   "coachCopied": "Copied to clipboard",
   "@coachCopied": {
     "description": "Top-banner shown after copying a message"
+  },
+
+  "settingsAccountTitle": "Account",
+  "@settingsAccountTitle": {
+    "description": "AppBar title for the Settings > Account screen"
+  },
+  "settingsAccountBackendNotConfigured": "Backend not configured",
+  "@settingsAccountBackendNotConfigured": {
+    "description": "Banner shown when sign-in is attempted but no backend is configured"
+  },
+  "settingsAccountSignOutFailed": "Sign out failed — check your connection",
+  "@settingsAccountSignOutFailed": {
+    "description": "Banner shown when signing out fails"
+  },
+  "settingsAccountChangePassword": "Change password",
+  "@settingsAccountChangePassword": {
+    "description": "Tile title and dialog title for changing the account password"
+  },
+  "settingsAccountNewPassword": "New password",
+  "@settingsAccountNewPassword": {
+    "description": "Label for the new-password field"
+  },
+  "settingsAccountConfirm": "Confirm",
+  "@settingsAccountConfirm": {
+    "description": "Label for the confirm-password field"
+  },
+  "settingsAccountCancel": "Cancel",
+  "@settingsAccountCancel": {
+    "description": "Cancel button on the Account screen dialogs"
+  },
+  "settingsAccountSave": "Save",
+  "@settingsAccountSave": {
+    "description": "Save button on the Account screen dialogs"
+  },
+  "settingsAccountPasswordTooShort": "Password must be at least 8 characters",
+  "@settingsAccountPasswordTooShort": {
+    "description": "Validation error when the new password is shorter than 8 characters"
+  },
+  "settingsAccountPasswordsMismatch": "Passwords do not match",
+  "@settingsAccountPasswordsMismatch": {
+    "description": "Validation error when the password and confirmation differ"
+  },
+  "settingsAccountPasswordUpdated": "Password updated",
+  "@settingsAccountPasswordUpdated": {
+    "description": "Banner shown after the password is changed successfully"
+  },
+  "settingsAccountPasswordUpdateFailed": "Could not update password: {error}",
+  "@settingsAccountPasswordUpdateFailed": {
+    "description": "Banner shown when the password change fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "settingsAccountDeleteTitle": "Delete account?",
+  "@settingsAccountDeleteTitle": {
+    "description": "Title of the delete-account confirmation dialog"
+  },
+  "settingsAccountDeleteBody": "This permanently removes your runs, routes, and profile from the server. Local device data is kept unless you sign in as a new user. This cannot be undone.",
+  "@settingsAccountDeleteBody": {
+    "description": "Body copy of the delete-account confirmation dialog"
+  },
+  "settingsAccountDeleteChallengeText": "Type \"DELETE\" to confirm",
+  "@settingsAccountDeleteChallengeText": {
+    "description": "Challenge field label when the account has no email on file"
+  },
+  "settingsAccountDeleteChallengeEmail": "Type your email ({email}) to confirm",
+  "@settingsAccountDeleteChallengeEmail": {
+    "description": "Challenge field label asking the user to type their email",
+    "placeholders": {"email": {"type": "String"}}
+  },
+  "settingsAccountDelete": "Delete",
+  "@settingsAccountDelete": {
+    "description": "Confirm button on the delete-account dialog"
+  },
+  "settingsAccountDeleteSignInFirst": "Sign in first to delete your account.",
+  "@settingsAccountDeleteSignInFirst": {
+    "description": "Banner shown when the user tries to delete an account while signed out"
+  },
+  "settingsAccountDeleted": "Account deleted",
+  "@settingsAccountDeleted": {
+    "description": "Banner shown after the account is deleted"
+  },
+  "settingsAccountDeleteFailed": "Account deletion failed: {error}",
+  "@settingsAccountDeleteFailed": {
+    "description": "Banner shown when account deletion fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "settingsAccountNoRunsToExport": "No runs to export.",
+  "@settingsAccountNoRunsToExport": {
+    "description": "Banner shown when CSV export is requested but there are no runs"
+  },
+  "settingsAccountCsvShareText": "Run app — runs export",
+  "@settingsAccountCsvShareText": {
+    "description": "Share-sheet caption for the CSV runs export"
+  },
+  "settingsAccountCsvExportFailed": "CSV export failed: {error}",
+  "@settingsAccountCsvExportFailed": {
+    "description": "Banner shown when the CSV export fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "settingsAccountBackupSignInFirst": "Sign in first to back up your runs.",
+  "@settingsAccountBackupSignInFirst": {
+    "description": "Banner shown when backup is requested while signed out"
+  },
+  "settingsAccountBackupPreparing": "Preparing backup…",
+  "@settingsAccountBackupPreparing": {
+    "description": "Banner shown while the backup archive is being prepared"
+  },
+  "settingsAccountBackupShareText": "Run app backup",
+  "@settingsAccountBackupShareText": {
+    "description": "Share-sheet caption for the full backup archive"
+  },
+  "settingsAccountBackupFailed": "Backup failed: {error}",
+  "@settingsAccountBackupFailed": {
+    "description": "Banner shown when the backup fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "settingsAccountRestoreUnavailable": "Backup service unavailable.",
+  "@settingsAccountRestoreUnavailable": {
+    "description": "Banner shown when restore can't run because the local store is missing"
+  },
+  "settingsAccountRestoreTitle": "Restore from backup?",
+  "@settingsAccountRestoreTitle": {
+    "description": "Title of the restore-from-backup confirmation dialog"
+  },
+  "settingsAccountRestoreBodyOffline": "You're not signed in. Runs will be restored to this device and synced to your account the next time you sign in.",
+  "@settingsAccountRestoreBodyOffline": {
+    "description": "Restore dialog body shown when the user is signed out"
+  },
+  "settingsAccountRestoreBodyOnline": "This adds or overwrites runs and routes matching IDs in the backup. It will not delete runs or routes that aren't in the backup.",
+  "@settingsAccountRestoreBodyOnline": {
+    "description": "Restore dialog body shown when the user is signed in"
+  },
+  "settingsAccountRestore": "Restore",
+  "@settingsAccountRestore": {
+    "description": "Confirm button on the restore dialog"
+  },
+  "settingsAccountRestoring": "Restoring…",
+  "@settingsAccountRestoring": {
+    "description": "Banner shown while a backup is being restored"
+  },
+  "settingsAccountRestoreDone": "Restored {runs} runs · {tracks} tracks · {routes} routes{warnings}",
+  "@settingsAccountRestoreDone": {
+    "description": "Banner summarising a successful restore; warnings is an optional suffix",
+    "placeholders": {
+      "runs": {"type": "int"},
+      "tracks": {"type": "int"},
+      "routes": {"type": "int"},
+      "warnings": {"type": "String"}
+    }
+  },
+  "settingsAccountRestoreWarningsSuffix": " · {count} warnings",
+  "@settingsAccountRestoreWarningsSuffix": {
+    "description": "Suffix appended to the restore summary when warnings occurred",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "settingsAccountRestoreFailed": "Restore failed: {error}",
+  "@settingsAccountRestoreFailed": {
+    "description": "Banner shown when restore fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "settingsAccountOfflineMode": "Offline mode",
+  "@settingsAccountOfflineMode": {
+    "description": "Account-row title shown when no email is on file"
+  },
+  "settingsAccountSignedInSync": "Signed in — runs will sync",
+  "@settingsAccountSignedInSync": {
+    "description": "Account-row subtitle when the user is signed in"
+  },
+  "settingsAccountSignInToSync": "Sign in to sync runs across devices",
+  "@settingsAccountSignInToSync": {
+    "description": "Account-row subtitle when the user is signed out"
+  },
+  "settingsAccountSignOut": "Sign out",
+  "@settingsAccountSignOut": {
+    "description": "Tooltip on the sign-out button"
+  },
+  "settingsAccountSignIn": "Sign in",
+  "@settingsAccountSignIn": {
+    "description": "Sign-in button on the Account screen"
+  },
+  "settingsAccountViewProfile": "View profile",
+  "@settingsAccountViewProfile": {
+    "description": "Tile title that opens the user's own profile"
+  },
+  "settingsAccountViewProfileSubtitle": "Your runs, followers, following, notifications",
+  "@settingsAccountViewProfileSubtitle": {
+    "description": "Subtitle of the View profile tile"
+  },
+  "settingsAccountGuidedRuns": "Guided runs",
+  "@settingsAccountGuidedRuns": {
+    "description": "Tile title for guided runs"
+  },
+  "settingsAccountGuidedRunsSubtitle": "Coach-voice scripted workouts with TTS cues",
+  "@settingsAccountGuidedRunsSubtitle": {
+    "description": "Subtitle of the Guided runs tile"
+  },
+  "settingsAccountPrivacyZones": "Privacy zones",
+  "@settingsAccountPrivacyZones": {
+    "description": "Tile title for privacy zones"
+  },
+  "settingsAccountPrivacyZonesSubtitle": "Clip start/end of public tracks near home",
+  "@settingsAccountPrivacyZonesSubtitle": {
+    "description": "Subtitle of the Privacy zones tile"
+  },
+  "settingsAccountTrustedContacts": "Trusted contacts",
+  "@settingsAccountTrustedContacts": {
+    "description": "Tile title for trusted contacts"
+  },
+  "settingsAccountTrustedContactsSubtitle": "Designated people for the planned overdue-run / panic surface",
+  "@settingsAccountTrustedContactsSubtitle": {
+    "description": "Subtitle of the Trusted contacts tile"
+  },
+  "settingsAccountSendErrorReports": "Send error reports",
+  "@settingsAccountSendErrorReports": {
+    "description": "Toggle title for Sentry error reporting"
+  },
+  "settingsAccountSendErrorReportsSubtitle": "Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.",
+  "@settingsAccountSendErrorReportsSubtitle": {
+    "description": "Subtitle of the error-reporting toggle"
+  },
+  "settingsAccountErrorReportingEnabled": "Error reporting enabled — restart the app to apply.",
+  "@settingsAccountErrorReportingEnabled": {
+    "description": "Banner shown after enabling error reporting"
+  },
+  "settingsAccountErrorReportingDisabled": "Error reporting disabled — restart the app to apply.",
+  "@settingsAccountErrorReportingDisabled": {
+    "description": "Banner shown after disabling error reporting"
+  },
+  "settingsAccountImport": "Import from another app",
+  "@settingsAccountImport": {
+    "description": "Tile title for importing runs"
+  },
+  "settingsAccountImportSubtitle": "Strava, GPX, TCX",
+  "@settingsAccountImportSubtitle": {
+    "description": "Subtitle of the Import tile"
+  },
+  "settingsAccountFullBackup": "Full backup",
+  "@settingsAccountFullBackup": {
+    "description": "Tile title for the full backup export"
+  },
+  "settingsAccountFullBackupSubtitle": "Every run with its GPS trace, plus routes, profile, and preferences. Restores on web or Android.",
+  "@settingsAccountFullBackupSubtitle": {
+    "description": "Subtitle of the Full backup tile"
+  },
+  "settingsAccountExportCsv": "Export runs as CSV",
+  "@settingsAccountExportCsv": {
+    "description": "Tile title for the CSV runs export"
+  },
+  "settingsAccountExportCsvSubtitle": "date, distance, duration, pace, source — one row per run. Same shape as the web GDPR export.",
+  "@settingsAccountExportCsvSubtitle": {
+    "description": "Subtitle of the Export runs as CSV tile"
+  },
+  "settingsAccountRestoreTile": "Restore from backup",
+  "@settingsAccountRestoreTile": {
+    "description": "Tile title for restoring from a backup file"
+  },
+  "settingsAccountRestoreTileSubtitle": "Pick a previously saved .zip backup.",
+  "@settingsAccountRestoreTileSubtitle": {
+    "description": "Subtitle of the Restore from backup tile"
+  },
+  "settingsAccountDeleteAccount": "Delete account",
+  "@settingsAccountDeleteAccount": {
+    "description": "Tile title for deleting the account"
+  },
+  "settingsAccountDeleteAccountSubtitle": "Permanently removes server data",
+  "@settingsAccountDeleteAccountSubtitle": {
+    "description": "Subtitle of the Delete account tile"
+  },
+
+  "integrationsTitle": "Integrations",
+  "@integrationsTitle": {
+    "description": "AppBar title for the Settings > Integrations screen"
+  },
+  "integrationsJustNow": "just now",
+  "@integrationsJustNow": {
+    "description": "Relative-time label for an event less than a minute ago"
+  },
+  "integrationsMinutesAgo": "{minutes}m ago",
+  "@integrationsMinutesAgo": {
+    "description": "Relative-time label in minutes",
+    "placeholders": {"minutes": {"type": "int"}}
+  },
+  "integrationsHoursAgo": "{hours}h ago",
+  "@integrationsHoursAgo": {
+    "description": "Relative-time label in hours",
+    "placeholders": {"hours": {"type": "int"}}
+  },
+  "integrationsDaysAgo": "{days}d ago",
+  "@integrationsDaysAgo": {
+    "description": "Relative-time label in days",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "integrationsWeeksAgo": "{weeks}w ago",
+  "@integrationsWeeksAgo": {
+    "description": "Relative-time label in weeks",
+    "placeholders": {"weeks": {"type": "int"}}
+  },
+  "integrationsCouldNotOpen": "Could not open: {error}",
+  "@integrationsCouldNotOpen": {
+    "description": "Banner shown when an external URL can't be opened",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "integrationsStravaBrowserHint": "Complete the Strava sign-in in your browser, then return here and pull to refresh.",
+  "@integrationsStravaBrowserHint": {
+    "description": "Banner shown when Strava connect falls back to the browser flow"
+  },
+  "integrationsStravaCancelled": "Strava sign-in cancelled.",
+  "@integrationsStravaCancelled": {
+    "description": "Banner shown when the user cancels the Strava OAuth flow"
+  },
+  "integrationsStravaSignInFailed": "Strava sign-in failed: {error}",
+  "@integrationsStravaSignInFailed": {
+    "description": "Banner shown when Strava sign-in fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "integrationsStravaCsrfMismatch": "Strava sign-in rejected: CSRF state mismatch. Please retry.",
+  "@integrationsStravaCsrfMismatch": {
+    "description": "Banner shown when the Strava OAuth state doesn't match"
+  },
+  "integrationsStravaConnectFailed": "Strava connect failed: {error}",
+  "@integrationsStravaConnectFailed": {
+    "description": "Banner shown when the Strava token exchange fails",
+    "placeholders": {"error": {"type": "String"}}
+  },
+  "integrationsStravaConnected": "Strava connected.",
+  "@integrationsStravaConnected": {
+    "description": "Banner shown after Strava connects successfully"
+  },
+  "integrationsSyncResult": "Synced. {imported} new, {skipped} already present.",
+  "@integrationsSyncResult": {
+    "description": "Banner summarising a Strava sync",
+    "placeholders": {
+      "imported": {"type": "int"},
+      "skipped": {"type": "int"}
+    }
+  },
+  "integrationsSyncFailed": "Sync failed: {error}",
+  "@integrationsSyncFailed": {
+    "description": "Banner shown when a Strava sync fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "integrationsStravaDisconnectTitle": "Disconnect Strava?",
+  "@integrationsStravaDisconnectTitle": {
+    "description": "Title of the disconnect-Strava confirmation dialog"
+  },
+  "integrationsStravaDisconnectBody": "Future activities will stop syncing automatically. Already-imported runs stay in your history.",
+  "@integrationsStravaDisconnectBody": {
+    "description": "Body of the disconnect-Strava confirmation dialog"
+  },
+  "integrationsCancel": "Cancel",
+  "@integrationsCancel": {
+    "description": "Cancel button on Integrations dialogs"
+  },
+  "integrationsDisconnect": "Disconnect",
+  "@integrationsDisconnect": {
+    "description": "Disconnect button and popup-menu item"
+  },
+  "integrationsStravaDisconnected": "Strava disconnected.",
+  "@integrationsStravaDisconnected": {
+    "description": "Banner shown after Strava is disconnected"
+  },
+  "integrationsDisconnectFailed": "Disconnect failed: {error}",
+  "@integrationsDisconnectFailed": {
+    "description": "Banner shown when disconnecting fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "integrationsParkrunTitle": "Import parkrun results",
+  "@integrationsParkrunTitle": {
+    "description": "Title of the parkrun import dialog"
+  },
+  "integrationsParkrunBody": "Enter your parkrun athlete number (e.g. A123456). We'll fetch your finish history and add any new results to your runs list.",
+  "@integrationsParkrunBody": {
+    "description": "Body of the parkrun import dialog"
+  },
+  "integrationsParkrunFieldLabel": "Athlete number",
+  "@integrationsParkrunFieldLabel": {
+    "description": "Label for the parkrun athlete-number field"
+  },
+  "integrationsImport": "Import",
+  "@integrationsImport": {
+    "description": "Import button on the parkrun dialog"
+  },
+  "integrationsParkrunImporting": "Importing parkrun results…",
+  "@integrationsParkrunImporting": {
+    "description": "Progress text while parkrun results are imported"
+  },
+  "integrationsParkrunImported": "{count, plural, one{Imported {count} parkrun result.} other{Imported {count} parkrun results.}}",
+  "@integrationsParkrunImported": {
+    "description": "Banner summarising imported parkrun results",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "integrationsParkrunNoneNew": "No new parkrun results since last import.",
+  "@integrationsParkrunNoneNew": {
+    "description": "Banner shown when no new parkrun results were found"
+  },
+  "integrationsImportFailed": "Import failed: {error}",
+  "@integrationsImportFailed": {
+    "description": "Banner shown when the parkrun import fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "integrationsStravaName": "Strava",
+  "@integrationsStravaName": {
+    "description": "Strava integration tile title (brand name)"
+  },
+  "integrationsStravaConnectSubtitle": "Connect to auto-sync activities",
+  "@integrationsStravaConnectSubtitle": {
+    "description": "Strava tile subtitle when not connected"
+  },
+  "integrationsStravaWaitingFirstSync": "Connected · waiting for first sync",
+  "@integrationsStravaWaitingFirstSync": {
+    "description": "Strava tile subtitle when connected but never synced"
+  },
+  "integrationsStravaLastSync": "Connected · last sync {time}",
+  "@integrationsStravaLastSync": {
+    "description": "Strava tile subtitle showing the last sync time",
+    "placeholders": {"time": {"type": "String"}}
+  },
+  "integrationsSyncNow": "Sync now",
+  "@integrationsSyncNow": {
+    "description": "Popup-menu item to trigger a Strava sync"
+  },
+  "integrationsParkrunName": "parkrun",
+  "@integrationsParkrunName": {
+    "description": "parkrun integration tile title (brand name)"
+  },
+  "integrationsParkrunTileSubtitle": "Import results by athlete number",
+  "@integrationsParkrunTileSubtitle": {
+    "description": "parkrun tile subtitle"
+  },
+  "integrationsSignInTitle": "Sign in to connect services",
+  "@integrationsSignInTitle": {
+    "description": "Tile title shown when signed out"
+  },
+  "integrationsSignInSubtitle": "Strava + parkrun require an account so synced activities land in your history.",
+  "@integrationsSignInSubtitle": {
+    "description": "Tile subtitle shown when signed out"
+  },
+  "integrationsHealthConnectTitle": "Write runs to Health Connect",
+  "@integrationsHealthConnectTitle": {
+    "description": "Toggle title for writing runs to Health Connect (Android)"
+  },
+  "integrationsHealthConnectSubtitle": "Send each finished run to Health Connect so it appears in Google Fit, Samsung Health, Fitbit and others.",
+  "@integrationsHealthConnectSubtitle": {
+    "description": "Subtitle of the Health Connect write toggle"
+  },
+  "integrationsHealthConnectDenied": "Health Connect permission not granted — runs won't be written.",
+  "@integrationsHealthConnectDenied": {
+    "description": "Banner shown when the Health Connect write permission is denied"
+  },
+  "integrationsHrPairFailed": "Pair failed: {error}",
+  "@integrationsHrPairFailed": {
+    "description": "Banner shown when pairing a heart-rate strap fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "integrationsHrTitle": "Heart rate monitor",
+  "@integrationsHrTitle": {
+    "description": "Tile title for the BLE heart-rate monitor"
+  },
+  "integrationsHrChecking": "Checking…",
+  "@integrationsHrChecking": {
+    "description": "HR tile subtitle while checking for a paired strap"
+  },
+  "integrationsHrPaired": "Paired: {name}",
+  "@integrationsHrPaired": {
+    "description": "HR tile subtitle showing the paired strap name",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "integrationsHrNotPaired": "No strap paired — tap to scan",
+  "@integrationsHrNotPaired": {
+    "description": "HR tile subtitle when no strap is paired"
+  },
+  "integrationsHrForget": "Forget",
+  "@integrationsHrForget": {
+    "description": "Tooltip on the forget-strap button"
+  },
+  "integrationsHrScanTitle": "Scan for heart rate monitor",
+  "@integrationsHrScanTitle": {
+    "description": "Title of the HR scan bottom sheet"
+  },
+  "integrationsHrScanHint": "Wake your strap / chest band. Apps typically take 3–8 seconds.",
+  "@integrationsHrScanHint": {
+    "description": "Hint text on the HR scan sheet"
+  },
+  "integrationsHrScanEmpty": "No straps found. Make sure it's nearby and awake.",
+  "@integrationsHrScanEmpty": {
+    "description": "Empty-state text on the HR scan sheet"
+  },
+  "integrationsHrRssi": "RSSI {rssi} dBm",
+  "@integrationsHrRssi": {
+    "description": "Signal-strength subtitle for a discovered strap",
+    "placeholders": {"rssi": {"type": "int"}}
+  },
+
+  "proTitle": "Pro & support",
+  "@proTitle": {
+    "description": "AppBar title for the Settings > Pro & support screen"
+  },
+  "proCouldNotOpen": "Could not open: {error}",
+  "@proCouldNotOpen": {
+    "description": "Banner shown when an external URL can't be opened",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "proWelcome": "Welcome to Pro! Pulling your benefits…",
+  "@proWelcome": {
+    "description": "Banner shown after a successful Pro purchase"
+  },
+  "proPurchaseFailed": "Purchase failed. Try again later.",
+  "@proPurchaseFailed": {
+    "description": "Banner shown when a Pro purchase fails"
+  },
+  "proRestoreNeedsSignIn": "Restore needs you to be signed in with RevenueCat configured. Manage your subscription on the web upgrade page instead.",
+  "@proRestoreNeedsSignIn": {
+    "description": "Banner shown when restore can't run because RevenueCat is unconfigured"
+  },
+  "proRestored": "Restored your Pro subscription.",
+  "@proRestored": {
+    "description": "Banner shown after purchases are restored"
+  },
+  "proRestoreNone": "No active purchases found on this store account.",
+  "@proRestoreNone": {
+    "description": "Banner shown when no purchases are found to restore"
+  },
+  "proRestoreFailed": "Restore failed. Try again later.",
+  "@proRestoreFailed": {
+    "description": "Banner shown when restore fails"
+  },
+  "proRestoreUnavailable": "Restore unavailable in this build.",
+  "@proRestoreUnavailable": {
+    "description": "Banner shown when restore isn't available in the build"
+  },
+  "proSubscribeTitle": "Subscribe to Pro — {price}/month",
+  "@proSubscribeTitle": {
+    "description": "Tile title for the Pro subscription; price is a localized currency amount",
+    "placeholders": {"price": {"type": "String"}}
+  },
+  "proSubscribeSubtitleConfigured": "Unlimited AI coach + priority processing. Auto-renews monthly until cancelled in Settings → Subscriptions.",
+  "@proSubscribeSubtitleConfigured": {
+    "description": "Pro tile subtitle when in-app purchase is configured"
+  },
+  "proSubscribeSubtitleWeb": "Opens the subscription portal in your browser. Auto-renews monthly until cancelled.",
+  "@proSubscribeSubtitleWeb": {
+    "description": "Pro tile subtitle when falling back to the web portal"
+  },
+  "proRegionalNote": "Billed in US dollars. Availability depends on your country and payment method — some regions can't be served by our payment processor.",
+  "@proRegionalNote": {
+    "description": "Honesty note about billing currency and regional availability"
+  },
+  "proRestorePurchases": "Restore purchases",
+  "@proRestorePurchases": {
+    "description": "Tile title to restore purchases"
+  },
+  "proRestorePurchasesSubtitle": "Re-link purchases from a previous install or another device",
+  "@proRestorePurchasesSubtitle": {
+    "description": "Subtitle of the Restore purchases tile"
+  },
+  "proManageSubscription": "Manage subscription",
+  "@proManageSubscription": {
+    "description": "Tile title to manage the subscription"
+  },
+  "proManageSubscriptionSubtitle": "Cancel, change plan, or update payment method",
+  "@proManageSubscriptionSubtitle": {
+    "description": "Subtitle of the Manage subscription tile"
+  },
+  "proSupport": "Support the app",
+  "@proSupport": {
+    "description": "Tile title for a one-off donation"
+  },
+  "proSupportSubtitle": "One-off donation in your browser",
+  "@proSupportSubtitle": {
+    "description": "Subtitle of the Support the app tile"
+  },
+
+  "licensesTitle": "Licenses",
+  "@licensesTitle": {
+    "description": "AppBar title for the Settings > Licenses screen"
+  },
+  "licensesVersion": "Version",
+  "@licensesVersion": {
+    "description": "Tile title showing the app version"
+  },
+  "licensesOpenSource": "Open-source licenses",
+  "@licensesOpenSource": {
+    "description": "Tile title that opens the bundled-licenses page"
+  },
+  "licensesOpenSourceSubtitle": "Third-party packages bundled with this app",
+  "@licensesOpenSourceSubtitle": {
+    "description": "Subtitle of the Open-source licenses tile"
+  },
+
+  "devicesTitle": "Devices",
+  "@devicesTitle": {
+    "description": "AppBar title for the Settings > Devices screen"
+  },
+  "devicesRenameTitle": "Rename device",
+  "@devicesRenameTitle": {
+    "description": "Title of the rename-device dialog"
+  },
+  "devicesCancel": "Cancel",
+  "@devicesCancel": {
+    "description": "Cancel button on Devices dialogs"
+  },
+  "devicesSave": "Save",
+  "@devicesSave": {
+    "description": "Save button on Devices dialogs"
+  },
+  "devicesRenameFailed": "Rename failed: {error}",
+  "@devicesRenameFailed": {
+    "description": "Banner shown when renaming a device fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "devicesRemoveTitle": "Remove device?",
+  "@devicesRemoveTitle": {
+    "description": "Title of the remove-device confirmation dialog"
+  },
+  "devicesRemoveBodyCurrent": "This is the device you're using. Removing it wipes the per-device preference overrides; the device stays signed in.",
+  "@devicesRemoveBodyCurrent": {
+    "description": "Remove dialog body when removing the current device"
+  },
+  "devicesRemoveBodyOther": "Removes the device entry and any per-device preference overrides. The device stays signed in until it next opens the app.",
+  "@devicesRemoveBodyOther": {
+    "description": "Remove dialog body when removing another device"
+  },
+  "devicesRemove": "Remove",
+  "@devicesRemove": {
+    "description": "Confirm button and popup-menu item to remove a device"
+  },
+  "devicesRemoveFailed": "Remove failed: {error}",
+  "@devicesRemoveFailed": {
+    "description": "Banner shown when removing a device fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "devicesSaveFailed": "Save failed: {error}",
+  "@devicesSaveFailed": {
+    "description": "Banner shown when saving device overrides fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "devicesLoadError": "Could not load devices.",
+  "@devicesLoadError": {
+    "description": "Error-state message when the device list fails to load"
+  },
+  "devicesEmpty": "No devices yet — they're registered the first time a device opens the app while signed in.",
+  "@devicesEmpty": {
+    "description": "Empty-state text when there are no registered devices"
+  },
+  "devicesThisDevice": "This device",
+  "@devicesThisDevice": {
+    "description": "Badge marking the current device"
+  },
+  "devicesLastSeen": "Last seen {time}",
+  "@devicesLastSeen": {
+    "description": "Subtitle showing when a device was last active",
+    "placeholders": {"time": {"type": "String"}}
+  },
+  "devicesOverrideCount": "{count, plural, one{{count} override} other{{count} overrides}}",
+  "@devicesOverrideCount": {
+    "description": "Suffix showing the number of per-device overrides",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "devicesJustNow": "just now",
+  "@devicesJustNow": {
+    "description": "Relative-time label for an event less than a minute ago"
+  },
+  "devicesMinutesAgo": "{minutes}m ago",
+  "@devicesMinutesAgo": {
+    "description": "Relative-time label in minutes",
+    "placeholders": {"minutes": {"type": "int"}}
+  },
+  "devicesHoursAgo": "{hours}h ago",
+  "@devicesHoursAgo": {
+    "description": "Relative-time label in hours",
+    "placeholders": {"hours": {"type": "int"}}
+  },
+  "devicesDaysAgo": "{days}d ago",
+  "@devicesDaysAgo": {
+    "description": "Relative-time label in days",
+    "placeholders": {"days": {"type": "int"}}
+  },
+  "devicesRename": "Rename",
+  "@devicesRename": {
+    "description": "Popup-menu item to rename a device"
+  },
+  "devicesEditOverrides": "Edit overrides…",
+  "@devicesEditOverrides": {
+    "description": "Popup-menu item to edit a device's overrides"
+  },
+  "devicesEveryKeySet": "Every overridable key is already set; remove one before adding another.",
+  "@devicesEveryKeySet": {
+    "description": "Banner shown when no more override keys are available to add"
+  },
+  "devicesOverridesSheetTitle": "Per-device overrides",
+  "@devicesOverridesSheetTitle": {
+    "description": "Title of the overrides bottom sheet"
+  },
+  "devicesOverridesSheetDesc": "These keys override the universal settings on this device only.",
+  "@devicesOverridesSheetDesc": {
+    "description": "Description on the overrides bottom sheet"
+  },
+  "devicesNoOverrides": "No overrides on this device.",
+  "@devicesNoOverrides": {
+    "description": "Empty-state text in the overrides sheet"
+  },
+  "devicesAddOverride": "Add override",
+  "@devicesAddOverride": {
+    "description": "Button to add a per-device override"
+  },
+  "devicesPickKey": "Pick a key",
+  "@devicesPickKey": {
+    "description": "Title of the key-picker step in the add-override sheet"
+  },
+  "devicesEnterWholeNumber": "Enter a whole number.",
+  "@devicesEnterWholeNumber": {
+    "description": "Validation error for an integer override value"
+  },
+  "devicesEnterNumber": "Enter a number (e.g. 0.8).",
+  "@devicesEnterNumber": {
+    "description": "Validation error for a decimal override value"
+  },
+  "devicesValue": "Value",
+  "@devicesValue": {
+    "description": "Label for the override value field"
+  },
+  "devicesBack": "Back",
+  "@devicesBack": {
+    "description": "Back button in the add-override sheet"
+  },
+  "devicesAdd": "Add",
+  "@devicesAdd": {
+    "description": "Confirm button in the add-override sheet"
+  },
+  "devicesKeyPreferredUnitLabel": "Preferred unit",
+  "@devicesKeyPreferredUnitLabel": {
+    "description": "Override key label: preferred unit"
+  },
+  "devicesKeyPreferredUnitHint": "Distance unit for all displays.",
+  "@devicesKeyPreferredUnitHint": {
+    "description": "Override key hint: preferred unit"
+  },
+  "devicesKeyDefaultActivityLabel": "Default activity type",
+  "@devicesKeyDefaultActivityLabel": {
+    "description": "Override key label: default activity type"
+  },
+  "devicesKeyDefaultActivityHint": "Pre-selected activity on the start screen.",
+  "@devicesKeyDefaultActivityHint": {
+    "description": "Override key hint: default activity type"
+  },
+  "devicesKeyMapStyleLabel": "Map style",
+  "@devicesKeyMapStyleLabel": {
+    "description": "Override key label: map style"
+  },
+  "devicesKeyMapStyleHint": "MapLibre style for the map view.",
+  "@devicesKeyMapStyleHint": {
+    "description": "Override key hint: map style"
+  },
+  "devicesKeyPaceFormatLabel": "Pace format",
+  "@devicesKeyPaceFormatLabel": {
+    "description": "Override key label: pace format"
+  },
+  "devicesKeyPaceFormatHint": "Display format for pace.",
+  "@devicesKeyPaceFormatHint": {
+    "description": "Override key hint: pace format"
+  },
+  "devicesKeyVoiceFeedbackLabel": "Voice feedback",
+  "@devicesKeyVoiceFeedbackLabel": {
+    "description": "Override key label: voice feedback"
+  },
+  "devicesKeyVoiceFeedbackHint": "Speak pace / distance callouts during a run.",
+  "@devicesKeyVoiceFeedbackHint": {
+    "description": "Override key hint: voice feedback"
+  },
+  "devicesKeyVoiceIntervalLabel": "Voice feedback interval (km)",
+  "@devicesKeyVoiceIntervalLabel": {
+    "description": "Override key label: voice feedback interval"
+  },
+  "devicesKeyVoiceIntervalHint": "Distance between spoken callouts.",
+  "@devicesKeyVoiceIntervalHint": {
+    "description": "Override key hint: voice feedback interval"
+  },
+  "devicesKeyHapticLabel": "Haptic feedback",
+  "@devicesKeyHapticLabel": {
+    "description": "Override key label: haptic feedback"
+  },
+  "devicesKeyHapticHint": "Vibration on lap + pace-zone changes.",
+  "@devicesKeyHapticHint": {
+    "description": "Override key hint: haptic feedback"
+  },
+  "devicesKeyKeepScreenOnLabel": "Keep screen on",
+  "@devicesKeyKeepScreenOnLabel": {
+    "description": "Override key label: keep screen on"
+  },
+  "devicesKeyKeepScreenOnHint": "Disable OS auto-dim while recording.",
+  "@devicesKeyKeepScreenOnHint": {
+    "description": "Override key hint: keep screen on"
+  },
+
+  "gearTitle": "Gear",
+  "@gearTitle": {
+    "description": "AppBar title for the Settings > Gear screen"
+  },
+  "gearAddGear": "Add gear",
+  "@gearAddGear": {
+    "description": "Tooltip and button label to add gear"
+  },
+  "gearDeleteTitle": "Delete gear?",
+  "@gearDeleteTitle": {
+    "description": "Title of the delete-gear confirmation dialog"
+  },
+  "gearDeleteBody": "Delete \"{name}\"? Mileage history on past runs will be lost. Retire instead to keep the records.",
+  "@gearDeleteBody": {
+    "description": "Body of the delete-gear confirmation dialog",
+    "placeholders": {"name": {"type": "String"}}
+  },
+  "gearCancel": "Cancel",
+  "@gearCancel": {
+    "description": "Cancel button on Gear dialogs"
+  },
+  "gearDelete": "Delete",
+  "@gearDelete": {
+    "description": "Delete button and popup-menu item on the Gear screen"
+  },
+  "gearDeletedOffline": "Deleted locally — will sync when you reconnect.",
+  "@gearDeletedOffline": {
+    "description": "Banner shown after deleting gear while offline"
+  },
+  "gearAttached": "{count, plural, one{Attached {name} to {count} run.} other{Attached {name} to {count} runs.}}",
+  "@gearAttached": {
+    "description": "Banner shown after backfilling gear onto past runs",
+    "placeholders": {
+      "name": {"type": "String"},
+      "count": {"type": "int"}
+    }
+  },
+  "gearOfflineQueued": "{count, plural, one{Offline — {count} edit queued, showing cached gear.} other{Offline — {count} edits queued, showing cached gear.}}",
+  "@gearOfflineQueued": {
+    "description": "Offline banner when edits are queued",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "gearOfflineCached": "Offline — showing cached gear.",
+  "@gearOfflineCached": {
+    "description": "Offline banner when no edits are queued"
+  },
+  "gearShoes": "Shoes",
+  "@gearShoes": {
+    "description": "Segmented-button label for shoes"
+  },
+  "gearBikes": "Bikes",
+  "@gearBikes": {
+    "description": "Segmented-button label for bikes"
+  },
+  "gearRetired": "RETIRED",
+  "@gearRetired": {
+    "description": "Section header for retired gear"
+  },
+  "gearEmptyShoes": "No shoes yet",
+  "@gearEmptyShoes": {
+    "description": "Empty-state title for shoes"
+  },
+  "gearEmptyBikes": "No bikes yet",
+  "@gearEmptyBikes": {
+    "description": "Empty-state title for bikes"
+  },
+  "gearEmptySubtitle": "Add a pair to track mileage and get retirement reminders.",
+  "@gearEmptySubtitle": {
+    "description": "Empty-state subtitle on the Gear screen"
+  },
+  "gearRunCount": "{count, plural, one{{count} run} other{{count} runs}}",
+  "@gearRunCount": {
+    "description": "Run count shown on a gear tile",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "gearRetire": "Retire",
+  "@gearRetire": {
+    "description": "Popup-menu item to retire gear"
+  },
+  "gearRestore": "Restore",
+  "@gearRestore": {
+    "description": "Popup-menu item to un-retire gear"
+  },
+
+  "privacyZonesTitle": "Privacy zones",
+  "@privacyZonesTitle": {
+    "description": "AppBar title for the Settings > Privacy zones screen"
+  },
+  "privacyZonesSaved": "Privacy zones saved.",
+  "@privacyZonesSaved": {
+    "description": "Banner shown after saving privacy zones"
+  },
+  "privacyZonesSaveFailed": "Save failed: {error}",
+  "@privacyZonesSaveFailed": {
+    "description": "Banner shown when saving privacy zones fails",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "privacyZonesLocationUnavailable": "Location unavailable: {error}",
+  "@privacyZonesLocationUnavailable": {
+    "description": "Banner shown when the Locate FAB can't get a fix",
+    "placeholders": {"error": {"type": "Object"}}
+  },
+  "privacyZonesSave": "Save",
+  "@privacyZonesSave": {
+    "description": "Save button in the AppBar"
+  },
+  "privacyZonesLocateMe": "Locate me",
+  "@privacyZonesLocateMe": {
+    "description": "Tooltip on the Locate FAB"
+  },
+  "privacyZonesHint": "Tap the map to add a zone. Tracks on public surfaces have their start and end clipped past the zone radius.",
+  "@privacyZonesHint": {
+    "description": "Instructional copy above the privacy-zones map"
+  },
+  "privacyZonesSearchHint": "Search places…",
+  "@privacyZonesSearchHint": {
+    "description": "Hint text in the place-search field"
+  },
+  "privacyZonesRadius": "Radius",
+  "@privacyZonesRadius": {
+    "description": "Label for the zone-radius slider"
+  },
+  "privacyZonesRadiusMeters": "{meters} m",
+  "@privacyZonesRadiusMeters": {
+    "description": "Radius value in metres",
+    "placeholders": {"meters": {"type": "int"}}
+  },
+  "privacyZonesCount": "{count, plural, one{{count} zone — tap a marker to remove.} other{{count} zones — tap a marker to remove.}}",
+  "@privacyZonesCount": {
+    "description": "Footer summarising the number of zones",
+    "placeholders": {"count": {"type": "int"}}
+  },
+  "privacyZonesClearAll": "Clear all",
+  "@privacyZonesClearAll": {
+    "description": "Button to remove all privacy zones"
+  },
+
+  "prefsTitle": "Preferences",
+  "@prefsTitle": {
+    "description": "AppBar title for the Settings > Preferences screen"
+  },
+  "prefsUnitMetric": "km, m",
+  "@prefsUnitMetric": {
+    "description": "Unit subtitle when kilometres are selected"
+  },
+  "prefsUnitImperial": "mi, ft",
+  "@prefsUnitImperial": {
+    "description": "Unit subtitle when miles are selected"
+  },
+  "prefsSyncedSuffix": "{base} · synced to your other devices",
+  "@prefsSyncedSuffix": {
+    "description": "Unit subtitle with a note that the setting syncs across devices",
+    "placeholders": {"base": {"type": "String"}}
+  },
+  "prefsClear": "Clear",
+  "@prefsClear": {
+    "description": "Clear button in Preferences dialogs"
+  },
+  "prefsCancel": "Cancel",
+  "@prefsCancel": {
+    "description": "Cancel button in Preferences dialogs"
+  },
+  "prefsSave": "Save",
+  "@prefsSave": {
+    "description": "Save button in Preferences dialogs"
+  },
+  "prefsSplitInterval": "Split interval",
+  "@prefsSplitInterval": {
+    "description": "Tile and dialog title for the split interval"
+  },
+  "prefsSplitIntervalDefault": "Default",
+  "@prefsSplitIntervalDefault": {
+    "description": "Split-interval option meaning the app default"
+  },
+  "prefsSplitIntervalDefaultSubtitle": "Default (1 km for running, 5 km for cycling)",
+  "@prefsSplitIntervalDefaultSubtitle": {
+    "description": "Subtitle shown when the split interval is at its default"
+  },
+  "prefsLivePaceAlert": "Live pace alert",
+  "@prefsLivePaceAlert": {
+    "description": "Tile and dialog title for the live pace alert"
+  },
+  "prefsLivePaceAlertMin": "min",
+  "@prefsLivePaceAlertMin": {
+    "description": "Minutes field label in the live-pace-alert dialog"
+  },
+  "prefsLivePaceAlertSec": "sec",
+  "@prefsLivePaceAlertSec": {
+    "description": "Seconds field label in the live-pace-alert dialog"
+  },
+  "prefsLivePaceAlertOff": "Off — set a pace to get spoken alerts during a run",
+  "@prefsLivePaceAlertOff": {
+    "description": "Live-pace-alert subtitle when no target pace is set"
+  },
+  "prefsLivePaceAlertOn": "{pace} {paceLabel} — spoken alert during a run when 30s+ off",
+  "@prefsLivePaceAlertOn": {
+    "description": "Live-pace-alert subtitle showing the target pace",
+    "placeholders": {
+      "pace": {"type": "String"},
+      "paceLabel": {"type": "String"}
+    }
+  },
+  "prefsActivityRun": "Run",
+  "@prefsActivityRun": {
+    "description": "Activity-type label: run"
+  },
+  "prefsActivityWalk": "Walk",
+  "@prefsActivityWalk": {
+    "description": "Activity-type label: walk"
+  },
+  "prefsActivityHike": "Hike",
+  "@prefsActivityHike": {
+    "description": "Activity-type label: hike"
+  },
+  "prefsActivityCycle": "Cycle",
+  "@prefsActivityCycle": {
+    "description": "Activity-type label: cycle"
+  },
+  "prefsPaceFormat": "Pace format",
+  "@prefsPaceFormat": {
+    "description": "Tile and picker title for the pace format"
+  },
+  "prefsPaceFormatMinPerKm": "Minutes per km",
+  "@prefsPaceFormatMinPerKm": {
+    "description": "Pace-format option: minutes per kilometre"
+  },
+  "prefsPaceFormatMinPerMi": "Minutes per mile",
+  "@prefsPaceFormatMinPerMi": {
+    "description": "Pace-format option: minutes per mile"
+  },
+  "prefsPaceFormatKph": "km/h",
+  "@prefsPaceFormatKph": {
+    "description": "Pace-format option: kilometres per hour"
+  },
+  "prefsPaceFormatMph": "mph",
+  "@prefsPaceFormatMph": {
+    "description": "Pace-format option: miles per hour"
+  },
+  "prefsNotSet": "Not set",
+  "@prefsNotSet": {
+    "description": "Placeholder shown when a setting has no value"
+  },
+  "prefsHrZonesSummary": "{zones} bpm",
+  "@prefsHrZonesSummary": {
+    "description": "HR-zones summary showing the upper bounds in bpm",
+    "placeholders": {"zones": {"type": "String"}}
+  },
+  "prefsWeeklyGoalSummary": "{distance} {unit} / week",
+  "@prefsWeeklyGoalSummary": {
+    "description": "Weekly-goal summary showing the target distance per week",
+    "placeholders": {
+      "distance": {"type": "String"},
+      "unit": {"type": "String"}
+    }
+  },
+  "prefsMapStyle": "Map style",
+  "@prefsMapStyle": {
+    "description": "Tile and picker title for the map style"
+  },
+  "prefsMapStyleStreets": "Streets",
+  "@prefsMapStyleStreets": {
+    "description": "Map-style option: streets"
+  },
+  "prefsMapStyleSatellite": "Satellite",
+  "@prefsMapStyleSatellite": {
+    "description": "Map-style option: satellite"
+  },
+  "prefsMapStyleOutdoors": "Outdoors",
+  "@prefsMapStyleOutdoors": {
+    "description": "Map-style option: outdoors"
+  },
+  "prefsMapStyleDark": "Dark",
+  "@prefsMapStyleDark": {
+    "description": "Map-style option: dark"
+  },
+  "prefsDefaultRunVisibility": "Default run visibility",
+  "@prefsDefaultRunVisibility": {
+    "description": "Picker title for the default run visibility"
+  },
+  "prefsCoachPersonality": "Coach personality",
+  "@prefsCoachPersonality": {
+    "description": "Tile and picker title for the coach personality"
+  },
+  "prefsCoachSupportive": "Supportive",
+  "@prefsCoachSupportive": {
+    "description": "Coach-personality option: supportive"
+  },
+  "prefsCoachDrillSergeant": "Drill sergeant",
+  "@prefsCoachDrillSergeant": {
+    "description": "Coach-personality option: drill sergeant"
+  },
+  "prefsCoachAnalytical": "Analytical",
+  "@prefsCoachAnalytical": {
+    "description": "Coach-personality option: analytical"
+  },
+  "prefsWeekStart": "Week starts on",
+  "@prefsWeekStart": {
+    "description": "Tile and picker title for the week-start day"
+  },
+  "prefsWeekStartMonday": "Monday",
+  "@prefsWeekStartMonday": {
+    "description": "Week-start option: Monday"
+  },
+  "prefsWeekStartSunday": "Sunday",
+  "@prefsWeekStartSunday": {
+    "description": "Week-start option: Sunday"
+  },
+  "prefsDefaultActivity": "Default activity",
+  "@prefsDefaultActivity": {
+    "description": "Tile and picker title for the default activity"
+  },
+  "prefsDateOfBirth": "Date of birth",
+  "@prefsDateOfBirth": {
+    "description": "Tile title and date-picker help text for date of birth"
+  },
+  "prefsRestingHr": "Resting heart rate",
+  "@prefsRestingHr": {
+    "description": "Tile and dialog title for resting heart rate"
+  },
+  "prefsMaxHr": "Max heart rate",
+  "@prefsMaxHr": {
+    "description": "Tile and dialog title for max heart rate"
+  },
+  "prefsMaxHrNotSet": "Not set — falls back to 208 − 0.7 × age",
+  "@prefsMaxHrNotSet": {
+    "description": "Max-HR subtitle when no value is set"
+  },
+  "prefsHrBpm": "{bpm} bpm",
+  "@prefsHrBpm": {
+    "description": "Heart-rate value with bpm unit",
+    "placeholders": {"bpm": {"type": "int"}}
+  },
+  "prefsHrZones": "Heart-rate zones",
+  "@prefsHrZones": {
+    "description": "Tile title for heart-rate zones"
+  },
+  "prefsHrZonesDialogTitle": "Heart-rate zones (upper bounds, bpm)",
+  "@prefsHrZonesDialogTitle": {
+    "description": "Dialog title for editing heart-rate zones"
+  },
+  "prefsWeeklyGoal": "Weekly mileage goal",
+  "@prefsWeeklyGoal": {
+    "description": "Tile and dialog title for the weekly mileage goal"
+  },
+  "prefsSectionActivityRecording": "Activity & recording",
+  "@prefsSectionActivityRecording": {
+    "description": "Section header for activity and recording settings"
+  },
+  "prefsSectionTrainingDemographics": "Training & demographics",
+  "@prefsSectionTrainingDemographics": {
+    "description": "Section header for training and demographics settings"
+  },
+  "prefsSectionPrivacySharing": "Privacy & sharing",
+  "@prefsSectionPrivacySharing": {
+    "description": "Section header for privacy and sharing settings"
+  },
+  "prefsSectionAiCoach": "AI coach",
+  "@prefsSectionAiCoach": {
+    "description": "Section header for AI coach settings"
+  },
+  "prefsSignInToEdit": "Sign in to edit profile-level settings that sync across devices.",
+  "@prefsSignInToEdit": {
+    "description": "Notice shown when the bag-backed settings are not yet available"
+  },
+  "prefsUseMiles": "Use miles",
+  "@prefsUseMiles": {
+    "description": "Toggle title for using miles instead of kilometres"
+  },
+  "prefsDarkMode": "Dark mode",
+  "@prefsDarkMode": {
+    "description": "Toggle title for dark mode"
+  },
+  "prefsAudioCues": "Audio cues",
+  "@prefsAudioCues": {
+    "description": "Toggle title for spoken audio cues"
+  },
+  "prefsAudioCuesSubtitle": "Spoken split announcements",
+  "@prefsAudioCuesSubtitle": {
+    "description": "Subtitle of the audio-cues toggle"
+  },
+  "prefsMinimalVoiceCues": "Minimal voice cues",
+  "@prefsMinimalVoiceCues": {
+    "description": "Toggle title for minimal voice cues"
+  },
+  "prefsMinimalVoiceCuesSubtitle": "Skip the chatty mid-rep and pace-drift nudges",
+  "@prefsMinimalVoiceCuesSubtitle": {
+    "description": "Subtitle of the minimal-voice-cues toggle"
+  },
+  "prefsKeepScreenOn": "Keep screen on",
+  "@prefsKeepScreenOn": {
+    "description": "Toggle title for keeping the screen on during a run"
+  },
+  "prefsKeepScreenOnSubtitle": "Hold a wakelock during a run",
+  "@prefsKeepScreenOnSubtitle": {
+    "description": "Subtitle of the keep-screen-on toggle"
+  },
+  "prefsAdvancedGps": "Advanced GPS",
+  "@prefsAdvancedGps": {
+    "description": "Toggle title for advanced GPS"
+  },
+  "prefsAdvancedGpsSubtitle": "Higher accuracy, finer track detail, more battery usage",
+  "@prefsAdvancedGpsSubtitle": {
+    "description": "Subtitle of the advanced-GPS toggle"
+  },
+  "prefsDefaultRunPrivacy": "Default run privacy",
+  "@prefsDefaultRunPrivacy": {
+    "description": "Tile title for the default run privacy"
+  },
+  "prefsStravaAutoShare": "Strava auto-share",
+  "@prefsStravaAutoShare": {
+    "description": "Toggle title for Strava auto-share"
+  },
+  "prefsStravaAutoShareSubtitle": "Auto-push every new run to Strava. Requires a connected Strava integration once that lands.",
+  "@prefsStravaAutoShareSubtitle": {
+    "description": "Subtitle of the Strava auto-share toggle"
+  },
+  "prefsDiscoverable": "Show me in name search",
+  "@prefsDiscoverable": {
+    "description": "Toggle title for being discoverable in name search"
+  },
+  "prefsDiscoverableSubtitle": "When off, your account won't appear when other runners search by display name. Your public runs and profile remain reachable to anyone with the URL.",
+  "@prefsDiscoverableSubtitle": {
+    "description": "Subtitle of the discoverable-in-search toggle"
   }
 }

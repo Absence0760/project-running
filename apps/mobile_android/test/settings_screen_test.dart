@@ -164,6 +164,8 @@ void main() {
         (tester) async {
       final s = await _makeStores();
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: SettingsAccountScreen(
           apiClient: null,
           preferences: s.prefs,
@@ -182,6 +184,8 @@ void main() {
         (tester) async {
       final s = await _makeStores();
       await tester.pumpWidget(MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
         home: SettingsAccountScreen(
           apiClient: null,
           preferences: s.prefs,

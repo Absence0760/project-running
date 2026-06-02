@@ -10,6 +10,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../backup.dart';
 import '../backup_server_client.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -62,7 +63,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   Future<void> _signIn() async {
     final api = widget.apiClient;
     if (api == null) {
-      showTopBanner(context, 'Backend not configured');
+      showTopBanner(
+          context, AppLocalizations.of(context).settingsAccountBackendNotConfigured);
       return;
     }
     final ok = await Navigator.of(context).push<bool>(
@@ -78,7 +80,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       await api.signOut();
     } catch (e) {
       if (mounted) {
-        showTopBanner(context, 'Sign out failed — check your connection');
+        showTopBanner(
+            context, AppLocalizations.of(context).settingsAccountSignOutFailed);
         return;
       }
     }
@@ -86,6 +89,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
   }
 
   Future<void> _changePassword() async {
+    final l10n = AppLocalizations.of(context);
     final pwdCtl = TextEditingController();
     final confirmCtl = TextEditingController();
     final ok = await showDialog<bool>(
@@ -94,20 +98,22 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
         String? error;
         return StatefulBuilder(
           builder: (ctx, setInner) => AlertDialog(
-            title: const Text('Change password'),
+            title: Text(l10n.settingsAccountChangePassword),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: pwdCtl,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'New password'),
+                  decoration: InputDecoration(
+                      labelText: l10n.settingsAccountNewPassword),
                 ),
                 const SizedBox(height: 8),
                 TextField(
                   controller: confirmCtl,
                   obscureText: true,
-                  decoration: const InputDecoration(labelText: 'Confirm'),
+                  decoration:
+                      InputDecoration(labelText: l10n.settingsAccountConfirm),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 8),
@@ -118,22 +124,23 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(l10n.settingsAccountCancel),
               ),
               FilledButton(
                 onPressed: () {
                   if (pwdCtl.text.length < 8) {
-                    setInner(
-                        () => error = 'Password must be at least 8 characters');
+                    setInner(() =>
+                        error = l10n.settingsAccountPasswordTooShort);
                     return;
                   }
                   if (pwdCtl.text != confirmCtl.text) {
-                    setInner(() => error = 'Passwords do not match');
+                    setInner(
+                        () => error = l10n.settingsAccountPasswordsMismatch);
                     return;
                   }
                   Navigator.pop(ctx, true);
                 },
-                child: const Text('Save'),
+                child: Text(l10n.settingsAccountSave),
               ),
             ],
           ),
@@ -146,10 +153,10 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       await Supabase.instance.client.auth
           .updateUser(UserAttributes(password: pwdCtl.text));
       if (!mounted) return;
-      showTopBanner(context, 'Password updated');
+      showTopBanner(context, l10n.settingsAccountPasswordUpdated);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Could not update password: $e');
+      showTopBanner(context, l10n.settingsAccountPasswordUpdateFailed(e));
     }
   }
 
@@ -159,6 +166,7 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
     // no email) before the Delete button enables. Apple 5.1.1 +
     // data-loss confirmation — a stray tap can't trigger an
     // irreversible server-side wipe.
+    final l10n = AppLocalizations.of(context);
     final email = widget.apiClient?.userEmail ?? '';
     final challengeTarget = email.isEmpty ? 'DELETE' : email;
     final challengeCtl = TextEditingController();
@@ -169,16 +177,12 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
           final met = challengeCtl.text.trim().toLowerCase() ==
               challengeTarget.trim().toLowerCase();
           return AlertDialog(
-            title: const Text('Delete account?'),
+            title: Text(l10n.settingsAccountDeleteTitle),
             content: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
-                  'This permanently removes your runs, routes, and profile '
-                  'from the server. Local device data is kept unless you sign '
-                  'in as a new user. This cannot be undone.',
-                ),
+                Text(l10n.settingsAccountDeleteBody),
                 const SizedBox(height: 16),
                 TextField(
                   controller: challengeCtl,
@@ -186,8 +190,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                   enableSuggestions: false,
                   decoration: InputDecoration(
                     labelText: email.isEmpty
-                        ? 'Type "DELETE" to confirm'
-                        : 'Type your email ($email) to confirm',
+                        ? l10n.settingsAccountDeleteChallengeText
+                        : l10n.settingsAccountDeleteChallengeEmail(email),
                   ),
                   onChanged: (_) => setInner(() {}),
                 ),
@@ -196,12 +200,12 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx, false),
-                child: const Text('Cancel'),
+                child: Text(l10n.settingsAccountCancel),
               ),
               FilledButton(
                 style: FilledButton.styleFrom(backgroundColor: Colors.red),
                 onPressed: met ? () => Navigator.pop(ctx, true) : null,
-                child: const Text('Delete'),
+                child: Text(l10n.settingsAccountDelete),
               ),
             ],
           );
@@ -213,26 +217,27 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
     try {
       final api = widget.apiClient;
       if (api == null) {
-        showTopBanner(context, 'Sign in first to delete your account.');
+        showTopBanner(context, l10n.settingsAccountDeleteSignInFirst);
         return;
       }
       await api.deleteAccount();
       await api.signOut();
       if (mounted) {
-        showTopBanner(context, 'Account deleted');
+        showTopBanner(context, l10n.settingsAccountDeleted);
         setState(() {});
       }
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Account deletion failed: $e');
+      showTopBanner(context, l10n.settingsAccountDeleteFailed(e));
     }
   }
 
   Future<void> _exportRunsCsv() async {
+    final l10n = AppLocalizations.of(context);
     final store = widget.runStore;
     final runs = store?.runs ?? const [];
     if (runs.isEmpty) {
-      showTopBanner(context, 'No runs to export.');
+      showTopBanner(context, l10n.settingsAccountNoRunsToExport);
       return;
     }
     try {
@@ -257,21 +262,22 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       await file.writeAsString(buf.toString());
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'text/csv')],
-        text: 'Run app — runs export',
+        text: l10n.settingsAccountCsvShareText,
       );
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'CSV export failed: $e');
+      showTopBanner(context, l10n.settingsAccountCsvExportFailed(e));
     }
   }
 
   Future<void> _exportBackup() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      showTopBanner(context, 'Sign in first to back up your runs.');
+      showTopBanner(context, l10n.settingsAccountBackupSignInFirst);
       return;
     }
-    showTopBanner(context, 'Preparing backup…');
+    showTopBanner(context, l10n.settingsAccountBackupPreparing);
     try {
       final tmp = await getTemporaryDirectory();
       final ts =
@@ -286,19 +292,20 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       ).createBackup(outputFile: file);
       await Share.shareXFiles(
         [XFile(file.path)],
-        text: 'Run app backup',
+        text: l10n.settingsAccountBackupShareText,
       );
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Backup failed: $e');
+      showTopBanner(context, l10n.settingsAccountBackupFailed(e));
     }
   }
 
   Future<void> _restoreBackup() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     final store = widget.runStore;
     if (store == null) {
-      showTopBanner(context, 'Backup service unavailable.');
+      showTopBanner(context, l10n.settingsAccountRestoreUnavailable);
       return;
     }
     final picked = await FilePicker.pickFiles(
@@ -312,30 +319,27 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Restore from backup?'),
+        title: Text(l10n.settingsAccountRestoreTitle),
         content: Text(
           offline
-              ? 'You\'re not signed in. Runs will be restored to this device '
-                  'and synced to your account the next time you sign in.'
-              : 'This adds or overwrites runs and routes matching IDs in the '
-                  'backup. It will not delete runs or routes that aren\'t in '
-                  'the backup.',
+              ? l10n.settingsAccountRestoreBodyOffline
+              : l10n.settingsAccountRestoreBodyOnline,
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+            child: Text(l10n.settingsAccountCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Restore'),
+            child: Text(l10n.settingsAccountRestore),
           ),
         ],
       ),
     );
     if (ok != true) return;
     if (!mounted) return;
-    showTopBanner(context, 'Restoring…');
+    showTopBanner(context, l10n.settingsAccountRestoring);
     try {
       final res = await BackupService(api: api).restore(
         zipFile: File(path),
@@ -345,22 +349,29 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
       if (!mounted) return;
       showTopBanner(
         context,
-        'Restored ${res.runsImported} runs · ${res.tracksUploaded} tracks · ${res.routesImported} routes'
-        '${res.warnings.isNotEmpty ? ' · ${res.warnings.length} warnings' : ''}',
+        l10n.settingsAccountRestoreDone(
+          res.runsImported,
+          res.tracksUploaded,
+          res.routesImported,
+          res.warnings.isNotEmpty
+              ? l10n.settingsAccountRestoreWarningsSuffix(res.warnings.length)
+              : '',
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Restore failed: $e');
+      showTopBanner(context, l10n.settingsAccountRestoreFailed(e));
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final signedIn = widget.apiClient?.userId != null;
     final email = widget.apiClient?.userEmail ?? '';
     return Scaffold(
-      appBar: AppBar(title: const Text('Account')),
+      appBar: AppBar(title: Text(l10n.settingsAccountTitle)),
       body: SafeArea(
         child: ListView(
           children: [
@@ -373,27 +384,27 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                   email.isNotEmpty ? email[0].toUpperCase() : '?',
                 ),
               ),
-              title: Text(email.isEmpty ? 'Offline mode' : email),
+              title: Text(
+                  email.isEmpty ? l10n.settingsAccountOfflineMode : email),
               subtitle: Text(signedIn
-                  ? 'Signed in — runs will sync'
-                  : 'Sign in to sync runs across devices'),
+                  ? l10n.settingsAccountSignedInSync
+                  : l10n.settingsAccountSignInToSync),
               trailing: signedIn
                   ? IconButton(
                       icon: const Icon(Icons.logout),
-                      tooltip: 'Sign out',
+                      tooltip: l10n.settingsAccountSignOut,
                       onPressed: _signOut,
                     )
                   : FilledButton.tonal(
                       onPressed: _signIn,
-                      child: const Text('Sign in'),
+                      child: Text(l10n.settingsAccountSignIn),
                     ),
             ),
             if (signedIn)
               ListTile(
                 leading: const Icon(Icons.person_outline),
-                title: const Text('View profile'),
-                subtitle: const Text(
-                    'Your runs, followers, following, notifications'),
+                title: Text(l10n.settingsAccountViewProfile),
+                subtitle: Text(l10n.settingsAccountViewProfileSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   final api = widget.apiClient;
@@ -409,9 +420,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               ),
             ListTile(
               leading: const Icon(Icons.headset),
-              title: const Text('Guided runs'),
-              subtitle: const Text(
-                  'Coach-voice scripted workouts with TTS cues'),
+              title: Text(l10n.settingsAccountGuidedRuns),
+              subtitle: Text(l10n.settingsAccountGuidedRunsSubtitle),
               trailing: const Icon(Icons.chevron_right),
               onTap: () {
                 Navigator.push(
@@ -425,9 +435,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
             if (signedIn)
               ListTile(
                 leading: const Icon(Icons.privacy_tip_outlined),
-                title: const Text('Privacy zones'),
-                subtitle: const Text(
-                    'Clip start/end of public tracks near home'),
+                title: Text(l10n.settingsAccountPrivacyZones),
+                subtitle: Text(l10n.settingsAccountPrivacyZonesSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   final s = widget.settingsSync;
@@ -443,9 +452,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
             if (signedIn)
               ListTile(
                 leading: const Icon(Icons.contact_emergency_outlined),
-                title: const Text('Trusted contacts'),
-                subtitle: const Text(
-                    'Designated people for the planned overdue-run / panic surface'),
+                title: Text(l10n.settingsAccountTrustedContacts),
+                subtitle: Text(l10n.settingsAccountTrustedContactsSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   final s = widget.settingsSync;
@@ -461,10 +469,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               ),
             SwitchListTile(
               secondary: const Icon(Icons.bug_report_outlined),
-              title: const Text('Send error reports'),
-              subtitle: const Text(
-                'Anonymised crash + error data to Sentry (US). Toggle off to withdraw consent. Applies on next launch.',
-              ),
+              title: Text(l10n.settingsAccountSendErrorReports),
+              subtitle: Text(l10n.settingsAccountSendErrorReportsSubtitle),
               value: !widget.preferences.sentryOptOut,
               onChanged: (enabled) async {
                 await widget.preferences.setSentryOptOut(!enabled);
@@ -472,8 +478,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 showTopBanner(
                   context,
                   enabled
-                      ? 'Error reporting enabled — restart the app to apply.'
-                      : 'Error reporting disabled — restart the app to apply.',
+                      ? l10n.settingsAccountErrorReportingEnabled
+                      : l10n.settingsAccountErrorReportingDisabled,
                 );
               },
             ),
@@ -481,8 +487,8 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.move_to_inbox),
-                title: const Text('Import from another app'),
-                subtitle: const Text('Strava, GPX, TCX'),
+                title: Text(l10n.settingsAccountImport),
+                subtitle: Text(l10n.settingsAccountImportSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () {
                   Navigator.push(
@@ -501,28 +507,22 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               ),
               ListTile(
                 leading: const Icon(Icons.archive_outlined),
-                title: const Text('Full backup'),
-                subtitle: const Text(
-                  'Every run with its GPS trace, plus routes, profile, and preferences. '
-                  'Restores on web or Android.',
-                ),
+                title: Text(l10n.settingsAccountFullBackup),
+                subtitle: Text(l10n.settingsAccountFullBackupSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _exportBackup,
               ),
               ListTile(
                 leading: const Icon(Icons.table_chart_outlined),
-                title: const Text('Export runs as CSV'),
-                subtitle: const Text(
-                  'date, distance, duration, pace, source — one row per run. '
-                  'Same shape as the web GDPR export.',
-                ),
+                title: Text(l10n.settingsAccountExportCsv),
+                subtitle: Text(l10n.settingsAccountExportCsvSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _exportRunsCsv,
               ),
               ListTile(
                 leading: const Icon(Icons.unarchive_outlined),
-                title: const Text('Restore from backup'),
-                subtitle: const Text('Pick a previously saved .zip backup.'),
+                title: Text(l10n.settingsAccountRestoreTile),
+                subtitle: Text(l10n.settingsAccountRestoreTileSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _restoreBackup,
               ),
@@ -531,17 +531,17 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
               const Divider(),
               ListTile(
                 leading: const Icon(Icons.lock_outline),
-                title: const Text('Change password'),
+                title: Text(l10n.settingsAccountChangePassword),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _changePassword,
               ),
               ListTile(
                 leading: const Icon(Icons.delete_outline, color: Colors.red),
-                title: const Text(
-                  'Delete account',
-                  style: TextStyle(color: Colors.red),
+                title: Text(
+                  l10n.settingsAccountDeleteAccount,
+                  style: const TextStyle(color: Colors.red),
                 ),
-                subtitle: const Text('Permanently removes server data'),
+                subtitle: Text(l10n.settingsAccountDeleteAccountSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _deleteAccount,
               ),

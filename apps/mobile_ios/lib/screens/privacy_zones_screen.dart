@@ -9,6 +9,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../geocoding.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../privacy.dart';
 import '../settings_sync.dart';
 import '../tile_cache.dart';
@@ -98,6 +99,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
   }
 
   Future<void> _save() async {
+    final l10n = AppLocalizations.of(context);
     final s = widget.settingsSync.service;
     if (s == null) return;
     setState(() => _saving = true);
@@ -106,10 +108,10 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
         privacyZonesKey: _zones.map((z) => z.toJson()).toList(),
       });
       if (!mounted) return;
-      showTopBanner(context, 'Privacy zones saved.');
+      showTopBanner(context, l10n.privacyZonesSaved);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Save failed: $e');
+      showTopBanner(context, l10n.privacyZonesSaveFailed(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -140,7 +142,9 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
     if (widget.locateFn != null) {
       try {
         _applyFix(await widget.locateFn!());
-      } catch (_) {}
+      } catch (e) {
+        debugPrint('privacy_zones: test locateFn fix failed: $e');
+      }
       return;
     }
     if (kIsWeb) return;
@@ -182,7 +186,8 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
       _mapController.move(ll, 15);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Location unavailable: $e');
+      showTopBanner(
+          context, AppLocalizations.of(context).privacyZonesLocationUnavailable(e));
     }
   }
 
@@ -239,6 +244,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final initial = _zones.isNotEmpty
         ? LatLng(_zones.first.lat, _zones.first.lng)
@@ -246,7 +252,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Privacy zones'),
+        title: Text(l10n.privacyZonesTitle),
         actions: [
           if (_saving)
             const Padding(
@@ -260,13 +266,13 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
           else
             TextButton(
               onPressed: _save,
-              child: const Text('Save'),
+              child: Text(l10n.privacyZonesSave),
             ),
         ],
       ),
       floatingActionButton: FloatingActionButton.small(
         heroTag: 'privacy_zones_locate_fab',
-        tooltip: 'Locate me',
+        tooltip: l10n.privacyZonesLocateMe,
         onPressed: _locate,
         child: const Icon(Icons.my_location),
       ),
@@ -275,8 +281,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
           Padding(
             padding: const EdgeInsets.all(12),
             child: Text(
-              'Tap the map to add a zone. Tracks on public surfaces have '
-              'their start and end clipped past the zone radius.',
+              l10n.privacyZonesHint,
               style: theme.textTheme.bodySmall?.copyWith(
                 color: theme.colorScheme.onSurfaceVariant,
               ),
@@ -288,7 +293,7 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
               controller: _searchCtl,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Search places…',
+                hintText: l10n.privacyZonesSearchHint,
                 prefixIcon: const Icon(Icons.search, size: 20),
                 isDense: true,
                 border: OutlineInputBorder(
@@ -301,18 +306,18 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Row(
               children: [
-                Text('Radius', style: theme.textTheme.labelLarge),
+                Text(l10n.privacyZonesRadius, style: theme.textTheme.labelLarge),
                 Expanded(
                   child: Slider(
                     min: 50,
                     max: 500,
                     divisions: 9,
                     value: _draftRadius,
-                    label: '${_draftRadius.round()} m',
+                    label: l10n.privacyZonesRadiusMeters(_draftRadius.round()),
                     onChanged: (v) => setState(() => _draftRadius = v),
                   ),
                 ),
-                Text('${_draftRadius.round()} m'),
+                Text(l10n.privacyZonesRadiusMeters(_draftRadius.round())),
               ],
             ),
           ),
@@ -429,15 +434,14 @@ class _PrivacyZonesScreenState extends State<PrivacyZonesScreen> {
                 children: [
                   Expanded(
                     child: Text(
-                      '${_zones.length} zone${_zones.length == 1 ? '' : 's'} '
-                      '— tap a marker to remove.',
+                      l10n.privacyZonesCount(_zones.length),
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
                   TextButton.icon(
                     onPressed: () => setState(() => _zones = []),
                     icon: const Icon(Icons.delete_outline, size: 18),
-                    label: const Text('Clear all'),
+                    label: Text(l10n.privacyZonesClearAll),
                   ),
                 ],
               ),

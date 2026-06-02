@@ -10,6 +10,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../ble_heart_rate.dart';
 import '../health_connect_exporter.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../strava.dart';
 import '../widgets/top_banner.dart';
@@ -61,13 +62,13 @@ class _SettingsIntegrationsScreenState
     return null;
   }
 
-  static String _relTime(DateTime t) {
+  static String _relTime(DateTime t, AppLocalizations l10n) {
     final diff = DateTime.now().toUtc().difference(t.toUtc());
-    if (diff.inMinutes < 1) return 'just now';
-    if (diff.inHours < 1) return '${diff.inMinutes}m ago';
-    if (diff.inDays < 1) return '${diff.inHours}h ago';
-    if (diff.inDays < 7) return '${diff.inDays}d ago';
-    return '${(diff.inDays / 7).floor()}w ago';
+    if (diff.inMinutes < 1) return l10n.integrationsJustNow;
+    if (diff.inHours < 1) return l10n.integrationsMinutesAgo(diff.inMinutes);
+    if (diff.inDays < 1) return l10n.integrationsHoursAgo(diff.inHours);
+    if (diff.inDays < 7) return l10n.integrationsDaysAgo(diff.inDays);
+    return l10n.integrationsWeeksAgo((diff.inDays / 7).floor());
   }
 
   Future<void> _openExternal(String url) async {
@@ -83,23 +84,20 @@ class _SettingsIntegrationsScreenState
         await Share.share(url);
       } catch (e) {
         if (!mounted) return;
-        showTopBanner(context, 'Could not open: $e');
+        showTopBanner(context, AppLocalizations.of(context).integrationsCouldNotOpen(e));
       }
     }
   }
 
   Future<void> _connectStrava() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null) return;
 
     if (!isStravaConfigured()) {
       await _openExternal('https://threkir.com/settings/integrations');
       if (!mounted) return;
-      showTopBanner(
-        context,
-        'Complete the Strava sign-in in your browser, then return here '
-            'and pull to refresh.',
-      );
+      showTopBanner(context, l10n.integrationsStravaBrowserHint);
       return;
     }
 
@@ -118,17 +116,15 @@ class _SettingsIntegrationsScreenState
         showTopBanner(
           context,
           cb.error == 'access_denied'
-              ? 'Strava sign-in cancelled.'
-              : 'Strava sign-in failed: ${cb.error ?? 'no code returned'}',
+              ? l10n.integrationsStravaCancelled
+              : l10n.integrationsStravaSignInFailed(
+                  cb.error ?? 'no code returned'),
         );
         return;
       }
       if (cb.state != state) {
         if (!mounted) return;
-        showTopBanner(
-          context,
-          'Strava sign-in rejected: CSRF state mismatch. Please retry.',
-        );
+        showTopBanner(context, l10n.integrationsStravaCsrfMismatch);
         return;
       }
       final res = await api.completeStravaOAuth(
@@ -139,20 +135,21 @@ class _SettingsIntegrationsScreenState
       if (!mounted) return;
       final err = res['error'];
       if (err is String) {
-        showTopBanner(context, 'Strava connect failed: $err');
+        showTopBanner(context, l10n.integrationsStravaConnectFailed(err));
         return;
       }
-      showTopBanner(context, 'Strava connected.');
+      showTopBanner(context, l10n.integrationsStravaConnected);
       await _refreshIntegrations();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Strava sign-in failed: $e');
+      showTopBanner(context, l10n.integrationsStravaSignInFailed(e));
     } finally {
       if (mounted) setState(() => _stravaBusy = false);
     }
   }
 
   Future<void> _syncStrava() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null) return;
     setState(() => _stravaBusy = true);
@@ -161,36 +158,33 @@ class _SettingsIntegrationsScreenState
       if (!mounted) return;
       final imported = (res['imported'] as num?)?.toInt() ?? 0;
       final skipped = (res['skipped'] as num?)?.toInt() ?? 0;
-      showTopBanner(
-          context, 'Synced. $imported new, $skipped already present.');
+      showTopBanner(context, l10n.integrationsSyncResult(imported, skipped));
       await _refreshIntegrations();
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Sync failed: $e');
+      showTopBanner(context, l10n.integrationsSyncFailed(e));
     } finally {
       if (mounted) setState(() => _stravaBusy = false);
     }
   }
 
   Future<void> _disconnectStrava() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null) return;
     final ok = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Disconnect Strava?'),
-            content: const Text(
-              'Future activities will stop syncing automatically. Already-imported '
-              'runs stay in your history.',
-            ),
+            title: Text(l10n.integrationsStravaDisconnectTitle),
+            content: Text(l10n.integrationsStravaDisconnectBody),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(l10n.integrationsCancel),
               ),
               FilledButton(
                 onPressed: () => Navigator.pop(context, true),
-                child: const Text('Disconnect'),
+                child: Text(l10n.integrationsDisconnect),
               ),
             ],
           ),
@@ -202,16 +196,17 @@ class _SettingsIntegrationsScreenState
       await api.disconnectIntegration('strava');
       await _refreshIntegrations();
       if (!mounted) return;
-      showTopBanner(context, 'Strava disconnected.');
+      showTopBanner(context, l10n.integrationsStravaDisconnected);
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Disconnect failed: $e');
+      showTopBanner(context, l10n.integrationsDisconnectFailed(e));
     } finally {
       if (mounted) setState(() => _stravaBusy = false);
     }
   }
 
   Future<void> _importParkrun() async {
+    final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null || api.userId == null) return;
 
@@ -228,25 +223,21 @@ class _SettingsIntegrationsScreenState
     final athleteNumber = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Import parkrun results'),
+        title: Text(l10n.integrationsParkrunTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text(
-              'Enter your parkrun athlete number (e.g. A123456). We\'ll '
-              'fetch your finish history and add any new results to your '
-              'runs list.',
-            ),
+            Text(l10n.integrationsParkrunBody),
             const SizedBox(height: 12),
             TextField(
               controller: ctrl,
               autofocus: true,
               maxLength: 20,
-              decoration: const InputDecoration(
-                labelText: 'Athlete number',
+              decoration: InputDecoration(
+                labelText: l10n.integrationsParkrunFieldLabel,
                 hintText: 'A123456',
-                border: OutlineInputBorder(),
+                border: const OutlineInputBorder(),
               ),
             ),
           ],
@@ -254,11 +245,11 @@ class _SettingsIntegrationsScreenState
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
+            child: Text(l10n.integrationsCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, ctrl.text.trim()),
-            child: const Text('Import'),
+            child: Text(l10n.integrationsImport),
           ),
         ],
       ),
@@ -269,12 +260,12 @@ class _SettingsIntegrationsScreenState
     showDialog<void>(
       context: context,
       barrierDismissible: false,
-      builder: (_) => const AlertDialog(
+      builder: (_) => AlertDialog(
         content: Row(
           children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Expanded(child: Text('Importing parkrun results…')),
+            const CircularProgressIndicator(),
+            const SizedBox(width: 16),
+            Expanded(child: Text(l10n.integrationsParkrunImporting)),
           ],
         ),
       ),
@@ -288,28 +279,29 @@ class _SettingsIntegrationsScreenState
       showTopBanner(
         context,
         imported > 0
-            ? 'Imported $imported parkrun result${imported == 1 ? '' : 's'}.'
-            : 'No new parkrun results since last import.',
+            ? l10n.integrationsParkrunImported(imported)
+            : l10n.integrationsParkrunNoneNew,
       );
     } catch (e) {
       if (!mounted) return;
       Navigator.of(context).pop();
-      showTopBanner(context, 'Import failed: $e');
+      showTopBanner(context, l10n.integrationsImportFailed(e));
     }
   }
 
   Widget _buildStravaTile() {
+    final l10n = AppLocalizations.of(context);
     final s = _strava();
     final connected = s != null;
     final last = s?.lastSyncAt;
     final subtitle = !connected
-        ? 'Connect to auto-sync activities'
+        ? l10n.integrationsStravaConnectSubtitle
         : last == null
-            ? 'Connected · waiting for first sync'
-            : 'Connected · last sync ${_relTime(last)}';
+            ? l10n.integrationsStravaWaitingFirstSync
+            : l10n.integrationsStravaLastSync(_relTime(last, l10n));
     return ListTile(
       leading: const Icon(Icons.sync, color: Color(0xFFFC4C02)),
-      title: const Text('Strava'),
+      title: Text(l10n.integrationsStravaName),
       subtitle: Text(subtitle),
       trailing: _stravaBusy
           ? const SizedBox(
@@ -323,10 +315,12 @@ class _SettingsIntegrationsScreenState
                     if (v == 'sync') _syncStrava();
                     if (v == 'disconnect') _disconnectStrava();
                   },
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: 'sync', child: Text('Sync now')),
+                  itemBuilder: (_) => [
                     PopupMenuItem(
-                        value: 'disconnect', child: Text('Disconnect')),
+                        value: 'sync', child: Text(l10n.integrationsSyncNow)),
+                    PopupMenuItem(
+                        value: 'disconnect',
+                        child: Text(l10n.integrationsDisconnect)),
                   ],
                 )
               : const Icon(Icons.chevron_right),
@@ -336,9 +330,10 @@ class _SettingsIntegrationsScreenState
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final signedIn = widget.apiClient?.userId != null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Integrations')),
+      appBar: AppBar(title: Text(l10n.integrationsTitle)),
       body: SafeArea(
         child: ListView(
           children: [
@@ -346,19 +341,16 @@ class _SettingsIntegrationsScreenState
               _buildStravaTile(),
               ListTile(
                 leading: const Icon(Icons.directions_run),
-                title: const Text('parkrun'),
-                subtitle: const Text('Import results by athlete number'),
+                title: Text(l10n.integrationsParkrunName),
+                subtitle: Text(l10n.integrationsParkrunTileSubtitle),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: _importParkrun,
               ),
             ] else
-              const ListTile(
-                leading: Icon(Icons.lock_outline),
-                title: Text('Sign in to connect services'),
-                subtitle: Text(
-                  'Strava + parkrun require an account so synced activities '
-                  'land in your history.',
-                ),
+              ListTile(
+                leading: const Icon(Icons.lock_outline),
+                title: Text(l10n.integrationsSignInTitle),
+                subtitle: Text(l10n.integrationsSignInSubtitle),
               ),
             const Divider(),
             HeartRateMonitorTile(heartRate: widget.heartRate),
@@ -366,11 +358,8 @@ class _SettingsIntegrationsScreenState
               const Divider(),
               SwitchListTile(
                 secondary: const Icon(Icons.health_and_safety_outlined),
-                title: const Text('Write runs to Health Connect'),
-                subtitle: const Text(
-                  'Send each finished run to Health Connect so it appears in '
-                  'Google Fit, Samsung Health, Fitbit and others.',
-                ),
+                title: Text(l10n.integrationsHealthConnectTitle),
+                subtitle: Text(l10n.integrationsHealthConnectSubtitle),
                 value: widget.preferences.writeToHealthConnect,
                 onChanged: _toggleHealthConnectWrite,
               ),
@@ -400,10 +389,7 @@ class _SettingsIntegrationsScreenState
     if (!mounted) return;
     setState(() {});
     if (!granted) {
-      showTopBanner(
-        context,
-        'Health Connect permission not granted — runs won\'t be written.',
-      );
+      showTopBanner(context, AppLocalizations.of(context).integrationsHealthConnectDenied);
     }
   }
 }
@@ -446,7 +432,8 @@ class _HeartRateMonitorTileState extends State<HeartRateMonitorTile> {
         await widget.heartRate.pair(device);
       } catch (e) {
         if (mounted) {
-          showTopBanner(context, 'Pair failed: $e');
+          showTopBanner(
+              context, AppLocalizations.of(context).integrationsHrPairFailed(e));
         }
       }
       await _refresh();
@@ -460,21 +447,22 @@ class _HeartRateMonitorTileState extends State<HeartRateMonitorTile> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final paired = _pairedName;
     return ListTile(
       leading: const Icon(Icons.favorite_border),
-      title: const Text('Heart rate monitor'),
+      title: Text(l10n.integrationsHrTitle),
       subtitle: Text(
         _loading
-            ? 'Checking…'
+            ? l10n.integrationsHrChecking
             : paired != null
-                ? 'Paired: $paired'
-                : 'No strap paired — tap to scan',
+                ? l10n.integrationsHrPaired(paired)
+                : l10n.integrationsHrNotPaired,
       ),
       trailing: paired != null
           ? IconButton(
               icon: const Icon(Icons.close),
-              tooltip: 'Forget',
+              tooltip: l10n.integrationsHrForget,
               onPressed: _forget,
             )
           : const Icon(Icons.chevron_right),
@@ -517,6 +505,7 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -526,10 +515,11 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
           children: [
             Row(
               children: [
-                const Expanded(
+                Expanded(
                   child: Text(
-                    'Scan for heart rate monitor',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    l10n.integrationsHrScanTitle,
+                    style: const TextStyle(
+                        fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (_scanning)
@@ -541,21 +531,21 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
               ],
             ),
             const SizedBox(height: 4),
-            const Text(
-              'Wake your strap / chest band. Apps typically take 3–8 seconds.',
-              style: TextStyle(fontSize: 12, color: Colors.grey),
+            Text(
+              l10n.integrationsHrScanHint,
+              style: const TextStyle(fontSize: 12, color: Colors.grey),
             ),
             const SizedBox(height: 12),
             if (_results.isEmpty && !_scanning)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 24),
-                child: Text('No straps found. Make sure it\'s nearby and awake.'),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 24),
+                child: Text(l10n.integrationsHrScanEmpty),
               ),
             ..._results.map((r) {
               return ListTile(
                 leading: const Icon(Icons.bluetooth),
                 title: Text(r.name),
-                subtitle: Text('RSSI ${r.rssi} dBm'),
+                subtitle: Text(l10n.integrationsHrRssi(r.rssi)),
                 onTap: () => Navigator.of(context).pop(r),
               );
             }),
@@ -564,7 +554,7 @@ class _HeartRateScanSheetState extends State<_HeartRateScanSheet> {
               alignment: Alignment.centerRight,
               child: TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Cancel'),
+                child: Text(l10n.integrationsCancel),
               ),
             ),
           ],

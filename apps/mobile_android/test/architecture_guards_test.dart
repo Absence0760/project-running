@@ -2340,11 +2340,21 @@ void main() {
       // can't quietly drop it.
       final source =
           File('lib/screens/settings_pro_screen.dart').readAsStringSync();
+      final arb = File('lib/l10n/app_en.arb').readAsStringSync();
+      // The tile title is localized via gen-l10n (proRestorePurchases);
+      // the English copy lives in the ARB. Pin both so a refactor can't
+      // drop the tile or empty the disclosure copy.
       expect(
         source,
-        contains("title: const Text('Restore purchases')"),
+        contains('l10n.proRestorePurchases'),
         reason:
-            'settings_pro_screen.dart must surface a "Restore purchases" tile.',
+            'settings_pro_screen.dart must surface a "Restore purchases" tile '
+            '(localized via l10n.proRestorePurchases).',
+      );
+      expect(
+        arb,
+        contains('"proRestorePurchases": "Restore purchases"'),
+        reason: 'app_en.arb must carry the "Restore purchases" tile copy.',
       );
       expect(
         source,
@@ -2364,12 +2374,19 @@ void main() {
       // privacy May 2026 High closeout.
       final source =
           File('lib/screens/settings_pro_screen.dart').readAsStringSync();
+      final arb = File('lib/l10n/app_en.arb').readAsStringSync();
       expect(
         source,
-        contains("title: const Text('Manage subscription')"),
+        contains('l10n.proManageSubscription'),
         reason: 'settings_pro_screen.dart must surface a "Manage '
-            'subscription" tile so the user can reach the cancel / '
-            'change-plan path from inside the app.',
+            'subscription" tile (localized via l10n.proManageSubscription) so '
+            'the user can reach the cancel / change-plan path from inside the '
+            'app.',
+      );
+      expect(
+        arb,
+        contains('"proManageSubscription": "Manage subscription"'),
+        reason: 'app_en.arb must carry the "Manage subscription" tile copy.',
       );
       expect(
         source,
@@ -2399,19 +2416,30 @@ void main() {
       // refactor can't strip them. /audit/app-store-privacy May 2026.
       final source =
           File('lib/screens/settings_pro_screen.dart').readAsStringSync();
+      final arb = File('lib/l10n/app_en.arb').readAsStringSync();
+      // Title copy is localized: the screen passes the $9.99 price into
+      // proSubscribeTitle, whose English template is "Subscribe to Pro —
+      // {price}/month". Pin the price arg at the call site AND the
+      // {price}/month shape in the ARB so the disclosure can't be stripped.
       expect(
         source,
-        contains(r'$9.99/month'),
+        contains(r"l10n.proSubscribeTitle('\$9.99')"),
         reason: 'Subscribe-to-Pro tile title must include the price '
             '(\$9.99/month) for App Store + Play in-app disclosure '
             'compliance.',
       );
       expect(
-        RegExp(r'Auto-renews|cancelled').hasMatch(source),
+        arb,
+        contains(r'"proSubscribeTitle": "Subscribe to Pro — {price}/month"'),
+        reason: 'app_en.arb proSubscribeTitle must keep the "{price}/month" '
+            'shape so the price + period stay visible in-app.',
+      );
+      expect(
+        RegExp(r'Auto-renews|cancelled').hasMatch(arb),
         isTrue,
         reason: 'Subscribe-to-Pro tile subtitle must communicate '
             'auto-renewal AND how to cancel — at minimum the words '
-            '"Auto-renews" or "cancelled" appear in the copy.',
+            '"Auto-renews" or "cancelled" appear in the ARB copy.',
       );
     });
 

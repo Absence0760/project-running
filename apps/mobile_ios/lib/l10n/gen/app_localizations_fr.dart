@@ -3474,4 +3474,1073 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get coachCopied => 'Copié dans le presse-papiers';
+
+  @override
+  String get settingsAccountTitle => 'Compte';
+
+  @override
+  String get settingsAccountBackendNotConfigured => 'Backend non configuré';
+
+  @override
+  String get settingsAccountSignOutFailed =>
+      'Échec de la déconnexion — vérifie ta connexion';
+
+  @override
+  String get settingsAccountChangePassword => 'Changer le mot de passe';
+
+  @override
+  String get settingsAccountNewPassword => 'Nouveau mot de passe';
+
+  @override
+  String get settingsAccountConfirm => 'Confirmer';
+
+  @override
+  String get settingsAccountCancel => 'Annuler';
+
+  @override
+  String get settingsAccountSave => 'Enregistrer';
+
+  @override
+  String get settingsAccountPasswordTooShort =>
+      'Le mot de passe doit comporter au moins 8 caractères';
+
+  @override
+  String get settingsAccountPasswordsMismatch =>
+      'Les mots de passe ne correspondent pas';
+
+  @override
+  String get settingsAccountPasswordUpdated => 'Mot de passe mis à jour';
+
+  @override
+  String settingsAccountPasswordUpdateFailed(Object error) {
+    return 'Impossible de mettre à jour le mot de passe : $error';
+  }
+
+  @override
+  String get settingsAccountDeleteTitle => 'Supprimer le compte ?';
+
+  @override
+  String get settingsAccountDeleteBody =>
+      'Cela supprime définitivement tes courses, itinéraires et ton profil du serveur. Les données locales de l\'appareil sont conservées, sauf si tu te connectes en tant que nouvel utilisateur. Cette action est irréversible.';
+
+  @override
+  String get settingsAccountDeleteChallengeText =>
+      'Tape « DELETE » pour confirmer';
+
+  @override
+  String settingsAccountDeleteChallengeEmail(String email) {
+    return 'Tape ton e-mail ($email) pour confirmer';
+  }
+
+  @override
+  String get settingsAccountDelete => 'Supprimer';
+
+  @override
+  String get settingsAccountDeleteSignInFirst =>
+      'Connecte-toi d\'abord pour supprimer ton compte.';
+
+  @override
+  String get settingsAccountDeleted => 'Compte supprimé';
+
+  @override
+  String settingsAccountDeleteFailed(Object error) {
+    return 'Échec de la suppression du compte : $error';
+  }
+
+  @override
+  String get settingsAccountNoRunsToExport => 'Aucune course à exporter.';
+
+  @override
+  String get settingsAccountCsvShareText => 'Run app — export des courses';
+
+  @override
+  String settingsAccountCsvExportFailed(Object error) {
+    return 'Échec de l\'export CSV : $error';
+  }
+
+  @override
+  String get settingsAccountBackupSignInFirst =>
+      'Connecte-toi d\'abord pour sauvegarder tes courses.';
+
+  @override
+  String get settingsAccountBackupPreparing => 'Préparation de la sauvegarde…';
+
+  @override
+  String get settingsAccountBackupShareText => 'Sauvegarde Run app';
+
+  @override
+  String settingsAccountBackupFailed(Object error) {
+    return 'Échec de la sauvegarde : $error';
+  }
+
+  @override
+  String get settingsAccountRestoreUnavailable =>
+      'Service de sauvegarde indisponible.';
+
+  @override
+  String get settingsAccountRestoreTitle => 'Restaurer depuis la sauvegarde ?';
+
+  @override
+  String get settingsAccountRestoreBodyOffline =>
+      'Tu n\'es pas connecté. Les courses seront restaurées sur cet appareil et synchronisées avec ton compte lors de ta prochaine connexion.';
+
+  @override
+  String get settingsAccountRestoreBodyOnline =>
+      'Cela ajoute ou écrase les courses et itinéraires dont les ID correspondent à ceux de la sauvegarde. Les courses ou itinéraires absents de la sauvegarde ne seront pas supprimés.';
+
+  @override
+  String get settingsAccountRestore => 'Restaurer';
+
+  @override
+  String get settingsAccountRestoring => 'Restauration…';
+
+  @override
+  String settingsAccountRestoreDone(
+    int runs,
+    int tracks,
+    int routes,
+    String warnings,
+  ) {
+    return '$runs courses · $tracks tracés · $routes itinéraires restaurés$warnings';
+  }
+
+  @override
+  String settingsAccountRestoreWarningsSuffix(int count) {
+    return ' · $count avertissements';
+  }
+
+  @override
+  String settingsAccountRestoreFailed(Object error) {
+    return 'Échec de la restauration : $error';
+  }
+
+  @override
+  String get settingsAccountOfflineMode => 'Mode hors ligne';
+
+  @override
+  String get settingsAccountSignedInSync =>
+      'Connecté — les courses se synchroniseront';
+
+  @override
+  String get settingsAccountSignInToSync =>
+      'Connecte-toi pour synchroniser tes courses sur tous tes appareils';
+
+  @override
+  String get settingsAccountSignOut => 'Se déconnecter';
+
+  @override
+  String get settingsAccountSignIn => 'Se connecter';
+
+  @override
+  String get settingsAccountViewProfile => 'Voir le profil';
+
+  @override
+  String get settingsAccountViewProfileSubtitle =>
+      'Tes courses, abonnés, abonnements, notifications';
+
+  @override
+  String get settingsAccountGuidedRuns => 'Courses guidées';
+
+  @override
+  String get settingsAccountGuidedRunsSubtitle =>
+      'Séances scriptées avec voix de coach et repères TTS';
+
+  @override
+  String get settingsAccountPrivacyZones => 'Zones de confidentialité';
+
+  @override
+  String get settingsAccountPrivacyZonesSubtitle =>
+      'Masque le début/la fin des tracés publics près de chez toi';
+
+  @override
+  String get settingsAccountTrustedContacts => 'Contacts de confiance';
+
+  @override
+  String get settingsAccountTrustedContactsSubtitle =>
+      'Personnes désignées pour la fonction prévue de course en retard / alerte';
+
+  @override
+  String get settingsAccountSendErrorReports =>
+      'Envoyer des rapports d\'erreur';
+
+  @override
+  String get settingsAccountSendErrorReportsSubtitle =>
+      'Données anonymisées de plantage et d\'erreur vers Sentry (USA). Désactive pour retirer ton consentement. Appliqué au prochain lancement.';
+
+  @override
+  String get settingsAccountErrorReportingEnabled =>
+      'Rapports d\'erreur activés — redémarre l\'app pour appliquer.';
+
+  @override
+  String get settingsAccountErrorReportingDisabled =>
+      'Rapports d\'erreur désactivés — redémarre l\'app pour appliquer.';
+
+  @override
+  String get settingsAccountImport => 'Importer depuis une autre app';
+
+  @override
+  String get settingsAccountImportSubtitle => 'Strava, GPX, TCX';
+
+  @override
+  String get settingsAccountFullBackup => 'Sauvegarde complète';
+
+  @override
+  String get settingsAccountFullBackupSubtitle =>
+      'Chaque course avec son tracé GPS, plus les itinéraires, le profil et les préférences. Restaurable sur le web ou Android.';
+
+  @override
+  String get settingsAccountExportCsv => 'Exporter les courses en CSV';
+
+  @override
+  String get settingsAccountExportCsvSubtitle =>
+      'Date, distance, durée, allure, source — une ligne par course. Même format que l\'export RGPD du web.';
+
+  @override
+  String get settingsAccountRestoreTile => 'Restaurer depuis une sauvegarde';
+
+  @override
+  String get settingsAccountRestoreTileSubtitle =>
+      'Choisis une sauvegarde .zip enregistrée précédemment.';
+
+  @override
+  String get settingsAccountDeleteAccount => 'Supprimer le compte';
+
+  @override
+  String get settingsAccountDeleteAccountSubtitle =>
+      'Supprime définitivement les données serveur';
+
+  @override
+  String get integrationsTitle => 'Intégrations';
+
+  @override
+  String get integrationsJustNow => 'à l\'instant';
+
+  @override
+  String integrationsMinutesAgo(int minutes) {
+    return 'il y a $minutes min';
+  }
+
+  @override
+  String integrationsHoursAgo(int hours) {
+    return 'il y a $hours h';
+  }
+
+  @override
+  String integrationsDaysAgo(int days) {
+    return 'il y a $days j';
+  }
+
+  @override
+  String integrationsWeeksAgo(int weeks) {
+    return 'il y a $weeks sem';
+  }
+
+  @override
+  String integrationsCouldNotOpen(Object error) {
+    return 'Impossible d\'ouvrir : $error';
+  }
+
+  @override
+  String get integrationsStravaBrowserHint =>
+      'Termine la connexion Strava dans ton navigateur, puis reviens ici et tire pour actualiser.';
+
+  @override
+  String get integrationsStravaCancelled => 'Connexion Strava annulée.';
+
+  @override
+  String integrationsStravaSignInFailed(Object error) {
+    return 'Échec de la connexion Strava : $error';
+  }
+
+  @override
+  String get integrationsStravaCsrfMismatch =>
+      'Connexion Strava refusée : incohérence de l\'état CSRF. Réessaie.';
+
+  @override
+  String integrationsStravaConnectFailed(String error) {
+    return 'Échec de la connexion à Strava : $error';
+  }
+
+  @override
+  String get integrationsStravaConnected => 'Strava connecté.';
+
+  @override
+  String integrationsSyncResult(int imported, int skipped) {
+    return 'Synchronisé. $imported nouvelles, $skipped déjà présentes.';
+  }
+
+  @override
+  String integrationsSyncFailed(Object error) {
+    return 'Échec de la synchronisation : $error';
+  }
+
+  @override
+  String get integrationsStravaDisconnectTitle => 'Déconnecter Strava ?';
+
+  @override
+  String get integrationsStravaDisconnectBody =>
+      'Les activités futures ne seront plus synchronisées automatiquement. Les courses déjà importées restent dans ton historique.';
+
+  @override
+  String get integrationsCancel => 'Annuler';
+
+  @override
+  String get integrationsDisconnect => 'Déconnecter';
+
+  @override
+  String get integrationsStravaDisconnected => 'Strava déconnecté.';
+
+  @override
+  String integrationsDisconnectFailed(Object error) {
+    return 'Échec de la déconnexion : $error';
+  }
+
+  @override
+  String get integrationsParkrunTitle => 'Importer les résultats parkrun';
+
+  @override
+  String get integrationsParkrunBody =>
+      'Saisis ton numéro d\'athlète parkrun (p. ex. A123456). Nous récupérons ton historique d\'arrivées et ajoutons les nouveaux résultats à ta liste de courses.';
+
+  @override
+  String get integrationsParkrunFieldLabel => 'Numéro d\'athlète';
+
+  @override
+  String get integrationsImport => 'Importer';
+
+  @override
+  String get integrationsParkrunImporting => 'Import des résultats parkrun…';
+
+  @override
+  String integrationsParkrunImported(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count résultats parkrun importés.',
+      one: '$count résultat parkrun importé.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get integrationsParkrunNoneNew =>
+      'Aucun nouveau résultat parkrun depuis le dernier import.';
+
+  @override
+  String integrationsImportFailed(Object error) {
+    return 'Échec de l\'import : $error';
+  }
+
+  @override
+  String get integrationsStravaName => 'Strava';
+
+  @override
+  String get integrationsStravaConnectSubtitle =>
+      'Connecte-toi pour synchroniser automatiquement les activités';
+
+  @override
+  String get integrationsStravaWaitingFirstSync =>
+      'Connecté · en attente de la première synchro';
+
+  @override
+  String integrationsStravaLastSync(String time) {
+    return 'Connecté · dernière synchro $time';
+  }
+
+  @override
+  String get integrationsSyncNow => 'Synchroniser maintenant';
+
+  @override
+  String get integrationsParkrunName => 'parkrun';
+
+  @override
+  String get integrationsParkrunTileSubtitle =>
+      'Importer les résultats par numéro d\'athlète';
+
+  @override
+  String get integrationsSignInTitle => 'Connecte-toi pour relier des services';
+
+  @override
+  String get integrationsSignInSubtitle =>
+      'Strava + parkrun nécessitent un compte pour que les activités synchronisées arrivent dans ton historique.';
+
+  @override
+  String get integrationsHealthConnectTitle =>
+      'Écrire les courses dans Health Connect';
+
+  @override
+  String get integrationsHealthConnectSubtitle =>
+      'Envoie chaque course terminée à Health Connect pour qu\'elle apparaisse dans Google Fit, Samsung Health, Fitbit et d\'autres.';
+
+  @override
+  String get integrationsHealthConnectDenied =>
+      'Autorisation Health Connect non accordée — les courses ne seront pas écrites.';
+
+  @override
+  String integrationsHrPairFailed(Object error) {
+    return 'Échec de l\'appairage : $error';
+  }
+
+  @override
+  String get integrationsHrTitle => 'Capteur de fréquence cardiaque';
+
+  @override
+  String get integrationsHrChecking => 'Vérification…';
+
+  @override
+  String integrationsHrPaired(String name) {
+    return 'Appairé : $name';
+  }
+
+  @override
+  String get integrationsHrNotPaired =>
+      'Aucune ceinture appairée — touche pour scanner';
+
+  @override
+  String get integrationsHrForget => 'Oublier';
+
+  @override
+  String get integrationsHrScanTitle => 'Rechercher un capteur cardiaque';
+
+  @override
+  String get integrationsHrScanHint =>
+      'Réveille ta ceinture / sangle thoracique. Cela prend généralement 3 à 8 secondes.';
+
+  @override
+  String get integrationsHrScanEmpty =>
+      'Aucune ceinture trouvée. Assure-toi qu\'elle est à proximité et active.';
+
+  @override
+  String integrationsHrRssi(int rssi) {
+    return 'RSSI $rssi dBm';
+  }
+
+  @override
+  String get proTitle => 'Pro et soutien';
+
+  @override
+  String proCouldNotOpen(Object error) {
+    return 'Impossible d\'ouvrir : $error';
+  }
+
+  @override
+  String get proWelcome =>
+      'Bienvenue dans Pro ! Récupération de tes avantages…';
+
+  @override
+  String get proPurchaseFailed => 'Échec de l\'achat. Réessaie plus tard.';
+
+  @override
+  String get proRestoreNeedsSignIn =>
+      'La restauration nécessite que tu sois connecté avec RevenueCat configuré. Gère ton abonnement sur la page de mise à niveau web à la place.';
+
+  @override
+  String get proRestored => 'Ton abonnement Pro a été restauré.';
+
+  @override
+  String get proRestoreNone =>
+      'Aucun achat actif trouvé sur ce compte de store.';
+
+  @override
+  String get proRestoreFailed =>
+      'Échec de la restauration. Réessaie plus tard.';
+
+  @override
+  String get proRestoreUnavailable =>
+      'Restauration indisponible dans cette version.';
+
+  @override
+  String proSubscribeTitle(String price) {
+    return 'S\'abonner à Pro — $price/mois';
+  }
+
+  @override
+  String get proSubscribeSubtitleConfigured =>
+      'Coach IA illimité + traitement prioritaire. Renouvellement mensuel automatique jusqu\'à résiliation dans Réglages → Abonnements.';
+
+  @override
+  String get proSubscribeSubtitleWeb =>
+      'Ouvre le portail d\'abonnement dans ton navigateur. Renouvellement mensuel automatique jusqu\'à résiliation.';
+
+  @override
+  String get proRegionalNote =>
+      'Facturé en dollars américains. La disponibilité dépend de ton pays et de ton moyen de paiement — certaines régions ne peuvent pas être desservies par notre prestataire de paiement.';
+
+  @override
+  String get proRestorePurchases => 'Restaurer les achats';
+
+  @override
+  String get proRestorePurchasesSubtitle =>
+      'Relie les achats d\'une installation précédente ou d\'un autre appareil';
+
+  @override
+  String get proManageSubscription => 'Gérer l\'abonnement';
+
+  @override
+  String get proManageSubscriptionSubtitle =>
+      'Résilier, changer de formule ou mettre à jour le moyen de paiement';
+
+  @override
+  String get proSupport => 'Soutenir l\'app';
+
+  @override
+  String get proSupportSubtitle => 'Don ponctuel dans ton navigateur';
+
+  @override
+  String get licensesTitle => 'Licences';
+
+  @override
+  String get licensesVersion => 'Version';
+
+  @override
+  String get licensesOpenSource => 'Licences open source';
+
+  @override
+  String get licensesOpenSourceSubtitle => 'Paquets tiers intégrés à cette app';
+
+  @override
+  String get devicesTitle => 'Appareils';
+
+  @override
+  String get devicesRenameTitle => 'Renommer l\'appareil';
+
+  @override
+  String get devicesCancel => 'Annuler';
+
+  @override
+  String get devicesSave => 'Enregistrer';
+
+  @override
+  String devicesRenameFailed(Object error) {
+    return 'Échec du renommage : $error';
+  }
+
+  @override
+  String get devicesRemoveTitle => 'Supprimer l\'appareil ?';
+
+  @override
+  String get devicesRemoveBodyCurrent =>
+      'C\'est l\'appareil que tu utilises. Le supprimer efface les surcharges de préférences propres à l\'appareil ; l\'appareil reste connecté.';
+
+  @override
+  String get devicesRemoveBodyOther =>
+      'Supprime l\'entrée de l\'appareil et toutes les surcharges de préférences propres à l\'appareil. L\'appareil reste connecté jusqu\'à la prochaine ouverture de l\'app.';
+
+  @override
+  String get devicesRemove => 'Supprimer';
+
+  @override
+  String devicesRemoveFailed(Object error) {
+    return 'Échec de la suppression : $error';
+  }
+
+  @override
+  String devicesSaveFailed(Object error) {
+    return 'Échec de l\'enregistrement : $error';
+  }
+
+  @override
+  String get devicesLoadError => 'Impossible de charger les appareils.';
+
+  @override
+  String get devicesEmpty =>
+      'Aucun appareil pour l\'instant — ils sont enregistrés la première fois qu\'un appareil ouvre l\'app en étant connecté.';
+
+  @override
+  String get devicesThisDevice => 'Cet appareil';
+
+  @override
+  String devicesLastSeen(String time) {
+    return 'Vu pour la dernière fois $time';
+  }
+
+  @override
+  String devicesOverrideCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count surcharges',
+      one: '$count surcharge',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get devicesJustNow => 'à l\'instant';
+
+  @override
+  String devicesMinutesAgo(int minutes) {
+    return 'il y a $minutes min';
+  }
+
+  @override
+  String devicesHoursAgo(int hours) {
+    return 'il y a $hours h';
+  }
+
+  @override
+  String devicesDaysAgo(int days) {
+    return 'il y a $days j';
+  }
+
+  @override
+  String get devicesRename => 'Renommer';
+
+  @override
+  String get devicesEditOverrides => 'Modifier les surcharges…';
+
+  @override
+  String get devicesEveryKeySet =>
+      'Toutes les clés surchargeables sont déjà définies ; supprimes-en une avant d\'en ajouter une autre.';
+
+  @override
+  String get devicesOverridesSheetTitle => 'Surcharges par appareil';
+
+  @override
+  String get devicesOverridesSheetDesc =>
+      'Ces clés remplacent les réglages universels uniquement sur cet appareil.';
+
+  @override
+  String get devicesNoOverrides => 'Aucune surcharge sur cet appareil.';
+
+  @override
+  String get devicesAddOverride => 'Ajouter une surcharge';
+
+  @override
+  String get devicesPickKey => 'Choisir une clé';
+
+  @override
+  String get devicesEnterWholeNumber => 'Saisis un nombre entier.';
+
+  @override
+  String get devicesEnterNumber => 'Saisis un nombre (p. ex. 0,8).';
+
+  @override
+  String get devicesValue => 'Valeur';
+
+  @override
+  String get devicesBack => 'Retour';
+
+  @override
+  String get devicesAdd => 'Ajouter';
+
+  @override
+  String get devicesKeyPreferredUnitLabel => 'Unité préférée';
+
+  @override
+  String get devicesKeyPreferredUnitHint =>
+      'Unité de distance pour tous les affichages.';
+
+  @override
+  String get devicesKeyDefaultActivityLabel => 'Activité par défaut';
+
+  @override
+  String get devicesKeyDefaultActivityHint =>
+      'Activité présélectionnée sur l\'écran de démarrage.';
+
+  @override
+  String get devicesKeyMapStyleLabel => 'Style de carte';
+
+  @override
+  String get devicesKeyMapStyleHint => 'Style MapLibre pour la vue carte.';
+
+  @override
+  String get devicesKeyPaceFormatLabel => 'Format d\'allure';
+
+  @override
+  String get devicesKeyPaceFormatHint => 'Format d\'affichage de l\'allure.';
+
+  @override
+  String get devicesKeyVoiceFeedbackLabel => 'Retour vocal';
+
+  @override
+  String get devicesKeyVoiceFeedbackHint =>
+      'Énonce les annonces d\'allure / distance pendant une course.';
+
+  @override
+  String get devicesKeyVoiceIntervalLabel => 'Intervalle de retour vocal (km)';
+
+  @override
+  String get devicesKeyVoiceIntervalHint =>
+      'Distance entre les annonces vocales.';
+
+  @override
+  String get devicesKeyHapticLabel => 'Retour haptique';
+
+  @override
+  String get devicesKeyHapticHint =>
+      'Vibration aux changements de tour et de zone d\'allure.';
+
+  @override
+  String get devicesKeyKeepScreenOnLabel => 'Garder l\'écran allumé';
+
+  @override
+  String get devicesKeyKeepScreenOnHint =>
+      'Désactive l\'atténuation auto de l\'OS pendant l\'enregistrement.';
+
+  @override
+  String get gearTitle => 'Équipement';
+
+  @override
+  String get gearAddGear => 'Ajouter un équipement';
+
+  @override
+  String get gearDeleteTitle => 'Supprimer l\'équipement ?';
+
+  @override
+  String gearDeleteBody(String name) {
+    return 'Supprimer « $name » ? L\'historique de kilométrage des courses passées sera perdu. Mets-le plutôt à la retraite pour conserver les enregistrements.';
+  }
+
+  @override
+  String get gearCancel => 'Annuler';
+
+  @override
+  String get gearDelete => 'Supprimer';
+
+  @override
+  String get gearDeletedOffline =>
+      'Supprimé localement — sera synchronisé à la reconnexion.';
+
+  @override
+  String gearAttached(String name, int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$name associé à $count courses.',
+      one: '$name associé à $count course.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gearOfflineQueued(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Hors ligne — $count modifications en attente, affichage de l\'équipement en cache.',
+      one:
+          'Hors ligne — $count modification en attente, affichage de l\'équipement en cache.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearOfflineCached =>
+      'Hors ligne — affichage de l\'équipement en cache.';
+
+  @override
+  String get gearShoes => 'Chaussures';
+
+  @override
+  String get gearBikes => 'Vélos';
+
+  @override
+  String get gearRetired => 'RETIRÉ';
+
+  @override
+  String get gearEmptyShoes => 'Aucune chaussure pour l\'instant';
+
+  @override
+  String get gearEmptyBikes => 'Aucun vélo pour l\'instant';
+
+  @override
+  String get gearEmptySubtitle =>
+      'Ajoute une paire pour suivre le kilométrage et recevoir des rappels de remplacement.';
+
+  @override
+  String gearRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count courses',
+      one: '$count course',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get gearRetire => 'Mettre à la retraite';
+
+  @override
+  String get gearRestore => 'Réactiver';
+
+  @override
+  String get privacyZonesTitle => 'Zones de confidentialité';
+
+  @override
+  String get privacyZonesSaved => 'Zones de confidentialité enregistrées.';
+
+  @override
+  String privacyZonesSaveFailed(Object error) {
+    return 'Échec de l\'enregistrement : $error';
+  }
+
+  @override
+  String privacyZonesLocationUnavailable(Object error) {
+    return 'Position indisponible : $error';
+  }
+
+  @override
+  String get privacyZonesSave => 'Enregistrer';
+
+  @override
+  String get privacyZonesLocateMe => 'Me localiser';
+
+  @override
+  String get privacyZonesHint =>
+      'Touche la carte pour ajouter une zone. Les tracés sur les surfaces publiques voient leur début et leur fin masqués au-delà du rayon de la zone.';
+
+  @override
+  String get privacyZonesSearchHint => 'Rechercher des lieux…';
+
+  @override
+  String get privacyZonesRadius => 'Rayon';
+
+  @override
+  String privacyZonesRadiusMeters(int meters) {
+    return '$meters m';
+  }
+
+  @override
+  String privacyZonesCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count zones — touche un repère pour le supprimer.',
+      one: '$count zone — touche un repère pour la supprimer.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get privacyZonesClearAll => 'Tout effacer';
+
+  @override
+  String get prefsTitle => 'Préférences';
+
+  @override
+  String get prefsUnitMetric => 'km, m';
+
+  @override
+  String get prefsUnitImperial => 'mi, ft';
+
+  @override
+  String prefsSyncedSuffix(String base) {
+    return '$base · synchronisé avec tes autres appareils';
+  }
+
+  @override
+  String get prefsClear => 'Effacer';
+
+  @override
+  String get prefsCancel => 'Annuler';
+
+  @override
+  String get prefsSave => 'Enregistrer';
+
+  @override
+  String get prefsSplitInterval => 'Intervalle de split';
+
+  @override
+  String get prefsSplitIntervalDefault => 'Par défaut';
+
+  @override
+  String get prefsSplitIntervalDefaultSubtitle =>
+      'Par défaut (1 km en course, 5 km à vélo)';
+
+  @override
+  String get prefsLivePaceAlert => 'Alerte d\'allure en direct';
+
+  @override
+  String get prefsLivePaceAlertMin => 'min';
+
+  @override
+  String get prefsLivePaceAlertSec => 's';
+
+  @override
+  String get prefsLivePaceAlertOff =>
+      'Désactivé — définis une allure pour recevoir des alertes vocales pendant une course';
+
+  @override
+  String prefsLivePaceAlertOn(String pace, String paceLabel) {
+    return '$pace $paceLabel — alerte vocale pendant une course si l\'écart dépasse 30 s';
+  }
+
+  @override
+  String get prefsActivityRun => 'Course';
+
+  @override
+  String get prefsActivityWalk => 'Marche';
+
+  @override
+  String get prefsActivityHike => 'Randonnée';
+
+  @override
+  String get prefsActivityCycle => 'Vélo';
+
+  @override
+  String get prefsPaceFormat => 'Format d\'allure';
+
+  @override
+  String get prefsPaceFormatMinPerKm => 'Minutes par km';
+
+  @override
+  String get prefsPaceFormatMinPerMi => 'Minutes par mile';
+
+  @override
+  String get prefsPaceFormatKph => 'km/h';
+
+  @override
+  String get prefsPaceFormatMph => 'mph';
+
+  @override
+  String get prefsNotSet => 'Non défini';
+
+  @override
+  String prefsHrZonesSummary(String zones) {
+    return '$zones bpm';
+  }
+
+  @override
+  String prefsWeeklyGoalSummary(String distance, String unit) {
+    return '$distance $unit / semaine';
+  }
+
+  @override
+  String get prefsMapStyle => 'Style de carte';
+
+  @override
+  String get prefsMapStyleStreets => 'Rues';
+
+  @override
+  String get prefsMapStyleSatellite => 'Satellite';
+
+  @override
+  String get prefsMapStyleOutdoors => 'Plein air';
+
+  @override
+  String get prefsMapStyleDark => 'Sombre';
+
+  @override
+  String get prefsDefaultRunVisibility => 'Visibilité par défaut des courses';
+
+  @override
+  String get prefsCoachPersonality => 'Personnalité du coach';
+
+  @override
+  String get prefsCoachSupportive => 'Encourageant';
+
+  @override
+  String get prefsCoachDrillSergeant => 'Sergent instructeur';
+
+  @override
+  String get prefsCoachAnalytical => 'Analytique';
+
+  @override
+  String get prefsWeekStart => 'La semaine commence le';
+
+  @override
+  String get prefsWeekStartMonday => 'Lundi';
+
+  @override
+  String get prefsWeekStartSunday => 'Dimanche';
+
+  @override
+  String get prefsDefaultActivity => 'Activité par défaut';
+
+  @override
+  String get prefsDateOfBirth => 'Date de naissance';
+
+  @override
+  String get prefsRestingHr => 'Fréquence cardiaque au repos';
+
+  @override
+  String get prefsMaxHr => 'Fréquence cardiaque maximale';
+
+  @override
+  String get prefsMaxHrNotSet => 'Non défini — repli sur 208 − 0,7 × âge';
+
+  @override
+  String prefsHrBpm(int bpm) {
+    return '$bpm bpm';
+  }
+
+  @override
+  String get prefsHrZones => 'Zones de fréquence cardiaque';
+
+  @override
+  String get prefsHrZonesDialogTitle =>
+      'Zones de fréquence cardiaque (limites supérieures, bpm)';
+
+  @override
+  String get prefsWeeklyGoal => 'Objectif de kilométrage hebdomadaire';
+
+  @override
+  String get prefsSectionActivityRecording => 'Activité et enregistrement';
+
+  @override
+  String get prefsSectionTrainingDemographics =>
+      'Entraînement et données démographiques';
+
+  @override
+  String get prefsSectionPrivacySharing => 'Confidentialité et partage';
+
+  @override
+  String get prefsSectionAiCoach => 'Coach IA';
+
+  @override
+  String get prefsSignInToEdit =>
+      'Connecte-toi pour modifier les réglages de profil qui se synchronisent sur tous tes appareils.';
+
+  @override
+  String get prefsUseMiles => 'Utiliser les miles';
+
+  @override
+  String get prefsDarkMode => 'Mode sombre';
+
+  @override
+  String get prefsAudioCues => 'Repères audio';
+
+  @override
+  String get prefsAudioCuesSubtitle => 'Annonces vocales des splits';
+
+  @override
+  String get prefsMinimalVoiceCues => 'Repères vocaux minimaux';
+
+  @override
+  String get prefsMinimalVoiceCuesSubtitle =>
+      'Ignore les rappels bavards de mi-répétition et de dérive d\'allure';
+
+  @override
+  String get prefsKeepScreenOn => 'Garder l\'écran allumé';
+
+  @override
+  String get prefsKeepScreenOnSubtitle =>
+      'Maintient un wakelock pendant une course';
+
+  @override
+  String get prefsAdvancedGps => 'GPS avancé';
+
+  @override
+  String get prefsAdvancedGpsSubtitle =>
+      'Plus de précision, tracé plus détaillé, plus de batterie';
+
+  @override
+  String get prefsDefaultRunPrivacy => 'Confidentialité par défaut des courses';
+
+  @override
+  String get prefsStravaAutoShare => 'Partage auto Strava';
+
+  @override
+  String get prefsStravaAutoShareSubtitle =>
+      'Pousse automatiquement chaque nouvelle course vers Strava. Nécessite une intégration Strava connectée une fois disponible.';
+
+  @override
+  String get prefsDiscoverable => 'Apparaître dans la recherche par nom';
+
+  @override
+  String get prefsDiscoverableSubtitle =>
+      'Si désactivé, ton compte n\'apparaît pas lorsque d\'autres coureurs recherchent par nom d\'affichage. Tes courses publiques et ton profil restent accessibles à quiconque possède l\'URL.';
 }

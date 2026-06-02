@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/privacy_zones_screen.dart';
 import '../lib/settings_sync.dart';
@@ -34,7 +35,11 @@ Future<void> _pump(
   required SettingsSyncService sync,
 }) async {
   await tester.pumpWidget(
-    MaterialApp(home: PrivacyZonesScreen(settingsSync: sync)),
+    MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: PrivacyZonesScreen(settingsSync: sync),
+    ),
   );
   // Drain pending timers from flutter_map_cache + Dio so the
   // post-test "Timer is still pending" guard doesn\'t fire. The
@@ -87,6 +92,8 @@ void main() {
           ]);
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: PrivacyZonesScreen(settingsSync: s.sync, geocodingFetcher: stub),
         ),
       );
@@ -106,6 +113,8 @@ void main() {
       var calls = 0;
       await tester.pumpWidget(
         MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: PrivacyZonesScreen(
             settingsSync: s.sync,
             locateFn: () async {

@@ -45,10 +45,12 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   String _unitSubtitle() {
-    final base = widget.preferences.useMiles ? 'mi, ft' : 'km, m';
+    final l10n = AppLocalizations.of(context);
+    final base =
+        widget.preferences.useMiles ? l10n.prefsUnitImperial : l10n.prefsUnitMetric;
     final sync = widget.settingsSync;
     if (sync == null || !sync.synced) return base;
-    return '$base · synced to your other devices';
+    return l10n.prefsSyncedSuffix(base);
   }
 
   static String _splitIntervalLabel(int metres, DistanceUnit unit) {
@@ -66,18 +68,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editSplitInterval() async {
+    final l10n = AppLocalizations.of(context);
     final prefs = widget.preferences;
     final options = prefs.useMiles
         ? <int>[0, 805, 1609, 3219, 8047]
         : <int>[0, 500, 1000, 2000, 5000];
     final labels = prefs.useMiles
-        ? ['Default', '0.5 mi', '1 mi', '2 mi', '5 mi']
-        : ['Default', '500m', '1 km', '2 km', '5 km'];
+        ? [l10n.prefsSplitIntervalDefault, '0.5 mi', '1 mi', '2 mi', '5 mi']
+        : [l10n.prefsSplitIntervalDefault, '500m', '1 km', '2 km', '5 km'];
 
     final result = await showDialog<int?>(
       context: context,
       builder: (ctx) => SimpleDialog(
-        title: const Text('Split interval'),
+        title: Text(l10n.prefsSplitInterval),
         children: [
           for (var i = 0; i < options.length; i++)
             RadioListTile<int>(
@@ -96,6 +99,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editTargetPace() async {
+    final l10n = AppLocalizations.of(context);
     final prefs = widget.preferences;
     final current = prefs.targetPaceSecPerKm;
     final mCtl =
@@ -106,7 +110,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final result = await showDialog<int?>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Live pace alert'),
+        title: Text(l10n.prefsLivePaceAlert),
         content: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -115,7 +119,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               child: TextField(
                 controller: mCtl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'min'),
+                decoration:
+                    InputDecoration(labelText: l10n.prefsLivePaceAlertMin),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -128,7 +133,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               child: TextField(
                 controller: sCtl,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'sec'),
+                decoration:
+                    InputDecoration(labelText: l10n.prefsLivePaceAlertSec),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -137,11 +143,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, 0),
-            child: const Text('Clear'),
+            child: Text(l10n.prefsClear),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel'),
+            child: Text(l10n.prefsCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -149,7 +155,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               final s = int.tryParse(sCtl.text) ?? 0;
               Navigator.pop(ctx, m * 60 + s);
             },
-            child: const Text('Save'),
+            child: Text(l10n.prefsSave),
           ),
         ],
       ),
@@ -162,55 +168,112 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
       .join(' ');
 
-  static String _activityTypeLabel(String raw) {
+  static String _activityTypeLabel(AppLocalizations l10n, String raw) {
     switch (raw) {
       case 'run':
-        return 'Run';
+        return l10n.prefsActivityRun;
       case 'walk':
-        return 'Walk';
+        return l10n.prefsActivityWalk;
       case 'hike':
-        return 'Hike';
+        return l10n.prefsActivityHike;
       case 'cycle':
-        return 'Cycle';
+        return l10n.prefsActivityCycle;
       default:
         return _toTitle(raw);
     }
   }
 
-  static String _paceFormatLabel(String raw) {
+  static String _paceFormatLabel(AppLocalizations l10n, String raw) {
     switch (raw) {
       case 'min_per_km':
-        return 'Minutes per km';
+        return l10n.prefsPaceFormatMinPerKm;
       case 'min_per_mi':
-        return 'Minutes per mile';
+        return l10n.prefsPaceFormatMinPerMi;
       case 'kph':
-        return 'km/h';
+        return l10n.prefsPaceFormatKph;
       case 'mph':
-        return 'mph';
+        return l10n.prefsPaceFormatMph;
+      default:
+        return _toTitle(raw);
+    }
+  }
+
+  static String _mapStyleLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case 'streets':
+        return l10n.prefsMapStyleStreets;
+      case 'satellite':
+        return l10n.prefsMapStyleSatellite;
+      case 'outdoors':
+        return l10n.prefsMapStyleOutdoors;
+      case 'dark':
+        return l10n.prefsMapStyleDark;
+      default:
+        return _toTitle(raw);
+    }
+  }
+
+  static String _weekStartLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case 'monday':
+        return l10n.prefsWeekStartMonday;
+      case 'sunday':
+        return l10n.prefsWeekStartSunday;
+      default:
+        return _toTitle(raw);
+    }
+  }
+
+  static String _privacyLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case 'public':
+        return l10n.privacyPublicTitle;
+      case 'followers':
+        return l10n.privacyFollowersTitle;
+      case 'private':
+        return l10n.privacyPrivateTitle;
+      default:
+        return _toTitle(raw);
+    }
+  }
+
+  static String _coachLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case 'supportive':
+        return l10n.prefsCoachSupportive;
+      case 'drill_sergeant':
+        return l10n.prefsCoachDrillSergeant;
+      case 'analytical':
+        return l10n.prefsCoachAnalytical;
       default:
         return _toTitle(raw);
     }
   }
 
   String _hrZonesSummary() {
+    final l10n = AppLocalizations.of(context);
     final raw = _bagValue<Map>(SettingsKeys.hrZones);
-    if (raw == null) return 'Not set';
+    if (raw == null) return l10n.prefsNotSet;
     final vals = ['z1', 'z2', 'z3', 'z4', 'z5']
         .map((k) => raw[k])
         .whereType<num>()
         .map((n) => n.round().toString())
         .toList();
-    if (vals.isEmpty) return 'Not set';
-    return '${vals.join(' · ')} bpm';
+    if (vals.isEmpty) return l10n.prefsNotSet;
+    return l10n.prefsHrZonesSummary(vals.join(' · '));
   }
 
   String _weeklyGoalSummary() {
+    final l10n = AppLocalizations.of(context);
     final metres =
         _bagValue<num>(SettingsKeys.weeklyMileageGoalMetres)?.toDouble();
-    if (metres == null) return 'Not set';
+    if (metres == null) return l10n.prefsNotSet;
     final useMiles = widget.preferences.useMiles;
     final display = useMiles ? metres / 1609.344 : metres / 1000;
-    return '${display.toStringAsFixed(display < 10 ? 1 : 0)} ${useMiles ? 'mi' : 'km'} / week';
+    return l10n.prefsWeeklyGoalSummary(
+      display.toStringAsFixed(display < 10 ? 1 : 0),
+      useMiles ? 'mi' : 'km',
+    );
   }
 
   /// The bag-backed tiles light up as soon as the [SettingsSyncService]
@@ -259,6 +322,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     int maxValue = 1 << 30,
     bool allowClear = true,
   }) {
+    final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(
       text: current == null ? '' : '$current',
     );
@@ -276,11 +340,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
           if (allowClear)
             TextButton(
               onPressed: () => Navigator.pop(ctx, -1),
-              child: const Text('Clear'),
+              child: Text(l10n.prefsClear),
             ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel'),
+            child: Text(l10n.prefsCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -291,7 +355,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 Navigator.pop(ctx, v);
               }
             },
-            child: const Text('Save'),
+            child: Text(l10n.prefsSave),
           ),
         ],
       ),
@@ -306,6 +370,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     double maxValue = double.infinity,
     bool allowClear = true,
   }) {
+    final l10n = AppLocalizations.of(context);
     final controller = TextEditingController(
       text: current == null ? '' : '$current',
     );
@@ -323,11 +388,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
           if (allowClear)
             TextButton(
               onPressed: () => Navigator.pop(ctx, -1.0),
-              child: const Text('Clear'),
+              child: Text(l10n.prefsClear),
             ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel'),
+            child: Text(l10n.prefsCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -338,7 +403,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 Navigator.pop(ctx, v);
               }
             },
-            child: const Text('Save'),
+            child: Text(l10n.prefsSave),
           ),
         ],
       ),
@@ -346,10 +411,16 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editDefaultActivityType() async {
+    final l10n = AppLocalizations.of(context);
     const opts = ['run', 'walk', 'hike', 'cycle'];
-    const labels = ['Run', 'Walk', 'Hike', 'Cycle'];
+    final labels = [
+      l10n.prefsActivityRun,
+      l10n.prefsActivityWalk,
+      l10n.prefsActivityHike,
+      l10n.prefsActivityCycle,
+    ];
     final picked = await _pickRadio<String>(
-      title: 'Default activity',
+      title: l10n.prefsDefaultActivity,
       options: opts,
       labels: labels,
       current: _bagValue<String>(SettingsKeys.defaultActivityType) ?? 'run',
@@ -390,10 +461,16 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editMapStyle() async {
+    final l10n = AppLocalizations.of(context);
     const opts = ['streets', 'satellite', 'outdoors', 'dark'];
-    const labels = ['Streets', 'Satellite', 'Outdoors', 'Dark'];
+    final labels = [
+      l10n.prefsMapStyleStreets,
+      l10n.prefsMapStyleSatellite,
+      l10n.prefsMapStyleOutdoors,
+      l10n.prefsMapStyleDark,
+    ];
     final picked = await _pickRadio<String>(
-      title: 'Map style',
+      title: l10n.prefsMapStyle,
       options: opts,
       labels: labels,
       current: _bagValue<String>(SettingsKeys.mapStyle) ?? 'streets',
@@ -402,10 +479,16 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editPaceFormat() async {
+    final l10n = AppLocalizations.of(context);
     const opts = ['min_per_km', 'min_per_mi', 'kph', 'mph'];
-    const labels = ['Minutes per km', 'Minutes per mile', 'km/h', 'mph'];
+    final labels = [
+      l10n.prefsPaceFormatMinPerKm,
+      l10n.prefsPaceFormatMinPerMi,
+      l10n.prefsPaceFormatKph,
+      l10n.prefsPaceFormatMph,
+    ];
     final picked = await _pickRadio<String>(
-      title: 'Pace format',
+      title: l10n.prefsPaceFormat,
       options: opts,
       labels: labels,
       current:
@@ -417,10 +500,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editPrivacyDefault() async {
+    final l10n = AppLocalizations.of(context);
     const opts = ['public', 'followers', 'private'];
-    const labels = ['Public', 'Followers', 'Private'];
+    final labels = [
+      l10n.privacyPublicTitle,
+      l10n.privacyFollowersTitle,
+      l10n.privacyPrivateTitle,
+    ];
     final picked = await _pickRadio<String>(
-      title: 'Default run visibility',
+      title: l10n.prefsDefaultRunVisibility,
       options: opts,
       labels: labels,
       current:
@@ -432,10 +520,15 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editCoachPersonality() async {
+    final l10n = AppLocalizations.of(context);
     const opts = ['supportive', 'drill_sergeant', 'analytical'];
-    const labels = ['Supportive', 'Drill sergeant', 'Analytical'];
+    final labels = [
+      l10n.prefsCoachSupportive,
+      l10n.prefsCoachDrillSergeant,
+      l10n.prefsCoachAnalytical,
+    ];
     final picked = await _pickRadio<String>(
-      title: 'Coach personality',
+      title: l10n.prefsCoachPersonality,
       options: opts,
       labels: labels,
       current:
@@ -447,10 +540,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editWeekStartDay() async {
+    final l10n = AppLocalizations.of(context);
     const opts = ['monday', 'sunday'];
-    const labels = ['Monday', 'Sunday'];
+    final labels = [l10n.prefsWeekStartMonday, l10n.prefsWeekStartSunday];
     final picked = await _pickRadio<String>(
-      title: 'Week starts on',
+      title: l10n.prefsWeekStart,
       options: opts,
       labels: labels,
       current: _bagValue<String>(SettingsKeys.weekStartDay) ?? 'monday',
@@ -480,7 +574,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
       initialDate: current ?? DateTime(now.year - 30, now.month, now.day),
       firstDate: DateTime(now.year - 120),
       lastDate: now,
-      helpText: 'Date of birth',
+      helpText: AppLocalizations.of(context).prefsDateOfBirth,
     );
     if (picked == null) return;
     final iso =
@@ -490,7 +584,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   Future<void> _editRestingHr() async {
     final picked = await _pickInt(
-      title: 'Resting heart rate',
+      title: AppLocalizations.of(context).prefsRestingHr,
       current: _bagValue<num>(SettingsKeys.restingHrBpm)?.round(),
       suffix: 'bpm',
       minValue: 20,
@@ -505,7 +599,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   Future<void> _editMaxHr() async {
     final picked = await _pickInt(
-      title: 'Max heart rate',
+      title: AppLocalizations.of(context).prefsMaxHr,
       current: _bagValue<num>(SettingsKeys.maxHrBpm)?.round(),
       suffix: 'bpm',
       minValue: 80,
@@ -519,6 +613,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   }
 
   Future<void> _editHrZones() async {
+    final l10n = AppLocalizations.of(context);
     final current = _bagValue<Map>(SettingsKeys.hrZones);
     int? z(String k) {
       final v = current?[k];
@@ -532,7 +627,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final result = await showDialog<Map<String, int>?>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Heart-rate zones (upper bounds, bpm)'),
+        title: Text(l10n.prefsHrZonesDialogTitle),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -551,11 +646,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, <String, int>{}),
-            child: const Text('Clear'),
+            child: Text(l10n.prefsClear),
           ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, null),
-            child: const Text('Cancel'),
+            child: Text(l10n.prefsCancel),
           ),
           FilledButton(
             onPressed: () {
@@ -566,7 +661,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               }
               Navigator.pop(ctx, out);
             },
-            child: const Text('Save'),
+            child: Text(l10n.prefsSave),
           ),
         ],
       ),
@@ -586,7 +681,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
         ? null
         : (useMiles ? current / 1609.344 : current / 1000);
     final picked = await _pickDouble(
-      title: 'Weekly mileage goal',
+      title: AppLocalizations.of(context).prefsWeeklyGoal,
       current: currentDisplay,
       suffix: useMiles ? 'mi' : 'km',
       minValue: 0.1,
@@ -641,13 +736,14 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final prefs = widget.preferences;
     final offlineNotice = widget.settingsSync?.synced == true &&
             widget.settingsSync?.service?.isServerHydrated == false
         ? widget.settingsSync?.lastError
         : null;
     return Scaffold(
-      appBar: AppBar(title: const Text('Preferences')),
+      appBar: AppBar(title: Text(l10n.prefsTitle)),
       body: SafeArea(
         child: ListView(
           children: [
@@ -685,7 +781,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onTap: _editLanguage,
             ),
             SwitchListTile(
-              title: const Text('Use miles'),
+              title: Text(l10n.prefsUseMiles),
               subtitle: Text(_unitSubtitle()),
               value: prefs.useMiles,
               onChanged: (v) async {
@@ -695,8 +791,9 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               },
             ),
             ListTile(
-              title: const Text('Pace format'),
+              title: Text(l10n.prefsPaceFormat),
               subtitle: Text(_paceFormatLabel(
+                l10n,
                 _bagValue<String>(SettingsKeys.unitsPaceFormat) ?? 'min_per_km',
               )),
               trailing: const Icon(Icons.chevron_right),
@@ -704,16 +801,17 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onTap: _editPaceFormat,
             ),
             ListTile(
-              title: const Text('Map style'),
+              title: Text(l10n.prefsMapStyle),
               subtitle: Text(
-                _toTitle(_bagValue<String>(SettingsKeys.mapStyle) ?? 'streets'),
+                _mapStyleLabel(
+                    l10n, _bagValue<String>(SettingsKeys.mapStyle) ?? 'streets'),
               ),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editMapStyle,
             ),
             SwitchListTile(
-              title: const Text('Dark mode'),
+              title: Text(l10n.prefsDarkMode),
               value: _darkMode,
               onChanged: (v) {
                 final mode = v ? ThemeMode.dark : ThemeMode.light;
@@ -723,10 +821,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               },
             ),
 
-            _sectionLabel('Activity & recording'),
+            _sectionLabel(l10n.prefsSectionActivityRecording),
             ListTile(
-              title: const Text('Default activity'),
+              title: Text(l10n.prefsDefaultActivity),
               subtitle: Text(_activityTypeLabel(
+                l10n,
                 _bagValue<String>(SettingsKeys.defaultActivityType) ?? 'run',
               )),
               trailing: const Icon(Icons.chevron_right),
@@ -734,8 +833,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onTap: _editDefaultActivityType,
             ),
             SwitchListTile(
-              title: const Text('Audio cues'),
-              subtitle: const Text('Spoken split announcements'),
+              title: Text(l10n.prefsAudioCues),
+              subtitle: Text(l10n.prefsAudioCuesSubtitle),
               value: prefs.audioCues,
               onChanged: (v) async {
                 await prefs.setAudioCues(v);
@@ -744,10 +843,8 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
             ),
             if (prefs.audioCues)
               SwitchListTile(
-                title: const Text('Minimal voice cues'),
-                subtitle: const Text(
-                  'Skip the chatty mid-rep and pace-drift nudges',
-                ),
+                title: Text(l10n.prefsMinimalVoiceCues),
+                subtitle: Text(l10n.prefsMinimalVoiceCuesSubtitle),
                 value: prefs.voiceFeedbackVerbosity == 'minimal',
                 onChanged: (v) async {
                   final value = v ? 'minimal' : 'full';
@@ -758,30 +855,32 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                 },
               ),
             ListTile(
-              title: const Text('Split interval'),
+              title: Text(l10n.prefsSplitInterval),
               subtitle: Text(
                 prefs.splitIntervalMetres > 0
                     ? _splitIntervalLabel(prefs.splitIntervalMetres, prefs.unit)
-                    : 'Default (1 km for running, 5 km for cycling)',
+                    : l10n.prefsSplitIntervalDefaultSubtitle,
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _editSplitInterval,
             ),
             ListTile(
-              title: const Text('Live pace alert'),
+              title: Text(l10n.prefsLivePaceAlert),
               subtitle: Text(
                 prefs.targetPaceSecPerKm > 0
-                    ? '${UnitFormat.pace(prefs.targetPaceSecPerKm.toDouble(), prefs.unit)} '
-                        '${UnitFormat.paceLabel(prefs.unit)} '
-                        '— spoken alert during a run when 30s+ off'
-                    : 'Off — set a pace to get spoken alerts during a run',
+                    ? l10n.prefsLivePaceAlertOn(
+                        UnitFormat.pace(
+                            prefs.targetPaceSecPerKm.toDouble(), prefs.unit),
+                        UnitFormat.paceLabel(prefs.unit),
+                      )
+                    : l10n.prefsLivePaceAlertOff,
               ),
               trailing: const Icon(Icons.chevron_right),
               onTap: _editTargetPace,
             ),
             SwitchListTile(
-              title: const Text('Keep screen on'),
-              subtitle: const Text('Hold a wakelock during a run'),
+              title: Text(l10n.prefsKeepScreenOn),
+              subtitle: Text(l10n.prefsKeepScreenOnSubtitle),
               value: prefs.keepScreenOn,
               onChanged: (v) async {
                 await prefs.setKeepScreenOn(v);
@@ -789,71 +888,71 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               },
             ),
             SwitchListTile(
-              title: const Text('Advanced GPS'),
-              subtitle: const Text(
-                'Higher accuracy, finer track detail, more battery usage',
-              ),
+              title: Text(l10n.prefsAdvancedGps),
+              subtitle: Text(l10n.prefsAdvancedGpsSubtitle),
               value: prefs.advancedGps,
               onChanged: prefs.setAdvancedGps,
             ),
-            _sectionLabel('Training & demographics'),
+            _sectionLabel(l10n.prefsSectionTrainingDemographics),
             if (!_bagReady)
-              const Padding(
-                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                 child: Text(
-                  'Sign in to edit profile-level settings that sync across devices.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey),
+                  l10n.prefsSignInToEdit,
+                  style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ),
             ListTile(
-              title: const Text('Date of birth'),
+              title: Text(l10n.prefsDateOfBirth),
               subtitle: Text(
-                _bagValue<String>(SettingsKeys.dateOfBirth) ?? 'Not set',
+                _bagValue<String>(SettingsKeys.dateOfBirth) ?? l10n.prefsNotSet,
               ),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editDateOfBirth,
             ),
             ListTile(
-              title: const Text('Resting heart rate'),
+              title: Text(l10n.prefsRestingHr),
               subtitle: Text(
                 _bagValue<num>(SettingsKeys.restingHrBpm) != null
-                    ? '${_bagValue<num>(SettingsKeys.restingHrBpm)!.round()} bpm'
-                    : 'Not set',
+                    ? l10n.prefsHrBpm(
+                        _bagValue<num>(SettingsKeys.restingHrBpm)!.round())
+                    : l10n.prefsNotSet,
               ),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editRestingHr,
             ),
             ListTile(
-              title: const Text('Max heart rate'),
+              title: Text(l10n.prefsMaxHr),
               subtitle: Text(
                 _bagValue<num>(SettingsKeys.maxHrBpm) != null
-                    ? '${_bagValue<num>(SettingsKeys.maxHrBpm)!.round()} bpm'
-                    : 'Not set — falls back to 208 − 0.7 × age',
+                    ? l10n.prefsHrBpm(
+                        _bagValue<num>(SettingsKeys.maxHrBpm)!.round())
+                    : l10n.prefsMaxHrNotSet,
               ),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editMaxHr,
             ),
             ListTile(
-              title: const Text('Heart-rate zones'),
+              title: Text(l10n.prefsHrZones),
               subtitle: Text(_hrZonesSummary()),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editHrZones,
             ),
             ListTile(
-              title: const Text('Weekly mileage goal'),
+              title: Text(l10n.prefsWeeklyGoal),
               subtitle: Text(_weeklyGoalSummary()),
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editWeeklyGoal,
             ),
             ListTile(
-              title: const Text('Week starts on'),
+              title: Text(l10n.prefsWeekStart),
               subtitle: Text(
-                _toTitle(
+                _weekStartLabel(l10n,
                     _bagValue<String>(SettingsKeys.weekStartDay) ?? 'monday'),
               ),
               trailing: const Icon(Icons.chevron_right),
@@ -861,10 +960,11 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onTap: _editWeekStartDay,
             ),
 
-            _sectionLabel('Privacy & sharing'),
+            _sectionLabel(l10n.prefsSectionPrivacySharing),
             ListTile(
-              title: const Text('Default run privacy'),
-              subtitle: Text(_toTitle(
+              title: Text(l10n.prefsDefaultRunPrivacy),
+              subtitle: Text(_privacyLabel(
+                l10n,
                 _bagValue<String>(SettingsKeys.privacyDefault) ?? 'followers',
               )),
               trailing: const Icon(Icons.chevron_right),
@@ -872,31 +972,25 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               onTap: _editPrivacyDefault,
             ),
             SwitchListTile(
-              title: const Text('Strava auto-share'),
-              subtitle: const Text(
-                'Auto-push every new run to Strava. Requires a connected Strava '
-                'integration once that lands.',
-              ),
+              title: Text(l10n.prefsStravaAutoShare),
+              subtitle: Text(l10n.prefsStravaAutoShareSubtitle),
               value: _bagValue<bool>(SettingsKeys.stravaAutoShare) ?? false,
               onChanged: _bagReady ? (_) => _editStravaAutoShare() : null,
             ),
             SwitchListTile(
-              title: const Text('Show me in name search'),
-              subtitle: const Text(
-                "When off, your account won't appear when other runners "
-                'search by display name. Your public runs and profile '
-                'remain reachable to anyone with the URL.',
-              ),
+              title: Text(l10n.prefsDiscoverable),
+              subtitle: Text(l10n.prefsDiscoverableSubtitle),
               value:
                   _bagValue<bool>(SettingsKeys.discoverableInSearch) ?? true,
               onChanged:
                   _bagReady ? (_) => _editDiscoverableInSearch() : null,
             ),
 
-            _sectionLabel('AI coach'),
+            _sectionLabel(l10n.prefsSectionAiCoach),
             ListTile(
-              title: const Text('Coach personality'),
-              subtitle: Text(_toTitle(
+              title: Text(l10n.prefsCoachPersonality),
+              subtitle: Text(_coachLabel(
+                l10n,
                 _bagValue<String>(SettingsKeys.coachPersonality) ??
                     'supportive',
               )),

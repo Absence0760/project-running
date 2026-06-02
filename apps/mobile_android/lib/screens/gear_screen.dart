@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../gear_backfill.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -168,8 +169,7 @@ class _GearScreenState extends State<GearScreen> {
     if (!mounted || attached == null || attached == 0) return;
     showTopBanner(
       context,
-      'Attached ${result.name} to $attached '
-      'run${attached == 1 ? '' : 's'}.',
+      AppLocalizations.of(context).gearAttached(result.name, attached),
     );
     await _refresh();
   }
@@ -184,23 +184,21 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Future<void> _delete(Map<String, dynamic> row) async {
+    final l10n = AppLocalizations.of(context);
     final ok = await showDialog<bool>(
           context: context,
           builder: (_) => AlertDialog(
-            title: const Text('Delete gear?'),
-            content: Text(
-              'Delete "${row['name']}"? Mileage history on past runs will '
-              'be lost. Retire instead to keep the records.',
-            ),
+            title: Text(l10n.gearDeleteTitle),
+            content: Text(l10n.gearDeleteBody(row['name'] as String)),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(context, false),
-                child: const Text('Cancel'),
+                child: Text(l10n.gearCancel),
               ),
               TextButton(
                 onPressed: () => Navigator.pop(context, true),
                 style: TextButton.styleFrom(foregroundColor: Colors.red),
-                child: const Text('Delete'),
+                child: Text(l10n.gearDelete),
               ),
             ],
           ),
@@ -210,10 +208,7 @@ class _GearScreenState extends State<GearScreen> {
     await widget.store.deleteLocal(row['id'] as String);
     await _maybeSync();
     if (mounted && !_isOnline) {
-      showTopBanner(
-        context,
-        'Deleted locally — will sync when you reconnect.',
-      );
+      showTopBanner(context, l10n.gearDeletedOffline);
     }
   }
 
@@ -236,6 +231,7 @@ class _GearScreenState extends State<GearScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final pendingCount = widget.store.hasPending
         ? widget.store.rows.length -
@@ -245,10 +241,10 @@ class _GearScreenState extends State<GearScreen> {
         : 0;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Gear'),
+        title: Text(l10n.gearTitle),
         actions: [
           IconButton(
-            tooltip: 'Add gear',
+            tooltip: l10n.gearAddGear,
             icon: const Icon(Icons.add),
             onPressed: _refreshing ? null : _create,
           ),
@@ -267,9 +263,9 @@ class _GearScreenState extends State<GearScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      widget.store.hasPending
-                          ? 'Offline — ${pendingCount > 0 ? "$pendingCount edit${pendingCount == 1 ? "" : "s"} queued, " : ""}showing cached gear.'
-                          : 'Offline — showing cached gear.',
+                      widget.store.hasPending && pendingCount > 0
+                          ? l10n.gearOfflineQueued(pendingCount)
+                          : l10n.gearOfflineCached,
                       style: theme.textTheme.bodySmall,
                     ),
                   ),
@@ -279,16 +275,16 @@ class _GearScreenState extends State<GearScreen> {
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
             child: SegmentedButton<String>(
-              segments: const [
+              segments: [
                 ButtonSegment(
                   value: 'shoe',
-                  label: Text('Shoes'),
-                  icon: Icon(Icons.directions_run),
+                  label: Text(l10n.gearShoes),
+                  icon: const Icon(Icons.directions_run),
                 ),
                 ButtonSegment(
                   value: 'bike',
-                  label: Text('Bikes'),
-                  icon: Icon(Icons.directions_bike),
+                  label: Text(l10n.gearBikes),
+                  icon: const Icon(Icons.directions_bike),
                 ),
               ],
               selected: {_activeKind},
@@ -307,7 +303,7 @@ class _GearScreenState extends State<GearScreen> {
                         if (_retired.isNotEmpty) ...[
                           const SizedBox(height: 16),
                           Text(
-                            'RETIRED',
+                            l10n.gearRetired,
                             style: theme.textTheme.labelSmall?.copyWith(
                               color: theme.colorScheme.outline,
                               letterSpacing: 1.1,
@@ -327,6 +323,7 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Widget _emptyState(ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     return ListView(
       children: [
         SizedBox(
@@ -344,12 +341,14 @@ class _GearScreenState extends State<GearScreen> {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'No ${_activeKind == 'shoe' ? 'shoes' : 'bikes'} yet',
+                  _activeKind == 'shoe'
+                      ? l10n.gearEmptyShoes
+                      : l10n.gearEmptyBikes,
                   style: theme.textTheme.titleMedium,
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Add a pair to track mileage and get retirement reminders.',
+                  l10n.gearEmptySubtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.outline,
                   ),
@@ -357,7 +356,7 @@ class _GearScreenState extends State<GearScreen> {
                 const SizedBox(height: 16),
                 FilledButton.icon(
                   icon: const Icon(Icons.add),
-                  label: const Text('Add gear'),
+                  label: Text(l10n.gearAddGear),
                   onPressed: _create,
                 ),
               ],
@@ -369,6 +368,7 @@ class _GearScreenState extends State<GearScreen> {
   }
 
   Widget _gearTile(Map<String, dynamic> row, ThemeData theme) {
+    final l10n = AppLocalizations.of(context);
     final prog = _progress(row);
     final name = row['name'] as String;
     final brand = row['brand'] as String?;
@@ -409,7 +409,7 @@ class _GearScreenState extends State<GearScreen> {
                       children: [
                         Text(prog.label, style: theme.textTheme.bodySmall),
                         Text(
-                          '$runCount run${runCount == 1 ? '' : 's'}',
+                          l10n.gearRunCount(runCount),
                           style: theme.textTheme.bodySmall?.copyWith(
                               color: theme.colorScheme.outline),
                         ),
@@ -426,10 +426,11 @@ class _GearScreenState extends State<GearScreen> {
                 itemBuilder: (_) => [
                   PopupMenuItem(
                     value: 'retire',
-                    child:
-                        Text(row['retired_at'] == null ? 'Retire' : 'Restore'),
+                    child: Text(row['retired_at'] == null
+                        ? l10n.gearRetire
+                        : l10n.gearRestore),
                   ),
-                  const PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  PopupMenuItem(value: 'delete', child: Text(l10n.gearDelete)),
                 ],
               ),
             ],

@@ -3,6 +3,7 @@ import 'package:share_plus/share_plus.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../revenuecat.dart';
 import '../widgets/top_banner.dart';
 
@@ -22,7 +23,7 @@ class SettingsProScreen extends StatelessWidget {
         await Share.share(url);
       } catch (e) {
         if (!context.mounted) return;
-        showTopBanner(context, 'Could not open: $e');
+        showTopBanner(context, AppLocalizations.of(context).proCouldNotOpen(e));
       }
     }
   }
@@ -36,14 +37,15 @@ class SettingsProScreen extends StatelessWidget {
     }
     final r = await startProCheckout(userId);
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context);
     switch (r) {
       case PurchaseResult.purchased:
-        showTopBanner(context, 'Welcome to Pro! Pulling your benefits…');
+        showTopBanner(context, l10n.proWelcome);
         break;
       case PurchaseResult.cancelled:
         break;
       case PurchaseResult.failed:
-        showTopBanner(context, 'Purchase failed. Try again later.');
+        showTopBanner(context, l10n.proPurchaseFailed);
         break;
       case PurchaseResult.notConfigured:
         await _openExternal(context, 'https://threkir.com/settings/upgrade');
@@ -56,27 +58,24 @@ class SettingsProScreen extends StatelessWidget {
     final userId = supabase.auth.currentUser?.id;
     if (!isRevenueCatConfigured() || userId == null) {
       if (!context.mounted) return;
-      showTopBanner(
-        context,
-        'Restore needs you to be signed in with RevenueCat configured. '
-        'Manage your subscription on the web upgrade page instead.',
-      );
+      showTopBanner(context, AppLocalizations.of(context).proRestoreNeedsSignIn);
       return;
     }
     final r = await restorePurchases(userId);
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context);
     switch (r) {
       case PurchaseResult.purchased:
-        showTopBanner(context, 'Restored your Pro subscription.');
+        showTopBanner(context, l10n.proRestored);
         break;
       case PurchaseResult.cancelled:
-        showTopBanner(context, 'No active purchases found on this store account.');
+        showTopBanner(context, l10n.proRestoreNone);
         break;
       case PurchaseResult.failed:
-        showTopBanner(context, 'Restore failed. Try again later.');
+        showTopBanner(context, l10n.proRestoreFailed);
         break;
       case PurchaseResult.notConfigured:
-        showTopBanner(context, 'Restore unavailable in this build.');
+        showTopBanner(context, l10n.proRestoreUnavailable);
         break;
     }
   }
@@ -94,19 +93,20 @@ class SettingsProScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final rcConfigured = isRevenueCatConfigured();
     return Scaffold(
-      appBar: AppBar(title: const Text('Pro & support')),
+      appBar: AppBar(title: Text(l10n.proTitle)),
       body: SafeArea(
         child: ListView(
           children: [
             ListTile(
               leading: const Icon(Icons.workspace_premium_outlined),
-              title: const Text('Subscribe to Pro — \$9.99/month'),
+              title: Text(l10n.proSubscribeTitle('\$9.99')),
               subtitle: Text(
                 rcConfigured
-                    ? 'Unlimited AI coach + priority processing. Auto-renews monthly until cancelled in Settings → Subscriptions.'
-                    : 'Opens the subscription portal in your browser. Auto-renews monthly until cancelled.',
+                    ? l10n.proSubscribeSubtitleConfigured
+                    : l10n.proSubscribeSubtitleWeb,
               ),
               trailing: Icon(
                 rcConfigured ? Icons.chevron_right : Icons.open_in_new,
@@ -123,9 +123,7 @@ class SettingsProScreen extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(72, 0, 16, 8),
               child: Text(
-                'Billed in US dollars. Availability depends on your country '
-                'and payment method — some regions can\'t be served by our '
-                'payment processor.',
+                l10n.proRegionalNote,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
@@ -133,26 +131,22 @@ class SettingsProScreen extends StatelessWidget {
             ),
             ListTile(
               leading: const Icon(Icons.restore),
-              title: const Text('Restore purchases'),
-              subtitle: const Text(
-                'Re-link purchases from a previous install or another device',
-              ),
+              title: Text(l10n.proRestorePurchases),
+              subtitle: Text(l10n.proRestorePurchasesSubtitle),
               trailing: const Icon(Icons.chevron_right, size: 18),
               onTap: () => _restorePurchases(context),
             ),
             ListTile(
               leading: const Icon(Icons.settings_outlined),
-              title: const Text('Manage subscription'),
-              subtitle: const Text(
-                'Cancel, change plan, or update payment method',
-              ),
+              title: Text(l10n.proManageSubscription),
+              subtitle: Text(l10n.proManageSubscriptionSubtitle),
               trailing: const Icon(Icons.open_in_new, size: 18),
               onTap: () => _openManageSubscription(context),
             ),
             ListTile(
               leading: const Icon(Icons.volunteer_activism_outlined),
-              title: const Text('Support the app'),
-              subtitle: const Text('One-off donation in your browser'),
+              title: Text(l10n.proSupport),
+              subtitle: Text(l10n.proSupportSubtitle),
               trailing: const Icon(Icons.open_in_new, size: 18),
               onTap: () =>
                   _openExternal(context, 'https://threkir.com/settings/upgrade'),

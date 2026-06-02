@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_gear_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/gear_screen.dart';
@@ -35,6 +36,8 @@ void main() {
       final f = await _makeFixtures();
       try {
         await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: GearScreen(
             api: null,
             preferences: f.prefs,
@@ -65,6 +68,8 @@ void main() {
       final f = await _makeFixtures();
       try {
         await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
           home: GearScreen(
             api: _OfflineFakeApi(),
             preferences: f.prefs,
