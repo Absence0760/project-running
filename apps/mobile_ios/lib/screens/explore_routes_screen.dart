@@ -308,17 +308,38 @@ class _ExploreRoutesScreenState extends State<ExploreRoutesScreen> {
     // High fix.
     final api = widget.apiClient;
     cm.Route toSave = route;
+    // Browse rows carry no waypoints; the fetch is what makes the saved
+    // copy usable. If it fails we must NOT persist a polyline-less route
+    // and then claim success — that produced an empty-thumbnail "saved"
+    // route that looked like the bookmark silently did nothing.
+    var hasGeometry = route.waypoints.length >= 2;
     if (api != null) {
       try {
         final result = await api.fetchRouteById(route.id);
-        if (result.route != null) {
+        if (result.route != null && result.route!.waypoints.length >= 2) {
           toSave = result.route!;
+          hasGeometry = true;
         }
       } catch (e) {
         debugPrint('save-route clip fetch failed: $e');
       }
     }
-    await widget.routeStore.save(toSave);
+    if (!hasGeometry) {
+      if (!mounted) return;
+      showTopBanner(
+        context,
+        "Couldn't save \"${route.name}\" — check your connection and try again.",
+      );
+      return;
+    }
+    try {
+      await widget.routeStore.save(toSave);
+    } catch (e) {
+      debugPrint('save-route persist failed: $e');
+      if (!mounted) return;
+      showTopBanner(context, "Couldn't save \"${route.name}\".");
+      return;
+    }
     if (!mounted) return;
     showTopBanner(context, 'Saved "${route.name}" to your library');
   }
