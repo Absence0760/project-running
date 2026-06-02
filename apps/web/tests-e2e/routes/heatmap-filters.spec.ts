@@ -418,9 +418,17 @@ test.describe('Heatmap results sidebar (web)', () => {
 		const popularRows = await rows.count();
 
 		// Featured is a subset → the list narrows (or holds) but stays
-		// non-empty.
+		// non-empty. Wait for the featured RPC to actually land before
+		// reading the list: `<= popularRows` is trivially true against the
+		// still-rendered popular set, so without this gate the click below
+		// races a row that the featured refetch is about to replace.
 		await page.getByTestId('filters-button').click();
+		const featuredFetch = page.waitForResponse(
+			(r) => r.url().includes('discoverable_routes_in_bbox') && r.status() === 200,
+			{ timeout: 10_000 }
+		);
 		await page.getByTestId('lens-chips').locator('[data-filter="featured"]').click();
+		await featuredFetch;
 		await expect.poll(() => rows.count(), { timeout: 6000 }).toBeLessThanOrEqual(popularRows);
 		expect(await rows.count()).toBeGreaterThanOrEqual(1);
 

@@ -37,36 +37,28 @@ test.describe('/routes/heatmap — interaction', () => {
 		await context.addInitScript(setConsentAccepted);
 	});
 
-	test('legend + map container + NavigationControl mount; timestamp surfaces', async ({
+	test('map container + NavigationControl mount; discover sidebar + timestamp surface', async ({
 		page
 	}) => {
 		await page.goto('/routes/heatmap');
 
-		// May 2026 real-estate pass: legend collapsed to an info-icon
-		// button by default. The info text + timestamp surface inside
-		// the expanded body, which appears after clicking the toggle.
-		const legend = page.locator('.heatmap-wrap .legend');
-		await expect(legend).toBeVisible({ timeout: 10_000 });
-		const toggle = legend.getByRole('button', { name: /show legend/i });
-		await expect(toggle).toBeVisible();
-		await toggle.click();
-		// Now the expanded body is visible.
-		await expect(legend.getByText('Where people run')).toBeVisible();
-		await expect(
-			legend.getByText(/Warmer cells = more public routes/)
-		).toBeVisible();
-
-		const mapContainer = page.locator('.heatmap-wrap .maplibregl-map');
+		// The discover-sidebar redesign replaced the standalone info-icon
+		// legend with a route-discovery sidebar; the heat scale is now a
+		// toggle chip and the freshness stamp lives in the sidebar's
+		// results header (`.results-updated`).
+		const mapContainer = page.locator('.maplibregl-map');
 		await expect(mapContainer).toBeVisible({ timeout: 15_000 });
 
-		await expect(
-			page.locator('.heatmap-wrap .maplibregl-ctrl-zoom-in')
-		).toBeVisible({ timeout: 10_000 });
-		await expect(
-			page.locator('.heatmap-wrap .maplibregl-ctrl-zoom-out')
-		).toBeVisible();
+		await expect(page.locator('.maplibregl-ctrl-zoom-in')).toBeVisible({
+			timeout: 10_000
+		});
+		await expect(page.locator('.maplibregl-ctrl-zoom-out')).toBeVisible();
 
-		await expect(legend.getByText(/^Updated /)).toBeVisible({
+		await expect(page.getByTestId('discover-sidebar')).toBeVisible();
+
+		// The "Updated <time>" stamp surfaces once the initial route fetch
+		// resolves (loading shows the spinner instead).
+		await expect(page.locator('.results-updated')).toBeVisible({
 			timeout: 15_000
 		});
 	});
@@ -76,40 +68,27 @@ test.describe('/routes/heatmap — interaction', () => {
 	}) => {
 		await page.goto('/routes/heatmap');
 
-		const legend = page.locator('.heatmap-wrap .legend');
-		// Expand the legend so the "Updated …" timestamp is visible —
-		// it lives inside the expandable body since the May 2026
-		// real-estate pass.
-		await legend.getByRole('button', { name: /show legend/i }).click();
-		await expect(legend.getByText(/^Updated /)).toBeVisible({
+		// Wait for the initial fetch to settle into the "Updated <time>"
+		// terminal state in the sidebar results header.
+		await expect(page.locator('.results-updated')).toBeVisible({
 			timeout: 15_000
 		});
-		const firstStamp = (await legend.getByText(/^Updated /).textContent()) ?? '';
+		const firstStamp = (await page.locator('.results-updated').textContent()) ?? '';
 
-		await page.locator('.heatmap-wrap .maplibregl-ctrl-zoom-in').click();
-		await page.locator('.heatmap-wrap .maplibregl-ctrl-zoom-in').click();
+		await page.locator('.maplibregl-ctrl-zoom-in').click();
+		await page.locator('.maplibregl-ctrl-zoom-in').click();
 
 		// moveend is debounced 350ms in RouteHeatmap.svelte. Allow the
-		// fetch to land and the timestamp to re-render. Since the
-		// `toLocaleTimeString` granularity is HH:MM the stamp may remain
-		// stable across two clicks in the same minute — assert it's
-		// either changed OR that the legend remains in a "Updated …"
-		// terminal state (i.e. not stuck on "Updating…").
+		// fetch to land. The `toLocaleTimeString` granularity is HH:MM so
+		// the stamp may stay stable across two clicks in the same minute —
+		// what matters is the header returns to the terminal "Updated"
+		// state (the loading spinner is gone), proving the refetch resolved.
 		await page.waitForTimeout(1500);
-		const updatingStuck = await legend
-			.locator('em')
-			.filter({ hasText: 'Updating…' })
-			.count();
-		expect(updatingStuck).toBe(0);
-		await expect(legend.getByText(/^Updated /)).toBeVisible();
+		await expect(page.locator('.results-spinner')).toHaveCount(0);
+		await expect(page.locator('.results-updated')).toBeVisible();
 
-		const secondStamp =
-			(await legend.getByText(/^Updated /).textContent()) ?? '';
+		const secondStamp = (await page.locator('.results-updated').textContent()) ?? '';
 		expect(secondStamp.length).toBeGreaterThan(0);
-		// Stamps may match minute-to-minute; what matters is the legend
-		// reached the terminal "Updated …" state after the pan, not that
-		// the HH:MM literal changed. The `updatingStuck === 0` check
-		// above pins the fetch resolved.
 		expect(firstStamp.length).toBeGreaterThan(0);
 	});
 });
