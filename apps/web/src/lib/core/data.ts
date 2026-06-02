@@ -215,6 +215,23 @@ export async function fetchTrackByPath(path: string) {
 	return fetchTrack(path);
 }
 
+/// Owner-only fetch of the indoor/treadmill HR sidecar
+/// (`{user_id}/{run_id}.hr.json.gz`, decisions §116). Same Storage pipeline as
+/// the track. Returns the `{ bpm, ts? }` series; used by the run-detail HR-zone
+/// breakdown when the GPS track carries no per-point bpm. The sidecar holds no
+/// location, so unlike the track there is no non-owner / clipped variant — it
+/// is never exposed off the owner's own run detail.
+export async function fetchHrSeries(
+	path: string,
+): Promise<Array<{ bpm: number; ts?: string }>> {
+	const series = await fetchTrack(path);
+	if (!Array.isArray(series)) return [];
+	return series.filter(
+		(s): s is { bpm: number; ts?: string } =>
+			!!s && typeof s.bpm === 'number',
+	);
+}
+
 /// Privacy-aware non-owner track fetcher. Calls the `clip-public-track`
 /// Edge Function which downloads the gzipped track via service-role,
 /// passes the points through `clip_track_for_user`, and returns the

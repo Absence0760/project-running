@@ -47,6 +47,10 @@ export async function insertRun(opts: {
 	 *  the row's `track_url` column is set to that path. Mirrors what
 	 *  the recorder's sync flow does. */
 	track?: TrackPoint[];
+	/** Optional indoor/treadmill HR series. Gzipped JSON is uploaded to
+	 *  `{user_id}/{run_id}.hr.json.gz` and `hr_series_url` is set — the
+	 *  trackless-run shape the HR-zone chart falls back to (decisions §116). */
+	hrSeries?: { bpm: number; ts?: string }[];
 }): Promise<string> {
 	const admin = getAdminClient();
 	const { data, error } = await admin
@@ -89,6 +93,24 @@ export async function insertRun(opts: {
 		}
 	}
 
+	if (opts.hrSeries && opts.hrSeries.length > 0) {
+		const path = `${opts.user_id}/${runId}.hr.json.gz`;
+		const gzipped = gzipSync(Buffer.from(JSON.stringify(opts.hrSeries), 'utf-8'));
+		const { error: upErr } = await admin.storage
+			.from('runs')
+			.upload(path, gzipped, { contentType: 'application/octet-stream', upsert: true });
+		if (upErr) {
+			throw new Error(`simulate.insertRun hr-series upload failed: ${upErr.message}`);
+		}
+		const { error: updErr } = await admin
+			.from('runs')
+			.update({ hr_series_url: path })
+			.eq('id', runId);
+		if (updErr) {
+			throw new Error(`simulate.insertRun hr_series_url set failed: ${updErr.message}`);
+		}
+	}
+
 	return runId;
 }
 
@@ -98,11 +120,14 @@ export async function deleteRun(runId: string): Promise<void> {
 	// the user folder by reading the row first.
 	const { data: row } = await admin
 		.from('runs')
-		.select('track_url')
+		.select('track_url, hr_series_url')
 		.eq('id', runId)
 		.maybeSingle();
-	if (row?.track_url) {
-		await admin.storage.from('runs').remove([row.track_url as string]);
+	const paths = [row?.track_url, row?.hr_series_url].filter(
+		(p): p is string => !!p,
+	);
+	if (paths.length > 0) {
+		await admin.storage.from('runs').remove(paths);
 	}
 	const { error } = await admin.from('runs').delete().eq('id', runId);
 	if (error) {

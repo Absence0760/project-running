@@ -28,6 +28,7 @@
 		fetchRoutesIntersectingTrack,
 		linkRunToRoute,
 		enqueueRunRematch,
+		fetchHrSeries,
 		type RunMatchInfo,
 		type RouteMatchCandidate,
 	} from '$lib/core/data';
@@ -750,6 +751,37 @@
 	/// Sample-count is a fine proxy when sampling is regular (~1 Hz),
 	/// but Strava streams and watch FIT files often emit irregularly,
 	/// and time-weighting is what every other running app shows.
+	/// Indoor/treadmill HR sidecar samples, fetched lazily when the run has an
+	/// `hr_series_url` but no per-point bpm on the GPS track (decisions §116).
+	let hrSidecarSamples = $state<{ bpm: number; tMs: number | null }[]>([]);
+	$effect(() => {
+		const url = run?.hr_series_url;
+		const trackHasBpm = (run?.track ?? []).some(
+			(p) => typeof p.bpm === 'number' && p.bpm >= 30 && p.bpm <= 230,
+		);
+		if (!url || trackHasBpm) {
+			hrSidecarSamples = [];
+			return;
+		}
+		let cancelled = false;
+		fetchHrSeries(url)
+			.then((series) => {
+				if (cancelled) return;
+				hrSidecarSamples = series
+					.filter((s) => s.bpm >= 30 && s.bpm <= 230)
+					.map((s) => {
+						const tMs = s.ts ? Date.parse(s.ts) : NaN;
+						return { bpm: s.bpm, tMs: Number.isFinite(tMs) ? tMs : null };
+					});
+			})
+			.catch((e) => {
+				if (!cancelled) console.warn('hr-series sidecar fetch failed', e);
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
 	let bpmTimedSamples = $derived.by(() => {
 		const track = run?.track ?? [];
 		const out: { bpm: number; tMs: number | null }[] = [];
@@ -759,6 +791,9 @@
 			const tMs = p.ts ? Date.parse(p.ts) : NaN;
 			out.push({ bpm: b, tMs: Number.isFinite(tMs) ? tMs : null });
 		}
+		// Trackless indoor run: fall back to the HR sidecar so the zone
+		// breakdown still renders.
+		if (out.length === 0 && hrSidecarSamples.length > 0) return hrSidecarSamples;
 		return out;
 	});
 

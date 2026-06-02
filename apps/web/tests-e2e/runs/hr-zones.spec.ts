@@ -178,6 +178,48 @@ test.describe('/runs/[id] — Heart Rate Zones section', () => {
 		}
 	});
 
+	test('trackless indoor run renders zones from the HR sidecar (decisions §116)', async ({
+		page
+	}) => {
+		// Treadmill shape: no GPS track, but an hr_series sidecar carries the
+		// per-point bpm. The page must fall back to the sidecar and render the
+		// zone bar instead of the "only average" / "no data" empty state.
+		const bpmSamples = [110, 110, 120, 120, 145, 145, 165, 165, 120, 110];
+		const tBase = new Date('2026-04-11T08:00:00Z').getTime();
+		const hrSeries = bpmSamples.map((bpm, i) => ({
+			bpm,
+			ts: new Date(tBase + i * 60_000).toISOString()
+		}));
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date('2026-04-11T08:00:00Z').toISOString(),
+			distance_m: 5_000,
+			duration_s: 1_800,
+			is_public: false,
+			metadata: { activity_type: 'run', avg_bpm: 130, indoor: true },
+			hrSeries
+			// No `track` → the GPS-track bpm path is empty; the sidecar drives it.
+		});
+		try {
+			await page.goto(`/runs/${runId}`);
+			await expect(page.getByRole('heading', { name: 'Heart Rate Zones' }))
+				.toBeVisible({ timeout: 10_000 });
+
+			// The zone bar must render (sidecar fed the breakdown), NOT the
+			// empty state that would show if the sidecar were ignored.
+			await expect(page.locator('.hr-segment')).toHaveCount(5);
+			await expect(page.locator('.hr-empty')).toHaveCount(0);
+
+			// min 110 / max 165 come from the sidecar, proving it was read.
+			await expect(page.locator('.hr-stat-label', { hasText: 'Min' })
+				.locator('+ .hr-stat-value')).toHaveText('110');
+			await expect(page.locator('.hr-stat-label', { hasText: 'Max' })
+				.locator('+ .hr-stat-value')).toHaveText('165');
+		} finally {
+			await deleteRun(runId);
+		}
+	});
+
 	test('per-point bpm with one sample only still renders the bar (no NaN / no crash)', async ({
 		page
 	}) => {
