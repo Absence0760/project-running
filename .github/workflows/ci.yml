@@ -111,7 +111,7 @@ jobs:
           echo "Run 'npm run gen:types' locally and commit the result."
 
   build-web:
-    name: Build web (production)
+    name: Web build compile check (no deploy)
     runs-on: ubuntu-latest
     # A route that fails to compile under the pinned Svelte/Vite was only
     # caught here by chance: the main CI never production-built the web app
@@ -130,7 +130,20 @@ jobs:
           node-version: 24
           cache: npm
       - run: npm ci
+      # This is a COMPILE GATE, not a deploy — it never uploads or
+      # releases anything (the prod/preview release is tag-gated in
+      # release-web.yml). The SvelteKit build resolves the PUBLIC_* keys
+      # through `$env/static/public` at build time, so without them every
+      # importing module fails with MISSING_EXPORT before the compiler is
+      # even reached. Feed the same placeholder values web-bundle-budget.yml
+      # uses — real secrets are irrelevant to a compile check and must never
+      # appear here.
       - run: npm run build --workspace=apps/web
+        env:
+          PUBLIC_SUPABASE_URL: https://placeholder.supabase.co
+          PUBLIC_SUPABASE_ANON_KEY: placeholder-anon-key
+          PUBLIC_MAPTILER_KEY: placeholder
+          BASE_PATH: ""
 
   parity-matrix:
     name: Parity matrix drift
