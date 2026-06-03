@@ -4867,6 +4867,21 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsCoachAnalytical => 'Analítico';
 
   @override
+  String get prefsSectionNotifications => 'Notificaciones';
+
+  @override
+  String get prefsEmailNotifications => 'Notificaciones por correo';
+
+  @override
+  String get prefsEmailNotifAll => 'Todas';
+
+  @override
+  String get prefsEmailNotifImportant => 'Solo importantes';
+
+  @override
+  String get prefsEmailNotifOff => 'Desactivadas';
+
+  @override
   String get prefsWeekStart => 'La semana empieza el';
 
   @override

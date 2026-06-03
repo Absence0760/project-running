@@ -35,6 +35,11 @@ class SettingsKeys {
   /// runners can populate their list ahead of the feature.
   static const trustedContacts = 'trusted_contacts';
   static const coachPersonality = 'coach_personality';
+  /// Which notification kinds are also delivered by email — `'all'` |
+  /// `'important'` (default) | `'off'`. Read server-side by the Go
+  /// worker's `notification_email` handler (migration 20261130_001);
+  /// the in-app bell is unaffected.
+  static const emailNotifications = 'email_notifications';
   static const weeklyMileageGoalMetres = 'weekly_mileage_goal_m';
   static const weekStartDay = 'week_start_day';
   static const mapStyle = 'map_style';

@@ -4864,6 +4864,21 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsCoachAnalytical => 'Analítico';
 
   @override
+  String get prefsSectionNotifications => 'Notificações';
+
+  @override
+  String get prefsEmailNotifications => 'Notificações por e-mail';
+
+  @override
+  String get prefsEmailNotifAll => 'Todas';
+
+  @override
+  String get prefsEmailNotifImportant => 'Apenas importantes';
+
+  @override
+  String get prefsEmailNotifOff => 'Desativadas';
+
+  @override
   String get prefsWeekStart => 'A semana começa em';
 
   @override
@@ -11462,6 +11477,21 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsCoachAnalytical => 'Analítico';
+
+  @override
+  String get prefsSectionNotifications => 'Notificações';
+
+  @override
+  String get prefsEmailNotifications => 'Notificações por e-mail';
+
+  @override
+  String get prefsEmailNotifAll => 'Todas';
+
+  @override
+  String get prefsEmailNotifImportant => 'Apenas importantes';
+
+  @override
+  String get prefsEmailNotifOff => 'Desativadas';
 
   @override
   String get prefsWeekStart => 'A semana começa em';

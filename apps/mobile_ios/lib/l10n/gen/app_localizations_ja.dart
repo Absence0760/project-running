@@ -4568,6 +4568,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsCoachAnalytical => '分析的';
 
   @override
+  String get prefsSectionNotifications => '通知';
+
+  @override
+  String get prefsEmailNotifications => 'メール通知';
+
+  @override
+  String get prefsEmailNotifAll => 'すべて';
+
+  @override
+  String get prefsEmailNotifImportant => '重要なものだけ';
+
+  @override
+  String get prefsEmailNotifOff => 'オフ';
+
+  @override
   String get prefsWeekStart => '週の開始曜日';
 
   @override

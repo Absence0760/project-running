@@ -7948,6 +7948,36 @@ abstract class AppLocalizations {
   /// **'Analytical'**
   String get prefsCoachAnalytical;
 
+  /// Settings section label for notification preferences
+  ///
+  /// In en, this message translates to:
+  /// **'Notifications'**
+  String get prefsSectionNotifications;
+
+  /// Tile and picker title for the email-notification preference
+  ///
+  /// In en, this message translates to:
+  /// **'Email notifications'**
+  String get prefsEmailNotifications;
+
+  /// Email-notification option: send every kind of notification by email
+  ///
+  /// In en, this message translates to:
+  /// **'Everything'**
+  String get prefsEmailNotifAll;
+
+  /// Email-notification option: only important notifications (reminders, cancellations, messages, plan updates)
+  ///
+  /// In en, this message translates to:
+  /// **'Important only'**
+  String get prefsEmailNotifImportant;
+
+  /// Email-notification option: no emails (in-app bell still shows everything)
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get prefsEmailNotifOff;
+
   /// Tile and picker title for the week-start day
   ///
   /// In en, this message translates to:

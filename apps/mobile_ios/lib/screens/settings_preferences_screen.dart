@@ -251,6 +251,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  static String _emailNotifLabel(AppLocalizations l10n, String raw) {
+    switch (raw) {
+      case 'all':
+        return l10n.prefsEmailNotifAll;
+      case 'important':
+        return l10n.prefsEmailNotifImportant;
+      case 'off':
+        return l10n.prefsEmailNotifOff;
+      default:
+        return _toTitle(raw);
+    }
+  }
+
   String _hrZonesSummary() {
     final l10n = AppLocalizations.of(context);
     final raw = _bagValue<Map>(SettingsKeys.hrZones);
@@ -537,6 +550,26 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     );
     if (picked != null) {
       await _putUniversal(SettingsKeys.coachPersonality, picked);
+    }
+  }
+
+  Future<void> _editEmailNotifications() async {
+    final l10n = AppLocalizations.of(context);
+    const opts = ['important', 'all', 'off'];
+    final labels = [
+      l10n.prefsEmailNotifImportant,
+      l10n.prefsEmailNotifAll,
+      l10n.prefsEmailNotifOff,
+    ];
+    final picked = await _pickRadio<String>(
+      title: l10n.prefsEmailNotifications,
+      options: opts,
+      labels: labels,
+      current:
+          _bagValue<String>(SettingsKeys.emailNotifications) ?? 'important',
+    );
+    if (picked != null) {
+      await _putUniversal(SettingsKeys.emailNotifications, picked);
     }
   }
 
@@ -998,6 +1031,19 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editCoachPersonality,
+            ),
+
+            _sectionLabel(l10n.prefsSectionNotifications),
+            ListTile(
+              title: Text(l10n.prefsEmailNotifications),
+              subtitle: Text(_emailNotifLabel(
+                l10n,
+                _bagValue<String>(SettingsKeys.emailNotifications) ??
+                    'important',
+              )),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: _editEmailNotifications,
             ),
           ],
         ),

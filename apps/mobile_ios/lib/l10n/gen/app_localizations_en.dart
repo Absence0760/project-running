@@ -4818,6 +4818,21 @@ class AppLocalizationsEn extends AppLocalizations {
   String get prefsCoachAnalytical => 'Analytical';
 
   @override
+  String get prefsSectionNotifications => 'Notifications';
+
+  @override
+  String get prefsEmailNotifications => 'Email notifications';
+
+  @override
+  String get prefsEmailNotifAll => 'Everything';
+
+  @override
+  String get prefsEmailNotifImportant => 'Important only';
+
+  @override
+  String get prefsEmailNotifOff => 'Off';
+
+  @override
   String get prefsWeekStart => 'Week starts on';
 
   @override
