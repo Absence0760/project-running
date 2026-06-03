@@ -13,11 +13,13 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { auth } from '$lib/stores/auth.svelte';
 	import {
+		addDays,
 		fmtHms,
 		isWorkoutCompleted,
 		parseISO,
 		todayISO
 	} from '$lib/training/training';
+	import { weeklyDrift, missedWorkoutAdvice } from '$lib/training/plan_adherence';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -83,13 +85,11 @@
 		weeks = res.weeks;
 		workouts = res.workouts;
 		loading = false;
-		if (plan != null) {
-			const days = daysUntilRace(plan.end_date, new Date());
-			if (days >= 0 && days <= 21) {
-				// Lazy-load the runner's recent runs so the Race Day panel
-				// can predict a finish time from a Riegel projection.
-				recentRuns = await fetchRuns({ limit: 50 });
-			}
+		if (plan != null && plan.user_id === auth.user?.id) {
+			// Owner-only: the recent runs feed both the Race Day Riegel
+			// projection (within 21 days) and the current-week adherence
+			// drift flag (any time). 50 covers a heavy week comfortably.
+			recentRuns = await fetchRuns({ limit: 50 });
 		}
 	}
 
@@ -213,6 +213,59 @@
 	let completed = $derived(workouts.filter(isWorkoutCompleted).length);
 	let totalActive = $derived(workouts.filter((w) => w.kind !== 'rest').length);
 	let pct = $derived(totalActive === 0 ? 0 : Math.round((completed / totalActive) * 100));
+
+	let currentWeek = $derived(
+		currentWeekIndex != null ? (weeks[currentWeekIndex] ?? null) : null
+	);
+
+	/// Current-week mileage drift vs plan. Owner-only (needs the runs
+	/// list). Planned volume is the week's target, falling back to the
+	/// sum of its non-rest workouts' distances; actual is every run dated
+	/// inside the week window. Null unless the drift trips the flag.
+	let currentWeekDrift = $derived.by(() => {
+		if (!plan || !isOwner || currentWeek == null || currentWeekIndex == null) return null;
+		const weekWorkouts = workoutsByWeek.get(currentWeek.id) ?? [];
+		let planned = currentWeek.target_volume_m ?? 0;
+		if (!(planned > 0)) {
+			planned = weekWorkouts.reduce(
+				(s, w) => s + (w.kind !== 'rest' ? (w.target_distance_m ?? 0) : 0),
+				0
+			);
+		}
+		const weekStartD = addDays(parseISO(plan.start_date), currentWeekIndex * 7);
+		const weekEndD = addDays(weekStartD, 7);
+		let actual = 0;
+		for (const r of recentRuns) {
+			const t = new Date(r.started_at);
+			if (t >= weekStartD && t < weekEndD) actual += r.distance_m ?? 0;
+		}
+		const d = weeklyDrift(planned, actual);
+		return d.flagged ? d : null;
+	});
+
+	/// A long run in the current week that's already in the past and
+	/// still uncompleted → a make-up / skip recommendation driven by
+	/// phase + whether a step-back week (a >15% volume drop next week) is
+	/// about to absorb the deficit.
+	let missedLongRun = $derived.by(() => {
+		if (!plan || !isOwner || currentWeek == null || currentWeekIndex == null) return null;
+		const weekWorkouts = workoutsByWeek.get(currentWeek.id) ?? [];
+		const missed = weekWorkouts.find(
+			(w) => w.kind === 'long' && w.scheduled_date < today && !isWorkoutCompleted(w)
+		);
+		if (!missed) return null;
+		const nextWeek = weeks[currentWeekIndex + 1] ?? null;
+		const recoveryWeekImminent =
+			nextWeek != null &&
+			nextWeek.target_volume_m != null &&
+			currentWeek.target_volume_m != null &&
+			nextWeek.target_volume_m < currentWeek.target_volume_m * 0.85;
+		return missedWorkoutAdvice({
+			kind: 'long',
+			isTaper: currentWeek.phase === 'taper' || currentWeek.phase === 'race',
+			recoveryWeekImminent,
+		});
+	});
 
 	/// Pre-compute the conic-gradient stop so the progress ring renders
 	/// as a real fill, not a static border. The static `5px` border was
@@ -382,6 +435,33 @@
 					style="width: {planPosition.calendarPct}%"
 				></span>
 			</div>
+		{/if}
+
+		{#if currentWeekDrift || missedLongRun}
+			<section class="adherence" aria-label={m('planDetail.adherenceAria')}>
+				{#if currentWeekDrift}
+					<p class="adherence-flag drift-{currentWeekDrift.direction}">
+						<span class="material-symbols">monitoring</span>
+						{currentWeekDrift.direction === 'over'
+							? m('planDetail.driftOverFlag', {
+									pct: Math.round(currentWeekDrift.driftFraction * 100)
+								})
+							: m('planDetail.driftUnderFlag', {
+									pct: Math.round(Math.abs(currentWeekDrift.driftFraction) * 100)
+								})}
+					</p>
+				{/if}
+				{#if missedLongRun}
+					<p class="adherence-flag missed-{missedLongRun.recommendation}">
+						<span class="material-symbols">event_busy</span>
+						{missedLongRun.reason === 'taper'
+							? m('planDetail.missedLongTaper')
+							: missedLongRun.reason === 'recovery_soon'
+								? m('planDetail.missedLongRecovery')
+								: m('planDetail.missedLongMakeUp')}
+					</p>
+				{/if}
+			</section>
 		{/if}
 
 		{#if Array.isArray(plan.rules) && plan.rules.length > 0}
@@ -827,6 +907,45 @@
 			color-mix(in srgb, var(--color-primary) 70%, var(--color-accent-orange, var(--color-primary)))
 		);
 		transition: width var(--transition-base);
+	}
+
+	.adherence {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-md);
+	}
+	.adherence-flag {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		margin: 0;
+		padding: var(--space-sm) var(--space-md);
+		border-radius: var(--radius-md);
+		font-size: 0.9rem;
+		font-weight: 600;
+		line-height: 1.4;
+		border: 1px solid transparent;
+	}
+	.adherence-flag .material-symbols {
+		font-size: 1.2rem;
+		flex-shrink: 0;
+	}
+	.drift-over,
+	.missed-make_up {
+		background: color-mix(in srgb, var(--color-warning, #B45309) 12%, var(--color-bg));
+		border-color: color-mix(in srgb, var(--color-warning, #B45309) 35%, transparent);
+		color: var(--color-warning, #B45309);
+	}
+	.drift-under {
+		background: color-mix(in srgb, var(--color-primary) 10%, var(--color-bg));
+		border-color: color-mix(in srgb, var(--color-primary) 30%, transparent);
+		color: var(--color-primary);
+	}
+	.missed-skip {
+		background: var(--color-bg-tertiary);
+		border-color: var(--color-border);
+		color: var(--color-text-secondary);
 	}
 
 	.publish-row {

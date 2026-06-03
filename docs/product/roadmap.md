@@ -439,10 +439,10 @@ The foundation under both the generator and any hand-built plan: a data model fo
   - [x] Live "workout progress" overlay during structured workouts — shows the current rep / recovery, upcoming target, reps remaining (`workout_execution_band.dart` + `packages/run_recorder/.../workout_runner.dart`)
   - [x] Post-run: the completed `run_id` auto-links to the planned workout (same day, same activity) and the workout card flips to "done" with a side-by-side comparison of planned vs actual (`autoMatchRunToPlanWorkout`)
   - [ ] Manual override: runner can un-link, re-link to a different planned workout, or mark a workout as skipped without deleting it — *partial: un-link ships; an explicit re-link-to-a-different-workout picker and a plan-level "skipped" status don't*
-- [ ] Adherence feedback — *per-week completion count ships; the drift flag + missed-workout coaching don't*
+- [ ] Adherence feedback — *web shipped (`lib/training/plan_adherence.ts`); mobile mirror pending*
   - [x] "N of M workouts completed this week" summary
-  - [ ] Flag when weekly mileage drifts >20% under or over plan (both directions matter — over-running the easy weeks is a real failure mode)
-  - [ ] Missed-workout recovery: suggest whether to make up a missed long run or skip it, driven by simple rules (phase + proximity to recovery week)
+  - [x] Flag when weekly mileage drifts >20% under or over plan (both directions matter — over-running the easy weeks is a real failure mode) — `weeklyDrift` compares the current week's actual run mileage (runs dated in the week window) to its planned volume; a flagged over/under drift renders as a coloured banner on `/plans/[id]` (owner-only)
+  - [x] Missed-workout recovery: suggest whether to make up a missed long run or skip it, driven by simple rules (phase + proximity to recovery week) — `missedWorkoutAdvice`: a past-and-uncompleted long run in the current week prompts make-up (base/build), or skip (taper, or a step-back week imminent — detected via a >15% next-week volume drop). Quality sessions aren't worth a dedicated make-up
 - [ ] Sharing and handoff:
   - [ ] Export a plan as markdown or JSON (round-trip with the paste-import path)
   - [ ] Public plan library — users can publish a plan they followed and others can clone it into their own account (deferred until community infra lands, see § Community) — *club-template cloning ships (`publish as template` → `clone_plan_template`); a public, anyone-can-clone library does not*
