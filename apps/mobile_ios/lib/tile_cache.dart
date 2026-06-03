@@ -111,6 +111,12 @@ class TileCache {
           options: CacheOptions(
             store: store,
             maxStale: const Duration(days: 30),
+            // Map raster tiles are content-addressed by z/x/y and are
+            // effectively immutable, so serve a cached tile without a
+            // revalidation round-trip whenever one exists — this is what
+            // keeps the map usable offline and stops every pan/zoom from
+            // re-hitting the tile server. _trimToBudget() bounds disk use;
+            // maxStale caps how long a never-re-requested tile lingers.
             policy: CachePolicy.forceCache,
           ),
         ),
