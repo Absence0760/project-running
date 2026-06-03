@@ -27,7 +27,16 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
 	testDir: '.',
 	// Don't recurse into node_modules / .auth / fixtures from the testDir glob.
-	testIgnore: ['**/node_modules/**', '**/.auth/**', '**/fixtures/**'],
+	// spectator_websocket.spec.ts needs the Go live-hub + a hub-pointed dev
+	// server, which only playwright.livehub.config.ts boots — exclude it here
+	// so the sharded suite never runs it without the hub (it'd hit the
+	// Realtime/demo fallback and fail).
+	testIgnore: [
+		'**/node_modules/**',
+		'**/.auth/**',
+		'**/fixtures/**',
+		'**/live/spectator_websocket.spec.ts'
+	],
 
 	// Stable on CI even with the dev server taking a beat to warm up.
 	timeout: 30_000,
