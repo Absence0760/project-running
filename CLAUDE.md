@@ -35,6 +35,7 @@ Start with whichever row below is closest to the task you've been given:
 | Which features have e2e tests today + what dev accounts unblock the rest | [docs/testing/e2e_dev_accounts.md](docs/testing/e2e_dev_accounts.md) — coverage table + 11-item dev-account checklist (Google, Stripe, Anthropic, …) |
 | Keeping local dev isolated from prod | [docs/testing/dev_prod_isolation.md](docs/testing/dev_prod_isolation.md) — Vite + Playwright guard rules, the `ALLOW_PROD_URL_IN_DEV` override, what's enforced vs not |
 | Touching the clubs / events / social layer | [docs/features/clubs.md](docs/features/clubs.md) — surfaces, schema pointers, what's deferred |
+| Touching email / notification delivery (welcome, receipts, reminders, digest) | [docs/features/email.md](docs/features/email.md) — job kinds, SMTP transport, i18n catalogue, what's shipped vs planned, prod ops |
 | Touching training plans (VDOT, Riegel, generator, week grid) | [docs/features/training.md](docs/features/training.md) — engine shape, pace derivation, what's deferred |
 | Implementing the live structured-workout execution loop | [docs/features/workout_execution.md](docs/features/workout_execution.md) — specced runner state machine + UI + persistence |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/features/integrations.md](docs/features/integrations.md) |

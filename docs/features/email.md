@@ -1,0 +1,119 @@
+# Email & notification delivery
+
+The single source of truth for the app's outbound email. For the **in-app**
+notification inbox (the bell + Notifications tab) see `decisions.md § 38`; this
+doc is the **email** layer that delivers a subset of those notifications plus
+transactional / lifecycle mail.
+
+## Architecture
+
+All email is sent **server-side by the Go worker** (`apps/job_worker/`), never
+from a client. Two job kinds on the `jobs` queue drive it:
+
+- **`notification_email`** — mirrors a row in the `notifications` table (the
+  same row the in-app bell renders). An AFTER-INSERT trigger on `notifications`
+  enqueues one job per recipient; the handler gates on the recipient's
+  `email_notifications` preference, then sends. `decisions.md § 117`.
+- **`lifecycle_email`** — transactional / relationship mail that has **no**
+  `notifications` row, keyed by a `template` name (`{user_id, template}`). The
+  welcome (signup), the Pro-purchase receipt, and the payment-failed dunning.
+  `decisions.md § 119` + `§ 121`.
+
+Shared pieces:
+
+- **Transport** — `internal/mailer.go` `SMTPSender` (Mailpit in local dev on
+  `127.0.0.1:54325`; a provider's SMTP — Resend / SES — in prod). Sent as
+  **multipart/alternative**: a branded, email-client-safe HTML part (table
+  layout, inline styles, ≤600 px card, teal header matching app.css
+  `--color-primary`, H1, CTA button, footer, inbox preheader) + a plain-text
+  fallback. Gated on `SMTP_HOST` — unset → the worker drains the jobs without
+  sending (so existing deploys are unaffected).
+- **Address** — resolved via the GoTrue admin API (email lives only in
+  `auth.users`, not a public table).
+- **Localization** — `internal/email_i18n.go` holds a per-locale catalogue for
+  all six app locales (`en/de/fr/es/ja/pt-BR`). The recipient's language comes
+  from `user_settings.prefs.locale`, which web + mobile write as a side effect
+  of the language picker (`decisions.md § 120`). Unknown/region tags normalize
+  to a supported locale; English is the per-key fallback. `<html lang>` is set.
+  A catalogue-parity test mirrors the web/mobile l10n-parity tests.
+- **Preference** — `user_settings.prefs.email_notifications` (`all | important
+  | off`, default `important`) gates the **notification** channel only;
+  transactional/lifecycle mail ignores it (you can't opt out of a receipt).
+  Toggle on web `/settings/preferences` + mobile Settings → Preferences.
+  Registry: `docs/backend/settings.md`.
+- **Idempotency** — `lifecycle_email_log (user_id, template)` is a send-once
+  guard for **once-per-account** templates (welcome only). Recurring
+  transactional templates (Pro receipt, dunning) deliberately skip it — the
+  enqueue trigger's transition guard is the dedupe. Delivery is at-least-once.
+
+## Shipped
+
+| Email | Kind | Trigger | Localized | ADR |
+|---|---|---|---|---|
+| Notification → email (kudos, comment, follow, event RSVP/cancel/reminder, plan update, message, club post, run completed) | `notification_email` | `notifications` AFTER INSERT, gated on `email_notifications` | ✓ | §117 |
+| **Event-day reminders** (scheduled) | `notification_email` (`event_reminder`) | hourly pg_cron `enqueue_event_reminders()` over `going` RSVPs in the next 24 h | ✓ | §117 |
+| **Welcome** ("thanks for signing up") | `lifecycle_email` (`welcome`) | `user_profiles` AFTER INSERT | ✓ | §119 |
+| **Pro-purchase receipt** | `lifecycle_email` (`pro_welcome`) | `user_profiles` AFTER UPDATE, `subscription_tier` → paid | ✓ | §121 |
+| **Payment-failed dunning** | `lifecycle_email` (`payment_failed`) | `user_profiles` AFTER UPDATE, `billing_issue_at` null→non-null | ✓ | §121 |
+| Branded HTML + inbox preview text | — | all of the above | ✓ | — |
+
+All shipped emails are end-to-end tested against the local Docker Mailpit
+(`http://127.0.0.1:54324`); none required Firebase/APNs credentials.
+
+## Planned / not built
+
+- [ ] **Weekly digest + lifecycle drip** (engagement) — mileage/PB/kudos digest
+  (weekly pg_cron → per-opted-in-user `lifecycle_email`), re-engagement,
+  onboarding drip, streak/goal nudges. **Prerequisites** (bulk/marketing mail,
+  unlike the transactional ones): a per-category **preference center** (separate
+  keys, not folded into `email_notifications`), **RFC 8058 one-click
+  unsubscribe**, and **bounce/complaint suppression**.
+- [ ] **Account-deletion receipt** — feasible but needs a different mechanism:
+  the worker can't look up the address post-deletion, `delete-account` drains
+  the user's pending jobs, and the send-once log cascades away with the user.
+  Build = send inline from the `delete-account` EF (where `user.email` is live)
+  or enqueue a job carrying the address in the payload + a non-cascading record;
+  mind that the deleted user's email then lingers in `jobs.payload` until
+  drained. `decisions.md § 121`.
+- [ ] **Native push (FCM / APNs)** — the remaining device-delivery leg. The
+  `notifications` row is already the source of truth; an FCM/APNs sender is a
+  sibling consumer of the same rows. Blocked on operator-supplied Firebase/APNs
+  credentials + mobile `firebase_messaging` token registration. roadmap Phase 4b.
+- [ ] **Web push server-side delivery** — VAPID is self-generated (not a
+  third-party credential); the client subscribe path already ships. Needs the
+  signing/POST endpoint. See `parity.md`.
+
+### Not planned (with reason)
+
+- **Data-export-ready email** — the export endpoint is **synchronous** and
+  returns a 10-minute signed URL inline; an async email would arrive stale.
+  Revisit only if export moves to an async/job model.
+- **Password-changed / new-device sign-in** — no GoTrue auth hooks are
+  configured and there's no sign-in/device tracking (the `device_tokens` table
+  has no write path). That's separate infrastructure, not an email.
+
+## Production ops (required before any email actually sends)
+
+None of this sends in prod until an operator:
+
+1. **Provisions SMTP** on the worker — `SMTP_HOST/PORT/USERNAME/PASSWORD/FROM`
+   + `APP_BASE_URL` (Resend or SES). Until then `notification_email` /
+   `lifecycle_email` jobs finish without sending.
+2. **Confirms the pg_cron schedules** are live in the deployed Supabase
+   (`enqueue-event-reminders`).
+3. **Sets up domain auth** — SPF / DKIM / DMARC for `threkir.com` so mail isn't
+   spam-filed.
+4. (Before any **bulk/engagement** mail) RFC 8058 one-click unsubscribe +
+   bounce/complaint suppression.
+
+## Where the code lives
+
+- Worker: `apps/job_worker/internal/` — `mailer.go` (transport + HTML/text
+  render), `email_i18n.go` (catalogue), `handler_notification_email.go`,
+  `handler_lifecycle_email.go`.
+- Migrations: `20261130_001` (notification channel + reminders), `20261202_001`
+  (welcome), `20261203_001` (subscription emails).
+- Clients (locale write): web `apps/web/src/routes/settings/preferences/`,
+  mobile `apps/mobile_android/lib/screens/settings_preferences_screen.dart`.
+- ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),
+  §121 (subscription emails).
