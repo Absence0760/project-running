@@ -702,6 +702,54 @@ export type Database = {
         }
         Relationships: []
       }
+      food_log: {
+        Row: {
+          calories: number | null
+          carbs_g: number | null
+          created_at: string
+          external_id: string | null
+          fat_g: number | null
+          id: string
+          is_public: boolean
+          item_name: string
+          last_modified_at: string
+          logged_at: string
+          meal_slot: string | null
+          protein_g: number | null
+          user_id: string
+        }
+        Insert: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string
+          external_id?: string | null
+          fat_g?: number | null
+          id?: string
+          is_public?: boolean
+          item_name: string
+          last_modified_at?: string
+          logged_at?: string
+          meal_slot?: string | null
+          protein_g?: number | null
+          user_id: string
+        }
+        Update: {
+          calories?: number | null
+          carbs_g?: number | null
+          created_at?: string
+          external_id?: string | null
+          fat_g?: number | null
+          id?: string
+          is_public?: boolean
+          item_name?: string
+          last_modified_at?: string
+          logged_at?: string
+          meal_slot?: string | null
+          protein_g?: number | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       gear: {
         Row: {
           brand: string | null
@@ -747,6 +795,83 @@ export type Database = {
           retired_at?: string | null
           target_distance_m?: number | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      gym_sets: {
+        Row: {
+          exercise_name: string
+          id: string
+          reps: number | null
+          rpe: number | null
+          set_index: number
+          weight_kg: number | null
+          workout_id: string
+        }
+        Insert: {
+          exercise_name: string
+          id?: string
+          reps?: number | null
+          rpe?: number | null
+          set_index: number
+          weight_kg?: number | null
+          workout_id: string
+        }
+        Update: {
+          exercise_name?: string
+          id?: string
+          reps?: number | null
+          rpe?: number | null
+          set_index?: number
+          weight_kg?: number | null
+          workout_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gym_sets_workout_id_fkey"
+            columns: ["workout_id"]
+            isOneToOne: false
+            referencedRelation: "gym_workouts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gym_workouts: {
+        Row: {
+          created_at: string
+          duration_s: number | null
+          external_id: string | null
+          id: string
+          is_public: boolean
+          last_modified_at: string
+          notes: string | null
+          started_at: string
+          title: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_s?: number | null
+          external_id?: string | null
+          id?: string
+          is_public?: boolean
+          last_modified_at?: string
+          notes?: string | null
+          started_at?: string
+          title?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_s?: number | null
+          external_id?: string | null
+          id?: string
+          is_public?: boolean
+          last_modified_at?: string
+          notes?: string | null
+          started_at?: string
+          title?: string | null
+          user_id?: string
         }
         Relationships: []
       }
@@ -1728,6 +1853,7 @@ export type Database = {
           hr_series_url: string | null
           id: string
           is_public: boolean | null
+          kind: string
           metadata: Json | null
           route_id: string | null
           source: string
@@ -1745,6 +1871,7 @@ export type Database = {
           hr_series_url?: string | null
           id?: string
           is_public?: boolean | null
+          kind?: string
           metadata?: Json | null
           route_id?: string | null
           source: string
@@ -1762,6 +1889,7 @@ export type Database = {
           hr_series_url?: string | null
           id?: string
           is_public?: boolean | null
+          kind?: string
           metadata?: Json | null
           route_id?: string | null
           source?: string
@@ -2193,6 +2321,16 @@ export type Database = {
       }
     }
     Views: {
+      activities: {
+        Row: {
+          id: string | null
+          kind: string | null
+          started_at: string | null
+          summary: Json | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
       event_results_redacted: {
         Row: {
           age_grade_pct: number | null

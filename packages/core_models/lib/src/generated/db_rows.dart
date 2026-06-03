@@ -726,6 +726,87 @@ class FitnessSnapshotRow {
   };
 }
 
+/// Row shape for the `food_log` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class FoodLogRow {
+  static const String table = 'food_log';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colLoggedAt = 'logged_at';
+  static const String colItemName = 'item_name';
+  static const String colMealSlot = 'meal_slot';
+  static const String colCalories = 'calories';
+  static const String colProteinG = 'protein_g';
+  static const String colCarbsG = 'carbs_g';
+  static const String colFatG = 'fat_g';
+  static const String colIsPublic = 'is_public';
+  static const String colExternalId = 'external_id';
+  static const String colLastModifiedAt = 'last_modified_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final DateTime loggedAt;
+  final String itemName;
+  final String? mealSlot;
+  final double? calories;
+  final double? proteinG;
+  final double? carbsG;
+  final double? fatG;
+  final bool isPublic;
+  final String? externalId;
+  final DateTime lastModifiedAt;
+  final DateTime createdAt;
+
+  const FoodLogRow({
+    required this.id,
+    required this.userId,
+    required this.loggedAt,
+    required this.itemName,
+    this.mealSlot,
+    this.calories,
+    this.proteinG,
+    this.carbsG,
+    this.fatG,
+    required this.isPublic,
+    this.externalId,
+    required this.lastModifiedAt,
+    required this.createdAt,
+  });
+
+  factory FoodLogRow.fromJson(Map<String, dynamic> json) => FoodLogRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    loggedAt: DateTime.parse(json['logged_at'] as String),
+    itemName: json['item_name'] as String,
+    mealSlot: json['meal_slot'] as String?,
+    calories: (json['calories'] as num?)?.toDouble(),
+    proteinG: (json['protein_g'] as num?)?.toDouble(),
+    carbsG: (json['carbs_g'] as num?)?.toDouble(),
+    fatG: (json['fat_g'] as num?)?.toDouble(),
+    isPublic: (json['is_public'] as bool?) ?? false,
+    externalId: json['external_id'] as String?,
+    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colLoggedAt: loggedAt.toIso8601String(),
+    colItemName: itemName,
+    colMealSlot: mealSlot,
+    colCalories: calories,
+    colProteinG: proteinG,
+    colCarbsG: carbsG,
+    colFatG: fatG,
+    colIsPublic: isPublic,
+    colExternalId: externalId,
+    colLastModifiedAt: lastModifiedAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `gear` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class GearRow {
@@ -804,6 +885,123 @@ class GearRow {
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
     colIsDefault: isDefault,
+  };
+}
+
+/// Row shape for the `gym_sets` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GymSetRow {
+  static const String table = 'gym_sets';
+  static const String colId = 'id';
+  static const String colWorkoutId = 'workout_id';
+  static const String colSetIndex = 'set_index';
+  static const String colExerciseName = 'exercise_name';
+  static const String colReps = 'reps';
+  static const String colWeightKg = 'weight_kg';
+  static const String colRpe = 'rpe';
+
+  final String id;
+  final String workoutId;
+  final int setIndex;
+  final String exerciseName;
+  final int? reps;
+  final double? weightKg;
+  final double? rpe;
+
+  const GymSetRow({
+    required this.id,
+    required this.workoutId,
+    required this.setIndex,
+    required this.exerciseName,
+    this.reps,
+    this.weightKg,
+    this.rpe,
+  });
+
+  factory GymSetRow.fromJson(Map<String, dynamic> json) => GymSetRow(
+    id: json['id'] as String,
+    workoutId: json['workout_id'] as String,
+    setIndex: (json['set_index'] as num).toInt(),
+    exerciseName: json['exercise_name'] as String,
+    reps: (json['reps'] as num?)?.toInt(),
+    weightKg: (json['weight_kg'] as num?)?.toDouble(),
+    rpe: (json['rpe'] as num?)?.toDouble(),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colWorkoutId: workoutId,
+    colSetIndex: setIndex,
+    colExerciseName: exerciseName,
+    colReps: reps,
+    colWeightKg: weightKg,
+    colRpe: rpe,
+  };
+}
+
+/// Row shape for the `gym_workouts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class GymWorkoutRow {
+  static const String table = 'gym_workouts';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colTitle = 'title';
+  static const String colStartedAt = 'started_at';
+  static const String colDurationS = 'duration_s';
+  static const String colNotes = 'notes';
+  static const String colIsPublic = 'is_public';
+  static const String colExternalId = 'external_id';
+  static const String colLastModifiedAt = 'last_modified_at';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final String? title;
+  final DateTime startedAt;
+  final int? durationS;
+  final String? notes;
+  final bool isPublic;
+  final String? externalId;
+  final DateTime lastModifiedAt;
+  final DateTime createdAt;
+
+  const GymWorkoutRow({
+    required this.id,
+    required this.userId,
+    this.title,
+    required this.startedAt,
+    this.durationS,
+    this.notes,
+    required this.isPublic,
+    this.externalId,
+    required this.lastModifiedAt,
+    required this.createdAt,
+  });
+
+  factory GymWorkoutRow.fromJson(Map<String, dynamic> json) => GymWorkoutRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    title: json['title'] as String?,
+    startedAt: DateTime.parse(json['started_at'] as String),
+    durationS: (json['duration_s'] as num?)?.toInt(),
+    notes: json['notes'] as String?,
+    isPublic: (json['is_public'] as bool?) ?? false,
+    externalId: json['external_id'] as String?,
+    lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colTitle: title,
+    colStartedAt: startedAt.toIso8601String(),
+    colDurationS: durationS,
+    colNotes: notes,
+    colIsPublic: isPublic,
+    colExternalId: externalId,
+    colLastModifiedAt: lastModifiedAt.toIso8601String(),
+    colCreatedAt: createdAt.toIso8601String(),
   };
 }
 
@@ -1766,6 +1964,7 @@ class RunRow {
   static const String colIsPublic = 'is_public';
   static const String colEventId = 'event_id';
   static const String colHrSeriesUrl = 'hr_series_url';
+  static const String colKind = 'kind';
 
   final String id;
   final String userId;
@@ -1782,6 +1981,7 @@ class RunRow {
   final bool? isPublic;
   final String? eventId;
   final String? hrSeriesUrl;
+  final String kind;
 
   const RunRow({
     required this.id,
@@ -1799,6 +1999,7 @@ class RunRow {
     this.isPublic,
     this.eventId,
     this.hrSeriesUrl,
+    required this.kind,
   });
 
   factory RunRow.fromJson(Map<String, dynamic> json) => RunRow(
@@ -1817,6 +2018,7 @@ class RunRow {
     isPublic: json['is_public'] as bool?,
     eventId: json['event_id'] as String?,
     hrSeriesUrl: json['hr_series_url'] as String?,
+    kind: json['kind'] as String,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1835,6 +2037,7 @@ class RunRow {
     colIsPublic: isPublic,
     colEventId: eventId,
     colHrSeriesUrl: hrSeriesUrl,
+    colKind: kind,
   };
 }
 
