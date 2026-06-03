@@ -3007,6 +3007,7 @@ export type Database = {
           week_start: string
         }[]
       }
+      withdraw_coach_consent: { Args: never; Returns: undefined }
     }
     Enums: {
       goal_event:
