@@ -310,3 +310,43 @@ export function recoveryAdvice(
 	}
 	return 'Very fresh — if you\'ve been tapering on purpose, race soon. Otherwise, it\'s time to build again.';
 }
+
+/// TSB at or above which a hard / quality session (intervals, tempo,
+/// race) is advisable. Below this the runner is still loaded enough
+/// that the next session should stay easy. Matches the boundary in
+/// `recoveryAdvice` where the advice flips from "easy / steady is
+/// right" to "a steady run or a tempo effort works".
+export const HARD_SESSION_TSB_THRESHOLD = -10;
+
+/// Estimate how many easy / rest days until Form (TSB) recovers enough
+/// for the next hard session. Projects the ATL / CTL EWMAs forward
+/// assuming zero added stress — the fastest realistic recovery — so the
+/// answer is a floor, not a promise (any running in between slows it).
+///
+/// Returns 0 when the runner is already recovered (TSB ≥ threshold), a
+/// positive day count when recovery lands within `maxDays`, or null
+/// when it would take longer than `maxDays` (too deep in the hole for a
+/// single "in N days" number to be meaningful — the recovery-advice
+/// string already says "easy running or a rest day" in that case).
+///
+/// Decay factors are exp(-1/halflife) with the same 7-day ATL / 42-day
+/// CTL halflives the load curves use, so this stays consistent with the
+/// TSB shown on the dashboard. With rest ATL decays faster than CTL, so
+/// TSB always rises — the loop is guaranteed to terminate or hit the cap.
+export function daysUntilNextHardSession(
+	atl: number | null,
+	ctl: number | null,
+	maxDays = 21,
+): number | null {
+	if (atl == null || ctl == null) return null;
+	const atlDecay = Math.exp(-1 / 7);
+	const ctlDecay = Math.exp(-1 / 42);
+	let a = atl;
+	let c = ctl;
+	for (let d = 0; d <= maxDays; d++) {
+		if (c - a >= HARD_SESSION_TSB_THRESHOLD) return d;
+		a *= atlDecay;
+		c *= ctlDecay;
+	}
+	return null;
+}

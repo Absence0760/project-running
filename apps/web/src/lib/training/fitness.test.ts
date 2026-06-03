@@ -10,6 +10,8 @@ import {
 	trainingLoad,
 	computeSnapshot,
 	recoveryAdvice,
+	daysUntilNextHardSession,
+	HARD_SESSION_TSB_THRESHOLD,
 	isReturningFromLayoff,
 	isReturningFromGap,
 } from './fitness';
@@ -311,6 +313,43 @@ test('recoveryAdvice — returning-from-layoff overrides the freshness rungs (co
 	assert.notEqual(normal, returning);
 	assert.match(returning, /back|rebuild|gradual|break/i);
 	assert.doesNotMatch(returning, /race soon/i);
+});
+
+// ─────────────── daysUntilNextHardSession ───────────────
+
+test('daysUntilNextHardSession — null inputs return null', () => {
+	assert.equal(daysUntilNextHardSession(null, 50), null);
+	assert.equal(daysUntilNextHardSession(50, null), null);
+});
+
+test('daysUntilNextHardSession — already recovered returns 0', () => {
+	// TSB = ctl - atl = 60 - 50 = +10, well above the -10 threshold.
+	assert.equal(daysUntilNextHardSession(50, 60), 0);
+	// Exactly at the threshold (TSB = -10) still counts as ready today.
+	assert.equal(daysUntilNextHardSession(60, 50), 0);
+});
+
+test('daysUntilNextHardSession — heavy fatigue needs several easy days', () => {
+	// Deeply loaded: atl 90, ctl 60 → TSB = -30. With rest, ATL decays
+	// faster than CTL so TSB climbs back toward the -10 threshold.
+	const d = daysUntilNextHardSession(90, 60);
+	assert.ok(d != null && d >= 1, 'should be at least a day out');
+	// Sanity-check it's the first day TSB crosses the threshold.
+	const atlDecay = Math.exp(-1 / 7);
+	const ctlDecay = Math.exp(-1 / 42);
+	let a = 90;
+	let c = 60;
+	for (let i = 0; i < d!; i++) {
+		assert.ok(c - a < HARD_SESSION_TSB_THRESHOLD, `day ${i} should still be loaded`);
+		a *= atlDecay;
+		c *= ctlDecay;
+	}
+	assert.ok(c - a >= HARD_SESSION_TSB_THRESHOLD, 'crosses the threshold on the returned day');
+});
+
+test('daysUntilNextHardSession — returns null when recovery exceeds maxDays', () => {
+	// A tiny maxDays window with deep fatigue can't recover in time.
+	assert.equal(daysUntilNextHardSession(90, 60, 1), null);
 });
 
 test('isReturningFromLayoff — true when a recent run follows a >28d gap', () => {

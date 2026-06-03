@@ -16,6 +16,7 @@
 	import {
 		computeSnapshot,
 		recoveryAdvice,
+		daysUntilNextHardSession,
 		isReturningFromLayoff,
 		isReturningFromGap,
 	} from '$lib/training/fitness';
@@ -106,6 +107,16 @@
 		// No training load (no qualifying runs) → hide like the old null.
 		if (last.ctl <= 0 && last.atl <= 0) return null;
 		return last;
+	});
+
+	// Forward-looking companion to the recovery-advice line: how many
+	// easy days until the next hard session is advisable. Only shown
+	// when currently loaded (≥1 day out) and not framed as a comeback
+	// (the rebuild-gradually advice already covers a returning runner).
+	let daysToHard = $derived.by(() => {
+		if (loadNow == null || isReturningFromLayoff(runs)) return null;
+		const d = daysUntilNextHardSession(loadNow.atl, loadNow.ctl);
+		return d != null && d >= 1 ? d : null;
 	});
 
 	/// HR zone thresholds (z1..z5 = upper bound of each zone, bpm) live in
@@ -1072,6 +1083,11 @@
 				<p class="fitness-advice">
 					{recoveryAdvice(loadNow?.tsb ?? null, loadNow?.ctl ?? null, isReturningFromLayoff(runs))}
 				</p>
+				{#if daysToHard != null}
+					<p class="fitness-next-hard">
+						Next hard session in ~{daysToHard} day{daysToHard === 1 ? '' : 's'} of easy running.
+					</p>
+				{/if}
 				{#if trendPath}
 					<!-- Trend sparkline: VO2 max over the persisted
 					     snapshot history. Rendered as an inline SVG path
@@ -2170,6 +2186,12 @@
 		font-size: 0.88rem;
 		color: var(--color-text-secondary);
 		line-height: 1.5;
+	}
+	.fitness-next-hard {
+		margin: var(--space-xs) 0 0;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--color-primary);
 	}
 	.trend {
 		width: 100%;

@@ -207,6 +207,28 @@ void main() {
     });
   });
 
+  group('daysUntilNextHardSession', () {
+    test('null inputs return null', () {
+      expect(daysUntilNextHardSession(null, 50), isNull);
+      expect(daysUntilNextHardSession(50, null), isNull);
+    });
+
+    test('already recovered returns 0', () {
+      expect(daysUntilNextHardSession(50, 60), 0);
+      expect(daysUntilNextHardSession(60, 50), 0);
+    });
+
+    test('heavy fatigue needs at least a day', () {
+      final d = daysUntilNextHardSession(90, 60);
+      expect(d, isNotNull);
+      expect(d! >= 1, isTrue);
+    });
+
+    test('returns null when recovery exceeds maxDays', () {
+      expect(daysUntilNextHardSession(90, 60, maxDays: 1), isNull);
+    });
+  });
+
   group('isReturningFromLayoff (comeback #29)', () {
     final now = DateTime.utc(2026, 4, 30, 7);
     test('true when a recent run follows a >28d gap', () {

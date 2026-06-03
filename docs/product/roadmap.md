@@ -471,7 +471,7 @@ The foundation under both the generator and any hand-built plan: a data model fo
 - [x] Chronic training load (CTL) — 42-day EWMA
 - [x] Training stress balance (TSB = CTL - ATL)
 - [x] Rest/easy/hard session recommendation
-- [ ] Days until next recommended hard session — *not surfaced*
+- [x] Days until next recommended hard session — `daysUntilNextHardSession` (fitness.ts/.dart parity pair) projects the ATL/CTL EWMAs forward at rest until TSB recovers to the hard-session threshold (−10); surfaced under the recovery-advice line on the dashboard (web `fitness-next-hard` line + mobile `FitnessCard`), shown only when ≥1 day out and not framed as a comeback
 
 ### Competitor-parity — shipped social + engagement
 

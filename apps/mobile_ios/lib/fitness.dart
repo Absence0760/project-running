@@ -319,3 +319,29 @@ String recoveryAdvice(double? tsb, double? ctl,
   return "Very fresh — if you've been tapering on purpose, race soon. "
       "Otherwise, it's time to build again.";
 }
+
+/// TSB at or above which a hard / quality session is advisable. Below
+/// this the runner is still loaded enough that the next session should
+/// stay easy. Matches the boundary in `recoveryAdvice` where the advice
+/// flips from "easy / steady" to "a steady run or a tempo effort works".
+const double kHardSessionTsbThreshold = -10;
+
+/// Estimate how many easy / rest days until Form (TSB) recovers enough
+/// for the next hard session. Projects the ATL / CTL EWMAs forward with
+/// zero added stress — the fastest realistic recovery — so the answer
+/// is a floor, not a promise. Returns 0 when already recovered, a
+/// positive day count when recovery lands within [maxDays], or null
+/// when it would take longer. Mirrors the web `daysUntilNextHardSession`.
+int? daysUntilNextHardSession(double? atl, double? ctl, {int maxDays = 21}) {
+  if (atl == null || ctl == null) return null;
+  final atlDecay = math.exp(-1 / 7);
+  final ctlDecay = math.exp(-1 / 42);
+  var a = atl;
+  var c = ctl;
+  for (var d = 0; d <= maxDays; d++) {
+    if (c - a >= kHardSessionTsbThreshold) return d;
+    a *= atlDecay;
+    c *= ctlDecay;
+  }
+  return null;
+}

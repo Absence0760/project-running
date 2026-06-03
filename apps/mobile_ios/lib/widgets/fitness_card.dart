@@ -42,11 +42,18 @@ class FitnessCard extends StatelessWidget {
             (series.last.ctl > 0 || series.last.atl > 0))
         ? series.last
         : null;
+    final returningFromLayoff = isReturningFromLayoff(runs, now: now);
     final advice = recoveryAdvice(
       load?.tsb,
       load?.ctl,
-      returningFromLayoff: isReturningFromLayoff(runs, now: now),
+      returningFromLayoff: returningFromLayoff,
     );
+    // Forward-looking companion to the advice line: days of easy running
+    // until the next hard session. Shown only when currently loaded
+    // (≥1 day out) and not a comeback (advice already says rebuild slowly).
+    final daysToHard = returningFromLayoff
+        ? null
+        : daysUntilNextHardSession(load?.atl, load?.ctl);
 
     String fmt(double? v, {int digits = 1}) =>
         v == null ? '—' : formatFixed(v, digits, activeLocaleTag);
@@ -121,11 +128,27 @@ class FitnessCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: Text(
-                          advice,
-                          style: theme.textTheme.bodySmall?.copyWith(
-                            color: theme.colorScheme.onSecondaryContainer,
-                          ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              advice,
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.onSecondaryContainer,
+                              ),
+                            ),
+                            if (daysToHard != null && daysToHard >= 1) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                'Next hard session in ~$daysToHard '
+                                '${daysToHard == 1 ? 'day' : 'days'} of easy running.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: theme.colorScheme.onSecondaryContainer,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
