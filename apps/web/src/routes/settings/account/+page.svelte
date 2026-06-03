@@ -46,6 +46,8 @@
 	// (the DB lock trigger only protects user_profiles.health_data_consent_at).
 	let healthDataConsent = $state(false);
 	let healthDataConsentAt = $state<string | null>(null);
+	let coachConsentAt = $state<string | null>(null);
+	let coachConsentWithdrawing = $state(false);
 	let saving = $state(false);
 	let saved = $state(false);
 	let exporting = $state(false);
@@ -184,12 +186,31 @@
 		// SELECTs (column lockdown, 20260707_001) — a direct select 403s.
 		const { data: prof } = await supabase.rpc('get_my_profile');
 		healthDataConsentAt = (prof?.health_data_consent_at as string | null) ?? null;
+		coachConsentAt = (prof?.coach_consent_at as string | null) ?? null;
 		// Pre-tick the box if consent is already on record so a user can
 		// edit DOB / HR without re-consenting on every visit.
 		healthDataConsent = healthDataConsentAt != null;
 		await loadIdentities();
 		await refreshPushState();
 	});
+
+	async function withdrawCoachConsent() {
+		if (coachConsentWithdrawing) return;
+		coachConsentWithdrawing = true;
+		try {
+			// Sanctioned inverse of record_coach_consent(): clears the
+			// server-held stamp. The coach handler's 403 gate then re-blocks
+			// the Coach until the user re-consents on the Coach surface.
+			const { error } = await supabase.rpc('withdraw_coach_consent');
+			if (error) throw new Error(error.message);
+			coachConsentAt = null;
+			showToast(m('settingsAccount.coachConsentWithdrawn'), 'success');
+		} catch (e) {
+			showToast(m('settingsAccount.saveFailed', { error: (e as Error).message }), 'error');
+		} finally {
+			coachConsentWithdrawing = false;
+		}
+	}
 
 	// --- Web push notifications ---
 
@@ -919,6 +940,27 @@
 		<p class="section-desc" style="margin-top: 0.5rem; font-size: 0.85rem;">
 			<strong>{m('settingsAccount.cloudExportFootnotePrefix')}</strong>{m('settingsAccount.cloudExportFootnoteSuffix')}
 		</p>
+	</section>
+
+	<section class="card">
+		<h2>{m('settingsAccount.coachConsentHeading')}</h2>
+		{#if coachConsentAt}
+			<p class="section-desc">{m('settingsAccount.coachConsentActive')}</p>
+			<div class="btn-row">
+				<button
+					class="btn btn-outline"
+					onclick={withdrawCoachConsent}
+					disabled={coachConsentWithdrawing}
+				>
+					<span class="material-symbols">block</span>
+					{coachConsentWithdrawing
+						? m('settingsAccount.coachConsentWithdrawing')
+						: m('settingsAccount.coachConsentWithdraw')}
+				</button>
+			</div>
+		{:else}
+			<p class="section-desc">{m('settingsAccount.coachConsentInactive')}</p>
+		{/if}
 	</section>
 
 	<ConfirmDialog
