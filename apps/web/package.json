@@ -12,7 +12,8 @@
 		"check:check-constraints": "node scripts/check_constraint_unions.mjs",
 		"test:unit": "tsx --test 'src/lib/**/*.test.ts'",
 		"test:e2e": "playwright test --config=tests-e2e/playwright.config.ts",
-		"test:e2e:ui": "playwright test --config=tests-e2e/playwright.config.ts --ui"
+		"test:e2e:ui": "playwright test --config=tests-e2e/playwright.config.ts --ui",
+		"test:e2e:livehub": "playwright test --config=tests-e2e/playwright.livehub.config.ts"
 	},
 	"devDependencies": {
 		"@iconify-json/material-symbols": "1.2.75",

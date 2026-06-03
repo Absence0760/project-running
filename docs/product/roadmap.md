@@ -277,7 +277,8 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Pulsing "LIVE" badge
 - [x] Map auto-follows runner position
 - [x] Open Graph and SEO meta tags
-- [ ] Connect to Go service WebSocket (currently simulated)
+- [x] Connect to Go service WebSocket — the spectator page takes the real `openLiveWebSocket()` path whenever `PUBLIC_LIVE_HUB_URL` is set (`lib/runs/live_hub.ts`); the Supabase Realtime channel is the fallback when it isn't, and the demo animation is only the no-signal filler. End-to-end proven against the real Go hub binary by `tests-e2e/live/spectator_websocket.spec.ts` (dedicated `playwright.livehub.config.ts`, CI job `e2e-web-livehub`): snapshot late-join + on-connect replay + live ping streaming.
+- [ ] **Operator deploy only** — provision the Go live-hub (Fly.io), point `live.threkir.com` at it, set `LIVEHUB_REQUIRE_AUTH=1` + `SUPABASE_JWT_SECRET` + `LIVEHUB_ALLOWED_ORIGINS`, then flip `PUBLIC_LIVE_HUB_URL` (web) + `LIVE_HUB_URL` (mobile). No client code changes needed — the path lights up from env alone. See `apps/job_worker/deployment.md`.
 
 ### Account and integrations management
 

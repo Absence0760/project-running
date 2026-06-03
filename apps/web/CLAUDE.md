@@ -101,7 +101,7 @@ src/
     settings/       # Tabbed layout: account, preferences, integrations, devices, upgrade (donate)
     share/run/[id]/ # Public run share page (no auth required)
     share/route/[id]/ # Public route share page (no auth required)
-    live/[id]/      # Live spectator tracking (simulated)
+    live/[id]/      # Live spectator tracking. Real Go live-hub WebSocket path via lib/runs/live_hub.ts when PUBLIC_LIVE_HUB_URL is set; Supabase Realtime channel as fallback when unset; the demo animation is only the no-signal filler. WS path e2e-tested by tests-e2e/live/spectator_websocket.spec.ts (dedicated playwright.livehub.config.ts — boots the real hub binary).
     login/          # Email/password + OAuth sign-in
     auth/callback/  # OAuth redirect handler
   app.css           # Global styles + CSS variables
