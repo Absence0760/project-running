@@ -26,12 +26,14 @@ class SettingsPreferencesScreen extends StatefulWidget {
 
 class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
   bool _darkMode = themeModeNotifier.value == ThemeMode.dark;
+  bool _localeBackfillDone = false;
 
   @override
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
     widget.settingsSync?.addListener(_onChange);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeBackfillLocale());
   }
 
   @override
@@ -43,6 +45,7 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
 
   void _onChange() {
     if (mounted) setState(() {});
+    _maybeBackfillLocale();
   }
 
   String _unitSubtitle() {
@@ -471,7 +474,32 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     final next = picked.isEmpty ? null : localeFromTag(picked);
     await widget.preferences.setLocale(next);
     localeNotifier.value = next;
+    // Mirror the applied locale into the universal bag so the worker can
+    // localize email (decisions §120). For "follow device" (empty pick),
+    // resolve the concrete tag the device negotiates to. The per-device UI
+    // locale above stays the source of truth for what THIS device shows.
+    final tag = picked.isEmpty
+        ? resolveActiveLocaleTag(
+            null, WidgetsBinding.instance.platformDispatcher.locales)
+        : picked;
+    await _putUniversal(SettingsKeys.locale, tag);
     if (mounted) setState(() {});
+  }
+
+  // One-shot backfill: when the bag has no `locale` yet, persist the active
+  // locale so a user who never opens the language picker still gets email in
+  // their language (decisions §120). Gated on a real settings service (the
+  // server-backed bag) so it no-ops in widget tests with a stubbed sync.
+  void _maybeBackfillLocale() {
+    if (_localeBackfillDone) return;
+    final sync = widget.settingsSync;
+    final svc = sync?.service;
+    if (sync == null || !sync.synced || svc == null) return; // not ready; retry on next change
+    _localeBackfillDone = true;
+    if (svc.effective<String>(SettingsKeys.locale) != null) return; // already set
+    final tag = resolveActiveLocaleTag(
+        widget.preferences.locale, WidgetsBinding.instance.platformDispatcher.locales);
+    _putUniversal(SettingsKeys.locale, tag);
   }
 
   Future<void> _editMapStyle() async {
