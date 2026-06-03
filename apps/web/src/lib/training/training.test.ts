@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import {
 	vdotFromRace,
 	riegelPredict,
+	predictionConfidence,
 	pacesFromGoalPace,
 	resolveTrainingPaces,
 	phaseFor,
@@ -605,3 +606,89 @@ test('generatePlan: a sub-masters age leaves the standard Tue/Thu schedule intac
 	assert.equal(dayOffsetInWeek(week, QUALITY_KINDS), 2);
 });
 
+
+// ─────────────────────── predictionConfidence ───────────────────────
+
+const FIVE_K = 5000;
+const TEN_K = 10000;
+const MARATHON = 42195;
+
+test('predictionConfidence: high when distance is close, effort recent, well-sampled', () => {
+	const q = predictionConfidence({
+		knownDistanceM: TEN_K,
+		targetDistanceM: FIVE_K,
+		daysSinceBest: 10,
+		qualifyingRunCount: 5,
+	});
+	assert.equal(q.confidence, 'high');
+	assert.equal(q.reason, 'similar');
+});
+
+test('predictionConfidence: low + extrapolated when projecting a marathon off a 5k', () => {
+	const q = predictionConfidence({
+		knownDistanceM: FIVE_K,
+		targetDistanceM: MARATHON,
+		daysSinceBest: 5,
+		qualifyingRunCount: 8,
+	});
+	assert.equal(q.confidence, 'low');
+	assert.equal(q.reason, 'extrapolated');
+});
+
+test('predictionConfidence: moderate + stale when the only recent effort is weeks old', () => {
+	const q = predictionConfidence({
+		knownDistanceM: FIVE_K,
+		targetDistanceM: FIVE_K,
+		daysSinceBest: 45,
+		qualifyingRunCount: 4,
+	});
+	assert.equal(q.confidence, 'moderate');
+	assert.equal(q.reason, 'stale');
+});
+
+test('predictionConfidence: moderate + limited when close + recent but thinly sampled', () => {
+	const q = predictionConfidence({
+		knownDistanceM: FIVE_K,
+		targetDistanceM: FIVE_K,
+		daysSinceBest: 7,
+		qualifyingRunCount: 1,
+	});
+	assert.equal(q.confidence, 'moderate');
+	assert.equal(q.reason, 'limited');
+});
+
+test('predictionConfidence: moderate + extrapolated for a meaningful but not extreme gap', () => {
+	// 5k → half marathon is ~4.2x — past the close band but within the
+	// moderate factor<=3? No: 21097/5000 = 4.2 > 4 → far → low.
+	// Use 10k → half (2.1x) to land in the moderate-extrapolated band.
+	const q = predictionConfidence({
+		knownDistanceM: TEN_K,
+		targetDistanceM: 21097,
+		daysSinceBest: 10,
+		qualifyingRunCount: 5,
+	});
+	assert.equal(q.confidence, 'moderate');
+	assert.equal(q.reason, 'extrapolated');
+});
+
+test('predictionConfidence: low + stale when the anchoring effort is over two months old', () => {
+	const q = predictionConfidence({
+		knownDistanceM: FIVE_K,
+		targetDistanceM: FIVE_K,
+		daysSinceBest: 75,
+		qualifyingRunCount: 4,
+	});
+	assert.equal(q.confidence, 'low');
+	assert.equal(q.reason, 'stale');
+});
+
+test('predictionConfidence: low + limited with no qualifying runs', () => {
+	const q = predictionConfidence({
+		knownDistanceM: FIVE_K,
+		targetDistanceM: FIVE_K,
+		daysSinceBest: 5,
+		qualifyingRunCount: 0,
+	});
+	assert.equal(q.confidence, 'low');
+	assert.equal(q.reason, 'limited');
+});

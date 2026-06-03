@@ -135,6 +135,66 @@ double riegelPredict(double knownDistanceM, int knownTimeSec, double targetDista
   return knownTimeSec * pow(targetDistanceM / knownDistanceM, exponent).toDouble();
 }
 
+enum PredictionConfidence { high, moderate, low }
+
+/// Machine-readable reason code for the binding limit on a prediction's
+/// confidence. Mirrors the web `PredictionReason` union.
+enum PredictionReason { similar, extrapolated, stale, limited }
+
+class PredictionQuality {
+  final PredictionConfidence confidence;
+  final PredictionReason reason;
+  const PredictionQuality(this.confidence, this.reason);
+}
+
+/// Beyond this Riegel extrapolation factor the prediction is little
+/// better than a guess (a marathon off a 5k is ~8.4x). Caps at 'low'.
+const double _riegelFarFactor = 4;
+
+/// Grade the data quality behind a Riegel race-time prediction. Mirrors
+/// the web `predictionConfidence` 1:1 — keep the thresholds in lockstep.
+PredictionQuality predictionConfidence({
+  required double knownDistanceM,
+  required double targetDistanceM,
+  required int daysSinceBest,
+  required int qualifyingRunCount,
+}) {
+  if (knownDistanceM <= 0 || targetDistanceM <= 0 || qualifyingRunCount <= 0) {
+    return const PredictionQuality(
+        PredictionConfidence.low, PredictionReason.limited);
+  }
+  final ratio = targetDistanceM / knownDistanceM;
+  final factor = ratio > 1 / ratio ? ratio : 1 / ratio;
+
+  if (factor > _riegelFarFactor) {
+    return const PredictionQuality(
+        PredictionConfidence.low, PredictionReason.extrapolated);
+  }
+
+  final closeDistance = factor <= 2;
+  final recent = daysSinceBest <= 30;
+  final wellSampled = qualifyingRunCount >= 3;
+
+  if (closeDistance && recent && wellSampled) {
+    return const PredictionQuality(
+        PredictionConfidence.high, PredictionReason.similar);
+  }
+
+  if (!closeDistance) {
+    return const PredictionQuality(
+        PredictionConfidence.moderate, PredictionReason.extrapolated);
+  }
+  if (!recent) {
+    return daysSinceBest > 60
+        ? const PredictionQuality(
+            PredictionConfidence.low, PredictionReason.stale)
+        : const PredictionQuality(
+            PredictionConfidence.moderate, PredictionReason.stale);
+  }
+  return const PredictionQuality(
+      PredictionConfidence.moderate, PredictionReason.limited);
+}
+
 // ─────────────────────── Paces ───────────────────────
 
 class TrainingPaces {

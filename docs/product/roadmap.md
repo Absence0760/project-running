@@ -464,7 +464,7 @@ The foundation under both the generator and any hand-built plan: a data model fo
 
 **Race pace predictor:** shipped — `RaceDayPanel.svelte` (Riegel projection), mounts on plan detail within 21 days of the goal race.
 - [x] Predict finish times (Riegel formula with VO2 max adjustment)
-- [ ] Confidence levels based on data quality — *not built*
+- [x] Confidence levels based on data quality — `predictionConfidence` (training.ts/.dart parity pair) grades the Riegel projection high/moderate/low from the anchoring effort's distance gap (factor vs target), recency, and qualifying-run count; surfaced as a confidence chip with a localized reason tooltip on `RaceDayPanel` (only for the data-derived path, not a user-set goal time)
 
 **Recovery advisor:** shipped — `lib/training/training_load.ts` + `readiness.ts`; `TrainingLoadChart` (90-day fitness / fatigue / form trio) + a readiness card on the dashboard.
 - [x] Acute training load (ATL) — 7-day EWMA

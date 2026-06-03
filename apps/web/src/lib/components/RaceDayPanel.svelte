@@ -7,7 +7,7 @@
 		raceChecklist,
 		fmtSplitTime,
 	} from '$lib/runs/race_day';
-	import { riegelPredict } from '$lib/training/training';
+	import { riegelPredict, predictionConfidence } from '$lib/training/training';
 	import { fmtKm, getUnit } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
@@ -26,20 +26,55 @@
 
 	// Predict the finish from the goal time if the user set one,
 	// otherwise pick a Riegel projection off the runner's best
-	// qualifying recent effort (>1 km, in the last 90 days).
-	let predictedSec = $derived.by(() => {
-		if (goalTimeSec != null) return goalTimeSec;
+	// qualifying recent effort (>1 km, in the last 90 days). When the
+	// prediction is data-derived we also capture the anchoring effort so
+	// we can grade its confidence (distance gap / recency / sample size).
+	let prediction = $derived.by(() => {
+		if (goalTimeSec != null) {
+			return { sec: goalTimeSec, fromGoal: true, anchor: null, qualifyingCount: 0 };
+		}
+		const now = Date.now();
+		const cutoff = now - 90 * 24 * 60 * 60 * 1000;
 		let bestSec: number | null = null;
-		const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000;
+		let anchor: { distanceM: number; daysSinceBest: number } | null = null;
+		let qualifyingCount = 0;
 		for (const r of recentRuns) {
 			if (r.distance_m < 1000) continue;
 			const t = new Date(r.started_at).getTime();
 			if (t < cutoff) continue;
+			qualifyingCount++;
 			const proj = riegelPredict(r.distance_m, r.duration_s, distanceM);
-			if (bestSec == null || proj < bestSec) bestSec = proj;
+			if (bestSec == null || proj < bestSec) {
+				bestSec = proj;
+				anchor = {
+					distanceM: r.distance_m,
+					daysSinceBest: Math.max(0, Math.round((now - t) / (24 * 60 * 60 * 1000))),
+				};
+			}
 		}
-		return bestSec;
+		return { sec: bestSec, fromGoal: false, anchor, qualifyingCount };
 	});
+
+	let predictedSec = $derived(prediction.sec);
+
+	// Confidence chip — only for data-derived predictions (a user-set
+	// goal time isn't a prediction, so no data-quality grade applies).
+	let confidence = $derived.by(() => {
+		if (prediction.fromGoal || prediction.anchor == null) return null;
+		return predictionConfidence({
+			knownDistanceM: prediction.anchor.distanceM,
+			targetDistanceM: distanceM,
+			daysSinceBest: prediction.anchor.daysSinceBest,
+			qualifyingRunCount: prediction.qualifyingCount,
+		});
+	});
+
+	let confidenceLabel = $derived(
+		confidence == null ? null : m(`raceDayPanel.confidence_${confidence.confidence}`),
+	);
+	let confidenceReason = $derived(
+		confidence == null ? null : m(`raceDayPanel.confReason_${confidence.reason}`),
+	);
 
 	let strategy = $state<'even' | 'negative'>('even');
 	// Pacing splits honour the user's distance pref — mi-mode users
@@ -74,6 +109,12 @@
 					{m('raceDayPanel.predictedFinishPrefix')} <strong>{fmtSplitTime(predictedSec)}</strong>
 					{m('raceDayPanel.predictedFinishFor')} {fmtKm(distanceM, 1)}
 				</p>
+				{#if confidenceLabel != null}
+					<span
+						class="confidence-chip conf-{confidence?.confidence}"
+						title={confidenceReason}
+					>{confidenceLabel}</span>
+				{/if}
 			{/if}
 		</header>
 
@@ -147,6 +188,23 @@
 	}
 	.prediction { margin: 0; font-size: 1rem; opacity: 0.95; }
 	.prediction strong { font-weight: 800; }
+
+	.confidence-chip {
+		display: inline-block;
+		margin-top: 0.4rem;
+		padding: 0.15rem 0.6rem;
+		border-radius: 999px;
+		font-size: 0.72rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background: rgba(255, 255, 255, 0.18);
+		border: 1px solid rgba(255, 255, 255, 0.35);
+		cursor: help;
+	}
+	.confidence-chip.conf-high { background: rgba(255, 255, 255, 0.92); color: #047857; }
+	.confidence-chip.conf-moderate { background: rgba(255, 255, 255, 0.82); color: #B45309; }
+	.confidence-chip.conf-low { background: rgba(255, 255, 255, 0.7); color: #B91C1C; }
 
 	.pacing-section {
 		background: rgba(255, 255, 255, 0.12);

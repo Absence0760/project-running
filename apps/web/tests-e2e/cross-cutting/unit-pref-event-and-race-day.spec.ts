@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
 import { getAdminClient } from '../fixtures/local-supabase';
-import { setUserSetting } from '../fixtures/simulate';
+import { deleteRun, insertRun, setUserSetting } from '../fixtures/simulate';
 import { USER_A } from '../fixtures/users';
 
 /**
@@ -162,6 +162,54 @@ test.describe('Unit pref propagation — EventEditor + RaceDayPanel', () => {
 				.toHaveCount(0);
 		} finally {
 			await admin.from('training_plans').delete().eq('id', planId);
+		}
+	});
+
+	test('RaceDayPanel: a data-derived prediction shows a confidence chip', async ({
+		page
+	}) => {
+		// A plan with NO goal_time_seconds falls back to a Riegel
+		// projection off the runner's best recent qualifying effort —
+		// the only path that grades + shows a confidence chip (a user-set
+		// goal time isn't a prediction, so no chip there). Seed one recent
+		// 10k so there's at least one qualifying anchor and the chip
+		// renders; the exact level depends on USER_A's full run history so
+		// we assert the chip surfaces a confidence grade, not which one.
+		const planId = crypto.randomUUID();
+		const runId = await insertRun({
+			user_id: USER_A.id,
+			started_at: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+			distance_m: 10_000,
+			duration_s: 3000,
+		});
+		try {
+			const admin = getAdminClient();
+			const endIso = new Date(Date.now() + 7 * 24 * 3600 * 1000)
+				.toISOString()
+				.slice(0, 10);
+			const startIso = new Date().toISOString().slice(0, 10);
+			await admin.from('training_plans').insert({
+				id: planId,
+				user_id: USER_A.id,
+				name: 'e2e race-day confidence',
+				goal_event: 'distance_10k',
+				goal_distance_m: 10_000,
+				goal_time_seconds: null, // force the data-derived path
+				start_date: startIso,
+				end_date: endIso,
+				status: 'completed',
+				days_per_week: 4
+			});
+
+			await page.goto(`/plans/${planId}`);
+
+			const chip = page.locator('.confidence-chip');
+			await expect(chip).toBeVisible({ timeout: 10_000 });
+			await expect(chip).toHaveText(/confidence/i);
+		} finally {
+			const admin = getAdminClient();
+			await admin.from('training_plans').delete().eq('id', planId);
+			await deleteRun(runId);
 		}
 	});
 

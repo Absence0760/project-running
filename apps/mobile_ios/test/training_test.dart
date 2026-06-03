@@ -151,6 +151,89 @@ void main() {
     });
   });
 
+  group('predictionConfidence', () {
+    const fiveK = 5000.0;
+    const tenK = 10000.0;
+    const marathon = 42195.0;
+
+    test('high when distance is close, effort recent, well-sampled', () {
+      final q = predictionConfidence(
+        knownDistanceM: tenK,
+        targetDistanceM: fiveK,
+        daysSinceBest: 10,
+        qualifyingRunCount: 5,
+      );
+      expect(q.confidence, PredictionConfidence.high);
+      expect(q.reason, PredictionReason.similar);
+    });
+
+    test('low + extrapolated projecting a marathon off a 5k', () {
+      final q = predictionConfidence(
+        knownDistanceM: fiveK,
+        targetDistanceM: marathon,
+        daysSinceBest: 5,
+        qualifyingRunCount: 8,
+      );
+      expect(q.confidence, PredictionConfidence.low);
+      expect(q.reason, PredictionReason.extrapolated);
+    });
+
+    test('moderate + stale when the only recent effort is weeks old', () {
+      final q = predictionConfidence(
+        knownDistanceM: fiveK,
+        targetDistanceM: fiveK,
+        daysSinceBest: 45,
+        qualifyingRunCount: 4,
+      );
+      expect(q.confidence, PredictionConfidence.moderate);
+      expect(q.reason, PredictionReason.stale);
+    });
+
+    test('moderate + limited when close + recent but thinly sampled', () {
+      final q = predictionConfidence(
+        knownDistanceM: fiveK,
+        targetDistanceM: fiveK,
+        daysSinceBest: 7,
+        qualifyingRunCount: 1,
+      );
+      expect(q.confidence, PredictionConfidence.moderate);
+      expect(q.reason, PredictionReason.limited);
+    });
+
+    test('moderate + extrapolated for a meaningful but not extreme gap', () {
+      final q = predictionConfidence(
+        knownDistanceM: tenK,
+        targetDistanceM: 21097,
+        daysSinceBest: 10,
+        qualifyingRunCount: 5,
+      );
+      expect(q.confidence, PredictionConfidence.moderate);
+      expect(q.reason, PredictionReason.extrapolated);
+    });
+
+    test('low + stale when the anchoring effort is over two months old', () {
+      final q = predictionConfidence(
+        knownDistanceM: fiveK,
+        targetDistanceM: fiveK,
+        daysSinceBest: 75,
+        qualifyingRunCount: 4,
+      );
+      expect(q.confidence, PredictionConfidence.low);
+      expect(q.reason, PredictionReason.stale);
+    });
+
+    test('low + limited with no qualifying runs', () {
+      final q = predictionConfidence(
+        knownDistanceM: fiveK,
+        targetDistanceM: fiveK,
+        daysSinceBest: 5,
+        qualifyingRunCount: 0,
+      );
+      expect(q.confidence, PredictionConfidence.low);
+      expect(q.reason, PredictionReason.limited);
+    });
+  });
+
   group('pacesFromGoalPace', () {
     test('zones are ordered slow → fast', () {
       final p = pacesFromGoalPace(240);

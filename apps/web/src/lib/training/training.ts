@@ -92,6 +92,76 @@ export function riegelPredict(
 	return knownTimeSec * Math.pow(targetDistanceM / knownDistanceM, exponent);
 }
 
+export type PredictionConfidence = 'high' | 'moderate' | 'low';
+
+/// Machine-readable reason code for the binding limit on a prediction's
+/// confidence. The UI maps these to localized prose; tests assert on
+/// the code so the wording can change without churning the suite.
+export type PredictionReason = 'similar' | 'extrapolated' | 'stale' | 'limited';
+
+export interface PredictionQuality {
+	confidence: PredictionConfidence;
+	reason: PredictionReason;
+}
+
+/// Beyond this Riegel extrapolation factor (target/known distance, or
+/// its reciprocal) the prediction is little better than a guess — a
+/// marathon predicted from a 5k is ~8.4x. Caps confidence at 'low'.
+const RIEGEL_FAR_FACTOR = 4;
+
+/// Grade the data quality behind a Riegel race-time prediction. The
+/// three levers are how far we extrapolate from the anchoring effort
+/// (distance gap), how recent that effort is, and how many qualifying
+/// recent efforts back it up. Pure — the caller supplies the anchor's
+/// distance, its age in days, and the count of qualifying recent runs.
+export function predictionConfidence(input: {
+	/// Distance of the best recent effort the Riegel projection is anchored to.
+	knownDistanceM: number;
+	/// Target race distance.
+	targetDistanceM: number;
+	/// Age in days of the anchoring effort.
+	daysSinceBest: number;
+	/// Number of qualifying recent runs (the size of the pool the anchor came from).
+	qualifyingRunCount: number;
+}): PredictionQuality {
+	const { knownDistanceM, targetDistanceM, daysSinceBest, qualifyingRunCount } = input;
+	if (knownDistanceM <= 0 || targetDistanceM <= 0 || qualifyingRunCount <= 0) {
+		return { confidence: 'low', reason: 'limited' };
+	}
+	const ratio = targetDistanceM / knownDistanceM;
+	const factor = Math.max(ratio, 1 / ratio);
+
+	// Extrapolating far past the anchoring effort dominates every other
+	// signal — no amount of recency or sample size rescues a marathon
+	// predicted off a parkrun.
+	if (factor > RIEGEL_FAR_FACTOR) {
+		return { confidence: 'low', reason: 'extrapolated' };
+	}
+
+	// A factor up to 2 (5k↔10k, 10k↔half-ish) is the band Riegel handles
+	// well; beyond that error grows fast even within the 4x cap.
+	const closeDistance = factor <= 2;
+	const recent = daysSinceBest <= 30;
+	const wellSampled = qualifyingRunCount >= 3;
+
+	if (closeDistance && recent && wellSampled) {
+		return { confidence: 'high', reason: 'similar' };
+	}
+
+	// One or more levers are soft. Report the binding constraint, with
+	// distance gap first (it hurts the prediction most).
+	if (!closeDistance) return { confidence: 'moderate', reason: 'extrapolated' };
+	if (!recent) {
+		// An effort older than two months is too stale to anchor a
+		// race-day prediction at all, not just a soft caveat.
+		return daysSinceBest > 60
+			? { confidence: 'low', reason: 'stale' }
+			: { confidence: 'moderate', reason: 'stale' };
+	}
+	// Close + recent but thinly sampled.
+	return { confidence: 'moderate', reason: 'limited' };
+}
+
 // ─────────────────────── Training paces ───────────────────────
 
 export interface TrainingPaces {
