@@ -3273,6 +3273,8 @@ export async function updatePlanMeta(
 		goal_time_seconds: number | null;
 		days_per_week: number;
 		rules: unknown[] | null;
+		start_date: string;
+		end_date: string;
 	}>
 ): Promise<void> {
 	const { error } = await supabase.from('training_plans').update(patch).eq('id', id);

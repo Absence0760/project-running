@@ -3,7 +3,16 @@
 	import { onMount } from 'svelte';
 	import { afterNavigate } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fetchPlan, fetchMyClubs, fetchRuns, publishPlanAsTemplate } from '$lib/core/data';
+	import {
+		fetchPlan,
+		fetchMyClubs,
+		fetchRuns,
+		publishPlanAsTemplate,
+		updatePlanWorkout,
+		updatePlanWeek,
+		updatePlanMeta,
+	} from '$lib/core/data';
+	import { shiftIsoDate, recoveryWorkoutPatch, recoveryWeekVolume } from '$lib/training/plan_bulk_ops';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
@@ -135,6 +144,60 @@
 	function downloadJson(): void {
 		const e = buildExport();
 		if (e) downloadFile(planToJson(e), `${planSlug()}.json`, 'application/json');
+	}
+
+	// ─── Bulk editor ops (owner-only) ───
+	let shiftDays = $state(7);
+	let bulkBusy = $state(false);
+
+	/// Move every workout + the plan's start/end by ±N days (race moved,
+	/// runner started a week late, …). Orchestrated client-side: one
+	/// update per workout then the plan meta; on partial failure the
+	/// reload surfaces the real server state.
+	async function shiftPlan(): Promise<void> {
+		if (!plan || bulkBusy || !shiftDays) return;
+		bulkBusy = true;
+		try {
+			await Promise.all(
+				workouts.map((w) =>
+					updatePlanWorkout(w.id, { scheduled_date: shiftIsoDate(w.scheduled_date, shiftDays) }),
+				),
+			);
+			await updatePlanMeta(plan.id, {
+				start_date: shiftIsoDate(plan.start_date, shiftDays),
+				end_date: shiftIsoDate(plan.end_date, shiftDays),
+			});
+			showToast(m('planDetail.shiftDone', { n: Math.abs(shiftDays) }));
+			await load();
+		} catch (e) {
+			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	/// Turn a week into a recovery / step-back week: scale its volume +
+	/// every non-rest/non-race workout to ~60% and convert quality
+	/// sessions to easy recovery runs.
+	async function markWeekRecovery(week: PlanWeek): Promise<void> {
+		if (bulkBusy) return;
+		bulkBusy = true;
+		try {
+			const weekWorkouts = workoutsByWeek.get(week.id) ?? [];
+			await Promise.all(
+				weekWorkouts.map((w) => {
+					const patch = recoveryWorkoutPatch(w);
+					return patch ? updatePlanWorkout(w.id, patch) : Promise.resolve();
+				}),
+			);
+			await updatePlanWeek(week.id, { target_volume_m: recoveryWeekVolume(week.target_volume_m) });
+			showToast(m('planDetail.recoveryDone'));
+			await load();
+		} catch (e) {
+			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
 	}
 
 	function handleBack(e: MouseEvent): void {
@@ -733,6 +796,30 @@
 			/>
 		</section>
 
+		{#if isOwner && !plan.is_template}
+			<section class="plan-tools">
+				<span class="tools-label">{m('planDetail.shiftPlanLabel')}</span>
+				<div class="shift-control">
+					<input
+						type="number"
+						bind:value={shiftDays}
+						step="1"
+						aria-label={m('planDetail.shiftDaysAria')}
+						disabled={bulkBusy}
+					/>
+					<span class="shift-unit">{m('planDetail.days')}</span>
+					<button
+						type="button"
+						class="btn btn-outline btn-sm"
+						onclick={shiftPlan}
+						disabled={bulkBusy || !shiftDays}
+					>
+						{m('planDetail.shiftApply')}
+					</button>
+				</div>
+			</section>
+		{/if}
+
 		<section class="weeks">
 			<h2 class="section-title">{m('planDetail.weekByWeek')}</h2>
 			{#each weeks as w (w.id)}
@@ -759,6 +846,18 @@
 								{weekDone}<em> / {weekActive.length}</em> {m('planDetail.done')}
 							</span>
 							<span class="week-volume">{fmtKm(w.target_volume_m, 0)}</span>
+							{#if isOwner && !plan.is_template && w.phase !== 'race'}
+								<button
+									type="button"
+									class="week-recovery-btn"
+									onclick={() => markWeekRecovery(w)}
+									disabled={bulkBusy}
+									title={m('planDetail.markRecovery')}
+								>
+									<span class="material-symbols">trending_down</span>
+									{m('planDetail.markRecovery')}
+								</button>
+							{/if}
 						</div>
 					</header>
 					{#if w.notes}
@@ -1168,6 +1267,60 @@
 		background: var(--color-surface);
 		border: 1px dashed var(--color-border);
 		border-radius: var(--radius-md);
+	}
+	.plan-tools {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+		margin: var(--space-md) 0;
+	}
+	.tools-label {
+		font-size: 0.9rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+	.shift-control {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+	.shift-control input {
+		width: 4.5rem;
+		padding: 0.4rem 0.5rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		color: inherit;
+		font: inherit;
+	}
+	.shift-unit {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.week-recovery-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+		padding: 0.2rem 0.5rem;
+		font-size: 0.74rem;
+		font-weight: 600;
+		background: transparent;
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		color: var(--color-text-secondary);
+		cursor: pointer;
+	}
+	.week-recovery-btn:hover:not(:disabled) {
+		border-color: var(--color-primary);
+		color: var(--color-primary);
+	}
+	.week-recovery-btn:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	.week-recovery-btn .material-symbols {
+		font-size: 0.95rem;
 	}
 	.publish-label {
 		font-size: 0.9rem;
