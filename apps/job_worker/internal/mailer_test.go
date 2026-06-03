@@ -125,19 +125,31 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 			t.Errorf("%s: empty subject", c.kind)
 		}
 		if strings.TrimSpace(msg.Body) == "" {
-			t.Errorf("%s: empty body", c.kind)
+			t.Errorf("%s: empty text body", c.kind)
 		}
-		if !strings.Contains(msg.Body, "Open Threkir:") {
-			t.Errorf("%s: body missing action line:\n%s", c.kind, msg.Body)
+		if strings.TrimSpace(msg.HTML) == "" {
+			t.Errorf("%s: empty HTML body", c.kind)
 		}
+		if strings.TrimSpace(msg.Preheader) == "" {
+			t.Errorf("%s: empty preheader (inbox preview text)", c.kind)
+		}
+		// The deep link appears in both the text CTA line and the HTML CTA href.
 		if !strings.Contains(msg.Body, c.wantPath) {
-			t.Errorf("%s: body should deep-link to %q, got:\n%s", c.kind, c.wantPath, msg.Body)
+			t.Errorf("%s: text body should deep-link to %q, got:\n%s", c.kind, c.wantPath, msg.Body)
+		}
+		if !strings.Contains(msg.HTML, `href="`+c.wantPath+`"`) {
+			t.Errorf("%s: HTML CTA should link to %q, got:\n%s", c.kind, c.wantPath, msg.HTML)
+		}
+		// Branded shell + footer present.
+		if !strings.Contains(msg.HTML, brandName) {
+			t.Errorf("%s: HTML missing the %s brand header", c.kind, brandName)
 		}
 		if msg.ListUnsubscribe != base+"/settings/preferences" {
 			t.Errorf("%s: unexpected unsubscribe URL %q", c.kind, msg.ListUnsubscribe)
 		}
-		if !strings.Contains(msg.Body, base+"/settings/preferences") {
-			t.Errorf("%s: body missing unsubscribe footer", c.kind)
+		if !strings.Contains(msg.Body, base+"/settings/preferences") ||
+			!strings.Contains(msg.HTML, base+"/settings/preferences") {
+			t.Errorf("%s: missing manage-preferences footer", c.kind)
 		}
 	}
 
@@ -177,6 +189,20 @@ func TestRenderLifecycleEmail_Welcome(t *testing.T) {
 	if msg.ListUnsubscribe != "" {
 		t.Errorf("welcome should not set List-Unsubscribe, got %q", msg.ListUnsubscribe)
 	}
+	// Branded HTML part: preheader, brand header, heading, CTA to the app root.
+	if strings.TrimSpace(msg.Preheader) == "" {
+		t.Error("welcome should set an inbox preheader")
+	}
+	for _, want := range []string{
+		"<!DOCTYPE html>", brandName,
+		"Welcome to Threkir",
+		`href="https://threkir.test"`, // CTA → app root (no trailing slash)
+		"https://threkir.test/settings/preferences",
+	} {
+		if !strings.Contains(msg.HTML, want) {
+			t.Errorf("welcome HTML missing %q in:\n%s", want, msg.HTML)
+		}
+	}
 }
 
 func TestRenderLifecycleEmail_UnknownTemplate(t *testing.T) {
@@ -204,6 +230,30 @@ func TestBuildMIME_HeadersAndCRLF(t *testing.T) {
 		if !strings.Contains(raw, want) {
 			t.Errorf("MIME missing %q in:\n%s", want, raw)
 		}
+	}
+}
+
+func TestBuildMIME_MultipartWhenHTMLPresent(t *testing.T) {
+	raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", Email{
+		Subject: "Hi",
+		Body:    "plain version",
+		HTML:    "<p>html version</p>",
+	})
+	for _, want := range []string{
+		"Content-Type: multipart/alternative; boundary=",
+		"Content-Type: text/plain; charset=UTF-8",
+		"plain version",
+		"Content-Type: text/html; charset=UTF-8",
+		"<p>html version</p>",
+	} {
+		if !strings.Contains(raw, want) {
+			t.Errorf("multipart MIME missing %q in:\n%s", want, raw)
+		}
+	}
+	// The text part must precede the HTML part (clients render the last
+	// understood part; text-first is the convention).
+	if strings.Index(raw, "plain version") > strings.Index(raw, "html version") {
+		t.Error("text/plain part must come before text/html")
 	}
 }
 

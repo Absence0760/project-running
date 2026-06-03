@@ -3,30 +3,42 @@ package internal
 import (
 	"context"
 	"fmt"
+	"html"
 	"net/smtp"
 	"strings"
 	"time"
 )
 
-// EmailSender is the transport the notification-email handler sends
-// through. Production wires *SMTPSender (Mailpit in local dev on
-// 127.0.0.1:54325; Resend / SES SMTP in prod). Tests substitute a fake
-// recorder so the handler logic is exercised without a live SMTP server.
+// EmailSender is the transport the email handlers send through. Production
+// wires *SMTPSender (Mailpit in local dev on 127.0.0.1:54325; Resend / SES
+// SMTP in prod). Tests substitute a fake recorder so the handler logic is
+// exercised without a live SMTP server.
 type EmailSender interface {
 	Send(ctx context.Context, to string, msg Email) error
 }
 
-// Email is a rendered, transport-agnostic message. Body is plain text;
-// the channel deliberately stays text-only for the first slice (no HTML
-// template surface to maintain, no tracking pixels — a privacy-app-
-// appropriate default). ListUnsubscribe is the URL placed in the
-// List-Unsubscribe header so mail clients surface a one-tap opt-out that
-// lands on the in-app notification preferences.
+// Email is a rendered, transport-agnostic message. It carries both a
+// branded HTML part and a plain-text alternative — buildMIME sends them as
+// multipart/alternative so every client (and spam scorer) gets a clean
+// text fallback while modern clients render the HTML. Preheader is the
+// inbox preview snippet (hidden at the top of the HTML). ListUnsubscribe is
+// the URL placed in the List-Unsubscribe header for a one-tap opt-out
+// ("" for transactional mail that isn't a subscription).
 type Email struct {
 	Subject         string
-	Body            string
+	Preheader       string
+	Body            string // plain-text alternative
+	HTML            string // text/html part ("" → text-only message)
 	ListUnsubscribe string
 }
+
+// Brand tokens — kept in lockstep with apps/web/src/app.css (--color-primary
+// deep teal). Email clients can't read CSS variables, so the values are
+// inlined here.
+const (
+	brandName  = "Threkir"
+	brandColor = "#2C5F6E"
+)
 
 // SMTPSender sends via a plain SMTP server. Auth is nil for an
 // unauthenticated server (the local Mailpit catcher accepts mail without
@@ -54,10 +66,12 @@ func (s *SMTPSender) Send(ctx context.Context, to string, msg Email) error {
 	return nil
 }
 
-// buildMIME assembles a minimal RFC 5322 / MIME text message. CRLF line
-// endings per the SMTP wire format. A fixed Date is not used — the send
-// time is now; callers don't depend on a deterministic header here, and
-// the rendering tests assert on the body, not the envelope.
+// buildMIME assembles the RFC 5322 / MIME message. When HTML is present it
+// emits multipart/alternative (text first, then HTML — clients render the
+// last part they understand); otherwise a bare text/plain. CRLF line
+// endings per the SMTP wire format. The boundary is a fixed token — one
+// message is built at a time, so it needn't be random (and randomness
+// isn't available deterministically for the tests).
 func buildMIME(from, to string, msg Email) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "From: %s\r\n", from)
@@ -70,15 +84,29 @@ func buildMIME(from, to string, msg Email) string {
 		fmt.Fprintf(&b, "List-Unsubscribe: <%s>\r\n", msg.ListUnsubscribe)
 	}
 	b.WriteString("MIME-Version: 1.0\r\n")
-	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n")
-	b.WriteString("\r\n")
-	b.WriteString(strings.ReplaceAll(msg.Body, "\n", "\r\n"))
+
+	if msg.HTML == "" {
+		b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+		b.WriteString(toCRLF(msg.Body))
+		return b.String()
+	}
+
+	const boundary = "threkir_alt_boundary_x7k2"
+	fmt.Fprintf(&b, "Content-Type: multipart/alternative; boundary=\"%s\"\r\n\r\n", boundary)
+	fmt.Fprintf(&b, "--%s\r\n", boundary)
+	b.WriteString("Content-Type: text/plain; charset=UTF-8\r\n\r\n")
+	b.WriteString(toCRLF(msg.Body) + "\r\n")
+	fmt.Fprintf(&b, "--%s\r\n", boundary)
+	b.WriteString("Content-Type: text/html; charset=UTF-8\r\n\r\n")
+	b.WriteString(toCRLF(msg.HTML) + "\r\n")
+	fmt.Fprintf(&b, "--%s--\r\n", boundary)
 	return b.String()
 }
 
+func toCRLF(s string) string { return strings.ReplaceAll(s, "\n", "\r\n") }
+
 // extractAddr pulls the bare address out of an RFC 5322 "Name <addr>"
-// string for the SMTP MAIL FROM. A plain address passes through
-// unchanged.
+// string for the SMTP MAIL FROM. A plain address passes through unchanged.
 func extractAddr(from string) string {
 	if i := strings.LastIndex(from, "<"); i >= 0 {
 		if j := strings.Index(from[i:], ">"); j >= 0 {
@@ -86,6 +114,97 @@ func extractAddr(from string) string {
 		}
 	}
 	return strings.TrimSpace(from)
+}
+
+// ─────────────────── shared layout (pure) ───────────────────
+
+// emailContent is the structured copy a template produces; composeEmail
+// turns it into the text + HTML parts so every email shares one layout and
+// adding a template is just filling these fields.
+type emailContent struct {
+	subject   string
+	preheader string   // inbox preview snippet
+	heading   string   // H1
+	body      []string // paragraphs
+	ctaLabel  string   // button text ("" → no button)
+	ctaURL    string
+	footer    string // "why you're receiving this" line
+	prefsURL  string // manage-preferences link in the footer ("" → omit)
+	listUnsub string // List-Unsubscribe header value ("" → none)
+}
+
+func composeEmail(c emailContent) Email {
+	return Email{
+		Subject:         c.subject,
+		Preheader:       c.preheader,
+		Body:            renderTextBody(c),
+		HTML:            renderHTMLBody(c),
+		ListUnsubscribe: c.listUnsub,
+	}
+}
+
+func renderTextBody(c emailContent) string {
+	var b strings.Builder
+	b.WriteString(c.heading + "\n\n")
+	for _, p := range c.body {
+		b.WriteString(p + "\n\n")
+	}
+	if c.ctaURL != "" {
+		b.WriteString(c.ctaLabel + ": " + c.ctaURL + "\n\n")
+	}
+	b.WriteString("—\n")
+	b.WriteString(c.footer)
+	if c.prefsURL != "" {
+		b.WriteString(" Manage your email preferences: " + c.prefsURL)
+	}
+	b.WriteString("\n")
+	return b.String()
+}
+
+// renderHTMLBody builds an email-client-safe HTML message: table layout,
+// inline styles, ≤600px centred card, a branded header bar, an H1, body
+// paragraphs, a bulletproof CTA button, and a muted footer. The preheader
+// is a hidden span so the inbox preview reads well without showing in the
+// body. All interpolated copy is HTML-escaped (defensive — today's copy is
+// static, but future enrichment may inject names / titles).
+func renderHTMLBody(c emailContent) string {
+	var paras strings.Builder
+	for _, p := range c.body {
+		fmt.Fprintf(&paras,
+			`<p style="margin:0 0 16px;font-size:15px;line-height:1.6;color:#374151;">%s</p>`,
+			html.EscapeString(p))
+	}
+
+	cta := ""
+	if c.ctaURL != "" {
+		cta = fmt.Sprintf(
+			`<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 4px;"><tr>`+
+				`<td bgcolor="%s" style="border-radius:8px;">`+
+				`<a href="%s" style="display:inline-block;padding:12px 26px;font-size:15px;font-weight:600;color:#ffffff;text-decoration:none;border-radius:8px;">%s</a>`+
+				`</td></tr></table>`,
+			brandColor, html.EscapeString(c.ctaURL), html.EscapeString(c.ctaLabel))
+	}
+
+	footer := html.EscapeString(c.footer)
+	if c.prefsURL != "" {
+		footer += fmt.Sprintf(
+			` <a href="%s" style="color:#6b7280;">Manage email preferences</a>.`,
+			html.EscapeString(c.prefsURL))
+	}
+
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"></head>
+<body style="margin:0;padding:0;background:#f4f5f7;">
+<div style="display:none;max-height:0;overflow:hidden;opacity:0;">%s</div>
+<table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;"><tr><td align="center" style="padding:24px 12px;">
+<table role="presentation" width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%%;background:#ffffff;border-radius:12px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+<tr><td style="background:%s;padding:20px 32px;"><span style="color:#ffffff;font-size:20px;font-weight:700;letter-spacing:0.5px;">%s</span></td></tr>
+<tr><td style="padding:32px;"><h1 style="margin:0 0 16px;font-size:22px;line-height:1.3;color:#111827;">%s</h1>%s%s</td></tr>
+<tr><td style="padding:20px 32px;border-top:1px solid #e5e7eb;"><p style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">%s</p></td></tr>
+</table></td></tr></table>
+</body></html>`,
+		html.EscapeString(c.preheader), brandColor, brandName,
+		html.EscapeString(c.heading), paras.String(), cta, footer)
 }
 
 // ─────────────────── preference + rendering (pure) ───────────────────
@@ -142,74 +261,113 @@ func shouldEmail(kind, mode string) bool {
 	}
 }
 
-// renderNotificationEmail turns a notification row into a subject + body
-// + unsubscribe link. Text is intentionally generic-but-actionable: it
-// names the category and links to the relevant surface, without extra
-// joins to fetch actor handles / event titles (a later enrichment pass
-// can add those). baseURL is the web app origin (APP_BASE_URL).
+// renderNotificationEmail turns a notification row into a branded email.
+// Copy is generic-but-actionable: it names the category and links to the
+// relevant surface, without extra joins to fetch actor handles / event
+// titles (a later enrichment pass can add those). baseURL is the web app
+// origin (APP_BASE_URL).
 func renderNotificationEmail(n NotificationRow, baseURL string) Email {
 	base := strings.TrimRight(baseURL, "/")
-	unsub := base + "/settings/preferences"
-
-	subject, line, path := notificationCopy(n, base)
-	body := line + "\n\n" +
-		"Open Threkir: " + path + "\n\n" +
-		"—\n" +
-		"You're receiving this because of your notification settings. " +
-		"Change what gets emailed (or turn emails off) at " + unsub + "\n"
-
-	return Email{Subject: subject, Body: body, ListUnsubscribe: unsub}
+	c := notificationContent(n, base)
+	c.prefsURL = base + "/settings/preferences"
+	c.footer = "You're receiving this because of your notification settings."
+	c.listUnsub = c.prefsURL
+	return composeEmail(c)
 }
 
-// notificationCopy maps a kind to (subject, body line, deep link). Kept
-// in one place so adding a kind is a single edit. Unknown kinds get a
-// safe generic fallback rather than an empty mail.
-func notificationCopy(n NotificationRow, base string) (subject, line, path string) {
+// notificationContent maps a kind to its copy + deep-linked CTA. Kept in
+// one place so adding a kind is a single edit. Unknown kinds get a safe
+// generic fallback rather than an empty mail.
+func notificationContent(n NotificationRow, base string) emailContent {
 	switch n.Kind {
 	case "event_reminder":
-		return "Reminder: your event is coming up",
-			"You have an event starting soon that you said you're going to.",
-			eventPath(base, n)
+		return emailContent{
+			subject:   "Reminder: your event is coming up",
+			preheader: "An event you said you're going to starts soon.",
+			heading:   "Your event is coming up",
+			body:      []string{"You have an event starting soon that you said you're going to.", "Open it for the meet point, timing, and who else is going."},
+			ctaLabel:  "View event", ctaURL: eventPath(base, n),
+		}
 	case "event_cancel":
-		return "An event you were going to was cancelled",
-			"One of the events you'd RSVP'd to has been cancelled.",
-			eventPath(base, n)
+		return emailContent{
+			subject:   "An event you were going to was cancelled",
+			preheader: "One of your RSVP'd events has been called off.",
+			heading:   "Event cancelled",
+			body:      []string{"An event you'd RSVP'd to has been cancelled.", "Open it for the organiser's note and any replacement plans."},
+			ctaLabel:  "View event", ctaURL: eventPath(base, n),
+		}
 	case "plan_update":
-		return "Your training plan was updated",
-			"Your coach made a change to your training plan.",
-			base + "/training"
+		return emailContent{
+			subject:   "Your training plan was updated",
+			preheader: "Your coach changed your plan.",
+			heading:   "Your training plan changed",
+			body:      []string{"Your coach made a change to your training plan."},
+			ctaLabel:  "View training", ctaURL: base + "/training",
+		}
 	case "message":
-		return "You have a new message",
-			"Someone sent you a direct message.",
-			base + "/messages"
+		return emailContent{
+			subject:   "You have a new message",
+			preheader: "Someone sent you a direct message.",
+			heading:   "New message",
+			body:      []string{"You have a new direct message on Threkir."},
+			ctaLabel:  "Read message", ctaURL: base + "/messages",
+		}
 	case "event_rsvp":
-		return "New RSVP to your event",
-			"Someone RSVP'd to an event you organise.",
-			eventPath(base, n)
+		return emailContent{
+			subject:   "New RSVP to your event",
+			preheader: "Someone's going to your event.",
+			heading:   "New RSVP",
+			body:      []string{"Someone RSVP'd to an event you organise."},
+			ctaLabel:  "View event", ctaURL: eventPath(base, n),
+		}
 	case "club_post":
-		return "New post in your club",
-			"There's a new post in one of your clubs.",
-			clubPath(base, n)
+		return emailContent{
+			subject:   "New post in your club",
+			preheader: "There's a new post in one of your clubs.",
+			heading:   "New club post",
+			body:      []string{"There's a new post in one of your clubs."},
+			ctaLabel:  "View club", ctaURL: clubPath(base, n),
+		}
 	case "run_completed":
-		return "A runner you follow finished a run",
-			"Someone you follow just completed a run.",
-			runPath(base, n)
+		return emailContent{
+			subject:   "A runner you follow finished a run",
+			preheader: "See their latest run.",
+			heading:   "New run from someone you follow",
+			body:      []string{"Someone you follow just completed a run."},
+			ctaLabel:  "View run", ctaURL: runPath(base, n),
+		}
 	case "kudos":
-		return "You got kudos",
-			"Someone gave kudos to your run.",
-			runPath(base, n)
+		return emailContent{
+			subject:   "You got kudos",
+			preheader: "Someone gave kudos to your run.",
+			heading:   "You got kudos",
+			body:      []string{"Someone gave kudos to your run."},
+			ctaLabel:  "View run", ctaURL: runPath(base, n),
+		}
 	case "comment", "comment_reply":
-		return "New comment on a run",
-			"There's a new comment on a run.",
-			runPath(base, n)
+		return emailContent{
+			subject:   "New comment on a run",
+			preheader: "Someone commented on a run.",
+			heading:   "New comment",
+			body:      []string{"There's a new comment on a run."},
+			ctaLabel:  "View run", ctaURL: runPath(base, n),
+		}
 	case "follow":
-		return "You have a new follower",
-			"Someone started following you.",
-			base + "/profile"
+		return emailContent{
+			subject:   "You have a new follower",
+			preheader: "Someone started following you.",
+			heading:   "New follower",
+			body:      []string{"Someone started following you on Threkir."},
+			ctaLabel:  "View profile", ctaURL: base + "/profile",
+		}
 	default:
-		return "You have a new notification",
-			"You have a new notification on Threkir.",
-			base + "/notifications"
+		return emailContent{
+			subject:   "You have a new notification",
+			preheader: "You have a new notification on Threkir.",
+			heading:   "New notification",
+			body:      []string{"You have a new notification on Threkir."},
+			ctaLabel:  "Open Threkir", ctaURL: base + "/notifications",
+		}
 	}
 }
 
@@ -224,14 +382,19 @@ func renderLifecycleEmail(template, baseURL string) (Email, bool) {
 	base := strings.TrimRight(baseURL, "/")
 	switch template {
 	case "welcome":
-		body := "Thanks for signing up — welcome to Threkir!\n\n" +
-			"You're all set to record your first run, build routes, and follow friends.\n\n" +
-			"Get started: " + base + "\n\n" +
-			"— The Threkir team\n\n" +
-			"—\n" +
-			"You're receiving this because you just created a Threkir account. " +
-			"Manage your email at " + base + "/settings/preferences\n"
-		return Email{Subject: "Welcome to Threkir", Body: body}, true
+		return composeEmail(emailContent{
+			subject:   "Welcome to Threkir",
+			preheader: "You're all set — here's how to get started.",
+			heading:   "Welcome to Threkir",
+			body: []string{
+				"Thanks for signing up. You're all set to record your first run, build routes, and follow friends.",
+				"Hit the button below to get going.",
+			},
+			ctaLabel: "Open Threkir", ctaURL: base,
+			footer:   "You're receiving this because you just created a Threkir account.",
+			prefsURL: base + "/settings/preferences",
+			// transactional — no List-Unsubscribe.
+		}), true
 	default:
 		return Email{}, false
 	}
