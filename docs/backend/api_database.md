@@ -841,7 +841,7 @@ create table live_run_pings (
 
 Monthly funding tracker for the donate page's progress bar. One row per month, keyed by the first of the month (e.g. `'2026-05-01'`). Updated by the project owner when donations land. Publicly readable — the whole point is transparency.
 
-Write path: service role only. RLS is enabled with a single `select` policy (`using (true)`); there are no INSERT/UPDATE/DELETE policies by design. All writes go through direct SQL or a service-role context (e.g. a webhook or admin script). No client-side write policy will be added.
+Write path: service role only. RLS is enabled with a single `select` policy (`using (true)`); there are no INSERT/UPDATE/DELETE policies by design. All writes go through direct SQL or a service-role context (e.g. a webhook or admin script). No client-side write policy will be added. A `monthly_funding_updated_at_trigger` BEFORE-UPDATE trigger stamps `updated_at` on every write (`20261129_001`) so the donate page's "last updated" signal stays honest even on a manual amount bump.
 
 ```sql
 create table monthly_funding (
