@@ -1,8 +1,17 @@
 # Run app — product roadmap
 
+## Status at a glance
+
+*Snapshot 2026-06-03. The per-item checkboxes below remain the source of truth — this section is just the orientation layer on top of them.*
+
+- **Shipped (built + tested in-repo): Phases 1, 2, 2b, 3.** Phone recording (Android + iOS), Apple Watch + Wear OS standalone recording, the SvelteKit web app, the full social layer (following + feed, kudos / comments, clubs + events, segments + leaderboards, run photos, notifications inbox, gear), AI Coach, training plans + generator + training-load / VO₂ analysis, monetisation infra (RevenueCat Pro tier), and six-locale i18n across every client.
+- **In flight — Go-service production cutover.** The live-spectator WebSocket hub (+ Redis fan-out), Strava webhook, token refresh, data export, and premium endpoints are all code-complete and tested under `apps/job_worker/`. What's left is operator-only: deploy to Fly.io, point `live.threkir.com` at it, set the secrets, then flip `PUBLIC_LIVE_HUB_URL` (web) + `LIVE_HUB_URL` (mobile). No client code changes.
+- **Blocked on external credentials / approval.** Garmin Connect (developer-program application), native push FCM / APNs (Firebase + APNs keys + client token registration), RunSignUp race results (API key), live in-app-purchase sheets (RevenueCat dashboard config), watchOS complication (Xcode Widget Extension target).
+- **Next up (not started): Phase 4 — multi-modal gym + nutrition.** Also queued but unscheduled: an RTL locale, Protomaps self-hosted tiles, map-matching deploy, and an admin / moderation page.
+
 ---
 
-**Contents:** [Vision](#vision) · [Strategic pillars](#strategic-pillars) · [Architecture evolution](#architecture-evolution) · [Phase 1 — MVP: prove the core loop](#phase-1--mvp-prove-the-core-loop) · [Phase 2 — watch parity: wrist-first experience](#phase-2--watch-parity-wrist-first-experience) · [Phase 2b — web app: plan big, review deep](#phase-2b--web-app-plan-big-review-deep) · [Phase 3 — growth and monetisation](#phase-3--growth-and-monetisation) · [Phase 4 — multi-modal: gym + nutrition](#phase-4--multi-modal-gym--nutrition) · [Future — Protomaps self-hosted tiles](#future--protomaps-self-hosted-tiles) · [Future — Map matching (Strava / Nike Run Club quality)](#future--map-matching-strava--nike-run-club-quality) · [Future — Cross-platform parity enforcement](#future--cross-platform-parity-enforcement) · [Future — Hardware: ultra-marathon-optimized watch](#future--hardware-ultra-marathon-optimized-watch) · [Competitive positioning](#competitive-positioning) · [Tech stack summary](#tech-stack-summary) · [Cost projection](#cost-projection) · [Deferred from Phase 1 (Android-specific)](#deferred-from-phase-1-android-specific) · [Known issues — runs storage + bulk import](#known-issues--runs-storage--bulk-import) · [Open risks](#open-risks) · [Anti-spam / moderation — what's shipped, what's deferred](#anti-spam--moderation--whats-shipped-whats-deferred) · [Competitor-parity backlog (unphased)](#competitor-parity-backlog-unphased)
+**Contents:** [Status at a glance](#status-at-a-glance) · [Vision](#vision) · [Strategic pillars](#strategic-pillars) · [Architecture evolution](#architecture-evolution) · [Phase 1 — MVP: prove the core loop](#phase-1--mvp-prove-the-core-loop) · [Phase 2 — watch parity: wrist-first experience](#phase-2--watch-parity-wrist-first-experience) · [Phase 2b — web app: plan big, review deep](#phase-2b--web-app-plan-big-review-deep) · [Phase 3 — growth and monetisation](#phase-3--growth-and-monetisation) · [Phase 4 — multi-modal: gym + nutrition](#phase-4--multi-modal-gym--nutrition) · [Multi-language (i18n)](#multi-language-i18n-across-all-clients--landed) · [Future — Protomaps self-hosted tiles](#future--protomaps-self-hosted-tiles) · [Future — Map matching (Strava / Nike Run Club quality)](#future--map-matching-strava--nike-run-club-quality) · [Future — Cross-platform parity enforcement](#future--cross-platform-parity-enforcement) · [Future — Hardware: ultra-marathon-optimized watch](#future--hardware-ultra-marathon-optimized-watch) · [Competitive positioning](#competitive-positioning) · [Tech stack summary](#tech-stack-summary) · [Cost projection](#cost-projection) · [Deferred from Phase 1 (Android-specific)](#deferred-from-phase-1-android-specific) · [Known issues — runs storage + bulk import](#known-issues--runs-storage--bulk-import) · [Open risks](#open-risks) · [Anti-spam / moderation — what's shipped, what's deferred](#anti-spam--moderation--whats-shipped-whats-deferred) · [Competitor-parity backlog (unphased)](#competitor-parity-backlog-unphased)
 
 ## Vision
 
@@ -203,7 +212,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Runner shares a live tracking link before starting — pre-start "Share live link" button on `run_screen.dart` pre-mints the run id so the URL is stable across the "share now → tap GO later" gap; URL points at `/live/{run_id}` on the configured web host (`WEB_BASE_URL`).
 - [x] Mobile recorder writes per-ping rows to `live_run_pings` while a run is in flight — `LiveBroadcaster` (Android + iOS twin) attached on Share-live-link tap, throttled 5 s, swallows network failures (L4); `ApiClient.beginLiveBroadcast` pre-creates the parent `runs` row with `is_public=true` so anon spectators on the share URL can read; `endLiveBroadcast` wipes pings on stop and `cleanup_stale_live_run_pings` (cron, 4 h) handles the crash path.
 - [x] WebSocket connection to Go service (replace simulation) — both ends shipped. Mobile recorder routes pings through `apps/mobile_android/lib/live_hub_client.dart` when `LIVE_HUB_URL` is in `dotenv.env`; web spectator opens a WS to `${PUBLIC_LIVE_HUB_URL}/v1/live/{run_id}/subscribe` when set (with auto-reconnect + late-joiner snapshot via `fetchLiveSnapshot`). Both gracefully fall back to the Supabase Realtime path when unset. The Go-side hub lives in `apps/job_worker/internal/livehub/` (see #12). Env-flip lands once the Fly.io app is provisioned.
-- [ ] Positions stored ephemerally in Redis (TTL 24h) for late joiners — hub uses an in-process map today; the Hub's Publish/Subscribe surface is the only swap touchpoint to Upstash Redis pub/sub.
+- [x] Positions stored ephemerally in Redis (TTL 24h) for late joiners — **code shipped** as `apps/job_worker/internal/livehub/redis_hub.go` (pub/sub on `live:{runID}:ch`, last-known `live:{runID}:last` + history ring, all 24h-TTL'd; 14 miniredis tests). `main.go` picks the backend at boot from `REDIS_URL` (else the in-process map, which is the single-replica dev default). See the "Set up Upstash Redis" item under Backend work (Phase 2) below — only the operator env-flip remains.
 
 ### Backend work (Phase 2)
 
@@ -267,7 +276,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Key stats (distance, duration, pace, HR, elevation)
 - [x] Back link to run list
 - [x] Trace animation (replay run as moving dot with animated trace)
-- [x] Comparison against previous runs on same route — `lib/route_history.ts` ports the mobile filter (same `route_id` + same `metadata.activity_type` + > 100 m, sorted by duration); `RouteHistory.svelte` mounts on `/runs/[id]` and renders the PB / "+Δs behind PB" / "Attempt N of M — PB: H:MM:SS" card. 10 unit tests in `route_history.test.ts`.
+- [x] Comparison against previous runs on same route — `lib/routes/route_history.ts` ports the mobile filter (same `route_id` + same `metadata.activity_type` + > 100 m, sorted by duration); `RouteHistory.svelte` mounts on `/runs/[id]` and renders the PB / "+Δs behind PB" / "Attempt N of M — PB: H:MM:SS" card. 10 unit tests in `lib/routes/route_history.test.ts`.
 
 ### Live tracking spectator view (web)
 
@@ -313,7 +322,7 @@ Pure route-geometry helpers (`offRouteDistanceM`, `routeRemainingM`) are ported 
 - [x] Full-text search index on `routes.name`
 - [x] Composite indexes for dashboard queries (runs by source, distance range)
 - [x] `pg_cron` job to refresh materialized view (every 15 min) — migration `20260602_001_pg_cron_schedules.sql` schedules `refresh materialized view concurrently mv_weekly_mileage` (later bumped from `*/5` to `*/15` in `20260706_001_pg_cron_mv_refresh_15min.sql` after the cost-controls audit flagged the cadence as the dominant Supabase background-compute draw) plus a 15-minute `cleanup_stale_live_run_pings()` sweep that the `20260509_001` follow-up note had pending.
-- [x] Verify dashboard queries perform under 2 seconds for users with 200+ runs — measured locally at 2074 runs for the seed user (10× the target). `fetchRuns(limit:50)` 0.11 ms via `runs_user_started_at` index scan; `fetchWeeklyMileage` 0.99 ms (seq scan + sort — planner correctly picks seq when the user owns ~all rows); `fetchPersonalRecords` 0.31 ms via the trigger-maintained PR cache. All three queries land ~1000× under the 2 s budget. Indexes already in place from `20260403_001_initial_schema.sql` carry it.
+- [x] Verify dashboard queries perform under 2 seconds for users with 200+ runs — measured locally at 2074 runs for the seed user (10× the target). `fetchRuns(limit:50)` 0.11 ms via `runs_user_started_at` index scan; `fetchWeeklyMileage` 0.99 ms (seq scan + sort — planner correctly picks seq when the user owns ~all rows); `fetchPersonalRecords` 0.31 ms via the trigger-maintained PR cache. All three queries land ~1000× under the 2 s budget. Indexes already in place from `20260405_001_initial_schema.sql` carry it.
 
 ### Milestone: web app live at `threkir.com`
 
@@ -409,58 +418,60 @@ This section predates the Pro-tier revival and tracks features that were *origin
 
 The foundation under both the generator and any hand-built plan: a data model for a *plan* (goal race + weeks + per-day planned workouts), the surfaces that render "today's workout" to the runner, and the execution loop that drives live pace targets from the planned workout and auto-matches recorded runs back to it. This unlocks the use case where the runner pastes a plan from a coach or a book (e.g. a 32-week marathon plan with phase-banded paces) and the app walks them through it day by day. Own feature because it's valuable with or without plan *generation* — a generated plan is just one of several inputs to the runner.
 
-- [ ] Data model:
-  - [ ] `training_plans` table: `id`, `user_id`, `name`, `goal_event_id` (nullable FK to `events`), `goal_time_seconds`, `start_date`, `end_date`, `status` (`active` / `completed` / `abandoned`), `notes`
-  - [ ] `plan_weeks`: `id`, `plan_id`, `week_index`, `phase_label` (`base` / `build` / `race_specific` / `taper` — free-form string), `target_volume_metres`, `notes`
-  - [ ] `plan_workouts`: `id`, `week_id`, `scheduled_date`, `kind` (enum: `easy` / `long` / `recovery` / `tempo` / `interval` / `marathon_pace` / `race` / `rest`), `target_distance_metres`, `target_duration_seconds`, `target_pace_sec_per_km` (nullable), `target_pace_tolerance_sec` (nullable), `structure_json` (for structured workouts like `4×1 mi @ 7:00 w/ 1 mi easy`), `notes`, `completed_run_id` (nullable FK to `runs` once matched)
-  - [ ] Dart + TS type regeneration via the existing `gen:types` flow — see `docs/architecture/schema_codegen.md`
-- [ ] Plan editor (web-first, mobile read-only in v1):
-  - [ ] Create a plan from scratch: set goal race, date, target time, number of weeks
-  - [ ] Import from templates: paste markdown table, parse into weeks/workouts, or import from a small built-in library (generic 16-week marathon / 12-week half / C25K)
-  - [ ] Edit per-day workouts inline: kind, distance, target pace, notes
-  - [ ] Bulk operations: duplicate a week, shift the plan forward/back by N days, mark a week as recovery
-- [ ] Dashboard + run-tab surfaces:
-  - [ ] "Today's workout" card on the dashboard: type, distance, target pace, quick "Start workout" button
-  - [ ] This-week view: 7-day strip with planned vs completed state per day
-  - [ ] Plan progress: weeks completed, adherence % (planned miles vs actual), long-run longest, phase marker
-- [ ] Execution loop:
-  - [ ] "Start workout" opens the run screen pre-configured: activity type from workout kind, target pace locked in, audio cues tuned to the workout's tolerance (e.g. tight band for intervals, loose band for easy runs)
-  - [ ] Live "workout progress" overlay during structured workouts — shows the current rep / recovery, upcoming target, reps remaining
-  - [ ] Post-run: the completed `run_id` auto-links to the planned workout (same day, same activity) and the workout card flips to "done" with a side-by-side comparison of planned vs actual
-  - [ ] Manual override: runner can un-link, re-link to a different planned workout, or mark a workout as skipped without deleting it
-- [ ] Adherence feedback:
-  - [ ] "N of M workouts completed this week" summary
+**Status: v1 shipped on Android** ([workout_execution.md](../features/workout_execution.md)) — data model, web plan editor, generator, today's-workout card, the live execution loop, and post-run auto-match all ship. The unticked items below are the genuine remaining gaps.
+
+- [x] Data model:
+  - [x] `training_plans` table: `id`, `user_id`, `name`, `goal_event_id` (nullable FK to `events`), `goal_time_seconds`, `start_date`, `end_date`, `status` (`active` / `completed` / `abandoned`), `notes`
+  - [x] `plan_weeks`: `id`, `plan_id`, `week_index`, `phase_label` (`base` / `build` / `race_specific` / `taper` — free-form string), `target_volume_metres`, `notes`
+  - [x] `plan_workouts`: `id`, `week_id`, `scheduled_date`, `kind` (enum: `easy` / `long` / `recovery` / `tempo` / `interval` / `marathon_pace` / `race` / `rest`), `target_distance_metres`, `target_duration_seconds`, `target_pace_sec_per_km` (nullable), `target_pace_tolerance_sec` (nullable), `structure` jsonb (for structured workouts like `4×1 mi @ 7:00 w/ 1 mi easy`), `notes`, `completed_run_id` (nullable FK to `runs` once matched). Migration `20260419_001_training_plans.sql` (+ hardening `20260421_001`).
+  - [x] Dart + TS type regeneration via the existing `gen:types` flow — see `docs/architecture/schema_codegen.md`
+- [ ] Plan editor (web-first, mobile read-only in v1) — *create + inline per-day edit ship; the import + bulk-ops items below don't*
+  - [x] Create a plan from scratch: set goal race, date, target time, number of weeks
+  - [ ] Import from templates: paste markdown table, parse into weeks/workouts, or import from a small built-in library (generic 16-week marathon / 12-week half / C25K) — *not built; the shipped paths are club-template cloning (`clone_plan_template`) and the generator's C25K walk-run variant, neither of which is a paste-import or a generic starter library*
+  - [x] Edit per-day workouts inline: kind, distance, target pace, notes (`WorkoutEditor.svelte`)
+  - [ ] Bulk operations: duplicate a week, shift the plan forward/back by N days, mark a week as recovery — *not built*
+- [ ] Dashboard + run-tab surfaces — *today's-workout card + progress ship; the focused current-week strip + the longest-long-run / overall-phase markers don't*
+  - [x] "Today's workout" card on the dashboard: type, distance, target pace, quick "Start workout" button (web dashboard + plan detail; mobile dashboard + Run tab)
+  - [ ] This-week view: 7-day strip with planned vs completed state per day — *partial: the plan-detail per-week day-grids + the month `PlanCalendar` show planned-vs-completed per day, but there's no focused current-week strip*
+  - [ ] Plan progress: weeks completed, adherence % (planned miles vs actual), long-run longest, phase marker — *partial: completion % + per-week phase label ship; the longest-long-run stat + an overall base→build→peak→taper marker don't*
+- [x] Execution loop (mobile — web isn't a GPS-recording surface):
+  - [x] "Start workout" opens the run screen pre-configured: activity type from workout kind, target pace locked in, audio cues tuned to the workout's tolerance (e.g. tight band for intervals, loose band for easy runs)
+  - [x] Live "workout progress" overlay during structured workouts — shows the current rep / recovery, upcoming target, reps remaining (`workout_execution_band.dart` + `packages/run_recorder/.../workout_runner.dart`)
+  - [x] Post-run: the completed `run_id` auto-links to the planned workout (same day, same activity) and the workout card flips to "done" with a side-by-side comparison of planned vs actual (`autoMatchRunToPlanWorkout`)
+  - [ ] Manual override: runner can un-link, re-link to a different planned workout, or mark a workout as skipped without deleting it — *partial: un-link ships; an explicit re-link-to-a-different-workout picker and a plan-level "skipped" status don't*
+- [ ] Adherence feedback — *per-week completion count ships; the drift flag + missed-workout coaching don't*
+  - [x] "N of M workouts completed this week" summary
   - [ ] Flag when weekly mileage drifts >20% under or over plan (both directions matter — over-running the easy weeks is a real failure mode)
   - [ ] Missed-workout recovery: suggest whether to make up a missed long run or skip it, driven by simple rules (phase + proximity to recovery week)
 - [ ] Sharing and handoff:
   - [ ] Export a plan as markdown or JSON (round-trip with the paste-import path)
-  - [ ] Public plan library — users can publish a plan they followed and others can clone it into their own account (deferred until community infra lands, see § Community)
+  - [ ] Public plan library — users can publish a plan they followed and others can clone it into their own account (deferred until community infra lands, see § Community) — *club-template cloning ships (`publish as template` → `clone_plan_template`); a public, anyone-can-clone library does not*
 
 **Scope note:** this is the single largest feature on the Phase 3 list. Budget weeks, not days. Build in this order: data model + web plan editor first (read-heavy), then dashboard "today's workout" card, then the run-tab execution loop. Structured-workout execution (intervals with live rep tracking) is the final layer and can be skipped in v1 if it blocks ship.
 
-**Training plan generator:**
-- [ ] Adaptive weekly plans for 5k, 10k, half marathon, full marathon
-- [ ] VDOT calculation using Daniels' Running Formula
-- [ ] Training phase determination (base → build → peak → taper)
-- [ ] Workout generation: easy, tempo, interval, long run with target paces
-- [ ] Adjustment based on missed sessions and recovery patterns
-- [ ] Output plugs into the plan-runner data model above — the generator produces `training_plans` + `plan_weeks` + `plan_workouts` rows, same as a hand-built plan
+**Training plan generator:** shipped — `generatePlan` in `apps/web/src/lib/training/training.ts` (+ byte-twin `apps/mobile_android/lib/training.dart`), wired into `/plans/new` (web) and `plan_new_screen.dart` (mobile).
+- [x] Adaptive weekly plans for 5k, 10k, half marathon, full marathon
+- [x] VDOT calculation using Daniels' Running Formula
+- [x] Training phase determination (base → build → peak → taper)
+- [x] Workout generation: easy, tempo, interval, long run with target paces
+- [ ] Adjustment based on missed sessions and recovery patterns — *not built: the generator emits a static plan and doesn't re-plan around missed sessions*
+- [x] Output plugs into the plan-runner data model above — the generator produces `training_plans` + `plan_weeks` + `plan_workouts` rows, same as a hand-built plan
 
-**VO2 max estimation:**
-- [ ] Estimate from pace and heart rate data (Cooper formula)
-- [ ] Track VO2 max trend over time
-- [ ] Update after each qualifying run
+**VO2 max estimation:** shipped — `lib/training/fitness.ts`, surfaced on the dashboard.
+- [x] Estimate from pace + heart-rate data — implemented as Daniels VDOT from the best qualifying run (the original Cooper-formula note is superseded)
+- [x] Track VO2 max trend over time — dashboard SVG sparkline over `fitness_snapshots`
+- [x] Update after each qualifying run
 
-**Race pace predictor:**
-- [ ] Predict finish times (Riegel formula with VO2 max adjustment)
-- [ ] Confidence levels based on data quality
+**Race pace predictor:** shipped — `RaceDayPanel.svelte` (Riegel projection), mounts on plan detail within 21 days of the goal race.
+- [x] Predict finish times (Riegel formula with VO2 max adjustment)
+- [ ] Confidence levels based on data quality — *not built*
 
-**Recovery advisor:**
-- [ ] Acute training load (ATL) — 7-day EWMA
-- [ ] Chronic training load (CTL) — 42-day EWMA
-- [ ] Training stress balance (TSB = CTL - ATL)
-- [ ] Rest/easy/hard session recommendation
-- [ ] Days until next recommended hard session
+**Recovery advisor:** shipped — `lib/training/training_load.ts` + `readiness.ts`; `TrainingLoadChart` (90-day fitness / fatigue / form trio) + a readiness card on the dashboard.
+- [x] Acute training load (ATL) — 7-day EWMA
+- [x] Chronic training load (CTL) — 42-day EWMA
+- [x] Training stress balance (TSB = CTL - ATL)
+- [x] Rest/easy/hard session recommendation
+- [ ] Days until next recommended hard session — *not surfaced*
 
 ### Competitor-parity — shipped social + engagement
 
@@ -916,21 +927,21 @@ Generated from `docs/product/competitors.md` and confirmed scope with the user. 
 2. **Pricing model:** free forever / freemium / pay-once. Gates how much of the list sits behind a paywall.
 3. **Premium boundary:** where the line runs between free and paid if freemium is chosen.
 
-Until those three are answered, treat this list as a menu, not a sequence. Rough sizing is in weeks of single-dev work; most items carry schema changes that need the usual codegen + CI parity check (see `schema_codegen.md`).
+Until those three are answered, treat this list as a menu, not a sequence. Rough sizing is in weeks of single-dev work; most items carry schema changes that need the usual codegen + CI parity check (see `schema_codegen.md`). **Note (2026-06-03): this menu predates roughly half its items shipping** — rows now marked `[x]` shipped or partial were built ahead of the ordering decisions; the still-open rows are the real remaining menu.
 
 | # | Feature | Rough size | Competitor it closes | Schema impact | Open decisions |
 |---|---|---|---|---|---|
-| 1 | **Training plan runner** — [x] web: schema + generator + editor + dashboard card + auto-match; [x] Android: engine port + plans list + create wizard + plan/workout detail + today's-workout card on Run tab idle; [ ] live structured-workout execution loop (**specced in [workout_execution.md](../features/workout_execution.md)**, ~4 dev-days, no new schema) | 6–8 wk (web + Android shipped, execution loop specced + estimated ~4 days) | Runna, Garmin | `training_plans`, `plan_weeks`, `plan_workouts` (shipped) | Spec resolved — reuse existing audio-cue layer, band overlay on the run screen, zero schema impact. |
+| 1 | **Training plan runner** — [x] web: schema + generator + editor + dashboard card + auto-match; [x] Android: engine port + plans list + create wizard + plan/workout detail + today's-workout card on Run tab idle; [x] live structured-workout execution loop (shipped on Android — [workout_execution.md](../features/workout_execution.md)) | **shipped** (web + Android + execution loop) | Runna, Garmin | `training_plans`, `plan_weeks`, `plan_workouts` (shipped) | Resolved — reused the existing audio-cue layer + a band overlay on the run screen, zero schema impact. |
 | 2 | **External integrations (OAuth sync)**: Strava read + write, Garmin Connect, Health Connect, HealthKit, parkrun, RunSignUp | 4–6 wk + Garmin business approval | Strava, Garmin | `integrations` already exists — extend per provider; token refresh Edge Function | Webhook vs polling for Strava; Garmin app approval timeline |
-| 3 | **Segments + leaderboards** (segment creation, automatic matching on new runs, weekly / all-time boards) | 2–3 wk | Strava | `segments`, `segment_efforts`; PostGIS line matching | Public vs private segments; anti-cheat |
+| 3 | **Segments + leaderboards** ([x] **shipped** — v1 route-anchored boards + v2 tiered (gender / age-band) leaderboards with KOM/QOM crowns; client-side auto-effort. See Phase-3 social section above.) | shipped | Strava | `segments`, `segment_efforts` (migrations `20260526_001`, `20260829_001`) | Resolved: route-anchored v1; arbitrary-geometry HMM matching still deferred |
 | 4 | **Heatmap / popular-route discovery** ([x] v1 shipped — public-routes-only heatmap via PostGIS `heatmap_points_in_bbox` RPC on top of densified `routes.geom`; web overlay on `/routes?tab=heatmap` with a MapLibre `heatmap` paint layer; refreshes on map moveend with 350 ms debounce, 5k point cap. Privacy: route opt-in already gates inclusion via `routes.is_public`. **[x] v2 shipped (web) — turned the blob into a route browser** laid out as a results sidebar beside a clean map (no more floating overlays stacking on each other or the map): a search + **Filters** popover holding the lens (`popular` / `friends` / `featured` / `hidden_gems` on `discoverable_routes_in_bbox`'s `p_filter` arg) and **multi-select race-distance bands** (5K / 10K / Half / Marathon / Ultra, combinable in any permutation, server-side via the parallel `p_dist_min[]`/`p_dist_max[]` bound arrays), MapLibre clustering on the route pins, a scrollable results list with per-route distance-band badges, the heat layer dimming as you zoom in, and **hover-to-preview** — route lines are hidden by default; hovering a dot or its list row reveals just that one route's line (cached, anti-flicker) with a synchronized highlight across the map + list. `friends` = public routes *created by* users you follow (there is no retained run↔route link to power "run by friends"); `hidden_gems` = un-run public routes past a 1 km sanity floor. **[x] Mobile parity shipped** — `routes_heatmap_screen.dart` (byte-identical twin) now has the same lens + race-distance band filters, pure-Dart pin clustering (no new dep), a results bottom sheet, and tap-to-preview (touch equivalent of hover); see [decisions § 102](../architecture/decisions.md).) | 2 wk | Strava, Komoot | Migrations `20260828_001_heatmap_points.sql`, `20261113_001_discoverable_routes_filter.sql`, `20261114_001_discoverable_routes_distance_bands.sql` | Resolved: opt-in (via existing `routes.is_public`) — no separate user-level toggle |
 | 5 | **Trail / offline navigation** (turn-by-turn nav on a loaded route, offline tile packs, condition reports). [x] partial — "Save for offline" per-route pin on mobile + phone → Wear OS DataLayer push of starred routes so watches without network can still access them (see `decisions.md § 64`); turn-by-turn voice cues, offline tile packs, and condition reports still deferred | 3–4 wk | AllTrails, Komoot | `route_conditions` (user reports), tile-pack store on disk | Which routing engine for turn cues? |
-| 6 | **Social graph** (follow / unfollow, kudos, activity comments, privacy zones) | 2–3 wk | Strava, Nike Run Club | `follows`, `kudos`, `comments`, `privacy_zones` on `user_profiles` | Default profile visibility; block / report surface |
+| 6 | **Social graph** ([x] **shipped** — follow/unfollow + feed, kudos, threaded comments, privacy zones. See Phase-3 social section above.) | shipped | Strava, Nike Run Club | shipped as `user_follows`, `run_kudos`, `run_comments`, `user_settings.prefs.privacy_zones` (not the placeholder names in this row) | Resolved: public-by-default profiles; report surface shipped (see Anti-spam below) |
 | 7 | **Gear tracking** ([x] shipped — `gear` + `run_gear` tables under migration `20260827_001_gear_tracking.sql`, RLS owner-scoped on gear and join-through-runs on assignments. `gear_with_distance` view aggregates per-item mileage. Web: `/settings/gear` tab with sub-tabs (shoes / bikes), retire/restore/delete, mileage bars with km/mi awareness. `RunGearChips.svelte` mounted on `/runs/[id]` with owner-only multi-select modal. Mobile (both twins): `GearScreen`, `gear_form_sheet.dart`, `run_gear_chips.dart`. Future: per-shoe wear-pattern logging, multi-pair "rotation" tagging, barcode import.) | 1 wk | Strava, Garmin | `gear` + `run_gear` | Resolved: manual entry for v1 |
-| 8 | **Photos on runs and routes** (multi-photo per run, map-pinned, auto-attached from camera roll by timestamp) | 3–4 d | Strava, AllTrails | `run_photos`, `route_photos`; Storage bucket `photos` | Max photos per run; server-side thumbnailing? |
+| 8 | **Photos on runs and routes** ([x] **runs shipped** — `run_photos` + `run-photos` bucket + server-side EXIF strip; [ ] route photos not built) | partial (runs done, routes pending) | Strava, AllTrails | `run_photos` (bucket `run-photos`) shipped — migration `20260525_001`; `route_photos` not built | Deferred: server-side thumbnails, club-photo features |
 | 9 | **Audio-coached / guided runs** (library of pre-recorded workouts, TTS-narrated pace cues) | 3–4 wk | Nike Run Club | `audio_workouts`, `audio_segments`; audio CDN strategy | Voice talent budget; TTS-only v1? |
 | 10 | **Race calendar + results import** (event discovery near me, entry links, auto-match results when you record the race) | 2 wk | Garmin, Runna | `races`, `race_results`; import from RunSignUp + parkrun | Scope: local only or worldwide? |
-| 11 | **Advanced analytics** (VDOT, training load / fitness / freshness curves, weekly/monthly breakdowns, race-time predictor) | 2 wk | Garmin, Runna | No new tables — derived from `runs` | Algorithm source of truth: Daniels vs Banister |
+| 11 | **Advanced analytics** ([x] **shipped** — VDOT/VO₂, training-load fitness/fatigue/form curves, race-time predictor, weekly/monthly breakdowns. See Phase-3 "Premium tier" + "Competitor-parity" sections above.) | shipped | Garmin, Runna | `fitness_snapshots` + derived from `runs` | Resolved: Daniels (VDOT) + Banister-style EWMA load |
 | 12 | **Premium billing + feature gating** (Stripe Checkout, subscription webhook, `SubscriptionTier` honouring across web + mobile, customer portal) | 1–2 wk | All | `user_profiles.subscription_tier` already exists; add `stripe_customer_id`, `stripe_subscription_id` | Monthly vs annual; grandfather early users? |
 | 13 | **Treadmill (BLE FTMS)** — real-time speed / distance / incline from a paired treadmill replacing the pedometer fallback for indoor runs. Mobile-only (web is not a recording surface). Spec + scope: [integrations.md § Treadmills (BLE FTMS)](../features/integrations.md#treadmills-ble-ftms--deferred). | 3–5 d | Garmin, Runna (indoor) | None — `prefs` jsonb + `metadata.indoor_source = "treadmill"` | FTMS covers ~60 % of treadmills; Peloton / NordicTrack / Echelon need per-vendor work. Punt or scope per-brand follow-ups when v1 ships. |
 
@@ -946,4 +957,4 @@ For whichever items the user green-lights, here's where the new surface lands �
 - **Feature doc stub** in `docs/product/features.md` under a "Competitor-parity features" section (stubs added below, flesh out on delivery).
 - **Tests** — see `docs/testing/testing.md` for the per-feature-area test map.
 
-*Last updated: April 2026*
+*Last updated: 2026-06-03*
