@@ -21,6 +21,7 @@ The watch's developer inner loop is `bin/watch-flash.sh` from the repo root (or 
 5. **Optical HR bring-up** — MAX86177 over I²C, raw photodiode sample → naive peak-detect (the licensed HR algorithm comes later via `bindgen` against Maxim's C library, post-tier-1).
 6. **BLE GATT bring-up** — phone pairs via `nrf-softdevice`, watch advertises a custom service, phone reads a dummy characteristic.
 7. **Integration** — wire steps 3–6 into a single recording state machine that ports the existing Dart `run_recorder` algorithm to async Rust.
+8. **Fabricate the tier-1 enclosure** — once the integrated unit records a run, 3D-print a chassis that holds the breakout boards + LiPo together and takes a Velcro strap, so it can be worn for a test jog. **FDM (any hobby printer / Shapeways / JLCPCB 3D) is the intended method here, ~$0–50 per print** — see [`parts.md`](../../docs/custom_watch/parts.md) (optional-tools table) and the tier-1 deliverables in [`prototyping.md`](../../docs/custom_watch/prototyping.md#tier-1--bench-prototype-5002k-36-months). This is a *functional chassis to hold breakouts*, **not** case CAD / industrial design / a sealed enclosure — those are tier-2+ and stay gated on the §71 triggers (see [`CLAUDE.md`](CLAUDE.md)). A printed case is not water-resistant and will not pass IPX7 (that needs injection-moulded tooling + a gasket, a tier-2/3 line item).
 
 Each step is roughly 2–4 weeks of evenings depending on prior firmware experience.
 

@@ -42,13 +42,23 @@ no longer applies.
   to a custom PCB. Independently testable, no `app/` dependencies.
 - Host-side unit tests (`cargo test`) for any pure-logic crate (NMEA
   parser, recording state machine, signal-processing helpers).
+- A **3D-printed tier-1 enclosure** — a functional FDM chassis that holds
+  the breakout boards + LiPo together and takes a Velcro strap so the unit
+  is wearable for a test jog. This is a tier-1 deliverable per
+  [../../docs/custom_watch/prototyping.md](../../docs/custom_watch/prototyping.md#tier-1--bench-prototype-5002k-36-months);
+  ~$0–50 per print, any hobby printer or Shapeways / JLCPCB 3D. It is *not*
+  case CAD (see the exclusion below) — a board-holder, not industrial
+  design, no sealing, no IPX claim.
 
 **Don't build here:**
 
 - PCB CAD, schematic files, EAGLE / KiCad projects, case CAD, gerbers.
   These are tier-2+ work and remain gated on the three §71 triggers
   (paying user base, ODM approach, hardware co-founder). The 2026-05-28
-  amendment did *not* lift this.
+  amendment did *not* lift this. **"Case CAD" here means
+  industrial-design / sealed-enclosure / IPX-tooling work — *not* the
+  functional 3D-printed board-holder chassis listed under "Build here",
+  which is an allowed tier-1 deliverable.**
 - RF antenna designs, IPX certification testing, FCC / CE pre-compliance
   scans, drop tests. Also tier-2+.
 - C / Zephyr code. The §80 decision picked Rust + Embassy; the fallback
