@@ -17,7 +17,7 @@ import (
 type Backend interface {
 	ClaimNextJob(ctx context.Context, workerID, kindFilter string) (*Job, error)
 	FinishJob(ctx context.Context, jobID int64, resultStatus string, errMsg *string) error
-	DeferJob(ctx context.Context, jobID int64, delaySeconds int, errMsg *string) error
+	DeferJob(ctx context.Context, jobID int64, delaySeconds int, errMsg *string) (string, error)
 	DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error)
 	UploadMatchedTrack(ctx context.Context, path string, points []TrackPoint) error
 	UpdateMatchedTrackRow(ctx context.Context, runID string, expectedSourceTrackURL string, row MatchedTrackRow) error
@@ -226,10 +226,19 @@ func (w *Worker) handle(ctx context.Context, job *Job) {
 	// shape as the watch's drain classifier.
 	msg := err.Error()
 	if isTransient(err) {
-		if derr := w.Backend.DeferJob(ctx, job.ID, w.Config.TransientDelay, ptr(msg)); derr != nil {
+		status, derr := w.Backend.DeferJob(ctx, job.ID, w.Config.TransientDelay, ptr(msg))
+		switch {
+		case derr != nil:
 			logger.Error("defer_job failed", "err", derr)
+		case status == "failed":
+			// Retry budget exhausted — defer_job terminated the job
+			// instead of re-queuing it (migration 20261201_001). Log it
+			// as a failure, not a deferral, so the line matches the row
+			// the jobs-failed-alert will surface.
+			logger.Error("job failed (retries exhausted)", "attempts", job.Attempts, "err", err)
+		default:
+			logger.Warn("job deferred", "delay_s", w.Config.TransientDelay, "err", err)
 		}
-		logger.Warn("job deferred", "delay_s", w.Config.TransientDelay, "err", err)
 		return
 	}
 	if ferr := w.Backend.FinishJob(ctx, job.ID, "failed", ptr(msg)); ferr != nil {

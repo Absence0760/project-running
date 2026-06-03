@@ -9,17 +9,21 @@
 
 begin;
 
-select plan(11);
+select plan(13);
 
 -- ── defer_job: below the ceiling re-queues ──────────────────────
 -- max_attempts default is 5. Simulate a worker that claimed once
 -- (attempts=1) then hit a transient error.
 insert into public.jobs (kind, payload, status, attempts, locked_by, locked_at)
   values ('map_match', '{}'::jsonb, 'running', 1, 'worker-a', now());
-select defer_job(
-  currval(pg_get_serial_sequence('public.jobs', 'id')),
-  30,
-  'transient: connection reset'
+select is(
+  defer_job(
+    currval(pg_get_serial_sequence('public.jobs', 'id')),
+    30,
+    'transient: connection reset'
+  ),
+  'queued',
+  'defer_job returns ''queued'' while attempts < max_attempts'
 );
 select is(
   (select status from public.jobs
@@ -47,10 +51,14 @@ insert into public.jobs (kind, payload, status, attempts, max_attempts, locked_b
           jsonb_build_object('owner_id', 1, 'object_id', 2,
                              'aspect_type', 'create', 'event_time', 0),
           'running', 5, 5, 'worker-b', now());
-select defer_job(
-  currval(pg_get_serial_sequence('public.jobs', 'id')),
-  30,
-  'transient after exhausting retries'
+select is(
+  defer_job(
+    currval(pg_get_serial_sequence('public.jobs', 'id')),
+    30,
+    'transient after exhausting retries'
+  ),
+  'failed',
+  'defer_job returns ''failed'' when the retry budget is exhausted'
 );
 select is(
   (select status from public.jobs

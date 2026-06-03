@@ -38,16 +38,23 @@
 -- path that would otherwise re-queue, just choosing a terminal state.
 
 -- ─── defer_job: exhausted retries become `failed`, not `queued` ───
--- Complete body re-emitted from 20260609_001 (the only prior
--- definition) with the exhaustion branch added. `attempts` is bumped
--- on claim, so by the time the worker calls defer_job the value
--- already reflects the attempt that just failed.
-create or replace function defer_job(
+-- Body re-emitted from 20260609_001 (the only prior definition) with
+-- the exhaustion branch added. `attempts` is bumped on claim, so by
+-- the time the worker calls defer_job the value already reflects the
+-- attempt that just failed.
+--
+-- The return type changes from `void` to `text` (the resulting
+-- status: 'queued' on re-queue, 'failed' on exhaustion, null if the
+-- row vanished) so the caller can log the outcome accurately without
+-- duplicating the attempts >= max_attempts threshold. A return-type
+-- change can't go through CREATE OR REPLACE, so drop first.
+drop function if exists defer_job(bigint, integer, text);
+create function defer_job(
   job_id bigint,
   delay_seconds integer,
   err text default null
 )
-returns void
+returns text
 language plpgsql
 security definer
 set search_path = public
@@ -67,7 +74,7 @@ begin
   where id = job_id;
 
   if v_attempts is null then
-    return;  -- row vanished (purged / cancelled mid-flight); nothing to do
+    return null;  -- row vanished (purged / cancelled mid-flight); nothing to do
   end if;
 
   if v_attempts >= v_max then
@@ -81,15 +88,17 @@ begin
         locked_by = null,
         last_error = err
     where id = job_id;
-  else
-    update jobs
-    set status = 'queued',
-        scheduled_at = now() + (delay_seconds || ' seconds')::interval,
-        locked_at = null,
-        locked_by = null,
-        last_error = err
-    where id = job_id;
+    return 'failed';
   end if;
+
+  update jobs
+  set status = 'queued',
+      scheduled_at = now() + (delay_seconds || ' seconds')::interval,
+      locked_at = null,
+      locked_by = null,
+      last_error = err
+  where id = job_id;
+  return 'queued';
 end;
 $$;
 

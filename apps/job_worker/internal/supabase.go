@@ -138,13 +138,20 @@ func (c *SupabaseClient) FinishJob(ctx context.Context, jobID int64, resultStatu
 
 // DeferJob re-queues a transient failure with backoff. Server doesn't
 // decrement attempts; the per-job max_attempts ceiling still applies.
-func (c *SupabaseClient) DeferJob(ctx context.Context, jobID int64, delaySeconds int, errMsg *string) error {
+// Returns the resulting job status: "queued" on re-queue, or "failed"
+// when the retry budget was exhausted and defer_job terminated the job
+// instead (migration 20261201_001) — the worker logs accordingly.
+func (c *SupabaseClient) DeferJob(ctx context.Context, jobID int64, delaySeconds int, errMsg *string) (string, error) {
 	params := map[string]any{
 		"job_id":        jobID,
 		"delay_seconds": delaySeconds,
 		"err":           errMsg,
 	}
-	return c.rpc(ctx, "defer_job", params, nil)
+	var status string
+	if err := c.rpc(ctx, "defer_job", params, &status); err != nil {
+		return "", err
+	}
+	return status, nil
 }
 
 // DownloadTrack fetches a gzipped track from the runs Storage bucket

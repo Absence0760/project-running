@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -52,6 +53,10 @@ type fakeBackend struct {
 	matcherErr    error // not on the backend, but threaded through
 	finishErr     error
 	deferErr      error
+	// deferStatus is the status DeferJob reports back (mirrors the
+	// defer_job RPC return). Empty → "queued"; set to "failed" to
+	// simulate the worker deferring a job whose retry budget is spent.
+	deferStatus string
 
 	// downloadDelay, when non-zero, makes DownloadTrack block for
 	// that duration OR until the caller's context is cancelled.
@@ -179,16 +184,19 @@ func (f *fakeBackend) FinishJob(_ context.Context, jobID int64, status string, m
 	return nil
 }
 
-func (f *fakeBackend) DeferJob(_ context.Context, jobID int64, delay int, msg *string) error {
+func (f *fakeBackend) DeferJob(_ context.Context, jobID int64, delay int, msg *string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if f.deferErr != nil {
 		err := f.deferErr
 		f.deferErr = nil
-		return err
+		return "", err
 	}
 	f.deferred = append(f.deferred, deferCall{JobID: jobID, DelayS: delay, ErrMsg: msg})
-	return nil
+	if f.deferStatus != "" {
+		return f.deferStatus, nil
+	}
+	return "queued", nil
 }
 
 // Photo-process surface — used by handler_photo_process_test.go.
@@ -890,6 +898,77 @@ func TestWorker_TransientErrorDefers(t *testing.T) {
 	}
 	if be.deferred[0].DelayS != 5 {
 		t.Errorf("delay_s=%d, want 5", be.deferred[0].DelayS)
+	}
+}
+
+// When defer_job reports back "failed" (the retry budget was spent and
+// the RPC terminated the job instead of re-queuing it), the worker must
+// log it as a failure — not a deferral — so the log line matches the
+// row the jobs-failed-alert surfaces. Regression guard for the silent
+// "looks deferred but is actually dead" log.
+func TestWorker_ExhaustedTransientLogsFailureNotDefer(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.downloadErr = &HTTPError{StatusCode: 503, Body: "upstream down"}
+	be.deferStatus = "failed" // RPC says: budget exhausted, terminated
+	be.jobs = []*Job{{
+		ID: 11, Kind: "map_match", Attempts: 5,
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	var logBuf bytes.Buffer
+	w := newTestWorker(be, PassthroughMatcher{})
+	w.Log = slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	// The worker still calls DeferJob (the transient classification is
+	// unchanged); the RPC decides re-queue vs terminate.
+	if len(be.deferred) != 1 {
+		t.Fatalf("deferred count=%d, want 1", len(be.deferred))
+	}
+	// The worker must NOT also call finish_job — defer_job did the
+	// terminal transition server-side.
+	if len(be.finished) != 0 {
+		t.Errorf("exhausted transient also called finish_job: %+v", be.finished)
+	}
+	out := logBuf.String()
+	if !strings.Contains(out, "job failed (retries exhausted)") {
+		t.Errorf("missing exhausted-failure log line; got:\n%s", out)
+	}
+	if strings.Contains(out, "job deferred") {
+		t.Errorf("logged a deferral for an exhausted job:\n%s", out)
+	}
+}
+
+// The normal transient path (RPC reports "queued") still logs a
+// deferral, not a failure.
+func TestWorker_TransientRequeueLogsDeferral(t *testing.T) {
+	be := newFakeBackend()
+	be.trackURL = "user-1/run-1.json.gz"
+	be.downloadErr = &HTTPError{StatusCode: 503, Body: "upstream down"}
+	// deferStatus left empty → fake returns "queued"
+	be.jobs = []*Job{{
+		ID: 12, Kind: "map_match", Attempts: 1,
+		Payload: mustPayload(t, MapMatchPayload{RunID: "run-1", UserID: "user-1"}),
+	}}
+
+	var logBuf bytes.Buffer
+	w := newTestWorker(be, PassthroughMatcher{})
+	w.Log = slog.New(slog.NewTextHandler(&logBuf, &slog.HandlerOptions{Level: slog.LevelWarn}))
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	_ = w.Run(ctx)
+
+	out := logBuf.String()
+	if !strings.Contains(out, "job deferred") {
+		t.Errorf("missing deferral log line; got:\n%s", out)
+	}
+	if strings.Contains(out, "retries exhausted") {
+		t.Errorf("logged exhaustion for a re-queued job:\n%s", out)
 	}
 }
 
