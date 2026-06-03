@@ -19,7 +19,7 @@ operator process, not a legal opinion. Counsel review before EU launch.
 | Erasure | 17 | Account deletion (cascade + Storage drain + third-party deauth + audit log) | Settings → Delete account (email re-entry challenge) → `delete-account` EF |
 | Restriction | 18 | **No self-service toggle** — manual SOP below | operator |
 | Objection | 21 | **No self-service toggle** — manual SOP below | operator |
-| Withdraw consent | 7(3) | Disconnect integrations; AI-coach consent is one-way but the Coach can be stopped by not using it; telemetry opt-out in Settings | Settings |
+| Withdraw consent | 7(3) | Disconnect integrations; **AI-coach consent is self-service withdrawable** (Settings → Account → AI Coach consent → Withdraw, backed by the `withdraw_coach_consent()` RPC — clears `coach_consent_at`, after which the coach handler's 403 gate re-blocks the Coach); telemetry opt-out in Settings | Settings |
 
 ## Art 18 (restriction) + Art 21 (objection) — operator SOP
 
@@ -32,11 +32,12 @@ requests are handled manually:
    if unsure, send a confirmation link to the account email.
 3. **Scope the restriction.** Most Art 18/21 requests target a specific
    processing purpose. The realistic levers today:
-   - **Stop the AI-coach processing** — clear `coach_consent_at` is not
-     enough (the column is RPC-stamped); instead disable Coach access for
-     the user at the account level / instruct them to stop using it.
-     Their prompts are not retained by us (provider-side ~30d, see
-     [retention.md](retention.md)).
+   - **Stop the AI-coach processing** — the user can do this themselves:
+     Settings → Account → AI Coach consent → Withdraw calls
+     `withdraw_coach_consent()`, which clears `coach_consent_at`; the coach
+     request handler then returns 403 until they re-consent. No operator
+     action needed. Their prompts are not retained by us (provider-side
+     ~30d, see [retention.md](retention.md)).
    - **Stop social/feed processing** — set the account's runs to private
      (`is_public = false`) and remove follow edges if requested.
    - **Stop marketing/telemetry** — flip the Sentry/telemetry opt-out.
