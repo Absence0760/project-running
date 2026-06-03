@@ -2683,6 +2683,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 121. Transactional subscription emails (Pro receipt, payment-failed dunning) fire from a user_profiles AFTER-UPDATE trigger; recurring ones skip the send-once log
+
+**Decided (2026-06-03):** the Pro-purchase receipt (`pro_welcome`) and the payment-failed dunning (`payment_failed`) reuse the `lifecycle_email` job kind (§119), enqueued by an AFTER-UPDATE trigger on `user_profiles` (migration `20261203_001`) keyed off the columns the RevenueCat webhook writes: `subscription_tier` entering a paid tier (free → pro/lifetime) → `pro_welcome`; `billing_issue_at` going null → non-null → `payment_failed`. The trigger has a `WHEN` guard so ordinary profile edits don't run the body, and is a distinct AFTER trigger from the BEFORE `lock_subscription_columns` guard (§ the 20260624 lock) — different phase, no conflict. Since service-role (the webhook) is the only caller that can change those columns, it fires exactly on real billing transitions.
+
+**Why a trigger, not the webhook enqueuing directly.** The `revenuecat-webhook` Edge Function already does one thing — map events to column writes. Hanging email-enqueue off the *column transition* (rather than the event) means any future writer of `subscription_tier`/`billing_issue_at` (a manual grant, an admin tool, a different IAP provider) gets the right email for free, and the email logic lives next to the welcome trigger it mirrors rather than smeared into the webhook.
+
+**The once-vs-recurring split.** `welcome` is once-per-account, so the handler dedups it via `lifecycle_email_log`. `pro_welcome`/`payment_failed` are **recurring** — a churn-and-re-subscribe is a legitimate second receipt; a second billing failure after the first cleared is a legitimate second dunning. Routing them through the permanent (user, template) log would wrongly suppress the second send. So `oncePerUserTemplates` gates the log to `welcome` only; recurring templates rely on the trigger's transition guard (`OLD` vs `NEW` distinct) as the dedupe, and the handler neither checks nor writes the log for them. Their copy uses a generic `footerTransactional` ("service message about your account") rather than the welcome footer, and the dunning CTA targets `/settings/upgrade`.
+
+**Trade-off / scope.** Renewal *success* receipts are deliberately not sent (RENEWAL keeps `subscription_tier=pro`, so there's no transition — only the first purchase emails). Three sibling transactional emails were considered and **not** built, for concrete reasons: **data-export-ready** adds no value (the export endpoint is synchronous and returns a 10-minute signed URL inline — an async email would arrive stale); **password-changed / new-device** need infrastructure that doesn't exist (no GoTrue auth hooks configured, no sign-in/device tracking); **account-deletion receipt** can't use this mechanism (the worker can't look up the email post-deletion, `delete-account` drains the user's pending jobs, and the send-once log cascades away with the user) — it needs the email passed inline at deletion time and a non-cascading record, tracked in `followups.md`. **Don't** add the once-per-user log to a recurring transactional template, and **don't** move the enqueue into the webhook.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

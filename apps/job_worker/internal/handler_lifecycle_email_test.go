@@ -103,3 +103,43 @@ func TestLifecycleEmail_SendErrorPropagatesUnrecorded(t *testing.T) {
 		t.Errorf("a failed send must not record, got %v", be.recordedLifecycle)
 	}
 }
+
+func TestLifecycleEmail_RecurringTemplateSendsWithoutLog(t *testing.T) {
+	be := &fakeBackend{
+		userEmails:    map[string]string{"u1": "runner@test.com"},
+		lifecycleSent: map[string]bool{"u1|pro_welcome": true}, // a prior send is on record
+	}
+	sender := &fakeEmailSender{}
+	w := newEmailTestWorker(be, sender)
+
+	if err := w.handleLifecycleEmail(context.Background(), lifecycleJob("u1", "pro_welcome")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	// Recurring: the prior log entry must NOT suppress a re-subscribe receipt,
+	// and the handler must not write the once-per-user log for it.
+	if len(sender.sent) != 1 {
+		t.Fatalf("pro_welcome must send despite a prior log entry, got %d", len(sender.sent))
+	}
+	if len(be.recordedLifecycle) != 0 {
+		t.Errorf("recurring template must not touch the once-per-user log, got %v", be.recordedLifecycle)
+	}
+	if sender.sent[0].msg.Subject != emailCatalogue["en"]["pro_welcome"].subject {
+		t.Errorf("unexpected subject %q", sender.sent[0].msg.Subject)
+	}
+}
+
+func TestLifecycleEmail_PaymentFailedSends(t *testing.T) {
+	be := &fakeBackend{userEmails: map[string]string{"u1": "runner@test.com"}}
+	sender := &fakeEmailSender{}
+	w := newEmailTestWorker(be, sender)
+
+	if err := w.handleLifecycleEmail(context.Background(), lifecycleJob("u1", "payment_failed")); err != nil {
+		t.Fatalf("handler: %v", err)
+	}
+	if len(sender.sent) != 1 {
+		t.Fatalf("payment_failed should send, got %d", len(sender.sent))
+	}
+	if len(be.recordedLifecycle) != 0 {
+		t.Errorf("payment_failed (recurring) must not record, got %v", be.recordedLifecycle)
+	}
+}

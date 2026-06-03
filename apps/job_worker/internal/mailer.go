@@ -324,29 +324,63 @@ func pathForKind(kind, base string, n NotificationRow) string {
 // email. Lifecycle mail is transactional/relationship — no List-Unsubscribe
 // header (it's not a subscription); the footer still points at preferences
 // for managing future email.
+// lifecycleTemplates is the closed set of transactional/relationship
+// templates. Membership (not the catalogue's "default" fallback) is what
+// gates renderLifecycleEmail — an unknown template returns ok=false so the
+// handler skips rather than sending a generic "new notification" email.
+var lifecycleTemplates = map[string]bool{
+	"welcome":        true,
+	"pro_welcome":    true,
+	"payment_failed": true,
+}
+
+// oncePerUserTemplates only fire once per account, so the handler dedups
+// them via lifecycle_email_log. Recurring transactional mail (a re-subscribe
+// receipt, a repeat billing failure) must NOT be in this set or the
+// permanent log would suppress the second legitimate send.
+var oncePerUserTemplates = map[string]bool{
+	"welcome": true,
+}
+
 func renderLifecycleEmail(template, baseURL, locale string) (Email, bool) {
+	if !lifecycleTemplates[template] {
+		return Email{}, false
+	}
 	base := strings.TrimRight(baseURL, "/")
 	loc := normalizeEmailLocale(locale)
+	s := lookupEmailStrings(loc, template)
+	shared := lookupEmailShared(loc)
+
+	// welcome reads as a relationship message; billing/account templates as a
+	// service message.
+	footer := shared.footerTransactional
+	if template == "welcome" {
+		footer = shared.footerWelcome
+	}
+
+	return composeEmail(emailContent{
+		lang:            loc,
+		subject:         s.subject,
+		preheader:       s.preheader,
+		heading:         s.heading,
+		body:            s.body,
+		ctaLabel:        s.cta,
+		ctaURL:          lifecycleCtaURL(template, base),
+		footer:          footer,
+		prefsURL:        base + "/settings/preferences",
+		prefsLabel:      shared.managePrefsLabel,
+		prefsTextPrefix: shared.managePrefsTextPrefix,
+		// transactional — no List-Unsubscribe.
+	}), true
+}
+
+// lifecycleCtaURL maps a lifecycle template to its CTA target.
+func lifecycleCtaURL(template, base string) string {
 	switch template {
-	case "welcome":
-		s := lookupEmailStrings(loc, "welcome")
-		shared := lookupEmailShared(loc)
-		return composeEmail(emailContent{
-			lang:            loc,
-			subject:         s.subject,
-			preheader:       s.preheader,
-			heading:         s.heading,
-			body:            s.body,
-			ctaLabel:        s.cta,
-			ctaURL:          base,
-			footer:          shared.footerWelcome,
-			prefsURL:        base + "/settings/preferences",
-			prefsLabel:      shared.managePrefsLabel,
-			prefsTextPrefix: shared.managePrefsTextPrefix,
-			// transactional — no List-Unsubscribe.
-		}), true
-	default:
-		return Email{}, false
+	case "payment_failed":
+		return base + "/settings/upgrade"
+	default: // welcome, pro_welcome
+		return base
 	}
 }
 

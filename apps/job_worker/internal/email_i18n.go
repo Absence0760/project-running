@@ -27,6 +27,7 @@ type emailStrings struct {
 type emailShared struct {
 	footerNotification    string // "why you're receiving this" for notification mail
 	footerWelcome         string // ditto for the welcome
+	footerTransactional   string // service-message footer for billing/account lifecycle mail
 	managePrefsLabel      string // HTML footer link text
 	managePrefsTextPrefix string // plain-text footer prefix before the URL
 }
@@ -99,36 +100,42 @@ var emailSharedByLocale = map[string]emailShared{
 	"en": {
 		footerNotification:    "You're receiving this because of your notification settings.",
 		footerWelcome:         "You're receiving this because you just created a Threkir account.",
+		footerTransactional:   "This is a service message about your Threkir account.",
 		managePrefsLabel:      "Manage email preferences",
 		managePrefsTextPrefix: "Manage your email preferences:",
 	},
 	"de": {
 		footerNotification:    "Du erhältst diese E-Mail aufgrund deiner Benachrichtigungseinstellungen.",
 		footerWelcome:         "Du erhältst diese E-Mail, weil du gerade ein Threkir-Konto erstellt hast.",
+		footerTransactional:   "Dies ist eine Service-Nachricht zu deinem Threkir-Konto.",
 		managePrefsLabel:      "E-Mail-Einstellungen verwalten",
 		managePrefsTextPrefix: "Verwalte deine E-Mail-Einstellungen:",
 	},
 	"fr": {
 		footerNotification:    "Vous recevez cet e-mail en raison de vos paramètres de notification.",
 		footerWelcome:         "Vous recevez cet e-mail car vous venez de créer un compte Threkir.",
+		footerTransactional:   "Ceci est un message de service concernant votre compte Threkir.",
 		managePrefsLabel:      "Gérer les préférences e-mail",
 		managePrefsTextPrefix: "Gérez vos préférences e-mail :",
 	},
 	"es": {
 		footerNotification:    "Recibes este correo por tus ajustes de notificaciones.",
 		footerWelcome:         "Recibes este correo porque acabas de crear una cuenta de Threkir.",
+		footerTransactional:   "Este es un mensaje de servicio sobre tu cuenta de Threkir.",
 		managePrefsLabel:      "Gestionar preferencias de correo",
 		managePrefsTextPrefix: "Gestiona tus preferencias de correo:",
 	},
 	"ja": {
 		footerNotification:    "通知設定に基づいてこのメールをお送りしています。",
 		footerWelcome:         "Threkir アカウントを作成されたため、このメールをお送りしています。",
+		footerTransactional:   "これは Threkir アカウントに関するサービス通知です。",
 		managePrefsLabel:      "メール設定を管理",
 		managePrefsTextPrefix: "メール設定の管理:",
 	},
 	"pt-BR": {
 		footerNotification:    "Você está recebendo este e-mail por causa das suas configurações de notificação.",
 		footerWelcome:         "Você está recebendo este e-mail porque acabou de criar uma conta no Threkir.",
+		footerTransactional:   "Esta é uma mensagem de serviço sobre a sua conta no Threkir.",
 		managePrefsLabel:      "Gerenciar preferências de e-mail",
 		managePrefsTextPrefix: "Gerencie suas preferências de e-mail:",
 	},
@@ -149,6 +156,8 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"comment":        {"New comment on a run", "Someone commented on a run.", "New comment", "View run", []string{"There's a new comment on a run."}},
 		"follow":         {"You have a new follower", "Someone started following you.", "New follower", "View profile", []string{"Someone started following you on Threkir."}},
 		"welcome":        {"Welcome to Threkir", "You're all set — here's how to get started.", "Welcome to Threkir", "Open Threkir", []string{"Thanks for signing up. You're all set to record your first run, build routes, and follow friends.", "Hit the button below to get going."}},
+		"pro_welcome":    {"You're now on Threkir Pro", "Thanks for upgrading — here's what's unlocked.", "Welcome to Threkir Pro", "Explore Pro", []string{"Thanks for upgrading — your Threkir Pro features are now active.", "Dive into advanced training insights, the AI coach, and more."}},
+		"payment_failed": {"There was a problem with your payment", "Update your payment method to keep Threkir Pro.", "Payment issue", "Update payment", []string{"We couldn't process your latest Threkir Pro payment.", "Update your payment method to keep your Pro features — your subscription may be paused until it's resolved."}},
 		"default":        {"You have a new notification", "You have a new notification on Threkir.", "New notification", "Open Threkir", []string{"You have a new notification on Threkir."}},
 	},
 	"de": {
@@ -163,6 +172,8 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"comment":        {"Neuer Kommentar zu einem Lauf", "Jemand hat einen Lauf kommentiert.", "Neuer Kommentar", "Lauf ansehen", []string{"Es gibt einen neuen Kommentar zu einem Lauf."}},
 		"follow":         {"Du hast einen neuen Follower", "Jemand folgt dir jetzt.", "Neuer Follower", "Profil ansehen", []string{"Jemand folgt dir jetzt auf Threkir."}},
 		"welcome":        {"Willkommen bei Threkir", "Alles bereit — so legst du los.", "Willkommen bei Threkir", "Threkir öffnen", []string{"Danke für deine Anmeldung. Du kannst jetzt deinen ersten Lauf aufzeichnen, Routen erstellen und Freunden folgen.", "Tippe auf den Button, um loszulegen."}},
+		"pro_welcome":    {"Du bist jetzt bei Threkir Pro", "Danke fürs Upgrade — das ist jetzt freigeschaltet.", "Willkommen bei Threkir Pro", "Pro entdecken", []string{"Danke fürs Upgrade — deine Threkir-Pro-Funktionen sind jetzt aktiv.", "Entdecke erweiterte Trainingsanalysen, den KI-Coach und mehr."}},
+		"payment_failed": {"Problem mit deiner Zahlung", "Aktualisiere deine Zahlungsmethode, um Threkir Pro zu behalten.", "Zahlungsproblem", "Zahlung aktualisieren", []string{"Wir konnten deine letzte Zahlung für Threkir Pro nicht verarbeiten.", "Aktualisiere deine Zahlungsmethode, um deine Pro-Funktionen zu behalten — dein Abo wird sonst möglicherweise pausiert."}},
 		"default":        {"Du hast eine neue Benachrichtigung", "Du hast eine neue Benachrichtigung auf Threkir.", "Neue Benachrichtigung", "Threkir öffnen", []string{"Du hast eine neue Benachrichtigung auf Threkir."}},
 	},
 	"fr": {
@@ -177,6 +188,8 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"comment":        {"Nouveau commentaire sur une course", "Quelqu'un a commenté une course.", "Nouveau commentaire", "Voir la course", []string{"Il y a un nouveau commentaire sur une course."}},
 		"follow":         {"Vous avez un nouvel abonné", "Quelqu'un s'est abonné à vous.", "Nouvel abonné", "Voir le profil", []string{"Quelqu'un s'est abonné à vous sur Threkir."}},
 		"welcome":        {"Bienvenue sur Threkir", "Tout est prêt — voici comment commencer.", "Bienvenue sur Threkir", "Ouvrir Threkir", []string{"Merci de votre inscription. Vous pouvez enregistrer votre première course, créer des itinéraires et suivre des amis.", "Appuyez sur le bouton pour commencer."}},
+		"pro_welcome":    {"Vous êtes maintenant sur Threkir Pro", "Merci pour la mise à niveau — voici ce qui est débloqué.", "Bienvenue sur Threkir Pro", "Découvrir Pro", []string{"Merci pour la mise à niveau — vos fonctionnalités Threkir Pro sont maintenant actives.", "Profitez des analyses d'entraînement avancées, du coach IA et plus encore."}},
+		"payment_failed": {"Un problème avec votre paiement", "Mettez à jour votre moyen de paiement pour conserver Threkir Pro.", "Problème de paiement", "Mettre à jour le paiement", []string{"Nous n'avons pas pu traiter votre dernier paiement Threkir Pro.", "Mettez à jour votre moyen de paiement pour conserver vos fonctionnalités Pro — votre abonnement pourrait être suspendu en attendant."}},
 		"default":        {"Vous avez une nouvelle notification", "Vous avez une nouvelle notification sur Threkir.", "Nouvelle notification", "Ouvrir Threkir", []string{"Vous avez une nouvelle notification sur Threkir."}},
 	},
 	"es": {
@@ -191,6 +204,8 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"comment":        {"Nuevo comentario en una carrera", "Alguien comentó una carrera.", "Nuevo comentario", "Ver carrera", []string{"Hay un nuevo comentario en una carrera."}},
 		"follow":         {"Tienes un nuevo seguidor", "Alguien empezó a seguirte.", "Nuevo seguidor", "Ver perfil", []string{"Alguien empezó a seguirte en Threkir."}},
 		"welcome":        {"Te damos la bienvenida a Threkir", "Todo listo: así puedes empezar.", "Te damos la bienvenida a Threkir", "Abrir Threkir", []string{"Gracias por registrarte. Ya puedes registrar tu primera carrera, crear rutas y seguir a amigos.", "Pulsa el botón para empezar."}},
+		"pro_welcome":    {"Ya tienes Threkir Pro", "Gracias por mejorar tu plan: esto es lo que se desbloquea.", "Te damos la bienvenida a Threkir Pro", "Descubrir Pro", []string{"Gracias por mejorar tu plan: tus funciones de Threkir Pro ya están activas.", "Descubre los análisis de entrenamiento avanzados, el entrenador con IA y mucho más."}},
+		"payment_failed": {"Hubo un problema con tu pago", "Actualiza tu método de pago para mantener Threkir Pro.", "Problema con el pago", "Actualizar pago", []string{"No pudimos procesar tu último pago de Threkir Pro.", "Actualiza tu método de pago para mantener tus funciones Pro: tu suscripción podría pausarse hasta resolverlo."}},
 		"default":        {"Tienes una notificación nueva", "Tienes una notificación nueva en Threkir.", "Notificación nueva", "Abrir Threkir", []string{"Tienes una notificación nueva en Threkir."}},
 	},
 	"ja": {
@@ -205,6 +220,8 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"comment":        {"ランに新しいコメント", "ランにコメントが付きました。", "新しいコメント", "ランを見る", []string{"ランに新しいコメントが付きました。"}},
 		"follow":         {"新しいフォロワーがいます", "あなたをフォローした人がいます。", "新しいフォロワー", "プロフィールを見る", []string{"Threkir であなたをフォローした人がいます。"}},
 		"welcome":        {"Threkir へようこそ", "準備完了です。さっそく始めましょう。", "Threkir へようこそ", "Threkir を開く", []string{"ご登録ありがとうございます。最初のランの記録、ルート作成、友達のフォローがすぐに始められます。", "下のボタンから始めましょう。"}},
+		"pro_welcome":    {"Threkir Pro をご利用いただけます", "アップグレードありがとうございます。使える機能はこちら。", "Threkir Pro へようこそ", "Pro を見る", []string{"アップグレードありがとうございます。Threkir Pro の機能が有効になりました。", "高度なトレーニング分析や AI コーチなどをぜひお試しください。"}},
+		"payment_failed": {"お支払いに問題がありました", "Threkir Pro を継続するにはお支払い方法を更新してください。", "お支払いの問題", "支払いを更新", []string{"最近の Threkir Pro のお支払いを処理できませんでした。", "Pro 機能を継続するにはお支払い方法を更新してください。解決まで購読が一時停止される場合があります。"}},
 		"default":        {"新しい通知があります", "Threkir に新しい通知があります。", "新しい通知", "Threkir を開く", []string{"Threkir に新しい通知があります。"}},
 	},
 	"pt-BR": {
@@ -219,6 +236,8 @@ var emailCatalogue = map[string]map[string]emailStrings{
 		"comment":        {"Novo comentário em uma corrida", "Alguém comentou em uma corrida.", "Novo comentário", "Ver corrida", []string{"Há um novo comentário em uma corrida."}},
 		"follow":         {"Você tem um novo seguidor", "Alguém começou a seguir você.", "Novo seguidor", "Ver perfil", []string{"Alguém começou a seguir você no Threkir."}},
 		"welcome":        {"Bem-vindo ao Threkir", "Tudo pronto — veja como começar.", "Bem-vindo ao Threkir", "Abrir Threkir", []string{"Obrigado por se cadastrar. Tudo pronto para registrar sua primeira corrida, criar rotas e seguir amigos.", "Toque no botão para começar."}},
+		"pro_welcome":    {"Agora você tem o Threkir Pro", "Obrigado por fazer o upgrade — veja o que foi liberado.", "Bem-vindo ao Threkir Pro", "Explorar o Pro", []string{"Obrigado por fazer o upgrade — seus recursos do Threkir Pro já estão ativos.", "Aproveite as análises de treino avançadas, o treinador com IA e muito mais."}},
+		"payment_failed": {"Houve um problema com seu pagamento", "Atualize sua forma de pagamento para manter o Threkir Pro.", "Problema no pagamento", "Atualizar pagamento", []string{"Não conseguimos processar seu último pagamento do Threkir Pro.", "Atualize sua forma de pagamento para manter seus recursos Pro — sua assinatura pode ser pausada até a resolução."}},
 		"default":        {"Você tem uma nova notificação", "Você tem uma nova notificação no Threkir.", "Nova notificação", "Abrir Threkir", []string{"Você tem uma nova notificação no Threkir."}},
 	},
 }

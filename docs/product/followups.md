@@ -170,6 +170,28 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   on signup, enqueued by an AFTER-INSERT trigger on `user_profiles`; `lifecycle_email_log`
   is the send-once guard. End-to-end tested against local Mailpit. Transactional —
   no preference gate, no `List-Unsubscribe`.
+- [x] **Transactional subscription emails — Pro receipt + payment-failed dunning** —
+  SHIPPED 2026-06-03 (migration `20261203_001`, `decisions.md § 121`). An AFTER-UPDATE
+  trigger on `user_profiles` enqueues `pro_welcome` on free→pro/lifetime and
+  `payment_failed` on `billing_issue_at` null→non-null (the columns the RevenueCat
+  webhook writes). Localized across all six locales; recurring (not deduped by the
+  once-per-user log). End-to-end tested against local Mailpit.
+- [ ] **Account-deletion receipt** — feasible but needs a different mechanism than the
+  other lifecycle emails: the worker can't look up the address post-deletion (GoTrue
+  404s), `delete-account` drains the user's pending jobs before the cascade, and
+  `lifecycle_email_log` cascades away with the user. Build = send the email inline from
+  the `delete-account` EF where `user.email` is still live (or enqueue a job carrying the
+  address in the payload, exempt from the job-drain, with a non-cascading send-once
+  record) — plus consider that the deleted user's email then lingers in `jobs.payload`
+  until drained. `decisions.md § 121`.
+- [ ] **Data-export-ready email** — NOT planned: the export endpoint is synchronous and
+  returns a 10-minute signed URL inline, so an async "your export is ready" email would
+  arrive stale and add no value. Revisit only if export moves to an async/job model.
+- [ ] **Security emails (password-changed, new-device sign-in)** — blocked on absent
+  infrastructure: no GoTrue auth hooks are configured (`config.toml`) and there's no
+  sign-in/device tracking (the `device_tokens` table has no write path). Needs a
+  password-change auth hook + a device/session table with new-device detection — a
+  separate feature, not an email. `decisions.md § 121`.
 - [ ] **Weekly digest + lifecycle drip (engagement email, ~1-2 wk + ops)** — reuses
   the shipped `lifecycle_email` kind with new templates: a weekly digest
   (mileage/PBs/kudos/upcoming events, weekly pg_cron → one job per opted-in user)

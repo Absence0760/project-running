@@ -87,7 +87,12 @@ Function moves per
   for "transactional mail with no notifications row": a `{user_id,
   template}` payload, a template renderer in `mailer.go`, and a
   `lifecycle_email_log (user_id, template)` send-once guard. The welcome
-  is trigger-enqueued on signup (`user_profiles` AFTER INSERT); a future
+  is trigger-enqueued on signup (`user_profiles` AFTER INSERT); the Pro
+  receipt (`pro_welcome`) + payment-failed dunning (`payment_failed`) are
+  trigger-enqueued on `user_profiles` AFTER UPDATE of the subscription
+  columns (`decisions.md § 121`) and are RECURRING — they skip the
+  once-per-user log (`oncePerUserTemplates` gates it to `welcome`). All
+  templates live in `email_i18n.go`, localized across six locales. A future
   digest reuses the kind with a cron enqueue + its own opt-in preference.
   `strava_event` (per-activity ingest enqueued by the HTTP webhook
   endpoint at `/v1/strava/webhook`) is the worked example for

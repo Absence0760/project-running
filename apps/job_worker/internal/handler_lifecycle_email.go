@@ -45,12 +45,19 @@ func (w *Worker) handleLifecycleEmail(ctx context.Context, job *Job) error {
 		return nil
 	}
 
-	already, err := w.Backend.LifecycleEmailAlreadySent(ctx, p.UserID, p.Template)
-	if err != nil {
-		return fmt.Errorf("check log: %w", err)
-	}
-	if already {
-		return nil
+	// Once-per-account templates (welcome) dedup via the permanent log;
+	// recurring transactional templates (pro_welcome, payment_failed) do not
+	// — a re-subscribe or a repeat billing failure is a legitimate new send.
+	once := oncePerUserTemplates[p.Template]
+
+	if once {
+		already, err := w.Backend.LifecycleEmailAlreadySent(ctx, p.UserID, p.Template)
+		if err != nil {
+			return fmt.Errorf("check log: %w", err)
+		}
+		if already {
+			return nil
+		}
 	}
 
 	email, err := w.Backend.FetchUserEmail(ctx, p.UserID)
@@ -58,16 +65,22 @@ func (w *Worker) handleLifecycleEmail(ctx context.Context, job *Job) error {
 		return fmt.Errorf("fetch email: %w", err)
 	}
 	if email == "" {
-		// No address (phone-only / deleted). Record so we don't retry forever.
+		// No address (phone-only / deleted). For once-per-user mail, record
+		// so we don't retry forever; recurring mail just finishes done.
 		w.Log.Warn("lifecycle_email: recipient has no address", "user_id", p.UserID)
-		return w.Backend.RecordLifecycleEmail(ctx, p.UserID, p.Template)
+		if once {
+			return w.Backend.RecordLifecycleEmail(ctx, p.UserID, p.Template)
+		}
+		return nil
 	}
 
 	if err := w.Email.Send(ctx, email, msg); err != nil {
 		return fmt.Errorf("send: %w", err)
 	}
-	if err := w.Backend.RecordLifecycleEmail(ctx, p.UserID, p.Template); err != nil {
-		return fmt.Errorf("record sent: %w", err)
+	if once {
+		if err := w.Backend.RecordLifecycleEmail(ctx, p.UserID, p.Template); err != nil {
+			return fmt.Errorf("record sent: %w", err)
+		}
 	}
 	w.Log.Info("lifecycle_email: sent", "template", p.Template, "user_id", p.UserID)
 	return nil

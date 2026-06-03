@@ -212,6 +212,32 @@ func TestRenderLifecycleEmail_UnknownTemplate(t *testing.T) {
 	}
 }
 
+func TestRenderLifecycleEmail_SubscriptionTemplates(t *testing.T) {
+	pro, ok := renderLifecycleEmail("pro_welcome", "https://threkir.test", "en")
+	if !ok {
+		t.Fatal("pro_welcome should render")
+	}
+	if pro.Subject != "You're now on Threkir Pro" {
+		t.Errorf("unexpected pro_welcome subject %q", pro.Subject)
+	}
+
+	pf, ok := renderLifecycleEmail("payment_failed", "https://threkir.test", "en")
+	if !ok {
+		t.Fatal("payment_failed should render")
+	}
+	// Dunning CTA points at billing management.
+	if !strings.Contains(pf.HTML, `href="https://threkir.test/settings/upgrade"`) {
+		t.Errorf("payment_failed CTA should target /settings/upgrade:\n%s", pf.HTML)
+	}
+	// Transactional (service-message) footer, not the welcome footer.
+	if !strings.Contains(pf.Body, "service message") {
+		t.Errorf("transactional footer expected:\n%s", pf.Body)
+	}
+	if strings.Contains(pf.Body, "just created a Threkir account") {
+		t.Errorf("payment_failed must not use the welcome footer:\n%s", pf.Body)
+	}
+}
+
 func TestBuildMIME_HeadersAndCRLF(t *testing.T) {
 	raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", Email{
 		Subject:         "Hi",
