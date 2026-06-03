@@ -56,7 +56,7 @@ func TestShouldEmail_Matrix(t *testing.T) {
 func TestRenderNotificationEmail_EventReminderDeepLink(t *testing.T) {
 	ev := "evt-42"
 	n := NotificationRow{ID: "n1", UserID: "u1", Kind: "event_reminder", EventID: &ev}
-	msg := renderNotificationEmail(n, "https://threkir.test/")
+	msg := renderNotificationEmail(n, "https://threkir.test/", "en")
 
 	if !strings.Contains(msg.Subject, "event") && !strings.Contains(msg.Subject, "Reminder") {
 		t.Errorf("subject should mention the event reminder, got %q", msg.Subject)
@@ -76,14 +76,14 @@ func TestRenderNotificationEmail_EventReminderDeepLink(t *testing.T) {
 func TestRenderNotificationEmail_RunDeepLinkAndFallback(t *testing.T) {
 	run := "run-9"
 	n := NotificationRow{ID: "n1", UserID: "u1", Kind: "kudos", RunID: &run}
-	msg := renderNotificationEmail(n, "https://threkir.test")
+	msg := renderNotificationEmail(n, "https://threkir.test", "en")
 	if !strings.Contains(msg.Body, "https://threkir.test/runs/run-9") {
 		t.Errorf("kudos should link to the run, got:\n%s", msg.Body)
 	}
 
 	// Missing FK → safe fallback path, never an empty/garbled link.
 	n2 := NotificationRow{ID: "n2", UserID: "u1", Kind: "kudos"}
-	msg2 := renderNotificationEmail(n2, "https://threkir.test")
+	msg2 := renderNotificationEmail(n2, "https://threkir.test", "en")
 	if !strings.Contains(msg2.Body, "https://threkir.test/notifications") {
 		t.Errorf("kudos with no run_id should fall back to /notifications, got:\n%s", msg2.Body)
 	}
@@ -120,7 +120,7 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 	}
 
 	for _, c := range cases {
-		msg := renderNotificationEmail(c.row, base)
+		msg := renderNotificationEmail(c.row, base, "en")
 		if strings.TrimSpace(msg.Subject) == "" {
 			t.Errorf("%s: empty subject", c.kind)
 		}
@@ -168,7 +168,7 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 }
 
 func TestRenderLifecycleEmail_Welcome(t *testing.T) {
-	msg, ok := renderLifecycleEmail("welcome", "https://threkir.test/")
+	msg, ok := renderLifecycleEmail("welcome", "https://threkir.test/", "en")
 	if !ok {
 		t.Fatal("welcome template should render")
 	}
@@ -206,7 +206,7 @@ func TestRenderLifecycleEmail_Welcome(t *testing.T) {
 }
 
 func TestRenderLifecycleEmail_UnknownTemplate(t *testing.T) {
-	_, ok := renderLifecycleEmail("no_such_template", "https://threkir.test")
+	_, ok := renderLifecycleEmail("no_such_template", "https://threkir.test", "en")
 	if ok {
 		t.Error("unknown template must report ok=false so the handler skips")
 	}

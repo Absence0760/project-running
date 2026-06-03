@@ -36,7 +36,10 @@ func (w *Worker) handleLifecycleEmail(ctx context.Context, job *Job) error {
 		return errors.New("payload missing user_id or template")
 	}
 
-	msg, ok := renderLifecycleEmail(p.Template, w.AppBaseURL)
+	// Locale is best-effort: a prefs read error falls back to English
+	// rather than failing the welcome over a non-critical detail.
+	prefs, _ := w.Backend.FetchUserSettingsPrefs(ctx, p.UserID)
+	msg, ok := renderLifecycleEmail(p.Template, w.AppBaseURL, localeFromPrefs(prefs))
 	if !ok {
 		w.Log.Warn("lifecycle_email: unknown template; skipping", "template", p.Template)
 		return nil

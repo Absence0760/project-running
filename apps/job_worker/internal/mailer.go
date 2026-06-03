@@ -122,14 +122,17 @@ func extractAddr(from string) string {
 // turns it into the text + HTML parts so every email shares one layout and
 // adding a template is just filling these fields.
 type emailContent struct {
+	lang      string   // <html lang> (BCP-47); "" → "en"
 	subject   string
 	preheader string   // inbox preview snippet
 	heading   string   // H1
 	body      []string // paragraphs
 	ctaLabel  string   // button text ("" → no button)
 	ctaURL    string
-	footer    string // "why you're receiving this" line
+	footer    string // "why you're receiving this" line (localized by caller)
 	prefsURL  string // manage-preferences link in the footer ("" → omit)
+	prefsLabel string // localized "Manage email preferences" link text
+	prefsTextPrefix string // localized plain-text footer prefix
 	listUnsub string // List-Unsubscribe header value ("" → none)
 }
 
@@ -155,7 +158,7 @@ func renderTextBody(c emailContent) string {
 	b.WriteString("—\n")
 	b.WriteString(c.footer)
 	if c.prefsURL != "" {
-		b.WriteString(" Manage your email preferences: " + c.prefsURL)
+		b.WriteString(" " + c.prefsTextPrefix + " " + c.prefsURL)
 	}
 	b.WriteString("\n")
 	return b.String()
@@ -188,12 +191,17 @@ func renderHTMLBody(c emailContent) string {
 	footer := html.EscapeString(c.footer)
 	if c.prefsURL != "" {
 		footer += fmt.Sprintf(
-			` <a href="%s" style="color:#6b7280;">Manage email preferences</a>.`,
-			html.EscapeString(c.prefsURL))
+			` <a href="%s" style="color:#6b7280;">%s</a>.`,
+			html.EscapeString(c.prefsURL), html.EscapeString(c.prefsLabel))
+	}
+
+	lang := c.lang
+	if lang == "" {
+		lang = "en"
 	}
 
 	return fmt.Sprintf(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"></head>
+<html lang="%s"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="x-apple-disable-message-reformatting"></head>
 <body style="margin:0;padding:0;background:#f4f5f7;">
 <div style="display:none;max-height:0;overflow:hidden;opacity:0;">%s</div>
 <table role="presentation" width="100%%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;"><tr><td align="center" style="padding:24px 12px;">
@@ -203,7 +211,7 @@ func renderHTMLBody(c emailContent) string {
 <tr><td style="padding:20px 32px;border-top:1px solid #e5e7eb;"><p style="margin:0;font-size:12px;line-height:1.5;color:#9ca3af;">%s</p></td></tr>
 </table></td></tr></table>
 </body></html>`,
-		html.EscapeString(c.preheader), brandColor, brandName,
+		lang, html.EscapeString(c.preheader), brandColor, brandName,
 		html.EscapeString(c.heading), paras.String(), cta, footer)
 }
 
@@ -261,113 +269,51 @@ func shouldEmail(kind, mode string) bool {
 	}
 }
 
-// renderNotificationEmail turns a notification row into a branded email.
-// Copy is generic-but-actionable: it names the category and links to the
-// relevant surface, without extra joins to fetch actor handles / event
-// titles (a later enrichment pass can add those). baseURL is the web app
-// origin (APP_BASE_URL).
-func renderNotificationEmail(n NotificationRow, baseURL string) Email {
+// renderNotificationEmail turns a notification row into a branded, localized
+// email. Copy comes from emailCatalogue[locale]; the deep-linked CTA from
+// pathForKind. Generic-but-actionable: names the category and links to the
+// relevant surface, without extra joins for actor handles / event titles (a
+// later enrichment pass can add those). baseURL is the web app origin
+// (APP_BASE_URL); locale is the recipient's user_settings.prefs.locale.
+func renderNotificationEmail(n NotificationRow, baseURL, locale string) Email {
 	base := strings.TrimRight(baseURL, "/")
-	c := notificationContent(n, base)
-	c.prefsURL = base + "/settings/preferences"
-	c.footer = "You're receiving this because of your notification settings."
-	c.listUnsub = c.prefsURL
-	return composeEmail(c)
+	loc := normalizeEmailLocale(locale)
+	s := lookupEmailStrings(loc, keyForKind(n.Kind))
+	shared := lookupEmailShared(loc)
+	return composeEmail(emailContent{
+		lang:            loc,
+		subject:         s.subject,
+		preheader:       s.preheader,
+		heading:         s.heading,
+		body:            s.body,
+		ctaLabel:        s.cta,
+		ctaURL:          pathForKind(n.Kind, base, n),
+		footer:          shared.footerNotification,
+		prefsURL:        base + "/settings/preferences",
+		prefsLabel:      shared.managePrefsLabel,
+		prefsTextPrefix: shared.managePrefsTextPrefix,
+		listUnsub:       base + "/settings/preferences",
+	})
 }
 
-// notificationContent maps a kind to its copy + deep-linked CTA. Kept in
-// one place so adding a kind is a single edit. Unknown kinds get a safe
-// generic fallback rather than an empty mail.
-func notificationContent(n NotificationRow, base string) emailContent {
-	switch n.Kind {
-	case "event_reminder":
-		return emailContent{
-			subject:   "Reminder: your event is coming up",
-			preheader: "An event you said you're going to starts soon.",
-			heading:   "Your event is coming up",
-			body:      []string{"You have an event starting soon that you said you're going to.", "Open it for the meet point, timing, and who else is going."},
-			ctaLabel:  "View event", ctaURL: eventPath(base, n),
-		}
-	case "event_cancel":
-		return emailContent{
-			subject:   "An event you were going to was cancelled",
-			preheader: "One of your RSVP'd events has been called off.",
-			heading:   "Event cancelled",
-			body:      []string{"An event you'd RSVP'd to has been cancelled.", "Open it for the organiser's note and any replacement plans."},
-			ctaLabel:  "View event", ctaURL: eventPath(base, n),
-		}
+// pathForKind maps a notification kind to its deep link. One place so a new
+// kind is a single edit alongside its catalogue entry.
+func pathForKind(kind, base string, n NotificationRow) string {
+	switch kind {
+	case "event_reminder", "event_cancel", "event_rsvp":
+		return eventPath(base, n)
 	case "plan_update":
-		return emailContent{
-			subject:   "Your training plan was updated",
-			preheader: "Your coach changed your plan.",
-			heading:   "Your training plan changed",
-			body:      []string{"Your coach made a change to your training plan."},
-			ctaLabel:  "View training", ctaURL: base + "/training",
-		}
+		return base + "/training"
 	case "message":
-		return emailContent{
-			subject:   "You have a new message",
-			preheader: "Someone sent you a direct message.",
-			heading:   "New message",
-			body:      []string{"You have a new direct message on Threkir."},
-			ctaLabel:  "Read message", ctaURL: base + "/messages",
-		}
-	case "event_rsvp":
-		return emailContent{
-			subject:   "New RSVP to your event",
-			preheader: "Someone's going to your event.",
-			heading:   "New RSVP",
-			body:      []string{"Someone RSVP'd to an event you organise."},
-			ctaLabel:  "View event", ctaURL: eventPath(base, n),
-		}
+		return base + "/messages"
 	case "club_post":
-		return emailContent{
-			subject:   "New post in your club",
-			preheader: "There's a new post in one of your clubs.",
-			heading:   "New club post",
-			body:      []string{"There's a new post in one of your clubs."},
-			ctaLabel:  "View club", ctaURL: clubPath(base, n),
-		}
-	case "run_completed":
-		return emailContent{
-			subject:   "A runner you follow finished a run",
-			preheader: "See their latest run.",
-			heading:   "New run from someone you follow",
-			body:      []string{"Someone you follow just completed a run."},
-			ctaLabel:  "View run", ctaURL: runPath(base, n),
-		}
-	case "kudos":
-		return emailContent{
-			subject:   "You got kudos",
-			preheader: "Someone gave kudos to your run.",
-			heading:   "You got kudos",
-			body:      []string{"Someone gave kudos to your run."},
-			ctaLabel:  "View run", ctaURL: runPath(base, n),
-		}
-	case "comment", "comment_reply":
-		return emailContent{
-			subject:   "New comment on a run",
-			preheader: "Someone commented on a run.",
-			heading:   "New comment",
-			body:      []string{"There's a new comment on a run."},
-			ctaLabel:  "View run", ctaURL: runPath(base, n),
-		}
+		return clubPath(base, n)
+	case "run_completed", "kudos", "comment", "comment_reply":
+		return runPath(base, n)
 	case "follow":
-		return emailContent{
-			subject:   "You have a new follower",
-			preheader: "Someone started following you.",
-			heading:   "New follower",
-			body:      []string{"Someone started following you on Threkir."},
-			ctaLabel:  "View profile", ctaURL: base + "/profile",
-		}
+		return base + "/profile"
 	default:
-		return emailContent{
-			subject:   "You have a new notification",
-			preheader: "You have a new notification on Threkir.",
-			heading:   "New notification",
-			body:      []string{"You have a new notification on Threkir."},
-			ctaLabel:  "Open Threkir", ctaURL: base + "/notifications",
-		}
+		return base + "/notifications"
 	}
 }
 
@@ -378,21 +324,25 @@ func notificationContent(n NotificationRow, base string) emailContent {
 // email. Lifecycle mail is transactional/relationship — no List-Unsubscribe
 // header (it's not a subscription); the footer still points at preferences
 // for managing future email.
-func renderLifecycleEmail(template, baseURL string) (Email, bool) {
+func renderLifecycleEmail(template, baseURL, locale string) (Email, bool) {
 	base := strings.TrimRight(baseURL, "/")
+	loc := normalizeEmailLocale(locale)
 	switch template {
 	case "welcome":
+		s := lookupEmailStrings(loc, "welcome")
+		shared := lookupEmailShared(loc)
 		return composeEmail(emailContent{
-			subject:   "Welcome to Threkir",
-			preheader: "You're all set — here's how to get started.",
-			heading:   "Welcome to Threkir",
-			body: []string{
-				"Thanks for signing up. You're all set to record your first run, build routes, and follow friends.",
-				"Hit the button below to get going.",
-			},
-			ctaLabel: "Open Threkir", ctaURL: base,
-			footer:   "You're receiving this because you just created a Threkir account.",
-			prefsURL: base + "/settings/preferences",
+			lang:            loc,
+			subject:         s.subject,
+			preheader:       s.preheader,
+			heading:         s.heading,
+			body:            s.body,
+			ctaLabel:        s.cta,
+			ctaURL:          base,
+			footer:          shared.footerWelcome,
+			prefsURL:        base + "/settings/preferences",
+			prefsLabel:      shared.managePrefsLabel,
+			prefsTextPrefix: shared.managePrefsTextPrefix,
 			// transactional — no List-Unsubscribe.
 		}), true
 	default:

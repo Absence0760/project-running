@@ -2671,6 +2671,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 120. Emails are localized server-side from a DB-synced `locale` pref + a worker-side catalogue — the one place locale leaves the device
+
+**Decided (2026-06-03):** the worker renders emails in the recipient's language. Because emails are sent server-side, the worker needs the user's locale — but neither client exposes it server-side: web detects locale client-side (§108) and mobile keeps `Preferences.locale` per-device and explicitly **not** DB-synced (§113). So the clients now also write the active UI locale tag into `user_settings.prefs.locale` (a universal, DB-synced bag key — `docs/backend/settings.md`), and the worker reads it (`localeFromPrefs`) and renders from a per-locale catalogue (`apps/job_worker/internal/email_i18n.go`) covering the same six locales as the app (en/de/fr/es/ja/pt-BR), with English fallback per key.
+
+**Why this doesn't violate §113.** §113's rule is that the *device UI locale* is per-device and not synced — so signing into the app on a friend's phone doesn't flip their app language. That still holds: `prefs.locale` is a **separate** value used only for server-sent comms, written as a side effect of the language picker, never read back to drive the app's UI. The device picker stays the source of truth for what each device displays; `prefs.locale` is "what language to email this person in," which is genuinely account-level, not device-level. Two distinct concerns that happened to look like one.
+
+**The shape.** Email copy moved out of Go string literals into `emailCatalogue[locale][key]` (key = notification kind / `welcome` / `default`) + `emailSharedByLocale` (footer + manage-preferences strings). `normalizeEmailLocale` collapses region tags (`de-DE`→`de`, `pt`/`pt-PT`→`pt-BR`) and unknown locales to English. The HTML carries `<html lang>`. `email_i18n_test.go` pins catalogue parity (every locale has every key, no empty strings) — the worker's mirror of the web `messages_parity` + mobile `l10n_parity` tests. The deep links + brand chrome are locale-independent; only copy changes.
+
+**Trade-off / when not to re-litigate.** The email catalogue is a **third** translation surface (after web i18n and the mobile ARBs) that must be kept in lockstep by hand — there's no shared source because the three runtimes (TS, Dart, Go) can't import one. That's accepted: emails are few and short, and the parity test catches a *missing* key (not a *stale* translation). A user who never picks a language and whose client hasn't written `prefs.locale` gets English — acceptable default. **Don't** read `prefs.locale` to drive in-app UI (that's §113's per-device locale), **don't** add an email locale without adding it to all six catalogue entries (parity test fails closed), and **don't** try to unify the three translation catalogues — the runtime boundary makes it not worth it.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

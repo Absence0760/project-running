@@ -81,7 +81,7 @@ func (w *Worker) handleNotificationEmail(ctx context.Context, job *Job) error {
 		return w.Backend.MarkNotificationEmailed(ctx, n.ID)
 	}
 
-	msg := renderNotificationEmail(*n, w.AppBaseURL)
+	msg := renderNotificationEmail(*n, w.AppBaseURL, localeFromPrefs(prefs))
 	if err := w.Email.Send(ctx, email, msg); err != nil {
 		return fmt.Errorf("send: %w", err)
 	}
