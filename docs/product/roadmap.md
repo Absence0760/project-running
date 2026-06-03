@@ -523,10 +523,10 @@ Surfaces that other running apps ship as table stakes; these have now shipped. E
 ## Phase 4 — multi-modal: gym + nutrition
 
 **Target:** TBD (post-Phase-3 monetisation milestone)
-**Goal:** Expand from running-only to a running + gym + nutrition product inside one app per platform. The differentiator vs Strava (running silo) and MyFitnessPal (nutrition silo) is the cross-modality view — weekly mileage, lift volume, and protein intake side-by-side in one Home and one History.
-**Architecture:** [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) is the foundational ADR. **Layout & IA contract:** [docs/features/multi_modal.md](../features/multi_modal.md) (mobile-first, anti-clutter — nav, Home card system, History, gym + nutrition surfaces). **Data foundation shipped:** migration `20261204_001` (`runs.kind` + `gym_workouts`/`gym_sets`/`food_log` + `activities` view).
+**Goal:** Expand from running-only to a running + gym + nutrition product inside one app per platform. The differentiator vs Strava (running silo) and MyFitnessPal (nutrition silo) is **cross-modality intelligence** — lifts in the recovery curve + a Coach that reasons across all three — surfaced through one Home and one History. (Co-located cards alone are not the wedge.)
+**Architecture:** [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) is the foundational ADR. **Layout & IA + hardened plan:** [docs/features/multi_modal.md](../features/multi_modal.md) (mobile-first anti-clutter IA, the inform-vs-command integration model, lift-load spec, sequencing/validation gates, sensitive-data/DSAR). **Data foundation shipped:** migration `20261204_001` (`runs.kind` + `gym_workouts`/`gym_sets`/`food_log` + `activities` view) + the `api_client` gym/food methods.
 
-Workstreams run **in parallel** within this phase — the nav reorg ships with the first modality, both modalities ship together at the lightweight tier. Depth tiers (Strong-app / MyFitnessPal / AI-driven) are documented at the bottom as future work, not committed to in Phase 4.
+**Sequencing (hardened — NOT parallel):** finish the Phase 3 training moat (missed-session re-planning — counters Runna, closer to revenue) → ship the nav foundation + **gym** (strong runner fit, low friction, trustworthy lift→load) → **validation gate** (measure gym engagement before committing to nutrition) → ship **nutrition, food-DB-backed** (never manual-only) → promote cross-modality intelligence first-class as each lands. Depth tiers are future work, not committed here. The §63 standalone-escape-hatch is the formal fallback if nutrition's user shape diverges.
 
 ### Navigation foundation (mobile + web)
 
@@ -558,24 +558,26 @@ Strong app's free-form log, not its programmed-routine engine.
 - [ ] Sharing — same `is_public` pattern as runs; lift summary cards appear in the social feed.
 - [ ] **Not in scope:** exercise database, workout templates, programmes, RPE-driven progression (all in the gym depth tier below).
 
-### Nutrition — lightweight tier
+### Nutrition — food-DB-backed (NOT manual-only)
 
-Manual macro logging. No food database, no barcode scan, no photo recognition (all in the nutrition depth tier below).
+**Hardened:** manual macro entry is dead on arrival (nobody knows the macros of "chicken bowl"); a food database is pulled forward from the depth tier — **nutrition does not ship without it.** Gated behind the gym validation gate (below). Full rationale + IA: [docs/features/multi_modal.md](../features/multi_modal.md).
 
-- [ ] Web: `/nutrition` (daily log + weekly trends), `/nutrition/log` (composer — item name as free text, calories + protein + carbs + fat manual entry).
-- [ ] Mobile: `nutrition_screen.dart`, `nutrition_log_sheet.dart`, twin-mirrored.
-- [ ] Daily targets — user sets calorie + macro goals in Settings; rings show daily progress on Home. Defaults from a Mifflin-St Jeor BMR × activity-level heuristic; user can override.
+- [ ] Web: `/nutrition` (daily log + rings + weekly trends), `/nutrition/log` (composer — **search Open Food Facts → tap → confirm portion**; manual entry only as the no-match fallback).
+- [ ] Mobile: `nutrition_screen.dart`, `nutrition_log_sheet.dart`, `food_search.dart` (Open Food Facts client, pluggable-fetcher seam), twin-mirrored. Barcode scan (camera) is a v1.1 fast-path on the same lookup.
+- [ ] Daily targets — Mifflin-St Jeor BMR × activity-level (`nutrition_targets` parity pair), overridable in Settings. Needs **body metrics** (height + a `body_metrics` weight time-series, new additive migration) — sensitive health data; update privacy disclosures (iOS label / Play Data Safety / sub-processor list — Open Food Facts is a new outbound hop).
 - [ ] Water tracker — separate from food log, simple count of 250 ml units.
 - [ ] Weekly trends — mirrors the existing `mileage_trend_card` pattern.
 
-### Cross-modality integration
+### Cross-modality integration — the headline, not the afterthought
 
-The point of the whole exercise. Each item assumes both lightweight modules above are shipped.
+**This is the wedge** (Coach reasoning across all three + lifts in the recovery curve), not the card layout. Built first-class as each module lands, on the **inform vs command** two-tier model (see [multi_modal.md](../features/multi_modal.md)).
 
-- [ ] Home dashboard composes cards from all three modalities (run, gym, nutrition) plus the existing training load + fitness cards. Order and visibility driven by what the user actually logs.
-- [ ] AI Coach context (`apps/web/src/lib/coach/` + the `/api/coach` Lambda) reads recent gym sessions + last 7 d nutrition averages alongside the existing run window. Same prompt-caching pattern, just more rows. Daily-cap unchanged.
-- [ ] History timeline shows all three kinds with filter chips. Social feed extends to lift + meal cards with the same `is_public` gate.
-- [ ] Training-load chart factors lift sessions as additional stress (TRIMP-from-RPE or simple per-set load) so CTL / ATL / TSB reflects the full picture. Algorithm details and source of truth deferred to spec when work starts.
+- [ ] **Lift training-load (Tier 1):** lift sessions contribute `source='lift'`-tagged stress to the same CTL/ATL/TSB series (`liftStress` in the `training_load` parity pair), calibrated so a hard lift ≈ an easy run's TSS and capped against typos. **Run-load stays separable** so a lift bug can't corrupt run-only readiness; a calibration test pins the target.
+- [ ] **Coach context (Tier 1):** `coach/context.ts` reads a **bounded** recent-lifts cap + a 7-day nutrition *summary* (not raw rows) so prompt size + cost stay flat. Daily cap unchanged.
+- [ ] Home composes all three modalities (self-hiding); History timeline + filter chips over the `activities` view (windowed/paginated).
+- [ ] Social feed extends to **lift** cards (`is_public`); **meals are not feed-shareable in v1** (privacy footgun, little upside).
+- [ ] **DSAR (must-fix):** add `gym_workouts` / `gym_sets` / `food_log` / `body_metrics` to the data-export path (deletion already FK-cascades from `auth.users`).
+- [ ] **Tier 2 (deferred, gated on data trust):** recommendation engine ("under-fuelling for tomorrow's long run", "skip the lift, CTL too high"), plan re-planning that factors fuelling + lift load, Coach-authored meal/lift plans, unified Whoop-style recovery score. Off until logging is reliable.
 
 ### Depth tiers (deferred, documented for sequencing decisions)
 
