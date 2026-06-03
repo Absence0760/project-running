@@ -6151,4 +6151,23 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'レース週';
+
+  @override
+  String get runBackgroundLocationNudgeTitle => '位置情報を常に許可';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'Android はアプリが開いている間だけ位置情報を許可しました。画面がオフのときも距離を正確に記録するには、設定で位置情報のアクセスを「常に許可」にしてください。このまま開始することもできます。アプリが画面に表示されている間は記録が機能します。';
+
+  @override
+  String get runBatteryOptHintTitle => 'バックグラウンドでも記録を継続';
+
+  @override
+  String get runBatteryOptHintBody =>
+      '一部のスマートフォン（Samsung、Xiaomi、OnePlus など）は、バッテリーを節約するためにアプリをスリープさせることがあり、画面がオフのときに長距離ランの記録が止まる場合があります。念のため、設定でこのアプリをバッテリー最適化の対象から除外してください。ランはいずれにせよ記録されます。これはシステムが記録を途中で止めるのを防ぐだけです。';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $durationで$distance';
+  }
 }

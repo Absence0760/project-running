@@ -646,8 +646,8 @@ class _RunScreenState extends State<RunScreen> {
     final openSettings = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(kBackgroundLocationNudgeTitle),
-        content: const Text(kBackgroundLocationNudgeBody),
+        title: Text(_l10n.runBackgroundLocationNudgeTitle),
+        content: Text(_l10n.runBackgroundLocationNudgeBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -690,8 +690,8 @@ class _RunScreenState extends State<RunScreen> {
     final openSettings = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text(kBatteryOptHintTitle),
-        content: const Text(kBatteryOptHintBody),
+        title: Text(_l10n.runBatteryOptHintTitle),
+        content: Text(_l10n.runBatteryOptHintBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),

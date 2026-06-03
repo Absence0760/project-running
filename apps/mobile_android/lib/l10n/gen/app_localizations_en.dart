@@ -6444,4 +6444,23 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'Race week';
+
+  @override
+  String get runBackgroundLocationNudgeTitle => 'Allow location all the time';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'Android only granted location while the app is open. For accurate distance when your screen is off, set location access to \"Allow all the time\" in Settings. You can start anyway — recording still works while the app is on screen.';
+
+  @override
+  String get runBatteryOptHintTitle => 'Keep recording alive in the background';
+
+  @override
+  String get runBatteryOptHintBody =>
+      'Some phones (Samsung, Xiaomi, OnePlus and others) put apps to sleep to save battery, which can stop a long run from recording when your screen is off. To be safe, exclude this app from battery optimisation in Settings. Your run will record either way — this just stops the system from cutting it short.';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $distance in $duration';
+  }
 }

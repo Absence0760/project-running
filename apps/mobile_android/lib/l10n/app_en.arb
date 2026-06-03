@@ -8436,5 +8436,15 @@
   "planPhaseRace": "Race week",
   "@planPhaseRace": {
     "description": "Training plan phase label: race week"
-  }
+  },
+  "runBackgroundLocationNudgeTitle": "Allow location all the time",
+  "@runBackgroundLocationNudgeTitle": {"description": "Title of the dialog nudging Android users to grant always-on location before a run"},
+  "runBackgroundLocationNudgeBody": "Android only granted location while the app is open. For accurate distance when your screen is off, set location access to \"Allow all the time\" in Settings. You can start anyway — recording still works while the app is on screen.",
+  "@runBackgroundLocationNudgeBody": {"description": "Body of the background-location nudge dialog shown before a run on Android"},
+  "runBatteryOptHintTitle": "Keep recording alive in the background",
+  "@runBatteryOptHintTitle": {"description": "Title of the one-time battery-optimisation hint dialog shown before a run on Android"},
+  "runBatteryOptHintBody": "Some phones (Samsung, Xiaomi, OnePlus and others) put apps to sleep to save battery, which can stop a long run from recording when your screen is off. To be safe, exclude this app from battery optimisation in Settings. Your run will record either way — this just stops the system from cutting it short.",
+  "@runBatteryOptHintBody": {"description": "Body of the battery-optimisation hint dialog shown before a run on Android"},
+  "shareCardCaption": "{title} — {distance} in {duration}",
+  "@shareCardCaption": {"description": "Share text accompanying a run share image or exported file: title, distance, and duration", "placeholders": {"title": {"type": "Object"}, "distance": {"type": "Object"}, "duration": {"type": "Object"}}}
 }

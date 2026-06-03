@@ -10748,6 +10748,36 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Race week'**
   String get planPhaseRace;
+
+  /// Title of the dialog nudging Android users to grant always-on location before a run
+  ///
+  /// In en, this message translates to:
+  /// **'Allow location all the time'**
+  String get runBackgroundLocationNudgeTitle;
+
+  /// Body of the background-location nudge dialog shown before a run on Android
+  ///
+  /// In en, this message translates to:
+  /// **'Android only granted location while the app is open. For accurate distance when your screen is off, set location access to \"Allow all the time\" in Settings. You can start anyway — recording still works while the app is on screen.'**
+  String get runBackgroundLocationNudgeBody;
+
+  /// Title of the one-time battery-optimisation hint dialog shown before a run on Android
+  ///
+  /// In en, this message translates to:
+  /// **'Keep recording alive in the background'**
+  String get runBatteryOptHintTitle;
+
+  /// Body of the battery-optimisation hint dialog shown before a run on Android
+  ///
+  /// In en, this message translates to:
+  /// **'Some phones (Samsung, Xiaomi, OnePlus and others) put apps to sleep to save battery, which can stop a long run from recording when your screen is off. To be safe, exclude this app from battery optimisation in Settings. Your run will record either way — this just stops the system from cutting it short.'**
+  String get runBatteryOptHintBody;
+
+  /// Share text accompanying a run share image or exported file: title, distance, and duration
+  ///
+  /// In en, this message translates to:
+  /// **'{title} — {distance} in {duration}'**
+  String shareCardCaption(Object title, Object distance, Object duration);
 }
 
 class _AppLocalizationsDelegate

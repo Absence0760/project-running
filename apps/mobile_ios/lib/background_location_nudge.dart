@@ -12,14 +12,6 @@
 /// this addresses, so the nudge is Android-only.
 library;
 
-const String kBackgroundLocationNudgeTitle = 'Allow location all the time';
-
-const String kBackgroundLocationNudgeBody =
-    'Android only granted location while the app is open. For accurate '
-    'distance when your screen is off, set location access to "Allow all '
-    'the time" in Settings. You can start anyway — recording still works '
-    'while the app is on screen.';
-
 /// True when we should nudge the runner to upgrade to background
 /// location. Only on Android, only when foreground access is already
 /// granted (no point nudging before they've granted anything) but the

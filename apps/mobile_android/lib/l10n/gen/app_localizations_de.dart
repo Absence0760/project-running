@@ -6516,4 +6516,24 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'Wettkampfwoche';
+
+  @override
+  String get runBackgroundLocationNudgeTitle => 'Standort immer zulassen';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'Android hat den Standort nur erlaubt, während die App geöffnet ist. Für eine genaue Distanz bei ausgeschaltetem Bildschirm setze den Standortzugriff in den Einstellungen auf „Immer zulassen“. Du kannst trotzdem starten – die Aufzeichnung funktioniert weiterhin, solange die App im Vordergrund ist.';
+
+  @override
+  String get runBatteryOptHintTitle =>
+      'Aufzeichnung im Hintergrund aktiv halten';
+
+  @override
+  String get runBatteryOptHintBody =>
+      'Manche Telefone (Samsung, Xiaomi, OnePlus und andere) versetzen Apps in den Ruhezustand, um Akku zu sparen, was die Aufzeichnung eines langen Laufs bei ausgeschaltetem Bildschirm stoppen kann. Schließe diese App in den Einstellungen sicherheitshalber von der Akku-Optimierung aus. Dein Lauf wird ohnehin aufgezeichnet – dies verhindert nur, dass das System ihn vorzeitig beendet.';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $distance in $duration';
+  }
 }

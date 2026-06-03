@@ -6512,4 +6512,25 @@ class AppLocalizationsEs extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'Semana de carrera';
+
+  @override
+  String get runBackgroundLocationNudgeTitle =>
+      'Permitir la ubicación todo el tiempo';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'Android solo concedió la ubicación mientras la aplicación está abierta. Para una distancia precisa cuando la pantalla está apagada, configura el acceso a la ubicación como «Permitir todo el tiempo» en Ajustes. Puedes empezar de todos modos: la grabación sigue funcionando mientras la aplicación está en pantalla.';
+
+  @override
+  String get runBatteryOptHintTitle =>
+      'Mantener la grabación activa en segundo plano';
+
+  @override
+  String get runBatteryOptHintBody =>
+      'Algunos teléfonos (Samsung, Xiaomi, OnePlus y otros) suspenden las aplicaciones para ahorrar batería, lo que puede detener la grabación de una carrera larga cuando la pantalla está apagada. Para mayor seguridad, excluye esta aplicación de la optimización de batería en Ajustes. Tu carrera se grabará de todos modos: esto solo evita que el sistema la interrumpa.';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $distance en $duration';
+  }
 }

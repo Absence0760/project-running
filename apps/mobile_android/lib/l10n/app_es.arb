@@ -1771,5 +1771,10 @@
   "planPhaseBuild": "Construcción",
   "planPhasePeak": "Pico",
   "planPhaseTaper": "Afinamiento",
-  "planPhaseRace": "Semana de carrera"
+  "planPhaseRace": "Semana de carrera",
+  "runBackgroundLocationNudgeTitle": "Permitir la ubicación todo el tiempo",
+  "runBackgroundLocationNudgeBody": "Android solo concedió la ubicación mientras la aplicación está abierta. Para una distancia precisa cuando la pantalla está apagada, configura el acceso a la ubicación como «Permitir todo el tiempo» en Ajustes. Puedes empezar de todos modos: la grabación sigue funcionando mientras la aplicación está en pantalla.",
+  "runBatteryOptHintTitle": "Mantener la grabación activa en segundo plano",
+  "runBatteryOptHintBody": "Algunos teléfonos (Samsung, Xiaomi, OnePlus y otros) suspenden las aplicaciones para ahorrar batería, lo que puede detener la grabación de una carrera larga cuando la pantalla está apagada. Para mayor seguridad, excluye esta aplicación de la optimización de batería en Ajustes. Tu carrera se grabará de todos modos: esto solo evita que el sistema la interrumpa.",
+  "shareCardCaption": "{title} — {distance} en {duration}"
 }

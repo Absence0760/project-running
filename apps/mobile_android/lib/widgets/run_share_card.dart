@@ -60,14 +60,19 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
   final GlobalKey _cardKey = GlobalKey();
   bool _capturing = false;
 
-  String get _caption {
+  String _caption(AppLocalizations l10n) {
     final unit = widget.preferences.unit;
     final dist = UnitFormat.distance(widget.run.distanceMetres, unit);
-    return '${widget.title} — $dist in ${_formatDuration(widget.run.duration)}';
+    return l10n.shareCardCaption(
+      widget.title,
+      dist,
+      _formatDuration(widget.run.duration),
+    );
   }
 
   Future<void> _shareImage() async {
     if (_capturing) return;
+    final l10n = AppLocalizations.of(context);
     setState(() => _capturing = true);
     try {
       // Give map tiles a beat to load in before grabbing the frame. Cached
@@ -90,7 +95,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
 
       await Share.shareXFiles(
         [XFile(file.path, mimeType: 'image/png')],
-        text: _caption,
+        text: _caption(l10n),
       );
     } catch (e) {
       debugPrint('Failed to capture run share card: $e');
@@ -104,6 +109,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
   }
 
   Future<void> _shareFile(String format) async {
+    final l10n = AppLocalizations.of(context);
     try {
       final tmp = await getTemporaryDirectory();
       final run = widget.run;
@@ -120,7 +126,7 @@ class _ShareRunSheetState extends State<_ShareRunSheet> {
           file = File('${tmp.path}/run-${run.id}.gpx');
           await file.writeAsString(_runToGpx(run, title));
       }
-      await Share.shareXFiles([XFile(file.path)], text: _caption);
+      await Share.shareXFiles([XFile(file.path)], text: _caption(l10n));
     } catch (e) {
       debugPrint('Failed to export run file: $e');
       if (mounted) {

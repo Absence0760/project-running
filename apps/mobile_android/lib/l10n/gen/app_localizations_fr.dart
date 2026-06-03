@@ -6526,4 +6526,25 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'Semaine de course';
+
+  @override
+  String get runBackgroundLocationNudgeTitle =>
+      'Autoriser la localisation en permanence';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'Android n\'a autorisé la localisation que lorsque l\'application est ouverte. Pour une distance précise lorsque votre écran est éteint, réglez l\'accès à la localisation sur « Toujours autoriser » dans les Réglages. Vous pouvez démarrer quand même — l\'enregistrement fonctionne tant que l\'application est à l\'écran.';
+
+  @override
+  String get runBatteryOptHintTitle =>
+      'Maintenir l\'enregistrement actif en arrière-plan';
+
+  @override
+  String get runBatteryOptHintBody =>
+      'Certains téléphones (Samsung, Xiaomi, OnePlus et d\'autres) mettent les applications en veille pour économiser la batterie, ce qui peut interrompre l\'enregistrement d\'une longue sortie lorsque votre écran est éteint. Par précaution, excluez cette application de l\'optimisation de la batterie dans les Réglages. Votre sortie sera enregistrée dans tous les cas — cela empêche simplement le système de l\'interrompre.';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $distance en $duration';
+  }
 }

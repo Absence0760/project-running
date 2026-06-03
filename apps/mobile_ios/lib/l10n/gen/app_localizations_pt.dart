@@ -6508,6 +6508,27 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get planPhaseRace => 'Semana de prova';
+
+  @override
+  String get runBackgroundLocationNudgeTitle =>
+      'Permitir localização o tempo todo';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'O Android só concedeu a localização enquanto o app está aberto. Para uma distância precisa com a tela desligada, defina o acesso à localização como \"Permitir o tempo todo\" nas Configurações. Você pode começar mesmo assim — a gravação continua funcionando enquanto o app estiver na tela.';
+
+  @override
+  String get runBatteryOptHintTitle =>
+      'Manter a gravação ativa em segundo plano';
+
+  @override
+  String get runBatteryOptHintBody =>
+      'Alguns celulares (Samsung, Xiaomi, OnePlus e outros) colocam os apps em suspensão para economizar bateria, o que pode interromper a gravação de uma corrida longa quando a tela está desligada. Por segurança, exclua este app da otimização de bateria nas Configurações. Sua corrida será gravada de qualquer forma — isso apenas impede que o sistema a interrompa.';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $distance em $duration';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13014,4 +13035,25 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get planPhaseRace => 'Semana de prova';
+
+  @override
+  String get runBackgroundLocationNudgeTitle =>
+      'Permitir localização o tempo todo';
+
+  @override
+  String get runBackgroundLocationNudgeBody =>
+      'O Android só concedeu a localização enquanto o app está aberto. Para uma distância precisa com a tela desligada, defina o acesso à localização como \"Permitir o tempo todo\" nas Configurações. Você pode começar mesmo assim — a gravação continua funcionando enquanto o app estiver na tela.';
+
+  @override
+  String get runBatteryOptHintTitle =>
+      'Manter a gravação ativa em segundo plano';
+
+  @override
+  String get runBatteryOptHintBody =>
+      'Alguns celulares (Samsung, Xiaomi, OnePlus e outros) colocam os apps em suspensão para economizar bateria, o que pode interromper a gravação de uma corrida longa quando a tela está desligada. Por segurança, exclua este app da otimização de bateria nas Configurações. Sua corrida será gravada de qualquer forma — isso apenas impede que o sistema a interrompa.';
+
+  @override
+  String shareCardCaption(Object title, Object distance, Object duration) {
+    return '$title — $distance em $duration';
+  }
 }

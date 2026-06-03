@@ -11,18 +11,10 @@
 /// pattern catalogued at dontkillmyapp.com.
 ///
 /// This is the iOS-excluded sibling of `background_location_nudge.dart`:
-/// pure decision + canned copy, surfaced once as a non-blocking,
-/// dismissible hint before a long run. The hint never blocks the run.
+/// a pure decision, surfaced once as a non-blocking, dismissible hint
+/// before a long run (copy lives in the gen-l10n catalogue). The hint
+/// never blocks the run.
 library;
-
-const String kBatteryOptHintTitle = 'Keep recording alive in the background';
-
-const String kBatteryOptHintBody =
-    'Some phones (Samsung, Xiaomi, OnePlus and others) put apps to sleep to '
-    'save battery, which can stop a long run from recording when your screen '
-    'is off. To be safe, exclude this app from battery optimisation in '
-    'Settings. Your run will record either way — this just stops the system '
-    'from cutting it short.';
 
 /// True when we should surface the one-time battery-optimisation hint. Only
 /// on Android (iOS does not have OEM app-killers), only when it hasn't been
