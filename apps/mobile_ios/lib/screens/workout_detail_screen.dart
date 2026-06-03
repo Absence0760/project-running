@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
+import '../training_labels.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -98,7 +99,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
         : WorkoutStructure.fromJson(w.structure!);
 
     return Scaffold(
-      appBar: AppBar(title: Text(workoutKindLabel(kind))),
+      appBar: AppBar(title: Text(workoutKindLabel(l10n, kind))),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
         children: [
@@ -109,7 +110,7 @@ class _WorkoutDetailScreenState extends State<WorkoutDetailScreen> {
                 fontWeight: FontWeight.w700,
               )),
           const SizedBox(height: 4),
-          Text(workoutKindLabel(kind),
+          Text(workoutKindLabel(l10n, kind),
               style: theme.textTheme.headlineSmall
                   ?.copyWith(fontWeight: FontWeight.w700)),
           const SizedBox(height: 12),

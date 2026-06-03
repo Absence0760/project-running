@@ -6037,4 +6037,46 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get ttsSplitUnitMiles => 'Meilen';
+
+  @override
+  String get workoutKindEasy => 'Locker';
+
+  @override
+  String get workoutKindLong => 'Langer Lauf';
+
+  @override
+  String get workoutKindRecovery => 'Erholung';
+
+  @override
+  String get workoutKindTempo => 'Tempo';
+
+  @override
+  String get workoutKindInterval => 'Intervalle';
+
+  @override
+  String get workoutKindMarathonPace => 'Marathontempo';
+
+  @override
+  String get workoutKindWalkRun => 'Geh-Lauf';
+
+  @override
+  String get workoutKindRace => 'Wettkampf';
+
+  @override
+  String get workoutKindRest => 'Ruhe';
+
+  @override
+  String get planPhaseBase => 'Grundlage';
+
+  @override
+  String get planPhaseBuild => 'Aufbau';
+
+  @override
+  String get planPhasePeak => 'Höhepunkt';
+
+  @override
+  String get planPhaseTaper => 'Tapering';
+
+  @override
+  String get planPhaseRace => 'Wettkampfwoche';
 }

@@ -5,6 +5,7 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../training.dart';
+import '../training_labels.dart';
 
 /// Month-by-month calendar projection of a training plan, mirroring the
 /// web's `PlanCalendar.svelte`. Each day cell shows the workout kind +
@@ -143,6 +144,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
                     Expanded(
                       child: _buildCell(
                         theme,
+                        l10n,
                         cells[r + i],
                         byDate[cells[r + i].iso],
                         today,
@@ -160,6 +162,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
 
   Widget _buildCell(
     ThemeData theme,
+    AppLocalizations l10n,
     _Cell cell,
     PlanWorkoutRow? wo,
     String today,
@@ -219,7 +222,7 @@ class _PlanCalendarState extends State<PlanCalendar> {
           ),
           if (hasWorkout) ...[
             Text(
-              workoutKindLabel(kind!).toUpperCase(),
+              workoutKindLabel(l10n, kind!).toUpperCase(),
               style: theme.textTheme.labelSmall?.copyWith(
                 color: kindColor,
                 fontWeight: FontWeight.w800,

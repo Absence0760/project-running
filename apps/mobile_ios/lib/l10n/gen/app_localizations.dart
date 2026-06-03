@@ -9998,6 +9998,90 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'miles'**
   String get ttsSplitUnitMiles;
+
+  /// Training workout kind label: easy run
+  ///
+  /// In en, this message translates to:
+  /// **'Easy'**
+  String get workoutKindEasy;
+
+  /// Training workout kind label: long run
+  ///
+  /// In en, this message translates to:
+  /// **'Long run'**
+  String get workoutKindLong;
+
+  /// Training workout kind label: recovery run
+  ///
+  /// In en, this message translates to:
+  /// **'Recovery'**
+  String get workoutKindRecovery;
+
+  /// Training workout kind label: tempo run
+  ///
+  /// In en, this message translates to:
+  /// **'Tempo'**
+  String get workoutKindTempo;
+
+  /// Training workout kind label: interval session
+  ///
+  /// In en, this message translates to:
+  /// **'Intervals'**
+  String get workoutKindInterval;
+
+  /// Training workout kind label: marathon-pace run
+  ///
+  /// In en, this message translates to:
+  /// **'Marathon pace'**
+  String get workoutKindMarathonPace;
+
+  /// Training workout kind label: walk-run
+  ///
+  /// In en, this message translates to:
+  /// **'Walk-run'**
+  String get workoutKindWalkRun;
+
+  /// Training workout kind label: race
+  ///
+  /// In en, this message translates to:
+  /// **'Race'**
+  String get workoutKindRace;
+
+  /// Training workout kind label: rest day
+  ///
+  /// In en, this message translates to:
+  /// **'Rest'**
+  String get workoutKindRest;
+
+  /// Training plan phase label: base
+  ///
+  /// In en, this message translates to:
+  /// **'Base'**
+  String get planPhaseBase;
+
+  /// Training plan phase label: build
+  ///
+  /// In en, this message translates to:
+  /// **'Build'**
+  String get planPhaseBuild;
+
+  /// Training plan phase label: peak
+  ///
+  /// In en, this message translates to:
+  /// **'Peak'**
+  String get planPhasePeak;
+
+  /// Training plan phase label: taper
+  ///
+  /// In en, this message translates to:
+  /// **'Taper'**
+  String get planPhaseTaper;
+
+  /// Training plan phase label: race week
+  ///
+  /// In en, this message translates to:
+  /// **'Race week'**
+  String get planPhaseRace;
 }
 
 class _AppLocalizationsDelegate

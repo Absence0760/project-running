@@ -5685,4 +5685,46 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get ttsSplitUnitMiles => 'マイル';
+
+  @override
+  String get workoutKindEasy => 'イージー';
+
+  @override
+  String get workoutKindLong => 'ロング走';
+
+  @override
+  String get workoutKindRecovery => 'リカバリー';
+
+  @override
+  String get workoutKindTempo => 'テンポ';
+
+  @override
+  String get workoutKindInterval => 'インターバル';
+
+  @override
+  String get workoutKindMarathonPace => 'マラソンペース';
+
+  @override
+  String get workoutKindWalkRun => 'ウォークラン';
+
+  @override
+  String get workoutKindRace => 'レース';
+
+  @override
+  String get workoutKindRest => '休養';
+
+  @override
+  String get planPhaseBase => 'ベース';
+
+  @override
+  String get planPhaseBuild => 'ビルド';
+
+  @override
+  String get planPhasePeak => 'ピーク';
+
+  @override
+  String get planPhaseTaper => 'テーパリング';
+
+  @override
+  String get planPhaseRace => 'レース週';
 }

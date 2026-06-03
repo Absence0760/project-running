@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
+import '../training_labels.dart';
 import '../training_service.dart';
 
 /// Modal bottom sheet for inline editing of a planned workout's kind,
@@ -89,7 +90,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
             decoration: InputDecoration(labelText: l10n.workoutEditKindLabel),
             items: [
               for (final k in WorkoutKind.values)
-                DropdownMenuItem(value: k, child: Text(workoutKindLabel(k))),
+                DropdownMenuItem(value: k, child: Text(workoutKindLabel(l10n, k))),
             ],
             onChanged: (v) {
               if (v != null) setState(() => _kind = v);

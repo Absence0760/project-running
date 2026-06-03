@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
+import '../training_labels.dart';
 import '../training_service.dart';
 
 /// Priority card on the Run-tab idle state when the user's active plan has a
@@ -68,7 +69,7 @@ class TodaysWorkoutCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    workoutKindLabel(kind),
+                    workoutKindLabel(l10n, kind),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.titleMedium?.copyWith(

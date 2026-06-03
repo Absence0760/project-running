@@ -4,6 +4,7 @@ import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
 import '../training.dart';
+import '../training_labels.dart';
 import '../training_service.dart';
 import 'plan_detail_screen.dart';
 
@@ -459,7 +460,7 @@ class _PlanNewScreenState extends State<PlanNewScreen> {
           ),
           SizedBox(
             width: 70,
-            child: Text(planPhaseLabel(w.phase),
+            child: Text(planPhaseLabel(l10n, w.phase),
                 style: theme.textTheme.bodySmall),
           ),
           Expanded(

@@ -5969,4 +5969,46 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get ttsSplitUnitMiles => 'miles';
+
+  @override
+  String get workoutKindEasy => 'Easy';
+
+  @override
+  String get workoutKindLong => 'Long run';
+
+  @override
+  String get workoutKindRecovery => 'Recovery';
+
+  @override
+  String get workoutKindTempo => 'Tempo';
+
+  @override
+  String get workoutKindInterval => 'Intervals';
+
+  @override
+  String get workoutKindMarathonPace => 'Marathon pace';
+
+  @override
+  String get workoutKindWalkRun => 'Walk-run';
+
+  @override
+  String get workoutKindRace => 'Race';
+
+  @override
+  String get workoutKindRest => 'Rest';
+
+  @override
+  String get planPhaseBase => 'Base';
+
+  @override
+  String get planPhaseBuild => 'Build';
+
+  @override
+  String get planPhasePeak => 'Peak';
+
+  @override
+  String get planPhaseTaper => 'Taper';
+
+  @override
+  String get planPhaseRace => 'Race week';
 }

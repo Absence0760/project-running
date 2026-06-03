@@ -8145,5 +8145,61 @@
   },
   "@ttsSplitUnitMiles": {
     "description": "Unit word for a split cue: plural miles"
+  },
+  "workoutKindEasy": "Easy",
+  "@workoutKindEasy": {
+    "description": "Training workout kind label: easy run"
+  },
+  "workoutKindLong": "Long run",
+  "@workoutKindLong": {
+    "description": "Training workout kind label: long run"
+  },
+  "workoutKindRecovery": "Recovery",
+  "@workoutKindRecovery": {
+    "description": "Training workout kind label: recovery run"
+  },
+  "workoutKindTempo": "Tempo",
+  "@workoutKindTempo": {
+    "description": "Training workout kind label: tempo run"
+  },
+  "workoutKindInterval": "Intervals",
+  "@workoutKindInterval": {
+    "description": "Training workout kind label: interval session"
+  },
+  "workoutKindMarathonPace": "Marathon pace",
+  "@workoutKindMarathonPace": {
+    "description": "Training workout kind label: marathon-pace run"
+  },
+  "workoutKindWalkRun": "Walk-run",
+  "@workoutKindWalkRun": {
+    "description": "Training workout kind label: walk-run"
+  },
+  "workoutKindRace": "Race",
+  "@workoutKindRace": {
+    "description": "Training workout kind label: race"
+  },
+  "workoutKindRest": "Rest",
+  "@workoutKindRest": {
+    "description": "Training workout kind label: rest day"
+  },
+  "planPhaseBase": "Base",
+  "@planPhaseBase": {
+    "description": "Training plan phase label: base"
+  },
+  "planPhaseBuild": "Build",
+  "@planPhaseBuild": {
+    "description": "Training plan phase label: build"
+  },
+  "planPhasePeak": "Peak",
+  "@planPhasePeak": {
+    "description": "Training plan phase label: peak"
+  },
+  "planPhaseTaper": "Taper",
+  "@planPhaseTaper": {
+    "description": "Training plan phase label: taper"
+  },
+  "planPhaseRace": "Race week",
+  "@planPhaseRace": {
+    "description": "Training plan phase label: race week"
   }
 }

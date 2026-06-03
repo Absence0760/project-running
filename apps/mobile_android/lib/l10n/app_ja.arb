@@ -1646,5 +1646,19 @@
   "ttsSplitUnitKilometre": "キロメートル",
   "ttsSplitUnitKilometres": "キロメートル",
   "ttsSplitUnitMile": "マイル",
-  "ttsSplitUnitMiles": "マイル"
+  "ttsSplitUnitMiles": "マイル",
+  "workoutKindEasy": "イージー",
+  "workoutKindLong": "ロング走",
+  "workoutKindRecovery": "リカバリー",
+  "workoutKindTempo": "テンポ",
+  "workoutKindInterval": "インターバル",
+  "workoutKindMarathonPace": "マラソンペース",
+  "workoutKindWalkRun": "ウォークラン",
+  "workoutKindRace": "レース",
+  "workoutKindRest": "休養",
+  "planPhaseBase": "ベース",
+  "planPhaseBuild": "ビルド",
+  "planPhasePeak": "ピーク",
+  "planPhaseTaper": "テーパリング",
+  "planPhaseRace": "レース週"
 }

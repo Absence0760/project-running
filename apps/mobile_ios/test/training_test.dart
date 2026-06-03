@@ -9,11 +9,11 @@ import '../lib/training.dart';
 
 void main() {
   group('walk_run workout kind (#22)', () {
-    test('walk_run round-trips through fromDb / dbValue / label', () {
-      // Mirrors the WORKOUT_KIND_LABEL.walk_run test in training.test.ts.
+    test('walk_run round-trips through fromDb / dbValue', () {
+      // The display label moved to training_labels.dart (localized) — see
+      // training_labels_test.dart. This pins the pure db round-trip.
       expect(workoutKindFromDb('walk_run'), WorkoutKind.walkRun);
       expect(workoutKindDbValue(WorkoutKind.walkRun), 'walk_run');
-      expect(workoutKindLabel(WorkoutKind.walkRun), 'Walk-run');
     });
 
     test('no-anchor 5k plan ramps gentler than an anchored one (#23)', () {

@@ -11,6 +11,7 @@ import '../l10n/number_format.dart';
 import '../main.dart' show pendingStartWorkout;
 import '../social_service.dart' show ClubView, SocialService;
 import '../training.dart';
+import '../training_labels.dart';
 import '../training_service.dart';
 import '../backend_timeout.dart';
 import '../widgets/error_state.dart';
@@ -368,7 +369,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   fontWeight: FontWeight.w700,
                 )),
             const SizedBox(height: 4),
-            Text(workoutKindLabel(kind),
+            Text(workoutKindLabel(l10n, kind),
                 style: theme.textTheme.titleLarge
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
@@ -425,7 +426,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                   style: theme.textTheme.titleSmall
                       ?.copyWith(fontWeight: FontWeight.w700)),
               const SizedBox(width: 8),
-              Text(planPhaseLabel(phase).toUpperCase(),
+              Text(planPhaseLabel(l10n, phase).toUpperCase(),
                   style: theme.textTheme.labelSmall?.copyWith(
                     color: theme.colorScheme.primary,
                     letterSpacing: 0.6,
@@ -483,7 +484,7 @@ class _PlanDetailScreenState extends State<PlanDetailScreen> {
                 ))),
             Expanded(
               child: Text(
-                workoutKindLabel(kind),
+                workoutKindLabel(l10n, kind),
                 style: theme.textTheme.bodyMedium?.copyWith(
                   color: isRest ? theme.colorScheme.outline : null,
                   fontWeight: isRest ? FontWeight.w400 : FontWeight.w600,

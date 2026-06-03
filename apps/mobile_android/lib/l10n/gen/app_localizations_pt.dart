@@ -6030,6 +6030,48 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get ttsSplitUnitMiles => 'milhas';
+
+  @override
+  String get workoutKindEasy => 'Leve';
+
+  @override
+  String get workoutKindLong => 'Longão';
+
+  @override
+  String get workoutKindRecovery => 'Recuperação';
+
+  @override
+  String get workoutKindTempo => 'Tempo';
+
+  @override
+  String get workoutKindInterval => 'Intervalado';
+
+  @override
+  String get workoutKindMarathonPace => 'Ritmo de maratona';
+
+  @override
+  String get workoutKindWalkRun => 'Caminhada-corrida';
+
+  @override
+  String get workoutKindRace => 'Prova';
+
+  @override
+  String get workoutKindRest => 'Descanso';
+
+  @override
+  String get planPhaseBase => 'Base';
+
+  @override
+  String get planPhaseBuild => 'Construção';
+
+  @override
+  String get planPhasePeak => 'Pico';
+
+  @override
+  String get planPhaseTaper => 'Polimento';
+
+  @override
+  String get planPhaseRace => 'Semana de prova';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -12058,4 +12100,46 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get ttsSplitUnitMiles => 'milhas';
+
+  @override
+  String get workoutKindEasy => 'Leve';
+
+  @override
+  String get workoutKindLong => 'Longão';
+
+  @override
+  String get workoutKindRecovery => 'Recuperação';
+
+  @override
+  String get workoutKindTempo => 'Tempo';
+
+  @override
+  String get workoutKindInterval => 'Intervalado';
+
+  @override
+  String get workoutKindMarathonPace => 'Ritmo de maratona';
+
+  @override
+  String get workoutKindWalkRun => 'Caminhada-corrida';
+
+  @override
+  String get workoutKindRace => 'Prova';
+
+  @override
+  String get workoutKindRest => 'Descanso';
+
+  @override
+  String get planPhaseBase => 'Base';
+
+  @override
+  String get planPhaseBuild => 'Construção';
+
+  @override
+  String get planPhasePeak => 'Pico';
+
+  @override
+  String get planPhaseTaper => 'Polimento';
+
+  @override
+  String get planPhaseRace => 'Semana de prova';
 }

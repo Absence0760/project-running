@@ -1646,5 +1646,19 @@
   "ttsSplitUnitKilometre": "quilômetro",
   "ttsSplitUnitKilometres": "quilômetros",
   "ttsSplitUnitMile": "milha",
-  "ttsSplitUnitMiles": "milhas"
+  "ttsSplitUnitMiles": "milhas",
+  "workoutKindEasy": "Leve",
+  "workoutKindLong": "Longão",
+  "workoutKindRecovery": "Recuperação",
+  "workoutKindTempo": "Tempo",
+  "workoutKindInterval": "Intervalado",
+  "workoutKindMarathonPace": "Ritmo de maratona",
+  "workoutKindWalkRun": "Caminhada-corrida",
+  "workoutKindRace": "Prova",
+  "workoutKindRest": "Descanso",
+  "planPhaseBase": "Base",
+  "planPhaseBuild": "Construção",
+  "planPhasePeak": "Pico",
+  "planPhaseTaper": "Polimento",
+  "planPhaseRace": "Semana de prova"
 }

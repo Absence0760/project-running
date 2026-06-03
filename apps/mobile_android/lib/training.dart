@@ -100,17 +100,6 @@ String workoutKindDbValue(WorkoutKind k) => switch (k) {
       WorkoutKind.rest => 'rest',
     };
 
-String workoutKindLabel(WorkoutKind k) => switch (k) {
-      WorkoutKind.easy => 'Easy',
-      WorkoutKind.long => 'Long run',
-      WorkoutKind.recovery => 'Recovery',
-      WorkoutKind.tempo => 'Tempo',
-      WorkoutKind.interval => 'Intervals',
-      WorkoutKind.marathonPace => 'Marathon pace',
-      WorkoutKind.walkRun => 'Walk-run',
-      WorkoutKind.race => 'Race',
-      WorkoutKind.rest => 'Rest',
-    };
 
 PlanPhase planPhaseFromDb(String s) => switch (s) {
       'base' => PlanPhase.base,
@@ -127,14 +116,6 @@ String planPhaseDbValue(PlanPhase p) => switch (p) {
       PlanPhase.peak => 'peak',
       PlanPhase.taper => 'taper',
       PlanPhase.race => 'race',
-    };
-
-String planPhaseLabel(PlanPhase p) => switch (p) {
-      PlanPhase.base => 'Base',
-      PlanPhase.build => 'Build',
-      PlanPhase.peak => 'Peak',
-      PlanPhase.taper => 'Taper',
-      PlanPhase.race => 'Race week',
     };
 
 // ─────────────────────── VDOT ───────────────────────
