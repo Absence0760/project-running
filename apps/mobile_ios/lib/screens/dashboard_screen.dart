@@ -470,7 +470,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                             const SizedBox(height: 12),
                             _PbRow(
                               icon: Icons.emoji_events,
-                              label: l10n.dashboardFastestDistance(e.key),
+                              label: l10n.dashboardFastestDistance(
+                                  bestEffortDistanceLabel(l10n, e.key)),
                               value: _formatDuration(e.value),
                             ),
                           ],

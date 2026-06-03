@@ -6533,4 +6533,78 @@ class AppLocalizationsEs extends AppLocalizations {
   String shareCardCaption(Object title, Object distance, Object duration) {
     return '$title — $distance en $duration';
   }
+
+  @override
+  String get settingsBackendNotConfigured => 'Backend no configurado';
+
+  @override
+  String get settingsAccountSignedIn => 'Sesión iniciada';
+
+  @override
+  String get settingsDevicesSignedOutSubtitle =>
+      'Inicia sesión para gestionar tus dispositivos';
+
+  @override
+  String get verifiedClubTooltip => 'Club verificado oficial';
+
+  @override
+  String get raceDistance5k => '5 km';
+
+  @override
+  String get raceDistance10k => '10 km';
+
+  @override
+  String get raceDistanceHalfMarathon => 'Media maratón';
+
+  @override
+  String get raceDistanceMarathon => 'Maratón';
+
+  @override
+  String get settingsTabAccountSubtitle =>
+      'Iniciar sesión, copia de seguridad, eliminar cuenta';
+
+  @override
+  String get settingsTabPreferencesSubtitle =>
+      'Unidades, tema, grabación, entrenamiento, privacidad';
+
+  @override
+  String get settingsTabIntegrationsSubtitle =>
+      'Strava, parkrun, banda de frecuencia cardíaca';
+
+  @override
+  String get settingsTabDevicesSubtitle =>
+      'Dónde tienes la sesión iniciada y ajustes por dispositivo';
+
+  @override
+  String get settingsTabGearSubtitle =>
+      'Registra zapatillas + bicis y el kilometraje por artículo';
+
+  @override
+  String get settingsTabProSubtitle =>
+      'Suscríbete, restaura compras, gestiona la facturación';
+
+  @override
+  String get settingsTabLicensesSubtitle =>
+      'Versión de la app y avisos de código abierto';
+
+  @override
+  String periodSummaryWeekOf(Object date) {
+    return 'Semana del $date';
+  }
+
+  @override
+  String periodShareRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count carreras',
+      one: '1 carrera',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String periodShareAvgPace(Object pace) {
+    return 'Ritmo medio: $pace';
+  }
 }

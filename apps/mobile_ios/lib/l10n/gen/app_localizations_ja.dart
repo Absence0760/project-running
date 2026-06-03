@@ -6170,4 +6170,69 @@ class AppLocalizationsJa extends AppLocalizations {
   String shareCardCaption(Object title, Object distance, Object duration) {
     return '$title — $durationで$distance';
   }
+
+  @override
+  String get settingsBackendNotConfigured => 'バックエンドが構成されていません';
+
+  @override
+  String get settingsAccountSignedIn => 'サインイン済み';
+
+  @override
+  String get settingsDevicesSignedOutSubtitle => 'デバイスを管理するにはサインインしてください';
+
+  @override
+  String get verifiedClubTooltip => '公式認証済みクラブ';
+
+  @override
+  String get raceDistance5k => '5km';
+
+  @override
+  String get raceDistance10k => '10km';
+
+  @override
+  String get raceDistanceHalfMarathon => 'ハーフマラソン';
+
+  @override
+  String get raceDistanceMarathon => 'マラソン';
+
+  @override
+  String get settingsTabAccountSubtitle => 'サインイン、バックアップ、アカウント削除';
+
+  @override
+  String get settingsTabPreferencesSubtitle => '単位、テーマ、記録、トレーニング、プライバシー';
+
+  @override
+  String get settingsTabIntegrationsSubtitle => 'Strava、parkrun、心拍センサー';
+
+  @override
+  String get settingsTabDevicesSubtitle => 'サインイン中のデバイスとデバイスごとの設定';
+
+  @override
+  String get settingsTabGearSubtitle => 'シューズ・バイクとアイテムごとの走行距離を記録';
+
+  @override
+  String get settingsTabProSubtitle => '登録、購入の復元、請求の管理';
+
+  @override
+  String get settingsTabLicensesSubtitle => 'アプリのバージョンとオープンソースの通知';
+
+  @override
+  String periodSummaryWeekOf(Object date) {
+    return '$dateの週';
+  }
+
+  @override
+  String periodShareRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count ラン',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String periodShareAvgPace(Object pace) {
+    return '平均ペース: $pace';
+  }
 }

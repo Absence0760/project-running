@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/verified_badge.dart';
+
+Widget _app(Widget child) => MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: Scaffold(body: child),
+    );
 
 /// Widget tests for the verified-club badge.
 ///
@@ -15,7 +22,7 @@ void main() {
   group('VerifiedBadge', () {
     testWidgets('renders the canonical Material verified icon', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: VerifiedBadge())),
+        _app(const VerifiedBadge()),
       );
       expect(
         find.byIcon(Icons.verified),
@@ -29,7 +36,7 @@ void main() {
 
     testWidgets('default tooltip is "Official verified club"', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: VerifiedBadge())),
+        _app(const VerifiedBadge()),
       );
       // Tooltip widget is mounted with the default copy.
       expect(
@@ -40,11 +47,7 @@ void main() {
 
     testWidgets('honours a custom tooltip', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(
-          home: Scaffold(
-            body: VerifiedBadge(tooltip: 'Verified event organiser'),
-          ),
-        ),
+        _app(const VerifiedBadge(tooltip: 'Verified event organiser')),
       );
       expect(find.byTooltip('Verified event organiser'), findsOneWidget);
     });
@@ -54,7 +57,7 @@ void main() {
       // The Svelte component uses `#2563eb`; the Flutter twin must
       // match so cross-platform users see the same mark.
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: VerifiedBadge())),
+        _app(const VerifiedBadge()),
       );
       final iconWidget = tester.widget<Icon>(find.byIcon(Icons.verified));
       expect(iconWidget.color, const Color(0xFF2563EB));
@@ -62,13 +65,13 @@ void main() {
 
     testWidgets('default size is 16 dp; honours a custom size', (tester) async {
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: VerifiedBadge())),
+        _app(const VerifiedBadge()),
       );
       var iconWidget = tester.widget<Icon>(find.byIcon(Icons.verified));
       expect(iconWidget.size, 16);
 
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: VerifiedBadge(size: 24))),
+        _app(const VerifiedBadge(size: 24)),
       );
       iconWidget = tester.widget<Icon>(find.byIcon(Icons.verified));
       expect(iconWidget.size, 24);
@@ -80,7 +83,7 @@ void main() {
       // label TalkBack reads "image" which gives no clue. Pin the
       // a11y string so a refactor doesn't drop it.
       await tester.pumpWidget(
-        const MaterialApp(home: Scaffold(body: VerifiedBadge())),
+        _app(const VerifiedBadge()),
       );
       final iconWidget = tester.widget<Icon>(find.byIcon(Icons.verified));
       expect(iconWidget.semanticLabel, 'Official verified club');

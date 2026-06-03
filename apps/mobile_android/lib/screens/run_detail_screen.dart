@@ -1430,7 +1430,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
             child: Icon(Icons.emoji_events,
                 size: 18, color: theme.colorScheme.tertiary),
           ),
-          title: Text(e.key),
+          title: Text(bestEffortDistanceLabel(l10n, e.key)),
           subtitle: Text(_activityType.usesSpeed
               ? '${UnitFormat.speed(paceSecPerKm, unit)} ${UnitFormat.speedLabel(unit)}'
               : '${UnitFormat.pace(paceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}'),

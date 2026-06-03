@@ -2,6 +2,27 @@ import 'dart:math';
 
 import 'package:core_models/core_models.dart';
 
+import 'l10n/gen/app_localizations.dart';
+
+/// Localized display name for a best-effort race distance. The dashboard +
+/// run-detail best-effort tables key their maps on the canonical English
+/// label (also used for the metres lookup), so this resolves that key to the
+/// locale's distance name at render time. Unknown keys pass through.
+String bestEffortDistanceLabel(AppLocalizations l10n, String key) {
+  switch (key) {
+    case '5 km':
+      return l10n.raceDistance5k;
+    case '10 km':
+      return l10n.raceDistance10k;
+    case 'Half Marathon':
+      return l10n.raceDistanceHalfMarathon;
+    case 'Marathon':
+      return l10n.raceDistanceMarathon;
+    default:
+      return key;
+  }
+}
+
 /// Compute **moving time** from a GPS track — the subset of elapsed time
 /// during which the runner was actually moving, excluding stops at traffic
 /// lights, water fountains, and so on.

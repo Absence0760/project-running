@@ -6529,6 +6529,79 @@ class AppLocalizationsPt extends AppLocalizations {
   String shareCardCaption(Object title, Object distance, Object duration) {
     return '$title — $distance em $duration';
   }
+
+  @override
+  String get settingsBackendNotConfigured => 'Backend não configurado';
+
+  @override
+  String get settingsAccountSignedIn => 'Conectado';
+
+  @override
+  String get settingsDevicesSignedOutSubtitle =>
+      'Entre para gerenciar seus dispositivos';
+
+  @override
+  String get verifiedClubTooltip => 'Clube verificado oficial';
+
+  @override
+  String get raceDistance5k => '5 km';
+
+  @override
+  String get raceDistance10k => '10 km';
+
+  @override
+  String get raceDistanceHalfMarathon => 'Meia maratona';
+
+  @override
+  String get raceDistanceMarathon => 'Maratona';
+
+  @override
+  String get settingsTabAccountSubtitle => 'Entrar, backup, excluir conta';
+
+  @override
+  String get settingsTabPreferencesSubtitle =>
+      'Unidades, tema, gravação, treino, privacidade';
+
+  @override
+  String get settingsTabIntegrationsSubtitle =>
+      'Strava, parkrun, cinta de frequência cardíaca';
+
+  @override
+  String get settingsTabDevicesSubtitle =>
+      'Onde você está conectado e ajustes por dispositivo';
+
+  @override
+  String get settingsTabGearSubtitle =>
+      'Acompanhe tênis + bikes e a quilometragem por item';
+
+  @override
+  String get settingsTabProSubtitle =>
+      'Assine, restaure compras, gerencie a cobrança';
+
+  @override
+  String get settingsTabLicensesSubtitle =>
+      'Versão do app e avisos de código aberto';
+
+  @override
+  String periodSummaryWeekOf(Object date) {
+    return 'Semana de $date';
+  }
+
+  @override
+  String periodShareRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas',
+      one: '1 corrida',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String periodShareAvgPace(Object pace) {
+    return 'Ritmo médio: $pace';
+  }
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13055,5 +13128,78 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String shareCardCaption(Object title, Object distance, Object duration) {
     return '$title — $distance em $duration';
+  }
+
+  @override
+  String get settingsBackendNotConfigured => 'Backend não configurado';
+
+  @override
+  String get settingsAccountSignedIn => 'Conectado';
+
+  @override
+  String get settingsDevicesSignedOutSubtitle =>
+      'Entre para gerenciar seus dispositivos';
+
+  @override
+  String get verifiedClubTooltip => 'Clube verificado oficial';
+
+  @override
+  String get raceDistance5k => '5 km';
+
+  @override
+  String get raceDistance10k => '10 km';
+
+  @override
+  String get raceDistanceHalfMarathon => 'Meia maratona';
+
+  @override
+  String get raceDistanceMarathon => 'Maratona';
+
+  @override
+  String get settingsTabAccountSubtitle => 'Entrar, backup, excluir conta';
+
+  @override
+  String get settingsTabPreferencesSubtitle =>
+      'Unidades, tema, gravação, treino, privacidade';
+
+  @override
+  String get settingsTabIntegrationsSubtitle =>
+      'Strava, parkrun, cinta de frequência cardíaca';
+
+  @override
+  String get settingsTabDevicesSubtitle =>
+      'Onde você está conectado e ajustes por dispositivo';
+
+  @override
+  String get settingsTabGearSubtitle =>
+      'Acompanhe tênis + bikes e a quilometragem por item';
+
+  @override
+  String get settingsTabProSubtitle =>
+      'Assine, restaure compras, gerencie a cobrança';
+
+  @override
+  String get settingsTabLicensesSubtitle =>
+      'Versão do app e avisos de código aberto';
+
+  @override
+  String periodSummaryWeekOf(Object date) {
+    return 'Semana de $date';
+  }
+
+  @override
+  String periodShareRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas',
+      one: '1 corrida',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String periodShareAvgPace(Object pace) {
+    return 'Ritmo médio: $pace';
   }
 }

@@ -50,7 +50,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _openAfterSignIn(Widget Function(BuildContext) builder) async {
     final api = widget.apiClient;
     if (api == null) {
-      showTopBanner(context, 'Backend not configured');
+      showTopBanner(
+          context, AppLocalizations.of(context).settingsBackendNotConfigured);
       return;
     }
     if (api.userId != null) {
@@ -85,20 +86,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final api = widget.apiClient;
     final signedIn = api?.userId != null;
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       body: SafeArea(
         child: ListView(
           padding: const EdgeInsets.symmetric(vertical: 8),
           children: [
-            _SectionHeader(AppLocalizations.of(context).settingsSectionProfile),
+            _SectionHeader(l10n.settingsSectionProfile),
             _tab(
               icon: Icons.person_outline,
-              label: 'Account',
+              label: l10n.settingsAccountTitle,
               subtitle: signedIn
                   ? (api?.userEmail?.isNotEmpty ?? false
                       ? api!.userEmail!
-                      : 'Signed in')
-                  : 'Sign in, backup, delete account',
+                      : l10n.settingsAccountSignedIn)
+                  : l10n.settingsTabAccountSubtitle,
               onTap: () => _open((_) => SettingsAccountScreen(
                     apiClient: widget.apiClient,
                     preferences: widget.preferences,
@@ -109,18 +111,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _tab(
               icon: Icons.tune,
-              label: 'Preferences',
-              subtitle: 'Units, theme, recording, training, privacy',
+              label: l10n.prefsTitle,
+              subtitle: l10n.settingsTabPreferencesSubtitle,
               onTap: () => _open((_) => SettingsPreferencesScreen(
                     preferences: widget.preferences,
                     settingsSync: widget.settingsSync,
                   )),
             ),
-            _SectionHeader(AppLocalizations.of(context).settingsSectionAppsData),
+            _SectionHeader(l10n.settingsSectionAppsData),
             _tab(
               icon: Icons.link,
-              label: 'Integrations',
-              subtitle: 'Strava, parkrun, heart-rate strap',
+              label: l10n.integrationsTitle,
+              subtitle: l10n.settingsTabIntegrationsSubtitle,
               onTap: () => _open((_) => SettingsIntegrationsScreen(
                     apiClient: widget.apiClient,
                     heartRate: widget.heartRate,
@@ -129,10 +131,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _tab(
               icon: Icons.devices,
-              label: 'Devices',
+              label: l10n.devicesTitle,
               subtitle: signedIn
-                  ? 'Where you\'re signed in and per-device overrides'
-                  : 'Sign in to manage your devices',
+                  ? l10n.settingsTabDevicesSubtitle
+                  : l10n.settingsDevicesSignedOutSubtitle,
               onTap: () => _openAfterSignIn((_) => DevicesScreen(
                     api: widget.apiClient!,
                     currentDeviceId: widget.preferences.deviceId,
@@ -140,8 +142,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             _tab(
               icon: Icons.directions_run,
-              label: 'Gear',
-              subtitle: 'Track shoes + bikes and per-item mileage',
+              label: l10n.gearTitle,
+              subtitle: l10n.settingsTabGearSubtitle,
               onTap: () {
                 final gearStore = widget.gearStore;
                 if (gearStore == null) return;
@@ -153,18 +155,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ));
               },
             ),
-            _SectionHeader(
-                AppLocalizations.of(context).settingsSectionAccountLegal),
+            _SectionHeader(l10n.settingsSectionAccountLegal),
             _tab(
               icon: Icons.favorite_outline,
-              label: 'Pro & support',
-              subtitle: 'Subscribe, restore purchases, manage billing',
+              label: l10n.proTitle,
+              subtitle: l10n.settingsTabProSubtitle,
               onTap: () => _open((_) => const SettingsProScreen()),
             ),
             _tab(
               icon: Icons.description_outlined,
-              label: 'Licenses',
-              subtitle: 'App version and open-source notices',
+              label: l10n.licensesTitle,
+              subtitle: l10n.settingsTabLicensesSubtitle,
               onTap: () => _open((_) => const SettingsLicensesScreen()),
             ),
           ],

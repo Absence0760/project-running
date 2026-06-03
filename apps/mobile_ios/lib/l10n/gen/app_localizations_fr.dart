@@ -6547,4 +6547,78 @@ class AppLocalizationsFr extends AppLocalizations {
   String shareCardCaption(Object title, Object distance, Object duration) {
     return '$title — $distance en $duration';
   }
+
+  @override
+  String get settingsBackendNotConfigured => 'Backend non configuré';
+
+  @override
+  String get settingsAccountSignedIn => 'Connecté';
+
+  @override
+  String get settingsDevicesSignedOutSubtitle =>
+      'Connectez-vous pour gérer vos appareils';
+
+  @override
+  String get verifiedClubTooltip => 'Club officiel vérifié';
+
+  @override
+  String get raceDistance5k => '5 km';
+
+  @override
+  String get raceDistance10k => '10 km';
+
+  @override
+  String get raceDistanceHalfMarathon => 'Semi-marathon';
+
+  @override
+  String get raceDistanceMarathon => 'Marathon';
+
+  @override
+  String get settingsTabAccountSubtitle =>
+      'Connexion, sauvegarde, suppression du compte';
+
+  @override
+  String get settingsTabPreferencesSubtitle =>
+      'Unités, thème, enregistrement, entraînement, confidentialité';
+
+  @override
+  String get settingsTabIntegrationsSubtitle =>
+      'Strava, parkrun, ceinture cardiaque';
+
+  @override
+  String get settingsTabDevicesSubtitle =>
+      'Où vous êtes connecté et réglages par appareil';
+
+  @override
+  String get settingsTabGearSubtitle =>
+      'Suivez chaussures + vélos et le kilométrage par article';
+
+  @override
+  String get settingsTabProSubtitle =>
+      'S\'abonner, restaurer les achats, gérer la facturation';
+
+  @override
+  String get settingsTabLicensesSubtitle =>
+      'Version de l\'app et mentions open source';
+
+  @override
+  String periodSummaryWeekOf(Object date) {
+    return 'Semaine du $date';
+  }
+
+  @override
+  String periodShareRunCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count courses',
+      one: '1 course',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String periodShareAvgPace(Object pace) {
+    return 'Allure moy. : $pace';
+  }
 }

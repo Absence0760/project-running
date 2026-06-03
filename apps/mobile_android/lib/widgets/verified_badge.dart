@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
+
 /// Verified-club badge — a small ✓-in-a-rosette icon shown next to a
 /// club's name (or an event title whose parent club is verified)
 /// indicating the entity has been manually confirmed as the
@@ -19,30 +21,31 @@ class VerifiedBadge extends StatelessWidget {
   /// hero headers.
   final double size;
 
-  /// Tooltip + accessibility label. Defaults to the standard copy
-  /// "Official verified club" so screen readers + hover tooltips
-  /// both surface the meaning.
-  final String tooltip;
+  /// Tooltip + accessibility label. When null, falls back to the
+  /// localized standard copy "Official verified club" so screen
+  /// readers + hover tooltips both surface the meaning.
+  final String? tooltip;
 
   const VerifiedBadge({
     super.key,
     this.size = 16,
-    this.tooltip = 'Official verified club',
+    this.tooltip,
   });
 
   @override
   Widget build(BuildContext context) {
+    final label = tooltip ?? AppLocalizations.of(context).verifiedClubTooltip;
     return Padding(
       padding: const EdgeInsets.only(left: 4),
       child: Tooltip(
-        message: tooltip,
+        message: label,
         child: Icon(
           Icons.verified,
           size: size,
           // Same blue (`#2563eb`) the Svelte twin uses so the badge
           // reads identically across web + mobile.
           color: const Color(0xFF2563EB),
-          semanticLabel: tooltip,
+          semanticLabel: label,
         ),
       ),
     );

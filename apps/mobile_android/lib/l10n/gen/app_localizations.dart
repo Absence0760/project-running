@@ -10778,6 +10778,114 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{title} — {distance} in {duration}'**
   String shareCardCaption(Object title, Object distance, Object duration);
+
+  /// Banner shown when a settings action needs a configured backend but none is available
+  ///
+  /// In en, this message translates to:
+  /// **'Backend not configured'**
+  String get settingsBackendNotConfigured;
+
+  /// Account settings tile subtitle shown when signed in but no email address is available
+  ///
+  /// In en, this message translates to:
+  /// **'Signed in'**
+  String get settingsAccountSignedIn;
+
+  /// Devices settings tile subtitle shown when signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in to manage your devices'**
+  String get settingsDevicesSignedOutSubtitle;
+
+  /// Tooltip on the verified-club badge
+  ///
+  /// In en, this message translates to:
+  /// **'Official verified club'**
+  String get verifiedClubTooltip;
+
+  /// Best-effort race distance label: 5 kilometres
+  ///
+  /// In en, this message translates to:
+  /// **'5 km'**
+  String get raceDistance5k;
+
+  /// Best-effort race distance label: 10 kilometres
+  ///
+  /// In en, this message translates to:
+  /// **'10 km'**
+  String get raceDistance10k;
+
+  /// Best-effort race distance label: half marathon
+  ///
+  /// In en, this message translates to:
+  /// **'Half Marathon'**
+  String get raceDistanceHalfMarathon;
+
+  /// Best-effort race distance label: marathon
+  ///
+  /// In en, this message translates to:
+  /// **'Marathon'**
+  String get raceDistanceMarathon;
+
+  /// Settings landing: Account tile subtitle when signed out
+  ///
+  /// In en, this message translates to:
+  /// **'Sign in, backup, delete account'**
+  String get settingsTabAccountSubtitle;
+
+  /// Settings landing: Preferences tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Units, theme, recording, training, privacy'**
+  String get settingsTabPreferencesSubtitle;
+
+  /// Settings landing: Integrations tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Strava, parkrun, heart-rate strap'**
+  String get settingsTabIntegrationsSubtitle;
+
+  /// Settings landing: Devices tile subtitle when signed in
+  ///
+  /// In en, this message translates to:
+  /// **'Where you\'re signed in and per-device overrides'**
+  String get settingsTabDevicesSubtitle;
+
+  /// Settings landing: Gear tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Track shoes + bikes and per-item mileage'**
+  String get settingsTabGearSubtitle;
+
+  /// Settings landing: Pro & support tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Subscribe, restore purchases, manage billing'**
+  String get settingsTabProSubtitle;
+
+  /// Settings landing: Licenses tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'App version and open-source notices'**
+  String get settingsTabLicensesSubtitle;
+
+  /// Period-summary title for a single week, e.g. 'Week of 13 Apr'
+  ///
+  /// In en, this message translates to:
+  /// **'Week of {date}'**
+  String periodSummaryWeekOf(Object date);
+
+  /// Run count line in the period-summary share text
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 run} other{{count} runs}}'**
+  String periodShareRunCount(int count);
+
+  /// Average-pace line in the period-summary share text
+  ///
+  /// In en, this message translates to:
+  /// **'Avg pace: {pace}'**
+  String periodShareAvgPace(Object pace);
 }
 
 class _AppLocalizationsDelegate

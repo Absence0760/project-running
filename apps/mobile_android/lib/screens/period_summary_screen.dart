@@ -56,13 +56,19 @@ String periodTitle(PeriodType period, DateTime anchor, String localeTag,
     {String weekStartDay = 'monday'}) {
   switch (period) {
     case PeriodType.week:
-      return 'Week of ${shortDate(periodStart(period, anchor, weekStartDay: weekStartDay), localeTag)}';
+      return _l10nFor(localeTag).periodSummaryWeekOf(
+          shortDate(periodStart(period, anchor, weekStartDay: weekStartDay), localeTag));
     case PeriodType.month:
       return '${monthName(anchor.month, localeTag)} ${anchor.year}';
     case PeriodType.all:
-      return 'All time';
+      return _l10nFor(localeTag).runsRangeAll;
   }
 }
+
+/// Context-free [AppLocalizations] for the pure period helpers, which take a
+/// BCP-47 tag rather than a [BuildContext] (they also feed share text + tests).
+AppLocalizations _l10nFor(String localeTag) =>
+    lookupAppLocalizations(localeFromTag(localeTag) ?? const Locale('en'));
 
 String periodLabel(PeriodType period, DateTime anchor, String localeTag,
     {String weekStartDay = 'monday'}) {
@@ -74,7 +80,7 @@ String periodLabel(PeriodType period, DateTime anchor, String localeTag,
     case PeriodType.month:
       return '${monthName(start.month, localeTag)} ${start.year}';
     case PeriodType.all:
-      return 'All time';
+      return _l10nFor(localeTag).runsRangeAll;
   }
 }
 
@@ -135,11 +141,12 @@ String buildPeriodShareText({
       ? '${UnitFormat.pace(stats.avgPaceSecPerKm, unit)} ${UnitFormat.paceLabel(unit)}'
       : null;
 
+  final l10n = _l10nFor(localeTag);
   final buf = StringBuffer();
   buf.writeln(periodTitle(period, anchor, localeTag, weekStartDay: weekStartDay));
-  buf.writeln('${stats.runCount} run${stats.runCount == 1 ? '' : 's'}');
+  buf.writeln(l10n.periodShareRunCount(stats.runCount));
   buf.writeln('$dist  |  $dur');
-  if (pace != null) buf.writeln('Avg pace: $pace');
+  if (pace != null) buf.writeln(l10n.periodShareAvgPace(pace));
 
   if (runs.isNotEmpty) {
     buf.writeln();
