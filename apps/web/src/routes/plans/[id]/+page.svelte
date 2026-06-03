@@ -13,6 +13,7 @@
 		updatePlanMeta,
 	} from '$lib/core/data';
 	import { shiftIsoDate, recoveryWorkoutPatch, recoveryWeekVolume } from '$lib/training/plan_bulk_ops';
+	import { replanRemaining, type ReplanChange, type ReplanWeek } from '$lib/training/plan_replan';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PlanMetaEditor from '$lib/components/PlanMetaEditor.svelte';
 	import PlanCalendar from '$lib/components/PlanCalendar.svelte';
@@ -198,6 +199,88 @@
 		} finally {
 			bulkBusy = false;
 		}
+	}
+
+	// ─── Re-plan around missed sessions (owner-only) ───
+	let replanPreview = $state<ReplanChange[] | null>(null);
+
+	/// Assemble the pure engine's input from the loaded plan + the runs
+	/// window. Per-week planned volume, actual mileage (runs dated in the
+	/// week), completion + past flags.
+	function buildReplanInput(): ReplanWeek[] {
+		if (!plan) return [];
+		const todayD = parseISO(today);
+		return weeks.map((w) => {
+			const weekWorkouts = workoutsByWeek.get(w.id) ?? [];
+			let planned = w.target_volume_m ?? 0;
+			if (!(planned > 0)) {
+				planned = weekWorkouts.reduce(
+					(s, x) => s + (x.kind !== 'rest' ? (x.target_distance_m ?? 0) : 0),
+					0,
+				);
+			}
+			const weekStartD = addDays(parseISO(plan!.start_date), w.week_index * 7);
+			const weekEndD = addDays(weekStartD, 7);
+			let actual = 0;
+			for (const r of recentRuns) {
+				const t = new Date(r.started_at);
+				if (t >= weekStartD && t < weekEndD) actual += r.distance_m ?? 0;
+			}
+			return {
+				weekIndex: w.week_index,
+				phase: w.phase,
+				plannedMetres: planned,
+				actualMetres: actual,
+				isComplete: weekEndD <= todayD,
+				workouts: weekWorkouts.map((x) => ({
+					id: x.id,
+					scheduledDate: x.scheduled_date,
+					kind: x.kind,
+					targetDistanceM: x.target_distance_m,
+					completed: isWorkoutCompleted(x),
+					isPast: x.scheduled_date < today,
+				})),
+			};
+		});
+	}
+
+	function proposeReplan(): void {
+		if (!plan || !isOwner || bulkBusy) return;
+		const { changes, onTrack } = replanRemaining({ weeks: buildReplanInput(), today });
+		if (onTrack || changes.length === 0) {
+			showToast(m('planDetail.replanOnTrack'));
+			replanPreview = null;
+			return;
+		}
+		replanPreview = changes;
+	}
+
+	async function applyReplan(): Promise<void> {
+		if (!replanPreview || bulkBusy) return;
+		bulkBusy = true;
+		try {
+			await Promise.all(
+				replanPreview.map((c) =>
+					updatePlanWorkout(c.workoutId, { target_distance_m: c.toMetres }),
+				),
+			);
+			showToast(m('planDetail.replanApplied', { n: replanPreview.length }));
+			replanPreview = null;
+			await load();
+		} catch (e) {
+			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	/// Human label for a proposed change row in the preview.
+	function replanChangeLabel(c: ReplanChange): string {
+		const from = fmtKm(c.fromMetres);
+		const to = fmtKm(c.toMetres);
+		return c.reason === 'make_up_long'
+			? m('planDetail.replanMakeUp', { from, to })
+			: m('planDetail.replanEase', { from, to });
 	}
 
 	function handleBack(e: MouseEvent): void {
@@ -817,7 +900,38 @@
 						{m('planDetail.shiftApply')}
 					</button>
 				</div>
+				<button
+					type="button"
+					class="btn btn-outline btn-sm replan-btn"
+					onclick={proposeReplan}
+					disabled={bulkBusy}
+				>
+					<span class="material-symbols">auto_fix_high</span>
+					{m('planDetail.replan')}
+				</button>
 			</section>
+
+			{#if replanPreview}
+				<section class="replan-preview" aria-label={m('planDetail.replanPreviewAria')}>
+					<h3>{m('planDetail.replanPreviewTitle')}</h3>
+					<ul>
+						{#each replanPreview as c (c.workoutId)}
+							<li>
+								<span class="replan-date">{c.scheduledDate}</span>
+								<span class="replan-change">{replanChangeLabel(c)}</span>
+							</li>
+						{/each}
+					</ul>
+					<div class="replan-actions">
+						<button type="button" class="btn btn-secondary btn-sm" onclick={() => (replanPreview = null)} disabled={bulkBusy}>
+							{m('planDetail.replanCancel')}
+						</button>
+						<button type="button" class="btn btn-primary btn-sm" onclick={applyReplan} disabled={bulkBusy}>
+							{m('planDetail.replanApply')}
+						</button>
+					</div>
+				</section>
+			{/if}
 		{/if}
 
 		<section class="weeks">
@@ -1270,9 +1384,9 @@
 	}
 	.plan-tools {
 		display: flex;
-		align-items: center;
-		gap: var(--space-md);
-		flex-wrap: wrap;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: var(--space-sm);
 		margin: var(--space-md) 0;
 	}
 	.tools-label {
@@ -1321,6 +1435,48 @@
 	}
 	.week-recovery-btn .material-symbols {
 		font-size: 0.95rem;
+	}
+	.replan-btn {
+		align-self: flex-start;
+	}
+	.replan-btn .material-symbols {
+		font-size: 1rem;
+		vertical-align: -2px;
+		margin-inline-end: 0.2rem;
+	}
+	.replan-preview {
+		margin: 0 0 var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-primary);
+		border-radius: var(--radius-md);
+	}
+	.replan-preview h3 {
+		margin: 0 0 var(--space-sm);
+		font-size: 0.95rem;
+	}
+	.replan-preview ul {
+		list-style: none;
+		margin: 0 0 var(--space-md);
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+	}
+	.replan-preview li {
+		display: flex;
+		gap: var(--space-sm);
+		font-size: 0.88rem;
+	}
+	.replan-date {
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+		flex-shrink: 0;
+	}
+	.replan-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
 	}
 	.publish-label {
 		font-size: 0.9rem;
