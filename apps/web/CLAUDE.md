@@ -57,6 +57,7 @@ src/
     training/training.test.ts  # node:test suite for the training engine — `npx tsx --test`
     training/plan_adherence.ts  # pure weeklyDrift (>20% over/under plan) + missedWorkoutAdvice (make-up/skip a missed long run). Web-first; mounted on /plans/[id]. 11 unit tests.
     training/plan_progress.ts   # pure orderedPlanPhases (base→build→peak→taper marker) + longestCompletedLongRunMetres. Mounted on the /plans/[id] header. 8 unit tests.
+    training/plan_serialize.ts  # pure planToMarkdown/planToJson + parsePlanMarkdown/parsePlanJson round-trip. Export menu on /plans/[id]; paste-import disclosure in PlanEditor (/plans/new). 12 unit tests.
     integrations/strava-zip.ts   # Strava bulk-export ZIP importer (parses CSV + per-activity GPX/TCX)
     integrations/garmin-zip.ts   # Garmin bulk import (single .fit OR Account Data .zip; routes inner .gpx/.tcx via parseRouteFile)
     integrations/garmin-fit.ts   # Single FIT-buffer parser (lazy-loads fit-file-parser to keep the integrations bundle small)

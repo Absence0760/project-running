@@ -21,6 +21,7 @@
 	} from '$lib/training/training';
 	import { weeklyDrift, missedWorkoutAdvice } from '$lib/training/plan_adherence';
 	import { orderedPlanPhases, longestCompletedLongRunMetres } from '$lib/training/plan_progress';
+	import { planToMarkdown, planToJson, type ExportPlan } from '$lib/training/plan_serialize';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -71,6 +72,70 @@
 			cameFromKnownParent = true;
 		}
 	});
+
+	/// Flatten the loaded plan + weeks + workouts into the export shape.
+	function buildExport(): ExportPlan | null {
+		if (!plan) return null;
+		const weekIndexById = new Map<string, number>();
+		for (const w of weeks) weekIndexById.set(w.id, w.week_index);
+		return {
+			name: plan.name,
+			goalEvent: plan.goal_event,
+			goalDistanceM: plan.goal_distance_m,
+			goalTimeSec: plan.goal_time_seconds,
+			startDate: plan.start_date,
+			workouts: workouts.map((w) => ({
+				week_index: weekIndexById.get(w.week_id) ?? 0,
+				scheduled_date: w.scheduled_date,
+				kind: w.kind,
+				target_distance_m: w.target_distance_m,
+				target_pace_sec_per_km: w.target_pace_sec_per_km,
+				notes: w.notes,
+			})),
+		};
+	}
+
+	function planSlug(): string {
+		return (
+			(plan?.name ?? 'plan')
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '-')
+				.replace(/^-|-$/g, '') || 'plan'
+		);
+	}
+
+	function downloadFile(content: string, filename: string, type: string): void {
+		const blob = new Blob([content], { type });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+	async function copyMarkdown(): Promise<void> {
+		const e = buildExport();
+		if (!e) return;
+		try {
+			await navigator.clipboard.writeText(planToMarkdown(e));
+			showToast(m('planDetail.exportCopied'));
+		} catch {
+			// Clipboard blocked (insecure context / permission) — fall back
+			// to a download so the export is never a dead end.
+			downloadFile(planToMarkdown(e), `${planSlug()}.md`, 'text/markdown');
+		}
+	}
+
+	function downloadMarkdown(): void {
+		const e = buildExport();
+		if (e) downloadFile(planToMarkdown(e), `${planSlug()}.md`, 'text/markdown');
+	}
+
+	function downloadJson(): void {
+		const e = buildExport();
+		if (e) downloadFile(planToJson(e), `${planSlug()}.json`, 'application/json');
+	}
 
 	function handleBack(e: MouseEvent): void {
 		if (cameFromKnownParent) {
@@ -371,6 +436,25 @@
 							<span class="material-symbols">edit</span>
 							{m('planDetail.editPlan')}
 						</button>
+					{/if}
+					{#if isOwner && workouts.length > 0}
+						<details class="export-menu">
+							<summary class="btn btn-outline btn-sm">
+								<span class="material-symbols">ios_share</span>
+								{m('planDetail.export')}
+							</summary>
+							<div class="export-actions" role="menu">
+								<button type="button" role="menuitem" onclick={copyMarkdown}>
+									{m('planDetail.exportCopyMarkdown')}
+								</button>
+								<button type="button" role="menuitem" onclick={downloadMarkdown}>
+									{m('planDetail.exportDownloadMarkdown')}
+								</button>
+								<button type="button" role="menuitem" onclick={downloadJson}>
+									{m('planDetail.exportDownloadJson')}
+								</button>
+							</div>
+						</details>
 					{/if}
 				</div>
 				<div class="hero-chips">
@@ -816,6 +900,50 @@
 		font-size: 1rem;
 		vertical-align: -2px;
 		margin-inline-end: 0.2rem;
+	}
+	.export-menu {
+		position: relative;
+		flex-shrink: 0;
+	}
+	.export-menu summary {
+		list-style: none;
+		cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
+	}
+	.export-menu summary::-webkit-details-marker {
+		display: none;
+	}
+	.export-menu summary .material-symbols {
+		font-size: 1rem;
+		vertical-align: -2px;
+	}
+	.export-actions {
+		position: absolute;
+		z-index: 20;
+		top: calc(100% + 0.3rem);
+		inset-inline-end: 0;
+		display: flex;
+		flex-direction: column;
+		min-width: 13rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: var(--shadow-md, 0 6px 20px rgba(0, 0, 0, 0.15));
+		overflow: hidden;
+	}
+	.export-actions button {
+		text-align: start;
+		padding: 0.6rem 0.9rem;
+		background: transparent;
+		border: none;
+		color: inherit;
+		font: inherit;
+		cursor: pointer;
+	}
+	.export-actions button:hover {
+		background: var(--color-bg-secondary);
 	}
 	.hero-chips {
 		display: flex;

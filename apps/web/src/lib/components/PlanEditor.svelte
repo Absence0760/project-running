@@ -18,6 +18,7 @@
 		TrainingGender,
 	} from '$lib/training/training';
 	import { isSundayIso, nextSundayIso } from '$lib/training/plan_start';
+	import { parsePlanMarkdown, parsePlanJson } from '$lib/training/plan_serialize';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
 	import { fmtKm, fmtPace, getUnit } from '$lib/format/units.svelte';
@@ -109,6 +110,50 @@
 	// the "if you change the goal, the schedule changes" expectation.
 	let plan = $state<GeneratedPlan | null>(null);
 	let expandedWeek = $state<number | null>(null);
+
+	// Paste-import state. When `importedMode` is on, the auto-generate
+	// effect stands down so a pasted plan isn't clobbered; changing any
+	// core form input exits import mode and hands control back to the
+	// generator. `importedGoalDistanceM` carries the parsed goal distance
+	// (the generator's `goalDistance` derived is wrong for a custom event).
+	let showImport = $state(false);
+	let importText = $state('');
+	let importError = $state<string | null>(null);
+	let importedMode = $state(false);
+	let importedGoalDistanceM = $state<number | null>(null);
+
+	function loadFromText() {
+		importError = null;
+		const text = importText.trim();
+		if (!text) return;
+		try {
+			const parsed = text.startsWith('{') ? parsePlanJson(text) : parsePlanMarkdown(text);
+			name = parsed.name;
+			goalEvent = parsed.goalEvent;
+			startDate = parsed.startDate;
+			importedGoalDistanceM = parsed.goalDistanceM;
+			if (parsed.goalTimeSec != null && parsed.goalTimeSec > 0) {
+				targetHours = Math.floor(parsed.goalTimeSec / 3600);
+				targetMin = Math.floor((parsed.goalTimeSec % 3600) / 60);
+				targetSec = parsed.goalTimeSec % 60;
+			}
+			importedMode = true;
+			plan = parsed.generated;
+			expandedWeek = null;
+			showImport = false;
+		} catch (e) {
+			importError = describeError(e);
+		}
+	}
+
+	/// Changing a core input means the runner wants the generator back —
+	/// drop import mode so the reactive effect regenerates from the form.
+	function exitImportMode() {
+		if (importedMode) {
+			importedMode = false;
+			importedGoalDistanceM = null;
+		}
+	}
 
 	const KIND_OPTIONS: WorkoutKind[] = [
 		'easy',
@@ -228,7 +273,10 @@
 	// until they touch a top-level input again.
 	$effect(() => {
 		// Read every input we care about so the effect tracks them.
-		void [goalEvent, goalDistance, goalTimeSec, recent5kApplied, startDate, daysPerWeek, weeks, viewerGender, beginnerWalkRun];
+		void [goalEvent, goalDistance, goalTimeSec, recent5kApplied, startDate, daysPerWeek, weeks, viewerGender, beginnerWalkRun, importedMode];
+		// A pasted plan owns `plan` until the runner edits a core input
+		// (which flips importedMode off and re-runs this effect).
+		if (importedMode) return;
 		if (!startDate) {
 			plan = null;
 			return;
@@ -281,7 +329,7 @@
 		// yesterday could submit a stale value before the page reloads,
 		// and a future refactor that drops the markup-level min loses
 		// the only guardrail. Validate at submit-time too.
-		if (startDate && startDate < todayIso()) {
+		if (!importedMode && startDate && startDate < todayIso()) {
 			error = t('planEditor.errorStartInPast');
 			return;
 		}
@@ -290,7 +338,7 @@
 		// onchange), snap now and re-show the preview rather than persisting
 		// a misaligned plan. The reactive preview regenerates from the
 		// aligned date, so ask the user to submit once more.
-		if (startDate && !isSundayIso(startDate)) {
+		if (!importedMode && startDate && !isSundayIso(startDate)) {
 			alignStartToSunday();
 			error = t('planEditor.errorStartMovedToSunday');
 			return;
@@ -325,7 +373,9 @@
 			const created = await createTrainingPlan({
 				name: name.trim(),
 				goalEvent,
-				goalDistanceM: goalDistance,
+				// A pasted plan's distance comes from the parse (the derived
+				// `goalDistance` is wrong for a custom-event import).
+				goalDistanceM: importedMode && importedGoalDistanceM ? importedGoalDistanceM : goalDistance,
 				goalTimeSec,
 				recent5kSec: recent5kApplied,
 				startDate,
@@ -352,6 +402,26 @@
 <form onsubmit={submit} class="plan-editor">
 	<div class="grid">
 		<section class="form">
+			<details class="import-box" bind:open={showImport}>
+				<summary>{t('planEditor.importTitle')}</summary>
+				<p class="hint">{t('planEditor.importHint')}</p>
+				<textarea
+					class="import-text"
+					bind:value={importText}
+					rows="6"
+					placeholder={t('planEditor.importPlaceholder')}
+				></textarea>
+				{#if importError}
+					<p class="error">{importError}</p>
+				{/if}
+				<button type="button" class="btn btn-secondary" onclick={loadFromText}>
+					{t('planEditor.importLoad')}
+				</button>
+			</details>
+			{#if importedMode}
+				<p class="imported-note" role="status">{t('planEditor.importedNote')}</p>
+			{/if}
+
 			<label>
 				<span>{t('planEditor.planName')}</span>
 				<input
@@ -365,7 +435,7 @@
 
 			<label>
 				<span>{t('planEditor.goalRace')}</span>
-				<select bind:value={goalEvent}>
+				<select bind:value={goalEvent} onchange={exitImportMode}>
 					{#each eventOptions as opt}
 						<option value={opt.value}>{opt.label}</option>
 					{/each}
@@ -378,7 +448,7 @@
 					type="date"
 					bind:value={startDate}
 					min={todayIso()}
-					onchange={alignStartToSunday}
+					onchange={() => { exitImportMode(); alignStartToSunday(); }}
 					required
 				/>
 				{#if startSnapped}
@@ -388,7 +458,7 @@
 
 			<label>
 				<span>{t('planEditor.daysPerWeek')}</span>
-				<select bind:value={daysPerWeek}>
+				<select bind:value={daysPerWeek} onchange={exitImportMode}>
 					{#each [3, 4, 5, 6, 7] as n}
 						<option value={n}>{t('planEditor.nDays', { n })}</option>
 					{/each}
@@ -707,6 +777,40 @@
 		background: var(--color-danger-light);
 		padding: 0.5rem 0.8rem;
 		border-radius: var(--radius-md);
+	}
+	.import-box {
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		padding: 0.4rem 0.7rem;
+	}
+	.import-box summary {
+		cursor: pointer;
+		font-weight: 600;
+		font-size: 0.9rem;
+		padding: 0.25rem 0;
+	}
+	.import-box[open] summary {
+		margin-bottom: 0.4rem;
+	}
+	.import-text {
+		width: 100%;
+		box-sizing: border-box;
+		font-family: var(--font-mono, monospace);
+		font-size: 0.8rem;
+		background: var(--color-bg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-sm);
+		padding: 0.5rem;
+		color: var(--color-text);
+		resize: vertical;
+		margin-bottom: 0.5rem;
+	}
+	.imported-note {
+		font-size: 0.82rem;
+		font-weight: 500;
+		color: var(--color-primary);
+		margin: 0;
 	}
 	.preview h2 {
 		font-size: 1.1rem;
