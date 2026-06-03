@@ -42,6 +42,7 @@
 	let privacyDefault = $state<'public' | 'followers' | 'private'>('followers');
 	let weeklyMileageGoal = $state('');
 	let coachPersonality = $state<'supportive' | 'drill_sergeant' | 'analytical'>('supportive');
+	let emailNotifications = $state<'all' | 'important' | 'off'>('important');
 	let stravaAutoShare = $state(false);
 	let voiceFeedbackEnabled = $state(false);
 	// 'full' (default) speaks every cue; 'minimal' drops the chatty in-rep
@@ -226,6 +227,7 @@
 			privacyDefault = effective(settings, 'privacy_default', 'followers') ?? 'followers';
 			weeklyMileageGoal = (effective<number>(settings, 'weekly_mileage_goal_m') ?? '')?.toString() ?? '';
 			coachPersonality = effective(settings, 'coach_personality', 'supportive') ?? 'supportive';
+			emailNotifications = effective(settings, 'email_notifications', 'important') ?? 'important';
 			stravaAutoShare = effective(settings, 'strava_auto_share', false) ?? false;
 			voiceFeedbackEnabled = effective(settings, 'voice_feedback_enabled', false) ?? false;
 			voiceFeedbackVerbosity =
@@ -719,6 +721,25 @@
 						<option value="analytical">{m('prefs.coachAnalytical')}</option>
 					</select>
 				</label>
+			</div>
+		</section>
+
+		<!-- Notifications -->
+		<section class="card">
+			<h2>{m('prefs.notificationsHeading')}</h2>
+			<div class="form-grid">
+				<label>
+					<span class="label-text">{m('prefs.emailNotifications')}</span>
+					<select
+						bind:value={emailNotifications}
+						onchange={() => autoSave({ email_notifications: emailNotifications })}
+					>
+						<option value="important">{m('prefs.emailNotifImportant')}</option>
+						<option value="all">{m('prefs.emailNotifAll')}</option>
+						<option value="off">{m('prefs.emailNotifOff')}</option>
+					</select>
+				</label>
+				<p class="section-hint">{m('prefs.emailNotifHint')}</p>
 			</div>
 		</section>
 	{/if}

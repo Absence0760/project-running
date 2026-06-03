@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
+	"strings"
 	"testing"
 )
 
@@ -57,6 +58,10 @@ func eventReminderRow() *NotificationRow {
 	return &NotificationRow{ID: "n1", UserID: "u1", Kind: "event_reminder", EventID: &ev}
 }
 
+// The event_reminder is the scheduled email (created by
+// enqueue_event_reminders, the hourly pg_cron job). This pins the full
+// scheduled-email path through the handler: default preference → send →
+// rendered reminder content → row stamped.
 func TestNotificationEmail_ImportantKindSendsByDefault(t *testing.T) {
 	be := seededBackend(eventReminderRow(), nil, "runner@test.com")
 	sender := &fakeEmailSender{}
@@ -68,8 +73,16 @@ func TestNotificationEmail_ImportantKindSendsByDefault(t *testing.T) {
 	if len(sender.sent) != 1 {
 		t.Fatalf("want 1 email sent, got %d", len(sender.sent))
 	}
-	if sender.sent[0].to != "runner@test.com" {
-		t.Errorf("wrong recipient: %q", sender.sent[0].to)
+	sent := sender.sent[0]
+	if sent.to != "runner@test.com" {
+		t.Errorf("wrong recipient: %q", sent.to)
+	}
+	// The scheduled reminder must render as a reminder, deep-linking to the event.
+	if !strings.Contains(sent.msg.Subject, "Reminder") {
+		t.Errorf("scheduled reminder subject should read as a reminder, got %q", sent.msg.Subject)
+	}
+	if !strings.Contains(sent.msg.Body, "https://threkir.test/events/evt-1") {
+		t.Errorf("scheduled reminder should deep-link to the event, got:\n%s", sent.msg.Body)
 	}
 	if len(be.markedEmailed) != 1 || be.markedEmailed[0] != "n1" {
 		t.Errorf("expected n1 stamped email_sent_at, got %v", be.markedEmailed)

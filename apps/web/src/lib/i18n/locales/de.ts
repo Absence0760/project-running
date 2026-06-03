@@ -2712,4 +2712,10 @@ export const messages = {
 	"prefs.coachSupportive": "Unterstützend",
 	"prefs.coachDrillSergeant": "Ausbilder",
 	"prefs.coachAnalytical": "Analytisch",
+	"prefs.notificationsHeading": "Benachrichtigungen",
+	"prefs.emailNotifications": "E-Mail-Benachrichtigungen",
+	"prefs.emailNotifImportant": "Nur wichtige",
+	"prefs.emailNotifAll": "Alle",
+	"prefs.emailNotifOff": "Aus",
+	"prefs.emailNotifHint": "Wähle, welche Benachrichtigungen zusätzlich per E-Mail gesendet werden. Die App-Glocke zeigt immer alles.",
 } satisfies Messages;

@@ -2720,4 +2720,10 @@ export const en = {
 	"prefs.coachSupportive": "Supportive",
 	"prefs.coachDrillSergeant": "Drill Sergeant",
 	"prefs.coachAnalytical": "Analytical",
+	"prefs.notificationsHeading": "Notifications",
+	"prefs.emailNotifications": "Email notifications",
+	"prefs.emailNotifImportant": "Important only",
+	"prefs.emailNotifAll": "Everything",
+	"prefs.emailNotifOff": "Off",
+	"prefs.emailNotifHint": "Choose which notifications are also sent to your email. The in-app bell always shows everything.",
 } satisfies Record<string, string>;

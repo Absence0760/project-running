@@ -89,6 +89,72 @@ func TestRenderNotificationEmail_RunDeepLinkAndFallback(t *testing.T) {
 	}
 }
 
+// TestRenderNotificationEmail_AllKinds asserts every kind that can reach
+// the email channel renders a complete message — non-empty subject + body,
+// the action link, and the unsubscribe footer — and lands on the right
+// deep link for the FK the kind carries. A new notification kind that
+// forgets a notificationCopy case would surface here (it'd hit the generic
+// fallback and fail the per-kind link assertion) rather than shipping a
+// blank/garbled email.
+func TestRenderNotificationEmail_AllKinds(t *testing.T) {
+	const base = "https://threkir.test"
+	ev, run, club := "evt-1", "run-1", "club-1"
+
+	cases := []struct {
+		kind     string
+		row      NotificationRow
+		wantPath string // the deep link the body must contain
+	}{
+		{"event_reminder", NotificationRow{Kind: "event_reminder", EventID: &ev}, base + "/events/evt-1"},
+		{"event_cancel", NotificationRow{Kind: "event_cancel", EventID: &ev}, base + "/events/evt-1"},
+		{"event_rsvp", NotificationRow{Kind: "event_rsvp", EventID: &ev}, base + "/events/evt-1"},
+		{"plan_update", NotificationRow{Kind: "plan_update"}, base + "/training"},
+		{"message", NotificationRow{Kind: "message"}, base + "/messages"},
+		{"club_post", NotificationRow{Kind: "club_post", ClubID: &club}, base + "/clubs/club-1"},
+		{"run_completed", NotificationRow{Kind: "run_completed", RunID: &run}, base + "/runs/run-1"},
+		{"kudos", NotificationRow{Kind: "kudos", RunID: &run}, base + "/runs/run-1"},
+		{"comment", NotificationRow{Kind: "comment", RunID: &run}, base + "/runs/run-1"},
+		{"comment_reply", NotificationRow{Kind: "comment_reply", RunID: &run}, base + "/runs/run-1"},
+		{"follow", NotificationRow{Kind: "follow"}, base + "/profile"},
+		{"unknown_future_kind", NotificationRow{Kind: "unknown_future_kind"}, base + "/notifications"},
+	}
+
+	for _, c := range cases {
+		msg := renderNotificationEmail(c.row, base)
+		if strings.TrimSpace(msg.Subject) == "" {
+			t.Errorf("%s: empty subject", c.kind)
+		}
+		if strings.TrimSpace(msg.Body) == "" {
+			t.Errorf("%s: empty body", c.kind)
+		}
+		if !strings.Contains(msg.Body, "Open Threkir:") {
+			t.Errorf("%s: body missing action line:\n%s", c.kind, msg.Body)
+		}
+		if !strings.Contains(msg.Body, c.wantPath) {
+			t.Errorf("%s: body should deep-link to %q, got:\n%s", c.kind, c.wantPath, msg.Body)
+		}
+		if msg.ListUnsubscribe != base+"/settings/preferences" {
+			t.Errorf("%s: unexpected unsubscribe URL %q", c.kind, msg.ListUnsubscribe)
+		}
+		if !strings.Contains(msg.Body, base+"/settings/preferences") {
+			t.Errorf("%s: body missing unsubscribe footer", c.kind)
+		}
+	}
+
+	// Every kind the preference matrix knows about must have a non-fallback
+	// render. Cross-check the importantKinds set is fully covered above so
+	// adding an important kind without a render case can't slip through.
+	covered := map[string]bool{}
+	for _, c := range cases {
+		covered[c.kind] = true
+	}
+	for k := range importantKinds {
+		if !covered[k] {
+			t.Errorf("importantKinds member %q has no render test case", k)
+		}
+	}
+}
+
 func TestBuildMIME_HeadersAndCRLF(t *testing.T) {
 	raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", Email{
 		Subject:         "Hi",

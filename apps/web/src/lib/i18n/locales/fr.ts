@@ -2712,4 +2712,10 @@ export const messages = {
 	"prefs.coachSupportive": "Bienveillant",
 	"prefs.coachDrillSergeant": "Sergent instructeur",
 	"prefs.coachAnalytical": "Analytique",
+	"prefs.notificationsHeading": "Notifications",
+	"prefs.emailNotifications": "Notifications par e-mail",
+	"prefs.emailNotifImportant": "Importantes uniquement",
+	"prefs.emailNotifAll": "Toutes",
+	"prefs.emailNotifOff": "Désactivées",
+	"prefs.emailNotifHint": "Choisissez les notifications également envoyées par e-mail. La cloche dans l'application affiche toujours tout.",
 } satisfies Messages;

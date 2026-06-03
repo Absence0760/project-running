@@ -2708,4 +2708,10 @@ export const messages = {
 	"prefs.coachSupportive": "サポート型",
 	"prefs.coachDrillSergeant": "スパルタ型",
 	"prefs.coachAnalytical": "分析型",
+	"prefs.notificationsHeading": "通知",
+	"prefs.emailNotifications": "メール通知",
+	"prefs.emailNotifImportant": "重要なものだけ",
+	"prefs.emailNotifAll": "すべて",
+	"prefs.emailNotifOff": "オフ",
+	"prefs.emailNotifHint": "メールでも送信する通知を選びます。アプリのベルには常にすべて表示されます。",
 } satisfies Messages;

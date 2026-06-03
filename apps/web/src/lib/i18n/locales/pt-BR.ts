@@ -2711,4 +2711,10 @@ export const messages = {
 	"prefs.coachSupportive": "Acolhedor",
 	"prefs.coachDrillSergeant": "Sargento durão",
 	"prefs.coachAnalytical": "Analítico",
+	"prefs.notificationsHeading": "Notificações",
+	"prefs.emailNotifications": "Notificações por e-mail",
+	"prefs.emailNotifImportant": "Apenas importantes",
+	"prefs.emailNotifAll": "Todas",
+	"prefs.emailNotifOff": "Desativadas",
+	"prefs.emailNotifHint": "Escolha quais notificações também são enviadas para o seu e-mail. O sino do app sempre mostra tudo.",
 } satisfies Messages;

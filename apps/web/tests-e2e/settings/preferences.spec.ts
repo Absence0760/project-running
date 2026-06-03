@@ -188,6 +188,43 @@ test.describe('/settings/preferences', () => {
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
+	test('Email notifications <select> save round-trip persists across reload', async ({
+		page
+	}) => {
+		// email_notifications gates the Go worker's notification_email
+		// channel (all | important | off, default important). The handler
+		// reads user_settings.prefs.email_notifications server-side, so the
+		// load-bearing assertion is that the picker actually writes the bag
+		// and the value survives a reload — a regression that dropped the
+		// key from the autoSave payload would silently leave every user on
+		// the default forever.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const sel = page
+			.locator('label', { has: page.getByText('Email notifications', { exact: true }) })
+			.locator('select');
+		// Default when the key is absent.
+		await expect(sel).toHaveValue('important');
+		const before = await sel.inputValue();
+
+		await sel.selectOption('all');
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+
+		await page.reload();
+		await expect(sel).toHaveValue('all');
+
+		// The full kill-switch value also round-trips.
+		await sel.selectOption('off');
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+		await page.reload();
+		await expect(sel).toHaveValue('off');
+
+		// Restore so later specs see the default.
+		await sel.selectOption(before);
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+	});
+
 	test('map style picker — selecting Satellite saves and survives reload', async ({
 		page
 	}) => {
