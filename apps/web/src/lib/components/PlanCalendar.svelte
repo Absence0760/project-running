@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { PlanWorkout } from '$lib/types';
-	import { WORKOUT_KIND_LABEL, isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training/training';
+	import { isWorkoutCompleted, parseISO, todayISO, formatISO } from '$lib/training/training';
+	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import { currentLocale } from '$lib/i18n/store.svelte';
 	import { monthName, weekdayAbbrevs, leadingBlanks, type WeekStart } from '$lib/format/calendar';
@@ -172,7 +173,7 @@
 				>
 					<span class="day-num">{c.day}</span>
 					<span class="kind-pill">
-						{WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ?? wo.kind}
+						{workoutKindLabel(wo.kind)}
 					</span>
 					{#if wo.target_distance_m != null && wo.kind !== 'rest'}
 						<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>

@@ -15,11 +15,10 @@
 	import {
 		fmtHms,
 		isWorkoutCompleted,
-		PHASE_LABEL,
-		WORKOUT_KIND_LABEL,
 		parseISO,
 		todayISO
 	} from '$lib/training/training';
+	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import { loadSettings, effective } from '$lib/settings/settings';
@@ -254,7 +253,7 @@
 
 	function workoutAriaLabel(wo: PlanWorkout): string {
 		const dow = dayOfWeek(wo.scheduled_date);
-		const kind = WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ?? wo.kind;
+		const kind = workoutKindLabel(wo.kind);
 		const dist = wo.target_distance_m != null ? `, ${fmtKm(wo.target_distance_m)}` : '';
 		const done = isWorkoutCompleted(wo) ? m('planDetail.ariaCompletedSuffix') : '';
 		return `${dow}: ${kind}${dist}${done}`;
@@ -410,7 +409,7 @@
 				<button
 					class="today-link"
 					type="button"
-					aria-label={m('planDetail.editTodayWorkoutAria', { kind: WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind })}
+					aria-label={m('planDetail.editTodayWorkoutAria', { kind: workoutKindLabel(todayWorkout.kind) })}
 					onclick={() => (editing = todayWorkout)}
 				>
 					<div class="today-icon" class:done={isWorkoutCompleted(todayWorkout)}>
@@ -425,7 +424,7 @@
 					<div class="today-body">
 						<span class="today-label">{m('planDetail.today')}</span>
 						<span class="today-kind">
-							{WORKOUT_KIND_LABEL[todayWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? todayWorkout.kind}
+							{workoutKindLabel(todayWorkout.kind)}
 						</span>
 						<div class="today-meta">
 							{#if todayWorkout.target_distance_m != null}
@@ -459,7 +458,7 @@
 					<div class="today-body">
 						<span class="today-label">{m('planDetail.nextUp')}</span>
 						<span class="today-kind">
-							{WORKOUT_KIND_LABEL[nextWorkout.kind as keyof typeof WORKOUT_KIND_LABEL] ?? nextWorkout.kind}
+							{workoutKindLabel(nextWorkout.kind)}
 						</span>
 						<div class="today-meta">
 							<span>{dayOfWeek(nextWorkout.scheduled_date)} · {nextWorkout.scheduled_date}</span>
@@ -553,7 +552,7 @@
 						<div class="week-ident">
 							<span class="week-num">{m('planDetail.weekNum', { n: w.week_index + 1 })}</span>
 							<span class="week-phase">
-								{PHASE_LABEL[w.phase as keyof typeof PHASE_LABEL] ?? w.phase}
+								{planPhaseLabel(w.phase)}
 							</span>
 						</div>
 						<div class="week-stats">
@@ -584,7 +583,7 @@
 								>
 									<span class="dow">{dayOfWeek(wo.scheduled_date)}</span>
 									<span class="kind">
-										{WORKOUT_KIND_LABEL[wo.kind as keyof typeof WORKOUT_KIND_LABEL] ?? wo.kind}
+										{workoutKindLabel(wo.kind)}
 									</span>
 									{#if wo.target_distance_m != null && wo.kind !== 'rest'}
 										<span class="dist">{fmtKm(wo.target_distance_m, 1)}</span>

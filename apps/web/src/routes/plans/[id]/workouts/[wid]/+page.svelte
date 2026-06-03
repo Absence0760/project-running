@@ -5,7 +5,8 @@
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchWorkout, markWorkoutCompleted } from '$lib/core/data';
-	import { fmtHms, isWorkoutCompleted, WORKOUT_KIND_LABEL } from '$lib/training/training';
+	import { fmtHms, isWorkoutCompleted } from '$lib/training/training';
+	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -115,10 +116,6 @@
 			month: 'long',
 			year: 'numeric'
 		});
-	}
-
-	function workoutKindLabel(kind: string): string {
-		return WORKOUT_KIND_LABEL[kind as keyof typeof WORKOUT_KIND_LABEL] ?? kind;
 	}
 
 	let kindForChrome = $derived(workout?.kind ?? 'easy');

@@ -900,22 +900,3 @@ export function fmtHms(sec: number | null | undefined): string {
 	return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export const WORKOUT_KIND_LABEL: Record<WorkoutKind, string> = {
-	easy: 'Easy',
-	long: 'Long run',
-	recovery: 'Recovery',
-	tempo: 'Tempo',
-	interval: 'Intervals',
-	marathon_pace: 'Marathon pace',
-	walk_run: 'Walk-run',
-	race: 'Race',
-	rest: 'Rest'
-};
-
-export const PHASE_LABEL: Record<PlanPhase, string> = {
-	base: 'Base',
-	build: 'Build',
-	peak: 'Peak',
-	taper: 'Taper',
-	race: 'Race week'
-};

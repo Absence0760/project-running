@@ -3,10 +3,10 @@
 	import { markWorkoutCompleted, updatePlanWorkout } from '$lib/core/data';
 	import {
 		isWorkoutCompleted,
-		WORKOUT_KIND_LABEL,
 		type WorkoutKind,
 		type WorkoutStructure
 	} from '$lib/training/training';
+	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import { getUnit } from '$lib/format/units.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
 	import type { PlanWorkout } from '$lib/types';
@@ -291,7 +291,7 @@
 			<span>{t('workoutEditor.kind')}</span>
 			<select bind:value={kind}>
 				{#each kindOptions as k}
-					<option value={k}>{WORKOUT_KIND_LABEL[k]}</option>
+					<option value={k}>{workoutKindLabel(k)}</option>
 				{/each}
 			</select>
 		</label>

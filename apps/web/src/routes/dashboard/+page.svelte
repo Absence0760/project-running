@@ -23,7 +23,7 @@
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
-	import { WORKOUT_KIND_LABEL } from '$lib/training/training';
+	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
 	import PeriodSummary from '$lib/components/PeriodSummary.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -724,7 +724,7 @@
 							<div class="plan-hero-today-body">
 								<span class="plan-hero-today-label">{m('dash.today')}</span>
 								<span class="plan-hero-today-kind">
-									{WORKOUT_KIND_LABEL[t.kind as keyof typeof WORKOUT_KIND_LABEL] ?? t.kind}
+									{workoutKindLabel(t.kind)}
 								</span>
 								<div class="plan-hero-today-meta">
 									{#if t.target_distance_m != null}

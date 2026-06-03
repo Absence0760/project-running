@@ -8,10 +8,9 @@
 		defaultPlanWeeks,
 		walkRunDefaultWeeks,
 		generatePlan,
-		PHASE_LABEL,
-		WORKOUT_KIND_LABEL,
 		formatISO,
 	} from '$lib/training/training';
+	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import type {
 		GoalEvent,
 		GeneratedPlan,
@@ -499,7 +498,7 @@
 								onclick={() => (expandedWeek = expandedWeek === weekIdx ? null : weekIdx)}
 							>
 								<span class="week-num">#{w.week_index + 1}</span>
-								<span class="week-phase">{PHASE_LABEL[w.phase]}</span>
+								<span class="week-phase">{planPhaseLabel(w.phase)}</span>
 								<span class="week-km">{fmtKm(w.target_volume_m, 0)}</span>
 								<span class="week-workouts">
 									{t(sessionCount === 1 ? 'planEditor.nSessionsOne' : 'planEditor.nSessionsMany', { n: sessionCount })}
@@ -524,7 +523,7 @@
 												<span>{t('planEditor.runType')}</span>
 												<select bind:value={w.workouts[woIdx].kind}>
 													{#each KIND_OPTIONS as k}
-														<option value={k}>{WORKOUT_KIND_LABEL[k]}</option>
+														<option value={k}>{workoutKindLabel(k)}</option>
 													{/each}
 												</select>
 											</label>
