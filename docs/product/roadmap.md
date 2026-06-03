@@ -524,7 +524,7 @@ Surfaces that other running apps ship as table stakes; these have now shipped. E
 
 **Target:** TBD (post-Phase-3 monetisation milestone)
 **Goal:** Expand from running-only to a running + gym + nutrition product inside one app per platform. The differentiator vs Strava (running silo) and MyFitnessPal (nutrition silo) is the cross-modality view — weekly mileage, lift volume, and protein intake side-by-side in one Home and one History.
-**Architecture:** [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) is the foundational ADR.
+**Architecture:** [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db) is the foundational ADR. **Layout & IA contract:** [docs/features/multi_modal.md](../features/multi_modal.md) (mobile-first, anti-clutter — nav, Home card system, History, gym + nutrition surfaces). **Data foundation shipped:** migration `20261204_001` (`runs.kind` + `gym_workouts`/`gym_sets`/`food_log` + `activities` view).
 
 Workstreams run **in parallel** within this phase — the nav reorg ships with the first modality, both modalities ship together at the lightweight tier. Depth tiers (Strong-app / MyFitnessPal / AI-driven) are documented at the bottom as future work, not committed to in Phase 4.
 

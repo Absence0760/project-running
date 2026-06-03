@@ -38,6 +38,7 @@ Start with whichever row below is closest to the task you've been given:
 | Touching email / notification delivery (welcome, receipts, reminders, digest) | [docs/features/email.md](docs/features/email.md) — job kinds, SMTP transport, i18n catalogue, what's shipped vs planned, prod ops |
 | Touching training plans (VDOT, Riegel, generator, week grid) | [docs/features/training.md](docs/features/training.md) — engine shape, pace derivation, what's deferred |
 | Implementing the live structured-workout execution loop | [docs/features/workout_execution.md](docs/features/workout_execution.md) — specced runner state machine + UI + persistence |
+| Building the Phase 4 gym / nutrition surfaces (or the multi-modal nav / Home) | [docs/features/multi_modal.md](docs/features/multi_modal.md) — mobile-first, anti-clutter layout + IA contract; data foundation (`runs.kind` + `gym_workouts`/`gym_sets`/`food_log` + `activities` view) is shipped (migration `20261204_001`) |
 | Wiring a new integration (Strava, Garmin, parkrun, HealthKit) | [docs/features/integrations.md](docs/features/integrations.md) |
 | Running one of the apps locally | `apps/<app>/local_testing.md` — one per app (e.g. [apps/mobile_android/local_testing.md](apps/mobile_android/local_testing.md), [apps/backend/local_testing.md](apps/backend/local_testing.md)) |
 | Backend schema, RLS, RPCs, Storage buckets | [docs/backend/api_database.md](docs/backend/api_database.md) |
