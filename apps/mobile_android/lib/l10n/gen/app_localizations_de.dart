@@ -3540,6 +3540,23 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsAccountDeleted => 'Konto gelöscht';
 
   @override
+  String get settingsAccountCoachConsentWithdraw =>
+      'Coach-Einwilligung widerrufen';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'Hindere den Coach daran, deine Trainingsdaten zu verwenden. Du kannst jederzeit erneut einwilligen.';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn =>
+      'Coach-Einwilligung widerrufen.';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return 'Widerruf fehlgeschlagen: $error';
+  }
+
+  @override
   String settingsAccountDeleteFailed(Object error) {
     return 'Kontolöschung fehlgeschlagen: $error';
   }

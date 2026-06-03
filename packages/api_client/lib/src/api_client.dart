@@ -1838,6 +1838,16 @@ class ApiClient {
     return DateTime.tryParse(res);
   }
 
+  /// Withdraw coach consent (GDPR Art 7(3)) via the
+  /// `withdraw_coach_consent()` SECURITY DEFINER RPC — the sanctioned
+  /// inverse of [recordCoachConsent]. Clears the server-held stamp; the
+  /// coach request gate then re-blocks the Coach until the user
+  /// re-consents through [recordCoachConsent].
+  Future<void> withdrawCoachConsent() async {
+    if (_client.auth.currentUser?.id == null) return;
+    await _client.rpc('withdraw_coach_consent');
+  }
+
   /// Self-read of the full `user_profiles` row, including
   /// `subscription_tier`, `subscription_at`, `parkrun_number`. Backed by
   /// the `get_my_profile()` SECURITY DEFINER RPC because those columns

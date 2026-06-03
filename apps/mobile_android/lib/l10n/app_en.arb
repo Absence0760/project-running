@@ -4722,6 +4722,27 @@
   "@settingsAccountDeleted": {
     "description": "Banner shown after the account is deleted"
   },
+  "settingsAccountCoachConsentWithdraw": "Withdraw AI Coach consent",
+  "@settingsAccountCoachConsentWithdraw": {
+    "description": "Settings > Account tile title to withdraw AI-coach consent (GDPR Art 7(3))"
+  },
+  "settingsAccountCoachConsentActive": "Stop the Coach from using your training data. You can grant consent again any time.",
+  "@settingsAccountCoachConsentActive": {
+    "description": "Subtitle under the withdraw-coach-consent tile"
+  },
+  "settingsAccountCoachConsentWithdrawn": "AI Coach consent withdrawn.",
+  "@settingsAccountCoachConsentWithdrawn": {
+    "description": "Banner shown after AI-coach consent is withdrawn"
+  },
+  "settingsAccountCoachConsentWithdrawFailed": "Couldn't withdraw consent: {error}",
+  "@settingsAccountCoachConsentWithdrawFailed": {
+    "description": "Banner shown when withdrawing AI-coach consent fails",
+    "placeholders": {
+      "error": {
+        "type": "Object"
+      }
+    }
+  },
   "settingsAccountDeleteFailed": "Account deletion failed: {error}",
   "@settingsAccountDeleteFailed": {
     "description": "Banner shown when account deletion fails",

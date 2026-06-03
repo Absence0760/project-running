@@ -3530,6 +3530,23 @@ class AppLocalizationsEs extends AppLocalizations {
   String get settingsAccountDeleted => 'Cuenta eliminada';
 
   @override
+  String get settingsAccountCoachConsentWithdraw =>
+      'Retirar consentimiento del Coach';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'Impide que el Coach use tus datos de entrenamiento. Puedes volver a dar tu consentimiento cuando quieras.';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn =>
+      'Consentimiento del Coach retirado.';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return 'Error al retirar el consentimiento: $error';
+  }
+
+  @override
   String settingsAccountDeleteFailed(Object error) {
     return 'Error al eliminar la cuenta: $error';
   }

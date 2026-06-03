@@ -3502,6 +3502,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsAccountDeleted => 'Account deleted';
 
   @override
+  String get settingsAccountCoachConsentWithdraw => 'Withdraw AI Coach consent';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'Stop the Coach from using your training data. You can grant consent again any time.';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn =>
+      'AI Coach consent withdrawn.';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return 'Couldn\'t withdraw consent: $error';
+  }
+
+  @override
   String settingsAccountDeleteFailed(Object error) {
     return 'Account deletion failed: $error';
   }

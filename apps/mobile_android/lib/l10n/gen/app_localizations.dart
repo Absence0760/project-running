@@ -5867,6 +5867,30 @@ abstract class AppLocalizations {
   /// **'Account deleted'**
   String get settingsAccountDeleted;
 
+  /// Settings > Account tile title to withdraw AI-coach consent (GDPR Art 7(3))
+  ///
+  /// In en, this message translates to:
+  /// **'Withdraw AI Coach consent'**
+  String get settingsAccountCoachConsentWithdraw;
+
+  /// Subtitle under the withdraw-coach-consent tile
+  ///
+  /// In en, this message translates to:
+  /// **'Stop the Coach from using your training data. You can grant consent again any time.'**
+  String get settingsAccountCoachConsentActive;
+
+  /// Banner shown after AI-coach consent is withdrawn
+  ///
+  /// In en, this message translates to:
+  /// **'AI Coach consent withdrawn.'**
+  String get settingsAccountCoachConsentWithdrawn;
+
+  /// Banner shown when withdrawing AI-coach consent fails
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t withdraw consent: {error}'**
+  String settingsAccountCoachConsentWithdrawFailed(Object error);
+
   /// Banner shown when account deletion fails
   ///
   /// In en, this message translates to:

@@ -3546,6 +3546,23 @@ class AppLocalizationsFr extends AppLocalizations {
   String get settingsAccountDeleted => 'Compte supprimé';
 
   @override
+  String get settingsAccountCoachConsentWithdraw =>
+      'Retirer le consentement au Coach';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'Empêchez le Coach d\'utiliser vos données d\'entraînement. Vous pouvez consentir à nouveau à tout moment.';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn =>
+      'Consentement au Coach retiré.';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return 'Échec du retrait : $error';
+  }
+
+  @override
   String settingsAccountDeleteFailed(Object error) {
     return 'Échec de la suppression du compte : $error';
   }

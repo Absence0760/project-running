@@ -3290,6 +3290,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get settingsAccountDeleted => 'アカウントを削除しました';
 
   @override
+  String get settingsAccountCoachConsentWithdraw => 'コーチへの同意を撤回';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'コーチによるトレーニングデータの使用を停止します。いつでも再度同意できます。';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn => 'コーチへの同意を撤回しました。';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return '撤回に失敗しました：$error';
+  }
+
+  @override
   String settingsAccountDeleteFailed(Object error) {
     return 'アカウントの削除に失敗しました：$error';
   }

@@ -44,16 +44,51 @@ class SettingsAccountScreen extends StatefulWidget {
 }
 
 class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
+  DateTime? _coachConsentAt;
+  bool _coachConsentWithdrawing = false;
+
   @override
   void initState() {
     super.initState();
     widget.preferences.addListener(_onChange);
+    _loadCoachConsent();
   }
 
   @override
   void dispose() {
     widget.preferences.removeListener(_onChange);
     super.dispose();
+  }
+
+  Future<void> _loadCoachConsent() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final at = await api.fetchCoachConsentAt();
+      if (mounted) setState(() => _coachConsentAt = at);
+    } catch (_) {
+      // Non-fatal: leave the withdrawal control hidden if the lookup fails.
+    }
+  }
+
+  Future<void> _withdrawCoachConsent() async {
+    final api = widget.apiClient;
+    if (api == null || _coachConsentWithdrawing) return;
+    setState(() => _coachConsentWithdrawing = true);
+    final l10n = AppLocalizations.of(context);
+    try {
+      await api.withdrawCoachConsent();
+      if (!mounted) return;
+      setState(() => _coachConsentAt = null);
+      showTopBanner(context, l10n.settingsAccountCoachConsentWithdrawn);
+    } catch (e) {
+      if (mounted) {
+        showTopBanner(
+            context, l10n.settingsAccountCoachConsentWithdrawFailed(e.toString()));
+      }
+    } finally {
+      if (mounted) setState(() => _coachConsentWithdrawing = false);
+    }
   }
 
   void _onChange() {
@@ -483,6 +518,21 @@ class _SettingsAccountScreenState extends State<SettingsAccountScreen> {
                 );
               },
             ),
+            if (_coachConsentAt != null)
+              ListTile(
+                leading: const Icon(Icons.block),
+                title: Text(l10n.settingsAccountCoachConsentWithdraw),
+                subtitle: Text(l10n.settingsAccountCoachConsentActive),
+                trailing: _coachConsentWithdrawing
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+                onTap:
+                    _coachConsentWithdrawing ? null : _withdrawCoachConsent,
+              ),
             if (widget.runStore != null) ...[
               const Divider(),
               ListTile(

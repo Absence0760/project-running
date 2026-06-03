@@ -3532,6 +3532,23 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsAccountDeleted => 'Conta excluída';
 
   @override
+  String get settingsAccountCoachConsentWithdraw =>
+      'Retirar consentimento do Coach';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'Impeça o Coach de usar seus dados de treino. Você pode consentir novamente quando quiser.';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn =>
+      'Consentimento do Coach retirado.';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return 'Falha ao retirar o consentimento: $error';
+  }
+
+  @override
   String settingsAccountDeleteFailed(Object error) {
     return 'Falha ao excluir a conta: $error';
   }
@@ -9600,6 +9617,23 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get settingsAccountDeleted => 'Conta excluída';
+
+  @override
+  String get settingsAccountCoachConsentWithdraw =>
+      'Retirar consentimento do Coach';
+
+  @override
+  String get settingsAccountCoachConsentActive =>
+      'Impeça o Coach de usar seus dados de treino. Você pode consentir novamente quando quiser.';
+
+  @override
+  String get settingsAccountCoachConsentWithdrawn =>
+      'Consentimento do Coach retirado.';
+
+  @override
+  String settingsAccountCoachConsentWithdrawFailed(Object error) {
+    return 'Falha ao retirar o consentimento: $error';
+  }
 
   @override
   String settingsAccountDeleteFailed(Object error) {
