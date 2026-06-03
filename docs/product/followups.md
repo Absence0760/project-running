@@ -164,6 +164,22 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   Saturday-morning race cancellation now reaches an inbox. Addresses the
   parkrun-owner / event-organizer / family-club / social-group findings for the
   email channel; admin-update fan-out rides the same path once that kind exists.
+- [x] **Welcome / "thanks for signing up" email (lifecycle leg)** — SHIPPED
+  2026-06-03 (migration `20261202_001`, `decisions.md § 119`). A `lifecycle_email`
+  job kind (template-keyed, separate from the notification channel) sends a welcome
+  on signup, enqueued by an AFTER-INSERT trigger on `user_profiles`; `lifecycle_email_log`
+  is the send-once guard. End-to-end tested against local Mailpit. Transactional —
+  no preference gate, no `List-Unsubscribe`.
+- [ ] **Weekly digest + lifecycle drip (engagement email, ~1-2 wk + ops)** — reuses
+  the shipped `lifecycle_email` kind with new templates: a weekly digest
+  (mileage/PBs/kudos/upcoming events, weekly pg_cron → one job per opted-in user)
+  and re-engagement / onboarding-drip / streak-nudge templates. **Prerequisites that
+  the one-off welcome did NOT need** (these are bulk/engagement, so they're required
+  before any of these go out): (1) a per-category **preference center** — separate
+  keys (`email_weekly_digest`, …) on web + mobile, not folded into
+  `email_notifications`; (2) **RFC 8058 one-click unsubscribe** (a tiny unauthenticated
+  endpoint that flips the relevant pref); (3) **bounce/complaint suppression** so a
+  dead address isn't retried. Per `decisions.md § 119`.
 - [ ] **Native push delivery (theme B, FCM/APNs leg, ~1 wk + ops)** — the remaining
   leg: native push to a locked phone. The `notifications` row is already the source
   of truth and the email handler proves the consumer pattern; an FCM/APNs sender is

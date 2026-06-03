@@ -87,6 +87,12 @@ type fakeBackend struct {
 	markEmailedErr error
 	markedEmailed  []string // notification ids stamped email_sent_at
 
+	// lifecycle_email inputs/outputs.
+	lifecycleSent      map[string]bool // key "user_id|template" → already sent
+	lifecycleSentErr   error
+	recordLifecycleErr error
+	recordedLifecycle  []string // "user_id|template" recorded this run
+
 	// Outputs
 	finished []finishCall
 	deferred []deferCall
@@ -302,6 +308,34 @@ func (f *fakeBackend) MarkNotificationEmailed(_ context.Context, id string) erro
 		stamped := "2026-01-01T00:00:00Z"
 		n.EmailSentAt = &stamped
 	}
+	return nil
+}
+
+func (f *fakeBackend) LifecycleEmailAlreadySent(_ context.Context, userID, template string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.lifecycleSentErr != nil {
+		err := f.lifecycleSentErr
+		f.lifecycleSentErr = nil
+		return false, err
+	}
+	return f.lifecycleSent[userID+"|"+template], nil
+}
+
+func (f *fakeBackend) RecordLifecycleEmail(_ context.Context, userID, template string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.recordLifecycleErr != nil {
+		err := f.recordLifecycleErr
+		f.recordLifecycleErr = nil
+		return err
+	}
+	key := userID + "|" + template
+	f.recordedLifecycle = append(f.recordedLifecycle, key)
+	if f.lifecycleSent == nil {
+		f.lifecycleSent = map[string]bool{}
+	}
+	f.lifecycleSent[key] = true
 	return nil
 }
 

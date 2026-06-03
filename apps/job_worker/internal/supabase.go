@@ -1248,6 +1248,51 @@ func (c *SupabaseClient) MarkNotificationEmailed(ctx context.Context, notificati
 	return err
 }
 
+// LifecycleEmailAlreadySent reports whether a (user, template) row exists in
+// lifecycle_email_log — the send-once guard for transactional lifecycle mail.
+func (c *SupabaseClient) LifecycleEmailAlreadySent(ctx context.Context, userID, template string) (bool, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("template", "eq."+template)
+	q.Set("select", "user_id")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/lifecycle_email_log?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return false, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return false, err
+	}
+	var rows []struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return false, err
+	}
+	return len(rows) > 0, nil
+}
+
+// RecordLifecycleEmail marks a (user, template) as sent. Idempotent — a
+// duplicate insert is ignored (resolution=ignore-duplicates) so a benign
+// re-record can't 409.
+func (c *SupabaseClient) RecordLifecycleEmail(ctx context.Context, userID, template string) error {
+	u := c.BaseURL + "/rest/v1/lifecycle_email_log"
+	payload, err := json.Marshal(map[string]string{"user_id": userID, "template": template})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal,resolution=ignore-duplicates")
+	_, err = c.do(ctx, req)
+	return err
+}
+
 // FetchExportPersonalDataTables bundles the personal-data tables
 // the audit/data-export-completeness (May 2026) pass added to the
 // Art 20 export. One call per table; failures on individual tables

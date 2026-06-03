@@ -2659,6 +2659,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 119. Lifecycle email (welcome, later digest) is a separate `lifecycle_email` job kind keyed by a template name, not the notification channel
+
+**Decided (2026-06-03):** transactional/relationship mail that has no `notifications` row — starting with a "thanks for signing up" welcome — rides a new `lifecycle_email` job kind (migration `20261202_001`) carrying `{user_id, template}`. The Go worker's `handler_lifecycle_email.go` renders the named template (`renderLifecycleEmail` in `mailer.go`) and sends through the same SMTP path as `notification_email`. The welcome is enqueued by an AFTER-INSERT trigger on `user_profiles`, which is created exactly once per user by `confirm_age_and_terms()` (`20260929_001`) — the INSERT branch fires on real signup; the returning-user `on conflict do update` branch doesn't fire an INSERT trigger.
+
+**Why a separate kind, not `notification_email`.** The notification channel is coupled to a `notifications` row (it renders from one, stamps `email_sent_at` on it, and gates on the `email_notifications` preference). A welcome has none of that: no inbox row, and it must send regardless of preference (you can't opt out of the email confirming you signed up). Forcing it through the notification path would have meant a fake notification row + a preference exemption — more contortion than a sibling kind. The template-name payload also generalises: the weekly digest and re-engagement mail will be the same kind with their own templates (and, unlike welcome, their own opt-in preferences + one-click unsubscribe, since those are bulk/engagement, not transactional).
+
+**Send-once.** `lifecycle_email_log (user_id, template)` is checked before send and written after, so a job retry — or a crash between send and `finish_job` — can't re-send. Delivery is at-least-once (a duplicate only escapes the narrow send-ok/record-fail window), matching the `notification_email` `email_sent_at` discipline. The log is RLS deny-all (service-role/worker only). When no SMTP sender is configured the handler finishes the job done without recording, so a later email-enabled deploy still sends; an unknown template is a permanent skip, not a retry loop.
+
+**Trade-off / when not to re-litigate.** Welcome carries no `List-Unsubscribe` header — it's a one-off relationship message, not a subscription; the footer still links to `/settings/preferences`. The trigger fires on the `user_profiles` insert (signup), not on `auth.users`, deliberately keeping triggers out of the auth schema. **Don't** route welcome/digest through `notification_email`, **don't** gate the transactional welcome on `email_notifications`, and **don't** ship the weekly digest on this kind without first adding its opt-in preference + RFC 8058 one-click unsubscribe + bounce suppression (the bulk-sender requirements that a one-off welcome doesn't trip).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

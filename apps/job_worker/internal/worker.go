@@ -79,6 +79,11 @@ type Backend interface {
 	FetchUserSettingsPrefs(ctx context.Context, userID string) (map[string]interface{}, error)
 	FetchUserEmail(ctx context.Context, userID string) (string, error)
 	MarkNotificationEmailed(ctx context.Context, notificationID string) error
+	// Lifecycle-email path — used by the kind='lifecycle_email' handler
+	// (migration 20261202_001). The send-once guard reads + writes
+	// lifecycle_email_log so a job retry can't re-send a welcome.
+	LifecycleEmailAlreadySent(ctx context.Context, userID, template string) (bool, error)
+	RecordLifecycleEmail(ctx context.Context, userID, template string) error
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
@@ -261,6 +266,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handlePhotoProcess(ctx, job)
 	case "notification_email":
 		return w.handleNotificationEmail(ctx, job)
+	case "lifecycle_email":
+		return w.handleLifecycleEmail(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

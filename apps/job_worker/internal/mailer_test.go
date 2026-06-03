@@ -155,6 +155,37 @@ func TestRenderNotificationEmail_AllKinds(t *testing.T) {
 	}
 }
 
+func TestRenderLifecycleEmail_Welcome(t *testing.T) {
+	msg, ok := renderLifecycleEmail("welcome", "https://threkir.test/")
+	if !ok {
+		t.Fatal("welcome template should render")
+	}
+	if msg.Subject != "Welcome to Threkir" {
+		t.Errorf("unexpected subject %q", msg.Subject)
+	}
+	if !strings.Contains(msg.Body, "Thanks for signing up") {
+		t.Errorf("body should thank the user:\n%s", msg.Body)
+	}
+	if !strings.Contains(msg.Body, "https://threkir.test/settings/preferences") {
+		t.Errorf("body should link to preferences:\n%s", msg.Body)
+	}
+	// No trailing-slash double-up from the base URL.
+	if strings.Contains(msg.Body, "threkir.test//") {
+		t.Errorf("base URL trailing slash leaked:\n%s", msg.Body)
+	}
+	// Transactional welcome carries no List-Unsubscribe (not a subscription).
+	if msg.ListUnsubscribe != "" {
+		t.Errorf("welcome should not set List-Unsubscribe, got %q", msg.ListUnsubscribe)
+	}
+}
+
+func TestRenderLifecycleEmail_UnknownTemplate(t *testing.T) {
+	_, ok := renderLifecycleEmail("no_such_template", "https://threkir.test")
+	if ok {
+		t.Error("unknown template must report ok=false so the handler skips")
+	}
+}
+
 func TestBuildMIME_HeadersAndCRLF(t *testing.T) {
 	raw := buildMIME("Threkir <noreply@threkir.com>", "runner@test.com", Email{
 		Subject:         "Hi",

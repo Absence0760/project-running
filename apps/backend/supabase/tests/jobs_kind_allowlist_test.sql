@@ -23,7 +23,7 @@
 
 begin;
 
-select plan(8);
+select plan(9);
 
 -- Accepted kinds round-trip cleanly. We're not asserting any
 -- particular id; just that the INSERT doesn't throw.
@@ -65,6 +65,13 @@ select lives_ok(
      values ('notification_email',
              jsonb_build_object('notification_id', gen_random_uuid())) $$,
   'public.jobs accepts kind = ''notification_email'''
+);
+
+select lives_ok(
+  $$ insert into public.jobs (kind, payload)
+     values ('lifecycle_email',
+             jsonb_build_object('user_id', gen_random_uuid(), 'template', 'welcome')) $$,
+  'public.jobs accepts kind = ''lifecycle_email'''
 );
 
 -- Junk kinds are rejected at INSERT time, not deferred to dispatch.

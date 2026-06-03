@@ -6,9 +6,12 @@ Generic Go service that drains the `jobs` queue (migration
 rotation, replaces the `refresh-tokens` Edge Function), `strava_event`
 (per-activity ingest enqueued by the `/v1/strava/webhook` endpoint,
 replaces the `strava-webhook` Edge Function), `photo_process` (EXIF
-strip on uploaded run photos), and `notification_email` (the email
+strip on uploaded run photos), `notification_email` (the email
 delivery channel for the notifications inbox + event-day reminders —
-roadmap Phase 4b, `decisions.md § 117`). Data-export will land as an
+roadmap Phase 4b, `decisions.md § 117`), and `lifecycle_email`
+(transactional/relationship mail with no notifications row — the welcome
+on signup today, weekly digest / re-engagement later; keyed by a template
+name, `decisions.md § 119`). Data-export will land as an
 additional kind in `internal/worker.go`'s dispatch when that Edge
 Function moves per
 [`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §214.
@@ -80,6 +83,12 @@ Function moves per
   `SMTP_HOST` — unset → jobs finish done but leave rows unstamped so a
   later email-enabled deploy can still send. Local dev points at the
   Supabase Mailpit catcher.
+  `lifecycle_email` (`handler_lifecycle_email.go`) is the worked example
+  for "transactional mail with no notifications row": a `{user_id,
+  template}` payload, a template renderer in `mailer.go`, and a
+  `lifecycle_email_log (user_id, template)` send-once guard. The welcome
+  is trigger-enqueued on signup (`user_profiles` AFTER INSERT); a future
+  digest reuses the kind with a cron enqueue + its own opt-in preference.
   `strava_event` (per-activity ingest enqueued by the HTTP webhook
   endpoint at `/v1/strava/webhook`) is the worked example for
   "port a webhook Edge Function into HTTP-front + queue-back" — see
@@ -126,6 +135,8 @@ apps/job_worker/
 │   ├── handler_token_refresh.go  # kind='token_refresh' sweep + rotate
 │   ├── handler_notification_email.go # kind='notification_email' send-or-skip
 │   ├── handler_notification_email_test.go # 9 tests on gating / opt-out / idempotency
+│   ├── handler_lifecycle_email.go # kind='lifecycle_email' (welcome) render + send-once
+│   ├── handler_lifecycle_email_test.go # 6 tests on send / dedup / no-address / nil-sender
 │   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic
 │   ├── mailer_test.go       # 6 tests on emailMode / shouldEmail / render / MIME
 │   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload

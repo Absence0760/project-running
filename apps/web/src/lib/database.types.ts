@@ -849,6 +849,24 @@ export type Database = {
         }
         Relationships: []
       }
+      lifecycle_email_log: {
+        Row: {
+          sent_at: string
+          template: string
+          user_id: string
+        }
+        Insert: {
+          sent_at?: string
+          template: string
+          user_id: string
+        }
+        Update: {
+          sent_at?: string
+          template?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       live_run_pings: {
         Row: {
           at: string

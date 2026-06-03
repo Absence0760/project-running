@@ -145,6 +145,17 @@ type NotificationRow struct {
 	EmailSentAt *string `json:"email_sent_at"`
 }
 
+// LifecycleEmailPayload is the payload for `kind='lifecycle_email'` jobs
+// (migration 20261202_001). Unlike notification_email, there's no
+// notifications row — the job names a template the worker renders for the
+// user. The first template is `welcome`, enqueued by the AFTER INSERT
+// trigger on user_profiles. Future scheduled mail (weekly digest,
+// re-engagement) reuses this kind with its own template + opt-in gate.
+type LifecycleEmailPayload struct {
+	UserID   string `json:"user_id"`
+	Template string `json:"template"`
+}
+
 // StravaActivity is the subset of Strava's `/api/v3/activities/{id}`
 // response the ingest path consumes. Mirrors the EF shape at
 // `apps/backend/supabase/functions/_shared/strava.ts` — keep these

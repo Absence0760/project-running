@@ -213,6 +213,30 @@ func notificationCopy(n NotificationRow, base string) (subject, line, path strin
 	}
 }
 
+// ─────────────────── lifecycle templates (pure) ───────────────────
+
+// renderLifecycleEmail renders a named lifecycle template. Returns ok=false
+// for an unknown template so the handler skips rather than sends a blank
+// email. Lifecycle mail is transactional/relationship — no List-Unsubscribe
+// header (it's not a subscription); the footer still points at preferences
+// for managing future email.
+func renderLifecycleEmail(template, baseURL string) (Email, bool) {
+	base := strings.TrimRight(baseURL, "/")
+	switch template {
+	case "welcome":
+		body := "Thanks for signing up — welcome to Threkir!\n\n" +
+			"You're all set to record your first run, build routes, and follow friends.\n\n" +
+			"Get started: " + base + "\n\n" +
+			"— The Threkir team\n\n" +
+			"—\n" +
+			"You're receiving this because you just created a Threkir account. " +
+			"Manage your email at " + base + "/settings/preferences\n"
+		return Email{Subject: "Welcome to Threkir", Body: body}, true
+	default:
+		return Email{}, false
+	}
+}
+
 func eventPath(base string, n NotificationRow) string {
 	if n.EventID != nil {
 		return base + "/events/" + *n.EventID
