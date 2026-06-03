@@ -2379,6 +2379,7 @@ export const messages = {
 	"authCallback.backToLogin": "ログインに戻る",
 	"authCallback.signingIn": "サインインしています...",
 	"clubsNewPage.documentTitle": "クラブを作成 — Threkir",
+	"routesHeatmapPage.documentTitle": "ヒートマップ — 近くのルート",
 	"clubsNewPage.backToClubs": "クラブに戻る",
 	"clubsNewPage.kicker": "新しいクラブ",
 	"clubsNewPage.heading": "クラブを作成",

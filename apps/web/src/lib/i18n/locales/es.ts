@@ -2383,6 +2383,7 @@ export const messages = {
 	"authCallback.backToLogin": "Volver al inicio de sesión",
 	"authCallback.signingIn": "Iniciando sesión...",
 	"clubsNewPage.documentTitle": "Crear un club — Threkir",
+	"routesHeatmapPage.documentTitle": "Mapa de calor — rutas cerca de ti",
 	"clubsNewPage.backToClubs": "Volver a los clubes",
 	"clubsNewPage.kicker": "Nuevo club",
 	"clubsNewPage.heading": "Crear un club",

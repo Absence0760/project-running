@@ -2391,6 +2391,7 @@ export const en = {
 	"authCallback.backToLogin": "Back to login",
 	"authCallback.signingIn": "Signing you in...",
 	"clubsNewPage.documentTitle": "Create a club — Threkir",
+	"routesHeatmapPage.documentTitle": "Heatmap — routes near you",
 	"clubsNewPage.backToClubs": "Back to clubs",
 	"clubsNewPage.kicker": "New club",
 	"clubsNewPage.heading": "Create a club",

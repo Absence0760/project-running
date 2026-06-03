@@ -18,10 +18,11 @@
 	/// in `/routes/+page.svelte` redirects there client-side so
 	/// pre-existing deep links keep functioning.
 	import RouteHeatmap from '$lib/components/RouteHeatmap.svelte';
+	import { m } from '$lib/i18n/store.svelte';
 </script>
 
 <svelte:head>
-	<title>Heatmap — routes near you</title>
+	<title>{m('routesHeatmapPage.documentTitle')}</title>
 </svelte:head>
 
 <div class="heatmap-root">
