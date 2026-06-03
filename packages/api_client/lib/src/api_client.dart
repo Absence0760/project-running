@@ -452,6 +452,7 @@ class ApiClient {
     final row = RunRow(
       id: run.id,
       userId: userId,
+      kind: 'run',
       startedAt: run.startedAt.toUtc(),
       durationS: run.duration.inSeconds,
       distanceM: run.distanceMetres,
@@ -564,6 +565,7 @@ class ApiClient {
       return RunRow(
         id: r.id,
         userId: userId,
+        kind: 'run',
         // Same UTC-normalisation as saveRun — see comment there.
         startedAt: r.startedAt.toUtc(),
         durationS: r.duration.inSeconds,
@@ -3882,4 +3884,228 @@ class ApiClient {
         .delete()
         .eq('run_id', runId);
   }
+
+  // ─────────────────── Gym (Phase 4 multi-modal, decisions §63) ───────────────────
+
+  /// Recent gym workouts for the signed-in user, newest first.
+  Future<List<GymWorkoutRow>> fetchGymWorkouts({int limit = 50}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return [];
+    final data = await _client
+        .from(GymWorkoutRow.table)
+        .select()
+        .eq(GymWorkoutRow.colUserId, uid)
+        .order(GymWorkoutRow.colStartedAt, ascending: false)
+        .limit(limit);
+    return (data as List)
+        .map((r) => GymWorkoutRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// A workout plus its sets in `set_index` order. Null when the row is
+  /// missing or RLS hides it.
+  Future<({GymWorkoutRow workout, List<GymSetRow> sets})?> fetchGymWorkoutWithSets(
+      String id) async {
+    final w = await _client
+        .from(GymWorkoutRow.table)
+        .select()
+        .eq(GymWorkoutRow.colId, id)
+        .maybeSingle();
+    if (w == null) return null;
+    final s = await _client
+        .from(GymSetRow.table)
+        .select()
+        .eq(GymSetRow.colWorkoutId, id)
+        .order(GymSetRow.colSetIndex, ascending: true);
+    return (
+      workout: GymWorkoutRow.fromJson(w),
+      sets: (s as List)
+          .map((r) => GymSetRow.fromJson(r as Map<String, dynamic>))
+          .toList(),
+    );
+  }
+
+  /// Insert a workout + its sets. The caller may mint [id] (offline-create
+  /// path) — `gym_workouts.id` defaults to gen_random_uuid() but accepts a
+  /// client value, so the local id IS the server id (no reconciliation),
+  /// matching the LocalGearStore pattern (decisions §73).
+  Future<GymWorkoutRow> createGymWorkout({
+    String? id,
+    String? title,
+    required DateTime startedAt,
+    int? durationS,
+    String? notes,
+    bool isPublic = false,
+    String? externalId,
+    DateTime? lastModifiedAt,
+    List<GymSetInput> sets = const [],
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(GymWorkoutRow.table)
+        .insert({
+          if (id != null) GymWorkoutRow.colId: id,
+          GymWorkoutRow.colUserId: uid,
+          GymWorkoutRow.colTitle: title,
+          GymWorkoutRow.colStartedAt: startedAt.toIso8601String(),
+          GymWorkoutRow.colDurationS: durationS,
+          GymWorkoutRow.colNotes: notes,
+          GymWorkoutRow.colIsPublic: isPublic,
+          GymWorkoutRow.colExternalId: externalId,
+          if (lastModifiedAt != null)
+            GymWorkoutRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
+        })
+        .select()
+        .single();
+    final workout = GymWorkoutRow.fromJson(row);
+    if (sets.isNotEmpty) await _replaceGymSets(workout.id, sets);
+    return workout;
+  }
+
+  /// Replace a workout's sets wholesale (delete + re-insert in order). The
+  /// composer always edits the full set list, so a replace is simpler and
+  /// less bug-prone than diffing individual rows.
+  Future<void> _replaceGymSets(String workoutId, List<GymSetInput> sets) async {
+    await _client.from(GymSetRow.table).delete().eq(GymSetRow.colWorkoutId, workoutId);
+    if (sets.isEmpty) return;
+    await _client.from(GymSetRow.table).insert([
+      for (var i = 0; i < sets.length; i++)
+        {
+          GymSetRow.colWorkoutId: workoutId,
+          GymSetRow.colSetIndex: i,
+          GymSetRow.colExerciseName: sets[i].exerciseName,
+          GymSetRow.colReps: sets[i].reps,
+          GymSetRow.colWeightKg: sets[i].weightKg,
+          GymSetRow.colRpe: sets[i].rpe,
+        },
+    ]);
+  }
+
+  /// Patch a workout's metadata; pass [sets] to replace the set list too.
+  /// Stamps `last_modified_at` (client-controlled, for newer-wins sync).
+  Future<void> updateGymWorkout(
+    String id, {
+    String? title,
+    int? durationS,
+    String? notes,
+    bool? isPublic,
+    DateTime? lastModifiedAt,
+    List<GymSetInput>? sets,
+  }) async {
+    final patch = <String, dynamic>{
+      GymWorkoutRow.colLastModifiedAt:
+          (lastModifiedAt ?? DateTime.now().toUtc()).toIso8601String(),
+    };
+    if (title != null) patch[GymWorkoutRow.colTitle] = title;
+    if (durationS != null) patch[GymWorkoutRow.colDurationS] = durationS;
+    if (notes != null) patch[GymWorkoutRow.colNotes] = notes;
+    if (isPublic != null) patch[GymWorkoutRow.colIsPublic] = isPublic;
+    await _client.from(GymWorkoutRow.table).update(patch).eq(GymWorkoutRow.colId, id);
+    if (sets != null) await _replaceGymSets(id, sets);
+  }
+
+  /// Delete a workout. `gym_sets` cascade via the FK.
+  Future<void> deleteGymWorkout(String id) async {
+    await _client.from(GymWorkoutRow.table).delete().eq(GymWorkoutRow.colId, id);
+  }
+
+  // ─────────────────── Nutrition / food log (Phase 4) ───────────────────
+
+  /// Food entries in the half-open day range [from, to), newest first.
+  Future<List<FoodLogRow>> fetchFoodLog({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return [];
+    final data = await _client
+        .from(FoodLogRow.table)
+        .select()
+        .eq(FoodLogRow.colUserId, uid)
+        .gte(FoodLogRow.colLoggedAt, from.toIso8601String())
+        .lt(FoodLogRow.colLoggedAt, to.toIso8601String())
+        .order(FoodLogRow.colLoggedAt, ascending: false);
+    return (data as List)
+        .map((r) => FoodLogRow.fromJson(r as Map<String, dynamic>))
+        .toList();
+  }
+
+  /// Log one food item. Client may mint [id] (offline-create), same id
+  /// semantics as [createGymWorkout].
+  Future<FoodLogRow> logFood({
+    String? id,
+    required DateTime loggedAt,
+    required String itemName,
+    String? mealSlot,
+    double? calories,
+    double? proteinG,
+    double? carbsG,
+    double? fatG,
+    bool isPublic = false,
+    String? externalId,
+    DateTime? lastModifiedAt,
+  }) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw Exception('Not authenticated');
+    final row = await _client
+        .from(FoodLogRow.table)
+        .insert({
+          if (id != null) FoodLogRow.colId: id,
+          FoodLogRow.colUserId: uid,
+          FoodLogRow.colLoggedAt: loggedAt.toIso8601String(),
+          FoodLogRow.colItemName: itemName,
+          FoodLogRow.colMealSlot: mealSlot,
+          FoodLogRow.colCalories: calories,
+          FoodLogRow.colProteinG: proteinG,
+          FoodLogRow.colCarbsG: carbsG,
+          FoodLogRow.colFatG: fatG,
+          FoodLogRow.colIsPublic: isPublic,
+          FoodLogRow.colExternalId: externalId,
+          if (lastModifiedAt != null)
+            FoodLogRow.colLastModifiedAt: lastModifiedAt.toIso8601String(),
+        })
+        .select()
+        .single();
+    return FoodLogRow.fromJson(row);
+  }
+
+  /// Patch a food entry. Stamps `last_modified_at` for newer-wins sync.
+  Future<void> updateFoodLog(
+    String id, {
+    String? itemName,
+    String? mealSlot,
+    double? calories,
+    double? proteinG,
+    double? carbsG,
+    double? fatG,
+    bool? isPublic,
+    DateTime? lastModifiedAt,
+  }) async {
+    final patch = <String, dynamic>{
+      FoodLogRow.colLastModifiedAt:
+          (lastModifiedAt ?? DateTime.now().toUtc()).toIso8601String(),
+    };
+    if (itemName != null) patch[FoodLogRow.colItemName] = itemName;
+    if (mealSlot != null) patch[FoodLogRow.colMealSlot] = mealSlot;
+    if (calories != null) patch[FoodLogRow.colCalories] = calories;
+    if (proteinG != null) patch[FoodLogRow.colProteinG] = proteinG;
+    if (carbsG != null) patch[FoodLogRow.colCarbsG] = carbsG;
+    if (fatG != null) patch[FoodLogRow.colFatG] = fatG;
+    if (isPublic != null) patch[FoodLogRow.colIsPublic] = isPublic;
+    await _client.from(FoodLogRow.table).update(patch).eq(FoodLogRow.colId, id);
+  }
+
+  Future<void> deleteFoodLog(String id) async {
+    await _client.from(FoodLogRow.table).delete().eq(FoodLogRow.colId, id);
+  }
 }
+
+/// One set in a [ApiClient.createGymWorkout] / `updateGymWorkout` call,
+/// before it has a server id or set_index (those are assigned on insert).
+typedef GymSetInput = ({
+  String exerciseName,
+  int? reps,
+  double? weightKg,
+  double? rpe,
+});
