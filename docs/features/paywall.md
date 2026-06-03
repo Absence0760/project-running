@@ -92,6 +92,19 @@ behaviour changes inside the surfaces. The `priority_processing` and
 they don't call through `isLocked()`. Add a key to
 `PRO_ONLY_FEATURES` to gate a new screen behind Pro.
 
+**No feature or analytic is locked behind Pro.** Net effect of the
+above: a free user reaches every screen and gets the full feature set —
+training plans, VDOT / VO₂ max, training-load curves, recovery advice,
+race predictor, segments, social, backup, etc. — all computed
+client-side for free. The Pro tier only buys a *higher* AI-coach daily
+cap, a wider coach context/response budget, and front-of-queue
+map-matching. (The `apps/job_worker/internal/premium/*` Go endpoints
+return `402 pro_required` for non-Pro, but **no client calls them** —
+the same analytics run client-side for free, so that gate is dormant
+server scaffolding, not a live paywall. If a client is ever wired to
+those endpoints, this is the one place a real analytics paywall would
+appear; revisit the "everything is free" claim then.)
+
 ## Client-side `isPro()` helper
 
 `apps/web/src/lib/settings/features.ts` exports `isPro()` — reads the auth

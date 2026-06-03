@@ -65,14 +65,13 @@ The Android app already covers a surprising amount of ground for an in-developme
 
 ### What's deliberately not in the app yet (and why)
 
-Most of what this section used to gate has shipped — OAuth (Google + Apple sign-in), Strava live OAuth + webhook sync, parkrun athlete-number import, BLE chest-strap HR, persistent disk tile cache, premium training endpoints + the matching UI (training plans, VDOT / VO₂ max, training load, recovery advice), live spectator (Supabase Realtime path), segments + leaderboards (v1 + v2 tiered with KOM/QOM crowns), follows + kudos + comments + notifications inbox, clubs + events + posts, gear tracking, photos on runs, web heatmap v1. Today's genuinely deferred items, sourced from the `[ ]` rows in [roadmap.md](roadmap.md) Phase 3 + the unphased competitor-parity backlog:
+Most of what this section used to gate has shipped — OAuth (Google + Apple sign-in), Strava live OAuth + webhook sync, parkrun athlete-number import, BLE chest-strap HR, persistent disk tile cache, premium training endpoints + the matching UI (training plans, VDOT / VO₂ max, training load, recovery advice), the **live structured-workout execution loop** (Android — band overlay + planned-vs-actual review, see [workout_execution.md](../features/workout_execution.md)), **audio-coached / guided runs** (web preview library + mobile TTS execution), live spectator (Supabase Realtime path), segments + leaderboards (v1 + v2 tiered with KOM/QOM crowns), follows + kudos + comments + notifications inbox, clubs + events + posts, gear tracking, photos on runs, web heatmap v1. Today's genuinely deferred items, sourced from the `[ ]` rows in [roadmap.md](roadmap.md) Phase 3 + the unphased competitor-parity backlog:
 
-- **Live workout-execution loop** — specced in [workout_execution.md](../features/workout_execution.md), ~4 dev-days, zero new schema. Lights up the structured-workout band overlay on the run screen and the post-run planned-vs-actual review. Plan + workout *data* is shipped; live execution against it isn't.
+- **Training-plan re-planning around missed sessions** — the generator emits a static plan and the adherence layer (`plan_adherence.ts`) now *detects* drift + a missed long run, but the plan doesn't auto-adjust. This is the last real training-engine gap and Runna's headline feature.
 - **Push notifications (FCM / APNs)** — `device_tokens` table is shipped; the sender + client-side token registration are blocked on user-supplied Firebase / APNs credentials.
 - **Garmin Connect OAuth** — hard-blocked on the multi-day Garmin Developer Program application.
 - **Live spectator transport upgrade** — the Realtime fallback is live and shipping; the Go WebSocket hub at `apps/job_worker/internal/livehub/` is code-complete and awaits a Fly deploy.
 - **Offline tile packs + turn-by-turn voice nav** — partial. Per-route "Save for offline" pin shipped (decisions.md § 64) — flags individual routes to keep on the phone — and the disk-backed tile cache is shipped for normal browsing. **Still pending:** pre-downloading a region's raster tiles before a no-signal trail run, plus turn-by-turn voice cues against a loaded route. The pin reserves the route data side; tile packs + cues are the remaining work.
-- **Audio-coached / guided runs** — NRC-style curated coached workouts (separate from the existing TTS audio-cue layer).
 - **Race calendar + results** — needs a RunSignUp API key; otherwise patterned after the existing parkrun import.
 - **Phase 4: gym + nutrition modules** — see the [multi-modal section below](#multi-modal-competitive-landscape-phase-4--run--lift--meal) and [roadmap.md § Phase 4](roadmap.md#phase-4--multi-modal-gym--nutrition).
 
@@ -316,9 +315,9 @@ Same legend as above. The **This app** column notes the platform(s) each feature
 | Health Connect sync | ✓ | ✓ | ✓ | — | — | — | Partial | Partial |
 | **Training & coaching** | | | | | | | | |
 | Adaptive training plans | ✓ (web, Android) | Paywalled | ✓ | — | — | — | **Native** | ✓ Free (EvoLab) |
-| Live structured workout execution | Phase 3 (pending) | Paywalled | ✓ | — | — | — | **Native** | ✓ (on-watch) |
-| Coached running (curated audio workouts) | Backlog | — | Training plans | **Native** | — | — | ✓ | — |
-| Audio-coached / guided runs | Backlog | — | — | **Native** | — | — | Partial | — |
+| Live structured workout execution | ✓ (Android — band overlay + planned-vs-actual) | Paywalled | ✓ | — | — | — | **Native** | ✓ (on-watch) |
+| Coached running (curated audio workouts) | ✓ (web preview + mobile TTS) | — | Training plans | **Native** | — | — | ✓ | — |
+| Audio-coached / guided runs | ✓ (web preview + mobile TTS) | — | — | **Native** | — | — | Partial | — |
 | VDOT + training load + recovery analytics | ✓ (web, Android) | ✓ (premium) | ✓ | — | — | — | ✓ | ✓ Free (EvoLab) |
 | Coach ↔ athlete roster + run review | ✓ (web — roster + plan-compliance review) | — | — | — | — | — | — | ✓ (Training Hub — teams + plan-building) |
 | **Social & community** | | | | | | | | |
