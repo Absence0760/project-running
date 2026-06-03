@@ -761,7 +761,7 @@ To read or write tokens, call the SECURITY DEFINER helpers:
 
 #### `jobs`
 
-Generic Postgres-backed job queue. First tenant is map matching (`kind = 'map_match'`) but the same table will host the strava-webhook / token-refresh / data-export workers when those move off Edge Functions per `roadmap.md §214`.
+Generic Postgres-backed job queue. First tenant was map matching (`kind = 'map_match'`); it now also hosts the Strava webhook ingest (`kind = 'strava_event'`) and hourly token rotation (`kind = 'token_refresh'`) that moved off Edge Functions (see `roadmap.md` Phase 2 backend bullets). Data export moved to the Go worker too but as a synchronous HTTP endpoint (`POST /v1/export`), not a job kind, since the user blocks on a signed URL.
 
 ```sql
 create table jobs (

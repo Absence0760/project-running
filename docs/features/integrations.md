@@ -110,7 +110,7 @@ All activities the user has recorded on Strava — including those synced from G
 
 ### Auth flow (web, shipped)
 
-Strava uses standard OAuth 2.0. Access tokens expire every 6 hours; refresh tokens are long-lived. The scheduled `refresh-tokens` Edge Function rotates them hourly; `strava-import` also does an on-demand refresh when a `sync` action finds the stored token inside its expiry window.
+Strava uses standard OAuth 2.0. Access tokens expire every 6 hours; refresh tokens are long-lived. Hourly token rotation has migrated to the Go worker (`kind='token_refresh'` in `apps/job_worker/internal/handler_token_refresh.go`, enqueued by the pg_cron schedule in migration `20260821_001_token_refresh_cron.sql`); the scheduled `refresh-tokens` Edge Function stays deployed as a rollback path until the operator cutover completes. `strava-import` (still an Edge Function) also does an on-demand refresh when a `sync` action finds the stored token inside its expiry window.
 
 ```
 1. User clicks "Connect" next to Strava on /settings/integrations
@@ -163,7 +163,7 @@ Operational pre-requisites:
 
 Register once per app (not per user). Strava pushes a notification within seconds of a user creating, updating, or deleting an activity.
 
-The real implementation lives in `apps/backend/supabase/functions/strava-webhook/index.ts` and shares its ingest path with the OAuth backfill via `apps/backend/supabase/functions/_shared/strava.ts`. Sketch of the actual flow (read the source for the full version — auth, retries, refresh, sport-type filtering):
+Webhook handling has migrated to the Go worker: `apps/job_worker/internal/stravahook/server.go` (POST `/v1/strava/webhook`) validates the URL secret + verify-token + freshness, dedupes via `webhook_events`, and enqueues a `kind='strava_event'` job that the worker drains asynchronously (`internal/handler_strava_event.go`) — matching Strava's "ack within 2s" requirement, which the old synchronous Edge Function regularly missed on a cold activity-detail fetch. The deprecated Edge Function `apps/backend/supabase/functions/strava-webhook/index.ts` stays deployed as a rollback path until the operator repoints Strava's `push_subscriptions` URL. Both paths share the ingest helpers in `apps/backend/supabase/functions/_shared/strava.ts` / the Go equivalents and the `webhook_events` dedupe table. Sketch of the (Edge Function) flow — auth, retries, refresh, sport-type filtering elided; read the source for the full version:
 
 ```typescript
 // 1. URL-secret guard (Strava doesn't sign POSTs)
