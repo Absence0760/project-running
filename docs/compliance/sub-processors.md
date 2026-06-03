@@ -43,7 +43,7 @@ Each row above is itself a top-level provider. Their sub-processors (e.g. AWS fo
 
 GDPR Art 28(2): we must notify users of "any intended changes concerning the addition or replacement of sub-processors". Mechanism we commit to in the Privacy Policy:
 
-- TODO: pick one — email notice to registered users 30 days before activation, OR a public sub-processor changelog with email opt-in. The latter is the modern default; users who care subscribe.
+- Committed mechanism (matches the Privacy Policy §4): an **in-app notice** shown to registered users **at least 30 days before** a new sub-processor goes live. Users who object may withdraw consent and delete their account. (Earlier drafts floated a public changelog; that was dropped because there is no public web surface to host it, and an in-app notice reaches every active user directly.)
 
 ## Cross-border transfer mechanisms
 

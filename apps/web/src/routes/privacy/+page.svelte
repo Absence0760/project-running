@@ -86,12 +86,7 @@
 	<h2>4. Who we share with (sub-processors)</h2>
 	<p>
 		Our service relies on a small set of vetted sub-processors. The current list and what data
-		each receives is documented in the project repository at
-		<a
-			href="https://github.com/Absence0760/project-running/blob/main/docs/compliance/sub-processors.md"
-			target="_blank"
-			rel="noopener noreferrer">docs/compliance/sub-processors.md</a
-		>. Headline relationships:
+		each receives:
 	</p>
 	<ul>
 		<li><strong>Supabase</strong> — database, authentication, file storage.</li>
@@ -104,27 +99,26 @@
 		<li><strong>Strava / parkrun / Garmin Connect / Health Connect / HealthKit</strong> — only when you connect them.</li>
 	</ul>
 	<p>
-		We notify you of new sub-processors via in-app banner and the public
-		<a
-			href="https://github.com/Absence0760/project-running/blob/main/docs/compliance/sub-processor-changelog.md"
-			target="_blank"
-			rel="noopener noreferrer">sub-processor changelog</a
-		>
-		at least 30 days before they go live. You may withdraw consent and delete your account if you
-		object.
+		Our server-side error monitoring (Sentry) captures crash and exception reports from our
+		Edge Functions. Because it runs on the server it cannot consult your in-app telemetry
+		choice, so it operates on a <strong>legitimate-interest</strong> basis (Art 6(1)(f)) with
+		data minimisation: it sends no default personal identifiers and strips request bodies and
+		headers before transmission. Client-side error monitoring remains gated on your telemetry
+		consent.
+	</p>
+	<p>
+		We notify you of new sub-processors via an in-app notice at least 30 days before they go
+		live. You may withdraw consent and delete your account if you object.
 	</p>
 
 	<h2>5. International transfers</h2>
 	<p>
 		Several sub-processors are based in the United States. We rely on the <strong>EU-US Data
 		Privacy Framework</strong> certifications where available, plus the European Commission's
-		<strong>Standard Contractual Clauses</strong> (2021) for everything else. The DPA for each
-		provider is linked from
-		<a
-			href="https://github.com/Absence0760/project-running/blob/main/docs/compliance/sub-processors.md"
-			target="_blank"
-			rel="noopener noreferrer">docs/compliance/sub-processors.md</a
-		>.
+		<strong>Standard Contractual Clauses</strong> (2021) for everything else. The data-processing
+		agreement for each provider is held on file; email <a href="mailto:privacy@threkir.com"
+			>privacy@threkir.com</a
+		> to request the details for a specific sub-processor.
 	</p>
 
 	<h2>6. How long we keep it</h2>
@@ -144,12 +138,8 @@
 		<li><strong>Backups</strong>: a deleted account may persist in encrypted point-in-time-recovery backups for up to 28 days before they roll off.</li>
 	</ul>
 	<p>
-		Full table at
-		<a
-			href="https://github.com/Absence0760/project-running/blob/main/docs/compliance/retention.md"
-			target="_blank"
-			rel="noopener noreferrer">docs/compliance/retention.md</a
-		>.
+		The categories above are our retention schedule. Where a period is not listed, we keep the
+		data only as long as needed for the purpose it was collected, then delete or anonymise it.
 	</p>
 
 	<h2>7. Your rights</h2>
