@@ -89,21 +89,9 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      # See e2e-web for the slow-ghcr.io retry rationale.
+      # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
-        working-directory: apps/backend
-        run: |
-          for attempt in 1 2; do
-            if timeout 480 supabase start; then
-              break
-            fi
-            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
-            supabase stop --no-backup || true
-            if [ "$attempt" = "2" ]; then
-              echo "::error::supabase start failed twice"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/start-supabase
       - run: npm run gen:types:check --workspace=apps/backend
       - if: failure()
         run: |
@@ -324,21 +312,9 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      # See e2e-web for the slow-ghcr.io retry rationale.
+      # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
-        working-directory: apps/backend
-        run: |
-          for attempt in 1 2; do
-            if timeout 480 supabase start; then
-              break
-            fi
-            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
-            supabase stop --no-backup || true
-            if [ "$attempt" = "2" ]; then
-              echo "::error::supabase start failed twice"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/start-supabase
       - name: Regenerate Dart + Kotlin row classes
         run: dart run scripts/gen_dart_models.dart
       - name: Fail if committed outputs drifted
@@ -367,21 +343,9 @@ jobs:
       # priority wire-level ApiClient methods (signIn / getRuns /
       # saveRun + fetchTrack roundtrip — which transitively
       # covers _uploadTrack).
-      # See e2e-web for the slow-ghcr.io retry rationale.
+      # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
-        working-directory: apps/backend
-        run: |
-          for attempt in 1 2; do
-            if timeout 480 supabase start; then
-              break
-            fi
-            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
-            supabase stop --no-backup || true
-            if [ "$attempt" = "2" ]; then
-              echo "::error::supabase start failed twice"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/start-supabase
       # No `supabase db reset` here — see the e2e-web "Verify the seed
       # loaded" step for why reset's mid-flight storage restart + health
       # poll is a chronic flake. `supabase start` (above) already
@@ -440,21 +404,9 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      # See e2e-web for the slow-ghcr.io retry rationale.
+      # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
-        working-directory: apps/backend
-        run: |
-          for attempt in 1 2; do
-            if timeout 480 supabase start; then
-              break
-            fi
-            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
-            supabase stop --no-backup || true
-            if [ "$attempt" = "2" ]; then
-              echo "::error::supabase start failed twice"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/start-supabase
       # Auto-started edge-runtime container has no env vars beyond the
       # Supabase defaults — every secret-gated function 503s. Stop it
       # and run `functions serve` with `--env-file` so the rejection
@@ -549,21 +501,9 @@ jobs:
       - uses: supabase/setup-cli@3c2f5e2ae34c34e428e8e206e2c4d21fa2d20fbf # v2.1.1
         with:
           version: 2.84.2
-      # See e2e-web for the slow-ghcr.io retry rationale.
+      # Retry + port-cleanup rationale lives in the composite action.
       - name: Start local Supabase stack
-        working-directory: apps/backend
-        run: |
-          for attempt in 1 2; do
-            if timeout 480 supabase start; then
-              break
-            fi
-            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
-            supabase stop --no-backup || true
-            if [ "$attempt" = "2" ]; then
-              echo "::error::supabase start failed twice"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/start-supabase
       - name: Run pgtap RLS suite
         working-directory: apps/backend
         run: supabase test db --local
@@ -625,26 +565,10 @@ jobs:
       # e2e suite depends on the seeded users, which are therefore in
       # place once start returns — the "Verify the seed loaded" step
       # below just asserts that, it does not re-seed.
-      #
-      # Per-attempt timeout + retry guards against transient slow
-      # ghcr.io image pulls (CI run 26490131303 edge-functions: a
-      # single 353MB image trickled at ~50KB/s and hung the job for
-      # the full 20-min budget). Normal cold boot is ~2 min, so 480s
-      # is ~4x headroom; the second attempt resumes from layer cache.
+      # The per-attempt timeout + port-clean retry lives in the
+      # composite action.
       - name: Start local Supabase stack
-        working-directory: apps/backend
-        run: |
-          for attempt in 1 2; do
-            if timeout 480 supabase start; then
-              break
-            fi
-            echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
-            supabase stop --no-backup || true
-            if [ "$attempt" = "2" ]; then
-              echo "::error::supabase start failed twice"
-              exit 1
-            fi
-          done
+        uses: ./.github/actions/start-supabase
       # `supabase start` returns before every sidecar is ready to
       # serve requests. On a slow runner the auto-started edge-runtime
       # can still be cold when the first delete-account-guards fetch

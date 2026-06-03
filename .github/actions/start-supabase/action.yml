@@ -1,0 +1,108 @@
+name: Start local Supabase stack
+description: >
+  Boot the local Supabase stack (applies migrations + seed.sql on the
+  pinned 2.84.2 CLI) with a port-clean retry.
+
+  Why a composite action rather than six inline copies: the start step
+  is duplicated across every stack-using job (parity-types, schema
+  drift, api-client, edge-functions, pgtap, e2e-web). It was drifting as
+  byte-identical copies; one source of truth keeps the retry logic — and
+  the incident comments below — from diverging.
+
+  Two failure modes are handled:
+
+  1. Slow ghcr.io image pulls. A single 353MB image once trickled at
+     ~50KB/s and hung edge-functions for the full 20-min budget (CI run
+     26490131303). Normal cold boot is ~2 min, so the 480s per-attempt
+     timeout is ~4x headroom; the second attempt resumes from layer
+     cache.
+
+  2. Port not freed on a partial start. When `supabase start` partly
+     comes up and rolls back ("Starting database... / Stopping
+     containers..."), it can orphan the db container or its docker-proxy
+     still holding host port 54322 — and `supabase stop` does NOT free
+     it (supabase/cli#3265). The previous retry ran only `supabase stop`
+     between attempts, so attempt 2 re-hit the IDENTICAL
+     "failed to bind host port for 0.0.0.0:54322: address already in
+     use" and the job died (CI run 26860851075, e2e shard 7). The fix:
+     the retry force-removes any container still publishing our host
+     ports, then GATES on the ports actually being free before
+     re-running. If cleanup can't free them, it fails loudly with the
+     holder dumped instead of letting `supabase start` emit its cryptic
+     bind error a second time.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      working-directory: apps/backend
+      run: |
+        set -uo pipefail
+
+        # Host ports config.toml publishes: api 54321, db 54322,
+        # studio 54323, mailpit 54324; the CLI also publishes analytics
+        # on 54327. 54322 is the one that actually collides, but a
+        # partial start can strand any of them, so clear them all.
+        PORTS="54321 54322 54323 54324 54327"
+
+        busy_ports() {
+          # Column 4 of `ss -ltn` is the local address (e.g. 0.0.0.0:54322,
+          # [::]:54322, *:54322). Anchor on a leading : or . so 54322
+          # never matches a substring of some unrelated high port.
+          local listening busy=""
+          listening=$(ss -ltnH 2>/dev/null | awk '{print $4}')
+          for p in $PORTS; do
+            if printf '%s\n' "$listening" | grep -qE "[:.]${p}\$"; then
+              busy="$busy $p"
+            fi
+          done
+          printf '%s' "$busy"
+        }
+
+        free_ports() {
+          # supabase stop is project-aware but does not reliably release
+          # the host port a partial start orphaned (supabase/cli#3265),
+          # so follow it with a force-remove of any supabase container or
+          # anything still publishing one of our ports.
+          supabase stop --no-backup >/dev/null 2>&1 || true
+          local cids
+          cids=$(docker ps -aq --filter "name=supabase_" 2>/dev/null || true)
+          for p in $PORTS; do
+            cids="$cids $(docker ps -aq --filter "publish=$p" 2>/dev/null || true)"
+          done
+          cids=$(printf '%s' "$cids" | tr ' ' '\n' | grep -v '^$' | sort -u || true)
+          if [ -n "$cids" ]; then
+            echo "force-removing leftover container(s) holding stack ports:"
+            docker rm -f $cids >/dev/null 2>&1 || true
+          fi
+        }
+
+        for attempt in 1 2; do
+          # Gate on the real precondition — free ports — before each
+          # attempt. On attempt 1 of a fresh runner this is a no-op; on
+          # attempt 2 it proves the post-failure cleanup actually worked.
+          busy=$(busy_ports)
+          if [ -n "$busy" ]; then
+            echo "::warning::stack ports in use before attempt $attempt:$busy"
+            docker ps --format '{{.Names}} {{.Ports}}' || true
+            free_ports
+            busy=$(busy_ports)
+            if [ -n "$busy" ]; then
+              echo "::error::stack ports still in use after cleanup:$busy"
+              ss -ltnp 2>/dev/null | grep -E '5432[0-9]' || true
+              exit 1
+            fi
+          fi
+
+          if timeout 480 supabase start; then
+            exit 0
+          fi
+
+          echo "::warning::supabase start attempt $attempt failed/timed out; cleaning up"
+          free_ports
+
+          if [ "$attempt" = "2" ]; then
+            echo "::error::supabase start failed twice"
+            docker ps -a --format '{{.Names}} {{.Status}} {{.Ports}}' || true
+            exit 1
+          fi
+        done
