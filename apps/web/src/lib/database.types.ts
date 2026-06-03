@@ -2631,6 +2631,17 @@ export type Database = {
       }
       enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
+      find_failed_jobs: {
+        Args: { p_failed_within?: string }
+        Returns: {
+          age: string
+          attempts: number
+          finished_at: string
+          id: number
+          kind: string
+          last_error: string
+        }[]
+      }
       find_stuck_jobs: {
         Args: { p_stuck_after?: string }
         Returns: {
@@ -2717,6 +2728,7 @@ export type Database = {
         Args: { p_user_id: string }
         Returns: string
       }
+      jobs_failed_summary: { Args: { p_failed_within?: string }; Returns: Json }
       jobs_stuck_summary: { Args: { p_stuck_after?: string }; Returns: Json }
       join_club_by_token: { Args: { token: string }; Returns: string }
       latest_fitness_snapshot: {

@@ -2647,6 +2647,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 118. Async-job failures are made observable two ways — exhausted retries terminate in `failed`, and a pg_cron alert watches the `failed` surface
+
+**Decided (2026-06-03):** with the Strava webhook moved off the synchronous `strava-webhook` Edge Function onto the Go worker's async `kind='strava_event'` pipeline, ingest failures no longer surface as a non-200 that makes Strava retry — the worker acks 200, enqueues, and drains later. To keep failures from going silent, migration `20261201_001_jobs_failed_alert.sql` closes two gaps: (1) `defer_job` now lands an exhausted-retry job (`attempts >= max_attempts`) in `status='failed'` instead of re-queuing it, and (2) a `jobs-failed-alert` pg_cron entry runs `jobs_failed_summary()` every 10 min, emitting `{failed_count, by_kind, sample}` into `cron.job_run_details` for a future Sentry/Slack scraper to route on `failed_count > 0`.
+
+**Why both.** There were two distinct silent-failure classes. Permanent failures (`finish_job(failed)`) already landed in `status='failed'` but nothing watched the table — the alert fixes that. Exhausted transients were worse: `defer_job` re-queued them, but `claim_next_job` only claims `attempts < max_attempts`, so once the budget was spent the row sat in `queued` **forever**, un-claimable, never reaching `failed`, invisible to both `find_stuck_jobs` (running-only) and any queue-lag count (can't tell an exhausted job from a fresh one). Flipping exhausted retries to `failed` routes them into the same surface the alert watches.
+
+**Why fail inside `defer_job` and not via a reaper.** Unlike `find_stuck_jobs` (§ the 20260731 stuck-alert), which deliberately does *not* auto-fail rows because an external observer could race a worker about to call `finish_job` on the same row, flipping to `failed` inside `defer_job` is race-free: it's the worker that holds the job (claimed `for update skip locked`, `locked_by` = itself) choosing a terminal state for the attempt it just ran, on the exact code path that would otherwise re-queue. No second actor, no race.
+
+**Trade-off / when not to re-litigate.** `find_failed_jobs` is windowed (default 15 min) because `failed` rows are never purged — an unbounded query would alert forever on old failures; the window is the "what failed since I last looked" lens, sized to overlap the 10-min cron cadence. The cron only *records* the count in `cron.job_run_details`; wiring an actual pager (Sentry/Slack) is still operator work, same as the queue-lag alert. **Don't** retire the synchronous `strava-webhook` Edge Function rollback path until that scraper is live, **don't** add a reaper that auto-fails `running` rows (that's the race `find_stuck_jobs` avoids), and **don't** widen the failure window without remembering it counts un-purged history.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

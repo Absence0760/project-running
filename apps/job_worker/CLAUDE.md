@@ -177,7 +177,11 @@ The worker reports back to the queue on every job:
 - **success** → `finish_job(done, nil)`
 - **transient** (5xx, dial timeout, connection refused, deadline) →
   `defer_job(delay_seconds, msg)`. `attempts` is *not* decremented;
-  the per-job `max_attempts` ceiling still applies.
+  the per-job `max_attempts` ceiling still applies. Once the budget is
+  spent, `defer_job` lands the row in `status='failed'` (not back in
+  `queued`, where `claim_next_job`'s `attempts < max_attempts` gate
+  would strand it un-claimable and invisible) so the `jobs-failed-alert`
+  cron sees it — migration `20261201_001_jobs_failed_alert.sql`.
 - **permanent** (4xx, malformed payload, missing run, RLS denial) →
   `finish_job(failed, msg)`.
 

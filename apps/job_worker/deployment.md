@@ -201,6 +201,7 @@ Once the `release-worker.yml` workflow lands (see § CI wiring below), tagging `
 | Worker logs | `flyctl logs --app job_worker` |
 | Per-machine metrics (CPU, RAM, restarts) | Fly.io dashboard → Metrics |
 | Queue lag | Custom: `select count(*) from jobs where status='queued' and scheduled_at <= now()` — wire to a Better Stack heartbeat that PG-queries every minute and alerts if >50 |
+| Failed jobs | A `jobs-failed-alert` pg_cron entry runs `jobs_failed_summary()` every 10 min (migration `20261201_001_jobs_failed_alert.sql`); its `{failed_count, by_kind, sample}` JSON lands in `cron.job_run_details.return_message`. **This is the safety net the async webhook needs** — a `strava_event` job that fails after the 200 ack surfaces here instead of vanishing. Route a Sentry/Slack scraper on `failed_count > 0`. Note `defer_job` now flips an exhausted-retry job to `status='failed'` so it shows up here rather than stalling un-claimable in `queued`. |
 | Worker liveness | Heartbeat: have the worker `update jobs set scheduled_at = ... where ...` once per claim; alert if no claim observed in >10 min while queued > 0 |
 | Hub liveness | The `/health` HTTP check above also covers the hub — both concerns share the binary, so a hub crash trips the same probe |
 | Hub fan-out / drop counts | Logged on each push (room subscriber count, drops from zone clip). No metrics endpoint yet — `flyctl logs` + a `jq`-friendly filter is the path until Prometheus lands |
@@ -554,6 +555,7 @@ The trigger queues fresh `map_match` jobs. The worker drains them at its claim r
 - [ ] Single machine deployed; `flyctl logs` shows `"matcher selected" engine=osrm`
 - [ ] Drained at least one real `map_match` job end-to-end (insert test run, watch `run_matched_tracks` flip to matched)
 - [ ] Queue-lag alert wired
+- [x] Failed-jobs alert wired (`jobs-failed-alert` pg_cron → `jobs_failed_summary()`; route a scraper on `failed_count > 0`)
 - [ ] `release-worker.yml` workflow merged
 - [ ] `FLY_API_TOKEN` GitHub secret configured
 
