@@ -79,7 +79,8 @@ class RunNotificationBridge(
                     )
                     return
                 }
-                val title = args["title"] as? String ?: "Running"
+                val title = args["title"] as? String
+                    ?: context.getString(R.string.run_notif_title_fallback)
                 val text = args["text"] as? String ?: ""
                 val bigText = args["big_text"] as? String
                 val paused = args["paused"] as? Boolean ?: false
@@ -136,7 +137,7 @@ class RunNotificationBridge(
         if (existing != null) nm.deleteNotificationChannel(GEOLOCATOR_CHANNEL_ID)
         val channel = NotificationChannel(
             GEOLOCATOR_CHANNEL_ID,
-            "Run in progress",
+            context.getString(R.string.run_notif_channel_name),
             // LOW avoids the heads-up buzz while still showing on the
             // lock screen — matches Strava / Nike Run Club behaviour.
             NotificationManager.IMPORTANCE_LOW,
@@ -200,11 +201,23 @@ class RunNotificationBridge(
         // Stop ends the run. Icon 0 renders text-only, which is fine on a
         // workout notification and avoids shipping new drawables.
         if (paused) {
-            builder.addAction(0, "Resume", actionIntent(ACTION_RESUME, RC_RESUME))
+            builder.addAction(
+                0,
+                context.getString(R.string.run_notif_action_resume),
+                actionIntent(ACTION_RESUME, RC_RESUME),
+            )
         } else {
-            builder.addAction(0, "Pause", actionIntent(ACTION_PAUSE, RC_PAUSE))
+            builder.addAction(
+                0,
+                context.getString(R.string.run_notif_action_pause),
+                actionIntent(ACTION_PAUSE, RC_PAUSE),
+            )
         }
-        builder.addAction(0, "Stop", actionIntent(ACTION_STOP, RC_STOP))
+        builder.addAction(
+            0,
+            context.getString(R.string.run_notif_action_stop),
+            actionIntent(ACTION_STOP, RC_STOP),
+        )
 
         // Posting with the same (channel, id) that geolocator's foreground
         // service is using replaces the visible row without interfering

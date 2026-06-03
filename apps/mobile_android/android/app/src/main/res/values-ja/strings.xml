@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="run_notif_channel_name">ラン記録中</string>
+    <string name="run_notif_title_fallback">ラン中</string>
+    <string name="run_notif_action_resume">再開</string>
+    <string name="run_notif_action_pause">一時停止</string>
+    <string name="run_notif_action_stop">停止</string>
+</resources>

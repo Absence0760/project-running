@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="run_notif_channel_name">Lauf aktiv</string>
+    <string name="run_notif_title_fallback">Läuft</string>
+    <string name="run_notif_action_resume">Fortsetzen</string>
+    <string name="run_notif_action_pause">Pause</string>
+    <string name="run_notif_action_stop">Stopp</string>
+</resources>

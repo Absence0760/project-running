@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="run_notif_channel_name">Carrera en curso</string>
+    <string name="run_notif_title_fallback">Corriendo</string>
+    <string name="run_notif_action_resume">Reanudar</string>
+    <string name="run_notif_action_pause">Pausar</string>
+    <string name="run_notif_action_stop">Detener</string>
+</resources>

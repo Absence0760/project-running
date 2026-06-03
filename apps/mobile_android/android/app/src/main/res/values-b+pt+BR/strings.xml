@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="run_notif_channel_name">Corrida em andamento</string>
+    <string name="run_notif_title_fallback">Correndo</string>
+    <string name="run_notif_action_resume">Retomar</string>
+    <string name="run_notif_action_pause">Pausar</string>
+    <string name="run_notif_action_stop">Parar</string>
+</resources>

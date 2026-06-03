@@ -1230,6 +1230,34 @@ void main() {
             'GeolocatorLocationService.ONGOING_NOTIFICATION_ID.',
       );
     });
+
+    test('RunNotificationBridge sources its user-facing strings from resources', () {
+      // audit/i18n-readiness W-OS-3: the channel name (shown in system
+      // notification settings), the title fallback, and the lock-screen
+      // action labels are user-facing, so they must come from string
+      // resources (localisable) rather than hard-coded English. Reverting
+      // any of them to a literal drops the matching R.string reference and
+      // trips this guard. Shared host file — skip on the iOS twin.
+      final file = File(
+        'android/app/src/main/kotlin/com/threkir/app/RunNotificationBridge.kt',
+      );
+      if (!file.existsSync()) return;
+      final source = file.readAsStringSync();
+      for (final res in [
+        'R.string.run_notif_channel_name',
+        'R.string.run_notif_title_fallback',
+        'R.string.run_notif_action_resume',
+        'R.string.run_notif_action_pause',
+        'R.string.run_notif_action_stop',
+      ]) {
+        expect(
+          source,
+          contains(res),
+          reason: '$res must back a user-facing notification string '
+              '(W-OS-3): do not hard-code the English literal.',
+        );
+      }
+    });
   });
 
   group('thumbnail privacy-zone clipping', () {
