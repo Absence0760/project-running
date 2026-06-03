@@ -381,6 +381,8 @@ export const messages = {
 	"planDetail.weekPillOf": "sur {total}",
 	"planDetail.workoutCompletionAria": "Progression des séances",
 	"planDetail.adherenceAria": "Respect du plan",
+	"planDetail.phaseMarkerAria": "Phase d'entraînement",
+	"planDetail.longestLongRun": "Sortie longue la plus longue",
 	"planDetail.driftOverFlag": "Cette semaine {pct}% au-dessus du plan — lève le pied sur les jours faciles pour ne pas creuser un trou de fatigue.",
 	"planDetail.driftUnderFlag": "Cette semaine {pct}% en dessous du plan — c'est le volume prévu qui déclenche l'adaptation.",
 	"planDetail.missedLongMakeUp": "Vous avez manqué la sortie longue de la semaine — rattrapez-la si possible. C'est la séance la plus importante.",

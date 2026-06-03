@@ -377,6 +377,8 @@ export const messages = {
 	"planDetail.weekPillOf": "/ {total}",
 	"planDetail.workoutCompletionAria": "ワークアウトの達成状況",
 	"planDetail.adherenceAria": "プランの遵守状況",
+	"planDetail.phaseMarkerAria": "トレーニング期分け",
+	"planDetail.longestLongRun": "最長のロング走",
 	"planDetail.driftOverFlag": "今週はプランより{pct}%多く走っています。疲労をため込まないよう、イージーの日は控えめに。",
 	"planDetail.driftUnderFlag": "今週はプランより{pct}%少なく走っています。計画した走行量が適応を生みます。",
 	"planDetail.missedLongMakeUp": "今週のロング走を逃しました。可能なら埋め合わせを。最も重要なセッションです。",

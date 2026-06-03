@@ -20,6 +20,7 @@
 		todayISO
 	} from '$lib/training/training';
 	import { weeklyDrift, missedWorkoutAdvice } from '$lib/training/plan_adherence';
+	import { orderedPlanPhases, longestCompletedLongRunMetres } from '$lib/training/plan_progress';
 	import { workoutKindLabel, planPhaseLabel } from '$lib/training/workout_labels';
 	import { fmtKm, fmtPace } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
@@ -217,6 +218,19 @@
 	let currentWeek = $derived(
 		currentWeekIndex != null ? (weeks[currentWeekIndex] ?? null) : null
 	);
+
+	/// Overall phase arc (base→build→peak→taper→race) the plan moves
+	/// through + which one the current week sits in.
+	let orderedPhases = $derived(orderedPlanPhases(weeks));
+	let currentPhase = $derived(currentWeek?.phase ?? null);
+
+	/// Longest long run completed so far — actual distance when the
+	/// linked run is in the recent window, else the planned target.
+	let longestLongRunMetres = $derived.by(() => {
+		const actualById = new Map<string, number>();
+		for (const r of recentRuns) actualById.set(r.id, r.distance_m ?? 0);
+		return longestCompletedLongRunMetres(workouts, actualById);
+	});
 
 	/// Current-week mileage drift vs plan. Owner-only (needs the runs
 	/// list). Planned volume is the week's target, falling back to the
@@ -435,6 +449,27 @@
 					style="width: {planPosition.calendarPct}%"
 				></span>
 			</div>
+		{/if}
+
+		{#if orderedPhases.length > 1 || longestLongRunMetres != null}
+			<section class="plan-progress">
+				{#if orderedPhases.length > 1}
+					<ol class="phase-marker" aria-label={m('planDetail.phaseMarkerAria')}>
+						{#each orderedPhases as ph (ph)}
+							<li class="phase-step" class:active={ph === currentPhase}>
+								{planPhaseLabel(ph)}
+							</li>
+						{/each}
+					</ol>
+				{/if}
+				{#if longestLongRunMetres != null}
+					<div class="longest-long" title={m('planDetail.longestLongRun')}>
+						<span class="material-symbols">trending_up</span>
+						<span class="longest-label">{m('planDetail.longestLongRun')}</span>
+						<span class="longest-value">{fmtKm(longestLongRunMetres)}</span>
+					</div>
+				{/if}
+			</section>
 		{/if}
 
 		{#if currentWeekDrift || missedLongRun}
@@ -907,6 +942,53 @@
 			color-mix(in srgb, var(--color-primary) 70%, var(--color-accent-orange, var(--color-primary)))
 		);
 		transition: width var(--transition-base);
+	}
+
+	.plan-progress {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.phase-marker {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.35rem;
+		list-style: none;
+		margin: 0;
+		padding: 0;
+	}
+	.phase-step {
+		padding: 0.2rem 0.7rem;
+		border-radius: 999px;
+		font-size: 0.78rem;
+		font-weight: 600;
+		background: var(--color-bg-tertiary);
+		color: var(--color-text-tertiary);
+		border: 1px solid var(--color-border);
+	}
+	.phase-step.active {
+		background: var(--color-primary);
+		color: white;
+		border-color: var(--color-primary);
+	}
+	.longest-long {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.longest-long .material-symbols {
+		font-size: 1.1rem;
+		color: var(--color-primary);
+	}
+	.longest-value {
+		font-weight: 700;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
 	}
 
 	.adherence {

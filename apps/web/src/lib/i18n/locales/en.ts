@@ -389,6 +389,8 @@ export const en = {
 	"planDetail.weekPillOf": "of {total}",
 	"planDetail.workoutCompletionAria": "Workout completion",
 	"planDetail.adherenceAria": "Plan adherence",
+	"planDetail.phaseMarkerAria": "Training phase",
+	"planDetail.longestLongRun": "Longest long run",
 	"planDetail.driftOverFlag": "Running {pct}% over plan this week — ease back on the easy days so you don't dig a fatigue hole.",
 	"planDetail.driftUnderFlag": "Running {pct}% under plan this week — the planned volume drives the adaptation.",
 	"planDetail.missedLongMakeUp": "You missed this week's long run — fit it in if you can. It's the session that matters most.",
