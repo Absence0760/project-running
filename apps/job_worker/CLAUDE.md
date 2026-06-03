@@ -3,11 +3,14 @@
 Generic Go service that drains the `jobs` queue (migration
 `20260609_001_run_match_pipeline.sql`). Kinds today: `map_match`
 (server-side OSRM map matching), `token_refresh` (Strava OAuth
-rotation, replaces the `refresh-tokens` Edge Function), and
-`strava_event` (per-activity ingest enqueued by the
-`/v1/strava/webhook` endpoint, replaces the `strava-webhook` Edge
-Function). Data-export will land as an additional kind in
-`internal/worker.go`'s dispatch when that Edge Function moves per
+rotation, replaces the `refresh-tokens` Edge Function), `strava_event`
+(per-activity ingest enqueued by the `/v1/strava/webhook` endpoint,
+replaces the `strava-webhook` Edge Function), `photo_process` (EXIF
+strip on uploaded run photos), and `notification_email` (the email
+delivery channel for the notifications inbox + event-day reminders —
+roadmap Phase 4b, `decisions.md § 117`). Data-export will land as an
+additional kind in `internal/worker.go`'s dispatch when that Edge
+Function moves per
 [`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §214.
 
 ## Scope — read before writing code
@@ -68,6 +71,15 @@ Function). Data-export will land as an additional kind in
   `token_refresh` (sweeps expiring Strava integrations + rotates via
   `/oauth/token`) is in `handler_token_refresh.go` and is the worked
   example for "port a scheduled Edge Function into the queue".
+  `notification_email` (`handler_notification_email.go` +
+  `mailer.go`) is the worked example for "trigger-enqueued fan-out with
+  an external transport": the notifications AFTER-INSERT trigger queues
+  one job per recipient, the handler checks the
+  `user_settings.prefs.email_notifications` preference, resolves the
+  address via the GoTrue admin API, and sends over SMTP. Gated on
+  `SMTP_HOST` — unset → jobs finish done but leave rows unstamped so a
+  later email-enabled deploy can still send. Local dev points at the
+  Supabase Mailpit catcher.
   `strava_event` (per-activity ingest enqueued by the HTTP webhook
   endpoint at `/v1/strava/webhook`) is the worked example for
   "port a webhook Edge Function into HTTP-front + queue-back" — see
@@ -112,6 +124,10 @@ apps/job_worker/
 │   ├── matcher_osrm_test.go
 │   ├── worker.go            # claim → handle → finish loop; dispatch by kind
 │   ├── handler_token_refresh.go  # kind='token_refresh' sweep + rotate
+│   ├── handler_notification_email.go # kind='notification_email' send-or-skip
+│   ├── handler_notification_email_test.go # 9 tests on gating / opt-out / idempotency
+│   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic
+│   ├── mailer_test.go       # 6 tests on emailMode / shouldEmail / render / MIME
 │   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload
 │   ├── handler_strava_event_test.go # 10 tests on the ingest dispatch
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests
@@ -225,6 +241,27 @@ SUPABASE_URL=http://127.0.0.1:54321 \
 ```
 
 Stops on SIGINT / SIGTERM.
+
+### Notification-email env (optional)
+
+`notification_email` jobs send only when `SMTP_HOST` is set. To exercise
+the channel against the local Supabase Mailpit catcher, add to the
+`go run .` invocation above:
+
+```bash
+SMTP_HOST=127.0.0.1 SMTP_PORT=54325 \
+  SMTP_FROM='Threkir <noreply@threkir.com>' \
+  APP_BASE_URL=http://localhost:7777
+```
+
+Then insert a notification (e.g. `psql … -c "insert into notifications
+(user_id, kind) values ('<uid>', 'message')"`) and watch it arrive at
+`http://127.0.0.1:54324`. Production also sets `SMTP_USERNAME` +
+`SMTP_PASSWORD` (Resend / SES SMTP); `SMTP_PORT` defaults to 587 and
+`APP_BASE_URL` to `https://threkir.com` when unset. With `SMTP_HOST`
+unset the worker drains `notification_email` jobs to done but leaves the
+notification rows unstamped (pending) so a later email-enabled deploy
+can still send them.
 
 ## Before reporting a task done
 

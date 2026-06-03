@@ -2629,6 +2629,24 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 117. Notification delivery ships email first, on the Go worker, because email needs no third-party push credential
+
+**Decided (2026-06-03):** the first off-app notification-delivery channel (roadmap Phase 4b) is **email**, implemented as a `notification_email` job kind on the Go worker (migration `20261130_001`). An AFTER-INSERT trigger on `notifications` enqueues one job per row; `handler_notification_email.go` resolves the recipient's preference + address and sends over SMTP. Event-day reminders are a sibling piece: `enqueue_event_reminders()` (hourly pg_cron) inserts an `event_reminder` notification for every `going` RSVP whose occurrence is inside the next 24 h, which then rides the same email path.
+
+**Why email, why now.** Phase 4b was framed as "push (FCM/APNs) — blocked on user-supplied Firebase/APNs credentials." That's true for the *native* leg only. Email needs no push credential — it sends over SMTP to the local Mailpit catcher (`:54325`) in dev and a provider (Resend/SES SMTP) in prod, so the entire fan-out → preference → render → deliver path is buildable and **end-to-end testable on the local Docker stack today**. It unblocks the user-visible Phase 4b outcome (you get told about your events) without waiting on an operator to stand up Firebase. The `notifications` row stays the single source of truth (`§ 38`); the email handler is one consumer of it, and a future FCM/APNs sender is a second consumer of the same rows — no schema change when it lands.
+
+**Why the Go worker, not an Edge Function.** This matches the established "port a scheduled/triggered job onto the queue" pattern (`token_refresh`, `photo_process`) — the worker already owns `jobs`-queue draining, service-role reads, and the <30 s-per-job budget that one-email-per-recipient satisfies. An EF would have re-implemented the queue semantics the worker already has.
+
+**The shape that falls out.**
+- **Preference:** a universal `user_settings.prefs.email_notifications` key (`all | important | off`, default `important`) — a jsonb-bag key, no migration (`docs/backend/settings.md`). Default `important` emails reminders/cancellations/coach-plan-updates/DMs and **not** the social loop (kudos/comments/follows/club-posts/run-completed), so a fresh user isn't spammed; `all` opts into everything; `off` is a full kill-switch. Unknown values fail toward `important`.
+- **Reminder identity:** RSVPs already pin the concrete occurrence in `event_attendees.instance_start`, so the scheduler needs **no recurrence expansion** — the set of occurrences anyone cares about is the set of distinct `instance_start` values people RSVP'd to. A new nullable `notifications.event_instance_start` is the third leg of the reminder's `(user, event, occurrence)` identity; a partial unique index dedupes the hourly re-runs.
+- **Address source:** email lives only in `auth.users`, unreachable via PostgREST; the worker reads it through the **GoTrue admin API** with its service-role key (no public mirror added).
+- **Delivery semantics:** at-least-once. `notifications.email_sent_at` is the terminal-state stamp (sent OR deliberately skipped); the only duplicate window is send-ok/mark-failed, the standard email trade-off. When `SMTP_HOST` is unset the handler finishes the job done but **leaves the row unstamped**, so a later email-enabled deploy still sends it.
+
+**The trade-off / when not to re-litigate.** Email isn't push — no lock-screen banner, deliverability depends on the provider, and there's no in-app token. That's accepted: it's the credential-free 80% while native push waits on Firebase/APNs. Web push is a separate not-blocked slice (VAPID is self-generated; the client subscribe path already ships — `parity.md`) and is the natural next consumer. **Don't** re-route notification delivery through an Edge Function, **don't** add a per-kind reminder that bypasses the `email_notifications` preference, and **don't** treat the "blocked on Firebase/APNs" note as covering email or web push — it covers the native leg only.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

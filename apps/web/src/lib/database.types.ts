@@ -930,7 +930,9 @@ export type Database = {
           club_id: string | null
           comment_id: string | null
           created_at: string
+          email_sent_at: string | null
           event_id: string | null
+          event_instance_start: string | null
           id: string
           kind: string
           plan_id: string | null
@@ -943,7 +945,9 @@ export type Database = {
           club_id?: string | null
           comment_id?: string | null
           created_at?: string
+          email_sent_at?: string | null
           event_id?: string | null
+          event_instance_start?: string | null
           id?: string
           kind: string
           plan_id?: string | null
@@ -956,7 +960,9 @@ export type Database = {
           club_id?: string | null
           comment_id?: string | null
           created_at?: string
+          email_sent_at?: string | null
           event_id?: string | null
+          event_instance_start?: string | null
           id?: string
           kind?: string
           plan_id?: string | null
@@ -2623,6 +2629,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      enqueue_event_reminders: { Args: never; Returns: undefined }
       enqueue_run_rematch: { Args: { p_run_id: string }; Returns: Json }
       find_stuck_jobs: {
         Args: { p_stuck_after?: string }

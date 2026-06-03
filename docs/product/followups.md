@@ -126,9 +126,10 @@ real need is a distinct, opt-in feature:
   user/email, opt-in both ways), and a `run_completed`-style trigger (or a
   branch in the live-hub finish path) that alerts ONLY the designated contact
   on a finish regardless of `is_public`. Pairs naturally with the live-spectator
-  feature (a watching partner already sees the finish). Gated on the same
-  deferred push/email sender as the rest of theme B. Until then the gate stays
-  as-is by design.
+  feature (a watching partner already sees the finish). The email leg of the
+  theme-B sender now ships (`decisions.md § 117`), so a safety-contact alert
+  could route through it; native push to a locked phone still waits on the
+  FCM/APNs leg. Until that feature is built the gate stays as-is by design.
 
 ## Auto-follow on club join (persona round-5 social-group) — product decision
 
@@ -149,15 +150,23 @@ follow-everyone trigger.
 Surfaced by the round-5 persona hunt; each is a real feature or needs external
 keys/product sign-off, so none were half-built. Sized for the roadmap:
 
-- [ ] **Push / email notification delivery (theme B, ~1-2 wk + ops)** — DB triggers
-  already fan out `event_cancel` / `run_completed` / `club_post` notification rows
-  and the in-app bell renders them, but there is NO server-side sender, so a
-  Saturday-morning race cancellation never reaches a locked phone. Needs an Edge
-  Function / Go endpoint that reads new notification rows and pushes via FCM
-  (Android) + APNs (iOS) + a web-push path (the `VAPID_PRIVATE_KEY` is already in
-  backend env, unused), plus an email channel (no email sender exists anywhere).
-  Blocked on operator-supplied Firebase/APNs credentials. Hit by parkrun-owner
-  (Critical), event-organizer (High), family-club (Critical), social-group (Med).
+- [x] **Email notification delivery + event-day reminders (theme B, email leg)** —
+  SHIPPED 2026-06-03 (migration `20261130_001`, `decisions.md § 117`). A
+  `notification_email` job kind on the Go worker reads new notification rows and
+  sends over SMTP, gated on `user_settings.prefs.email_notifications`
+  (`all | important | off`, default `important`); `enqueue_event_reminders()`
+  (hourly pg_cron) creates `event_reminder` rows for `going` RSVPs in the next
+  24 h. Credential-free, end-to-end tested against local Mailpit. So the
+  Saturday-morning race cancellation now reaches an inbox. Addresses the
+  parkrun-owner / event-organizer / family-club / social-group findings for the
+  email channel; admin-update fan-out rides the same path once that kind exists.
+- [ ] **Native push delivery (theme B, FCM/APNs leg, ~1 wk + ops)** — the remaining
+  leg: native push to a locked phone. The `notifications` row is already the source
+  of truth and the email handler proves the consumer pattern; an FCM/APNs sender is
+  a sibling consumer. Genuinely blocked on operator-supplied Firebase/APNs
+  credentials + mobile client-side token registration (no `firebase_messaging`
+  wiring exists). Web-push server-side delivery is a separate not-blocked slice (the
+  `VAPID_PRIVATE_KEY` is self-generated; the client subscribe path already ships).
 - [ ] **Paid event registration (~2-3 wk)** — event creation has no paid-entry /
   ticketing path (event-organizer Critical). Needs a Stripe-backed registration
   flow (capacity cap + waitlist already partially modelled), refunds, and payout

@@ -12,6 +12,16 @@ enable_signup = true
 [auth.email]
 enable_confirmations = false
 
+# Pin the local mail-catcher ports rather than relying on the CLI default
+# (web 54324 / SMTP 54325 / POP3 54326). The Go worker's notification-email
+# sender targets SMTP 54325 in local dev (SMTP_HOST=127.0.0.1
+# SMTP_PORT=54325); inspect sent mail at http://127.0.0.1:54324. Auth
+# emails (GoTrue) land here too.
+[inbucket]
+port = 54324
+smtp_port = 54325
+pop3_port = 54326
+
 [auth.external.google]
 enabled = false
 

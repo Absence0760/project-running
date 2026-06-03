@@ -72,6 +72,16 @@ type fakeBackend struct {
 	photoThumbPaths     map[string]string
 	updatePhotoThumbErr error
 
+	// notification_email inputs/outputs.
+	notifications  map[string]*NotificationRow       // keyed by id; absent → (nil,nil)
+	userPrefs      map[string]map[string]interface{} // keyed by user_id
+	userEmails     map[string]string                 // keyed by user_id
+	fetchNotifErr  error
+	fetchPrefsErr  error
+	fetchEmailErr  error
+	markEmailedErr error
+	markedEmailed  []string // notification ids stamped email_sent_at
+
 	// Outputs
 	finished []finishCall
 	deferred []deferCall
@@ -232,6 +242,58 @@ func (f *fakeBackend) UpdatePhotoThumb512Path(_ context.Context, photoID, path s
 		f.photoThumbPaths = make(map[string]string)
 	}
 	f.photoThumbPaths[photoID] = path
+	return nil
+}
+
+func (f *fakeBackend) FetchNotificationForEmail(_ context.Context, id string) (*NotificationRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchNotifErr != nil {
+		err := f.fetchNotifErr
+		f.fetchNotifErr = nil
+		return nil, err
+	}
+	return f.notifications[id], nil
+}
+
+func (f *fakeBackend) FetchUserSettingsPrefs(_ context.Context, userID string) (map[string]interface{}, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchPrefsErr != nil {
+		err := f.fetchPrefsErr
+		f.fetchPrefsErr = nil
+		return nil, err
+	}
+	if p, ok := f.userPrefs[userID]; ok {
+		return p, nil
+	}
+	return map[string]interface{}{}, nil
+}
+
+func (f *fakeBackend) FetchUserEmail(_ context.Context, userID string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchEmailErr != nil {
+		err := f.fetchEmailErr
+		f.fetchEmailErr = nil
+		return "", err
+	}
+	return f.userEmails[userID], nil
+}
+
+func (f *fakeBackend) MarkNotificationEmailed(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.markEmailedErr != nil {
+		err := f.markEmailedErr
+		f.markEmailedErr = nil
+		return err
+	}
+	f.markedEmailed = append(f.markedEmailed, id)
+	if n := f.notifications[id]; n != nil {
+		stamped := "2026-01-01T00:00:00Z"
+		n.EmailSentAt = &stamped
+	}
 	return nil
 }
 

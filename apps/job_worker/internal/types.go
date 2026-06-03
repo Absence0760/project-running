@@ -119,6 +119,32 @@ type StravaEventPayload struct {
 	EventTime  int64  `json:"event_time"`  // unix seconds
 }
 
+// NotificationEmailPayload is the payload the notifications AFTER INSERT
+// trigger writes for `kind='notification_email'` jobs (migration
+// `20261130_001_notification_email_channel.sql`). The handler loads the
+// referenced notification, checks the recipient's channel preference,
+// resolves their address, and sends.
+type NotificationEmailPayload struct {
+	NotificationID string `json:"notification_id"`
+}
+
+// NotificationRow is the projection of `notifications` the email handler
+// reads. The source-link FKs (run_id / event_id / club_id / comment_id)
+// are nullable — only the one relevant to the kind is populated — and
+// drive the deep link in the rendered mail. EmailSentAt is the idempotency
+// guard: non-NULL means a prior attempt already sent or deliberately
+// skipped this row.
+type NotificationRow struct {
+	ID          string  `json:"id"`
+	UserID      string  `json:"user_id"`
+	Kind        string  `json:"kind"`
+	RunID       *string `json:"run_id"`
+	EventID     *string `json:"event_id"`
+	ClubID      *string `json:"club_id"`
+	CommentID   *string `json:"comment_id"`
+	EmailSentAt *string `json:"email_sent_at"`
+}
+
 // StravaActivity is the subset of Strava's `/api/v3/activities/{id}`
 // response the ingest path consumes. Mirrors the EF shape at
 // `apps/backend/supabase/functions/_shared/strava.ts` — keep these

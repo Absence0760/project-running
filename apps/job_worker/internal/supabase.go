@@ -1166,6 +1166,81 @@ func (c *SupabaseClient) FetchUserSettingsPrefs(ctx context.Context, userID stri
 	return rows[0].Prefs, nil
 }
 
+// FetchNotificationForEmail reads the projection the notification-email
+// handler needs. Returns (nil, nil) when the row is gone — the user
+// cleared their inbox before the worker drained the job, which is a
+// finish-done, not an error.
+func (c *SupabaseClient) FetchNotificationForEmail(ctx context.Context, notificationID string) (*NotificationRow, error) {
+	q := url.Values{}
+	q.Set("id", "eq."+notificationID)
+	q.Set("select", "id,user_id,kind,run_id,event_id,club_id,comment_id,email_sent_at")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/notifications?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []NotificationRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &rows[0], nil
+}
+
+// FetchUserEmail resolves a user's email via the GoTrue Admin API. The
+// address lives in auth.users, which PostgREST doesn't expose; the admin
+// endpoint is the supported service-role read. Returns "" (no error) when
+// the user has no email on file (e.g. a phone-only or deleted account) so
+// the caller can mark the notification handled rather than retry forever.
+func (c *SupabaseClient) FetchUserEmail(ctx context.Context, userID string) (string, error) {
+	u := c.BaseURL + "/auth/v1/admin/users/" + userID
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return "", err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	var out struct {
+		Email string `json:"email"`
+	}
+	if err := json.Unmarshal(body, &out); err != nil {
+		return "", err
+	}
+	return out.Email, nil
+}
+
+// MarkNotificationEmailed stamps email_sent_at so the row reaches a
+// terminal state — sent OR deliberately skipped (opted-out category, no
+// address). Idempotent: re-stamping an already-stamped row is harmless.
+func (c *SupabaseClient) MarkNotificationEmailed(ctx context.Context, notificationID string) error {
+	q := url.Values{}
+	q.Set("id", "eq."+notificationID)
+	u := c.BaseURL + "/rest/v1/notifications?" + q.Encode()
+	payload, err := json.Marshal(map[string]string{
+		"email_sent_at": time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
 // FetchExportPersonalDataTables bundles the personal-data tables
 // the audit/data-export-completeness (May 2026) pass added to the
 // Art 20 export. One call per table; failures on individual tables

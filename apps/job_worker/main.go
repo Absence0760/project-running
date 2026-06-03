@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"net/smtp"
 	"os"
 	"os/signal"
 	"strings"
@@ -217,6 +218,41 @@ func main() {
 		logger.Warn("strava: DISABLED — STRAVA_CLIENT_ID/SECRET unset; token_refresh + strava_event jobs will fail permanent")
 	}
 
+	// Email sender for kind='notification_email' jobs. Optional — when
+	// SMTP_HOST is unset the worker still drains every other kind, and
+	// notification_email jobs finish done while leaving the rows pending
+	// (so a later email-enabled deploy can send them). Local dev points
+	// at the Supabase Mailpit catcher: SMTP_HOST=127.0.0.1 SMTP_PORT=54325,
+	// no auth, inspect at http://127.0.0.1:54324. Production sets a real
+	// provider (Resend / SES SMTP) with SMTP_USERNAME + SMTP_PASSWORD.
+	var emailSender internal.EmailSender
+	if smtpHost := os.Getenv("SMTP_HOST"); smtpHost != "" {
+		smtpPort := os.Getenv("SMTP_PORT")
+		if smtpPort == "" {
+			smtpPort = "587"
+		}
+		from := os.Getenv("SMTP_FROM")
+		if from == "" {
+			from = "Threkir <noreply@threkir.com>"
+		}
+		var auth smtp.Auth
+		if user := os.Getenv("SMTP_USERNAME"); user != "" {
+			auth = smtp.PlainAuth("", user, os.Getenv("SMTP_PASSWORD"), smtpHost)
+		}
+		emailSender = &internal.SMTPSender{
+			Addr: smtpHost + ":" + smtpPort,
+			From: from,
+			Auth: auth,
+		}
+		logger.Info("notification_email: enabled", "smtp", smtpHost+":"+smtpPort, "auth", auth != nil)
+	} else {
+		logger.Warn("notification_email: DISABLED — SMTP_HOST unset; notification_email jobs finish without sending")
+	}
+	appBaseURL := os.Getenv("APP_BASE_URL")
+	if appBaseURL == "" {
+		appBaseURL = "https://threkir.com"
+	}
+
 	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
 	// worker's poll loop bumps it on every successful poll
 	// (claim-or-empty), so /health flips to 503 only when the loop
@@ -227,9 +263,11 @@ func main() {
 	lastClaimAtUnix.Store(time.Now().Unix())
 
 	worker := &internal.Worker{
-		Backend: client,
-		Matcher: matcher,
-		Strava:  strava,
+		Backend:    client,
+		Matcher:    matcher,
+		Strava:     strava,
+		Email:      emailSender,
+		AppBaseURL: appBaseURL,
 		Config: internal.Config{
 			WorkerID:       workerID,
 			PollInterval:   2 * time.Second,

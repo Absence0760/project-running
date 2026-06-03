@@ -71,6 +71,14 @@ type Backend interface {
 	// the column to decide whether to fetch the smaller file (gallery
 	// fast-paint) or fall back to the original.
 	UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error
+	// Notification-email path — used by the kind='notification_email'
+	// handler (migration 20261130_001). The notifications AFTER INSERT
+	// trigger enqueues one job per recipient; the handler reads the row,
+	// the recipient's channel preference, and their address, then sends.
+	FetchNotificationForEmail(ctx context.Context, notificationID string) (*NotificationRow, error)
+	FetchUserSettingsPrefs(ctx context.Context, userID string) (map[string]interface{}, error)
+	FetchUserEmail(ctx context.Context, userID string) (string, error)
+	MarkNotificationEmailed(ctx context.Context, notificationID string) error
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
@@ -119,8 +127,17 @@ type Worker struct {
 	// Wired in main.go when STRAVA_CLIENT_ID + STRAVA_CLIENT_SECRET
 	// are both set.
 	Strava StravaIngestor
-	Config Config
-	Log    *slog.Logger
+	// Email is the transport for kind='notification_email' jobs. Nil
+	// disables the send path — the handler finishes those jobs done but
+	// leaves the notification rows pending so a later email-enabled
+	// deploy can still send them. Wired in main.go when SMTP_HOST is set.
+	Email EmailSender
+	// AppBaseURL is the web origin used to build deep links + the
+	// unsubscribe URL in rendered email (APP_BASE_URL). Empty falls back
+	// to relative-looking links; production sets it.
+	AppBaseURL string
+	Config     Config
+	Log        *slog.Logger
 	// OnPollTick fires after every claim attempt (whether or not a job
 	// was returned). Used by the /health server to distinguish "queue
 	// empty" from "loop wedged" — see main.go. Safe to leave nil; the
@@ -233,6 +250,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleStravaEvent(ctx, job)
 	case "photo_process":
 		return w.handlePhotoProcess(ctx, job)
+	case "notification_email":
+		return w.handleNotificationEmail(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}
