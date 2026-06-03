@@ -1,6 +1,14 @@
 import type { EntryGenerator, PageLoad } from './$types';
 import { createClient } from '@supabase/supabase-js';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
+import { env } from '$env/dynamic/public';
+
+// Canonical host for the absolute <link rel="canonical"> + og:url +
+// JSON-LD URLs baked into the prerendered HTML. Same source +
+// fallback as /sitemap.xml so the host stays consistent across the
+// indexable surface (preview vs prod set PUBLIC_SITE_URL; local
+// prerender falls through to the prod host).
+const DEFAULT_SITE_URL = 'https://threkir.com';
 
 // Build-time prerender for public routes — mirror of the
 // share/run/[id] shape. `entries()` lists every public route id
@@ -43,12 +51,13 @@ export const entries: EntryGenerator = async () => {
 };
 
 export const load: PageLoad = async ({ params }) => {
+	const siteUrl = env.PUBLIC_SITE_URL || DEFAULT_SITE_URL;
 	// Native fetch (not SvelteKit's wrapped fetch) — see the parallel
 	// note in share/run/[id]/+page.ts: wrapping rewrites cross-origin
 	// requests during prerender and the supabase call loops back to
 	// the SvelteKit dev server.
 	if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) {
-		return { id: params.id, route: null };
+		return { id: params.id, route: null, siteUrl };
 	}
 	try {
 		const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
@@ -59,9 +68,9 @@ export const load: PageLoad = async ({ params }) => {
 			.select('id, name, distance_m, surface, elevation_m')
 			.eq('id', params.id)
 			.maybeSingle();
-		return { id: params.id, route: data ?? null };
+		return { id: params.id, route: data ?? null, siteUrl };
 	} catch (err) {
 		console.warn('share/route load: fetch failed', err);
-		return { id: params.id, route: null };
+		return { id: params.id, route: null, siteUrl };
 	}
 };

@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+	buildRouteJsonLd,
+	buildRouteShareCanonical,
 	buildRouteShareDescription,
 	buildRouteShareTitle,
 	buildRunShareDescription,
@@ -8,6 +10,7 @@ import {
 	cleanShareTitle,
 	formatDateStable,
 	formatKmStable,
+	normaliseSiteUrl,
 } from './share_meta';
 
 // ---------------- formatKmStable ----------------
@@ -194,4 +197,75 @@ test('buildRunShareTitle falls back to the formula when no caption is set', () =
 		'Alex'
 	);
 	assert.equal(noTitle, '5.0 km run by Alex on 28 May 2026 — Threkir');
+});
+
+// ---------------- normaliseSiteUrl ----------------
+
+test('normaliseSiteUrl strips trailing slashes and tolerates null', () => {
+	assert.equal(normaliseSiteUrl('https://threkir.com/'), 'https://threkir.com');
+	assert.equal(normaliseSiteUrl('https://threkir.com///'), 'https://threkir.com');
+	assert.equal(normaliseSiteUrl('https://threkir.com'), 'https://threkir.com');
+	assert.equal(normaliseSiteUrl(null), '');
+	assert.equal(normaliseSiteUrl(undefined), '');
+});
+
+// ---------------- buildRouteShareCanonical ----------------
+
+test('buildRouteShareCanonical joins base + id single-slashed', () => {
+	assert.equal(
+		buildRouteShareCanonical('https://threkir.com', 'abc-123'),
+		'https://threkir.com/share/route/abc-123'
+	);
+	assert.equal(
+		buildRouteShareCanonical('https://threkir.com/', 'abc-123'),
+		'https://threkir.com/share/route/abc-123'
+	);
+});
+
+test('buildRouteShareCanonical with no base yields a root-relative path', () => {
+	assert.equal(buildRouteShareCanonical(null, 'abc-123'), '/share/route/abc-123');
+});
+
+// ---------------- buildRouteJsonLd ----------------
+
+test('buildRouteJsonLd emits a WebPage + breadcrumb graph with absolute URLs', () => {
+	const json = buildRouteJsonLd(
+		{ name: 'Hampstead Heath loop', distance_m: 10000, surface: 'trail' },
+		{ id: 'r-1', base: 'https://threkir.com' }
+	);
+	const obj = JSON.parse(json);
+	assert.equal(obj['@context'], 'https://schema.org');
+	assert.equal(obj['@type'], 'WebPage');
+	assert.equal(obj.name, 'Hampstead Heath loop');
+	assert.equal(obj.url, 'https://threkir.com/share/route/r-1');
+	assert.equal(obj.description, '10.0 km trail route.');
+	assert.equal(obj.primaryImageOfPage.url, 'https://threkir.com/og/route/r-1.png');
+	assert.equal(obj.breadcrumb['@type'], 'BreadcrumbList');
+	const crumbs = obj.breadcrumb.itemListElement;
+	assert.equal(crumbs.length, 3);
+	assert.equal(crumbs[0].item, 'https://threkir.com/');
+	assert.equal(crumbs[1].item, 'https://threkir.com/routes?tab=explore');
+	assert.equal(crumbs[2].name, 'Hampstead Heath loop');
+	// The current page (last crumb) has no `item` per Google guidance.
+	assert.equal(crumbs[2].item, undefined);
+});
+
+test('buildRouteJsonLd falls back to a generic name when the route is null', () => {
+	const obj = JSON.parse(buildRouteJsonLd(null, { id: 'r-2', base: 'https://threkir.com' }));
+	assert.equal(obj.name, 'Route');
+	assert.equal(obj.description, 'A public route on Threkir.');
+});
+
+test('buildRouteJsonLd escapes angle brackets so a route name cannot break out of the script tag', () => {
+	const json = buildRouteJsonLd(
+		{ name: '</script><img src=x onerror=alert(1)>', distance_m: 5000, surface: 'road' },
+		{ id: 'r-3', base: 'https://threkir.com' }
+	);
+	// The raw serialized string must not contain a literal `<` or `>` —
+	// they're escaped to their \u00xx forms so the injected
+	// <script type="application/ld+json"> can't be terminated early.
+	assert.ok(!json.includes('<'), 'expected no literal < in the JSON-LD string');
+	assert.ok(!json.includes('>'), 'expected no literal > in the JSON-LD string');
+	// It still round-trips to the original name once parsed.
+	assert.equal(JSON.parse(json).name, '</script><img src=x onerror=alert(1)>');
 });

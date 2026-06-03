@@ -25,6 +25,20 @@ test.describe('/routes/[id]', () => {
 			.eq('id', RUNNER_PUBLIC_ROUTE_ID);
 	});
 
+	test('canonical link points at the public /share/route surface', async ({ page }) => {
+		// SEO-indexing hardening: the in-app detail page renders the same
+		// route as the public /share/route/[id] page, so it canonicals
+		// there to consolidate ranking signals onto the single
+		// prerendered, sitemap-listed copy. Rendered client-side in
+		// <svelte:head>, so wait for hydration.
+		await page.goto(`/routes/${RUNNER_PUBLIC_ROUTE_ID}`);
+		await page.waitForLoadState('networkidle');
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}$`)
+		);
+	});
+
 	test('public toggle: Public → Private, reload persists, back to Public', async ({
 		page
 	}) => {

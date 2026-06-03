@@ -103,6 +103,42 @@ test.describe('/share/route/[id] — anon', () => {
 		);
 	});
 
+	test('anon visitor gets a canonical link + JSON-LD structured data', async ({ page }) => {
+		// SEO-indexing hardening: the public share page is the single
+		// canonical, crawlable surface for a route (the in-app
+		// /routes/[id] page canonicals here), and it carries schema.org
+		// JSON-LD so search engines get a WebPage + breadcrumb trail.
+		// Pin both so a refactor can't silently drop the indexing signals.
+		await page.goto(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}`);
+
+		// Canonical is baked at load() time (not onMount), so it's present
+		// in the initial HTML. Assert the path tail rather than the full
+		// host so the test is independent of PUBLIC_SITE_URL.
+		await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
+			'href',
+			new RegExp(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}$`)
+		);
+		// og:url mirrors the canonical.
+		await expect(page.locator('meta[property="og:url"]')).toHaveAttribute(
+			'content',
+			new RegExp(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}$`)
+		);
+
+		// JSON-LD: parse the script body and assert the schema.org shape.
+		const ld = await page
+			.locator('script[type="application/ld+json"]')
+			.first()
+			.textContent();
+		expect(ld, 'expected a JSON-LD script block').toBeTruthy();
+		const obj = JSON.parse(ld!);
+		expect(obj['@type']).toBe('WebPage');
+		expect(obj.name).toBe('E2E demo public route');
+		expect(obj.url).toMatch(new RegExp(`/share/route/${RUNNER_PUBLIC_ROUTE_ID}$`));
+		expect(obj.breadcrumb['@type']).toBe('BreadcrumbList');
+		expect(obj.breadcrumb.itemListElement).toHaveLength(3);
+		expect(obj.breadcrumb.itemListElement[2].name).toBe('E2E demo public route');
+	});
+
 	test('per-route og:image renders a real PNG of correct dimensions', async ({ request }) => {
 		// The prerendered /og/route/[id].png endpoint must return a
 		// 1200×630 PNG (Twitter / Facebook recommended unfurl size).

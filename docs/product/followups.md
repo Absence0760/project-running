@@ -28,6 +28,10 @@ Every item below is one of: (a) blocked on an external credential / account, (b)
 - [ ] **Map matching deploy** — OSRM alongside Supabase, OSM-extract refresh pipeline, auth endpoint, matched-geom return + raw-vs-matched toggle, offline fallback. Engine choice + trigger wiring shipped; the deploy is what remains.
 - [ ] **Protomaps self-hosted tiles** — all 4 items from `roadmap.md` "Future — Protomaps self-hosted tiles".
 
+## Web SEO (sized, not started)
+
+- [ ] **Request-time `share-route` Lambda (parity with `share-run`)** — `/share/route/[id]` + `/og/route/[id].png` are prerendered at build time (`entries()` from `public_routes`, capped at 5k). A route made public *after* a build — or beyond the cap — serves the SPA-shell fallback `<head>` (generic "Threkir" title, no per-route OG) and a 404 for the og:image until the next deploy; a public→private flip stays served from S3 until overwritten. `share-run` already solved exactly this with a request-time Lambda (persona Casual #4 + round-5 very-social — see `apps/web/lambda/share-run/`). Mirroring it for routes is the symmetric fix: a `share-route` Lambda reusing `buildRouteShareCanonical` / `buildRouteJsonLd` / `buildRouteOgSvg`, a `prerender = false` flip on the page + og endpoint, CloudFront behaviours for `/share/route/*` + `/og/route/*`, IAM in `infra/github-oidc`, and a CI release step. Sized, not started — the build-time prerender + sitemap + canonical/JSON-LD (shipped) cover the steady-state indexed surface; this is the freshness/robustness upgrade.
+
 ## Blocked on external credentials / accounts
 
 - [ ] **Push notifications (FCM + APNs + web Push)** — operator: create a Firebase project, drop `google-services.json` (Android) / `GoogleService-Info.plist` (iOS), enable an APNs auth key in the Apple Developer portal + upload to Firebase, generate `VAPID_PRIVATE_KEY` for web. Then add `firebase_messaging`, register tokens to `user_devices.push_token`, write the workout-reminder + kudos receive handlers, and wire `apps/web/src/lib/util/push.ts`.

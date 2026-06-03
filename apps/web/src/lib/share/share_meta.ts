@@ -125,3 +125,81 @@ export function buildRouteShareDescription(
 	if (surface) return `${surface} route${elev}.`;
 	return 'A public route on Threkir.';
 }
+
+/// Strip a trailing slash from a site-URL base so `${base}/share/...`
+/// joins single-slashed. Tolerates null/undefined (returns ''), so a
+/// caller that hasn't resolved PUBLIC_SITE_URL still produces a
+/// root-relative path that resolves against the current origin.
+export function normaliseSiteUrl(base: string | null | undefined): string {
+	return (base ?? '').replace(/\/+$/, '');
+}
+
+/// Absolute canonical URL for a public route share page. The in-app
+/// /routes/[id] surface points its canonical here so search engines
+/// consolidate ranking signals onto the single public, prerendered,
+/// sitemap-listed page rather than splitting them across two URLs for
+/// the same route.
+export function buildRouteShareCanonical(
+	base: string | null | undefined,
+	id: string,
+): string {
+	return `${normaliseSiteUrl(base)}/share/route/${id}`;
+}
+
+/// Escape the three characters that let a string break out of a
+/// `<script type="application/ld+json">` block when the JSON is
+/// injected verbatim into HTML. `<` is the only strictly necessary
+/// one (`</script>`), but escaping all three is the conventional
+/// belt-and-braces form and keeps the payload valid JSON either way.
+function escapeJsonLd(json: string): string {
+	return json
+		.replace(/</g, '\\u003c')
+		.replace(/>/g, '\\u003e')
+		.replace(/&/g, '\\u0026');
+}
+
+/// schema.org JSON-LD for a public route share page, serialized ready
+/// to drop inside a `<script type="application/ld+json">`. A `WebPage`
+/// node names + describes the route and points at the og:image, with a
+/// `BreadcrumbList` (Home → Explore routes → route) for breadcrumb
+/// rich results. There is no dedicated schema.org type for a running
+/// route, so `WebPage` + breadcrumb is the honest, broadly-supported
+/// choice — and we deliberately omit `geo` because the track is
+/// privacy-clipped server-side and a precise start coordinate must
+/// never leak into structured data.
+///
+/// The route name is user-controlled, so the output is run through
+/// `escapeJsonLd` before it reaches the DOM.
+export function buildRouteJsonLd(
+	route: ShareRouteMeta | null | undefined,
+	opts: { id: string; base: string | null | undefined },
+): string {
+	const base = normaliseSiteUrl(opts.base);
+	const canonical = `${base}/share/route/${opts.id}`;
+	const name = (route?.name ?? '').trim() || 'Route';
+	const graph = {
+		'@context': 'https://schema.org',
+		'@type': 'WebPage',
+		name,
+		description: buildRouteShareDescription(route),
+		url: canonical,
+		primaryImageOfPage: {
+			'@type': 'ImageObject',
+			url: `${base}/og/route/${opts.id}.png`,
+		},
+		breadcrumb: {
+			'@type': 'BreadcrumbList',
+			itemListElement: [
+				{ '@type': 'ListItem', position: 1, name: SITE_NAME, item: `${base}/` },
+				{
+					'@type': 'ListItem',
+					position: 2,
+					name: 'Explore routes',
+					item: `${base}/routes?tab=explore`,
+				},
+				{ '@type': 'ListItem', position: 3, name },
+			],
+		},
+	};
+	return escapeJsonLd(JSON.stringify(graph));
+}

@@ -12,10 +12,21 @@
 	import ReportDialog from '$lib/components/ReportDialog.svelte';
 	import RoutePreviewScrubber from '$lib/components/RoutePreviewScrubber.svelte';
 	import { interpolateAlongRoute } from '$lib/routes/route_geometry';
+	import { buildRouteShareCanonical } from '$lib/share/share_meta';
+	import { env } from '$env/dynamic/public';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Route } from '$lib/types';
 
 	let { data } = $props();
+
+	// This in-app surface and the public /share/route/[id] page render
+	// the same route. Point the canonical at the public page so search
+	// engines consolidate ranking signals there — it's the prerendered,
+	// sitemap-listed, anon-readable copy. No own SEO meta otherwise:
+	// the app shell is behind the SPA and not meant to be indexed.
+	let canonicalUrl = $derived(
+		buildRouteShareCanonical(env.PUBLIC_SITE_URL || 'https://threkir.com', data.id)
+	);
 
 	let route = $state<Route | null>(null);
 	// `fetchRouteById` returns owner-clipped waypoints for owners and
@@ -289,6 +300,10 @@
 		}
 	});
 </script>
+
+<svelte:head>
+	<link rel="canonical" href={canonicalUrl} />
+</svelte:head>
 
 {#if loading}
 	<div class="route-detail"><p class="loading">&nbsp;</p></div>

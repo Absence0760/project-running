@@ -5,7 +5,12 @@
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import ElevationProfile from '$lib/components/ElevationProfile.svelte';
-	import { buildRouteShareDescription, buildRouteShareTitle } from '$lib/share/share_meta';
+	import {
+		buildRouteJsonLd,
+		buildRouteShareCanonical,
+		buildRouteShareDescription,
+		buildRouteShareTitle,
+	} from '$lib/share/share_meta';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Route, TrackPoint } from '$lib/types';
 
@@ -38,14 +43,24 @@
 	let metaSource = $derived(route ?? data.route ?? null);
 	let pageTitle = $derived(buildRouteShareTitle(metaSource));
 	let pageDesc = $derived(buildRouteShareDescription(metaSource));
+	// Absolute canonical so search engines fold the in-app /routes/[id]
+	// surface (which canonicals here) onto this single public page.
+	let canonicalUrl = $derived(buildRouteShareCanonical(data.siteUrl, data.id));
+	// JSON-LD WebPage + breadcrumb. Injected via {@html} because a
+	// literal <script> in Svelte markup would be hoisted/compiled; the
+	// builder pre-escapes < / > / & so a malicious route name can't
+	// terminate the script element.
+	let jsonLd = $derived(buildRouteJsonLd(metaSource, { id: data.id, base: data.siteUrl }));
 </script>
 
 <svelte:head>
 	<title>{pageTitle}</title>
 	<meta name="description" content={pageDesc} />
+	<link rel="canonical" href={canonicalUrl} />
 	<meta property="og:title" content={pageTitle} />
 	<meta property="og:description" content={pageDesc} />
 	<meta property="og:type" content="website" />
+	<meta property="og:url" content={canonicalUrl} />
 	<meta property="og:site_name" content="Threkir" />
 	<meta property="og:image" content="/og/route/{data.id}.png" />
 	<meta property="og:image:width" content="1200" />
@@ -54,6 +69,7 @@
 	<meta name="twitter:title" content={pageTitle} />
 	<meta name="twitter:description" content={pageDesc} />
 	<meta name="twitter:image" content="/og/route/{data.id}.png" />
+	{@html `<script type="application/ld+json">${jsonLd}</script>`}
 </svelte:head>
 
 <div class="share-page">
