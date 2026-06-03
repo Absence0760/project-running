@@ -70,12 +70,12 @@
 	}
 
 	// Language — per-browser like theme (localStorage, applied via the
-	// i18n runtime which also updates <html lang/dir>). Not synced through
-	// the cross-device settings bag: the web app has no per-request SSR, so
-	// detection is client-side and the same localStorage key the runtime
-	// reads on first mount is the source of truth (decisions §108). Options
-	// show each language's own endonym so it's findable in any current UI
-	// language.
+	// i18n runtime which also updates <html lang/dir>). The UI locale stays
+	// client-side detected (decisions §108); separately, the applied tag is
+	// mirrored into the universal settings bag (`locale`) purely so the
+	// server can localize email (decisions §120) — it's never read back to
+	// drive the UI. Options show each language's own endonym so it's
+	// findable in any current UI language.
 	let language = $state<Locale>('en');
 
 	async function changeLanguage(next: Locale) {
@@ -84,6 +84,8 @@
 		// load, setLocale keeps the current locale and the select snaps back
 		// rather than lying about a switch that didn't happen.
 		language = currentLocale();
+		// Mirror to the bag for server-sent email localization (§120).
+		if (auth.user) autoSave({ locale: language });
 	}
 
 	// Auto-save path. Changes are COALESCED: rapid edits (e.g. blurring two HR
@@ -250,6 +252,13 @@
 			}
 
 			privacyZones = effective<PrivacyZone[]>(settings, PRIVACY_ZONES_KEY) ?? [];
+
+			// Backfill the server-side email locale once for users who never
+			// open the language picker, so their email still matches their
+			// detected UI language (§120). Only writes when absent.
+			if (auth.user && effective<string>(settings, 'locale') == null) {
+				autoSave({ locale: currentLocale() });
+			}
 
 			// Self-read via get_my_profile(): gender / date_of_birth /
 			// health_data_consent_at are deny-by-default for direct

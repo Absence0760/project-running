@@ -225,6 +225,35 @@ test.describe('/settings/preferences', () => {
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 	});
 
+	test('changing language writes locale to the settings bag (email localization)', async ({
+		page
+	}) => {
+		// The UI locale stays client-side; separately the applied tag is
+		// mirrored into user_settings.prefs.locale so the worker can localize
+		// email (decisions §120). Assert the write actually fires by catching
+		// the user_settings PATCH — a regression dropping it would silently
+		// leave every user's email in English.
+		await page.goto('/settings/preferences');
+		await page.waitForLoadState('networkidle');
+
+		const sel = page.getByTestId('language-select');
+		const before = await sel.inputValue();
+
+		const patch = page.waitForRequest(
+			(req) =>
+				req.method() === 'PATCH' &&
+				req.url().includes('/rest/v1/user_settings') &&
+				(req.postData() ?? '').includes('"locale":"de"'),
+			{ timeout: 8_000 }
+		);
+		await sel.selectOption('de');
+		await patch; // throws if the locale write never fires
+
+		// Restore (writes the bag back to the prior locale).
+		await sel.selectOption(before);
+		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
+	});
+
 	test('map style picker — selecting Satellite saves and survives reload', async ({
 		page
 	}) => {
