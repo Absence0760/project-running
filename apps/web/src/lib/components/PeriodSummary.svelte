@@ -79,8 +79,9 @@
 		if (t === 'all') return m('dash.allTime');
 		if (t === 'week') {
 			const end = periodEnd(d, t);
-			return `${d.toLocaleDateString(activeFormatLocale(), { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(
-				undefined,
+			const fmtLocale = activeFormatLocale();
+			return `${d.toLocaleDateString(fmtLocale, { month: 'short', day: 'numeric' })} – ${end.toLocaleDateString(
+				fmtLocale,
 				{ month: 'short', day: 'numeric', year: 'numeric' },
 			)}`;
 		}
