@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/widgets/missing_map_tiles_hint.dart';
 
 /// Widget tests for the missing-MAPTILER_KEY diagnostic banner.
@@ -13,7 +14,9 @@ void main() {
       'renders the hint banner when neither env key is set',
       (tester) async {
         await tester.pumpWidget(
-          const MaterialApp(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: MissingMapTilesHint(envKeyPresentOverride: false),
             ),
@@ -42,7 +45,9 @@ void main() {
       '(production builds + dev with a real key see no banner)',
       (tester) async {
         await tester.pumpWidget(
-          const MaterialApp(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: MissingMapTilesHint(envKeyPresentOverride: true),
             ),
@@ -65,7 +70,9 @@ void main() {
       '10.0.2.2 vs LAN-IP footgun for physical devices',
       (tester) async {
         await tester.pumpWidget(
-          const MaterialApp(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Scaffold(
               body: MissingMapTilesHint(envKeyPresentOverride: false),
             ),

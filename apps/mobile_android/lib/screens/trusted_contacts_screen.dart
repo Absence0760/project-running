@@ -1,6 +1,7 @@
 import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../settings_sync.dart';
 import '../trusted_contacts.dart';
 import '../widgets/top_banner.dart';
@@ -59,18 +60,19 @@ class _TrustedContactsScreenState extends State<TrustedContactsScreen> {
       await widget.settingsSync
           .updateUniversal({SettingsKeys.trustedContacts: cleaned.map((c) => c.toJson()).toList()});
       if (!mounted) return;
+      final l10n = AppLocalizations.of(context);
       setState(() {
         _contacts = cleaned.map(_EditableContact.from).toList();
       });
       showTopBanner(
         context,
         cleaned.isEmpty
-            ? 'Trusted contacts cleared.'
-            : '${cleaned.length} trusted contact${cleaned.length == 1 ? '' : 's'} saved.',
+            ? l10n.trustedContactsClearedBanner
+            : l10n.trustedContactsSavedBanner(cleaned.length),
       );
     } catch (e) {
       if (!mounted) return;
-      showTopBanner(context, 'Save failed: $e');
+      showTopBanner(context, AppLocalizations.of(context).trustedContactsSaveFailedBanner(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -79,15 +81,14 @@ class _TrustedContactsScreenState extends State<TrustedContactsScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Trusted contacts')),
+      appBar: AppBar(title: Text(l10n.trustedContactsTitle)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           Text(
-            'Designate one or more trusted contacts. The scaffold stores the '
-            'list with your account so the planned "overdue run" + panic-button '
-            'surfaces have somewhere to send notifications. Up to $kMaxTrustedContacts.',
+            l10n.trustedContactsIntro(kMaxTrustedContacts),
             style: theme.textTheme.bodySmall?.copyWith(
               color: theme.colorScheme.onSurfaceVariant,
             ),
@@ -106,12 +107,14 @@ class _TrustedContactsScreenState extends State<TrustedContactsScreen> {
               OutlinedButton.icon(
                 onPressed: _contacts.length >= kMaxTrustedContacts ? null : _add,
                 icon: const Icon(Icons.person_add_outlined),
-                label: const Text('Add contact'),
+                label: Text(l10n.trustedContactsAddButton),
               ),
               const Spacer(),
               FilledButton(
                 onPressed: _saving ? null : _save,
-                child: Text(_saving ? 'Saving…' : 'Save'),
+                child: Text(_saving
+                    ? l10n.trustedContactsSavingButton
+                    : l10n.trustedContactsSaveButton),
               ),
             ],
           ),
@@ -167,6 +170,7 @@ class _ContactCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(12),
@@ -175,10 +179,10 @@ class _ContactCard extends StatelessWidget {
           children: [
             TextField(
               controller: contact.nameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Name',
-                hintText: 'e.g. Alex Chen',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.trustedContactsNameLabel,
+                hintText: l10n.trustedContactsNameHint,
+                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.next,
             ),
@@ -186,10 +190,10 @@ class _ContactCard extends StatelessWidget {
             TextField(
               controller: contact.phoneCtrl,
               keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'Phone',
-                hintText: '+1 555 123 4567',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.trustedContactsPhoneLabel,
+                hintText: l10n.trustedContactsPhoneHint,
+                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.next,
             ),
@@ -197,20 +201,20 @@ class _ContactCard extends StatelessWidget {
             TextField(
               controller: contact.emailCtrl,
               keyboardType: TextInputType.emailAddress,
-              decoration: const InputDecoration(
-                labelText: 'Email',
-                hintText: 'alex@example.com',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.trustedContactsEmailLabel,
+                hintText: l10n.trustedContactsEmailHint,
+                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.next,
             ),
             const SizedBox(height: 8),
             TextField(
               controller: contact.relCtrl,
-              decoration: const InputDecoration(
-                labelText: 'Relationship',
-                hintText: 'partner / parent / run buddy',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.trustedContactsRelationshipLabel,
+                hintText: l10n.trustedContactsRelationshipHint,
+                border: const OutlineInputBorder(),
               ),
               textInputAction: TextInputAction.done,
             ),
@@ -220,7 +224,7 @@ class _ContactCard extends StatelessWidget {
               child: TextButton.icon(
                 onPressed: onRemove,
                 icon: const Icon(Icons.delete_outline),
-                label: const Text('Remove'),
+                label: Text(l10n.trustedContactsRemoveButton),
               ),
             ),
           ],

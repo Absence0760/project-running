@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../readiness.dart';
 import '../training_load.dart';
 
@@ -34,6 +35,7 @@ class ReadinessCard extends StatelessWidget {
     final tsb = load.tsb;
 
     final readiness = computeReadiness(ReadinessInputs(tsb: tsb));
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final accent = _bandAccent(readiness.band);
 
@@ -52,7 +54,7 @@ class ReadinessCard extends StatelessWidget {
             Row(
               children: [
                 Text(
-                  'READINESS',
+                  l10n.readinessCardHeader,
                   style: theme.textTheme.labelMedium?.copyWith(
                     fontWeight: FontWeight.w700,
                     letterSpacing: 0.06,
@@ -68,7 +70,7 @@ class ReadinessCard extends StatelessWidget {
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
-                    _bandLabel(readiness.band),
+                    _bandLabel(l10n, readiness.band),
                     style: theme.textTheme.labelSmall?.copyWith(
                       color: accent,
                       fontWeight: FontWeight.w700,
@@ -115,10 +117,11 @@ class ReadinessCard extends StatelessWidget {
         ReadinessBand.low => const Color(0xFFD32F2F),
       };
 
-  static String _bandLabel(ReadinessBand band) => switch (band) {
-        ReadinessBand.high => 'high',
-        ReadinessBand.moderate => 'moderate',
-        ReadinessBand.low => 'low',
+  static String _bandLabel(AppLocalizations l10n, ReadinessBand band) =>
+      switch (band) {
+        ReadinessBand.high => l10n.readinessBandHigh,
+        ReadinessBand.moderate => l10n.readinessBandModerate,
+        ReadinessBand.low => l10n.readinessBandLow,
       };
 }
 

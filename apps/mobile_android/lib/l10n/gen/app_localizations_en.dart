@@ -9,6 +9,423 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
+  String get trustedContactsClearedBanner => 'Trusted contacts cleared.';
+
+  @override
+  String trustedContactsSavedBanner(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count trusted contacts saved.',
+      one: '1 trusted contact saved.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trustedContactsSaveFailedBanner(Object error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get trustedContactsTitle => 'Trusted contacts';
+
+  @override
+  String trustedContactsIntro(Object max) {
+    return 'Designate one or more trusted contacts. The scaffold stores the list with your account so the planned \"overdue run\" + panic-button surfaces have somewhere to send notifications. Up to $max.';
+  }
+
+  @override
+  String get trustedContactsAddButton => 'Add contact';
+
+  @override
+  String get trustedContactsSavingButton => 'Saving…';
+
+  @override
+  String get trustedContactsSaveButton => 'Save';
+
+  @override
+  String get trustedContactsNameLabel => 'Name';
+
+  @override
+  String get trustedContactsNameHint => 'e.g. Alex Chen';
+
+  @override
+  String get trustedContactsPhoneLabel => 'Phone';
+
+  @override
+  String get trustedContactsPhoneHint => '+1 555 123 4567';
+
+  @override
+  String get trustedContactsEmailLabel => 'Email';
+
+  @override
+  String get trustedContactsEmailHint => 'alex@example.com';
+
+  @override
+  String get trustedContactsRelationshipLabel => 'Relationship';
+
+  @override
+  String get trustedContactsRelationshipHint => 'partner / parent / run buddy';
+
+  @override
+  String get trustedContactsRemoveButton => 'Remove';
+
+  @override
+  String get clubInviteEnterCodeError =>
+      'Enter the invite code from your link.';
+
+  @override
+  String get clubInviteJoinedBanner => 'You\'ve joined the club.';
+
+  @override
+  String get clubInviteTitle => 'Join club';
+
+  @override
+  String get clubInviteIntro =>
+      'Paste the invite code your club admin shared with you.';
+
+  @override
+  String get clubInviteCodeLabel => 'Invite code';
+
+  @override
+  String get clubInviteJoinButton => 'Join';
+
+  @override
+  String recapShareHeadline(Object year) {
+    return 'My $year in running:';
+  }
+
+  @override
+  String recapShareTotals(Object total, Object count) {
+    return '$total across $count runs';
+  }
+
+  @override
+  String recapShareLongestRun(Object distance) {
+    return 'Longest run: $distance';
+  }
+
+  @override
+  String recapShareBestStreak(Object days) {
+    return 'Best streak: $days days';
+  }
+
+  @override
+  String recapShareSubject(Object year) {
+    return '$year recap';
+  }
+
+  @override
+  String get recapTitle => 'Year in running';
+
+  @override
+  String get recapShareTooltip => 'Share recap';
+
+  @override
+  String recapNoRunsForYear(Object year) {
+    return 'No runs to recap for $year.';
+  }
+
+  @override
+  String recapNoRunsYet(Object year) {
+    return 'No runs in $year yet. Log one to see your recap.';
+  }
+
+  @override
+  String recapAcrossRuns(Object count, Object runWord) {
+    return 'across $count $runWord';
+  }
+
+  @override
+  String get recapLongestRunLabel => 'Longest run';
+
+  @override
+  String get recapBestStreakLabel => 'Best streak';
+
+  @override
+  String recapStreakDays(Object days, Object dayWord) {
+    return '$days $dayWord';
+  }
+
+  @override
+  String get recapTopWeekLabel => 'Top week';
+
+  @override
+  String get recapUniqueRoutesLabel => 'Unique routes';
+
+  @override
+  String get recapEarliestStartLabel => 'Earliest start';
+
+  @override
+  String get recapLatestStartLabel => 'Latest start';
+
+  @override
+  String get routePickerTitle => 'Choose route';
+
+  @override
+  String get routePickerNoRoute => 'No route';
+
+  @override
+  String get routePickerClearSearchTooltip => 'Clear search';
+
+  @override
+  String get routePickerSearchHint => 'Search routes by name…';
+
+  @override
+  String get routePickerEmptyNoRoutes => 'No routes saved yet';
+
+  @override
+  String routePickerEmptyNoMatch(Object query) {
+    return 'No routes match \"$query\"';
+  }
+
+  @override
+  String get routePickerStarredHeader => 'Starred';
+
+  @override
+  String get routePickerAllRoutesHeader => 'All routes';
+
+  @override
+  String importStatusImported(Object count, Object label) {
+    return 'Imported $count runs from $label';
+  }
+
+  @override
+  String importStatusImportedWithErrors(Object count, Object errors) {
+    return 'Imported $count runs ($errors failed)';
+  }
+
+  @override
+  String importStatusNoGpsNote(Object base, Object label) {
+    return '$base. $label has no route data, so these runs have no map.';
+  }
+
+  @override
+  String importHealthRequestingPermission(Object label) {
+    return 'Requesting $label permission...';
+  }
+
+  @override
+  String importHealthPermissionDenied(Object label) {
+    return '$label permission denied';
+  }
+
+  @override
+  String get importHealthReadingWorkouts => 'Reading workouts...';
+
+  @override
+  String importHealthFailed(Object label, Object error) {
+    return '$label import failed: $error';
+  }
+
+  @override
+  String get importStatusSavingLocally => 'Saving locally...';
+
+  @override
+  String importStatusSkippedDuplicates(Object count) {
+    return 'Skipped $count duplicate(s) already imported from another source';
+  }
+
+  @override
+  String importStatusSavedProgress(Object done, Object total) {
+    return 'Saved $done of $total locally';
+  }
+
+  @override
+  String get importStatusSyncingToCloud => 'Syncing to cloud...';
+
+  @override
+  String importStatusSyncProgress(Object done, Object total) {
+    return 'Synced $done of $total';
+  }
+
+  @override
+  String get importStatusReadingCsv => 'Reading CSV...';
+
+  @override
+  String importCsvFailed(Object error) {
+    return 'CSV import failed: $error';
+  }
+
+  @override
+  String get importStatusRestoringBackup => 'Restoring backup...';
+
+  @override
+  String importStatusBackupRestored(Object runs, Object tracks, Object routes) {
+    return 'Restored $runs runs · $tracks tracks · $routes routes';
+  }
+
+  @override
+  String importBackupFailed(Object error) {
+    return 'Backup restore failed: $error';
+  }
+
+  @override
+  String get importStatusReadingExport => 'Reading export...';
+
+  @override
+  String importStravaFailed(Object error) {
+    return 'Import failed: $error';
+  }
+
+  @override
+  String get importTitle => 'Import runs';
+
+  @override
+  String get importStravaCardTitle => 'Strava';
+
+  @override
+  String get importStravaCardSubtitle =>
+      'Import every run from a Strava data export ZIP';
+
+  @override
+  String get importStravaHowToHeader => 'How to get your Strava export:';
+
+  @override
+  String get importStravaHowToSteps =>
+      '1. Open Strava → Settings → My Account\n2. Scroll to \"Download or Delete Your Account\"\n3. Tap \"Get Started\" → \"Request your archive\"\n4. You\'ll get an email with a download link in a few hours\n5. Download the .zip and tap Import below';
+
+  @override
+  String get importStravaButton => 'Import Strava ZIP';
+
+  @override
+  String importHealthButton(Object label) {
+    return 'Import from $label';
+  }
+
+  @override
+  String get importCsvCardTitle => 'CSV';
+
+  @override
+  String get importCsvCardSubtitle =>
+      'Re-import a CSV exported from Settings — runs only, no GPS';
+
+  @override
+  String get importCsvCardDescription =>
+      'Each CSV row becomes a manual run (date, distance, duration, source). The map trace is not in the CSV, so imported runs won\'t have a route line.';
+
+  @override
+  String get importCsvButton => 'Import CSV';
+
+  @override
+  String get importBackupCardTitle => 'Full backup ZIP';
+
+  @override
+  String get importBackupCardSubtitle =>
+      'Restore runs, routes, and GPS traces from a backup file';
+
+  @override
+  String get importBackupCardDescription =>
+      'Loss-less round-trip. Works without signing in — restored runs sync to your account the next time you do. Make a backup from Settings → Full backup.';
+
+  @override
+  String get importBackupButton => 'Restore backup ZIP';
+
+  @override
+  String get importErrorsHeader => 'Errors';
+
+  @override
+  String importErrorsMore(Object count) {
+    return '... and $count more';
+  }
+
+  @override
+  String get importHealthSubtitleIos =>
+      'Pull workouts you\'ve recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health';
+
+  @override
+  String get importHealthSubtitleAndroid =>
+      'Pull workouts from Google Fit, Samsung Health, Garmin, Fitbit, and any other Health Connect app';
+
+  @override
+  String get importHealthDescriptionIos =>
+      'Reads workout summaries (date, distance, duration, type) from the last year. Apple Health doesn\'t expose GPS routes recorded by third-party apps — runs imported this way won\'t have a map trace.';
+
+  @override
+  String get importHealthDescriptionAndroid =>
+      'Reads workout summaries (date, distance, duration, type) from the last year. GPS routes are not exposed by Health Connect — runs imported this way won\'t have a map trace.';
+
+  @override
+  String peopleFollowFailedBanner(Object error) {
+    return 'Could not update follow: $error';
+  }
+
+  @override
+  String get peopleSearchHint => 'Search runners by name';
+
+  @override
+  String get peopleClearSearchTooltip => 'Clear search';
+
+  @override
+  String get peopleSearchResultsHeader => 'Search results';
+
+  @override
+  String get peopleSuggestedHeader => 'Suggested for you';
+
+  @override
+  String peopleEmptySearchTitle(Object query) {
+    return 'No runners match \"$query\"';
+  }
+
+  @override
+  String get peopleEmptySearchBody =>
+      'Try a shorter or different name. Display names are public; people who haven\'t set one yet won\'t show up here.';
+
+  @override
+  String get peopleEmptySuggestionsTitle => 'No suggestions yet';
+
+  @override
+  String get peopleEmptySuggestionsBody =>
+      'Suggestions come from people in clubs you\'ve joined. Join a club to start seeing them here.';
+
+  @override
+  String peoplePublicRunCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count public runs',
+      one: '1 public run',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String peopleSharedClubsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clubs together',
+      one: '1 club together',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get peopleFallbackDisplayName => 'Runner';
+
+  @override
+  String get peopleFollowingButton => 'Following';
+
+  @override
+  String get peopleFollowButton => 'Follow';
+
+  @override
+  String get readinessCardHeader => 'READINESS';
+
+  @override
+  String get readinessBandHigh => 'high';
+
+  @override
+  String get readinessBandModerate => 'moderate';
+
+  @override
+  String get readinessBandLow => 'low';
+
+  @override
+  String get missingMapTilesTitle => 'Using OpenStreetMap fallback tiles';
+
+  @override
   String get prefsLanguage => 'Language';
 
   @override

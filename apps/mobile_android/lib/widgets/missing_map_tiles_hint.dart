@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+import '../l10n/gen/app_localizations.dart';
+
 /// Inline diagnostic shown on map-bearing screens when NEITHER
 /// `dotenv.env['MAPTILER_KEY']` NOR `dotenv.env['TILE_URL_TEMPLATE']`
 /// is configured. The user reported "I'm still not seeing the map"
@@ -46,6 +48,7 @@ class MissingMapTilesHint extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (_tilesConfigured) return const SizedBox.shrink();
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(12, 8, 12, 0),
@@ -71,7 +74,7 @@ class MissingMapTilesHint extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Using OpenStreetMap fallback tiles',
+                  l10n.missingMapTilesTitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     fontWeight: FontWeight.w600,
                     color: theme.colorScheme.error,

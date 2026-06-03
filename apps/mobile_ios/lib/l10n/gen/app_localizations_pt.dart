@@ -9,6 +9,425 @@ class AppLocalizationsPt extends AppLocalizations {
   AppLocalizationsPt([String locale = 'pt']) : super(locale);
 
   @override
+  String get trustedContactsClearedBanner => 'Contatos de confiança removidos.';
+
+  @override
+  String trustedContactsSavedBanner(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count contatos de confiança salvos.',
+      one: '1 contato de confiança salvo.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trustedContactsSaveFailedBanner(Object error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get trustedContactsTitle => 'Contatos de confiança';
+
+  @override
+  String trustedContactsIntro(Object max) {
+    return 'Defina um ou mais contatos de confiança. A estrutura armazena a lista junto à sua conta para que os recursos planejados de \"corrida atrasada\" e botão de pânico tenham para onde enviar notificações. Até $max.';
+  }
+
+  @override
+  String get trustedContactsAddButton => 'Adicionar contato';
+
+  @override
+  String get trustedContactsSavingButton => 'Salvando…';
+
+  @override
+  String get trustedContactsSaveButton => 'Salvar';
+
+  @override
+  String get trustedContactsNameLabel => 'Nome';
+
+  @override
+  String get trustedContactsNameHint => 'ex.: Alex Chen';
+
+  @override
+  String get trustedContactsPhoneLabel => 'Telefone';
+
+  @override
+  String get trustedContactsPhoneHint => '+55 11 91234 5678';
+
+  @override
+  String get trustedContactsEmailLabel => 'E-mail';
+
+  @override
+  String get trustedContactsEmailHint => 'alex@exemplo.com';
+
+  @override
+  String get trustedContactsRelationshipLabel => 'Relação';
+
+  @override
+  String get trustedContactsRelationshipHint =>
+      'parceiro(a) / pai ou mãe / parceiro(a) de corrida';
+
+  @override
+  String get trustedContactsRemoveButton => 'Remover';
+
+  @override
+  String get clubInviteEnterCodeError =>
+      'Digite o código de convite do seu link.';
+
+  @override
+  String get clubInviteJoinedBanner => 'Você entrou no clube.';
+
+  @override
+  String get clubInviteTitle => 'Entrar no clube';
+
+  @override
+  String get clubInviteIntro =>
+      'Cole o código de convite que o administrador do clube compartilhou com você.';
+
+  @override
+  String get clubInviteCodeLabel => 'Código de convite';
+
+  @override
+  String get clubInviteJoinButton => 'Entrar';
+
+  @override
+  String recapShareHeadline(Object year) {
+    return 'Meu $year na corrida:';
+  }
+
+  @override
+  String recapShareTotals(Object total, Object count) {
+    return '$total em $count corridas';
+  }
+
+  @override
+  String recapShareLongestRun(Object distance) {
+    return 'Corrida mais longa: $distance';
+  }
+
+  @override
+  String recapShareBestStreak(Object days) {
+    return 'Melhor sequência: $days dias';
+  }
+
+  @override
+  String recapShareSubject(Object year) {
+    return 'Retrospectiva $year';
+  }
+
+  @override
+  String get recapTitle => 'Ano na corrida';
+
+  @override
+  String get recapShareTooltip => 'Compartilhar retrospectiva';
+
+  @override
+  String recapNoRunsForYear(Object year) {
+    return 'Nenhuma corrida para a retrospectiva de $year.';
+  }
+
+  @override
+  String recapNoRunsYet(Object year) {
+    return 'Ainda não há corridas em $year. Registre uma para ver sua retrospectiva.';
+  }
+
+  @override
+  String recapAcrossRuns(Object count, Object runWord) {
+    return 'em $count $runWord';
+  }
+
+  @override
+  String get recapLongestRunLabel => 'Corrida mais longa';
+
+  @override
+  String get recapBestStreakLabel => 'Melhor sequência';
+
+  @override
+  String recapStreakDays(Object days, Object dayWord) {
+    return '$days $dayWord';
+  }
+
+  @override
+  String get recapTopWeekLabel => 'Melhor semana';
+
+  @override
+  String get recapUniqueRoutesLabel => 'Rotas únicas';
+
+  @override
+  String get recapEarliestStartLabel => 'Início mais cedo';
+
+  @override
+  String get recapLatestStartLabel => 'Início mais tarde';
+
+  @override
+  String get routePickerTitle => 'Escolher rota';
+
+  @override
+  String get routePickerNoRoute => 'Sem rota';
+
+  @override
+  String get routePickerClearSearchTooltip => 'Limpar busca';
+
+  @override
+  String get routePickerSearchHint => 'Buscar rotas por nome…';
+
+  @override
+  String get routePickerEmptyNoRoutes => 'Nenhuma rota salva ainda';
+
+  @override
+  String routePickerEmptyNoMatch(Object query) {
+    return 'Nenhuma rota corresponde a \"$query\"';
+  }
+
+  @override
+  String get routePickerStarredHeader => 'Com estrela';
+
+  @override
+  String get routePickerAllRoutesHeader => 'Todas as rotas';
+
+  @override
+  String importStatusImported(Object count, Object label) {
+    return '$count corridas importadas de $label';
+  }
+
+  @override
+  String importStatusImportedWithErrors(Object count, Object errors) {
+    return '$count corridas importadas ($errors com falha)';
+  }
+
+  @override
+  String importStatusNoGpsNote(Object base, Object label) {
+    return '$base. $label não tem dados de rota, então essas corridas não têm mapa.';
+  }
+
+  @override
+  String importHealthRequestingPermission(Object label) {
+    return 'Solicitando permissão do $label...';
+  }
+
+  @override
+  String importHealthPermissionDenied(Object label) {
+    return 'Permissão do $label negada';
+  }
+
+  @override
+  String get importHealthReadingWorkouts => 'Lendo treinos...';
+
+  @override
+  String importHealthFailed(Object label, Object error) {
+    return 'Falha na importação do $label: $error';
+  }
+
+  @override
+  String get importStatusSavingLocally => 'Salvando localmente...';
+
+  @override
+  String importStatusSkippedDuplicates(Object count) {
+    return '$count duplicata(s) ignorada(s) já importada(s) de outra fonte';
+  }
+
+  @override
+  String importStatusSavedProgress(Object done, Object total) {
+    return '$done de $total salvas localmente';
+  }
+
+  @override
+  String get importStatusSyncingToCloud => 'Sincronizando com a nuvem...';
+
+  @override
+  String importStatusSyncProgress(Object done, Object total) {
+    return '$done de $total sincronizadas';
+  }
+
+  @override
+  String get importStatusReadingCsv => 'Lendo CSV...';
+
+  @override
+  String importCsvFailed(Object error) {
+    return 'Falha na importação do CSV: $error';
+  }
+
+  @override
+  String get importStatusRestoringBackup => 'Restaurando backup...';
+
+  @override
+  String importStatusBackupRestored(Object runs, Object tracks, Object routes) {
+    return '$runs corridas · $tracks trajetos · $routes rotas restauradas';
+  }
+
+  @override
+  String importBackupFailed(Object error) {
+    return 'Falha ao restaurar o backup: $error';
+  }
+
+  @override
+  String get importStatusReadingExport => 'Lendo exportação...';
+
+  @override
+  String importStravaFailed(Object error) {
+    return 'Falha na importação: $error';
+  }
+
+  @override
+  String get importTitle => 'Importar corridas';
+
+  @override
+  String get importStravaCardTitle => 'Strava';
+
+  @override
+  String get importStravaCardSubtitle =>
+      'Importe todas as corridas de um ZIP de exportação de dados do Strava';
+
+  @override
+  String get importStravaHowToHeader => 'Como obter sua exportação do Strava:';
+
+  @override
+  String get importStravaHowToSteps =>
+      '1. Abra o Strava → Configurações → Minha conta\n2. Role até \"Baixar ou excluir sua conta\"\n3. Toque em \"Começar\" → \"Solicitar seu arquivo\"\n4. Você receberá um e-mail com um link de download em algumas horas\n5. Baixe o .zip e toque em Importar abaixo';
+
+  @override
+  String get importStravaButton => 'Importar ZIP do Strava';
+
+  @override
+  String importHealthButton(Object label) {
+    return 'Importar do $label';
+  }
+
+  @override
+  String get importCsvCardTitle => 'CSV';
+
+  @override
+  String get importCsvCardSubtitle =>
+      'Reimporte um CSV exportado em Configurações — apenas corridas, sem GPS';
+
+  @override
+  String get importCsvCardDescription =>
+      'Cada linha do CSV vira uma corrida manual (data, distância, duração, fonte). O trajeto no mapa não está no CSV, então as corridas importadas não terão linha de rota.';
+
+  @override
+  String get importCsvButton => 'Importar CSV';
+
+  @override
+  String get importBackupCardTitle => 'ZIP de backup completo';
+
+  @override
+  String get importBackupCardSubtitle =>
+      'Restaure corridas, rotas e trajetos de GPS de um arquivo de backup';
+
+  @override
+  String get importBackupCardDescription =>
+      'Ida e volta sem perdas. Funciona sem login — as corridas restauradas sincronizam com sua conta na próxima vez que você entrar. Faça um backup em Configurações → Backup completo.';
+
+  @override
+  String get importBackupButton => 'Restaurar ZIP de backup';
+
+  @override
+  String get importErrorsHeader => 'Erros';
+
+  @override
+  String importErrorsMore(Object count) {
+    return '... e mais $count';
+  }
+
+  @override
+  String get importHealthSubtitleIos =>
+      'Importe treinos gravados no Apple Watch, Nike Run Club, Strava e outros apps que gravam no Apple Saúde';
+
+  @override
+  String get importHealthSubtitleAndroid =>
+      'Importe treinos do Google Fit, Samsung Health, Garmin, Fitbit e qualquer outro app do Health Connect';
+
+  @override
+  String get importHealthDescriptionIos =>
+      'Lê resumos de treino (data, distância, duração, tipo) do último ano. O Apple Saúde não expõe rotas de GPS gravadas por apps de terceiros — as corridas importadas assim não terão trajeto no mapa.';
+
+  @override
+  String get importHealthDescriptionAndroid =>
+      'Lê resumos de treino (data, distância, duração, tipo) do último ano. As rotas de GPS não são expostas pelo Health Connect — as corridas importadas assim não terão trajeto no mapa.';
+
+  @override
+  String peopleFollowFailedBanner(Object error) {
+    return 'Não foi possível atualizar o seguimento: $error';
+  }
+
+  @override
+  String get peopleSearchHint => 'Buscar corredores por nome';
+
+  @override
+  String get peopleClearSearchTooltip => 'Limpar busca';
+
+  @override
+  String get peopleSearchResultsHeader => 'Resultados da busca';
+
+  @override
+  String get peopleSuggestedHeader => 'Sugestões para você';
+
+  @override
+  String peopleEmptySearchTitle(Object query) {
+    return 'Nenhum corredor corresponde a \"$query\"';
+  }
+
+  @override
+  String get peopleEmptySearchBody =>
+      'Tente um nome mais curto ou diferente. Os nomes de exibição são públicos; quem ainda não definiu um não aparece aqui.';
+
+  @override
+  String get peopleEmptySuggestionsTitle => 'Nenhuma sugestão ainda';
+
+  @override
+  String get peopleEmptySuggestionsBody =>
+      'As sugestões vêm de pessoas dos clubes em que você entrou. Entre em um clube para começar a vê-las aqui.';
+
+  @override
+  String peoplePublicRunCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas públicas',
+      one: '1 corrida pública',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String peopleSharedClubsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clubes em comum',
+      one: '1 clube em comum',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get peopleFallbackDisplayName => 'Corredor';
+
+  @override
+  String get peopleFollowingButton => 'Seguindo';
+
+  @override
+  String get peopleFollowButton => 'Seguir';
+
+  @override
+  String get readinessCardHeader => 'PRONTIDÃO';
+
+  @override
+  String get readinessBandHigh => 'alta';
+
+  @override
+  String get readinessBandModerate => 'moderada';
+
+  @override
+  String get readinessBandLow => 'baixa';
+
+  @override
+  String get missingMapTilesTitle =>
+      'Usando tiles alternativos do OpenStreetMap';
+
+  @override
   String get prefsLanguage => 'Idioma';
 
   @override
@@ -6094,6 +6513,425 @@ class AppLocalizationsPt extends AppLocalizations {
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
 class AppLocalizationsPtBr extends AppLocalizationsPt {
   AppLocalizationsPtBr() : super('pt_BR');
+
+  @override
+  String get trustedContactsClearedBanner => 'Contatos de confiança removidos.';
+
+  @override
+  String trustedContactsSavedBanner(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count contatos de confiança salvos.',
+      one: '1 contato de confiança salvo.',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trustedContactsSaveFailedBanner(Object error) {
+    return 'Falha ao salvar: $error';
+  }
+
+  @override
+  String get trustedContactsTitle => 'Contatos de confiança';
+
+  @override
+  String trustedContactsIntro(Object max) {
+    return 'Defina um ou mais contatos de confiança. A estrutura armazena a lista junto à sua conta para que os recursos planejados de \"corrida atrasada\" e botão de pânico tenham para onde enviar notificações. Até $max.';
+  }
+
+  @override
+  String get trustedContactsAddButton => 'Adicionar contato';
+
+  @override
+  String get trustedContactsSavingButton => 'Salvando…';
+
+  @override
+  String get trustedContactsSaveButton => 'Salvar';
+
+  @override
+  String get trustedContactsNameLabel => 'Nome';
+
+  @override
+  String get trustedContactsNameHint => 'ex.: Alex Chen';
+
+  @override
+  String get trustedContactsPhoneLabel => 'Telefone';
+
+  @override
+  String get trustedContactsPhoneHint => '+55 11 91234 5678';
+
+  @override
+  String get trustedContactsEmailLabel => 'E-mail';
+
+  @override
+  String get trustedContactsEmailHint => 'alex@exemplo.com';
+
+  @override
+  String get trustedContactsRelationshipLabel => 'Relação';
+
+  @override
+  String get trustedContactsRelationshipHint =>
+      'parceiro(a) / pai ou mãe / parceiro(a) de corrida';
+
+  @override
+  String get trustedContactsRemoveButton => 'Remover';
+
+  @override
+  String get clubInviteEnterCodeError =>
+      'Digite o código de convite do seu link.';
+
+  @override
+  String get clubInviteJoinedBanner => 'Você entrou no clube.';
+
+  @override
+  String get clubInviteTitle => 'Entrar no clube';
+
+  @override
+  String get clubInviteIntro =>
+      'Cole o código de convite que o administrador do clube compartilhou com você.';
+
+  @override
+  String get clubInviteCodeLabel => 'Código de convite';
+
+  @override
+  String get clubInviteJoinButton => 'Entrar';
+
+  @override
+  String recapShareHeadline(Object year) {
+    return 'Meu $year na corrida:';
+  }
+
+  @override
+  String recapShareTotals(Object total, Object count) {
+    return '$total em $count corridas';
+  }
+
+  @override
+  String recapShareLongestRun(Object distance) {
+    return 'Corrida mais longa: $distance';
+  }
+
+  @override
+  String recapShareBestStreak(Object days) {
+    return 'Melhor sequência: $days dias';
+  }
+
+  @override
+  String recapShareSubject(Object year) {
+    return 'Retrospectiva $year';
+  }
+
+  @override
+  String get recapTitle => 'Ano na corrida';
+
+  @override
+  String get recapShareTooltip => 'Compartilhar retrospectiva';
+
+  @override
+  String recapNoRunsForYear(Object year) {
+    return 'Nenhuma corrida para a retrospectiva de $year.';
+  }
+
+  @override
+  String recapNoRunsYet(Object year) {
+    return 'Ainda não há corridas em $year. Registre uma para ver sua retrospectiva.';
+  }
+
+  @override
+  String recapAcrossRuns(Object count, Object runWord) {
+    return 'em $count $runWord';
+  }
+
+  @override
+  String get recapLongestRunLabel => 'Corrida mais longa';
+
+  @override
+  String get recapBestStreakLabel => 'Melhor sequência';
+
+  @override
+  String recapStreakDays(Object days, Object dayWord) {
+    return '$days $dayWord';
+  }
+
+  @override
+  String get recapTopWeekLabel => 'Melhor semana';
+
+  @override
+  String get recapUniqueRoutesLabel => 'Rotas únicas';
+
+  @override
+  String get recapEarliestStartLabel => 'Início mais cedo';
+
+  @override
+  String get recapLatestStartLabel => 'Início mais tarde';
+
+  @override
+  String get routePickerTitle => 'Escolher rota';
+
+  @override
+  String get routePickerNoRoute => 'Sem rota';
+
+  @override
+  String get routePickerClearSearchTooltip => 'Limpar busca';
+
+  @override
+  String get routePickerSearchHint => 'Buscar rotas por nome…';
+
+  @override
+  String get routePickerEmptyNoRoutes => 'Nenhuma rota salva ainda';
+
+  @override
+  String routePickerEmptyNoMatch(Object query) {
+    return 'Nenhuma rota corresponde a \"$query\"';
+  }
+
+  @override
+  String get routePickerStarredHeader => 'Com estrela';
+
+  @override
+  String get routePickerAllRoutesHeader => 'Todas as rotas';
+
+  @override
+  String importStatusImported(Object count, Object label) {
+    return '$count corridas importadas de $label';
+  }
+
+  @override
+  String importStatusImportedWithErrors(Object count, Object errors) {
+    return '$count corridas importadas ($errors com falha)';
+  }
+
+  @override
+  String importStatusNoGpsNote(Object base, Object label) {
+    return '$base. $label não tem dados de rota, então essas corridas não têm mapa.';
+  }
+
+  @override
+  String importHealthRequestingPermission(Object label) {
+    return 'Solicitando permissão do $label...';
+  }
+
+  @override
+  String importHealthPermissionDenied(Object label) {
+    return 'Permissão do $label negada';
+  }
+
+  @override
+  String get importHealthReadingWorkouts => 'Lendo treinos...';
+
+  @override
+  String importHealthFailed(Object label, Object error) {
+    return 'Falha na importação do $label: $error';
+  }
+
+  @override
+  String get importStatusSavingLocally => 'Salvando localmente...';
+
+  @override
+  String importStatusSkippedDuplicates(Object count) {
+    return '$count duplicata(s) ignorada(s) já importada(s) de outra fonte';
+  }
+
+  @override
+  String importStatusSavedProgress(Object done, Object total) {
+    return '$done de $total salvas localmente';
+  }
+
+  @override
+  String get importStatusSyncingToCloud => 'Sincronizando com a nuvem...';
+
+  @override
+  String importStatusSyncProgress(Object done, Object total) {
+    return '$done de $total sincronizadas';
+  }
+
+  @override
+  String get importStatusReadingCsv => 'Lendo CSV...';
+
+  @override
+  String importCsvFailed(Object error) {
+    return 'Falha na importação do CSV: $error';
+  }
+
+  @override
+  String get importStatusRestoringBackup => 'Restaurando backup...';
+
+  @override
+  String importStatusBackupRestored(Object runs, Object tracks, Object routes) {
+    return '$runs corridas · $tracks trajetos · $routes rotas restauradas';
+  }
+
+  @override
+  String importBackupFailed(Object error) {
+    return 'Falha ao restaurar o backup: $error';
+  }
+
+  @override
+  String get importStatusReadingExport => 'Lendo exportação...';
+
+  @override
+  String importStravaFailed(Object error) {
+    return 'Falha na importação: $error';
+  }
+
+  @override
+  String get importTitle => 'Importar corridas';
+
+  @override
+  String get importStravaCardTitle => 'Strava';
+
+  @override
+  String get importStravaCardSubtitle =>
+      'Importe todas as corridas de um ZIP de exportação de dados do Strava';
+
+  @override
+  String get importStravaHowToHeader => 'Como obter sua exportação do Strava:';
+
+  @override
+  String get importStravaHowToSteps =>
+      '1. Abra o Strava → Configurações → Minha conta\n2. Role até \"Baixar ou excluir sua conta\"\n3. Toque em \"Começar\" → \"Solicitar seu arquivo\"\n4. Você receberá um e-mail com um link de download em algumas horas\n5. Baixe o .zip e toque em Importar abaixo';
+
+  @override
+  String get importStravaButton => 'Importar ZIP do Strava';
+
+  @override
+  String importHealthButton(Object label) {
+    return 'Importar do $label';
+  }
+
+  @override
+  String get importCsvCardTitle => 'CSV';
+
+  @override
+  String get importCsvCardSubtitle =>
+      'Reimporte um CSV exportado em Configurações — apenas corridas, sem GPS';
+
+  @override
+  String get importCsvCardDescription =>
+      'Cada linha do CSV vira uma corrida manual (data, distância, duração, fonte). O trajeto no mapa não está no CSV, então as corridas importadas não terão linha de rota.';
+
+  @override
+  String get importCsvButton => 'Importar CSV';
+
+  @override
+  String get importBackupCardTitle => 'ZIP de backup completo';
+
+  @override
+  String get importBackupCardSubtitle =>
+      'Restaure corridas, rotas e trajetos de GPS de um arquivo de backup';
+
+  @override
+  String get importBackupCardDescription =>
+      'Ida e volta sem perdas. Funciona sem login — as corridas restauradas sincronizam com sua conta na próxima vez que você entrar. Faça um backup em Configurações → Backup completo.';
+
+  @override
+  String get importBackupButton => 'Restaurar ZIP de backup';
+
+  @override
+  String get importErrorsHeader => 'Erros';
+
+  @override
+  String importErrorsMore(Object count) {
+    return '... e mais $count';
+  }
+
+  @override
+  String get importHealthSubtitleIos =>
+      'Importe treinos gravados no Apple Watch, Nike Run Club, Strava e outros apps que gravam no Apple Saúde';
+
+  @override
+  String get importHealthSubtitleAndroid =>
+      'Importe treinos do Google Fit, Samsung Health, Garmin, Fitbit e qualquer outro app do Health Connect';
+
+  @override
+  String get importHealthDescriptionIos =>
+      'Lê resumos de treino (data, distância, duração, tipo) do último ano. O Apple Saúde não expõe rotas de GPS gravadas por apps de terceiros — as corridas importadas assim não terão trajeto no mapa.';
+
+  @override
+  String get importHealthDescriptionAndroid =>
+      'Lê resumos de treino (data, distância, duração, tipo) do último ano. As rotas de GPS não são expostas pelo Health Connect — as corridas importadas assim não terão trajeto no mapa.';
+
+  @override
+  String peopleFollowFailedBanner(Object error) {
+    return 'Não foi possível atualizar o seguimento: $error';
+  }
+
+  @override
+  String get peopleSearchHint => 'Buscar corredores por nome';
+
+  @override
+  String get peopleClearSearchTooltip => 'Limpar busca';
+
+  @override
+  String get peopleSearchResultsHeader => 'Resultados da busca';
+
+  @override
+  String get peopleSuggestedHeader => 'Sugestões para você';
+
+  @override
+  String peopleEmptySearchTitle(Object query) {
+    return 'Nenhum corredor corresponde a \"$query\"';
+  }
+
+  @override
+  String get peopleEmptySearchBody =>
+      'Tente um nome mais curto ou diferente. Os nomes de exibição são públicos; quem ainda não definiu um não aparece aqui.';
+
+  @override
+  String get peopleEmptySuggestionsTitle => 'Nenhuma sugestão ainda';
+
+  @override
+  String get peopleEmptySuggestionsBody =>
+      'As sugestões vêm de pessoas dos clubes em que você entrou. Entre em um clube para começar a vê-las aqui.';
+
+  @override
+  String peoplePublicRunCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count corridas públicas',
+      one: '1 corrida pública',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String peopleSharedClubsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count clubes em comum',
+      one: '1 clube em comum',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get peopleFallbackDisplayName => 'Corredor';
+
+  @override
+  String get peopleFollowingButton => 'Seguindo';
+
+  @override
+  String get peopleFollowButton => 'Seguir';
+
+  @override
+  String get readinessCardHeader => 'PRONTIDÃO';
+
+  @override
+  String get readinessBandHigh => 'alta';
+
+  @override
+  String get readinessBandModerate => 'moderada';
+
+  @override
+  String get readinessBandLow => 'baixa';
+
+  @override
+  String get missingMapTilesTitle =>
+      'Usando tiles alternativos do OpenStreetMap';
 
   @override
   String get prefsLanguage => 'Idioma';

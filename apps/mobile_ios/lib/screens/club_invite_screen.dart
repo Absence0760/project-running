@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../widgets/top_banner.dart';
@@ -61,7 +62,9 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
   Future<void> _redeem() async {
     final token = _tokenCtl.text.trim();
     if (token.isEmpty) {
-      setState(() => _error = 'Enter the invite code from your link.');
+      setState(
+        () => _error = AppLocalizations.of(context).clubInviteEnterCodeError,
+      );
       return;
     }
     setState(() {
@@ -71,7 +74,7 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
     try {
       final slug = await widget.social.joinClubByToken(token);
       if (!mounted) return;
-      showTopBanner(context, "You've joined the club.");
+      showTopBanner(context, AppLocalizations.of(context).clubInviteJoinedBanner);
       // Replace the invite screen with the club detail so a back-tap
       // returns the user to where they were before redemption (not
       // back into the redemption form).
@@ -94,23 +97,24 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Join club')),
+      appBar: AppBar(title: Text(l10n.clubInviteTitle)),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Text(
-              'Paste the invite code your club admin shared with you.',
+              l10n.clubInviteIntro,
               style: theme.textTheme.bodyMedium,
             ),
             const SizedBox(height: 16),
             TextField(
               controller: _tokenCtl,
-              decoration: const InputDecoration(
-                labelText: 'Invite code',
-                border: OutlineInputBorder(),
+              decoration: InputDecoration(
+                labelText: l10n.clubInviteCodeLabel,
+                border: const OutlineInputBorder(),
               ),
               autocorrect: false,
               enableSuggestions: false,
@@ -132,7 +136,7 @@ class _ClubInviteScreenState extends State<ClubInviteScreen> {
                       height: 20,
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
-                  : const Text('Join'),
+                  : Text(l10n.clubInviteJoinButton),
             ),
           ],
         ),

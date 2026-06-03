@@ -107,6 +107,648 @@ abstract class AppLocalizations {
     Locale('pt', 'BR'),
   ];
 
+  /// Confirmation banner shown after saving an empty trusted-contacts list
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted contacts cleared.'**
+  String get trustedContactsClearedBanner;
+
+  /// Confirmation banner with the count of trusted contacts saved
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 trusted contact saved.} other{{count} trusted contacts saved.}}'**
+  String trustedContactsSavedBanner(num count);
+
+  /// Error banner shown when saving trusted contacts fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String trustedContactsSaveFailedBanner(Object error);
+
+  /// App bar title for the trusted-contacts settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Trusted contacts'**
+  String get trustedContactsTitle;
+
+  /// Intro paragraph explaining what trusted contacts are used for
+  ///
+  /// In en, this message translates to:
+  /// **'Designate one or more trusted contacts. The scaffold stores the list with your account so the planned \"overdue run\" + panic-button surfaces have somewhere to send notifications. Up to {max}.'**
+  String trustedContactsIntro(Object max);
+
+  /// Button label to add a new trusted contact row
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get trustedContactsAddButton;
+
+  /// Save button label while a save is in progress
+  ///
+  /// In en, this message translates to:
+  /// **'Saving…'**
+  String get trustedContactsSavingButton;
+
+  /// Save button label for the trusted-contacts list
+  ///
+  /// In en, this message translates to:
+  /// **'Save'**
+  String get trustedContactsSaveButton;
+
+  /// Text field label for a trusted contact's name
+  ///
+  /// In en, this message translates to:
+  /// **'Name'**
+  String get trustedContactsNameLabel;
+
+  /// Placeholder hint for the trusted-contact name field
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Alex Chen'**
+  String get trustedContactsNameHint;
+
+  /// Text field label for a trusted contact's phone number
+  ///
+  /// In en, this message translates to:
+  /// **'Phone'**
+  String get trustedContactsPhoneLabel;
+
+  /// Placeholder hint for the trusted-contact phone field
+  ///
+  /// In en, this message translates to:
+  /// **'+1 555 123 4567'**
+  String get trustedContactsPhoneHint;
+
+  /// Text field label for a trusted contact's email address
+  ///
+  /// In en, this message translates to:
+  /// **'Email'**
+  String get trustedContactsEmailLabel;
+
+  /// Placeholder hint for the trusted-contact email field
+  ///
+  /// In en, this message translates to:
+  /// **'alex@example.com'**
+  String get trustedContactsEmailHint;
+
+  /// Text field label for a trusted contact's relationship
+  ///
+  /// In en, this message translates to:
+  /// **'Relationship'**
+  String get trustedContactsRelationshipLabel;
+
+  /// Placeholder hint for the trusted-contact relationship field
+  ///
+  /// In en, this message translates to:
+  /// **'partner / parent / run buddy'**
+  String get trustedContactsRelationshipHint;
+
+  /// Button to remove a trusted contact from the list
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get trustedContactsRemoveButton;
+
+  /// Inline error when the invite-code field is empty on submit
+  ///
+  /// In en, this message translates to:
+  /// **'Enter the invite code from your link.'**
+  String get clubInviteEnterCodeError;
+
+  /// Confirmation banner after successfully redeeming a club invite
+  ///
+  /// In en, this message translates to:
+  /// **'You\'ve joined the club.'**
+  String get clubInviteJoinedBanner;
+
+  /// App bar title for the club-invite redemption screen
+  ///
+  /// In en, this message translates to:
+  /// **'Join club'**
+  String get clubInviteTitle;
+
+  /// Instruction text above the invite-code field
+  ///
+  /// In en, this message translates to:
+  /// **'Paste the invite code your club admin shared with you.'**
+  String get clubInviteIntro;
+
+  /// Text field label for the club invite code
+  ///
+  /// In en, this message translates to:
+  /// **'Invite code'**
+  String get clubInviteCodeLabel;
+
+  /// Button to redeem the club invite code
+  ///
+  /// In en, this message translates to:
+  /// **'Join'**
+  String get clubInviteJoinButton;
+
+  /// First line of the shared year-in-running recap summary
+  ///
+  /// In en, this message translates to:
+  /// **'My {year} in running:'**
+  String recapShareHeadline(Object year);
+
+  /// Distance-and-run-count line in the shared recap summary
+  ///
+  /// In en, this message translates to:
+  /// **'{total} across {count} runs'**
+  String recapShareTotals(Object total, Object count);
+
+  /// Longest-run line in the shared recap summary
+  ///
+  /// In en, this message translates to:
+  /// **'Longest run: {distance}'**
+  String recapShareLongestRun(Object distance);
+
+  /// Best-streak line in the shared recap summary
+  ///
+  /// In en, this message translates to:
+  /// **'Best streak: {days} days'**
+  String recapShareBestStreak(Object days);
+
+  /// OS share-sheet subject for the year-in-running recap
+  ///
+  /// In en, this message translates to:
+  /// **'{year} recap'**
+  String recapShareSubject(Object year);
+
+  /// App bar title for the year-in-running recap screen
+  ///
+  /// In en, this message translates to:
+  /// **'Year in running'**
+  String get recapTitle;
+
+  /// Tooltip for the share-recap icon button
+  ///
+  /// In en, this message translates to:
+  /// **'Share recap'**
+  String get recapShareTooltip;
+
+  /// Empty-state shown for a year outside the valid range
+  ///
+  /// In en, this message translates to:
+  /// **'No runs to recap for {year}.'**
+  String recapNoRunsForYear(Object year);
+
+  /// Empty-state shown when no runs exist for the selected year
+  ///
+  /// In en, this message translates to:
+  /// **'No runs in {year} yet. Log one to see your recap.'**
+  String recapNoRunsYet(Object year);
+
+  /// Subtitle under the hero distance giving the run count
+  ///
+  /// In en, this message translates to:
+  /// **'across {count} {runWord}'**
+  String recapAcrossRuns(Object count, Object runWord);
+
+  /// Stat card label for the longest run of the year
+  ///
+  /// In en, this message translates to:
+  /// **'Longest run'**
+  String get recapLongestRunLabel;
+
+  /// Stat card label for the best running streak
+  ///
+  /// In en, this message translates to:
+  /// **'Best streak'**
+  String get recapBestStreakLabel;
+
+  /// Stat card value for the best streak length in days
+  ///
+  /// In en, this message translates to:
+  /// **'{days} {dayWord}'**
+  String recapStreakDays(Object days, Object dayWord);
+
+  /// Stat card label for the highest-mileage week
+  ///
+  /// In en, this message translates to:
+  /// **'Top week'**
+  String get recapTopWeekLabel;
+
+  /// Stat card label for the count of unique routes run
+  ///
+  /// In en, this message translates to:
+  /// **'Unique routes'**
+  String get recapUniqueRoutesLabel;
+
+  /// Stat card label for the earliest run start time
+  ///
+  /// In en, this message translates to:
+  /// **'Earliest start'**
+  String get recapEarliestStartLabel;
+
+  /// Stat card label for the latest run start time
+  ///
+  /// In en, this message translates to:
+  /// **'Latest start'**
+  String get recapLatestStartLabel;
+
+  /// App bar title for the full-screen route picker
+  ///
+  /// In en, this message translates to:
+  /// **'Choose route'**
+  String get routePickerTitle;
+
+  /// App bar action to dismiss the picker without choosing a route
+  ///
+  /// In en, this message translates to:
+  /// **'No route'**
+  String get routePickerNoRoute;
+
+  /// Tooltip for the clear-search button in the route picker
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get routePickerClearSearchTooltip;
+
+  /// Placeholder hint for the route-picker search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search routes by name…'**
+  String get routePickerSearchHint;
+
+  /// Empty state when the user has no saved routes
+  ///
+  /// In en, this message translates to:
+  /// **'No routes saved yet'**
+  String get routePickerEmptyNoRoutes;
+
+  /// Empty state when no saved route matches the search query
+  ///
+  /// In en, this message translates to:
+  /// **'No routes match \"{query}\"'**
+  String routePickerEmptyNoMatch(Object query);
+
+  /// Section header above the starred routes block in the picker
+  ///
+  /// In en, this message translates to:
+  /// **'Starred'**
+  String get routePickerStarredHeader;
+
+  /// Section header above the non-starred routes block in the picker
+  ///
+  /// In en, this message translates to:
+  /// **'All routes'**
+  String get routePickerAllRoutesHeader;
+
+  /// Status line after a successful import with no errors
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} runs from {label}'**
+  String importStatusImported(Object count, Object label);
+
+  /// Status line after an import that had some failures
+  ///
+  /// In en, this message translates to:
+  /// **'Imported {count} runs ({errors} failed)'**
+  String importStatusImportedWithErrors(Object count, Object errors);
+
+  /// Appended note when an imported source has no GPS route data
+  ///
+  /// In en, this message translates to:
+  /// **'{base}. {label} has no route data, so these runs have no map.'**
+  String importStatusNoGpsNote(Object base, Object label);
+
+  /// Status while requesting the platform health-store permission
+  ///
+  /// In en, this message translates to:
+  /// **'Requesting {label} permission...'**
+  String importHealthRequestingPermission(Object label);
+
+  /// Status when the health-store permission was denied
+  ///
+  /// In en, this message translates to:
+  /// **'{label} permission denied'**
+  String importHealthPermissionDenied(Object label);
+
+  /// Status while reading workouts from the health store
+  ///
+  /// In en, this message translates to:
+  /// **'Reading workouts...'**
+  String get importHealthReadingWorkouts;
+
+  /// Status when a health-store import fails
+  ///
+  /// In en, this message translates to:
+  /// **'{label} import failed: {error}'**
+  String importHealthFailed(Object label, Object error);
+
+  /// Status while saving imported runs to the local store
+  ///
+  /// In en, this message translates to:
+  /// **'Saving locally...'**
+  String get importStatusSavingLocally;
+
+  /// Status when cross-source duplicate runs are skipped during import
+  ///
+  /// In en, this message translates to:
+  /// **'Skipped {count} duplicate(s) already imported from another source'**
+  String importStatusSkippedDuplicates(Object count);
+
+  /// Per-run progress status while saving imported runs locally
+  ///
+  /// In en, this message translates to:
+  /// **'Saved {done} of {total} locally'**
+  String importStatusSavedProgress(Object done, Object total);
+
+  /// Status while pushing imported runs to the cloud
+  ///
+  /// In en, this message translates to:
+  /// **'Syncing to cloud...'**
+  String get importStatusSyncingToCloud;
+
+  /// Per-run progress status while syncing imported runs to the cloud
+  ///
+  /// In en, this message translates to:
+  /// **'Synced {done} of {total}'**
+  String importStatusSyncProgress(Object done, Object total);
+
+  /// Status while reading the selected CSV file
+  ///
+  /// In en, this message translates to:
+  /// **'Reading CSV...'**
+  String get importStatusReadingCsv;
+
+  /// Status when the CSV import fails
+  ///
+  /// In en, this message translates to:
+  /// **'CSV import failed: {error}'**
+  String importCsvFailed(Object error);
+
+  /// Status while restoring from a full-backup ZIP
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring backup...'**
+  String get importStatusRestoringBackup;
+
+  /// Status after a successful full-backup restore
+  ///
+  /// In en, this message translates to:
+  /// **'Restored {runs} runs · {tracks} tracks · {routes} routes'**
+  String importStatusBackupRestored(Object runs, Object tracks, Object routes);
+
+  /// Status when restoring from a backup ZIP fails
+  ///
+  /// In en, this message translates to:
+  /// **'Backup restore failed: {error}'**
+  String importBackupFailed(Object error);
+
+  /// Status while reading the Strava export ZIP
+  ///
+  /// In en, this message translates to:
+  /// **'Reading export...'**
+  String get importStatusReadingExport;
+
+  /// Status when the Strava ZIP import fails
+  ///
+  /// In en, this message translates to:
+  /// **'Import failed: {error}'**
+  String importStravaFailed(Object error);
+
+  /// App bar title for the bulk-import screen
+  ///
+  /// In en, this message translates to:
+  /// **'Import runs'**
+  String get importTitle;
+
+  /// Card title for the Strava import source
+  ///
+  /// In en, this message translates to:
+  /// **'Strava'**
+  String get importStravaCardTitle;
+
+  /// Card subtitle describing the Strava ZIP import
+  ///
+  /// In en, this message translates to:
+  /// **'Import every run from a Strava data export ZIP'**
+  String get importStravaCardSubtitle;
+
+  /// Header above the Strava export step-by-step instructions
+  ///
+  /// In en, this message translates to:
+  /// **'How to get your Strava export:'**
+  String get importStravaHowToHeader;
+
+  /// Step-by-step instructions for requesting a Strava data export
+  ///
+  /// In en, this message translates to:
+  /// **'1. Open Strava → Settings → My Account\n2. Scroll to \"Download or Delete Your Account\"\n3. Tap \"Get Started\" → \"Request your archive\"\n4. You\'ll get an email with a download link in a few hours\n5. Download the .zip and tap Import below'**
+  String get importStravaHowToSteps;
+
+  /// Button to pick and import a Strava export ZIP
+  ///
+  /// In en, this message translates to:
+  /// **'Import Strava ZIP'**
+  String get importStravaButton;
+
+  /// Button to import workouts from the platform health store
+  ///
+  /// In en, this message translates to:
+  /// **'Import from {label}'**
+  String importHealthButton(Object label);
+
+  /// Card title for the CSV import source
+  ///
+  /// In en, this message translates to:
+  /// **'CSV'**
+  String get importCsvCardTitle;
+
+  /// Card subtitle describing the CSV import source
+  ///
+  /// In en, this message translates to:
+  /// **'Re-import a CSV exported from Settings — runs only, no GPS'**
+  String get importCsvCardSubtitle;
+
+  /// Body copy explaining the CSV import limitations
+  ///
+  /// In en, this message translates to:
+  /// **'Each CSV row becomes a manual run (date, distance, duration, source). The map trace is not in the CSV, so imported runs won\'t have a route line.'**
+  String get importCsvCardDescription;
+
+  /// Button to pick and import a CSV file
+  ///
+  /// In en, this message translates to:
+  /// **'Import CSV'**
+  String get importCsvButton;
+
+  /// Card title for the full-backup ZIP restore source
+  ///
+  /// In en, this message translates to:
+  /// **'Full backup ZIP'**
+  String get importBackupCardTitle;
+
+  /// Card subtitle describing the full-backup restore
+  ///
+  /// In en, this message translates to:
+  /// **'Restore runs, routes, and GPS traces from a backup file'**
+  String get importBackupCardSubtitle;
+
+  /// Body copy explaining the full-backup restore behaviour
+  ///
+  /// In en, this message translates to:
+  /// **'Loss-less round-trip. Works without signing in — restored runs sync to your account the next time you do. Make a backup from Settings → Full backup.'**
+  String get importBackupCardDescription;
+
+  /// Button to pick and restore a full-backup ZIP
+  ///
+  /// In en, this message translates to:
+  /// **'Restore backup ZIP'**
+  String get importBackupButton;
+
+  /// Header above the list of per-file import errors
+  ///
+  /// In en, this message translates to:
+  /// **'Errors'**
+  String get importErrorsHeader;
+
+  /// Truncation line when more than ten import errors exist
+  ///
+  /// In en, this message translates to:
+  /// **'... and {count} more'**
+  String importErrorsMore(Object count);
+
+  /// iOS subtitle naming apps that write to Apple Health
+  ///
+  /// In en, this message translates to:
+  /// **'Pull workouts you\'ve recorded on Apple Watch, Nike Run Club, Strava, and other apps that write to Apple Health'**
+  String get importHealthSubtitleIos;
+
+  /// Android subtitle naming apps that write to Health Connect
+  ///
+  /// In en, this message translates to:
+  /// **'Pull workouts from Google Fit, Samsung Health, Garmin, Fitbit, and any other Health Connect app'**
+  String get importHealthSubtitleAndroid;
+
+  /// iOS body copy explaining what is imported from Apple Health and the no-track caveat
+  ///
+  /// In en, this message translates to:
+  /// **'Reads workout summaries (date, distance, duration, type) from the last year. Apple Health doesn\'t expose GPS routes recorded by third-party apps — runs imported this way won\'t have a map trace.'**
+  String get importHealthDescriptionIos;
+
+  /// Android body copy explaining what is imported from Health Connect and the no-track caveat
+  ///
+  /// In en, this message translates to:
+  /// **'Reads workout summaries (date, distance, duration, type) from the last year. GPS routes are not exposed by Health Connect — runs imported this way won\'t have a map trace.'**
+  String get importHealthDescriptionAndroid;
+
+  /// Error banner when toggling follow on a person fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not update follow: {error}'**
+  String peopleFollowFailedBanner(Object error);
+
+  /// Placeholder hint for the people-search field
+  ///
+  /// In en, this message translates to:
+  /// **'Search runners by name'**
+  String get peopleSearchHint;
+
+  /// Tooltip for the clear-search action button in the app bar
+  ///
+  /// In en, this message translates to:
+  /// **'Clear search'**
+  String get peopleClearSearchTooltip;
+
+  /// Section header shown above people search results
+  ///
+  /// In en, this message translates to:
+  /// **'Search results'**
+  String get peopleSearchResultsHeader;
+
+  /// Section header shown above suggested people
+  ///
+  /// In en, this message translates to:
+  /// **'Suggested for you'**
+  String get peopleSuggestedHeader;
+
+  /// Empty-state title when no people match the search query
+  ///
+  /// In en, this message translates to:
+  /// **'No runners match \"{query}\"'**
+  String peopleEmptySearchTitle(Object query);
+
+  /// Empty-state body when no people match the search query
+  ///
+  /// In en, this message translates to:
+  /// **'Try a shorter or different name. Display names are public; people who haven\'t set one yet won\'t show up here.'**
+  String get peopleEmptySearchBody;
+
+  /// Empty-state title when there are no people suggestions
+  ///
+  /// In en, this message translates to:
+  /// **'No suggestions yet'**
+  String get peopleEmptySuggestionsTitle;
+
+  /// Empty-state body when there are no people suggestions
+  ///
+  /// In en, this message translates to:
+  /// **'Suggestions come from people in clubs you\'ve joined. Join a club to start seeing them here.'**
+  String get peopleEmptySuggestionsBody;
+
+  /// Person-row metadata: count of the person's public runs
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 public run} other{{count} public runs}}'**
+  String peoplePublicRunCount(num count);
+
+  /// Person-row metadata: count of clubs shared with the person
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{1 club together} other{{count} clubs together}}'**
+  String peopleSharedClubsCount(num count);
+
+  /// Fallback display name for a person with no name set
+  ///
+  /// In en, this message translates to:
+  /// **'Runner'**
+  String get peopleFallbackDisplayName;
+
+  /// Follow-toggle button label when already following the person
+  ///
+  /// In en, this message translates to:
+  /// **'Following'**
+  String get peopleFollowingButton;
+
+  /// Follow-toggle button label when not following the person
+  ///
+  /// In en, this message translates to:
+  /// **'Follow'**
+  String get peopleFollowButton;
+
+  /// Header label on the dashboard readiness-to-run card
+  ///
+  /// In en, this message translates to:
+  /// **'READINESS'**
+  String get readinessCardHeader;
+
+  /// Readiness band pill label for a high readiness score
+  ///
+  /// In en, this message translates to:
+  /// **'high'**
+  String get readinessBandHigh;
+
+  /// Readiness band pill label for a moderate readiness score
+  ///
+  /// In en, this message translates to:
+  /// **'moderate'**
+  String get readinessBandModerate;
+
+  /// Readiness band pill label for a low readiness score
+  ///
+  /// In en, this message translates to:
+  /// **'low'**
+  String get readinessBandLow;
+
+  /// Diagnostic banner title shown when no map-tile source is configured (dev-facing)
+  ///
+  /// In en, this message translates to:
+  /// **'Using OpenStreetMap fallback tiles'**
+  String get missingMapTilesTitle;
+
   /// Settings > Preferences row title for the language picker
   ///
   /// In en, this message translates to:

@@ -9,6 +9,7 @@ import '../backup.dart';
 import '../cross_source_dedup.dart';
 import '../csv_run_importer.dart';
 import '../health_connect_importer.dart';
+import '../l10n/gen/app_localizations.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
@@ -22,13 +23,14 @@ String buildImportStatus({
   required int savedCount,
   required int errorCount,
   required String label,
+  required AppLocalizations l10n,
   bool noGpsNote = false,
 }) {
   final base = errorCount == 0
-      ? 'Imported $savedCount runs from $label'
-      : 'Imported $savedCount runs ($errorCount failed)';
+      ? l10n.importStatusImported(savedCount, label)
+      : l10n.importStatusImportedWithErrors(savedCount, errorCount);
   if (noGpsNote && savedCount > 0) {
-    return '$base. $label has no route data, so these runs have no map.';
+    return l10n.importStatusNoGpsNote(base, label);
   }
   return base;
 }
@@ -74,9 +76,10 @@ class _ImportScreenState extends State<ImportScreen> {
   String get _healthLabel => healthLabelFor(isIOS: Platform.isIOS);
 
   Future<void> _importHealthConnect() async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _busy = true;
-      _status = 'Requesting $_healthLabel permission...';
+      _status = l10n.importHealthRequestingPermission(_healthLabel);
       _imported = 0;
       _total = 0;
       _errors = [];
@@ -87,14 +90,14 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!granted) {
         setState(() {
           _busy = false;
-          _status = '$_healthLabel permission denied';
+          _status = l10n.importHealthPermissionDenied(_healthLabel);
         });
         return;
       }
 
       await _maybeSeedBodyWeight();
 
-      setState(() => _status = 'Reading workouts...');
+      setState(() => _status = l10n.importHealthReadingWorkouts);
       final runs = await HealthConnectImporter.fetchWorkouts();
       // Health Connect exposes workout summaries but not route geometry, so
       // these runs land without a GPS track / map — tell the user so a
@@ -104,7 +107,7 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = '$_healthLabel import failed: $e';
+        _status = l10n.importHealthFailed(_healthLabel, e);
       });
     }
   }
@@ -131,9 +134,10 @@ class _ImportScreenState extends State<ImportScreen> {
   /// Saves each run locally, then batch-pushes to the cloud if signed in.
   Future<void> _saveImportedRuns(List<Run> runs,
       {required String label, bool noGpsNote = false}) async {
+    final l10n = AppLocalizations.of(context);
     setState(() {
       _total = runs.length;
-      _status = 'Saving locally...';
+      _status = l10n.importStatusSavingLocally;
     });
 
     final localErrors = <StravaImportError>[];
@@ -155,7 +159,7 @@ class _ImportScreenState extends State<ImportScreen> {
           setState(() {
             _imported = i + 1;
             _status =
-                'Skipped $skippedCrossSource duplicate(s) already imported from another source';
+                l10n.importStatusSkippedDuplicates(skippedCrossSource);
           });
         }
         continue;
@@ -169,7 +173,7 @@ class _ImportScreenState extends State<ImportScreen> {
       if (mounted) {
         setState(() {
           _imported = i + 1;
-          _status = 'Saved ${i + 1} of ${runs.length} locally';
+          _status = l10n.importStatusSavedProgress(i + 1, runs.length);
         });
       }
     }
@@ -177,14 +181,14 @@ class _ImportScreenState extends State<ImportScreen> {
     final api = widget.apiClient;
     final canSync = api != null && api.userId != null;
     if (canSync && savedRuns.isNotEmpty) {
-      if (mounted) setState(() => _status = 'Syncing to cloud...');
+      if (mounted) setState(() => _status = l10n.importStatusSyncingToCloud);
       try {
         final failed = await api.saveRunsBatch(
           savedRuns,
           onProgress: (saved) {
             if (mounted) {
-              setState(
-                  () => _status = 'Synced $saved of ${savedRuns.length}');
+              setState(() =>
+                  _status = l10n.importStatusSyncProgress(saved, savedRuns.length));
             }
           },
         );
@@ -207,11 +211,13 @@ class _ImportScreenState extends State<ImportScreen> {
         errorCount: localErrors.length,
         label: label,
         noGpsNote: noGpsNote,
+        l10n: l10n,
       );
     });
   }
 
   Future<void> _importCsv() async {
+    final l10n = AppLocalizations.of(context);
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['csv'],
@@ -222,7 +228,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
     setState(() {
       _busy = true;
-      _status = 'Reading CSV...';
+      _status = l10n.importStatusReadingCsv;
       _imported = 0;
       _total = 0;
       _errors = [];
@@ -241,12 +247,13 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = 'CSV import failed: $e';
+        _status = l10n.importCsvFailed(e);
       });
     }
   }
 
   Future<void> _importBackupZip() async {
+    final l10n = AppLocalizations.of(context);
     final picked = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
@@ -257,7 +264,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
     setState(() {
       _busy = true;
-      _status = 'Restoring backup...';
+      _status = l10n.importStatusRestoringBackup;
       _imported = 0;
       _total = 0;
       _errors = [];
@@ -272,20 +279,21 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = 'Restored ${res.runsImported} runs · '
-            '${res.tracksUploaded} tracks · ${res.routesImported} routes';
+        _status = l10n.importStatusBackupRestored(
+            res.runsImported, res.tracksUploaded, res.routesImported);
         _errors = res.warnings;
       });
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = 'Backup restore failed: $e';
+        _status = l10n.importBackupFailed(e);
       });
     }
   }
 
   Future<void> _importStrava() async {
+    final l10n = AppLocalizations.of(context);
     final result = await FilePicker.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
@@ -294,7 +302,7 @@ class _ImportScreenState extends State<ImportScreen> {
 
     setState(() {
       _busy = true;
-      _status = 'Reading export...';
+      _status = l10n.importStatusReadingExport;
       _imported = 0;
       _total = 0;
       _errors = [];
@@ -314,7 +322,7 @@ class _ImportScreenState extends State<ImportScreen> {
       if (!mounted) return;
       setState(() {
         _busy = false;
-        _status = 'Import failed: $e';
+        _status = l10n.importStravaFailed(e);
       });
     }
   }
@@ -322,8 +330,9 @@ class _ImportScreenState extends State<ImportScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
-      appBar: AppBar(title: const Text('Import runs')),
+      appBar: AppBar(title: Text(l10n.importTitle)),
       body: SafeArea(
         top: false,
         child: ListView(
@@ -352,9 +361,10 @@ class _ImportScreenState extends State<ImportScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Strava', style: theme.textTheme.titleMedium),
+                            Text(l10n.importStravaCardTitle,
+                                style: theme.textTheme.titleMedium),
                             Text(
-                              'Import every run from a Strava data export ZIP',
+                              l10n.importStravaCardSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
@@ -366,18 +376,14 @@ class _ImportScreenState extends State<ImportScreen> {
                   ),
                   const SizedBox(height: 16),
                   Text(
-                    'How to get your Strava export:',
+                    l10n.importStravaHowToHeader,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '1. Open Strava → Settings → My Account\n'
-                    '2. Scroll to "Download or Delete Your Account"\n'
-                    '3. Tap "Get Started" → "Request your archive"\n'
-                    '4. You\'ll get an email with a download link in a few hours\n'
-                    '5. Download the .zip and tap Import below',
+                    l10n.importStravaHowToSteps,
                     style: theme.textTheme.bodySmall?.copyWith(height: 1.5),
                   ),
                   const SizedBox(height: 16),
@@ -386,7 +392,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     child: FilledButton.icon(
                       onPressed: _busy ? null : _importStrava,
                       icon: const Icon(Icons.upload_file),
-                      label: const Text('Import Strava ZIP'),
+                      label: Text(l10n.importStravaButton),
                     ),
                   ),
                 ],
@@ -420,7 +426,9 @@ class _ImportScreenState extends State<ImportScreen> {
                             Text(_healthLabel,
                                 style: theme.textTheme.titleMedium),
                             Text(
-                              healthCardSubtitleFor(isIOS: Platform.isIOS),
+                              Platform.isIOS
+                                  ? l10n.importHealthSubtitleIos
+                                  : l10n.importHealthSubtitleAndroid,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
@@ -432,7 +440,9 @@ class _ImportScreenState extends State<ImportScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    healthCardDescriptionFor(isIOS: Platform.isIOS),
+                    Platform.isIOS
+                        ? l10n.importHealthDescriptionIos
+                        : l10n.importHealthDescriptionAndroid,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                       height: 1.5,
@@ -444,7 +454,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     child: FilledButton.icon(
                       onPressed: _busy ? null : _importHealthConnect,
                       icon: const Icon(Icons.health_and_safety),
-                      label: Text('Import from $_healthLabel'),
+                      label: Text(l10n.importHealthButton(_healthLabel)),
                     ),
                   ),
                 ],
@@ -475,9 +485,10 @@ class _ImportScreenState extends State<ImportScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('CSV', style: theme.textTheme.titleMedium),
+                            Text(l10n.importCsvCardTitle,
+                                style: theme.textTheme.titleMedium),
                             Text(
-                              'Re-import a CSV exported from Settings — runs only, no GPS',
+                              l10n.importCsvCardSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
@@ -489,9 +500,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Each CSV row becomes a manual run (date, distance, '
-                    'duration, source). The map trace is not in the CSV, '
-                    'so imported runs won\'t have a route line.',
+                    l10n.importCsvCardDescription,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                       height: 1.5,
@@ -503,7 +512,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     child: FilledButton.icon(
                       onPressed: _busy ? null : _importCsv,
                       icon: const Icon(Icons.upload_file),
-                      label: const Text('Import CSV'),
+                      label: Text(l10n.importCsvButton),
                     ),
                   ),
                 ],
@@ -534,10 +543,10 @@ class _ImportScreenState extends State<ImportScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Full backup ZIP',
+                            Text(l10n.importBackupCardTitle,
                                 style: theme.textTheme.titleMedium),
                             Text(
-                              'Restore runs, routes, and GPS traces from a backup file',
+                              l10n.importBackupCardSubtitle,
                               style: theme.textTheme.bodySmall?.copyWith(
                                 color: theme.colorScheme.outline,
                               ),
@@ -549,9 +558,7 @@ class _ImportScreenState extends State<ImportScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'Loss-less round-trip. Works without signing in — '
-                    'restored runs sync to your account the next time you '
-                    'do. Make a backup from Settings → Full backup.',
+                    l10n.importBackupCardDescription,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color: theme.colorScheme.outline,
                       height: 1.5,
@@ -563,7 +570,7 @@ class _ImportScreenState extends State<ImportScreen> {
                     child: FilledButton.icon(
                       onPressed: _busy ? null : _importBackupZip,
                       icon: const Icon(Icons.folder_zip_outlined),
-                      label: const Text('Restore backup ZIP'),
+                      label: Text(l10n.importBackupButton),
                     ),
                   ),
                 ],
@@ -602,7 +609,7 @@ class _ImportScreenState extends State<ImportScreen> {
                       const SizedBox(height: 12),
                       const Divider(),
                       const SizedBox(height: 8),
-                      Text('Errors',
+                      Text(l10n.importErrorsHeader,
                           style: theme.textTheme.bodyMedium?.copyWith(
                             fontWeight: FontWeight.w600,
                           )),
@@ -615,7 +622,7 @@ class _ImportScreenState extends State<ImportScreen> {
                                 )),
                           )),
                       if (_errors.length > 10)
-                        Text('... and ${_errors.length - 10} more',
+                        Text(l10n.importErrorsMore(_errors.length - 10),
                             style: theme.textTheme.bodySmall),
                     ],
                   ],
@@ -638,21 +645,3 @@ class _ImportScreenState extends State<ImportScreen> {
 /// the Flutter target platform, not `dart:io`'s `Platform.isIOS`).
 String healthLabelFor({required bool isIOS}) =>
     isIOS ? 'Apple Health' : 'Health Connect';
-
-/// Subtitle copy for the Health import card — names the third-party
-/// apps each platform's health store typically receives data from.
-String healthCardSubtitleFor({required bool isIOS}) => isIOS
-    ? "Pull workouts you've recorded on Apple Watch, Nike Run Club, "
-        "Strava, and other apps that write to Apple Health"
-    : 'Pull workouts from Google Fit, Samsung Health, Garmin, Fitbit, '
-        'and any other Health Connect app';
-
-/// Body copy explaining what's imported + the no-track caveat.
-String healthCardDescriptionFor({required bool isIOS}) => isIOS
-    ? "Reads workout summaries (date, distance, duration, type) from "
-        "the last year. Apple Health doesn't expose GPS routes recorded "
-        "by third-party apps — runs imported this way won't have a map "
-        "trace."
-    : 'Reads workout summaries (date, distance, duration, type) from '
-        'the last year. GPS routes are not exposed by Health Connect — '
-        "runs imported this way won't have a map trace.";

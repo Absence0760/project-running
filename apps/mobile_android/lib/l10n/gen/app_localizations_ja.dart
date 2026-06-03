@@ -9,6 +9,415 @@ class AppLocalizationsJa extends AppLocalizations {
   AppLocalizationsJa([String locale = 'ja']) : super(locale);
 
   @override
+  String get trustedContactsClearedBanner => '信頼できる連絡先をクリアしました。';
+
+  @override
+  String trustedContactsSavedBanner(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count件の信頼できる連絡先を保存しました。',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String trustedContactsSaveFailedBanner(Object error) {
+    return '保存できませんでした: $error';
+  }
+
+  @override
+  String get trustedContactsTitle => '信頼できる連絡先';
+
+  @override
+  String trustedContactsIntro(Object max) {
+    return '信頼できる連絡先を1人以上指定してください。リストはアカウントとともに保存され、今後の「ラン遅延」通知や緊急ボタンの通知先として使われます。最大$max件まで。';
+  }
+
+  @override
+  String get trustedContactsAddButton => '連絡先を追加';
+
+  @override
+  String get trustedContactsSavingButton => '保存中…';
+
+  @override
+  String get trustedContactsSaveButton => '保存';
+
+  @override
+  String get trustedContactsNameLabel => '名前';
+
+  @override
+  String get trustedContactsNameHint => '例: アレックス・チェン';
+
+  @override
+  String get trustedContactsPhoneLabel => '電話番号';
+
+  @override
+  String get trustedContactsPhoneHint => '+1 555 123 4567';
+
+  @override
+  String get trustedContactsEmailLabel => 'メールアドレス';
+
+  @override
+  String get trustedContactsEmailHint => 'alex@example.com';
+
+  @override
+  String get trustedContactsRelationshipLabel => '続柄';
+
+  @override
+  String get trustedContactsRelationshipHint => 'パートナー / 親 / ランニング仲間';
+
+  @override
+  String get trustedContactsRemoveButton => '削除';
+
+  @override
+  String get clubInviteEnterCodeError => 'リンクの招待コードを入力してください。';
+
+  @override
+  String get clubInviteJoinedBanner => 'クラブに参加しました。';
+
+  @override
+  String get clubInviteTitle => 'クラブに参加';
+
+  @override
+  String get clubInviteIntro => 'クラブ管理者から共有された招待コードを貼り付けてください。';
+
+  @override
+  String get clubInviteCodeLabel => '招待コード';
+
+  @override
+  String get clubInviteJoinButton => '参加';
+
+  @override
+  String recapShareHeadline(Object year) {
+    return '$year年のランニング:';
+  }
+
+  @override
+  String recapShareTotals(Object total, Object count) {
+    return '$count件のランで$total';
+  }
+
+  @override
+  String recapShareLongestRun(Object distance) {
+    return '最長のラン: $distance';
+  }
+
+  @override
+  String recapShareBestStreak(Object days) {
+    return '最高の連続記録: $days日';
+  }
+
+  @override
+  String recapShareSubject(Object year) {
+    return '$year年の振り返り';
+  }
+
+  @override
+  String get recapTitle => 'ランニングの1年';
+
+  @override
+  String get recapShareTooltip => '振り返りを共有';
+
+  @override
+  String recapNoRunsForYear(Object year) {
+    return '$year年は振り返るランがありません。';
+  }
+
+  @override
+  String recapNoRunsYet(Object year) {
+    return '$year年はまだランがありません。記録すると振り返りが表示されます。';
+  }
+
+  @override
+  String recapAcrossRuns(Object count, Object runWord) {
+    return '$count件の$runWord';
+  }
+
+  @override
+  String get recapLongestRunLabel => '最長のラン';
+
+  @override
+  String get recapBestStreakLabel => '最高の連続記録';
+
+  @override
+  String recapStreakDays(Object days, Object dayWord) {
+    return '$days$dayWord';
+  }
+
+  @override
+  String get recapTopWeekLabel => 'ベストな週';
+
+  @override
+  String get recapUniqueRoutesLabel => 'ユニークなルート';
+
+  @override
+  String get recapEarliestStartLabel => '最も早いスタート';
+
+  @override
+  String get recapLatestStartLabel => '最も遅いスタート';
+
+  @override
+  String get routePickerTitle => 'ルートを選択';
+
+  @override
+  String get routePickerNoRoute => 'ルートなし';
+
+  @override
+  String get routePickerClearSearchTooltip => '検索をクリア';
+
+  @override
+  String get routePickerSearchHint => '名前でルートを検索…';
+
+  @override
+  String get routePickerEmptyNoRoutes => '保存済みのルートはまだありません';
+
+  @override
+  String routePickerEmptyNoMatch(Object query) {
+    return '「$query」に一致するルートはありません';
+  }
+
+  @override
+  String get routePickerStarredHeader => 'スター付き';
+
+  @override
+  String get routePickerAllRoutesHeader => 'すべてのルート';
+
+  @override
+  String importStatusImported(Object count, Object label) {
+    return '$labelから$count件のランをインポートしました';
+  }
+
+  @override
+  String importStatusImportedWithErrors(Object count, Object errors) {
+    return '$count件のランをインポートしました（$errors件失敗）';
+  }
+
+  @override
+  String importStatusNoGpsNote(Object base, Object label) {
+    return '$base。$labelにはルートデータがないため、これらのランに地図はありません。';
+  }
+
+  @override
+  String importHealthRequestingPermission(Object label) {
+    return '$labelの権限をリクエスト中...';
+  }
+
+  @override
+  String importHealthPermissionDenied(Object label) {
+    return '$labelの権限が拒否されました';
+  }
+
+  @override
+  String get importHealthReadingWorkouts => 'ワークアウトを読み込み中...';
+
+  @override
+  String importHealthFailed(Object label, Object error) {
+    return '$labelのインポートに失敗しました: $error';
+  }
+
+  @override
+  String get importStatusSavingLocally => 'ローカルに保存中...';
+
+  @override
+  String importStatusSkippedDuplicates(Object count) {
+    return '他のソースからすでにインポート済みの重複$count件をスキップしました';
+  }
+
+  @override
+  String importStatusSavedProgress(Object done, Object total) {
+    return '$total件中$done件をローカルに保存しました';
+  }
+
+  @override
+  String get importStatusSyncingToCloud => 'クラウドに同期中...';
+
+  @override
+  String importStatusSyncProgress(Object done, Object total) {
+    return '$total件中$done件を同期しました';
+  }
+
+  @override
+  String get importStatusReadingCsv => 'CSVを読み込み中...';
+
+  @override
+  String importCsvFailed(Object error) {
+    return 'CSVのインポートに失敗しました: $error';
+  }
+
+  @override
+  String get importStatusRestoringBackup => 'バックアップを復元中...';
+
+  @override
+  String importStatusBackupRestored(Object runs, Object tracks, Object routes) {
+    return 'ラン$runs件 · トラック$tracks件 · ルート$routes件を復元しました';
+  }
+
+  @override
+  String importBackupFailed(Object error) {
+    return 'バックアップの復元に失敗しました: $error';
+  }
+
+  @override
+  String get importStatusReadingExport => 'エクスポートを読み込み中...';
+
+  @override
+  String importStravaFailed(Object error) {
+    return 'インポートに失敗しました: $error';
+  }
+
+  @override
+  String get importTitle => 'ランをインポート';
+
+  @override
+  String get importStravaCardTitle => 'Strava';
+
+  @override
+  String get importStravaCardSubtitle => 'StravaのデータエクスポートZIPからすべてのランをインポート';
+
+  @override
+  String get importStravaHowToHeader => 'Stravaのエクスポートの取得方法:';
+
+  @override
+  String get importStravaHowToSteps =>
+      '1. Stravaを開く → 設定 → マイアカウント\n2. 「アカウントのダウンロードまたは削除」までスクロール\n3. 「始める」→「アーカイブをリクエスト」をタップ\n4. 数時間後にダウンロードリンク付きのメールが届きます\n5. .zipをダウンロードし、下の「インポート」をタップ';
+
+  @override
+  String get importStravaButton => 'Strava ZIPをインポート';
+
+  @override
+  String importHealthButton(Object label) {
+    return '$labelからインポート';
+  }
+
+  @override
+  String get importCsvCardTitle => 'CSV';
+
+  @override
+  String get importCsvCardSubtitle => '設定からエクスポートしたCSVを再インポート — ランのみ、GPSなし';
+
+  @override
+  String get importCsvCardDescription =>
+      'CSVの各行が手動ランになります（日付、距離、時間、ソース）。地図のトレースはCSVに含まれないため、インポートしたランにはルートの線が表示されません。';
+
+  @override
+  String get importCsvButton => 'CSVをインポート';
+
+  @override
+  String get importBackupCardTitle => 'フルバックアップZIP';
+
+  @override
+  String get importBackupCardSubtitle => 'バックアップファイルからラン、ルート、GPSトレースを復元';
+
+  @override
+  String get importBackupCardDescription =>
+      'ロスレスで往復できます。サインインなしでも動作し、復元したランは次回サインイン時にアカウントに同期されます。設定 → フルバックアップ からバックアップを作成してください。';
+
+  @override
+  String get importBackupButton => 'バックアップZIPを復元';
+
+  @override
+  String get importErrorsHeader => 'エラー';
+
+  @override
+  String importErrorsMore(Object count) {
+    return '... ほか$count件';
+  }
+
+  @override
+  String get importHealthSubtitleIos =>
+      'Apple Watch、Nike Run Club、Strava など、Apple Health に書き込む各アプリで記録したワークアウトを取り込みます';
+
+  @override
+  String get importHealthSubtitleAndroid =>
+      'Google Fit、Samsung Health、Garmin、Fitbit など、Health Connect 対応アプリからワークアウトを取り込みます';
+
+  @override
+  String get importHealthDescriptionIos =>
+      '過去1年間のワークアウト概要（日付、距離、時間、種類）を読み込みます。Apple Health はサードパーティ製アプリが記録した GPS ルートを公開しないため、この方法でインポートしたランには地図のトレースがありません。';
+
+  @override
+  String get importHealthDescriptionAndroid =>
+      '過去1年間のワークアウト概要（日付、距離、時間、種類）を読み込みます。GPS ルートは Health Connect から公開されないため、この方法でインポートしたランには地図のトレースがありません。';
+
+  @override
+  String peopleFollowFailedBanner(Object error) {
+    return 'フォローを更新できませんでした: $error';
+  }
+
+  @override
+  String get peopleSearchHint => '名前でランナーを検索';
+
+  @override
+  String get peopleClearSearchTooltip => '検索をクリア';
+
+  @override
+  String get peopleSearchResultsHeader => '検索結果';
+
+  @override
+  String get peopleSuggestedHeader => 'おすすめ';
+
+  @override
+  String peopleEmptySearchTitle(Object query) {
+    return '「$query」に一致するランナーはいません';
+  }
+
+  @override
+  String get peopleEmptySearchBody =>
+      '短い名前や別の名前で試してください。表示名は公開されます。まだ設定していない人はここに表示されません。';
+
+  @override
+  String get peopleEmptySuggestionsTitle => 'おすすめはまだありません';
+
+  @override
+  String get peopleEmptySuggestionsBody =>
+      'おすすめは参加中のクラブのメンバーから表示されます。クラブに参加すると、ここに表示され始めます。';
+
+  @override
+  String peoplePublicRunCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '公開ラン$count件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String peopleSharedClubsCount(num count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '共通のクラブ$count件',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get peopleFallbackDisplayName => 'ランナー';
+
+  @override
+  String get peopleFollowingButton => 'フォロー中';
+
+  @override
+  String get peopleFollowButton => 'フォロー';
+
+  @override
+  String get readinessCardHeader => 'レディネス';
+
+  @override
+  String get readinessBandHigh => '高い';
+
+  @override
+  String get readinessBandModerate => '普通';
+
+  @override
+  String get readinessBandLow => '低い';
+
+  @override
+  String get missingMapTilesTitle => 'OpenStreetMapの代替タイルを使用中';
+
+  @override
   String get prefsLanguage => '言語';
 
   @override

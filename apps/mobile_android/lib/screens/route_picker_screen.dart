@@ -1,6 +1,7 @@
 import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 
 /// Full-screen route picker — the modern replacement for the old
@@ -73,18 +74,19 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final routes = _filteredAndSorted();
     final hasStarred = routes.any((r) => r.isStarred);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Choose route'),
+        title: Text(l10n.routePickerTitle),
         // "No route" lives as a leading-style trailing action so
         // users running without a preselected route can dismiss
         // back to the run screen without scrolling.
         actions: [
           TextButton(
             onPressed: () => Navigator.pop<cm.Route?>(context, null),
-            child: const Text('No route'),
+            child: Text(l10n.routePickerNoRoute),
           ),
         ],
       ),
@@ -105,13 +107,13 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                       ? null
                       : IconButton(
                           icon: const Icon(Icons.close),
-                          tooltip: 'Clear search',
+                          tooltip: l10n.routePickerClearSearchTooltip,
                           onPressed: () {
                             _searchCtl.clear();
                             setState(() => _search = '');
                           },
                         ),
-                  hintText: 'Search routes by name…',
+                  hintText: l10n.routePickerSearchHint,
                   border: const OutlineInputBorder(),
                 ),
               ),
@@ -123,8 +125,8 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                     padding: const EdgeInsets.all(24),
                     child: Text(
                       _search.trim().isEmpty
-                          ? 'No routes saved yet'
-                          : 'No routes match "$_search"',
+                          ? l10n.routePickerEmptyNoRoutes
+                          : l10n.routePickerEmptyNoMatch(_search),
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: theme.colorScheme.onSurfaceVariant,
                       ),
@@ -148,7 +150,7 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                       if (index == 0) {
                         return _SectionHeader(
                           icon: Icons.star,
-                          label: 'Starred',
+                          label: l10n.routePickerStarredHeader,
                           color: const Color(0xFFFBBF24),
                         );
                       }
@@ -159,7 +161,7 @@ class _RoutePickerScreenState extends State<RoutePickerScreen> {
                       if (firstUnstarred > 0 && index == firstUnstarred + 1) {
                         return _SectionHeader(
                           icon: Icons.route,
-                          label: 'All routes',
+                          label: l10n.routePickerAllRoutesHeader,
                           color: theme.colorScheme.onSurfaceVariant,
                         );
                       }

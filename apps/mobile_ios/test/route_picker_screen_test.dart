@@ -2,6 +2,7 @@ import 'package:core_models/core_models.dart' as cm;
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/route_picker_screen.dart';
 
@@ -27,6 +28,8 @@ cm.Route _route(
 Future<void> _pump(WidgetTester tester, List<cm.Route> routes) async {
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: RoutePickerScreen(
         routes: routes,
         unit: DistanceUnit.km,
@@ -131,6 +134,8 @@ void main() {
         cm.Route? result = _route('placeholder', 'placeholder');
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(
               builder: (ctx) => Scaffold(
                 body: Center(
@@ -169,6 +174,8 @@ void main() {
         cm.Route? result;
         await tester.pumpWidget(
           MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
             home: Builder(
               builder: (ctx) => Scaffold(
                 body: Center(

@@ -4,6 +4,7 @@ import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
 import 'package:flutter/material.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../widgets/top_banner.dart';
 import 'profile_screen.dart';
 
@@ -119,7 +120,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
     } catch (e) {
       if (!mounted) return;
       setState(() => _flipFollow(target.id, wasFollowing));
-      showTopBanner(context, 'Could not update follow: $e');
+      showTopBanner(
+        context, AppLocalizations.of(context).peopleFollowFailedBanner(e));
     } finally {
       if (mounted) setState(() => _rowBusy.remove(target.id));
     }
@@ -147,6 +149,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final hasQuery = _query.isNotEmpty;
     final visible = hasQuery ? _results : _suggestions;
     final searchField = TextField(
@@ -155,7 +158,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
       textInputAction: TextInputAction.search,
       style: theme.textTheme.titleMedium,
       decoration: InputDecoration(
-        hintText: 'Search runners by name',
+        hintText: l10n.peopleSearchHint,
         prefixIcon: widget.embedded
             ? const Icon(Icons.search, size: 20)
             : null,
@@ -166,7 +169,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
         suffixIcon: hasQuery
             ? IconButton(
                 icon: const Icon(Icons.clear),
-                tooltip: 'Clear search',
+                tooltip: l10n.peopleClearSearchTooltip,
                 onPressed: _clearSearch,
               )
             : null,
@@ -188,7 +191,9 @@ class _PeopleScreenState extends State<PeopleScreen> {
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
-                hasQuery ? 'Search results' : 'Suggested for you',
+                hasQuery
+                    ? l10n.peopleSearchResultsHeader
+                    : l10n.peopleSuggestedHeader,
                 style: theme.textTheme.labelLarge?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   letterSpacing: 0.6,
@@ -209,9 +214,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
             SliverToBoxAdapter(
               child: _Empty(
                 icon: Icons.search_off,
-                title: 'No runners match "$_query"',
-                body: 'Try a shorter or different name. Display names are '
-                    'public; people who haven\'t set one yet won\'t show up here.',
+                title: l10n.peopleEmptySearchTitle(_query),
+                body: l10n.peopleEmptySearchBody,
               ),
             )
           else if (!hasQuery && _loadingSuggestions)
@@ -227,9 +231,8 @@ class _PeopleScreenState extends State<PeopleScreen> {
             SliverToBoxAdapter(
               child: _Empty(
                 icon: Icons.groups_outlined,
-                title: 'No suggestions yet',
-                body: 'Suggestions come from people in clubs you\'ve joined. '
-                    'Join a club to start seeing them here.',
+                title: l10n.peopleEmptySuggestionsTitle,
+                body: l10n.peopleEmptySuggestionsBody,
               ),
             )
           else
@@ -265,7 +268,7 @@ class _PeopleScreenState extends State<PeopleScreen> {
           if (hasQuery)
             IconButton(
               icon: const Icon(Icons.clear),
-              tooltip: 'Clear search',
+              tooltip: l10n.peopleClearSearchTooltip,
               onPressed: _clearSearch,
             ),
         ],
@@ -291,13 +294,13 @@ class _PersonRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final l10n = AppLocalizations.of(context);
     final initial = (person.displayName?.isNotEmpty ?? false)
         ? person.displayName![0].toUpperCase()
         : '?';
     final metaParts = <String>[
-      '${person.publicRunsCount} public run${person.publicRunsCount == 1 ? '' : 's'}',
-      if (person.sharedClubs > 0)
-        '${person.sharedClubs} club${person.sharedClubs == 1 ? '' : 's'} together',
+      l10n.peoplePublicRunCount(person.publicRunsCount),
+      if (person.sharedClubs > 0) l10n.peopleSharedClubsCount(person.sharedClubs),
     ];
     return ListTile(
       leading: CircleAvatar(
@@ -313,14 +316,16 @@ class _PersonRow extends StatelessWidget {
           ),
         ),
       ),
-      title: Text(person.displayName ?? 'Runner'),
+      title: Text(person.displayName ?? l10n.peopleFallbackDisplayName),
       subtitle: Text(metaParts.join(' · ')),
       trailing: FilledButton.tonal(
         onPressed: busy ? null : onToggleFollow,
         style: FilledButton.styleFrom(
           visualDensity: VisualDensity.compact,
         ),
-        child: Text(person.viewerFollows ? 'Following' : 'Follow'),
+        child: Text(person.viewerFollows
+            ? l10n.peopleFollowingButton
+            : l10n.peopleFollowButton),
       ),
       onTap: onOpenProfile,
     );

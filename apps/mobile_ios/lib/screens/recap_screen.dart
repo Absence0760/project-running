@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../l10n/gen/app_localizations.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../recap.dart';
@@ -40,22 +41,26 @@ class _RecapScreenState extends State<RecapScreen> {
   }
 
   Future<void> _share(YearInRunningRecap recap) async {
+    final l10n = AppLocalizations.of(context);
     final total = UnitFormat.distance(recap.totalDistanceM, widget.preferences.unit);
     final lines = <String>[
-      'My ${recap.year} in running:',
-      '$total across ${recap.runCount} runs',
+      l10n.recapShareHeadline(recap.year),
+      l10n.recapShareTotals(total, recap.runCount),
       if (recap.longestRunM > 0)
-        'Longest run: ${UnitFormat.distance(recap.longestRunM, widget.preferences.unit)}',
+        l10n.recapShareLongestRun(
+            UnitFormat.distance(recap.longestRunM, widget.preferences.unit)),
       if (recap.bestStreakDays > 0)
-        'Best streak: ${recap.bestStreakDays} days',
+        l10n.recapShareBestStreak(recap.bestStreakDays),
     ];
     await SharePlus.instance.share(
-      ShareParams(text: lines.join('\n'), subject: '${recap.year} recap'),
+      ShareParams(
+          text: lines.join('\n'), subject: l10n.recapShareSubject(recap.year)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
     final recap = buildYearInRunningRecap(widget.runStore.runs, _year);
@@ -63,11 +68,11 @@ class _RecapScreenState extends State<RecapScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('Year in running'),
+        title: Text(l10n.recapTitle),
         actions: [
           IconButton(
             icon: const Icon(Icons.share_outlined),
-            tooltip: 'Share recap',
+            tooltip: l10n.recapShareTooltip,
             onPressed: recap.runCount == 0 ? null : () => _share(recap),
           ),
         ],
@@ -99,7 +104,7 @@ class _RecapScreenState extends State<RecapScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
-                    'No runs to recap for $_year.',
+                    l10n.recapNoRunsForYear(_year),
                     style: theme.textTheme.titleMedium,
                   ),
                 ),
@@ -109,7 +114,7 @@ class _RecapScreenState extends State<RecapScreen> {
                 child: Padding(
                   padding: const EdgeInsets.all(20),
                   child: Text(
-                    'No runs in $_year yet. Log one to see your recap.',
+                    l10n.recapNoRunsYet(_year),
                     style: theme.textTheme.bodyMedium,
                   ),
                 ),
@@ -129,7 +134,8 @@ class _RecapScreenState extends State<RecapScreen> {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'across ${recap.runCount} ${recap.runCount == 1 ? 'run' : 'runs'}',
+                        l10n.recapAcrossRuns(recap.runCount,
+                            recap.runCount == 1 ? 'run' : 'runs'),
                         style: theme.textTheme.bodyMedium,
                       ),
                     ],
@@ -141,16 +147,16 @@ class _RecapScreenState extends State<RecapScreen> {
                 children: [
                   Expanded(
                     child: _StatCard(
-                      label: 'Longest run',
+                      label: l10n.recapLongestRunLabel,
                       value: UnitFormat.distance(recap.longestRunM, unit),
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _StatCard(
-                      label: 'Best streak',
-                      value:
-                          '${recap.bestStreakDays} ${recap.bestStreakDays == 1 ? 'day' : 'days'}',
+                      label: l10n.recapBestStreakLabel,
+                      value: l10n.recapStreakDays(recap.bestStreakDays,
+                          recap.bestStreakDays == 1 ? 'day' : 'days'),
                     ),
                   ),
                 ],
@@ -160,7 +166,7 @@ class _RecapScreenState extends State<RecapScreen> {
                 children: [
                   Expanded(
                     child: _StatCard(
-                      label: 'Top week',
+                      label: l10n.recapTopWeekLabel,
                       value: recap.topWeek == null
                           ? '—'
                           : UnitFormat.distance(
@@ -170,7 +176,7 @@ class _RecapScreenState extends State<RecapScreen> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _StatCard(
-                      label: 'Unique routes',
+                      label: l10n.recapUniqueRoutesLabel,
                       value: '${recap.uniqueRouteCount}',
                     ),
                   ),
@@ -181,14 +187,14 @@ class _RecapScreenState extends State<RecapScreen> {
                 children: [
                   Expanded(
                     child: _StatCard(
-                      label: 'Earliest start',
+                      label: l10n.recapEarliestStartLabel,
                       value: recap.earliestStartLocal ?? '—',
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: _StatCard(
-                      label: 'Latest start',
+                      label: l10n.recapLatestStartLabel,
                       value: recap.latestStartLocal ?? '—',
                     ),
                   ),

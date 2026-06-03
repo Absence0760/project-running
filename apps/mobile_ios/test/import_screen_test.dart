@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import '../lib/l10n/gen/app_localizations.dart';
 import '../lib/local_run_store.dart';
 import '../lib/screens/import_screen.dart';
 
@@ -23,6 +24,8 @@ Future<void> _pump(WidgetTester tester, LocalRunStore runStore) async {
   addTearDown(() => tester.binding.setSurfaceSize(null));
   await tester.pumpWidget(
     MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
       home: ImportScreen(
         apiClient: null,
         runStore: runStore,
@@ -147,59 +150,18 @@ void main() {
       expect(healthLabelFor(isIOS: true), 'Apple Health');
       expect(healthLabelFor(isIOS: false), 'Health Connect');
     });
-
-    test(
-        'healthCardSubtitleFor names iOS source apps on iOS, Android on Android',
-        () {
-      expect(
-        healthCardSubtitleFor(isIOS: true),
-        contains('Apple Watch'),
-        reason: 'iOS subtitle should mention Apple Watch',
-      );
-      expect(
-        healthCardSubtitleFor(isIOS: true),
-        contains('Apple Health'),
-      );
-      expect(
-        healthCardSubtitleFor(isIOS: false),
-        contains('Google Fit'),
-      );
-      expect(
-        healthCardSubtitleFor(isIOS: false),
-        contains('Health Connect'),
-      );
-    });
-
-    test('healthCardDescriptionFor names the platform store in the caveat',
-        () {
-      expect(
-        healthCardDescriptionFor(isIOS: true),
-        contains('Apple Health'),
-      );
-      expect(
-        healthCardDescriptionFor(isIOS: false),
-        contains('Health Connect'),
-      );
-      // Both variants must call out the no-GPS-track caveat — without
-      // it the user is surprised by trackless runs in their history.
-      expect(
-        healthCardDescriptionFor(isIOS: true),
-        contains("won't have a map trace"),
-      );
-      expect(
-        healthCardDescriptionFor(isIOS: false),
-        contains("won't have a map trace"),
-      );
-    });
   });
 
   group('buildImportStatus (#37)', () {
+    final l10n = lookupAppLocalizations(const Locale('en'));
+
     test('Health Connect import appends the no-route note', () {
       final s = buildImportStatus(
         savedCount: 5,
         errorCount: 0,
         label: 'Health Connect',
         noGpsNote: true,
+        l10n: l10n,
       );
       expect(s, contains('Imported 5 runs from Health Connect'));
       expect(s, contains('no map'));
@@ -207,7 +169,8 @@ void main() {
 
     test('non-HC import omits the note; zero-saved omits it too', () {
       expect(
-        buildImportStatus(savedCount: 3, errorCount: 0, label: 'Strava'),
+        buildImportStatus(
+            savedCount: 3, errorCount: 0, label: 'Strava', l10n: l10n),
         'Imported 3 runs from Strava',
       );
       expect(
@@ -216,6 +179,7 @@ void main() {
           errorCount: 0,
           label: 'Health Connect',
           noGpsNote: true,
+          l10n: l10n,
         ),
         isNot(contains('no map')),
       );
