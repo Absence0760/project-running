@@ -6,13 +6,16 @@
 	import { fetchActivePlanOverview, fetchMyPlans } from '$lib/core/data';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { supabase } from '$lib/core/supabase';
-	import { GUIDED_RUN_LIBRARY, type GuidedRun } from '$lib/training/guided_runs';
+	import { guidedRunLibrary, type GuidedRun } from '$lib/training/guided_runs';
 	import type { TrainingPlan } from '$lib/types';
 	import { m } from '$lib/i18n/store.svelte';
 
 	let plans = $state<TrainingPlan[]>([]);
 	let planId = $state<string | null>(null);
 	let loaded = $state(false);
+
+	// $derived so the guided-run rail re-renders when the locale changes.
+	let guidedLibrary = $derived(guidedRunLibrary(m));
 
 	// GDPR Art 6(1)(a): the Coach forwards health-adjacent data (DOB,
 	// HR zones, recent runs) to Anthropic, a US-based sub-processor.
@@ -147,10 +150,11 @@
 	// Intensity is implicit in title + subtitle wording — keep the data
 	// model untouched (it mirrors mobile_android via shared-library-syncer)
 	// and derive a hue locally for the rail's at-a-glance dot.
+	// Switch on the stable run id, not the now-localized title/subtitle —
+	// matching English substrings would silently fail in every other locale.
 	function intensityFor(g: GuidedRun): { label: string; tone: 'easy' | 'tempo' | 'mixed' } {
-		const s = (g.title + ' ' + g.subtitle).toLowerCase();
-		if (s.includes('run/walk')) return { label: m('coachPage.intensityRunWalk'), tone: 'mixed' };
-		if (s.includes('tempo') || s.includes('interval')) return { label: m('coachPage.intensityTempo'), tone: 'tempo' };
+		if (g.id === 'first-timer-15') return { label: m('coachPage.intensityRunWalk'), tone: 'mixed' };
+		if (g.id === 'tempo-builder-25') return { label: m('coachPage.intensityTempo'), tone: 'tempo' };
 		return { label: m('coachPage.intensityEasy'), tone: 'easy' };
 	}
 </script>
@@ -225,11 +229,11 @@
 			<h2 id="guided-heading">{m('coachPage.guidedHeading')}</h2>
 			<p class="guided-sub">{m('coachPage.guidedSub')}</p>
 		</header>
-		{#if GUIDED_RUN_LIBRARY.length === 0}
+		{#if guidedLibrary.length === 0}
 			<p class="guided-empty">{m('coachPage.guidedEmpty')}</p>
 		{:else}
 			<ul class="guided-list">
-				{#each GUIDED_RUN_LIBRARY as g (g.id)}
+				{#each guidedLibrary as g (g.id)}
 					{@const intent = intensityFor(g)}
 					<li>
 						<a class="guided-card" href="/guided/{g.id}">

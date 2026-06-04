@@ -1,8 +1,11 @@
 <script lang="ts">
 	import { afterNavigate } from '$app/navigation';
 	import { auth } from '$lib/stores/auth.svelte';
-	import { GUIDED_RUN_LIBRARY } from '$lib/training/guided_runs';
+	import { guidedRunLibrary } from '$lib/training/guided_runs';
 	import { m as t } from '$lib/i18n/store.svelte';
+
+	// $derived so the library re-renders when the active locale changes.
+	let guidedLibrary = $derived(guidedRunLibrary(t));
 
 	function fmtMinutes(seconds: number): string {
 		const m = Math.round(seconds / 60);
@@ -53,7 +56,7 @@
 	</header>
 
 	<section class="library" aria-label={t('guidedList.libraryLabel')}>
-		{#each GUIDED_RUN_LIBRARY as g (g.id)}
+		{#each guidedLibrary as g (g.id)}
 			<a class="card" href="/guided/{g.id}">
 				<header>
 					<span class="duration">{fmtMinutes(g.duration_sec)}</span>

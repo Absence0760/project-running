@@ -5,7 +5,9 @@
 	import { m as t } from '$lib/i18n/store.svelte';
 
 	let id = $derived($page.params.id ?? '');
-	let run = $derived(findGuidedRun(id));
+	// findGuidedRun reads the catalogue via `t`, so the $derived re-runs
+	// on a locale switch and the script re-localizes.
+	let run = $derived(findGuidedRun(t, id));
 
 	let cameFromCoach = $state(false);
 	afterNavigate(({ from }) => {

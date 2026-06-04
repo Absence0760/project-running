@@ -1,12 +1,19 @@
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
 import {
-	GUIDED_RUN_LIBRARY,
+	guidedRunLibrary,
 	cuesDue,
 	findGuidedRun,
 	isGuidedRunValid,
 	type GuidedRun,
+	type GuidedTranslate,
 } from './guided_runs';
+import { en } from '../i18n/locales/en';
+
+// The library now resolves its strings through the message catalogue.
+// Build it against the English dict for these structural tests.
+const t: GuidedTranslate = (key) => (en as Record<string, string>)[key] ?? key;
+const GUIDED_RUN_LIBRARY = guidedRunLibrary(t);
 
 function mkRun(cues: number[]): GuidedRun {
 	return {
@@ -122,13 +129,13 @@ test('GUIDED_RUN_LIBRARY: ids are unique', () => {
 });
 
 test('findGuidedRun: returns null for unknown id', () => {
-	assert.equal(findGuidedRun('nope'), null);
+	assert.equal(findGuidedRun(t, 'nope'), null);
 });
 
 test('findGuidedRun: returns the run for a known id', () => {
 	const id = GUIDED_RUN_LIBRARY[0].id;
-	assert.notEqual(findGuidedRun(id), null);
-	assert.equal(findGuidedRun(id)!.id, id);
+	assert.notEqual(findGuidedRun(t, id), null);
+	assert.equal(findGuidedRun(t, id)!.id, id);
 });
 
 test('GUIDED_RUN_LIBRARY: durations are sensible (5-90 min)', () => {
@@ -152,4 +159,36 @@ test('GUIDED_RUN_LIBRARY: every run has a finish cue at exactly duration', () =>
 		const last = g.cues[g.cues.length - 1];
 		assert.equal(last.at_sec, g.duration_sec, `${g.id} missing a finish cue at duration`);
 	}
+});
+
+// ─────────── localization ───────────
+
+test('guidedRunLibrary: every string resolves through the catalogue (no raw keys)', () => {
+	// `m` falls back to the raw key when a key is missing; a leaked
+	// `guidedRuns.*` literal means a catalogue gap, not a real string.
+	for (const g of GUIDED_RUN_LIBRARY) {
+		for (const s of [g.title, g.subtitle, g.description, ...g.cues.map((c) => c.text)]) {
+			assert.ok(s.trim().length > 0, `${g.id} has an empty string`);
+			assert.ok(!s.startsWith('guidedRuns.'), `${g.id} leaked a raw catalogue key: ${s}`);
+		}
+	}
+});
+
+test('guidedRunLibrary: switching the catalogue re-localizes the text but keeps the shape', async () => {
+	const { messages: de } = await import('../i18n/locales/de');
+	const tDe: GuidedTranslate = (key) => (de as Record<string, string>)[key] ?? key;
+	const deLib = guidedRunLibrary(tDe);
+
+	assert.equal(deLib.length, GUIDED_RUN_LIBRARY.length);
+	for (let i = 0; i < deLib.length; i++) {
+		// ids + timing are locale-independent; only the copy changes.
+		assert.equal(deLib[i].id, GUIDED_RUN_LIBRARY[i].id);
+		assert.equal(deLib[i].duration_sec, GUIDED_RUN_LIBRARY[i].duration_sec);
+		assert.notEqual(deLib[i].title, GUIDED_RUN_LIBRARY[i].title, `${deLib[i].id} title not translated`);
+		assert.deepEqual(
+			deLib[i].cues.map((c) => c.at_sec),
+			GUIDED_RUN_LIBRARY[i].cues.map((c) => c.at_sec),
+		);
+	}
+	assert.ok(deLib.every((g) => isGuidedRunValid(g)));
 });

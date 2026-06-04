@@ -11,7 +11,22 @@
  *
  * Mirrors `apps/mobile_android/lib/guided_runs.dart`. Keep in
  * lockstep — the shared-library-syncer agent watches the pair.
+ *
+ * The cue scripts + titles are localized: the library is built from the
+ * message catalogue for the active locale via `guidedRunLibrary(t)` (web
+ * twin of the mobile `guidedRunLibrary(AppLocalizations)`). The cue
+ * *timing* (at_sec / duration_sec) is locale-independent and stays inline;
+ * only the spoken/displayed text comes from the catalogue.
  */
+
+import type { MessageKey } from '$lib/i18n/messages';
+
+/**
+ * A catalogue lookup — the runtime `m` from `$lib/i18n/store.svelte`
+ * satisfies this. Call sites pass `m` so the library re-renders on a
+ * locale switch (build it inside a `$derived`, never a top-level const).
+ */
+export type GuidedTranslate = (key: MessageKey) => string;
 
 export interface GuidedCue {
 	/** Seconds from the start of the run when the cue should fire. */
@@ -69,73 +84,76 @@ export function isGuidedRunValid(g: GuidedRun): boolean {
 }
 
 /**
- * Library of MVP guided runs. The cue scripts are deliberately
- * compact — TTS reads them at ~3 wps so each cue is under a
- * sentence. The library is a constant so the test suite can pin
- * its shape.
+ * Library of MVP guided runs, localized via `t`. The cue scripts are
+ * deliberately compact — TTS reads them at ~3 wps so each cue is under a
+ * sentence. The timing (at_sec / duration_sec) is locale-independent and
+ * stays inline; only the spoken/displayed text comes from the catalogue.
+ *
+ * Build this inside a `$derived(...)` (or call it inline in a template) so
+ * the rendered library tracks a locale switch — never assign it to a
+ * top-level `const`, which would freeze the strings to the boot locale.
  */
-export const GUIDED_RUN_LIBRARY: GuidedRun[] = [
-	{
-		id: 'easy-30',
-		title: '30-Minute Easy Run',
-		subtitle: 'Coach voice · 30 min · easy effort',
-		duration_sec: 30 * 60,
-		description:
-			'A relaxed, conversational-pace run for a recovery day or just clearing your head. Coach checks in every five minutes with a gentle nudge.',
-		cues: [
-			{ at_sec: 0, text: 'Let’s go. Start easy — this is your recovery pace.' },
-			{ at_sec: 5 * 60, text: 'Five minutes in. Drop your shoulders. Keep it conversational.' },
-			{ at_sec: 10 * 60, text: 'Ten minutes. Cadence check — quick feet, light landing.' },
-			{ at_sec: 15 * 60, text: 'Halfway. You should still be able to talk through this.' },
-			{ at_sec: 20 * 60, text: 'Twenty minutes. Notice your breathing — slow nasal in, mouth out.' },
-			{ at_sec: 25 * 60, text: 'Five to go. Stay relaxed. Don’t pick it up.' },
-			{ at_sec: 29 * 60, text: 'One minute left. Easy finish.' },
-			{ at_sec: 30 * 60, text: 'Done. Walk it out for a minute. Nice job.' },
-		],
-	},
-	{
-		id: 'tempo-builder-25',
-		title: '25-Minute Tempo Builder',
-		subtitle: 'Coach voice · 25 min · 5-15-5',
-		duration_sec: 25 * 60,
-		description:
-			'Five-minute easy warm-up, fifteen minutes at tempo (comfortably hard), five-minute cool-down. The bread-and-butter weekly tempo session.',
-		cues: [
-			{ at_sec: 0, text: 'Warm-up time. Five minutes easy — wake up the legs.' },
-			{ at_sec: 4 * 60, text: 'One minute left in the warm-up. Pick up the cadence.' },
-			{ at_sec: 5 * 60, text: 'Lift it to tempo. Comfortably hard. Like a 10K race effort.' },
-			{ at_sec: 10 * 60, text: 'Five minutes in tempo. Strong but controlled. Keep the rhythm.' },
-			{ at_sec: 15 * 60, text: 'Ten minutes of tempo done. Hold the pace.' },
-			{ at_sec: 18 * 60, text: 'Two minutes left at tempo. Stay smooth.' },
-			{ at_sec: 20 * 60, text: 'Ease off. Five minutes easy to cool down.' },
-			{ at_sec: 23 * 60, text: 'Two to go. Bring the heart rate back down.' },
-			{ at_sec: 25 * 60, text: 'Done. Walk and stretch. Great work.' },
-		],
-	},
-	{
-		id: 'first-timer-15',
-		title: 'First-Timer 15-Minute Run/Walk',
-		subtitle: 'Coach voice · 15 min · run/walk intervals',
-		duration_sec: 15 * 60,
-		description:
-			'New to running? Three rounds of one-minute run, one-minute walk, plus a warm-up and cool-down. A gentle on-ramp; everyone starts here.',
-		cues: [
-			{ at_sec: 0, text: 'Start with a three-minute brisk walk to warm up.' },
-			{ at_sec: 3 * 60, text: 'Switch to a one-minute easy run. Conversational pace.' },
-			{ at_sec: 4 * 60, text: 'Walk one minute.' },
-			{ at_sec: 5 * 60, text: 'Run one minute.' },
-			{ at_sec: 6 * 60, text: 'Walk one minute.' },
-			{ at_sec: 7 * 60, text: 'Run one minute.' },
-			{ at_sec: 8 * 60, text: 'Walk one minute.' },
-			{ at_sec: 9 * 60, text: 'Run one minute — last one.' },
-			{ at_sec: 10 * 60, text: 'Walk it down. Five-minute cool-down.' },
-			{ at_sec: 14 * 60, text: 'One minute left. Walk easy.' },
-			{ at_sec: 15 * 60, text: 'Done. That was a real run. Get out there again soon.' },
-		],
-	},
-];
+export function guidedRunLibrary(t: GuidedTranslate): GuidedRun[] {
+	return [
+		{
+			id: 'easy-30',
+			title: t('guidedRuns.easy30.title'),
+			subtitle: t('guidedRuns.easy30.subtitle'),
+			duration_sec: 30 * 60,
+			description: t('guidedRuns.easy30.description'),
+			cues: [
+				{ at_sec: 0, text: t('guidedRuns.easy30.cue0') },
+				{ at_sec: 5 * 60, text: t('guidedRuns.easy30.cue1') },
+				{ at_sec: 10 * 60, text: t('guidedRuns.easy30.cue2') },
+				{ at_sec: 15 * 60, text: t('guidedRuns.easy30.cue3') },
+				{ at_sec: 20 * 60, text: t('guidedRuns.easy30.cue4') },
+				{ at_sec: 25 * 60, text: t('guidedRuns.easy30.cue5') },
+				{ at_sec: 29 * 60, text: t('guidedRuns.easy30.cue6') },
+				{ at_sec: 30 * 60, text: t('guidedRuns.easy30.cue7') },
+			],
+		},
+		{
+			id: 'tempo-builder-25',
+			title: t('guidedRuns.tempo25.title'),
+			subtitle: t('guidedRuns.tempo25.subtitle'),
+			duration_sec: 25 * 60,
+			description: t('guidedRuns.tempo25.description'),
+			cues: [
+				{ at_sec: 0, text: t('guidedRuns.tempo25.cue0') },
+				{ at_sec: 4 * 60, text: t('guidedRuns.tempo25.cue1') },
+				{ at_sec: 5 * 60, text: t('guidedRuns.tempo25.cue2') },
+				{ at_sec: 10 * 60, text: t('guidedRuns.tempo25.cue3') },
+				{ at_sec: 15 * 60, text: t('guidedRuns.tempo25.cue4') },
+				{ at_sec: 18 * 60, text: t('guidedRuns.tempo25.cue5') },
+				{ at_sec: 20 * 60, text: t('guidedRuns.tempo25.cue6') },
+				{ at_sec: 23 * 60, text: t('guidedRuns.tempo25.cue7') },
+				{ at_sec: 25 * 60, text: t('guidedRuns.tempo25.cue8') },
+			],
+		},
+		{
+			id: 'first-timer-15',
+			title: t('guidedRuns.first15.title'),
+			subtitle: t('guidedRuns.first15.subtitle'),
+			duration_sec: 15 * 60,
+			description: t('guidedRuns.first15.description'),
+			cues: [
+				{ at_sec: 0, text: t('guidedRuns.first15.cue0') },
+				{ at_sec: 3 * 60, text: t('guidedRuns.first15.cue1') },
+				{ at_sec: 4 * 60, text: t('guidedRuns.first15.cue2') },
+				{ at_sec: 5 * 60, text: t('guidedRuns.first15.cue3') },
+				{ at_sec: 6 * 60, text: t('guidedRuns.first15.cue4') },
+				{ at_sec: 7 * 60, text: t('guidedRuns.first15.cue5') },
+				{ at_sec: 8 * 60, text: t('guidedRuns.first15.cue6') },
+				{ at_sec: 9 * 60, text: t('guidedRuns.first15.cue7') },
+				{ at_sec: 10 * 60, text: t('guidedRuns.first15.cue8') },
+				{ at_sec: 14 * 60, text: t('guidedRuns.first15.cue9') },
+				{ at_sec: 15 * 60, text: t('guidedRuns.first15.cue10') },
+			],
+		},
+	];
+}
 
 /** Look up a guided run by id. Returns null if not in the library. */
-export function findGuidedRun(id: string): GuidedRun | null {
-	return GUIDED_RUN_LIBRARY.find((g) => g.id === id) ?? null;
+export function findGuidedRun(t: GuidedTranslate, id: string): GuidedRun | null {
+	return guidedRunLibrary(t).find((g) => g.id === id) ?? null;
 }

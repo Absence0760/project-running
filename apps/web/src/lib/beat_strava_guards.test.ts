@@ -132,10 +132,10 @@ test('/plans/[id] only mounts the race-day panel within 21 days', () => {
 
 // ─────────── Guided runs ───────────
 
-test('/guided lists every run in GUIDED_RUN_LIBRARY', () => {
+test('/guided lists every run in the guided-run library', () => {
 	const source = read('src/routes/guided/+page.svelte');
-	assert.match(source, /GUIDED_RUN_LIBRARY/, 'library page must iterate the shared constant');
-	assert.match(source, /\{#each GUIDED_RUN_LIBRARY as g/, 'each-block over the library missing');
+	assert.match(source, /guidedRunLibrary\(/, 'library page must build the shared library');
+	assert.match(source, /\{#each guidedLibrary as g/, 'each-block over the library missing');
 });
 
 test('/guided makes clear that recording happens on mobile', () => {
@@ -167,12 +167,12 @@ test('/coach surfaces the Guided runs library on its page', () => {
 	// Reason: the dedicated `/guided` sidebar entry was removed when the
 	// nav tightened to 5 items. Guided + Coach are both coach-driven,
 	// so the library is reachable from /coach via a side rail / section
-	// that iterates GUIDED_RUN_LIBRARY. A regression that drops the
+	// that iterates the guided-run library. A regression that drops the
 	// reference would leave guided runs only accessible by typing the
 	// URL — effectively orphaning the library.
 	const source = read('src/routes/coach/+page.svelte');
-	assert.match(source, /GUIDED_RUN_LIBRARY/, '/coach must surface the guided-run library');
-	assert.match(source, /\{#each GUIDED_RUN_LIBRARY as g/, 'each-block over the library missing on /coach');
+	assert.match(source, /guidedRunLibrary\(/, '/coach must surface the guided-run library');
+	assert.match(source, /\{#each guidedLibrary as g/, 'each-block over the library missing on /coach');
 });
 
 // ─────────── audio_cues.dart speakGuidedCue ───────────
