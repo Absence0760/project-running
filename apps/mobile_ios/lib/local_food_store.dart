@@ -33,8 +33,8 @@ class StoredFood implements SyncEntry {
   /// `.entry.itemName` instead of reaching into the raw `row` map.
   FoodEntry get entry => FoodEntry.fromRow(row);
 
-  DateTime? get loggedAt {
-    final v = row['logged_at'];
+  DateTime? get startedAt {
+    final v = row['started_at'];
     return v is String ? DateTime.tryParse(v) : null;
   }
 
@@ -105,8 +105,8 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   List<Map<String, dynamic>> get rows {
     final live = rowsById.values.where((f) => !f.isTombstone).toList();
     live.sort((a, b) {
-      final at = a.loggedAt;
-      final bt = b.loggedAt;
+      final at = a.startedAt;
+      final bt = b.startedAt;
       if (at == null || bt == null) return 0;
       return bt.compareTo(at);
     });
@@ -124,7 +124,7 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   /// newest-logged first. The nutrition screen renders a single day.
   List<Map<String, dynamic>> entriesForRange(DateTime from, DateTime to) =>
       rows.where((r) {
-        final v = r['logged_at'];
+        final v = r['started_at'];
         final at = v is String ? DateTime.tryParse(v) : null;
         if (at == null) return false;
         return !at.isBefore(from) && at.isBefore(to);
@@ -133,7 +133,7 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   /// Mint a new UUID and persist a pending-create entry. Returns the
   /// stored shape so the caller can render it immediately.
   Future<StoredFood> createLocal({
-    required DateTime loggedAt,
+    required DateTime startedAt,
     required String itemName,
     String? mealSlot,
     double? calories,
@@ -146,7 +146,7 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
     final now = DateTime.now().toUtc();
     final row = <String, dynamic>{
       'id': id,
-      'logged_at': loggedAt.toUtc().toIso8601String(),
+      'started_at': startedAt.toUtc().toIso8601String(),
       'item_name': itemName,
       'meal_slot': mealSlot,
       'calories': calories,
@@ -276,7 +276,7 @@ class LocalFoodStore extends OfflineSyncStore<StoredFood> {
   @override
   Future<void> pushCreate(ApiClient api, StoredFood stored) => api.logFood(
         id: stored.id,
-        loggedAt: stored.loggedAt ?? DateTime.now().toUtc(),
+        startedAt: stored.startedAt ?? DateTime.now().toUtc(),
         itemName: stored.row['item_name'] as String,
         mealSlot: stored.row['meal_slot'] as String?,
         calories: (stored.row['calories'] as num?)?.toDouble(),

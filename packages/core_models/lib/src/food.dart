@@ -7,7 +7,7 @@ import 'generated/db_rows.dart';
 class FoodEntry {
   const FoodEntry({
     required this.id,
-    this.loggedAt,
+    this.startedAt,
     required this.itemName,
     this.mealSlot,
     this.calories,
@@ -21,11 +21,7 @@ class FoodEntry {
   });
 
   final String id;
-  // Sourced from the renamed `started_at` column (F8 / 20261208_001); the
-  // Dart field keeps the `loggedAt` name until the mobile LocalFoodStore +
-  // its callers migrate in Round 4 (renaming it now would churn the
-  // byte-identical mobile twin tests, which are out of this change's scope).
-  final DateTime? loggedAt;
+  final DateTime? startedAt;
   final String itemName;
   final String? mealSlot;
   final double? calories;
@@ -39,7 +35,7 @@ class FoodEntry {
 
   factory FoodEntry.fromRow(Map<String, dynamic> row) => FoodEntry(
         id: row[FoodLogRow.colId] as String,
-        loggedAt: _parseTs(row[FoodLogRow.colStartedAt]),
+        startedAt: _parseTs(row[FoodLogRow.colStartedAt]),
         itemName: (row[FoodLogRow.colItemName] as String?) ?? '',
         mealSlot: row[FoodLogRow.colMealSlot] as String?,
         calories: (row[FoodLogRow.colCalories] as num?)?.toDouble(),

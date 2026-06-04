@@ -1192,7 +1192,7 @@ void main() {
         ],
       );
       await srcFood.createLocal(
-        loggedAt: DateTime.utc(2026, 6, 1, 12),
+        startedAt: DateTime.utc(2026, 6, 1, 12),
         itemName: 'Oatmeal',
         calories: 300,
       );
@@ -1232,7 +1232,7 @@ void main() {
         ],
       );
       final entry = await srcFood.createLocal(
-        loggedAt: DateTime.utc(2026, 6, 2, 12),
+        startedAt: DateTime.utc(2026, 6, 2, 12),
         itemName: 'Banana',
         calories: 90,
       );

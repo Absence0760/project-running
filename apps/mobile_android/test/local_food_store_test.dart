@@ -19,7 +19,7 @@ class _FakeFoodApi extends ApiClient {
   @override
   Future<FoodLogRow> logFood({
     String? id,
-    required DateTime loggedAt,
+    required DateTime startedAt,
     required String itemName,
     String? mealSlot,
     double? calories,
@@ -35,7 +35,7 @@ class _FakeFoodApi extends ApiClient {
     return FoodLogRow(
       id: id ?? 'server-generated',
       userId: 'test-user',
-      startedAt: loggedAt,
+      startedAt: startedAt,
       itemName: itemName,
       mealSlot: mealSlot,
       calories: calories,
@@ -75,12 +75,12 @@ class _FakeFoodApi extends ApiClient {
 Map<String, dynamic> _serverRow(
   String id, {
   String? itemName,
-  DateTime? loggedAt,
+  DateTime? startedAt,
   DateTime? lastModifiedAt,
 }) =>
     {
       'id': id,
-      'logged_at': (loggedAt ?? DateTime.utc(2026, 6, 1, 12)).toIso8601String(),
+      'started_at': (startedAt ?? DateTime.utc(2026, 6, 1, 12)).toIso8601String(),
       'item_name': itemName ?? 'Server item',
       'meal_slot': null,
       'calories': null,
@@ -115,7 +115,7 @@ void main() {
   group('createLocal', () {
     test('mints a v4 UUID and marks the entry pendingCreate', () async {
       final stored = await store.createLocal(
-        loggedAt: DateTime.utc(2026, 6, 2, 8),
+        startedAt: DateTime.utc(2026, 6, 2, 8),
         itemName: 'Oats',
         mealSlot: 'breakfast',
         calories: 412,
@@ -133,7 +133,7 @@ void main() {
 
     test('survives a store reload', () async {
       await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Chicken bowl', calories: 640);
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Chicken bowl', calories: 640);
       final fresh = LocalFoodStore();
       await fresh.init(overrideDirectory: dir);
       expect(fresh.rows, hasLength(1));
@@ -143,9 +143,9 @@ void main() {
 
     test('rows are sorted newest-logged first', () async {
       await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2, 8), itemName: 'Breakfast');
+          startedAt: DateTime.utc(2026, 6, 2, 8), itemName: 'Breakfast');
       await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2, 13), itemName: 'Lunch');
+          startedAt: DateTime.utc(2026, 6, 2, 13), itemName: 'Lunch');
       expect(store.rows.first['item_name'], 'Lunch');
       expect(store.rows.last['item_name'], 'Breakfast');
     });
@@ -154,11 +154,11 @@ void main() {
   group('entriesForRange', () {
     test('returns only entries within the half-open day window', () async {
       await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 1, 23), itemName: 'Yesterday');
+          startedAt: DateTime.utc(2026, 6, 1, 23), itemName: 'Yesterday');
       await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2, 8), itemName: 'Today');
+          startedAt: DateTime.utc(2026, 6, 2, 8), itemName: 'Today');
       await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 3, 0), itemName: 'Tomorrow');
+          startedAt: DateTime.utc(2026, 6, 3, 0), itemName: 'Tomorrow');
       final today = store.entriesForRange(
           DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
       expect(today.map((r) => r['item_name']), ['Today']);
@@ -168,7 +168,7 @@ void main() {
   group('schema version (_v)', () {
     test('a persisted record carries the current schema version', () async {
       final stored = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Apple');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Apple');
       final raw = jsonDecode(
               File('${dir.path}/${stored.id}.json').readAsStringSync())
           as Map<String, dynamic>;
@@ -206,7 +206,7 @@ void main() {
   group('updateLocal', () {
     test('pendingCreate stays pendingCreate', () async {
       final stored = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Old');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Old');
       await store.updateLocal(stored.id, itemName: 'New', calories: 500);
       final reloaded = LocalFoodStore();
       await reloaded.init(overrideDirectory: dir);
@@ -226,7 +226,7 @@ void main() {
   group('deleteLocal', () {
     test('pendingCreate entries disappear without a tombstone', () async {
       final stored = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
       await store.deleteLocal(stored.id);
       expect(store.rows, isEmpty);
       final reloaded = LocalFoodStore();
@@ -247,7 +247,7 @@ void main() {
   group('replaceFromServer', () {
     test('overwrites synced rows but preserves pendingCreate', () async {
       final mine = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Mine');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Mine');
       await store.replaceFromServer([_serverRow('server-1', itemName: 'Server')]);
       expect(store.rows.any((r) => r['id'] == mine.id), isTrue,
           reason: 'pendingCreate entry must survive a server refresh');
@@ -310,7 +310,7 @@ void main() {
         _serverRow('f2', itemName: 'Two'),
       ]);
       final mine = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 4), itemName: 'Offline');
+          startedAt: DateTime.utc(2026, 6, 4), itemName: 'Offline');
       expect(jsonFiles(), hasLength(3));
 
       await store.replaceFromServer([_serverRow('f1', itemName: 'One')]);
@@ -362,7 +362,7 @@ void main() {
     test('drains pendingCreate via logFood with the local id', () async {
       final api = _FakeFoodApi();
       final stored = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Oats');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Oats');
 
       final drained = await store.syncWithServer(api);
 
@@ -405,7 +405,7 @@ void main() {
         _serverRow('sync-kill'),
       ]);
       final created = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Fresh');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'Fresh');
       await store.updateLocal('sync-edit', itemName: 'Edited');
       await store.deleteLocal('sync-kill');
 
@@ -423,7 +423,7 @@ void main() {
     test('per-row failure isolation: failing create leaves the row pending',
         () async {
       final stored = await store.createLocal(
-          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
+          startedAt: DateTime.utc(2026, 6, 2), itemName: 'X');
       final api = _FakeFoodApi()..failedCreates = {stored.id};
 
       final drained = await store.syncWithServer(api);

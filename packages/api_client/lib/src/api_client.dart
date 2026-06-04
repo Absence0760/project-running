@@ -4101,7 +4101,7 @@ class ApiClient {
   /// semantics as [createGymWorkout].
   Future<FoodLogRow> logFood({
     String? id,
-    required DateTime loggedAt,
+    required DateTime startedAt,
     required String itemName,
     String? mealSlot,
     double? calories,
@@ -4119,7 +4119,7 @@ class ApiClient {
         .insert({
           if (id != null) FoodLogRow.colId: id,
           FoodLogRow.colUserId: uid,
-          FoodLogRow.colStartedAt: loggedAt.toIso8601String(),
+          FoodLogRow.colStartedAt: startedAt.toIso8601String(),
           FoodLogRow.colItemName: itemName,
           FoodLogRow.colMealSlot: mealSlot,
           FoodLogRow.colCalories: calories,
