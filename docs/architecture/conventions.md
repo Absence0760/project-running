@@ -73,6 +73,48 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 - Foreign keys: `{table}_id`, e.g. `route_id` on `runs`.
 - Migration files: `{YYYYMMDD}_{nnn}_{description}.sql`. The `nnn` is the ordinal within a day (`001`, `002`, ...).
 
+### Storage buckets — one bucket per modality, named for the table it backs (F2)
+
+Storage buckets are **per-modality and honestly named**, mirroring the F1
+Option A table decision (`runs` stays `runs`; tables are modality-specific, not
+folded into a generic `activities` table). The GPS-track bucket is `runs` (it
+backs the `runs` table) and run images live in `run-photos`. There is **no
+generic `activities` bucket** and no plan for one — a `runs` table writing to an
+`activities` bucket would be exactly the table↔bucket-name mismatch this rule
+exists to prevent.
+
+- When a future modality grows file attachments (gym progress photos, meal
+  photos), it gets its **own** bucket named for its table — `gym-photos`,
+  `meal-photos` — not a shared bag. Same RLS path shape (`{user_id}/{...}`),
+  same owner-scoped policies.
+- Never hardcode a bucket id. Route every `supabase.storage.from(...)` through
+  the registry: `BUCKETS` in `apps/web/src/lib/core/schema.ts`,
+  `StorageBuckets` in `packages/core_models/lib/src/metadata_keys.dart`, and
+  `schema.Bucket*` in `apps/job_worker/internal/schema/schema.go` (F11). The
+  literal is decoupled from the call sites, so the name and the registry move
+  together if a rename is ever genuinely needed.
+
+### `external_id` namespacing — `provider:native_id` (F10)
+
+Every imported activity row carries `external_id text` namespaced as
+`<provider>:<native_id>` so two providers can't collide on the same numeric id.
+The format is already universal across all importers and must stay so:
+
+- `strava:{activity_id}` · `garmin:{file_id}` · `parkrun:{event}:{date}` ·
+  `csv:{iso}-{distance}-{duration}`. New importers follow the same shape; put
+  the prefix-building in one helper (e.g. `garminExternalId`) rather than
+  inlining the literal.
+- Idempotency is the per-user partial unique index
+  `(user_id, external_id) where external_id is not null` (per-user, not global —
+  two users legitimately sharing one `strava:<id>` must both keep their row; see
+  `20260528000003`). Importers dedupe with `onConflict` on that key.
+- The namespace is a **string-prefix convention**, not structural. If a future
+  provider's native ids could ever collide across the `:`-prefix boundary,
+  escalate to structural `(source, external_id)` columns with the unique index
+  over `(user_id, source, external_id)` — a deliberate migration, not an inline
+  tweak. Not warranted today: the four-importer prefix scheme has zero collision
+  surface.
+
 ### Activity-table column checklist — column vs jsonb bag (F6 / decision D4)
 
 The activity tables (`runs`, `gym_workouts`, `gym_sets`, `food_log`) each pair
