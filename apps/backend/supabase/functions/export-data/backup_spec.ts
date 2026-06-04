@@ -175,6 +175,20 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 			filter: `cancelled_by=eq.${uid}`,
 			select: '*',
 		},
+		// gym_workouts (+ sets via nested embed). Phase 4 multi-modal
+		// strength log (migration 20261204_001). gym_sets has no user_id
+		// of its own (it cascades from the parent workout), so the export
+		// nests each workout's sets, mirroring the training_plans embed.
+		// audit/data-export-completeness gym/nutrition gap.
+		{
+			entry: 'gym_workouts.json',
+			table: 'gym_workouts',
+			filter: uidEq,
+			select: '*,sets:gym_sets(*)',
+		},
+		// food_log — Phase 4 nutrition diary (calories + macros per item,
+		// migration 20261204_001). Owner-scoped Art 20 personal data.
+		{ entry: 'food_log.json', table: 'food_log', filter: uidEq, select: '*' },
 	];
 }
 

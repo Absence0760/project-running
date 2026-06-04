@@ -401,14 +401,19 @@ Data Safety disclosable). Plan:
   rather than a single mutable column, because weight trends matter and a
   single column loses history. (New migration when the nutrition module
   starts — additive, owner-scoped RLS, cascade-delete.)
-- **DSAR completeness (must-fix):** the new `gym_workouts`, `gym_sets`,
-  `food_log` (and future `body_metrics`) tables **must be added to the
-  data-export path** (Go `dataexport` + the `export-data` EF) so the
-  GDPR right-to-know export is complete. Account *deletion* is already
-  covered — all four FK-cascade from `auth.users`, so deleting the auth
-  user removes them — but **export is not automatic** and is a real gap to
-  close as each table gains real data. Track it; don't ship a modality to
-  real users with its data missing from export.
+- **DSAR completeness (must-fix):** `gym_workouts`, `gym_sets`, and
+  `food_log` are now in the **data-export path** (Go `dataexport`'s
+  `FetchExportPersonalDataTables` + the `export-data` EF's
+  `buildBackupSpecs`) so the GDPR right-to-know export is complete.
+  `gym_sets` has no `user_id` of its own — it cascades from the parent
+  workout — so it ships nested inside each `gym_workouts` row via the
+  same PostgREST embed `training_plans` uses for its weeks/workouts.
+  The future `body_metrics` table still **must be added** to both paths
+  when its migration lands. Account *deletion* is already covered — all
+  FK-cascade from `auth.users`, so deleting the auth user removes them —
+  but **export is not automatic**, so wire each new modality table into
+  the export path as it gains real data; don't ship a modality to real
+  users with its data missing from export.
 - **Disclosure:** adding nutrition + body metrics changes the privacy
   posture — update the iOS Privacy Nutrition Label, Play Data Safety
   form, and the sub-processor list (Open Food Facts becomes an outbound
@@ -474,4 +479,4 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Data access | `packages/api_client` typed gym + food methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); food queries pending |
 
 **Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the `multi_modal_nav`-gated **Gym** sidebar item in `+layout.svelte`. E2e: `tests-e2e/gym/gym.spec.ts`. Weight is entered/shown in kg (there is no per-user weight-unit preference yet — distance `preferred_unit` is km/mi only).
-| DSAR | add `gym_workouts` / `gym_sets` / `food_log` / `body_metrics` to the export path |
+| DSAR | `gym_workouts` / `gym_sets` (nested) / `food_log` in the export path (**shipped**); `body_metrics` pending its migration |

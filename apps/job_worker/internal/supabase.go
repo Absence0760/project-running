@@ -1504,6 +1504,20 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			name: "event_exceptions.json", table: "event_exceptions",
 			filter: "cancelled_by=eq." + uid, sel: "*",
 		},
+		// gym_workouts (+ sets via nested embed). Phase 4 multi-modal
+		// strength-training log (migration 20261204_001). gym_sets has
+		// no user_id of its own — it cascades from the parent workout —
+		// so the export nests each workout's sets inside its row, the
+		// same shape training_plans uses for plan_weeks / plan_workouts.
+		// audit/data-export-completeness gym/nutrition gap.
+		{
+			name: "gym_workouts.json", table: "gym_workouts", filter: uidEq,
+			sel: "*,sets:gym_sets(*)",
+		},
+		// food_log — Phase 4 nutrition diary (per-item calories + macros,
+		// migration 20261204_001). Owner-scoped personal data the subject
+		// has an Art 20 right to receive.
+		{name: "food_log.json", table: "food_log", filter: uidEq, sel: "*"},
 	}
 
 	out := make(map[string][]map[string]interface{}, len(specs))

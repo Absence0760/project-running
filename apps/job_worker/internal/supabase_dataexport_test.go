@@ -953,3 +953,56 @@ func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
 		}
 	}
 }
+
+// audit/data-export-completeness gym/nutrition gap: the Phase 4
+// multi-modal strength + nutrition logs (migration 20261204_001) were
+// missing from the Art 20 export. gym_workouts must ship scoped to the
+// subject, embedding its child gym_sets (which has no user_id of its own
+// — it cascades from the parent workout, so it can't be filtered
+// directly), and food_log must ship scoped to the subject. Keep the
+// shape in lockstep with the TS twin in backup_spec.test.ts.
+func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T) {
+	var gymQ, foodQ string
+	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case strings.Contains(r.URL.Path, "/rest/v1/gym_workouts"):
+			gymQ = r.URL.RawQuery
+			_, _ = w.Write([]byte(`[{"id":"gw1","title":"Push day","sets":[{"id":"gs1","exercise_name":"Bench","reps":5,"weight_kg":80}]}]`))
+		case strings.Contains(r.URL.Path, "/rest/v1/food_log"):
+			foodQ = r.URL.RawQuery
+			_, _ = w.Write([]byte(`[{"id":"fl1","item_name":"Oats","calories":350,"protein_g":12}]`))
+		default:
+			_, _ = w.Write([]byte(`[]`))
+		}
+	})
+	out, err := client.FetchExportPersonalDataTables(context.Background(), "user-A")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, key := range []string{"gym_workouts.json", "food_log.json"} {
+		if rows, ok := out[key]; !ok || len(rows) == 0 {
+			t.Errorf("%s must appear in the export manifest with at least one row — gym/nutrition DSAR gap; got out=%v", key, extraTableKeys(out))
+		}
+	}
+
+	if !strings.Contains(gymQ, "user_id=eq.user-A") {
+		t.Errorf("gym_workouts must be scoped to the subject's user_id; got query=%q", gymQ)
+	}
+	if !strings.Contains(foodQ, "user_id=eq.user-A") {
+		t.Errorf("food_log must be scoped to the subject's user_id; got query=%q", foodQ)
+	}
+	// gym_sets has no user_id — it must ship via the nested embed on the
+	// parent workout (the same shape training_plans uses for its weeks /
+	// workouts), and the embedded rows must survive into the result.
+	if !strings.Contains(gymQ, "gym_sets") {
+		t.Errorf("gym_workouts select must embed gym_sets so the owner-less child table ships; got query=%q", gymQ)
+	}
+	gymRows := out["gym_workouts.json"]
+	if len(gymRows) > 0 {
+		if _, ok := gymRows[0]["sets"]; !ok {
+			t.Errorf("gym_workouts rows must carry the embedded sets; got row=%v", gymRows[0])
+		}
+	}
+}

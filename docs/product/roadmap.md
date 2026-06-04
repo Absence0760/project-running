@@ -576,7 +576,7 @@ Strong app's free-form log, not its programmed-routine engine.
 - [ ] **Coach context (Tier 1):** `coach/context.ts` reads a **bounded** recent-lifts cap + a 7-day nutrition *summary* (not raw rows) so prompt size + cost stay flat. Daily cap unchanged.
 - [ ] Home composes all three modalities (self-hiding); History timeline + filter chips over the `activities` view (windowed/paginated).
 - [ ] Social feed extends to **lift** cards (`is_public`); **meals are not feed-shareable in v1** (privacy footgun, little upside).
-- [ ] **DSAR (must-fix):** add `gym_workouts` / `gym_sets` / `food_log` / `body_metrics` to the data-export path (deletion already FK-cascades from `auth.users`).
+- [x] **DSAR (must-fix):** `gym_workouts` / `gym_sets` (nested embed) / `food_log` added to the data-export path (Go `dataexport` + `export-data` EF); deletion already FK-cascades from `auth.users`. `body_metrics` still to add when its migration lands.
 - [ ] **Tier 2 (deferred, gated on data trust):** recommendation engine ("under-fuelling for tomorrow's long run", "skip the lift, CTL too high"), plan re-planning that factors fuelling + lift load, Coach-authored meal/lift plans, unified Whoop-style recovery score. Off until logging is reliable.
 
 ### Depth tiers (deferred, documented for sequencing decisions)
