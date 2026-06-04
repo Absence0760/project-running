@@ -560,6 +560,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get goalGain => 'Ganhar peso';
 
   @override
+  String get homeTodaysLift => 'Treino de hoje';
+
+  @override
   String get settingsSectionProfile => 'Perfil';
 
   @override
@@ -7496,6 +7499,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get goalGain => 'Ganhar peso';
+
+  @override
+  String get homeTodaysLift => 'Treino de hoje';
 
   @override
   String get settingsSectionProfile => 'Perfil';

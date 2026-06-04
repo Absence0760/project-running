@@ -562,6 +562,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get goalGain => 'Prendre du poids';
 
   @override
+  String get homeTodaysLift => 'Séance du jour';
+
+  @override
   String get settingsSectionProfile => 'Profil';
 
   @override

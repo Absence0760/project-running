@@ -1001,6 +1001,12 @@ abstract class AppLocalizations {
   /// **'Gain weight'**
   String get goalGain;
 
+  /// Home card header above today's logged gym workout
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s lift'**
+  String get homeTodaysLift;
+
   /// Settings landing section header grouping Account + Preferences
   ///
   /// In en, this message translates to:

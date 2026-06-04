@@ -385,6 +385,10 @@
   "@goalGain": {
     "description": "Nutrition weight goal: calorie surplus"
   },
+  "homeTodaysLift": "Today's lift",
+  "@homeTodaysLift": {
+    "description": "Home card header above today's logged gym workout"
+  },
   "settingsSectionProfile": "Profile",
   "@settingsSectionProfile": {
     "description": "Settings landing section header grouping Account + Preferences"

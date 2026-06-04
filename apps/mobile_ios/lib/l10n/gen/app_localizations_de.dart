@@ -561,6 +561,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get goalGain => 'Zunehmen';
 
   @override
+  String get homeTodaysLift => 'Heutiges Training';
+
+  @override
   String get settingsSectionProfile => 'Profil';
 
   @override

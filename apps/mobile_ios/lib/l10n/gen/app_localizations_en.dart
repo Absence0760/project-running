@@ -558,6 +558,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get goalGain => 'Gain weight';
 
   @override
+  String get homeTodaysLift => 'Today\'s lift';
+
+  @override
   String get settingsSectionProfile => 'Profile';
 
   @override

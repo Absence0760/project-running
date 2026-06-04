@@ -546,6 +546,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get goalGain => '増量';
 
   @override
+  String get homeTodaysLift => '今日の筋トレ';
+
+  @override
   String get settingsSectionProfile => 'プロフィール';
 
   @override

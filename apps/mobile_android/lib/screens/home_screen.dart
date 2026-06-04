@@ -153,6 +153,8 @@ class _HomeScreenState extends State<HomeScreen> {
           training: widget.training,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
+          gymStore: widget.gymStore,
+          foodStore: widget.foodStore,
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
         ),
