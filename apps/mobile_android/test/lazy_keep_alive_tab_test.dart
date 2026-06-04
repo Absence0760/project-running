@@ -94,11 +94,17 @@ void main() {
       );
     });
 
-    test('_startRunWithRoute sets _preselectedRoute + jumps to tab 1', () {
-      // Pin the flow that the rebuildKey fix supports.
+    test('_startRunWithRoute sets _preselectedRoute + jumps to the Run page',
+        () {
+      // Pin the flow that the rebuildKey fix supports. After the Phase 4
+      // nav reshape (multi_modal.md § Bottom nav) the Run tab is no longer a
+      // top-level destination — it is the _pageRun PageView page (index 2),
+      // reached via the centre Log action / this route-start flow.
       expect(src.contains('_preselectedRoute = route'), isTrue);
-      expect(src.contains('_pageController.jumpToPage(1)'), isTrue,
-          reason: 'Run tab is index 1 in the home nav.');
+      expect(src.contains('_pageController.jumpToPage(_pageRun)'), isTrue,
+          reason: 'Run is now the _pageRun page, not a bottom-nav tab.');
+      expect(src.contains('static const _pageRun = 2'), isTrue,
+          reason: 'Run sits at PageView index 2 in the reshaped shell.');
     });
   });
 }
