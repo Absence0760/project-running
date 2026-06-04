@@ -54,4 +54,5 @@ export const METADATA_KEYS = {
 	workout_adherence: 'workout_adherence',
 	steps: 'steps',
 	age_grade: 'age_grade',
+	elevation_m: 'elevation_m',
 } as const;

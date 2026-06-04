@@ -2,6 +2,7 @@
  * Data access layer — all Supabase queries in one place.
  */
 import { supabase } from './supabase';
+import { TABLES, BUCKETS, METADATA_KEYS } from './schema';
 import { loadSettings, effective } from '../settings/settings';
 import { privacyDefaultToIsPublic } from '../social/run_visibility';
 import { bandsToRanges, type DistanceBandKey } from '../routes/distance_bands';
@@ -66,7 +67,7 @@ export async function fetchRuns(opts?: FetchRunsOptions): Promise<Run[]> {
 	if (!userId) return [];
 	const build = () =>
 		supabase
-			.from('runs')
+			.from(TABLES.runs)
 			.select('*')
 			.eq('user_id', userId)
 			.order('started_at', { ascending: false });
@@ -150,7 +151,7 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 	const userId = auth.user?.id;
 	if (!userId) return null;
 	const { data } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('*')
 		.eq('id', id)
 		.eq('user_id', userId)
@@ -181,7 +182,7 @@ export async function fetchRunsOnRoute(
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data, error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('id, route_id, distance_m, duration_s, metadata')
 		.eq('user_id', userId)
 		.eq('route_id', routeId)
@@ -195,7 +196,7 @@ export async function fetchRunsOnRoute(
  * Throws if the path is invalid or the user can't read it.
  */
 async function fetchTrack(path: string) {
-	const { data, error } = await supabase.storage.from('runs').download(path);
+	const { data, error } = await supabase.storage.from(BUCKETS.runs).download(path);
 	if (error || !data) throw error ?? new Error('No data');
 	const buf = await data.arrayBuffer();
 	const decompressed = await decompressGzip(buf);
@@ -336,7 +337,7 @@ export async function fetchRoutesIntersectingTrack(
 /// /runs/[id] and by any future "save as route" flow that wants
 /// to back-link the run to its source.
 export async function linkRunToRoute(runId: string, routeId: string): Promise<void> {
-	await supabase.from('runs').update({ route_id: routeId }).eq('id', runId);
+	await supabase.from(TABLES.runs).update({ route_id: routeId }).eq('id', runId);
 }
 
 export type MatchStatus = 'pending' | 'matched' | 'failed' | 'skipped';
@@ -450,7 +451,7 @@ export async function deleteRun(id: string): Promise<void> {
 	// since the row-cascade kills the join target — but unreachable
 	// orphan bytes still occupy the bucket.) Audit/storage Medium fix.
 	const { data: run } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('track_url, hr_series_url')
 		.eq('id', id)
 		.single();
@@ -461,7 +462,7 @@ export async function deleteRun(id: string): Promise<void> {
 	);
 	if (orphanPaths.length > 0) {
 		try {
-			await supabase.storage.from('runs').remove(orphanPaths);
+			await supabase.storage.from(BUCKETS.runs).remove(orphanPaths);
 		} catch (e) {
 			// Don't log the storage path — it embeds the user's auth
 			// UUID and would land in Sentry breadcrumbs. The Sentry
@@ -498,7 +499,7 @@ export async function deleteRun(id: string): Promise<void> {
 			}
 		}
 	}
-	const { error } = await supabase.from('runs').delete().eq('id', id);
+	const { error } = await supabase.from(TABLES.runs).delete().eq('id', id);
 	if (error) throw error;
 }
 
@@ -532,7 +533,7 @@ export async function setRoutePublic(id: string, isPublic: boolean): Promise<voi
 
 export async function makeRunPublic(id: string): Promise<void> {
 	const { error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.update({ is_public: true })
 		.eq('id', id);
 	if (error) throw error;
@@ -638,7 +639,7 @@ export async function saveRunAsRoute(
 	// run-detail page. Best-effort — the route insert is the important
 	// bit. Swallow any RLS or FK miss silently.
 	try {
-		await supabase.from('runs').update({ route_id: data.id }).eq('id', runId);
+		await supabase.from(TABLES.runs).update({ route_id: data.id }).eq('id', runId);
 	} catch (e) {
 		console.warn('saveRunAsRoute: back-link update failed', e);
 	}
@@ -686,13 +687,13 @@ export async function createManualRun(input: {
 	const isPublic = input.isPublic ?? (await defaultRunIsPublic(userId));
 
 	const metadata: Record<string, unknown> = {
-		manual_entry: true,
-		activity_type: input.activityType ?? 'run',
+		[METADATA_KEYS.manual_entry]: true,
+		[METADATA_KEYS.activity_type]: input.activityType ?? 'run',
 	};
-	if (input.notes && input.notes.trim()) metadata.notes = input.notes.trim();
+	if (input.notes && input.notes.trim()) metadata[METADATA_KEYS.notes] = input.notes.trim();
 
 	const { data, error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.insert({
 			user_id: userId,
 			started_at: input.startedAt,
@@ -754,8 +755,8 @@ export async function saveRun(input: {
 	// `routes`; title has no DB column). Merge both into metadata so they
 	// survive the round-trip. See docs/backend/metadata.md for the registered keys.
 	const mergedMetadata: Record<string, unknown> = { ...(input.metadata ?? {}) };
-	if (input.title) mergedMetadata.title = input.title;
-	if (input.elevation_m != null) mergedMetadata.elevation_m = input.elevation_m;
+	if (input.title) mergedMetadata[METADATA_KEYS.title] = input.title;
+	if (input.elevation_m != null) mergedMetadata[METADATA_KEYS.elevation_m] = input.elevation_m;
 	const row: Record<string, unknown> = {
 		user_id: userId,
 		started_at: input.started_at,
@@ -768,7 +769,7 @@ export async function saveRun(input: {
 	if (input.external_id) row.external_id = input.external_id;
 
 	const { data, error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.insert(row)
 		.select('id')
 		.single();
@@ -790,7 +791,7 @@ export async function saveRun(input: {
 			const encoded = new TextEncoder().encode(JSON.stringify(input.track));
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
-				.from('runs')
+				.from(TABLES.runs)
 				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
@@ -799,7 +800,7 @@ export async function saveRun(input: {
 				trackError = upErr.message;
 			} else {
 				const { error: linkErr } = await supabase
-					.from('runs')
+					.from(TABLES.runs)
 					.update({ track_url: path })
 					.eq('id', runId);
 				if (linkErr) {
@@ -833,7 +834,7 @@ export async function saveRun(input: {
 			const encoded = new TextEncoder().encode(JSON.stringify(input.hrSeries));
 			const gzipped = await gzipBytes(encoded);
 			const { error: upErr } = await supabase.storage
-				.from('runs')
+				.from(TABLES.runs)
 				.upload(path, new Blob([gzipped as BlobPart], { type: 'application/gzip' }), {
 					contentType: 'application/gzip',
 					upsert: true,
@@ -845,7 +846,7 @@ export async function saveRun(input: {
 				// a resolved { error }, not a throw, so the outer catch can't see
 				// it — check it explicitly or the sidecar orphans silently.
 				const { error: linkErr } = await supabase
-					.from('runs')
+					.from(TABLES.runs)
 					.update({ hr_series_url: path })
 					.eq('id', runId);
 				if (linkErr) {
@@ -895,7 +896,7 @@ export async function updateRunMetadata(
 	fields: { title?: string; notes?: string },
 ): Promise<void> {
 	const { data: run } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('metadata')
 		.eq('id', id)
 		.single();
@@ -911,7 +912,7 @@ export async function updateRunMetadata(
 		new Date().toISOString(),
 	);
 	const { error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.update({ metadata: next })
 		.eq('id', id);
 	if (error) throw error;
@@ -1274,7 +1275,7 @@ export async function fetchWeeklyMileage(
 	const windowStart = new Date();
 	windowStart.setDate(windowStart.getDate() - 14 * 7);
 	const { data: runs } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('started_at, distance_m')
 		.eq('user_id', user.id)
 		.gte('started_at', windowStart.toISOString())
@@ -2254,7 +2255,7 @@ export async function submitEventResult(params: {
 	// Best-effort back-link so the run-detail page can show "ran at {event}".
 	if (params.runId) {
 		await supabase
-			.from('runs')
+			.from(TABLES.runs)
 			.update({ event_id: params.eventId })
 			.eq('id', params.runId)
 			.eq('user_id', userId);
@@ -2420,7 +2421,7 @@ export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOpt
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('id, started_at, duration_s, distance_m, metadata')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
@@ -2432,8 +2433,8 @@ export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOpt
 		duration_s: r.duration_s,
 		distance_m: r.distance_m,
 		activity_type:
-			(r.metadata && typeof r.metadata === 'object' && 'activity_type' in r.metadata
-				? ((r.metadata as Record<string, unknown>).activity_type as string)
+			(r.metadata && typeof r.metadata === 'object' && METADATA_KEYS.activity_type in r.metadata
+				? ((r.metadata as Record<string, unknown>)[METADATA_KEYS.activity_type] as string)
 				: null) ?? 'run',
 	}));
 }
@@ -3533,7 +3534,7 @@ async function hydratePeopleSuggestions(
 			.select('id, display_name, avatar_url')
 			.in('id', ids),
 		supabase
-			.from('runs')
+			.from(TABLES.runs)
 			.select('user_id')
 			.in('user_id', ids)
 			.eq('is_public', true),
@@ -3686,7 +3687,7 @@ export async function fetchFollowingFeed(opts?: {
 		if (opts?.activityType && opts.activityType !== 'all') {
 			// jsonb metadata key — Supabase exposes the `->>` operator via
 			// the column-name string syntax. Matches '{activity_type:run}'.
-			q = q.eq('metadata->>activity_type', opts.activityType);
+			q = q.eq(`metadata->>${METADATA_KEYS.activity_type}`, opts.activityType);
 		}
 		if (opts?.cursor) {
 			// Stable cursor pagination on (started_at, id) — strictly less than
@@ -4764,7 +4765,7 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 		// SELECT since migration 20260701_001 so a follower read returns
 		// nothing). Merged below; either source filling the distance.
 		runIds.length > 0
-			? supabase.from('runs').select('id, distance_m, started_at').in('id', runIds)
+			? supabase.from(TABLES.runs).select('id, distance_m, started_at').in('id', runIds)
 			: Promise.resolve({ data: [] as { id: string; distance_m: number; started_at: string }[] }),
 		runIds.length > 0
 			? supabase.from('public_runs').select('id, distance_m, started_at').in('id', runIds)
@@ -5132,7 +5133,7 @@ export async function fetchAthleteRuns(
 ): Promise<AthleteRunSummary[]> {
 	if (!auth.user?.id || !athleteId) return [];
 	const { data, error } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('id, started_at, distance_m, duration_s, is_public, source, route_id, metadata')
 		.eq('user_id', athleteId)
 		.order('started_at', { ascending: false })
@@ -5313,7 +5314,7 @@ export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data, error } = await supabase
-		.from('gym_workouts')
+		.from(TABLES.gym_workouts)
 		.select('*')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
@@ -5331,13 +5332,13 @@ export async function fetchGymWorkoutWithSets(
 	id: string,
 ): Promise<GymWorkoutWithSets | null> {
 	const { data: workout, error: wErr } = await supabase
-		.from('gym_workouts')
+		.from(TABLES.gym_workouts)
 		.select('*')
 		.eq('id', id)
 		.maybeSingle();
 	if (wErr || !workout) return null;
 	const { data: sets, error: sErr } = await supabase
-		.from('gym_sets')
+		.from(TABLES.gym_sets)
 		.select('*')
 		.eq('workout_id', id)
 		.order('set_index', { ascending: true });
@@ -5354,7 +5355,7 @@ export async function fetchGymSetHistory(): Promise<GymSetWithDate[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data, error } = await supabase
-		.from('gym_sets')
+		.from(TABLES.gym_sets)
 		.select('workout_id, exercise_name, reps, weight_kg, rpe, gym_workouts!inner(started_at, user_id)')
 		.eq('gym_workouts.user_id', userId);
 	if (error) {
@@ -5384,7 +5385,7 @@ export async function fetchGymSetHistory(): Promise<GymSetWithDate[]> {
 
 async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<void> {
 	const { error: delErr } = await supabase
-		.from('gym_sets')
+		.from(TABLES.gym_sets)
 		.delete()
 		.eq('workout_id', workoutId);
 	if (delErr) throw delErr;
@@ -5399,7 +5400,7 @@ async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<v
 		}))
 		.filter((r) => r.exercise_name.length > 0);
 	if (rows.length === 0) return;
-	const { error: insErr } = await supabase.from('gym_sets').insert(rows);
+	const { error: insErr } = await supabase.from(TABLES.gym_sets).insert(rows);
 	if (insErr) throw insErr;
 }
 
@@ -5415,7 +5416,7 @@ export async function createGymWorkout(input: {
 	if (!userId) throw new Error('Not signed in');
 	const nowIso = new Date().toISOString();
 	const { data, error } = await supabase
-		.from('gym_workouts')
+		.from(TABLES.gym_workouts)
 		.insert({
 			user_id: userId,
 			title: input.title ?? null,
@@ -5441,7 +5442,7 @@ export async function updateGymWorkout(
 	sets?: GymSetInput[],
 ): Promise<void> {
 	const { error } = await supabase
-		.from('gym_workouts')
+		.from(TABLES.gym_workouts)
 		.update({ ...patch, last_modified_at: new Date().toISOString() })
 		.eq('id', id);
 	if (error) throw error;
@@ -5450,7 +5451,7 @@ export async function updateGymWorkout(
 
 /// Deletes the workout; gym_sets cascade via the FK (migration 20261204_001).
 export async function deleteGymWorkout(id: string): Promise<void> {
-	const { error } = await supabase.from('gym_workouts').delete().eq('id', id);
+	const { error } = await supabase.from(TABLES.gym_workouts).delete().eq('id', id);
 	if (error) throw error;
 }
 
@@ -5476,7 +5477,7 @@ export async function fetchActivities(limit = 100): Promise<ActivityRow[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data, error } = await supabase
-		.from('activities')
+		.from(TABLES.activities)
 		.select('id, kind, started_at, summary')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
