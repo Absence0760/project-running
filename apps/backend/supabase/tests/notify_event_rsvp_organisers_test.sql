@@ -29,7 +29,7 @@ insert into club_members (club_id, user_id, role, status) values
   ('cccccccc-cccc-cccc-cccc-cccccccce001', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaae004', 'member', 'active');
 
 -- Event created by the owner.
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeee001',
         'cccccccc-cccc-cccc-cccc-cccccccce001', 'Saturday Long Run',
         now() + interval '2 days', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaae001');

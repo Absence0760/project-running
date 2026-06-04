@@ -1281,7 +1281,7 @@ func TestBuildBackupZip_RouteWithNilPointerFieldsRoundTrips(t *testing.T) {
 			// Optional fields must be absent from the output (the
 			// writer's "if non-nil" branches).
 			for _, optKey := range []string{"distance_m", "elevation_m", "surface", "tags",
-				"featured", "run_count", "is_starred", "description", "club_id"} {
+				"is_featured", "run_count", "is_starred", "description", "club_id"} {
 				if _, ok := row[optKey]; ok {
 					t.Errorf("optional field %q should be absent on a minimal route; got %v",
 						optKey, row[optKey])

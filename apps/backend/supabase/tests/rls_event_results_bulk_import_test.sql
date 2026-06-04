@@ -46,7 +46,7 @@ values
   ('43434343-4343-4343-4343-434343434301',
    '00000000-0000-0000-0000-0000000043a3', 'event_organiser', 'active');
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values
   ('43434343-4343-4343-4343-434343434311',
    '43434343-4343-4343-4343-434343434301', 'Charity 10k',

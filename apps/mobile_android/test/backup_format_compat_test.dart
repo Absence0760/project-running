@@ -292,7 +292,7 @@ void main() {
             'is_public': true,
             'slug': 'fully-populated',
             'tags': ['easy', 'morning'],
-            'featured': false,
+            'is_featured': false,
             'run_count': 42,
             'is_starred': true,
             'description': 'A test route',

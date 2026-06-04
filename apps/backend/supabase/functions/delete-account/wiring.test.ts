@@ -159,7 +159,7 @@ Deno.test('handler drains user jobs pre-cascade (audit/account-deletion-complete
 });
 
 Deno.test('handler anonymises authored segments pre-cascade (audit/account-deletion-completeness Medium)', () => {
-	// segments.created_by FK is `on delete set null`. Without an
+	// segments.author_id FK is `on delete set null`. Without an
 	// explicit anonymise, the deleted user's contributed segments
 	// survive with their (potentially PII-bearing) names.
 	const anon = SRC.indexOf('anonymiseAuthoredSegments(adminClient, user.id)');

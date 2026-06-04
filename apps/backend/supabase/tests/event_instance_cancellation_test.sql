@@ -30,7 +30,7 @@ insert into club_members (club_id, user_id, role, status) values
   ('cccccccc-cccc-cccc-cccc-ccccccccdd01', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaab04', 'member', 'active'),
   ('cccccccc-cccc-cccc-cccc-ccccccccdd01', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaab05', 'member', 'active');
 
-insert into events (id, club_id, title, starts_at, created_by, recurrence_freq)
+insert into events (id, club_id, title, starts_at, author_id, recurrence_freq)
 values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeedd01',
         'cccccccc-cccc-cccc-cccc-ccccccccdd01', 'Weekly Parkrun',
         '2026-06-20 09:00:00+00', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaab01', 'weekly');

@@ -23,7 +23,7 @@ values ('dddddddd-0000-0000-0000-0000000049c1',
         'Gallery Club', 'gallery-club-49', true, 'open')
 on conflict (id) do nothing;
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values ('eeeeeeee-0000-0000-0000-0000000049e1',
         'dddddddd-0000-0000-0000-0000000049c1',
         'Gallery 10K', '2026-06-20T08:00:00Z',

@@ -14,7 +14,7 @@ select plan(3);
 insert into clubs (id, owner_id, name, slug)
   values ('c1aaaaaa-0000-0000-0000-0000000f0501',
           'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Race Club', 'race-club-f5');
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
   values ('e1aaaaaa-0000-0000-0000-0000000f0501',
           'c1aaaaaa-0000-0000-0000-0000000f0501', 'Race Event',
           now(), 'a1b2c3d4-e5f6-7890-abcd-ef1234567890');

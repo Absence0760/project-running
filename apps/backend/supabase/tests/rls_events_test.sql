@@ -10,7 +10,7 @@
 --   - SELECT "events readable with their club" — caller must see
 --     the parent club (public / owner / active member).
 --   - INSERT "organisers can create events" — `is_event_organiser`
---     (owner / admin / event_organiser) AND created_by = auth.uid.
+--     (owner / admin / event_organiser) AND author_id = auth.uid.
 --   - UPDATE "organisers can edit events" — `is_event_organiser`.
 --   - DELETE "organisers can delete events" — `is_event_organiser`.
 --
@@ -60,7 +60,7 @@ values
 
 -- Plant a pre-existing event by the owner so SELECT / UPDATE /
 -- DELETE tests have something to target.
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0001',
    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001',
@@ -90,7 +90,7 @@ select is_empty(
 
 -- 3. Event organiser can INSERT an event under their own user_id.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000ff0002"}';
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values
   ('bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbb0002',
    'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001',
@@ -108,7 +108,7 @@ select results_eq(
 --    excludes role='member').
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000ff0004"}';
 select throws_ok(
-  $$ insert into events (club_id, title, starts_at, created_by)
+  $$ insert into events (club_id, title, starts_at, author_id)
        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001',
                'Member Hijack',
                '2026-07-15 09:00:00+00',
@@ -124,7 +124,7 @@ select throws_ok(
 --    is_event_organiser to include race_director gets caught.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000ff0003"}';
 select throws_ok(
-  $$ insert into events (club_id, title, starts_at, created_by)
+  $$ insert into events (club_id, title, starts_at, author_id)
        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001',
                'Director Encroachment',
                '2026-07-22 09:00:00+00',
@@ -134,11 +134,11 @@ select throws_ok(
   'race_director cannot INSERT an event (role split with event_organiser)'
 );
 
--- 6. Forged created_by INSERT rejected even when the caller is
+-- 6. Forged author_id INSERT rejected even when the caller is
 --    a legitimate organiser.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000ff0002"}';
 select throws_ok(
-  $$ insert into events (club_id, title, starts_at, created_by)
+  $$ insert into events (club_id, title, starts_at, author_id)
        values ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaa0001',
                'Forged Attribution',
                '2026-07-29 09:00:00+00',

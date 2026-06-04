@@ -51,7 +51,7 @@ function makeRoute(overrides: Partial<Route> & { name: string; distance_m: numbe
 		start_point: null,
 		geom: null,
 		tags: [],
-		featured: false,
+		is_featured: false,
 		featured_at: null,
 		is_starred: false,
 		run_count: 0,

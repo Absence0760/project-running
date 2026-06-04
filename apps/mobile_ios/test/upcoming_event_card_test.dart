@@ -16,7 +16,7 @@ EventView _event({
     clubId: 'c1',
     title: title,
     startsAt: when,
-    createdBy: 'user1',
+    authorId: 'user1',
     meetLabel: meetLabel,
   );
   return EventView(

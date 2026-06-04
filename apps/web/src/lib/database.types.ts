@@ -335,9 +335,9 @@ export type Database = {
           app_version: string | null
           created_at: string
           id: string
+          is_notifications_enabled: boolean
           last_seen_at: string
           locale: string | null
-          notifications_enabled: boolean
           platform: string
           token: string
           updated_at: string
@@ -347,9 +347,9 @@ export type Database = {
           app_version?: string | null
           created_at?: string
           id?: string
+          is_notifications_enabled?: boolean
           last_seen_at?: string
           locale?: string | null
-          notifications_enabled?: boolean
           platform: string
           token: string
           updated_at?: string
@@ -359,9 +359,9 @@ export type Database = {
           app_version?: string | null
           created_at?: string
           id?: string
+          is_notifications_enabled?: boolean
           last_seen_at?: string
           locale?: string | null
-          notifications_enabled?: boolean
           platform?: string
           token?: string
           updated_at?: string
@@ -592,10 +592,10 @@ export type Database = {
       }
       events: {
         Row: {
+          author_id: string
           capacity: number | null
           club_id: string
           created_at: string | null
-          created_by: string
           description: string | null
           distance_m: number | null
           duration_min: number | null
@@ -614,10 +614,10 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          author_id: string
           capacity?: number | null
           club_id: string
           created_at?: string | null
-          created_by: string
           description?: string | null
           distance_m?: number | null
           duration_min?: number | null
@@ -636,10 +636,10 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          author_id?: string
           capacity?: number | null
           club_id?: string
           created_at?: string | null
-          created_by?: string
           description?: string | null
           distance_m?: number | null
           duration_min?: number | null
@@ -1402,33 +1402,33 @@ export type Database = {
       }
       race_sessions: {
         Row: {
-          auto_approve: boolean
           created_at: string
           event_id: string
           finished_at: string | null
           instance_start: string
+          is_auto_approve: boolean
           started_at: string | null
           started_by: string | null
           status: string
           updated_at: string
         }
         Insert: {
-          auto_approve?: boolean
           created_at?: string
           event_id: string
           finished_at?: string | null
           instance_start: string
+          is_auto_approve?: boolean
           started_at?: string | null
           started_by?: string | null
           status?: string
           updated_at?: string
         }
         Update: {
-          auto_approve?: boolean
           created_at?: string
           event_id?: string
           finished_at?: string | null
           instance_start?: string
+          is_auto_approve?: boolean
           started_at?: string | null
           started_by?: string | null
           status?: string
@@ -1559,10 +1559,10 @@ export type Database = {
           description: string | null
           distance_m: number
           elevation_m: number | null
-          featured: boolean
           featured_at: string | null
           geom: unknown
           id: string
+          is_featured: boolean
           is_public: boolean | null
           is_starred: boolean
           name: string
@@ -1581,10 +1581,10 @@ export type Database = {
           description?: string | null
           distance_m: number
           elevation_m?: number | null
-          featured?: boolean
           featured_at?: string | null
           geom?: unknown
           id?: string
+          is_featured?: boolean
           is_public?: boolean | null
           is_starred?: boolean
           name: string
@@ -1603,10 +1603,10 @@ export type Database = {
           description?: string | null
           distance_m?: number
           elevation_m?: number | null
-          featured?: boolean
           featured_at?: string | null
           geom?: unknown
           id?: string
+          is_featured?: boolean
           is_public?: boolean | null
           is_starred?: boolean
           name?: string
@@ -2048,8 +2048,8 @@ export type Database = {
       }
       segments: {
         Row: {
+          author_id: string | null
           created_at: string
-          created_by: string | null
           end_distance_m: number
           id: string
           length_m: number | null
@@ -2058,8 +2058,8 @@ export type Database = {
           start_distance_m: number
         }
         Insert: {
+          author_id?: string | null
           created_at?: string
-          created_by?: string | null
           end_distance_m: number
           id?: string
           length_m?: number | null
@@ -2068,8 +2068,8 @@ export type Database = {
           start_distance_m: number
         }
         Update: {
+          author_id?: string | null
           created_at?: string
-          created_by?: string | null
           end_distance_m?: number
           id?: string
           length_m?: number | null
@@ -2492,9 +2492,9 @@ export type Database = {
           created_at: string | null
           distance_m: number | null
           elevation_m: number | null
-          featured: boolean | null
           featured_at: string | null
           id: string | null
+          is_featured: boolean | null
           is_public: boolean | null
           name: string | null
           run_count: number | null
@@ -2509,9 +2509,9 @@ export type Database = {
           created_at?: string | null
           distance_m?: number | null
           elevation_m?: number | null
-          featured?: boolean | null
           featured_at?: string | null
           id?: string | null
+          is_featured?: boolean | null
           is_public?: boolean | null
           name?: string | null
           run_count?: number | null
@@ -2526,9 +2526,9 @@ export type Database = {
           created_at?: string | null
           distance_m?: number | null
           elevation_m?: number | null
-          featured?: boolean | null
           featured_at?: string | null
           id?: string | null
+          is_featured?: boolean | null
           is_public?: boolean | null
           name?: string | null
           run_count?: number | null
@@ -2593,33 +2593,33 @@ export type Database = {
       }
       race_sessions_redacted: {
         Row: {
-          auto_approve: boolean | null
           created_at: string | null
           event_id: string | null
           finished_at: string | null
           instance_start: string | null
+          is_auto_approve: boolean | null
           started_at: string | null
           started_by: string | null
           status: string | null
           updated_at: string | null
         }
         Insert: {
-          auto_approve?: never
           created_at?: string | null
           event_id?: string | null
           finished_at?: string | null
           instance_start?: string | null
+          is_auto_approve?: never
           started_at?: string | null
           started_by?: never
           status?: string | null
           updated_at?: string | null
         }
         Update: {
-          auto_approve?: never
           created_at?: string | null
           event_id?: string | null
           finished_at?: string | null
           instance_start?: string | null
+          is_auto_approve?: never
           started_at?: string | null
           started_by?: never
           status?: string | null
@@ -2816,8 +2816,8 @@ export type Database = {
         Returns: {
           distance_m: number
           elevation_m: number
-          featured: boolean
           id: string
+          is_featured: boolean
           lat: number
           lng: number
           name: string
@@ -2978,9 +2978,9 @@ export type Database = {
           created_at: string | null
           distance_m: number | null
           elevation_m: number | null
-          featured: boolean | null
           featured_at: string | null
           id: string | null
+          is_featured: boolean | null
           is_public: boolean | null
           name: string | null
           run_count: number | null
@@ -3084,9 +3084,9 @@ export type Database = {
           created_at: string | null
           distance_m: number | null
           elevation_m: number | null
-          featured: boolean | null
           featured_at: string | null
           id: string | null
+          is_featured: boolean | null
           is_public: boolean | null
           name: string | null
           run_count: number | null
@@ -3153,9 +3153,9 @@ export type Database = {
           created_at: string | null
           distance_m: number | null
           elevation_m: number | null
-          featured: boolean | null
           featured_at: string | null
           id: string | null
+          is_featured: boolean | null
           is_public: boolean | null
           name: string | null
           run_count: number | null

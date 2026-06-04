@@ -23,7 +23,7 @@ insert into clubs (id, owner_id, name, slug)
   values ('c1aaaaaa-0000-0000-0000-000000000001',
           'a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Test Club', 'test-club-f16');
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
   values ('e1aaaaaa-0000-0000-0000-000000000001',
           'c1aaaaaa-0000-0000-0000-000000000001', 'Test Event',
           now() + interval '1 day',

@@ -27,7 +27,7 @@ values ('43ed0000-0000-0000-0000-0000000000c1',
 insert into club_members (club_id, user_id, role, status) values
   ('43ed0000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-00000043ed02', 'member', 'active');
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values ('43ed0000-0000-0000-0000-00000000e111',
         '43ed0000-0000-0000-0000-0000000000c1', 'Edge 10k',
         '2026-06-06 09:00+00', '00000000-0000-0000-0000-00000043ed01');

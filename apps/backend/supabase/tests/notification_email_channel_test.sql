@@ -27,7 +27,7 @@ insert into clubs (id, owner_id, name, slug, is_public)
 values ('cccccccc-cccc-cccc-cccc-ccccccccee01',
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaee01', 'Reminder Club', 'reminder-club', false);
 
-insert into events (id, club_id, title, starts_at, created_by, recurrence_freq)
+insert into events (id, club_id, title, starts_at, author_id, recurrence_freq)
 values ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01',
         'cccccccc-cccc-cccc-cccc-ccccccccee01', 'Reminder Run',
         now() + interval '2 hours', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaee01', 'weekly');

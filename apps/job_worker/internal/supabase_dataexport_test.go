@@ -419,7 +419,7 @@ func TestFetchExportRoutes_OptionalPointerFieldsRoundTrip(t *testing.T) {
 				"is_public":   true,
 				"slug":        "full-loop",
 				"tags":        []string{"easy", "morning"},
-				"featured":    false,
+				"is_featured": false,
 				"run_count":   42,
 				"is_starred":  true,
 				"description": "A grand tour.",

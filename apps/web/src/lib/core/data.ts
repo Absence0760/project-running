@@ -1412,7 +1412,7 @@ const CLUB_SELECT_COLS =
 // enumerates these safe columns; the two coords are write-only
 // today (no UI consumer).
 const EVENT_SELECT_COLS =
-	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, created_by, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count' as const;
+	'id, club_id, title, description, starts_at, duration_min, meet_label, route_id, distance_m, pace_target_sec, capacity, author_id, created_at, updated_at, recurrence_freq, recurrence_byday, recurrence_until, recurrence_count' as const;
 
 function slugify(name: string): string {
 	return name
@@ -1998,7 +1998,7 @@ export async function createEvent(input: {
 			recurrence_byday: input.recurrence_byday ?? null,
 			recurrence_until: input.recurrence_until ?? null,
 			recurrence_count: input.recurrence_count ?? null,
-			created_by: userId
+			author_id: userId
 		})
 		.select(EVENT_SELECT_COLS)
 		.single();
@@ -2448,7 +2448,7 @@ export interface RaceSessionRow {
 	started_at: string | null;
 	started_by: string | null;
 	finished_at: string | null;
-	auto_approve: boolean;
+	is_auto_approve: boolean;
 	created_at: string;
 	updated_at: string;
 }
@@ -2458,7 +2458,7 @@ export async function fetchRaceSession(
 	instanceStart: string
 ): Promise<RaceSessionRow | null> {
 	// Read from the redaction view rather than the base table —
-	// `race_sessions_redacted` masks `started_by` + `auto_approve`
+	// `race_sessions_redacted` masks `started_by` + `is_auto_approve`
 	// for non-admin viewers (decisions per /audit/all 2026-05-07,
 	// migration 20260813_001). Admin row-level mutations
 	// (armRace / startRace / endRace) below keep writing the base
@@ -2489,7 +2489,7 @@ export async function armRace(
 				started_at: null,
 				started_by: null,
 				finished_at: null,
-				auto_approve: autoApprove,
+				is_auto_approve: autoApprove,
 				updated_at: new Date().toISOString(),
 			},
 			{ onConflict: 'event_id,instance_start' }
@@ -4264,7 +4264,7 @@ export interface DiscoverableRoutePin {
 	id: string;
 	name: string;
 	slug: string | null;
-	featured: boolean;
+	is_featured: boolean;
 	distance_m: number;
 	elevation_m: number | null;
 	surface: string;
@@ -4486,7 +4486,7 @@ export interface Segment {
 	start_distance_m: number;
 	end_distance_m: number;
 	length_m: number | null;
-	created_by: string | null;
+	author_id: string | null;
 	created_at: string;
 }
 
@@ -4541,7 +4541,7 @@ export async function createSegment(input: {
 			name: input.name.trim(),
 			start_distance_m: input.start_distance_m,
 			end_distance_m: input.end_distance_m,
-			created_by: userId,
+			author_id: userId,
 		})
 		.select('*')
 		.single();

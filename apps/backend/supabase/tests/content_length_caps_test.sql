@@ -14,7 +14,7 @@ set local role service_role;
 insert into clubs (id, owner_id, name, slug, is_public)
 values ('ca900000-0000-0000-0000-0000000000c1', '00000000-0000-0000-0000-0000ca900001', 'Cap Club', 'cap-club', true);
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values ('ca900000-0000-0000-0000-00000000e111', 'ca900000-0000-0000-0000-0000000000c1', 'Cap 5k', '2026-06-06 09:00+00', '00000000-0000-0000-0000-0000ca900001');
 
 -- club_posts.body

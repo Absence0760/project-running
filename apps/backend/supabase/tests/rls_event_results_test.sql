@@ -54,7 +54,7 @@ values
   ('33333333-3333-3333-3333-333333333302',
    '00000000-0000-0000-0000-00000000a703', 'member', 'active');
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values
   ('33333333-3333-3333-3333-333333333311',
    '33333333-3333-3333-3333-333333333301', 'Public Tuesday',

@@ -36,7 +36,7 @@ values ('55555555-5555-5555-5555-555555555501',
         '00000000-0000-0000-0000-00000000ee01',
         'Public Meet Test', 'public-meet-test', true);
 
-insert into events (id, club_id, title, starts_at, meet_lat, meet_lng, meet_label, created_by)
+insert into events (id, club_id, title, starts_at, meet_lat, meet_lng, meet_label, author_id)
 values ('55555555-5555-5555-5555-555555555502',
         '55555555-5555-5555-5555-555555555501',
         'Sunday Long Run',

@@ -65,7 +65,7 @@ values ('44444444-4444-4444-4444-444444444401',
         '00000000-0000-0000-0000-0000000eee01',
         'Race Trigger Test Club', 'race-trig-test', true);
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values ('44444444-4444-4444-4444-444444444402',
         '44444444-4444-4444-4444-444444444401',
         'Race Trigger Test', now(),

@@ -81,7 +81,7 @@ values
    '[{"lat":47.37,"lng":8.54},{"lat":47.38,"lng":8.55}]',
    10000, false);
 
-insert into segments (id, route_id, name, start_distance_m, end_distance_m, created_by)
+insert into segments (id, route_id, name, start_distance_m, end_distance_m, author_id)
 values
   ('77777777-7777-7777-7777-777777770001',
    '66666666-6666-6666-6666-666666660001',

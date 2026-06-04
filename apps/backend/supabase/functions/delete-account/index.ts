@@ -308,7 +308,7 @@ async function drainUserRateLimits(
   }
 }
 
-// `segments.created_by` (20260526_001) is `on delete set null`, so
+// `segments.author_id` (20260526_001) is `on delete set null`, so
 // segments the user authored survive deletion as orphan rows. The
 // segment NAME may carry PII (a toponym derived from the author's
 // activity). audit/account-deletion-completeness Medium: anonymise
@@ -322,8 +322,8 @@ async function anonymiseAuthoredSegments(
   try {
     const { error, count } = await adminClient
       .from('segments')
-      .update({ name: 'Anonymous segment', created_by: null }, { count: 'exact' })
-      .eq('created_by', userId);
+      .update({ name: 'Anonymous segment', author_id: null }, { count: 'exact' })
+      .eq('author_id', userId);
     if (error) return { ok: false, reason: error.message };
     return { ok: true, count: count ?? 0 };
   } catch (e) {
@@ -552,7 +552,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   }
   deletedCounts.rate_limits = rl.count;
 
-  // segments.created_by (20260526_001, audit/account-deletion-
+  // segments.author_id (20260526_001, audit/account-deletion-
   // completeness Medium May 2026). `on delete set null` would leave
   // the segment name behind — anonymise the row pre-cascade so the
   // leaderboard keeps working without surfacing the author identity.

@@ -2808,6 +2808,23 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 130. F17 column-naming uniformity: `created_by` → `author_id`, the three non-`is_` booleans → `is_*`, output columns included
+
+**Decided (2026-06-04, remediation plan 2d / F17):** migration `20261217_001` renamed the five owner-column / boolean-flag outliers onto the house convention now written in [`conventions.md` § SQL](conventions.md):
+
+- `events.created_by` and `segments.created_by` → `author_id` (the authored-content/user-object tables — `club_posts`, `run_comments`, `reports`, `segments`, `events` — now all use `author_id`; `created_by` is retired).
+- `device_tokens.notifications_enabled` → `is_notifications_enabled`, `routes.featured` → `is_featured`, `race_sessions.auto_approve` → `is_auto_approve` (booleans read as `is_<predicate>`).
+
+**Why the full version, not "document the rule" or a half-rename.** The original F17 finding mis-stated the problem as "one lone outlier each"; in fact `created_by` was on **two** tables and **three** booleans skipped `is_`, so a single-column rename would have made consistency *worse* (`events.author_id` vs `segments.created_by`). The choice was a documented contextual rule vs. a real uniformity migration; the latter was taken so the schema is genuinely uniform rather than carrying a written exception.
+
+**Why output columns were renamed too (the load-bearing call).** `routes.featured` and `race_sessions.auto_approve` surface through views / RPCs (`public_routes`, `discoverable_routes_in_bbox`, `race_sessions_redacted`). Renaming only the base column would relocate the drift to the column-vs-output boundary (`routes.is_featured` but `public_routes.featured`) — the same inconsistency F17 set out to remove. So the outputs were renamed to match. The mechanism matters: **`ALTER VIEW … RENAME COLUMN`** renames a view's output label *in place*, preserving every grant and the in-body redaction logic (no DROP-cascade, no grant reconstruction — which on the security-redaction views would have been the risky part). Only `discoverable_routes_in_bbox`, whose flag is a `RETURNS TABLE` output column, needed drop + recreate + re-grant. RLS policies, CHECK constraints, column GRANTs and indexes follow a column rename by attnum automatically; function *bodies* (text) were recreated where they named the old columns. The whole `race_sessions` redaction + `public_routes` lockdown posture is pinned by the existing pgtap suite (859 tests green post-rename).
+
+**Trade-off.** A one-time wide sweep — base columns, two view outputs, one RPC return type, regenerated TS + Dart/Kotlin row types, ~13 web + a handful of Dart/api_client + Go-export + Edge-Function + ~30 pgtap + seed sites. Client-side **domain** field names (`Route.featured` in Dart, the GeoJSON `featured` property in `RouteHeatmap`) were intentionally **left** — F17 is about database columns, and renaming a domain field would churn the local-store JSON format for no schema benefit. The DB-facing reads that feed them were renamed; the local names stay.
+
+**Don't re-litigate unless** a future column genuinely can't take an `is_`/`author_id` form (then document the exception here rather than forcing it), or a view output column needs renaming where `ALTER VIEW RENAME COLUMN` can't reach it — then the DROP-cascade + grant-reconstruction cost is real and worth weighing against leaving the output name alone.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

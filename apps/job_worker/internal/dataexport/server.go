@@ -180,7 +180,7 @@ type ExportRoute struct {
 	IsPublic    *bool                  `json:"is_public,omitempty"`
 	Slug        *string                `json:"slug,omitempty"`
 	Tags        []string               `json:"tags,omitempty"`
-	Featured    *bool                  `json:"featured,omitempty"`
+	Featured    *bool                  `json:"is_featured,omitempty"`
 	RunCount    *int                   `json:"run_count,omitempty"`
 	IsStarred   *bool                  `json:"is_starred,omitempty"`
 	Description *string                `json:"description,omitempty"`
@@ -747,7 +747,7 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 			row["tags"] = r.Tags
 		}
 		if r.Featured != nil {
-			row["featured"] = *r.Featured
+			row["is_featured"] = *r.Featured
 		}
 		if r.RunCount != nil {
 			row["run_count"] = *r.RunCount

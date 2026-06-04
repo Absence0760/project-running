@@ -6,6 +6,47 @@
 // Do not hand-edit. To add a column, add it to the SQL
 // migration, rerun the generator, and commit both files.
 
+/// Row shape for the `body_metrics` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class BodyMetricRow {
+  static const String table = 'body_metrics';
+  static const String colId = 'id';
+  static const String colUserId = 'user_id';
+  static const String colRecordedAt = 'recorded_at';
+  static const String colWeightKg = 'weight_kg';
+  static const String colCreatedAt = 'created_at';
+
+  final String id;
+  final String userId;
+  final DateTime recordedAt;
+  final double weightKg;
+  final DateTime createdAt;
+
+  const BodyMetricRow({
+    required this.id,
+    required this.userId,
+    required this.recordedAt,
+    required this.weightKg,
+    required this.createdAt,
+  });
+
+  factory BodyMetricRow.fromJson(Map<String, dynamic> json) => BodyMetricRow(
+    id: json['id'] as String,
+    userId: json['user_id'] as String,
+    recordedAt: DateTime.parse(json['recorded_at'] as String),
+    weightKg: (json['weight_kg'] as num).toDouble(),
+    createdAt: DateTime.parse(json['created_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colUserId: userId,
+    colRecordedAt: recordedAt.toIso8601String(),
+    colWeightKg: weightKg,
+    colCreatedAt: createdAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `club_members` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class ClubMemberRow {
@@ -331,10 +372,10 @@ class DeviceTokenRow {
   static const String colToken = 'token';
   static const String colAppVersion = 'app_version';
   static const String colLocale = 'locale';
-  static const String colNotificationsEnabled = 'notifications_enabled';
   static const String colLastSeenAt = 'last_seen_at';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colIsNotificationsEnabled = 'is_notifications_enabled';
 
   final String id;
   final String userId;
@@ -342,10 +383,10 @@ class DeviceTokenRow {
   final String token;
   final String? appVersion;
   final String? locale;
-  final bool notificationsEnabled;
   final DateTime lastSeenAt;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isNotificationsEnabled;
 
   const DeviceTokenRow({
     required this.id,
@@ -354,10 +395,10 @@ class DeviceTokenRow {
     required this.token,
     this.appVersion,
     this.locale,
-    required this.notificationsEnabled,
     required this.lastSeenAt,
     required this.createdAt,
     required this.updatedAt,
+    required this.isNotificationsEnabled,
   });
 
   factory DeviceTokenRow.fromJson(Map<String, dynamic> json) => DeviceTokenRow(
@@ -367,10 +408,10 @@ class DeviceTokenRow {
     token: json['token'] as String,
     appVersion: json['app_version'] as String?,
     locale: json['locale'] as String?,
-    notificationsEnabled: (json['notifications_enabled'] as bool?) ?? false,
     lastSeenAt: DateTime.parse(json['last_seen_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    isNotificationsEnabled: (json['is_notifications_enabled'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -380,10 +421,10 @@ class DeviceTokenRow {
     colToken: token,
     colAppVersion: appVersion,
     colLocale: locale,
-    colNotificationsEnabled: notificationsEnabled,
     colLastSeenAt: lastSeenAt.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colIsNotificationsEnabled: isNotificationsEnabled,
   };
 }
 
@@ -551,13 +592,13 @@ class EventRow {
   static const String colDistanceM = 'distance_m';
   static const String colPaceTargetSec = 'pace_target_sec';
   static const String colCapacity = 'capacity';
-  static const String colCreatedBy = 'created_by';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
   static const String colRecurrenceFreq = 'recurrence_freq';
   static const String colRecurrenceByday = 'recurrence_byday';
   static const String colRecurrenceUntil = 'recurrence_until';
   static const String colRecurrenceCount = 'recurrence_count';
+  static const String colAuthorId = 'author_id';
 
   final String id;
   final String clubId;
@@ -572,13 +613,13 @@ class EventRow {
   final double? distanceM;
   final int? paceTargetSec;
   final int? capacity;
-  final String createdBy;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? recurrenceFreq;
   final List<String>? recurrenceByday;
   final DateTime? recurrenceUntil;
   final int? recurrenceCount;
+  final String authorId;
 
   const EventRow({
     required this.id,
@@ -594,13 +635,13 @@ class EventRow {
     this.distanceM,
     this.paceTargetSec,
     this.capacity,
-    required this.createdBy,
     this.createdAt,
     this.updatedAt,
     this.recurrenceFreq,
     this.recurrenceByday,
     this.recurrenceUntil,
     this.recurrenceCount,
+    required this.authorId,
   });
 
   factory EventRow.fromJson(Map<String, dynamic> json) => EventRow(
@@ -617,13 +658,13 @@ class EventRow {
     distanceM: (json['distance_m'] as num?)?.toDouble(),
     paceTargetSec: (json['pace_target_sec'] as num?)?.toInt(),
     capacity: (json['capacity'] as num?)?.toInt(),
-    createdBy: json['created_by'] as String,
     createdAt: json['created_at'] == null ? null : DateTime.parse(json['created_at'] as String),
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     recurrenceFreq: json['recurrence_freq'] as String?,
     recurrenceByday: json['recurrence_byday'] == null ? null : (json['recurrence_byday'] as List<dynamic>).cast<String>(),
     recurrenceUntil: json['recurrence_until'] == null ? null : DateTime.parse(json['recurrence_until'] as String),
     recurrenceCount: (json['recurrence_count'] as num?)?.toInt(),
+    authorId: json['author_id'] as String,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -640,13 +681,13 @@ class EventRow {
     colDistanceM: distanceM,
     colPaceTargetSec: paceTargetSec,
     colCapacity: capacity,
-    colCreatedBy: createdBy,
     colCreatedAt: createdAt?.toIso8601String(),
     colUpdatedAt: updatedAt?.toIso8601String(),
     colRecurrenceFreq: recurrenceFreq,
     colRecurrenceByday: recurrenceByday,
     colRecurrenceUntil: recurrenceUntil?.toIso8601String(),
     colRecurrenceCount: recurrenceCount,
+    colAuthorId: authorId,
   };
 }
 
@@ -1497,9 +1538,9 @@ class RaceSessionRow {
   static const String colStartedAt = 'started_at';
   static const String colStartedBy = 'started_by';
   static const String colFinishedAt = 'finished_at';
-  static const String colAutoApprove = 'auto_approve';
   static const String colCreatedAt = 'created_at';
   static const String colUpdatedAt = 'updated_at';
+  static const String colIsAutoApprove = 'is_auto_approve';
 
   final String eventId;
   final DateTime instanceStart;
@@ -1507,9 +1548,9 @@ class RaceSessionRow {
   final DateTime? startedAt;
   final String? startedBy;
   final DateTime? finishedAt;
-  final bool autoApprove;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isAutoApprove;
 
   const RaceSessionRow({
     required this.eventId,
@@ -1518,9 +1559,9 @@ class RaceSessionRow {
     this.startedAt,
     this.startedBy,
     this.finishedAt,
-    required this.autoApprove,
     required this.createdAt,
     required this.updatedAt,
+    required this.isAutoApprove,
   });
 
   factory RaceSessionRow.fromJson(Map<String, dynamic> json) => RaceSessionRow(
@@ -1530,9 +1571,9 @@ class RaceSessionRow {
     startedAt: json['started_at'] == null ? null : DateTime.parse(json['started_at'] as String),
     startedBy: json['started_by'] as String?,
     finishedAt: json['finished_at'] == null ? null : DateTime.parse(json['finished_at'] as String),
-    autoApprove: (json['auto_approve'] as bool?) ?? false,
     createdAt: DateTime.parse(json['created_at'] as String),
     updatedAt: DateTime.parse(json['updated_at'] as String),
+    isAutoApprove: (json['is_auto_approve'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1542,9 +1583,9 @@ class RaceSessionRow {
     colStartedAt: startedAt?.toIso8601String(),
     colStartedBy: startedBy,
     colFinishedAt: finishedAt?.toIso8601String(),
-    colAutoApprove: autoApprove,
     colCreatedAt: createdAt.toIso8601String(),
     colUpdatedAt: updatedAt.toIso8601String(),
+    colIsAutoApprove: isAutoApprove,
   };
 }
 
@@ -1616,13 +1657,13 @@ class RouteRow {
   static const String colUpdatedAt = 'updated_at';
   static const String colStartPoint = 'start_point';
   static const String colTags = 'tags';
-  static const String colFeatured = 'featured';
   static const String colFeaturedAt = 'featured_at';
   static const String colRunCount = 'run_count';
   static const String colClubId = 'club_id';
   static const String colIsStarred = 'is_starred';
   static const String colGeom = 'geom';
   static const String colDescription = 'description';
+  static const String colIsFeatured = 'is_featured';
 
   final String id;
   final String userId;
@@ -1637,13 +1678,13 @@ class RouteRow {
   final DateTime? updatedAt;
   final dynamic startPoint;
   final List<String> tags;
-  final bool featured;
   final DateTime? featuredAt;
   final int runCount;
   final String? clubId;
   final bool isStarred;
   final dynamic geom;
   final String? description;
+  final bool isFeatured;
 
   const RouteRow({
     required this.id,
@@ -1659,13 +1700,13 @@ class RouteRow {
     this.updatedAt,
     this.startPoint,
     required this.tags,
-    required this.featured,
     this.featuredAt,
     required this.runCount,
     this.clubId,
     required this.isStarred,
     this.geom,
     this.description,
+    required this.isFeatured,
   });
 
   factory RouteRow.fromJson(Map<String, dynamic> json) => RouteRow(
@@ -1682,13 +1723,13 @@ class RouteRow {
     updatedAt: json['updated_at'] == null ? null : DateTime.parse(json['updated_at'] as String),
     startPoint: json['start_point'],
     tags: (json['tags'] as List<dynamic>).cast<String>(),
-    featured: (json['featured'] as bool?) ?? false,
     featuredAt: json['featured_at'] == null ? null : DateTime.parse(json['featured_at'] as String),
     runCount: (json['run_count'] as num).toInt(),
     clubId: json['club_id'] as String?,
     isStarred: (json['is_starred'] as bool?) ?? false,
     geom: json['geom'],
     description: json['description'] as String?,
+    isFeatured: (json['is_featured'] as bool?) ?? false,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1705,13 +1746,13 @@ class RouteRow {
     colUpdatedAt: updatedAt?.toIso8601String(),
     colStartPoint: startPoint,
     colTags: tags,
-    colFeatured: featured,
     colFeaturedAt: featuredAt?.toIso8601String(),
     colRunCount: runCount,
     colClubId: clubId,
     colIsStarred: isStarred,
     colGeom: geom,
     colDescription: description,
+    colIsFeatured: isFeatured,
   };
 }
 
@@ -2158,8 +2199,8 @@ class SegmentRow {
   static const String colStartDistanceM = 'start_distance_m';
   static const String colEndDistanceM = 'end_distance_m';
   static const String colLengthM = 'length_m';
-  static const String colCreatedBy = 'created_by';
   static const String colCreatedAt = 'created_at';
+  static const String colAuthorId = 'author_id';
 
   final String id;
   final String routeId;
@@ -2167,8 +2208,8 @@ class SegmentRow {
   final double startDistanceM;
   final double endDistanceM;
   final double? lengthM;
-  final String? createdBy;
   final DateTime createdAt;
+  final String? authorId;
 
   const SegmentRow({
     required this.id,
@@ -2177,8 +2218,8 @@ class SegmentRow {
     required this.startDistanceM,
     required this.endDistanceM,
     this.lengthM,
-    this.createdBy,
     required this.createdAt,
+    this.authorId,
   });
 
   factory SegmentRow.fromJson(Map<String, dynamic> json) => SegmentRow(
@@ -2188,8 +2229,8 @@ class SegmentRow {
     startDistanceM: (json['start_distance_m'] as num).toDouble(),
     endDistanceM: (json['end_distance_m'] as num).toDouble(),
     lengthM: (json['length_m'] as num?)?.toDouble(),
-    createdBy: json['created_by'] as String?,
     createdAt: DateTime.parse(json['created_at'] as String),
+    authorId: json['author_id'] as String?,
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2199,8 +2240,8 @@ class SegmentRow {
     colStartDistanceM: startDistanceM,
     colEndDistanceM: endDistanceM,
     colLengthM: lengthM,
-    colCreatedBy: createdBy,
     colCreatedAt: createdAt.toIso8601String(),
+    colAuthorId: authorId,
   };
 }
 

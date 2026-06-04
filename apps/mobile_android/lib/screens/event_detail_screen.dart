@@ -300,7 +300,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _RaceAction.arm => await social.armRace(
             eventId: e.row.id,
             instance: inst,
-            autoApprove: _autoApproveOnArm,
+            isAutoApprove: _autoApproveOnArm,
           ),
         _RaceAction.go => await social.startRace(
             eventId: e.row.id,

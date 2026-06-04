@@ -871,7 +871,7 @@
 					properties: {
 						id: r.id,
 						name: r.name,
-						featured: r.featured,
+						featured: r.is_featured,
 						distance_m: r.distance_m,
 						// The route popup's elevation chip reads this off the
 						// rendered feature.
@@ -1358,7 +1358,7 @@
 					<button
 						type="button"
 						class="result-row"
-						class:featured={r.featured}
+						class:featured={r.is_featured}
 						class:hovered={hoveredRouteId === r.id}
 						class:kept={pinnedIds.has(r.id)}
 						data-route-id={r.id}
@@ -1375,7 +1375,7 @@
 									class="result-kept material-symbols"
 									title={m('routeHeatmap.keptOnMap')}>push_pin</span
 								>{/if}
-							{#if r.featured}<span class="result-star" title={m('routeHeatmap.featured')}>★</span>{/if}
+							{#if r.is_featured}<span class="result-star" title={m('routeHeatmap.featured')}>★</span>{/if}
 							{r.name}
 						</span>
 						<span class="result-meta">

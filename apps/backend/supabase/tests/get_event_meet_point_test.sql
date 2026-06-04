@@ -37,7 +37,7 @@ values ('66666666-6666-6666-6666-666666666601',
         '00000000-0000-0000-0000-0000000fee02', 'member', 'active')
 on conflict do nothing;
 
-insert into events (id, club_id, title, starts_at, meet_lat, meet_lng, meet_label, created_by)
+insert into events (id, club_id, title, starts_at, meet_lat, meet_lng, meet_label, author_id)
 values
   ('66666666-6666-6666-6666-666666666602',
    '66666666-6666-6666-6666-666666666601',

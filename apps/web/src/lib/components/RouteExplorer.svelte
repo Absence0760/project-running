@@ -322,7 +322,7 @@
 								waypoints={[]}
 								ownerUserId={route.user_id}
 							/>
-							{#if route.featured}
+							{#if route.is_featured}
 								<span class="featured-badge" title={t('routeExplorer.featuredRoute')}>
 									<span class="material-symbols">star</span>
 								</span>

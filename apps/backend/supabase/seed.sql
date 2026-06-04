@@ -568,7 +568,7 @@ ON CONFLICT (id) DO NOTHING;
 -- discoverable_routes_in_bbox RPC surfaces them at city-zoom on
 -- the heatmap. Belle Isle + UVA + Mount Vernon are the three the
 -- watch picker already stars by default — same visual shortlist.
-UPDATE routes SET featured = true, featured_at = now()
+UPDATE routes SET is_featured = true, featured_at = now()
   WHERE name IN (
     'Belle Isle + Pipeline Loop',
     'UVA Rotunda Loop (Charlottesville)',
@@ -638,7 +638,7 @@ ON CONFLICT DO NOTHING;
 -- the Run-tab UpcomingEventCard is exercised.
 INSERT INTO events (
   id, club_id, title, description, starts_at, duration_min, meet_label, distance_m, pace_target_sec,
-  recurrence_freq, recurrence_byday, created_by
+  recurrence_freq, recurrence_byday, author_id
 ) VALUES
   ('e1111111-0000-0000-0000-000000000001',
    'c1111111-0000-0000-0000-000000000001',
@@ -1000,7 +1000,7 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
 -- Lens states for the Denver testbed (see groups above). Featured +
 -- run_count>0 → 'popular'; run_count=0 & not featured → 'hidden_gems';
 -- Alex's route (run_count 0, not featured) only surfaces under 'friends'.
-UPDATE routes SET featured = true, featured_at = now()
+UPDATE routes SET is_featured = true, featured_at = now()
   WHERE name IN (
     'Wash Park 10K Spur',
     'City Park Sprint to Confluence',
@@ -1067,7 +1067,7 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
   5200, 22, 'road', true);
 
 -- Lens states for Richmond (see the comment above).
-UPDATE routes SET featured = true, featured_at = now()
+UPDATE routes SET is_featured = true, featured_at = now()
   WHERE name IN (
     'Monument Avenue 10K',
     'Brown''s Island + Canal Walk'
@@ -1113,7 +1113,7 @@ INSERT INTO routes (user_id, name, waypoints, distance_m, elevation_m, surface, 
 -- (Swift Creek + Beaver Lake Half) share a trailhead ~40 m apart, so
 -- their start pins overlap — a real same-start case to test the cluster
 -- list + the overlapping-leaf hover handling.
-UPDATE routes SET featured = true, featured_at = now()
+UPDATE routes SET is_featured = true, featured_at = now()
   WHERE name IN ('Richmond Marathon', 'Pocahontas Lakeview Loop');
 UPDATE routes SET run_count = 7 WHERE name = 'Pocahontas Swift Creek Half';
 UPDATE routes SET run_count = 5 WHERE name = 'Pocahontas Beaver Lake Half';
@@ -2245,10 +2245,10 @@ BEGIN
   INSERT INTO clubs (name, slug, owner_id, is_public)
     VALUES ('rsvp-rls public', 'rsvp-rls-public-' || floor(random()*1e6), other_user, true)
     RETURNING id INTO v_public_club_id;
-  INSERT INTO events (club_id, title, starts_at, created_by)
+  INSERT INTO events (club_id, title, starts_at, author_id)
     VALUES (v_private_club_id, 'private event', v_instance, other_user)
     RETURNING id INTO v_private_event_id;
-  INSERT INTO events (club_id, title, starts_at, created_by)
+  INSERT INTO events (club_id, title, starts_at, author_id)
     VALUES (v_public_club_id, 'public event', v_instance, other_user)
     RETURNING id INTO v_public_event_id;
 

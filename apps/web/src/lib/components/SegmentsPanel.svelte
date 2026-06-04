@@ -336,7 +336,7 @@
 									{/each}
 								</ol>
 							{/if}
-							{#if auth.user?.id === seg.created_by || canCreate}
+							{#if auth.user?.id === seg.author_id || canCreate}
 								<button
 									class="link-btn danger"
 									type="button"

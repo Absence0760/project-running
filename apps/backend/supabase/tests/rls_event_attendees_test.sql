@@ -62,7 +62,7 @@ values
   ('cccccccc-cccc-cccc-cccc-cccccccc0001',
    '00000000-0000-0000-0000-00000a000004', 'member', 'active');
 
-insert into events (id, club_id, title, starts_at, created_by)
+insert into events (id, club_id, title, starts_at, author_id)
 values
   ('dddddddd-dddd-dddd-dddd-dddddddd0001',
    'cccccccc-cccc-cccc-cccc-cccccccc0001',

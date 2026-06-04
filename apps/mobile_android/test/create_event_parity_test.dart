@@ -27,7 +27,7 @@ void main() {
       () {
     test('title is trimmed', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: '  Saturday parkrun  ',
         startsAt: startsAt,
@@ -37,7 +37,7 @@ void main() {
 
     test('null description stays null', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -47,7 +47,7 @@ void main() {
 
     test('whitespace-only description collapses to null', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -58,7 +58,7 @@ void main() {
 
     test('non-empty description is trimmed but preserved', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -69,7 +69,7 @@ void main() {
 
     test('meet_label follows the same trim/null contract', () {
       final blank = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -78,7 +78,7 @@ void main() {
       expect(blank['meet_label'], isNull);
 
       final populated = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -98,7 +98,7 @@ void main() {
     // observable symptom: the event saves but no instances expand.
     test('null recurrenceByDay → null in body', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -108,7 +108,7 @@ void main() {
 
     test('single-weekday byday is written as a one-element List<String>', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -122,7 +122,7 @@ void main() {
       // Web supports an array of weekday codes for "twice a week"
       // rules. Pin that the helper preserves order and content.
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -135,7 +135,7 @@ void main() {
   group('buildCreateEventBody — recurrence_count parity', () {
     test('null recurrenceCount → null in body', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -145,7 +145,7 @@ void main() {
 
     test('non-null recurrenceCount is written through', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -160,7 +160,7 @@ void main() {
   group('buildCreateEventBody — canonical column set + timestamps', () {
     test('starts_at is serialised as an ISO-8601 string', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: DateTime.utc(2026, 6, 1, 9, 30, 15),
@@ -170,7 +170,7 @@ void main() {
 
     test('recurrence_until is serialised as an ISO-8601 string when set', () {
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -187,7 +187,7 @@ void main() {
       // and relied on DB-side defaults. Aligning on "always emit the
       // key" makes the two clients write identical rows.
       final body = SocialService.buildCreateEventBody(
-        createdBy: userId,
+        authorId: userId,
         clubId: clubId,
         title: 'T',
         startsAt: startsAt,
@@ -205,7 +205,7 @@ void main() {
         'distance_m',
         'pace_target_sec',
         'capacity',
-        'created_by',
+        'author_id',
         'recurrence_freq',
         'recurrence_byday',
         'recurrence_until',

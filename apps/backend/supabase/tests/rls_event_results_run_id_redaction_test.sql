@@ -39,7 +39,7 @@ values ('44444444-4444-4444-4444-444444444444',
         '00000000-0000-0000-0000-0000000000e1',
         'Public Race Club', 'public-race-club', true);
 
-insert into events (id, club_id, title, starts_at, distance_m, created_by)
+insert into events (id, club_id, title, starts_at, distance_m, author_id)
 values ('55555555-5555-5555-5555-555555555555',
         '44444444-4444-4444-4444-444444444444',
         'Saturday Test Race',

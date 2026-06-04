@@ -381,7 +381,7 @@
 								<span class="key-stat-label">{m('routeDetail.statRunsLogged')}</span>
 							</div>
 						{/if}
-						{#if route.featured}
+						{#if route.is_featured}
 							<div class="key-stat key-stat-activity">
 								<span class="key-stat-value">
 									<span class="material-symbols" style="color: #facc15">star</span>

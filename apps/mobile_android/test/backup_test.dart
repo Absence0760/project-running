@@ -83,7 +83,7 @@ Map<String, dynamic> routeRow({
     'created_at': null,
     'updated_at': null,
     'tags': const <String>[],
-    'featured': false,
+    'is_featured': false,
     'run_count': 0,
     'is_starred': false,
   };

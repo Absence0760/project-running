@@ -29,7 +29,7 @@ const String _clubSelectCols =
 const String _eventSelectCols =
     'id, club_id, title, description, starts_at, duration_min, '
     'meet_label, route_id, distance_m, pace_target_sec, capacity, '
-    'created_by, created_at, updated_at, recurrence_freq, '
+    'author_id, created_at, updated_at, recurrence_freq, '
     'recurrence_byday, recurrence_until, recurrence_count';
 
 /// Parse the `events.recurrence_byday` jsonb array (a list of weekday
@@ -554,7 +554,7 @@ class SocialService extends ChangeNotifier {
       surface: r.surface,
       createdAt: r.createdAt,
       tags: (row['tags'] as List?)?.cast<String>() ?? const [],
-      featured: row['featured'] == true,
+      featured: row['is_featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
       clubId: r.clubId,
     );
@@ -638,7 +638,7 @@ class SocialService extends ChangeNotifier {
     final uid = _uid;
     if (uid == null) throw Exception('Not authenticated');
     final body = buildCreateEventBody(
-      createdBy: uid,
+      authorId: uid,
       clubId: clubId,
       title: title,
       startsAt: startsAt,
@@ -670,7 +670,7 @@ class SocialService extends ChangeNotifier {
   /// unit-tested without standing up a Supabase fixture.
   @visibleForTesting
   static Map<String, dynamic> buildCreateEventBody({
-    required String createdBy,
+    required String authorId,
     required String clubId,
     required String title,
     required DateTime startsAt,
@@ -705,7 +705,7 @@ class SocialService extends ChangeNotifier {
       'distance_m': distanceM,
       'pace_target_sec': paceTargetSec,
       'capacity': capacity,
-      'created_by': createdBy,
+      'author_id': authorId,
       'recurrence_freq': recurrenceFreq,
       'recurrence_byday': recurrenceByDay,
       'recurrence_until': recurrenceUntil?.toIso8601String(),
@@ -1066,8 +1066,8 @@ class SocialService extends ChangeNotifier {
   /// Put the race session into the `armed` state. Upsert on the
   /// composite key, resetting `started_at` / `finished_at` so a rearm
   /// after a finished race starts from a clean slate (common pattern
-  /// when testing a recurring event). [autoApprove] flows into the
-  /// `auto_approve` column and the participant-submit pipeline reads
+  /// when testing a recurring event). [isAutoApprove] flows into the
+  /// `is_auto_approve` column and the participant-submit pipeline reads
   /// it to decide whether to flip new results to `approved` on insert.
   ///
   /// Mirrors `apps/web/src/lib/data.ts:armRace`. Keep the two in sync
@@ -1076,7 +1076,7 @@ class SocialService extends ChangeNotifier {
   Future<RaceSessionRow> armRace({
     required String eventId,
     required DateTime instance,
-    bool autoApprove = true,
+    bool isAutoApprove = true,
   }) async {
     if (_uid == null) throw Exception('Not authenticated');
     final now = DateTime.now().toUtc().toIso8601String();
@@ -1090,7 +1090,7 @@ class SocialService extends ChangeNotifier {
             RaceSessionRow.colStartedAt: null,
             RaceSessionRow.colStartedBy: null,
             RaceSessionRow.colFinishedAt: null,
-            RaceSessionRow.colAutoApprove: autoApprove,
+            RaceSessionRow.colIsAutoApprove: isAutoApprove,
             RaceSessionRow.colUpdatedAt: now,
           },
           onConflict:

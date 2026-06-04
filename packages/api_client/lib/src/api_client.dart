@@ -22,7 +22,7 @@ const String _clubSafeCols =
 const String _eventSafeCols =
     'id, club_id, title, description, starts_at, duration_min, '
     'meet_label, route_id, distance_m, pace_target_sec, capacity, '
-    'created_by, created_at, updated_at, recurrence_freq, '
+    'author_id, created_at, updated_at, recurrence_freq, '
     'recurrence_byday, recurrence_until, recurrence_count';
 
 /// Typed client for the Supabase REST API.
@@ -1123,7 +1123,7 @@ class ApiClient {
       isPublic: route.isPublic,
       surface: route.surface,
       tags: route.tags,
-      featured: route.featured,
+      isFeatured: route.featured,
       runCount: route.runCount,
       isStarred: route.isStarred,
       clubId: route.clubId,
@@ -1270,7 +1270,7 @@ class ApiClient {
           id: r['id'] as String,
           name: (r['name'] as String?) ?? 'Route',
           slug: r['slug'] as String?,
-          featured: (r['featured'] as bool?) ?? false,
+          featured: (r['is_featured'] as bool?) ?? false,
           distanceM: (r['distance_m'] as num?)?.toDouble() ?? 0,
           elevationM: (r['elevation_m'] as num?)?.toDouble(),
           surface: (r['surface'] as String?) ?? '',
@@ -2449,7 +2449,7 @@ class ApiClient {
           SegmentRow.colName: name.trim(),
           SegmentRow.colStartDistanceM: startDistanceM,
           SegmentRow.colEndDistanceM: endDistanceM,
-          SegmentRow.colCreatedBy: viewerId,
+          SegmentRow.colAuthorId: viewerId,
         })
         .select()
         .single();
@@ -3072,7 +3072,7 @@ class ApiClient {
           EventRow.colDistanceM: distanceM,
           EventRow.colPaceTargetSec: paceTargetSec,
           EventRow.colCapacity: capacity,
-          EventRow.colCreatedBy: viewerId,
+          EventRow.colAuthorId: viewerId,
           if (recurrenceFreq != null) 'recurrence_freq': recurrenceFreq,
           if (recurrenceByDay != null) 'recurrence_byday': recurrenceByDay,
           if (recurrenceUntil != null)
@@ -3723,7 +3723,7 @@ class ApiClient {
           ? null
           : DateTime.parse(row['created_at'] as String),
       tags: (row['tags'] as List?)?.cast<String>() ?? const [],
-      featured: row['featured'] == true,
+      featured: row['is_featured'] == true,
       runCount: (row['run_count'] as num?)?.toInt() ?? 0,
       isStarred: row['is_starred'] == true,
       clubId: row['club_id'] as String?,
@@ -4168,6 +4168,23 @@ class ApiClient {
 
   Future<void> deleteFoodLog(String id) async {
     await _client.from(FoodLogRow.table).delete().eq(FoodLogRow.colId, id);
+  }
+
+  /// The signed-in user's most recent recorded weight (kg), or null when
+  /// none. Owner-only — `body_metrics` has no public-read policy (migration
+  /// 20261216_001). Feeds the nutrition BMR target.
+  Future<double?> fetchLatestBodyWeightKg() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return null;
+    final data = await _client
+        .from(BodyMetricRow.table)
+        .select(BodyMetricRow.colWeightKg)
+        .eq(BodyMetricRow.colUserId, uid)
+        .order(BodyMetricRow.colRecordedAt, ascending: false)
+        .limit(1)
+        .maybeSingle();
+    if (data == null) return null;
+    return (data[BodyMetricRow.colWeightKg] as num?)?.toDouble();
   }
 }
 

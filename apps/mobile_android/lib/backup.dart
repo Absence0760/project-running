@@ -779,7 +779,7 @@ class BackupService {
               isPublic: r['is_public'] == true,
               surface: r['surface'] as String?,
               tags: (r['tags'] as List?)?.cast<String>() ?? const [],
-              featured: r['featured'] == true,
+              featured: r['is_featured'] == true,
               runCount: (r['run_count'] as num?)?.toInt() ?? 0,
               // Bug caught by `backup_format_compat_test.dart` in
               // May 2026 — the offline restore was dropping

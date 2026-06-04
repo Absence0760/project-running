@@ -90,7 +90,7 @@ insert into clubs (id, owner_id, name, slug, is_public) values
   ('c0000000-0000-0000-0000-0000ab230001', '00000000-0000-0000-0000-0000ab230004', 'Hyg3 Public',  'hyg3-pub',  true),
   ('c0000000-0000-0000-0000-0000ab230002', '00000000-0000-0000-0000-0000ab230005', 'Hyg3 Private', 'hyg3-priv', false);
 
-insert into events (id, club_id, title, starts_at, created_by) values
+insert into events (id, club_id, title, starts_at, author_id) values
   ('e0000000-0000-0000-0000-0000ab230001', 'c0000000-0000-0000-0000-0000ab230001', 'Pub 5k',  '2026-06-06 09:00+00', '00000000-0000-0000-0000-0000ab230004'),
   ('e0000000-0000-0000-0000-0000ab230002', 'c0000000-0000-0000-0000-0000ab230002', 'Priv 5k', '2026-06-06 09:00+00', '00000000-0000-0000-0000-0000ab230005');
 

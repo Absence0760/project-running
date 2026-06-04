@@ -5,7 +5,7 @@
 --     `is_route_visible_to(route_id, auth.uid())` (owner / public /
 --     active club member).
 --   - INSERT "segment authors create on readable routes" — caller is
---     `created_by` AND the route must be visible to them.
+--     `author_id` AND the route must be visible to them.
 --   - UPDATE / DELETE "segment author or route owner …" — segment
 --     author OR the route's owner. Route admins via club_members
 --     work through the routes RLS, not these policies.
@@ -14,7 +14,7 @@
 --
 -- Blast radius if regressed: pollution of every public route's
 -- segment list with forged-attribution rows (closes the same
--- `auth.uid() = created_by` shape as run_kudos / route_reviews), or
+-- `auth.uid() = author_id` shape as run_kudos / route_reviews), or
 -- a non-author / non-owner overwriting another user's segment
 -- bounds (which silently invalidates every `segment_efforts` row
 -- attached to it, since the unique key is `(segment_id, run_id)`
@@ -53,7 +53,7 @@ values
 
 -- bb0001 (route owner) plants a segment on their private route so
 -- test 3 has something for a stranger to fail-to-see.
-insert into segments (id, route_id, name, start_distance_m, end_distance_m, created_by)
+insert into segments (id, route_id, name, start_distance_m, end_distance_m, author_id)
 values
   ('55555555-5555-5555-5555-555555550001',
    '44444444-4444-4444-4444-444444440002',
@@ -63,7 +63,7 @@ values
 
 -- bb0002 (segment author) creates a segment on bb0001's public route.
 set local "request.jwt.claims" = '{"sub":"00000000-0000-0000-0000-000000bb0002"}';
-insert into segments (id, route_id, name, start_distance_m, end_distance_m, created_by)
+insert into segments (id, route_id, name, start_distance_m, end_distance_m, author_id)
 values
   ('55555555-5555-5555-5555-555555550002',
    '44444444-4444-4444-4444-444444440001',
@@ -96,9 +96,9 @@ select is_empty(
   'stranger cannot SELECT a segment on a private route they cannot see'
 );
 
--- 4. Forged created_by INSERT is rejected.
+-- 4. Forged author_id INSERT is rejected.
 select throws_ok(
-  $$ insert into segments (route_id, name, start_distance_m, end_distance_m, created_by)
+  $$ insert into segments (route_id, name, start_distance_m, end_distance_m, author_id)
        values ('44444444-4444-4444-4444-444444440001',
                'Forged', 0, 500,
                '00000000-0000-0000-0000-000000bb0002') $$,
@@ -109,7 +109,7 @@ select throws_ok(
 
 -- 5. INSERT against an invisible private route is rejected.
 select throws_ok(
-  $$ insert into segments (route_id, name, start_distance_m, end_distance_m, created_by)
+  $$ insert into segments (route_id, name, start_distance_m, end_distance_m, author_id)
        values ('44444444-4444-4444-4444-444444440002',
                'Planted on private', 0, 500,
                '00000000-0000-0000-0000-000000bb0003') $$,
@@ -145,7 +145,7 @@ select results_eq(
 -- 8. CHECK: segments shorter than 100 m are rejected (decisions §37 —
 --    leaderboards on tiny slices are meaningless and a DoS vector).
 select throws_ok(
-  $$ insert into segments (route_id, name, start_distance_m, end_distance_m, created_by)
+  $$ insert into segments (route_id, name, start_distance_m, end_distance_m, author_id)
        values ('44444444-4444-4444-4444-444444440001',
                'Too short', 0, 50,
                '00000000-0000-0000-0000-000000bb0002') $$,

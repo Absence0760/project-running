@@ -318,7 +318,7 @@ The `club_post` + `run_completed` kinds (migration `20261101_001`, persona #38) 
 
 Two indexes for the read path: `(user_id, created_at desc)` for the list view, and a **partial** `(user_id, created_at desc) where read_at is null` so the bell-badge count query is O(unread). A partial unique `(user_id, actor_id, event_id) where kind = 'event_rsvp'` de-dupes RSVP-status flips (Going → Maybe → Going re-fires the trigger but `on conflict do nothing` keeps one row), and a partial unique `(user_id, run_id) where kind = 'run_completed'` is the same defensive dedupe for completed-run fan-out. Source FKs use `on delete cascade` so notifications die with their parent (deleted run, deleted comment, deleted event, deleted club), keeping the inbox honest without a cleanup job.
 
-RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them. `notify_event_rsvp` fires for the event's `created_by` only and only when `status = 'going'`; Maybe / Declined intentionally produce no inbox row.
+RLS: users SELECT / UPDATE (mark read) / DELETE their own rows. INSERT is closed to regular users — only the SECURITY DEFINER trigger functions write rows. The triggers also defensively skip self-actions (`actor = recipient`) even though the source-table CHECKs already block them. `notify_event_rsvp` fires for the event's `author_id` only and only when `status = 'going'`; Maybe / Declined intentionally produce no inbox row.
 
 #### `direct_messages`
 
@@ -348,7 +348,7 @@ create table segments (
   start_distance_m  numeric not null check (start_distance_m >= 0),
   end_distance_m    numeric not null,
   length_m          numeric generated always as (end_distance_m - start_distance_m) stored,
-  created_by        uuid references auth.users(id) on delete set null,
+  author_id        uuid references auth.users(id) on delete set null,
   created_at        timestamptz not null default now(),
   check (end_distance_m > start_distance_m),
   check (end_distance_m - start_distance_m >= 100)
@@ -366,7 +366,7 @@ create table segment_efforts (
 );
 ```
 
-Anyone who can read the parent route can create a segment (Strava-style community contribution); `created_by` is enforced as `auth.uid()`. Effort visibility = segment AND run readability so private runs don't surface on a public segment's leaderboard. **Auto-effort generation is client-side**: there's no trigger because `pg_net` isn't wired and downloading from Postgres is gross. The browser walks the run track via `lib/segments.ts#computeEffortFromTrack` (haversine cumulative distance + timestamp interpolation) on the run-detail page, then INSERTs new efforts via the regular RLS-gated path. The unique constraint makes this idempotent.
+Anyone who can read the parent route can create a segment (Strava-style community contribution); `author_id` is enforced as `auth.uid()`. Effort visibility = segment AND run readability so private runs don't surface on a public segment's leaderboard. **Auto-effort generation is client-side**: there's no trigger because `pg_net` isn't wired and downloading from Postgres is gross. The browser walks the run track via `lib/segments.ts#computeEffortFromTrack` (haversine cumulative distance + timestamp interpolation) on the run-detail page, then INSERTs new efforts via the regular RLS-gated path. The unique constraint makes this idempotent.
 
 ---
 
@@ -454,7 +454,7 @@ create table events (
   distance_m      numeric(10, 2),
   pace_target_sec integer,                            -- seconds per km
   capacity        integer,
-  created_by      uuid references auth.users not null,
+  author_id      uuid references auth.users not null,
   created_at      timestamptz default now(),
   updated_at      timestamptz default now()
 );
@@ -655,7 +655,7 @@ create table device_tokens (
   token                  text not null,
   app_version            text,
   locale                 text,
-  notifications_enabled  boolean not null default true,
+  is_notifications_enabled  boolean not null default true,
   last_seen_at           timestamptz not null default now(),
   created_at             timestamptz not null default now(),
   updated_at             timestamptz not null default now(),
@@ -664,7 +664,7 @@ create table device_tokens (
 ```
 
 Indexes: `device_tokens_active` (partial index on `user_id` where
-`notifications_enabled`, the fan-out read shape) and
+`is_notifications_enabled`, the fan-out read shape) and
 `device_tokens_platform` (for platform-wide audits). RLS scopes reads /
 writes to `auth.uid() = user_id`; the push worker reads with the
 service-role key to fan out. A trigger touches `updated_at` on update.

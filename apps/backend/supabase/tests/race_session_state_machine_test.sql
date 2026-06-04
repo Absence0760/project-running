@@ -23,7 +23,7 @@ begin
   insert into club_members (club_id, user_id, role, status, joined_at)
     values (v_club, v_user, 'admin', 'active', now())
     on conflict (club_id, user_id) do nothing;
-  insert into events (id, club_id, title, starts_at, created_by)
+  insert into events (id, club_id, title, starts_at, author_id)
     values (v_event, v_club, 'Test Race',
             '2026-04-15 09:00:00+00', v_user)
     on conflict (id) do nothing;

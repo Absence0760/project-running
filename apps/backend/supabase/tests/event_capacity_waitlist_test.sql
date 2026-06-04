@@ -28,7 +28,7 @@ insert into clubs (id, owner_id, name, slug, is_public)
 values ('cccccccc-cccc-cccc-cccc-cccccccccc01',
         'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaa01', 'Cap Club', 'cap-club', true);
 
-insert into events (id, club_id, title, starts_at, created_by, capacity)
+insert into events (id, club_id, title, starts_at, author_id, capacity)
 values
   ('eeeeeeee-eeee-eeee-eeee-eeeeeeeeee01',
    'cccccccc-cccc-cccc-cccc-cccccccccc01', 'Capped Race',
