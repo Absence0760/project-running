@@ -123,6 +123,13 @@ class LocalFoodStore extends ChangeNotifier {
     return live.map((f) => f.row).toList();
   }
 
+  /// Serialised live entries (excludes tombstones) in the
+  /// `StoredFood.toJson()` shape, for the backup archive's `food_log.json`.
+  List<Map<String, dynamic>> get backupRecords => _rows.values
+      .where((f) => !f.isTombstone)
+      .map((f) => f.toJson())
+      .toList();
+
   /// Live entries logged in the half-open day range [from, to),
   /// newest-logged first. The nutrition screen renders a single day.
   List<Map<String, dynamic>> entriesForRange(DateTime from, DateTime to) =>
@@ -387,6 +394,30 @@ class LocalFoodStore extends ChangeNotifier {
       lastModifiedAt: existing.lastModifiedAt,
     );
     await _persist(stored);
+  }
+
+  /// Hydrate entries from a backup archive (the `StoredFood.toJson()` shape).
+  /// Each is written as `pendingCreate` so `syncWithServer` pushes it once the
+  /// user signs in — the same queued-unsynced contract the offline run/route
+  /// restore uses. Additive + idempotent: an id already present is left
+  /// untouched so re-running a restore can't clobber a locally-newer copy.
+  Future<int> restoreFromBackup(List<Map<String, dynamic>> records) async {
+    var imported = 0;
+    for (final json in records) {
+      try {
+        final parsed = StoredFood.fromJson(json);
+        if (_rows.containsKey(parsed.id)) continue;
+        await _persist(StoredFood(
+          row: parsed.row,
+          syncState: FoodSyncState.pendingCreate,
+          lastModifiedAt: parsed.lastModifiedAt,
+        ));
+        imported++;
+      } catch (e) {
+        debugPrint('local_food_store: restore skipped a record: $e');
+      }
+    }
+    return imported;
   }
 
   Future<void> _dropRow(String id) async {

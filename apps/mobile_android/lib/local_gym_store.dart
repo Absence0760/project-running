@@ -134,6 +134,14 @@ class LocalGymStore extends ChangeNotifier {
     return live;
   }
 
+  /// Serialised live workouts (excludes tombstones) in the
+  /// `StoredGymWorkout.toJson()` shape, for the backup archive's
+  /// `gym_workouts.json`.
+  List<Map<String, dynamic>> get backupRecords => _rows.values
+      .where((w) => !w.isTombstone)
+      .map((w) => w.toJson())
+      .toList();
+
   /// A single live workout by id, or null if missing / a tombstone.
   StoredGymWorkout? byId(String id) {
     final w = _rows[id];
@@ -390,6 +398,31 @@ class LocalGymStore extends ChangeNotifier {
       lastModifiedAt: existing.lastModifiedAt,
     );
     await _persist(stored);
+  }
+
+  /// Hydrate workouts from a backup archive (the `StoredGymWorkout.toJson()`
+  /// shape). Each is written as `pendingCreate` so `syncWithServer` pushes it
+  /// once the user signs in — the same queued-unsynced contract the offline
+  /// run/route restore uses. Additive + idempotent: an id already present is
+  /// left untouched so re-running a restore can't clobber a locally-newer copy.
+  Future<int> restoreFromBackup(List<Map<String, dynamic>> records) async {
+    var imported = 0;
+    for (final json in records) {
+      try {
+        final parsed = StoredGymWorkout.fromJson(json);
+        if (_rows.containsKey(parsed.id)) continue;
+        await _persist(StoredGymWorkout(
+          row: parsed.row,
+          sets: parsed.sets,
+          syncState: GymSyncState.pendingCreate,
+          lastModifiedAt: parsed.lastModifiedAt,
+        ));
+        imported++;
+      } catch (e) {
+        debugPrint('local_gym_store: restore skipped a record: $e');
+      }
+    }
+    return imported;
   }
 
   Future<void> _dropRow(String id) async {
