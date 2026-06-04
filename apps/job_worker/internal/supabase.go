@@ -1295,46 +1295,32 @@ func (c *SupabaseClient) RecordLifecycleEmail(ctx context.Context, userID, templ
 	return err
 }
 
-// FetchExportPersonalDataTables bundles the personal-data tables
-// the audit/data-export-completeness (May 2026) pass added to the
-// Art 20 export. One call per table; failures on individual tables
-// are tolerated (the table is omitted from the result rather than
-// failing the whole export) so a single missing migration or
-// rename doesn't strand the user's data.
+// exportTableSpec describes one personal-data table the GDPR Art 20
+// export bundles: (zip entry name, PostgREST table, filter param,
+// select clause). The filter param is the column the table joins on —
+// almost all `user_id`, with a few owner_id / author_id / claimant_id
+// exceptions.
+type exportTableSpec struct {
+	name   string // zip entry name (with .json suffix)
+	table  string // PostgREST table
+	filter string // querystring KV (e.g. "user_id=eq.<uid>")
+	sel    string // select clause; "*" to include every column
+}
+
+// exportPersonalDataSpecs is the SINGLE SOURCE OF TRUTH for which
+// personal-data tables the Art 20 export fetches one-row-per-table.
+// `uid` must already be url.QueryEscape'd by the caller (the filter
+// strings are appended to the URL verbatim, not through url.Values).
 //
-// `device_tokens.token` is redacted to "<redacted>" — the bare
-// FCM/APNs token is server-managed credential material and isn't
-// useful to the subject in an export.
-//
-// `integrations.access_token` / `refresh_token` columns aren't
-// fetched at all (column projection scrubs them).
-//
-// Return-value convention: empty table => key absent. The backup
-// builder treats an absent key the same as a zero-row entry so the
-// zip stays small.
-func (c *SupabaseClient) FetchExportPersonalDataTables(
-	ctx context.Context,
-	userID string,
-) (map[string][]map[string]interface{}, error) {
-	// Each spec is (zip entry name, table, filter param, select clause).
-	// The filter param is the column the table joins on; almost all are
-	// `user_id`, with a few exceptions (run_comments, run_kudos use
-	// `author_id`/`user_id` against the runs the user authored; we use
-	// the simple `user_id`-equivalent for these).
-	type spec struct {
-		name   string // zip entry name (with .json suffix)
-		table  string // PostgREST table
-		filter string // querystring KV (e.g. "user_id=eq.<uid>")
-		sel    string // select clause; "*" to include every column
-	}
-	// The filter is appended to the URL verbatim below (unlike `select`,
-	// which goes through url.Values), so the value must be encoded here.
-	// QueryEscape renders space as `+`, which PostgREST decodes back to
-	// space — functionally identical to the EF for any DB lookup.
-	// audit-findings 2026-05-30 Medium.
-	uid := url.QueryEscape(userID)
+// personal_data_export_guard_test.go parses every migration for tables
+// carrying a `user_id` column and asserts each one appears here (or in
+// an explicit exclusion list) — so adding a new personal-data table to
+// the schema fails the build until it is wired into this list or
+// consciously excluded. Keep the shape in lockstep with the TS twin in
+// apps/web/.../backup_spec.test.ts.
+func exportPersonalDataSpecs(uid string) []exportTableSpec {
 	uidEq := "user_id=eq." + uid
-	specs := []spec{
+	return []exportTableSpec{
 		// coach_messages — full chat transcripts with the assistant.
 		// Densest single PII corpus outside GPS tracks.
 		{name: "coach_messages.json", table: schema.TableCoachMessages, filter: uidEq, sel: "*"},
@@ -1521,6 +1507,41 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// has an Art 20 right to receive.
 		{name: "food_log.json", table: schema.TableFoodLog, filter: uidEq, sel: "*"},
 	}
+}
+
+// FetchExportPersonalDataTables bundles the personal-data tables
+// the audit/data-export-completeness (May 2026) pass added to the
+// Art 20 export. One call per table; failures on individual tables
+// are tolerated (the table is omitted from the result rather than
+// failing the whole export) so a single missing migration or
+// rename doesn't strand the user's data.
+//
+// `device_tokens.token` is redacted to "<redacted>" — the bare
+// FCM/APNs token is server-managed credential material and isn't
+// useful to the subject in an export.
+//
+// `integrations.access_token` / `refresh_token` columns aren't
+// fetched at all (column projection scrubs them).
+//
+// Return-value convention: empty table => key absent. The backup
+// builder treats an absent key the same as a zero-row entry so the
+// zip stays small.
+func (c *SupabaseClient) FetchExportPersonalDataTables(
+	ctx context.Context,
+	userID string,
+) (map[string][]map[string]interface{}, error) {
+	// Each spec is (zip entry name, table, filter param, select clause).
+	// The filter param is the column the table joins on; almost all are
+	// `user_id`, with a few exceptions (run_comments, run_kudos use
+	// `author_id`/`user_id` against the runs the user authored; we use
+	// the simple `user_id`-equivalent for these).
+	// The filter is appended to the URL verbatim below (unlike `select`,
+	// which goes through url.Values), so the value must be encoded here.
+	// QueryEscape renders space as `+`, which PostgREST decodes back to
+	// space — functionally identical to the EF for any DB lookup.
+	// audit-findings 2026-05-30 Medium.
+	uid := url.QueryEscape(userID)
+	specs := exportPersonalDataSpecs(uid)
 
 	out := make(map[string][]map[string]interface{}, len(specs))
 	for _, s := range specs {
