@@ -5453,3 +5453,52 @@ export async function deleteGymWorkout(id: string): Promise<void> {
 	const { error } = await supabase.from('gym_workouts').delete().eq('id', id);
 	if (error) throw error;
 }
+
+// --- Unified activities timeline (Phase 4 multi-modal History) ---
+
+/// One row of the `activities` UNION view (runs + gym_workouts + food_log)
+/// projecting (id, user_id, kind, started_at, summary). `summary` is a thin
+/// per-kind jsonb the History list renders without a second fetch; the
+/// detail routes load the full underlying row. Migration 20261204_001.
+export interface ActivityRow {
+	id: string;
+	kind: 'run' | 'lift' | 'meal';
+	started_at: string;
+	summary: Record<string, unknown>;
+}
+
+/// Windowed, reverse-chronological feed across all logged modalities for
+/// the History timeline. RLS (security_invoker on the view) scopes it to
+/// the caller. Always bounded — the timeline paginates like /runs rather
+/// than pulling an unbounded history (multi_modal.md § "activities view
+/// at scale").
+export async function fetchActivities(limit = 100): Promise<ActivityRow[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('activities')
+		.select('id, kind, started_at, summary')
+		.eq('user_id', userId)
+		.order('started_at', { ascending: false })
+		.limit(limit);
+	if (error) {
+		console.error('fetchActivities failed', error);
+		return [];
+	}
+	return ((data ?? []) as unknown[])
+		.map((row) => {
+			const r = row as {
+				id: string | null;
+				kind: string | null;
+				started_at: string | null;
+				summary: Record<string, unknown> | null;
+			};
+			return {
+				id: r.id ?? '',
+				kind: (r.kind ?? 'run') as ActivityRow['kind'],
+				started_at: r.started_at ?? '',
+				summary: r.summary ?? {},
+			};
+		})
+		.filter((r) => r.id !== '' && r.started_at !== '');
+}

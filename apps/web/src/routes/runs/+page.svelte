@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
-	import { fetchRuns, deleteRuns } from '$lib/core/data';
+	import { fetchRuns, deleteRuns, fetchActivities, type ActivityRow } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import { periodStart } from '$lib/training/goals';
 	import { auth } from '$lib/stores/auth.svelte';
@@ -16,6 +16,7 @@
 	import type { Run, RunSource } from '$lib/types';
 	import { formatElevation } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
+	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Snapshot } from './$types';
 
 	let runs = $state<Run[]>([]);
@@ -328,11 +329,109 @@
 			.then((settings) => {
 				const wsd = effective<string>(settings, 'week_start_day');
 				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
+				// Multi-modal History: when the flag is on, pull the unified
+				// activities feed so the kind chips + timeline can render. A
+				// pure runner / flag-off user never fetches it and the page
+				// stays the run-only history it is today (multi_modal.md §
+				// History). Best-effort — a failure just hides the chips.
+				multiModalNav = effective<boolean>(settings, 'multi_modal_nav', false) ?? false;
+				if (multiModalNav) {
+					fetchActivities(200)
+						.then((rows) => (activityFeed = rows))
+						.catch(() => {
+							/* silent — chips stay hidden, run history unaffected */
+						});
+				}
 			})
 			.catch(() => {
 				/* leave the monday default — the filter still works */
 			});
 	});
+
+	// --- Unified activities timeline (multi-modal History) ---
+	let multiModalNav = $state(false);
+	let activityFeed = $state<ActivityRow[]>([]);
+	type KindFilter = 'all' | 'run' | 'lift' | 'meal';
+	let kindFilter = $state<KindFilter>('all');
+
+	let hasLift = $derived(activityFeed.some((a) => a.kind === 'lift'));
+	let hasMeal = $derived(activityFeed.some((a) => a.kind === 'meal'));
+	// Chips only appear once there's a SECOND modality to switch to — a
+	// flagged user who only runs sees no chips (anti-clutter checklist).
+	let showKindChips = $derived(multiModalNav && (hasLift || hasMeal));
+	// Filter chips for empty kinds are hidden, not disabled.
+	let kindChips = $derived.by<{ value: KindFilter; key: MessageKey }[]>(() => {
+		const out: { value: KindFilter; key: MessageKey }[] = [
+			{ value: 'all', key: 'history.kindAll' },
+			{ value: 'run', key: 'history.kindRuns' },
+		];
+		if (hasLift) out.push({ value: 'lift', key: 'history.kindLifts' });
+		if (hasMeal) out.push({ value: 'meal', key: 'history.kindMeals' });
+		return out;
+	});
+	// Client-side filter over the already-fetched window — no round-trip
+	// per chip. Activities arrive newest-first from the view.
+	let timelineRows = $derived(
+		kindFilter === 'all' ? activityFeed : activityFeed.filter((a) => a.kind === kindFilter),
+	);
+	let timelineGroups = $derived.by(() => {
+		const today = new Date();
+		today.setHours(0, 0, 0, 0);
+		const yesterday = new Date(today);
+		yesterday.setDate(yesterday.getDate() - 1);
+		const groups: { key: string; label: string; rows: ActivityRow[] }[] = [];
+		let cur: { key: string; label: string; rows: ActivityRow[] } | null = null;
+		for (const a of timelineRows) {
+			const d = new Date(a.started_at);
+			d.setHours(0, 0, 0, 0);
+			let label: string;
+			if (d.getTime() === today.getTime()) label = m('history.today');
+			else if (d.getTime() === yesterday.getTime()) label = m('history.yesterday');
+			else label = formatDate(a.started_at);
+			if (!cur || cur.key !== label) {
+				cur = { key: label, label, rows: [] };
+				groups.push(cur);
+			}
+			cur.rows.push(a);
+		}
+		return groups;
+	});
+	function activitySummary(a: ActivityRow): { primary: string; secondary: string } {
+		const s = a.summary;
+		if (a.kind === 'lift') {
+			const setCount = typeof s.set_count === 'number' ? s.set_count : 0;
+			const vol = typeof s.volume_kg === 'number' ? Math.round(s.volume_kg) : 0;
+			const secondary = [m('history.setCount', { n: setCount })];
+			if (vol > 0) secondary.push(m('gym.volumeShort', { volume: vol.toLocaleString() }));
+			return {
+				primary: (typeof s.title === 'string' && s.title) || m('gym.untitled'),
+				secondary: secondary.join(' · '),
+			};
+		}
+		if (a.kind === 'meal') {
+			const kcal = typeof s.calories === 'number' ? Math.round(s.calories) : null;
+			return {
+				primary: typeof s.item_name === 'string' ? s.item_name : '—',
+				secondary: kcal != null ? m('history.kcal', { n: kcal.toLocaleString() }) : '',
+			};
+		}
+		const dist = typeof s.distance_m === 'number' ? s.distance_m : 0;
+		const dur = typeof s.duration_s === 'number' ? s.duration_s : 0;
+		return {
+			primary: formatDistance(dist),
+			secondary: dur > 0 ? formatDuration(dur) : '',
+		};
+	}
+	function activityGlyph(kind: ActivityRow['kind']): string {
+		return kind === 'lift' ? 'fitness_center' : kind === 'meal' ? 'restaurant' : 'directions_run';
+	}
+	function activityHref(a: ActivityRow): string | null {
+		if (a.kind === 'run') return `/runs/${a.id}`;
+		if (a.kind === 'lift') return `/gym/${a.id}`;
+		// Meals have no detail route yet (nutrition module pending); the
+		// row renders read-only rather than linking to a 404.
+		return null;
+	}
 
 	$effect(() => {
 		// Don't fetch before the auth store has hydrated. fetchRuns
@@ -478,6 +577,74 @@
 		visual primary surface.
 	-->
 	<h1 class="visually-hidden">{m('runs.heading')}</h1>
+
+	{#if showKindChips}
+		<!-- Kind chips — client-side filter over the unified activities
+		     view (multi_modal.md § History). Only shown once a second
+		     modality exists; chips for empty kinds are hidden. Type is
+		     coded by glyph + label inside each timeline row, not by the
+		     chip colour, so the chips aren't load-bearing for scanning. -->
+		<div class="kind-chips" role="group" aria-label={m('runs.activityTypeGroup')}>
+			{#each kindChips as c (c.value)}
+				<button
+					type="button"
+					class="kind-chip"
+					class:active={kindFilter === c.value}
+					aria-pressed={kindFilter === c.value}
+					onclick={() => (kindFilter = c.value)}
+				>
+					{m(c.key)}
+				</button>
+			{/each}
+		</div>
+	{/if}
+
+	{#if showKindChips && kindFilter !== 'run'}
+		<!-- Unified reverse-chronological timeline over the activities
+		     view. Each row taps through to its own detail route; meals
+		     have no detail screen yet (nutrition module pending) so they
+		     render read-only rather than linking to a 404. -->
+		{#if timelineRows.length === 0}
+			<div class="empty">
+				<span class="material-symbols empty-icon" aria-hidden="true">inbox</span>
+				<p class="empty-text">{m('history.emptyTimeline')}</p>
+			</div>
+		{:else}
+			<div class="timeline">
+				{#each timelineGroups as g (g.key)}
+					<h2 class="timeline-day">{g.label}</h2>
+					<ul class="timeline-list">
+						{#each g.rows as a (a.id)}
+							{@const sum = activitySummary(a)}
+							{@const href = activityHref(a)}
+							<li>
+								<svelte:element
+									this={href ? 'a' : 'div'}
+									href={href ?? undefined}
+									class="timeline-row"
+									class:timeline-row-link={href != null}
+									data-kind={a.kind}
+								>
+									<span class="timeline-glyph" data-kind={a.kind} aria-hidden="true">
+										<span class="material-symbols">{activityGlyph(a.kind)}</span>
+									</span>
+									<span class="timeline-main">
+										<span class="timeline-primary">{sum.primary}</span>
+										{#if sum.secondary}
+											<span class="timeline-secondary">{sum.secondary}</span>
+										{/if}
+									</span>
+									{#if href}
+										<span class="material-symbols timeline-arrow">chevron_right</span>
+									{/if}
+								</svelte:element>
+							</li>
+						{/each}
+					</ul>
+				{/each}
+			</div>
+		{/if}
+	{:else}
 	<header class="page-header">
 		<div class="toolbar">
 			<div class="activity-group" role="group" aria-label={m('runs.activityTypeGroup')}>
@@ -807,6 +974,7 @@
 				</div>
 			{/if}
 		{/if}
+	{/if}
 	{/if}
 </div>
 
@@ -1384,4 +1552,89 @@
 	}
 
 	/* .modal-* classes live in app.css. */
+
+	/* --- Unified activities timeline (multi-modal History) --- */
+	.kind-chips {
+		display: flex;
+		gap: var(--space-2xs);
+		flex-wrap: wrap;
+		margin-bottom: var(--space-lg);
+	}
+	.kind-chip {
+		padding: var(--space-2xs) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: 999px;
+		background: var(--color-surface);
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		cursor: pointer;
+		transition: background var(--transition-fast), border-color var(--transition-fast);
+	}
+	.kind-chip:hover { border-color: var(--color-primary); }
+	.kind-chip.active {
+		background: var(--color-primary);
+		border-color: var(--color-primary);
+		color: var(--color-on-primary, #fff);
+	}
+
+	.timeline {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-lg);
+	}
+	.timeline-day {
+		font-size: 0.8rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--color-text-tertiary);
+		margin: 0 0 var(--space-2xs) 0;
+	}
+	.timeline-list {
+		list-style: none;
+		margin: 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+	}
+	.timeline-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		text-decoration: none;
+		color: inherit;
+	}
+	.timeline-row-link:hover { border-color: var(--color-primary); }
+	.timeline-glyph {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+		color: var(--color-text-secondary);
+		background: var(--color-bg-tertiary);
+	}
+	/* Per-kind accent on the glyph chip — a secondary cue; the glyph
+	   shape + the row text carry the type, never colour alone. */
+	.timeline-glyph[data-kind='lift'] { color: #4e7c5e; background: color-mix(in srgb, #8fbf9f 18%, transparent); }
+	.timeline-glyph[data-kind='meal'] { color: #9a6b2f; background: color-mix(in srgb, #d9a25a 20%, transparent); }
+	.timeline-glyph[data-kind='run'] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
+	.timeline-glyph .material-symbols { font-size: 1.2rem; }
+	.timeline-main {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
+	.timeline-primary { font-weight: 600; }
+	.timeline-secondary { font-size: 0.85rem; color: var(--color-text-secondary); }
+	.timeline-arrow { color: var(--color-text-tertiary); }
 </style>
