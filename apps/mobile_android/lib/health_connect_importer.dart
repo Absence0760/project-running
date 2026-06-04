@@ -73,10 +73,10 @@ class HealthConnectImporter {
         final avgBpm = await _averageHrInWindow(point.dateFrom, point.dateTo);
 
         final metadata = <String, dynamic>{
-          'imported_from': 'health_connect',
-          'imported_at': DateTime.now().toIso8601String(),
-          'health_connect_type': value.workoutActivityType.name,
-          'activity_type': activityType,
+          MetadataKeys.importedFrom: 'health_connect',
+          MetadataKeys.importedAt: DateTime.now().toIso8601String(),
+          MetadataKeys.healthConnectType: value.workoutActivityType.name,
+          MetadataKeys.activityType: activityType,
         };
         if (avgBpm != null) metadata[MetadataKeys.avgBpm] = avgBpm;
 

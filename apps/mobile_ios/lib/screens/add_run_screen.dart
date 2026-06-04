@@ -166,8 +166,8 @@ class _AddRunScreenState extends State<AddRunScreen> {
     setState(() => _saving = true);
 
     final metadata = <String, dynamic>{
-      'activity_type': _activityType.name,
-      'manual_entry': true,
+      MetadataKeys.activityType: _activityType.name,
+      MetadataKeys.manualEntry: true,
     };
     final title = _titleCtl.text.trim();
     if (title.isNotEmpty) metadata[MetadataKeys.title] = title;

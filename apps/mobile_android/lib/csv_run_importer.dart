@@ -134,12 +134,12 @@ class CsvRunImporter {
         }
         if (titleIdx != null && titleIdx < cells.length) {
           final v = cells[titleIdx].trim();
-          if (v.isNotEmpty) metadata.putIfAbsent('title', () => v);
+          if (v.isNotEmpty) metadata.putIfAbsent(MetadataKeys.title, () => v);
         }
         // CHECK constraint on the runs table requires activity_type —
         // see runs_metadata_activity_type_check. Default to 'run' so
         // a 5-column CSV (no activity_type) inserts cleanly.
-        metadata.putIfAbsent('activity_type', () => 'run');
+        metadata.putIfAbsent(MetadataKeys.activityType, () => 'run');
         metadata[MetadataKeys.importedFrom] = 'csv';
         metadata[MetadataKeys.importedAt] = DateTime.now().toUtc().toIso8601String();
 

@@ -240,14 +240,14 @@ class StravaImporter {
       source: RunSource.strava,
       externalId: 'strava:$stravaId',
       metadata: {
-        'title': name.isEmpty ? 'Strava import' : name,
+        MetadataKeys.title: name.isEmpty ? 'Strava import' : name,
         // Match the web importer's derivation in apps/web/src/lib/
         // strava-zip.ts so a Strava ZIP imported on either platform
         // produces the same activity_type. Fallback is 'run'.
-        'activity_type': _activityTypeFromStrava(stravaType),
-        'imported_from': 'strava',
-        'strava_activity_type': stravaType,
-        'imported_at': DateTime.now().toIso8601String(),
+        MetadataKeys.activityType: _activityTypeFromStrava(stravaType),
+        MetadataKeys.importedFrom: 'strava',
+        MetadataKeys.stravaActivityType: stravaType,
+        MetadataKeys.importedAt: DateTime.now().toIso8601String(),
       },
     );
   }

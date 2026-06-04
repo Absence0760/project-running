@@ -2757,14 +2757,14 @@ Map<String, dynamic> applyRunMetadataEdit(
   final titleTrim = title.trim();
   final notesTrim = notes.trim();
   if (titleTrim.isEmpty) {
-    next.remove('title');
+    next.remove(MetadataKeys.title);
   } else {
-    next['title'] = titleTrim;
+    next[MetadataKeys.title] = titleTrim;
   }
   if (notesTrim.isEmpty) {
-    next.remove('notes');
+    next.remove(MetadataKeys.notes);
   } else {
-    next['notes'] = notesTrim;
+    next[MetadataKeys.notes] = notesTrim;
   }
   return next;
 }
@@ -2778,7 +2778,7 @@ void applyDnfFlag(Map<String, dynamic> metadata, bool dnf) {
   if (dnf) {
     metadata[MetadataKeys.isDnf] = true;
   } else {
-    metadata.remove('is_dnf');
+    metadata.remove(MetadataKeys.isDnf);
   }
 }
 

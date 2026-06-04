@@ -1387,11 +1387,11 @@ class _RunScreenState extends State<RunScreen> {
         _distanceMetres == 0 &&
         _displayDistanceMetres > 0;
     final metadata = <String, dynamic>{
-      'activity_type': _activityType.name,
-      'in_progress_saved_at': DateTime.now().toIso8601String(),
-      if (indoorEstimate) 'indoor_estimated': true,
-      if (indoorEstimate) 'distance_source': 'pedometer',
-      if (_steps > 0) 'steps': _steps,
+      cm.MetadataKeys.activityType: _activityType.name,
+      cm.MetadataKeys.inProgressSavedAt: DateTime.now().toIso8601String(),
+      if (indoorEstimate) cm.MetadataKeys.indoorEstimated: true,
+      if (indoorEstimate) cm.MetadataKeys.distanceSource: 'pedometer',
+      if (_steps > 0) cm.MetadataKeys.steps: _steps,
     };
     // Workout review trail — written here so a crash mid-workout
     // surfaces the planned-vs-actual table on the recovered run.
