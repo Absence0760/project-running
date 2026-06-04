@@ -2733,6 +2733,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 125. Mobile file-store records carry an on-disk schema version (`_v`) with a read-side forward-migration hook
+
+**Decided (2026-06-04):** every record (and sidecar) the five mobile file stores persist is stamped with `_v = kLocalStoreSchemaVersion` (currently 1), defined in `packages/core_models/lib/src/local_store_schema.dart`. On read, each store resolves the version via `localStoreRecordVersion(json)` and routes through a per-store forward-migration branch before parsing.
+
+**Why.** Before this, a record's JSON shape was implicit. When a shape changed (e.g. the gym lap-shape migration, or the pending-deletes `{ids}`→`{deletes}` change) the only defence was ad-hoc "try the new shape, fall back to the old" branches, and a stricter future parser could silently drop an unrecognised legacy file — data loss. An explicit version turns "what shape is this file" into a single read and gives every future incompatible change a documented home (bump the constant, add a branch keyed on the version read back).
+
+**Today the migration is a pass-through.** v1 is forward-compatible with the legacy unstamped shape (v0 = no `_v`): per-row stores gained only the extra `_v` key; the run envelope (`{run, synced}`) and the route file (a flat `Route.toJson()` — `_v` is a flat key that `Route.fromJson` ignores) are unchanged otherwise. So a v0 file still loads. The read hook also logs (doesn't fail) when it sees a `_v` *newer* than it understands — a cross-version device where the other phone runs a newer build — and reads the known fields. The in-progress NDJSON recording file is out of scope (it has its own crash-safe append format, §123).
+
+**Trade-off.** A few extra bytes per record and a stamp on every write. Cheap insurance against the silent-drop failure mode. Don't strip `_v` to "clean up" a record — the absence of a stamp is itself meaningful (legacy).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

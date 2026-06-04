@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -161,6 +162,44 @@ void main() {
       final today = store.entriesForRange(
           DateTime.utc(2026, 6, 2), DateTime.utc(2026, 6, 3));
       expect(today.map((r) => r['item_name']), ['Today']);
+    });
+  });
+
+  group('schema version (_v)', () {
+    test('a persisted record carries the current schema version', () async {
+      final stored = await store.createLocal(
+          loggedAt: DateTime.utc(2026, 6, 2), itemName: 'Apple');
+      final raw = jsonDecode(
+              File('${dir.path}/${stored.id}.json').readAsStringSync())
+          as Map<String, dynamic>;
+      expect(raw[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+    });
+
+    test('a legacy (unstamped) record still loads via the migration hook',
+        () async {
+      final legacy = {
+        'row': {
+          'id': 'legacy',
+          'logged_at': DateTime.utc(2026, 6, 1, 12).toIso8601String(),
+          'item_name': 'Old',
+          'meal_slot': null,
+          'calories': null,
+          'protein_g': null,
+          'carbs_g': null,
+          'fat_g': null,
+          'is_public': false,
+          'external_id': null,
+          'last_modified_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+          'created_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+        },
+        'sync_state': 'synced',
+        'last_modified_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+      };
+      File('${dir.path}/legacy.json').writeAsStringSync(jsonEncode(legacy));
+
+      final reloaded = LocalFoodStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows.any((r) => r['id'] == 'legacy'), isTrue);
     });
   });
 

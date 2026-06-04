@@ -52,6 +52,7 @@ class StoredFood {
   }
 
   Map<String, dynamic> toJson() => {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
         'row': row,
         'sync_state': syncState.wire,
         'last_modified_at': lastModifiedAt.toIso8601String(),
@@ -154,13 +155,27 @@ class LocalFoodStore extends ChangeNotifier {
       try {
         final raw = entity.readAsStringSync();
         final json = jsonDecode(raw) as Map<String, dynamic>;
-        final stored = StoredFood.fromJson(json);
+        final stored = StoredFood.fromJson(_migrateRecord(json, entity.path));
         _rows[stored.id] = stored;
       } catch (e) {
         debugPrint('local_food_store: corrupt row ${entity.path}: $e');
       }
     }
     notifyListeners();
+  }
+
+  /// Forward-migration hook for a stored record read off disk. Resolves the
+  /// `_v` schema stamp and upgrades older shapes to the current one. The
+  /// current shape (v1) is forward-compatible with the legacy unstamped
+  /// shape (v0), so the migration is a pass-through today; future
+  /// incompatible changes bump [kLocalStoreSchemaVersion] and branch here.
+  Map<String, dynamic> _migrateRecord(Map<String, dynamic> json, String path) {
+    final version = localStoreRecordVersion(json);
+    if (version > kLocalStoreSchemaVersion) {
+      debugPrint(
+          'local_food_store: record $path has _v=$version (> $kLocalStoreSchemaVersion); reading known fields only');
+    }
+    return json;
   }
 
   /// Mint a new UUID and persist a pending-create entry. Returns the

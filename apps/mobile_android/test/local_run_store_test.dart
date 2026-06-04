@@ -34,6 +34,30 @@ void main() {
     );
   }
 
+  group('schema version (_v)', () {
+    test('a saved run record carries the current schema version', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'r-v'));
+      final raw = jsonDecode(File('${tempDir.path}/r-v.json').readAsStringSync())
+          as Map<String, dynamic>;
+      expect(raw[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+    });
+
+    test('a legacy (unstamped) run record still loads', () async {
+      // v0 envelope: {run, synced} with no _v key.
+      final legacy = {
+        'run': makeRun(id: 'legacy').toJson(),
+        'synced': true,
+      };
+      File('${tempDir.path}/legacy.json').writeAsStringSync(jsonEncode(legacy));
+
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.runs.any((r) => r.id == 'legacy'), isTrue);
+    });
+  });
+
   group('completed runs', () {
     test('init loads from an empty directory', () async {
       final store = LocalRunStore();

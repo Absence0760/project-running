@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -152,6 +153,42 @@ void main() {
           title: 'Newer', startedAt: DateTime.utc(2026, 6, 3));
       expect(store.workouts.first.row['title'], 'Newer');
       expect(store.workouts.last.row['title'], 'Older');
+    });
+  });
+
+  group('schema version (_v)', () {
+    test('a persisted record carries the current schema version', () async {
+      final stored =
+          await store.createLocal(startedAt: DateTime.utc(2026, 6, 2));
+      final raw = jsonDecode(
+              File('${dir.path}/${stored.id}.json').readAsStringSync())
+          as Map<String, dynamic>;
+      expect(raw[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+    });
+
+    test('a legacy (unstamped) record still loads via the migration hook',
+        () async {
+      final legacy = {
+        'row': {
+          'id': 'legacy',
+          'title': 'Old',
+          'started_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+          'duration_s': null,
+          'notes': null,
+          'is_public': false,
+          'external_id': null,
+          'last_modified_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+          'created_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+        },
+        'sets': const [],
+        'sync_state': 'synced',
+        'last_modified_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+      };
+      File('${dir.path}/legacy.json').writeAsStringSync(jsonEncode(legacy));
+
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.byId('legacy'), isNotNull);
     });
   });
 

@@ -169,6 +169,7 @@ class LocalRunStore extends ChangeNotifier {
     }
     final file = File('${_dir.path}/${stamped.id}.json');
     final data = {
+      kLocalStoreVersionKey: kLocalStoreSchemaVersion,
       'run': stamped.toJson(),
       'synced': false,
     };
@@ -240,6 +241,7 @@ class LocalRunStore extends ChangeNotifier {
 
     final file = File('${_dir.path}/${merged.id}.json');
     final data = {
+      kLocalStoreVersionKey: kLocalStoreSchemaVersion,
       'run': merged.toJson(),
       'synced': true,
     };
@@ -288,7 +290,11 @@ class LocalRunStore extends ChangeNotifier {
     if (toWrite.isEmpty) return;
     await Future.wait(toWrite.map((merged) {
       final file = File('${_dir.path}/${merged.id}.json');
-      final data = {'run': merged.toJson(), 'synced': true};
+      final data = {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        'run': merged.toJson(),
+        'synced': true,
+      };
       return writeJsonAtomic(file, data);
     }));
     for (final merged in toWrite) {
@@ -312,6 +318,7 @@ class LocalRunStore extends ChangeNotifier {
 
     final stamped = _withLastModified(updated, DateTime.now());
     final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+    data[kLocalStoreVersionKey] = kLocalStoreSchemaVersion;
     data['run'] = stamped.toJson();
     data['synced'] = false;
     await writeJsonAtomic(file, data);
@@ -504,6 +511,7 @@ class LocalRunStore extends ChangeNotifier {
   Future<void> _persistSyncedIds() async {
     try {
       await writeJsonAtomic(_syncedIdsFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
         'ids': _syncedIds.toList(),
       });
     } catch (e) {
@@ -580,6 +588,7 @@ class LocalRunStore extends ChangeNotifier {
       // _readPendingRemoteDeletes) for one-way migration from existing
       // installs — the next write upgrades them.
       await writeJsonAtomic(_pendingRemoteDeletesFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
         'deletes': _pendingRemoteDeletes,
       });
     } catch (e) {
@@ -692,6 +701,15 @@ class LocalRunStore extends ChangeNotifier {
     try {
       final raw = await file.readAsString();
       final data = jsonDecode(raw) as Map<String, dynamic>;
+      // Forward-migration hook: the `{run, synced}` envelope is v1 and
+      // forward-compatible with the legacy unstamped (v0) shape, so the
+      // read is a pass-through today. A future incompatible change bumps
+      // kLocalStoreSchemaVersion and branches on this version.
+      final version = localStoreRecordVersion(data);
+      if (version > kLocalStoreSchemaVersion) {
+        debugPrint(
+            'local_run_store: ${file.path} has _v=$version (> $kLocalStoreSchemaVersion); reading known fields only');
+      }
       final run = Run.fromJson(data['run'] as Map<String, dynamic>);
       return _LoadedRun(run, data['synced'] == true);
     } catch (e) {

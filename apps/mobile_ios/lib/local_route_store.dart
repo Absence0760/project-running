@@ -122,10 +122,19 @@ class LocalRouteStore extends ChangeNotifier {
   /// in the cloud (e.g. a server-pulled route landing in the store
   /// via `saveBatch` after a remote fetch). Without that override
   /// every refresh would re-push every route the next sync cycle.
+  /// The on-disk record for a route: the route JSON plus the schema-version
+  /// stamp. The stamp is a flat key — `Route.fromJson` ignores unrecognised
+  /// keys, so legacy bare-route files still parse and stamped files lose
+  /// nothing.
+  Map<String, dynamic> _routeRecord(Route route) => {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        ...route.toJson(),
+      };
+
   Future<void> save(Route route, {bool markSynced = false}) async {
     final dir = await _ensureDir();
     final file = File('${dir.path}/${route.id}.json');
-    await writeJsonAtomic(file, route.toJson());
+    await writeJsonAtomic(file, _routeRecord(route));
     _routes.removeWhere((r) => r.id == route.id);
     _routes.insert(0, route);
     if (markSynced) {
@@ -173,7 +182,7 @@ class LocalRouteStore extends ChangeNotifier {
     final dir = await _ensureDir();
     await Future.wait(list.map((route) {
       final file = File('${dir.path}/${route.id}.json');
-      return writeJsonAtomic(file, route.toJson());
+      return writeJsonAtomic(file, _routeRecord(route));
     }));
     for (final route in list) {
       _routes.removeWhere((r) => r.id == route.id);
@@ -287,6 +296,16 @@ class LocalRouteStore extends ChangeNotifier {
     try {
       final raw = await file.readAsString();
       final data = jsonDecode(raw) as Map<String, dynamic>;
+      // Forward-migration hook: v1 stamps `_v` as a flat key alongside the
+      // route fields; legacy (v0) files are a bare Route.toJson(). Both
+      // parse — Route.fromJson ignores the `_v` key — so the read is a
+      // pass-through today. A future incompatible change bumps
+      // kLocalStoreSchemaVersion and branches on this version.
+      final version = localStoreRecordVersion(data);
+      if (version > kLocalStoreSchemaVersion) {
+        debugPrint(
+            'local_route_store: ${file.path} has _v=$version (> $kLocalStoreSchemaVersion); reading known fields only');
+      }
       return Route.fromJson(data);
     } catch (e) {
       debugPrint('Failed to load route file ${file.path}: $e');
@@ -326,6 +345,7 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> _persistSyncedIds() async {
     try {
       await writeJsonAtomic(_syncedIdsFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
         'ids': _syncedIds.toList(),
       });
     } catch (e) {
@@ -361,6 +381,7 @@ class LocalRouteStore extends ChangeNotifier {
     _offlinePersistChain = _offlinePersistChain.then((_) async {
       try {
         await writeJsonAtomic(_offlinePinnedIdsFile, {
+          kLocalStoreVersionKey: kLocalStoreSchemaVersion,
           'ids': _offlinePinnedIds.toList(),
         });
       } catch (e) {

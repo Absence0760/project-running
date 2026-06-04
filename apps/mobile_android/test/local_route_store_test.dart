@@ -236,6 +236,31 @@ void main() {
     });
   });
 
+  group('schema version (_v)', () {
+    test('a saved route file carries the current schema version', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRoute(id: 'r-v'));
+      final raw = jsonDecode(File('${tempDir.path}/r-v.json').readAsStringSync())
+          as Map<String, dynamic>;
+      expect(raw[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+      // The route fields remain top-level — Route.fromJson ignores `_v`.
+      expect(raw['id'], 'r-v');
+    });
+
+    test('a legacy (bare, unstamped) route file still loads', () async {
+      // v0 shape: a bare Route.toJson() with no _v key.
+      final legacy = makeRoute(id: 'legacy', name: 'Old route');
+      File('${tempDir.path}/legacy.json')
+          .writeAsStringSync(jsonEncode(legacy.toJson()));
+
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      expect(store.routes.any((r) => r.id == 'legacy'), isTrue);
+      expect(store.routes.single.name, 'Old route');
+    });
+  });
+
   group('delete', () {
     test('removes the file from disk and from in-memory list', () async {
       final store = LocalRouteStore();

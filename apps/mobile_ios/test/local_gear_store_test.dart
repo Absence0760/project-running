@@ -146,6 +146,36 @@ void main() {
     });
   });
 
+  group('schema version (_v)', () {
+    test('a persisted record carries the current schema version', () async {
+      final stored = await store.createLocal(kind: 'shoe', name: 'X');
+      final raw = jsonDecode(
+              File('${dir.path}/${stored.id}.json').readAsStringSync())
+          as Map<String, dynamic>;
+      expect(raw[kLocalStoreVersionKey], kLocalStoreSchemaVersion);
+    });
+
+    test('a legacy (unstamped) record still loads via the migration hook',
+        () async {
+      final legacy = {
+        'row': {
+          'id': 'legacy',
+          'kind': 'shoe',
+          'name': 'Old',
+          'retired_at': null,
+          'total_distance_m': 0,
+        },
+        'sync_state': 'synced',
+        'last_modified_at': DateTime.utc(2020).toIso8601String(),
+      };
+      File('${dir.path}/legacy.json').writeAsStringSync(jsonEncode(legacy));
+
+      final reloaded = LocalGearStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows.any((r) => r['id'] == 'legacy'), isTrue);
+    });
+  });
+
   group('updateLocal', () {
     test('flips pendingCreate→pendingCreate (not pendingUpdate)', () async {
       final stored = await store.createLocal(kind: 'shoe', name: 'Old');
