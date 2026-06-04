@@ -107,13 +107,38 @@
 	// profile popover at the bottom of the sidebar; Feed is a self-only
 	// tab on /u/[me]; Guided runs are surfaced from /coach (both are
 	// coach-driven). Top-down scan time matches frequency-of-use.
-	const navItems: { href: string; labelKey: MessageKey; icon: string; accent: string }[] = [
-		{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
-		{ href: '/runs', labelKey: 'nav.history', icon: 'directions_run', accent: '#D97A54' },
-		{ href: '/routes', labelKey: 'nav.routes', icon: 'route', accent: '#B9A7E8' },
-		{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
-		{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
-	];
+	// `multi_modal_nav` (Phase 4, decisions §63) — per-user, default off.
+	// When on, the Gym section appears in the sidebar. Kept off the pure-
+	// runner's nav so a runner who never lifts sees today's app unchanged.
+	let multiModalNav = $state(false);
+	$effect(() => {
+		const uid = auth.user?.id;
+		if (!browser || !uid) {
+			multiModalNav = false;
+			return;
+		}
+		(async () => {
+			try {
+				const { loadSettings, effective } = await import('$lib/settings/settings');
+				const settings = await loadSettings(uid);
+				multiModalNav = effective<boolean>(settings, 'multi_modal_nav', false) ?? false;
+			} catch (_) {
+				multiModalNav = false;
+			}
+		})();
+	});
+
+	const navItems: { href: string; labelKey: MessageKey; icon: string; accent: string }[] =
+		$derived([
+			{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
+			{ href: '/runs', labelKey: 'nav.history', icon: 'directions_run', accent: '#D97A54' },
+			...(multiModalNav
+				? [{ href: '/gym', labelKey: 'nav.gym' as MessageKey, icon: 'fitness_center', accent: '#8FBF9F' }]
+				: []),
+			{ href: '/routes', labelKey: 'nav.routes', icon: 'route', accent: '#B9A7E8' },
+			{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
+			{ href: '/social', labelKey: 'nav.social', icon: 'public', accent: '#C98ECF' },
+		]);
 
 	// "Shell-less" surfaces: rendered without the app sidebar regardless of
 	// auth state. Landing, auth flows, and the share / spectator pages that

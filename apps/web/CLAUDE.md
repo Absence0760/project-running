@@ -26,7 +26,7 @@ src/
     components/     # Modal + SplitPane (primitives), Avatar (shared img-or-initial avatar; per-site size/font/bg props), RunMap, ElevationProfile (Android-style interactive chart), ImportRoute, RouteBuilder, CoachChat,
                     # ConfirmDialog, ToastContainer, ProGate, WorkoutEditor, RunTrackPreview, TrackPreview, PlanCalendar, RouteExplorer,
                     # CalendarHeatmap, PersonalHeatmap (geographic heatmap of the user's own tracks on /runs/heatmap — distinct from RouteHeatmap's public community map), LicenseList, ClubEditor, EventEditor, PlanEditor (editable preview), PlanMetaEditor, RunEditor
-                    # (modal-hosted creation forms), PrivacyZonePicker (MapLibre map picker for owner zones, decisions §33),
+                    # (modal-hosted creation forms), GymEditor (Phase 4 gym composer — modal-hosted, free-text exercise + inline sets, used by /gym + /gym/[id]), PrivacyZonePicker (MapLibre map picker for owner zones, decisions §33),
                     # TrainingLoadChart (90-day fitness/fatigue/form trio on /dashboard, decisions §34),
                     # PeriodSummary (week/month/all-time stats + run list — used by dashboard modal AND /dashboard/period/...; the dashboard "This Week" + "All time"/Longest-run stat cards open it),
                     # RunSocial (kudos + comments on a run — mounted on /share/run/[id], /runs/[id]; feed uses fetchEngagementSummaries chips instead),
@@ -99,6 +99,7 @@ src/
     plans/new/      # New-plan wizard with editable week-by-week preview (click a week to expand the day-by-day editor; edits persist on submit)
     plans/[id]/     # Plan detail: progress ring, today card, week grid + Edit-plan button (PlanMetaEditor) for owner-only meta edits (name, days/week, goal time, rules)
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
+    gym/            # Phase 4 multi-modal Gym (decisions §63, behind the multi_modal_nav sidebar flag). /gym = workout list + PR badges + create modal (GymEditor); /gym/[id] = detail with per-exercise PR chips + edit/delete. Data in core/data.ts; PR engine gym/gym_prs.ts (parity pair). e2e tests-e2e/gym/. Weight in kg (no weight-unit pref yet).
     coach/          # Standalone Coach chat — plan switcher (?plan=<id>), configurable runs window (10/20/50/100), grounded-in context strip
     api/coach/+server.ts         # Coach endpoint. Default provider: Claude (ANTHROPIC_API_KEY). Set COACH_PROVIDER=openai + OPENAI_BASE_URL for local Ollama.
     explore/        # Thin redirect to /routes?tab=explore (kept so old links / Android deep links still resolve)

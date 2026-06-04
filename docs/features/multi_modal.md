@@ -471,5 +471,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Cross-modality | `coach/context.ts` (bounded gym + 7-day nutrition summary); `home_screen` card composition |
 | Runner protection | Settings toggle: keep Run as the one-tap primary action |
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline; not yet wired into nav/sync — lands with the screens) |
-| Data access | `packages/api_client` typed gym + food methods (shipped); web `data.ts` gym + food queries |
+| Data access | `packages/api_client` typed gym + food methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); food queries pending |
+
+**Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the `multi_modal_nav`-gated **Gym** sidebar item in `+layout.svelte`. E2e: `tests-e2e/gym/gym.spec.ts`. Weight is entered/shown in kg (there is no per-user weight-unit preference yet — distance `preferred_unit` is km/mi only).
 | DSAR | add `gym_workouts` / `gym_sets` / `food_log` / `body_metrics` to the export path |

@@ -535,8 +535,8 @@ Without this, every new modality competes for the 5-slot bottom nav.
 - [ ] **Mobile bottom nav** — `Home / History / Log / Social / Settings`. The current `Run` tab disappears as top-level. The centre `Log` slot is an action button (not a tab) that presents a sheet: Start run / Start lift / Log meal / Log snack. Long-press = repeat last activity (preserves the one-tap "start run" muscle memory).
 - [ ] **Home redesign (mobile + web)** — cards from every modality: today's run, today's lift, daily nutrition rings, plus the existing dashboard cards (mileage chart, training load, fitness, intensity, weekly goal). Cards self-hide when the modality has no data.
 - [ ] **History unification (mobile + web)** — single timeline of activities (runs + lifts + meals) with filter chips. Run-detail / lift-detail / meal-detail are separate routes.
-- [ ] **Web sidebar** — `Run` / `Gym` / `Nutrition` as explicit siblings. Web isn't constrained by the bottom-nav ceiling so the modalities surface directly.
-- [ ] **Feature flag** — `multi_modal_nav` per user, defaults off until the redesign is shippable on both platforms.
+- [~] **Web sidebar** — `Run` / `Gym` / `Nutrition` as explicit siblings. Web isn't constrained by the bottom-nav ceiling so the modalities surface directly. **Gym sidebar item ships** (flag-gated, web `+layout.svelte`); Nutrition pending.
+- [~] **Feature flag** — `multi_modal_nav` per user (universal `user_settings.prefs`, default off — `docs/backend/settings.md`). **Read on web** to gate the Gym sidebar item; mobile nav reshape still pending.
 
 ### Activity-kind data model
 
@@ -552,9 +552,9 @@ The DB grows a shared abstraction so cross-modality views stay sane.
 
 Strong app's free-form log, not its programmed-routine engine.
 
-- [ ] Web: `/gym/new` (composer — exercise name as free text, sets[] with reps + weight + optional RPE), `/gym/[id]` (detail), `/gym` (list).
-- [ ] Mobile: `gym_screen.dart` (list), `gym_compose_sheet.dart` (composer), `gym_detail_screen.dart` (detail). Twin-mirrored to iOS per the byte-identical-twin rule ([decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)).
-- [ ] Personal-records per `(user, exercise_name)` — heaviest set, most volume, best rep PR. Surfaces on Home as a card and on the History row as a "PR" badge.
+- [x] Web: **shipped** — `/gym` (list, PR badges) + `/gym/[id]` (detail, per-exercise PR chips, edit/delete) + the composer as a modal (`GymEditor.svelte`, exercise name as free text with history autocomplete, sets[] with reps + weight + optional RPE). Data layer in `core/data.ts`; e2e in `tests-e2e/gym/gym.spec.ts`. Followed the create-flow modal pattern rather than a standalone `/gym/new` route.
+- [ ] Mobile: `gym_screen.dart` (list), `gym_compose_sheet.dart` (composer), `gym_detail_screen.dart` (detail). Twin-mirrored to iOS per the byte-identical-twin rule ([decisions.md § 39](../architecture/decisions.md#39-mobile_android-and-mobile_ios-share-a-byte-for-byte-dart-codebase)). The offline `LocalGymStore` is already shipped (decisions §122).
+- [x] Personal-records per `(user, exercise_name)` — heaviest set, most volume, best rep PR (Epley e1RM). **Shipped** as the pure parity pair `gym_prs.ts` ↔ `gym_prs.dart` (17 tests each); web History rows show a "PR" badge and detail shows per-exercise chips. Home PR card pending (Home redesign).
 - [ ] Sharing — same `is_public` pattern as runs; lift summary cards appear in the social feed.
 - [ ] **Not in scope:** exercise database, workout templates, programmes, RPE-driven progression (all in the gym depth tier below).
 
