@@ -8,7 +8,7 @@ The `docs/` tree is grouped into topical folders, by concern rather than by plat
 
 - **`docs/architecture/`** — system map, monorepo setup, ADR log (`decisions.md`), house conventions, schema codegen
 - **`docs/product/`** — roadmap, parity matrix, feature specs, competitor analysis, open follow-ups
-- **`docs/backend/`** — schema / RPCs / RLS reference, backend scaling, the `metadata.md` + `settings.md` registries
+- **`docs/backend/`** — schema / RPCs / RLS reference, backend scaling, the `metadata.md` + `settings.md` registries, the `derived_state.md` cache contract
 - **`docs/features/`** — per-feature deep dives: run recording, training, clubs, workout execution, integrations, paywall, web auth, end-to-end flows
 - **`docs/testing/`** — testing guide + `test_inventory.md`, manual / mobile-e2e recipes, dev accounts, coverage snapshot, dev/prod isolation
 - **`docs/ops/`** — deployment hub, releasing, backup/restore, local Protomaps tiles
@@ -24,6 +24,7 @@ Start with whichever row below is closest to the task you've been given:
 | Touching the database or a client row type | [docs/architecture/schema_codegen.md](docs/architecture/schema_codegen.md) — generators + CI drift check |
 | Touching a jsonb metadata key | [docs/backend/metadata.md](docs/backend/metadata.md) — the registry of known keys |
 | Touching a user setting / preference | [docs/backend/settings.md](docs/backend/settings.md) — universal + per-device prefs registry |
+| Touching a trigger-maintained cache (PRs, route run_count, gym totals, coach usage) | [docs/backend/derived_state.md](docs/backend/derived_state.md) — the cache=authoritative-query contract per derived cache + retention |
 | Touching the recording pipeline | [docs/features/run_recording.md](docs/features/run_recording.md) — state machine, filters, auto-pause |
 | Touching the web auth flow | [docs/features/web_app_auth.md](docs/features/web_app_auth.md) |
 | Touching Edge Functions or the Supabase stack | [apps/backend/CLAUDE.md](apps/backend/CLAUDE.md) — functions, migrations, CLI gotchas |
