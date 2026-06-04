@@ -42,6 +42,7 @@ src/
     # Only types.ts + database.types.ts stay at the lib root (gen:types writes database.types.ts there; the
     # twin parity-pair paths in docs/architecture/conventions.md + shared-library-syncer.md track the new locations).
     core/data.ts         # All Supabase queries (fetchRuns, searchPublicRoutes, etc.)
+    core/schema.ts       # F11 string-literal registry: TABLES / BUCKETS / METADATA_KEYS. Route every `.from('runs')`, `.storage.from('runs')`, and runs.metadata key through these instead of bare strings — core/schema.test.ts walks the source tree and fails the build on a stray bare `.from('runs')` (+ activity-core siblings). The metadata-key registry of record stays docs/backend/metadata.md.
     types.ts        # Run, Route, Integration type overlays on generated DB types
     database.types.ts  # Generated Supabase types (regenerate after migrations)
     core/supabase.ts     # Supabase client init
