@@ -288,14 +288,11 @@ can still send them.
 ## Before reporting a task done
 
 - `go vet ./...` clean.
-- `go test ./...` passes. **These run locally only — CI does not gate
-  the worker's Go tests** (CI just `go build`s the worker; there's no
-  `go test`/`go vet` step in any workflow). So a Go-side guard like
-  `internal/personal_data_export_guard_test.go` fails your local run but
-  NOT the build. Wiring `go test ./...` into the job_worker CI job is a
-  tracked follow-up (`docs/product/followups.md` § Testing gaps); until
-  then, run the suite locally before declaring done and don't assume CI
-  caught a Go regression.
+- `go test ./...` passes. CI gates this — the `test-worker` job in
+  `ci.yml` runs `go vet ./...` + `go test ./...` (working-directory
+  `apps/job_worker`) on every PR, so a Go-side guard like
+  `internal/personal_data_export_guard_test.go` now fails the build, not
+  just your local run. Still run the suite locally before declaring done.
 - If you added a new job kind: extended the `Worker.dispatch` switch,
   added a handler test, and updated the `kind` allowlist in any
   client-side enqueue path that reaches into `jobs` directly (only
