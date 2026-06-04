@@ -54,6 +54,17 @@ class SettingsKeys {
   /// kg; this only changes how the number is shown and parsed, the same
   /// display-only split as [preferredUnit].
   static const weightUnit = 'weight_unit';
+  /// Activity multiplier for the Mifflin-St Jeor nutrition target
+  /// (`nutrition_targets.ts`/`.dart`) — `'sedentary' | 'light' | 'moderate'
+  /// (default) | 'active' | 'very_active'`. An effort label, not a body
+  /// measurement, so it is NOT special-category and auto-saves like other
+  /// prefs (unlike height/weight which are consent-gated on
+  /// `health_data_consent_at`). Phase 4 nutrition (`multi_modal.md`).
+  static const nutritionActivityLevel = 'nutrition_activity_level';
+  /// Weight-goal calorie delta applied after TDEE for the nutrition target —
+  /// `'lose' | 'maintain' (default) | 'gain'` (−500 / 0 / +300 kcal). Same
+  /// placement rationale as [nutritionActivityLevel]. Phase 4 nutrition.
+  static const nutritionGoal = 'nutrition_goal';
 
   // Device (D)
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';
