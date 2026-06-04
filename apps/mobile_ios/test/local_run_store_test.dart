@@ -445,6 +445,31 @@ void main() {
       expect(store.unsyncedCount, 0);
     });
 
+    test('next sidecar write prunes ids for server-deleted runs', () async {
+      // Seed a synced run + a ghost id that belongs to a run deleted
+      // server-side (it has no local file). The ghost would otherwise
+      // accumulate in the on-disk sidecar forever.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'run-live'));
+      await store.markSynced('run-live');
+      File('${tempDir.path}/synced_ids.json').writeAsStringSync(
+          '{"ids":["run-live","ghost-deleted-server-side"]}');
+
+      // Any subsequent sidecar write self-heals: save + sync a second
+      // run to trigger _persistSyncedIds.
+      await store.save(makeRun(id: 'run-2'));
+      await store.markSynced('run-2');
+
+      final ids = ((jsonDecode(
+                  File('${tempDir.path}/synced_ids.json').readAsStringSync())
+              as Map<String, dynamic>)['ids'] as List)
+          .cast<String>()
+          .toSet();
+      expect(ids, {'run-live', 'run-2'});
+      expect(ids.contains('ghost-deleted-server-side'), isFalse);
+    });
+
     test('markPendingRemoteDelete persists across reload and is idempotent', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);

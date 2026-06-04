@@ -509,6 +509,15 @@ class LocalRunStore extends ChangeNotifier {
   }
 
   Future<void> _persistSyncedIds() async {
+    // Drop ids for runs that no longer exist locally — a run deleted
+    // server-side (on another device / web) is never given a local
+    // delete() call; it just stops arriving in the delta fetch, so its
+    // id would otherwise linger in the sidecar forever and the on-disk
+    // set would grow without bound. `unsyncedRuns` already intersects
+    // with `_runs`, so the only effect of a stale id is sidecar bloat;
+    // self-heal it on every write.
+    final liveIds = _runs.map((r) => r.id).toSet();
+    _syncedIds.retainWhere(liveIds.contains);
     try {
       await writeJsonAtomic(_syncedIdsFile, {
         kLocalStoreVersionKey: kLocalStoreSchemaVersion,
