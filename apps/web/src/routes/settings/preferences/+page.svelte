@@ -15,6 +15,13 @@
 	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
+	import { fetchLatestWeightKg, recordWeightKg, clearWeightHistory } from '$lib/core/data';
+	import { kgToDisplay, displayToKg, roundWeight } from '$lib/format/weight';
+	import {
+		ACTIVITY_LEVELS,
+		type ActivityLevel,
+		type WeightGoal,
+	} from '$lib/nutrition/nutrition_targets';
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
 	import PrivacyZonePicker from '$lib/components/PrivacyZonePicker.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -200,6 +207,17 @@
 	let dateOfBirth = $state('');
 	let healthDataConsent = $state(false);
 	let healthDataConsentAt = $state<string | null>(null);
+	// Body metrics for the nutrition BMR target — also Art 9 health data, so
+	// they share the demographics consent gate. Height lives on user_profiles;
+	// weight is appended to the body_metrics time-series on save. Both are
+	// shown in cm / the user's weight unit but stored canonically (cm, kg).
+	let heightCm = $state('');
+	let weightInput = $state(''); // in the user's weight unit
+	let loadedWeightKg = $state<number | null>(null);
+	// Activity level + goal are nutrition preferences (not special-category),
+	// so they auto-save to the prefs bag like everything else above.
+	let nutritionActivityLevel = $state<ActivityLevel>('moderate');
+	let nutritionGoal = $state<WeightGoal>('maintain');
 
 	// Privacy zones — geofences clipped from public track renders.
 	let privacyZones = $state<PrivacyZone[]>([]);
@@ -279,6 +297,7 @@
 			if (prof) {
 				gender = (prof.gender as typeof gender) ?? '';
 				dateOfBirth = prof.date_of_birth ?? '';
+				heightCm = prof.height_cm != null ? String(prof.height_cm) : '';
 				healthDataConsentAt = (prof.health_data_consent_at as string | null) ?? null;
 				// Default the checkbox to the persisted state. If the row
 				// already carries a consent timestamp the user has
@@ -286,6 +305,16 @@
 				// can edit without re-consenting.
 				healthDataConsent = healthDataConsentAt != null;
 			}
+
+			nutritionActivityLevel =
+				effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate';
+			nutritionGoal = effective<WeightGoal>(settings, 'nutrition_goal', 'maintain') ?? 'maintain';
+
+			// Latest weight is owner-only (body_metrics, no public read). Shown
+			// in the user's weight unit; stored canonical kg.
+			loadedWeightKg = await fetchLatestWeightKg();
+			weightInput =
+				loadedWeightKg != null ? String(roundWeight(kgToDisplay(loadedWeightKg, weightUnit))) : '';
 		} catch (e) {
 			console.warn('Settings load failed', e);
 		}
@@ -333,12 +362,11 @@
 	// withdrawal nulls gender + DOB + the timestamp atomically per Art 7(3).
 	async function saveDemographics() {
 		if (!auth.user) return;
-		const hasDemographic = !!(gender || dateOfBirth);
+		const heightVal = heightCm.trim() ? Number(heightCm) : null;
+		const weightDisplay = weightInput.trim() ? Number(weightInput) : null;
+		const hasDemographic = !!(gender || dateOfBirth || heightVal != null || weightDisplay != null);
 		if (hasDemographic && !healthDataConsent) {
-			showToast(
-				'To save gender or date of birth, tick the consent checkbox above.',
-				'error',
-			);
+			showToast(m('prefs.demographicsConsentRequired'), 'error');
 			return;
 		}
 		savingDemographics = true;
@@ -356,6 +384,7 @@
 			const profileUpdate: Record<string, unknown> = {
 				gender: healthDataConsent && gender ? gender : null,
 				date_of_birth: healthDataConsent && dateOfBirth ? dateOfBirth : null,
+				height_cm: healthDataConsent && heightVal != null ? heightVal : null,
 			};
 			if (!healthDataConsent) {
 				profileUpdate.health_data_consent_at = null;
@@ -366,14 +395,34 @@
 				.update(profileUpdate)
 				.eq('id', auth.user.id);
 			if (error) throw error;
+
+			if (!healthDataConsent) {
+				// Art 7(3): withdrawing consent clears the special-category
+				// series alongside the profile fields.
+				await clearWeightHistory();
+				loadedWeightKg = null;
+				weightInput = '';
+			} else if (weightDisplay != null && weightDisplay > 0) {
+				// Append a new measurement only when the value changed, so
+				// re-saving the card doesn't pad the time-series.
+				const kg = roundWeight(displayToKg(weightDisplay, weightUnit));
+				if (loadedWeightKg == null || Math.abs(kg - loadedWeightKg) > 0.01) {
+					await recordWeightKg(kg);
+					loadedWeightKg = kg;
+				}
+			}
 			demographicsSaved = true;
-			showToast('Demographics saved.', 'success');
+			showToast(m('prefs.demographicsSavedToast'), 'success');
 			setTimeout(() => (demographicsSaved = false), 2000);
 		} catch (e) {
 			showToast(`Save failed: ${(e as Error).message}`, 'error');
 		} finally {
 			savingDemographics = false;
 		}
+	}
+
+	function saveNutritionPref(changes: Record<string, unknown>) {
+		autoSave(changes);
 	}
 </script>
 
@@ -645,6 +694,29 @@
 					<span class="label-text">{m('prefs.dateOfBirth')}</span>
 					<input type="date" bind:value={dateOfBirth} disabled={!healthDataConsent} />
 				</label>
+				<label>
+					<span class="label-text">{m('prefs.heightCm')}</span>
+					<input
+						type="number"
+						min="0"
+						max="300"
+						inputmode="numeric"
+						bind:value={heightCm}
+						disabled={!healthDataConsent}
+						data-testid="height-cm"
+					/>
+				</label>
+				<label>
+					<span class="label-text">{m('prefs.weight')} ({weightUnit})</span>
+					<input
+						type="number"
+						min="0"
+						inputmode="decimal"
+						bind:value={weightInput}
+						disabled={!healthDataConsent}
+						data-testid="weight"
+					/>
+				</label>
 			</div>
 			{#if healthDataConsentAt}
 				<p class="section-hint">
@@ -663,6 +735,37 @@
 			>
 				{savingDemographics ? m('prefs.saving') : demographicsSaved ? m('prefs.demographicsSavedBtn') : m('prefs.saveDemographics')}
 			</button>
+
+			<!-- Nutrition target inputs — activity level + weight goal feed the
+			     Mifflin-St Jeor target on /nutrition. Effort labels, not body
+			     measurements, so they auto-save and aren't consent-gated. -->
+			<div class="form-grid nutrition-targets-grid">
+				<label>
+					<span class="label-text">{m('prefs.activityLevel')}</span>
+					<select
+						bind:value={nutritionActivityLevel}
+						onchange={() => saveNutritionPref({ nutrition_activity_level: nutritionActivityLevel })}
+						data-testid="activity-level"
+					>
+						{#each ACTIVITY_LEVELS as lvl (lvl.key)}
+							<option value={lvl.key}>{m(`prefs.activity_${lvl.key}`)}</option>
+						{/each}
+					</select>
+				</label>
+				<label>
+					<span class="label-text">{m('prefs.weightGoal')}</span>
+					<select
+						bind:value={nutritionGoal}
+						onchange={() => saveNutritionPref({ nutrition_goal: nutritionGoal })}
+						data-testid="weight-goal"
+					>
+						<option value="lose">{m('prefs.goalLose')}</option>
+						<option value="maintain">{m('prefs.goalMaintain')}</option>
+						<option value="gain">{m('prefs.goalGain')}</option>
+					</select>
+				</label>
+			</div>
+			<p class="section-hint">{m('prefs.nutritionTargetsHint')}</p>
 		</section>
 
 		<!-- Privacy zones — clipped from the start and end of public tracks. -->
