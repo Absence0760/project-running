@@ -2669,6 +2669,7 @@ export const messages = {
 	"trainingLoad.readingLoaded": "Stark belastet – zieh durch und erhole dich, wenn du bereit bist.",
 	"trainingLoad.readingTapered": "Erholt – eine harte Einheit wirft dich nicht um.",
 	"trainingLoad.readingBalanced": "Ausgeglichen – lockerer oder harter Tag, deine Wahl.",
+	"trainingLoad.includesLifts": "Fitnessstudio-Einheiten enthalten – Krafttraining erhöht auch die Ermüdung.",
 	"prefs.kicker": "Einstellungen",
 	"prefs.heading": "Voreinstellungen",
 	"prefs.tagline": "Einheiten, Standardwerte, Datenschutz und die Regler, die bestimmen, wie jeder Lauf aufgezeichnet und angezeigt wird. Änderungen werden automatisch gespeichert und auf allen Geräten synchronisiert, auf denen du angemeldet bist.",

@@ -2665,6 +2665,7 @@ export const messages = {
 	"trainingLoad.readingLoaded": "負荷高め — 頑張って、準備ができたら回復しましょう。",
 	"trainingLoad.readingTapered": "テーパリング済み — ハードなセッションでも崩れません。",
 	"trainingLoad.readingBalanced": "バランス良好 — イージーかハードか、あなた次第です。",
+	"trainingLoad.includesLifts": "ジムのセッションを含む — 筋力トレーニングも疲労に加算されます。",
 	"prefs.kicker": "設定",
 	"prefs.heading": "環境設定",
 	"prefs.tagline": "単位、デフォルト設定、プライバシー、そしてすべてのランの記録と表示方法を左右する各種設定。変更は自動的に保存され、サインインしているすべてのデバイスで同期されます。",

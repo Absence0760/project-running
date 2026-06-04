@@ -57,6 +57,11 @@
 	let zeroY = $derived(yAt(0));
 
 	let last = $derived(points.at(-1));
+	// Honest signal that gym load is folded into these curves — the
+	// dashboard only passes lifts when multi_modal_nav is on AND the
+	// user has logged a session, so any liftStress means the trio
+	// reflects more than running (multi_modal.md Tier-1 lift→load).
+	let hasLiftLoad = $derived(points.some((p) => p.liftStress > 0));
 	let firstDate = $derived(points[0]?.date ?? '');
 	let lastDate = $derived(points.at(-1)?.date ?? '');
 
@@ -83,6 +88,9 @@
 				{t('trainingLoad.hintVolume')}
 			{/if}
 		</p>
+		{#if hasLiftLoad}
+			<p class="hint hint-lifts">{t('trainingLoad.includesLifts')}</p>
+		{/if}
 	</header>
 
 	{#if points.length === 0}

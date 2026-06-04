@@ -23,6 +23,9 @@
 	import { computeRunStreaks } from '$lib/runs/streaks';
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
+	import type { LiftForLoad } from '$lib/training/training_load';
+	import { fetchGymSetHistory } from '$lib/core/data';
+	import { liftsFromSetHistory } from '$lib/gym/lift_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
 	import WorkoutEditor from '$lib/components/WorkoutEditor.svelte';
@@ -88,9 +91,17 @@
 	// they reopen the app.
 	let isReturningRunner = $derived(isReturningFromGap(runs));
 
+	// `multi_modal_nav` (Phase 4, decisions §63) — per-user, default off.
+	// When on, gym sessions feed the SAME fitness/fatigue/form curve as
+	// runs (multi_modal.md Tier-1 lift→load). Off / pure runner: `lifts`
+	// stays [] so the series is byte-for-byte the run-only curve.
+	let multiModalNav = $state(false);
+	let lifts = $state<LiftForLoad[]>([]);
 	// HR prefs feed both the TRIMP-eligible flag and the stress score.
 	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
-	let trainingLoadSeries = $derived(computeTrainingLoadSeries(runs, trimpPrefs, 90));
+	let trainingLoadSeries = $derived(
+		computeTrainingLoadSeries(runs, trimpPrefs, 90, new Date(), lifts),
+	);
 	let trainingLoadHasHr = $derived(hasTrimpSignal(runs, trimpPrefs));
 	// Single source of truth for CTL/ATL/TSB on this page. The fitness
 	// card's numbers, the recovery advice, and the readiness ring used to
@@ -339,10 +350,23 @@
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
 		}
+		// Multi-modal: fold logged gym sessions into the same load curve
+		// as runs. Only fired when the flag is on, so a pure runner never
+		// pays the extra query. Best-effort — an RLS blip just leaves the
+		// curve run-only (the contract: a lift-load failure can't corrupt
+		// run readiness). multi_modal.md Tier-1 lift→load.
+		if (multiModalNav) {
+			try {
+				lifts = liftsFromSetHistory(await fetchGymSetHistory());
+			} catch (_) {
+				/* silent — lifts are additive to the load curve */
+			}
+		}
 		loading = false;
 	});
 
 	function applyDashboardSettings(settings: LoadedSettings) {
+		multiModalNav = effective<boolean>(settings, 'multi_modal_nav', false) ?? false;
 		weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
 		const hidden = effective<string[]>(settings, 'hidden_prs');
 		hiddenPrs = Array.isArray(hidden) ? hidden : [];

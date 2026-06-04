@@ -2669,6 +2669,7 @@ export const messages = {
 	"trainingLoad.readingLoaded": "Carga alta: aguanta y recupérate cuando estés listo.",
 	"trainingLoad.readingTapered": "Descargado: una sesión dura no te hará daño.",
 	"trainingLoad.readingBalanced": "Equilibrado: día suave o día duro, tú decides.",
+	"trainingLoad.includesLifts": "Incluye sesiones de gimnasio: las pesas también suman fatiga.",
 	"prefs.kicker": "Ajustes",
 	"prefs.heading": "Preferencias",
 	"prefs.tagline": "Unidades, valores predeterminados, privacidad y los ajustes que definen cómo se registra y se muestra cada carrera. Los cambios se guardan automáticamente y se sincronizan en todos los dispositivos en los que inicies sesión.",

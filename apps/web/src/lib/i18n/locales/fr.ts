@@ -2669,6 +2669,7 @@ export const messages = {
 	"trainingLoad.readingLoaded": "Forte charge — tiens bon et récupère quand tu es prêt.",
 	"trainingLoad.readingTapered": "En décharge — une séance difficile ne te fera pas de mal.",
 	"trainingLoad.readingBalanced": "Équilibré — jour facile ou jour difficile, à toi de voir.",
+	"trainingLoad.includesLifts": "Séances de musculation incluses — elles ajoutent aussi de la fatigue.",
 	"prefs.kicker": "Paramètres",
 	"prefs.heading": "Préférences",
 	"prefs.tagline": "Unités, valeurs par défaut, confidentialité et tous les réglages qui déterminent la façon dont chaque course est enregistrée et affichée. Les modifications sont enregistrées automatiquement et synchronisées sur tous tes appareils.",

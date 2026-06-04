@@ -2677,6 +2677,7 @@ export const en = {
 	"trainingLoad.readingLoaded": "Loaded up — push through and recover when you're ready.",
 	"trainingLoad.readingTapered": "Tapered — a hard session won't break you.",
 	"trainingLoad.readingBalanced": "Balanced — easy day or hard day, your call.",
+	"trainingLoad.includesLifts": "Gym sessions included — lifts add to fatigue too.",
 	"prefs.kicker": "Settings",
 	"prefs.heading": "Preferences",
 	"prefs.tagline": "Units, defaults, privacy, and the knobs that shape how every run is recorded and shown. Changes save automatically and sync across every device you sign into.",
