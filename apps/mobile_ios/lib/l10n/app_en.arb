@@ -6073,6 +6073,18 @@
   "@prefsPaceFormatMph": {
     "description": "Pace-format option: miles per hour"
   },
+  "prefsWeightUnit": "Weight unit",
+  "@prefsWeightUnit": {
+    "description": "Tile and picker title for the body/lift weight unit"
+  },
+  "prefsWeightUnitKg": "Kilograms (kg)",
+  "@prefsWeightUnitKg": {
+    "description": "Weight-unit option: kilograms"
+  },
+  "prefsWeightUnitLbs": "Pounds (lbs)",
+  "@prefsWeightUnitLbs": {
+    "description": "Weight-unit option: pounds"
+  },
   "prefsNotSet": "Not set",
   "@prefsNotSet": {
     "description": "Placeholder shown when a setting has no value"

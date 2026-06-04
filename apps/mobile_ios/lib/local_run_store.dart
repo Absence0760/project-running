@@ -352,7 +352,15 @@ class LocalRunStore extends ChangeNotifier {
       final parsed = DateTime.tryParse(raw);
       if (parsed != null) return parsed;
     }
-    return run.createdAt ?? run.startedAt;
+    // Fall back to startedAt, NOT createdAt. `createdAt` is the server's
+    // `created_at` insert timestamp — it's null for an offline run and,
+    // for a synced run, reflects when the row first reached the server
+    // rather than when the user last touched it, so it's ambiguous as a
+    // modification clock. `startedAt` is the client's run-start instant:
+    // stable, always present, and the same value on every device. Used
+    // only for a legacy run that predates the metadata.last_modified_at
+    // stamp; every save/update since stamps the key explicitly.
+    return run.startedAt;
   }
 
   /// Delete a run from local storage.
@@ -509,6 +517,15 @@ class LocalRunStore extends ChangeNotifier {
   }
 
   Future<void> _persistSyncedIds() async {
+    // Drop ids for runs that no longer exist locally — a run deleted
+    // server-side (on another device / web) is never given a local
+    // delete() call; it just stops arriving in the delta fetch, so its
+    // id would otherwise linger in the sidecar forever and the on-disk
+    // set would grow without bound. `unsyncedRuns` already intersects
+    // with `_runs`, so the only effect of a stale id is sidecar bloat;
+    // self-heal it on every write.
+    final liveIds = _runs.map((r) => r.id).toSet();
+    _syncedIds.retainWhere(liveIds.contains);
     try {
       await writeJsonAtomic(_syncedIdsFile, {
         kLocalStoreVersionKey: kLocalStoreSchemaVersion,

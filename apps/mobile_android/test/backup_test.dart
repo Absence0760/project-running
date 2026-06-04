@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../lib/backup.dart';
 import '../lib/backup_server_client.dart';
+import '../lib/local_food_store.dart';
+import '../lib/local_gym_store.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 
@@ -1150,6 +1152,159 @@ void main() {
       );
       expect(result, isFalse);
       expect(file.existsSync(), isFalse);
+    });
+  });
+
+  // ---- gym + food backup/restore round-trip (M5) ----
+  //
+  // The local gym/food stores aren't server-synced yet, so the backup
+  // sources them from the stores' `backupRecords` and restore hydrates them
+  // back into fresh stores as pendingCreate. Proves the Phase 4 multi-modal
+  // data survives a device-swap backup -> restore.
+  group('gym + food backup/restore round-trip', () {
+    late LocalGymStore srcGym;
+    late LocalFoodStore srcFood;
+    late LocalGymStore dstGym;
+    late LocalFoodStore dstFood;
+
+    setUp(() async {
+      srcGym = LocalGymStore();
+      srcFood = LocalFoodStore();
+      dstGym = LocalGymStore();
+      dstFood = LocalFoodStore();
+      await srcGym.init(
+          overrideDirectory: Directory('${tempDir.path}/src_gym')..createSync());
+      await srcFood.init(
+          overrideDirectory: Directory('${tempDir.path}/src_food')..createSync());
+      await dstGym.init(
+          overrideDirectory: Directory('${tempDir.path}/dst_gym')..createSync());
+      await dstFood.init(
+          overrideDirectory: Directory('${tempDir.path}/dst_food')..createSync());
+    });
+
+    test('backup includes gym_workouts.json + food_log.json + manifest counts',
+        () async {
+      await srcGym.createLocal(
+        title: 'Leg day',
+        startedAt: DateTime.utc(2026, 6, 1, 7),
+        sets: const [
+          (exerciseName: 'Squat', reps: 5, weightKg: 100.0, rpe: null),
+        ],
+      );
+      await srcFood.createLocal(
+        loggedAt: DateTime.utc(2026, 6, 1, 12),
+        itemName: 'Oatmeal',
+        calories: 300,
+      );
+
+      final out = File('${tempDir.path}/gymfood.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: srcFood.backupRecords,
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final archive =
+          ZipDecoder().decodeBytes(await out.readAsBytes());
+      expect(archive.findFile('gym_workouts.json'), isNotNull);
+      expect(archive.findFile('food_log.json'), isNotNull);
+      final manifest = jsonDecode(
+              utf8.decode(archive.findFile('manifest.json')!.content as List<int>))
+          as Map<String, dynamic>;
+      expect((manifest['counts'] as Map)['gym_workouts'], 1);
+      expect((manifest['counts'] as Map)['food_log'], 1);
+    });
+
+    test('restore hydrates the gym + food stores from the archive', () async {
+      final workout = await srcGym.createLocal(
+        title: 'Push day',
+        startedAt: DateTime.utc(2026, 6, 2, 7),
+        sets: const [
+          (exerciseName: 'Bench', reps: 8, weightKg: 60.0, rpe: null),
+        ],
+      );
+      final entry = await srcFood.createLocal(
+        loggedAt: DateTime.utc(2026, 6, 2, 12),
+        itemName: 'Banana',
+        calories: 90,
+      );
+
+      final out = File('${tempDir.path}/gymfood2.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: srcFood.backupRecords,
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final svc = BackupService(api: _OfflineApi());
+      final res = await svc.restore(
+        zipFile: out,
+        gymStore: dstGym,
+        foodStore: dstFood,
+      );
+
+      expect(res.gymWorkoutsImported, 1);
+      expect(res.foodLogImported, 1);
+
+      final restoredWorkout = dstGym.byId(workout.id);
+      expect(restoredWorkout, isNotNull);
+      expect(restoredWorkout!.workout.title, 'Push day');
+      expect(restoredWorkout.sets, hasLength(1));
+      // Queued for the next sync drain.
+      expect(restoredWorkout.syncState, GymSyncState.pendingCreate);
+
+      final restoredFood =
+          dstFood.rows.where((r) => r['id'] == entry.id).toList();
+      expect(restoredFood, hasLength(1));
+      expect(restoredFood.single['item_name'], 'Banana');
+      // Queued for the next sync drain.
+      expect(dstFood.hasPending, isTrue);
+    });
+
+    test('restore of gym/food is idempotent — re-running keeps the local copy',
+        () async {
+      await srcGym.createLocal(
+        title: 'Once',
+        startedAt: DateTime.utc(2026, 6, 3, 7),
+      );
+      final out = File('${tempDir.path}/gymfood3.zip');
+      await BackupService.writeBackupZipStreaming(
+        outputFile: out,
+        runsOut: const [],
+        routesOut: const [],
+        profile: null,
+        settingsPrefs: const {},
+        userId: 'uid',
+        exportedFrom: 'test',
+        runsWithTracks: const [],
+        gymWorkoutsOut: srcGym.backupRecords,
+        foodLogOut: const [],
+        fetchTrackBytes: (_) async => Uint8List(0),
+      );
+
+      final svc = BackupService(api: _OfflineApi());
+      final first = await svc.restore(zipFile: out, gymStore: dstGym);
+      final second = await svc.restore(zipFile: out, gymStore: dstGym);
+
+      expect(first.gymWorkoutsImported, 1);
+      expect(second.gymWorkoutsImported, 0);
+      expect(dstGym.workouts, hasLength(1));
     });
   });
 }

@@ -6,6 +6,7 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
+import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
 import 'gym_screen.dart' show gymExerciseSuggestions;
 
@@ -161,7 +162,10 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final reps = s['reps'] as num?;
     final weight = s['weight_kg'] as num?;
     if (reps != null) parts.add(_numStr(reps));
-    if (weight != null) parts.add('${_numStr(weight)} ${l10n.gymKg}');
+    // Stored canonical kg -> the user's display unit.
+    if (weight != null) {
+      parts.add(WeightFormat.format(weight.toDouble(), activeWeightUnit));
+    }
     return parts.join(' × ');
   }
 

@@ -209,6 +209,10 @@ cm.Run runFromWatchPayload(Map<String, dynamic> raw) {
   if (avgBpm is num) metadata[cm.MetadataKeys.avgBpm] = avgBpm.toDouble();
   final activity = raw['activity_type'];
   if (activity is String) metadata[cm.MetadataKeys.activityType] = activity;
+  final lastModified = raw['last_modified_at'];
+  if (lastModified is String) {
+    metadata[cm.MetadataKeys.lastModifiedAt] = lastModified;
+  }
   // Lap splits: registered shape per `docs/backend/metadata.md` § laps —
   // `[{ index, start_offset_s, distance_m, duration_s }]`. Forward
   // verbatim so a watch sender that follows the registry survives a

@@ -49,6 +49,11 @@ class SettingsKeys {
   static const weekStartDay = 'week_start_day';
   static const mapStyle = 'map_style';
   static const unitsPaceFormat = 'units_pace_format';
+  /// Display + entry unit for body weight and lift weights (Phase 4
+  /// gym/nutrition) — `'kg'` (default) | `'lbs'`. Storage stays canonical
+  /// kg; this only changes how the number is shown and parsed, the same
+  /// display-only split as [preferredUnit].
+  static const weightUnit = 'weight_unit';
 
   // Device (D)
   static const voiceFeedbackEnabled = 'voice_feedback_enabled';

@@ -181,4 +181,53 @@ void main() {
       expect(ActivityType.hike.gpsDistanceFilter, 3);
     });
   });
+
+  group('WeightFormat (weight_unit, F19)', () {
+    test('unitFromWire maps lbs to lbs, everything else to kg', () {
+      expect(WeightFormat.unitFromWire('lbs'), WeightUnit.lbs);
+      expect(WeightFormat.unitFromWire('kg'), WeightUnit.kg);
+      expect(WeightFormat.unitFromWire(null), WeightUnit.kg);
+      expect(WeightFormat.unitFromWire('bogus'), WeightUnit.kg);
+    });
+
+    test('kg is canonical — toDisplay/toKg are identity in kg', () {
+      expect(WeightFormat.toDisplay(100, WeightUnit.kg), 100);
+      expect(WeightFormat.toKg(100, WeightUnit.kg), 100);
+    });
+
+    test('toDisplay converts kg to lbs with the 2.2046226218 factor', () {
+      expect(WeightFormat.toDisplay(100, WeightUnit.lbs),
+          closeTo(220.46226218, 1e-6));
+    });
+
+    test('kg -> lbs -> kg round-trips within float tolerance', () {
+      for (final kg in [0.0, 2.5, 60.0, 100.0, 142.5, 300.0]) {
+        final lbs = WeightFormat.toDisplay(kg, WeightUnit.lbs);
+        final back = WeightFormat.toKg(lbs, WeightUnit.lbs);
+        expect(back, closeTo(kg, 1e-9));
+      }
+    });
+
+    test('label is kg or lbs', () {
+      expect(WeightFormat.label(WeightUnit.kg), 'kg');
+      expect(WeightFormat.label(WeightUnit.lbs), 'lbs');
+    });
+
+    test('format shows one decimal + the unit suffix, em-dash on null', () {
+      expect(WeightFormat.format(100, WeightUnit.kg), '100.0 kg');
+      expect(WeightFormat.format(100, WeightUnit.lbs), '220.5 lbs');
+      expect(WeightFormat.format(null, WeightUnit.kg), '—');
+    });
+
+    test('parseToKg tolerates a unit suffix + decimal comma, stores kg', () {
+      expect(WeightFormat.parseToKg('100', WeightUnit.kg), 100);
+      expect(WeightFormat.parseToKg('100 kg', WeightUnit.kg), 100);
+      expect(WeightFormat.parseToKg('220.5', WeightUnit.lbs),
+          closeTo(100.0171, 1e-3));
+      expect(WeightFormat.parseToKg('220,5 lbs', WeightUnit.lbs),
+          closeTo(100.0171, 1e-3));
+      expect(WeightFormat.parseToKg('', WeightUnit.kg), isNull);
+      expect(WeightFormat.parseToKg('abc', WeightUnit.kg), isNull);
+    });
+  });
 }

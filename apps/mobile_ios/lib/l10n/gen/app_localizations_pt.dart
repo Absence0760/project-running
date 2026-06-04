@@ -4821,6 +4821,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get prefsPaceFormatMph => 'mph';
 
   @override
+  String get prefsWeightUnit => 'Unidade de peso';
+
+  @override
+  String get prefsWeightUnitKg => 'Quilogramas (kg)';
+
+  @override
+  String get prefsWeightUnitLbs => 'Libras (lbs)';
+
+  @override
   String get prefsNotSet => 'Não definido';
 
   @override
@@ -11561,6 +11570,15 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get prefsPaceFormatMph => 'mph';
+
+  @override
+  String get prefsWeightUnit => 'Unidade de peso';
+
+  @override
+  String get prefsWeightUnitKg => 'Quilogramas (kg)';
+
+  @override
+  String get prefsWeightUnitLbs => 'Libras (lbs)';
 
   @override
   String get prefsNotSet => 'Não definido';

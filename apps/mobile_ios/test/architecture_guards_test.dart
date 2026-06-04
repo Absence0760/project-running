@@ -570,14 +570,19 @@ void main() {
     // atomic rename) from core_models. The in-progress NDJSON append path
     // (_appendInProgressLine, FileMode.writeOnlyAppend) is separately
     // crash-safe and intentionally exempt.
-    const stores = [
+    // No store file may use a bare truncate-then-write writeAsString. The
+    // gear / gym / food stores now share the OfflineSyncStore base for the
+    // actual persist + rewrite, so writeJsonAtomic lives there (decisions
+    // §122); run / route + the base itself still call it directly.
+    const noBareWriteStores = [
       'lib/local_run_store.dart',
       'lib/local_route_store.dart',
       'lib/local_gear_store.dart',
       'lib/local_gym_store.dart',
       'lib/local_food_store.dart',
+      'lib/offline_sync_store.dart',
     ];
-    for (final path in stores) {
+    for (final path in noBareWriteStores) {
       test('$path has no bare writeAsString', () {
         final source = File(path).readAsStringSync();
         expect(
@@ -586,45 +591,51 @@ void main() {
           reason: '$path must persist via writeJsonAtomic / '
               'writeStringAtomic, not a truncate-then-write writeAsString.',
         );
-        expect(
-          source.contains('writeJsonAtomic('),
-          isTrue,
-          reason: '$path should use the crash-atomic helper.',
-        );
       });
     }
 
+    // The per-row stores persist via the crash-atomic helper, directly
+    // (run / route) or through the shared OfflineSyncStore base.
     for (final path in [
-      'lib/local_gym_store.dart',
-      'lib/local_food_store.dart',
-      'lib/local_gear_store.dart',
+      'lib/local_run_store.dart',
+      'lib/local_route_store.dart',
+      'lib/offline_sync_store.dart',
     ]) {
-      test('$path _rewriteAll writes new files before deleting orphans', () {
-        // Reason: the old _rewriteAll deleted every file then rewrote —
-        // a crash in the gap emptied the directory and lost unsynced
-        // pendingCreate rows. The fixed order is write-all-then-prune.
+      test('$path uses the crash-atomic helper writeJsonAtomic', () {
         final source = File(path).readAsStringSync();
-        final body = _extractMethodBody(
-          source,
-          r'Future<void> _rewriteAll\(\)\s*async\s*\{',
-        );
-        final firstWrite = body.indexOf('writeJsonAtomic(');
-        final firstDelete = body.indexOf('.delete()');
-        expect(firstWrite, greaterThanOrEqualTo(0),
-            reason: '_rewriteAll must write via writeJsonAtomic');
-        expect(firstDelete, greaterThanOrEqualTo(0),
-            reason: '_rewriteAll must prune orphaned files');
-        expect(firstWrite, lessThan(firstDelete),
-            reason: '_rewriteAll must write the new state BEFORE deleting '
-                'any file — never empty the directory first.');
-        expect(
-          body.contains('deleteSync()'),
-          isFalse,
-          reason: '_rewriteAll should not use a catch-free synchronous '
-              'delete for the prune phase.',
-        );
+        expect(source.contains('writeJsonAtomic('), isTrue,
+            reason: '$path should use the crash-atomic helper.');
       });
     }
+
+    test('OfflineSyncStore.rewriteAll writes new files before deleting orphans',
+        () {
+      // Reason: the old per-store _rewriteAll deleted every file then
+      // rewrote — a crash in the gap emptied the directory and lost
+      // unsynced pendingCreate rows. The fixed order is write-all-then-
+      // prune. The gear / gym / food stores share this single base impl
+      // now (decisions §122).
+      final source = File('lib/offline_sync_store.dart').readAsStringSync();
+      final body = _extractMethodBody(
+        source,
+        r'Future<void> rewriteAll\(\)\s*async\s*\{',
+      );
+      final firstWrite = body.indexOf('writeJsonAtomic(');
+      final firstDelete = body.indexOf('.delete()');
+      expect(firstWrite, greaterThanOrEqualTo(0),
+          reason: 'rewriteAll must write via writeJsonAtomic');
+      expect(firstDelete, greaterThanOrEqualTo(0),
+          reason: 'rewriteAll must prune orphaned files');
+      expect(firstWrite, lessThan(firstDelete),
+          reason: 'rewriteAll must write the new state BEFORE deleting '
+              'any file — never empty the directory first.');
+      expect(
+        body.contains('deleteSync()'),
+        isFalse,
+        reason: 'rewriteAll should not use a catch-free synchronous '
+            'delete for the prune phase.',
+      );
+    });
   });
 
   group('share-button consent before flipping is_public', () {
