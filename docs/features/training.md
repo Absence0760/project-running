@@ -26,7 +26,7 @@ A Claude-powered second-opinion chat embedded below the week grid on the plan de
 
 **Architecture**:
 - Server endpoint `POST /api/coach` — runs per-request (`prerender = false`), reads the caller's Supabase JWT to scope context pulls via RLS.
-- Context = user profile + active (or specified) plan + `plan_weeks` + `plan_workouts` + last 20 runs, serialised as JSON.
+- Context = user profile + active (or specified) plan + `plan_weeks` + `plan_workouts` + last 20 runs, serialised as JSON. Phase 4 adds the Tier-1 cross-modality slice: a bounded `recent_lifts` array (capped per-session gym summaries) + a `nutrition_7d` daily-average rollup (gated on the Art 9 health-consent, like DOB/HR). Both self-hide when nothing is logged — see [multi_modal.md § Cross-modality](multi_modal.md#cross-modality-touches-tier-1--ship-with-phase-4-this-is-the-headline).
 - **Prompt caching at two breakpoints**: (1) coach system prompt, (2) first user message carrying the context dump. Subsequent chat turns hit the cache for ~95% of input tokens. `cache_control: { type: 'ephemeral' }` on both blocks. The UI surfaces `cache_read` / `cache_creation` / `input` / `output` token counts below the composer for verification.
 - Model: `claude-sonnet-4-5`. Output tokens: 768 (free tier) / 2048 (Pro tier). Context window: 30 runs (free) / 200 runs (Pro).
 

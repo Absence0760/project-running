@@ -592,6 +592,14 @@ Mirror of `apps/mobile_android/test/fitness_test.dart`. Pure tests for `lib/fitn
 
 Smoke tests for the coach config / tier shape. `emptyUsage` returns a fresh zeroed object every call (no shared reference; mutation doesn't leak across calls). `TIER_LIMITS.free` keeps a finite daily cap so anonymous abuse can't drain quota. `TIER_LIMITS.pro` carries a finite daily cap that's strictly higher than free's, with larger token + runs windows. Anchors the paywall contract — flipping any of these silently would change rate-limit behaviour without code review.
 
+### `apps/web/src/lib/coach/context.test.ts` — 9 tests
+
+Source-grep guards + pure-helper behaviour for the coach context builder. Pins the audit-compliance invariants in source (subscription_tier never projected; DOB/HR gated on `health_data_consent_at`; runner_context never emits known secret names; the `food_log` nutrition query lives inside the `if (healthConsentGranted)` block — Art 9). Behavioural tests cover the two Tier-1 multi-modal summary helpers: `summarizeRecentLifts` (rolls gym sets into per-session summaries, ignores bodyweight sets in volume, caps at `COACH_LIFTS_CAP`) and `summarizeNutrition` (7-day daily averages over days logged, drops out-of-window rows, null on empty, null per-macro when no row carries it).
+
+### `apps/web/src/lib/gym/lift_load.ts` — 3 tests (`lift_load.test.ts`)
+
+Pure bridge from the gym data layer (`GymSetWithDate` rows) to the training-load model input (`LiftForLoad`). `liftsFromSetHistory` groups flat set rows by workout, drops rows with no workout date (can't land on a calendar day), and an integration test confirms grouped lifts raise the fitness/fatigue/form curve while the run-only series stays recoverable (separability).
+
 ### `apps/web/src/lib/coach/limits.test.ts` — 22 tests
 
 Pure tests for the validation / clamping helpers extracted from `coach/handler.ts` so they can run under `tsx --test` without booting `createClient`. `parseAuthHeader` covers `Bearer ` prefix stripping (case-insensitive on the prefix), null / undefined / empty input, bare `Bearer ` returning null, and tokens-without-prefix being passed through verbatim. `clampRunsLimit` covers undefined / null returning the default, non-finite (NaN, Infinity, non-numeric strings) returning the default rather than the tier cap, the tier max ceilings (free=30, pro=75), the floor at 1 (zero-runs context is never useful), fractional input being truncated, string-typed integer coercion, and pro tier honouring larger requests up to its cap. `jsonError` covers the canonical pre-stream response shape, extra fields landing alongside `error`, and the spread-order behaviour where `extra.error` wins over the literal. `rateLimitHeaders` covers the free-tier finite limit / remaining, remaining clamping to 0 when usage exceeds the cap, the pro-tier finite cap (10/day) reporting correctly, and pro remaining clamping to 0 when usage exceeds the pro cap. `personalityAddendum` covers the `drill_sergeant` and `analytical` tone overrides + the empty-string default for null / undefined / unknown styles.
@@ -731,6 +739,9 @@ tests-e2e/
     save-as-route.spec.ts      — /runs/[id] Save-as-route CRUD (prompt → /routes/[new])
     track-missing.spec.ts      — row + Storage divergence resilience: plant a row with `track_url` pointing at a non-existent Storage object (mirrors a mid-sync crash where the row insert succeeded but the gzipped track upload failed); /runs/[id] must render the run header + distance/duration without crashing on the failed track download. Pins the data-layer's try/catch around fetchTrack
     social.spec.ts             — /runs/[id] owner sees kudos count + comment list (RunSocial mounts for own runs); owner posts comment on own run
+  gym/
+    gym.spec.ts                — /gym lightweight loop: log a free-form workout (title + exercise + sets) → PR badge on the list → detail per-exercise PR chip + set rows → delete (DB assertions throughout)
+    multimodal_home_history.spec.ts — Phase 4 multi-modal Home + History (flag `multi_modal_nav` on, seed a lift): /dashboard shows the Recent-lifts card; /runs shows the All/Runs/Lifts/Meals chips + a lift row in the unified timeline that links to /gym/[id]. Snapshots + restores user_settings.prefs so no other spec inherits the flipped flag
   routes/
     list.spec.ts               — /routes (search, filter, tab switch)
     detail.spec.ts             — /routes/[id] (star, public toggle, tag add+remove, review submit + DB upsert)
