@@ -211,8 +211,10 @@
 	// they share the demographics consent gate. Height lives on user_profiles;
 	// weight is appended to the body_metrics time-series on save. Both are
 	// shown in cm / the user's weight unit but stored canonically (cm, kg).
-	let heightCm = $state('');
-	let weightInput = $state(''); // in the user's weight unit
+	// Bound to <input type="number">, so these hold a number (or null when
+	// empty) — never call string methods on them.
+	let heightCm = $state<number | null>(null);
+	let weightInput = $state<number | null>(null); // in the user's weight unit
 	let loadedWeightKg = $state<number | null>(null);
 	// Activity level + goal are nutrition preferences (not special-category),
 	// so they auto-save to the prefs bag like everything else above.
@@ -297,7 +299,7 @@
 			if (prof) {
 				gender = (prof.gender as typeof gender) ?? '';
 				dateOfBirth = prof.date_of_birth ?? '';
-				heightCm = prof.height_cm != null ? String(prof.height_cm) : '';
+				heightCm = prof.height_cm ?? null;
 				healthDataConsentAt = (prof.health_data_consent_at as string | null) ?? null;
 				// Default the checkbox to the persisted state. If the row
 				// already carries a consent timestamp the user has
@@ -314,7 +316,7 @@
 			// in the user's weight unit; stored canonical kg.
 			loadedWeightKg = await fetchLatestWeightKg();
 			weightInput =
-				loadedWeightKg != null ? String(roundWeight(kgToDisplay(loadedWeightKg, weightUnit))) : '';
+				loadedWeightKg != null ? roundWeight(kgToDisplay(loadedWeightKg, weightUnit)) : null;
 		} catch (e) {
 			console.warn('Settings load failed', e);
 		}
@@ -362,8 +364,8 @@
 	// withdrawal nulls gender + DOB + the timestamp atomically per Art 7(3).
 	async function saveDemographics() {
 		if (!auth.user) return;
-		const heightVal = heightCm.trim() ? Number(heightCm) : null;
-		const weightDisplay = weightInput.trim() ? Number(weightInput) : null;
+		const heightVal = heightCm != null && heightCm > 0 ? heightCm : null;
+		const weightDisplay = weightInput != null && weightInput > 0 ? weightInput : null;
 		const hasDemographic = !!(gender || dateOfBirth || heightVal != null || weightDisplay != null);
 		if (hasDemographic && !healthDataConsent) {
 			showToast(m('prefs.demographicsConsentRequired'), 'error');
@@ -401,7 +403,7 @@
 				// series alongside the profile fields.
 				await clearWeightHistory();
 				loadedWeightKg = null;
-				weightInput = '';
+				weightInput = null;
 			} else if (weightDisplay != null && weightDisplay > 0) {
 				// Append a new measurement only when the value changed, so
 				// re-saving the card doesn't pad the time-series.

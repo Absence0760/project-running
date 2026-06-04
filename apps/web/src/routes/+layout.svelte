@@ -137,7 +137,10 @@
 			{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
 			{ href: '/history', labelKey: 'nav.history', icon: 'timeline', accent: '#D97A54' },
 			...(multiModalNav
-				? [{ href: '/gym', labelKey: 'nav.gym' as MessageKey, icon: 'fitness_center', accent: '#8FBF9F' }]
+				? [
+						{ href: '/gym', labelKey: 'nav.gym' as MessageKey, icon: 'fitness_center', accent: '#8FBF9F' },
+						{ href: '/nutrition', labelKey: 'nav.nutrition' as MessageKey, icon: 'nutrition', accent: '#E8C07D' },
+					]
 				: []),
 			{ href: '/routes', labelKey: 'nav.routes', icon: 'route', accent: '#B9A7E8' },
 			{ href: '/coach', labelKey: 'nav.coach', icon: 'sports', accent: '#7FB3C2' },
