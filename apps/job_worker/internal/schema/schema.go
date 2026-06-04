@@ -75,8 +75,11 @@ const (
 // MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag
 // has no schema codegen, so docs/backend/metadata.md + this block are
 // the only thing keeping cross-platform writers and readers in sync.
+//
+// activity_type and is_dnf used to live here; F3 (migration
+// 20261207_001) promoted both to real `runs` columns, so they are now
+// plain column-name strings in select lists and row maps, not bag keys.
 const (
-	MetaActivityType       = "activity_type"
 	MetaTitle              = "title"
 	MetaAvgBPM             = "avg_bpm"
 	MetaSteps              = "steps"

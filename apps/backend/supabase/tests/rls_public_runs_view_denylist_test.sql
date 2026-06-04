@@ -24,7 +24,7 @@
 
 begin;
 
-select plan(2);
+select plan(3);
 
 insert into auth.users (id, aud, role, email, encrypted_password, created_at, updated_at)
 values
@@ -36,13 +36,17 @@ set local role service_role;
 -- One public run carrying every sensitive metadata key the strip
 -- list claims to remove. Service-role insert so the row is created
 -- regardless of any column-write trigger that might inspect metadata.
+-- activity_type + is_dnf are real columns now (F3 / 20261207_001); set
+-- them on the row (non-default values) to prove the view exposes the
+-- columns, not a stale bag copy.
 insert into runs (
   id, user_id, started_at, duration_s, distance_m, source, is_public,
-  metadata
+  activity_type, is_dnf, metadata
 ) values (
   'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01',
   '00000000-0000-0000-0000-00000000bc01',
   '2026-04-15 09:00+00', 1800, 5000, 'parkrun', true,
+  'walk', true,
   jsonb_build_object(
     -- Audit / import linkage
     'strava_id', '12345', 'garmin_id', '67890',
@@ -64,8 +68,9 @@ insert into runs (
     'perceived_effort', 7,
     -- parkrun attendance counter (20260724_001)
     'run_number', 100,
-    -- Public-safe keys included to confirm they DO survive the view
-    'activity_type', 'run', 'event', 'parkrun', 'position', 12, 'age_grade', 65.4
+    -- Public-safe bag keys included to confirm they DO survive the view
+    -- (activity_type + is_dnf are columns now, asserted separately below)
+    'event', 'parkrun', 'position', 12, 'age_grade', 65.4
   )
 );
 
@@ -107,14 +112,22 @@ begin
 end $$;
 select pass('public_runs view strips every key on the audit denylist');
 
--- 2. Public-safe keys still survive. activity_type is the canonical
---    one — every public-run reader (web feed, mobile feed, share
---    page) needs it.
+-- 2. activity_type is exposed as a real column (F3) — every public-run
+--    reader (web feed, mobile feed, share page) needs it. The value
+--    flows from the column, not the bag.
 select results_eq(
-  $$ select metadata->>'activity_type' from public_runs
+  $$ select activity_type from public_runs
      where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01' $$,
-  $$ values ('run'::text) $$,
-  'public_runs view preserves the public-safe activity_type key'
+  $$ values ('walk'::text) $$,
+  'public_runs view exposes the activity_type column'
+);
+
+-- 3. is_dnf is exposed as a real column too (public-safe, was a bag key).
+select results_eq(
+  $$ select is_dnf from public_runs
+     where id = 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbb01' $$,
+  $$ values (true) $$,
+  'public_runs view exposes the is_dnf column'
 );
 
 select * from finish();

@@ -750,7 +750,6 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 	stravaIDStr := strconv.FormatInt(act.ID, 10)
 	metadata := map[string]any{
 		schema.MetaStravaID:           stravaIDStr,
-		schema.MetaActivityType:       activityType,
 		schema.MetaImportedFrom:       "strava",
 		schema.MetaImportedAt:         time.Now().UTC().Format(time.RFC3339),
 		schema.MetaStravaActivityType: act.Type,
@@ -771,12 +770,15 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 	}
 
 	row := map[string]any{
-		"user_id":    userID,
-		"started_at": act.StartDate,
-		"distance_m": int(math.Round(act.Distance)),
-		"duration_s": duration,
-		"source":     "strava",
-		"is_public":  c.privacyDefaultIsPublic(ctx, userID),
+		"user_id": userID,
+		// activity_type is a real column now (F3 / 20261207_001), no
+		// longer a metadata key. is_dnf defaults to false at the DB.
+		"activity_type": activityType,
+		"started_at":    act.StartDate,
+		"distance_m":    int(math.Round(act.Distance)),
+		"duration_s":    duration,
+		"source":        "strava",
+		"is_public":     c.privacyDefaultIsPublic(ctx, userID),
 		// `external_id = 'strava:<id>'` is the cross-source dedupe key
 		// — same shape mobile ZIP writes. /audit/strava M3.
 		"external_id": "strava:" + stravaIDStr,
@@ -965,7 +967,7 @@ func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, lim
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
 	q.Set("select",
-		"id,user_id,started_at,duration_s,distance_m,source,external_id,metadata,track_url,hr_series_url,is_public,event_id,route_id,created_at,updated_at")
+		"id,user_id,started_at,duration_s,distance_m,source,activity_type,is_dnf,external_id,metadata,track_url,hr_series_url,is_public,event_id,route_id,created_at,updated_at")
 	q.Set("order", "started_at.desc")
 	q.Set("limit", strconv.Itoa(limit))
 	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + q.Encode()
@@ -988,21 +990,23 @@ func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, lim
 // dataexport package here to keep `internal` a leaf (the adapter
 // in main.go bridges across).
 type dataexportRow struct {
-	ID          string                 `json:"id"`
-	UserID      string                 `json:"user_id"`
-	StartedAt   string                 `json:"started_at"`
-	DurationS   int                    `json:"duration_s"`
-	DistanceM   float64                `json:"distance_m"`
-	Source      string                 `json:"source"`
-	ExternalID  *string                `json:"external_id"`
-	Metadata    map[string]interface{} `json:"metadata"`
-	TrackURL    *string                `json:"track_url"`
-	HrSeriesURL *string                `json:"hr_series_url"`
-	IsPublic    *bool                  `json:"is_public"`
-	EventID     *string                `json:"event_id"`
-	RouteID     *string                `json:"route_id"`
-	CreatedAt   string                 `json:"created_at"`
-	UpdatedAt   string                 `json:"updated_at"`
+	ID           string                 `json:"id"`
+	UserID       string                 `json:"user_id"`
+	StartedAt    string                 `json:"started_at"`
+	DurationS    int                    `json:"duration_s"`
+	DistanceM    float64                `json:"distance_m"`
+	Source       string                 `json:"source"`
+	ActivityType string                 `json:"activity_type"`
+	IsDNF        bool                   `json:"is_dnf"`
+	ExternalID   *string                `json:"external_id"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	TrackURL     *string                `json:"track_url"`
+	HrSeriesURL  *string                `json:"hr_series_url"`
+	IsPublic     *bool                  `json:"is_public"`
+	EventID      *string                `json:"event_id"`
+	RouteID      *string                `json:"route_id"`
+	CreatedAt    string                 `json:"created_at"`
+	UpdatedAt    string                 `json:"updated_at"`
 }
 
 // UploadExportArtifact stores the assembled CSV / GPX-zip body to
@@ -1712,7 +1716,7 @@ func (c *SupabaseClient) FetchUserSubscriptionTier(ctx context.Context, userID s
 func (c *SupabaseClient) FetchPremiumRuns(ctx context.Context, userID string, since time.Time, limit int) ([]premiumRunRow, error) {
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
-	q.Set("select", "started_at,distance_m,duration_s,metadata")
+	q.Set("select", "started_at,distance_m,duration_s,activity_type,metadata")
 	q.Set("order", "started_at.desc")
 	q.Set("limit", strconv.Itoa(limit))
 	if !since.IsZero() {
@@ -1738,8 +1742,9 @@ func (c *SupabaseClient) FetchPremiumRuns(ctx context.Context, userID string, si
 // avoids importing `premium` and creating a cycle; the adapter in
 // main.go translates across.
 type premiumRunRow struct {
-	StartedAt string                 `json:"started_at"`
-	DistanceM float64                `json:"distance_m"`
-	DurationS int                    `json:"duration_s"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	StartedAt    string                 `json:"started_at"`
+	DistanceM    float64                `json:"distance_m"`
+	DurationS    int                    `json:"duration_s"`
+	ActivityType string                 `json:"activity_type"`
+	Metadata     map[string]interface{} `json:"metadata"`
 }

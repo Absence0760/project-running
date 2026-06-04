@@ -39,6 +39,7 @@ import (
 	"net/http"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -192,21 +193,23 @@ type ExportRoute struct {
 // ExportRun is the row projection the export builder consumes.
 // Mirrors the EF's RunRow shape at export-data/index.ts.
 type ExportRun struct {
-	ID          string                 `json:"id"`
-	UserID      string                 `json:"user_id"`
-	StartedAt   string                 `json:"started_at"`
-	DurationS   int                    `json:"duration_s"`
-	DistanceM   float64                `json:"distance_m"`
-	Source      string                 `json:"source"`
-	ExternalID  *string                `json:"external_id"`
-	Metadata    map[string]interface{} `json:"metadata"`
-	TrackURL    *string                `json:"track_url"`
-	HrSeriesURL *string                `json:"hr_series_url"`
-	IsPublic    *bool                  `json:"is_public"`
-	EventID     *string                `json:"event_id"`
-	RouteID     *string                `json:"route_id"`
-	CreatedAt   string                 `json:"created_at"`
-	UpdatedAt   string                 `json:"updated_at"`
+	ID           string                 `json:"id"`
+	UserID       string                 `json:"user_id"`
+	StartedAt    string                 `json:"started_at"`
+	DurationS    int                    `json:"duration_s"`
+	DistanceM    float64                `json:"distance_m"`
+	Source       string                 `json:"source"`
+	ActivityType string                 `json:"activity_type"`
+	IsDNF        bool                   `json:"is_dnf"`
+	ExternalID   *string                `json:"external_id"`
+	Metadata     map[string]interface{} `json:"metadata"`
+	TrackURL     *string                `json:"track_url"`
+	HrSeriesURL  *string                `json:"hr_series_url"`
+	IsPublic     *bool                  `json:"is_public"`
+	EventID      *string                `json:"event_id"`
+	RouteID      *string                `json:"route_id"`
+	CreatedAt    string                 `json:"created_at"`
+	UpdatedAt    string                 `json:"updated_at"`
 }
 
 // TrackPoint is the wire shape inside each gzipped Storage track.
@@ -465,7 +468,8 @@ var csvColumns = []string{
 	"distance_m",
 	"duration_s",
 	"source",
-	schema.MetaActivityType,
+	"activity_type",
+	"is_dnf",
 	schema.MetaTitle,
 	schema.MetaAvgBPM,
 	schema.MetaSteps,
@@ -497,7 +501,8 @@ func BuildCSV(runs []ExportRun) string {
 			fmt.Sprintf("%.0f", r.DistanceM),
 			fmt.Sprintf("%d", r.DurationS),
 			r.Source,
-			stringy(md[schema.MetaActivityType]),
+			r.ActivityType,
+			strconv.FormatBool(r.IsDNF),
 			stringy(md[schema.MetaTitle]),
 			stringy(md[schema.MetaAvgBPM]),
 			stringy(md[schema.MetaSteps]),
@@ -577,16 +582,18 @@ func BuildGpxZip(ctx context.Context, runs []ExportRun, trackFetcher TrackFetche
 	manifest := make([]map[string]interface{}, 0, len(runs))
 	for _, r := range runs {
 		manifest = append(manifest, map[string]interface{}{
-			"id":          r.ID,
-			"started_at":  r.StartedAt,
-			"distance_m":  r.DistanceM,
-			"duration_s":  r.DurationS,
-			"source":      r.Source,
-			"external_id": r.ExternalID,
-			"metadata":    r.Metadata,
-			"is_public":   r.IsPublic,
-			"event_id":    r.EventID,
-			"route_id":    r.RouteID,
+			"id":            r.ID,
+			"started_at":    r.StartedAt,
+			"distance_m":    r.DistanceM,
+			"duration_s":    r.DurationS,
+			"source":        r.Source,
+			"activity_type": r.ActivityType,
+			"is_dnf":        r.IsDNF,
+			"external_id":   r.ExternalID,
+			"metadata":      r.Metadata,
+			"is_public":     r.IsPublic,
+			"event_id":      r.EventID,
+			"route_id":      r.RouteID,
 		})
 	}
 	manifestJSON, err := json.MarshalIndent(manifest, "", "  ")
@@ -696,6 +703,8 @@ func BuildBackupZip(ctx context.Context, in BuildBackupZipInput, rawTrackFetcher
 			"duration_s":    r.DurationS,
 			"distance_m":    r.DistanceM,
 			"source":        r.Source,
+			"activity_type": r.ActivityType,
+			"is_dnf":        r.IsDNF,
 			"external_id":   r.ExternalID,
 			"metadata":      r.Metadata,
 			"track_url":     r.TrackURL,

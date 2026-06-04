@@ -4,8 +4,6 @@ import (
 	"math"
 	"strings"
 	"time"
-
-	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 )
 
 // realNow returns the current wall-clock time. Indirected through
@@ -88,16 +86,11 @@ func BestVDotFromRuns(runs []PremiumRun) VO2MaxResponse {
 }
 
 func isRunlike(r PremiumRun) bool {
-	if r.Metadata == nil {
-		return true
-	}
-	switch t := r.Metadata[schema.MetaActivityType].(type) {
-	case string:
-		lt := strings.ToLower(t)
-		return lt == "" || lt == "run" || lt == "walk" || lt == "hike"
-	default:
-		return true
-	}
+	// activity_type is a real column now (F3 / 20261207_001). An empty
+	// value (legacy / un-set) is admitted on the assumption that no-tag
+	// runs are runs.
+	lt := strings.ToLower(r.ActivityType)
+	return lt == "" || lt == "run" || lt == "walk" || lt == "hike"
 }
 
 // ---------------- Riegel ----------------

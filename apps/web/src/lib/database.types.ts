@@ -1845,6 +1845,7 @@ export type Database = {
       }
       runs: {
         Row: {
+          activity_type: string
           created_at: string | null
           distance_m: number
           duration_s: number
@@ -1852,6 +1853,7 @@ export type Database = {
           external_id: string | null
           hr_series_url: string | null
           id: string
+          is_dnf: boolean
           is_public: boolean | null
           metadata: Json | null
           route_id: string | null
@@ -1862,6 +1864,7 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          activity_type?: string
           created_at?: string | null
           distance_m: number
           duration_s: number
@@ -1869,6 +1872,7 @@ export type Database = {
           external_id?: string | null
           hr_series_url?: string | null
           id?: string
+          is_dnf?: boolean
           is_public?: boolean | null
           metadata?: Json | null
           route_id?: string | null
@@ -1879,6 +1883,7 @@ export type Database = {
           user_id: string
         }
         Update: {
+          activity_type?: string
           created_at?: string | null
           distance_m?: number
           duration_s?: number
@@ -1886,6 +1891,7 @@ export type Database = {
           external_id?: string | null
           hr_series_url?: string | null
           id?: string
+          is_dnf?: boolean
           is_public?: boolean | null
           metadata?: Json | null
           route_id?: string | null
@@ -2496,12 +2502,14 @@ export type Database = {
       }
       public_runs: {
         Row: {
+          activity_type: string | null
           created_at: string | null
           distance_m: number | null
           duration_s: number | null
           event_id: string | null
           has_track: boolean | null
           id: string | null
+          is_dnf: boolean | null
           is_public: boolean | null
           metadata: Json | null
           route_id: string | null
@@ -2510,12 +2518,14 @@ export type Database = {
           user_id: string | null
         }
         Insert: {
+          activity_type?: string | null
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
           event_id?: never
           has_track?: never
           id?: string | null
+          is_dnf?: boolean | null
           is_public?: boolean | null
           metadata?: never
           route_id?: never
@@ -2524,12 +2534,14 @@ export type Database = {
           user_id?: string | null
         }
         Update: {
+          activity_type?: string | null
           created_at?: string | null
           distance_m?: number | null
           duration_s?: number | null
           event_id?: never
           has_track?: never
           id?: string | null
+          is_dnf?: boolean | null
           is_public?: boolean | null
           metadata?: never
           route_id?: never

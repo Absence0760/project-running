@@ -3,10 +3,10 @@
 //
 //   - POST /v1/premium/vo2max         — Daniels VDOT from recent runs
 //   - POST /v1/premium/race-predictor — Riegel from a representative
-//                                       effort to a target distance
+//     effort to a target distance
 //   - POST /v1/premium/recovery       — CTL/ATL/TSB EWMA + advice
 //   - POST /v1/premium/training-plan  — Riegel-derived pace targets
-//                                       + phased weekly mileage
+//   - phased weekly mileage
 //
 // Why these belong on the server (not the client):
 //
@@ -77,10 +77,13 @@ type Backend interface {
 // `metadata.avg_bpm` is the HR signal for TRIMP; absent → fall back
 // to a distance-based stress score.
 type PremiumRun struct {
-	StartedAt string                 `json:"started_at"`
-	DistanceM float64                `json:"distance_m"`
-	DurationS int                    `json:"duration_s"`
-	Metadata  map[string]interface{} `json:"metadata"`
+	StartedAt string  `json:"started_at"`
+	DistanceM float64 `json:"distance_m"`
+	DurationS int     `json:"duration_s"`
+	// activity_type is a real column now (F3 / 20261207_001); the VDOT
+	// qualifier reads it directly instead of metadata->>'activity_type'.
+	ActivityType string                 `json:"activity_type"`
+	Metadata     map[string]interface{} `json:"metadata"`
 }
 
 // RegisterRoutes mounts the four routes on [mux].
@@ -199,11 +202,11 @@ func readJSON[T any](r *http.Request, w http.ResponseWriter, out *T, maxBytes in
 
 // VO2MaxResponse is the JSON shape the vo2max endpoint returns.
 type VO2MaxResponse struct {
-	VDOT             float64 `json:"vdot"`
-	BestVO2Max       float64 `json:"vo2_max"`
-	QualifyingRuns   int     `json:"qualifying_runs_count"`
-	BestDistanceM    float64 `json:"best_distance_m"`
-	BestDurationS    int     `json:"best_duration_s"`
+	VDOT           float64 `json:"vdot"`
+	BestVO2Max     float64 `json:"vo2_max"`
+	QualifyingRuns int     `json:"qualifying_runs_count"`
+	BestDistanceM  float64 `json:"best_distance_m"`
+	BestDurationS  int     `json:"best_duration_s"`
 }
 
 func (s *Server) handleVO2Max(w http.ResponseWriter, r *http.Request, userID string) {
@@ -299,11 +302,11 @@ func (s *Server) handleRecovery(w http.ResponseWriter, r *http.Request, userID s
 // ---------------- /v1/premium/training-plan ----------------
 
 type trainingPlanRequest struct {
-	GoalEvent      string `json:"goal_event"`       // 5k / 10k / half / full / custom
-	GoalDistanceM  float64 `json:"goal_distance_m"` // honoured when goal_event=custom
-	Recent5kSec    int     `json:"recent_5k_sec"`
-	Weeks          int     `json:"weeks"`            // 0 → default per goal
-	DaysPerWeek    int     `json:"days_per_week"`    // 0 → 4
+	GoalEvent     string  `json:"goal_event"`      // 5k / 10k / half / full / custom
+	GoalDistanceM float64 `json:"goal_distance_m"` // honoured when goal_event=custom
+	Recent5kSec   int     `json:"recent_5k_sec"`
+	Weeks         int     `json:"weeks"`         // 0 → default per goal
+	DaysPerWeek   int     `json:"days_per_week"` // 0 → 4
 }
 
 func (s *Server) handleTrainingPlan(w http.ResponseWriter, r *http.Request, userID string) {

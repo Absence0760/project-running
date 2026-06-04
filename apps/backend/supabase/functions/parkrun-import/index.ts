@@ -121,11 +121,12 @@ Deno.serve(withSentry('parkrun-import', async (req: Request) => {
       duration_s: parseParkrunTime(time),
       distance_m: 5000,
       source: 'parkrun',
+      // parkrun is always 5K running — no walking-only events.
+      // activity_type is a real column now (F3 / 20261207_001).
+      activity_type: 'run',
       is_public: importIsPublic,
       external_id: `parkrun:${event}:${date}`,
       metadata: {
-        // parkrun is always 5K running — no walking-only events.
-        activity_type: 'run',
         event,
         position: parseInt($(cells[4]).text().trim()),
         age_grade: ageGrade,

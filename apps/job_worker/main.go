@@ -61,8 +61,9 @@ func (b *dataexportBackend) FetchExportRuns(ctx context.Context, userID string, 
 		out[i] = dataexport.ExportRun{
 			ID: r.ID, UserID: r.UserID, StartedAt: r.StartedAt,
 			DurationS: r.DurationS, DistanceM: r.DistanceM,
-			Source: r.Source, ExternalID: r.ExternalID,
-			Metadata: r.Metadata, TrackURL: r.TrackURL, HrSeriesURL: r.HrSeriesURL,
+			Source: r.Source, ActivityType: r.ActivityType, IsDNF: r.IsDNF,
+			ExternalID: r.ExternalID,
+			Metadata:   r.Metadata, TrackURL: r.TrackURL, HrSeriesURL: r.HrSeriesURL,
 			IsPublic: r.IsPublic, EventID: r.EventID, RouteID: r.RouteID,
 			CreatedAt: r.CreatedAt, UpdatedAt: r.UpdatedAt,
 		}
@@ -158,10 +159,11 @@ func (b *premiumBackend) FetchPremiumRuns(ctx context.Context, userID string, si
 	out := make([]premium.PremiumRun, len(rows))
 	for i, r := range rows {
 		out[i] = premium.PremiumRun{
-			StartedAt: r.StartedAt,
-			DistanceM: r.DistanceM,
-			DurationS: r.DurationS,
-			Metadata:  r.Metadata,
+			StartedAt:    r.StartedAt,
+			DistanceM:    r.DistanceM,
+			DurationS:    r.DurationS,
+			ActivityType: r.ActivityType,
+			Metadata:     r.Metadata,
 		}
 	}
 	return out, nil

@@ -49,6 +49,8 @@ type RunRow = {
 	duration_s: number;
 	distance_m: number;
 	source: string;
+	activity_type: string;
+	is_dnf: boolean;
 	external_id: string | null;
 	metadata: Record<string, unknown> | null;
 	track_url: string | null;
@@ -120,7 +122,7 @@ Deno.serve(withSentry('export-data', async (req: Request) => {
 	const { data: runs, error: runsErr } = await authedSupabase
 		.from('runs')
 		.select(
-			'id, user_id, started_at, duration_s, distance_m, source, external_id, metadata, track_url, is_public, event_id, route_id, created_at, updated_at',
+			'id, user_id, started_at, duration_s, distance_m, source, activity_type, is_dnf, external_id, metadata, track_url, is_public, event_id, route_id, created_at, updated_at',
 		)
 		.eq('user_id', user.id)
 		.order('started_at', { ascending: false })
@@ -194,6 +196,7 @@ function buildCsv(runs: RunRow[]): string {
 		'duration_s',
 		'source',
 		'activity_type',
+		'is_dnf',
 		'title',
 		'avg_bpm',
 		'steps',
@@ -224,7 +227,9 @@ function buildCsv(runs: RunRow[]): string {
 				String(r.distance_m),
 				String(r.duration_s),
 				csvEscape(r.source),
-				csvEscape((md.activity_type as string | undefined) ?? ''),
+				// activity_type + is_dnf are real columns now (F3).
+				csvEscape(r.activity_type ?? ''),
+				csvEscape(String(r.is_dnf ?? false)),
 				csvEscape((md.title as string | undefined) ?? ''),
 				csvEscape(stringy(md.avg_bpm)),
 				csvEscape(stringy(md.steps)),
@@ -278,6 +283,8 @@ async function buildGpxZip(
 					distance_m: r.distance_m,
 					duration_s: r.duration_s,
 					source: r.source,
+					activity_type: r.activity_type,
+					is_dnf: r.is_dnf,
 					external_id: r.external_id,
 					metadata: r.metadata,
 					is_public: r.is_public,
@@ -442,6 +449,8 @@ async function buildBackupZip(
 					distance_m: r.distance_m,
 					duration_s: r.duration_s,
 					source: r.source,
+					activity_type: r.activity_type,
+					is_dnf: r.is_dnf,
 					external_id: r.external_id,
 					metadata: r.metadata,
 					is_public: r.is_public,

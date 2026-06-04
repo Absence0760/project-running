@@ -132,9 +132,10 @@ select is(
   '99999999-0000-0000-0000-00000000ee01'::uuid,
   'a new run auto-tags the default shoe');
 
--- A new CYCLE auto-tags the default BIKE, not the shoe.
-insert into runs (id, user_id, started_at, duration_s, distance_m, source, is_public, metadata)
-  values ('99999999-0000-0000-0000-00000000ff04', '99999999-0000-0000-0000-0000000000a1', now(), 1200, 9000, 'app', false, '{"activity_type":"cycle"}');
+-- A new CYCLE auto-tags the default BIKE, not the shoe. activity_type is
+-- a real column now (F3 / 20261207_001); the trigger reads new.activity_type.
+insert into runs (id, user_id, started_at, duration_s, distance_m, source, is_public, activity_type, metadata)
+  values ('99999999-0000-0000-0000-00000000ff04', '99999999-0000-0000-0000-0000000000a1', now(), 1200, 9000, 'app', false, 'cycle', '{}'::jsonb);
 select is(
   (select gear_id from run_gear where run_id = '99999999-0000-0000-0000-00000000ff04'),
   '99999999-0000-0000-0000-00000000ee02'::uuid,

@@ -258,8 +258,9 @@ func TestServer_HappyPathCsvUploadsAndSigns(t *testing.T) {
 			{
 				ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z",
 				DurationS: 1500, DistanceM: 5000, Source: "app",
-				Metadata:  map[string]interface{}{"activity_type": "run", "title": "Morning"},
-				CreatedAt: "2026-05-11T11:00:00Z", UpdatedAt: "2026-05-11T11:00:00Z",
+				ActivityType: "run",
+				Metadata:     map[string]interface{}{"title": "Morning"},
+				CreatedAt:    "2026-05-11T11:00:00Z", UpdatedAt: "2026-05-11T11:00:00Z",
 			},
 		},
 	}
@@ -364,8 +365,9 @@ func TestBuildCSV_ColumnOrderAndDataShape(t *testing.T) {
 		{
 			ID: "r1", StartedAt: "2026-05-11T10:00:00Z",
 			DurationS: 1500, DistanceM: 5000, Source: "app",
+			ActivityType: "run", IsDNF: false,
 			Metadata: map[string]interface{}{
-				"activity_type": "run", "title": "Morning", "avg_bpm": 145.0,
+				"title": "Morning", "avg_bpm": 145.0,
 			},
 			CreatedAt: "2026-05-11T11:00:00Z", UpdatedAt: "2026-05-11T11:00:00Z",
 		},
@@ -378,8 +380,13 @@ func TestBuildCSV_ColumnOrderAndDataShape(t *testing.T) {
 	if !strings.HasPrefix(lines[0], "id,started_at,distance_m") {
 		t.Errorf("header order off: %q", lines[0])
 	}
+	// activity_type + is_dnf are real columns now (F3); they come from the
+	// ExportRun fields, not the metadata bag.
+	if !strings.Contains(lines[0], "activity_type") || !strings.Contains(lines[0], "is_dnf") {
+		t.Errorf("header missing activity_type/is_dnf columns: %q", lines[0])
+	}
 	if !strings.Contains(lines[1], "run") || !strings.Contains(lines[1], "Morning") {
-		t.Errorf("row missing metadata fields: %q", lines[1])
+		t.Errorf("row missing activity_type / title fields: %q", lines[1])
 	}
 	if !strings.Contains(lines[1], "145") {
 		t.Errorf("avg_bpm not formatted as integer in row: %q", lines[1])
@@ -501,8 +508,9 @@ func TestServer_BackupFormatHappyPath(t *testing.T) {
 			{
 				ID: "run-1", UserID: "user-A", StartedAt: "2026-05-11T10:00:00Z",
 				DurationS: 1500, DistanceM: 5000, Source: "app",
-				TrackURL: &trackURL,
-				Metadata: map[string]interface{}{"activity_type": "run", "title": "Morning"},
+				TrackURL:     &trackURL,
+				ActivityType: "run",
+				Metadata:     map[string]interface{}{"title": "Morning"},
 			},
 		},
 		routes: []ExportRoute{
@@ -574,7 +582,8 @@ func TestBuildBackupZip_ProducesValidArchive(t *testing.T) {
 	runs := []ExportRun{{
 		ID: "run-1", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
 		DurationS: 1500, DistanceM: 5000, Source: "app", TrackURL: &trackURL,
-		Metadata: map[string]interface{}{"activity_type": "run"},
+		ActivityType: "run",
+		Metadata:     map[string]interface{}{},
 	}}
 	floatVal := 5000.0
 	routes := []ExportRoute{{
@@ -736,7 +745,8 @@ func TestBuildBackupZip_ArchivesHrSidecar(t *testing.T) {
 	runs := []ExportRun{{
 		ID: "run-hr", UserID: "uid", StartedAt: "2026-05-11T10:00:00Z",
 		DurationS: 1800, DistanceM: 5000, Source: "app", HrSeriesURL: &hrURL,
-		Metadata: map[string]interface{}{"activity_type": "run", "indoor": true},
+		ActivityType: "run",
+		Metadata:     map[string]interface{}{"indoor": true},
 	}}
 	fetcher := func(_ context.Context, path string) ([]byte, error) {
 		if path == hrURL {

@@ -449,14 +449,20 @@ class ApiClient {
     // Z or offset, which PostgreSQL's `timestamptz` column interprets as
     // UTC — off by the user's offset and potentially a full calendar day.
     // Force UTC here so the stored instant is unambiguous.
+    // activity_type + is_dnf are real columns now (F3 / 20261207_001).
+    // Source them from the metadata bag the recorder/importers still write
+    // (the bag → column write-site switch is the Round-4 Tier-2 follow-up);
+    // until then this dual-writes the column from the bag so server reads
+    // (PR engine, gear auto-tag, activities view) see the right value.
     final row = RunRow(
       id: run.id,
       userId: userId,
-      kind: 'run',
       startedAt: run.startedAt.toUtc(),
       durationS: run.duration.inSeconds,
       distanceM: run.distanceMetres,
       source: run.source.name,
+      activityType: (run.metadata?['activity_type'] as String?) ?? 'run',
+      isDnf: run.metadata?['is_dnf'] == true,
       externalId: run.externalId,
       metadata: run.metadata,
       trackUrl: trackUrl,
@@ -565,12 +571,14 @@ class ApiClient {
       return RunRow(
         id: r.id,
         userId: userId,
-        kind: 'run',
         // Same UTC-normalisation as saveRun — see comment there.
         startedAt: r.startedAt.toUtc(),
         durationS: r.duration.inSeconds,
         distanceM: r.distanceMetres,
         source: r.source.name,
+        // F3: dual-write the columns from the metadata bag (see saveRun).
+        activityType: (r.metadata?['activity_type'] as String?) ?? 'run',
+        isDnf: r.metadata?['is_dnf'] == true,
         externalId: r.externalId,
         metadata: r.metadata,
         trackUrl: trackUrl.isEmpty ? null : trackUrl,

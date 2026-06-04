@@ -53,8 +53,8 @@ func TestBestVDotFromRuns_PicksHighestVDot(t *testing.T) {
 
 func TestBestVDotFromRuns_IgnoresNonRunActivities(t *testing.T) {
 	runs := []PremiumRun{
-		{DistanceM: 5000, DurationS: 1200, Metadata: map[string]any{"activity_type": "cycle"}},
-		{DistanceM: 5000, DurationS: 1500, Metadata: map[string]any{"activity_type": "run"}},
+		{DistanceM: 5000, DurationS: 1200, ActivityType: "cycle"},
+		{DistanceM: 5000, DurationS: 1500, ActivityType: "run"},
 	}
 	res := BestVDotFromRuns(runs)
 	if res.QualifyingRuns != 1 {

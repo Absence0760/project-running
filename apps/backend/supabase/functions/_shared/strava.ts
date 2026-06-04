@@ -198,7 +198,6 @@ export async function ingestActivity(
 	const stravaId = String(act.id);
 	const metadata: Record<string, unknown> = {
 		strava_id: stravaId,
-		activity_type: activityType,
 		imported_from: 'strava',
 		imported_at: new Date().toISOString(),
 		strava_activity_type: act.type,
@@ -215,6 +214,9 @@ export async function ingestActivity(
 			distance_m: Math.round(act.distance),
 			duration_s: act.moving_time || act.elapsed_time,
 			source: 'strava',
+			// activity_type is a real column now (F3 / 20261207_001), no
+			// longer a metadata key. is_dnf defaults to false at the DB.
+			activity_type: activityType,
 			is_public: isPublic,
 			// `external_id = 'strava:<id>'` is the cross-source dedupe key
 			// — same shape mobile ZIP writes. A future unique constraint

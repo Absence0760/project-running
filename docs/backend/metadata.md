@@ -12,11 +12,38 @@ The `runs.metadata` column is `jsonb` — a schema-less bag that any client can 
 
 Each row: what the key is, its shape, which platforms *write* it, which platforms *read* it, whether the client must tolerate its absence, and whether the key is **public-safe** (preserved by the `public_runs` view) or **owner-only** (stripped from the view's `metadata` projection — see migration `20260626_001_public_runs_view.sql` and decisions §33's wire-leak follow-up). "Optional" means "a consumer must be safe with it missing." All keys are optional unless explicitly required. **When you add a new key, classify it.** If the public_runs strip-list and this column drift, the next public-rows audit will catch it; we'd rather catch it at PR review.
 
+### Promoted to real columns (no longer metadata keys)
+
+Migration `20261207_001_promote_activity_type_is_dnf.sql` (F3, decision D4)
+moved two load-bearing keys out of the jsonb bag into real `runs` columns,
+backfilled from the bag, and stripped the keys from existing rows. They are
+no longer metadata keys — read/write `runs.activity_type` / `runs.is_dnf`.
+
+| Was-key | Now-column | Migration |
+|---|---|---|
+| `activity_type` | `runs.activity_type text not null default 'run'` + CHECK `in ('run','walk','hike','cycle','stroller')`. Exposed on `public_runs` as a column, the `activities` view summary, the gear auto-tag trigger, and VDOT qualification. | `20261207_001` (was `20260601_001`'s jsonb CHECK, now dropped) |
+| `is_dnf` | `runs.is_dnf boolean not null default false`. The personal-records refresher filters on it (a DNF must not be promoted as a distance PR). Exposed on `public_runs` as a column. | `20261207_001` (was `20260530000001`'s `metadata->>'is_dnf'` filter) |
+
+**Server-side writers/readers already migrated (Round 3, this change):**
+`_shared/strava.ts`, `parkrun-import`, `export-data` (CSV + backup),
+the Go worker (`InsertStravaRun`, `FetchExportRuns`, `FetchPremiumRuns`,
+`isRunlike`, the dataexport CSV/backup), the `activities` + `public_runs`
+views, `auto_tag_default_gear`, `refresh_personal_records_for_user`.
+
+**Client read/write sites STILL on the jsonb keys (Tier-2, deferred to
+Round 4 — these silently read `null` / write a now-ignored bag key until
+switched):**
+- `apps/web/src/routes/runs/[id]/+page.svelte` (reads `metadata.activity_type`; writes `metadata.is_dnf` via the DNF checkbox; renders the DNF chip),
+- `apps/web/src/lib/core/data.ts` (`createManualRun`/`saveRun` write `metadata.activity_type`),
+- `apps/web/src/lib/integrations/strava-zip.ts`, `garmin-zip.ts` (write `metadata.activity_type`),
+- `apps/web/src/lib/backup/backup.ts`, `apps/web/src/lib/training/goals.ts` (read `metadata.activity_type`),
+- `apps/mobile_android/lib/screens/run_screen.dart` (recording), `add_run_screen.dart`, `health_connect_importer.dart`, `strava_importer.dart`, `run_detail_screen.dart` (`applyDnfFlag`) + the byte-identical iOS twin,
+- `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-ingest write to the column is the Round-4 follow-up).
+
 ### Core run properties
 
 | Key | Shape | Writers | Readers | Required? | Notes |
 |---|---|---|---|---|---|
-| `activity_type` | `string` — one of `run`, `walk`, `hike`, `cycle`, `stroller` | `mobile_android/screens/run_screen.dart` (recording), `mobile_android/screens/add_run_screen.dart` (manual entry form), `mobile_android/health_connect_importer.dart`, `mobile_android/strava_importer.dart`, `apps/backend/supabase/functions/parkrun-import`, `apps/backend/supabase/functions/strava-import`, `apps/web/src/lib/integrations/strava-zip.ts`, `apps/web/src/lib/integrations/garmin-zip.ts`, `apps/web/src/lib/core/data.ts` (createManualRun), `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` (WCSession metadata to phone), `apps/watch_ios/.../SupabaseService.swift` (DEBUG-only direct upload path — `RunPayload.metadata` carries `activity_type: "run"` so the row passes `runs_metadata_activity_type_check`) | `mobile_android` (dashboard, history, run detail), `apps/web/src/routes/runs/[id]/+page.svelte`, `apps/web/src/lib/backup/backup.ts` (restore coalesces to `'run'`), `apps/web/src/lib/training/goals.ts` (goal calculation excludes cycles) | **Required** — enforced by `runs_metadata_activity_type_check` (see `apps/backend/supabase/migrations/20260601_001_runs_metadata_activity_type_required.sql`). Postgres rejects rows with null/missing/empty `metadata->>'activity_type'`. Reads still tolerate the key being absent for back-compat. | Backfilled to `'run'` for legacy rows. The Android recorder writes this on every save. Health Connect imports map through `_mapWorkoutType`. Strava imports map walk/hike/run from the activity type string. Backup restores coalesce to `'run'` when the original ZIP predates the requirement. |
 | `steps` | `int` (stringified on the wire? — **investigate**) | `mobile_android/screens/run_screen.dart` (pedometer); `apps/watch_wear/android/.../RunRecordingService.kt` (via `Pedometer.kt` → `Sensor.TYPE_STEP_COUNTER`) | `apps/web/src/routes/runs/[id]/+page.svelte`, `apps/backend/supabase/functions/export-data/index.ts` (CSV column) | Optional; only present when pedometer data is available | Only written when `steps > 0`. Android + Wear OS omit the key entirely if the pedometer never fired. Wear OS requires `ACTIVITY_RECOGNITION` at runtime; if the user denies, the Pedometer flow is silent and `metadata.steps` stays absent. |
 | `laps` | `array` of `{ index: int, start_offset_s: int, distance_m: double, duration_s: int }` | `packages/run_recorder/lib/src/run_recorder.dart` (final save only, via `lapsToCanonicalJson`); `apps/watch_wear/.../WatchRunMetadata.kt` (`buildRunMetadata`, called from `RunViewModel.pushRun`); `apps/web/src/lib/integrations/garmin-zip.ts` (Garmin FIT import, via `buildCanonicalLaps` in `garmin-fit.ts` — projects FIT `lap` messages, drops the degenerate single-lap file) | `mobile_android/screens/run_detail_screen.dart` (`_buildLaps`); `apps/web/src/routes/runs/[id]/+page.svelte` (Laps section) | Optional; present if the runner marked laps or imported a multi-lap FIT | The recorder sets `metadata = null` entirely when `_laps.isEmpty`, so readers must check for both a null `metadata` and a missing `laps` key. `index` is 1-based (matches `lap.number` on both platforms). `distance_m` and `duration_s` are *per-lap* deltas (not cumulative); `start_offset_s` is the cumulative duration up to the **start** of this lap (so the first lap has `start_offset_s = 0`). The Apr 2026 cross-platform audit caught the Dart recorder writing the older `{ number, timestamp, cumulative_distance_m, cumulative_duration_s }` shape; both writer and `run_detail_screen.dart` reader were migrated to the registered per-lap shape in the same change. The cross-platform fixture test (`fixtures/watch_run_payload.json` consumed by `apps/mobile_android/test/watch_payload_fixture_test.dart`, `apps/mobile_ios/test/watch_payload_fixture_test.dart`, `apps/watch_wear/.../WatchRunPayloadFixtureTest.kt`, and `apps/web/src/lib/watch_payload_fixture.test.ts`) caught a separate Wear OS bug where `start_offset_s` was emitted as cumulative-AFTER (`lap.atMs / 1000`) instead of cumulative-BEFORE — fixed in `buildRunMetadata`. `watch_ingest_queue.dart` forwards the field verbatim when a watch payload includes it. |
 
@@ -106,7 +133,9 @@ Per-canonical-distance fastest times computed by the client at save time. Person
 | `fastest_10k_s` | `int` — seconds | same | same | same as above, gated on track ≥ 10 km | same |
 | `fastest_half_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 21.097 km | same |
 | `fastest_marathon_s` | `int` — seconds | same | same | same as above, gated on track ≥ 42.195 km | same |
-| `is_dnf` | `bool` — true when the runner marked the recording as a did-not-finish | `apps/web/src/routes/runs/[id]/+page.svelte` (owner edit form — "Mark as DNF" checkbox; read-merge-write through the `supabase` client mirroring `updateRunMetadata`, since its title/notes normaliser drops unknown keys). Mobile: `apps/mobile_android/lib/screens/run_detail_screen.dart` (owner edit dialog "Mark as DNF" checkbox → `applyDnfFlag` sets/clears the key on the metadata bag before `LocalRunStore.update`; byte-identical iOS twin). Watch write path still TBD. | `apps/backend/supabase/migrations/20260530000001_personal_records_exclude_dnf.sql` — the PR trigger excludes DNF candidates from both whole-run and embedded-best partitions; `apps/web/src/routes/runs/[id]/+page.svelte` renders a DNF chip | Optional; absent ≡ not a DNF | Persona-hunt Round 3 finding Ultra #3 (web write path added Round 5). Pre-fix a DNF at mile 26 of a 100-miler had `distance_m=42000`, fit the widened marathon bracket, and was promoted as a marathon PR. Web write clears the key (not `false`) when un-toggled. Public-safe (passes through `public_runs`). |
+
+> `is_dnf` was promoted to a real `runs.is_dnf` column by `20261207_001` —
+> see [Promoted to real columns](#promoted-to-real-columns-no-longer-metadata-keys) above.
 
 ### Client-side synthetic
 

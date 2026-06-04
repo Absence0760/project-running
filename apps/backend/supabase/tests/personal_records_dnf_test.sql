@@ -36,7 +36,8 @@ values (
 -- DNF at mile 26 — distance 42_000 lands in the marathon bracket
 -- (41,351–43,039). Duration 3:00:00 — faster than the real marathon
 -- in raw seconds. Pre-fix this would beat the real PR.
-insert into runs (id, user_id, started_at, distance_m, duration_s, source, metadata)
+-- is_dnf is now a real column (F3 / 20261207_001), not a metadata key.
+insert into runs (id, user_id, started_at, distance_m, duration_s, source, is_dnf, metadata)
 values (
   '11111111-1111-1111-1111-11111ddddd02',
   '99999999-9999-9999-9999-99999dddaaaa',
@@ -44,7 +45,8 @@ values (
   42000,
   10800,
   'app',
-  jsonb_build_object('is_dnf', true, 'activity_type', 'run')
+  true,
+  '{"activity_type":"run"}'
 );
 
 do $$

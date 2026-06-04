@@ -38,7 +38,9 @@ data class RunRow(
     val trackUrl: String? = null,
     val isPublic: Boolean? = null,
     val eventId: String? = null,
-    val hrSeriesUrl: String? = null
+    val hrSeriesUrl: String? = null,
+    val activityType: String,
+    val isDnf: Boolean
 ) {
     companion object {
         const val TABLE = "runs"
@@ -57,6 +59,8 @@ data class RunRow(
         const val COL_IS_PUBLIC = "is_public"
         const val COL_EVENT_ID = "event_id"
         const val COL_HR_SERIES_URL = "hr_series_url"
+        const val COL_ACTIVITY_TYPE = "activity_type"
+        const val COL_IS_DNF = "is_dnf"
 
         fun fromJson(json: JsonObject): RunRow = RunRow(
             id = json["id"]!!.jsonPrimitive.content,
@@ -73,7 +77,9 @@ data class RunRow(
             trackUrl = json["track_url"]?.jsonPrimitive?.contentOrNull,
             isPublic = json["is_public"]?.jsonPrimitive?.boolean,
             eventId = json["event_id"]?.jsonPrimitive?.contentOrNull,
-            hrSeriesUrl = json["hr_series_url"]?.jsonPrimitive?.contentOrNull
+            hrSeriesUrl = json["hr_series_url"]?.jsonPrimitive?.contentOrNull,
+            activityType = json["activity_type"]!!.jsonPrimitive.content,
+            isDnf = json["is_dnf"]!!.jsonPrimitive.boolean
         )
     }
 
@@ -92,7 +98,9 @@ data class RunRow(
         COL_TRACK_URL to trackUrl,
         COL_IS_PUBLIC to isPublic,
         COL_EVENT_ID to eventId,
-        COL_HR_SERIES_URL to hrSeriesUrl
+        COL_HR_SERIES_URL to hrSeriesUrl,
+        COL_ACTIVITY_TYPE to activityType,
+        COL_IS_DNF to isDnf
     )
 }
 
