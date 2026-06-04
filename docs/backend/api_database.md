@@ -295,16 +295,20 @@ create table notifications (
   id          uuid primary key default gen_random_uuid(),
   user_id     uuid references auth.users(id) on delete cascade not null,
   actor_id    uuid references auth.users(id) on delete set null,
-  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed')),
-  run_id      uuid references runs(id) on delete cascade,
-  comment_id  uuid references run_comments(id) on delete cascade,
-  event_id    uuid references events(id) on delete cascade,
-  plan_id     uuid references training_plans(id) on delete cascade,
-  club_id     uuid references clubs(id) on delete cascade,
-  read_at     timestamptz,
-  created_at  timestamptz not null default now()
+  kind        text not null check (kind in ('kudos','comment','comment_reply','follow','event_rsvp','event_cancel','plan_update','message','club_post','run_completed','event_reminder')),
+  run_id        uuid references runs(id) on delete cascade,
+  comment_id    uuid references run_comments(id) on delete cascade,
+  event_id      uuid references events(id) on delete cascade,
+  plan_id       uuid references training_plans(id) on delete cascade,
+  club_id       uuid references clubs(id) on delete cascade,
+  activity_kind text check (activity_kind is null or activity_kind in ('run','lift','meal')),
+  activity_id   uuid,
+  read_at       timestamptz,
+  created_at    timestamptz not null default now()
 );
 ```
+
+`(activity_kind, activity_id)` is the **polymorphic activity reference** (F15, migration `20261212_001`) added ahead of the Phase 4 social expansion (kudos on a lift, comment on a meal). `activity_kind` matches the `activities`-view modality tag; `activity_id` is a bare uuid (no single FK — it spans `runs` / `gym_workouts` / `food_log`). The run-notification triggers (`notify_run_kudos`, `notify_run_comment`, `notify_run_completed`) populate it as `('run', run_id)`, and existing run-linked rows were backfilled the same way. `run_id` is kept as the referential-integrity bridge for the run path until the social-lift work lands. The kind CHECK is consolidated into one authoritative constraint (F16, `20261211_001`); `event_reminder` was added by `20261130_001`.
 
 The `plan_update` kind (migration `20261024_001`, coach persona #48) fires from an AFTER UPDATE trigger on `plan_workouts` when the editor (`auth.uid()`) is someone other than the plan owner — the coach-edit notification. `plan_workouts` also gained `updated_by` + `updated_at`, stamped by a BEFORE UPDATE trigger. The cross-user edit path itself lands with the coach-athlete roster (persona #46); until then the notify trigger is dormant (owner-only RLS) while the audit columns populate on every edit.
 

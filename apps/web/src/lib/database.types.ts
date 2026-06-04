@@ -1069,6 +1069,8 @@ export type Database = {
       }
       notifications: {
         Row: {
+          activity_id: string | null
+          activity_kind: string | null
           actor_id: string | null
           club_id: string | null
           comment_id: string | null
@@ -1084,6 +1086,8 @@ export type Database = {
           user_id: string
         }
         Insert: {
+          activity_id?: string | null
+          activity_kind?: string | null
           actor_id?: string | null
           club_id?: string | null
           comment_id?: string | null
@@ -1099,6 +1103,8 @@ export type Database = {
           user_id: string
         }
         Update: {
+          activity_id?: string | null
+          activity_kind?: string | null
           actor_id?: string | null
           club_id?: string | null
           comment_id?: string | null
