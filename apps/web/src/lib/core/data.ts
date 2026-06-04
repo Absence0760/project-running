@@ -5252,3 +5252,204 @@ export async function revokeCoachInvite(id: string): Promise<void> {
 	const { error } = await supabase.from('coach_athletes').delete().eq('id', id);
 	if (error) throw error;
 }
+
+// --- Gym (Phase 4 multi-modal, decisions §63; spec docs/features/multi_modal.md) ---
+//
+// A gym session is a `gym_workouts` parent with N ordered `gym_sets`
+// children. Mirrors the api_client Dart methods (createGymWorkout /
+// fetchGymWorkoutWithSets / ...). last_modified_at is client-stamped for
+// the same newer-wins reconciliation runs + gear use — there is no server
+// updated_at trigger (migration 20261204_001).
+
+export interface GymWorkout {
+	id: string;
+	user_id: string;
+	title: string | null;
+	started_at: string;
+	duration_s: number | null;
+	notes: string | null;
+	is_public: boolean;
+	external_id: string | null;
+	last_modified_at: string;
+	created_at: string;
+}
+
+export interface GymSet {
+	id: string;
+	workout_id: string;
+	set_index: number;
+	exercise_name: string;
+	reps: number | null;
+	weight_kg: number | null;
+	rpe: number | null;
+}
+
+export interface GymWorkoutWithSets {
+	workout: GymWorkout;
+	sets: GymSet[];
+}
+
+export interface GymSetInput {
+	exercise_name: string;
+	reps?: number | null;
+	weight_kg?: number | null;
+	rpe?: number | null;
+}
+
+/// One row per historical set, joined to its workout's start time, for
+/// client-side PR computation (gym_prs.ts). Owner-scoped by RLS. Fine at
+/// individual-user scale; see multi_modal.md § "activities view at scale".
+export interface GymSetWithDate {
+	workout_id: string;
+	started_at: string;
+	exercise_name: string;
+	reps: number | null;
+	weight_kg: number | null;
+	rpe: number | null;
+}
+
+/// Recent gym workouts for the signed-in user, newest first.
+export async function fetchGymWorkouts(limit = 50): Promise<GymWorkout[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('gym_workouts')
+		.select('*')
+		.eq('user_id', userId)
+		.order('started_at', { ascending: false })
+		.limit(limit);
+	if (error) {
+		console.error('fetchGymWorkouts failed', error);
+		return [];
+	}
+	return (data ?? []) as GymWorkout[];
+}
+
+/// A single workout plus its sets in set_index order. Returns null when the
+/// id doesn't resolve (RLS hides another user's private workout).
+export async function fetchGymWorkoutWithSets(
+	id: string,
+): Promise<GymWorkoutWithSets | null> {
+	const { data: workout, error: wErr } = await supabase
+		.from('gym_workouts')
+		.select('*')
+		.eq('id', id)
+		.maybeSingle();
+	if (wErr || !workout) return null;
+	const { data: sets, error: sErr } = await supabase
+		.from('gym_sets')
+		.select('*')
+		.eq('workout_id', id)
+		.order('set_index', { ascending: true });
+	if (sErr) {
+		console.error('fetchGymWorkoutWithSets sets failed', sErr);
+		return { workout: workout as GymWorkout, sets: [] };
+	}
+	return { workout: workout as GymWorkout, sets: (sets ?? []) as GymSet[] };
+}
+
+/// Every set the user has logged, joined to its workout start time. Used by
+/// gym_prs to compute PR badges. Owner-scoped.
+export async function fetchGymSetHistory(): Promise<GymSetWithDate[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from('gym_sets')
+		.select('workout_id, exercise_name, reps, weight_kg, rpe, gym_workouts!inner(started_at, user_id)')
+		.eq('gym_workouts.user_id', userId);
+	if (error) {
+		console.error('fetchGymSetHistory failed', error);
+		return [];
+	}
+	return ((data ?? []) as unknown[]).map((row) => {
+		const r = row as {
+			workout_id: string;
+			exercise_name: string;
+			reps: number | null;
+			weight_kg: number | null;
+			rpe: number | null;
+			gym_workouts: { started_at: string } | { started_at: string }[];
+		};
+		const w = Array.isArray(r.gym_workouts) ? r.gym_workouts[0] : r.gym_workouts;
+		return {
+			workout_id: r.workout_id,
+			started_at: w?.started_at ?? '',
+			exercise_name: r.exercise_name,
+			reps: r.reps,
+			weight_kg: r.weight_kg,
+			rpe: r.rpe,
+		};
+	});
+}
+
+async function replaceGymSets(workoutId: string, sets: GymSetInput[]): Promise<void> {
+	const { error: delErr } = await supabase
+		.from('gym_sets')
+		.delete()
+		.eq('workout_id', workoutId);
+	if (delErr) throw delErr;
+	const rows = sets
+		.map((s, i) => ({
+			workout_id: workoutId,
+			set_index: i,
+			exercise_name: s.exercise_name.trim(),
+			reps: s.reps ?? null,
+			weight_kg: s.weight_kg ?? null,
+			rpe: s.rpe ?? null,
+		}))
+		.filter((r) => r.exercise_name.length > 0);
+	if (rows.length === 0) return;
+	const { error: insErr } = await supabase.from('gym_sets').insert(rows);
+	if (insErr) throw insErr;
+}
+
+export async function createGymWorkout(input: {
+	title?: string | null;
+	started_at?: string;
+	duration_s?: number | null;
+	notes?: string | null;
+	is_public?: boolean;
+	sets?: GymSetInput[];
+}): Promise<GymWorkout> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const nowIso = new Date().toISOString();
+	const { data, error } = await supabase
+		.from('gym_workouts')
+		.insert({
+			user_id: userId,
+			title: input.title ?? null,
+			started_at: input.started_at ?? nowIso,
+			duration_s: input.duration_s ?? null,
+			notes: input.notes ?? null,
+			is_public: input.is_public ?? false,
+			last_modified_at: nowIso,
+		})
+		.select('*')
+		.single();
+	if (error || !data) throw error ?? new Error('createGymWorkout failed');
+	const workout = data as GymWorkout;
+	if (input.sets && input.sets.length > 0) {
+		await replaceGymSets(workout.id, input.sets);
+	}
+	return workout;
+}
+
+export async function updateGymWorkout(
+	id: string,
+	patch: Partial<Pick<GymWorkout, 'title' | 'started_at' | 'duration_s' | 'notes' | 'is_public'>>,
+	sets?: GymSetInput[],
+): Promise<void> {
+	const { error } = await supabase
+		.from('gym_workouts')
+		.update({ ...patch, last_modified_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+	if (sets !== undefined) await replaceGymSets(id, sets);
+}
+
+/// Deletes the workout; gym_sets cascade via the FK (migration 20261204_001).
+export async function deleteGymWorkout(id: string): Promise<void> {
+	const { error } = await supabase.from('gym_workouts').delete().eq('id', id);
+	if (error) throw error;
+}

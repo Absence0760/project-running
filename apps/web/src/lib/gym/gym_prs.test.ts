@@ -7,7 +7,7 @@ import {
 	workoutPrs,
 	kE1rmMaxReps,
 	type GymSetLike,
-} from './gym_prs.ts';
+} from './gym_prs';
 
 function set(exercise_name: string, reps: number | null, weight_kg: number | null): GymSetLike {
 	return { exercise_name, reps, weight_kg };
