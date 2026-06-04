@@ -30,13 +30,21 @@ the Go worker (`InsertStravaRun`, `FetchExportRuns`, `FetchPremiumRuns`,
 `isRunlike`, the dataexport CSV/backup), the `activities` + `public_runs`
 views, `auto_tag_default_gear`, `refresh_personal_records_for_user`.
 
-**Client read/write sites STILL on the jsonb keys (Tier-2, deferred to
-Round 4 — these silently read `null` / write a now-ignored bag key until
-switched):**
-- `apps/web/src/routes/runs/[id]/+page.svelte` (reads `metadata.activity_type`; writes `metadata.is_dnf` via the DNF checkbox; renders the DNF chip),
-- `apps/web/src/lib/core/data.ts` (`createManualRun`/`saveRun` write `metadata.activity_type`),
-- `apps/web/src/lib/integrations/strava-zip.ts`, `garmin-zip.ts` (write `metadata.activity_type`),
-- `apps/web/src/lib/backup/backup.ts`, `apps/web/src/lib/training/goals.ts` (read `metadata.activity_type`),
+**Web client read/write sites — switched to the columns (Round 4, F3
+Tier-2):** the SvelteKit app no longer touches `metadata.activity_type` /
+`metadata.is_dnf` anywhere — `runs/[id]/+page.svelte` (read + DNF write +
+chip), `core/data.ts` (`createManualRun`/`saveRun` + the following-feed
+`activity_type` filter + `fetchRecentRunsForPicker` / `fetchRunsOnRoute` /
+`fetchAthleteRuns`), `integrations/strava-zip.ts` + `garmin-zip.ts`,
+`backup/backup_reader.ts` (`coalesceRunActivity`) + `restore_orchestrator.ts`,
+`training/goals.ts`, `runs/recap.ts`, `routes/route_history.ts`,
+`components/RunShareView.svelte`, `routes/history/+page.svelte`, and
+`coaching/athletes/[id]/+page.svelte` all read/write the real columns. The
+narrow `ActivityType` TS union (`types.ts`) ↔ CHECK lockstep is guarded by
+`check_constraint_unions.mjs`.
+
+**Client read/write sites STILL on the jsonb keys (Tier-2, deferred — these
+silently read `null` / write a now-ignored bag key until switched):**
 - `apps/mobile_android/lib/screens/run_screen.dart` (recording), `add_run_screen.dart`, `health_connect_importer.dart`, `strava_importer.dart`, `run_detail_screen.dart` (`applyDnfFlag`) + the byte-identical iOS twin,
 - `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-ingest write to the column is the Round-4 follow-up).
 

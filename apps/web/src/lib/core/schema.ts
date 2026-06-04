@@ -31,7 +31,6 @@ export const BUCKETS = {
 /// compile-time coupling between the writer and reader sides. Every key here
 /// is documented in docs/backend/metadata.md — keep the two in lockstep.
 export const METADATA_KEYS = {
-	activity_type: 'activity_type',
 	avg_bpm: 'avg_bpm',
 	max_bpm: 'max_bpm',
 	cadence_spm: 'cadence_spm',
@@ -48,7 +47,6 @@ export const METADATA_KEYS = {
 	manual_entry: 'manual_entry',
 	notes: 'notes',
 	title: 'title',
-	is_dnf: 'is_dnf',
 	plan_workout_id: 'plan_workout_id',
 	workout_step_results: 'workout_step_results',
 	workout_adherence: 'workout_adherence',

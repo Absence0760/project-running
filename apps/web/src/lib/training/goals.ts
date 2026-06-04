@@ -206,9 +206,7 @@ export function evaluateGoal(
 
 	// Pace calculations exclude cycling — a distance-weighted average
 	// would otherwise be dominated by a single long bike ride.
-	const paceEligible = inPeriod.filter(
-		(r) => (r.metadata?.['activity_type'] as string | undefined) !== 'cycle',
-	);
+	const paceEligible = inPeriod.filter((r) => r.activity_type !== 'cycle');
 
 	const targets: TargetProgress[] = [];
 

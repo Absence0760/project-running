@@ -12,7 +12,7 @@ export interface RouteHistoryRun {
 	route_id: string | null;
 	distance_m: number;
 	duration_s: number;
-	metadata?: Record<string, unknown> | null;
+	activity_type?: string | null;
 }
 
 export interface RouteHistorySummary {
@@ -32,22 +32,20 @@ export interface RouteHistorySummary {
 ///  - `distance_m > 100` — guards against accidental starts that
 ///    never moved off the start line and would otherwise look like
 ///    incredible PBs.
-///  - Same `metadata.activity_type` (default `'run'`). A walk on
+///  - Same `activity_type` column (default `'run'`). A walk on
 ///    the same route shouldn't compete with a run.
 export function qualifyingAttempts(
 	currentRun: RouteHistoryRun,
 	allRuns: readonly RouteHistoryRun[],
 ): RouteHistoryRun[] {
 	if (!currentRun.route_id) return [];
-	const thisActivity =
-		(currentRun.metadata?.['activity_type'] as string | undefined) ?? 'run';
+	const thisActivity = currentRun.activity_type ?? 'run';
 	return [...allRuns]
 		.filter(
 			(r) =>
 				r.route_id === currentRun.route_id &&
 				r.distance_m > 100 &&
-				((r.metadata?.['activity_type'] as string | undefined) ?? 'run') ===
-					thisActivity,
+				(r.activity_type ?? 'run') === thisActivity,
 		)
 		.sort((a, b) => a.duration_s - b.duration_s);
 }

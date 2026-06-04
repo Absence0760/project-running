@@ -12,7 +12,7 @@ const baseRun = (over: Partial<RouteHistoryRun>): RouteHistoryRun => ({
 	route_id: 'route-1',
 	distance_m: 5000,
 	duration_s: 1500,
-	metadata: null,
+	activity_type: null,
 	...over,
 });
 
@@ -45,10 +45,10 @@ test('qualifyingAttempts excludes runs under 100 m', () => {
 });
 
 test('qualifyingAttempts filters by activity_type (defaulting to run)', () => {
-	const me = baseRun({ id: 'me' }); // metadata null → defaults to 'run'
+	const me = baseRun({ id: 'me' }); // activity_type null → defaults to 'run'
 	const others = [
-		baseRun({ id: 'run', metadata: { activity_type: 'run' } }),
-		baseRun({ id: 'walk', metadata: { activity_type: 'walk' } }),
+		baseRun({ id: 'run', activity_type: 'run' }),
+		baseRun({ id: 'walk', activity_type: 'walk' }),
 		baseRun({ id: 'undef' }), // also 'run'
 	];
 	const got = qualifyingAttempts(me, others);

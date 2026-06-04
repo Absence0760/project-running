@@ -41,6 +41,9 @@ export async function insertRun(opts: {
 	distance_m: number;
 	source?: 'app' | 'strava' | 'parkrun' | 'healthkit';
 	is_public?: boolean;
+	/** Real `runs.activity_type` column (20261207_001). Defaults to 'run'. */
+	activity_type?: 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
+	is_dnf?: boolean;
 	metadata?: Record<string, unknown>;
 	/** Optional GPS track. When supplied, gzipped JSON is uploaded to
 	 *  the `runs` Storage bucket at `{user_id}/{run_id}.json.gz` and
@@ -62,7 +65,9 @@ export async function insertRun(opts: {
 			distance_m: opts.distance_m,
 			source: opts.source ?? 'app',
 			is_public: opts.is_public ?? false,
-			metadata: opts.metadata ?? { activity_type: 'run' }
+			activity_type: opts.activity_type ?? 'run',
+			is_dnf: opts.is_dnf ?? false,
+			metadata: opts.metadata ?? {}
 		})
 		.select('id')
 		.single();

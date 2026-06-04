@@ -14,8 +14,8 @@ import {
 import type { Run } from '../types';
 
 // Build a Run with just enough fields for the goal evaluator. The
-// evaluator only touches started_at, distance_m, duration_s, and
-// metadata.activity_type — the rest is filler.
+// evaluator only touches started_at, distance_m, duration_s, and the
+// activity_type column — the rest is filler.
 function run(partial: {
 	started_at: string;
 	distance_m: number;
@@ -29,6 +29,7 @@ function run(partial: {
 		distance_m: partial.distance_m,
 		duration_s: partial.duration_s,
 		source: 'app',
+		activity_type: partial.activity_type ?? 'run',
 		track_url: null,
 		track: null,
 		route_id: null,
@@ -37,7 +38,7 @@ function run(partial: {
 		is_public: null,
 		created_at: null,
 		updated_at: null,
-		metadata: partial.activity_type ? { activity_type: partial.activity_type } : null,
+		metadata: null,
 	} as unknown as Run;
 }
 

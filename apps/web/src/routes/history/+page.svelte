@@ -233,7 +233,7 @@
 		const out = runs.filter((r) => {
 			if (sourceFilter !== 'all' && r.source !== sourceFilter) return false;
 			if (activityFilter !== 'all') {
-				const type = (r.metadata as Record<string, unknown> | null)?.activity_type ?? 'run';
+				const type = r.activity_type ?? 'run';
 				if (type !== activityFilter) return false;
 			}
 			const startedAt = new Date(r.started_at);

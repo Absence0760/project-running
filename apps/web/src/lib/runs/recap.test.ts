@@ -24,7 +24,8 @@ function mkRun(opts: {
 		notes: null,
 		route_id: opts.route_id ?? null,
 		source: 'app',
-		metadata: opts.activity ? { activity_type: opts.activity } : {},
+		activity_type: opts.activity ?? 'run',
+		metadata: {},
 	} as unknown as Run;
 }
 
@@ -176,9 +177,9 @@ test('buildYearInRunningRecap: earliest + latest start times in HH:MM', () => {
 // ─────────── Round 3 edge cases ───────────
 
 test('buildYearInRunningRecap: activity_type missing → defaults to "run"', () => {
-	// Reason: metadata.activity_type is optional in the jsonb bag.
-	// The helper must not crash and should count missing-activity
-	// runs as "run" so the most-used-activity tally stays accurate.
+	// Reason: the activity_type column defaults to 'run' but a fixture
+	// may leave it unset. The helper must not crash and should count
+	// missing-activity runs as "run" so the tally stays accurate.
 	const runs = [
 		mkRun({ startedAt: '2026-02-01T10:00:00', distance_m: 5000, duration_s: 1500 }), // no activity
 		mkRun({ startedAt: '2026-02-02T10:00:00', distance_m: 5000, duration_s: 1500 }), // no activity

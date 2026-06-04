@@ -12,7 +12,7 @@
  */
 
 import {
-	coalesceActivityType,
+	coalesceRunActivity,
 	extractEventIds,
 	stripServerManagedProfileFields,
 	type ParsedBackup
@@ -132,13 +132,15 @@ export async function restoreOrchestrate(
 					? r.event_id
 					: null;
 
+			const { activity_type, metadata } = coalesceRunActivity(r);
 			const row = {
 				...r,
 				id: newId,
 				user_id: userId,
 				event_id: eventId,
 				track_url: trackUrl,
-				metadata: coalesceActivityType(r.metadata)
+				activity_type,
+				metadata
 			};
 
 			try {

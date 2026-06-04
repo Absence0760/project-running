@@ -28,6 +28,7 @@ const TYPES_FILE = join(REPO_ROOT, 'apps/web/src/lib/types.ts');
 // (e.g. `runs.source` vs `fitness_snapshots.source`).
 const PAIRS = [
 	{ tableColumn: 'runs.source', tsUnion: 'RunSource' },
+	{ tableColumn: 'runs.activity_type', tsUnion: 'ActivityType' },
 	{ tableColumn: 'routes.surface', tsUnion: 'RouteSurface' },
 	{ tableColumn: 'integrations.provider', tsUnion: 'IntegrationProvider' },
 	{ tableColumn: 'user_profiles.preferred_unit', tsUnion: 'PreferredUnit' },

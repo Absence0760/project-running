@@ -226,7 +226,6 @@ async function importFitFile(
 	if (seenComposite.has(composite)) return 'skipped';
 
 	const metadata: Record<string, unknown> = {
-		[METADATA_KEYS.activity_type]: parsed.activity_type,
 		[METADATA_KEYS.imported_from]: 'garmin',
 		[METADATA_KEYS.imported_at]: new Date().toISOString(),
 		[METADATA_KEYS.source_file]: displayName,
@@ -246,6 +245,7 @@ async function importFitFile(
 		duration_s: parsed.duration_s,
 		elevation_m: parsed.elevation_m,
 		source: 'garmin',
+		activity_type: parsed.activity_type,
 		metadata,
 		track: parsed.track.length > 0 ? parsed.track : undefined,
 		// Indoor / treadmill runs have no track but carry per-point HR; saveRun
@@ -300,8 +300,8 @@ async function importRouteFile(
 		duration_s: durationS,
 		elevation_m: r.elevation_m ?? null,
 		source: 'garmin',
+		activity_type: 'run',
 		metadata: {
-			activity_type: 'run',
 			imported_from: 'garmin',
 			imported_at: new Date().toISOString(),
 			source_file: file.name,

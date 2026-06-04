@@ -13,7 +13,7 @@ import JSZip from 'jszip';
 import {
 	parseBackupArchive,
 	stripServerManagedProfileFields,
-	coalesceActivityType,
+	coalesceRunActivity,
 	extractEventIds
 } from './backup_reader';
 import { BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
@@ -205,42 +205,48 @@ test('stripServerManagedProfileFields: preserves nested objects untouched', () =
 	assert.deepEqual(out.nested, { hr_zones: [120, 140, 160, 180] });
 });
 
-// ─────────────────── coalesceActivityType ───────────────────
+// ─────────────────── coalesceRunActivity ───────────────────
 
-test('coalesceActivityType: inserts "run" when metadata is null/undefined', () => {
-	assert.equal(coalesceActivityType(null).activity_type, 'run');
-	assert.equal(coalesceActivityType(undefined).activity_type, 'run');
+test('coalesceRunActivity: defaults to "run" when neither column nor bag carry it', () => {
+	assert.equal(coalesceRunActivity({}).activity_type, 'run');
+	assert.equal(coalesceRunActivity({ metadata: null }).activity_type, 'run');
+	assert.equal(
+		coalesceRunActivity({ metadata: { title: 'x', avg_bpm: 142 } }).activity_type,
+		'run',
+	);
 });
 
-test('coalesceActivityType: inserts "run" when metadata is missing the key', () => {
-	const out = coalesceActivityType({ title: 'x', avg_bpm: 142 });
-	assert.equal(out.activity_type, 'run');
-	assert.equal(out.title, 'x');
-	assert.equal(out.avg_bpm, 142);
-});
-
-test('coalesceActivityType: preserves explicit activity_type', () => {
-	const out = coalesceActivityType({ activity_type: 'cycle', title: 'x' });
+test('coalesceRunActivity: prefers the real activity_type column', () => {
+	const out = coalesceRunActivity({ activity_type: 'cycle', metadata: { title: 'x' } });
 	assert.equal(out.activity_type, 'cycle');
 });
 
-test('coalesceActivityType: rejects non-string activity_type and defaults', () => {
-	// A corrupt backup that stuck an int in the key should coalesce
-	// rather than poison the DB row.
-	const out = coalesceActivityType({ activity_type: 42 });
-	assert.equal(out.activity_type, 'run');
+test('coalesceRunActivity: falls back to the legacy metadata.activity_type bag key', () => {
+	// Pre-promotion (20261207_001) backups only carry it in the bag.
+	const out = coalesceRunActivity({ metadata: { activity_type: 'hike' } });
+	assert.equal(out.activity_type, 'hike');
 });
 
-test('coalesceActivityType: not a Map → returns a fresh map with the default', () => {
-	const out = coalesceActivityType('this should not be a string');
-	assert.deepEqual(out, { activity_type: 'run' });
+test('coalesceRunActivity: strips the stale bag key after promoting it', () => {
+	const out = coalesceRunActivity({ metadata: { activity_type: 'walk', title: 'x' } });
+	assert.equal(out.activity_type, 'walk');
+	assert.equal(out.metadata?.activity_type, undefined);
+	assert.equal(out.metadata?.title, 'x');
 });
 
-test('coalesceActivityType: clones the input instead of mutating it', () => {
-	const input = { title: 'before' };
-	const out = coalesceActivityType(input);
-	out.title = 'after';
-	assert.equal((input as Record<string, unknown>).title, 'before');
+test('coalesceRunActivity: non-string activity_type defaults to run', () => {
+	// A corrupt backup that stuck an int in either place coalesces
+	// rather than poisoning the DB row's CHECK.
+	assert.equal(coalesceRunActivity({ activity_type: 42 }).activity_type, 'run');
+	assert.equal(coalesceRunActivity({ metadata: { activity_type: 42 } }).activity_type, 'run');
+});
+
+test('coalesceRunActivity: clones the metadata bag instead of mutating it', () => {
+	const input = { metadata: { activity_type: 'cycle', title: 'before' } };
+	const out = coalesceRunActivity(input);
+	(out.metadata as Record<string, unknown>).title = 'after';
+	assert.equal(input.metadata.title, 'before');
+	assert.equal(input.metadata.activity_type, 'cycle');
 });
 
 // ─────────────────── extractEventIds ───────────────────

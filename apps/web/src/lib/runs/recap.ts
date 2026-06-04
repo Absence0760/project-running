@@ -217,9 +217,9 @@ export function buildYearInRunningRecap(
 	let earliestRun: Date | null = null;
 	let latestRun: Date | null = null;
 
-	// Activity-type tally — `runs.metadata.activity_type` is the
-	// canonical key on the row, but it lives in a jsonb bag. Treat
-	// missing values as "run" which matches the default elsewhere.
+	// Activity-type tally off the real `runs.activity_type` column
+	// (20261207_001). Treat missing values as "run" to match the default
+	// elsewhere.
 	const activityCounts = new Map<string, number>();
 	const monthly: RecapMonthBucket[] = Array.from({ length: 12 }, (_, i) => ({
 		month: i + 1,
@@ -269,8 +269,7 @@ export function buildYearInRunningRecap(
 
 		if (r.route_id) uniqueRoutes.add(r.route_id);
 
-		const meta = (r as unknown as { metadata?: { activity_type?: string } }).metadata;
-		const activity = meta?.activity_type ?? 'run';
+		const activity = r.activity_type ?? 'run';
 		activityCounts.set(activity, (activityCounts.get(activity) ?? 0) + 1);
 	}
 

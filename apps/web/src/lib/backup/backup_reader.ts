@@ -133,19 +133,29 @@ export function stripServerManagedProfileFields(
 }
 
 /**
- * Older backups (pre-Apr 2026) may lack `metadata.activity_type`.
- * The DB CHECK trigger requires it on insert, so coalesce to
- * `'run'` on restore. The user can still edit it afterwards.
+ * Resolve the run's activity from a backed-up row onto the real
+ * `runs.activity_type` column (promoted out of metadata by 20261207_001).
+ * New backups carry it as a top-level column; pre-promotion backups only
+ * carry `metadata.activity_type`. Read the column first, fall back to the
+ * legacy bag key, default to `'run'`, and drop the now-stale bag key so a
+ * restored row doesn't double-store it. Returns the column value plus the
+ * cleaned metadata bag.
  */
-export function coalesceActivityType(metadata: unknown): Record<string, unknown> {
+export function coalesceRunActivity(row: Record<string, unknown>): {
+	activity_type: string;
+	metadata: Record<string, unknown> | null;
+} {
 	const md =
-		metadata && typeof metadata === 'object'
-			? { ...(metadata as Record<string, unknown>) }
-			: ({} as Record<string, unknown>);
-	if (typeof md.activity_type !== 'string') {
-		md.activity_type = 'run';
+		row.metadata && typeof row.metadata === 'object'
+			? { ...(row.metadata as Record<string, unknown>) }
+			: null;
+	let activityType =
+		typeof row.activity_type === 'string' ? row.activity_type : undefined;
+	if (activityType === undefined && md && typeof md.activity_type === 'string') {
+		activityType = md.activity_type;
 	}
-	return md;
+	if (md) delete md.activity_type;
+	return { activity_type: activityType ?? 'run', metadata: md };
 }
 
 /**

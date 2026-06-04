@@ -57,7 +57,7 @@
 	onMount(load);
 
 	function activityLabel(r: AthleteRunSummary): string {
-		const a = (r.metadata?.activity_type as string | undefined) ?? 'run';
+		const a = r.activity_type ?? 'run';
 		return a.charAt(0).toUpperCase() + a.slice(1);
 	}
 

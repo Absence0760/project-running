@@ -198,7 +198,6 @@ async function importOne(
 
 	const metadata: Record<string, unknown> = {
 		[METADATA_KEYS.strava_id]: stravaId,
-		[METADATA_KEYS.activity_type]: activityType,
 		[METADATA_KEYS.imported_from]: 'strava',
 		[METADATA_KEYS.imported_at]: new Date().toISOString(),
 	};
@@ -212,6 +211,7 @@ async function importOne(
 		duration_s: Math.max(0, Math.round(durationS)),
 		elevation_m: elevationM > 0 ? Math.round(elevationM) : null,
 		source: 'strava',
+		activity_type: activityType,
 		metadata,
 		track: track ?? undefined,
 		title: row[idx.name] || null,

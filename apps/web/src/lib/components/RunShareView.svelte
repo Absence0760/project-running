@@ -90,7 +90,7 @@
 	let chartHoverIdx = $state<number | null>(null);
 
 	let paceHeatmapActivity = $derived.by<'run' | 'walk' | 'cycle' | 'hike' | undefined>(() => {
-		const key = run?.metadata?.['activity_type'];
+		const key = run?.activity_type;
 		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
 		return undefined;
 	});

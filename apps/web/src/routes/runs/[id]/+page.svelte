@@ -90,10 +90,10 @@
 	let editing = $state(false);
 	let editTitle = $state('');
 	let editNotes = $state('');
-	// DNF flag, mirrored from metadata.is_dnf into the edit form. Setting
-	// it excludes the run from personal-records scoring server-side
-	// (migration 20260530000001) — a DNF ultra must not promote as a PR
-	// just because its truncated distance fits a shorter bracket.
+	// DNF flag, mirrored from the runs.is_dnf column into the edit form.
+	// Setting it excludes the run from personal-records scoring server-side
+	// (migration 20261207_001) — a DNF ultra must not promote as a PR just
+	// because its truncated distance fits a shorter bracket.
 	let editIsDnf = $state(false);
 	let showDeleteConfirm = $state(false);
 	let showShareConfirm = $state(false);
@@ -266,9 +266,7 @@
 	let runNotes = $derived(
 		(run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.notes] as string ?? '',
 	);
-	let isDnf = $derived(
-		(run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.is_dnf] === true,
-	);
+	let isDnf = $derived(run?.is_dnf === true);
 	/// Estimated calories — routes through the shared pure helper
 	/// `apps/web/src/lib/runs/calories.ts` (mirrored byte-for-byte in
 	/// the Dart twin) so the formula stays in lockstep across the
@@ -278,10 +276,7 @@
 	/// `docs/architecture/decisions.md § 77`). Pre-fix this page hardcoded
 	/// `weight × distance` and ignored gender entirely — every
 	/// female runner was over-estimated by ~5%.
-	let runActivityType = $derived(
-		((run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.activity_type] as string) ??
-			'run',
-	);
+	let runActivityType = $derived(run?.activity_type ?? 'run');
 	/// Garmin discipline (FIT sub_sport) — the trail/track/treadmill/road
 	/// distinction the coarse activity_type throws away. Shown as a header
 	/// chip so a trail run reads as trail, not generic "Run" (round-5 F1).
@@ -420,28 +415,22 @@
 		if (!run) return;
 		try {
 			// title/notes go through updateRunMetadata's normalised patch.
-			// is_dnf isn't one of its keys (the normaliser only knows
-			// title + notes), so when it changed apply the same
-			// read-merge-write here in a single round-trip: build the
-			// title/notes patch with the shared helper, then add or drop
-			// is_dnf on top. Setting it true excludes the run from
-			// personal-records scoring; the PR trigger drops it on the next
-			// refresh. Un-toggling deletes the key rather than writing
-			// `false`, matching the metadata-bag convention.
+			// is_dnf is a real `runs.is_dnf` column (20261207_001), so when it
+			// changed apply the title/notes patch plus the column in a single
+			// round-trip. Setting it true excludes the run from personal-records
+			// scoring; the PR trigger drops it on the next refresh.
 			if (editIsDnf !== isDnf) {
 				const nextMeta = applyRunMetadataPatch(
 					run.metadata as Record<string, unknown> | null | undefined,
 					{ title: editTitle, notes: editNotes },
 					new Date().toISOString(),
 				);
-				if (editIsDnf) nextMeta[METADATA_KEYS.is_dnf] = true;
-				else delete nextMeta[METADATA_KEYS.is_dnf];
 				const { error } = await supabase
 					.from(TABLES.runs)
-					.update({ metadata: nextMeta })
+					.update({ metadata: nextMeta, is_dnf: editIsDnf })
 					.eq('id', run.id);
 				if (error) throw error;
-				run = { ...run, metadata: nextMeta } as Run;
+				run = { ...run, metadata: nextMeta, is_dnf: editIsDnf } as Run;
 			} else {
 				await updateRunMetadata(run.id, { title: editTitle, notes: editNotes });
 				const metadata = {
@@ -643,7 +632,7 @@
 	}
 
 	/**
-	 * Mobile-recorded runs stamp the activity into `metadata.activity_type`.
+	 * The activity lives on the real `runs.activity_type` column (20261207_001).
 	 * Map to a human label + Material Symbols icon.
 	 */
 	// $derived so the m() labels track locale changes (a plain const captures
@@ -656,7 +645,7 @@
 	});
 
 	let activity = $derived.by(() => {
-		const key = run?.metadata?.[METADATA_KEYS.activity_type];
+		const key = run?.activity_type;
 		if (typeof key !== 'string') return null;
 		return activityMeta[key] ?? { label: key, icon: 'directions_run' };
 	});
@@ -666,7 +655,7 @@
 	/// anything else (or a missing tag) falls back to the legacy
 	/// single-line render via `undefined`.
 	let paceHeatmapActivity = $derived.by<'run' | 'walk' | 'cycle' | 'hike' | undefined>(() => {
-		const key = run?.metadata?.[METADATA_KEYS.activity_type];
+		const key = run?.activity_type;
 		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
 		return undefined;
 	});
@@ -1387,7 +1376,7 @@
 				 most common 2-col layout). When the conditional stats
 				 above leave us with an odd total, render the Activity
 				 Type as the last cell — it's universally available
-				 (every run carries metadata.activity_type) + adds
+				 (every run carries the activity_type column) + adds
 				 genuine info rather than visual padding. -->
 			{#if showActivityFiller && activity}
 				<div class="key-stat key-stat-activity">
@@ -1455,7 +1444,7 @@
 					routeId={run.route_id}
 					distanceM={run.distance_m}
 					durationS={run.duration_s}
-					metadata={run.metadata as Record<string, unknown> | null}
+					activityType={run.activity_type}
 				/>
 			</section>
 		{/if}

@@ -15,7 +15,7 @@
 		routeId: string;
 		distanceM: number;
 		durationS: number;
-		metadata: Record<string, unknown> | null;
+		activityType: string | null;
 		routeName?: string;
 	}
 	let {
@@ -23,7 +23,7 @@
 		routeId,
 		distanceM,
 		durationS,
-		metadata,
+		activityType,
 		routeName,
 	}: Props = $props();
 
@@ -37,7 +37,7 @@
 			route_id: routeId,
 			distance_m: distanceM,
 			duration_s: durationS,
-			metadata,
+			activity_type: activityType,
 		};
 		attempts = qualifyingAttempts(me, rows);
 		loading = false;

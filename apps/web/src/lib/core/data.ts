@@ -178,12 +178,12 @@ export async function fetchRunById(id: string): Promise<Run | null> {
 /// no track download.
 export async function fetchRunsOnRoute(
 	routeId: string,
-): Promise<{ id: string; route_id: string | null; distance_m: number; duration_s: number; metadata: Record<string, unknown> | null }[]> {
+): Promise<{ id: string; route_id: string | null; distance_m: number; duration_s: number; activity_type: string | null }[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data, error } = await supabase
 		.from(TABLES.runs)
-		.select('id, route_id, distance_m, duration_s, metadata')
+		.select('id, route_id, distance_m, duration_s, activity_type')
 		.eq('user_id', userId)
 		.eq('route_id', routeId)
 		.order('duration_s', { ascending: true });
@@ -688,7 +688,6 @@ export async function createManualRun(input: {
 
 	const metadata: Record<string, unknown> = {
 		[METADATA_KEYS.manual_entry]: true,
-		[METADATA_KEYS.activity_type]: input.activityType ?? 'run',
 	};
 	if (input.notes && input.notes.trim()) metadata[METADATA_KEYS.notes] = input.notes.trim();
 
@@ -700,6 +699,7 @@ export async function createManualRun(input: {
 			duration_s: input.durationS,
 			distance_m: input.distanceM,
 			source: 'app',
+			activity_type: input.activityType ?? 'run',
 			metadata,
 			route_id: input.routeId ?? null,
 			is_public: isPublic,
@@ -729,6 +729,8 @@ export async function saveRun(input: {
 	duration_s: number;
 	elevation_m: number | null;
 	source: string;
+	/// Real `runs.activity_type` column (20261207_001). Defaults to 'run'.
+	activity_type?: 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
 	metadata: Record<string, unknown> | null;
 	track?: Array<{ lat: number; lng: number; ele?: number; ts?: string; bpm?: number }>;
 	/// Per-point HR for a trackless (indoor / treadmill) run. Uploaded as the
@@ -763,6 +765,7 @@ export async function saveRun(input: {
 		distance_m: input.distance_m,
 		duration_s: input.duration_s,
 		source: input.source,
+		activity_type: input.activity_type ?? 'run',
 		metadata: mergedMetadata,
 		is_public: isPublic,
 	};
@@ -2422,7 +2425,7 @@ export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOpt
 	if (!userId) return [];
 	const { data } = await supabase
 		.from(TABLES.runs)
-		.select('id, started_at, duration_s, distance_m, metadata')
+		.select('id, started_at, duration_s, distance_m, activity_type')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false })
 		.limit(limit);
@@ -2432,10 +2435,7 @@ export async function fetchRecentRunsForPicker(limit = 20): Promise<RecentRunOpt
 		started_at: r.started_at,
 		duration_s: r.duration_s,
 		distance_m: r.distance_m,
-		activity_type:
-			(r.metadata && typeof r.metadata === 'object' && METADATA_KEYS.activity_type in r.metadata
-				? ((r.metadata as Record<string, unknown>)[METADATA_KEYS.activity_type] as string)
-				: null) ?? 'run',
+		activity_type: r.activity_type ?? 'run',
 	}));
 }
 
@@ -3638,7 +3638,7 @@ export async function fetchFollowingFeed(opts?: {
 	cursor?: { started_at: string; id: string } | null;
 	/** Restrict to a single followee. Pass `null` / omit for "everyone you follow". */
 	authorId?: string | null;
-	/** Restrict by `metadata->>activity_type`. Pass 'all' / omit for any activity. */
+	/** Restrict by `runs.activity_type`. Pass 'all' / omit for any activity. */
 	activityType?: string | null;
 }): Promise<FeedEntry[]> {
 	const limit = opts?.limit ?? 20;
@@ -3685,9 +3685,7 @@ export async function fetchFollowingFeed(opts?: {
 			.order('id', { ascending: false })
 			.limit(limit);
 		if (opts?.activityType && opts.activityType !== 'all') {
-			// jsonb metadata key — Supabase exposes the `->>` operator via
-			// the column-name string syntax. Matches '{activity_type:run}'.
-			q = q.eq(`metadata->>${METADATA_KEYS.activity_type}`, opts.activityType);
+			q = q.eq('activity_type', opts.activityType);
 		}
 		if (opts?.cursor) {
 			// Stable cursor pagination on (started_at, id) — strictly less than
@@ -5124,6 +5122,7 @@ export interface AthleteRunSummary {
 	is_public: boolean;
 	source: RunSource;
 	route_id: string | null;
+	activity_type: string;
 	metadata: Record<string, unknown> | null;
 }
 
@@ -5134,7 +5133,7 @@ export async function fetchAthleteRuns(
 	if (!auth.user?.id || !athleteId) return [];
 	const { data, error } = await supabase
 		.from(TABLES.runs)
-		.select('id, started_at, distance_m, duration_s, is_public, source, route_id, metadata')
+		.select('id, started_at, distance_m, duration_s, is_public, source, route_id, activity_type, metadata')
 		.eq('user_id', athleteId)
 		.order('started_at', { ascending: false })
 		.limit(limit);
@@ -5147,6 +5146,7 @@ export async function fetchAthleteRuns(
 		is_public: (r.is_public as boolean) ?? false,
 		source: parseRunSource(r.source as string | null),
 		route_id: (r.route_id as string | null) ?? null,
+		activity_type: (r.activity_type as string | null) ?? 'run',
 		metadata: (r.metadata as Record<string, unknown> | null) ?? null,
 	}));
 }

@@ -255,12 +255,12 @@ test('happy-path single run with track uploads then upserts', async () => {
 	assert.equal(uploadArg.path, 'uid/run-1.json.gz');
 	assert.equal(uploadArg.byteLength, 4);
 
-	// The upserted run row carries track_url + activity_type default.
+	// The upserted run row carries track_url + the activity_type column default.
 	const runRow = backend.calls[upsertIdx].arg as Record<string, unknown>;
 	assert.equal(runRow.id, 'run-1');
 	assert.equal(runRow.user_id, 'uid');
 	assert.equal(runRow.track_url, 'uid/run-1.json.gz');
-	assert.equal((runRow.metadata as Record<string, unknown>).activity_type, 'run');
+	assert.equal(runRow.activity_type, 'run');
 });
 
 test('run with no track in archive still upserts the row, track_url=null', async () => {
@@ -415,7 +415,7 @@ test('event_id resolver failure becomes part of warnings, all event_ids null', a
 	);
 });
 
-test('coalesceActivityType: run with missing metadata gets activity_type=run', async () => {
+test('restore: run with missing activity_type gets the column default "run"', async () => {
 	const backend = makeFakeBackend();
 	await restoreOrchestrate(
 		makeParsedBackup({
@@ -426,16 +426,15 @@ test('coalesceActivityType: run with missing metadata gets activity_type=run', a
 	);
 	const row = backend.calls.find((c) => c.method === 'upsertRun')!
 		.arg as Record<string, unknown>;
-	const md = row.metadata as Record<string, unknown>;
-	assert.equal(md.activity_type, 'run');
+	assert.equal(row.activity_type, 'run');
 });
 
-test('preserves explicit metadata.activity_type', async () => {
+test('restore: prefers the activity_type column over the legacy bag key', async () => {
 	const backend = makeFakeBackend();
 	await restoreOrchestrate(
 		makeParsedBackup({
 			runs: [
-				{ id: 'r-1', metadata: { activity_type: 'cycle' } }
+				{ id: 'r-1', activity_type: 'cycle', metadata: { activity_type: 'run' } }
 			]
 		}),
 		'uid',
@@ -443,8 +442,23 @@ test('preserves explicit metadata.activity_type', async () => {
 	);
 	const row = backend.calls.find((c) => c.method === 'upsertRun')!
 		.arg as Record<string, unknown>;
-	const md = row.metadata as Record<string, unknown>;
-	assert.equal(md.activity_type, 'cycle');
+	assert.equal(row.activity_type, 'cycle');
+	assert.equal((row.metadata as Record<string, unknown>)?.activity_type, undefined);
+});
+
+test('restore: pre-promotion backup falls back to the metadata.activity_type bag key', async () => {
+	const backend = makeFakeBackend();
+	await restoreOrchestrate(
+		makeParsedBackup({
+			runs: [{ id: 'r-1', metadata: { activity_type: 'hike' } }]
+		}),
+		'uid',
+		backend
+	);
+	const row = backend.calls.find((c) => c.method === 'upsertRun')!
+		.arg as Record<string, unknown>;
+	assert.equal(row.activity_type, 'hike');
+	assert.equal((row.metadata as Record<string, unknown>)?.activity_type, undefined);
 });
 
 // ─────────────────── routes ───────────────────
@@ -596,9 +610,9 @@ test('100-run backup processes everything in order without dropping', async () =
 	assert.deepEqual(ids, runs.map((r) => r.id));
 });
 
-test('coalesceActivityType clones — original metadata is not mutated', async () => {
+test('coalesceRunActivity clones — original metadata is not mutated', async () => {
 	const backend = makeFakeBackend();
-	const inputMeta = { title: 'Original' };
+	const inputMeta = { activity_type: 'cycle', title: 'Original' };
 	await restoreOrchestrate(
 		makeParsedBackup({
 			runs: [{ id: 'r-1', metadata: inputMeta }]
@@ -606,7 +620,8 @@ test('coalesceActivityType clones — original metadata is not mutated', async (
 		'uid',
 		backend
 	);
-	// The caller's metadata object was not mutated to add
-	// activity_type — coalesceActivityType clones.
-	assert.equal((inputMeta as Record<string, unknown>).activity_type, undefined);
+	// The caller's metadata object is not mutated when coalesceRunActivity
+	// promotes + strips the legacy bag key.
+	assert.equal(inputMeta.activity_type, 'cycle');
+	assert.equal(inputMeta.title, 'Original');
 });

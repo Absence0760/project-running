@@ -47,8 +47,9 @@ export interface TrackPoint {
 // `metadata` is overridden to a looser map so consumers can index dynamic
 // keys (activity_type, steps, event, position, etc.) — the generated `Json`
 // type is too strict for that pattern.
-export type Run = Omit<RunRow, 'source' | 'metadata'> & {
+export type Run = Omit<RunRow, 'source' | 'metadata' | 'activity_type'> & {
 	source: RunSource;
+	activity_type: ActivityType;
 	metadata: Record<string, unknown> | null;
 	track: TrackPoint[] | null;
 	// View-only boolean from `public_runs` (migration 20261105_001):
@@ -114,6 +115,11 @@ export function parseRunSource(raw: string | null | undefined): RunSource {
 			return 'app';
 	}
 }
+
+// Promoted out of `runs.metadata` into a real `runs.activity_type` column by
+// migration 20261207_001 (CHECK in ('run','walk','hike','cycle','stroller')).
+// The CHECK ↔ this union lockstep is enforced by check_constraint_unions.mjs.
+export type ActivityType = 'run' | 'walk' | 'hike' | 'cycle' | 'stroller';
 
 export type RouteSurface = 'road' | 'trail' | 'mixed';
 export type IntegrationProvider = 'strava' | 'garmin' | 'parkrun' | 'runsignup';

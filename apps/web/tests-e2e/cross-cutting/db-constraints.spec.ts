@@ -413,4 +413,47 @@ test.describe('database constraints', () => {
 			.eq('id', USER_A.id);
 		expect(error?.code).toBe('23514');
 	});
+
+	test('runs.activity_type CHECK rejects an out-of-domain value; column defaults pin the F3 promotion', async () => {
+		// activity_type + is_dnf were promoted out of runs.metadata into
+		// real columns by 20261207_001 (ActivityType TS narrow-union ↔
+		// CHECK lockstep, guarded by check_constraint_unions.mjs). A write
+		// outside ('run','walk','hike','cycle','stroller') must 23514, and
+		// a row that omits both columns must land the defaults.
+		const admin = getAdminClient();
+
+		const bad = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				duration_s: 600,
+				distance_m: 2000,
+				source: 'app',
+				activity_type: 'swim'
+			})
+			.select('id')
+			.single();
+		expect(bad.error?.code).toBe('23514');
+		expect(bad.data).toBeNull();
+
+		const ok = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: new Date().toISOString(),
+				duration_s: 600,
+				distance_m: 2000,
+				source: 'app'
+			})
+			.select('id, activity_type, is_dnf')
+			.single();
+		try {
+			expect(ok.error).toBeNull();
+			expect(ok.data?.activity_type).toBe('run');
+			expect(ok.data?.is_dnf).toBe(false);
+		} finally {
+			if (ok.data?.id) await admin.from('runs').delete().eq('id', ok.data.id);
+		}
+	});
 });

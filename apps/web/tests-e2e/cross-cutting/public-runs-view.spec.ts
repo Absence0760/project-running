@@ -54,11 +54,12 @@ const STRIPPED_METADATA_KEYS = [
 	'run_number',
 ] as const;
 
-// Keys the view DOES expose (so a public viewer can render the run
-// usefully). Pin these so a regression that over-stripped breaks
-// here too.
+// Keys the view DOES expose in the metadata bag (so a public viewer can
+// render the run usefully). Pin these so a regression that over-stripped
+// breaks here too. `activity_type` is NOT here — migration 20261207_001
+// promoted it to a real `runs.activity_type` column, so the view exposes
+// it as a top-level column (asserted separately below), not a bag key.
 const RETAINED_METADATA_KEYS = [
-	'activity_type',
 	'avg_bpm',
 ] as const;
 
@@ -72,6 +73,7 @@ test.describe('public_runs view — privacy strip contract', () => {
 			distance_m: 5_000,
 			duration_s: 1_500,
 			is_public: true,
+			activity_type: 'run',
 			metadata: {
 				// strip-list — these MUST disappear
 				strava_id: 'STRAVA_LEAK',
@@ -112,14 +114,18 @@ test.describe('public_runs view — privacy strip contract', () => {
 			});
 			const { data, error } = await anon
 				.from('public_runs')
-				.select('metadata')
+				.select('activity_type, metadata')
 				.eq('id', planted)
 				.single();
 
 			expect(error, 'anon must be able to read its own public_runs row')
 				.toBeNull();
-			const meta = (data as { metadata: Record<string, unknown> })
-				.metadata;
+			const row = data as { activity_type: string; metadata: Record<string, unknown> };
+			const meta = row.metadata;
+
+			// activity_type is a real column on the view (20261207_001), not a
+			// metadata bag key — a public viewer reads it for the activity badge.
+			expect(row.activity_type).toBe('run');
 
 			// Every strip-listed key must be absent.
 			for (const key of STRIPPED_METADATA_KEYS) {
