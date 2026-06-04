@@ -263,5 +263,40 @@ void main() {
       expect(downloaded.first.lat, closeTo(47.37, 0.001));
       expect(downloaded.last.lng, closeTo(8.56, 0.001));
     });
+
+    test(
+        'fetchPublicProfile stays within the user_profiles column grant '
+        '(no 42501)', () async {
+      // Regression for "Could not load profile.": `user_profiles` is
+      // locked to column-level SELECT grants for authenticated/anon
+      // (id, display_name, avatar_url, created_at). `preferred_unit`
+      // (20260810_001), `subscription_tier`/`subscription_at`/
+      // `parkrun_number` (20260707_001) are revoked. PostgREST rejects
+      // the WHOLE read with 42501 "permission denied for table
+      // user_profiles" if the select names any revoked column, which
+      // tanks the entire profile screen. A live read against real
+      // grants is the only thing that catches a select drifting back
+      // onto a revoked column — assert it succeeds and returns the row.
+      final profile = await api.fetchPublicProfile(userId!);
+      expect(profile, isNotNull,
+          reason: 'fetchPublicProfile must succeed for the seed user; a '
+              '42501 here means the select names a column revoked from '
+              'the authenticated grant (e.g. preferred_unit).');
+      expect(profile!.id, userId);
+      expect(profile.displayName, isNotEmpty);
+    });
+
+    test('fetchProfileSummary loads for the seed user (profile screen '
+        'entry path)', () async {
+      // fetchProfileSummary fans out to fetchPublicProfile +
+      // fetchFollowCounts + viewerFollows; it is the first of the six
+      // parallel calls the profile screen awaits, and a throw in any
+      // of them collapses the whole screen to "Could not load profile."
+      // Pin the happy path end-to-end against real grants.
+      final summary = await api.fetchProfileSummary(userId!);
+      expect(summary, isNotNull);
+      expect(summary!.id, userId);
+      expect(summary.displayName, isNotEmpty);
+    });
   });
 }

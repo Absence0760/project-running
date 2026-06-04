@@ -1806,15 +1806,19 @@ class ApiClient {
   }
 
   /// Public profile lookup by user ID. Returns null when the row
-  /// doesn't exist or RLS hides it. Returns only the public-safe columns
-  /// — `subscription_tier`, `subscription_at`, and `parkrun_number` are
-  /// column-level revoked from `authenticated` callers (migration
-  /// 20260707_001), so cross-user reads must not request them. Self-reads
-  /// of those columns go through [fetchMyProfile].
+  /// doesn't exist or RLS hides it. Returns only the columns that are
+  /// column-level granted to `authenticated`/`anon` on `user_profiles`:
+  /// `id, display_name, avatar_url, created_at`. `subscription_tier`,
+  /// `subscription_at`, `parkrun_number` are revoked (migration
+  /// 20260707_001), and `preferred_unit` was dropped from the cross-user
+  /// grant by 20260810_001 (it telegraphs rough region). Requesting any
+  /// revoked column makes PostgREST reject the whole read with 42501
+  /// "permission denied for table user_profiles". Self-reads of revoked
+  /// columns go through [fetchMyProfile] (get_my_profile, SECURITY DEFINER).
   Future<UserProfileRow?> fetchPublicProfile(String userId) async {
     final row = await _client
         .from(UserProfileRow.table)
-        .select('id, display_name, avatar_url, preferred_unit, created_at')
+        .select('id, display_name, avatar_url, created_at')
         .eq(UserProfileRow.colId, userId)
         .maybeSingle();
     if (row == null) return null;
