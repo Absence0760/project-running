@@ -18,8 +18,22 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     @Published var distanceMetres: Double = 0
     @Published var currentPace: Double? = nil
 
-    /// Raw GPS track recorded during the run.
+    /// Rolling window of the most recent GPS fixes, kept only to compute
+    /// live pace and the per-fix distance delta. The full track is
+    /// streamed to disk by `CheckpointStore`; holding the whole thing in
+    /// memory would grow without bound on an all-day ultra (a 100-hour
+    /// run at 1 Hz is ~360k points). Capped at `maxInMemoryTrackPoints`.
     @Published var track: [CLLocation] = []
+
+    /// Authoritative count of every GPS fix recorded this run. Unlike
+    /// `track.count` (now bounded), this never resets mid-run, so the UI
+    /// and the crash checkpoint report the true number of points.
+    @Published var trackPointCount: Int = 0
+
+    /// Upper bound on the in-memory rolling window. 600 fixes comfortably
+    /// covers the ~200 m pace look-back even at dense sampling, while
+    /// keeping memory flat regardless of run length.
+    private let maxInMemoryTrackPoints = 600
 
     /// The completed run data, available after stop() or recovery.
     var finishedRun: FinishedRun?
@@ -39,7 +53,6 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private var lastTooSlowHaptic: Date? = nil
     private var currentRunId: String?
     private var checkpointStore: CheckpointStore?
-    private var writtenPointCount: Int = 0
 
     struct FinishedRun {
         let id: String
@@ -89,13 +102,13 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let runId = UUID().uuidString.lowercased()
         currentRunId = runId
         track = []
+        trackPointCount = 0
         distanceMetres = 0
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
         pausedAt = nil
         totalPausedInterval = 0
-        writtenPointCount = 0
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
         healthKit.reset()
@@ -153,21 +166,26 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         timer = nil
         locationManager.stopUpdatingLocation()
         healthKit.stopWorkout()
-        checkpointStore?.clear()
+
+        // The in-memory `track` is a bounded rolling window, so the full
+        // run is read back from the streamed NDJSON file. Close the append
+        // handle first to flush every fix to disk, read, then clear.
+        let store = checkpointStore
+        store?.closeAppendHandle()
+        let trackPoints = (store?.loadTrackPoints() ?? []).map { p in
+            TrackPoint(lat: p.lat, lng: p.lng, ele: p.ele, ts: p.ts)
+        }
+        store?.clear()
         checkpointStore = nil
 
         let duration = Int(elapsedSeconds)
-        let trackPoints = track.map { loc in
-            TrackPoint(
-                lat: loc.coordinate.latitude,
-                lng: loc.coordinate.longitude,
-                ele: loc.altitude > -999 ? loc.altitude : nil,
-                ts: ISO8601DateFormatter().string(from: loc.timestamp)
-            )
-        }
 
+        // One UUID per run: the finished run reuses the id assigned at
+        // start() — the same id the checkpoint and the on-disk track file
+        // are keyed under — instead of minting a fresh one here, which
+        // previously orphaned the streamed track from the run row.
         finishedRun = FinishedRun(
-            id: UUID().uuidString.lowercased(),
+            id: currentRunId ?? UUID().uuidString.lowercased(),
             startedAt: startDate ?? Date(),
             durationSeconds: duration,
             distanceMetres: distanceMetres,
@@ -182,14 +200,15 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     func reset() {
         checkpointTimer?.invalidate()
         checkpointTimer = nil
+        checkpointStore?.closeAppendHandle()
         track = []
+        trackPointCount = 0
         distanceMetres = 0
         elapsedSeconds = 0
         currentPace = nil
         finishedRun = nil
         pausedAt = nil
         totalPausedInterval = 0
-        writtenPointCount = 0
         lastTooFastHaptic = nil
         lastTooSlowHaptic = nil
         checkpointStore = nil
@@ -266,6 +285,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
         if !newPoints.isEmpty {
             checkpointStore?.appendTrackPoints(newPoints)
+            trackPointCount += newPoints.count
+        }
+
+        // Keep the in-memory window bounded — the full track lives on disk.
+        if track.count > maxInMemoryTrackPoints {
+            track.removeFirst(track.count - maxInMemoryTrackPoints)
         }
 
         updatePace()
@@ -281,10 +306,13 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
             distanceMetres: distanceMetres,
             activeDurationSeconds: elapsedSeconds,
             pausedIntervalSeconds: totalPausedInterval,
-            trackPointCount: track.count,
-            cacheFileURL: store.trackFileURL
+            trackPointCount: trackPointCount,
+            cacheFileURL: store.trackFileURL,
+            averageBPM: healthKit.averageBPM
         )
         store.write(checkpoint: cp)
+        // Match the track's crash-durability window to the checkpoint's.
+        store.syncTrack()
     }
 
     func recoverRun() -> FinishedRun? {
@@ -294,13 +322,16 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         let trackPoints = pts.map { p in
             TrackPoint(lat: p.lat, lng: p.lng, ele: p.ele, ts: p.ts)
         }
+        trackPointCount = trackPoints.count
         return FinishedRun(
             id: cp.id,
             startedAt: cp.startedAt,
             durationSeconds: Int(cp.activeDurationSeconds),
             distanceMetres: cp.distanceMetres,
             track: trackPoints,
-            averageBPM: nil
+            // Restored from the checkpoint so a recovered run keeps its
+            // heart-rate summary instead of dropping to "— bpm".
+            averageBPM: cp.averageBPM
         )
     }
 

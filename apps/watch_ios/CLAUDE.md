@@ -52,7 +52,7 @@ All under `WatchApp/` inside `WatchApp.xcodeproj`:
 - `RunApp.swift` — SwiftUI app entry (`@main`)
 - `ContentView.swift` — root view, run state routing (idle / recovering / recording / paused / finished)
 - `WorkoutManager.swift` — `HKWorkoutSession` wrapper, workout lifecycle (start / pause / resume / stop / recovery)
-- `CheckpointStore.swift` — 15s crash checkpoint to `UserDefaults` + incremental track JSON to `Caches/run_checkpoint/<id>.ndjson`
+- `CheckpointStore.swift` — 15s crash checkpoint to `UserDefaults` + incremental track NDJSON to `Caches/run_checkpoint/<id>.ndjson`. The track file is written through one long-lived `FileHandle` (opened once per run, not re-opened per GPS batch), one self-contained JSON object per line, `synchronize()`d every 32 points and on each 15s metadata checkpoint — so a crash can only truncate the final partial line (which the loader skips) and loses at most ~15s of GPS. The checkpoint carries `averageBPM` so a recovered run keeps its heart-rate summary
 - `WatchConnectivityManager.swift` — Watch Connectivity framework, two-way messaging with the iOS phone app
 - `RouteNavigator.swift` — route preview and off-route detection on the watch (stub — no logic yet)
 - `HealthKitManager.swift` — `HKWorkoutSession` + `HKLiveWorkoutBuilder` wrapper that publishes live heart rate from the watch's sensor
@@ -107,7 +107,7 @@ More than a stub — there's a multi-file architecture with `@StateObject` / `@O
 
 Per [`roadmap.md` § Phase 2](../../docs/product/roadmap.md), the current checkbox status is:
 
-- [x] Standalone workout session (no phone required) — background GPS via `allowsBackgroundLocationUpdates = true`; crash checkpoint recovery in `CheckpointStore.swift` writes a 15s snapshot to UserDefaults + incremental track JSON to Caches; on next launch the user is offered "Recover unsaved run?"
+- [x] Standalone workout session (no phone required) — background GPS via `allowsBackgroundLocationUpdates = true`; crash checkpoint recovery in `CheckpointStore.swift` writes a 15s snapshot to UserDefaults + streams the track to NDJSON in Caches; on next launch the user is offered "Recover unsaved run?" (recovery restores the avg HR from the checkpoint). The run keeps **one UUID end-to-end** — the id minted at `start()` is the one the checkpoint, the on-disk track file, and the finished run row all share (a finished run no longer mints a second UUID). `WorkoutManager.track` is a **bounded rolling window** (`maxInMemoryTrackPoints`); the full track lives on disk and is read back at stop, so an all-day ultra holds flat memory instead of a 360k-point array. `trackPointCount` carries the authoritative count
 - [x] Heart rate via HealthKit sensor
 - [x] Haptic pace alerts — target pace set via preset list in `PreRunView`; `WKInterfaceDevice.current().play(.notification)` fires when pace leaves the ±15 s/km band, debounced to once per 30s per direction
 - [ ] Syncs run data via Watch Connectivity framework — watch side wired (`WCSession.transferFile`); phone-side receiver + sign-in UI live; checkbox remains unticked pending end-to-end verification on paired physical devices

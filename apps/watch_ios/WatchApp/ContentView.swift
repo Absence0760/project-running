@@ -264,7 +264,7 @@ struct RunningView: View {
                 }
             }
 
-            Text("\(workoutManager.track.count) GPS pts")
+            Text("\(workoutManager.trackPointCount) GPS pts")
                 .font(.caption2)
                 .foregroundColor(.secondary)
 
@@ -408,7 +408,7 @@ struct PostRunView: View {
                         if let bpm = workoutManager.finishedRun?.averageBPM {
                             Label("\(Int(bpm.rounded())) bpm", systemImage: "heart.fill")
                         } else {
-                            Label("\(workoutManager.track.count) pts", systemImage: "mappin.and.ellipse")
+                            Label("\(workoutManager.finishedRun?.track.count ?? workoutManager.trackPointCount) pts", systemImage: "mappin.and.ellipse")
                         }
                     }
                     .font(.caption)
