@@ -89,16 +89,16 @@ Organisers can turn an event instance into a live, server-coordinated race: ever
 
 **Tables** (`20260425_001_race_sessions.sql`):
 
-- `race_sessions` (`event_id`, `instance_start`, `status ∈ {armed, running, finished, cancelled}`, `started_at`, `started_by`, `finished_at`, `auto_approve`). Admin-only writes via `is_club_admin`; anyone who can see the event reads.
+- `race_sessions` (`event_id`, `instance_start`, `status ∈ {armed, running, finished, cancelled}`, `started_at`, `started_by`, `finished_at`, `is_auto_approve`). Admin-only writes via `is_club_admin`; anyone who can see the event reads.
 - `race_pings` (append-only, `user_id`, `lat`, `lng`, `distance_m`, `elapsed_s`, `bpm`). Writes allowed only while the parent `race_sessions.status = 'running'`; reads follow the parent event's visibility.
-- `event_results.organiser_approved` + `organiser_approved_by` / `_at` columns. The trigger `event_results_set_approval_default` flips a new result to `organiser_approved = false` if the parent `race_sessions.auto_approve` is off; otherwise it's approved on insert.
+- `event_results.organiser_approved` + `organiser_approved_by` / `_at` columns. The trigger `event_results_set_approval_default` flips a new result to `organiser_approved = false` if the parent `race_sessions.is_auto_approve` is off; otherwise it's approved on insert.
 - `approve_event_result(event_id, instance_start, user_id, approve)` security-definer RPC so admins can approve pending rows without needing a direct update policy.
 
 **Realtime**: `race_sessions`, `race_pings`, and `event_results` are all published on `supabase_realtime` so the organiser panel, spectator page, and leaderboard all update without polling.
 
 **Surfaces**:
 
-- Web event page: admin race-control panel (Arm → GO → End), `auto_approve` checkbox before arming. Attendees see a "Race armed" / "Race LIVE" banner with live elapsed. Approval buttons on pending rows for admins.
+- Web event page: admin race-control panel (Arm → GO → End), `is_auto_approve` checkbox before arming. Attendees see a "Race armed" / "Race LIVE" banner with live elapsed. Approval buttons on pending rows for admins.
 - `/live/event/{id}/{instance_start}`: public-ish spectator page. Live MapLibre map with each runner as a colour-coded dot + recent trail (latest 30 ping samples), Realtime-subscribed to `race_pings`. Below the map: live-ranked list of runners on course (distance, pace, elapsed) driven by the same data, plus the finisher leaderboard.
 - Mobile Android: `lib/race_controller.dart` handles the **participant** side — polls for the current user's armed/running races, shows a banner on the Run tab idle screen, pushes pings at 10s cadence while recording, auto-submits an `event_results` row on stop. **Organiser Arm / Fire Go / End** controls now also live on Android (`SocialService.armRace / startRace / endRace` + the race-control card on `event_detail_screen.dart`, gated on `ClubView.isRaceDirector`), with live state updates via the existing `subscribeToEvent` realtime channel extended to `race_sessions`.
 - Wear OS: `RaceSessionClient.kt` + `RunViewModel.observeRace` poll every 30s, surface a "RACE ARMED" / "RACE LIVE" caption above the Start button, push pings from the foreground service, auto-submit finisher rows. No organiser controls on Wear by design — typing admin actions on a wrist is a bad UX; use web or Android phone instead.

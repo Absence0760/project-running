@@ -160,6 +160,14 @@ not-yet-synced run is dropped on sign-out; in practice the queue drains
 on every run-stop and every offline→online edge, so it's normally empty
 before a deliberate sign-out.
 
+**At-rest / cloud backup.** The manifest sets `android:allowBackup="false"`,
+so none of the on-device data (the queued-run track files, the DataStore
+run metadata + route cache, the `EncryptedSharedPreferences` session blob)
+is swept into Android Auto-Backup — a restored encrypted blob would be
+undecryptable on a new device anyway, since its Keystore master key never
+leaves the original watch. `BackupExclusionManifestTest.kt` pins the flag;
+OS-level FBE covers the lost/stolen-device case. See [decisions.md § 127](../../docs/architecture/decisions.md).
+
 Offline runs persist in `LocalRunStore` (DataStore, `watch_wear` prefs,
 key `queued_runs_v2`). `RunViewModel.drainQueue()` fires on app start after
 auth succeeds, after every run stops, on every offline→online edge from
