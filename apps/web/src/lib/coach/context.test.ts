@@ -11,6 +11,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import {
+	summarizeRecentLifts,
+	summarizeNutrition,
+	COACH_LIFTS_CAP,
+} from './context';
 
 const SRC = readFileSync(
 	resolve(import.meta.dirname ?? '.', 'context.ts'),
@@ -71,4 +76,107 @@ test('runner_context never emits raw secrets (defence-in-depth)', () => {
 			`context.ts must NEVER project \`prefs.${k}\` into runner_context`,
 		);
 	}
+});
+
+test('nutrition_7d is gated on health-data consent', () => {
+	// Dietary intake is health-adjacent special-category data (Art 9),
+	// so the 7-day nutrition rollup must only be queried when
+	// healthConsentGranted is true — the same gate as DOB / HR. A
+	// refactor that hoists the food_log query out of the guard fails
+	// here rather than silently shipping intake data to Anthropic.
+	const guard = SRC.match(
+		/if \(healthConsentGranted\) \{([\s\S]*?from\('food_log'\)[\s\S]*?)\n\t\}/,
+	);
+	assert.ok(
+		guard,
+		'the food_log query MUST live inside an `if (healthConsentGranted)` block',
+	);
+});
+
+// --- summarizeRecentLifts ---------------------------------------------
+
+test('summarizeRecentLifts rolls sets into per-session summaries', () => {
+	const workouts = [
+		{ id: 'w1', title: 'Push day', started_at: '2026-06-03T08:00:00.000Z' },
+		{ id: 'w2', title: null, started_at: '2026-06-01T18:00:00.000Z' },
+	];
+	const sets = [
+		{ workout_id: 'w1', exercise_name: 'Bench', reps: 5, weight_kg: 60 },
+		{ workout_id: 'w1', exercise_name: 'Bench', reps: 5, weight_kg: 60 },
+		{ workout_id: 'w1', exercise_name: 'OHP', reps: 8, weight_kg: 40 },
+		{ workout_id: 'w2', exercise_name: 'Squat', reps: 5, weight_kg: 100 },
+	];
+	const out = summarizeRecentLifts(workouts, sets);
+	assert.equal(out.length, 2);
+	assert.deepEqual(out[0], {
+		date: '2026-06-03',
+		title: 'Push day',
+		exercises: 2,
+		sets: 3,
+		volume_kg: 5 * 60 + 5 * 60 + 8 * 40, // 920
+	});
+	assert.equal(out[1].title, null);
+	assert.equal(out[1].volume_kg, 500);
+});
+
+test('summarizeRecentLifts ignores bodyweight sets in volume + caps count', () => {
+	const workouts = Array.from({ length: COACH_LIFTS_CAP + 3 }, (_, i) => ({
+		id: `w${i}`,
+		title: null,
+		started_at: `2026-06-0${(i % 9) + 1}T08:00:00.000Z`,
+	}));
+	const sets = [
+		{ workout_id: 'w0', exercise_name: 'Pull-up', reps: 10, weight_kg: null },
+		{ workout_id: 'w0', exercise_name: 'Row', reps: 8, weight_kg: 50 },
+	];
+	const out = summarizeRecentLifts(workouts, sets);
+	assert.equal(out.length, COACH_LIFTS_CAP, 'caps at COACH_LIFTS_CAP sessions');
+	// Bodyweight set (no weight) contributes 0 tonnage; only the row counts.
+	assert.equal(out[0].volume_kg, 8 * 50);
+	assert.equal(out[0].exercises, 2);
+	assert.equal(out[0].sets, 2);
+});
+
+// --- summarizeNutrition -----------------------------------------------
+
+test('summarizeNutrition averages over days logged within the 7-day window', () => {
+	const now = new Date('2026-06-08T12:00:00.000Z');
+	const rows = [
+		// Two items on day A
+		{ logged_at: '2026-06-08T08:00:00.000Z', calories: 400, protein_g: 30, carbs_g: 40, fat_g: 10 },
+		{ logged_at: '2026-06-08T13:00:00.000Z', calories: 600, protein_g: 20, carbs_g: 80, fat_g: 20 },
+		// One item on day B
+		{ logged_at: '2026-06-06T08:00:00.000Z', calories: 1000, protein_g: 50, carbs_g: 100, fat_g: 30 },
+	];
+	const out = summarizeNutrition(rows, now);
+	assert.ok(out);
+	assert.equal(out.days_logged, 2);
+	// Totals: cal 2000, protein 100, over 2 days → 1000 / 50.
+	assert.equal(out.avg_calories, 1000);
+	assert.equal(out.avg_protein_g, 50);
+	assert.equal(out.avg_carbs_g, 110);
+	assert.equal(out.avg_fat_g, 30);
+});
+
+test('summarizeNutrition drops rows outside the window and returns null when empty', () => {
+	const now = new Date('2026-06-08T12:00:00.000Z');
+	// 8 days old — outside the 7-day window.
+	const stale = [
+		{ logged_at: '2026-05-31T08:00:00.000Z', calories: 500, protein_g: 20, carbs_g: 50, fat_g: 10 },
+	];
+	assert.equal(summarizeNutrition(stale, now), null);
+	assert.equal(summarizeNutrition([], now), null);
+});
+
+test('summarizeNutrition yields null macro averages when no row carries that macro', () => {
+	const now = new Date('2026-06-08T12:00:00.000Z');
+	const rows = [
+		{ logged_at: '2026-06-08T08:00:00.000Z', calories: 400, protein_g: null, carbs_g: null, fat_g: null },
+	];
+	const out = summarizeNutrition(rows, now);
+	assert.ok(out);
+	assert.equal(out.avg_calories, 400);
+	assert.equal(out.avg_protein_g, null);
+	assert.equal(out.avg_carbs_g, null);
+	assert.equal(out.avg_fat_g, null);
 });

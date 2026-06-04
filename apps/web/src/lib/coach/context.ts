@@ -49,6 +49,37 @@ export async function buildContext(
 		.select('id, started_at, distance_m, duration_s, metadata, route_id')
 		.order('started_at', { ascending: false })
 		.limit(runsLimit);
+
+	// Tier-1 multi-modal coach context (docs/features/multi_modal.md §
+	// "Cross-modality touches"). The coach SEES recent lift sessions +
+	// a 7-day nutrition rollup and reasons about them — advisory, it
+	// never auto-mutates a plan. Both are BOUNDED so prompt size + per-
+	// call cost stay flat as history grows: a fixed cap of recent lift
+	// sessions (summaries, not raw sets) and a 7-day rolling nutrition
+	// summary (daily averages, not every food row). When the user logs
+	// neither, both self-hide (empty array / null) and the JSON stays
+	// the same size as today's running-only payload.
+	//
+	// RLS scopes both queries to the caller (gym_workouts / gym_sets /
+	// food_log are owner-only), so no user_id filter is needed — the
+	// forwarded JWT does the scoping, same as recent_runs above.
+	const { data: liftWorkouts } = await supabase
+		.from('gym_workouts')
+		.select('id, title, started_at')
+		.order('started_at', { ascending: false })
+		.limit(COACH_LIFTS_CAP);
+	let recentLifts: LiftSummary[] = [];
+	if (liftWorkouts && liftWorkouts.length > 0) {
+		const ids = (liftWorkouts as { id: string }[]).map((w) => w.id);
+		const { data: liftSets } = await supabase
+			.from('gym_sets')
+			.select('workout_id, exercise_name, reps, weight_kg')
+			.in('workout_id', ids);
+		recentLifts = summarizeRecentLifts(
+			liftWorkouts as LiftWorkoutRow[],
+			(liftSets ?? []) as LiftSetRow[],
+		);
+	}
 	// Persona-hunt Round 2 finding Pro #3. `metadata` is a free-form
 	// jsonb bag (docs/backend/metadata.md). Some keys are useful coaching
 	// signal (activity_type, avg_bpm, workout_kind, etc.); many are
@@ -120,6 +151,24 @@ export async function buildContext(
 		hr_zones: healthConsentGranted ? (prefs.hr_zones ?? null) : null,
 	};
 
+	// Nutrition is health-adjacent (dietary intake), so it crosses the
+	// same Art 9(2)(a) special-category boundary as DOB / HR and is
+	// gated on the SAME health-data consent. Lifts (working-set tonnage)
+	// are activity data like runs — ungated, sent whenever logged. A 200-
+	// row cap over a 7-day window is plenty to compute daily averages and
+	// bounds the worst case (a power-logger).
+	let nutrition7d: NutritionSummary | null = null;
+	if (healthConsentGranted) {
+		const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
+		const { data: foodRows } = await supabase
+			.from('food_log')
+			.select('logged_at, calories, protein_g, carbs_g, fat_g')
+			.gte('logged_at', sevenDaysAgo)
+			.order('logged_at', { ascending: false })
+			.limit(200);
+		nutrition7d = summarizeNutrition((foodRows ?? []) as FoodLogRow[], new Date());
+	}
+
 	return {
 		data: {
 			now_iso: new Date().toISOString(),
@@ -129,7 +178,154 @@ export async function buildContext(
 			plan_weeks: weeks,
 			plan_workouts: workouts,
 			recent_runs: recentRuns ?? [],
+			recent_lifts: recentLifts,
+			nutrition_7d: nutrition7d,
 		},
+	};
+}
+
+/// Fixed cap on lift sessions sent to the coach. Bounded so the prompt
+/// size + per-call cost stay roughly flat as gym history grows — the
+/// coach reasons about recent training, not a lifetime log.
+export const COACH_LIFTS_CAP = 8;
+
+interface LiftWorkoutRow {
+	id: string;
+	title: string | null;
+	started_at: string;
+}
+
+interface LiftSetRow {
+	workout_id: string;
+	exercise_name: string;
+	reps: number | null;
+	weight_kg: number | null;
+}
+
+export interface LiftSummary {
+	/// Local-ish calendar date (YYYY-MM-DD) of the session.
+	date: string;
+	title: string | null;
+	/// Distinct exercise names in the session.
+	exercises: number;
+	/// Total logged sets.
+	sets: number;
+	/// Σ(reps · weight_kg) across the session, rounded. Bodyweight-only
+	/// sets (no weight) contribute 0, matching the lift-load model.
+	volume_kg: number;
+}
+
+export interface NutritionSummary {
+	/// Distinct days with at least one logged item in the window.
+	days_logged: number;
+	/// Daily averages over the days logged (total ÷ days_logged), rounded.
+	/// Null when no row in the window carried that macro.
+	avg_calories: number | null;
+	avg_protein_g: number | null;
+	avg_carbs_g: number | null;
+	avg_fat_g: number | null;
+}
+
+/// Collapse recent gym workouts + their sets into bounded per-session
+/// summaries (no raw set rows cross the sub-processor boundary). Pure +
+/// unit-tested. Workouts arrive newest-first; we keep the first `cap`.
+export function summarizeRecentLifts(
+	workouts: LiftWorkoutRow[],
+	sets: LiftSetRow[],
+	cap: number = COACH_LIFTS_CAP,
+): LiftSummary[] {
+	const byWorkout = new Map<string, LiftSetRow[]>();
+	for (const s of sets) {
+		const arr = byWorkout.get(s.workout_id) ?? [];
+		arr.push(s);
+		byWorkout.set(s.workout_id, arr);
+	}
+	return workouts.slice(0, cap).map((w) => {
+		const mine = byWorkout.get(w.id) ?? [];
+		const names = new Set<string>();
+		let volume = 0;
+		for (const s of mine) {
+			const name = s.exercise_name?.trim().toLowerCase();
+			if (name) names.add(name);
+			if (
+				s.reps != null &&
+				s.weight_kg != null &&
+				s.reps > 0 &&
+				s.weight_kg > 0
+			) {
+				volume += s.reps * s.weight_kg;
+			}
+		}
+		return {
+			date: w.started_at.slice(0, 10),
+			title: w.title,
+			exercises: names.size,
+			sets: mine.length,
+			volume_kg: Math.round(volume),
+		};
+	});
+}
+
+interface FoodLogRow {
+	logged_at: string;
+	calories: number | null;
+	protein_g: number | null;
+	carbs_g: number | null;
+	fat_g: number | null;
+}
+
+/// Roll a window of food-log rows into 7-day daily averages. Pure +
+/// unit-tested. Returns null when nothing falls in the trailing 7-day
+/// window so the key is omitted (self-hiding). Averages divide the
+/// macro total by the number of DAYS LOGGED (not row count), so the
+/// figure reads as "on a day you log, you average X".
+export function summarizeNutrition(
+	rows: FoodLogRow[],
+	now: Date,
+): NutritionSummary | null {
+	const cutoff = now.getTime() - 7 * 86_400_000;
+	const recent = rows.filter((r) => {
+		const t = new Date(r.logged_at).getTime();
+		return Number.isFinite(t) && t >= cutoff;
+	});
+	if (recent.length === 0) return null;
+	const days = new Set<string>();
+	let cal = 0;
+	let calN = 0;
+	let pro = 0;
+	let proN = 0;
+	let carb = 0;
+	let carbN = 0;
+	let fat = 0;
+	let fatN = 0;
+	for (const r of recent) {
+		days.add(r.logged_at.slice(0, 10));
+		if (r.calories != null) {
+			cal += r.calories;
+			calN++;
+		}
+		if (r.protein_g != null) {
+			pro += r.protein_g;
+			proN++;
+		}
+		if (r.carbs_g != null) {
+			carb += r.carbs_g;
+			carbN++;
+		}
+		if (r.fat_g != null) {
+			fat += r.fat_g;
+			fatN++;
+		}
+	}
+	const dayCount = days.size;
+	const avg = (total: number, present: number): number | null =>
+		present > 0 && dayCount > 0 ? Math.round(total / dayCount) : null;
+	return {
+		days_logged: dayCount,
+		avg_calories: avg(cal, calN),
+		avg_protein_g: avg(pro, proN),
+		avg_carbs_g: avg(carb, carbN),
+		avg_fat_g: avg(fat, fatN),
 	};
 }
 
