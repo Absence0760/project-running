@@ -78,9 +78,9 @@ src/
     social/         # Top-level social hub. ARIA tab strip (Feed default, People, Clubs) with ?tab= URL state. Hosts the SocialFeed + SocialPeople + SocialClubs components.
     feed/           # Thin client-side redirect to `/social?tab=feed`. Kept alive for the sitemap entry, the bell-popover CTA, mobile push deep links, and any external links pinned to the old URL.
     u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs, Follow toggle. Honours ?tab=runs|followers|following|notifications (notifications gated to isSelf — decisions §38). Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31). The activity feed used to live here as a self-only tab; it's now under /social and any legacy ?tab=feed deep link bounces over.
-    dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal.
+    dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal. Multi-modal (flag `multi_modal_nav`): self-hiding Today's-lift + Recent-lifts cards, and gym sessions folded into the fitness/fatigue/form curve via gym/lift_load.ts (decisions §63, multi_modal.md).
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
-    runs/           # Run history with source + activity type filters
+    runs/           # Run history with source + activity type filters. The canonical History surface — multi-modal (flag `multi_modal_nav`): All/Runs/Lifts/Meals kind chips + a unified timeline over the `activities` view (fetchActivities) when a second modality exists; the Runs chip keeps the full run UI. Pure runner / flag-off unchanged.
     runs/heatmap/   # Personal run-track heatmap — the user's OWN tracks (PersonalHeatmap.svelte + lib/run_heatmap.ts). Distinct from the public /routes/heatmap community map. Persona #53.
     runs/[id]/      # Run detail with map, elevation, splits
     routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab.

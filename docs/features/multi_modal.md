@@ -67,9 +67,13 @@ auto-mutation of anyone's plan:
 - **Run → nutrition targets:** the BMR × activity-level target is
   activity-aware (a high-mileage week nudges the target up), but it does
   not do per-run "you burned X, eat Y."
-- **Coach context:** the Coach *sees* recent lifts + 7-day nutrition
-  averages and reasons about them in its answers (advisory — you decide).
-- **Unified Home / History / social feed.**
+- **Coach context (shipped):** the Coach *sees* recent lifts + 7-day
+  nutrition averages and reasons about them in its answers (advisory — you
+  decide). `coach/context.ts` projects a bounded `recent_lifts` array
+  (capped per-session summaries) + a `nutrition_7d` daily-average rollup;
+  nutrition is gated on the same Art 9 health-consent as DOB/HR, lifts are
+  ungated activity data, and both self-hide when nothing is logged.
+- **Unified Home / History (web shipped) / social feed.**
 
 **Tier 2 — command (deferred depth tier, explicitly gated on data
 trust).** Active auto-adjustment:
@@ -132,6 +136,14 @@ becomes an **action button**, not a tab.
 
 ## Home — a prioritised, self-hiding card stack
 
+> **Status (web — gym slice shipped):** `/dashboard` renders a Today's-lift
+> card (when a session was logged today), a Recent-lifts trend card, and a
+> first-run "log a lift" footer affordance — all gated on `multi_modal_nav`
+> AND data presence, modality coded by the `fitness_center` glyph + label +
+> a distinct accent (never colour alone). A pure runner / flag-off user
+> sees no new card. Nutrition rings land with the nutrition module; the
+> mobile Home reshape is separate work.
+
 Home is a vertical scroll of cards. The order is **driven by what the
 user logs**, not a fixed grid. The ordering algorithm:
 
@@ -186,6 +198,15 @@ Density rules so it never becomes a wall of cards:
 History becomes a single reverse-chronological timeline backed by the
 `activities` view (one query, `(kind, started_at, summary)`), with filter
 chips at the top.
+
+> **Status (web shipped):** `/runs` gains All/Runs/Lifts/Meals chips + a
+> day-grouped unified timeline over `fetchActivities` when `multi_modal_nav`
+> is on AND a second modality exists (chips for empty kinds hidden). Rows
+> link to their own detail route (`/runs/[id]`, `/gym/[id]`); meals render
+> read-only until the nutrition detail route lands. The **Runs** chip drops
+> back to the full existing run history (all its source / date / sort
+> filters, pagination, bulk-delete); a pure runner / flag-off user sees that
+> unchanged page with no chips. Mobile History is separate work.
 
 ```
   History            [ All ] [ Runs ] [ Lifts ] [ Meals ]
@@ -307,15 +328,19 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 
 ## Cross-modality touches (Tier 1 — ship with Phase 4; this is the headline)
 
-- **Home** composes all three modalities per the ordering above.
+- **Home** composes all three modalities per the ordering above. *(Web gym
+  slice shipped — see the Home status note above.)*
 - **AI Coach** context (web-side `coach/context.ts`) reads recent gym
   sessions + 7-day nutrition *averages* (not every food row) alongside the
   run window; mobile's coach screen just renders richer answers, no mobile
-  work. **Context is bounded** — a fixed cap of recent lifts + a 7-day
-  rolling nutrition summary, not raw rows — so prompt size + per-call cost
-  stay roughly flat as history grows. The daily cap is unchanged.
+  work. **Context is bounded** — a fixed cap of recent lifts (`COACH_LIFTS_CAP`)
+  + a 7-day rolling nutrition summary, not raw rows — so prompt size + per-
+  call cost stay roughly flat as history grows. The daily cap is unchanged.
+  *(Shipped — `summarizeRecentLifts` + `summarizeNutrition`, unit-tested;
+  nutrition gated on Art 9 health consent.)*
 - **Training-load** factors lift sessions as additional stress — see the
-  lift-load spec below. A `training_load` parity-pair change.
+  lift-load spec below. A `training_load` parity-pair change. *(Shipped +
+  wired into web `/dashboard`.)*
 - **Social feed** extends to **lift** cards gated on `is_public`, reusing
   the existing follower/feed plumbing. **Meals are NOT feed-shareable in
   v1** — broadcasting what you ate is a privacy footgun with little upside;
@@ -347,15 +372,21 @@ readiness runners already trust. Rules:
   constant ships with a test pinning the "hard lift ≈ easy run" target so
   a regression is caught, not shipped.
 
-> **Status (shipped):** the mechanic itself is implemented in the
+> **Status (shipped + wired):** the mechanic is implemented in the
 > `training_load` parity pair — `computeLiftStress` (capped, RPE-weighted
 > tonnage), `aggregateDailyLiftStress`, and an optional `lifts` argument to
 > `computeTrainingLoadSeries` that adds a `source`-separable `runStress` /
 > `liftStress` split to every `TrainingLoadPoint`. The `CALIBRATION` test
 > pins a hard session into the easy-run TSS band and a separability test
-> proves the run-only curve is recoverable unchanged. **Not yet wired** to a
-> consumer — the dashboard chart keeps passing runs only until the gym
-> module feeds real `gym_workouts` into it.
+> proves the run-only curve is recoverable unchanged. **Now wired** to its
+> first consumer: web `/dashboard` fetches the user's gym set history (flag-
+> gated), groups it into per-session `LiftForLoad` via the pure, tested
+> `gym/lift_load.ts` helper (`liftsFromSetHistory`), and passes it to
+> `computeTrainingLoadSeries`, so the fitness/fatigue/form trio, recovery
+> advice, and the readiness ring all reflect lifts. `TrainingLoadChart`
+> shows a "gym sessions included" hint whenever any `liftStress > 0`. Pure
+> runners / flag-off pass `lifts=[]`, so the curve is the unchanged run-only
+> series.
 
 ## Sequencing, validation gates & risk controls
 
@@ -472,8 +503,8 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (new migration when nutrition starts) + Settings height/weight entry |
-| Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`; not yet wired to the dashboard) |
-| Cross-modality | `coach/context.ts` (bounded gym + 7-day nutrition summary); `home_screen` card composition |
+| Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Web consumer wired**: `web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`, pure + tested) feeds the dashboard load curve |
+| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/runs` + `fetchActivities`). `home_screen` card composition is the pending mobile mirror |
 | Runner protection | Settings toggle: keep Run as the one-tap primary action |
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline; not yet wired into nav/sync — lands with the screens) |
 | Data access | `packages/api_client` typed gym + food methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); food queries pending |
