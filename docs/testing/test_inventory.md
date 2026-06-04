@@ -600,6 +600,21 @@ Source-grep guards + pure-helper behaviour for the coach context builder. Pins t
 
 Pure bridge from the gym data layer (`GymSetWithDate` rows) to the training-load model input (`LiftForLoad`). `liftsFromSetHistory` groups flat set rows by workout, drops rows with no workout date (can't land on a calendar day), and an integration test confirms grouped lifts raise the fitness/fatigue/form curve while the run-only series stays recoverable (separability).
 
+### `apps/web/src/lib/nutrition/nutrition_targets.test.ts` — 13 tests
+
+Pure tests for the Mifflin-St Jeor nutrition target engine (`nutrition_targets.ts`, TS↔Dart parity pair with `apps/mobile_android/lib/nutrition_targets.dart` — equal counts). `mifflinStJeorBmr` (+5 male / −161 female / −78 neutral offset), `computeNutritionTargets` (moderate activity factor, protein 1.8 g/kg, fat 30%, carbs fill the remainder, goal delta, sedentary<very_active, the 1200 kcal floor, null on missing/non-physical metrics), `ageFromDob` (whole-year age decremented before the birthday, null on malformed/out-of-range), and the activity-level factor ordering.
+
+### `apps/web/src/lib/nutrition/food_search.test.ts` — 7 tests
+
+Pure tests for the Open Food Facts client (`food_search.ts`, injectable-fetcher seam; Dart twin `food_search_test.dart`). `parseOffSearch` maps products + drops nameless/calorie-less ones + keeps the first brand, tolerates string-typed nutriments, returns `[]` on malformed input; `scalePortion` scales per-100g to a gram portion (rounded, 0 g → 0); `searchFoods` skips the fetcher on an empty query, parses a canned response, returns `[]` on a non-OK response or a throw (manual-entry fallback).
+
+### `apps/web/src/lib/nutrition/nutrition_totals.test.ts` — 4 tests
+
+Pure tests for the daily nutrition aggregation (`nutrition_totals.ts`; Dart twin `nutrition_totals_test.dart`). `sumMacros` sums fields treating null as zero (zeros for an empty day); `groupByMealSlot` orders slots and omits empty ones (null slot folds into snack); `ringFraction` clamps to [0,1] and returns null on a missing/zero target.
+
+### Mobile nutrition tests (Dart) — `food_search_test.dart` (7) · `nutrition_totals_test.dart` (4) · `nutrition_targets_test.dart` (13, mirror) · `nutrition_screen_test.dart` (3 widget) · `nutrition_log_sheet_test.dart` (2 widget)
+
+Dart twins of the web nutrition pure logic (equal counts) plus the mobile-only screen/widget coverage: `nutrition_screen_test.dart` (empty state with rings + water cards, a logged meal under its slot with calories, water increment via the `SharedPreferences` mock) and `nutrition_log_sheet_test.dart` (manual entry logs to the store, Open Food Facts results render via the injected fetcher). The iOS twin runs the same files byte-for-byte.
 ### `apps/web/src/lib/coach/limits.test.ts` — 22 tests
 
 Pure tests for the validation / clamping helpers extracted from `coach/handler.ts` so they can run under `tsx --test` without booting `createClient`. `parseAuthHeader` covers `Bearer ` prefix stripping (case-insensitive on the prefix), null / undefined / empty input, bare `Bearer ` returning null, and tokens-without-prefix being passed through verbatim. `clampRunsLimit` covers undefined / null returning the default, non-finite (NaN, Infinity, non-numeric strings) returning the default rather than the tier cap, the tier max ceilings (free=30, pro=75), the floor at 1 (zero-runs context is never useful), fractional input being truncated, string-typed integer coercion, and pro tier honouring larger requests up to its cap. `jsonError` covers the canonical pre-stream response shape, extra fields landing alongside `error`, and the spread-order behaviour where `extra.error` wins over the literal. `rateLimitHeaders` covers the free-tier finite limit / remaining, remaining clamping to 0 when usage exceeds the cap, the pro-tier finite cap (10/day) reporting correctly, and pro remaining clamping to 0 when usage exceeds the pro cap. `personalityAddendum` covers the `drill_sergeant` and `analytical` tone overrides + the empty-string default for null / undefined / unknown styles.
@@ -742,6 +757,8 @@ tests-e2e/
   gym/
     gym.spec.ts                — /gym lightweight loop: log a free-form workout (title + exercise + sets) → PR badge on the list → detail per-exercise PR chip + set rows → delete (DB assertions throughout)
     multimodal_home_history.spec.ts — Phase 4 multi-modal Home + History (flag `multi_modal_nav` on, seed a lift): /dashboard shows the Recent-lifts card; /runs shows the All/Runs/Lifts/Meals chips + a lift row in the unified timeline that links to /gym/[id]. Snapshots + restores user_settings.prefs so no other spec inherits the flipped flag
+  nutrition/
+    nutrition.spec.ts          — /nutrition manual-log loop: open /nutrition/log → pick a meal slot → manual entry (name + macros) → save → land on /nutrition with the item under its slot + calories → water tracker increments by a 250 ml unit (DB assertion + cleanup). The Open Food Facts search path is unit-tested in food_search.test.ts (no network in e2e)
   routes/
     list.spec.ts               — /routes (search, filter, tab switch)
     detail.spec.ts             — /routes/[id] (star, public toggle, tag add+remove, review submit + DB upsert)

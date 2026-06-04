@@ -32,7 +32,7 @@ New product work starts on web. Drift in the mobile → web direction (Android h
 
 ### Modalities
 
-The product is multi-modal by design — running today, gym + nutrition next ([decisions.md § 63](decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)). The DB carries a shared `kind` abstraction across activity tables; the unified `activities` view drives cross-modality surfaces (Home, History, AI Coach). Mobile organises around the `Log` action rather than per-modality tabs to scale past the 5-tab bottom-nav ceiling. Phased delivery in [roadmap.md § Phase 4](../product/roadmap.md#phase-4--multi-modal-gym--nutrition).
+The product is multi-modal by design — running today, gym + nutrition rolling out (web `/gym` + `/nutrition` shipped behind the `multi_modal_nav` flag; mobile screens built standalone, pending the nav reshape) ([decisions.md § 63](decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)). The DB carries a shared `kind` abstraction across activity tables; the unified `activities` view drives cross-modality surfaces (Home, History, AI Coach). Mobile organises around the `Log` action rather than per-modality tabs to scale past the 5-tab bottom-nav ceiling. Phased delivery in [roadmap.md § Phase 4](../product/roadmap.md#phase-4--multi-modal-gym--nutrition).
 
 ---
 
