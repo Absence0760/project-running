@@ -3,7 +3,7 @@
 Design spec for the navigation, Home, and History surfaces once the app
 spans running + gym + nutrition. The data foundation (migration
 `20261204_001`, `gym_workouts` / `gym_sets` / `food_log` / `activities`
-view, `runs.kind`) is shipped; this doc is the **layout contract** the
+view) is shipped; this doc is the **layout contract** the
 screens get built against. Architecture rationale: [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db). Sequencing: [roadmap.md § Phase 4](../product/roadmap.md#phase-4--multi-modal-gym--nutrition).
 
 > **Status:** design only. Everything below ships behind the

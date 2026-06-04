@@ -1853,7 +1853,6 @@ export type Database = {
           hr_series_url: string | null
           id: string
           is_public: boolean | null
-          kind: string
           metadata: Json | null
           route_id: string | null
           source: string
@@ -1871,7 +1870,6 @@ export type Database = {
           hr_series_url?: string | null
           id?: string
           is_public?: boolean | null
-          kind?: string
           metadata?: Json | null
           route_id?: string | null
           source: string
@@ -1889,7 +1887,6 @@ export type Database = {
           hr_series_url?: string | null
           id?: string
           is_public?: boolean | null
-          kind?: string
           metadata?: Json | null
           route_id?: string | null
           source?: string
