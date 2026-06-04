@@ -2719,6 +2719,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 124. Dart reads/writes of `runs.metadata` keys + Storage bucket names route through `MetadataKeys` / `StorageBuckets` constants in `core_models`
+
+**Decided (2026-06-03):** the canonical key names for the `runs.metadata` jsonb bag and the Supabase Storage bucket names live as `static const` strings in `packages/core_models/lib/src/metadata_keys.dart` (`MetadataKeys.activityType == 'activity_type'`, `StorageBuckets.runs == 'runs'`, …). Dart writers/readers reference the constant instead of a bare string literal, so a typo or a casing drift (`activity_type` vs `activityType`) is a compile error rather than a silently-missing field at runtime. The same applies to the two Storage buckets the typed client touches (`runs`, `run-photos`) — previously raw `storage.from('runs')` literals scattered across `api_client.dart`. Postgres *table* names already flow through the generated `RunRow.table` etc., so those weren't in scope.
+
+**The registry guard resolves the constants.** `metadata_registry_test.dart` historically scanned for `metadata['literal']` patterns; centralising behind `MetadataKeys.*` would have blinded it. The scanner now parses `metadata_keys.dart` into an `identifier → wire value` map and resolves every `MetadataKeys.<ident>` reference back to the wire key, so the "every key referenced in Dart is registered in `metadata.md`" guarantee survives the migration. Both literal and constant forms are detected, so a mixed codebase (the conversion is incremental — only the high-traffic writer files were re-pointed first) stays covered.
+
+**Scope.** This is a Dart-side ergonomic + drift-defence layer; it does not change the wire format or the registry's role as the cross-platform (web / watch_wear / watch_ios / Edge Function) coordination point. The registry in [metadata.md](../backend/metadata.md) is still the source of truth; `MetadataKeys` is the Dart mirror of it.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

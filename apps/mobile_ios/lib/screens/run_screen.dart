@@ -1590,8 +1590,8 @@ class _RunScreenState extends State<RunScreen> {
     // Tag the run with the chosen activity type + step count so the web
     // and future mobile views can display a consistent summary.
     final metadata = Map<String, dynamic>.from(raw.metadata ?? {});
-    metadata['activity_type'] = _activityType.name;
-    if (_steps > 0) metadata['steps'] = _steps;
+    metadata[cm.MetadataKeys.activityType] = _activityType.name;
+    if (_steps > 0) metadata[cm.MetadataKeys.steps] = _steps;
 
     // Indoor fallback: if no GPS fix ever arrived but the pedometer ran,
     // save the estimated distance so the run history shows something
@@ -1601,13 +1601,13 @@ class _RunScreenState extends State<RunScreen> {
         raw.distanceMetres == 0 &&
         _displayDistanceMetres > 0;
     if (indoorEstimate) {
-      metadata['indoor_estimated'] = true;
-      metadata['distance_source'] = 'pedometer';
+      metadata[cm.MetadataKeys.indoorEstimated] = true;
+      metadata[cm.MetadataKeys.distanceSource] = 'pedometer';
     }
 
     // Average heart rate across the run (BLE chest-strap samples).
     if (_bpmSamples.isNotEmpty) {
-      metadata['avg_bpm'] = _bpmSamples.reduce((a, b) => a + b) / _bpmSamples.length;
+      metadata[cm.MetadataKeys.avgBpm] = _bpmSamples.reduce((a, b) => a + b) / _bpmSamples.length;
     }
     await _hrSub?.cancel();
     _hrSub = null;

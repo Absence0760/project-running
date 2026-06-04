@@ -51,7 +51,7 @@ InProgressEvaluation evaluateInProgressPartial(Run? partial) {
     return const InProgressEvaluation(outcome: InProgressOutcome.none);
   }
 
-  final indoorEstimated = partial.metadata?['indoor_estimated'] == true;
+  final indoorEstimated = partial.metadata?[MetadataKeys.indoorEstimated] == true;
   final hasEnoughGps = partial.track.length >= 3 &&
       partial.distanceMetres >= 50;
   final hasEnoughIndoor = indoorEstimated &&
@@ -59,7 +59,7 @@ InProgressEvaluation evaluateInProgressPartial(Run? partial) {
 
   if (hasEnoughGps || hasEnoughIndoor) {
     final metadata = Map<String, dynamic>.from(partial.metadata ?? {});
-    metadata['recovered_from_crash'] = true;
+    metadata[MetadataKeys.recoveredFromCrash] = true;
     final recovered = Run(
       id: partial.id,
       startedAt: partial.startedAt,

@@ -130,7 +130,7 @@ class CsvRunImporter {
         }
         if (activityIdx != null && activityIdx < cells.length) {
           final v = cells[activityIdx].trim();
-          if (v.isNotEmpty) metadata['activity_type'] = v;
+          if (v.isNotEmpty) metadata[MetadataKeys.activityType] = v;
         }
         if (titleIdx != null && titleIdx < cells.length) {
           final v = cells[titleIdx].trim();
@@ -140,8 +140,8 @@ class CsvRunImporter {
         // see runs_metadata_activity_type_check. Default to 'run' so
         // a 5-column CSV (no activity_type) inserts cleanly.
         metadata.putIfAbsent('activity_type', () => 'run');
-        metadata['imported_from'] = 'csv';
-        metadata['imported_at'] = DateTime.now().toUtc().toIso8601String();
+        metadata[MetadataKeys.importedFrom] = 'csv';
+        metadata[MetadataKeys.importedAt] = DateTime.now().toUtc().toIso8601String();
 
         // External id: prefer whatever the 17-column form carries
         // (server-assigned `csv:` or `strava:` etc.) so a re-import

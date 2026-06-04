@@ -78,7 +78,7 @@ class HealthConnectImporter {
           'health_connect_type': value.workoutActivityType.name,
           'activity_type': activityType,
         };
-        if (avgBpm != null) metadata['avg_bpm'] = avgBpm;
+        if (avgBpm != null) metadata[MetadataKeys.avgBpm] = avgBpm;
 
         runs.add(Run(
           id: _uuid.v4(),

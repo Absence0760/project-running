@@ -170,9 +170,9 @@ class _AddRunScreenState extends State<AddRunScreen> {
       'manual_entry': true,
     };
     final title = _titleCtl.text.trim();
-    if (title.isNotEmpty) metadata['title'] = title;
+    if (title.isNotEmpty) metadata[MetadataKeys.title] = title;
     final notes = _notesCtl.text.trim();
-    if (notes.isNotEmpty) metadata['notes'] = notes;
+    if (notes.isNotEmpty) metadata[MetadataKeys.notes] = notes;
 
     final run = Run(
       id: _uuid.v4(),

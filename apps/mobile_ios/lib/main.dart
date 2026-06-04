@@ -668,9 +668,9 @@ class WatchIngest {
 
     final metadata = <String, dynamic>{};
     final avgBpm = raw['avg_bpm'];
-    if (avgBpm is num) metadata['avg_bpm'] = avgBpm.toDouble();
+    if (avgBpm is num) metadata[cm.MetadataKeys.avgBpm] = avgBpm.toDouble();
     final activity = raw['activity_type'];
-    if (activity is String) metadata['activity_type'] = activity;
+    if (activity is String) metadata[cm.MetadataKeys.activityType] = activity;
 
     return cm.Run(
       id: id,

@@ -641,7 +641,7 @@ class ApiClient {
     final trackPath = run.metadata?['track_url'] as String?;
     if (trackPath != null && trackPath.isNotEmpty) {
       try {
-        await _client.storage.from('runs').remove([trackPath]);
+        await _client.storage.from(StorageBuckets.runs).remove([trackPath]);
       } catch (e) {
         // Best-effort — the row delete is more important than the file cleanup.
       }
@@ -668,7 +668,7 @@ class ApiClient {
         if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
       }
       if (paths.isNotEmpty) {
-        await _client.storage.from('run-photos').remove(paths);
+        await _client.storage.from(StorageBuckets.runPhotos).remove(paths);
       }
     } catch (e) {
       // Same best-effort posture as the track sweep above. Orphan
@@ -783,7 +783,7 @@ class ApiClient {
   Future<List<Waypoint>> fetchHrSeries(Run run) async {
     final url = run.metadata?['hr_series_url'] as String?;
     if (url == null || url.isEmpty) return const [];
-    final bytes = await _client.storage.from('runs').download(url);
+    final bytes = await _client.storage.from(StorageBuckets.runs).download(url);
     final json = utf8.decode(gzip.decode(bytes));
     final list = jsonDecode(json) as List<dynamic>;
     final out = <Waypoint>[];
@@ -880,7 +880,7 @@ class ApiClient {
   /// Used by the backup flow which wants to archive the gzipped blob
   /// verbatim so restore is a byte-for-byte upload.
   Future<Uint8List> downloadTrackBytes(String path) async {
-    return _client.storage.from('runs').download(path);
+    return _client.storage.from(StorageBuckets.runs).download(path);
   }
 
   /// Upload pre-gzipped track bytes to Storage at `{userId}/{runId}.json.gz`.
@@ -891,7 +891,7 @@ class ApiClient {
     required Uint8List gzippedBytes,
   }) async {
     final path = '$userId/$runId.json.gz';
-    await _client.storage.from('runs').uploadBinary(
+    await _client.storage.from(StorageBuckets.runs).uploadBinary(
           path,
           gzippedBytes,
           fileOptions: const FileOptions(
@@ -915,7 +915,7 @@ class ApiClient {
     required Uint8List gzippedBytes,
   }) async {
     final path = '$userId/$runId.hr.json.gz';
-    await _client.storage.from('runs').uploadBinary(
+    await _client.storage.from(StorageBuckets.runs).uploadBinary(
           path,
           gzippedBytes,
           fileOptions: const FileOptions(
@@ -958,7 +958,7 @@ class ApiClient {
     final json = jsonEncode(track.map(_waypointToJson).toList());
     final bytes = Uint8List.fromList(gzip.encode(utf8.encode(json)));
     final path = '$userId/$runId.json.gz';
-    await _client.storage.from('runs').uploadBinary(
+    await _client.storage.from(StorageBuckets.runs).uploadBinary(
           path,
           bytes,
           fileOptions: const FileOptions(
@@ -975,7 +975,7 @@ class ApiClient {
   }
 
   Future<List<Waypoint>> _downloadTrack(String path) async {
-    final bytes = await _client.storage.from('runs').download(path);
+    final bytes = await _client.storage.from(StorageBuckets.runs).download(path);
     final json = utf8.decode(gzip.decode(bytes));
     final list = jsonDecode(json) as List<dynamic>;
     return list.map((t) => _waypointFromJson(t as Map<String, dynamic>)).toList();
@@ -2159,7 +2159,7 @@ class ApiClient {
         .single();
     final photoId = inserted[RunPhotoRow.colId] as String;
     final path = '$id/$photoId.$extension';
-    await _client.storage.from('run-photos').uploadBinary(
+    await _client.storage.from(StorageBuckets.runPhotos).uploadBinary(
           path,
           bytes,
           fileOptions: FileOptions(contentType: contentType, upsert: false),
@@ -2201,7 +2201,7 @@ class ApiClient {
     final thumb = photo.thumb512Path;
     if (thumb != null && thumb.isNotEmpty) paths.add(thumb);
     if (paths.isNotEmpty) {
-      await _client.storage.from('run-photos').remove(paths);
+      await _client.storage.from(StorageBuckets.runPhotos).remove(paths);
     }
   }
 

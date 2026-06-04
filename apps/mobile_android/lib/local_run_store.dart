@@ -186,7 +186,7 @@ class LocalRunStore extends ChangeNotifier {
 
   static Run _withCreatedByUserId(Run run, String userId) {
     final metadata = Map<String, dynamic>.from(run.metadata ?? {});
-    metadata['created_by_user_id'] = userId;
+    metadata[MetadataKeys.createdByUserId] = userId;
     return Run(
       id: run.id,
       startedAt: run.startedAt,
@@ -324,7 +324,7 @@ class LocalRunStore extends ChangeNotifier {
 
   Run _withLastModified(Run run, DateTime ts) {
     final metadata = Map<String, dynamic>.from(run.metadata ?? {});
-    metadata['last_modified_at'] = ts.toUtc().toIso8601String();
+    metadata[MetadataKeys.lastModifiedAt] = ts.toUtc().toIso8601String();
     return Run(
       id: run.id,
       startedAt: run.startedAt,
@@ -340,7 +340,7 @@ class LocalRunStore extends ChangeNotifier {
   }
 
   static DateTime _lastModifiedOf(Run run) {
-    final raw = run.metadata?['last_modified_at'] as String?;
+    final raw = run.metadata?[MetadataKeys.lastModifiedAt] as String?;
     if (raw != null) {
       final parsed = DateTime.tryParse(raw);
       if (parsed != null) return parsed;

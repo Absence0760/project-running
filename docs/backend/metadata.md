@@ -4,6 +4,8 @@ The `runs.metadata` column is `jsonb` — a schema-less bag that any client can 
 
 **Rule:** If you add, rename, remove, or change the shape of a metadata key, update this file in the same change. If you're reading a key that isn't listed here, add it. If you find a key in the registry that isn't used anywhere in code, delete it.
 
+**Dart side:** key names are mirrored as `MetadataKeys.*` constants in `packages/core_models/lib/src/metadata_keys.dart` (and bucket names as `StorageBuckets.*`). Prefer the constant over a bare string literal in Dart so a typo is a compile error; `metadata_registry_test.dart` resolves `MetadataKeys.*` back to the wire key, so a key referenced only through the constant is still checked against this registry. When you add a key here, add the matching constant (see [decisions.md § 124](../architecture/decisions.md)).
+
 ---
 
 ## Key registry

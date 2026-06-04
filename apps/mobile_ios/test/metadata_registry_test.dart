@@ -34,6 +34,7 @@ void main() {
       final registry = _parseRegistry(
         File('../../docs/backend/metadata.md').readAsStringSync(),
       );
+      final constMap = _parseMetadataKeyConstants();
 
       final roots = <Directory>[
         Directory('lib'),
@@ -48,7 +49,7 @@ void main() {
           if (!entity.path.endsWith('.dart')) continue;
           if (entity.path.contains('/generated/')) continue;
           final src = entity.readAsStringSync();
-          for (final k in _extractMetadataKeys(src)) {
+          for (final k in _extractMetadataKeys(src, constMap)) {
             referenced.putIfAbsent(k, () => []).add(entity.path);
           }
         }
@@ -91,6 +92,7 @@ void main() {
       final registry = _parseRegistry(
         File('../../docs/backend/metadata.md').readAsStringSync(),
       );
+      final constMap = _parseMetadataKeyConstants();
 
       final referenced = <String>{};
       final roots = <Directory>[
@@ -103,7 +105,8 @@ void main() {
           if (entity is! File) continue;
           if (!entity.path.endsWith('.dart')) continue;
           if (entity.path.contains('/generated/')) continue;
-          referenced.addAll(_extractMetadataKeys(entity.readAsStringSync()));
+          referenced
+              .addAll(_extractMetadataKeys(entity.readAsStringSync(), constMap));
         }
       }
 
@@ -146,6 +149,28 @@ Set<String> _parseRegistry(String doc) {
   return out;
 }
 
+/// Parse `MetadataKeys` constant declarations from `core_models` into an
+/// `identifier -> wire value` map (e.g. `activityType -> activity_type`).
+/// The keys are increasingly centralised behind `MetadataKeys.*` instead of
+/// raw string literals, so the scanner must resolve those references back to
+/// the wire value or it would silently lose coverage of every centralised
+/// key.
+Map<String, String> _parseMetadataKeyConstants() {
+  final file = File(
+    '../../packages/core_models/lib/src/metadata_keys.dart',
+  );
+  if (!file.existsSync()) return const {};
+  final src = file.readAsStringSync();
+  final out = <String, String>{};
+  final re = RegExp(
+    r"""static\s+const\s+String\s+([A-Za-z0-9_]+)\s*=\s*'([a-z_][a-z0-9_]*)'""",
+  );
+  for (final m in re.allMatches(src)) {
+    out[m.group(1)!] = m.group(2)!;
+  }
+  return out;
+}
+
 /// Find every metadata-key reference in a single Dart source file. Covers:
 ///
 ///   * subscript access:  `metadata['xxx']`, `metadata!['xxx']`,
@@ -153,12 +178,21 @@ Set<String> _parseRegistry(String doc) {
 ///                        `.metadata?['xxx']`
 ///   * map-literal writes: `metadata: { 'xxx': ..., 'yyy': ... }` — extracts
 ///                        every string-literal key inside the balanced `{}`
+///   * `MetadataKeys.<ident>` references — resolved to the wire value via
+///                        [constMap]
 ///
 /// Does NOT cover:
 ///   * dynamic keys (`metadata[someVar]`) — by design
 ///   * non-literal nested access (`metadata['a']['b']`) — flagged as 'a' only
-Set<String> _extractMetadataKeys(String source) {
+Set<String> _extractMetadataKeys(String source, Map<String, String> constMap) {
   final keys = <String>{};
+
+  // `MetadataKeys.activityType` -> `activity_type`.
+  final constRef = RegExp(r'MetadataKeys\.([A-Za-z0-9_]+)');
+  for (final m in constRef.allMatches(source)) {
+    final value = constMap[m.group(1)];
+    if (value != null) keys.add(value);
+  }
 
   // Subscript pattern — accepts either quote, allows !/? after metadata.
   final subscript = RegExp(

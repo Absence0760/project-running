@@ -363,7 +363,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// next time we don't need to refetch.
   Future<void> _maybeFetchTrack() async {
     if (run.track.isNotEmpty) return;
-    final trackUrl = run.metadata?['track_url'] as String?;
+    final trackUrl = run.metadata?[MetadataKeys.trackUrl] as String?;
     if (trackUrl == null) return;
     final api = widget.apiClient;
     if (api == null) return;
@@ -417,7 +417,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       return b != null && b >= 30 && b <= 230;
     });
     if (trackHasBpm) return;
-    final url = run.metadata?['hr_series_url'] as String?;
+    final url = run.metadata?[MetadataKeys.hrSeriesUrl] as String?;
     if (url == null || url.isEmpty) return;
     final api = widget.apiClient;
     if (api == null) return;
@@ -435,13 +435,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   String get _title =>
-      (run.metadata?['title'] as String?) ??
+      (run.metadata?[MetadataKeys.title] as String?) ??
       formatDateMed(run.startedAt, localeToTag(Localizations.localeOf(context)));
-  String get _notes => (run.metadata?['notes'] as String?) ?? '';
+  String get _notes => (run.metadata?[MetadataKeys.notes] as String?) ?? '';
 
   static const _metresPerMile = 1609.344;
 
-  bool get _isDnf => run.metadata?['is_dnf'] == true;
+  bool get _isDnf => run.metadata?[MetadataKeys.isDnf] == true;
 
   Future<void> _editDetails() async {
     final l10n = AppLocalizations.of(context);
@@ -1168,13 +1168,13 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   }
 
   ActivityType get _activityType =>
-      ActivityType.fromName(run.metadata?['activity_type'] as String?);
+      ActivityType.fromName(run.metadata?[MetadataKeys.activityType] as String?);
 
   bool get _hasElevation =>
       run.track.any((w) => w.elevationMetres != null);
 
   List<Map<String, dynamic>> get _laps {
-    final laps = run.metadata?['laps'];
+    final laps = run.metadata?[MetadataKeys.laps];
     if (laps is List) return List<Map<String, dynamic>>.from(laps);
     return const [];
   }
@@ -1183,7 +1183,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   // capitalised for a header chip beside the activity type. Null when the
   // import carried no informative sub_sport.
   String? get _disciplineLabel {
-    final raw = run.metadata?['sub_sport'];
+    final raw = run.metadata?[MetadataKeys.subSport];
     if (raw is! String || raw.isEmpty) return null;
     return raw[0].toUpperCase() + raw.substring(1);
   }
@@ -1191,7 +1191,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   // Garmin Running Dynamics off an imported FIT session — only the
   // sub-fields the watch recorded are present.
   Map<String, dynamic>? get _runningDynamics {
-    final rd = run.metadata?['running_dynamics'];
+    final rd = run.metadata?[MetadataKeys.runningDynamics];
     return rd is Map ? Map<String, dynamic>.from(rd) : null;
   }
 
@@ -1346,7 +1346,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       );
 
   int get _steps {
-    final s = run.metadata?['steps'];
+    final s = run.metadata?[MetadataKeys.steps];
     if (s is int) return s;
     if (s is num) return s.toInt();
     return 0;
@@ -1361,7 +1361,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// steps, or under 30 s of moving time) so the tile collapses to
   /// "0 spm" instead of misreporting.
   int get _cadence {
-    final stored = run.metadata?['cadence_spm'];
+    final stored = run.metadata?[MetadataKeys.cadenceSpm];
     if (stored is num && stored > 0) return stored.round();
     final steps = _steps;
     final movingSeconds = _movingTime.inSeconds;
@@ -1374,7 +1374,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// it today (no BLE strap integration on mobile_android yet). Returns
   /// 0 when absent so the tile renders conditionally.
   int get _avgBpm {
-    final v = run.metadata?['avg_bpm'];
+    final v = run.metadata?[MetadataKeys.avgBpm];
     if (v is int) return v;
     if (v is num) return v.round();
     return 0;
@@ -1383,7 +1383,7 @@ class _RunDetailScreenState extends State<RunDetailScreen>
   /// parkrun age-graded percentage (e.g. "54.23%"), set by the parkrun
   /// importer into metadata.age_grade. Null when absent. See metadata.md.
   String? get _ageGrade {
-    final v = run.metadata?['age_grade'];
+    final v = run.metadata?[MetadataKeys.ageGrade];
     return (v is String && v.trim().isNotEmpty) ? v.trim() : null;
   }
 
@@ -1448,12 +1448,12 @@ class _RunDetailScreenState extends State<RunDetailScreen>
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit) {
     if (run.routeId == null) return const [];
 
-    final thisActivity = run.metadata?['activity_type'] as String? ?? 'run';
+    final thisActivity = run.metadata?[MetadataKeys.activityType] as String? ?? 'run';
     final attempts = widget.runStore.runs
         .where((r) =>
             r.routeId == run.routeId &&
             r.distanceMetres > 100 &&
-            (r.metadata?['activity_type'] as String? ?? 'run') == thisActivity)
+            (r.metadata?[MetadataKeys.activityType] as String? ?? 'run') == thisActivity)
         .toList()
       ..sort((a, b) => a.duration.compareTo(b.duration));
 
@@ -2776,7 +2776,7 @@ Map<String, dynamic> applyRunMetadataEdit(
 @visibleForTesting
 void applyDnfFlag(Map<String, dynamic> metadata, bool dnf) {
   if (dnf) {
-    metadata['is_dnf'] = true;
+    metadata[MetadataKeys.isDnf] = true;
   } else {
     metadata.remove('is_dnf');
   }
