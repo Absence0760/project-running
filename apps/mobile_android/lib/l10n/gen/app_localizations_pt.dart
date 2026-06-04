@@ -6617,6 +6617,133 @@ class AppLocalizationsPt extends AppLocalizations {
   String periodShareAvgPace(Object pace) {
     return 'Ritmo médio: $pace';
   }
+
+  @override
+  String get gymTitle => 'Academia';
+
+  @override
+  String get gymLog => 'Registrar treino';
+
+  @override
+  String get gymUntitled => 'Treino sem título';
+
+  @override
+  String get gymOfflineCached => 'Offline: mostrando treinos salvos';
+
+  @override
+  String get gymOfflineQueued =>
+      'Offline: as alterações serão sincronizadas mais tarde';
+
+  @override
+  String get gymEmptyTitle => 'Nenhum treino de academia ainda';
+
+  @override
+  String get gymEmptyBody =>
+      'Registre um treino para acompanhá-lo aqui e alimentar sua carga de treino.';
+
+  @override
+  String get gymPrBadge => 'RP';
+
+  @override
+  String gymExercisesShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exercícios',
+      one: '$count exercício',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymVolumeShort(int volume) {
+    return '$volume kg';
+  }
+
+  @override
+  String get gymNotFound => 'Treino não encontrado.';
+
+  @override
+  String get gymEdit => 'Editar';
+
+  @override
+  String get gymDelete => 'Excluir';
+
+  @override
+  String get gymNotes => 'Notas';
+
+  @override
+  String get gymKg => 'kg';
+
+  @override
+  String get gymReps => 'Reps';
+
+  @override
+  String get gymRpe => 'RPE';
+
+  @override
+  String gymSetN(int n) {
+    return 'Série $n';
+  }
+
+  @override
+  String get gymPrWeight => 'Mais pesada';
+
+  @override
+  String get gymPrVolume => 'Melhor volume';
+
+  @override
+  String get gymPrE1rm => 'Melhor 1RM est.';
+
+  @override
+  String get gymDeleteConfirmTitle => 'Excluir treino?';
+
+  @override
+  String get gymDeleteConfirmBody =>
+      'Isso remove permanentemente o treino e suas séries.';
+
+  @override
+  String get gymEditorNewTitle => 'Novo treino';
+
+  @override
+  String get gymEditorEditTitle => 'Editar treino';
+
+  @override
+  String get gymEditorTitleLabel => 'Título (opcional)';
+
+  @override
+  String get gymEditorTitlePlaceholder => 'ex.: Dia de push';
+
+  @override
+  String get gymEditorExercisePlaceholder => 'Nome do exercício';
+
+  @override
+  String get gymEditorRemoveExercise => 'Remover exercício';
+
+  @override
+  String get gymEditorRemoveSet => 'Remover série';
+
+  @override
+  String get gymEditorAddSet => 'Adicionar série';
+
+  @override
+  String get gymEditorAddExercise => 'Adicionar exercício';
+
+  @override
+  String get gymEditorShare => 'Compartilhar no feed';
+
+  @override
+  String get gymEditorCancel => 'Cancelar';
+
+  @override
+  String get gymEditorSave => 'Salvar treino';
+
+  @override
+  String get gymEditorNeedExercise =>
+      'Adicione ao menos um exercício com nome.';
+
+  @override
+  String get gymSaveFailed => 'Não foi possível salvar o treino.';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13232,4 +13359,131 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String periodShareAvgPace(Object pace) {
     return 'Ritmo médio: $pace';
   }
+
+  @override
+  String get gymTitle => 'Academia';
+
+  @override
+  String get gymLog => 'Registrar treino';
+
+  @override
+  String get gymUntitled => 'Treino sem título';
+
+  @override
+  String get gymOfflineCached => 'Offline: mostrando treinos salvos';
+
+  @override
+  String get gymOfflineQueued =>
+      'Offline: as alterações serão sincronizadas mais tarde';
+
+  @override
+  String get gymEmptyTitle => 'Nenhum treino de academia ainda';
+
+  @override
+  String get gymEmptyBody =>
+      'Registre um treino para acompanhá-lo aqui e alimentar sua carga de treino.';
+
+  @override
+  String get gymPrBadge => 'RP';
+
+  @override
+  String gymExercisesShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exercícios',
+      one: '$count exercício',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymVolumeShort(int volume) {
+    return '$volume kg';
+  }
+
+  @override
+  String get gymNotFound => 'Treino não encontrado.';
+
+  @override
+  String get gymEdit => 'Editar';
+
+  @override
+  String get gymDelete => 'Excluir';
+
+  @override
+  String get gymNotes => 'Notas';
+
+  @override
+  String get gymKg => 'kg';
+
+  @override
+  String get gymReps => 'Reps';
+
+  @override
+  String get gymRpe => 'RPE';
+
+  @override
+  String gymSetN(int n) {
+    return 'Série $n';
+  }
+
+  @override
+  String get gymPrWeight => 'Mais pesada';
+
+  @override
+  String get gymPrVolume => 'Melhor volume';
+
+  @override
+  String get gymPrE1rm => 'Melhor 1RM est.';
+
+  @override
+  String get gymDeleteConfirmTitle => 'Excluir treino?';
+
+  @override
+  String get gymDeleteConfirmBody =>
+      'Isso remove permanentemente o treino e suas séries.';
+
+  @override
+  String get gymEditorNewTitle => 'Novo treino';
+
+  @override
+  String get gymEditorEditTitle => 'Editar treino';
+
+  @override
+  String get gymEditorTitleLabel => 'Título (opcional)';
+
+  @override
+  String get gymEditorTitlePlaceholder => 'ex.: Dia de push';
+
+  @override
+  String get gymEditorExercisePlaceholder => 'Nome do exercício';
+
+  @override
+  String get gymEditorRemoveExercise => 'Remover exercício';
+
+  @override
+  String get gymEditorRemoveSet => 'Remover série';
+
+  @override
+  String get gymEditorAddSet => 'Adicionar série';
+
+  @override
+  String get gymEditorAddExercise => 'Adicionar exercício';
+
+  @override
+  String get gymEditorShare => 'Compartilhar no feed';
+
+  @override
+  String get gymEditorCancel => 'Cancelar';
+
+  @override
+  String get gymEditorSave => 'Salvar treino';
+
+  @override
+  String get gymEditorNeedExercise =>
+      'Adicione ao menos um exercício com nome.';
+
+  @override
+  String get gymSaveFailed => 'Não foi possível salvar o treino.';
 }

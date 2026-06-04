@@ -10916,6 +10916,228 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Avg pace: {pace}'**
   String periodShareAvgPace(Object pace);
+
+  /// No description provided for @gymTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Gym'**
+  String get gymTitle;
+
+  /// No description provided for @gymLog.
+  ///
+  /// In en, this message translates to:
+  /// **'Log workout'**
+  String get gymLog;
+
+  /// No description provided for @gymUntitled.
+  ///
+  /// In en, this message translates to:
+  /// **'Untitled workout'**
+  String get gymUntitled;
+
+  /// No description provided for @gymOfflineCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing saved workouts'**
+  String get gymOfflineCached;
+
+  /// No description provided for @gymOfflineQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — changes will sync when you reconnect'**
+  String get gymOfflineQueued;
+
+  /// No description provided for @gymEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No gym workouts yet'**
+  String get gymEmptyTitle;
+
+  /// No description provided for @gymEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Log a lift to track it here and feed your training load.'**
+  String get gymEmptyBody;
+
+  /// No description provided for @gymPrBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'PR'**
+  String get gymPrBadge;
+
+  /// Exercise count on a gym workout row
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, one{{count} exercise} other{{count} exercises}}'**
+  String gymExercisesShort(int count);
+
+  /// Total working volume (kg) on a gym workout row
+  ///
+  /// In en, this message translates to:
+  /// **'{volume} kg'**
+  String gymVolumeShort(int volume);
+
+  /// No description provided for @gymNotFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Workout not found.'**
+  String get gymNotFound;
+
+  /// No description provided for @gymEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get gymEdit;
+
+  /// No description provided for @gymDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get gymDelete;
+
+  /// No description provided for @gymNotes.
+  ///
+  /// In en, this message translates to:
+  /// **'Notes'**
+  String get gymNotes;
+
+  /// No description provided for @gymKg.
+  ///
+  /// In en, this message translates to:
+  /// **'kg'**
+  String get gymKg;
+
+  /// No description provided for @gymReps.
+  ///
+  /// In en, this message translates to:
+  /// **'Reps'**
+  String get gymReps;
+
+  /// No description provided for @gymRpe.
+  ///
+  /// In en, this message translates to:
+  /// **'RPE'**
+  String get gymRpe;
+
+  /// Set ordinal label in a gym workout
+  ///
+  /// In en, this message translates to:
+  /// **'Set {n}'**
+  String gymSetN(int n);
+
+  /// No description provided for @gymPrWeight.
+  ///
+  /// In en, this message translates to:
+  /// **'Heaviest'**
+  String get gymPrWeight;
+
+  /// No description provided for @gymPrVolume.
+  ///
+  /// In en, this message translates to:
+  /// **'Top volume'**
+  String get gymPrVolume;
+
+  /// No description provided for @gymPrE1rm.
+  ///
+  /// In en, this message translates to:
+  /// **'Best est. 1RM'**
+  String get gymPrE1rm;
+
+  /// No description provided for @gymDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete workout?'**
+  String get gymDeleteConfirmTitle;
+
+  /// No description provided for @gymDeleteConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This permanently removes the workout and its sets.'**
+  String get gymDeleteConfirmBody;
+
+  /// No description provided for @gymEditorNewTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New workout'**
+  String get gymEditorNewTitle;
+
+  /// No description provided for @gymEditorEditTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit workout'**
+  String get gymEditorEditTitle;
+
+  /// No description provided for @gymEditorTitleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Title (optional)'**
+  String get gymEditorTitleLabel;
+
+  /// No description provided for @gymEditorTitlePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. Push day'**
+  String get gymEditorTitlePlaceholder;
+
+  /// No description provided for @gymEditorExercisePlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Exercise name'**
+  String get gymEditorExercisePlaceholder;
+
+  /// No description provided for @gymEditorRemoveExercise.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove exercise'**
+  String get gymEditorRemoveExercise;
+
+  /// No description provided for @gymEditorRemoveSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove set'**
+  String get gymEditorRemoveSet;
+
+  /// No description provided for @gymEditorAddSet.
+  ///
+  /// In en, this message translates to:
+  /// **'Add set'**
+  String get gymEditorAddSet;
+
+  /// No description provided for @gymEditorAddExercise.
+  ///
+  /// In en, this message translates to:
+  /// **'Add exercise'**
+  String get gymEditorAddExercise;
+
+  /// No description provided for @gymEditorShare.
+  ///
+  /// In en, this message translates to:
+  /// **'Share to feed'**
+  String get gymEditorShare;
+
+  /// No description provided for @gymEditorCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get gymEditorCancel;
+
+  /// No description provided for @gymEditorSave.
+  ///
+  /// In en, this message translates to:
+  /// **'Save workout'**
+  String get gymEditorSave;
+
+  /// No description provided for @gymEditorNeedExercise.
+  ///
+  /// In en, this message translates to:
+  /// **'Add at least one exercise with a name.'**
+  String get gymEditorNeedExercise;
+
+  /// No description provided for @gymSaveFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t save workout.'**
+  String get gymSaveFailed;
 }
 
 class _AppLocalizationsDelegate

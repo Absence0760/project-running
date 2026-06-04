@@ -6624,4 +6624,132 @@ class AppLocalizationsDe extends AppLocalizations {
   String periodShareAvgPace(Object pace) {
     return 'Ø Pace: $pace';
   }
+
+  @override
+  String get gymTitle => 'Gym';
+
+  @override
+  String get gymLog => 'Training erfassen';
+
+  @override
+  String get gymUntitled => 'Unbenanntes Training';
+
+  @override
+  String get gymOfflineCached =>
+      'Offline – gespeicherte Trainings werden angezeigt';
+
+  @override
+  String get gymOfflineQueued =>
+      'Offline – Änderungen werden später synchronisiert';
+
+  @override
+  String get gymEmptyTitle => 'Noch keine Gym-Trainings';
+
+  @override
+  String get gymEmptyBody =>
+      'Erfasse eine Einheit, um sie hier zu verfolgen und in deine Trainingslast einfließen zu lassen.';
+
+  @override
+  String get gymPrBadge => 'PR';
+
+  @override
+  String gymExercisesShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Übungen',
+      one: '$count Übung',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymVolumeShort(int volume) {
+    return '$volume kg';
+  }
+
+  @override
+  String get gymNotFound => 'Training nicht gefunden.';
+
+  @override
+  String get gymEdit => 'Bearbeiten';
+
+  @override
+  String get gymDelete => 'Löschen';
+
+  @override
+  String get gymNotes => 'Notizen';
+
+  @override
+  String get gymKg => 'kg';
+
+  @override
+  String get gymReps => 'Wdh.';
+
+  @override
+  String get gymRpe => 'RPE';
+
+  @override
+  String gymSetN(int n) {
+    return 'Satz $n';
+  }
+
+  @override
+  String get gymPrWeight => 'Schwerste';
+
+  @override
+  String get gymPrVolume => 'Top-Volumen';
+
+  @override
+  String get gymPrE1rm => 'Beste gesch. 1RM';
+
+  @override
+  String get gymDeleteConfirmTitle => 'Training löschen?';
+
+  @override
+  String get gymDeleteConfirmBody =>
+      'Dadurch werden das Training und seine Sätze dauerhaft entfernt.';
+
+  @override
+  String get gymEditorNewTitle => 'Neues Training';
+
+  @override
+  String get gymEditorEditTitle => 'Training bearbeiten';
+
+  @override
+  String get gymEditorTitleLabel => 'Titel (optional)';
+
+  @override
+  String get gymEditorTitlePlaceholder => 'z. B. Push-Tag';
+
+  @override
+  String get gymEditorExercisePlaceholder => 'Übungsname';
+
+  @override
+  String get gymEditorRemoveExercise => 'Übung entfernen';
+
+  @override
+  String get gymEditorRemoveSet => 'Satz entfernen';
+
+  @override
+  String get gymEditorAddSet => 'Satz hinzufügen';
+
+  @override
+  String get gymEditorAddExercise => 'Übung hinzufügen';
+
+  @override
+  String get gymEditorShare => 'Im Feed teilen';
+
+  @override
+  String get gymEditorCancel => 'Abbrechen';
+
+  @override
+  String get gymEditorSave => 'Training speichern';
+
+  @override
+  String get gymEditorNeedExercise =>
+      'Füge mindestens eine Übung mit Namen hinzu.';
+
+  @override
+  String get gymSaveFailed => 'Training konnte nicht gespeichert werden.';
 }

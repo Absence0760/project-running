@@ -6250,4 +6250,126 @@ class AppLocalizationsJa extends AppLocalizations {
   String periodShareAvgPace(Object pace) {
     return '平均ペース: $pace';
   }
+
+  @override
+  String get gymTitle => 'ジム';
+
+  @override
+  String get gymLog => 'ワークアウトを記録';
+
+  @override
+  String get gymUntitled => '無題のワークアウト';
+
+  @override
+  String get gymOfflineCached => 'オフライン：保存済みのワークアウトを表示中';
+
+  @override
+  String get gymOfflineQueued => 'オフライン：変更は後で同期されます';
+
+  @override
+  String get gymEmptyTitle => 'ジムのワークアウトがまだありません';
+
+  @override
+  String get gymEmptyBody => 'トレーニングを記録すると、ここで管理でき、トレーニング負荷にも反映されます。';
+
+  @override
+  String get gymPrBadge => 'PR';
+
+  @override
+  String gymExercisesShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count 種目',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymVolumeShort(int volume) {
+    return '$volume kg';
+  }
+
+  @override
+  String get gymNotFound => 'ワークアウトが見つかりません。';
+
+  @override
+  String get gymEdit => '編集';
+
+  @override
+  String get gymDelete => '削除';
+
+  @override
+  String get gymNotes => 'メモ';
+
+  @override
+  String get gymKg => 'kg';
+
+  @override
+  String get gymReps => '回数';
+
+  @override
+  String get gymRpe => 'RPE';
+
+  @override
+  String gymSetN(int n) {
+    return 'セット $n';
+  }
+
+  @override
+  String get gymPrWeight => '最高重量';
+
+  @override
+  String get gymPrVolume => '最高ボリューム';
+
+  @override
+  String get gymPrE1rm => '推定1RM最高';
+
+  @override
+  String get gymDeleteConfirmTitle => 'ワークアウトを削除しますか？';
+
+  @override
+  String get gymDeleteConfirmBody => 'ワークアウトとそのセットが完全に削除されます。';
+
+  @override
+  String get gymEditorNewTitle => '新しいワークアウト';
+
+  @override
+  String get gymEditorEditTitle => 'ワークアウトを編集';
+
+  @override
+  String get gymEditorTitleLabel => 'タイトル（任意）';
+
+  @override
+  String get gymEditorTitlePlaceholder => '例：プッシュの日';
+
+  @override
+  String get gymEditorExercisePlaceholder => '種目名';
+
+  @override
+  String get gymEditorRemoveExercise => '種目を削除';
+
+  @override
+  String get gymEditorRemoveSet => 'セットを削除';
+
+  @override
+  String get gymEditorAddSet => 'セットを追加';
+
+  @override
+  String get gymEditorAddExercise => '種目を追加';
+
+  @override
+  String get gymEditorShare => 'フィードに共有';
+
+  @override
+  String get gymEditorCancel => 'キャンセル';
+
+  @override
+  String get gymEditorSave => 'ワークアウトを保存';
+
+  @override
+  String get gymEditorNeedExercise => '名前付きの種目を少なくとも1つ追加してください。';
+
+  @override
+  String get gymSaveFailed => 'ワークアウトを保存できませんでした。';
 }

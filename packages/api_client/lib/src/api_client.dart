@@ -3925,6 +3925,42 @@ class ApiClient {
     );
   }
 
+  /// The signed-in user's recent workouts each paired with their sets,
+  /// newest-started first. Two round-trips (workouts, then every set whose
+  /// `workout_id` is in that page) grouped client-side — the shape
+  /// [LocalGymStore.replaceFromServer] consumes so the offline cache and
+  /// the list screen's volume / PR stats hydrate in one refresh.
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return [];
+    final ws = await _client
+        .from(GymWorkoutRow.table)
+        .select()
+        .eq(GymWorkoutRow.colUserId, uid)
+        .order(GymWorkoutRow.colStartedAt, ascending: false)
+        .limit(limit);
+    final workouts = (ws as List).cast<Map<String, dynamic>>();
+    if (workouts.isEmpty) return [];
+    final ids = [for (final w in workouts) w[GymWorkoutRow.colId] as String];
+    final ss = await _client
+        .from(GymSetRow.table)
+        .select()
+        .inFilter(GymSetRow.colWorkoutId, ids)
+        .order(GymSetRow.colSetIndex, ascending: true);
+    final byWorkout = <String, List<Map<String, dynamic>>>{};
+    for (final raw in (ss as List).cast<Map<String, dynamic>>()) {
+      (byWorkout[raw[GymSetRow.colWorkoutId] as String] ??= []).add(raw);
+    }
+    return [
+      for (final w in workouts)
+        (
+          workout: w,
+          sets: byWorkout[w[GymWorkoutRow.colId] as String] ?? const [],
+        ),
+    ];
+  }
+
   /// Insert a workout + its sets. The caller may mint [id] (offline-create
   /// path) — `gym_workouts.id` defaults to gen_random_uuid() but accepts a
   /// client value, so the local id IS the server id (no reconciliation),

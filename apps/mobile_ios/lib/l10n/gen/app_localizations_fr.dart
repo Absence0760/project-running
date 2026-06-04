@@ -6636,4 +6636,131 @@ class AppLocalizationsFr extends AppLocalizations {
   String periodShareAvgPace(Object pace) {
     return 'Allure moy. : $pace';
   }
+
+  @override
+  String get gymTitle => 'Muscu';
+
+  @override
+  String get gymLog => 'Enregistrer une séance';
+
+  @override
+  String get gymUntitled => 'Séance sans titre';
+
+  @override
+  String get gymOfflineCached => 'Hors ligne – séances enregistrées affichées';
+
+  @override
+  String get gymOfflineQueued =>
+      'Hors ligne – les modifications seront synchronisées plus tard';
+
+  @override
+  String get gymEmptyTitle => 'Aucune séance de muscu';
+
+  @override
+  String get gymEmptyBody =>
+      'Enregistre une séance pour la suivre ici et alimenter ta charge d\'entraînement.';
+
+  @override
+  String get gymPrBadge => 'Record';
+
+  @override
+  String gymExercisesShort(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count exercices',
+      one: '$count exercice',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String gymVolumeShort(int volume) {
+    return '$volume kg';
+  }
+
+  @override
+  String get gymNotFound => 'Séance introuvable.';
+
+  @override
+  String get gymEdit => 'Modifier';
+
+  @override
+  String get gymDelete => 'Supprimer';
+
+  @override
+  String get gymNotes => 'Notes';
+
+  @override
+  String get gymKg => 'kg';
+
+  @override
+  String get gymReps => 'Réps';
+
+  @override
+  String get gymRpe => 'RPE';
+
+  @override
+  String gymSetN(int n) {
+    return 'Série $n';
+  }
+
+  @override
+  String get gymPrWeight => 'Plus lourde';
+
+  @override
+  String get gymPrVolume => 'Meilleur volume';
+
+  @override
+  String get gymPrE1rm => 'Meilleur 1RM est.';
+
+  @override
+  String get gymDeleteConfirmTitle => 'Supprimer la séance ?';
+
+  @override
+  String get gymDeleteConfirmBody =>
+      'Cette action supprime définitivement la séance et ses séries.';
+
+  @override
+  String get gymEditorNewTitle => 'Nouvelle séance';
+
+  @override
+  String get gymEditorEditTitle => 'Modifier la séance';
+
+  @override
+  String get gymEditorTitleLabel => 'Titre (facultatif)';
+
+  @override
+  String get gymEditorTitlePlaceholder => 'ex. Jour push';
+
+  @override
+  String get gymEditorExercisePlaceholder => 'Nom de l\'exercice';
+
+  @override
+  String get gymEditorRemoveExercise => 'Supprimer l\'exercice';
+
+  @override
+  String get gymEditorRemoveSet => 'Supprimer la série';
+
+  @override
+  String get gymEditorAddSet => 'Ajouter une série';
+
+  @override
+  String get gymEditorAddExercise => 'Ajouter un exercice';
+
+  @override
+  String get gymEditorShare => 'Partager dans le fil';
+
+  @override
+  String get gymEditorCancel => 'Annuler';
+
+  @override
+  String get gymEditorSave => 'Enregistrer la séance';
+
+  @override
+  String get gymEditorNeedExercise =>
+      'Ajoute au moins un exercice avec un nom.';
+
+  @override
+  String get gymSaveFailed => 'Impossible d\'enregistrer la séance.';
 }
