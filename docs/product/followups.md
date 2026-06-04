@@ -63,6 +63,21 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 ### Wave 3 — Nutrition (gated on the gym-engagement validation gate; pre-buildable, don't ship ahead)
 
+> **In progress (2026-06-04, behind `multi_modal_nav`).** Landed so far:
+> the `nutrition_targets` TS↔Dart parity pair (13 tests each); the
+> `body_metrics` migration `20261216_001` (+ `user_profiles.height_cm`,
+> owner-only, pgtap); `body_metrics` wired into both DSAR export paths;
+> the web nutrition data layer (`core/data.ts` food + body-metrics
+> queries, `body_metrics` in the `TABLES` registry); the `food_search`
+> Open Food Facts client (injectable-fetcher seam, pure parse/scale, 7
+> tests); and the `nutrition_totals` day-aggregation helper (4 tests).
+> **Remaining (each i18n-heavy):** Settings body-metrics entry +
+> consent-wording broaden (Art 9, 6 web locales); `/nutrition` +
+> `/nutrition/log` pages + flag-gated sidebar item + Playwright e2e
+> (G7); the mobile screens + 7-ARB i18n + iOS twin (G8); privacy-
+> disclosure doc updates (iOS label / Play Data Safety / Open Food Facts
+> sub-processor).
+
 - [ ] **G6 · Nutrition foundation (pure + schema)** — `nutrition_targets` parity pair (Mifflin-St Jeor BMR × activity-level); `body_metrics` migration (height on `user_profiles` + `body_metrics` weight time-series, owner RLS, cascade-delete); Settings height/weight entry; privacy-disclosure updates (iOS label / Play Data Safety / Open Food Facts sub-processor). **Feeds G1** (add `body_metrics` to export). Owns: `nutrition_targets.ts`/`.dart`, the new migration, Settings body-metrics entry.
   ```
   Read docs/features/multi_modal.md (§ Nutrition targets, § "Body metrics & sensitive data"), docs/architecture/schema_codegen.md, and docs/backend/settings.md. (1) Build the nutrition_targets TS↔Dart parity pair (Mifflin-St Jeor BMR × activity-level, unit-tested both sides, equal test counts). (2) Add an additive migration: height on user_profiles + a body_metrics weight time-series (user_id, recorded_at, weight_kg), owner-scoped RLS, cascade-delete from auth.users; regenerate both type files (npm run gen:types + dart gen_dart_models) and update the CHECK↔union guard if needed. (3) Settings height/weight entry (web + mobile twin). (4) Update the iOS Privacy Label / Play Data Safety / sub-processor list (Open Food Facts is a new outbound hop). Flag to G1 that body_metrics must join the export path. Worktree; path-scoped commits; no AI attribution.
