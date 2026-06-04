@@ -76,14 +76,27 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 > `sub-processors.md`. A real `<input type="number">` binding bug
 > (`.trim` on a number) was caught by the e2e and fixed.
 >
-> **Remaining:** **G8 mobile** — `nutrition_screen.dart` +
-> `nutrition_log_sheet.dart` + `food_search.dart` + `LocalFoodStore`
-> wiring + iOS twin + 7-ARB i18n (the user chose "web vertical first,
-> then mobile"). **Operator carry-overs:** the iOS Privacy Nutrition
-> Label + Play Data Safety form must be updated for the new body-metrics
-> (height/weight, Art 9) + Open Food Facts hop before a store submission
-> that ships nutrition. **Translation review:** the de/es/fr/ja/pt-BR
-> nutrition + consent strings are best-effort and want native review.
+> **G8 (mobile) landed 2026-06-04.** `screens/nutrition_screen.dart`
+> (rings/meal-slots/water/7-day trend, offline-first via `LocalFoodStore`)
+> + `widgets/nutrition_log_sheet.dart` (Open Food Facts search →
+> confirm-portion dialog + manual fallback) + `food_search.dart` +
+> `nutrition_totals.dart` (mirror web; unit-tested) + `api_client
+> .fetchLatestBodyWeightKg` + `body_metrics` in the gen_dart_models
+> allowlist (`BodyMetricRow`). 7-ARB i18n + widget tests + byte-identical
+> iOS twin. Built standalone like the gym screens.
+>
+> **Remaining for the nutrition vertical:**
+> - **Mobile nav entry** — the gym + nutrition screens are reachable only
+>   once the G5 `multi_modal_nav` Run→Log bottom-nav reshape lands.
+> - **Mobile Settings body-metrics entry** — height/weight/activity/goal
+>   input under the Art 9 consent gate (the web half shipped). Until then
+>   mobile targets use default activity/goal + web-set profile metrics, so
+>   the rings show consumed-only for a mobile-only user.
+> - **Operator carry-overs:** iOS Privacy Nutrition Label + Play Data
+>   Safety form for the new body-metrics (height/weight, Art 9) + Open
+>   Food Facts hop, before a store submission that ships nutrition.
+> - **Translation review:** the de/es/fr/ja/pt-BR nutrition + consent
+>   strings (web + mobile ARB) are best-effort and want native review.
 
 - [ ] **G6 · Nutrition foundation (pure + schema)** — `nutrition_targets` parity pair (Mifflin-St Jeor BMR × activity-level); `body_metrics` migration (height on `user_profiles` + `body_metrics` weight time-series, owner RLS, cascade-delete); Settings height/weight entry; privacy-disclosure updates (iOS label / Play Data Safety / Open Food Facts sub-processor). **Feeds G1** (add `body_metrics` to export). Owns: `nutrition_targets.ts`/`.dart`, the new migration, Settings body-metrics entry.
   ```
