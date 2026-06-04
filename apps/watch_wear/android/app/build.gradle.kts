@@ -206,6 +206,12 @@ dependencies {
     // Local persistence
     implementation("androidx.datastore:datastore-preferences:1.2.1")
 
+    // Encrypted storage for the auth session (access + refresh tokens are
+    // bearer credentials — they live in EncryptedSharedPreferences, not
+    // plaintext DataStore). 1.1.0-alpha06 is the build the MasterKey.Builder
+    // API ships in; security-crypto has no newer stable than 1.0.0.
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     // Serialization + coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
