@@ -953,6 +953,8 @@ class GymWorkoutRow {
   static const String colExternalId = 'external_id';
   static const String colLastModifiedAt = 'last_modified_at';
   static const String colCreatedAt = 'created_at';
+  static const String colSetCount = 'set_count';
+  static const String colVolumeKg = 'volume_kg';
 
   final String id;
   final String userId;
@@ -964,6 +966,8 @@ class GymWorkoutRow {
   final String? externalId;
   final DateTime lastModifiedAt;
   final DateTime createdAt;
+  final int setCount;
+  final double volumeKg;
 
   const GymWorkoutRow({
     required this.id,
@@ -976,6 +980,8 @@ class GymWorkoutRow {
     this.externalId,
     required this.lastModifiedAt,
     required this.createdAt,
+    required this.setCount,
+    required this.volumeKg,
   });
 
   factory GymWorkoutRow.fromJson(Map<String, dynamic> json) => GymWorkoutRow(
@@ -989,6 +995,8 @@ class GymWorkoutRow {
     externalId: json['external_id'] as String?,
     lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
+    setCount: (json['set_count'] as num).toInt(),
+    volumeKg: (json['volume_kg'] as num).toDouble(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1002,6 +1010,8 @@ class GymWorkoutRow {
     colExternalId: externalId,
     colLastModifiedAt: lastModifiedAt.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
+    colSetCount: setCount,
+    colVolumeKg: volumeKg,
   };
 }
 

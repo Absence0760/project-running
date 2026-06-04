@@ -845,9 +845,11 @@ export type Database = {
           is_public: boolean
           last_modified_at: string
           notes: string | null
+          set_count: number
           started_at: string
           title: string | null
           user_id: string
+          volume_kg: number
         }
         Insert: {
           created_at?: string
@@ -857,9 +859,11 @@ export type Database = {
           is_public?: boolean
           last_modified_at?: string
           notes?: string | null
+          set_count?: number
           started_at?: string
           title?: string | null
           user_id: string
+          volume_kg?: number
         }
         Update: {
           created_at?: string
@@ -869,9 +873,11 @@ export type Database = {
           is_public?: boolean
           last_modified_at?: string
           notes?: string | null
+          set_count?: number
           started_at?: string
           title?: string | null
           user_id?: string
+          volume_kg?: number
         }
         Relationships: []
       }
@@ -2705,6 +2711,7 @@ export type Database = {
       }
       cleanup_stale_export_blobs: { Args: never; Returns: number }
       cleanup_stale_live_run_pings: { Args: never; Returns: number }
+      cleanup_stale_race_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       clip_route_for_viewer: { Args: { p_route_id: string }; Returns: Json }
       clip_track_for_user: {
@@ -3012,6 +3019,10 @@ export type Database = {
       }
       record_coach_consent: { Args: never; Returns: string }
       redeem_coach_invite: { Args: { token: string }; Returns: string }
+      refresh_gym_workout_totals: {
+        Args: { p_workout_id: string }
+        Returns: undefined
+      }
       refresh_personal_records_for_user: {
         Args: { p_user_id: string }
         Returns: undefined

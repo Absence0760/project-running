@@ -557,8 +557,10 @@ Data Safety disclosable). Plan:
 
 ## `activities` view at scale
 
-The view UNION-ALLs runs (potentially thousands) with per-workout
-subqueries for set count + volume. For the History list:
+The view UNION-ALLs runs (potentially thousands) with the gym branch
+reading the **stored** `set_count` + `volume_kg` columns on
+`gym_workouts` (no longer per-workout correlated subqueries — F7, migration
+`20261214_001`). For the History list:
 
 - Always query it **windowed** (`limit` + `started_at` cursor), never
   unbounded — the History screen paginates like `/runs` does. The web
@@ -571,10 +573,14 @@ subqueries for set count + volume. For the History list:
   `food_log_user`), so the windowed read is a per-branch ordered index
   scan merged + limited, not a full UNION materialise. The spine is pinned
   by `activities_spine_indexes_test.sql` (MM3).
-- The per-workout subqueries are fine at individual-user scale (a user
-  has tens of workouts, not millions); if a power lifter's history ever
-  makes them hot, fold set_count + volume into stored columns on
-  `gym_workouts` maintained by a trigger. Not needed at launch.
+- `set_count` + `volume_kg` are trigger-maintained derived columns on
+  `gym_workouts` (an AFTER INSERT/UPDATE/DELETE trigger on `gym_sets`
+  recomputes the parent's totals from scratch). The view reads them as
+  flat columns, so a power lifter's history is a per-branch ordered index
+  scan, not a fan-out of correlated subqueries. The cache contract (the
+  authoritative recompute) is documented in
+  [`derived_state.md`](../backend/derived_state.md); the trigger
+  maintenance + view correctness are pinned by `gym_workout_totals_test.sql`.
 
 ## Empty states & first-run
 
