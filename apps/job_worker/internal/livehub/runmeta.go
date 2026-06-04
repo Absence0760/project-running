@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 )
 
 // RunMeta captures the two `runs` columns the authorizer cares about:
@@ -44,7 +46,7 @@ func (f *SupabaseRunMetaFetcher) RunMeta(ctx context.Context, runID string) (*Ru
 	q.Set("id", "eq."+runID)
 	q.Set("select", "user_id,is_public")
 	q.Set("limit", "1")
-	body, err := f.get(ctx, "/rest/v1/runs?"+q.Encode())
+	body, err := f.get(ctx, "/rest/v1/"+schema.TableRuns+"?"+q.Encode())
 	if err != nil {
 		return nil, fmt.Errorf("runmeta: fetch run: %w", err)
 	}

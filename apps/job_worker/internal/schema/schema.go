@@ -1,0 +1,90 @@
+// Package schema is the worker's single registry of the Supabase
+// vocabulary the Go code talks to over PostgREST + Storage REST:
+// table names, Storage bucket names, the `runs.metadata` jsonb keys,
+// and the `user_settings.prefs` keys.
+//
+// Before this package every `/rest/v1/<table>` path, every
+// `/storage/v1/object/<bucket>/` path, and every `metadata["<key>"]`
+// access spelled its table / bucket / key as a bare string literal,
+// scattered across supabase.go, livehub/, dataexport/, and premium/.
+// A typo ("run_photo" for "run_photos") would compile and only fail at
+// runtime against a 404; a renamed table meant grepping for a string.
+// Routing them through these constants makes the set of tables the
+// worker touches enumerable (the data-export coverage guard in
+// supabase package depends on it) and a rename a one-line edit.
+//
+// These names mirror the Postgres schema in
+// apps/backend/supabase/migrations and the registries in
+// docs/backend/{metadata,settings}.md. Keep them in lockstep — a
+// constant here that drifts from the DB is the same latent 404 the
+// bare literals were.
+package schema
+
+// Table is a PostgREST table name — the `<table>` in `/rest/v1/<table>`.
+const (
+	TableRuns               = "runs"
+	TableRunMatchedTracks   = "run_matched_tracks"
+	TableRunPhotos          = "run_photos"
+	TableRunGear            = "run_gear"
+	TableGear               = "gear"
+	TableRoutes             = "routes"
+	TableRouteReviews       = "route_reviews"
+	TableSavedRoutes        = "saved_routes"
+	TableIntegrations       = "integrations"
+	TableWebhookEvents      = "webhook_events"
+	TableJobs               = "jobs"
+	TableUserProfiles       = "user_profiles"
+	TableUserSettings       = "user_settings"
+	TableUserDeviceSettings = "user_device_settings"
+	TableUserCoachUsage     = "user_coach_usage"
+	TableUserFollows        = "user_follows"
+	TableUserBlocks         = "user_blocks"
+	TableNotifications      = "notifications"
+	TableLifecycleEmailLog  = "lifecycle_email_log"
+	TableCoachMessages      = "coach_messages"
+	TableCoachAthletes      = "coach_athletes"
+	TableTrainingPlans      = "training_plans"
+	TableRunKudos           = "run_kudos"
+	TableRunComments        = "run_comments"
+	TableSegmentEfforts     = "segment_efforts"
+	TableFitnessSnapshots   = "fitness_snapshots"
+	TablePersonalRecords    = "personal_records"
+	TableDeviceTokens       = "device_tokens"
+	TableLiveRunPings       = "live_run_pings"
+	TableRacePings          = "race_pings"
+	TableEventAttendees     = "event_attendees"
+	TableEventResults       = "event_results"
+	TableEventResultClaims  = "event_result_claims"
+	TableEventExceptions    = "event_exceptions"
+	TableClubMembers        = "club_members"
+	TableClubPosts          = "club_posts"
+	TableReports            = "reports"
+	TableDirectMessages     = "direct_messages"
+	TableGymWorkouts        = "gym_workouts"
+	TableFoodLog            = "food_log"
+)
+
+// Bucket is a Supabase Storage bucket name — the `<bucket>` in
+// `/storage/v1/object/<bucket>/`. Distinct from the like-named tables
+// (`run_photos` the table vs `run-photos` the bucket).
+const (
+	BucketRuns      = "runs"
+	BucketRunPhotos = "run-photos"
+)
+
+// MetadataKey is a key inside the `runs.metadata` jsonb bag. The bag
+// has no schema codegen, so docs/backend/metadata.md + this block are
+// the only thing keeping cross-platform writers and readers in sync.
+const (
+	MetaActivityType = "activity_type"
+	MetaTitle        = "title"
+	MetaAvgBPM       = "avg_bpm"
+	MetaSteps        = "steps"
+	MetaElevationM   = "elevation_m"
+)
+
+// PrefsKey is a key inside the `user_settings.prefs` jsonb bag — the
+// per-user preferences registry documented in docs/backend/settings.md.
+const (
+	PrefsPrivacyZones = "privacy_zones"
+)

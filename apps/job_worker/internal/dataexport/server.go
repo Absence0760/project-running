@@ -43,6 +43,8 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 )
 
 // Server wires the data-export HTTP endpoint to the worker's
@@ -463,11 +465,11 @@ var csvColumns = []string{
 	"distance_m",
 	"duration_s",
 	"source",
-	"activity_type",
-	"title",
-	"avg_bpm",
-	"steps",
-	"elevation_m",
+	schema.MetaActivityType,
+	schema.MetaTitle,
+	schema.MetaAvgBPM,
+	schema.MetaSteps,
+	schema.MetaElevationM,
 	"route_id",
 	"event_id",
 	"external_id",
@@ -495,11 +497,11 @@ func BuildCSV(runs []ExportRun) string {
 			fmt.Sprintf("%.0f", r.DistanceM),
 			fmt.Sprintf("%d", r.DurationS),
 			r.Source,
-			stringy(md["activity_type"]),
-			stringy(md["title"]),
-			stringy(md["avg_bpm"]),
-			stringy(md["steps"]),
-			stringy(md["elevation_m"]),
+			stringy(md[schema.MetaActivityType]),
+			stringy(md[schema.MetaTitle]),
+			stringy(md[schema.MetaAvgBPM]),
+			stringy(md[schema.MetaSteps]),
+			stringy(md[schema.MetaElevationM]),
 			deref(r.RouteID),
 			deref(r.EventID),
 			deref(r.ExternalID),
@@ -968,7 +970,7 @@ func defaultIfNil(m map[string]interface{}) map[string]interface{} {
 // track. Loaders (Strava, Garmin Connect, GPX viewers) handle
 // this shape uniformly. Exported for unit testing.
 func BuildGpx(run ExportRun, track []TrackPoint) string {
-	title := stringy(run.Metadata["title"])
+	title := stringy(run.Metadata[schema.MetaTitle])
 	if title == "" {
 		title = "Run " + run.ID
 	}

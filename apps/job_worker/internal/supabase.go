@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 )
 
 // SupabaseClient wraps the REST surface the worker needs. All calls
@@ -158,7 +160,7 @@ func (c *SupabaseClient) DeferJob(ctx context.Context, jobID int64, delaySeconds
 // and decompresses it into a TrackPoint slice. Path is the value stored
 // in runs.track_url — `{user_id}/{run_id}.json.gz`.
 func (c *SupabaseClient) DownloadTrack(ctx context.Context, path string) ([]TrackPoint, error) {
-	url := c.BaseURL + "/storage/v1/object/runs/" + path
+	url := c.BaseURL + "/storage/v1/object/" + schema.BucketRuns + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, err
@@ -210,7 +212,7 @@ func (c *SupabaseClient) UploadMatchedTrack(ctx context.Context, path string, po
 		return err
 	}
 
-	url := c.BaseURL + "/storage/v1/object/runs/" + path
+	url := c.BaseURL + "/storage/v1/object/" + schema.BucketRuns + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, &buf)
 	if err != nil {
 		return err
@@ -230,7 +232,7 @@ func (c *SupabaseClient) UploadMatchedTrack(ctx context.Context, path string, po
 // back to extension-sniffing when it's missing, but Supabase Storage
 // signed URLs only use the stored header).
 func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte, string, error) {
-	url := c.BaseURL + "/storage/v1/object/run-photos/" + path
+	url := c.BaseURL + "/storage/v1/object/" + schema.BucketRunPhotos + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return nil, "", err
@@ -261,7 +263,7 @@ func (c *SupabaseClient) DownloadPhoto(ctx context.Context, path string) ([]byte
 // stripping. Idempotent — uploading already-stripped bytes a second
 // time produces no observable difference.
 func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []byte, contentType string) error {
-	url := c.BaseURL + "/storage/v1/object/run-photos/" + path
+	url := c.BaseURL + "/storage/v1/object/" + schema.BucketRunPhotos + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -280,7 +282,7 @@ func (c *SupabaseClient) UploadPhoto(ctx context.Context, path string, body []by
 // Service role bypasses RLS so the standard PostgREST surface works
 // without a definer function.
 func (c *SupabaseClient) UpdatePhotoThumb512Path(ctx context.Context, photoID, path string) error {
-	url := c.BaseURL + "/rest/v1/run_photos?id=eq." + photoID
+	url := c.BaseURL + "/rest/v1/" + schema.TableRunPhotos + "?id=eq." + photoID
 	body, err := json.Marshal(map[string]string{"thumb_512_path": path})
 	if err != nil {
 		return err
@@ -327,7 +329,7 @@ func (c *SupabaseClient) UpdateMatchedTrackRow(
 	if expectedSourceTrackURL != "" {
 		q += "&source_track_url=eq." + url.QueryEscape(expectedSourceTrackURL)
 	}
-	endpoint := c.BaseURL + "/rest/v1/run_matched_tracks?" + q
+	endpoint := c.BaseURL + "/rest/v1/" + schema.TableRunMatchedTracks + "?" + q
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, endpoint, bytes.NewReader(payload))
 	if err != nil {
 		return err
@@ -360,7 +362,7 @@ func (c *SupabaseClient) UpdateMatchedTrackRow(
 // match time so a re-upload that changes track_url is matched against
 // the latest version.
 func (c *SupabaseClient) ReadRunTrackURL(ctx context.Context, runID string) (string, error) {
-	url := c.BaseURL + "/rest/v1/runs?id=eq." + runID + "&select=track_url"
+	url := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?id=eq." + runID + "&select=track_url"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", err
@@ -399,7 +401,7 @@ type RunLinkInfo struct {
 func (c *SupabaseClient) ReadRunForAutoLink(
 	ctx context.Context, runID string,
 ) (RunLinkInfo, error) {
-	url := c.BaseURL + "/rest/v1/runs?id=eq." + runID + "&select=route_id,distance_m"
+	url := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?id=eq." + runID + "&select=route_id,distance_m"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return RunLinkInfo{}, err
@@ -464,7 +466,7 @@ func (c *SupabaseClient) LinkRunToRoute(ctx context.Context, runID, routeID stri
 	if err != nil {
 		return err
 	}
-	url := c.BaseURL + "/rest/v1/runs?id=eq." + runID
+	url := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?id=eq." + runID
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -497,7 +499,7 @@ func (c *SupabaseClient) FetchExpiringStravaIntegrations(ctx context.Context, wi
 	q.Set("select", "id,user_id")
 	q.Set("order", "token_expiry.asc")
 	q.Set("limit", "500")
-	u := c.BaseURL + "/rest/v1/integrations?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableIntegrations + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -561,7 +563,7 @@ func (c *SupabaseClient) FindIntegrationUserByAthlete(ctx context.Context, provi
 	q.Set("external_id", "eq."+strconv.FormatInt(athleteID, 10))
 	q.Set("select", "user_id")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/integrations?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableIntegrations + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", err
@@ -656,7 +658,7 @@ func (c *SupabaseClient) MarkIntegrationDisconnected(ctx context.Context, userID
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
 	q.Set("provider", "eq."+provider)
-	u := c.BaseURL + "/rest/v1/integrations?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableIntegrations + "?" + q.Encode()
 	body, err := json.Marshal(map[string]any{
 		"disconnected_at":     time.Now().UTC().Format(time.RFC3339),
 		"disconnected_reason": reason,
@@ -688,7 +690,7 @@ func (c *SupabaseClient) IsStravaActivityImported(ctx context.Context, userID st
 	q.Set("metadata->>strava_id", "eq."+strconv.FormatInt(stravaActivityID, 10))
 	q.Set("select", "id")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return false, err
@@ -784,7 +786,7 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 	if err != nil {
 		return nil, err
 	}
-	u := c.BaseURL + "/rest/v1/runs"
+	u := c.BaseURL + "/rest/v1/" + schema.TableRuns
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(payload))
 	if err != nil {
 		return nil, err
@@ -813,7 +815,7 @@ func (c *SupabaseClient) UpdateRunTrackURL(ctx context.Context, runID, trackURL 
 	if err != nil {
 		return err
 	}
-	u := c.BaseURL + "/rest/v1/runs?id=eq." + runID
+	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?id=eq." + runID
 	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -839,7 +841,7 @@ func (c *SupabaseClient) InsertWebhookEvent(ctx context.Context, provider, event
 	if err != nil {
 		return false, err
 	}
-	u := c.BaseURL + "/rest/v1/webhook_events"
+	u := c.BaseURL + "/rest/v1/" + schema.TableWebhookEvents
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		return false, err
@@ -872,7 +874,7 @@ func (c *SupabaseClient) DeleteWebhookEvent(ctx context.Context, provider, event
 	q := url.Values{}
 	q.Set("provider", "eq."+provider)
 	q.Set("event_id", "eq."+eventID)
-	u := c.BaseURL + "/rest/v1/webhook_events?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableWebhookEvents + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
 	if err != nil {
 		return err
@@ -901,7 +903,7 @@ func (c *SupabaseClient) EnqueueStravaEvent(ctx context.Context, payload map[str
 	if err != nil {
 		return 0, err
 	}
-	u := c.BaseURL + "/rest/v1/jobs"
+	u := c.BaseURL + "/rest/v1/" + schema.TableJobs
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		return 0, err
@@ -966,7 +968,7 @@ func (c *SupabaseClient) FetchExportRuns(ctx context.Context, userID string, lim
 		"id,user_id,started_at,duration_s,distance_m,source,external_id,metadata,track_url,hr_series_url,is_public,event_id,route_id,created_at,updated_at")
 	q.Set("order", "started_at.desc")
 	q.Set("limit", strconv.Itoa(limit))
-	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -1008,7 +1010,7 @@ type dataexportRow struct {
 // stomp on an existing export (the caller picks a ms-precision
 // timestamped path).
 func (c *SupabaseClient) UploadExportArtifact(ctx context.Context, path, contentType string, body []byte) error {
-	u := c.BaseURL + "/storage/v1/object/runs/" + path
+	u := c.BaseURL + "/storage/v1/object/" + schema.BucketRuns + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		return err
@@ -1028,7 +1030,7 @@ func (c *SupabaseClient) CreateSignedURL(ctx context.Context, path string, ttlSe
 	if err != nil {
 		return "", err
 	}
-	u := c.BaseURL + "/storage/v1/object/sign/runs/" + path
+	u := c.BaseURL + "/storage/v1/object/sign/" + schema.BucketRuns + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, u, bytes.NewReader(body))
 	if err != nil {
 		return "", err
@@ -1063,7 +1065,7 @@ func (c *SupabaseClient) FetchExportRoutes(ctx context.Context, userID string) (
 	q := url.Values{}
 	q.Set("user_id", "eq."+userID)
 	q.Set("select", "*")
-	u := c.BaseURL + "/rest/v1/routes?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableRoutes + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -1124,7 +1126,7 @@ func (c *SupabaseClient) FetchExportProfile(ctx context.Context, userID string) 
 	// an Art 20 right to receive.
 	q.Set("select", "id,display_name,avatar_url,bio,location,preferred_unit,created_at,hr_zones,date_of_birth,parkrun_number,gender,activity_default,privacy_default")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/user_profiles?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableUserProfiles + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -1152,7 +1154,7 @@ func (c *SupabaseClient) FetchUserSettingsPrefs(ctx context.Context, userID stri
 	q.Set("user_id", "eq."+userID)
 	q.Set("select", "prefs")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/user_settings?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableUserSettings + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -1182,7 +1184,7 @@ func (c *SupabaseClient) FetchNotificationForEmail(ctx context.Context, notifica
 	q.Set("id", "eq."+notificationID)
 	q.Set("select", "id,user_id,kind,run_id,event_id,club_id,comment_id,email_sent_at")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/notifications?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -1231,7 +1233,7 @@ func (c *SupabaseClient) FetchUserEmail(ctx context.Context, userID string) (str
 func (c *SupabaseClient) MarkNotificationEmailed(ctx context.Context, notificationID string) error {
 	q := url.Values{}
 	q.Set("id", "eq."+notificationID)
-	u := c.BaseURL + "/rest/v1/notifications?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + q.Encode()
 	payload, err := json.Marshal(map[string]string{
 		"email_sent_at": time.Now().UTC().Format(time.RFC3339),
 	})
@@ -1256,7 +1258,7 @@ func (c *SupabaseClient) LifecycleEmailAlreadySent(ctx context.Context, userID, 
 	q.Set("template", "eq."+template)
 	q.Set("select", "user_id")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/lifecycle_email_log?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableLifecycleEmailLog + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return false, err
@@ -1278,7 +1280,7 @@ func (c *SupabaseClient) LifecycleEmailAlreadySent(ctx context.Context, userID, 
 // duplicate insert is ignored (resolution=ignore-duplicates) so a benign
 // re-record can't 409.
 func (c *SupabaseClient) RecordLifecycleEmail(ctx context.Context, userID, template string) error {
-	u := c.BaseURL + "/rest/v1/lifecycle_email_log"
+	u := c.BaseURL + "/rest/v1/" + schema.TableLifecycleEmailLog
 	payload, err := json.Marshal(map[string]string{"user_id": userID, "template": template})
 	if err != nil {
 		return err
@@ -1335,13 +1337,13 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 	specs := []spec{
 		// coach_messages — full chat transcripts with the assistant.
 		// Densest single PII corpus outside GPS tracks.
-		{name: "coach_messages.json", table: "coach_messages", filter: uidEq, sel: "*"},
+		{name: "coach_messages.json", table: schema.TableCoachMessages, filter: uidEq, sel: "*"},
 		// notifications — actor + target + read_at; everything that
 		// landed in the user's inbox.
-		{name: "notifications.json", table: "notifications", filter: uidEq, sel: "*"},
+		{name: "notifications.json", table: schema.TableNotifications, filter: uidEq, sel: "*"},
 		// training_plans (+ weeks + workouts via nested embeds).
 		{
-			name: "training_plans.json", table: "training_plans", filter: uidEq,
+			name: "training_plans.json", table: schema.TableTrainingPlans, filter: uidEq,
 			sel: "*,weeks:plan_weeks(*,workouts:plan_workouts(*))",
 		},
 		// integrations — fact of connection + cursor + scope +
@@ -1353,58 +1355,58 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// these columns and they're personal data under GDPR Art 15
 		// (right of access), so the export must reflect them.
 		{
-			name: "integrations.json", table: "integrations", filter: uidEq,
+			name: "integrations.json", table: schema.TableIntegrations, filter: uidEq,
 			sel: "id,provider,external_id,scope,last_sync_at,sync_cursor,disconnected_at,disconnected_reason,created_at,updated_at",
 		},
 		// run_kudos given BY the user (the row where user_id = me).
-		{name: "run_kudos.json", table: "run_kudos", filter: uidEq, sel: "*"},
+		{name: "run_kudos.json", table: schema.TableRunKudos, filter: uidEq, sel: "*"},
 		// run_comments authored by the user.
 		{
-			name: "run_comments.json", table: "run_comments",
+			name: "run_comments.json", table: schema.TableRunComments,
 			filter: "author_id=eq." + uid, sel: "*",
 		},
 		// run_photos metadata. The image bytes themselves are bundled
 		// under `photos/` by BuildBackupZip via DownloadPhoto, keyed off
 		// each row's `storage_path` (audit-findings 2026-05-30 High).
-		{name: "run_photos.json", table: "run_photos", filter: "owner_id=eq." + uid, sel: "*"},
+		{name: "run_photos.json", table: schema.TableRunPhotos, filter: "owner_id=eq." + uid, sel: "*"},
 		// segment_efforts — performance history.
-		{name: "segment_efforts.json", table: "segment_efforts", filter: uidEq, sel: "*"},
+		{name: "segment_efforts.json", table: schema.TableSegmentEfforts, filter: uidEq, sel: "*"},
 		// gear + run_gear — owner-private inventory + join.
-		{name: "gear.json", table: "gear", filter: "owner_id=eq." + uid, sel: "*"},
+		{name: "gear.json", table: schema.TableGear, filter: "owner_id=eq." + uid, sel: "*"},
 		// run_gear is filled below by a two-step fetch (PostgREST
 		// `in.()` takes a literal value list, not a SQL subselect —
 		// the self-audit caught the malformed query that this entry
 		// used to attempt). See the post-loop block.
 		// fitness_snapshots — derived VDOT / VO2 / load.
-		{name: "fitness_snapshots.json", table: "fitness_snapshots", filter: uidEq, sel: "*"},
+		{name: "fitness_snapshots.json", table: schema.TableFitnessSnapshots, filter: uidEq, sel: "*"},
 		// personal_records.
-		{name: "personal_records.json", table: "personal_records", filter: uidEq, sel: "*"},
+		{name: "personal_records.json", table: schema.TablePersonalRecords, filter: uidEq, sel: "*"},
 		// device_tokens — redact the raw token below.
-		{name: "device_tokens.json", table: "device_tokens", filter: uidEq, sel: "*"},
+		{name: "device_tokens.json", table: schema.TableDeviceTokens, filter: uidEq, sel: "*"},
 		// live_run_pings — short-TTL but in-flight rows may exist
 		// when an export is taken.
-		{name: "live_run_pings.json", table: "live_run_pings", filter: uidEq, sel: "*"},
+		{name: "live_run_pings.json", table: schema.TableLiveRunPings, filter: uidEq, sel: "*"},
 		// user_follows (both directions).
 		{
-			name: "following.json", table: "user_follows",
+			name: "following.json", table: schema.TableUserFollows,
 			filter: "follower_id=eq." + uid, sel: "*",
 		},
 		{
-			name: "followers.json", table: "user_follows",
+			name: "followers.json", table: schema.TableUserFollows,
 			filter: "followee_id=eq." + uid, sel: "*",
 		},
 		// event_attendees — RSVPs.
-		{name: "event_attendees.json", table: "event_attendees", filter: uidEq, sel: "*"},
+		{name: "event_attendees.json", table: schema.TableEventAttendees, filter: uidEq, sel: "*"},
 		// club_members — joins.
-		{name: "club_members.json", table: "club_members", filter: uidEq, sel: "*"},
+		{name: "club_members.json", table: schema.TableClubMembers, filter: uidEq, sel: "*"},
 		// saved_routes — starred-route library.
-		{name: "saved_routes.json", table: "saved_routes", filter: uidEq, sel: "*"},
+		{name: "saved_routes.json", table: schema.TableSavedRoutes, filter: uidEq, sel: "*"},
 		// route_reviews authored by the user.
-		{name: "route_reviews.json", table: "route_reviews", filter: uidEq, sel: "*"},
+		{name: "route_reviews.json", table: schema.TableRouteReviews, filter: uidEq, sel: "*"},
 		// race_pings — live race GPS+HR at ~10s granularity. Personal
 		// health + location data; absent before audit/data-export-
 		// completeness (2026-05-25).
-		{name: "race_pings.json", table: "race_pings", filter: uidEq, sel: "*"},
+		{name: "race_pings.json", table: schema.TableRacePings, filter: uidEq, sel: "*"},
 		// user_settings — the universal (per-user) prefs bag: privacy
 		// zones, HR settings, date-of-birth, week-start, units, and
 		// every other preference. The dataexport server also surfaces
@@ -1415,21 +1417,21 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// giving the subject a self-describing `user_settings.json`.
 		// It's the subject's own data, so the full prefs ship
 		// unredacted. persona round-5 privacy / GDPR Art 20.
-		{name: "user_settings.json", table: "user_settings", filter: uidEq, sel: "*"},
+		{name: "user_settings.json", table: schema.TableUserSettings, filter: uidEq, sel: "*"},
 		// user_device_settings — per-device behavioural prefs +
 		// last-seen-at. Distinct from user_settings (the per-user bag
 		// above). Added per audit/data-export-completeness
 		// (2026-05-25).
-		{name: "user_device_settings.json", table: "user_device_settings", filter: uidEq, sel: "*"},
+		{name: "user_device_settings.json", table: schema.TableUserDeviceSettings, filter: uidEq, sel: "*"},
 		// user_coach_usage — daily message_count behavioural log.
 		// Small but personal; added per audit/data-export-completeness
 		// (2026-05-25).
-		{name: "user_coach_usage.json", table: "user_coach_usage", filter: uidEq, sel: "*"},
+		{name: "user_coach_usage.json", table: schema.TableUserCoachUsage, filter: uidEq, sel: "*"},
 		// reports authored by the user (subject's own report history).
 		// reporter_id is the user; target rows belong to others and are
 		// out of scope of THIS subject's export.
 		{
-			name: "reports.json", table: "reports",
+			name: "reports.json", table: schema.TableReports,
 			filter: "reporter_id=eq." + uid, sel: "*",
 		},
 		// reports filed AGAINST the user (target_kind='user'). GDPR
@@ -1450,11 +1452,11 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// ships verbatim: it is the subject's own correspondence.
 		// audit/data-export-completeness (2026-05-30) Critical.
 		{
-			name: "direct_messages_sent.json", table: "direct_messages",
+			name: "direct_messages_sent.json", table: schema.TableDirectMessages,
 			filter: "sender_id=eq." + uid, sel: "*",
 		},
 		{
-			name: "direct_messages_received.json", table: "direct_messages",
+			name: "direct_messages_received.json", table: schema.TableDirectMessages,
 			filter: "recipient_id=eq." + uid, sel: "*",
 		},
 		// coach_athletes — the subject's coaching relationships, as coach
@@ -1463,45 +1465,45 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// it — same rationale as integrations' vault columns.
 		// audit/data-export-completeness (2026-05-30) Critical.
 		{
-			name: "coaching_as_coach.json", table: "coach_athletes",
+			name: "coaching_as_coach.json", table: schema.TableCoachAthletes,
 			filter: "coach_id=eq." + uid,
 			sel:    "id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at",
 		},
 		{
-			name: "coaching_as_athlete.json", table: "coach_athletes",
+			name: "coaching_as_athlete.json", table: schema.TableCoachAthletes,
 			filter: "athlete_id=eq." + uid,
 			sel:    "id,coach_id,athlete_id,status,note,created_at,accepted_at,ended_at",
 		},
 		// event_results — the subject's own race finish records (time,
 		// rank, DNF/DNS, age-grade). Health-adjacent performance data.
 		// audit/data-export-completeness (2026-05-30) Critical.
-		{name: "event_results.json", table: "event_results", filter: uidEq, sel: "*"},
+		{name: "event_results.json", table: schema.TableEventResults, filter: uidEq, sel: "*"},
 		// event_result_claims — the subject's own "this result is me"
 		// claims (status + decision). `decided_by` belongs to the
 		// organiser who ruled on it, so the projection keeps it (it's a
 		// recipient disclosure under Art 15(1)(c)) but the filter is the
 		// subject's claimant_id. audit-findings (2026-05-30) High.
 		{
-			name: "event_result_claims.json", table: "event_result_claims",
+			name: "event_result_claims.json", table: schema.TableEventResultClaims,
 			filter: "claimant_id=eq." + uid, sel: "*",
 		},
 		// user_blocks — the subject's own block list (who they blocked +
 		// why). audit-findings (2026-05-30) High.
 		{
-			name: "user_blocks.json", table: "user_blocks",
+			name: "user_blocks.json", table: schema.TableUserBlocks,
 			filter: "blocker_id=eq." + uid, sel: "*",
 		},
 		// club_posts — club-feed posts the subject authored.
 		// audit-findings (2026-05-30) High.
 		{
-			name: "club_posts.json", table: "club_posts",
+			name: "club_posts.json", table: schema.TableClubPosts,
 			filter: "author_id=eq." + uid, sel: "*",
 		},
 		// event_exceptions — recurring-event instance cancellations the
 		// subject made (cancelled_by + reason). audit-findings
 		// (2026-05-30) High.
 		{
-			name: "event_exceptions.json", table: "event_exceptions",
+			name: "event_exceptions.json", table: schema.TableEventExceptions,
 			filter: "cancelled_by=eq." + uid, sel: "*",
 		},
 		// gym_workouts (+ sets via nested embed). Phase 4 multi-modal
@@ -1511,13 +1513,13 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 		// same shape training_plans uses for plan_weeks / plan_workouts.
 		// audit/data-export-completeness gym/nutrition gap.
 		{
-			name: "gym_workouts.json", table: "gym_workouts", filter: uidEq,
+			name: "gym_workouts.json", table: schema.TableGymWorkouts, filter: uidEq,
 			sel: "*,sets:gym_sets(*)",
 		},
 		// food_log — Phase 4 nutrition diary (per-item calories + macros,
 		// migration 20261204_001). Owner-scoped personal data the subject
 		// has an Art 20 right to receive.
-		{name: "food_log.json", table: "food_log", filter: uidEq, sel: "*"},
+		{name: "food_log.json", table: schema.TableFoodLog, filter: uidEq, sel: "*"},
 	}
 
 	out := make(map[string][]map[string]interface{}, len(specs))
@@ -1576,7 +1578,7 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 	{
 		jq := url.Values{}
 		jq.Set("select", "kind")
-		u := c.BaseURL + "/rest/v1/jobs?" + jq.Encode() +
+		u := c.BaseURL + "/rest/v1/" + schema.TableJobs + "?" + jq.Encode() +
 			"&payload->>user_id=eq." + uid
 		if req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil); err == nil {
 			if body, err := c.do(ctx, req); err == nil {
@@ -1621,7 +1623,7 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 			// don't need URL-encoding but join with commas only.
 			q := url.Values{}
 			q.Set("select", "*")
-			u := c.BaseURL + "/rest/v1/run_gear?" + q.Encode() +
+			u := c.BaseURL + "/rest/v1/" + schema.TableRunGear + "?" + q.Encode() +
 				"&gear_id=in.(" + strings.Join(ids, ",") + ")"
 			req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 			if err == nil {
@@ -1644,7 +1646,7 @@ func (c *SupabaseClient) FetchExportPersonalDataTables(
 // in their on-disk `.json.gz` form so restore is a byte-for-byte
 // upload.
 func (c *SupabaseClient) DownloadRawTrackBytes(ctx context.Context, path string) ([]byte, error) {
-	u := c.BaseURL + "/storage/v1/object/runs/" + path
+	u := c.BaseURL + "/storage/v1/object/" + schema.BucketRuns + "/" + path
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
@@ -1661,7 +1663,7 @@ func (c *SupabaseClient) FetchUserSubscriptionTier(ctx context.Context, userID s
 	q.Set("id", "eq."+userID)
 	q.Set("select", "subscription_tier")
 	q.Set("limit", "1")
-	u := c.BaseURL + "/rest/v1/user_profiles?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableUserProfiles + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return "", err
@@ -1695,7 +1697,7 @@ func (c *SupabaseClient) FetchPremiumRuns(ctx context.Context, userID string, si
 	if !since.IsZero() {
 		q.Set("started_at", "gte."+since.UTC().Format(time.RFC3339))
 	}
-	u := c.BaseURL + "/rest/v1/runs?" + q.Encode()
+	u := c.BaseURL + "/rest/v1/" + schema.TableRuns + "?" + q.Encode()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err

@@ -4,6 +4,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 )
 
 // realNow returns the current wall-clock time. Indirected through
@@ -89,7 +91,7 @@ func isRunlike(r PremiumRun) bool {
 	if r.Metadata == nil {
 		return true
 	}
-	switch t := r.Metadata["activity_type"].(type) {
+	switch t := r.Metadata[schema.MetaActivityType].(type) {
 	case string:
 		lt := strings.ToLower(t)
 		return lt == "" || lt == "run" || lt == "walk" || lt == "hike"
@@ -229,22 +231,22 @@ type TrainingPaces struct {
 
 // PlanWeek is one week of the generated plan.
 type PlanWeek struct {
-	WeekNumber       int    `json:"week_number"`
-	Phase            string `json:"phase"` // base / build / peak / taper / race
-	TargetDistanceM  int    `json:"target_distance_m"`
-	KeyWorkout       string `json:"key_workout"`
+	WeekNumber      int    `json:"week_number"`
+	Phase           string `json:"phase"` // base / build / peak / taper / race
+	TargetDistanceM int    `json:"target_distance_m"`
+	KeyWorkout      string `json:"key_workout"`
 }
 
 // GeneratedPlan is what the endpoint returns.
 type GeneratedPlan struct {
-	GoalDistanceM   float64       `json:"goal_distance_m"`
-	GoalTimeS       int           `json:"goal_time_s"`
-	Weeks           int           `json:"weeks"`
-	DaysPerWeek     int           `json:"days_per_week"`
-	Paces           TrainingPaces `json:"paces"`
-	Weekly          []PlanWeek    `json:"weekly"`
-	BaseWeeklyKm    int           `json:"base_weekly_km"`
-	PeakWeeklyKm    int           `json:"peak_weekly_km"`
+	GoalDistanceM float64       `json:"goal_distance_m"`
+	GoalTimeS     int           `json:"goal_time_s"`
+	Weeks         int           `json:"weeks"`
+	DaysPerWeek   int           `json:"days_per_week"`
+	Paces         TrainingPaces `json:"paces"`
+	Weekly        []PlanWeek    `json:"weekly"`
+	BaseWeeklyKm  int           `json:"base_weekly_km"`
+	PeakWeeklyKm  int           `json:"peak_weekly_km"`
 }
 
 // GeneratePlan ports the Riegel-pace + phased-weekly-mileage

@@ -8,6 +8,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/schema"
 )
 
 // ZoneFetcher resolves the privacy zones the broadcaster has
@@ -71,7 +73,7 @@ func (f *SupabaseZoneFetcher) fetchRunOwner(ctx context.Context, runID string) (
 	q.Set("id", "eq."+runID)
 	q.Set("select", "user_id")
 	q.Set("limit", "1")
-	body, err := f.get(ctx, "/rest/v1/runs?"+q.Encode())
+	body, err := f.get(ctx, "/rest/v1/"+schema.TableRuns+"?"+q.Encode())
 	if err != nil {
 		return "", err
 	}
@@ -92,7 +94,7 @@ func (f *SupabaseZoneFetcher) fetchZonesForUser(ctx context.Context, userID stri
 	q.Set("user_id", "eq."+userID)
 	q.Set("select", "prefs")
 	q.Set("limit", "1")
-	body, err := f.get(ctx, "/rest/v1/user_settings?"+q.Encode())
+	body, err := f.get(ctx, "/rest/v1/"+schema.TableUserSettings+"?"+q.Encode())
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +110,7 @@ func (f *SupabaseZoneFetcher) fetchZonesForUser(ctx context.Context, userID stri
 	if len(rows) == 0 {
 		return nil, nil
 	}
-	raw, ok := rows[0].Prefs["privacy_zones"]
+	raw, ok := rows[0].Prefs[schema.PrefsPrivacyZones]
 	if !ok {
 		return nil, nil
 	}
