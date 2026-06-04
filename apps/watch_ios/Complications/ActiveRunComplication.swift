@@ -72,9 +72,20 @@ struct ActiveRunProvider: TimelineProvider {
 
     private func snapshotEntry() -> Entry {
         let snap = ActiveRunBridge.read()
+        // The writer stamps `lastUpdatedEpoch` on every state transition so
+        // the reader can tell a live run from a stale snapshot — but it was
+        // never consumed. If the host app is killed mid-run without a clean
+        // stop/reset, `isActive` stays true and the watch face would show a
+        // phantom run until the next launch clears it. Treat a snapshot
+        // older than this ceiling as inactive. The ceiling sits far beyond
+        // any realistic Apple-Watch run (battery dies long before a day), so
+        // a genuine long run is never wrongly hidden.
+        let staleAfter: TimeInterval = 24 * 60 * 60
+        let age = Date().timeIntervalSince1970 - snap.lastUpdatedEpoch
+        let isActive = snap.isActive && snap.lastUpdatedEpoch > 0 && age < staleAfter
         return ActiveRunEntry(
             date: .now,
-            isActive: snap.isActive,
+            isActive: isActive,
             elapsedSeconds: snap.elapsedSeconds,
             distanceMeters: snap.distanceMeters,
             paceSecPerKm: snap.paceSecPerKm,
