@@ -2008,6 +2008,30 @@ void main() {
       }
     });
 
+    test('AppDelegate excludes the Documents dir from iCloud backup', () {
+      // Same skip idiom — auto-skips on the Android twin (no `ios/`).
+      // The Flutter app writes its GPS/HR run cache under Documents
+      // (NSDocumentDirectory); without isExcludedFromBackup that whole
+      // subtree rides into iCloud / iTunes backups. See decisions.md
+      // (at-rest / backup posture) + remediation plan 3c-b.
+      final file = File('ios/Runner/AppDelegate.swift');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      expect(
+        body,
+        contains('isExcludedFromBackup = true'),
+        reason: 'AppDelegate.swift must mark the Documents directory '
+            'isExcludedFromBackup so the GPS/HR run cache is never '
+            'extracted via an iCloud / iTunes device backup.',
+      );
+      expect(
+        body,
+        contains('.documentDirectory'),
+        reason: 'The backup-exclusion must target the Documents directory '
+            '(where path_provider stores the run/route/gym/food caches).',
+      );
+    });
+
     test('Workmanager background-task identifier is registered', () {
       final file = File('ios/Runner/Info.plist');
       if (!file.existsSync()) return;
@@ -2224,6 +2248,26 @@ void main() {
         reason:
             'AndroidManifest.xml must declare READ_MEDIA_IMAGES so '
             'the runtime ask matches the Play Data Safety form.',
+      );
+    });
+
+    test('allowBackup is disabled so GPS/HR + auth tokens stay out of cloud backup', () {
+      final file = File('android/app/src/main/AndroidManifest.xml');
+      if (!file.existsSync()) return;
+      final body = file.readAsStringSync();
+      // The local run/route/gym/food JSON caches (under app_flutter via
+      // path_provider) hold GPS traces + per-point HR, and the Supabase
+      // session (access + refresh JWT) lives in SharedPreferences. Android
+      // Auto-Backup would otherwise sweep all of it into Google's cloud.
+      // It's all server-re-derivable cache + tokens, so we opt the whole
+      // app out rather than surgically exclude. See decisions.md (at-rest
+      // / backup posture) + remediation plan 3c-b.
+      expect(
+        body,
+        contains('android:allowBackup="false"'),
+        reason: 'AndroidManifest.xml must set android:allowBackup="false" '
+            'so the GPS/HR run cache and the SharedPreferences-stored '
+            'Supabase session are never extracted via Android Auto-Backup.',
       );
     });
 
