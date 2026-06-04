@@ -5,19 +5,20 @@ import '../l10n/gen/app_localizations.dart';
 import '../training.dart';
 import '../training_labels.dart';
 import '../training_service.dart';
+import 'full_screen_form.dart';
 
-/// Modal bottom sheet for inline editing of a planned workout's kind,
+/// Full-screen dialog for inline editing of a planned workout's kind,
 /// target distance, target pace, and notes. The caller is responsible
-/// for refreshing the plan view after the sheet returns.
+/// for refreshing the plan view after the sheet returns. Presentation
+/// goes through [showFullScreenForm], the shared create/edit-entity wrapper.
 Future<bool> showWorkoutEditSheet(
   BuildContext context, {
   required PlanWorkoutRow workout,
   required TrainingService training,
 }) async {
-  final ok = await showModalBottomSheet<bool>(
-    context: context,
-    isScrollControlled: true,
-    showDragHandle: true,
+  final ok = await showFullScreenForm<bool>(
+    context,
+    title: AppLocalizations.of(context).workoutEditTitle,
     builder: (ctx) => _WorkoutEditSheet(
       workout: workout,
       training: training,
@@ -76,15 +77,9 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final mq = MediaQuery.of(context);
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 8, 20, 20 + mq.viewInsets.bottom),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Text(l10n.workoutEditTitle, style: theme.textTheme.titleMedium),
-          const SizedBox(height: 12),
+    // Heading lives in the host AppBar (showFullScreenForm).
+    return FullScreenFormBody(
+      children: [
           DropdownButtonFormField<WorkoutKind>(
             initialValue: _kind,
             decoration: InputDecoration(labelText: l10n.workoutEditKindLabel),
@@ -152,8 +147,7 @@ class _WorkoutEditSheetState extends State<_WorkoutEditSheet> {
             ],
           ),
         ],
-      ),
-    );
+      );
   }
 
   Future<void> _save() async {

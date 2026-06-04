@@ -4,17 +4,20 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../social_service.dart';
+import 'full_screen_form.dart';
 
-/// Modal bottom sheet for creating a new event under a club. Mirrors
+/// Full-screen dialog for creating a new event under a club. Mirrors
 /// the web `EventEditor.svelte` (one-off / weekly / biweekly / monthly).
+/// Presentation goes through [showFullScreenForm], the shared
+/// create/edit-entity wrapper.
 Future<String?> showEventFormSheet(
   BuildContext context, {
   required SocialService social,
   required String clubId,
 }) {
-  return showModalBottomSheet<String>(
-    context: context,
-    isScrollControlled: true,
+  return showFullScreenForm<String>(
+    context,
+    title: AppLocalizations.of(context).eventFormTitle,
     builder: (_) => _EventForm(social: social, clubId: clubId),
   );
 }
@@ -135,16 +138,9 @@ class _EventFormState extends State<_EventForm> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final inset = MediaQuery.of(context).viewInsets.bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + inset),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(l10n.eventFormTitle, style: theme.textTheme.titleLarge),
-            const SizedBox(height: 12),
+    // Heading lives in the host AppBar (showFullScreenForm).
+    return FullScreenFormBody(
+      children: [
             TextField(
               controller: _title,
               autofocus: true,
@@ -264,9 +260,7 @@ class _EventFormState extends State<_EventForm> {
               ],
             ),
           ],
-        ),
-      ),
-    );
+        );
   }
 
 }

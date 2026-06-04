@@ -55,9 +55,14 @@ Future<void> _openSheet(WidgetTester tester) async {
 
 void main() {
   group('showEventFormSheet', () {
-    testWidgets('renders the New event heading', (tester) async {
+    testWidgets('opens as a full-screen dialog with the New event heading',
+        (tester) async {
       await _openSheet(tester);
+      // Heading now lives in the host AppBar (full-screen dialog), not an
+      // inline Text in a bottom sheet.
+      expect(find.byType(AppBar), findsOneWidget);
       expect(find.text('New event'), findsOneWidget);
+      expect(find.byTooltip('Close'), findsOneWidget);
     });
 
     testWidgets('renders the Title and Starts at fields', (tester) async {

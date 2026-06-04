@@ -89,6 +89,9 @@ void main() {
         (tester) async {
       final training = _FakeTraining();
       await _pumpSheet(tester, _workout(), training);
+      // Full-screen dialog presentation (was a bottom sheet).
+      expect(find.byType(AppBar), findsOneWidget);
+      expect(find.byTooltip('Close'), findsOneWidget);
       // Distance 8.0 km
       expect(find.text('8.0'), findsOneWidget);
       // Notes field
