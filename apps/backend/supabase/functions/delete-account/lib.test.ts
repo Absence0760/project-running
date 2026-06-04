@@ -7,6 +7,7 @@ import {
 	FCM_BATCH_REMOVE_URL,
 	STRAVA_DEAUTHORIZE_URL,
 	fcmBatchRemoveBody,
+	formatDeletedCounts,
 	hashUserIdForAudit,
 	revenueCatSubscriberUrl,
 } from './lib.ts';
@@ -45,6 +46,61 @@ Deno.test('fcmBatchRemoveBody truncates at 1000 tokens', () => {
 	const body = fcmBatchRemoveBody(many);
 	const parsed = JSON.parse(body) as { registration_tokens: string[] };
 	assertEquals(parsed.registration_tokens.length, 1000);
+});
+
+Deno.test('formatDeletedCounts returns null for an empty map', () => {
+	// Nothing explicitly drained → notes stays null (the cascade did all
+	// the work). Distinct from `{}` which would be a misleading empty
+	// JSON object in the audit row.
+	assertEquals(formatDeletedCounts({}), null);
+});
+
+Deno.test('formatDeletedCounts emits compact JSON of the counts', () => {
+	const out = formatDeletedCounts({
+		jobs: 3,
+		rate_limits: 12,
+		reports: 0,
+		segments_anonymised: 1,
+		storage_runs: 47,
+		'storage_run-photos': 5,
+	});
+	assert(out !== null);
+	assertEquals(JSON.parse(out!), {
+		jobs: 3,
+		rate_limits: 12,
+		reports: 0,
+		segments_anonymised: 1,
+		storage_runs: 47,
+		'storage_run-photos': 5,
+	});
+});
+
+Deno.test('formatDeletedCounts stays within the 200-char notes CHECK', () => {
+	// The deletion_audit_log.notes CHECK is length <= 200. A realistic
+	// full-account payload must fit, or the INSERT raises 23514 and the
+	// (best-effort) audit write is silently lost.
+	const out = formatDeletedCounts({
+		jobs: 999999,
+		rate_limits: 999999,
+		reports: 999999,
+		segments_anonymised: 999999,
+		storage_runs: 9999999,
+		'storage_run-photos': 9999999,
+	});
+	assert(out !== null);
+	assert(out!.length <= 200, `notes payload was ${out!.length} chars, must be <= 200`);
+});
+
+Deno.test('formatDeletedCounts falls back to a summary if it would overrun 200 chars', () => {
+	// Defensive: a pathological map (many keys) must not produce a notes
+	// value that violates the CHECK. The fallback is still valid JSON.
+	const huge: Record<string, number> = {};
+	for (let i = 0; i < 50; i++) huge[`table_with_a_fairly_long_name_${i}`] = i;
+	const out = formatDeletedCounts(huge);
+	assert(out !== null);
+	assert(out!.length <= 200, `fallback was ${out!.length} chars, must be <= 200`);
+	const parsed = JSON.parse(out!) as { tables: number; total_rows: number };
+	assertEquals(parsed.tables, 50);
 });
 
 Deno.test('hashUserIdForAudit returns 64-char hex (SHA-256)', async () => {

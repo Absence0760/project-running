@@ -181,11 +181,76 @@ Deno.test('handler builds a third_party_outcomes record from the best-effort cal
 		'handler must build a ThirdPartyOutcomes record from deauthorizeStrava + ' +
 			'deauthorizeGarmin + deleteRevenueCatSubscriber + invalidatePushTokens results',
 	);
-	// And recordAudit must receive it on every call site (verified by
-	// the count being ≥ 7 above + a spot-check below).
+	// And recordAudit must receive it on every call site. Count the
+	// argument uses (`thirdPartyOutcomes` immediately followed by `,` or
+	// `)`) rather than matching a specific indentation — the ok-path call
+	// is multi-line now that it also threads the deleted-counts note.
+	const argUses = SRC.match(/thirdPartyOutcomes[,)]/g) ?? [];
+	const callSites = SRC.match(/recordAudit\(/g) ?? [];
 	assert(
-		SRC.includes('thirdPartyOutcomes)') || SRC.includes('thirdPartyOutcomes,\n      );'),
-		'recordAudit calls must thread the thirdPartyOutcomes argument',
+		argUses.length >= callSites.length - 1,
+		`every recordAudit call must thread thirdPartyOutcomes as its final ` +
+			`argument; found ${argUses.length} arg uses for ${callSites.length - 1} ` +
+			`call sites (one recordAudit match is the function definition)`,
+	);
+});
+
+Deno.test('handler records per-table deleted-row counts on the ok path', () => {
+	// audit/account-deletion-completeness — the bare `ok` result code
+	// said nothing about WHAT was erased. The handler now accumulates a
+	// deletedCounts map (jobs / rate_limits / reports / segments / the
+	// two Storage buckets) and threads it through formatDeletedCounts
+	// into the audit row so the Art 5(2) accountability trail is
+	// quantitative. A refactor that drops the accumulation would silently
+	// regress the evidence trail.
+	assert(
+		/const\s+deletedCounts\s*:\s*Record<string,\s*number>\s*=\s*\{\}/.test(SRC),
+		'handler must declare a deletedCounts accumulator',
+	);
+	for (const key of [
+		'deletedCounts.reports',
+		'deletedCounts.jobs',
+		'deletedCounts.rate_limits',
+		'deletedCounts.segments_anonymised',
+	]) {
+		assert(
+			SRC.includes(`${key} =`),
+			`handler must record ${key} after the matching drain succeeds`,
+		);
+	}
+	assert(
+		/deletedCounts\[`storage_\$\{bucket\}`\]\s*=\s*await\s+deletePrefix/.test(SRC),
+		'handler must record a per-bucket Storage object count from deletePrefix',
+	);
+	const okAudit = SRC.match(
+		/recordAudit\(\s*adminClient,\s*user\.id,\s*'ok',\s*formatDeletedCounts\(deletedCounts\),/m,
+	);
+	assert(
+		okAudit,
+		"the ok-path recordAudit must pass formatDeletedCounts(deletedCounts) as its notes argument",
+	);
+});
+
+Deno.test('count-returning drains request an exact row count', () => {
+	// The per-table counts are only meaningful if the delete/update
+	// calls actually ask PostgREST for the affected-row count. A
+	// refactor that drops `{ count: 'exact' }` would silently report 0
+	// for every table.
+	for (const helper of ['jobs', 'rate_limits']) {
+		assert(
+			SRC.includes(`.from('${helper}')`),
+			`expected a drain against ${helper}`,
+		);
+	}
+	const exactDeletes = SRC.match(/\.delete\(\{ count: 'exact' \}\)/g) ?? [];
+	assert(
+		exactDeletes.length >= 3,
+		`jobs + rate_limits + reports drains must use .delete({ count: 'exact' }); ` +
+			`found ${exactDeletes.length}`,
+	);
+	assert(
+		/\.update\(\s*\{[^}]*\},\s*\{ count: 'exact' \}\s*\)/.test(SRC),
+		"segments anonymise must use .update(values, { count: 'exact' }) to report its row count",
 	);
 });
 

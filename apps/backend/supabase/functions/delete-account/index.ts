@@ -12,6 +12,7 @@ import {
   type ThirdPartyOutcome,
   type ThirdPartyOutcomes,
   fcmBatchRemoveBody,
+  formatDeletedCounts,
   hashUserIdForAudit,
   revenueCatSubscriberUrl,
 } from './lib.ts';
@@ -31,11 +32,15 @@ const PAGE = 1000;
 // auth-row cascade orphans blobs with no row to point at them — a
 // privacy-deletion silent failure that the user can't observe and
 // can't retry (their auth row is already gone).
+//
+// Returns the number of objects removed so the caller can record a
+// per-bucket count in the deletion audit trail.
 async function deletePrefix(
   client: SupabaseClient,
   bucket: string,
   prefix: string,
-): Promise<void> {
+): Promise<number> {
+  let removed = 0;
   while (true) {
     const { data: entries, error: listErr } = await client.storage
       .from(bucket)
@@ -55,13 +60,15 @@ async function deletePrefix(
       if (rmErr) {
         throw new Error(`remove in ${bucket}/${prefix} failed: ${rmErr.message}`);
       }
+      removed += files.length;
     }
     for (const folder of folders) {
-      await deletePrefix(client, bucket, `${prefix}/${folder.name}`);
+      removed += await deletePrefix(client, bucket, `${prefix}/${folder.name}`);
     }
 
     if (entries.length < PAGE) break;
   }
+  return removed;
 }
 
 // Best-effort third-party cleanup. Each helper logs + swallows on
@@ -266,14 +273,14 @@ async function invalidatePushTokens(
 async function drainUserJobs(
   adminClient: SupabaseClient,
   userId: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
-    const { error } = await adminClient
+    const { error, count } = await adminClient
       .from('jobs')
-      .delete()
+      .delete({ count: 'exact' })
       .filter('payload->>user_id', 'eq', userId);
     if (error) return { ok: false, reason: error.message };
-    return { ok: true };
+    return { ok: true, count: count ?? 0 };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
@@ -288,14 +295,14 @@ async function drainUserJobs(
 async function drainUserRateLimits(
   adminClient: SupabaseClient,
   userId: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
-    const { error } = await adminClient
+    const { error, count } = await adminClient
       .from('rate_limits')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('user_id', userId);
     if (error) return { ok: false, reason: error.message };
-    return { ok: true };
+    return { ok: true, count: count ?? 0 };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
@@ -311,14 +318,14 @@ async function drainUserRateLimits(
 async function anonymiseAuthoredSegments(
   adminClient: SupabaseClient,
   userId: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
-    const { error } = await adminClient
+    const { error, count } = await adminClient
       .from('segments')
-      .update({ name: 'Anonymous segment', created_by: null })
+      .update({ name: 'Anonymous segment', created_by: null }, { count: 'exact' })
       .eq('created_by', userId);
     if (error) return { ok: false, reason: error.message };
-    return { ok: true };
+    return { ok: true, count: count ?? 0 };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
@@ -358,15 +365,15 @@ async function cleanupVaultSecrets(
 async function deleteUserReports(
   adminClient: SupabaseClient,
   userId: string,
-): Promise<{ ok: true } | { ok: false; reason: string }> {
+): Promise<{ ok: true; count: number } | { ok: false; reason: string }> {
   try {
-    const { error } = await adminClient
+    const { error, count } = await adminClient
       .from('reports')
-      .delete()
+      .delete({ count: 'exact' })
       .eq('target_kind', 'user')
       .eq('target_id', userId);
     if (error) return { ok: false, reason: error.message };
-    return { ok: true };
+    return { ok: true, count: count ?? 0 };
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : String(e) };
   }
@@ -466,6 +473,13 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     fcm_remove: await invalidatePushTokens(adminClient, user.id),
   };
 
+  // Per-table deleted-row counts for the audit trail. Only the tables
+  // the EF drains / anonymises explicitly are countable here — the rows
+  // that vanish inside admin.deleteUser's FK cascade are not visible to
+  // the handler. Written to deletion_audit_log.notes on the `ok` path
+  // (see formatDeletedCounts).
+  const deletedCounts: Record<string, number> = {};
+
   // ─── Mandatory cleanups before the cascade ───
   // These leak personal data past the auth-row cascade, so failure
   // must abort + leave the auth row intact (the user can retry).
@@ -501,6 +515,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     );
     return Response.json({ error: 'reports cleanup failed' }, { status: 500 });
   }
+  deletedCounts.reports = reports.count;
 
   // jobs queue (20260609_001, audit/account-deletion-completeness
   // High May 2026). No FK to auth.users, no cascade — the user's
@@ -517,6 +532,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     );
     return Response.json({ error: 'jobs drain failed' }, { status: 500 });
   }
+  deletedCounts.jobs = jobsDrain.count;
 
   // rate_limits drain — audit/gdpr High #1. The FK was rolled back
   // in 20261003_001 to keep the anon-path callers working; the
@@ -534,6 +550,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     );
     return Response.json({ error: 'rate_limits drain failed' }, { status: 500 });
   }
+  deletedCounts.rate_limits = rl.count;
 
   // segments.created_by (20260526_001, audit/account-deletion-
   // completeness Medium May 2026). `on delete set null` would leave
@@ -551,6 +568,7 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     );
     return Response.json({ error: 'segments anonymise failed' }, { status: 500 });
   }
+  deletedCounts.segments_anonymised = segs.count;
 
   // Delete Storage files. The `runs` bucket holds gzipped tracks +
   // per-user export blobs at `{user.id}/exports/<ts>.{csv,zip}`; the
@@ -562,7 +580,11 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
   // retry once Storage recovers.
   try {
     for (const bucket of ['runs', 'run-photos']) {
-      await deletePrefix(adminClient, bucket, user.id);
+      deletedCounts[`storage_${bucket}`] = await deletePrefix(
+        adminClient,
+        bucket,
+        user.id,
+      );
     }
   } catch (err) {
     console.error(
@@ -626,6 +648,12 @@ Deno.serve(withSentry('delete-account', async (req: Request) => {
     );
   }
 
-  await recordAudit(adminClient, user.id, 'ok', null, thirdPartyOutcomes);
+  await recordAudit(
+    adminClient,
+    user.id,
+    'ok',
+    formatDeletedCounts(deletedCounts),
+    thirdPartyOutcomes,
+  );
   return Response.json({ ok: true });
 }));

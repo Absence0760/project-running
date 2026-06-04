@@ -78,6 +78,40 @@ export async function hashUserIdForAudit(
 	return hex;
 }
 
+// ─── per-table deleted-row counts ───
+
+/**
+ * Compact JSON encoding of the per-table row counts the delete-account
+ * saga removed (or anonymised) before the auth-row cascade, written to
+ * `deletion_audit_log.notes` on a successful erasure. It is the Art
+ * 5(2) accountability counterpart to `third_party_outcomes`: a
+ * structured "we deleted N jobs, M rate-limit rows, K reports, …" so a
+ * regulator's "what did you actually erase for user X?" has an answer
+ * beyond a bare `ok`.
+ *
+ * It rides in `notes` (rather than a dedicated column) because the
+ * audit row's `result` already disambiguates: `result='ok'` → notes is
+ * this counts JSON; a `*_failed` result → notes is the failure reason.
+ * Only the tables the EF drains explicitly are counted — the rows that
+ * vanish inside `auth.admin.deleteUser`'s FK cascade are not
+ * individually visible to the handler.
+ *
+ * Returns null for an empty map (nothing was drained). Stays inside the
+ * column's 200-char CHECK: the key set is small + bounded, but if a
+ * freak total ever overruns we emit a still-valid-JSON summary rather
+ * than risk a 23514 that would lose the whole audit row.
+ */
+export function formatDeletedCounts(
+	counts: Record<string, number>,
+): string | null {
+	const keys = Object.keys(counts);
+	if (keys.length === 0) return null;
+	const json = JSON.stringify(counts);
+	if (json.length <= 200) return json;
+	const total = keys.reduce((sum, k) => sum + (counts[k] ?? 0), 0);
+	return JSON.stringify({ tables: keys.length, total_rows: total });
+}
+
 // ─── result codes (mirror the deletion_audit_log CHECK) ───
 
 // Keep in lockstep with the deletion_audit_log result CHECK
