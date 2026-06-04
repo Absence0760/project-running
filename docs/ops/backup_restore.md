@@ -78,8 +78,9 @@ as their DB rows.
 
 - Run count is preserved (counts.runs == imported runs).
 - GPS traces are byte-for-byte the same files the Storage bucket holds.
-- `metadata` jsonb bag is preserved verbatim — `activity_type`, `event_id`,
-  lap arrays, and every future key survives. Callers must not whitelist
+- `metadata` jsonb bag is preserved verbatim — `event_id`,
+  lap arrays, and every future key survives (`activity_type` / `is_dnf` are now
+  real columns, `20261207_001`, also preserved). Callers must not whitelist
   known keys when reading.
 - `source` is preserved. A Strava-imported run stays `source = 'strava'`
   after a round-trip; an `app` run stays `app`. This matters for dashboard

@@ -2747,6 +2747,19 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **Trade-off.** A few extra bytes per record and a stamp on every write. Cheap insurance against the silent-drop failure mode. Don't strip `_v` to "clean up" a record — the absence of a stamp is itself meaningful (legacy).
 
+## 126. Activity-model canonicalization: drop vestigial `runs.kind`, promote `activity_type` + `is_dnf` to columns, keep telemetry in jsonb; new narrow unions use text+CHECK
+
+**Decided (2026-06-04, remediation Rounds 3–4):** migrations `20261206_001`–`20261208_001` (schema + server) and `20261210_001`–`20261215_001` (constraints/retention), with the web + mobile client read/write sites switched in Round 4.
+
+- **Dropped `runs.kind`** (F1/D1). It only ever held `'run'`; the `activities` view injects the `'run'`/`'lift'`/`'meal'` literal per UNION branch, so the discriminator column was dead weight.
+- **Promoted exactly two `runs.metadata` keys to real columns** (F3/D4): `activity_type text not null default 'run'` (+ CHECK) and `is_dnf boolean not null default false`. The telemetry trio (`avg_bpm` / `steps` / `elevation_m`) stays in the jsonb bag. The bar for promotion is "present on most rows AND filtered/aggregated/constrained in SQL" — `activity_type` (CHECK + `activities`/`public_runs` views + gear auto-tag + VDOT) and `is_dnf` (the PR-exclusion filter) clear it; the telemetry trio is displayed but never filtered, so promoting it would widen every row for no query benefit.
+- **Renamed `food_log.logged_at` → `started_at`** (F8) so all three modality tables share the timestamp name the `activities` view depends on — no per-table synonym.
+- **New narrow unions get `text` + a `CHECK (… in (…))`, not a Postgres enum** (F16/D2). `ActivityType` joins `RunSource` / `RouteSurface` / … as a TS-union ↔ CHECK pair guarded by `check_constraint_unions.mjs`. The three legacy real enums (`workout_kind`, `plan_phase`, `goal_event`) stay as-is. text+CHECK keeps "add a value" a one-line CHECK re-state (an enum needs `alter type`) and keeps the value list in lockstep across TS / Dart / SQL through one guard.
+
+**Trade-off.** A phased Tier-2 rollout: the promoted columns carry defaults, so an un-migrated client that still writes only the jsonb key inserts cleanly (lands as the default) until its sites switch. Web + mobile (byte-identical twin) switched in Round 4; the watch→phone WCSession bridge still ships `activity_type` in its payload, so a non-run *watch* activity currently lands as `'run'` on the column with the real value in the bag until the bridge is switched — the documented interim state, harmless pre-prod. See the column-vs-jsonb checklist in [`conventions.md`](conventions.md) before pushing any new "attribute pretending to be metadata" into the bag.
+
+**Don't re-litigate unless** a telemetry key starts being filtered/aggregated in SQL (then promote it the same way), or a fourth modality needs a real discriminator back (then it's a new purpose-built column, not the resurrected `kind`).
+
 ---
 
 ## How to add an entry

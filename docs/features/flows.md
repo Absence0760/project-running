@@ -144,7 +144,7 @@ If the phone isn't reachable (out of range / not yet paired / not signed in), th
       - RunSnapshot emitted → screen updates, auto-pause checks fire
 7.  User holds Stop for 800 ms → _stop()
       - RunRecorder.stop() closes the stream and returns a Run
-      - metadata populated: activity_type, steps, laps (if any)
+      - activity_type / is_dnf columns set; metadata bag populated: steps, laps (if any)
       - in_progress.json cleared
       - LocalRunStore.save(run) → on-disk file in the runs/ dir
       - SyncService._trySync() kicks off a push attempt if online

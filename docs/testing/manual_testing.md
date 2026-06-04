@@ -154,7 +154,7 @@ The most-tested surface in the codebase. The recording state machine + filter ch
 | GPS lost mid-run | Disable location → wait 30 s → re-enable | "GPS lost" banner appears with the dropout count; resuming GPS clears it; track has a small gap, total distance excludes the no-fix interval. |
 | Permission revoked mid-run | Background-pull location permission → return to app | "Location permission revoked" banner; recording continues against last-known until permission returns. |
 | Audio cues at split | Set split interval to 1 km in Settings → record a 2 km run | TTS announces "1 kilometre. Pace 5 minutes 30 seconds per kilometre" at the 1 km split. |
-| Activity-type filter | Switch chip to Walk, record a slow 200 m | Run saves with `metadata.activity_type='walk'`; the home filter chip surfaces it under Walk, not Run. |
+| Activity-type filter | Switch chip to Walk, record a slow 200 m | Run saves with the `activity_type='walk'` column set (web + mobile write the column post-Tier-2, not the jsonb key); the home filter chip surfaces it under Walk, not Run. |
 | Off-route detection | Pick a route in pre-run, run perpendicular to it | "Off route · N m" banner with hysteresis at 40 m on, 20 m off; haptic on entry. |
 | Workout execution | Start a `plans/[id]/workouts/[wid]` from the home Today card | Live workout band shows current step; Skip / Abandon work; finished metadata carries `plan_workout_id` + `workout_step_results` (see [workout_execution.md](../features/workout_execution.md)). |
 | Crash recovery | Open run, get to ~1 km, force-kill the process, re-open | Home screen surfaces a "Recover unsaved run?" prompt; accepting saves a run reconstructed from the incremental snapshot with `metadata.recovered_from_crash=true`. |

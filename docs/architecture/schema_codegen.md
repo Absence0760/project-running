@@ -305,7 +305,7 @@ Dart treats these columns as raw `String` (no Dart enum to update), but the DB-l
 
 ## What this does not solve
 
-- **Ephemeral / undeclared fields inside `jsonb` columns** — `runs.metadata` is `jsonb` in the DB and `Record<string, unknown>` / `Map<String, dynamic>` on both clients. If mobile writes `metadata.activity_type` and web doesn't read it, no generator will catch that. The roadmap's Phase 3 cross-client integration test is designed to cover this.
+- **Ephemeral / undeclared fields inside `jsonb` columns** — `runs.metadata` is `jsonb` in the DB and `Record<string, unknown>` / `Map<String, dynamic>` on both clients. If mobile writes `metadata.avg_bpm` and web doesn't read it, no generator will catch that (this is why load-bearing keys like `activity_type` / `is_dnf` were promoted to real columns — `20261207_001`, F3 — so codegen *does* cover them; only the telemetry bag stays undeclared). The roadmap's Phase 3 cross-client integration test is designed to cover this.
 - **Semantic parity** — generators catch "this column exists", not "this column means the same thing on both platforms". `moving_time` computed differently on web vs Android is still a human-review problem.
 - **UI parity** — whether both platforms actually *show* a field is covered by the Phase 2 parity matrix, not codegen.
 
