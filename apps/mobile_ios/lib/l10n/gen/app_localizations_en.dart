@@ -6687,4 +6687,98 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gymSaveFailed => 'Couldn\'t save workout.';
+
+  @override
+  String get nutritionTitle => 'Nutrition';
+
+  @override
+  String get nutritionLogFood => 'Log food';
+
+  @override
+  String get nutritionCalories => 'Calories';
+
+  @override
+  String get nutritionProtein => 'Protein';
+
+  @override
+  String get nutritionCarbs => 'Carbs';
+
+  @override
+  String get nutritionFat => 'Fat';
+
+  @override
+  String get nutritionWater => 'Water';
+
+  @override
+  String get nutritionWaterAdd => 'Add water';
+
+  @override
+  String get nutritionWaterRemove => 'Remove water';
+
+  @override
+  String get nutritionNoTargets =>
+      'Add your height, weight, age and sex on the web app to see calorie + macro targets.';
+
+  @override
+  String get nutritionWeeklyTrend => 'Last 7 days';
+
+  @override
+  String get nutritionEmptyTitle => 'No food logged today';
+
+  @override
+  String get nutritionEmptyBody =>
+      'Log a meal to track your calories and macros.';
+
+  @override
+  String get nutritionSlotBreakfast => 'Breakfast';
+
+  @override
+  String get nutritionSlotLunch => 'Lunch';
+
+  @override
+  String get nutritionSlotDinner => 'Dinner';
+
+  @override
+  String get nutritionSlotSnack => 'Snack';
+
+  @override
+  String get nutritionDelete => 'Delete';
+
+  @override
+  String get nutritionOfflineQueued =>
+      'Offline — changes will sync when you reconnect';
+
+  @override
+  String get nutritionOfflineCached => 'Offline — showing saved entries';
+
+  @override
+  String get nutritionLogTitle => 'Log food';
+
+  @override
+  String get nutritionSearchHint => 'Search for a food';
+
+  @override
+  String get nutritionSearching => 'Searching…';
+
+  @override
+  String get nutritionNoResults =>
+      'No matches. Try another term or enter it manually below.';
+
+  @override
+  String get nutritionMealSlot => 'Meal';
+
+  @override
+  String get nutritionManualEntry => 'Enter manually';
+
+  @override
+  String get nutritionItemName => 'Item name';
+
+  @override
+  String get nutritionPortionGrams => 'Portion (g)';
+
+  @override
+  String get nutritionAdd => 'Add';
+
+  @override
+  String get nutritionCancel => 'Cancel';
 }

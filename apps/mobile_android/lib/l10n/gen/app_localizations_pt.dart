@@ -6753,6 +6753,100 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gymSaveFailed => 'Não foi possível salvar o treino.';
+
+  @override
+  String get nutritionTitle => 'Nutrição';
+
+  @override
+  String get nutritionLogFood => 'Registrar comida';
+
+  @override
+  String get nutritionCalories => 'Calorias';
+
+  @override
+  String get nutritionProtein => 'Proteínas';
+
+  @override
+  String get nutritionCarbs => 'Carboidratos';
+
+  @override
+  String get nutritionFat => 'Gorduras';
+
+  @override
+  String get nutritionWater => 'Água';
+
+  @override
+  String get nutritionWaterAdd => 'Adicionar água';
+
+  @override
+  String get nutritionWaterRemove => 'Remover água';
+
+  @override
+  String get nutritionNoTargets =>
+      'Informe sua altura, peso, idade e sexo no app web para ver as metas de calorias e macros.';
+
+  @override
+  String get nutritionWeeklyTrend => 'Últimos 7 dias';
+
+  @override
+  String get nutritionEmptyTitle => 'Nada registrado hoje';
+
+  @override
+  String get nutritionEmptyBody =>
+      'Registre uma refeição para acompanhar suas calorias e macros.';
+
+  @override
+  String get nutritionSlotBreakfast => 'Café da manhã';
+
+  @override
+  String get nutritionSlotLunch => 'Almoço';
+
+  @override
+  String get nutritionSlotDinner => 'Jantar';
+
+  @override
+  String get nutritionSlotSnack => 'Lanche';
+
+  @override
+  String get nutritionDelete => 'Excluir';
+
+  @override
+  String get nutritionOfflineQueued =>
+      'Offline — as alterações serão sincronizadas ao reconectar';
+
+  @override
+  String get nutritionOfflineCached => 'Offline — mostrando entradas salvas';
+
+  @override
+  String get nutritionLogTitle => 'Registrar comida';
+
+  @override
+  String get nutritionSearchHint => 'Buscar um alimento';
+
+  @override
+  String get nutritionSearching => 'Buscando…';
+
+  @override
+  String get nutritionNoResults =>
+      'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionMealSlot => 'Refeição';
+
+  @override
+  String get nutritionManualEntry => 'Inserir manualmente';
+
+  @override
+  String get nutritionItemName => 'Nome do item';
+
+  @override
+  String get nutritionPortionGrams => 'Porção (g)';
+
+  @override
+  String get nutritionAdd => 'Adicionar';
+
+  @override
+  String get nutritionCancel => 'Cancelar';
 }
 
 /// The translations for Portuguese, as used in Brazil (`pt_BR`).
@@ -13504,4 +13598,98 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get gymSaveFailed => 'Não foi possível salvar o treino.';
+
+  @override
+  String get nutritionTitle => 'Nutrição';
+
+  @override
+  String get nutritionLogFood => 'Registrar comida';
+
+  @override
+  String get nutritionCalories => 'Calorias';
+
+  @override
+  String get nutritionProtein => 'Proteínas';
+
+  @override
+  String get nutritionCarbs => 'Carboidratos';
+
+  @override
+  String get nutritionFat => 'Gorduras';
+
+  @override
+  String get nutritionWater => 'Água';
+
+  @override
+  String get nutritionWaterAdd => 'Adicionar água';
+
+  @override
+  String get nutritionWaterRemove => 'Remover água';
+
+  @override
+  String get nutritionNoTargets =>
+      'Informe sua altura, peso, idade e sexo no app web para ver as metas de calorias e macros.';
+
+  @override
+  String get nutritionWeeklyTrend => 'Últimos 7 dias';
+
+  @override
+  String get nutritionEmptyTitle => 'Nada registrado hoje';
+
+  @override
+  String get nutritionEmptyBody =>
+      'Registre uma refeição para acompanhar suas calorias e macros.';
+
+  @override
+  String get nutritionSlotBreakfast => 'Café da manhã';
+
+  @override
+  String get nutritionSlotLunch => 'Almoço';
+
+  @override
+  String get nutritionSlotDinner => 'Jantar';
+
+  @override
+  String get nutritionSlotSnack => 'Lanche';
+
+  @override
+  String get nutritionDelete => 'Excluir';
+
+  @override
+  String get nutritionOfflineQueued =>
+      'Offline — as alterações serão sincronizadas ao reconectar';
+
+  @override
+  String get nutritionOfflineCached => 'Offline — mostrando entradas salvas';
+
+  @override
+  String get nutritionLogTitle => 'Registrar comida';
+
+  @override
+  String get nutritionSearchHint => 'Buscar um alimento';
+
+  @override
+  String get nutritionSearching => 'Buscando…';
+
+  @override
+  String get nutritionNoResults =>
+      'Sem resultados. Tente outro termo ou insira manualmente abaixo.';
+
+  @override
+  String get nutritionMealSlot => 'Refeição';
+
+  @override
+  String get nutritionManualEntry => 'Inserir manualmente';
+
+  @override
+  String get nutritionItemName => 'Nome do item';
+
+  @override
+  String get nutritionPortionGrams => 'Porção (g)';
+
+  @override
+  String get nutritionAdd => 'Adicionar';
+
+  @override
+  String get nutritionCancel => 'Cancelar';
 }

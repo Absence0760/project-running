@@ -6762,4 +6762,99 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get gymSaveFailed => 'Training konnte nicht gespeichert werden.';
+
+  @override
+  String get nutritionTitle => 'Ernährung';
+
+  @override
+  String get nutritionLogFood => 'Essen erfassen';
+
+  @override
+  String get nutritionCalories => 'Kalorien';
+
+  @override
+  String get nutritionProtein => 'Eiweiß';
+
+  @override
+  String get nutritionCarbs => 'Kohlenhydrate';
+
+  @override
+  String get nutritionFat => 'Fett';
+
+  @override
+  String get nutritionWater => 'Wasser';
+
+  @override
+  String get nutritionWaterAdd => 'Wasser hinzufügen';
+
+  @override
+  String get nutritionWaterRemove => 'Wasser entfernen';
+
+  @override
+  String get nutritionNoTargets =>
+      'Gib in der Web-App Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.';
+
+  @override
+  String get nutritionWeeklyTrend => 'Letzte 7 Tage';
+
+  @override
+  String get nutritionEmptyTitle => 'Heute noch nichts erfasst';
+
+  @override
+  String get nutritionEmptyBody =>
+      'Erfasse eine Mahlzeit, um Kalorien und Makros zu verfolgen.';
+
+  @override
+  String get nutritionSlotBreakfast => 'Frühstück';
+
+  @override
+  String get nutritionSlotLunch => 'Mittagessen';
+
+  @override
+  String get nutritionSlotDinner => 'Abendessen';
+
+  @override
+  String get nutritionSlotSnack => 'Snack';
+
+  @override
+  String get nutritionDelete => 'Löschen';
+
+  @override
+  String get nutritionOfflineQueued =>
+      'Offline – Änderungen werden später synchronisiert';
+
+  @override
+  String get nutritionOfflineCached =>
+      'Offline – gespeicherte Einträge werden angezeigt';
+
+  @override
+  String get nutritionLogTitle => 'Essen erfassen';
+
+  @override
+  String get nutritionSearchHint => 'Nach einem Lebensmittel suchen';
+
+  @override
+  String get nutritionSearching => 'Suche läuft…';
+
+  @override
+  String get nutritionNoResults =>
+      'Keine Treffer. Versuche einen anderen Begriff oder gib es unten manuell ein.';
+
+  @override
+  String get nutritionMealSlot => 'Mahlzeit';
+
+  @override
+  String get nutritionManualEntry => 'Manuell eingeben';
+
+  @override
+  String get nutritionItemName => 'Bezeichnung';
+
+  @override
+  String get nutritionPortionGrams => 'Portion (g)';
+
+  @override
+  String get nutritionAdd => 'Hinzufügen';
+
+  @override
+  String get nutritionCancel => 'Abbrechen';
 }

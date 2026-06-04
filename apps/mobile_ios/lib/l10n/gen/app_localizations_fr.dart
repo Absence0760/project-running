@@ -6772,4 +6772,99 @@ class AppLocalizationsFr extends AppLocalizations {
 
   @override
   String get gymSaveFailed => 'Impossible d\'enregistrer la séance.';
+
+  @override
+  String get nutritionTitle => 'Nutrition';
+
+  @override
+  String get nutritionLogFood => 'Enregistrer un aliment';
+
+  @override
+  String get nutritionCalories => 'Calories';
+
+  @override
+  String get nutritionProtein => 'Protéines';
+
+  @override
+  String get nutritionCarbs => 'Glucides';
+
+  @override
+  String get nutritionFat => 'Lipides';
+
+  @override
+  String get nutritionWater => 'Eau';
+
+  @override
+  String get nutritionWaterAdd => 'Ajouter de l\'eau';
+
+  @override
+  String get nutritionWaterRemove => 'Retirer de l\'eau';
+
+  @override
+  String get nutritionNoTargets =>
+      'Renseigne ta taille, ton poids, ton âge et ton sexe dans l\'app web pour voir les objectifs de calories et de macros.';
+
+  @override
+  String get nutritionWeeklyTrend => '7 derniers jours';
+
+  @override
+  String get nutritionEmptyTitle => 'Rien d\'enregistré aujourd\'hui';
+
+  @override
+  String get nutritionEmptyBody =>
+      'Enregistre un repas pour suivre tes calories et tes macros.';
+
+  @override
+  String get nutritionSlotBreakfast => 'Petit-déjeuner';
+
+  @override
+  String get nutritionSlotLunch => 'Déjeuner';
+
+  @override
+  String get nutritionSlotDinner => 'Dîner';
+
+  @override
+  String get nutritionSlotSnack => 'En-cas';
+
+  @override
+  String get nutritionDelete => 'Supprimer';
+
+  @override
+  String get nutritionOfflineQueued =>
+      'Hors ligne — les modifications se synchroniseront à la reconnexion';
+
+  @override
+  String get nutritionOfflineCached =>
+      'Hors ligne — affichage des entrées enregistrées';
+
+  @override
+  String get nutritionLogTitle => 'Enregistrer un aliment';
+
+  @override
+  String get nutritionSearchHint => 'Rechercher un aliment';
+
+  @override
+  String get nutritionSearching => 'Recherche…';
+
+  @override
+  String get nutritionNoResults =>
+      'Aucun résultat. Essaie un autre terme ou saisis-le manuellement ci-dessous.';
+
+  @override
+  String get nutritionMealSlot => 'Repas';
+
+  @override
+  String get nutritionManualEntry => 'Saisir manuellement';
+
+  @override
+  String get nutritionItemName => 'Nom de l\'aliment';
+
+  @override
+  String get nutritionPortionGrams => 'Portion (g)';
+
+  @override
+  String get nutritionAdd => 'Ajouter';
+
+  @override
+  String get nutritionCancel => 'Annuler';
 }

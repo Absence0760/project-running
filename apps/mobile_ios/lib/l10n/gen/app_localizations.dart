@@ -11156,6 +11156,186 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Couldn\'t save workout.'**
   String get gymSaveFailed;
+
+  /// No description provided for @nutritionTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Nutrition'**
+  String get nutritionTitle;
+
+  /// No description provided for @nutritionLogFood.
+  ///
+  /// In en, this message translates to:
+  /// **'Log food'**
+  String get nutritionLogFood;
+
+  /// No description provided for @nutritionCalories.
+  ///
+  /// In en, this message translates to:
+  /// **'Calories'**
+  String get nutritionCalories;
+
+  /// No description provided for @nutritionProtein.
+  ///
+  /// In en, this message translates to:
+  /// **'Protein'**
+  String get nutritionProtein;
+
+  /// No description provided for @nutritionCarbs.
+  ///
+  /// In en, this message translates to:
+  /// **'Carbs'**
+  String get nutritionCarbs;
+
+  /// No description provided for @nutritionFat.
+  ///
+  /// In en, this message translates to:
+  /// **'Fat'**
+  String get nutritionFat;
+
+  /// No description provided for @nutritionWater.
+  ///
+  /// In en, this message translates to:
+  /// **'Water'**
+  String get nutritionWater;
+
+  /// No description provided for @nutritionWaterAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add water'**
+  String get nutritionWaterAdd;
+
+  /// No description provided for @nutritionWaterRemove.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove water'**
+  String get nutritionWaterRemove;
+
+  /// No description provided for @nutritionNoTargets.
+  ///
+  /// In en, this message translates to:
+  /// **'Add your height, weight, age and sex on the web app to see calorie + macro targets.'**
+  String get nutritionNoTargets;
+
+  /// No description provided for @nutritionWeeklyTrend.
+  ///
+  /// In en, this message translates to:
+  /// **'Last 7 days'**
+  String get nutritionWeeklyTrend;
+
+  /// No description provided for @nutritionEmptyTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'No food logged today'**
+  String get nutritionEmptyTitle;
+
+  /// No description provided for @nutritionEmptyBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Log a meal to track your calories and macros.'**
+  String get nutritionEmptyBody;
+
+  /// No description provided for @nutritionSlotBreakfast.
+  ///
+  /// In en, this message translates to:
+  /// **'Breakfast'**
+  String get nutritionSlotBreakfast;
+
+  /// No description provided for @nutritionSlotLunch.
+  ///
+  /// In en, this message translates to:
+  /// **'Lunch'**
+  String get nutritionSlotLunch;
+
+  /// No description provided for @nutritionSlotDinner.
+  ///
+  /// In en, this message translates to:
+  /// **'Dinner'**
+  String get nutritionSlotDinner;
+
+  /// No description provided for @nutritionSlotSnack.
+  ///
+  /// In en, this message translates to:
+  /// **'Snack'**
+  String get nutritionSlotSnack;
+
+  /// No description provided for @nutritionDelete.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get nutritionDelete;
+
+  /// No description provided for @nutritionOfflineQueued.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — changes will sync when you reconnect'**
+  String get nutritionOfflineQueued;
+
+  /// No description provided for @nutritionOfflineCached.
+  ///
+  /// In en, this message translates to:
+  /// **'Offline — showing saved entries'**
+  String get nutritionOfflineCached;
+
+  /// No description provided for @nutritionLogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Log food'**
+  String get nutritionLogTitle;
+
+  /// No description provided for @nutritionSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search for a food'**
+  String get nutritionSearchHint;
+
+  /// No description provided for @nutritionSearching.
+  ///
+  /// In en, this message translates to:
+  /// **'Searching…'**
+  String get nutritionSearching;
+
+  /// No description provided for @nutritionNoResults.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches. Try another term or enter it manually below.'**
+  String get nutritionNoResults;
+
+  /// No description provided for @nutritionMealSlot.
+  ///
+  /// In en, this message translates to:
+  /// **'Meal'**
+  String get nutritionMealSlot;
+
+  /// No description provided for @nutritionManualEntry.
+  ///
+  /// In en, this message translates to:
+  /// **'Enter manually'**
+  String get nutritionManualEntry;
+
+  /// No description provided for @nutritionItemName.
+  ///
+  /// In en, this message translates to:
+  /// **'Item name'**
+  String get nutritionItemName;
+
+  /// No description provided for @nutritionPortionGrams.
+  ///
+  /// In en, this message translates to:
+  /// **'Portion (g)'**
+  String get nutritionPortionGrams;
+
+  /// No description provided for @nutritionAdd.
+  ///
+  /// In en, this message translates to:
+  /// **'Add'**
+  String get nutritionAdd;
+
+  /// No description provided for @nutritionCancel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cancel'**
+  String get nutritionCancel;
 }
 
 class _AppLocalizationsDelegate

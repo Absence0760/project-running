@@ -6381,4 +6381,95 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get gymSaveFailed => 'ワークアウトを保存できませんでした。';
+
+  @override
+  String get nutritionTitle => '栄養';
+
+  @override
+  String get nutritionLogFood => '食事を記録';
+
+  @override
+  String get nutritionCalories => 'カロリー';
+
+  @override
+  String get nutritionProtein => 'たんぱく質';
+
+  @override
+  String get nutritionCarbs => '炭水化物';
+
+  @override
+  String get nutritionFat => '脂質';
+
+  @override
+  String get nutritionWater => '水分';
+
+  @override
+  String get nutritionWaterAdd => '水分を追加';
+
+  @override
+  String get nutritionWaterRemove => '水分を減らす';
+
+  @override
+  String get nutritionNoTargets =>
+      'カロリー・マクロの目標を表示するには、ウェブアプリで身長・体重・年齢・性別を入力してください。';
+
+  @override
+  String get nutritionWeeklyTrend => '直近7日間';
+
+  @override
+  String get nutritionEmptyTitle => '今日はまだ何も記録していません';
+
+  @override
+  String get nutritionEmptyBody => '食事を記録してカロリーとマクロを管理しましょう。';
+
+  @override
+  String get nutritionSlotBreakfast => '朝食';
+
+  @override
+  String get nutritionSlotLunch => '昼食';
+
+  @override
+  String get nutritionSlotDinner => '夕食';
+
+  @override
+  String get nutritionSlotSnack => '間食';
+
+  @override
+  String get nutritionDelete => '削除';
+
+  @override
+  String get nutritionOfflineQueued => 'オフライン — 再接続時に変更を同期します';
+
+  @override
+  String get nutritionOfflineCached => 'オフライン — 保存済みの記録を表示しています';
+
+  @override
+  String get nutritionLogTitle => '食事を記録';
+
+  @override
+  String get nutritionSearchHint => '食品を検索';
+
+  @override
+  String get nutritionSearching => '検索中…';
+
+  @override
+  String get nutritionNoResults => '一致する項目がありません。別の語で検索するか、下から手動で入力してください。';
+
+  @override
+  String get nutritionMealSlot => '食事区分';
+
+  @override
+  String get nutritionManualEntry => '手動で入力';
+
+  @override
+  String get nutritionItemName => '名称';
+
+  @override
+  String get nutritionPortionGrams => '分量（g）';
+
+  @override
+  String get nutritionAdd => '追加';
+
+  @override
+  String get nutritionCancel => 'キャンセル';
 }
