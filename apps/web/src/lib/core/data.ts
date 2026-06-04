@@ -4477,6 +4477,93 @@ export async function fetchRunGear(runId: string): Promise<Gear[]> {
 	return data as Gear[];
 }
 
+// --- Safety contacts (decisions §123) ---
+
+export interface SafetyContact {
+	id: string;
+	contact_email: string;
+	contact_user_id: string | null;
+	confirmed_at: string | null;
+	created_at: string;
+}
+
+export interface PendingSafetyRequest {
+	id: string;
+	owner_name: string;
+	created_at: string;
+}
+
+/// The owner's own safety-contact list (RLS scopes to owner_id = me).
+export async function fetchMySafetyContacts(): Promise<SafetyContact[]> {
+	const { data, error } = await supabase
+		.from(TABLES.safety_contacts)
+		.select('id, contact_email, contact_user_id, confirmed_at, created_at')
+		.order('created_at', { ascending: false });
+	if (error) {
+		console.error('fetchMySafetyContacts failed', error);
+		return [];
+	}
+	return (data ?? []) as SafetyContact[];
+}
+
+/// Add a safety contact by email. The address is stored as-is; a confirm
+/// email is sent by the AFTER INSERT trigger. confirmed_at / contact_user_id
+/// are forced null server-side (the contact must opt in), so we never set
+/// them here. Throws on RLS / unique / format failure for the caller to
+/// surface.
+export async function addSafetyContact(email: string): Promise<SafetyContact> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('Not signed in');
+	const { data, error } = await supabase
+		.from(TABLES.safety_contacts)
+		.insert({ owner_id: userId, contact_email: email })
+		.select('id, contact_email, contact_user_id, confirmed_at, created_at')
+		.single();
+	if (error || !data) throw error ?? new Error('addSafetyContact failed');
+	return data as SafetyContact;
+}
+
+/// Remove a safety contact the owner added (RLS gates to owner_id = me).
+export async function removeSafetyContact(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.safety_contacts).delete().eq('id', id);
+	if (error) throw error;
+}
+
+/// Pending requests where the signed-in user is the named contact (matched
+/// by their account email via a SECURITY DEFINER RPC — the pending row isn't
+/// directly readable until they link by confirming).
+export async function fetchPendingSafetyRequests(): Promise<PendingSafetyRequest[]> {
+	const { data, error } = await supabase.rpc('my_pending_safety_requests');
+	if (error || !data) {
+		if (error) console.error('fetchPendingSafetyRequests failed', error);
+		return [];
+	}
+	return data as PendingSafetyRequest[];
+}
+
+/// Confirm a pending request addressed to my account email (links my
+/// account). Returns whether a row was confirmed.
+export async function confirmSafetyRequest(id: string): Promise<boolean> {
+	const { data, error } = await supabase.rpc('confirm_safety_contact', { p_id: id });
+	if (error) throw error;
+	return data === true;
+}
+
+/// Decline a pending request / withdraw from a confirmed one.
+export async function declineSafetyRequest(id: string): Promise<boolean> {
+	const { data, error } = await supabase.rpc('decline_safety_contact', { p_id: id });
+	if (error) throw error;
+	return data === true;
+}
+
+/// Unauthenticated email-link confirm for an external contact. The token is
+/// the capability; the anon Supabase client may call it.
+export async function confirmSafetyContactByToken(token: string): Promise<boolean> {
+	const { data, error } = await supabase.rpc('confirm_safety_contact_by_token', { p_token: token });
+	if (error) throw error;
+	return data === true;
+}
+
 // --- Segments + leaderboards (decisions §37) ---
 
 export interface Segment {

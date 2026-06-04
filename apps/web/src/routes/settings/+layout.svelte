@@ -41,6 +41,7 @@
 			tabs: [
 				{ href: '/settings/account', label: m('settingsLayout.tabAccount'), icon: 'person' },
 				{ href: '/settings/preferences', label: m('settingsLayout.tabPreferences'), icon: 'tune' },
+				{ href: '/settings/safety', label: m('safety.navTab'), icon: 'emergency' },
 			],
 		},
 		{

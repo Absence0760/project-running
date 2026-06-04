@@ -52,6 +52,7 @@ export const TABLES = {
 	fitness_snapshots: 'fitness_snapshots',
 	personal_records: 'personal_records',
 	user_blocks: 'user_blocks',
+	safety_contacts: 'safety_contacts',
 } as const;
 
 /// Supabase Storage buckets reached via `supabase.storage.from(...)`.
