@@ -2107,6 +2107,62 @@ class RunRow {
   };
 }
 
+/// Row shape for the `safety_contacts` table. Mirrors the Supabase schema
+/// exactly — field names are snake_case to match the JSON wire format.
+class SafetyContactRow {
+  static const String table = 'safety_contacts';
+  static const String colId = 'id';
+  static const String colOwnerId = 'owner_id';
+  static const String colContactUserId = 'contact_user_id';
+  static const String colContactEmail = 'contact_email';
+  static const String colConfirmedAt = 'confirmed_at';
+  static const String colConfirmToken = 'confirm_token';
+  static const String colCreatedAt = 'created_at';
+  static const String colUpdatedAt = 'updated_at';
+
+  final String id;
+  final String ownerId;
+  final String? contactUserId;
+  final String contactEmail;
+  final DateTime? confirmedAt;
+  final String confirmToken;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+
+  const SafetyContactRow({
+    required this.id,
+    required this.ownerId,
+    this.contactUserId,
+    required this.contactEmail,
+    this.confirmedAt,
+    required this.confirmToken,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  factory SafetyContactRow.fromJson(Map<String, dynamic> json) => SafetyContactRow(
+    id: json['id'] as String,
+    ownerId: json['owner_id'] as String,
+    contactUserId: json['contact_user_id'] as String?,
+    contactEmail: json['contact_email'] as String,
+    confirmedAt: json['confirmed_at'] == null ? null : DateTime.parse(json['confirmed_at'] as String),
+    confirmToken: json['confirm_token'] as String,
+    createdAt: DateTime.parse(json['created_at'] as String),
+    updatedAt: DateTime.parse(json['updated_at'] as String),
+  );
+
+  Map<String, dynamic> toJson() => <String, dynamic>{
+    colId: id,
+    colOwnerId: ownerId,
+    colContactUserId: contactUserId,
+    colContactEmail: contactEmail,
+    colConfirmedAt: confirmedAt?.toIso8601String(),
+    colConfirmToken: confirmToken,
+    colCreatedAt: createdAt.toIso8601String(),
+    colUpdatedAt: updatedAt.toIso8601String(),
+  };
+}
+
 /// Row shape for the `saved_routes` table. Mirrors the Supabase schema
 /// exactly — field names are snake_case to match the JSON wire format.
 class SavedRouteRow {

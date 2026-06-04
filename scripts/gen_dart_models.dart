@@ -103,6 +103,7 @@ const _tables = <String>{
   'gym_sets',
   'food_log',
   'body_metrics',
+  'safety_contacts',
 };
 
 // Tables whose pluralised name doesn't follow the strip-trailing-`s` rule

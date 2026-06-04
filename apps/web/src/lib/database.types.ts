@@ -1961,6 +1961,39 @@ export type Database = {
           },
         ]
       }
+      safety_contacts: {
+        Row: {
+          confirm_token: string
+          confirmed_at: string | null
+          contact_email: string
+          contact_user_id: string | null
+          created_at: string
+          id: string
+          owner_id: string
+          updated_at: string
+        }
+        Insert: {
+          confirm_token?: string
+          confirmed_at?: string | null
+          contact_email: string
+          contact_user_id?: string | null
+          created_at?: string
+          id?: string
+          owner_id: string
+          updated_at?: string
+        }
+        Update: {
+          confirm_token?: string
+          confirmed_at?: string | null
+          contact_email?: string
+          contact_user_id?: string | null
+          created_at?: string
+          id?: string
+          owner_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       saved_routes: {
         Row: {
           route_id: string
@@ -2770,6 +2803,11 @@ export type Database = {
         }[]
       }
       confirm_age_and_terms: { Args: never; Returns: undefined }
+      confirm_safety_contact: { Args: { p_id: string }; Returns: boolean }
+      confirm_safety_contact_by_token: {
+        Args: { p_token: string }
+        Returns: boolean
+      }
       cron_schedule_status: { Args: { p_jobname: string }; Returns: Json }
       decide_event_result_claim: {
         Args: { p_approve: boolean; p_claim_id: string }
@@ -2789,6 +2827,7 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      decline_safety_contact: { Args: { p_id: string }; Returns: boolean }
       decrement_coach_usage: { Args: { p_user_id: string }; Returns: number }
       defer_job: {
         Args: { delay_seconds: number; err?: string; job_id: number }
@@ -2965,6 +3004,14 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      my_pending_safety_requests: {
+        Args: never
+        Returns: {
+          created_at: string
+          id: string
+          owner_name: string
+        }[]
       }
       nearby_routes: {
         Args: {
