@@ -2779,6 +2779,35 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 128. `race_pings` and `live_run_pings` stay two tables — column overlap is not table identity (F5 closed: won't-consolidate)
+
+**Decided (2026-06-04, remediation F5):** the two live-position-stream tables are **kept separate**. R4 closed the retention-parity gap (migration `20261213_001` gave `race_pings` the cleanup cron `live_run_pings` had since `20260509_001`); the remaining "they look near-identical, consolidate them" item is resolved as **won't-consolidate**, documented here rather than migrated.
+
+**Why not consolidate.** The two tables share ~6 column *definitions* (`lat`/`lng`/`elapsed_s`/`distance_m`/`bpm`/`user_id`/`at`/`id`), but a table's identity is its **key + constraints + access rules**, and on every one of those they diverge:
+
+- **Key.** `live_run_pings` is keyed by `run_id` (single FK → `runs`); `race_pings` by `(event_id, instance_start)` (composite FK → `race_sessions`). A merged table needs both key sets nullable plus a `CHECK` that exactly one is populated — the polymorphic-association shape, which throws away the DB-enforced guarantee that a `run_id` can't appear in an event-keyed row. (Contrast F15/§126's `notifications.(activity_kind, activity_id)`: that polymorphism is correct because notifications genuinely *reference many* heterogeneous activities — these pings are not one stream referencing many things, they're two streams with different owners.)
+- **RLS.** `live_run_pings` visibility flows through `is_run_visible_to(run_id)` (public-or-owner); `race_pings` through the `race_sessions → events → clubs` chain (club membership / public-club). Consolidating replaces two narrow policies with **one policy that branches on a discriminator** — strictly harder to audit, and the exact surface where `20260715_001` already had to plug a leak (unauthenticated `instance_start` guessing exposing private-club race coordinates). With the project's RLS-correctness investment (audits + pgtap), two separate policies are the safer asset.
+- **Retention, insert, indexes.** 4h vs 48h TTL (a solo live-share is ephemeral; a scheduled race replay isn't); owner-only insert vs own-ping-while-race-is-running; `(run_id, at asc)` for chronological playback vs `(event_id, instance_start, at desc)` + a per-user index for the leaderboard. A merged table either branches all of these on `kind` or compromises each.
+- `live_run_pings` carries `ele`; `race_pings` doesn't. Minor, but it's one more "nullable for half the rows" column a merge would add.
+
+**Trade-off.** We keep two near-identical `CREATE TABLE`s, two `_drop_in_zone` BEFORE-INSERT triggers, and two retention functions. The duplication is shallow: both triggers already delegate to the shared `privacy_in_any_zone(...)` helper, so only the ~10-line trigger wrapper and the column list repeat — not the load-bearing logic. That shallow repetition is a cheaper price than a polymorphic table with branching RLS. The realtime publication lists both tables; clients subscribe by table, not by a `kind` filter, which keeps each subscription's payload narrow.
+
+**On "consolidate for the long term".** Evaluated purely as a design question (ignoring migration cost): a single physical `pings` table is *not* the better long-term form, because it would **de-normalize**. The two streams have structurally different keys — scalar `run_id` vs composite `(event_id, instance_start)` — which can't be one clean FK; a merged table needs three nullable columns + a `CHECK`-exactly-one, i.e. it *replaces two NOT-NULL FK constraints with nullable columns and a CHECK* (weaker integrity), and centralizes two declarative RLS policies into one branching one (harder to audit). The actual normalized long-term form, *if* this ever grew to 3+ live-stream types (group runs, virtual races, …), is **class-table inheritance** — a shared `live_pings` base holding the common telemetry (`lat`/`lng`/`ele`/`elapsed_s`/`distance_m`/`bpm`/`at`/`user_id`) plus thin per-context stream tables owning the divergent FK + RLS. That *adds* tables, and only pays off at N≥3. At today's N=2 it's over-engineering, and a nullable-FK polymorphic single table is never the right shape (it's exactly what CTI exists to avoid). So: stay at two now.
+
+**Don't re-litigate unless** a third live-position-stream type appears (then introduce the shared `live_pings` base + thin per-context stream tables — class-table inheritance — *not* a nullable-FK union of the two existing tables), or the privacy-zone trigger logic starts to drift between the two copies (then extract the wrapper into one shared trigger function both tables attach — still two tables, one trigger body).
+
+---
+
+## 129. Mobile create/edit-entity forms all present as a full-screen dialog via one shared `showFullScreenForm` wrapper
+
+**Decided (2026-06-04):** every "add / edit X" surface on the Flutter clients presents identically — a `MaterialPageRoute(fullscreenDialog: true)` hosting the form in a `Scaffold` + `AppBar(title)` + `SafeArea` — built through the single helper `widgets/full_screen_form.dart` (`showFullScreenForm<T>` + `FullScreenFormBody` + `FormSectionLabel`). Migrated: gear, club, event, goal, gym, and planned-workout edit; the manual-run screen (`AddRunScreen`) is pushed with `fullscreenDialog: true` for the same presentation but keeps its own `Scaffold` (it has a `Form` + validation + a nested route picker that don't fit the simple body chrome).
+
+**Why.** The forms had drifted into three different presentations — `showModalBottomSheet` (gear / event / workout-edit), a bare back-arrow `MaterialPageRoute` page (club), and a `fullscreenDialog` (goal / gym) — so the same conceptual action looked and dismissed differently depending on where you opened it. The bottom-sheet variant was also the buggiest: it fought the soft keyboard (`viewInsets` + `FractionallySizedBox` both reflow on open — the "slow and glitchy" feel) and repeatedly put the Cancel/Save buttons under the Samsung gesture bar (it only padded for `viewInsets`, not `viewPadding`). The full-screen dialog is what Material recommends for multi-field forms with text + pickers, the `Scaffold` handles the keyboard via `resizeToAvoidBottomInset`, and `FullScreenFormBody` encodes the keyboard-else-nav-bar inset once instead of each form re-deriving (and mis-deriving) it.
+
+**Trade-off / contract.** New mobile create/edit forms must route through `showFullScreenForm` rather than hand-rolling a sheet/page; the heading goes in the AppBar (don't duplicate it inline in the body), and the body is `FullScreenFormBody(children: [...])`. The helper lives under `lib/widgets/` (twin-mirrored), not `ui_kit`, to sit beside the forms that use it. Don't force a genuinely complex screen (its own `Scaffold`, multi-step nav) through `FullScreenFormBody` — push it with `fullscreenDialog: true` and keep its `Scaffold`, as `AddRunScreen` does.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

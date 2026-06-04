@@ -395,6 +395,12 @@ On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical tr
 
 If the notification has an action (e.g. "Settings" on the GPS-unavailable banner), pass `actionLabel:` + `onAction:`. Tapping the action runs the callback and dismisses the banner.
 
+## Mobile create/edit-entity forms — `showFullScreenForm`
+
+On the Flutter apps, every "add / edit X" form presents as a full-screen dialog built through `showFullScreenForm<T>(context, title:, builder:)` in `lib/widgets/full_screen_form.dart` (see [decisions.md § 129](decisions.md)). It pushes a `MaterialPageRoute(fullscreenDialog: true)` wrapping the body in `Scaffold` + `AppBar(title)` + `SafeArea`; lay the body out with `FullScreenFormBody(children: [...])` and label field groups with `FormSectionLabel`.
+
+**Don't hand-roll a `showModalBottomSheet` or a bare back-arrow page for a create/edit form.** The bottom-sheet shape fought the soft keyboard and dropped its action buttons under the gesture nav bar; the mixed presentations made the same action look different per entry point. Put the heading in the AppBar (not inline in the body). A genuinely complex screen with its own `Scaffold` / `Form` / nested navigation (e.g. `AddRunScreen`) may keep its `Scaffold` but should still be pushed with `fullscreenDialog: true` for the same slide-up + close presentation.
+
 ## Local-tz date strings
 
 Don't use `new Date().toISOString().slice(0, 10)` to derive a "yyyy-mm-dd today" or "yyyy-mm-dd of week start" string. `toISOString()` formats in UTC, so in any positive-offset timezone it rolls the date back a day before midnight local — week boundaries snap to the wrong Monday and prev/next navigation jumps two periods at once. Use `formatISO(d)` (or `todayISO()`) from `apps/web/src/lib/training/training.ts` — both build the string from `getFullYear` / `getMonth` / `getDate`, which stay in local time. The same rule applies to Dart on the mobile side: call `DateTime.local()` and format the components yourself, don't go via UTC.
