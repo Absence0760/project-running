@@ -49,6 +49,7 @@
 		type CalorieGender,
 	} from '$lib/runs/calories';
 	import { supabase } from '$lib/core/supabase';
+	import { TABLES, METADATA_KEYS } from '$lib/core/schema';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { Run } from '$lib/types';
 
@@ -153,7 +154,9 @@
 		// If the recorder linked this run to a structured workout, pull
 		// the planned workout row so the review section can show its
 		// title alongside the per-step planned/actual table.
-		const planWorkoutId = (run?.metadata as Record<string, unknown> | null)?.['plan_workout_id'];
+		const planWorkoutId = (run?.metadata as Record<string, unknown> | null)?.[
+			METADATA_KEYS.plan_workout_id
+		];
 		if (typeof planWorkoutId === 'string') {
 			try {
 				linkedWorkout = await fetchWorkout(planWorkoutId);
@@ -257,9 +260,15 @@
 		}
 	}
 
-	let runTitle = $derived((run?.metadata as Record<string, unknown> | null)?.title as string ?? '');
-	let runNotes = $derived((run?.metadata as Record<string, unknown> | null)?.notes as string ?? '');
-	let isDnf = $derived((run?.metadata as Record<string, unknown> | null)?.['is_dnf'] === true);
+	let runTitle = $derived(
+		(run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.title] as string ?? '',
+	);
+	let runNotes = $derived(
+		(run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.notes] as string ?? '',
+	);
+	let isDnf = $derived(
+		(run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.is_dnf] === true,
+	);
 	/// Estimated calories — routes through the shared pure helper
 	/// `apps/web/src/lib/runs/calories.ts` (mirrored byte-for-byte in
 	/// the Dart twin) so the formula stays in lockstep across the
@@ -270,21 +279,23 @@
 	/// `weight × distance` and ignored gender entirely — every
 	/// female runner was over-estimated by ~5%.
 	let runActivityType = $derived(
-		((run?.metadata as Record<string, unknown> | null)?.activity_type as string) ??
+		((run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.activity_type] as string) ??
 			'run',
 	);
 	/// Garmin discipline (FIT sub_sport) — the trail/track/treadmill/road
 	/// distinction the coarse activity_type throws away. Shown as a header
 	/// chip so a trail run reads as trail, not generic "Run" (round-5 F1).
 	let subSport = $derived(
-		((run?.metadata as Record<string, unknown> | null)?.sub_sport as string | null) ?? null,
+		((run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.sub_sport] as
+			| string
+			| null) ?? null,
 	);
 	let disciplineLabel = $derived(
 		subSport ? subSport.charAt(0).toUpperCase() + subSport.slice(1) : null,
 	);
 	/// Garmin Running Dynamics off the imported session (round-5 F2).
 	let runningDynamics = $derived(
-		((run?.metadata as Record<string, unknown> | null)?.running_dynamics as {
+		((run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.running_dynamics] as {
 			vertical_oscillation_mm?: number;
 			gct_ms?: number;
 			stride_length_m?: number;
@@ -347,12 +358,12 @@
 	}
 
 	let workoutStepResults = $derived.by<WorkoutStepResult[]>(() => {
-		const v = (run?.metadata as Record<string, unknown> | null)?.['workout_step_results'];
+		const v = (run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.workout_step_results];
 		return Array.isArray(v) ? (v as WorkoutStepResult[]) : [];
 	});
 
 	let workoutAdherence = $derived(
-		(run?.metadata as Record<string, unknown> | null)?.['workout_adherence'] as
+		(run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.workout_adherence] as
 			| 'completed'
 			| 'partial'
 			| 'abandoned'
@@ -423,17 +434,21 @@
 					{ title: editTitle, notes: editNotes },
 					new Date().toISOString(),
 				);
-				if (editIsDnf) nextMeta['is_dnf'] = true;
-				else delete nextMeta['is_dnf'];
+				if (editIsDnf) nextMeta[METADATA_KEYS.is_dnf] = true;
+				else delete nextMeta[METADATA_KEYS.is_dnf];
 				const { error } = await supabase
-					.from('runs')
+					.from(TABLES.runs)
 					.update({ metadata: nextMeta })
 					.eq('id', run.id);
 				if (error) throw error;
 				run = { ...run, metadata: nextMeta } as Run;
 			} else {
 				await updateRunMetadata(run.id, { title: editTitle, notes: editNotes });
-				const metadata = { ...(run.metadata as Record<string, unknown> ?? {}), title: editTitle, notes: editNotes };
+				const metadata = {
+					...(run.metadata as Record<string, unknown> ?? {}),
+					[METADATA_KEYS.title]: editTitle,
+					[METADATA_KEYS.notes]: editNotes,
+				};
 				run = { ...run, metadata } as Run;
 			}
 			editing = false;
@@ -515,7 +530,7 @@
 		// with an English route name baked into their data. They can still
 		// rename it in the prompt below.
 		const defaultName =
-			((run.metadata as Record<string, unknown> | null)?.title as string) ||
+			((run.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.title] as string) ||
 			new Date(run.started_at).toISOString().slice(0, 10);
 		const name = window.prompt(m('runDetail.nameThisRoute'), defaultName);
 		if (!name || !name.trim()) return;
@@ -552,7 +567,7 @@
 				cacheBust: true,
 			});
 			const title =
-				((run.metadata as Record<string, unknown> | null)?.title as string) ||
+				((run.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.title] as string) ||
 				`Run ${new Date(run.started_at).toISOString().slice(0, 10)}`;
 			const fileName =
 				title.replace(/[^a-z0-9\-_. ]/gi, '_').replace(/\s+/g, '_') + '.png';
@@ -611,7 +626,7 @@
 	function handleDownloadGpx() {
 		if (!run?.track || run.track.length < 2) return;
 		const title =
-			((run.metadata as Record<string, unknown> | null)?.title as string) ||
+			((run.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.title] as string) ||
 			`Run ${new Date(run.started_at).toISOString().slice(0, 10)}`;
 		const gpx = toRunGpx(
 			title,
@@ -641,7 +656,7 @@
 	});
 
 	let activity = $derived.by(() => {
-		const key = run?.metadata?.['activity_type'];
+		const key = run?.metadata?.[METADATA_KEYS.activity_type];
 		if (typeof key !== 'string') return null;
 		return activityMeta[key] ?? { label: key, icon: 'directions_run' };
 	});
@@ -651,7 +666,7 @@
 	/// anything else (or a missing tag) falls back to the legacy
 	/// single-line render via `undefined`.
 	let paceHeatmapActivity = $derived.by<'run' | 'walk' | 'cycle' | 'hike' | undefined>(() => {
-		const key = run?.metadata?.['activity_type'];
+		const key = run?.metadata?.[METADATA_KEYS.activity_type];
 		if (key === 'run' || key === 'walk' || key === 'cycle' || key === 'hike') return key;
 		return undefined;
 	});
@@ -679,7 +694,7 @@
 
 	/** Total steps are stored on mobile save in `metadata.steps`. */
 	let totalSteps = $derived.by(() => {
-		const v = run?.metadata?.['steps'];
+		const v = run?.metadata?.[METADATA_KEYS.steps];
 		return typeof v === 'number' ? v : null;
 	});
 
@@ -688,7 +703,7 @@
 	 *  which has no pedometer step count — persona #17), then falls back
 	 *  to steps / moving_time_minutes for pedometer-recorded runs. */
 	let avgCadence = $derived.by(() => {
-		const stored = run?.metadata?.['cadence_spm'];
+		const stored = run?.metadata?.[METADATA_KEYS.cadence_spm];
 		if (typeof stored === 'number' && stored > 0) return Math.round(stored);
 		if (totalSteps == null || movingSeconds < 30) return null;
 		return Math.round((totalSteps / (movingSeconds / 60)) || 0);
@@ -697,14 +712,14 @@
 	/** Average heart rate. Watch apps (watch_ios, watch_wear) record this
 	 *  into `metadata.avg_bpm` during a run. See `docs/backend/metadata.md`. */
 	let avgBpm = $derived.by(() => {
-		const v = run?.metadata?.['avg_bpm'];
+		const v = run?.metadata?.[METADATA_KEYS.avg_bpm];
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
 
 	/** parkrun age-graded percentage (e.g. "54.23%"), set by the
 	 *  parkrun importer into metadata.age_grade. See docs/backend/metadata.md. */
 	let ageGrade = $derived.by(() => {
-		const v = run?.metadata?.['age_grade'];
+		const v = run?.metadata?.[METADATA_KEYS.age_grade];
 		return typeof v === 'string' && v.trim() ? v.trim() : null;
 	});
 
@@ -948,7 +963,7 @@
 		duration_s: number;
 	}
 	let laps = $derived.by<Lap[]>(() => {
-		const v = (run?.metadata as Record<string, unknown> | null)?.['laps'];
+		const v = (run?.metadata as Record<string, unknown> | null)?.[METADATA_KEYS.laps];
 		if (!Array.isArray(v)) return [];
 		return v
 			.filter(

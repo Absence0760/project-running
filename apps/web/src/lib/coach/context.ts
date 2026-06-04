@@ -5,6 +5,7 @@
 // and prod.
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { TABLES } from '../core/schema';
 
 export interface CoachContext {
 	data?: unknown;
@@ -45,7 +46,7 @@ export async function buildContext(
 	}
 
 	const { data: rawRecentRuns } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('id, started_at, distance_m, duration_s, metadata, route_id')
 		.order('started_at', { ascending: false })
 		.limit(runsLimit);
@@ -64,7 +65,7 @@ export async function buildContext(
 	// food_log are owner-only), so no user_id filter is needed — the
 	// forwarded JWT does the scoping, same as recent_runs above.
 	const { data: liftWorkouts } = await supabase
-		.from('gym_workouts')
+		.from(TABLES.gym_workouts)
 		.select('id, title, started_at')
 		.order('started_at', { ascending: false })
 		.limit(COACH_LIFTS_CAP);
@@ -72,7 +73,7 @@ export async function buildContext(
 	if (liftWorkouts && liftWorkouts.length > 0) {
 		const ids = (liftWorkouts as { id: string }[]).map((w) => w.id);
 		const { data: liftSets } = await supabase
-			.from('gym_sets')
+			.from(TABLES.gym_sets)
 			.select('workout_id, exercise_name, reps, weight_kg')
 			.in('workout_id', ids);
 		recentLifts = summarizeRecentLifts(
@@ -161,7 +162,7 @@ export async function buildContext(
 	if (healthConsentGranted) {
 		const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 		const { data: foodRows } = await supabase
-			.from('food_log')
+			.from(TABLES.food_log)
 			.select('logged_at, calories, protein_g, carbs_g, fat_g')
 			.gte('logged_at', sevenDaysAgo)
 			.order('logged_at', { ascending: false })

@@ -16,6 +16,7 @@ import JSZip from 'jszip';
 import { parseRouteFile, type ImportedRoute } from './import';
 import { parseFitBuffer } from './garmin-fit';
 import { saveRun, addRunPhoto } from '../core/data';
+import { TABLES, METADATA_KEYS } from '../core/schema';
 import { parseStravaMediaPaths, STRAVA_PHOTO_MIME } from './strava_media';
 import { buildStravaDedupeSet } from './strava-zip-dedupe';
 import { gunzipBlob } from '../util/gunzip';
@@ -80,7 +81,7 @@ export async function importStravaZip(
 	}
 
 	const { data: existing } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('metadata, external_id')
 		.eq('user_id', uid);
 	const seen = buildStravaDedupeSet(existing ?? []);
@@ -196,13 +197,14 @@ async function importOne(
 	}
 
 	const metadata: Record<string, unknown> = {
-		strava_id: stravaId,
-		activity_type: activityType,
-		imported_from: 'strava',
-		imported_at: new Date().toISOString(),
+		[METADATA_KEYS.strava_id]: stravaId,
+		[METADATA_KEYS.activity_type]: activityType,
+		[METADATA_KEYS.imported_from]: 'strava',
+		[METADATA_KEYS.imported_at]: new Date().toISOString(),
 	};
-	if (avgBpm > 0) metadata.avg_bpm = Math.round(avgBpm);
-	if (idx.stravaType >= 0 && row[idx.stravaType]) metadata.strava_activity_type = row[idx.stravaType];
+	if (avgBpm > 0) metadata[METADATA_KEYS.avg_bpm] = Math.round(avgBpm);
+	if (idx.stravaType >= 0 && row[idx.stravaType])
+		metadata[METADATA_KEYS.strava_activity_type] = row[idx.stravaType];
 
 	const { id: runId } = await saveRun({
 		started_at: new Date(startedAt).toISOString(),

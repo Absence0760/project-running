@@ -6,6 +6,7 @@
 	import { showToast } from '$lib/stores/toast.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import { supabase } from '$lib/core/supabase';
+	import { TABLES } from '$lib/core/schema';
 	import { PUBLIC_SUPABASE_URL } from '$env/static/public';
 	import { downloadFile } from '$lib/routes/gpx';
 	import { fetchRuns } from '$lib/core/data';
@@ -374,7 +375,7 @@
 		exportingJson = true;
 		try {
 			const { data, error } = await supabase
-				.from('runs')
+				.from(TABLES.runs)
 				.select('*')
 				.eq('user_id', userId)
 				.order('started_at', { ascending: false });

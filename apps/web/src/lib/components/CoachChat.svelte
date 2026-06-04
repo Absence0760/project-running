@@ -3,6 +3,7 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { renderCoachMarkdown } from '$lib/coach/markdown';
 	import { supabase } from '$lib/core/supabase';
+	import { TABLES } from '$lib/core/schema';
 	import { fmtKm } from '$lib/format/units.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
 	import ChipDropdown from '$lib/components/ChipDropdown.svelte';
@@ -331,7 +332,7 @@
 		let runCount = 0;
 		try {
 			const { count } = await supabase
-				.from('runs')
+				.from(TABLES.runs)
 				.select('id', { count: 'exact', head: true })
 				.eq('user_id', userId);
 			runCount = Math.min(count ?? 0, runsLimit);

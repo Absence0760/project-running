@@ -1,4 +1,5 @@
 import { supabase } from '../core/supabase';
+import { TABLES, BUCKETS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
 import { buildBackupZip, BACKUP_FORMAT, BACKUP_VERSION } from './backup_writer';
 import type { BackupProgress } from './backup_writer';
@@ -40,7 +41,7 @@ export async function createBackup(
 
 	onProgress?.({ stage: 'runs', current: 0, total: 1 });
 	const { data: runs, error: runsErr } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('*')
 		.eq('user_id', userId)
 		.order('started_at', { ascending: false });
@@ -98,7 +99,7 @@ export async function createBackup(
  * supabase-js.
  */
 async function defaultTrackFetcher(trackUrl: string): Promise<Uint8Array> {
-	const { data, error } = await supabase.storage.from('runs').download(trackUrl);
+	const { data, error } = await supabase.storage.from(BUCKETS.runs).download(trackUrl);
 	if (error || !data) {
 		throw error ?? new Error('track download returned no body');
 	}
@@ -150,7 +151,7 @@ function supabaseRestoreBackend(): RestoreBackend {
 			if (error) throw error;
 		},
 		async uploadTrack(path, bytes) {
-			const { error } = await supabase.storage.from('runs').upload(path, bytes, {
+			const { error } = await supabase.storage.from(BUCKETS.runs).upload(path, bytes, {
 				contentType: 'application/gzip',
 				upsert: true,
 				cacheControl: '0'
@@ -158,7 +159,7 @@ function supabaseRestoreBackend(): RestoreBackend {
 			if (error) throw error;
 		},
 		async upsertRun(row) {
-			const { error } = await supabase.from('runs').upsert(row, { onConflict: 'id' });
+			const { error } = await supabase.from(TABLES.runs).upsert(row, { onConflict: 'id' });
 			if (error) throw error;
 		},
 		async upsertRoute(row) {

@@ -22,6 +22,7 @@ import JSZip from 'jszip';
 import { parseRouteFile } from './import';
 import { saveRun } from '../core/data';
 import { supabase } from '../core/supabase';
+import { TABLES, METADATA_KEYS } from '../core/schema';
 import { auth } from '../stores/auth.svelte';
 import { parseFitBuffer, garminExternalId, type ParsedFitRun, type FitHrZones } from './garmin-fit';
 import { loadSettings, effective, updateUniversal } from '../settings/settings';
@@ -81,7 +82,7 @@ export async function importGarminBundle(
 	// is the canonical identity for FIT-sourced runs; `composite_key`
 	// (`{started_at}|{distance_m}`) catches the GPX/TCX fallback path.
 	const { data: existing } = await supabase
-		.from('runs')
+		.from(TABLES.runs)
 		.select('metadata, started_at, distance_m')
 		.eq('user_id', uid)
 		.eq('source', 'garmin');
@@ -225,19 +226,19 @@ async function importFitFile(
 	if (seenComposite.has(composite)) return 'skipped';
 
 	const metadata: Record<string, unknown> = {
-		activity_type: parsed.activity_type,
-		imported_from: 'garmin',
-		imported_at: new Date().toISOString(),
-		source_file: displayName,
+		[METADATA_KEYS.activity_type]: parsed.activity_type,
+		[METADATA_KEYS.imported_from]: 'garmin',
+		[METADATA_KEYS.imported_at]: new Date().toISOString(),
+		[METADATA_KEYS.source_file]: displayName,
 	};
-	if (parsed.garmin_file_id) metadata.garmin_id = parsed.garmin_file_id;
-	if (parsed.avg_bpm != null) metadata.avg_bpm = parsed.avg_bpm;
-	if (parsed.max_bpm != null) metadata.max_bpm = parsed.max_bpm;
-	if (parsed.avg_cadence_spm != null) metadata.cadence_spm = parsed.avg_cadence_spm;
-	if (parsed.laps.length > 0) metadata.laps = parsed.laps;
-	if (parsed.indoor) metadata.indoor = true;
-	if (parsed.sub_sport) metadata.sub_sport = parsed.sub_sport;
-	if (parsed.running_dynamics) metadata.running_dynamics = parsed.running_dynamics;
+	if (parsed.garmin_file_id) metadata[METADATA_KEYS.garmin_id] = parsed.garmin_file_id;
+	if (parsed.avg_bpm != null) metadata[METADATA_KEYS.avg_bpm] = parsed.avg_bpm;
+	if (parsed.max_bpm != null) metadata[METADATA_KEYS.max_bpm] = parsed.max_bpm;
+	if (parsed.avg_cadence_spm != null) metadata[METADATA_KEYS.cadence_spm] = parsed.avg_cadence_spm;
+	if (parsed.laps.length > 0) metadata[METADATA_KEYS.laps] = parsed.laps;
+	if (parsed.indoor) metadata[METADATA_KEYS.indoor] = true;
+	if (parsed.sub_sport) metadata[METADATA_KEYS.sub_sport] = parsed.sub_sport;
+	if (parsed.running_dynamics) metadata[METADATA_KEYS.running_dynamics] = parsed.running_dynamics;
 
 	await saveRun({
 		started_at: parsed.startedAt,

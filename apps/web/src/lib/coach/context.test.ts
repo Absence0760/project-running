@@ -84,8 +84,10 @@ test('nutrition_7d is gated on health-data consent', () => {
 	// healthConsentGranted is true — the same gate as DOB / HR. A
 	// refactor that hoists the food_log query out of the guard fails
 	// here rather than silently shipping intake data to Anthropic.
+	// The table name routes through the F11 registry (core/schema.ts),
+	// so the guard matches `from(TABLES.food_log)`, not the bare literal.
 	const guard = SRC.match(
-		/if \(healthConsentGranted\) \{([\s\S]*?from\('food_log'\)[\s\S]*?)\n\t\}/,
+		/if \(healthConsentGranted\) \{([\s\S]*?from\(TABLES\.food_log\)[\s\S]*?)\n\t\}/,
 	);
 	assert.ok(
 		guard,
