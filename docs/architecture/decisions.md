@@ -2707,6 +2707,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 123. Mobile local stores persist through a crash-atomic write helper (`writeJsonAtomic`); `_rewriteAll` writes before it prunes
+
+**Decided (2026-06-03):** every record and sidecar write in the five mobile file stores (`local_run_store`, `local_route_store`, `local_gear_store`, `local_gym_store`, `local_food_store`) goes through `writeStringAtomic` / `writeJsonAtomic` in `packages/core_models/lib/src/atomic_io.dart` — a `.tmp` sibling write + `flush` + atomic POSIX `rename`. A bare `File.writeAsString` truncates the destination to zero bytes before streaming the new content, so a process death mid-write (OOM-kill, power loss, force-quit) left a zero-byte or partial file that `jsonDecode` rejected on the next cold-start — the record silently vanished. `rename` is atomic on Android ext4/f2fs and iOS APFS: a reader sees either the old file or the fully written new one. The helper uses a per-write unique temp suffix so two concurrent writes to one target don't race on the rename (last rename wins, matching the prior last-write-wins semantics).
+
+**`_rewriteAll` (gym/food/gear) writes new files before deleting orphans.** The old `replaceFromServer` path deleted every `.json` in the directory *then* rewrote — a crash in the gap emptied the store and lost any unsynced `pendingCreate` rows. It now writes every live row first (each atomic) and only then prunes ids that no longer exist, with a per-file try/catch on the prune. No empty-directory window.
+
+**Enforced, not just documented.** `architecture_guards_test.dart` fails CI on any bare `writeAsString` in the five stores and on a `_rewriteAll` that deletes before it writes.
+
+**Scope / not in scope.** The in-progress recording file (`in_progress.json`) is *not* covered here — it uses its own crash-safe append-only NDJSON path (`_appendInProgressLine`, see [run_recording.md](../features/run_recording.md)). At-rest encryption of the plaintext GPS/HR JSON is a separate open item (audit L-FILE H3, Phase 3c). The synced-ids sidecar's unbounded growth (audit L-FILE H5 pruning half) is also still open (Phase 3b); only its atomicity is closed here. This entry closes the data-loss-grade Criticals L-FILE C1/C2 from the data-architecture audit (Phase 0a/0b).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
