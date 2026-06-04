@@ -2695,6 +2695,18 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 122. Gym + food get `LocalGymStore` / `LocalFoodStore` mirroring `LocalGearStore`; gym stores its sets inline, one file per workout
+
+**Decided (2026-06-03):** the Phase 4 multi-modal modalities (gym, nutrition) land their offline-first caches the same way gear did (§73). `LocalGymStore` (`apps/mobile_*/lib/local_gym_store.dart`) and `LocalFoodStore` (`apps/mobile_*/lib/local_food_store.dart`) are disk-backed `ChangeNotifier`s — one JSON file per row under `<appDocs>/gym/` and `<appDocs>/food/`, a per-row `{Gym,Food}SyncState` (`synced` / `pendingCreate` / `pendingUpdate` / `pendingDelete`), client-minted v4 UUIDs that become the server id on the eventual INSERT (`gym_workouts.id` / `food_log.id` default to `gen_random_uuid()` but accept a client value), and a `syncWithServer(api)` that drains create → update → delete with per-row failure isolation. `replaceFromServer` preserves pending rows and overwrites only `synced` ones, exactly as gear does.
+
+**Gym stores its sets inline.** A `gym_workouts` row owns N `gym_sets`; the composer always edits the whole set list, so `StoredGymWorkout` carries `sets` inline in the same file rather than a separate `gym_sets/` store. The drain maps the inline sets back to `GymSetInput` and `createGymWorkout`/`updateGymWorkout` replace the set list wholesale server-side (the api already does delete-then-reinsert). `set_index` is positional (the list index) — never persisted as a field — so a reorder is just a list reorder. This avoids a parent/child two-store reconciliation entirely.
+
+**Shipped ahead of the screens.** Like the api_client gym/food methods (commit `9d8f6b58`), the stores ship before the gym/nutrition UI and are therefore not yet wired into `main.dart` or `sync_service` — there's no consumer to drain them and wiring an unused store would be speculative. The wiring lands with the screens (the multi_modal.md file plan's Gym/Nutrition rows). Pinning tests: `apps/mobile_android/test/local_{gym,food}_store_test.dart` (17 + 16 tests) cover lifecycle, drain order, reload-after-restart, and gym's inline-sets round-trip.
+
+**Same trade-offs as §73 carry over:** last-write-wins on a cross-device offline window, no `dropUser` hook (best-effort single-user device until the `created_by_user_id` ownership tag from §67 is added). Don't re-litigate by adding a "sync now" button or a temp-id remap layer — the client-minted UUID is the load-bearing choice.
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.
