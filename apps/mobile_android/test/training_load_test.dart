@@ -284,4 +284,102 @@ void main() {
       expect(daily[key], 50);
     });
   });
+
+  group('lift load', () {
+    // A representative HARD session: 16 working sets of 8 reps at 62.5 kg
+    // (~8,000 kg tonnage) at RPE 8 — the calibration anchor.
+    LiftForLoad hardLiftSession(DateTime when) => LiftForLoad(
+          startedAt: when,
+          sets: List.generate(
+            16,
+            (_) => const LiftSetForLoad(reps: 8, weightKg: 62.5, rpe: 8),
+          ),
+        );
+
+    test('rpeFactor anchored at RPE 8 = 1.0, absent = 1.0, bounded', () {
+      expect(rpeFactor(8), 1.0);
+      expect(rpeFactor(null), 1.0);
+      expect(rpeFactor(6) < 1.0 && rpeFactor(10) > 1.0, isTrue);
+      expect(rpeFactor(0), 0.5);
+      expect(rpeFactor(20), 1.25);
+    });
+
+    test('CALIBRATION: a hard lift session scores in the easy-run band (40-60)',
+        () {
+      final stress = computeLiftStress(hardLiftSession(DateTime.utc(2026, 4, 1)));
+      expect(stress >= 40 && stress <= 60, isTrue);
+    });
+
+    test('sets without reps or weight contribute nothing', () {
+      final bw = LiftForLoad(
+        startedAt: DateTime.utc(2026, 4, 1),
+        sets: const [
+          LiftSetForLoad(reps: 20, weightKg: null),
+          LiftSetForLoad(reps: null, weightKg: 60),
+          LiftSetForLoad(reps: 0, weightKg: 60),
+        ],
+      );
+      expect(computeLiftStress(bw), 0);
+    });
+
+    test('a fat-fingered weight is capped, cannot spike the curve', () {
+      final typo = LiftForLoad(
+        startedAt: DateTime.utc(2026, 4, 1),
+        sets: const [LiftSetForLoad(reps: 5, weightKg: 50000, rpe: 8)],
+      );
+      expect(computeLiftStress(typo), kLiftStressCap);
+    });
+
+    test('aggregateDailyLiftStress sums by local day, skips empty sessions', () {
+      final when = DateTime.utc(2026, 4, 1);
+      final daily = aggregateDailyLiftStress([
+        hardLiftSession(when),
+        hardLiftSession(when),
+        LiftForLoad(
+          startedAt: DateTime.utc(2026, 4, 2),
+          sets: const [LiftSetForLoad(reps: 10, weightKg: null)],
+        ),
+      ]);
+      final local = when.toLocal();
+      final key = DateTime(local.year, local.month, local.day);
+      expect((daily[key] ?? 0) > 80, isTrue);
+      expect(daily.containsKey(DateTime(2026, 4, 2)), isFalse);
+    });
+
+    test('lift stress is separable and raises fatigue', () {
+      final ref = DateTime.utc(2026, 5, 1, 12);
+      final runDay = ref.subtract(const Duration(days: 1));
+      final runs = [
+        _run(distanceM: 8000, durationS: 2400, startedAt: runDay),
+      ];
+      final lifts = [hardLiftSession(runDay)];
+
+      final runOnly = computeTrainingLoadSeries(runs, endDate: ref);
+      final withLifts =
+          computeTrainingLoadSeries(runs, endDate: ref, lifts: lifts);
+
+      // Run-only curve is recoverable from runStress regardless of lifts.
+      for (var i = 0; i < runOnly.length; i++) {
+        expect(withLifts[i].runStress, runOnly[i].stress);
+      }
+      final last = withLifts[withLifts.length - 2];
+      expect(last.liftStress > 0, isTrue);
+      expect(last.stress > last.runStress, isTrue);
+      expect(withLifts.last.atl > runOnly.last.atl, isTrue);
+    });
+
+    test('no lifts leaves liftStress 0 and stress unchanged', () {
+      final ref = DateTime.utc(2026, 5, 1, 12);
+      final runs = [
+        _run(
+          distanceM: 5000,
+          durationS: 1500,
+          startedAt: ref.subtract(const Duration(days: 2)),
+        ),
+      ];
+      final series = computeTrainingLoadSeries(runs, endDate: ref);
+      expect(series.every((p) => p.liftStress == 0), isTrue);
+      expect(series.every((p) => p.stress == p.runStress), isTrue);
+    });
+  });
 }

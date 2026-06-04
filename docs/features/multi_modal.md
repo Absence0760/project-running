@@ -243,8 +243,10 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   kg, rendered in the user's unit. Add/remove set and exercise inline.
 - `gym_screen` (list) and `gym_detail_screen` (read-only review +
   per-exercise PR badges) round it out.
-- **PRs** (`gym_prs.dart`, pure + unit-tested) compute heaviest set / most
-  volume / best rep-PR per `(user, exercise_name)` → a Home card + a "PR"
+- **PRs** (`gym_prs.ts` ↔ `gym_prs.dart`, pure + unit-tested parity pair,
+  **shipped**) compute heaviest set / most volume / best rep-PR (Epley
+  e1rm) per `(user, exercise_name)` via `computeExercisePrs`; `workoutPrs`
+  reports which metrics a session newly bettered → a Home card + a "PR"
   badge on the History row + a chip in detail.
 - **Not in scope (depth tier):** exercise database, templates, programmes,
   progressive-overload prescriptions, rest-timer.
@@ -344,6 +346,16 @@ readiness runners already trust. Rules:
   `multi_modal_nav` flag like everything else, and the calibration
   constant ships with a test pinning the "hard lift ≈ easy run" target so
   a regression is caught, not shipped.
+
+> **Status (shipped):** the mechanic itself is implemented in the
+> `training_load` parity pair — `computeLiftStress` (capped, RPE-weighted
+> tonnage), `aggregateDailyLiftStress`, and an optional `lifts` argument to
+> `computeTrainingLoadSeries` that adds a `source`-separable `runStress` /
+> `liftStress` split to every `TrainingLoadPoint`. The `CALIBRATION` test
+> pins a hard session into the easy-run TSS band and a separability test
+> proves the run-only curve is recoverable unchanged. **Not yet wired** to a
+> consumer — the dashboard chart keeps passing runs only until the gym
+> module feeds real `gym_workouts` into it.
 
 ## Sequencing, validation gates & risk controls
 
@@ -455,7 +467,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (new migration when nutrition starts) + Settings height/weight entry |
-| Lift load | `training_load.ts` / `.dart` gains `liftStress` + `source`-tagged daily contributions |
+| Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`; not yet wired to the dashboard) |
 | Cross-modality | `coach/context.ts` (bounded gym + 7-day nutrition summary); `home_screen` card composition |
 | Runner protection | Settings toggle: keep Run as the one-tap primary action |
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline; not yet wired into nav/sync — lands with the screens) |

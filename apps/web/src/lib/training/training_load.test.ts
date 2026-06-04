@@ -7,8 +7,23 @@ import {
 	computeTrainingLoadSeries,
 	localDateKey,
 	hasTrimpSignal,
+	computeLiftStress,
+	rpeFactor,
+	aggregateDailyLiftStress,
+	kLiftStressCap,
 	type RunForLoad,
+	type LiftForLoad,
 } from './training_load';
+
+/// A representative HARD lifting session — ~8,000 kg of working volume at
+/// RPE 8 (16 working sets of 8 reps at 62.5 kg). The calibration constant is
+/// anchored so this scores in the easy-run TSS band. If you retune
+/// kLiftStressPerKgTonnage, this test is the guard that "a hard lift ≈ an
+/// easy run" still holds.
+const kHardLiftSession: LiftForLoad = {
+	started_at: '2026-04-01T18:00:00Z',
+	sets: Array.from({ length: 16 }, () => ({ reps: 8, weight_kg: 62.5, rpe: 8 })),
+};
 
 const easy5k: RunForLoad = {
 	started_at: '2026-04-01T07:00:00Z',
@@ -232,4 +247,98 @@ test('computeTrainingLoadSeries — new user with no pre-window history still ra
 	// Day 1 of the chart is well before the runner's first run; CTL
 	// must still be ~0 there.
 	assert.ok(series[0].ctl < 1, `new user day-1 CTL should be ~0, got ${series[0].ctl}`);
+});
+
+// ─────────────────── Lift load ───────────────────
+
+test('rpeFactor — anchored at RPE 8 = 1.0, absent = 1.0, bounded', () => {
+	assert.equal(rpeFactor(8), 1.0);
+	assert.equal(rpeFactor(null), 1.0);
+	assert.equal(rpeFactor(undefined), 1.0);
+	assert.ok(rpeFactor(6) < 1.0 && rpeFactor(10) > 1.0);
+	assert.equal(rpeFactor(0), 0.5); // clamped low
+	assert.equal(rpeFactor(20), 1.25); // clamped high
+});
+
+test('CALIBRATION — a hard lift session scores in the easy-run TSS band (40-60)', () => {
+	const stress = computeLiftStress(kHardLiftSession);
+	assert.ok(
+		stress >= 40 && stress <= 60,
+		`hard lift should land in the easy-run band, got ${stress}`,
+	);
+});
+
+test('computeLiftStress — sets without reps or weight contribute nothing', () => {
+	const bodyweight: LiftForLoad = {
+		started_at: '2026-04-01T18:00:00Z',
+		sets: [
+			{ reps: 20, weight_kg: null }, // pull-ups, no external load
+			{ reps: null, weight_kg: 60 },
+			{ reps: 0, weight_kg: 60 },
+		],
+	};
+	assert.equal(computeLiftStress(bodyweight), 0);
+});
+
+test('computeLiftStress — a fat-fingered weight is capped, cannot spike the curve', () => {
+	const typo: LiftForLoad = {
+		started_at: '2026-04-01T18:00:00Z',
+		sets: [{ reps: 5, weight_kg: 50000, rpe: 8 }], // 500 kg → 50,000 typo
+	};
+	assert.equal(computeLiftStress(typo), kLiftStressCap);
+});
+
+test('aggregateDailyLiftStress — sums by local day, skips empty sessions', () => {
+	const daily = aggregateDailyLiftStress([
+		kHardLiftSession,
+		{ ...kHardLiftSession }, // same day → summed
+		{ started_at: '2026-04-02T18:00:00Z', sets: [{ reps: 10, weight_kg: null }] }, // 0
+	]);
+	const day1 = localDateKey(new Date(kHardLiftSession.started_at));
+	assert.ok((daily.get(day1) ?? 0) > 80); // two hard sessions stacked
+	assert.equal(daily.has('2026-04-02'), false);
+});
+
+test('lift stress is separable — run-only series is recoverable, lifts raise fatigue', () => {
+	const ref = new Date('2026-05-01T12:00:00Z');
+	const runDay = new Date(ref);
+	runDay.setDate(runDay.getDate() - 1);
+	const runs: RunForLoad[] = [
+		{ started_at: runDay.toISOString(), distance_m: 8000, duration_s: 2400 },
+	];
+	const liftDay = new Date(ref);
+	liftDay.setDate(liftDay.getDate() - 1);
+	const lifts: LiftForLoad[] = [{ ...kHardLiftSession, started_at: liftDay.toISOString() }];
+
+	const runOnly = computeTrainingLoadSeries(runs, {}, 90, ref);
+	const withLifts = computeTrainingLoadSeries(runs, {}, 90, ref, lifts);
+
+	// Run-only curve is unchanged by passing or omitting lifts — provenance
+	// is separable, so a lift-load bug can never corrupt run readiness.
+	assert.deepEqual(
+		withLifts.map((p) => p.runStress),
+		runOnly.map((p) => p.stress),
+		'runStress with lifts must equal the run-only total',
+	);
+	// Yesterday's point carries the lift contribution on top of the run.
+	const last = withLifts[withLifts.length - 2];
+	assert.ok(last.liftStress > 0, 'lift day should carry lift stress');
+	assert.ok(last.stress > last.runStress, 'total exceeds run-only on a lift day');
+	// Fatigue (ATL) is higher with the lift than without.
+	assert.ok(
+		withLifts[withLifts.length - 1].atl > runOnly[runOnly.length - 1].atl,
+		'lifting should raise fatigue on the shared curve',
+	);
+});
+
+test('computeTrainingLoadSeries — no lifts leaves liftStress 0 and stress unchanged', () => {
+	const ref = new Date('2026-05-01T12:00:00Z');
+	const runDay = new Date(ref);
+	runDay.setDate(runDay.getDate() - 2);
+	const runs: RunForLoad[] = [
+		{ started_at: runDay.toISOString(), distance_m: 5000, duration_s: 1500 },
+	];
+	const series = computeTrainingLoadSeries(runs, {}, 90, ref);
+	assert.ok(series.every((p) => p.liftStress === 0));
+	assert.ok(series.every((p) => p.stress === p.runStress));
 });

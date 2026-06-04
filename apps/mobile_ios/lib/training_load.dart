@@ -22,17 +22,90 @@ class HrPrefs {
 
 class TrainingLoadPoint {
   final DateTime date;
+
+  /// Total daily stress (run + lift). Equals runStress when no lifts are
+  /// passed, so the run-only curve is unchanged.
   final double stress;
+
+  /// Provenance split — runStress is always recoverable so a lift-load bug
+  /// can't corrupt run-only readiness. liftStress is 0 when no lifts pass.
+  final double runStress;
+  final double liftStress;
   final double atl;
   final double ctl;
   final double tsb;
   const TrainingLoadPoint({
     required this.date,
     required this.stress,
+    this.runStress = 0,
+    this.liftStress = 0,
     required this.atl,
     required this.ctl,
     required this.tsb,
   });
+}
+
+// ─────────────────── Lift load (Phase 4 multi-modal, decisions §63) ───────────────────
+//
+// Dart twin of the lift-load block in
+// `apps/web/src/lib/training/training_load.ts` — keep behaviour in lockstep
+// (multi_modal.md § "Lift training-load spec"). Lifts feed the SAME daily
+// series as runs but carry separable provenance: pass no lifts and the
+// run-only curve a runner trusts is recoverable unchanged.
+
+class LiftSetForLoad {
+  final num? reps;
+  final num? weightKg;
+  final num? rpe;
+  const LiftSetForLoad({this.reps, this.weightKg, this.rpe});
+}
+
+class LiftForLoad {
+  final DateTime startedAt;
+  final List<LiftSetForLoad> sets;
+  const LiftForLoad({required this.startedAt, required this.sets});
+}
+
+/// Tonnage → stress. Calibrated against a ~8,000 kg hard session at RPE 8 so
+/// it scores ≈50 — the easy-run TSS band.
+const double kLiftStressPerKgTonnage = 50 / 8000;
+
+/// Per-session hard cap so a typo'd weight can't spike the shared curve.
+const double kLiftStressCap = 150;
+
+/// RPE → intensity multiplier, anchored at RPE 8 = 1.0; absent RPE = 1.0;
+/// bounded so a stray value can't dominate tonnage.
+double rpeFactor(num? rpe) {
+  if (rpe == null || !rpe.toDouble().isFinite) return 1.0;
+  final f = 0.5 + rpe / 16;
+  return math.max(0.5, math.min(1.25, f.toDouble()));
+}
+
+/// Per-session lift stress: `k · Σ(reps · weight_kg · rpeFactor)`, capped.
+/// Sets missing reps or weight contribute nothing.
+double computeLiftStress(LiftForLoad lift) {
+  var weighted = 0.0;
+  for (final s in lift.sets) {
+    final reps = s.reps;
+    final weight = s.weightKg;
+    if (reps == null || reps <= 0 || weight == null || weight <= 0) continue;
+    weighted += reps * weight * rpeFactor(s.rpe);
+  }
+  final stress = weighted * kLiftStressPerKgTonnage;
+  return math.min(stress, kLiftStressCap);
+}
+
+/// Sum lift stress by local calendar day, mirroring aggregateDailyStress.
+Map<DateTime, double> aggregateDailyLiftStress(List<LiftForLoad> lifts) {
+  final out = <DateTime, double>{};
+  for (final l in lifts) {
+    final stress = computeLiftStress(l);
+    if (stress <= 0) continue;
+    final local = l.startedAt.toLocal();
+    final key = DateTime(local.year, local.month, local.day);
+    out[key] = (out[key] ?? 0) + stress;
+  }
+  return out;
 }
 
 /// Stress-model calibration for a window. Persona-hunt finding Pro #2
@@ -175,8 +248,10 @@ List<TrainingLoadPoint> computeTrainingLoadSeries(
   HrPrefs prefs = const HrPrefs(),
   int windowDays = 90,
   DateTime? endDate,
+  List<LiftForLoad> lifts = const [],
 }) {
   final daily = aggregateDailyStress(runs, prefs);
+  final dailyLift = aggregateDailyLiftStress(lifts);
   final atlAlpha = 1 - math.exp(-1 / 7);
   final ctlAlpha = 1 - math.exp(-1 / 42);
 
@@ -216,18 +291,22 @@ List<TrainingLoadPoint> computeTrainingLoadSeries(
   for (var i = 0; i < warmupDays; i++) {
     final day = DateTime(today.year, today.month,
         today.day - (windowDays - 1) - warmupDays + i);
-    step((daily[day] ?? 0).toDouble());
+    step((daily[day] ?? 0).toDouble() + (dailyLift[day] ?? 0).toDouble());
   }
 
   final points = <TrainingLoadPoint>[];
   for (var i = 0; i < windowDays; i++) {
     final day =
         DateTime(today.year, today.month, today.day - (windowDays - 1) + i);
-    final stress = (daily[day] ?? 0).toDouble();
+    final runStress = (daily[day] ?? 0).toDouble();
+    final liftStress = (dailyLift[day] ?? 0).toDouble();
+    final stress = runStress + liftStress;
     step(stress);
     points.add(TrainingLoadPoint(
       date: day,
       stress: stress,
+      runStress: _round2(runStress),
+      liftStress: _round2(liftStress),
       atl: _round2(atl),
       ctl: _round2(ctl),
       tsb: _round2(ctl - atl),

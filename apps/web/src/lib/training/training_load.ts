@@ -170,9 +170,92 @@ export function aggregateDailyStress(runs: RunForLoad[], prefs: HrPrefs = {}): M
 	return out;
 }
 
+// ─────────────────── Lift load (Phase 4 multi-modal, decisions §63) ───────────────────
+//
+// Lifts feed the SAME daily-stress series as runs so a heavy gym session
+// raises fatigue and the recovery advisor reflects it (multi_modal.md §
+// "Lift training-load spec"). Two hard rules from the spec:
+//
+//   1. Calibrated, capped. Session stress = k · Σ(reps · weight_kg ·
+//      rpeFactor), with k chosen so a typical hard session lands in the
+//      easy-run TSS band (≈40-60), not 10× it, and a per-session cap so a
+//      data-entry typo (500 kg bench) can't spike the curve. The
+//      kHardLiftSession fixture + its calibration test pin this.
+//   2. Separable provenance. Lift stress is tagged `source: 'lift'` and the
+//      run-only readiness a runner trusts is always recoverable — call
+//      computeTrainingLoadSeries WITHOUT lifts and you get the run-only
+//      curve unchanged. A lift-load bug can never silently corrupt it.
+
+export type StressSource = 'run' | 'lift';
+
+export interface LiftSetForLoad {
+	reps: number | null;
+	weight_kg: number | null;
+	rpe?: number | null;
+}
+
+export interface LiftForLoad {
+	started_at: string;
+	sets: LiftSetForLoad[];
+}
+
+/// Tonnage → stress. Calibrated against `kHardLiftSession` (~8,000 kg of
+/// working volume at RPE 8) so it scores ≈50 — squarely in the easy-run TSS
+/// band. The calibration test pins this so a constant drift is caught, not
+/// shipped.
+export const kLiftStressPerKgTonnage = 50 / 8000;
+
+/// Per-session hard cap. A pathological tonnage (typo, fat-fingered weight)
+/// can't push a single session past this onto the shared curve.
+export const kLiftStressCap = 150;
+
+/// RPE → intensity multiplier, anchored at RPE 8 = 1.0 (a normal "hard"
+/// working set). Absent RPE defaults to 1.0 so a session logged without RPE
+/// scores on tonnage alone. Bounded so a stray RPE can't dominate tonnage.
+export function rpeFactor(rpe: number | null | undefined): number {
+	const r = numericOrNull(rpe);
+	if (r == null) return 1.0;
+	return Math.max(0.5, Math.min(1.25, 0.5 + r / 16));
+}
+
+/// Per-session lift stress: `k · Σ(reps · weight_kg · rpeFactor)`, capped.
+/// Sets missing reps or weight contribute nothing (a bodyweight set has no
+/// external tonnage to score — until bodyweight-load lands in a depth tier).
+export function computeLiftStress(lift: LiftForLoad): number {
+	let weighted = 0;
+	for (const s of lift.sets) {
+		const reps = numericOrNull(s.reps);
+		const weight = numericOrNull(s.weight_kg);
+		if (reps == null || reps <= 0 || weight == null || weight <= 0) continue;
+		weighted += reps * weight * rpeFactor(s.rpe);
+	}
+	const stress = weighted * kLiftStressPerKgTonnage;
+	return Math.min(stress, kLiftStressCap);
+}
+
+/// Sum lift stress by local calendar day, mirroring aggregateDailyStress for
+/// runs. Kept separate so run-only and lift-only daily series never mingle
+/// until the caller explicitly combines them.
+export function aggregateDailyLiftStress(lifts: LiftForLoad[]): Map<string, number> {
+	const out = new Map<string, number>();
+	for (const l of lifts) {
+		const stress = computeLiftStress(l);
+		if (stress <= 0) continue;
+		const key = localDateKey(new Date(l.started_at));
+		out.set(key, (out.get(key) ?? 0) + stress);
+	}
+	return out;
+}
+
 export interface TrainingLoadPoint {
 	date: string;
+	/// Total daily stress (run + lift). Equals runStress when no lifts are
+	/// passed, so the run-only curve is unchanged.
 	stress: number;
+	/// Provenance split — runStress is always recoverable so a lift-load bug
+	/// can't corrupt run-only readiness. liftStress is 0 when no lifts pass.
+	runStress: number;
+	liftStress: number;
 	atl: number;
 	ctl: number;
 	tsb: number;
@@ -194,9 +277,11 @@ export function computeTrainingLoadSeries(
 	runs: RunForLoad[],
 	prefs: HrPrefs = {},
 	windowDays = 90,
-	endDate: Date = new Date()
+	endDate: Date = new Date(),
+	lifts: LiftForLoad[] = []
 ): TrainingLoadPoint[] {
 	const daily = aggregateDailyStress(runs, prefs);
+	const dailyLift = aggregateDailyLiftStress(lifts);
 	const atlAlpha = 1 - Math.exp(-1 / 7);
 	const ctlAlpha = 1 - Math.exp(-1 / 42);
 
@@ -239,7 +324,8 @@ export function computeTrainingLoadSeries(
 	warmupCursor.setHours(0, 0, 0, 0);
 	warmupCursor.setDate(warmupCursor.getDate() - (windowDays - 1) - WARMUP_DAYS);
 	for (let i = 0; i < WARMUP_DAYS; i++) {
-		step(daily.get(localDateKey(warmupCursor)) ?? 0);
+		const key = localDateKey(warmupCursor);
+		step((daily.get(key) ?? 0) + (dailyLift.get(key) ?? 0));
 		warmupCursor.setDate(warmupCursor.getDate() + 1);
 	}
 
@@ -250,11 +336,15 @@ export function computeTrainingLoadSeries(
 
 	for (let i = 0; i < windowDays; i++) {
 		const key = localDateKey(cursor);
-		const stress = daily.get(key) ?? 0;
+		const runStress = daily.get(key) ?? 0;
+		const liftStress = dailyLift.get(key) ?? 0;
+		const stress = runStress + liftStress;
 		step(stress);
 		points.push({
 			date: key,
 			stress,
+			runStress: round2(runStress),
+			liftStress: round2(liftStress),
 			atl: round2(atl),
 			ctl: round2(ctl),
 			tsb: round2(ctl - atl),
