@@ -237,6 +237,79 @@ void main() {
     });
   });
 
+  group('_rewriteAll crash-atomic ordering', () {
+    List<String> jsonFiles() => dir
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last)
+        .where((n) => n.endsWith('.json'))
+        .toList();
+    List<String> tmpFiles() => dir
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last)
+        .where((n) => n.endsWith('.tmp'))
+        .toList();
+
+    test('removes files for ids dropped server-side, keeps pending, no temp '
+        'files left', () async {
+      await store.replaceFromServer([
+        _serverWorkout('w1', title: 'One'),
+        _serverWorkout('w2', title: 'Two'),
+      ]);
+      final mine = await store.createLocal(
+          title: 'Offline', startedAt: DateTime.utc(2026, 6, 4));
+      expect(jsonFiles(), hasLength(3));
+
+      // Server no longer returns w2 — replaceFromServer must clean up its
+      // orphaned file without wiping the directory or losing the pending
+      // create.
+      await store.replaceFromServer([_serverWorkout('w1', title: 'One')]);
+
+      expect(store.byId('w1'), isNotNull);
+      expect(store.byId('w2'), isNull);
+      expect(store.byId(mine.id), isNotNull,
+          reason: 'pendingCreate survives the rewrite');
+      expect(tmpFiles(), isEmpty, reason: 'atomic writes leave no .tmp behind');
+
+      // The on-disk state must match the live rows exactly — a fresh store
+      // reads back only w1 + the pending create.
+      final reloaded = LocalGymStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.workouts.map((w) => w.id).toSet(), {'w1', mine.id});
+    });
+
+    test('per-write failure isolation: one bad row keeps its prior state, '
+        'other rows still rewrite, orphans still cleaned', () async {
+      // A directory sitting where a row file should be makes that row's
+      // atomic rename fail, while the other rows write normally.
+      Directory('${dir.path}/bad.json').createSync();
+      // A stale file for an id no longer in the store — must be cleaned.
+      File('${dir.path}/orphan.json').writeAsStringSync('{}');
+
+      // replaceFromServer rebuilds _rows then calls _rewriteAll. The 'bad'
+      // write throws; without per-write isolation the whole rewrite would
+      // abort (ok-2 unwritten, orphan never deleted) and the exception
+      // would surface here.
+      await store.replaceFromServer([
+        _serverWorkout('ok-1', title: 'One'),
+        _serverWorkout('ok-2', title: 'Two'),
+        _serverWorkout('bad', title: 'Bad'),
+      ]);
+
+      expect(jsonFiles(), containsAll(['ok-1.json', 'ok-2.json']),
+          reason: 'the good rows write despite the bad one failing');
+      expect(jsonFiles(), isNot(contains('orphan.json')),
+          reason: 'orphan cleanup still runs after a write failure');
+      expect(Directory('${dir.path}/bad.json').existsSync(), isTrue,
+          reason: "the bad row's prior on-disk state is kept, not deleted");
+      expect(tmpFiles(), isEmpty,
+          reason: 'a failed atomic write cleans up its own .tmp sibling');
+      expect(store.byId('ok-1'), isNotNull);
+      expect(store.byId('ok-2'), isNotNull);
+    });
+  });
+
   group('syncWithServer drain', () {
     test('drains pendingCreate via createGymWorkout with the local id + sets',
         () async {

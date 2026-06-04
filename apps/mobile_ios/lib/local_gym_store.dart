@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -359,20 +360,44 @@ class LocalGymStore extends ChangeNotifier {
   Future<void> _persist(StoredGymWorkout stored) async {
     _rows[stored.id] = stored;
     final file = File('${_dir!.path}/${stored.id}.json');
-    await file.writeAsString(jsonEncode(stored.toJson()));
+    await writeJsonAtomic(file, stored.toJson());
     notifyListeners();
   }
 
+  /// Re-point the on-disk state at the current `_rows`. Writes every
+  /// workout first — each through `writeJsonAtomic`, which writes a `.tmp`
+  /// sibling then renames it over the target, so a crash mid-rewrite leaves
+  /// either the prior file or the fully written new one, never a partial or
+  /// a wiped directory (which would silently lose unsynced pendingCreate
+  /// workouts). Only once the new state is durably on disk do we delete
+  /// files for ids that no longer exist.
+  ///
+  /// Both passes isolate per-file failures so one bad row can't abort the
+  /// rest. A row whose write throws is still added to `keep` so its prior
+  /// file (left intact by the atomic write) isn't then deleted as an orphan
+  /// — degrading to "this row keeps its last-good version" rather than
+  /// losing it.
   Future<void> _rewriteAll() async {
-    if (_dir == null) return;
-    for (final entity in _dir!.listSync()) {
-      if (entity is File && entity.path.endsWith('.json')) {
-        entity.deleteSync();
+    final dir = _dir;
+    if (dir == null) return;
+    final keep = <String>{};
+    for (final stored in _rows.values) {
+      final file = File('${dir.path}/${stored.id}.json');
+      keep.add(file.path);
+      try {
+        await writeJsonAtomic(file, stored.toJson());
+      } catch (e) {
+        debugPrint('local_gym_store: rewrite write failed ${file.path}: $e');
       }
     }
-    for (final stored in _rows.values) {
-      final file = File('${_dir!.path}/${stored.id}.json');
-      await file.writeAsString(jsonEncode(stored.toJson()));
+    for (final entity in dir.listSync()) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      if (keep.contains(entity.path)) continue;
+      try {
+        await entity.delete();
+      } catch (e) {
+        debugPrint('local_gym_store: orphan delete failed ${entity.path}: $e');
+      }
     }
   }
 
