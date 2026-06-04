@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.lifecycle.ViewModelProvider
 import androidx.wear.ambient.AmbientLifecycleObserver
 import com.runapp.watchwear.ui.RunWatchApp
+import com.runapp.watchwear.ui.TileSource
 import io.sentry.android.core.SentryAndroid
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -68,5 +69,12 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         vm.refreshBatteryOptimisation()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        // Hand the decoded-tile bitmap cache back to the OS under memory
+        // pressure; tiles re-decode from disk on the next draw.
+        TileSource.get(this).trimMemory(level)
     }
 }

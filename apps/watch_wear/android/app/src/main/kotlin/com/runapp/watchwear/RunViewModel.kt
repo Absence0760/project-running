@@ -513,6 +513,13 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
         supabase.clearCredentials()
         sessionStore.clear()
         routeStore.clear()
+        // Drop cached map tiles too — prefetched route tiles reveal where
+        // the signed-out user runs, so they don't carry over to the next
+        // user on this watch.
+        try {
+            com.runapp.watchwear.ui.TileSource.get(getApplication()).clear()
+        } catch (_: Throwable) {
+        }
         authReady.value = false
         _state.value = _state.value.copy(
             authed = false,

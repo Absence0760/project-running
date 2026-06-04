@@ -8,7 +8,9 @@ import androidx.compose.ui.graphics.asImageBitmap
 import com.runapp.watchwear.BuildConfig
 import com.runapp.watchwear.recording.MercatorTiles
 import com.runapp.watchwear.recording.RouteMath
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -78,6 +80,11 @@ class TileSource private constructor(context: Context) {
     // overshoot tiles, with headroom for the next-zoom tier when the
     // runner pans.
     private val memoryCache = LruCache<String, ImageBitmap>(64)
+
+    // Long-lived IO scope for fire-and-forget disk eviction triggered
+    // from main-thread callers (e.g. sign-out). Process-singleton, so it
+    // never needs cancelling.
+    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /// Synchronous in-memory peek. Returns the decoded bitmap if it's
     /// still in the LRU, or null if it'd require a disk hit. Used by
@@ -170,6 +177,47 @@ class TileSource private constructor(context: Context) {
         }
     }
 
+    /// Evict everything — the in-memory decoded bitmaps and the OkHttp
+    /// disk cache. Called on sign-out so the next user on this watch
+    /// can't pull the previous user's prefetched route tiles (which
+    /// reveal where they run) back off disk, and from `trimMemory` under
+    /// the most severe OS pressure. Memory eviction is synchronous and
+    /// cheap; the disk eviction (which deletes the journal + entries)
+    /// runs on IO.
+    suspend fun clear() {
+        memoryCache.evictAll()
+        withContext(Dispatchers.IO) {
+            try {
+                client.cache?.evictAll()
+            } catch (e: Exception) {
+                // Best-effort: a concurrent fetch can hold the cache lock.
+                // Leaving stale tiles on disk is harmless (OkHttp caps at
+                // 50 MB) — never crash the sign-out path over it.
+            }
+        }
+    }
+
+    /// React to an `onTrimMemory` callback. The in-memory decoded-bitmap
+    /// cache is the RAM consumer worth dropping under pressure — the
+    /// tiles re-decode from the OkHttp disk cache on the next draw, so
+    /// the only cost is a one-frame midnight flash. At the most severe
+    /// level (the app is next on the OS kill list) also hand the disk
+    /// cache back. Fire-and-forget because `onTrimMemory` runs on the
+    /// main thread. The level→disk decision is the pure
+    /// [shouldEvictDiskOnTrim] helper so it's unit-testable.
+    fun trimMemory(level: Int) {
+        memoryCache.evictAll()
+        if (shouldEvictDiskOnTrim(level)) {
+            ioScope.launch {
+                try {
+                    client.cache?.evictAll()
+                } catch (e: Exception) {
+                    // See clear(): best-effort.
+                }
+            }
+        }
+    }
+
     companion object {
         @Volatile private var instance: TileSource? = null
 
@@ -184,6 +232,19 @@ class TileSource private constructor(context: Context) {
         }
     }
 }
+
+/// Decide whether an `onTrimMemory` at [level] should also evict the
+/// OkHttp disk cache (not just the in-memory bitmaps). Only at
+/// `TRIM_MEMORY_COMPLETE` (80) — the point where the OS says the app is
+/// the next process it will kill — is it worth the disk churn of
+/// dropping cached tiles. Lighter levels evict the memory cache only.
+///
+/// File-level `internal` so the threshold is exercised without an
+/// Android `TileSource` instance; the `ComponentCallbacks2` constant is
+/// a compile-time `static final int`, so the comparison is inlined and
+/// the helper touches no Android class at runtime.
+internal fun shouldEvictDiskOnTrim(level: Int): Boolean =
+    level >= android.content.ComponentCallbacks2.TRIM_MEMORY_COMPLETE
 
 /// Decide whether [TileSource] should fetch tiles at all. Returns
 /// true iff either the dev override [template] OR the production
