@@ -49,12 +49,12 @@ type MatchOutput struct {
 // MatchedTrackRow is the subset of run_matched_tracks the worker writes
 // after a successful match. PATCH'd via PostgREST.
 type MatchedTrackRow struct {
-	Status            string     `json:"status"`
-	MatchedTrackURL   string     `json:"matched_track_url"`
-	MatchedAt         *time.Time `json:"matched_at,omitempty"`
-	Algorithm         string     `json:"algorithm"`
-	AlgorithmVersion  string     `json:"algorithm_version"`
-	ErrorMessage      *string    `json:"error_message"`
+	Status           string     `json:"status"`
+	MatchedTrackURL  string     `json:"matched_track_url"`
+	MatchedAt        *time.Time `json:"matched_at,omitempty"`
+	Algorithm        string     `json:"algorithm"`
+	AlgorithmVersion string     `json:"algorithm_version"`
+	ErrorMessage     *string    `json:"error_message"`
 }
 
 // RouteMatchCandidate is a row returned by the
@@ -62,11 +62,11 @@ type MatchedTrackRow struct {
 // as the Dart core_models class — keeping the names in sync helps
 // when the worker logs hint at a client-side discrepancy.
 type RouteMatchCandidate struct {
-	ID            string  `json:"id"`
-	Name          string  `json:"name"`
-	DistanceM     float64 `json:"distance_m"`
-	StartOffsetM  float64 `json:"start_offset_m"`
-	EndOffsetM    float64 `json:"end_offset_m"`
+	ID           string  `json:"id"`
+	Name         string  `json:"name"`
+	DistanceM    float64 `json:"distance_m"`
+	StartOffsetM float64 `json:"start_offset_m"`
+	EndOffsetM   float64 `json:"end_offset_m"`
 }
 
 // IntegrationRow is the minimal projection of `integrations` the
@@ -154,6 +154,33 @@ type NotificationRow struct {
 type LifecycleEmailPayload struct {
 	UserID   string `json:"user_id"`
 	Template string `json:"template"`
+}
+
+// SafetyEmailPayload is the payload for `kind='safety_email'` jobs
+// (migration 20261218_001). Safety-contact mail is neither channel: it has
+// no notifications row (so not notification_email) and the recipient may be
+// a non-user identified only by an email + the copy carries per-finish
+// context (so not lifecycle_email). Two templates:
+//   - "confirm": the opt-in request, enqueued by the safety_contacts AFTER
+//     INSERT trigger; carries the confirm_token for the email-link confirm.
+//   - "finish": the finish alert, enqueued by the runs AFTER INSERT trigger
+//     for every CONFIRMED contact regardless of is_public; carries the run
+//     facts (distance/time).
+//
+// ContactEmail is always set (the address the alert goes to). ContactUserID
+// is set only for a contact linked to an app account — used purely to
+// localize the mail to their language; it is NOT a preference gate (a safety
+// contact opted in explicitly and must not be silenced by the runner's
+// email_notifications setting). decisions §123.
+type SafetyEmailPayload struct {
+	Template      string  `json:"template"`
+	ContactUserID *string `json:"contact_user_id"`
+	ContactEmail  string  `json:"contact_email"`
+	OwnerName     string  `json:"owner_name"`
+	RunID         *string `json:"run_id"`
+	DistanceM     float64 `json:"distance_m"`
+	DurationS     int     `json:"duration_s"`
+	ConfirmToken  string  `json:"confirm_token"`
 }
 
 // StravaActivity is the subset of Strava's `/api/v3/activities/{id}`

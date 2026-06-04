@@ -268,6 +268,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleNotificationEmail(ctx, job)
 	case "lifecycle_email":
 		return w.handleLifecycleEmail(ctx, job)
+	case "safety_email":
+		return w.handleSafetyEmail(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

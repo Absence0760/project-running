@@ -122,18 +122,18 @@ func extractAddr(from string) string {
 // turns it into the text + HTML parts so every email shares one layout and
 // adding a template is just filling these fields.
 type emailContent struct {
-	lang      string   // <html lang> (BCP-47); "" → "en"
-	subject   string
-	preheader string   // inbox preview snippet
-	heading   string   // H1
-	body      []string // paragraphs
-	ctaLabel  string   // button text ("" → no button)
-	ctaURL    string
-	footer    string // "why you're receiving this" line (localized by caller)
-	prefsURL  string // manage-preferences link in the footer ("" → omit)
-	prefsLabel string // localized "Manage email preferences" link text
+	lang            string // <html lang> (BCP-47); "" → "en"
+	subject         string
+	preheader       string   // inbox preview snippet
+	heading         string   // H1
+	body            []string // paragraphs
+	ctaLabel        string   // button text ("" → no button)
+	ctaURL          string
+	footer          string // "why you're receiving this" line (localized by caller)
+	prefsURL        string // manage-preferences link in the footer ("" → omit)
+	prefsLabel      string // localized "Manage email preferences" link text
 	prefsTextPrefix string // localized plain-text footer prefix
-	listUnsub string // List-Unsubscribe header value ("" → none)
+	listUnsub       string // List-Unsubscribe header value ("" → none)
 }
 
 func composeEmail(c emailContent) Email {
@@ -372,6 +372,83 @@ func renderLifecycleEmail(template, baseURL, locale string) (Email, bool) {
 		prefsTextPrefix: shared.managePrefsTextPrefix,
 		// transactional — no List-Unsubscribe.
 	}), true
+}
+
+// ─────────────────── safety-contact templates (pure) ───────────────────
+
+// renderSafetyEmail renders a safety-contact email. Returns ok=false for an
+// unknown template. Safety mail is transactional/opt-in — no
+// List-Unsubscribe and no manage-preferences link (the recipient opted in
+// to this specific relationship; they manage it via the in-app safety page
+// or the confirm-decline path, not the email_notifications preference).
+//
+// Dynamic copy (owner name, distance, time, confirm token) is interpolated
+// here from the catalogue's format strings; composeEmail/renderHTMLBody
+// HTML-escape every interpolated value.
+func renderSafetyEmail(p SafetyEmailPayload, baseURL, locale string) (Email, bool) {
+	base := strings.TrimRight(baseURL, "/")
+	loc := normalizeEmailLocale(locale)
+	shared := lookupEmailShared(loc)
+
+	owner := strings.TrimSpace(p.OwnerName)
+	if owner == "" {
+		owner = shared.safetyDefaultOwner
+	}
+
+	switch p.Template {
+	case "finish":
+		s := lookupEmailStrings(loc, "safety_finish")
+		return composeEmail(emailContent{
+			lang:      loc,
+			subject:   fmt.Sprintf(s.subject, owner),
+			preheader: s.preheader,
+			heading:   fmt.Sprintf(s.heading, owner),
+			body: []string{
+				fmt.Sprintf(s.body[0], formatDistanceKm(p.DistanceM), formatDurationHM(p.DurationS)),
+				s.body[1],
+			},
+			ctaLabel: s.cta,
+			ctaURL:   base,
+			footer:   shared.footerSafety,
+		}), true
+	case "confirm":
+		s := lookupEmailStrings(loc, "safety_confirm")
+		return composeEmail(emailContent{
+			lang:      loc,
+			subject:   fmt.Sprintf(s.subject, owner),
+			preheader: s.preheader,
+			heading:   fmt.Sprintf(s.heading, owner),
+			body: []string{
+				fmt.Sprintf(s.body[0], owner),
+				s.body[1],
+			},
+			ctaLabel: s.cta,
+			ctaURL:   base + "/safety/confirm?token=" + p.ConfirmToken,
+			footer:   shared.footerSafety,
+		}), true
+	default:
+		return Email{}, false
+	}
+}
+
+// formatDistanceKm renders metres as km with two decimals — locale-neutral
+// (the email's words localize, the number doesn't, matching the other
+// templates). A safety alert favours an unambiguous metric figure.
+func formatDistanceKm(metres float64) string {
+	return fmt.Sprintf("%.2f km", metres/1000)
+}
+
+// formatDurationHM renders seconds as "Hh MMm" (or "Mm" under an hour).
+func formatDurationHM(seconds int) string {
+	if seconds < 0 {
+		seconds = 0
+	}
+	h := seconds / 3600
+	m := (seconds % 3600) / 60
+	if h > 0 {
+		return fmt.Sprintf("%dh %02dm", h, m)
+	}
+	return fmt.Sprintf("%dm", m)
 }
 
 // lifecycleCtaURL maps a lifecycle template to its CTA target.
