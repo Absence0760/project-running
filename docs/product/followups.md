@@ -9,6 +9,16 @@ What's left after the gap-closure + persona-hunt sessions. Shipped work has been
 
 Every item below is one of: (a) blocked on an external credential / account, (b) an operator deploy step on code that's already merged, or (c) a sized-but-unstarted feature awaiting a product green-light.
 
+## Data-architecture remediation — Round 4 (activity-model client switch)
+
+The backend + server-side half of the activity-model canonicalization landed (F1 `20261206_001`, F3/F18 `20261207_001`, F8 `20261208_001`): `runs.kind` dropped, `activity_type` + `is_dnf` promoted to real `runs` columns, `food_log.logged_at` → `started_at`. Server reads/writes (views, triggers, PR refresher, gear auto-tag, Go worker, Edge Functions, `api_client.saveRun` dual-write) all use the columns. **The Tier-2 client read/write-site switch is the remaining work** — until it lands, web/mobile read the now-stripped jsonb keys (silently `null`) or query the renamed column (PostgREST 400). Authoritative site list: [`docs/backend/metadata.md` → "Promoted to real columns"](../backend/metadata.md).
+
+- **activity_type / is_dnf bag → column (F3 Tier-2).** Switch every client read/write off `metadata['activity_type']` / `metadata['is_dnf']` onto the columns:
+  - **Web:** `runs/[id]/+page.svelte` (reads activity_type; DNF checkbox writes `metadata.is_dnf`; DNF chip), `core/data.ts` (`createManualRun`/`saveRun` write the bag keys), `integrations/strava-zip.ts` + `garmin-zip.ts` (write `metadata.activity_type`), `backup/backup.ts` + `training/goals.ts` (read it). Add a narrow `ActivityType` TS union + a `runs.activity_type` entry to `check_constraint_unions.mjs` PAIRS when you do (the CHECK exists, the union doesn't yet).
+  - **Mobile (+ iOS twin):** `run_screen.dart`, `add_run_screen.dart`, `health_connect_importer.dart`, `strava_importer.dart`, `run_detail_screen.dart` (`applyDnfFlag`); then drop the `MetadataKeys.activityType`/`isDnf` constants + `api_client.saveRun`'s bag→column dual-write shim.
+  - **Watch bridge:** `WatchRunMetadata.kt` / watchOS `ContentView`/`SupabaseService` still carry `activity_type` in WCSession metadata; the phone-ingest path should write the column.
+- **food_log.logged_at → started_at client sites (F8 Tier-2).** `apps/web/src/lib/coach/context.ts` (`.select/.gte/.order('logged_at')` + its hand-rolled `FoodLogRow` interface field), and `apps/mobile_android/lib/local_food_store.dart` (+ iOS twin) — rename the local on-disk JSON key + the `FoodEntry.loggedAt` field + `ApiClient.logFood`'s `loggedAt` param when `LocalFoodStore` is wired into nav/sync.
+
 ## Phase 4 (multi-modal) — session handoff groups
 
 The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work, sliced into chunks that can be handed to **separate Claude sessions**. The slicing rule is **clean file ownership**, because concurrent sessions share one working tree + git index (CLAUDE.md § "Working alongside other Claude sessions") — two sessions editing the same file clobber each other. **Each session should run in its own git worktree** (`git worktree add ../run-<slug> -b <branch>`).

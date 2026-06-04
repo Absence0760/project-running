@@ -26,14 +26,20 @@ create table runs (
   route_id      uuid references routes,     -- linked planned route, if any
   event_id      uuid references events,     -- linked club event instance, if any
   source        text not null,              -- see RunSource enum below
+  activity_type text not null default 'run' -- run|walk|hike|cycle|stroller (CHECK). Promoted from metadata in 20261207_001 (F3)
+                check (activity_type in ('run','walk','hike','cycle','stroller')),
+  is_dnf        boolean not null default false, -- did-not-finish; PR engine excludes these. Promoted from metadata in 20261207_001 (F3)
   external_id   text unique,                -- deduplication key
-  metadata      jsonb,                      -- source-specific extra fields
+  metadata      jsonb,                      -- source-specific extra fields (avg_bpm, steps, elevation_m, provider ids, …)
   track_url     text,                       -- Storage path: {user_id}/{run_id}.json.gz
   hr_series_url text,                        -- Storage path: {user_id}/{run_id}.hr.json.gz (indoor/trackless HR series)
   is_public     boolean default false,      -- visible at /share/run/{id}
   created_at    timestamptz default now(),
   updated_at    timestamptz default now()
 );
+-- NB: there is no `kind` column. 20261204_001 added one as a future
+-- modality discriminator; 20261206_001 (F1/D1) dropped it as vestigial —
+-- `runs` is running-only and the `activities` view is the modality union.
 
 -- Index for timeline queries
 create index runs_user_started_at on runs (user_id, started_at desc);
@@ -93,6 +99,7 @@ when `bpm` is absent.
 - strips audit/sync/training-plan-linkage keys from `metadata` (denylist in lockstep with [metadata.md](metadata.md)'s "Public-safe?" column — `imported_from`, `*_id`, `*_activity_type`, `last_modified_at`, `recovered_from_crash`, `in_progress*`, `manual_entry`, `indoor_estimated`, `distance_source`, `plan_workout_id`, `workout_step_results`, `workout_adherence`, `source_file`, `max_bpm`),
 - nulls `route_id` / `event_id` when the joined route or event isn't itself public (via SECURITY DEFINER helpers `is_public_route_by_id` / `is_public_event_by_id`),
 - restricts to `is_public = true`,
+- exposes `activity_type` + `is_dnf` as **columns** (public-safe — both were public-safe metadata keys before they were promoted to real columns in `20261207_001`, F3; the view now selects the columns and the keys no longer ride in the `metadata` projection),
 - omits `updated_at` — same signal as `metadata.last_modified_at` (already stripped); leaks last-edit / last-sync timestamps to anyone with the share link (`20260807_001`).
 - omits `track_url` (the `{user_id}/{run_id}.json.gz` Storage path — dropped `20260924_001` for defence-in-depth so a future Storage-RLS loosening can't re-open direct download from a leaked path) but exposes a derived boolean `has_track` (`track_url IS NOT NULL`, `20261105_001`) so the feed / `/u/[id]` map-thumbnail gate has a safe existence signal without the path. Non-owner thumbnails fetch the clipped trace by `run_id` through the `clip-public-track` Edge Function, which derives the path itself.
 
