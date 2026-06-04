@@ -352,7 +352,15 @@ class LocalRunStore extends ChangeNotifier {
       final parsed = DateTime.tryParse(raw);
       if (parsed != null) return parsed;
     }
-    return run.createdAt ?? run.startedAt;
+    // Fall back to startedAt, NOT createdAt. `createdAt` is the server's
+    // `created_at` insert timestamp — it's null for an offline run and,
+    // for a synced run, reflects when the row first reached the server
+    // rather than when the user last touched it, so it's ambiguous as a
+    // modification clock. `startedAt` is the client's run-start instant:
+    // stable, always present, and the same value on every device. Used
+    // only for a legacy run that predates the metadata.last_modified_at
+    // stamp; every save/update since stamps the key explicitly.
+    return run.startedAt;
   }
 
   /// Delete a run from local storage.
