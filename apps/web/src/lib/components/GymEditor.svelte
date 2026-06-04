@@ -8,6 +8,7 @@
 	} from '$lib/core/data';
 	import { showToast } from '$lib/stores/toast.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
+	import { parseWeight, weightInputValue, weightUnitLabel } from '$lib/format/units.svelte';
 
 	interface Props {
 		existing?: GymWorkoutWithSets | null;
@@ -43,7 +44,9 @@
 			const last = blocks[blocks.length - 1];
 			const row: EditSet = {
 				reps: s.reps == null ? '' : String(s.reps),
-				weight: s.weight_kg == null ? '' : String(s.weight_kg),
+				// Stored kg -> the user's display unit for editing; parsed back
+				// to kg on save. Storage stays canonical kg.
+				weight: weightInputValue(s.weight_kg),
 				rpe: s.rpe == null ? '' : String(s.rpe),
 			};
 			if (last && last.name === s.exercise_name) last.sets.push(row);
@@ -91,7 +94,8 @@
 				out.push({
 					exercise_name: name,
 					reps: num(set.reps),
-					weight_kg: num(set.weight),
+					// The field carries the user's chosen unit; persist canonical kg.
+					weight_kg: parseWeight(set.weight),
 					rpe: num(set.rpe),
 				});
 			}
@@ -170,7 +174,7 @@
 						<input type="number" inputmode="numeric" min="0" bind:value={exercises[ei].sets[si].reps} />
 					</label>
 					<label>
-						<span class="set-cap">{t('gym.weightKg')}</span>
+						<span class="set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
 						<input type="number" inputmode="decimal" min="0" step="0.5" bind:value={exercises[ei].sets[si].weight} />
 					</label>
 					<label>

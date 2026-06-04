@@ -47,7 +47,8 @@ src/
     database.types.ts  # Generated Supabase types (regenerate after migrations)
     core/supabase.ts     # Supabase client init
     core/mock-data.ts    # Fallback data when Supabase is empty
-    format/units.svelte.ts # Reactive km/mi preference signal + unit-aware formatters (distance/pace/elevation)
+    format/units.svelte.ts # Reactive km/mi + kg/lbs preference signals + unit-aware formatters (distance/pace/elevation; weight via the format/weight.ts pure layer)
+    format/weight.ts       # Pure kg↔lbs conversion + formatWeightKg / parseWeightToKg for the `weight_unit` pref (storage stays canonical kg). Rune-free sibling of units.svelte.ts so it is tsx-testable (weight.test.ts); mirror the mobile Dart twin.
     format/time.ts         # Pure, locale/unit-independent time formatters (formatRelativeTime, formatDuration, formatDate, formatDateShort) — unit-tested in time.test.ts. NOT in mock-data.ts (which is fallback data only).
     i18n/                  # Web i18n runtime (decisions §108). store.svelte.ts = reactive locale signal + `m(key, params)` + initLocale (call once in +layout). locale.ts = pure negotiation (negotiateLocale / dirForLocale, unit-tested). messages.ts = `Messages = typeof en` type. locales/{en,de,fr,es,ja,pt-BR}.ts = catalogues (en static, rest lazy-imported). Add a user-facing string: add the key to en.ts + every locale (satisfies Messages enforces parity; messages_parity.test.ts guards it), then `{m('key')}` at the call site. Detection is CLIENT-SIDE (no Accept-Language SSR — the site is statically prerendered).
     routes/map-style.svelte.ts  # Reactive map-style preference signal (used by RunMap)
@@ -101,7 +102,7 @@ src/
     plans/new/      # New-plan wizard with editable week-by-week preview (click a week to expand the day-by-day editor; edits persist on submit)
     plans/[id]/     # Plan detail: progress ring, today card, week grid + Edit-plan button (PlanMetaEditor) for owner-only meta edits (name, days/week, goal time, rules)
     plans/[id]/workouts/[wid]/   # Workout detail with structured-interval breakdown
-    gym/            # Phase 4 multi-modal Gym (decisions §63, behind the multi_modal_nav sidebar flag). /gym = workout list + PR badges + create modal (GymEditor); /gym/[id] = detail with per-exercise PR chips + edit/delete. Data in core/data.ts; PR engine gym/gym_prs.ts (parity pair). e2e tests-e2e/gym/. Weight in kg (no weight-unit pref yet).
+    gym/            # Phase 4 multi-modal Gym (decisions §63, behind the multi_modal_nav sidebar flag). /gym = workout list + PR badges + create modal (GymEditor); /gym/[id] = detail with per-exercise PR chips + edit/delete. Data in core/data.ts; PR engine gym/gym_prs.ts (parity pair). e2e tests-e2e/gym/. Weight storage is canonical kg (gym_sets.weight_kg); display + entry honour the `weight_unit` ('kg'|'lbs') pref via format/weight.ts (pure, kg↔lbs) + the weightUnit signal in format/units.svelte.ts (Settings → Preferences toggle). Mobile twin owns the Dart side.
     coach/          # Standalone Coach chat — plan switcher (?plan=<id>), configurable runs window (10/20/50/100), grounded-in context strip
     api/coach/+server.ts         # Coach endpoint. Default provider: Claude (ANTHROPIC_API_KEY). Set COACH_PROVIDER=openai + OPENAI_BASE_URL for local Ollama.
     explore/        # Thin redirect to /routes?tab=explore (kept so old links / Android deep links still resolve)

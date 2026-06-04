@@ -9,6 +9,7 @@
 	} from '$lib/core/data';
 	import { workoutPrs, type GymSetLike } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
+	import { formatWeight } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import { m as t } from '$lib/i18n/store.svelte';
@@ -123,7 +124,7 @@
 							{/if}
 							<span class="stat">{t('gym.exercisesShort', { count: exerciseCountOf(w.id) })}</span>
 							{#if volumeOf(w.id) > 0}
-								<span class="stat">{t('gym.volumeShort', { volume: volumeOf(w.id).toLocaleString() })}</span>
+								<span class="stat">{t('gym.volumeShort', { volume: formatWeight(volumeOf(w.id)) })}</span>
 							{/if}
 							<span class="material-symbols-outlined chevron">chevron_right</span>
 						</div>

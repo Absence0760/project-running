@@ -13,6 +13,7 @@
 	} from '$lib/core/data';
 	import { workoutPrs, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
+	import { formatWeight } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -87,7 +88,7 @@
 	function setSummary(s: GymSet): string {
 		const parts: string[] = [];
 		if (s.reps != null) parts.push(`${s.reps}`);
-		if (s.weight_kg != null) parts.push(`${s.weight_kg} ${t('gym.kg')}`);
+		if (s.weight_kg != null) parts.push(formatWeight(s.weight_kg));
 		return parts.join(' × ');
 	}
 

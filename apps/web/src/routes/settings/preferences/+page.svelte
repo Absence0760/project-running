@@ -12,7 +12,7 @@
 	import { applyTheme, loadTheme, type Theme } from '$lib/settings/theme';
 	import { m, currentLocale, setLocale } from '$lib/i18n/store.svelte';
 	import { SUPPORTED_LOCALES, LOCALE_LABELS, type Locale } from '$lib/i18n/locale';
-	import { setUnit } from '$lib/format/units.svelte';
+	import { setUnit, setWeightUnit } from '$lib/format/units.svelte';
 	import { defaultWeekStartForLocale } from '$lib/format/locale_defaults';
 	import { setMapStyle } from '$lib/routes/map-style.svelte';
 	import { PRIVACY_ZONES_KEY, type PrivacyZone } from '$lib/routes/privacy';
@@ -35,6 +35,7 @@
 
 	// Universal settings from docs/backend/settings.md
 	let preferredUnit = $state<'km' | 'mi'>('km');
+	let weightUnit = $state<'kg' | 'lbs'>('kg');
 	let paceFormat = $state<'min_per_km' | 'min_per_mi' | 'kph' | 'mph'>('min_per_km');
 	let defaultActivity = $state<'run' | 'walk' | 'hike' | 'cycle' | 'stroller'>('run');
 	let weekStartDay = $state<'monday' | 'sunday'>('monday');
@@ -166,6 +167,15 @@
 		await autoSave({ preferred_unit: next, units_pace_format: paceFormat });
 	}
 
+	// Weight unit (kg/lbs) is display + entry only — storage stays canonical
+	// kg (gym_sets.weight_kg). Flip the app-wide weight signal so every gym
+	// surface re-renders, then persist the universal bag key.
+	async function pickWeightUnit(next: 'kg' | 'lbs') {
+		weightUnit = next;
+		setWeightUnit(next);
+		await autoSave({ weight_unit: next });
+	}
+
 	// Measured resting + max HR. max_hr_bpm overrides the Tanaka
 	// 208 − 0.7 × age estimate for HR-zone derivation — the reason a
 	// beta-blocked runner whose formula HR-max is wrong needs to set it.
@@ -215,6 +225,8 @@
 			settings = await loadSettings(auth.user.id);
 			preferredUnit = effective(settings, 'preferred_unit', 'km') ?? 'km';
 			setUnit(preferredUnit);
+			weightUnit = effective(settings, 'weight_unit', 'kg') ?? 'kg';
+			setWeightUnit(weightUnit);
 			paceFormat = effective(settings, 'units_pace_format', 'min_per_km') ?? 'min_per_km';
 			defaultActivity = effective(settings, 'default_activity_type', 'run') ?? 'run';
 			// New users have no stored week_start_day — fall back to the
@@ -418,6 +430,13 @@
 					<div class="toggle-row" role="group" aria-label={m('prefs.distanceUnit')}>
 						<button class="toggle-btn" class:active={preferredUnit === 'km'} onclick={() => pickDistanceUnit('km')} type="button">{m('prefs.kilometres')}</button>
 						<button class="toggle-btn" class:active={preferredUnit === 'mi'} onclick={() => pickDistanceUnit('mi')} type="button">{m('prefs.miles')}</button>
+					</div>
+				</div>
+				<div class="field">
+					<span class="label-text">{m('prefs.weightUnit')}</span>
+					<div class="toggle-row" role="group" aria-label={m('prefs.weightUnit')}>
+						<button class="toggle-btn" class:active={weightUnit === 'kg'} onclick={() => pickWeightUnit('kg')} type="button">{m('prefs.kilograms')}</button>
+						<button class="toggle-btn" class:active={weightUnit === 'lbs'} onclick={() => pickWeightUnit('lbs')} type="button">{m('prefs.pounds')}</button>
 					</div>
 				</div>
 				<label>

@@ -13,6 +13,14 @@
 import type { PreferredUnit } from '../types';
 import { currentLocale } from '../i18n/store.svelte';
 import { formatDecimal, formatInteger } from './number';
+import {
+	type WeightUnit,
+	parseWeightUnit,
+	formatWeightKg,
+	parseWeightToKg,
+	kgToDisplay,
+	roundWeight,
+} from './weight';
 
 const METRES_PER_MILE = 1609.344;
 
@@ -26,6 +34,46 @@ export function getUnit(): PreferredUnit {
 
 export function setUnit(u: PreferredUnit | null | undefined): void {
 	unit.value = u === 'mi' ? 'mi' : 'km';
+}
+
+/// Weight-unit preference signal — the kg/lbs analogue of `unit` above.
+/// Storage is canonical kg; this only drives display + entry parsing.
+/// The auth store / settings page call `setWeightUnit(...)` after the
+/// prefs bag loads so every gym surface re-renders on a flip.
+const weight = $state<{ value: WeightUnit }>({ value: 'kg' });
+
+export function getWeightUnit(): WeightUnit {
+	return weight.value;
+}
+
+export function setWeightUnit(u: string | null | undefined): void {
+	weight.value = parseWeightUnit(u);
+}
+
+/// Format a canonical kg value in the user's chosen weight unit (suffix
+/// baked in). Reactive: reads the `weight` signal so views update on flip.
+export function formatWeight(kg: number | null | undefined): string {
+	return formatWeightKg(kg, weight.value);
+}
+
+/// Parse a free-text weight the user typed (in their chosen unit) into
+/// canonical kg for storage. Null on empty / non-numeric / negative.
+export function parseWeight(raw: string | null | undefined): number | null {
+	return parseWeightToKg(raw, weight.value);
+}
+
+/// Canonical kg -> a display number (no suffix) in the user's unit,
+/// rounded for an input field's initial value. Used by entry forms that
+/// pre-fill an existing weight for editing.
+export function weightInputValue(kg: number | null | undefined): string {
+	if (kg == null || !Number.isFinite(kg)) return '';
+	const shown = roundWeight(kgToDisplay(kg, weight.value));
+	return Number.isInteger(shown) ? String(shown) : shown.toFixed(1);
+}
+
+/// The active weight-unit suffix ("kg" / "lbs") for labels + placeholders.
+export function weightUnitLabel(): WeightUnit {
+	return weight.value;
 }
 
 /// Distance label: km for metric, mi for imperial. Sub-kilometre

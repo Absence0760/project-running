@@ -15,6 +15,7 @@
 	import { accountLabel } from '$lib/format/account_label';
 	import { initTheme } from '$lib/settings/theme';
 	import { setMapStyle, type MapStyle } from '$lib/routes/map-style.svelte';
+	import { setWeightUnit } from '$lib/format/units.svelte';
 	import BillingIssueBanner from '$lib/components/BillingIssueBanner.svelte';
 	import CookieConsentBanner from '$lib/components/CookieConsentBanner.svelte';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
@@ -64,9 +65,11 @@
 		};
 	});
 
-	// Hydrate the map-style signal once the user is known so the
-	// preview on /runs/[id] matches the user's saved preference without
-	// needing the preferences page to be visited first this session.
+	// Hydrate the map-style + weight-unit signals once the user is known so
+	// the /runs/[id] map preview and every gym surface match the user's
+	// saved preferences without needing the preferences page to be visited
+	// first this session. (preferred_unit rides the profile column via the
+	// auth store; weight_unit is a universal bag key, so it loads here.)
 	$effect(() => {
 		const uid = auth.user?.id;
 		if (!browser || !uid) return;
@@ -76,6 +79,7 @@
 				const settings = await loadSettings(uid);
 				const ms = effective<MapStyle>(settings, 'map_style');
 				setMapStyle(ms);
+				setWeightUnit(effective<string>(settings, 'weight_unit', 'kg') ?? 'kg');
 			} catch (_) {
 				/* silent — falls back to default */
 			}
