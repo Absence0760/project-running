@@ -70,9 +70,11 @@ test.describe('/share/route/[id] — anon', () => {
 			'content',
 			'Threkir'
 		);
-		// og:image is now the per-route prerendered PNG. The image URL
-		// includes the route id so the unfurl card carries a real
-		// track preview rather than the static favicon.
+		// og:image is the per-route og:image PNG (request-time in prod
+		// via the share-route Lambda; the dev server's /og/route/[id].png
+		// endpoint here). The image URL includes the route id so the
+		// unfurl card carries a real track preview rather than the
+		// static favicon.
 		await expect(page.locator('meta[property="og:image"]')).toHaveAttribute(
 			'content',
 			`/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
@@ -140,11 +142,12 @@ test.describe('/share/route/[id] — anon', () => {
 	});
 
 	test('per-route og:image renders a real PNG of correct dimensions', async ({ request }) => {
-		// The prerendered /og/route/[id].png endpoint must return a
-		// 1200×630 PNG (Twitter / Facebook recommended unfurl size).
-		// In dev mode the +server.ts handler runs at request time;
-		// in production CloudFront serves the prerendered file from S3.
-		// Either way the URL + Content-Type + magic bytes are pinned.
+		// The /og/route/[id].png endpoint must return a 1200×630 PNG
+		// (Twitter / Facebook recommended unfurl size). The +server.ts
+		// handler runs at request time here; in production CloudFront
+		// routes /og/route/* to the share-route Lambda (same
+		// renderRouteOgPng helper). Either way the URL + Content-Type +
+		// magic bytes are pinned.
 		const res = await request.get(
 			`http://localhost:7777/og/route/${RUNNER_PUBLIC_ROUTE_ID}.png`
 		);

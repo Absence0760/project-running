@@ -61,15 +61,16 @@ function defineConfig() {
 			},
 			inlineStyleThreshold: 0,
 			prerender: {
-				// /og/route/[id].png and /share/{run,route}/[id] are
-				// marked prerenderable but discover their ids via entries()
-				// against Supabase at build time. (/og/run/[id].png is now
-				// prerender=false — it renders at request time in the
-				// share-run Lambda; see decisions §104.) CI builds run without
-				// Supabase credentials so entries() returns []; @sveltejs/kit
-				// 2.60 turned that into a hard error. The runtime fallback
-				// (adapter-static's index.html SPA route) handles unbuilt
-				// dynamic pages, so a warning is the right severity here.
+				// The per-entity share surfaces (/share/{run,route}/[id] +
+				// /og/{run,route}/[id].png) are all prerender=false now — they
+				// render at request time in the share-run / share-route Lambdas
+				// (see decisions §104 + apps/web/lambda/share-route/README.md),
+				// so the build-time prerender can never stale them. Any other
+				// dynamic page reachable by crawling (e.g. /runs/[id],
+				// /routes/[id], /u/[id]) has no entries() and falls through to
+				// adapter-static's index.html SPA route at runtime; a hard
+				// error on those unseen routes (@sveltejs/kit 2.60+) would be
+				// wrong, so warn is the right severity here.
 				handleUnseenRoutes: 'warn',
 			},
 		},
