@@ -1,6 +1,13 @@
 import Foundation
 
 struct RunCheckpoint: Codable {
+    /// On-disk schema version. Bumped whenever a field is added/changed in
+    /// a way a reader must branch on. A checkpoint written before this
+    /// field existed decodes as `1` (see the custom `init(from:)`), so a
+    /// build upgrade mid-run never throws on the older shape.
+    static let currentVersion = 1
+
+    let version: Int
     let id: String
     let startedAt: Date
     let distanceMetres: Double
@@ -16,6 +23,50 @@ struct RunCheckpoint: Codable {
     // Optional as nil, which is exactly the recover-an-in-flight-run-
     // after-app-upgrade path we must not break.
     let averageBPM: Double?
+
+    init(
+        id: String,
+        startedAt: Date,
+        distanceMetres: Double,
+        activeDurationSeconds: Double,
+        pausedIntervalSeconds: Double,
+        trackPointCount: Int,
+        cacheFileURL: URL,
+        averageBPM: Double?,
+        version: Int = RunCheckpoint.currentVersion
+    ) {
+        self.version = version
+        self.id = id
+        self.startedAt = startedAt
+        self.distanceMetres = distanceMetres
+        self.activeDurationSeconds = activeDurationSeconds
+        self.pausedIntervalSeconds = pausedIntervalSeconds
+        self.trackPointCount = trackPointCount
+        self.cacheFileURL = cacheFileURL
+        self.averageBPM = averageBPM
+    }
+
+    /// Every field is decoded with a fallback default rather than the
+    /// synthesised all-or-nothing decode, so a checkpoint written by a
+    /// *different* build (an older shape after an app upgrade, or a newer
+    /// shape after a downgrade) still recovers as much of the in-flight run
+    /// as it can instead of throwing and dropping the whole recovery. The
+    /// only field with no safe default is `cacheFileURL`, which recovery
+    /// doesn't actually consult — it rebuilds the track path from `id`
+    /// (see `WorkoutManager.recoverRun`) — so a placeholder is harmless.
+    init(from decoder: any Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        version = try c.decodeIfPresent(Int.self, forKey: .version) ?? 1
+        id = try c.decodeIfPresent(String.self, forKey: .id) ?? ""
+        startedAt = try c.decodeIfPresent(Date.self, forKey: .startedAt) ?? Date()
+        distanceMetres = try c.decodeIfPresent(Double.self, forKey: .distanceMetres) ?? 0
+        activeDurationSeconds = try c.decodeIfPresent(Double.self, forKey: .activeDurationSeconds) ?? 0
+        pausedIntervalSeconds = try c.decodeIfPresent(Double.self, forKey: .pausedIntervalSeconds) ?? 0
+        trackPointCount = try c.decodeIfPresent(Int.self, forKey: .trackPointCount) ?? 0
+        cacheFileURL = try c.decodeIfPresent(URL.self, forKey: .cacheFileURL)
+            ?? URL(fileURLWithPath: NSTemporaryDirectory())
+        averageBPM = try c.decodeIfPresent(Double.self, forKey: .averageBPM)
+    }
 }
 
 class CheckpointStore {
