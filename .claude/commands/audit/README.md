@@ -34,6 +34,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 | [/audit/metadata-keys](metadata-keys.md) | Every `runs.metadata.<key>` access matches `docs/backend/metadata.md` registry |
 | [/audit/architecture-guards](architecture-guards.md) | Run every architecture-guard test suite + summarize failures |
 | [/audit/layered-resilience](layered-resilience.md) | L0–L4 try/catch contract on the run-recording stack |
+| [/audit/db-design](db-design.md) | Professional data-architecture standards across **all three persistence layers** — Postgres relational design + mobile JSON file-stores + watch local storage. Scope arg: `backend` / `mobile` / `watch` / `all` |
 
 ### Health
 
@@ -78,6 +79,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 | Compliance (gdpr, data-export-completeness, account-deletion-completeness, third-party-data-flows, cookie-consent, regional-availability, accessibility) | `compliance-auditor` |
 | App-store disclosure (app-store-privacy) | `app-store-privacy-auditor` |
 | i18n (i18n-readiness) | `i18n-readiness-auditor` |
+| Data-architecture design (db-design) | `data-architecture-auditor` |
 | Legal-doc review (when drafting `/privacy`, `/terms`, etc.) | `intl-legal-doc-reviewer` (non-US), `us-legal-doc-reviewer` (US — global agent) |
 
 Each auditor has the relevant trust boundaries + project conventions baked in so a `/audit/<name>` invocation runs without re-reading them. `/audit/all` spawns one auditor instance per area in parallel.
