@@ -566,7 +566,7 @@
 </script>
 
 <svelte:head>
-	<title>{m('runs.pageTitle')}</title>
+	<title>{m('history.pageTitle')}</title>
 </svelte:head>
 
 <div class="page">
@@ -576,7 +576,7 @@
 		page-header already shows the activity-type toolbar as the
 		visual primary surface.
 	-->
-	<h1 class="visually-hidden">{m('runs.heading')}</h1>
+	<h1 class="visually-hidden">{m('history.heading')}</h1>
 
 	{#if showKindChips}
 		<!-- Kind chips — client-side filter over the unified activities
