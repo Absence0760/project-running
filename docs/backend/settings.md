@@ -17,6 +17,30 @@ universal value" must use a sentinel like `"off"` rather than `null`.
 The DB stores an opaque jsonb bag. This file is the registry of known
 keys. Adding a new key is a client change + an entry below — no migration.
 
+## Placement rule — bag vs column (F4)
+
+When you add a **user preference**, decide where it lives before reaching for
+this registry:
+
+1. **A `prefs` bag key (here)** — the default for a preference. Use it when the
+   value is read by *clients* to shape the UI / behaviour and is **never
+   filtered, joined, or aggregated in SQL**. No migration, no type regen — just
+   a row in the table below and a client default. Almost every preference is
+   this.
+2. **A real column on a domain table** (`user_profiles`, `runs`, …) — only when
+   the value must be queried server-side: a `WHERE` / `ORDER BY` / `GROUP BY`,
+   a `CHECK`, an index, or a read by a view / RPC / trigger / RLS policy. This
+   is the same bar the [activity-table column checklist](../architecture/conventions.md#activity-table-column-checklist--column-vs-jsonb-bag-f6--decision-d4)
+   applies to activity attributes. A column costs a migration + both type
+   regens, so only pay it when SQL genuinely needs the value. (`preferred_unit`
+   is the live example of the migrate-away-from-a-column direction — it began
+   as `profiles.preferred_unit`, is dual-read today, and the column is slated to
+   drop once every client prefers the bag.)
+
+Then, **within the bag**, pick the scope (U / D / UD below): default to `UD`,
+but ask whether a per-device override is actually meaningful — if it isn't,
+make it `U`. A pref that only makes sense on one physical device is `D`.
+
 ## Scope shorthand
 
 | Symbol | Meaning |
@@ -51,6 +75,7 @@ keys. Adding a new key is a client change + an entry below — no migration.
 | `keep_screen_on` | `bool` | D | `true` | Disable OS auto-dim while the running screen is visible. Phones only; watches use ambient mode. |
 | `map_style` | `'streets' \| 'satellite' \| 'outdoors' \| 'dark'` | UD | `streets` | MapLibre style for the map view. |
 | `units_pace_format` | `'min_per_km' \| 'min_per_mi' \| 'kph' \| 'mph'` | UD | `min_per_km` | Display format for pace. Independent of `preferred_unit` so users can keep km distances but pace in mph if they want — but the web preferences page will auto-snap `min_per_km` ↔ `min_per_mi` when the user flips `preferred_unit` so they don't have to update both. Speed formats (`kph`/`mph`) are treated as deliberate choices and are left alone. |
+| `weight_unit` | `'kg' \| 'lbs'` | U | `kg` | Display + entry unit for body weight and lift weights (Phase 4 gym/nutrition). **Storage stays canonical kg** — `gym_sets.weight_kg` (and the future `body_metrics`) are always kilograms; this key only changes how the number is shown and parsed on input, the same display-only split as `preferred_unit`. Universal (not `UD`): a per-device weight unit isn't meaningful. Placed in the bag per the [placement rule](#placement-rule--bag-vs-column-f4) — never queried in SQL. **Not yet wired** — gym surfaces show kg today (multi_modal.md "Weight in kg (no weight-unit pref yet)"); this is the key they'll read once the converter lands. |
 | `weekly_mileage_goal_m` | `int` | U | — | Target weekly distance in metres. Displayed on the dashboard progress bar. |
 | `week_start_day` | `'monday' \| 'sunday'` | U | `monday` | First day of the week for mileage + plan rollups. |
 | `privacy_zones` | `{ lat: number, lng: number, radius_m: number }[]` | U | `[]` | Geofences clipped from the start and end of any track rendered on a public surface (`/share/run/[id]`, `/share/route/[id]`). The list itself is private to the owner via `user_settings` RLS; the clipped output is what the public sees. See `decisions.md § 33` for the algorithm and known v1 gaps. |

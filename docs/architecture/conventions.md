@@ -73,6 +73,49 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 - Foreign keys: `{table}_id`, e.g. `route_id` on `runs`.
 - Migration files: `{YYYYMMDD}_{nnn}_{description}.sql`. The `nnn` is the ordinal within a day (`001`, `002`, ...).
 
+### Activity-table column checklist — column vs jsonb bag (F6 / decision D4)
+
+The activity tables (`runs`, `gym_workouts`, `gym_sets`, `food_log`) each pair
+a set of real columns with a loose `jsonb` bag (`runs.metadata`; the gym/food
+tables have no bag yet). When you add an attribute, decide deliberately where
+it lives — don't default everything into the bag, and don't promote display-only
+telemetry to a column.
+
+**An attribute earns a real column when BOTH hold:**
+
+1. It's present on **most rows** (not a rare source-specific extra), and
+2. it is **filtered / aggregated / constrained / read by SQL** — a `WHERE`,
+   `ORDER BY`, `GROUP BY`, a `CHECK`, an index, or it's consumed by a view /
+   RPC / trigger / RLS policy.
+
+If only (1) holds (present everywhere but purely *displayed*, never queried), it
+stays in the bag. If only (2) holds on rare rows, it stays in the bag too.
+
+- **Promoted** (cleared the bar): `runs.activity_type` (CHECK-constrained,
+  filtered by the PR engine, read by the `activities` + `public_runs` views,
+  drives the gear auto-tag trigger) and `runs.is_dnf` (the PR engine filters
+  on it) — both lifted out of `runs.metadata` in `20261207_001`.
+- **Stayed in the bag** (display-only telemetry): `avg_bpm`, `steps`,
+  `elevation_m` — shown on the run detail, never filtered or aggregated in SQL.
+
+**When you do add a column to an activity table:**
+
+- `snake_case`; use `started_at` for "when it happened" and the right
+  modification clock (`updated_at` server-trigger vs client-stamped
+  `last_modified_at` — see the SQL clock rule above).
+- Give it a `NOT NULL DEFAULT` when a sane default exists, so the generated
+  `Insert` types stay optional and un-migrated writers don't hard-fail.
+- A narrow string domain needs a `CHECK` **and** a matching TS union in
+  `apps/web/src/lib/types.ts`, kept in lockstep (add the pair to
+  `check_constraint_unions.mjs` — see backend CLAUDE.md).
+- Regenerate both row-type files (`npm run gen:types` + `dart run
+  scripts/gen_dart_models.dart`) and update `docs/backend/api_database.md`. If
+  you're moving a key **out** of `runs.metadata`, also strike it from
+  `docs/backend/metadata.md`.
+
+For a **user preference** (not an activity attribute), the column-vs-bag call is
+the user-pref placement rule in [`docs/backend/settings.md`](../backend/settings.md#placement-rule--bag-vs-column-f4) instead.
+
 ## `apps/web/src/lib` organisation
 
 Loose modules are grouped into topical subfolders so the lib root doesn't
