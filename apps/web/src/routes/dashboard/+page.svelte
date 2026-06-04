@@ -23,8 +23,8 @@
 	import { computeRunStreaks } from '$lib/runs/streaks';
 	import { computeReadiness } from '$lib/training/readiness';
 	import { computeTrainingLoadSeries, hasTrimpSignal } from '$lib/training/training_load';
-	import type { LiftForLoad } from '$lib/training/training_load';
-	import { fetchGymSetHistory } from '$lib/core/data';
+	import { fetchGymSetHistory, fetchGymWorkouts } from '$lib/core/data';
+	import type { GymWorkout, GymSetWithDate } from '$lib/core/data';
 	import { liftsFromSetHistory } from '$lib/gym/lift_load';
 	import TrainingLoadChart from '$lib/components/TrainingLoadChart.svelte';
 	import { workoutKindLabel } from '$lib/training/workout_labels';
@@ -96,12 +96,52 @@
 	// runs (multi_modal.md Tier-1 lift→load). Off / pure runner: `lifts`
 	// stays [] so the series is byte-for-byte the run-only curve.
 	let multiModalNav = $state(false);
-	let lifts = $state<LiftForLoad[]>([]);
+	// Raw gym data, only fetched when the flag is on. The load curve reads
+	// `lifts` (derived); the Home cards read `gymWorkouts` + a sets-by-
+	// workout map. All three self-hide when the user has logged nothing.
+	let gymWorkouts = $state<GymWorkout[]>([]);
+	let gymHistory = $state<GymSetWithDate[]>([]);
+	let lifts = $derived(liftsFromSetHistory(gymHistory));
 	// HR prefs feed both the TRIMP-eligible flag and the stress score.
 	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
 	let trainingLoadSeries = $derived(
 		computeTrainingLoadSeries(runs, trimpPrefs, 90, new Date(), lifts),
 	);
+
+	// Sets grouped by workout id — drives the per-session volume +
+	// exercise-count stats on the Home gym cards. Mirrors /gym.
+	let setsByWorkout = $derived.by(() => {
+		const map = new Map<string, GymSetWithDate[]>();
+		for (const s of gymHistory) {
+			const arr = map.get(s.workout_id) ?? [];
+			arr.push(s);
+			map.set(s.workout_id, arr);
+		}
+		return map;
+	});
+	function liftVolume(id: string): number {
+		let v = 0;
+		for (const s of setsByWorkout.get(id) ?? []) {
+			if (s.reps != null && s.weight_kg != null) v += s.reps * s.weight_kg;
+		}
+		return Math.round(v);
+	}
+	function liftExerciseCount(id: string): number {
+		const names = new Set<string>();
+		for (const s of setsByWorkout.get(id) ?? [])
+			names.add(s.exercise_name.trim().toLowerCase());
+		return names.size;
+	}
+
+	// Today's logged lift(s) — the "today's modality" card the Home spec
+	// puts near the top (multi_modal.md § Home). Compared on the local
+	// calendar day so an 11pm session still counts as today.
+	let todaysLifts = $derived.by(() => {
+		const start = new Date();
+		start.setHours(0, 0, 0, 0);
+		return gymWorkouts.filter((w) => new Date(w.started_at) >= start);
+	});
+	let latestTodayLift = $derived(todaysLifts[0] ?? null);
 	let trainingLoadHasHr = $derived(hasTrimpSignal(runs, trimpPrefs));
 	// Single source of truth for CTL/ATL/TSB on this page. The fitness
 	// card's numbers, the recovery advice, and the readiness ring used to
@@ -357,9 +397,12 @@
 		// run readiness). multi_modal.md Tier-1 lift→load.
 		if (multiModalNav) {
 			try {
-				lifts = liftsFromSetHistory(await fetchGymSetHistory());
+				[gymWorkouts, gymHistory] = await Promise.all([
+					fetchGymWorkouts(50),
+					fetchGymSetHistory(),
+				]);
 			} catch (_) {
-				/* silent — lifts are additive to the load curve */
+				/* silent — gym cards + lift-load are additive */
 			}
 		}
 		loading = false;
@@ -840,6 +883,28 @@
 					</span>
 				</div>
 				<span class="material-symbols event-arrow">chevron_right</span>
+			</a>
+		{/if}
+
+		<!-- Today's lift — a "today's modality" card (multi_modal.md §
+		     Home). Self-hiding: only renders when the flag is on AND a
+		     gym session was logged today. A pure runner never sees it. -->
+		{#if multiModalNav && latestTodayLift}
+			<a class="card today-lift-card" href="/gym/{latestTodayLift.id}">
+				<div class="today-lift-icon">
+					<span class="material-symbols">fitness_center</span>
+				</div>
+				<div class="today-lift-body">
+					<span class="today-label">{m('dash.todayLiftLabel')}</span>
+					<strong class="today-lift-title">{latestTodayLift.title || m('gym.untitled')}</strong>
+					<span class="today-lift-meta">
+						{m('gym.exercisesShort', { count: liftExerciseCount(latestTodayLift.id) })}
+						{#if liftVolume(latestTodayLift.id) > 0}
+							&middot; {m('gym.volumeShort', { volume: liftVolume(latestTodayLift.id).toLocaleString() })}
+						{/if}
+					</span>
+				</div>
+				<span class="material-symbols today-lift-arrow">chevron_right</span>
 			</a>
 		{/if}
 
@@ -1329,6 +1394,45 @@
 				{/if}
 			</section>
 		</div>
+
+		<!-- Recent lifts — gym trend card (multi_modal.md § Home). Self-
+		     hides unless the flag is on AND the user has logged a
+		     session. Mirrors the "Recent runs" list above it. -->
+		{#if multiModalNav && gymWorkouts.length > 0}
+			<section class="card">
+				<div class="card-head">
+					<h2>{m('dash.recentLiftsTitle')}</h2>
+					<a class="link-btn" href="/gym">{m('dash.viewAllGym')}</a>
+				</div>
+				<div class="run-list">
+					{#each gymWorkouts.slice(0, 5) as w (w.id)}
+						<a href="/gym/{w.id}" class="run-row">
+							<div class="run-info">
+								<span class="run-date">{formatDateShort(w.started_at)}</span>
+								<span class="run-distance">{w.title || m('gym.untitled')}</span>
+							</div>
+							<div class="run-meta lift-row-meta">
+								<span class="run-pace">{m('gym.exercisesShort', { count: liftExerciseCount(w.id) })}</span>
+								{#if liftVolume(w.id) > 0}
+									<span class="lift-volume">{m('gym.volumeShort', { volume: liftVolume(w.id).toLocaleString() })}</span>
+								{/if}
+							</div>
+						</a>
+					{/each}
+				</div>
+			</section>
+		{/if}
+
+		<!-- First-run gym affordance — one slim line, below the fold, only
+		     for a flagged user who hasn't logged a lift yet. No empty
+		     card / zeroed chart (anti-clutter checklist). -->
+		{#if multiModalNav && !loading && gymWorkouts.length === 0}
+			<a class="gym-footer-prompt" href="/gym">
+				<span class="material-symbols">fitness_center</span>
+				<span>{m('dash.gymFooterPrompt')}</span>
+				<span class="gym-footer-cta">{m('dash.logALift')}</span>
+			</a>
+		{/if}
 
 		<a class="coach-promo" href="/coach">
 			<div class="coach-icon">
@@ -2031,6 +2135,79 @@
 		color: var(--color-text-secondary);
 	}
 	.event-arrow { color: var(--color-text-tertiary); }
+
+	/* Gym (multi-modal) accent — matches the Gym sidebar accent (#8FBF9F).
+	   Kept distinct from the running/primary accent so a runner reads the
+	   modality at a glance without relying on it (label + glyph carry it). */
+	.today-lift-card {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-lg);
+		border-inline-start: 3px solid #8fbf9f;
+		text-decoration: none;
+		color: inherit;
+		transition: background var(--transition-fast), box-shadow var(--transition-fast);
+	}
+	.today-lift-card:hover {
+		background: color-mix(in srgb, #8fbf9f 8%, var(--color-surface));
+		box-shadow: var(--shadow-sm);
+	}
+	.today-lift-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, #8fbf9f 18%, transparent);
+		color: #4e7c5e;
+		flex-shrink: 0;
+	}
+	.today-lift-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2xs);
+		min-width: 0;
+	}
+	.today-lift-title {
+		font-size: 1rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.today-lift-meta {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.today-lift-arrow { color: var(--color-text-tertiary); }
+
+	.lift-row-meta { gap: var(--space-sm); }
+	.lift-volume {
+		font-size: 0.8rem;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+	}
+
+	.gym-footer-prompt {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-sm) var(--space-md);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		border: 1px dashed var(--color-border);
+		border-radius: var(--radius-md);
+	}
+	.gym-footer-prompt:hover { border-color: #8fbf9f; }
+	.gym-footer-prompt .material-symbols { color: #8fbf9f; font-size: 1.2rem; }
+	.gym-footer-prompt > span:nth-child(2) { flex: 1; }
+	.gym-footer-cta {
+		font-weight: 600;
+		color: #4e7c5e;
+		white-space: nowrap;
+	}
 
 	.coach-promo {
 		display: flex;
