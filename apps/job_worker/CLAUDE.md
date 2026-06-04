@@ -129,7 +129,9 @@ apps/job_worker/
 │                            # also wires the livehub.Server alongside /health
 ├── internal/
 │   ├── types.go             # Job, MapMatchPayload, TrackPoint, MatchedTrackRow, IntegrationRow, TokenPair
-│   ├── supabase.go          # PostgREST + Storage REST client (service role)
+│   ├── schema/schema.go     # registry: PostgREST table names + Storage bucket names + runs.metadata keys + prefs keys (every package routes its literals through here)
+│   ├── supabase.go          # PostgREST + Storage REST client (service role); exportPersonalDataSpecs is the single source of truth for the Art 20 export table list
+│   ├── personal_data_export_guard_test.go # parses migrations for user_id tables; fails the build if one is missing from the export spec or the reasoned exclusion list
 │   ├── strava.go            # StravaClient — /oauth/token refresh_token grant
 │   ├── strava_test.go       # 4 tests: parse, error surface, malformed, default URL
 │   ├── matcher.go           # Matcher interface + PassthroughMatcher stub
