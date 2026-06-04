@@ -62,6 +62,7 @@ const (
 	TableDirectMessages     = "direct_messages"
 	TableGymWorkouts        = "gym_workouts"
 	TableFoodLog            = "food_log"
+	TableBodyMetrics        = "body_metrics"
 )
 
 // Bucket is a Supabase Storage bucket name — the `<bucket>` in

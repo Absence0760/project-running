@@ -20,10 +20,11 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 	// event_results + the 2026-05-30 High batch: event_result_claims,
 	// user_blocks, club_posts, event_exceptions + the persona round-5
 	// addition: user_settings + the Phase 4 multi-modal gym/nutrition
-	// pair: gym_workouts, food_log); a regression that drops one of
-	// these is a silent Art 20 completeness gap. Keep in lockstep with
-	// the Go worker's `FetchExportPersonalDataTables` spec list.
-	assertEquals(specs.length, 36, `expected 36 specs, got ${specs.length}`);
+	// pair: gym_workouts, food_log + the nutrition body_metrics weight
+	// series); a regression that drops one of these is a silent Art 20
+	// completeness gap. Keep in lockstep with the Go worker's
+	// `FetchExportPersonalDataTables` spec list.
+	assertEquals(specs.length, 37, `expected 37 specs, got ${specs.length}`);
 	const entries = new Set(specs.map((s) => s.entry));
 	for (const expected of [
 		'coach_messages.json',
@@ -62,6 +63,7 @@ Deno.test('buildBackupSpecs covers the Go worker table set', () => {
 		'event_exceptions.json',
 		'gym_workouts.json',
 		'food_log.json',
+		'body_metrics.json',
 	]) {
 		assertEquals(entries.has(expected), true, `missing entry: ${expected}`);
 	}

@@ -543,8 +543,9 @@ Data Safety disclosable). Plan:
   `gym_sets` has no `user_id` of its own — it cascades from the parent
   workout — so it ships nested inside each `gym_workouts` row via the
   same PostgREST embed `training_plans` uses for its weeks/workouts.
-  The future `body_metrics` table still **must be added** to both paths
-  when its migration lands. Account *deletion* is already covered — all
+  `body_metrics` (migration `20261216_001`) is now wired into **both**
+  paths (`body_metrics.json`); `height_cm` ships in the `user_profiles`
+  export entry. Account *deletion* is already covered — all
   FK-cascade from `auth.users`, so deleting the auth user removes them —
   but **export is not automatic**, so wire each new modality table into
   the export path as it gains real data; don't ship a modality to real

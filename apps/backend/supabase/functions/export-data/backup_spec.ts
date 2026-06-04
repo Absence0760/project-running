@@ -189,6 +189,10 @@ export function buildBackupSpecs(userId: string): BackupTableSpec[] {
 		// food_log — Phase 4 nutrition diary (calories + macros per item,
 		// migration 20261204_001). Owner-scoped Art 20 personal data.
 		{ entry: 'food_log.json', table: 'food_log', filter: uidEq, select: '*' },
+		// body_metrics — Phase 4 nutrition weight time-series (migration
+		// 20261216_001). Special-category health data, owner-scoped, squarely
+		// within Art 20. height_cm ships in the user_profiles export entry.
+		{ entry: 'body_metrics.json', table: 'body_metrics', filter: uidEq, select: '*' },
 	];
 }
 

@@ -1510,6 +1510,11 @@ func exportPersonalDataSpecs(uid string) []exportTableSpec {
 		// migration 20261204_001). Owner-scoped personal data the subject
 		// has an Art 20 right to receive.
 		{name: "food_log.json", table: schema.TableFoodLog, filter: uidEq, sel: "*"},
+		// body_metrics — Phase 4 nutrition weight time-series (migration
+		// 20261216_001). GDPR special-category health data; owner-scoped and
+		// squarely within the Art 20 right to receive. height_cm lives on
+		// user_profiles and ships in that export entry.
+		{name: "body_metrics.json", table: schema.TableBodyMetrics, filter: uidEq, sel: "*"},
 	}
 }
 

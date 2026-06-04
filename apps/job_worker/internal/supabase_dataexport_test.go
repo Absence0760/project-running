@@ -962,7 +962,7 @@ func TestFetchExportPersonalDataTables_IncludesHighBatchTables(t *testing.T) {
 // directly), and food_log must ship scoped to the subject. Keep the
 // shape in lockstep with the TS twin in backup_spec.test.ts.
 func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T) {
-	var gymQ, foodQ string
+	var gymQ, foodQ, bodyQ string
 	client := newSupabaseTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
@@ -972,6 +972,9 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 		case strings.Contains(r.URL.Path, "/rest/v1/food_log"):
 			foodQ = r.URL.RawQuery
 			_, _ = w.Write([]byte(`[{"id":"fl1","item_name":"Oats","calories":350,"protein_g":12}]`))
+		case strings.Contains(r.URL.Path, "/rest/v1/body_metrics"):
+			bodyQ = r.URL.RawQuery
+			_, _ = w.Write([]byte(`[{"id":"bm1","weight_kg":70.5,"recorded_at":"2026-06-01T00:00:00Z"}]`))
 		default:
 			_, _ = w.Write([]byte(`[]`))
 		}
@@ -981,7 +984,7 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 		t.Fatal(err)
 	}
 
-	for _, key := range []string{"gym_workouts.json", "food_log.json"} {
+	for _, key := range []string{"gym_workouts.json", "food_log.json", "body_metrics.json"} {
 		if rows, ok := out[key]; !ok || len(rows) == 0 {
 			t.Errorf("%s must appear in the export manifest with at least one row — gym/nutrition DSAR gap; got out=%v", key, extraTableKeys(out))
 		}
@@ -992,6 +995,9 @@ func TestFetchExportPersonalDataTables_IncludesGymAndNutritionLogs(t *testing.T)
 	}
 	if !strings.Contains(foodQ, "user_id=eq.user-A") {
 		t.Errorf("food_log must be scoped to the subject's user_id; got query=%q", foodQ)
+	}
+	if !strings.Contains(bodyQ, "user_id=eq.user-A") {
+		t.Errorf("body_metrics must be scoped to the subject's user_id; got query=%q", bodyQ)
 	}
 	// gym_sets has no user_id — it must ship via the nested embed on the
 	// parent workout (the same shape training_plans uses for its weeks /
