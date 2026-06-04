@@ -52,7 +52,7 @@ import WatchConnectivity
         var payload: [String: Any] = [:]
         // Required metadata fields — match what watch_ios writes in
         // `ContentView.syncRun()`.
-        for key in ["id", "started_at", "source", "activity_type"] {
+        for key in ["id", "started_at", "source", "activity_type", "last_modified_at"] {
             if let v = metadata[key] { payload[key] = v }
         }
         if let v = metadata["duration_s"] { payload["duration_s"] = v }

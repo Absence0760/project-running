@@ -445,6 +445,31 @@ void main() {
       expect(store.unsyncedCount, 0);
     });
 
+    test('next sidecar write prunes ids for server-deleted runs', () async {
+      // Seed a synced run + a ghost id that belongs to a run deleted
+      // server-side (it has no local file). The ghost would otherwise
+      // accumulate in the on-disk sidecar forever.
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'run-live'));
+      await store.markSynced('run-live');
+      File('${tempDir.path}/synced_ids.json').writeAsStringSync(
+          '{"ids":["run-live","ghost-deleted-server-side"]}');
+
+      // Any subsequent sidecar write self-heals: save + sync a second
+      // run to trigger _persistSyncedIds.
+      await store.save(makeRun(id: 'run-2'));
+      await store.markSynced('run-2');
+
+      final ids = ((jsonDecode(
+                  File('${tempDir.path}/synced_ids.json').readAsStringSync())
+              as Map<String, dynamic>)['ids'] as List)
+          .cast<String>()
+          .toSet();
+      expect(ids, {'run-live', 'run-2'});
+      expect(ids.contains('ghost-deleted-server-side'), isFalse);
+    });
+
     test('markPendingRemoteDelete persists across reload and is idempotent', () async {
       final store = LocalRunStore();
       await store.init(overrideDirectory: tempDir);
@@ -773,6 +798,82 @@ void main() {
       expect(store.runs.single.metadata?['created_by_user_id'], isNull,
           reason: 'cloud-sourced rows must not be tagged with the local '
               'currentUserId — the cloud row carries its own user_id');
+    });
+  });
+
+  group('_lastModifiedOf fallback prefers startedAt over createdAt (L2)', () {
+    Run rawRun({
+      required String id,
+      required DateTime startedAt,
+      DateTime? createdAt,
+      Map<String, dynamic>? metadata,
+      double distance = 5000,
+    }) =>
+        Run(
+          id: id,
+          startedAt: startedAt,
+          duration: const Duration(minutes: 25),
+          distanceMetres: distance,
+          track: const [],
+          source: RunSource.app,
+          metadata: metadata,
+          createdAt: createdAt,
+        );
+
+    test(
+        'a legacy local run with a later startedAt wins over a remote run with '
+        'a later createdAt', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      // Local run, no metadata.last_modified_at: startedAt is LATE,
+      // createdAt is EARLY. Seed it as already-on-disk (synced) so
+      // saveFromRemote sees it as the existing copy.
+      await store.saveFromRemote(rawRun(
+        id: 'r-clock',
+        startedAt: DateTime.utc(2026, 6, 10),
+        createdAt: DateTime.utc(2026, 1, 1),
+        distance: 1111,
+      ));
+
+      // Remote run with the same id: startedAt EARLY, createdAt LATE.
+      // Under the old createdAt-preferring chain the remote (later
+      // createdAt) would win and overwrite the local distance. With the
+      // startedAt fallback the local (later startedAt) is kept.
+      await store.saveFromRemote(rawRun(
+        id: 'r-clock',
+        startedAt: DateTime.utc(2026, 1, 1),
+        createdAt: DateTime.utc(2026, 6, 10),
+        distance: 9999,
+      ));
+
+      expect(store.runs.single.distanceMetres, 1111,
+          reason: 'startedAt (not the ambiguous server createdAt) is the '
+              'modification-clock fallback');
+    });
+
+    test('metadata.last_modified_at still takes precedence over startedAt',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+
+      // Local: late last_modified_at but an early startedAt.
+      await store.saveFromRemote(rawRun(
+        id: 'r-meta',
+        startedAt: DateTime.utc(2026, 1, 1),
+        metadata: {'last_modified_at': '2026-06-10T00:00:00.000Z'},
+        distance: 2222,
+      ));
+
+      // Remote: no last_modified_at, a late startedAt. The local's
+      // explicit stamp must still win.
+      await store.saveFromRemote(rawRun(
+        id: 'r-meta',
+        startedAt: DateTime.utc(2026, 6, 9),
+        distance: 8888,
+      ));
+
+      expect(store.runs.single.distanceMetres, 2222);
     });
   });
 }

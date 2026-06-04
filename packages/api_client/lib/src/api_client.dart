@@ -449,11 +449,6 @@ class ApiClient {
     // Z or offset, which PostgreSQL's `timestamptz` column interprets as
     // UTC — off by the user's offset and potentially a full calendar day.
     // Force UTC here so the stored instant is unambiguous.
-    // activity_type + is_dnf are real columns now (F3 / 20261207_001).
-    // Source them from the metadata bag the recorder/importers still write
-    // (the bag → column write-site switch is the Round-4 Tier-2 follow-up);
-    // until then this dual-writes the column from the bag so server reads
-    // (PR engine, gear auto-tag, activities view) see the right value.
     final row = RunRow(
       id: run.id,
       userId: userId,
@@ -464,7 +459,7 @@ class ApiClient {
       activityType: (run.metadata?['activity_type'] as String?) ?? 'run',
       isDnf: run.metadata?['is_dnf'] == true,
       externalId: run.externalId,
-      metadata: run.metadata,
+      metadata: _metadataWithoutPromotedColumns(run.metadata),
       trackUrl: trackUrl,
       isPublic: isPublic,
     );
@@ -576,11 +571,10 @@ class ApiClient {
         durationS: r.duration.inSeconds,
         distanceM: r.distanceMetres,
         source: r.source.name,
-        // F3: dual-write the columns from the metadata bag (see saveRun).
         activityType: (r.metadata?['activity_type'] as String?) ?? 'run',
         isDnf: r.metadata?['is_dnf'] == true,
         externalId: r.externalId,
-        metadata: r.metadata,
+        metadata: _metadataWithoutPromotedColumns(r.metadata),
         trackUrl: trackUrl.isEmpty ? null : trackUrl,
       ).toJson();
     }).toList();
@@ -1005,6 +999,15 @@ class ApiClient {
   /// be exercised without booting Supabase.
   @visibleForTesting
   static Run debugRunFromRow(Map<String, dynamic> row) => _runFromRow(row);
+
+  /// Test-only: exposes the bag-strip that saveRun applies before persisting
+  /// a run, so the activity_type / is_dnf promotion (no double-write into the
+  /// metadata bag) can be pinned without booting Supabase.
+  @visibleForTesting
+  static Map<String, dynamic>? debugMetadataWithoutPromotedColumns(
+    Map<String, dynamic>? metadata,
+  ) =>
+      _metadataWithoutPromotedColumns(metadata);
 
   /// Test-only: exposes [_routeFromRow] for the same reason.
   @visibleForTesting
@@ -3255,7 +3258,7 @@ class ApiClient {
         .inFilter(RunRow.colUserId, filtered)
         .gte(RunRow.colStartedAt, cutoff);
     if (activityType != null && activityType != 'all') {
-      q = q.eq('metadata->>activity_type', activityType);
+      q = q.eq(RunRow.colActivityType, activityType);
     }
     if (cursor != null) {
       // Stable (started_at desc, id desc) cursor — strictly less than
@@ -3637,6 +3640,20 @@ class ApiClient {
   // as compile errors on the consuming fields below, not as silent runtime
   // drift.
 
+  // activity_type and is_dnf are promoted columns (migration 20261207_001);
+  // the `Run` domain object still carries them inside its metadata bag for a
+  // single read path, so saveRun lifts them into the columns and strips them
+  // from the persisted bag here — the column is the only stored copy.
+  static Map<String, dynamic>? _metadataWithoutPromotedColumns(
+    Map<String, dynamic>? metadata,
+  ) {
+    if (metadata == null) return null;
+    final out = Map<String, dynamic>.from(metadata)
+      ..remove('activity_type')
+      ..remove('is_dnf');
+    return out.isEmpty ? null : out;
+  }
+
   static Run _runFromRow(Map<String, dynamic> row) {
     final r = RunRow.fromJson(row);
     // Stash the storage path on metadata so callers can pass the run back
@@ -3648,6 +3665,12 @@ class ApiClient {
     // ({user_id}/{run_id}.hr.json.gz) so run-detail can fall back to it for the
     // HR-zone chart when the GPS track has no per-point bpm (decisions §116).
     if (r.hrSeriesUrl != null) metadata['hr_series_url'] = r.hrSeriesUrl;
+    // activity_type / is_dnf are promoted columns (migration 20261207_001); the
+    // column is authoritative. Surface them back onto metadata so the domain
+    // readers keep their single access path, the same convenience stash as
+    // track_url above.
+    metadata['activity_type'] = r.activityType;
+    metadata['is_dnf'] = r.isDnf;
 
     return Run(
       id: r.id,
@@ -3833,10 +3856,9 @@ class ApiClient {
   }) async {
     final userId = _client.auth.currentUser?.id;
     if (userId == null) throw Exception('Not authenticated');
-    // metadata MUST include `activity_type` (CHECK constraint
-    // `runs_metadata_activity_type_check`, migration 20260601_001).
-    // Default to `run` — the recorder updates the same row on stop
-    // with the user's actual activity choice via saveRun's upsert.
+    // activity_type is a column (migration 20261207_001); default to `run` —
+    // the recorder updates the same row on stop with the user's actual
+    // activity choice via saveRun's upsert.
     await _client.from(RunRow.table).upsert(
       {
         RunRow.colId: runId,
@@ -3846,8 +3868,8 @@ class ApiClient {
         RunRow.colDistanceM: 0,
         RunRow.colSource: 'app',
         RunRow.colIsPublic: true,
+        RunRow.colActivityType: activityType,
         RunRow.colMetadata: {
-          'activity_type': activityType,
           'in_progress': true,
         },
       },
@@ -4079,7 +4101,7 @@ class ApiClient {
   /// semantics as [createGymWorkout].
   Future<FoodLogRow> logFood({
     String? id,
-    required DateTime loggedAt,
+    required DateTime startedAt,
     required String itemName,
     String? mealSlot,
     double? calories,
@@ -4097,7 +4119,7 @@ class ApiClient {
         .insert({
           if (id != null) FoodLogRow.colId: id,
           FoodLogRow.colUserId: uid,
-          FoodLogRow.colStartedAt: loggedAt.toIso8601String(),
+          FoodLogRow.colStartedAt: startedAt.toIso8601String(),
           FoodLogRow.colItemName: itemName,
           FoodLogRow.colMealSlot: mealSlot,
           FoodLogRow.colCalories: calories,

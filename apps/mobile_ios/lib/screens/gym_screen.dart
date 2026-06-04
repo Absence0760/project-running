@@ -6,6 +6,7 @@ import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../local_gym_store.dart';
+import '../preferences.dart';
 import '../widgets/gym_compose_sheet.dart';
 import 'gym_detail_screen.dart';
 
@@ -276,7 +277,9 @@ class _GymScreenState extends State<GymScreen> {
                       ),
                       if (volume > 0)
                         Text(
-                          l10n.gymVolumeShort(volume),
+                          // Volume is summed in canonical kg; show it in the
+                          // user's weight unit (rounded — it's an aggregate).
+                          '${WeightFormat.toDisplay(volume.toDouble(), activeWeightUnit).round()} ${WeightFormat.label(activeWeightUnit)}',
                           style: theme.textTheme.bodySmall
                               ?.copyWith(color: theme.colorScheme.outline),
                         ),

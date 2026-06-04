@@ -87,6 +87,8 @@ void main() {
       int durationS = 1500,
       double distanceM = 5000,
       String source = 'app',
+      String activityType = 'run',
+      bool isDnf = false,
       Map<String, dynamic>? metadata,
       String? trackUrl,
       String? externalId,
@@ -95,6 +97,8 @@ void main() {
       return <String, dynamic>{
         'id': id,
         'user_id': userId,
+        'activity_type': activityType,
+        'is_dnf': isDnf,
         'started_at': (startedAt ?? DateTime.utc(2026, 4, 10, 8))
             .toIso8601String(),
         'duration_s': durationS,
@@ -129,14 +133,18 @@ void main() {
       expect(run.metadata?['track_url'], 'user-1/run-1.json.gz');
     });
 
-    test('null metadata + null track_url leaves Run.metadata null', () {
-      final run = ApiClient.debugRunFromRow(minimalRow());
-      expect(run.metadata, isNull);
+    test('activity_type + is_dnf columns are surfaced onto metadata', () {
+      final run = ApiClient.debugRunFromRow(
+        minimalRow(activityType: 'cycle', isDnf: true),
+      );
+      expect(run.metadata?['activity_type'], 'cycle');
+      expect(run.metadata?['is_dnf'], true);
     });
 
-    test('existing metadata keys survive alongside the stashed track_url', () {
+    test('existing metadata keys survive alongside the stashed columns', () {
       final run = ApiClient.debugRunFromRow(minimalRow(
-        metadata: {'activity_type': 'cycle', 'avg_bpm': 142},
+        activityType: 'cycle',
+        metadata: {'avg_bpm': 142},
         trackUrl: 'u/r.json.gz',
       ));
       expect(run.metadata?['activity_type'], 'cycle');
@@ -168,6 +176,36 @@ void main() {
       final created = DateTime.utc(2026, 4, 10, 8, 30);
       final run = ApiClient.debugRunFromRow(minimalRow(createdAt: created));
       expect(run.createdAt, created);
+    });
+  });
+
+  group('metadataWithoutPromotedColumns (saveRun write-side strip)', () {
+    test('strips activity_type + is_dnf from the persisted bag', () {
+      final out = ApiClient.debugMetadataWithoutPromotedColumns({
+        'activity_type': 'cycle',
+        'is_dnf': true,
+        'avg_bpm': 142,
+      });
+      expect(out, {'avg_bpm': 142});
+    });
+
+    test('collapses to null when only the promoted keys were present', () {
+      final out = ApiClient.debugMetadataWithoutPromotedColumns({
+        'activity_type': 'run',
+        'is_dnf': false,
+      });
+      expect(out, isNull);
+    });
+
+    test('null in → null out', () {
+      expect(ApiClient.debugMetadataWithoutPromotedColumns(null), isNull);
+    });
+
+    test('does not mutate the caller argument', () {
+      final input = {'activity_type': 'walk', 'steps': 9000};
+      ApiClient.debugMetadataWithoutPromotedColumns(input);
+      expect(input['activity_type'], 'walk');
+      expect(input['steps'], 9000);
     });
   });
 

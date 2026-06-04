@@ -671,6 +671,10 @@ class WatchIngest {
     if (avgBpm is num) metadata[cm.MetadataKeys.avgBpm] = avgBpm.toDouble();
     final activity = raw['activity_type'];
     if (activity is String) metadata[cm.MetadataKeys.activityType] = activity;
+    final lastModified = raw['last_modified_at'];
+    if (lastModified is String) {
+      metadata[cm.MetadataKeys.lastModifiedAt] = lastModified;
+    }
 
     return cm.Run(
       id: id,

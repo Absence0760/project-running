@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
+import '../preferences.dart';
 
 /// Open the gym-workout composer as a fullscreen dialog. Pass [existing] to
 /// edit a stored workout in place; omit for a new one. Resolves `true` when
@@ -83,9 +84,15 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     final blocks = <_EditExercise>[];
     for (final s in sets) {
       final name = (s['exercise_name'] as String?) ?? '';
+      // Stored canonical kg -> display unit for the entry field. Round to
+      // 1 decimal so an lbs conversion doesn't render a long float tail.
+      final kg = (s['weight_kg'] as num?)?.toDouble();
+      final display = kg == null
+          ? null
+          : (WeightFormat.toDisplay(kg, activeWeightUnit) * 10).round() / 10;
       final row = _EditSet(
         reps: _numStr(s['reps'] as num?),
-        weight: _numStr(s['weight_kg'] as num?),
+        weight: _numStr(display),
         rpe: _numStr(s['rpe'] as num?),
       );
       final last = blocks.isEmpty ? null : blocks.last;
@@ -134,7 +141,8 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
         out.add((
           exerciseName: name,
           reps: int.tryParse(s.reps.text.trim()),
-          weightKg: double.tryParse(s.weight.text.trim()),
+          // Entry is in the user's display unit; store canonical kg.
+          weightKg: WeightFormat.parseToKg(s.weight.text, activeWeightUnit),
           rpe: double.tryParse(s.rpe.text.trim()),
         ));
       }
@@ -305,7 +313,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
                     Expanded(
                       child: _setNumberField(
                         ex.sets[si].weight,
-                        l10n.gymKg,
+                        WeightFormat.label(activeWeightUnit),
                         const TextInputType.numberWithOptions(decimal: true),
                       ),
                     ),

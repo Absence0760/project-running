@@ -11,6 +11,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import 'backup_server_client.dart';
+import 'local_food_store.dart';
+import 'local_gym_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 
@@ -78,6 +80,8 @@ class BackupService {
   /// total run count. See [decisions.md § 66](../../../docs/architecture/decisions.md#66-backup-zip-writes-stream-to-disk-and-download-tracks-in-bounded-batches).
   Future<File> createBackup({
     required File outputFile,
+    LocalGymStore? gymStore,
+    LocalFoodStore? foodStore,
     void Function(BackupProgress)? onProgress,
   }) async {
     final api = this.api;
@@ -165,6 +169,8 @@ class BackupService {
       exportedFrom: 'mobile_android',
       runsWithTracks: runsWithTracks,
       runsWithHrSeries: runsWithHrSeries,
+      gymWorkoutsOut: gymStore?.backupRecords ?? const [],
+      foodLogOut: foodStore?.backupRecords ?? const [],
       fetchTrackBytes: (path) => api.downloadTrackBytes(path),
       concurrency: _kTrackDownloadConcurrency,
       onProgress: onProgress,
@@ -241,6 +247,8 @@ class BackupService {
     required List<Map<String, dynamic>> runsWithTracks,
     required Future<Uint8List> Function(String path) fetchTrackBytes,
     List<Map<String, dynamic>> runsWithHrSeries = const [],
+    List<Map<String, dynamic>> gymWorkoutsOut = const [],
+    List<Map<String, dynamic>> foodLogOut = const [],
     int concurrency = _kTrackDownloadConcurrency,
     void Function(BackupProgress)? onProgress,
   }) async {
@@ -257,6 +265,16 @@ class BackupService {
       // JSON metadata first — small + cheap.
       _writeJsonEntry(encoder, 'runs.json', runsOut);
       _writeJsonEntry(encoder, 'routes.json', routesOut);
+      // Phase 4 multi-modal stores. Sourced from the local gym/food stores
+      // (they're not server-synced yet), so they're only present on a
+      // mobile-built archive; an older/web restore that doesn't read these
+      // keys ignores them.
+      if (gymWorkoutsOut.isNotEmpty) {
+        _writeJsonEntry(encoder, 'gym_workouts.json', gymWorkoutsOut);
+      }
+      if (foodLogOut.isNotEmpty) {
+        _writeJsonEntry(encoder, 'food_log.json', foodLogOut);
+      }
       _writeJsonEntry(encoder, 'profile.json', {
         'profile': profile == null ? null : _withoutKeyMap(profile, 'id'),
         'settings_prefs': settingsPrefs,
@@ -340,6 +358,8 @@ class BackupService {
           'goals': 0,
           'tracks': tracksAdded,
           'hr_series': hrAdded,
+          'gym_workouts': gymWorkoutsOut.length,
+          'food_log': foodLogOut.length,
         },
       });
 
@@ -370,6 +390,8 @@ class BackupService {
     bool generateNewIds = false,
     LocalRunStore? runStore,
     LocalRouteStore? routeStore,
+    LocalGymStore? gymStore,
+    LocalFoodStore? foodStore,
     void Function(RestoreProgress)? onProgress,
   }) async {
     // `api == null` happens on a release build that wasn't given
@@ -380,7 +402,11 @@ class BackupService {
     final api = this.api;
     final offline = api == null || api.userId == null;
 
-    if (offline && runStore == null && routeStore == null) {
+    if (offline &&
+        runStore == null &&
+        routeStore == null &&
+        gymStore == null &&
+        foodStore == null) {
       throw Exception(
         'Sign in first, or pass a local store to restore offline.',
       );
@@ -419,6 +445,8 @@ class BackupService {
         archive: archive,
         runStore: runStore,
         routeStore: routeStore,
+        gymStore: gymStore,
+        foodStore: foodStore,
         generateNewIds: generateNewIds,
         onProgress: onProgress,
       );
@@ -581,10 +609,58 @@ class BackupService {
       }
     }
 
+    // Gym + food hydrate into the local stores (Phase 4 multi-modal isn't
+    // server-synced from the restore path yet — the stores drain to Supabase
+    // on the next sign-in). No-op when the archive carries neither key or the
+    // caller didn't supply the stores.
+    await _restoreGymFood(archive, gymStore, foodStore, result);
+
     onProgress?.call(const RestoreProgress.done());
     return result;
     } finally {
       await fileStream.close();
+    }
+  }
+
+  /// Hydrate the local gym + food stores from `gym_workouts.json` /
+  /// `food_log.json`. Shared by the online + offline restore paths because
+  /// these stores have no server-side restore-upload yet — both paths queue
+  /// the rows locally for the next sync drain.
+  Future<void> _restoreGymFood(
+    Archive archive,
+    LocalGymStore? gymStore,
+    LocalFoodStore? foodStore,
+    RestoreResult result,
+  ) async {
+    if (gymStore != null) {
+      final gym = _readJson(archive, 'gym_workouts.json') as List?;
+      if (gym != null) {
+        try {
+          result.gymWorkoutsImported += await gymStore.restoreFromBackup(
+            gym
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList(),
+          );
+        } catch (e) {
+          result.warnings.add('gym_workouts: $e');
+        }
+      }
+    }
+    if (foodStore != null) {
+      final food = _readJson(archive, 'food_log.json') as List?;
+      if (food != null) {
+        try {
+          result.foodLogImported += await foodStore.restoreFromBackup(
+            food
+                .whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList(),
+          );
+        } catch (e) {
+          result.warnings.add('food_log: $e');
+        }
+      }
     }
   }
 
@@ -602,6 +678,8 @@ class BackupService {
     required Archive archive,
     required LocalRunStore? runStore,
     required LocalRouteStore? routeStore,
+    required LocalGymStore? gymStore,
+    required LocalFoodStore? foodStore,
     required bool generateNewIds,
     required void Function(RestoreProgress)? onProgress,
   }) async {
@@ -638,9 +716,9 @@ class BackupService {
                 orElse: () => cm.RunSource.app,
               ),
               externalId: r['external_id'] as String?,
-              // Older backups (pre-Apr 2026) may lack
-              // metadata.activity_type. The DB CHECK trigger
-              // requires it on insert, so coalesce to 'run' on
+              // Older backups (pre-Apr 2026) may lack activity_type.
+              // It rides in metadata as the Run's carrier (saveRun lifts
+              // it into the column on sync), so coalesce to 'run' on
               // restore. The user can still edit it afterwards.
               metadata: () {
                 final m = r['metadata'] is Map
@@ -726,6 +804,8 @@ class BackupService {
         }
       }
     }
+
+    await _restoreGymFood(archive, gymStore, foodStore, result);
 
     onProgress?.call(const RestoreProgress.done());
     return result;
@@ -820,6 +900,8 @@ class RestoreResult {
   int runsImported = 0;
   int routesImported = 0;
   int tracksUploaded = 0;
+  int gymWorkoutsImported = 0;
+  int foodLogImported = 0;
   bool profileRestored = false;
   final List<String> warnings = [];
 }

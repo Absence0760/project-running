@@ -4823,6 +4823,15 @@ class AppLocalizationsEs extends AppLocalizations {
   String get prefsPaceFormatMph => 'mph';
 
   @override
+  String get prefsWeightUnit => 'Unidad de peso';
+
+  @override
+  String get prefsWeightUnitKg => 'Kilogramos (kg)';
+
+  @override
+  String get prefsWeightUnitLbs => 'Libras (lbs)';
+
+  @override
   String get prefsNotSet => 'Sin definir';
 
   @override

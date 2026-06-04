@@ -191,6 +191,12 @@ class SettingsSyncService extends ChangeNotifier {
     if (pd is String) {
       preferences.setPrivacyDefault(pd);
     }
+    // Display + entry unit for body / lift weights (Phase 4). Storage
+    // stays canonical kg; this only flips how the number is shown/parsed.
+    final wu = prefs[SettingsKeys.weightUnit];
+    if (wu is String) {
+      preferences.setWeightUnit(WeightFormat.unitFromWire(wu));
+    }
     // Seed a weekly distance RunGoal from the universal bag value when
     // the local list doesn't already have one. We never *replace* an
     // existing local goal — the dashboard's editor is the richer

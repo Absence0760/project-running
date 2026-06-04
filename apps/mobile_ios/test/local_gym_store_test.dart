@@ -42,6 +42,11 @@ class _FakeGymApi extends ApiClient {
       notes: notes,
       isPublic: isPublic,
       externalId: externalId,
+      setCount: sets.length,
+      volumeKg: sets.fold(
+        0.0,
+        (sum, s) => sum + (s.reps ?? 0) * (s.weightKg ?? 0),
+      ),
       lastModifiedAt: lastModifiedAt ?? DateTime.now().toUtc(),
       createdAt: DateTime.now().toUtc(),
     );
@@ -89,6 +94,13 @@ GymSetInput _set(String name, {int? reps, double? kg, double? rpe}) =>
         'notes': null,
         'is_public': false,
         'external_id': null,
+        'set_count': sets.length,
+        'volume_kg': sets.fold<double>(
+          0,
+          (sum, s) =>
+              sum +
+              ((s['reps'] as num?) ?? 0) * ((s['weight_kg'] as num?) ?? 0),
+        ),
         'last_modified_at':
             (lastModifiedAt ?? DateTime.utc(2026, 6, 1)).toIso8601String(),
         'created_at': DateTime.utc(2026, 6, 1).toIso8601String(),

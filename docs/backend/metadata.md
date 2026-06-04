@@ -43,10 +43,24 @@ chip), `core/data.ts` (`createManualRun`/`saveRun` + the following-feed
 narrow `ActivityType` TS union (`types.ts`) ↔ CHECK lockstep is guarded by
 `check_constraint_unions.mjs`.
 
+**Mobile (Flutter) clients — switched to the columns (Round 4, F3 Piece A):**
+the `Run` domain object still carries `activity_type` / `is_dnf` inside its
+in-memory metadata bag (one read path for the dozens of screen readers), but
+the bag is no longer the persisted copy. `ApiClient.saveRun` / `saveRunsBatch`
+lift the two keys into the `activity_type` / `is_dnf` **columns** and strip
+them from the bag before upsert (`_metadataWithoutPromotedColumns`);
+`_runFromRow` surfaces the columns back onto the bag on read (the same
+convenience stash as `track_url`). Raw-`RunRow` consumers that bypass
+`_runFromRow` read the column directly — `profile_screen` (public runs), the
+following-feed activity filter (`fetchFollowingFeed` filters on the
+`activity_type` column, not `metadata->>activity_type`), `fetchRecentRuns`, and
+`beginLiveBroadcast` (writes the column on the stub row). The recorder /
+importer / `add_run` / `applyDnfFlag` write sites set the bag key as before;
+the lift makes that the column write. The byte-identical iOS twin matches.
+
 **Client read/write sites STILL on the jsonb keys (Tier-2, deferred — these
 silently read `null` / write a now-ignored bag key until switched):**
-- `apps/mobile_android/lib/screens/run_screen.dart` (recording), `add_run_screen.dart`, `health_connect_importer.dart`, `strava_importer.dart`, `run_detail_screen.dart` (`applyDnfFlag`) + the byte-identical iOS twin,
-- `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-ingest write to the column is the Round-4 follow-up).
+- `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-side ingest lifts it into the column via the same `Run`-carrier path — see § Known issues).
 
 ### Core run properties
 
@@ -123,7 +137,7 @@ Keys that carry transient or platform-internal state. Treat these as implementat
 
 | Key | Shape | Writers | Readers | Required? | Notes |
 |---|---|---|---|---|---|
-| `last_modified_at` | `string` (ISO 8601) | `mobile_android/lib/local_run_store.dart` (on every `update()`); `watch_wear/.../WatchRunMetadata.kt` (on every direct upload); `watch_ios/WatchApp/ContentView.swift` (WCSession metadata, at sync) + `watch_ios/WatchApp/SupabaseService.swift` (DEBUG-direct upload) | `mobile_android/lib/local_run_store.dart` (newer-wins conflict resolution during sync); `mobile_android/lib/screens/runs_screen.dart` (delta-fetch `updatedSince` filter, `metadata->>'last_modified_at' > since`) | **Required** on every cloud-bound row — without it, the row is invisible to mobile's delta refresh after the first ever fetch | Set by the local store on Android/iOS, the watch encoder on Wear OS direct uploads, and the Apple Watch encoders (2026-06-04). **Apple-Watch-via-WCSession caveat:** the watch now stamps it, but the phone-side ingest still drops it — `WatchIngestBridge.swift` forwards only a fixed key list and `WatchIngest._runFromArgs` (`main.dart`) rebuilds metadata from `avg_bpm` + `activity_type` only — so that path needs both updated to carry the key through (tracked in [followups.md § Mobile](../product/followups.md#mobile)). The DEBUG-direct watch path writes it straight to the row, so it's effective there today. (The earlier claim that this path "inherits the stamp from `LocalRunStore.save()`" was wrong — ingest calls `api.saveRun` directly, never the local store.) |
+| `last_modified_at` | `string` (ISO 8601) | `mobile_android/lib/local_run_store.dart` (on every `update()`); `watch_wear/.../WatchRunMetadata.kt` (on every direct upload); `watch_ios/WatchApp/ContentView.swift` (WCSession metadata, at sync) + `watch_ios/WatchApp/SupabaseService.swift` (DEBUG-direct upload); the Apple-Watch-via-WCSession ingest path forwards the watch's own stamp through `apps/mobile_ios/ios/Runner/WatchIngestBridge.swift` (forwarded-key list) → `WatchIngest._runFromArgs` (`main.dart`) / `runFromWatchPayload` (`watch_ingest_queue.dart`), which both copy it into `metadata` before `ApiClient.saveRun` | `mobile_android/lib/local_run_store.dart` (newer-wins conflict resolution during sync); `mobile_android/lib/screens/runs_screen.dart` (delta-fetch `updatedSince` filter, `metadata->>'last_modified_at' > since`) | **Required** on every cloud-bound row — without it, the row is invisible to mobile's delta refresh after the first ever fetch | Set by the local store on Android/iOS, the watch encoder on Wear OS direct uploads, and the Apple Watch encoders (2026-06-04). The Apple-Watch-via-WCSession ingest path uploads to the cloud directly (it does NOT go through `LocalRunStore.save()`), so the watch's own `last_modified_at` (watchOS R3 H1) is forwarded verbatim through the bridge + both watch-payload decoders — a WCSession run is delta-visible from the first push. The DEBUG-direct watch path writes it straight to the row, so it's effective there too. |
 | `recovered_from_crash` | `bool` — always `true` when present | `mobile_android/lib/main.dart` (app launch, when it detects an in-progress crash-time save) | — | Optional, audit-only | Marks a run that was reconstructed from the incremental-save snapshot after a crash mid-recording. No UI consumer yet — would be useful for a "we saved what we had" toast. |
 | `in_progress_saved_at` | `string` (ISO 8601) | `mobile_android/lib/screens/run_screen.dart` (periodic incremental save during recording) | — | Optional, audit-only | Timestamp of the last incremental save. Cleared when the run is finalised. Survival indicator for crash recovery. |
 | `in_progress` | `bool` — `true` only on the live-broadcast stub | `packages/api_client/lib/src/api_client.dart` (`beginLiveBroadcast`) — written into the stub `runs` row created when the user taps "Share live link" so the FK + RLS on `live_run_pings` accept inserts before the real run is saved | — | Optional, audit-only | The stub is overwritten on stop by `saveRun`'s upsert (which omits this key), so the value flips from `true` to absent for finished runs. Useful for distinguishing stubs in forensics; readers should treat absence as the normal case. |
