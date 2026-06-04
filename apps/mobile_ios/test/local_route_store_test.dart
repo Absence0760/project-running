@@ -194,7 +194,9 @@ void main() {
     test('overlapping ids replace existing entries (no duplicates)', () async {
       final store = LocalRouteStore();
       await store.init(overrideDirectory: tempDir);
-      await store.save(makeRoute(id: 'r-1', name: 'v1'));
+      // r-1 starts synced (server ingest) so the overwrite path is exercised
+      // — saveBatch only preserves UNsynced local edits.
+      await store.saveBatch([makeRoute(id: 'r-1', name: 'v1')]);
       await store.saveBatch([
         makeRoute(id: 'r-1', name: 'v2'),
         makeRoute(id: 'r-2'),
@@ -202,6 +204,35 @@ void main() {
 
       expect(store.routes, hasLength(2));
       expect(store.routes.firstWhere((r) => r.id == 'r-1').name, 'v2');
+    });
+
+    test('server ingest preserves an unsynced local edit (newer-wins)',
+        () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      // Local-only edit: save() marks the route unsynced (pending push).
+      await store.save(makeRoute(id: 'r-1', name: 'My offline edit'));
+      expect(store.unsyncedRoutes.map((r) => r.id), contains('r-1'));
+
+      // A server pull returns an older copy of the same id. It must NOT
+      // clobber the pending local edit or flag it synced.
+      await store.saveBatch([makeRoute(id: 'r-1', name: 'Server stale copy')]);
+
+      expect(store.routes.single.name, 'My offline edit');
+      expect(store.unsyncedRoutes.map((r) => r.id), contains('r-1'),
+          reason: 'the pending push must survive the server ingest');
+    });
+
+    test('server ingest overwrites a synced local route', () async {
+      final store = LocalRouteStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.saveBatch([makeRoute(id: 'r-1', name: 'v1')]); // synced
+      expect(store.unsyncedRoutes, isEmpty);
+
+      await store.saveBatch([makeRoute(id: 'r-1', name: 'v2')]);
+
+      expect(store.routes.single.name, 'v2',
+          reason: 'a clean (synced) route takes the server copy');
     });
   });
 
@@ -435,10 +466,10 @@ void main() {
     test('pin survives saveBatch overwrite of the same id', () async {
       final store = LocalRouteStore();
       await store.init(overrideDirectory: tempDir);
-      await store.save(makeRoute(id: 'r-1', name: 'v1'));
+      await store.saveBatch([makeRoute(id: 'r-1', name: 'v1')]); // synced
       await store.pinOffline('r-1');
 
-      // Fresh server pull overwrites the same id with a newer name.
+      // Fresh server pull overwrites the same (synced) id with a newer name.
       // The pin must survive — it's per-device, not per-row-version.
       await store.saveBatch([makeRoute(id: 'r-1', name: 'v2')]);
 

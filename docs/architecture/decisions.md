@@ -2707,6 +2707,8 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **Conflict-resolution alignment (2026-06-04).** The three per-row stores were brought into lockstep on the modification clock: gym/food's `replaceFromServer` now applies **newer-wins** for `synced` rows (a server fetch that's *older* than the local copy — read-replica lag — no longer clobbers it; the local synced row's clock is built from the server's `last_modified_at` so successive refreshes compare like-for-like), mirroring `LocalRunStore.saveFromRemote`. Gear has no `last_modified_at` column so it keeps the server-overwrites-synced behaviour, but two clock bugs were fixed: `createLocal` now stamps `lastModifiedAt` from the same `now` as `created_at`, and `_markSynced` preserves the existing clock instead of bumping it to "now" (a bumped clock would make a freshly-drained row beat the very server copy it was pushed from). These are the L-FILE H4 / M2 / L3 findings from the data-architecture audit.
 
+**Routes (M3).** `LocalRouteStore` has no per-row modification clock (the `Route` DTO carries no `last_modified_at`), so its conflict signal is the `_syncedIds` sidecar instead. `saveBatch(..., markSynced: true)` — the server-ingest path — now skips any route that is present locally **and** unsynced, so a server pull can't clobber a pending local edit and silently drop its push (the route-store form of newer-wins). A clean route (synced, or not present locally) still takes the server copy. The local-save path (`markSynced: false`) is unaffected.
+
 ---
 
 ## 123. Mobile local stores persist through a crash-atomic write helper (`writeJsonAtomic`); `_rewriteAll` writes before it prunes

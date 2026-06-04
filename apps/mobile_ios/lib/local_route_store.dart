@@ -50,6 +50,12 @@ class LocalRouteStore extends ChangeNotifier {
 
   int get unsyncedCount => unsyncedRoutes.length;
 
+  /// True when [routeId] is present locally and has NOT been confirmed
+  /// pushed to the cloud — i.e. it carries a pending local edit. Used by
+  /// [saveBatch] to keep a server ingest from clobbering an unsynced edit.
+  bool _hasUnsyncedLocalEdit(String routeId) =>
+      _routes.any((r) => r.id == routeId) && !_syncedIds.contains(routeId);
+
   /// Unmodifiable snapshot of every route the user has pinned for
   /// offline access. Order matches `_routes` (newest-first).
   List<Route> get offlinePinnedRoutes => List.unmodifiable(
@@ -151,7 +157,19 @@ class LocalRouteStore extends ChangeNotifier {
     bool markSynced = true,
   }) async {
     if (routes.isEmpty) return;
-    final list = routes.toList();
+    // Server-ingest path (markSynced): never clobber a route that has
+    // unsynced local edits. Overwriting it with the server's (possibly
+    // older) copy AND flagging it synced would silently drop the pending
+    // push and revert the edit — the route-store equivalent of the
+    // newer-wins guard the per-row stores apply. Routes carry no per-row
+    // modification clock, so the sidecar sync-state is the conflict
+    // signal: an unsynced local route is the pending side and wins; a
+    // clean copy (synced, or not present locally) takes the server
+    // version. The non-markSynced path is a local save and is unaffected.
+    final list = markSynced
+        ? routes.where((r) => !_hasUnsyncedLocalEdit(r.id)).toList()
+        : routes.toList();
+    if (list.isEmpty) return;
     final dir = await _ensureDir();
     await Future.wait(list.map((route) {
       final file = File('${dir.path}/${route.id}.json');
