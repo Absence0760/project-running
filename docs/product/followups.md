@@ -63,20 +63,27 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 ### Wave 3 — Nutrition (gated on the gym-engagement validation gate; pre-buildable, don't ship ahead)
 
-> **In progress (2026-06-04, behind `multi_modal_nav`).** Landed so far:
-> the `nutrition_targets` TS↔Dart parity pair (13 tests each); the
-> `body_metrics` migration `20261216_001` (+ `user_profiles.height_cm`,
-> owner-only, pgtap); `body_metrics` wired into both DSAR export paths;
-> the web nutrition data layer (`core/data.ts` food + body-metrics
-> queries, `body_metrics` in the `TABLES` registry); the `food_search`
-> Open Food Facts client (injectable-fetcher seam, pure parse/scale, 7
-> tests); and the `nutrition_totals` day-aggregation helper (4 tests).
-> **Remaining (each i18n-heavy):** Settings body-metrics entry +
-> consent-wording broaden (Art 9, 6 web locales); `/nutrition` +
-> `/nutrition/log` pages + flag-gated sidebar item + Playwright e2e
-> (G7); the mobile screens + 7-ARB i18n + iOS twin (G8); privacy-
-> disclosure doc updates (iOS label / Play Data Safety / Open Food Facts
-> sub-processor).
+> **G6 + G7 (web) landed 2026-06-04, behind `multi_modal_nav`.** Done:
+> `nutrition_targets` TS↔Dart parity pair (13 tests each); `body_metrics`
+> migration `20261216_001` (+ `user_profiles.height_cm`, owner-only,
+> pgtap) wired into both DSAR export paths; web nutrition data layer
+> (`core/data.ts`, `body_metrics` in the `TABLES` registry); `food_search`
+> Open Food Facts client (injectable fetcher, 7 tests); `nutrition_totals`
+> (4 tests); Settings body-metrics + activity/goal entry under a broadened
+> Art 9 consent gate (6 web locales); `/nutrition` (rings/meal-slots/water/
+> trend) + `/nutrition/log` (search→confirm-portion + manual fallback) +
+> flag-gated sidebar item + Playwright e2e; Open Food Facts added to
+> `sub-processors.md`. A real `<input type="number">` binding bug
+> (`.trim` on a number) was caught by the e2e and fixed.
+>
+> **Remaining:** **G8 mobile** — `nutrition_screen.dart` +
+> `nutrition_log_sheet.dart` + `food_search.dart` + `LocalFoodStore`
+> wiring + iOS twin + 7-ARB i18n (the user chose "web vertical first,
+> then mobile"). **Operator carry-overs:** the iOS Privacy Nutrition
+> Label + Play Data Safety form must be updated for the new body-metrics
+> (height/weight, Art 9) + Open Food Facts hop before a store submission
+> that ships nutrition. **Translation review:** the de/es/fr/ja/pt-BR
+> nutrition + consent strings are best-effort and want native review.
 
 - [ ] **G6 · Nutrition foundation (pure + schema)** — `nutrition_targets` parity pair (Mifflin-St Jeor BMR × activity-level); `body_metrics` migration (height on `user_profiles` + `body_metrics` weight time-series, owner RLS, cascade-delete); Settings height/weight entry; privacy-disclosure updates (iOS label / Play Data Safety / Open Food Facts sub-processor). **Feeds G1** (add `body_metrics` to export). Owns: `nutrition_targets.ts`/`.dart`, the new migration, Settings body-metrics entry.
   ```
