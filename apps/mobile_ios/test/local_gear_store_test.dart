@@ -212,6 +212,48 @@ void main() {
     });
   });
 
+  group('_rewriteAll crash-atomic ordering', () {
+    Map<String, dynamic> _gear(String id, String name) => {
+          'id': id,
+          'kind': 'shoe',
+          'name': name,
+          'retired_at': null,
+          'total_distance_m': 0,
+        };
+    List<String> jsonFiles() => dir
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last)
+        .where((n) => n.endsWith('.json'))
+        .toList();
+    List<String> tmpFiles() => dir
+        .listSync()
+        .whereType<File>()
+        .map((f) => f.uri.pathSegments.last)
+        .where((n) => n.endsWith('.tmp'))
+        .toList();
+
+    test('removes files for ids dropped server-side, keeps pending, no temp '
+        'files left', () async {
+      await store.replaceFromServer([_gear('g1', 'One'), _gear('g2', 'Two')]);
+      final mine = await store.createLocal(kind: 'shoe', name: 'Offline');
+      expect(jsonFiles(), hasLength(3));
+
+      await store.replaceFromServer([_gear('g1', 'One')]);
+
+      expect(store.rows.any((r) => r['id'] == 'g1'), isTrue);
+      expect(store.rows.any((r) => r['id'] == 'g2'), isFalse);
+      expect(store.rows.any((r) => r['id'] == mine.id), isTrue,
+          reason: 'pendingCreate survives the rewrite');
+      expect(tmpFiles(), isEmpty, reason: 'atomic writes leave no .tmp behind');
+
+      final reloaded = LocalGearStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.rows.map((r) => r['id'] as String).toSet(),
+          {'g1', mine.id});
+    });
+  });
+
   group('hasPending', () {
     test('false on a clean store', () {
       expect(store.hasPending, isFalse);

@@ -119,7 +119,7 @@ class LocalRouteStore extends ChangeNotifier {
   Future<void> save(Route route, {bool markSynced = false}) async {
     final dir = await _ensureDir();
     final file = File('${dir.path}/${route.id}.json');
-    await file.writeAsString(jsonEncode(route.toJson()));
+    await writeJsonAtomic(file, route.toJson());
     _routes.removeWhere((r) => r.id == route.id);
     _routes.insert(0, route);
     if (markSynced) {
@@ -155,7 +155,7 @@ class LocalRouteStore extends ChangeNotifier {
     final dir = await _ensureDir();
     await Future.wait(list.map((route) {
       final file = File('${dir.path}/${route.id}.json');
-      return file.writeAsString(jsonEncode(route.toJson()));
+      return writeJsonAtomic(file, route.toJson());
     }));
     for (final route in list) {
       _routes.removeWhere((r) => r.id == route.id);
@@ -307,9 +307,9 @@ class LocalRouteStore extends ChangeNotifier {
 
   Future<void> _persistSyncedIds() async {
     try {
-      await _syncedIdsFile.writeAsString(jsonEncode({
+      await writeJsonAtomic(_syncedIdsFile, {
         'ids': _syncedIds.toList(),
-      }));
+      });
     } catch (e) {
       // Not fatal — the in-memory set is still correct for this
       // session; the next sync attempt will write it again.
@@ -342,9 +342,9 @@ class LocalRouteStore extends ChangeNotifier {
     // mutations have settled the final write matches the final state.
     _offlinePersistChain = _offlinePersistChain.then((_) async {
       try {
-        await _offlinePinnedIdsFile.writeAsString(jsonEncode({
+        await writeJsonAtomic(_offlinePinnedIdsFile, {
           'ids': _offlinePinnedIds.toList(),
-        }));
+        });
       } catch (e) {
         debugPrint('Failed to persist offline pinned route ids sidecar: $e');
       }

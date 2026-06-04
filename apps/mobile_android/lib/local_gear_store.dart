@@ -4,6 +4,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:api_client/api_client.dart';
+import 'package:core_models/core_models.dart';
 import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 
@@ -319,20 +320,33 @@ class LocalGearStore extends ChangeNotifier {
   Future<void> _persist(StoredGear stored) async {
     _rows[stored.id] = stored;
     final file = File('${_dir!.path}/${stored.id}.json');
-    await file.writeAsString(jsonEncode(stored.toJson()));
+    await writeJsonAtomic(file, stored.toJson());
     notifyListeners();
   }
 
+  /// Re-point the on-disk state at the current `_rows`. Writes every live
+  /// row first (each atomic) so there is never a window where the
+  /// directory is empty — a crash mid-rewrite leaves the prior files in
+  /// place, not a wiped store. Only once the new state is durably on disk
+  /// do we delete files for ids that no longer exist, each delete isolated
+  /// so one failure can't abort the rest.
   Future<void> _rewriteAll() async {
-    if (_dir == null) return;
-    for (final entity in _dir!.listSync()) {
-      if (entity is File && entity.path.endsWith('.json')) {
-        entity.deleteSync();
-      }
-    }
+    final dir = _dir;
+    if (dir == null) return;
+    final keep = <String>{};
     for (final stored in _rows.values) {
-      final file = File('${_dir!.path}/${stored.id}.json');
-      await file.writeAsString(jsonEncode(stored.toJson()));
+      final file = File('${dir.path}/${stored.id}.json');
+      await writeJsonAtomic(file, stored.toJson());
+      keep.add(file.path);
+    }
+    for (final entity in dir.listSync()) {
+      if (entity is! File || !entity.path.endsWith('.json')) continue;
+      if (keep.contains(entity.path)) continue;
+      try {
+        await entity.delete();
+      } catch (e) {
+        debugPrint('local_gear_store: orphan delete failed ${entity.path}: $e');
+      }
     }
   }
 

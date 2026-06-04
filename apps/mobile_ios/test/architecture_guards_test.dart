@@ -561,6 +561,72 @@ void main() {
     });
   });
 
+  group('local stores use crash-atomic writes (writeJsonAtomic)', () {
+    // Reason: a bare `file.writeAsString(...)` truncates the target to
+    // zero bytes before streaming the new content, so a process death
+    // mid-write leaves a partial / empty file that jsonDecode rejects on
+    // the next cold-start — the record silently vanishes. Every record +
+    // sidecar write must go through writeJsonAtomic (temp + flush +
+    // atomic rename) from core_models. The in-progress NDJSON append path
+    // (_appendInProgressLine, FileMode.writeOnlyAppend) is separately
+    // crash-safe and intentionally exempt.
+    const stores = [
+      'lib/local_run_store.dart',
+      'lib/local_route_store.dart',
+      'lib/local_gear_store.dart',
+      'lib/local_gym_store.dart',
+      'lib/local_food_store.dart',
+    ];
+    for (final path in stores) {
+      test('$path has no bare writeAsString', () {
+        final source = File(path).readAsStringSync();
+        expect(
+          source.contains('writeAsString('),
+          isFalse,
+          reason: '$path must persist via writeJsonAtomic / '
+              'writeStringAtomic, not a truncate-then-write writeAsString.',
+        );
+        expect(
+          source.contains('writeJsonAtomic('),
+          isTrue,
+          reason: '$path should use the crash-atomic helper.',
+        );
+      });
+    }
+
+    for (final path in [
+      'lib/local_gym_store.dart',
+      'lib/local_food_store.dart',
+      'lib/local_gear_store.dart',
+    ]) {
+      test('$path _rewriteAll writes new files before deleting orphans', () {
+        // Reason: the old _rewriteAll deleted every file then rewrote —
+        // a crash in the gap emptied the directory and lost unsynced
+        // pendingCreate rows. The fixed order is write-all-then-prune.
+        final source = File(path).readAsStringSync();
+        final body = _extractMethodBody(
+          source,
+          r'Future<void> _rewriteAll\(\)\s*async\s*\{',
+        );
+        final firstWrite = body.indexOf('writeJsonAtomic(');
+        final firstDelete = body.indexOf('.delete()');
+        expect(firstWrite, greaterThanOrEqualTo(0),
+            reason: '_rewriteAll must write via writeJsonAtomic');
+        expect(firstDelete, greaterThanOrEqualTo(0),
+            reason: '_rewriteAll must prune orphaned files');
+        expect(firstWrite, lessThan(firstDelete),
+            reason: '_rewriteAll must write the new state BEFORE deleting '
+                'any file — never empty the directory first.');
+        expect(
+          body.contains('deleteSync()'),
+          isFalse,
+          reason: '_rewriteAll should not use a catch-free synchronous '
+              'delete for the prune phase.',
+        );
+      });
+    }
+  });
+
   group('share-button consent before flipping is_public', () {
     test('run_detail_screen._shareRun gates makeRunPublic on a confirm dialog',
         () {

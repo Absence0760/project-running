@@ -172,7 +172,7 @@ class LocalRunStore extends ChangeNotifier {
       'run': stamped.toJson(),
       'synced': false,
     };
-    await file.writeAsString(jsonEncode(data));
+    await writeJsonAtomic(file, data);
     _runs.removeWhere((r) => r.id == stamped.id);
     _runs.insert(0, stamped);
     notifyListeners();
@@ -243,7 +243,7 @@ class LocalRunStore extends ChangeNotifier {
       'run': merged.toJson(),
       'synced': true,
     };
-    await file.writeAsString(jsonEncode(data));
+    await writeJsonAtomic(file, data);
     _runs.removeWhere((r) => r.id == merged.id);
     _runs.insert(0, merged);
     _syncedIds.add(merged.id);
@@ -289,7 +289,7 @@ class LocalRunStore extends ChangeNotifier {
     await Future.wait(toWrite.map((merged) {
       final file = File('${_dir.path}/${merged.id}.json');
       final data = {'run': merged.toJson(), 'synced': true};
-      return file.writeAsString(jsonEncode(data));
+      return writeJsonAtomic(file, data);
     }));
     for (final merged in toWrite) {
       _runs.removeWhere((r) => r.id == merged.id);
@@ -314,7 +314,7 @@ class LocalRunStore extends ChangeNotifier {
     final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     data['run'] = stamped.toJson();
     data['synced'] = false;
-    await file.writeAsString(jsonEncode(data));
+    await writeJsonAtomic(file, data);
 
     final idx = _runs.indexWhere((r) => r.id == stamped.id);
     if (idx >= 0) _runs[idx] = stamped;
@@ -503,9 +503,9 @@ class LocalRunStore extends ChangeNotifier {
 
   Future<void> _persistSyncedIds() async {
     try {
-      await _syncedIdsFile.writeAsString(jsonEncode({
+      await writeJsonAtomic(_syncedIdsFile, {
         'ids': _syncedIds.toList(),
-      }));
+      });
     } catch (e) {
       // Not fatal — the in-memory set is still correct for the rest of
       // the session; we'll retry on the next sync event.
@@ -579,9 +579,9 @@ class LocalRunStore extends ChangeNotifier {
       // format ({"ids": [...]}) is still readable (see
       // _readPendingRemoteDeletes) for one-way migration from existing
       // installs — the next write upgrades them.
-      await _pendingRemoteDeletesFile.writeAsString(jsonEncode({
+      await writeJsonAtomic(_pendingRemoteDeletesFile, {
         'deletes': _pendingRemoteDeletes,
-      }));
+      });
     } catch (e) {
       debugPrint('Failed to persist pending_remote_deletes sidecar: $e');
     }
