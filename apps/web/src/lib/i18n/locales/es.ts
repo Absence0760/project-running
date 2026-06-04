@@ -395,6 +395,8 @@ export const messages = {
 	"planDetail.shiftDone": "Plan desplazado {n} días",
 	"planDetail.markRecovery": "Convertir en semana de recuperación",
 	"planDetail.recoveryDone": "Semana reducida a semana de recuperación",
+	"planDetail.duplicateWeek": "Duplicar semana",
+	"planDetail.duplicateWeekDone": "Semana {n} duplicada",
 	"planDetail.bulkFailed": "No se pudo actualizar el plan: {error}",
 	"planDetail.replan": "Replanificar las semanas restantes",
 	"planDetail.replanOnTrack": "Tu plan va bien encaminado: nada que ajustar.",

@@ -391,6 +391,8 @@ export const messages = {
 	"planDetail.shiftDone": "プランを{n}日ずらしました",
 	"planDetail.markRecovery": "回復週にする",
 	"planDetail.recoveryDone": "週を回復週に軽減しました",
+	"planDetail.duplicateWeek": "週を複製",
+	"planDetail.duplicateWeekDone": "第{n}週を複製しました",
 	"planDetail.bulkFailed": "プランを更新できませんでした: {error}",
 	"planDetail.replan": "残りの週を再計画",
 	"planDetail.replanOnTrack": "プランは順調です — 調整は不要です。",

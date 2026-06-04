@@ -11,6 +11,7 @@
 		updatePlanWorkout,
 		updatePlanWeek,
 		updatePlanMeta,
+		duplicatePlanWeek,
 	} from '$lib/core/data';
 	import { shiftIsoDate, recoveryWorkoutPatch, recoveryWeekVolume } from '$lib/training/plan_bulk_ops';
 	import { replanRemaining, type ReplanChange, type ReplanWeek } from '$lib/training/plan_replan';
@@ -193,6 +194,24 @@
 			);
 			await updatePlanWeek(week.id, { target_volume_m: recoveryWeekVolume(week.target_volume_m) });
 			showToast(m('planDetail.recoveryDone'));
+			await load();
+		} catch (e) {
+			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
+		} finally {
+			bulkBusy = false;
+		}
+	}
+
+	/// Duplicate a week: insert a copy right after it, pushing every later
+	/// week + the plan end date back by 7 days. The (plan_id, week_index)
+	/// re-index is atomic server-side (duplicate_plan_week RPC) — a
+	/// client-side multi-update would transiently break the unique index.
+	async function duplicateWeek(week: PlanWeek): Promise<void> {
+		if (bulkBusy) return;
+		bulkBusy = true;
+		try {
+			await duplicatePlanWeek(plan!.id, week.week_index);
+			showToast(m('planDetail.duplicateWeekDone', { n: week.week_index + 1 }));
 			await load();
 		} catch (e) {
 			showToast(m('planDetail.bulkFailed', { error: String(e) }), 'error');
@@ -970,6 +989,18 @@
 								>
 									<span class="material-symbols">trending_down</span>
 									{m('planDetail.markRecovery')}
+								</button>
+							{/if}
+							{#if isOwner && !plan.is_template}
+								<button
+									type="button"
+									class="week-recovery-btn"
+									onclick={() => duplicateWeek(w)}
+									disabled={bulkBusy}
+									title={m('planDetail.duplicateWeek')}
+								>
+									<span class="material-symbols">content_copy</span>
+									{m('planDetail.duplicateWeek')}
 								</button>
 							{/if}
 						</div>

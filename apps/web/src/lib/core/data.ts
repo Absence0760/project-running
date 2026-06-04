@@ -3281,6 +3281,21 @@ export async function updatePlanMeta(
 	if (error) throw error;
 }
 
+/// Duplicate the plan week at `weekIndex`, inserting the copy right after
+/// it. Every later week shifts up one index (+7 days), the copy lands 7
+/// days after its source, and the plan end_date extends a week. Atomic
+/// server-side because the (plan_id, week_index) unique constraint makes
+/// a client-side multi-update unsafe — see the duplicate_plan_week RPC.
+/// Returns the new week's id.
+export async function duplicatePlanWeek(planId: string, weekIndex: number): Promise<string> {
+	const { data, error } = await supabase.rpc('duplicate_plan_week', {
+		p_plan_id: planId,
+		p_week_index: weekIndex
+	});
+	if (error) throw error;
+	return data as string;
+}
+
 // ─────────────────────── Following + activity feed (decisions §31) ───────────────────────
 
 export interface PublicProfile {

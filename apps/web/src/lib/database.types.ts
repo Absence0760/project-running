@@ -2775,6 +2775,10 @@ export type Database = {
           surface: string
         }[]
       }
+      duplicate_plan_week: {
+        Args: { p_plan_id: string; p_week_index: number }
+        Returns: string
+      }
       end_coach_link: { Args: { p_id: string }; Returns: boolean }
       enforce_create_rate_limit: {
         Args: {

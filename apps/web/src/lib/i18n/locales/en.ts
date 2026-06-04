@@ -403,6 +403,8 @@ export const en = {
 	"planDetail.shiftDone": "Plan shifted by {n} days",
 	"planDetail.markRecovery": "Make recovery week",
 	"planDetail.recoveryDone": "Week eased to a recovery week",
+	"planDetail.duplicateWeek": "Duplicate week",
+	"planDetail.duplicateWeekDone": "Week {n} duplicated",
 	"planDetail.bulkFailed": "Couldn't update the plan: {error}",
 	"planDetail.replan": "Re-plan remaining weeks",
 	"planDetail.replanOnTrack": "Your plan's on track — nothing to adjust.",
