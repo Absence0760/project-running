@@ -10,20 +10,53 @@
 // The metadata-key registry of record (shapes, writers, readers, public
 // safety) stays docs/backend/metadata.md — this is only the name list.
 
-/// Postgres tables + views reached via `supabase.from(...)`. The activity-core
-/// surface (runs + the gym / nutrition / unified-timeline tables) is routed
-/// today; the F11 rollout extends outward from here as other call sites move.
+/// Postgres base tables reached via `supabase.from(...)`. The activity-core
+/// surface (runs + the gym / nutrition / unified-timeline tables) was routed
+/// first; the F11 rollout extends outward as call sites move. A name only
+/// belongs here once EVERY bare `.from('<name>')` for it has been repointed —
+/// `core/schema.test.ts` fails the build on a stray literal, so a half-done
+/// table breaks CI.
+///
+/// VIEWS (`public_runs`, `public_routes`, `*_redacted`, `*_with_distance`)
+/// stay bare on purpose: they are distinct DB objects unaffected by a base-
+/// table rename, and routing them here would couple two unrelated names.
+///
+/// Still bare (call sites spill into route pages / components owned by other
+/// surfaces, so converting them risks clobbering concurrent work — tracked as
+/// the remaining F11 web tail): user_profiles, clubs, events, routes,
+/// saved_routes, training_plans, plan_weeks, plan_workouts, coach_messages,
+/// user_follows, user_settings, user_device_settings.
 export const TABLES = {
 	runs: 'runs',
 	gym_workouts: 'gym_workouts',
 	gym_sets: 'gym_sets',
 	food_log: 'food_log',
 	activities: 'activities',
+	club_members: 'club_members',
+	club_posts: 'club_posts',
+	event_attendees: 'event_attendees',
+	event_results: 'event_results',
+	route_reviews: 'route_reviews',
+	run_kudos: 'run_kudos',
+	run_comments: 'run_comments',
+	run_photos: 'run_photos',
+	run_gear: 'run_gear',
+	notifications: 'notifications',
+	direct_messages: 'direct_messages',
+	coach_athletes: 'coach_athletes',
+	integrations: 'integrations',
+	segments: 'segments',
+	segment_efforts: 'segment_efforts',
+	gear: 'gear',
+	fitness_snapshots: 'fitness_snapshots',
+	personal_records: 'personal_records',
+	user_blocks: 'user_blocks',
 } as const;
 
 /// Supabase Storage buckets reached via `supabase.storage.from(...)`.
 export const BUCKETS = {
 	runs: 'runs',
+	run_photos: 'run-photos',
 } as const;
 
 /// Keys on the schema-less `runs.metadata` jsonb bag that the web client

@@ -128,13 +128,13 @@ export async function fetchRecapExtras(
 
 	const [photos, prs] = await Promise.all([
 		supabase
-			.from('run_photos')
+			.from(TABLES.run_photos)
 			.select('id, runs!inner(started_at)', { count: 'exact', head: true })
 			.eq('owner_id', userId)
 			.gte('runs.started_at', start)
 			.lt('runs.started_at', end),
 		supabase
-			.from('personal_records')
+			.from(TABLES.personal_records)
 			.select('user_id', { count: 'exact', head: true })
 			.eq('user_id', userId)
 			.gte('achieved_at', start)
@@ -473,7 +473,7 @@ export async function deleteRun(id: string): Promise<void> {
 		}
 	}
 	const { data: photos } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		.select('storage_path, thumb_512_path')
 		.eq('run_id', id);
 	if (photos && photos.length > 0) {
@@ -493,7 +493,7 @@ export async function deleteRun(id: string): Promise<void> {
 			.filter((p: string | null): p is string => !!p);
 		if (paths.length > 0) {
 			try {
-				await supabase.storage.from('run-photos').remove(paths);
+				await supabase.storage.from(BUCKETS.run_photos).remove(paths);
 			} catch (e) {
 				console.warn('deleteRun: photo storage removal failed (orphaned files)', { run_id: id, count: paths.length, error: e });
 			}
@@ -565,7 +565,7 @@ export async function insertFitnessSnapshot(input: {
 	) {
 		return;
 	}
-	await supabase.from('fitness_snapshots').insert({
+	await supabase.from(TABLES.fitness_snapshots).insert({
 		user_id: userId,
 		vdot: input.vdot,
 		vo2_max: input.vo2Max,
@@ -590,7 +590,7 @@ export interface FitnessSnapshotRow {
 /// so a Svelte `{#each}` draws the chart left-to-right.
 export async function fetchFitnessSnapshots(limit = 60): Promise<FitnessSnapshotRow[]> {
 	const { data } = await supabase
-		.from('fitness_snapshots')
+		.from(TABLES.fitness_snapshots)
 		.select('computed_at, vdot, vo2_max, acute_load, chronic_load, training_stress_bal')
 		.order('computed_at', { ascending: false })
 		.limit(limit);
@@ -925,7 +925,7 @@ export async function updateRunMetadata(
 
 export async function getRouteReviews(routeId: string, limit = 100) {
 	const { data, error } = await supabase
-		.from('route_reviews')
+		.from(TABLES.route_reviews)
 		.select('*')
 		.eq('route_id', routeId)
 		.order('created_at', { ascending: false })
@@ -941,7 +941,7 @@ export async function upsertRouteReview(review: {
 }): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
-	const { error } = await supabase.from('route_reviews').upsert(
+	const { error } = await supabase.from(TABLES.route_reviews).upsert(
 		{ ...review, user_id: userId },
 		{ onConflict: 'route_id,user_id' },
 	);
@@ -1299,7 +1299,7 @@ export async function fetchPersonalRecords() {
 	if (!userId) return [];
 
 	const { data } = await supabase
-		.from('personal_records')
+		.from(TABLES.personal_records)
 		.select('distance, best_time_s, achieved_at')
 		.eq('user_id', userId);
 
@@ -1344,7 +1344,7 @@ export async function fetchIntegrations(): Promise<Integration[]> {
 	// connected-integration list shown on /settings/integrations
 	// should treat them as gone. /audit/strava High #1 + H2.
 	const { data } = await supabase
-		.from('integrations')
+		.from(TABLES.integrations)
 		.select('*')
 		.eq('user_id', userId)
 		.is('disconnected_at', null);
@@ -1356,7 +1356,7 @@ export async function connectIntegration(provider: string): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 
-	const { error } = await supabase.from('integrations').upsert(
+	const { error } = await supabase.from(TABLES.integrations).upsert(
 		{ user_id: userId, provider },
 		{ onConflict: 'user_id,provider' }
 	);
@@ -1381,7 +1381,7 @@ export async function disconnectIntegration(provider: string): Promise<void> {
 	}
 
 	const { error } = await supabase
-		.from('integrations')
+		.from(TABLES.integrations)
 		.delete()
 		.eq('user_id', userId)
 		.eq('provider', provider);
@@ -1490,7 +1490,7 @@ export async function fetchMyClubs(): Promise<ClubWithMeta[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.select(`club_id, role, clubs!inner(${CLUB_SELECT_COLS})`)
 		.eq('user_id', userId)
 		.order('joined_at', { ascending: false });
@@ -1521,13 +1521,13 @@ async function enrichClubs(clubs: Club[]): Promise<ClubWithMeta[]> {
 
 	const [countsRes, rolesRes] = await Promise.all([
 		supabase
-			.from('club_members')
+			.from(TABLES.club_members)
 			.select('club_id', { count: 'exact' })
 			.in('club_id', ids)
 			.eq('status', 'active'),
 		userId
 			? supabase
-					.from('club_members')
+					.from(TABLES.club_members)
 					.select('club_id, role, status')
 					.in('club_id', ids)
 					.eq('user_id', userId)
@@ -1653,7 +1653,7 @@ export async function joinClub(
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const status: MembershipStatus = policy === 'request' ? 'pending' : 'active';
-	const { error } = await supabase.from('club_members').insert({
+	const { error } = await supabase.from(TABLES.club_members).insert({
 		club_id: clubId,
 		user_id: userId,
 		role: 'member',
@@ -1678,7 +1678,7 @@ export async function fetchPendingRequests(clubId: string): Promise<(ClubMember 
 	avatar_url: string | null;
 })[]> {
 	const { data: rows } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.select('club_id, user_id, role, status, joined_at')
 		.eq('club_id', clubId)
 		.eq('status', 'pending')
@@ -1700,7 +1700,7 @@ export async function fetchPendingRequests(clubId: string): Promise<(ClubMember 
 
 export async function approveMember(clubId: string, userId: string): Promise<void> {
 	const { error } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.update({ status: 'active' })
 		.eq('club_id', clubId)
 		.eq('user_id', userId);
@@ -1710,7 +1710,7 @@ export async function approveMember(clubId: string, userId: string): Promise<voi
 export async function bulkApproveMembers(clubId: string, userIds: string[]): Promise<void> {
 	if (userIds.length === 0) return;
 	const { error } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.update({ status: 'active' })
 		.eq('club_id', clubId)
 		.eq('status', 'pending')
@@ -1724,7 +1724,7 @@ export async function setMemberRole(
 	role: 'admin' | 'event_organiser' | 'race_director' | 'member'
 ): Promise<void> {
 	const { error } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.update({ role })
 		.eq('club_id', clubId)
 		.eq('user_id', userId);
@@ -1733,7 +1733,7 @@ export async function setMemberRole(
 
 export async function rejectMember(clubId: string, userId: string): Promise<void> {
 	const { error } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.delete()
 		.eq('club_id', clubId)
 		.eq('user_id', userId);
@@ -1750,7 +1750,7 @@ export async function rejectMember(clubId: string, userId: string): Promise<void
 /// rejecting an owner-row delete will block a misuse.
 export async function removeMember(clubId: string, userId: string): Promise<void> {
 	const { error } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.delete()
 		.eq('club_id', clubId)
 		.eq('user_id', userId);
@@ -1761,7 +1761,7 @@ export async function leaveClub(clubId: string): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { error } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.delete()
 		.eq('club_id', clubId)
 		.eq('user_id', userId);
@@ -1773,7 +1773,7 @@ export async function fetchClubMembers(clubId: string): Promise<(ClubMember & {
 	avatar_url: string | null;
 })[]> {
 	const { data: members } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		// Enumerate columns rather than `*`: on a public club anyone can
 		// read this list, and `activity_waiver_ack_at` (when a member
 		// signed the liability waiver) is the member's own business, not
@@ -1818,7 +1818,7 @@ export async function fetchNextRsvpedEvent(
 	const now = new Date();
 	const horizon = new Date(now.getTime() + windowHours * 3600_000);
 	const { data } = await supabase
-		.from('event_attendees')
+		.from(TABLES.event_attendees)
 		.select(
 			'event_id, instance_start, events(title, meet_label, clubs(slug))',
 		)
@@ -1908,13 +1908,13 @@ async function enrichEvents(events: Event[]): Promise<EventWithMeta[]> {
 	// is scoped to ITS next instance, so we fetch the going rows + their
 	// instance_start and tally only the ones that match `nextMap`.
 	const countsPromise = supabase
-		.from('event_attendees')
+		.from(TABLES.event_attendees)
 		.select('event_id, instance_start')
 		.in('event_id', ids)
 		.eq('status', 'going');
 	const rsvpPromise = userId
 		? supabase
-				.from('event_attendees')
+				.from(TABLES.event_attendees)
 				.select('event_id, status, instance_start')
 				.in('event_id', ids)
 				.eq('user_id', userId)
@@ -2097,7 +2097,7 @@ export async function rsvpEvent(
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { data, error } = await supabase
-		.from('event_attendees')
+		.from(TABLES.event_attendees)
 		.upsert(
 			{ event_id: eventId, user_id: userId, status, instance_start: instanceStart },
 			{ onConflict: 'event_id,user_id,instance_start' }
@@ -2112,7 +2112,7 @@ export async function clearRsvp(eventId: string, instanceStart: string): Promise
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { error } = await supabase
-		.from('event_attendees')
+		.from(TABLES.event_attendees)
 		.delete()
 		.eq('event_id', eventId)
 		.eq('user_id', userId)
@@ -2128,7 +2128,7 @@ export async function fetchEventAttendees(
 	avatar_url: string | null;
 })[]> {
 	const { data: attendees } = await supabase
-		.from('event_attendees')
+		.from(TABLES.event_attendees)
 		.select('*')
 		.eq('event_id', eventId)
 		.eq('instance_start', instanceStart)
@@ -2235,7 +2235,7 @@ export async function submitEventResult(params: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const noteTrimmed = params.note?.trim();
-	const { error } = await supabase.from('event_results').upsert(
+	const { error } = await supabase.from(TABLES.event_results).upsert(
 		{
 			event_id: params.eventId,
 			instance_start: params.instanceStart,
@@ -2272,7 +2272,7 @@ export async function removeEventResult(
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { error } = await supabase
-		.from('event_results')
+		.from(TABLES.event_results)
 		.delete()
 		.eq('event_id', eventId)
 		.eq('user_id', userId)
@@ -2308,7 +2308,7 @@ export async function bulkImportEventResults(params: {
 		updated_at: new Date().toISOString(),
 	}));
 	const { error } = await supabase
-		.from('event_results')
+		.from(TABLES.event_results)
 		.upsert(payload, { onConflict: 'event_id,instance_start,bib' });
 	if (error) throw error;
 }
@@ -2585,7 +2585,7 @@ export async function approveEventResultById(
 	const directorId = auth.user?.id;
 	if (!directorId) throw new Error('Not authenticated');
 	const { error } = await supabase
-		.from('event_results')
+		.from(TABLES.event_results)
 		.update({
 			organiser_approved: approve,
 			organiser_approved_by: directorId,
@@ -2681,7 +2681,7 @@ export async function fetchClubPosts(
 ): Promise<ClubPostWithAuthor[]> {
 	// Top-level posts only; replies are loaded lazily per-post.
 	const { data: posts } = await supabase
-		.from('club_posts')
+		.from(TABLES.club_posts)
 		.select('*')
 		.eq('club_id', clubId)
 		.is('parent_post_id', null)
@@ -2693,7 +2693,7 @@ export async function fetchClubPosts(
 
 export async function fetchPostReplies(parentId: string, limit = 200): Promise<ClubPostWithAuthor[]> {
 	const { data: posts } = await supabase
-		.from('club_posts')
+		.from(TABLES.club_posts)
 		.select('*')
 		.eq('parent_post_id', parentId)
 		.order('created_at', { ascending: true })
@@ -2714,7 +2714,7 @@ async function enrichPosts(posts: ClubPost[]): Promise<ClubPostWithAuthor[]> {
 			.in('id', authorIds),
 		topLevelIds.length > 0
 			? supabase
-					.from('club_posts')
+					.from(TABLES.club_posts)
 					.select('parent_post_id')
 					.in('parent_post_id', topLevelIds)
 					.limit(5000)
@@ -2747,7 +2747,7 @@ export async function createClubPost(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const { data, error } = await supabase
-		.from('club_posts')
+		.from(TABLES.club_posts)
 		.insert({
 			club_id: input.club_id,
 			event_id: input.event_id ?? null,
@@ -2763,7 +2763,7 @@ export async function createClubPost(input: {
 }
 
 export async function deleteClubPost(id: string): Promise<void> {
-	const { error } = await supabase.from('club_posts').delete().eq('id', id);
+	const { error } = await supabase.from(TABLES.club_posts).delete().eq('id', id);
 	if (error) throw error;
 }
 
@@ -3412,7 +3412,7 @@ export async function isBlockedByViewer(targetUserId: string): Promise<boolean> 
 	const userId = sessionData.session?.user?.id;
 	if (!userId) return false;
 	const { data } = await supabase
-		.from('user_blocks')
+		.from(TABLES.user_blocks)
 		.select('blocker_id')
 		.eq('blocker_id', userId)
 		.eq('blocked_id', targetUserId)
@@ -3480,7 +3480,7 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 	if (!viewerId) return [];
 
 	const { data: myMemberRows } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.select('club_id')
 		.eq('user_id', viewerId)
 		.eq('status', 'active');
@@ -3488,7 +3488,7 @@ export async function fetchSuggestedPeople(limit = 12): Promise<PeopleSuggestion
 	if (myClubIds.length === 0) return [];
 
 	const { data: coMemberRows } = await supabase
-		.from('club_members')
+		.from(TABLES.club_members)
 		.select('user_id, club_id')
 		.in('club_id', myClubIds)
 		.eq('status', 'active')
@@ -3791,15 +3791,15 @@ export async function fetchEngagementSummaries(
 	const viewerId = sessionData.session?.user?.id;
 
 	const [kudosRows, viewerKudos, commentRows] = await Promise.all([
-		supabase.from('run_kudos').select('run_id').in('run_id', runIds),
+		supabase.from(TABLES.run_kudos).select('run_id').in('run_id', runIds),
 		viewerId
 			? supabase
-					.from('run_kudos')
+					.from(TABLES.run_kudos)
 					.select('run_id')
 					.eq('user_id', viewerId)
 					.in('run_id', runIds)
 			: Promise.resolve({ data: [] as { run_id: string }[] }),
-		supabase.from('run_comments').select('run_id').in('run_id', runIds),
+		supabase.from(TABLES.run_comments).select('run_id').in('run_id', runIds),
 	]);
 
 	for (const id of runIds) out.set(id, { kudos_count: 0, viewer_has_kudos: false, comment_count: 0 });
@@ -3827,12 +3827,12 @@ export async function fetchKudosForRun(runId: string): Promise<RunKudosSummary> 
 
 	const [countRes, viewerRes] = await Promise.all([
 		supabase
-			.from('run_kudos')
+			.from(TABLES.run_kudos)
 			.select('*', { count: 'exact', head: true })
 			.eq('run_id', runId),
 		viewerId
 			? supabase
-					.from('run_kudos')
+					.from(TABLES.run_kudos)
 					.select('user_id')
 					.eq('run_id', runId)
 					.eq('user_id', viewerId)
@@ -3851,7 +3851,7 @@ export async function giveKudos(runId: string): Promise<void> {
 	const userId = sessionData.session?.user?.id;
 	if (!userId) throw new Error('Not signed in');
 	const { error } = await supabase
-		.from('run_kudos')
+		.from(TABLES.run_kudos)
 		.insert({ user_id: userId, run_id: runId });
 	// Treat duplicate as no-op.
 	if (error && error.code !== '23505') throw error;
@@ -3862,7 +3862,7 @@ export async function rescindKudos(runId: string): Promise<void> {
 	const userId = sessionData.session?.user?.id;
 	if (!userId) throw new Error('Not signed in');
 	const { error } = await supabase
-		.from('run_kudos')
+		.from(TABLES.run_kudos)
 		.delete()
 		.eq('run_id', runId)
 		.eq('user_id', userId);
@@ -3873,7 +3873,7 @@ export async function rescindKudos(runId: string): Promise<void> {
 /// in a second round trip so PostgREST doesn't need an embedded select.
 export async function fetchRunComments(runId: string, limit = 200): Promise<RunCommentWithAuthor[]> {
 	const { data: rows, error } = await supabase
-		.from('run_comments')
+		.from(TABLES.run_comments)
 		.select('*')
 		.eq('run_id', runId)
 		.order('created_at', { ascending: true })
@@ -3906,7 +3906,7 @@ export async function postRunComment(input: {
 	const { data: sessionData } = await supabase.auth.getSession();
 	const userId = sessionData.session?.user?.id;
 	if (!userId) throw new Error('Not signed in');
-	const { error } = await supabase.from('run_comments').insert({
+	const { error } = await supabase.from(TABLES.run_comments).insert({
 		run_id: input.run_id,
 		author_id: userId,
 		body: input.body,
@@ -3916,7 +3916,7 @@ export async function postRunComment(input: {
 }
 
 export async function deleteRunComment(commentId: string): Promise<void> {
-	const { error } = await supabase.from('run_comments').delete().eq('id', commentId);
+	const { error } = await supabase.from(TABLES.run_comments).delete().eq('id', commentId);
 	if (error) throw error;
 }
 
@@ -3977,7 +3977,7 @@ const PHOTO_SIGNED_URL_TTL_S = 15 * 60;
 async function signRunPhotoPaths(paths: string[]): Promise<Record<string, string>> {
 	if (paths.length === 0) return {};
 	const { data, error } = await supabase.storage
-		.from('run-photos')
+		.from(BUCKETS.run_photos)
 		.createSignedUrls(paths, PHOTO_SIGNED_URL_TTL_S);
 	if (error || !data) {
 		console.error('signRunPhotoPaths failed', error);
@@ -3992,7 +3992,7 @@ async function signRunPhotoPaths(paths: string[]): Promise<Record<string, string
 
 export async function fetchRunPhotos(runId: string, limit = 50): Promise<RunPhoto[]> {
 	const { data, error } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		.select('*')
 		.eq('run_id', runId)
 		.order('position_idx', { ascending: true })
@@ -4033,7 +4033,7 @@ export async function fetchEventPhotos(
 	limit = 100,
 ): Promise<EventPhoto[]> {
 	const { data, error } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		// Enumerate columns — `run_id` is NOT selected so a private run's
 		// UUID can't leak to an event viewer who can't see that run.
 		.select('id, owner_id, storage_path, thumb_512_path, caption, position_idx, created_at, event_id, event_instance_start')
@@ -4093,7 +4093,7 @@ export async function addRunPhoto(input: {
 	const storagePath = `${userId}/${photoId}.${ext}`;
 
 	const { error: upErr } = await supabase.storage
-		.from('run-photos')
+		.from(BUCKETS.run_photos)
 		.upload(storagePath, file, {
 			contentType: file.type,
 			upsert: false,
@@ -4101,7 +4101,7 @@ export async function addRunPhoto(input: {
 	if (upErr) throw upErr;
 
 	const { data: posData } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		.select('position_idx')
 		.eq('run_id', input.run_id)
 		.order('position_idx', { ascending: false })
@@ -4110,7 +4110,7 @@ export async function addRunPhoto(input: {
 	const nextIdx = (posData?.position_idx ?? -1) + 1;
 
 	const { data, error } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		.insert({
 			id: photoId,
 			run_id: input.run_id,
@@ -4125,11 +4125,11 @@ export async function addRunPhoto(input: {
 		.single();
 	if (error || !data) {
 		// Best-effort cleanup of the uploaded blob if metadata insert fails.
-		await supabase.storage.from('run-photos').remove([storagePath]);
+		await supabase.storage.from(BUCKETS.run_photos).remove([storagePath]);
 		throw error ?? new Error('Insert failed');
 	}
 	const { data: signed } = await supabase.storage
-		.from('run-photos')
+		.from(BUCKETS.run_photos)
 		.createSignedUrl(storagePath, PHOTO_SIGNED_URL_TTL_S);
 	return {
 		...data,
@@ -4139,13 +4139,13 @@ export async function addRunPhoto(input: {
 
 export async function deleteRunPhoto(photoId: string): Promise<void> {
 	const { data: row, error: fetchErr } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		.select('storage_path, thumb_512_path')
 		.eq('id', photoId)
 		.maybeSingle();
 	if (fetchErr) throw fetchErr;
 
-	const { error } = await supabase.from('run_photos').delete().eq('id', photoId);
+	const { error } = await supabase.from(TABLES.run_photos).delete().eq('id', photoId);
 	if (error) throw error;
 
 	// Sweep both the original upload AND the worker-generated 512-wide
@@ -4156,7 +4156,7 @@ export async function deleteRunPhoto(photoId: string): Promise<void> {
 		(p: string | null | undefined): p is string => !!p,
 	);
 	if (paths.length > 0) {
-		await supabase.storage.from('run-photos').remove(paths);
+		await supabase.storage.from(BUCKETS.run_photos).remove(paths);
 	}
 }
 
@@ -4166,7 +4166,7 @@ export async function updateRunPhotoCaption(
 ): Promise<void> {
 	const trimmed = caption?.trim() || null;
 	const { error } = await supabase
-		.from('run_photos')
+		.from(TABLES.run_photos)
 		.update({ caption: trimmed })
 		.eq('id', photoId);
 	if (error) throw error;
@@ -4367,7 +4367,7 @@ export async function createGear(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 	const { data, error } = await supabase
-		.from('gear')
+		.from(TABLES.gear)
 		.insert({
 			owner_id: userId,
 			kind: input.kind,
@@ -4391,7 +4391,7 @@ export async function updateGear(
 		'target_distance_m' | 'notes'
 	>>,
 ): Promise<void> {
-	const { error } = await supabase.from('gear').update(patch).eq('id', id);
+	const { error } = await supabase.from(TABLES.gear).update(patch).eq('id', id);
 	if (error) throw error;
 }
 
@@ -4406,7 +4406,7 @@ export async function setDefaultGear(
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 	const { error: clearErr } = await supabase
-		.from('gear')
+		.from(TABLES.gear)
 		.update({ is_default: false })
 		.eq('owner_id', userId)
 		.eq('kind', kind)
@@ -4414,7 +4414,7 @@ export async function setDefaultGear(
 	if (clearErr) throw clearErr;
 	if (gearId !== null) {
 		const { error: setErr } = await supabase
-			.from('gear')
+			.from(TABLES.gear)
 			.update({ is_default: true })
 			.eq('id', gearId);
 		if (setErr) throw setErr;
@@ -4437,7 +4437,7 @@ export async function unretireGear(id: string): Promise<void> {
 }
 
 export async function deleteGear(id: string): Promise<void> {
-	const { error } = await supabase.from('gear').delete().eq('id', id);
+	const { error } = await supabase.from(TABLES.gear).delete().eq('id', id);
 	if (error) throw error;
 }
 
@@ -4449,11 +4449,11 @@ export async function setRunGear(runId: string, gearIds: string[]): Promise<void
 	// Delete-then-insert is the simple shape; the join table has no
 	// natural-key churn to make a smarter diff worthwhile. Wrap in
 	// best-effort error surfacing for the toast layer.
-	const del = await supabase.from('run_gear').delete().eq('run_id', runId);
+	const del = await supabase.from(TABLES.run_gear).delete().eq('run_id', runId);
 	if (del.error) throw del.error;
 	if (gearIds.length === 0) return;
 	const rows = gearIds.map((gear_id) => ({ run_id: runId, gear_id }));
-	const ins = await supabase.from('run_gear').insert(rows);
+	const ins = await supabase.from(TABLES.run_gear).insert(rows);
 	if (ins.error) throw ins.error;
 }
 
@@ -4514,7 +4514,7 @@ export interface SegmentEffortWithSegment {
 
 export async function fetchSegmentsForRoute(routeId: string, limit = 100): Promise<Segment[]> {
 	const { data, error } = await supabase
-		.from('segments')
+		.from(TABLES.segments)
 		.select('*')
 		.eq('route_id', routeId)
 		.order('start_distance_m', { ascending: true })
@@ -4535,7 +4535,7 @@ export async function createSegment(input: {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not signed in');
 	const { data, error } = await supabase
-		.from('segments')
+		.from(TABLES.segments)
 		.insert({
 			route_id: input.route_id,
 			name: input.name.trim(),
@@ -4550,7 +4550,7 @@ export async function createSegment(input: {
 }
 
 export async function deleteSegment(segmentId: string): Promise<void> {
-	const { error } = await supabase.from('segments').delete().eq('id', segmentId);
+	const { error } = await supabase.from(TABLES.segments).delete().eq('id', segmentId);
 	if (error) throw error;
 }
 
@@ -4621,14 +4621,14 @@ export async function fetchSegmentLeaderboardTiered(
  */
 export async function fetchEffortsForRun(runId: string): Promise<SegmentEffortWithSegment[]> {
 	const { data: efforts, error } = await supabase
-		.from('segment_efforts')
+		.from(TABLES.segment_efforts)
 		.select('*')
 		.eq('run_id', runId);
 	if (error || !efforts || efforts.length === 0) return [];
 
 	const segmentIds = Array.from(new Set(efforts.map((e) => e.segment_id)));
 	const { data: segments } = await supabase
-		.from('segments')
+		.from(TABLES.segments)
 		.select('*')
 		.in('id', segmentIds);
 	const bySeg = new Map<string, Segment>();
@@ -4641,7 +4641,7 @@ export async function fetchEffortsForRun(runId: string): Promise<SegmentEffortWi
 		const segment = bySeg.get(e.segment_id);
 		if (!segment) continue;
 		const { count } = await supabase
-			.from('segment_efforts')
+			.from(TABLES.segment_efforts)
 			.select('*', { count: 'exact', head: true })
 			.eq('segment_id', e.segment_id)
 			.lt('time_seconds', e.time_seconds);
@@ -4686,7 +4686,7 @@ export async function computeSegmentEffortsForRun(input: {
 			end_distance_m: Number(seg.end_distance_m),
 		});
 		if (!eff) continue;
-		const { error } = await supabase.from('segment_efforts').insert({
+		const { error } = await supabase.from(TABLES.segment_efforts).insert({
 			segment_id: seg.id,
 			run_id: input.run_id,
 			user_id: userId,
@@ -4736,7 +4736,7 @@ export interface NotificationView {
  */
 export async function fetchNotifications(limit = 50): Promise<NotificationView[]> {
 	const { data: rows, error } = await supabase
-		.from('notifications')
+		.from(TABLES.notifications)
 		.select('*')
 		.order('created_at', { ascending: false })
 		.limit(limit);
@@ -4769,7 +4769,7 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 			? supabase.from('public_runs').select('id, distance_m, started_at').in('id', runIds)
 			: Promise.resolve({ data: [] as { id: string; distance_m: number; started_at: string }[] }),
 		commentIds.length > 0
-			? supabase.from('run_comments').select('id, body').in('id', commentIds)
+			? supabase.from(TABLES.run_comments).select('id, body').in('id', commentIds)
 			: Promise.resolve({ data: [] as { id: string; body: string }[] }),
 		eventIds.length > 0
 			? supabase.from('events').select('id, title, club_id, clubs(slug)').in('id', eventIds)
@@ -4826,7 +4826,7 @@ export async function fetchNotifications(limit = 50): Promise<NotificationView[]
 
 export async function fetchUnreadNotificationCount(): Promise<number> {
 	const { count, error } = await supabase
-		.from('notifications')
+		.from(TABLES.notifications)
 		.select('*', { count: 'exact', head: true })
 		.is('read_at', null);
 	if (error) {
@@ -4838,7 +4838,7 @@ export async function fetchUnreadNotificationCount(): Promise<number> {
 
 export async function markNotificationRead(id: string): Promise<void> {
 	const { error } = await supabase
-		.from('notifications')
+		.from(TABLES.notifications)
 		.update({ read_at: new Date().toISOString() })
 		.eq('id', id)
 		.is('read_at', null);
@@ -4849,7 +4849,7 @@ export async function markAllNotificationsRead(): Promise<void> {
 	const userId = auth.user?.id;
 	if (!userId) return;
 	const { error } = await supabase
-		.from('notifications')
+		.from(TABLES.notifications)
 		.update({ read_at: new Date().toISOString() })
 		.eq('user_id', userId)
 		.is('read_at', null);
@@ -4857,7 +4857,7 @@ export async function markAllNotificationsRead(): Promise<void> {
 }
 
 export async function deleteNotification(id: string): Promise<void> {
-	const { error } = await supabase.from('notifications').delete().eq('id', id);
+	const { error } = await supabase.from(TABLES.notifications).delete().eq('id', id);
 	if (error) throw error;
 }
 
@@ -4939,7 +4939,7 @@ export async function fetchDmThreads(): Promise<DmThread[]> {
 	const me = auth.user?.id;
 	if (!me) return [];
 	const { data, error } = await supabase
-		.from('direct_messages')
+		.from(TABLES.direct_messages)
 		.select('*')
 		.or(`sender_id.eq.${me},recipient_id.eq.${me}`)
 		.order('created_at', { ascending: false })
@@ -4987,7 +4987,7 @@ export async function fetchDmThread(otherId: string, limit = 200): Promise<Direc
 	const me = auth.user?.id;
 	if (!me) return [];
 	const { data, error } = await supabase
-		.from('direct_messages')
+		.from(TABLES.direct_messages)
 		.select('*')
 		.or(
 			`and(sender_id.eq.${me},recipient_id.eq.${otherId}),and(sender_id.eq.${otherId},recipient_id.eq.${me})`,
@@ -5006,7 +5006,7 @@ export async function sendDm(recipientId: string, body: string): Promise<DirectM
 	const trimmed = body.trim();
 	if (!trimmed) throw new Error('Message is empty');
 	const { data, error } = await supabase
-		.from('direct_messages')
+		.from(TABLES.direct_messages)
 		.insert({ sender_id: me, recipient_id: recipientId, body: trimmed })
 		.select('*')
 		.single();
@@ -5024,7 +5024,7 @@ export async function markDmThreadRead(otherId: string): Promise<void> {
 	const me = auth.user?.id;
 	if (!me) return;
 	await supabase
-		.from('direct_messages')
+		.from(TABLES.direct_messages)
 		.update({ read_at: new Date().toISOString() })
 		.eq('sender_id', otherId)
 		.eq('recipient_id', me)
@@ -5065,7 +5065,7 @@ export async function createCoachInvite(note?: string): Promise<string> {
 	const userId = auth.user?.id;
 	if (!userId) throw new Error('Not authenticated');
 	const token = crypto.randomUUID().replace(/-/g, '');
-	const { error } = await supabase.from('coach_athletes').insert({
+	const { error } = await supabase.from(TABLES.coach_athletes).insert({
 		coach_id: userId,
 		status: 'pending',
 		invite_token: token,
@@ -5080,7 +5080,7 @@ export async function fetchMyAthletes(): Promise<CoachAthleteLink[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data: rows } = await supabase
-		.from('coach_athletes')
+		.from(TABLES.coach_athletes)
 		.select('id, status, note, created_at, accepted_at, athlete_id')
 		.eq('coach_id', userId)
 		.eq('status', 'active')
@@ -5192,7 +5192,7 @@ export async function fetchPendingCoachInvites(): Promise<PendingCoachInvite[]> 
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data } = await supabase
-		.from('coach_athletes')
+		.from(TABLES.coach_athletes)
 		.select('id, invite_token, note, created_at')
 		.eq('coach_id', userId)
 		.eq('status', 'pending')
@@ -5206,7 +5206,7 @@ export async function fetchMyCoaches(): Promise<CoachAthleteLink[]> {
 	const userId = auth.user?.id;
 	if (!userId) return [];
 	const { data: rows } = await supabase
-		.from('coach_athletes')
+		.from(TABLES.coach_athletes)
 		.select('id, status, note, created_at, accepted_at, coach_id')
 		.eq('athlete_id', userId)
 		.eq('status', 'active')
@@ -5250,7 +5250,7 @@ export async function endCoachLink(id: string): Promise<void> {
 /// Revoke (hard-delete) an unredeemed invite. RLS only permits this on the
 /// coach's own pending, athlete-less rows.
 export async function revokeCoachInvite(id: string): Promise<void> {
-	const { error } = await supabase.from('coach_athletes').delete().eq('id', id);
+	const { error } = await supabase.from(TABLES.coach_athletes).delete().eq('id', id);
 	if (error) throw error;
 }
 

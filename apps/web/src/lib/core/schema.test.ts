@@ -40,9 +40,11 @@ function walk(dir: string, out: string[] = []): string[] {
 }
 
 // Every name routed through the registry is guarded — `runs` is the
-// headline case from the audit, but the activity-core siblings
-// (gym_workouts, gym_sets, food_log, activities) ride the same rule so a
-// future bare write to any of them fails the build too.
+// headline case from the audit, and the F11 rollout has since folded in the
+// activity-core siblings plus the social / club / event / coaching / gear /
+// segment / fitness base tables and the run-photos bucket. The set is derived
+// straight from TABLES + BUCKETS, so adding a name there automatically guards
+// every bare `.from('<name>')` for it tree-wide.
 const guardedNames = Array.from(new Set([...Object.values(TABLES), ...Object.values(BUCKETS)]));
 
 test('no bare .from(<registry name>) literal outside core/schema.ts', () => {
