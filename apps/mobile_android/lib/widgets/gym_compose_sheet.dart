@@ -66,8 +66,8 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
     super.initState();
     final existing = widget.existing;
     _titleCtl =
-        TextEditingController(text: existing?.row['title'] as String? ?? '');
-    _isPublic = (existing?.row['is_public'] as bool?) ?? false;
+        TextEditingController(text: existing?.workout.title ?? '');
+    _isPublic = existing?.workout.isPublic ?? false;
     _exercises = _initExercises(existing);
   }
 

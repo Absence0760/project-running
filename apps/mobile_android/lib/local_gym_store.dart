@@ -51,6 +51,10 @@ class StoredGymWorkout {
   String get id => row['id'] as String;
   bool get isTombstone => syncState == GymSyncState.pendingDelete;
 
+  /// Typed domain view of this workout (scalars + inline sets). Lets screens
+  /// read `.workout.title` instead of reaching into the raw `row` map.
+  GymWorkout get workout => GymWorkout.fromRow(row, sets: sets);
+
   DateTime? get startedAt {
     final v = row['started_at'];
     return v is String ? DateTime.tryParse(v) : null;

@@ -230,7 +230,7 @@ class _GymScreenState extends State<GymScreen> {
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (_, i) {
         final w = workouts[i];
-        final title = (w.row['title'] as String?)?.trim();
+        final title = w.workout.title?.trim();
         final started = w.startedAt;
         final volume = gymWorkoutVolume(w);
         return Card(

@@ -46,6 +46,10 @@ class StoredFood {
   String get id => row['id'] as String;
   bool get isTombstone => syncState == FoodSyncState.pendingDelete;
 
+  /// Typed domain view of this entry. Lets the nutrition surfaces read
+  /// `.entry.itemName` instead of reaching into the raw `row` map.
+  FoodEntry get entry => FoodEntry.fromRow(row);
+
   DateTime? get loggedAt {
     final v = row['logged_at'];
     return v is String ? DateTime.tryParse(v) : null;

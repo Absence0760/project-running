@@ -181,7 +181,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final w = widget.store.byId(widget.workoutId);
-    final title = (w?.row['title'] as String?)?.trim();
+    final title = w?.workout.title?.trim();
 
     return Scaffold(
       appBar: AppBar(
@@ -219,7 +219,7 @@ class _GymDetailScreenState extends State<GymDetailScreen> {
     final tag = localeToTag(Localizations.localeOf(context));
     final started = w.startedAt;
     final prByExercise = _prByExercise(w);
-    final notes = (w.row['notes'] as String?)?.trim();
+    final notes = w.workout.notes?.trim();
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
