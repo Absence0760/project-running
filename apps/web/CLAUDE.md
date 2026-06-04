@@ -81,9 +81,10 @@ src/
     u/[id]/         # Public user profile — display_name, avatar, follower/following counts, recent public runs, Follow toggle. Honours ?tab=runs|followers|following|notifications (notifications gated to isSelf — decisions §38). Identifier is auth.users.id (uuid); URL-safe handles deferred (decisions §31). The activity feed used to live here as a self-only tab; it's now under /social and any legacy ?tab=feed deep link bounces over.
     dashboard/      # Weekly mileage, PBs, calendar heatmap. "This Week" stat card opens PeriodSummary in a modal. Multi-modal (flag `multi_modal_nav`): self-hiding Today's-lift + Recent-lifts cards, and gym sessions folded into the fitness/fatigue/form curve via gym/lift_load.ts (decisions §63, multi_modal.md).
     dashboard/period/[type]/[date]/  # Standalone period summary — thin wrapper around PeriodSummary, kept for deep links
-    runs/           # Run history with source + activity type filters. The canonical History surface — multi-modal (flag `multi_modal_nav`): All/Runs/Lifts/Meals kind chips + a unified timeline over the `activities` view (fetchActivities) when a second modality exists; the Runs chip keeps the full run UI. Pure runner / flag-off unchanged.
+    history/        # Run history with source + activity type filters. The canonical History surface (renamed from /runs — F14 cosmetic half, decisions §63 / D3). Multi-modal (flag `multi_modal_nav`): All/Runs/Lifts/Meals kind chips + a unified timeline over the `activities` view (fetchActivities) when a second modality exists; the Runs chip keeps the full run UI. Pure runner / flag-off unchanged. nav glyph is `timeline` (modality-agnostic), not `directions_run`.
+    runs/           # Thin client-side redirect to `/history` (kept so bookmarks + external deep links to the old list URL keep resolving). Still houses the run-specific subroutes below.
     runs/heatmap/   # Personal run-track heatmap — the user's OWN tracks (PersonalHeatmap.svelte + lib/run_heatmap.ts). Distinct from the public /routes/heatmap community map. Persona #53.
-    runs/[id]/      # Run detail with map, elevation, splits
+    runs/[id]/      # Run detail with map, elevation, splits. In-page back-link returns to /history.
     routes/         # Tabbed: My routes (saved) + Explore routes (community discovery via RouteExplorer). ?tab=explore deep-links the second tab.
     routes/new/     # Route builder (MapLibre + OSRM)
     routes/[id]/    # Route detail
@@ -147,7 +148,7 @@ npm run check --workspace=apps/web       # Type-check
 
 ## Create-flow modal pattern
 
-Every create surface (`/clubs`, `/plans`, `/runs`, `/clubs/[slug]`) opens a modal hosting a reusable editor component (`ClubEditor`, `PlanEditor`, `RunEditor`, `EventEditor`). Each editor takes `oncreated(item)` and `oncancel()` callbacks; the host decides whether to close + refresh or navigate to the new entity.
+Every create surface (`/clubs`, `/plans`, `/history`, `/clubs/[slug]`) opens a modal hosting a reusable editor component (`ClubEditor`, `PlanEditor`, `RunEditor`, `EventEditor`). Each editor takes `oncreated(item)` and `oncancel()` callbacks; the host decides whether to close + refresh or navigate to the new entity.
 
 The standalone `/new` routes (`/clubs/new`, `/plans/new`, `/runs/new`, `/clubs/[slug]/events/new`) are kept as **thin page wrappers** around the same editor components so deep links and browser back work unchanged. When you add a new editor, follow this same shape — never duplicate the form between the modal and the standalone route.
 
