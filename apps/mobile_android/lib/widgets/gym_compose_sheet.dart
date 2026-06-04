@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gym_store.dart';
 import '../preferences.dart';
+import 'full_screen_form.dart';
 
 /// Open the gym-workout composer as a fullscreen dialog. Pass [existing] to
 /// edit a stored workout in place; omit for a new one. Resolves `true` when
@@ -12,30 +13,22 @@ import '../preferences.dart';
 ///
 /// Flutter twin of web `GymEditor.svelte` — a free-text exercise name with
 /// history autocomplete plus inline sets (reps / weight / RPE). Writes
-/// through [LocalGymStore] so logging a lift works offline.
+/// through [LocalGymStore] so logging a lift works offline. Presentation
+/// goes through [showFullScreenForm], the shared create/edit-entity wrapper.
 Future<bool?> showGymComposeSheet({
   required BuildContext context,
   required LocalGymStore store,
   StoredGymWorkout? existing,
   List<String> suggestions = const [],
 }) {
-  return Navigator.of(context).push<bool>(
-    MaterialPageRoute<bool>(
-      fullscreenDialog: true,
-      builder: (ctx) => Scaffold(
-        appBar: AppBar(
-          title: Text(existing == null
-              ? AppLocalizations.of(ctx).gymEditorNewTitle
-              : AppLocalizations.of(ctx).gymEditorEditTitle),
-        ),
-        body: SafeArea(
-          child: GymComposeSheet(
-            store: store,
-            existing: existing,
-            suggestions: suggestions,
-          ),
-        ),
-      ),
+  final l10n = AppLocalizations.of(context);
+  return showFullScreenForm<bool>(
+    context,
+    title: existing == null ? l10n.gymEditorNewTitle : l10n.gymEditorEditTitle,
+    builder: (ctx) => GymComposeSheet(
+      store: store,
+      existing: existing,
+      suggestions: suggestions,
     ),
   );
 }
@@ -195,18 +188,11 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final mq = MediaQuery.of(context);
-    final bottomInset =
-        mq.viewInsets.bottom > 0 ? mq.viewInsets.bottom : mq.viewPadding.bottom;
 
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _sectionLabel(theme, l10n.gymEditorTitleLabel),
-            const SizedBox(height: 8),
+    return FullScreenFormBody(
+      children: [
+        FormSectionLabel(l10n.gymEditorTitleLabel),
+        const SizedBox(height: 8),
             TextField(
               controller: _titleCtl,
               textInputAction: TextInputAction.next,
@@ -262,9 +248,7 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
               ],
             ),
           ],
-        ),
-      ),
-    );
+        );
   }
 
   Widget _exerciseCard(
@@ -424,18 +408,6 @@ class _GymComposeSheetState extends State<GymComposeSheet> {
       },
     );
   }
-
-  Widget _sectionLabel(ThemeData theme, String text) => Align(
-        alignment: Alignment.centerLeft,
-        child: Text(
-          text.toUpperCase(),
-          style: theme.textTheme.labelSmall?.copyWith(
-            color: theme.colorScheme.outline,
-            letterSpacing: 1.1,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-      );
 
   /// Render a stored numeric back into an input string: integral values drop
   /// the `.0` (100, not 100.0) so a round-trip through the composer doesn't

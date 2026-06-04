@@ -4,21 +4,14 @@ import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../preferences.dart';
 import '../settings_sync.dart';
+import 'full_screen_form.dart';
 
 /// Open the goal editor as a full-screen modal dialog. Pass an
 /// existing goal to edit it in-place; omit for a new goal.
 ///
-/// Was previously a `showModalBottomSheet` — the user surface was
-/// inconsistent with the rest of the dashboard's drill-ins
-/// (PeriodSummaryScreen for Week / Month opens as a full-screen
-/// page). Field report: "Note the Mileage modal looks less wide
-/// (thinner) than the other modals on the dashboard. … I like the
-/// week modal compared to the goal modal." Promoting goal-edit to
-/// a fullscreen dialog matches the period-summary shape and reads
-/// as a "drill-in" the same way.
-///
 /// The function name is kept (`showGoalEditorSheet`) so call sites
-/// don't churn; the surface inside is unchanged.
+/// don't churn; presentation goes through [showFullScreenForm], the
+/// shared create/edit-entity dialog wrapper.
 ///
 /// Resolves to a short screen-reader status message (`Goal saved` /
 /// `Goal deleted`) when the sheet committed a change, or null when the
@@ -31,23 +24,16 @@ Future<String?> showGoalEditorSheet(
   SettingsSyncService? settingsSync,
   RunGoal? existing,
 }) {
-  return Navigator.of(context).push<String>(
-    MaterialPageRoute<String>(
-      fullscreenDialog: true,
-      builder: (ctx) => Scaffold(
-        appBar: AppBar(
-          title: Text(existing == null
-              ? AppLocalizations.of(ctx).goalEditorTitleNew
-              : AppLocalizations.of(ctx).goalEditorTitleEdit),
-        ),
-        body: SafeArea(
-          child: _GoalEditorSheet(
-            preferences: preferences,
-            settingsSync: settingsSync,
-            existing: existing,
-          ),
-        ),
-      ),
+  final l10n = AppLocalizations.of(context);
+  return showFullScreenForm<String>(
+    context,
+    title: existing == null
+        ? l10n.goalEditorTitleNew
+        : l10n.goalEditorTitleEdit,
+    builder: (ctx) => _GoalEditorSheet(
+      preferences: preferences,
+      settingsSync: settingsSync,
+      existing: existing,
     ),
   );
 }
@@ -121,31 +107,14 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    final mq = MediaQuery.of(context);
     final unit = widget.preferences.unit;
     final isEditing = widget.existing != null;
 
-    // Bottom spacing must clear whichever system UI is currently showing:
-    // the soft keyboard (viewInsets.bottom) when focused, or the Samsung
-    // gesture/nav bar (viewPadding.bottom) when not. They never overlap
-    // in practice — the keyboard replaces the nav bar when up — so max()
-    // picks whichever is active.
-    final bottomInset = mq.viewInsets.bottom > 0
-        ? mq.viewInsets.bottom
-        : mq.viewPadding.bottom;
-
-    return Padding(
-      padding: EdgeInsets.fromLTRB(20, 20, 20, 20 + bottomInset),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            // Title now comes from the host Scaffold's AppBar (set
-            // by showGoalEditorSheet's fullscreenDialog wrapper).
-            // Drop the inline title so the heading isn't duplicated.
-            _sectionLabel(theme, l10n.goalEditorNameLabel),
-            const SizedBox(height: 8),
+    return FullScreenFormBody(
+      children: [
+        // Heading comes from the host AppBar (showFullScreenForm).
+        FormSectionLabel(l10n.goalEditorNameLabel),
+        const SizedBox(height: 8),
             TextField(
               controller: _titleCtl,
               textInputAction: TextInputAction.next,
@@ -160,7 +129,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               ),
             ),
             const SizedBox(height: 24),
-            _sectionLabel(theme, l10n.goalEditorPeriod),
+            FormSectionLabel(l10n.goalEditorPeriod),
             const SizedBox(height: 8),
             SegmentedButton<GoalPeriod>(
               showSelectedIcon: false,
@@ -178,7 +147,7 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               onSelectionChanged: (s) => setState(() => _period = s.first),
             ),
             const SizedBox(height: 24),
-            _sectionLabel(theme, l10n.goalEditorTargets),
+            FormSectionLabel(l10n.goalEditorTargets),
             const SizedBox(height: 4),
             Text(
               l10n.goalEditorTargetsHelp,
@@ -255,19 +224,8 @@ class _GoalEditorSheetState extends State<_GoalEditorSheet> {
               ],
             ),
           ],
-        ),
-      ),
-    );
+        );
   }
-
-  Widget _sectionLabel(ThemeData theme, String text) => Text(
-        text.toUpperCase(),
-        style: theme.textTheme.labelSmall?.copyWith(
-          color: theme.colorScheme.outline,
-          letterSpacing: 1.1,
-          fontWeight: FontWeight.w600,
-        ),
-      );
 
   Widget _targetField({
     required String label,
