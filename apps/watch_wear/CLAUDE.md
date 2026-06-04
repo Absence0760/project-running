@@ -69,7 +69,7 @@ apps/watch_wear/
             │   ├── WatchRunMetadata.kt      # `buildRunMetadata` + queued-run encoder
             │   ├── SessionBridge.kt         # Wearable Data Layer listener for phone-handed session
             │   ├── RoutesBridge.kt          # Wearable Data Layer listener for phone-pushed starred routes
-            │   ├── SessionStore.kt          # DataStore cache of the auth session
+            │   ├── SessionStore.kt          # EncryptedSharedPreferences cache of the auth session (tokens encrypted at rest)
             │   ├── RaceSessionClient.kt     # live race-mode ping client (`race_pings`)
             │   ├── ui/RunWatchApp.kt        # Compose-for-Wear screens
             │   ├── ui/RouteMiniMap.kt       # Polyline + position-dot + track-so-far + raster tiles
@@ -143,6 +143,22 @@ session in `SessionStore` so it's indistinguishable from a
 phone-handed-over session for the rest of the lifecycle. Typing an email
 on a 46mm screen is awful; the docs say so explicitly. Use it only when
 you don't have a paired Android phone.
+
+**Sign-out lifecycle.** `RunViewModel.tearDownSession()` is the single
+point where every per-user cache on the watch is wiped (it runs for both
+the user-initiated `signOut` and the phone-side `SessionEvent.Cleared`
+signal): in-memory Supabase credentials, the **encrypted** session
+(`SessionStore`, now `EncryptedSharedPreferences` — the access + refresh
+tokens are bearer credentials, never plaintext on disk), the route cache
+(`LocalRouteStore`), the upload queue **and its on-disk track files**
+(`LocalRunStore.clear()`), and the map-tile cache (`TileSource.clear()`).
+Clearing the run queue on sign-out is **fail-closed against cross-user
+upload** — `drainQueue` uploads under whatever session is current at
+drain time, so a run left queued across a sign-out would post user A's
+GPS trace into user B's account. The trade-off is that an offline,
+not-yet-synced run is dropped on sign-out; in practice the queue drains
+on every run-stop and every offline→online edge, so it's normally empty
+before a deliberate sign-out.
 
 Offline runs persist in `LocalRunStore` (DataStore, `watch_wear` prefs,
 key `queued_runs_v2`). `RunViewModel.drainQueue()` fires on app start after

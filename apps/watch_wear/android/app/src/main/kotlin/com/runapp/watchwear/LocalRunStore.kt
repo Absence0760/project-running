@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import java.io.File
 
 @Serializable
 data class QueuedLap(val number: Int, val atMs: Long, val distanceM: Double)
@@ -70,6 +71,28 @@ class LocalRunStore(private val context: Context) {
 
     suspend fun contains(id: String): Boolean =
         queue.first().any { it.id == id }
+
+    /// Wipe the entire upload queue, including the on-disk track files
+    /// the queued runs reference.
+    ///
+    /// Called from sign-out teardown ([RunViewModel.tearDownSession]).
+    /// The queue holds finished-but-unsynced runs, and `drainQueue`
+    /// uploads them under whatever session is current at drain time — so
+    /// leaving another user's runs queued across a sign-out would upload
+    /// user A's GPS traces into user B's account. Clearing on sign-out is
+    /// fail-closed against that cross-user leak. The trade-off is that a
+    /// run recorded offline and not yet synced is dropped on sign-out; in
+    /// practice the queue is drained on every run-stop and every
+    /// offline→online edge, so it's normally empty before a deliberate
+    /// sign-out. Deleting the track files too keeps the previous user's
+    /// traces from lingering recoverably in the cache dir.
+    suspend fun clear() {
+        val current = queue.first()
+        for (run in current) {
+            runCatching { File(run.trackFilePath).delete() }
+        }
+        context.dataStore.edit { prefs -> prefs.remove(KEY_QUEUE) }
+    }
 
     private suspend fun write(runs: List<QueuedRun>) {
         context.dataStore.edit { prefs ->

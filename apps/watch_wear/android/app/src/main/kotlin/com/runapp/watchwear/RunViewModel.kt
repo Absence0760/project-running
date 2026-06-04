@@ -509,10 +509,23 @@ class RunViewModel(application: Application) : AndroidViewModel(application) {
     /// phone-side sign-out signal that arrives on the SessionBridge as
     /// `SessionEvent.Cleared`. Mirrors `signOut`'s state mutation so the
     /// two paths can't drift.
+    ///
+    /// Sign-out is the single point where every per-user cache on the
+    /// watch is wiped so nothing carries over to the next user:
+    ///   - in-memory Supabase credentials (`clearCredentials`)
+    ///   - the encrypted session (`sessionStore`)
+    ///   - the route cache (`routeStore`)
+    ///   - the upload queue + its on-disk track files (`store`) — see
+    ///     `LocalRunStore.clear` for why this is fail-closed against
+    ///     cross-user upload
+    ///   - cached map tiles (`TileSource`)
     private suspend fun tearDownSession() {
         supabase.clearCredentials()
         sessionStore.clear()
         routeStore.clear()
+        // Drop unsynced runs (+ their track files) so they can't upload
+        // under the next user's credentials. See LocalRunStore.clear.
+        store.clear()
         // Drop cached map tiles too — prefetched route tiles reveal where
         // the signed-out user runs, so they don't carry over to the next
         // user on this watch.
