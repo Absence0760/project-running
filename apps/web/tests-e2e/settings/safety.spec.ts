@@ -5,7 +5,7 @@ import { USER_A, USER_B } from '../fixtures/users';
 
 /**
  * /settings/safety — safety-contact double opt-in (migration
- * 20261218_001, decisions §123). The owner adds a contact by email; the
+ * 20261218_001, decisions §131). The owner adds a contact by email; the
  * contact's opt-in is a separate step, so the row starts "pending" and
  * only the contact can flip it to "confirmed" — either in-app (an app
  * user matched by their account email) or via the email-link token (an

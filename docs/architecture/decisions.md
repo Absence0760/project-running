@@ -2827,6 +2827,22 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 131. Safety-contact finish alerts are a separate opt-in feature on a `safety_email` job kind — not a relaxation of the `run_completed` is_public gate
+
+**Decided (2026-06-04):** the family-club persona wanted a partner to be told a runner finished *even on a private run* (a safety use case). The existing `run_completed` notification (`20261101_001`) only fans **public** runs out to **followers**; removing its `is_public` gate would broadcast every private run to all followers — a privacy regression. So this is a distinct feature: a `safety_contacts` table (migration `20261218_001`) + a `safety_email` worker job kind that alerts ONE designated, double-opt-in contact on every finish regardless of `is_public`.
+
+**The shape.**
+- **Email-identified, account-linked on confirm.** A contact is always identified by `contact_email`; `contact_user_id` is filled only when an app-user contact confirms in-app. Storing only the email at add time is deliberate — it avoids an **account-enumeration** leak (an owner can't probe whether an arbitrary address belongs to a registered user). The contact-side cascade-delete still works because `contact_user_id` (when set) FK-cascades from `auth.users`; the owner side cascades on `owner_id`.
+- **Both-sides opt-in.** The owner's opt-in is implicit in creating the row; the contact's is `confirmed_at`. A row that exists AND is confirmed === both agreed. Two confirm paths: in-app (`my_pending_safety_requests()` matches the caller's account email via a definer read, `confirm_safety_contact()` links + confirms) and an unauthenticated email-link `confirm_safety_contact_by_token()` for external (non-app-user) contacts.
+- **Owner can't self-confirm.** There is no owner UPDATE policy and a BEFORE INSERT trigger forces `confirmed_at`/`contact_user_id` null, so an owner can never preset the opt-in and start emailing an address that never agreed.
+- **Finish trigger.** A `runs` AFTER INSERT enqueues a `safety_email` `finish` job per confirmed contact, **no `is_public` gate**, but with the same **24h recency guard** `run_completed` uses so a bulk history import can't blast a contact with years of old finishes.
+
+**Why a third email kind, neither `notification_email` nor `lifecycle_email`.** It can't be `notification_email`: there's no `notifications` inbox row, and — critically — it must NOT be gated on the *runner's* `email_notifications` preference (a safety contact opted in explicitly and must not be silenced by the runner's social-email setting). It can't be `lifecycle_email` either: the recipient may be a non-user identified only by an email, and the copy carries per-finish context (distance, time). So `safety_email` is its own kind with two templates (`finish`, `confirm`); no send-once log (a finish is a fresh event each run, and a rare duplicate beats a missed safety alert). Reuses the same SMTP transport + locale catalogue as the other two. `contact_user_id`, when present, only localizes the mail.
+
+**Trade-off / scope.** Mobile UI (a Settings safety surface) is deferred to a later session (R2-B); web Settings + the email-link confirm page ship now. Native push to a locked phone still waits on the FCM/APNs leg (`§ 117`) — email is the credible-now channel, matching the persona's "a watching partner already sees the finish" framing. Account *deletion* (Art 17) is covered by the FK cascades; the Art 20 *export* of `safety_contacts` is a documented follow-up (the export-guard keys on a literal `user_id` column, which this table doesn't have, so it isn't auto-flagged). **Don't** relax the `run_completed` is_public gate to cover this, **don't** route safety mail through `notification_email` (it would inherit the preference gate), and **don't** resolve email→user at add time (the enumeration leak).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

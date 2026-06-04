@@ -235,14 +235,28 @@ safety use case). This is NOT a fix to the `is_public` gate — removing that ga
 would broadcast every private run to all followers, a privacy regression. The
 real need is a distinct, opt-in feature:
 
-- [ ] **Safety contacts** (~1 wk) — a `safety_contacts` table (owner → contact
-  user/email, opt-in both ways), and a `run_completed`-style trigger (or a
-  branch in the live-hub finish path) that alerts ONLY the designated contact
-  on a finish regardless of `is_public`. Pairs naturally with the live-spectator
-  feature (a watching partner already sees the finish). The email leg of the
-  theme-B sender now ships (`decisions.md § 117`), so a safety-contact alert
-  could route through it; native push to a locked phone still waits on the
-  FCM/APNs leg. Until that feature is built the gate stays as-is by design.
+- [x] **Safety contacts** — **core shipped 2026-06-04** (migration
+  `20261218_001`, `decisions.md § 131`). A `safety_contacts` table (owner →
+  email-identified contact, account-linked on confirm; double opt-in via
+  `confirmed_at`), a `runs` AFTER INSERT trigger that enqueues a new
+  `safety_email` `finish` job per **confirmed** contact regardless of
+  `is_public` (24h recency guard, **not** gated on the runner's
+  `email_notifications` pref), and a `safety_contacts` AFTER INSERT trigger that
+  emails the opt-in `confirm` request. Confirm paths: in-app
+  (`my_pending_safety_requests` + `confirm_safety_contact`) and an
+  unauthenticated email-link (`confirm_safety_contact_by_token`). Web Settings →
+  Safety (`/settings/safety`) add/confirm/remove + the logged-out
+  `/safety/confirm` page. pgtap + Playwright + Go handler tests; owner-scoped
+  RLS with no owner-UPDATE (can't self-confirm). **Remaining:**
+  - **Mobile UI (R2-B)** — a mobile Settings safety surface (the table + email
+    leg are platform-agnostic; only the UI is web-first per `decisions.md § 24`).
+  - **Art 20 DSAR export of `safety_contacts`** — account *deletion* (Art 17) is
+    covered by the FK cascades, but the table isn't yet in the data-export path.
+    It's owned by the G1/`dataexport` worker file (separate session); the
+    export-guard keys on a literal `user_id` column, which this table doesn't
+    carry (`owner_id`/`contact_user_id`), so it isn't auto-flagged. Add
+    `safety_contacts` to `exportPersonalDataSpecs` when that path is next touched.
+  - Native push to a locked phone still waits on the FCM/APNs leg.
 
 ## Auto-follow on club join (persona round-5 social-group) — product decision
 

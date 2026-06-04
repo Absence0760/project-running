@@ -669,6 +669,67 @@ Indexes: `device_tokens_active` (partial index on `user_id` where
 writes to `auth.uid() = user_id`; the push worker reads with the
 service-role key to fan out. A trigger touches `updated_at` on update.
 
+#### `safety_contacts`
+
+Opt-in contacts emailed when their owner finishes a run — **even a private
+one** — so someone trusted knows the runner got back safely (migration
+`20261218_001`, [decisions.md § 131](../architecture/decisions.md)). A distinct
+feature from the `run_completed` follower fan-out, which stays gated on
+`is_public` by design.
+
+```sql
+create table safety_contacts (
+  id              uuid primary key default gen_random_uuid(),
+  owner_id        uuid not null references auth.users(id) on delete cascade,
+  contact_user_id uuid references auth.users(id) on delete cascade, -- linked on confirm
+  contact_email   text not null,        -- the identity; alerts go here
+  confirmed_at    timestamptz,          -- the contact's opt-in (NULL = pending)
+  confirm_token   uuid not null default gen_random_uuid(), -- email-link capability
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now(),
+  check (contact_email ~* '...email...'),
+  check (contact_user_id is null or contact_user_id <> owner_id)  -- not_self
+);
+-- unique (owner_id, lower(contact_email)); index on contact_user_id, confirm_token.
+```
+
+**Double opt-in.** The owner's consent is implicit in creating the row; the
+contact's is `confirmed_at`. A contact is identified by **email only** at add
+time (storing/looking-up a `user_id` then would leak account existence — an
+enumeration vector); `contact_user_id` is filled when an app-user contact
+confirms in-app, which enables the contact-side cascade-delete and localizes
+their alert.
+
+**RLS.** Owner: `select` / `insert` / `delete` on their own rows — **no owner
+`UPDATE`** policy, so an owner can never self-confirm a contact. A linked
+contact (`contact_user_id = auth.uid()`) gets `select` + `delete` (withdraw).
+A BEFORE INSERT trigger forces `confirmed_at` / `contact_user_id` null as
+defense in depth.
+
+**RPCs** (all `SECURITY DEFINER`):
+- `my_pending_safety_requests()` → pending rows whose `contact_email` matches
+  the caller's account email (the email→row match needs an `auth.users` read);
+  returns only the caller's own matches, so it leaks nothing.
+- `confirm_safety_contact(p_id)` — an app user confirms + links a pending row
+  addressed to their email.
+- `decline_safety_contact(p_id)` — decline a pending request / withdraw from a
+  confirmed one (covers the pre-link case the contact DELETE policy can't).
+- `confirm_safety_contact_by_token(p_token)` — unauthenticated email-link
+  confirm for external contacts (`anon`-callable; the v4 token is the
+  capability).
+
+**Triggers.** AFTER INSERT on `safety_contacts` enqueues a `safety_email`
+`confirm` job; AFTER INSERT on `runs` enqueues a `safety_email` `finish` job
+per **confirmed** contact regardless of `is_public`, with the same 24h recency
+guard `run_completed` uses. See [email.md](../features/email.md).
+
+Pinned by `safety_contacts_test.sql` (RLS isolation, no-owner-UPDATE, the
+force-unconfirmed guard, both confirm paths, the finish/confirm enqueues, the
+unconfirmed-contact-no-alert + bulk-import-skip cases). Account **deletion**
+(Art 17) is covered by the FK cascades; the Art 20 **export** of this table is
+a tracked follow-up (the export-guard keys on a literal `user_id` column, which
+this table doesn't carry, so it isn't auto-flagged).
+
 ---
 
 ### Fitness & analytics

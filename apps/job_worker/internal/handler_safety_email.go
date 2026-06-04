@@ -18,7 +18,7 @@ import (
 // contact opted in explicitly and must not be silenced by the *runner's*
 // social-email setting). Also not lifecycle_email: the recipient may be a
 // non-user identified only by an email, and the copy carries per-finish
-// context. decisions §123.
+// context. decisions §131.
 //
 // The address is in the payload (contact_email is always set by the
 // triggers). contact_user_id, when present, is used ONLY to localize the

@@ -4477,7 +4477,7 @@ export async function fetchRunGear(runId: string): Promise<Gear[]> {
 	return data as Gear[];
 }
 
-// --- Safety contacts (decisions §123) ---
+// --- Safety contacts (decisions §131) ---
 
 export interface SafetyContact {
 	id: string;

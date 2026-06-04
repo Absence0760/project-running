@@ -8,7 +8,7 @@ transactional / lifecycle mail.
 ## Architecture
 
 All email is sent **server-side by the Go worker** (`apps/job_worker/`), never
-from a client. Two job kinds on the `jobs` queue drive it:
+from a client. Three job kinds on the `jobs` queue drive it:
 
 - **`notification_email`** — mirrors a row in the `notifications` table (the
   same row the in-app bell renders). An AFTER-INSERT trigger on `notifications`
@@ -18,6 +18,15 @@ from a client. Two job kinds on the `jobs` queue drive it:
   `notifications` row, keyed by a `template` name (`{user_id, template}`). The
   welcome (signup), the Pro-purchase receipt, and the payment-failed dunning.
   `decisions.md § 119` + `§ 121`.
+- **`safety_email`** — safety-contact mail. Neither of the above: no
+  `notifications` row, and the recipient may be a **non-user identified only by
+  an email**, with per-finish context in the copy. Two templates — `confirm`
+  (the opt-in request, enqueued by the `safety_contacts` AFTER INSERT trigger)
+  and `finish` (the finish alert, enqueued by a `runs` AFTER INSERT trigger for
+  every **confirmed** contact **regardless of `is_public`**, with the same 24h
+  recency guard `run_completed` uses). Crucially **not** gated on the runner's
+  `email_notifications` preference — a safety contact opted in explicitly and
+  must not be silenced by the runner's social-email setting. `decisions.md § 131`.
 
 Shared pieces:
 
@@ -55,6 +64,8 @@ Shared pieces:
 | **Welcome** ("thanks for signing up") | `lifecycle_email` (`welcome`) | `user_profiles` AFTER INSERT | ✓ | §119 |
 | **Pro-purchase receipt** | `lifecycle_email` (`pro_welcome`) | `user_profiles` AFTER UPDATE, `subscription_tier` → paid | ✓ | §121 |
 | **Payment-failed dunning** | `lifecycle_email` (`payment_failed`) | `user_profiles` AFTER UPDATE, `billing_issue_at` null→non-null | ✓ | §121 |
+| **Safety-contact confirm** (opt-in request) | `safety_email` (`confirm`) | `safety_contacts` AFTER INSERT | ✓ | §131 |
+| **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` AFTER INSERT, per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
 | Branded HTML + inbox preview text | — | all of the above | ✓ | — |
 
 All shipped emails are end-to-end tested against the local Docker Mailpit
@@ -110,10 +121,14 @@ None of this sends in prod until an operator:
 
 - Worker: `apps/job_worker/internal/` — `mailer.go` (transport + HTML/text
   render), `email_i18n.go` (catalogue), `handler_notification_email.go`,
-  `handler_lifecycle_email.go`.
+  `handler_lifecycle_email.go`, `handler_safety_email.go`.
 - Migrations: `20261130_001` (notification channel + reminders), `20261202_001`
-  (welcome), `20261203_001` (subscription emails).
+  (welcome), `20261203_001` (subscription emails), `20261218_001` (safety
+  contacts + the `safety_email` kind).
+- Safety contacts: web Settings → Safety (`apps/web/src/routes/settings/safety/`)
+  + the logged-out email-link confirm page (`apps/web/src/routes/safety/confirm/`);
+  schema in `docs/backend/api_database.md`. Mobile UI is deferred (R2-B).
 - Clients (locale write): web `apps/web/src/routes/settings/preferences/`,
   mobile `apps/mobile_android/lib/screens/settings_preferences_screen.dart`.
 - ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),
-  §121 (subscription emails).
+  §121 (subscription emails), §131 (safety-contact alerts).

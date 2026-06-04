@@ -34,7 +34,7 @@
 --     runner's social-email setting);
 --   - not lifecycle_email — the recipient may be a non-user identified only
 --     by an email, and the copy carries per-finish context (distance, time).
--- decisions §123.
+-- decisions §131.
 
 -- ─────────────────────── table ───────────────────────
 
@@ -62,7 +62,7 @@ create table public.safety_contacts (
 
 comment on table public.safety_contacts is
   'Opt-in safety contacts alerted by email when their owner finishes a run, '
-  'regardless of is_public (decisions §123). Email-identified; contact_user_id '
+  'regardless of is_public (decisions §131). Email-identified; contact_user_id '
   'links an app user after they confirm. Owner-scoped RLS, cascade-delete from '
   'auth.users on both legs.';
 

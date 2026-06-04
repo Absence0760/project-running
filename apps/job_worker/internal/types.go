@@ -171,7 +171,7 @@ type LifecycleEmailPayload struct {
 // is set only for a contact linked to an app account — used purely to
 // localize the mail to their language; it is NOT a preference gate (a safety
 // contact opted in explicitly and must not be silenced by the runner's
-// email_notifications setting). decisions §123.
+// email_notifications setting). decisions §131.
 type SafetyEmailPayload struct {
 	Template      string  `json:"template"`
 	ContactUserID *string `json:"contact_user_id"`

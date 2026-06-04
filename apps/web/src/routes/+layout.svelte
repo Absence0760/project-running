@@ -163,7 +163,7 @@
 		'/auth/confirm-age',
 		'/onboarding',
 		// The safety-contact email-link confirm: reachable logged-out by an
-		// external (non-app-user) contact who only got the email (decisions §123).
+		// external (non-app-user) contact who only got the email (decisions §131).
 		'/safety/confirm',
 	];
 	const isShellless = (path: string) =>
