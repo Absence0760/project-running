@@ -1,41 +1,20 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 
 import 'package:api_client/api_client.dart';
 import 'package:core_models/core_models.dart';
-import 'package:flutter/foundation.dart';
-import 'package:path_provider/path_provider.dart';
 
-/// Sync state for a single gym workout. Mirrors [GearSyncState]: a
-/// freshly-logged workout is `pendingCreate` until the INSERT succeeds;
-/// a title / set-list edit becomes `pendingUpdate`; a deleted workout is
-/// kept as a tombstone with `pendingDelete` until the server DELETE
-/// returns 2xx.
-enum GymSyncState { synced, pendingCreate, pendingUpdate, pendingDelete }
+import 'offline_sync_store.dart';
 
-extension on GymSyncState {
-  String get wire {
-    switch (this) {
-      case GymSyncState.synced:
-        return 'synced';
-      case GymSyncState.pendingCreate:
-        return 'pending_create';
-      case GymSyncState.pendingUpdate:
-        return 'pending_update';
-      case GymSyncState.pendingDelete:
-        return 'pending_delete';
-    }
-  }
-}
+/// Sync state for a single gym workout. Alias of the shared [SyncState] so the
+/// store tests + screens keep the `GymSyncState` name.
+typedef GymSyncState = SyncState;
 
 /// One stored workout in the [LocalGymStore]. Holds the `gym_workouts`
 /// row shape plus the workout's sets inline (the composer always edits
 /// the whole set list, so they travel together) and the sync-state tag.
 /// Sets are positional — `set_index` is the list index, assigned on the
 /// eventual INSERT.
-class StoredGymWorkout {
+class StoredGymWorkout implements SyncEntry {
   StoredGymWorkout({
     required this.row,
     required this.sets,
@@ -45,11 +24,15 @@ class StoredGymWorkout {
 
   final Map<String, dynamic> row;
   final List<Map<String, dynamic>> sets;
-  final GymSyncState syncState;
+  @override
+  final SyncState syncState;
+  @override
   final DateTime lastModifiedAt;
 
+  @override
   String get id => row['id'] as String;
-  bool get isTombstone => syncState == GymSyncState.pendingDelete;
+  @override
+  bool get isTombstone => syncState == SyncState.pendingDelete;
 
   /// Typed domain view of this workout (scalars + inline sets). Lets screens
   /// read `.workout.title` instead of reaching into the raw `row` map.
@@ -60,6 +43,7 @@ class StoredGymWorkout {
     return v is String ? DateTime.tryParse(v) : null;
   }
 
+  @override
   Map<String, dynamic> toJson() => {
         kLocalStoreVersionKey: kLocalStoreSchemaVersion,
         'row': row,
@@ -74,33 +58,21 @@ class StoredGymWorkout {
         sets: ((json['sets'] as List?) ?? const [])
             .map((s) => Map<String, dynamic>.from(s as Map))
             .toList(),
-        syncState: _fromWire(json['sync_state'] as String?),
+        syncState: syncStateFromWire(json['sync_state'] as String?),
         lastModifiedAt:
             DateTime.tryParse(json['last_modified_at'] as String? ?? '')
                     ?.toUtc() ??
                 DateTime.now().toUtc(),
       );
-
-  static GymSyncState _fromWire(String? s) {
-    switch (s) {
-      case 'pending_create':
-        return GymSyncState.pendingCreate;
-      case 'pending_update':
-        return GymSyncState.pendingUpdate;
-      case 'pending_delete':
-        return GymSyncState.pendingDelete;
-      case 'synced':
-      default:
-        return GymSyncState.synced;
-    }
-  }
 }
 
 /// Disk-backed store for the user's gym workouts. Mirrors
-/// [LocalGearStore] (decisions §73): one JSON file per workout under
+/// [LocalGearStore] (decisions §73 + §122): one JSON file per workout under
 /// `<appDocs>/gym/`, in-memory `ChangeNotifier` so screens refresh on
 /// every mutation, sync drained on demand (sign-in, connectivity
-/// return, manual pull-to-refresh).
+/// return, manual pull-to-refresh). The per-row sync-state machine lives in
+/// [OfflineSyncStore]; this class supplies the gym-specific create / update /
+/// replace-from-server logic, including the inline `sets`.
 ///
 /// Offline contract:
 /// - `createLocal` mints a v4 UUID (the client value becomes the server
@@ -116,15 +88,36 @@ class StoredGymWorkout {
 /// - `syncWithServer(api)` drains every non-synced workout in the order
 ///   create → update → delete. Failures leave the workout in its pending
 ///   state for the next drain.
-class LocalGymStore extends ChangeNotifier {
-  static final Random _rand = Random.secure();
+class LocalGymStore extends OfflineSyncStore<StoredGymWorkout> {
+  @override
+  String get storeSubdir => 'gym';
 
-  Directory? _dir;
-  final Map<String, StoredGymWorkout> _rows = <String, StoredGymWorkout>{};
+  @override
+  String get debugLabel => 'local_gym_store';
+
+  @override
+  StoredGymWorkout entryFromJson(Map<String, dynamic> json) =>
+      StoredGymWorkout.fromJson(json);
+
+  @override
+  StoredGymWorkout asSynced(StoredGymWorkout entry) => StoredGymWorkout(
+        row: entry.row,
+        sets: entry.sets,
+        syncState: SyncState.synced,
+        lastModifiedAt: entry.lastModifiedAt,
+      );
+
+  @override
+  StoredGymWorkout asPendingCreate(StoredGymWorkout entry) => StoredGymWorkout(
+        row: entry.row,
+        sets: entry.sets,
+        syncState: SyncState.pendingCreate,
+        lastModifiedAt: entry.lastModifiedAt,
+      );
 
   /// Live workouts (excludes tombstones), newest-started first.
   List<StoredGymWorkout> get workouts {
-    final live = _rows.values.where((w) => !w.isTombstone).toList();
+    final live = rowsById.values.where((w) => !w.isTombstone).toList();
     live.sort((a, b) {
       final at = a.startedAt;
       final bt = b.startedAt;
@@ -137,65 +130,15 @@ class LocalGymStore extends ChangeNotifier {
   /// Serialised live workouts (excludes tombstones) in the
   /// `StoredGymWorkout.toJson()` shape, for the backup archive's
   /// `gym_workouts.json`.
-  List<Map<String, dynamic>> get backupRecords => _rows.values
+  List<Map<String, dynamic>> get backupRecords => rowsById.values
       .where((w) => !w.isTombstone)
       .map((w) => w.toJson())
       .toList();
 
   /// A single live workout by id, or null if missing / a tombstone.
   StoredGymWorkout? byId(String id) {
-    final w = _rows[id];
+    final w = rowsById[id];
     return (w == null || w.isTombstone) ? null : w;
-  }
-
-  /// True when at least one workout hasn't been pushed to the server.
-  bool get hasPending =>
-      _rows.values.any((w) => w.syncState != GymSyncState.synced);
-
-  Future<void> init({Directory? overrideDirectory}) async {
-    if (overrideDirectory != null) {
-      _dir = overrideDirectory;
-    } else {
-      final appDir = await getApplicationDocumentsDirectory();
-      _dir = Directory('${appDir.path}/gym');
-    }
-    if (!_dir!.existsSync()) {
-      _dir!.createSync(recursive: true);
-    }
-    await _loadAll();
-  }
-
-  Future<void> _loadAll() async {
-    _rows.clear();
-    final dir = _dir;
-    if (dir == null) return;
-    for (final entity in dir.listSync()) {
-      if (entity is! File || !entity.path.endsWith('.json')) continue;
-      try {
-        final raw = entity.readAsStringSync();
-        final json = jsonDecode(raw) as Map<String, dynamic>;
-        final stored =
-            StoredGymWorkout.fromJson(_migrateRecord(json, entity.path));
-        _rows[stored.id] = stored;
-      } catch (e) {
-        debugPrint('local_gym_store: corrupt row ${entity.path}: $e');
-      }
-    }
-    notifyListeners();
-  }
-
-  /// Forward-migration hook for a stored record read off disk. Resolves the
-  /// `_v` schema stamp and upgrades older shapes to the current one. The
-  /// current shape (v1) is forward-compatible with the legacy unstamped
-  /// shape (v0), so the migration is a pass-through today; future
-  /// incompatible changes bump [kLocalStoreSchemaVersion] and branch here.
-  Map<String, dynamic> _migrateRecord(Map<String, dynamic> json, String path) {
-    final version = localStoreRecordVersion(json);
-    if (version > kLocalStoreSchemaVersion) {
-      debugPrint(
-          'local_gym_store: record $path has _v=$version (> $kLocalStoreSchemaVersion); reading known fields only');
-    }
-    return json;
   }
 
   /// Mint a new UUID and persist a pending-create workout. Returns the
@@ -208,7 +151,7 @@ class LocalGymStore extends ChangeNotifier {
     bool isPublic = false,
     List<GymSetInput> sets = const [],
   }) async {
-    final id = _newUuid();
+    final id = OfflineSyncStore.newUuid();
     final now = DateTime.now().toUtc();
     final row = <String, dynamic>{
       'id': id,
@@ -224,10 +167,10 @@ class LocalGymStore extends ChangeNotifier {
     final stored = StoredGymWorkout(
       row: row,
       sets: _setsToMaps(sets),
-      syncState: GymSyncState.pendingCreate,
+      syncState: SyncState.pendingCreate,
       lastModifiedAt: now,
     );
-    await _persist(stored);
+    await persist(stored);
     return stored;
   }
 
@@ -242,7 +185,7 @@ class LocalGymStore extends ChangeNotifier {
     bool? isPublic,
     List<GymSetInput>? sets,
   }) async {
-    final existing = _rows[id];
+    final existing = rowsById[id];
     if (existing == null) return;
     final now = DateTime.now().toUtc();
     final next = Map<String, dynamic>.from(existing.row);
@@ -254,23 +197,23 @@ class LocalGymStore extends ChangeNotifier {
     final stored = StoredGymWorkout(
       row: next,
       sets: sets != null ? _setsToMaps(sets) : existing.sets,
-      syncState: existing.syncState == GymSyncState.pendingCreate
-          ? GymSyncState.pendingCreate
-          : GymSyncState.pendingUpdate,
+      syncState: existing.syncState == SyncState.pendingCreate
+          ? SyncState.pendingCreate
+          : SyncState.pendingUpdate,
       lastModifiedAt: now,
     );
-    await _persist(stored);
+    await persist(stored);
   }
 
   /// Delete a workout. A workout that was only ever local (pendingCreate)
   /// disappears immediately; a synced or pendingUpdate workout becomes a
   /// pendingDelete tombstone so the next sync issues the server DELETE.
   Future<void> deleteLocal(String id) async {
-    final existing = _rows[id];
+    final existing = rowsById[id];
     if (existing == null) return;
-    if (existing.syncState == GymSyncState.pendingCreate) {
-      _rows.remove(id);
-      final file = File('${_dir!.path}/$id.json');
+    if (existing.syncState == SyncState.pendingCreate) {
+      rowsById.remove(id);
+      final file = File('${dir!.path}/$id.json');
       if (file.existsSync()) file.deleteSync();
       notifyListeners();
       return;
@@ -278,9 +221,9 @@ class LocalGymStore extends ChangeNotifier {
     final tombstone = StoredGymWorkout(
       row: existing.row,
       sets: existing.sets,
-      syncState: GymSyncState.pendingDelete,
+      syncState: SyncState.pendingDelete,
     );
-    await _persist(tombstone);
+    await persist(tombstone);
   }
 
   /// Replace the in-memory state from a fresh server fetch (workout rows
@@ -293,18 +236,18 @@ class LocalGymStore extends ChangeNotifier {
   ) async {
     final preserved = <String, StoredGymWorkout>{};
     final syncedLocal = <String, StoredGymWorkout>{};
-    for (final entry in _rows.entries) {
-      if (entry.value.syncState != GymSyncState.synced) {
+    for (final entry in rowsById.entries) {
+      if (entry.value.syncState != SyncState.synced) {
         preserved[entry.key] = entry.value;
       } else {
         syncedLocal[entry.key] = entry.value;
       }
     }
-    _rows.clear();
+    rowsById.clear();
     for (final w in serverWorkouts) {
       final id = w.workout['id'] as String;
       if (preserved.containsKey(id)) {
-        _rows[id] = preserved.remove(id)!;
+        rowsById[id] = preserved.remove(id)!;
         continue;
       }
       // Newer-wins: keep the local synced copy when its modification clock
@@ -316,21 +259,21 @@ class LocalGymStore extends ChangeNotifier {
       if (local != null &&
           serverTs != null &&
           local.lastModifiedAt.isAfter(serverTs)) {
-        _rows[id] = local;
+        rowsById[id] = local;
       } else {
         // Build the synced row's clock from the server's last_modified_at
         // (not wall-clock now) so the next refresh's newer-wins compares
         // like-for-like.
-        _rows[id] = StoredGymWorkout(
+        rowsById[id] = StoredGymWorkout(
           row: w.workout,
           sets: w.sets.map((s) => Map<String, dynamic>.from(s)).toList(),
-          syncState: GymSyncState.synced,
+          syncState: SyncState.synced,
           lastModifiedAt: serverTs,
         );
       }
     }
-    _rows.addAll(preserved);
-    await _rewriteAll();
+    rowsById.addAll(preserved);
+    await rewriteAll();
     notifyListeners();
   }
 
@@ -339,142 +282,34 @@ class LocalGymStore extends ChangeNotifier {
     return null;
   }
 
-  /// Push every pending workout to the server. Returns the count of
-  /// workouts successfully drained — caller can surface a banner when ≥1.
-  Future<int> syncWithServer(ApiClient api) async {
-    var drained = 0;
-    for (final stored in List<StoredGymWorkout>.from(_rows.values)) {
-      try {
-        switch (stored.syncState) {
-          case GymSyncState.pendingCreate:
-            await api.createGymWorkout(
-              id: stored.id,
-              title: stored.row['title'] as String?,
-              startedAt: stored.startedAt ?? DateTime.now().toUtc(),
-              durationS: (stored.row['duration_s'] as num?)?.toInt(),
-              notes: stored.row['notes'] as String?,
-              isPublic: (stored.row['is_public'] as bool?) ?? false,
-              lastModifiedAt: stored.lastModifiedAt,
-              sets: _mapsToSets(stored.sets),
-            );
-            await _markSynced(stored.id);
-            drained++;
-            break;
-          case GymSyncState.pendingUpdate:
-            await api.updateGymWorkout(
-              stored.id,
-              title: stored.row['title'] as String?,
-              durationS: (stored.row['duration_s'] as num?)?.toInt(),
-              notes: stored.row['notes'] as String?,
-              isPublic: (stored.row['is_public'] as bool?) ?? false,
-              lastModifiedAt: stored.lastModifiedAt,
-              sets: _mapsToSets(stored.sets),
-            );
-            await _markSynced(stored.id);
-            drained++;
-            break;
-          case GymSyncState.pendingDelete:
-            await api.deleteGymWorkout(stored.id);
-            await _dropRow(stored.id);
-            drained++;
-            break;
-          case GymSyncState.synced:
-            break;
-        }
-      } catch (e) {
-        debugPrint('local_gym_store: sync failed for ${stored.id}: $e');
-      }
-    }
-    return drained;
-  }
+  @override
+  Future<void> pushCreate(ApiClient api, StoredGymWorkout stored) =>
+      api.createGymWorkout(
+        id: stored.id,
+        title: stored.row['title'] as String?,
+        startedAt: stored.startedAt ?? DateTime.now().toUtc(),
+        durationS: (stored.row['duration_s'] as num?)?.toInt(),
+        notes: stored.row['notes'] as String?,
+        isPublic: (stored.row['is_public'] as bool?) ?? false,
+        lastModifiedAt: stored.lastModifiedAt,
+        sets: _mapsToSets(stored.sets),
+      );
 
-  Future<void> _markSynced(String id) async {
-    final existing = _rows[id];
-    if (existing == null) return;
-    final stored = StoredGymWorkout(
-      row: existing.row,
-      sets: existing.sets,
-      syncState: GymSyncState.synced,
-      lastModifiedAt: existing.lastModifiedAt,
-    );
-    await _persist(stored);
-  }
+  @override
+  Future<void> pushUpdate(ApiClient api, StoredGymWorkout stored) =>
+      api.updateGymWorkout(
+        stored.id,
+        title: stored.row['title'] as String?,
+        durationS: (stored.row['duration_s'] as num?)?.toInt(),
+        notes: stored.row['notes'] as String?,
+        isPublic: (stored.row['is_public'] as bool?) ?? false,
+        lastModifiedAt: stored.lastModifiedAt,
+        sets: _mapsToSets(stored.sets),
+      );
 
-  /// Hydrate workouts from a backup archive (the `StoredGymWorkout.toJson()`
-  /// shape). Each is written as `pendingCreate` so `syncWithServer` pushes it
-  /// once the user signs in — the same queued-unsynced contract the offline
-  /// run/route restore uses. Additive + idempotent: an id already present is
-  /// left untouched so re-running a restore can't clobber a locally-newer copy.
-  Future<int> restoreFromBackup(List<Map<String, dynamic>> records) async {
-    var imported = 0;
-    for (final json in records) {
-      try {
-        final parsed = StoredGymWorkout.fromJson(json);
-        if (_rows.containsKey(parsed.id)) continue;
-        await _persist(StoredGymWorkout(
-          row: parsed.row,
-          sets: parsed.sets,
-          syncState: GymSyncState.pendingCreate,
-          lastModifiedAt: parsed.lastModifiedAt,
-        ));
-        imported++;
-      } catch (e) {
-        debugPrint('local_gym_store: restore skipped a record: $e');
-      }
-    }
-    return imported;
-  }
-
-  Future<void> _dropRow(String id) async {
-    _rows.remove(id);
-    final file = File('${_dir!.path}/$id.json');
-    if (file.existsSync()) file.deleteSync();
-    notifyListeners();
-  }
-
-  Future<void> _persist(StoredGymWorkout stored) async {
-    _rows[stored.id] = stored;
-    final file = File('${_dir!.path}/${stored.id}.json');
-    await writeJsonAtomic(file, stored.toJson());
-    notifyListeners();
-  }
-
-  /// Re-point the on-disk state at the current `_rows`. Writes every
-  /// workout first — each through `writeJsonAtomic`, which writes a `.tmp`
-  /// sibling then renames it over the target, so a crash mid-rewrite leaves
-  /// either the prior file or the fully written new one, never a partial or
-  /// a wiped directory (which would silently lose unsynced pendingCreate
-  /// workouts). Only once the new state is durably on disk do we delete
-  /// files for ids that no longer exist.
-  ///
-  /// Both passes isolate per-file failures so one bad row can't abort the
-  /// rest. A row whose write throws is still added to `keep` so its prior
-  /// file (left intact by the atomic write) isn't then deleted as an orphan
-  /// — degrading to "this row keeps its last-good version" rather than
-  /// losing it.
-  Future<void> _rewriteAll() async {
-    final dir = _dir;
-    if (dir == null) return;
-    final keep = <String>{};
-    for (final stored in _rows.values) {
-      final file = File('${dir.path}/${stored.id}.json');
-      keep.add(file.path);
-      try {
-        await writeJsonAtomic(file, stored.toJson());
-      } catch (e) {
-        debugPrint('local_gym_store: rewrite write failed ${file.path}: $e');
-      }
-    }
-    for (final entity in dir.listSync()) {
-      if (entity is! File || !entity.path.endsWith('.json')) continue;
-      if (keep.contains(entity.path)) continue;
-      try {
-        await entity.delete();
-      } catch (e) {
-        debugPrint('local_gym_store: orphan delete failed ${entity.path}: $e');
-      }
-    }
-  }
+  @override
+  Future<void> pushDelete(ApiClient api, StoredGymWorkout stored) =>
+      api.deleteGymWorkout(stored.id);
 
   static List<Map<String, dynamic>> _setsToMaps(List<GymSetInput> sets) => [
         for (final s in sets)
@@ -495,22 +330,4 @@ class LocalGymStore extends ChangeNotifier {
             rpe: (s['rpe'] as num?)?.toDouble(),
           ),
       ];
-
-  /// Crypto-strong v4 UUID. Avoids pulling in a dedicated `uuid`
-  /// package — `Random.secure()` is enough.
-  static String _newUuid() {
-    final b = List<int>.generate(16, (_) => _rand.nextInt(256));
-    b[6] = (b[6] & 0x0f) | 0x40;
-    b[8] = (b[8] & 0x3f) | 0x80;
-    String hex(int n) => n.toRadixString(16).padLeft(2, '0');
-    final s = b.map(hex).join();
-    return '${s.substring(0, 8)}-${s.substring(8, 12)}-'
-        '${s.substring(12, 16)}-${s.substring(16, 20)}-${s.substring(20)}';
-  }
-
-  @visibleForTesting
-  void debugClear() {
-    _rows.clear();
-    notifyListeners();
-  }
 }
