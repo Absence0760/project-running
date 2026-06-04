@@ -163,9 +163,10 @@ select results_eq(
 -- 9. Owner CAN DELETE their own club (positive control on the
 --    owner-only DELETE policy).
 update club_members
-  set status = 'inactive'
+  set status = 'rejected'
   where club_id = '66666666-6666-6666-6666-666666660001';
--- ↑ avoid the auto-enrolled owner row tripping the cascade
+-- ↑ avoid the auto-enrolled owner row tripping the cascade. 'rejected'
+-- (a legal status per 20261210_001's CHECK) stands in for "not active".
 delete from clubs where id = '66666666-6666-6666-6666-666666660001';
 select is_empty(
   $$ select id from clubs
