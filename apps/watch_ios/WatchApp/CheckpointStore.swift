@@ -96,7 +96,16 @@ class CheckpointStore {
     init(runId: String) {
         let dir = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("run_checkpoint", isDirectory: true)
-        try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // A failure here means every subsequent track append silently drops
+        // (the file can't be created), so surface it rather than swallowing
+        // with `try?` — matches the logging in `appendTrackPoints`.
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        } catch {
+            #if DEBUG
+            print("CheckpointStore: failed to create checkpoint dir \(dir.path): \(error)")
+            #endif
+        }
         trackFileURL = dir.appendingPathComponent("\(runId).ndjson")
     }
 
