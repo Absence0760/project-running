@@ -2453,6 +2453,7 @@ class UserProfileRow {
   static const String colAgeConfirmedAt = 'age_confirmed_at';
   static const String colTermsAcceptedAt = 'terms_accepted_at';
   static const String colOnboardedAt = 'onboarded_at';
+  static const String colHeightCm = 'height_cm';
 
   final String id;
   final String? displayName;
@@ -2470,6 +2471,7 @@ class UserProfileRow {
   final DateTime? ageConfirmedAt;
   final DateTime? termsAcceptedAt;
   final DateTime? onboardedAt;
+  final double? heightCm;
 
   const UserProfileRow({
     required this.id,
@@ -2488,6 +2490,7 @@ class UserProfileRow {
     this.ageConfirmedAt,
     this.termsAcceptedAt,
     this.onboardedAt,
+    this.heightCm,
   });
 
   factory UserProfileRow.fromJson(Map<String, dynamic> json) => UserProfileRow(
@@ -2507,6 +2510,7 @@ class UserProfileRow {
     ageConfirmedAt: json['age_confirmed_at'] == null ? null : DateTime.parse(json['age_confirmed_at'] as String),
     termsAcceptedAt: json['terms_accepted_at'] == null ? null : DateTime.parse(json['terms_accepted_at'] as String),
     onboardedAt: json['onboarded_at'] == null ? null : DateTime.parse(json['onboarded_at'] as String),
+    heightCm: (json['height_cm'] as num?)?.toDouble(),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -2526,6 +2530,7 @@ class UserProfileRow {
     colAgeConfirmedAt: ageConfirmedAt?.toIso8601String(),
     colTermsAcceptedAt: termsAcceptedAt?.toIso8601String(),
     colOnboardedAt: onboardedAt?.toIso8601String(),
+    colHeightCm: heightCm,
   };
 }
 

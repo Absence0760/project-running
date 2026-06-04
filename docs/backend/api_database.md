@@ -586,8 +586,9 @@ create table user_profiles (
   subscription_at          timestamptz,
   gender                   text,                                -- 'male' | 'female' | 'nonbinary' | null
   date_of_birth            date,
+  height_cm                numeric(5,1),                        -- nutrition BMR (20261216_001); owner-only, off the public-safe grant
   coach_consent_at         timestamptz,                         -- GDPR Art 6(1)(a) — gates /api/coach
-  health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB persistence
+  health_data_consent_at   timestamptz,                         -- GDPR Art 9(2)(a) — gates gender + DOB + height + weight persistence
   created_at               timestamptz default now()
 );
 -- CHECK constraint enforces subscription_tier ∈ ('free','pro','lifetime') —
@@ -614,6 +615,25 @@ create table user_profiles (
 -- write (the Art 7(3) withdrawal) stays allowed for health-data
 -- consent; coach consent is one-way (cleared only on account deletion).
 ```
+
+`height_cm` (migration `20261216_001`, nutrition BMR) is **special-category health data** and shares the `gender`/`date_of_birth` posture: it is **owner-only** — not on the `20260707_001` public-safe column grant, so it's read back through `get_my_profile()` and never exposed to other authenticated callers or anon — and its persistence is gated on `health_data_consent_at` at the client layer, exactly like gender/DOB. Same for the `body_metrics` weight series below.
+
+#### `body_metrics`
+
+Weight time-series for the nutrition Mifflin-St Jeor BMR target (migration `20261216_001`). Weight is a **time-series**, not a single mutable column, because a trend matters and a column loses history. **GDPR special-category health data**: owner-only RLS (no public-read policy — unlike `gym_workouts` / `food_log`), cascade-deletes from `auth.users`, gated on `health_data_consent_at` at the client layer, and must be in the DSAR export path (G1/G6).
+
+```sql
+create table body_metrics (
+  id           uuid primary key default gen_random_uuid(),
+  user_id      uuid references auth.users(id) on delete cascade not null,
+  recorded_at  timestamptz not null default now(),
+  weight_kg    numeric(5,2) not null check (weight_kg > 0 and weight_kg <= 500),
+  created_at   timestamptz not null default now()
+);
+-- index (user_id, recorded_at desc); RLS: owner-only for all four commands.
+```
+
+RLS + range CHECK + cascade-delete + the owner-only `height_cm` grant are pinned by `body_metrics_rls_test.sql`.
 
 #### `user_settings` / `user_device_settings`
 

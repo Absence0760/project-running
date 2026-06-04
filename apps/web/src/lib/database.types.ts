@@ -55,6 +55,30 @@ export type Database = {
         }
         Relationships: []
       }
+      body_metrics: {
+        Row: {
+          created_at: string
+          id: string
+          recorded_at: string
+          user_id: string
+          weight_kg: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          user_id: string
+          weight_kg: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          recorded_at?: string
+          user_id?: string
+          weight_kg?: number
+        }
+        Relationships: []
+      }
       club_members: {
         Row: {
           activity_waiver_ack_at: string | null
@@ -2252,6 +2276,7 @@ export type Database = {
           display_name: string | null
           gender: string | null
           health_data_consent_at: string | null
+          height_cm: number | null
           id: string
           onboarded_at: string | null
           parkrun_number: string | null
@@ -2270,6 +2295,7 @@ export type Database = {
           display_name?: string | null
           gender?: string | null
           health_data_consent_at?: string | null
+          height_cm?: number | null
           id: string
           onboarded_at?: string | null
           parkrun_number?: string | null
@@ -2288,6 +2314,7 @@ export type Database = {
           display_name?: string | null
           gender?: string | null
           health_data_consent_at?: string | null
+          height_cm?: number | null
           id?: string
           onboarded_at?: string | null
           parkrun_number?: string | null
@@ -2870,6 +2897,7 @@ export type Database = {
           display_name: string | null
           gender: string | null
           health_data_consent_at: string | null
+          height_cm: number | null
           id: string
           onboarded_at: string | null
           parkrun_number: string | null
