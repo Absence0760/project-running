@@ -4067,9 +4067,9 @@ class ApiClient {
         .from(FoodLogRow.table)
         .select()
         .eq(FoodLogRow.colUserId, uid)
-        .gte(FoodLogRow.colLoggedAt, from.toIso8601String())
-        .lt(FoodLogRow.colLoggedAt, to.toIso8601String())
-        .order(FoodLogRow.colLoggedAt, ascending: false);
+        .gte(FoodLogRow.colStartedAt, from.toIso8601String())
+        .lt(FoodLogRow.colStartedAt, to.toIso8601String())
+        .order(FoodLogRow.colStartedAt, ascending: false);
     return (data as List)
         .map((r) => FoodLogRow.fromJson(r as Map<String, dynamic>))
         .toList();
@@ -4097,7 +4097,7 @@ class ApiClient {
         .insert({
           if (id != null) FoodLogRow.colId: id,
           FoodLogRow.colUserId: uid,
-          FoodLogRow.colLoggedAt: loggedAt.toIso8601String(),
+          FoodLogRow.colStartedAt: loggedAt.toIso8601String(),
           FoodLogRow.colItemName: itemName,
           FoodLogRow.colMealSlot: mealSlot,
           FoodLogRow.colCalories: calories,

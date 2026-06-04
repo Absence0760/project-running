@@ -713,9 +713,9 @@ export type Database = {
           is_public: boolean
           item_name: string
           last_modified_at: string
-          logged_at: string
           meal_slot: string | null
           protein_g: number | null
+          started_at: string
           user_id: string
         }
         Insert: {
@@ -728,9 +728,9 @@ export type Database = {
           is_public?: boolean
           item_name: string
           last_modified_at?: string
-          logged_at?: string
           meal_slot?: string | null
           protein_g?: number | null
+          started_at?: string
           user_id: string
         }
         Update: {
@@ -743,9 +743,9 @@ export type Database = {
           is_public?: boolean
           item_name?: string
           last_modified_at?: string
-          logged_at?: string
           meal_slot?: string | null
           protein_g?: number | null
+          started_at?: string
           user_id?: string
         }
         Relationships: []

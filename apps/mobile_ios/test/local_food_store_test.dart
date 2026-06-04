@@ -35,7 +35,7 @@ class _FakeFoodApi extends ApiClient {
     return FoodLogRow(
       id: id ?? 'server-generated',
       userId: 'test-user',
-      loggedAt: loggedAt,
+      startedAt: loggedAt,
       itemName: itemName,
       mealSlot: mealSlot,
       calories: calories,

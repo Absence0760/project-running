@@ -64,6 +64,11 @@ If you deleted code, do not leave a `// removed X because Y` stub behind. The co
 
 - Table names: plural, `snake_case` (`runs`, `routes`, `user_profiles`).
 - Column names: `snake_case`. Timestamp columns: `{verb}_at` (`created_at`, `started_at`, `last_sync_at`).
+- **The activity timestamp is `started_at` on every modality table** — `runs`, `gym_workouts`, `food_log` (renamed from `logged_at` in `20261208_001`, F8). Don't reintroduce a per-table synonym (`logged_at` / `at`) for "when the thing happened"; the `activities` view depends on the shared name.
+- **Two modification clocks, by design — don't conflate them:**
+  - `updated_at` = **server clock**, maintained by a server-side trigger (e.g. `runs.updated_at`, `run_comments.updated_at`). Authoritative "when the row was last written server-side."
+  - `last_modified_at` = **client-stamped sync clock** on the offline-first tables (`gym_workouts`, `food_log`, `gear`). Set by the client at write time with **no** server trigger — a trigger would clobber the timestamp the newer-wins reconciliation depends on (see [decisions.md § 73](decisions.md) / § 122). A row on these tables therefore has `last_modified_at` but no `updated_at`.
+  - Same word "modified," opposite owner. A new sync table uses `last_modified_at` (client-owned); a server-authoritative table uses `updated_at`. Renaming `runs.updated_at` → `server_updated_at` was considered (F8) and rejected: ~50 client read sites for zero behavioural gain. The names stay; this split is the contract.
 - Primary keys: `id uuid primary key default gen_random_uuid()` unless the table references `auth.users(id)` directly.
 - Foreign keys: `{table}_id`, e.g. `route_id` on `runs`.
 - Migration files: `{YYYYMMDD}_{nnn}_{description}.sql`. The `nnn` is the ordinal within a day (`001`, `002`, ...).

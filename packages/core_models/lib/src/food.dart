@@ -21,6 +21,10 @@ class FoodEntry {
   });
 
   final String id;
+  // Sourced from the renamed `started_at` column (F8 / 20261208_001); the
+  // Dart field keeps the `loggedAt` name until the mobile LocalFoodStore +
+  // its callers migrate in Round 4 (renaming it now would churn the
+  // byte-identical mobile twin tests, which are out of this change's scope).
   final DateTime? loggedAt;
   final String itemName;
   final String? mealSlot;
@@ -35,7 +39,7 @@ class FoodEntry {
 
   factory FoodEntry.fromRow(Map<String, dynamic> row) => FoodEntry(
         id: row[FoodLogRow.colId] as String,
-        loggedAt: _parseTs(row[FoodLogRow.colLoggedAt]),
+        loggedAt: _parseTs(row[FoodLogRow.colStartedAt]),
         itemName: (row[FoodLogRow.colItemName] as String?) ?? '',
         mealSlot: row[FoodLogRow.colMealSlot] as String?,
         calories: (row[FoodLogRow.colCalories] as num?)?.toDouble(),

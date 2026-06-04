@@ -14,6 +14,8 @@
 //   alter table NAME add column COL TYPE [constraints];
 //   alter table NAME add column A TYPE, add column B TYPE;
 //   alter table NAME drop column COL;
+//   alter table NAME rename column OLD to NEW;
+//   alter table NAME alter column COL set/drop not null;
 // Other statements (indexes, functions, RLS, storage, policies) are ignored.
 //
 // jsonb/json columns generate as `dynamic` since Postgres doesn't know the
@@ -359,6 +361,28 @@ void _parseAlterTable(String stmt, Map<String, Map<String, _Column>> schema) {
         .first
         .toLowerCase();
     schema[table]?.remove(name);
+  } else if (lower.startsWith('rename column')) {
+    // alter table t rename column old to new
+    final m = RegExp(
+      r'^rename\s+column\s+(\w+)\s+to\s+(\w+)',
+      caseSensitive: false,
+    ).firstMatch(rest);
+    if (m != null) {
+      final oldName = m.group(1)!.toLowerCase();
+      final newName = m.group(2)!.toLowerCase();
+      final col = schema[table]?.remove(oldName);
+      if (col != null) {
+        // _Column.name is final — clone it under the new name, preserving
+        // every other attribute.
+        schema[table]![newName] = _Column(
+          newName,
+          col.pgType,
+          col.nullable,
+          col.waypointJsonb,
+          isArray: col.isArray,
+        );
+      }
+    }
   } else if (lower.startsWith('alter column')) {
     // Handles:
     //   alter table t alter column col set not null

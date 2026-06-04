@@ -732,7 +732,6 @@ class FoodLogRow {
   static const String table = 'food_log';
   static const String colId = 'id';
   static const String colUserId = 'user_id';
-  static const String colLoggedAt = 'logged_at';
   static const String colItemName = 'item_name';
   static const String colMealSlot = 'meal_slot';
   static const String colCalories = 'calories';
@@ -743,10 +742,10 @@ class FoodLogRow {
   static const String colExternalId = 'external_id';
   static const String colLastModifiedAt = 'last_modified_at';
   static const String colCreatedAt = 'created_at';
+  static const String colStartedAt = 'started_at';
 
   final String id;
   final String userId;
-  final DateTime loggedAt;
   final String itemName;
   final String? mealSlot;
   final double? calories;
@@ -757,11 +756,11 @@ class FoodLogRow {
   final String? externalId;
   final DateTime lastModifiedAt;
   final DateTime createdAt;
+  final DateTime startedAt;
 
   const FoodLogRow({
     required this.id,
     required this.userId,
-    required this.loggedAt,
     required this.itemName,
     this.mealSlot,
     this.calories,
@@ -772,12 +771,12 @@ class FoodLogRow {
     this.externalId,
     required this.lastModifiedAt,
     required this.createdAt,
+    required this.startedAt,
   });
 
   factory FoodLogRow.fromJson(Map<String, dynamic> json) => FoodLogRow(
     id: json['id'] as String,
     userId: json['user_id'] as String,
-    loggedAt: DateTime.parse(json['logged_at'] as String),
     itemName: json['item_name'] as String,
     mealSlot: json['meal_slot'] as String?,
     calories: (json['calories'] as num?)?.toDouble(),
@@ -788,12 +787,12 @@ class FoodLogRow {
     externalId: json['external_id'] as String?,
     lastModifiedAt: DateTime.parse(json['last_modified_at'] as String),
     createdAt: DateTime.parse(json['created_at'] as String),
+    startedAt: DateTime.parse(json['started_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
     colId: id,
     colUserId: userId,
-    colLoggedAt: loggedAt.toIso8601String(),
     colItemName: itemName,
     colMealSlot: mealSlot,
     colCalories: calories,
@@ -804,6 +803,7 @@ class FoodLogRow {
     colExternalId: externalId,
     colLastModifiedAt: lastModifiedAt.toIso8601String(),
     colCreatedAt: createdAt.toIso8601String(),
+    colStartedAt: startedAt.toIso8601String(),
   };
 }
 

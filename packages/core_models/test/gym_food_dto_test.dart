@@ -66,7 +66,7 @@ void main() {
     test('parses scalars', () {
       final f = FoodEntry.fromRow({
         'id': 'f1',
-        'logged_at': '2026-06-02T12:00:00.000Z',
+        'started_at': '2026-06-02T12:00:00.000Z',
         'item_name': 'Oatmeal',
         'meal_slot': 'breakfast',
         'calories': 350.0,
@@ -79,6 +79,8 @@ void main() {
         'created_at': '2026-06-02T12:00:00.000Z',
       });
       expect(f.id, 'f1');
+      // Field still named loggedAt; sourced from the renamed started_at
+      // column (F8). The input key below is started_at accordingly.
       expect(f.loggedAt, DateTime.utc(2026, 6, 2, 12));
       expect(f.itemName, 'Oatmeal');
       expect(f.mealSlot, 'breakfast');
