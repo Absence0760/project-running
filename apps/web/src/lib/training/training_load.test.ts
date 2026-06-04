@@ -331,6 +331,54 @@ test('lift stress is separable — run-only series is recoverable, lifts raise f
 	);
 });
 
+test('run-only readiness (ctl/atl/tsb) is recoverable and uncorrupted by lift magnitude', () => {
+	// The separability test above pins the runStress INPUT. This pins the
+	// DERIVED layer the runner actually trusts — the ctl/atl/tsb readiness.
+	// "Run-only readiness must be recoverable from run contributions alone even
+	// when lift-load is present" (multi_modal.md § Lift training-load spec): a
+	// lift-load modelling bug must never be able to move the run-only numbers.
+	const ref = new Date('2026-05-01T12:00:00Z');
+	const day = new Date(ref);
+	day.setDate(day.getDate() - 1);
+	const runs: RunForLoad[] = [
+		{ started_at: day.toISOString(), distance_m: 8000, duration_s: 2400 },
+	];
+	const normalLifts: LiftForLoad[] = [{ ...kHardLiftSession, started_at: day.toISOString() }];
+	// A pathological session that pins to the per-session cap — a different,
+	// larger lift load than the normal session.
+	const absurdLifts: LiftForLoad[] = [
+		{
+			started_at: day.toISOString(),
+			sets: Array.from({ length: 20 }, () => ({ reps: 10, weight_kg: 200, rpe: 10 })),
+		},
+	];
+
+	const runOnly = computeTrainingLoadSeries(runs, {}, 90, ref);
+	const withNormal = computeTrainingLoadSeries(runs, {}, 90, ref, normalLifts);
+	const withAbsurd = computeTrainingLoadSeries(runs, {}, 90, ref, absurdLifts);
+
+	// The run contribution is source-separable regardless of WHAT lifts exist:
+	// the runStress channel of either lifts-present series is the run-only total.
+	assert.deepEqual(withNormal.map((p) => p.runStress), runOnly.map((p) => p.stress));
+	assert.deepEqual(withAbsurd.map((p) => p.runStress), runOnly.map((p) => p.stress));
+
+	// Recovery: dropping lifts reproduces the run-only readiness, and that
+	// recovery is byte-identical no matter how large the lift load was. The
+	// run-only ctl/atl/tsb a runner trusts cannot be moved by any lift bug.
+	const readiness = (s: typeof runOnly) => s.map((p) => ({ ctl: p.ctl, atl: p.atl, tsb: p.tsb }));
+	assert.deepEqual(readiness(computeTrainingLoadSeries(runs, {}, 90, ref)), readiness(runOnly));
+
+	// But lifts DO feed the COMBINED readiness (else the source tag is vacuous),
+	// and a heavier session moves the combined curve further from run-only.
+	const lastRun = runOnly[runOnly.length - 1];
+	const lastNormal = withNormal[withNormal.length - 1];
+	const lastAbsurd = withAbsurd[withAbsurd.length - 1];
+	assert.ok(lastNormal.atl > lastRun.atl, 'lifts raise combined fatigue');
+	assert.ok(lastAbsurd.atl > lastNormal.atl, 'a heavier lift raises combined fatigue further');
+	assert.ok(lastNormal.tsb < lastRun.tsb, 'lifts lower combined form');
+	assert.ok(lastAbsurd.tsb < lastNormal.tsb, 'a heavier lift lowers combined form further');
+});
+
 test('computeTrainingLoadSeries — no lifts leaves liftStress 0 and stress unchanged', () => {
 	const ref = new Date('2026-05-01T12:00:00Z');
 	const runDay = new Date(ref);

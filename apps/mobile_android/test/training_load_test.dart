@@ -368,6 +368,59 @@ void main() {
       expect(withLifts.last.atl > runOnly.last.atl, isTrue);
     });
 
+    test('run-only readiness (ctl/atl/tsb) is recoverable and uncorrupted by '
+        'lift magnitude', () {
+      // The separability test above pins the runStress INPUT. This pins the
+      // DERIVED layer the runner actually trusts — the ctl/atl/tsb readiness.
+      // "Run-only readiness must be recoverable from run contributions alone
+      // even when lift-load is present" (multi_modal.md § Lift training-load
+      // spec): a lift-load modelling bug must never move the run-only numbers.
+      final ref = DateTime.utc(2026, 5, 1, 12);
+      final day = ref.subtract(const Duration(days: 1));
+      final runs = [_run(distanceM: 8000, durationS: 2400, startedAt: day)];
+      final normalLifts = [hardLiftSession(day)];
+      // A pathological session that pins to the per-session cap — a different,
+      // larger lift load than the normal session.
+      final absurdLifts = [
+        LiftForLoad(
+          startedAt: day,
+          sets: List.generate(
+            20,
+            (_) => const LiftSetForLoad(reps: 10, weightKg: 200, rpe: 10),
+          ),
+        ),
+      ];
+
+      final runOnly = computeTrainingLoadSeries(runs, endDate: ref);
+      final withNormal =
+          computeTrainingLoadSeries(runs, endDate: ref, lifts: normalLifts);
+      final withAbsurd =
+          computeTrainingLoadSeries(runs, endDate: ref, lifts: absurdLifts);
+
+      // The run contribution is source-separable regardless of WHAT lifts
+      // exist: the runStress channel is the run-only total either way.
+      for (var i = 0; i < runOnly.length; i++) {
+        expect(withNormal[i].runStress, runOnly[i].stress);
+        expect(withAbsurd[i].runStress, runOnly[i].stress);
+      }
+
+      // Recovery: dropping lifts reproduces the run-only readiness, and that
+      // recovery is byte-identical no matter how large the lift load was.
+      final recovered = computeTrainingLoadSeries(runs, endDate: ref);
+      for (var i = 0; i < runOnly.length; i++) {
+        expect(recovered[i].ctl, runOnly[i].ctl);
+        expect(recovered[i].atl, runOnly[i].atl);
+        expect(recovered[i].tsb, runOnly[i].tsb);
+      }
+
+      // But lifts DO feed the COMBINED readiness (else the source tag is
+      // vacuous), and a heavier session moves it further from run-only.
+      expect(withNormal.last.atl > runOnly.last.atl, isTrue);
+      expect(withAbsurd.last.atl > withNormal.last.atl, isTrue);
+      expect(withNormal.last.tsb < runOnly.last.tsb, isTrue);
+      expect(withAbsurd.last.tsb < withNormal.last.tsb, isTrue);
+    });
+
     test('no lifts leaves liftStress 0 and stress unchanged', () {
       final ref = DateTime.utc(2026, 5, 1, 12);
       final runs = [
