@@ -61,7 +61,18 @@ struct ContentView: View {
                 // even though `WatchIngestBridge.swift` filters for it.
                 // Hardcode "run" to match Wear OS until the watch app
                 // grows an activity picker.
-                "activity_type": "run"
+                "activity_type": "run",
+                // Mobile's delta-fetch (`runs_screen._fetchRemote`) filters
+                // rows on `metadata->>'last_modified_at' > since`. Without
+                // this stamp an Apple-Watch run is invisible to every
+                // incremental refresh after the first full pull — it never
+                // resurfaces on another device. Always present, matching
+                // Wear's `WatchRunMetadata.buildRunMetadata`. UTC + `Z`
+                // suffix (ISO8601DateFormatter's default zone) so the
+                // lexicographic `>` compare against the cursor is sound.
+                // (steps + laps stay omitted — this watch records neither,
+                // and Wear likewise omits them when absent.)
+                "last_modified_at": formatter.string(from: Date())
             ]
             if let bpm = run.averageBPM { metadata["avg_bpm"] = bpm }
             connectivity.transferRun(fileURL: fileURL, metadata: metadata)

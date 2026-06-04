@@ -90,6 +90,11 @@ actor SupabaseService {
         // sets it from `WCSession.transferFile` metadata; this DEBUG-only
         // direct path has no phone in the loop, so default to "run" — the
         // Apple Watch app only records runs today.
+        //
+        // `last_modified_at` mirrors the WCSession payload in `ContentView`:
+        // mobile's delta-fetch filters on `metadata->>'last_modified_at'`, so
+        // a direct-uploaded run without it would never resurface on another
+        // device after the first full pull.
         let runPayload = RunPayload(
             id: run.id,
             user_id: userId,
@@ -98,7 +103,10 @@ actor SupabaseService {
             distance_m: run.distanceMetres,
             track_url: objectPath,
             source: "watch",
-            metadata: ["activity_type": "run"]
+            metadata: [
+                "activity_type": "run",
+                "last_modified_at": formatter.string(from: Date()),
+            ]
         )
 
         let url = URL(string: "\(baseURL)/rest/v1/runs")!
