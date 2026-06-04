@@ -554,8 +554,8 @@ class RoutesScreenState extends State<RoutesScreen> {
               IconButton(
                 icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
                 tooltip: allSelected
-                    ? l10n.runsClearSelectionTooltip
-                    : l10n.runsSelectAllTooltip,
+                    ? l10n.historyClearSelectionTooltip
+                    : l10n.historySelectAllTooltip,
                 onPressed: _deleting
                     ? null
                     : (allSelected
@@ -570,7 +570,7 @@ class RoutesScreenState extends State<RoutesScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
                     : const Icon(Icons.delete_outline),
-                tooltip: l10n.runsDeleteTooltip,
+                tooltip: l10n.historyDeleteTooltip,
                 onPressed: (_selected.isEmpty || _deleting)
                     ? null
                     : _deleteSelected,

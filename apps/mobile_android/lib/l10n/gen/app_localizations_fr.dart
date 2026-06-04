@@ -1049,35 +1049,35 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get runsRangeToday => 'Aujourd\'hui';
+  String get historyRangeToday => 'Aujourd\'hui';
 
   @override
-  String get runsRangeWeek => 'Cette semaine';
+  String get historyRangeWeek => 'Cette semaine';
 
   @override
-  String get runsRangeMonth => '30 derniers jours';
+  String get historyRangeMonth => '30 derniers jours';
 
   @override
-  String get runsRangeYear => 'Cette année';
+  String get historyRangeYear => 'Cette année';
 
   @override
-  String get runsRangeAll => 'Tout l\'historique';
+  String get historyRangeAll => 'Tout l\'historique';
 
   @override
-  String get runsRangeCustom => 'Personnalisé…';
+  String get historyRangeCustom => 'Personnalisé…';
 
   @override
-  String runsRangeFrom(String date) {
+  String historyRangeFrom(String date) {
     return 'À partir du $date';
   }
 
   @override
-  String runsRangeUntil(String date) {
+  String historyRangeUntil(String date) {
     return 'Jusqu\'au $date';
   }
 
   @override
-  String runsCount(int count) {
+  String historyCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1088,25 +1088,25 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get runsDateRangeTooltip => 'Plage de dates';
+  String get historyDateRangeTooltip => 'Plage de dates';
 
   @override
-  String get runsSortTooltip => 'Trier';
+  String get historySortTooltip => 'Trier';
 
   @override
-  String get runsSortNewest => 'Plus récentes d\'abord';
+  String get historySortNewest => 'Plus récentes d\'abord';
 
   @override
-  String get runsSortOldest => 'Plus anciennes d\'abord';
+  String get historySortOldest => 'Plus anciennes d\'abord';
 
   @override
-  String get runsSortLongest => 'Distance la plus longue';
+  String get historySortLongest => 'Distance la plus longue';
 
   @override
-  String get runsSortFastest => 'Meilleure allure';
+  String get historySortFastest => 'Meilleure allure';
 
   @override
-  String runsSyncTooltip(int count) {
+  String historySyncTooltip(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1117,116 +1117,116 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get runsRefreshTooltip => 'Actualiser depuis le cloud';
+  String get historyRefreshTooltip => 'Actualiser depuis le cloud';
 
   @override
-  String get runsOfflineTooltip => 'Hors ligne';
+  String get historyOfflineTooltip => 'Hors ligne';
 
   @override
-  String runsSelectionTitle(int count) {
+  String historySelectionTitle(int count) {
     return '$count sélectionnée(s)';
   }
 
   @override
-  String get runsSelectAllTooltip => 'Tout sélectionner';
+  String get historySelectAllTooltip => 'Tout sélectionner';
 
   @override
-  String get runsClearSelectionTooltip => 'Effacer';
+  String get historyClearSelectionTooltip => 'Effacer';
 
   @override
-  String get runsDeleteTooltip => 'Supprimer';
+  String get historyDeleteTooltip => 'Supprimer';
 
   @override
-  String get runsCancelTooltip => 'Annuler';
+  String get historyCancelTooltip => 'Annuler';
 
   @override
-  String get runsAddRun => 'Ajouter une course';
+  String get historyAddRun => 'Ajouter une course';
 
   @override
-  String get runsAddRunTooltip => 'Ajouter une course manuellement';
+  String get historyAddRunTooltip => 'Ajouter une course manuellement';
 
   @override
-  String runsLoadMore(int count) {
+  String historyLoadMore(int count) {
     return 'Charger $count de plus';
   }
 
   @override
-  String get runsNoMatch => 'Aucune course ne correspond à ces filtres';
+  String get historyNoMatch => 'Aucune course ne correspond à ces filtres';
 
   @override
-  String get runsClearFilters => 'Effacer les filtres';
+  String get historyClearFilters => 'Effacer les filtres';
 
   @override
-  String get runsEmptyTitle => 'Aucune course pour l\'instant';
+  String get historyEmptyTitle => 'Aucune course pour l\'instant';
 
   @override
-  String get runsEmptyBody =>
+  String get historyEmptyBody =>
       'Touchez l\'onglet Course pour démarrer votre première course';
 
   @override
-  String get runsFilterAll => 'Toutes';
+  String get historyFilterAll => 'Toutes';
 
   @override
-  String get runsSourceAll => 'Toutes les sources';
+  String get historySourceAll => 'Toutes les sources';
 
   @override
-  String runsSourceLabel(String source) {
+  String historySourceLabel(String source) {
     return 'Source : $source';
   }
 
   @override
-  String get runsSourceFilterTooltip => 'Filtrer par source';
+  String get historySourceFilterTooltip => 'Filtrer par source';
 
   @override
-  String get runsSourceRecorded => 'Enregistrée';
+  String get historySourceRecorded => 'Enregistrée';
 
   @override
-  String get runsSourceWatch => 'Montre';
+  String get historySourceWatch => 'Montre';
 
   @override
-  String get runsSourceStrava => 'Strava';
+  String get historySourceStrava => 'Strava';
 
   @override
-  String get runsSourceParkrun => 'parkrun';
+  String get historySourceParkrun => 'parkrun';
 
   @override
-  String get runsSourceHealthKit => 'HealthKit';
+  String get historySourceHealthKit => 'HealthKit';
 
   @override
-  String get runsSourceHealthConnect => 'Health Connect';
+  String get historySourceHealthConnect => 'Health Connect';
 
   @override
-  String get runsRangePickerTitle => 'Sélectionner les dates';
+  String get historyRangePickerTitle => 'Sélectionner les dates';
 
   @override
-  String get runsRangeStart => 'Début';
+  String get historyRangeStart => 'Début';
 
   @override
-  String get runsRangeEnd => 'Fin';
+  String get historyRangeEnd => 'Fin';
 
   @override
-  String get runsRangeTapDate => 'Touchez une date';
+  String get historyRangeTapDate => 'Touchez une date';
 
   @override
-  String get runsRangeApply => 'Appliquer';
+  String get historyRangeApply => 'Appliquer';
 
   @override
-  String get runsRangeClear => 'Effacer';
+  String get historyRangeClear => 'Effacer';
 
   @override
-  String get runsPrevMonth => 'Mois précédent';
+  String get historyPrevMonth => 'Mois précédent';
 
   @override
-  String get runsNextMonth => 'Mois suivant';
+  String get historyNextMonth => 'Mois suivant';
 
   @override
-  String get runsPrevYear => 'Année précédente';
+  String get historyPrevYear => 'Année précédente';
 
   @override
-  String get runsNextYear => 'Année suivante';
+  String get historyNextYear => 'Année suivante';
 
   @override
-  String runsDeleteConfirmTitle(int count) {
+  String historyDeleteConfirmTitle(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1237,35 +1237,35 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String get runsDeleteConfirmBody => 'Cette action est irréversible.';
+  String get historyDeleteConfirmBody => 'Cette action est irréversible.';
 
   @override
-  String get runsCancel => 'Annuler';
+  String get historyCancel => 'Annuler';
 
   @override
-  String get runsDelete => 'Supprimer';
+  String get historyDelete => 'Supprimer';
 
   @override
-  String get runsQueuedToSync => 'En attente de synchronisation';
+  String get historyQueuedToSync => 'En attente de synchronisation';
 
   @override
-  String get runsSignInToSync =>
+  String get historySignInToSync =>
       'Connectez-vous depuis les réglages pour synchroniser les courses';
 
   @override
-  String get runsRefreshFailed =>
+  String get historyRefreshFailed =>
       'Impossible d\'actualiser — vérifiez votre connexion';
 
   @override
-  String get runsLoadMoreFailed => 'Impossible de charger plus de courses';
+  String get historyLoadMoreFailed => 'Impossible de charger plus de courses';
 
   @override
-  String runsSyncPartial(int synced, int total, String error) {
+  String historySyncPartial(int synced, int total, String error) {
     return '$synced/$total synchronisées. Erreur : $error';
   }
 
   @override
-  String runsSyncTrackFailed(int count) {
+  String historySyncTrackFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1278,7 +1278,7 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String runsSyncAllDone(int count) {
+  String historySyncAllDone(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1289,12 +1289,12 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
-  String runsDeletePartial(int deleted, int queued) {
+  String historyDeletePartial(int deleted, int queued) {
     return '$deleted supprimée(s) ; $queued en attente — nouvelle tentative une fois en ligne.';
   }
 
   @override
-  String runsDeleteDone(int count) {
+  String historyDeleteDone(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,

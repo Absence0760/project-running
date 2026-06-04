@@ -391,17 +391,17 @@ class _RunsScreenState extends State<RunsScreen> {
   static String _rangeLabel(_RunsRange range, AppLocalizations l10n) {
     switch (range) {
       case _RunsRange.today:
-        return l10n.runsRangeToday;
+        return l10n.historyRangeToday;
       case _RunsRange.week:
-        return l10n.runsRangeWeek;
+        return l10n.historyRangeWeek;
       case _RunsRange.month:
-        return l10n.runsRangeMonth;
+        return l10n.historyRangeMonth;
       case _RunsRange.year:
-        return l10n.runsRangeYear;
+        return l10n.historyRangeYear;
       case _RunsRange.all:
-        return l10n.runsRangeAll;
+        return l10n.historyRangeAll;
       case _RunsRange.custom:
-        return l10n.runsRangeCustom;
+        return l10n.historyRangeCustom;
     }
   }
 
@@ -412,13 +412,13 @@ class _RunsScreenState extends State<RunsScreen> {
     if (_range != _RunsRange.custom) return _rangeLabel(_range, l10n);
     final from = _customFrom;
     final to = _customTo;
-    if (from == null && to == null) return l10n.runsRangeCustom;
+    if (from == null && to == null) return l10n.historyRangeCustom;
     final tag = localeToTag(Localizations.localeOf(context));
     if (from != null && to != null) {
       return '${_formatRangeDate(from, tag)} – ${_formatRangeDate(to, tag)}';
     }
-    if (from != null) return l10n.runsRangeFrom(_formatRangeDate(from, tag));
-    return l10n.runsRangeUntil(_formatRangeDate(to!, tag));
+    if (from != null) return l10n.historyRangeFrom(_formatRangeDate(from, tag));
+    return l10n.historyRangeUntil(_formatRangeDate(to!, tag));
   }
 
   /// Compact "May 1" / "May 1, 2025" date formatter for the header
@@ -463,7 +463,7 @@ class _RunsScreenState extends State<RunsScreen> {
       debugPrint('Fetch remote runs failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).runsRefreshFailed);
+            context, AppLocalizations.of(context).historyRefreshFailed);
       }
     } finally {
       if (mounted) setState(() => _fetching = false);
@@ -533,7 +533,7 @@ class _RunsScreenState extends State<RunsScreen> {
       debugPrint('Load more runs failed: $e');
       if (mounted) {
         showTopBanner(
-            context, AppLocalizations.of(context).runsLoadMoreFailed);
+            context, AppLocalizations.of(context).historyLoadMoreFailed);
       }
     } finally {
       if (mounted) setState(() => _loadingMore = false);
@@ -544,7 +544,7 @@ class _RunsScreenState extends State<RunsScreen> {
     final l10n = AppLocalizations.of(context);
     final api = widget.apiClient;
     if (api == null || api.userId == null) {
-      showTopBanner(context, l10n.runsSignInToSync);
+      showTopBanner(context, l10n.historySignInToSync);
       return;
     }
 
@@ -564,7 +564,7 @@ class _RunsScreenState extends State<RunsScreen> {
       );
       synced = unsynced.length - failed.length;
       if (failed.isNotEmpty) {
-        lastError = l10n.runsSyncTrackFailed(failed.length);
+        lastError = l10n.historySyncTrackFailed(failed.length);
       }
     } catch (e) {
       lastError = e.toString();
@@ -575,9 +575,9 @@ class _RunsScreenState extends State<RunsScreen> {
     if (!mounted) return;
     if (lastError != null) {
       showTopBanner(
-          context, l10n.runsSyncPartial(synced, unsynced.length, lastError));
+          context, l10n.historySyncPartial(synced, unsynced.length, lastError));
     } else {
-      showTopBanner(context, l10n.runsSyncAllDone(synced));
+      showTopBanner(context, l10n.historySyncAllDone(synced));
     }
   }
 
@@ -625,17 +625,17 @@ class _RunsScreenState extends State<RunsScreen> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(l10n.runsDeleteConfirmTitle(count)),
-        content: Text(l10n.runsDeleteConfirmBody),
+        title: Text(l10n.historyDeleteConfirmTitle(count)),
+        content: Text(l10n.historyDeleteConfirmBody),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: Text(l10n.runsCancel),
+            child: Text(l10n.historyCancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
-            child: Text(l10n.runsDelete),
+            child: Text(l10n.historyDelete),
           ),
         ],
       ),
@@ -681,10 +681,10 @@ class _RunsScreenState extends State<RunsScreen> {
     if (failedIds.isNotEmpty) {
       showTopBanner(
           context,
-          l10n.runsDeletePartial(
+          l10n.historyDeletePartial(
               ids.length - failedIds.length, failedIds.length));
     } else {
-      showTopBanner(context, l10n.runsDeleteDone(count));
+      showTopBanner(context, l10n.historyDeleteDone(count));
     }
   }
 
@@ -711,8 +711,8 @@ class _RunsScreenState extends State<RunsScreen> {
                 heroTag: 'history_add_run_fab',
                 onPressed: _openAddRun,
                 icon: const Icon(Icons.add),
-                label: Text(l10n.runsAddRun),
-                tooltip: l10n.runsAddRunTooltip,
+                label: Text(l10n.historyAddRun),
+                tooltip: l10n.historyAddRunTooltip,
               ),
       ),
     );
@@ -785,7 +785,7 @@ class _RunsScreenState extends State<RunsScreen> {
           Text(_activeRangeLabel(l10n)),
           const SizedBox(width: 8),
           Text(
-            l10n.runsCount(visibleCount),
+            l10n.historyCount(visibleCount),
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Theme.of(context).colorScheme.outline,
                 ),
@@ -795,7 +795,7 @@ class _RunsScreenState extends State<RunsScreen> {
       actions: [
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
-          tooltip: l10n.runsDateRangeTooltip,
+          tooltip: l10n.historyDateRangeTooltip,
           onSelected: (v) async {
             // Custom always opens the picker, even when already selected
             // — that's the only way to change the bounds without first
@@ -821,7 +821,7 @@ class _RunsScreenState extends State<RunsScreen> {
         ),
         PopupMenuButton<_RunsSort>(
           icon: const Icon(Icons.sort),
-          tooltip: l10n.runsSortTooltip,
+          tooltip: l10n.historySortTooltip,
           onSelected: (v) {
             setState(() {
               _sort = v;
@@ -834,22 +834,22 @@ class _RunsScreenState extends State<RunsScreen> {
             CheckedPopupMenuItem(
               value: _RunsSort.newest,
               checked: _sort == _RunsSort.newest,
-              child: Text(l10n.runsSortNewest),
+              child: Text(l10n.historySortNewest),
             ),
             CheckedPopupMenuItem(
               value: _RunsSort.oldest,
               checked: _sort == _RunsSort.oldest,
-              child: Text(l10n.runsSortOldest),
+              child: Text(l10n.historySortOldest),
             ),
             CheckedPopupMenuItem(
               value: _RunsSort.longest,
               checked: _sort == _RunsSort.longest,
-              child: Text(l10n.runsSortLongest),
+              child: Text(l10n.historySortLongest),
             ),
             CheckedPopupMenuItem(
               value: _RunsSort.fastest,
               checked: _sort == _RunsSort.fastest,
-              child: Text(l10n.runsSortFastest),
+              child: Text(l10n.historySortFastest),
             ),
           ],
         ),
@@ -875,7 +875,7 @@ class _RunsScreenState extends State<RunsScreen> {
               count: unsyncedCount,
               child: IconButton(
                 icon: const Icon(Icons.cloud_upload),
-                tooltip: l10n.runsSyncTooltip(unsyncedCount),
+                tooltip: l10n.historySyncTooltip(unsyncedCount),
                 onPressed: _syncAll,
               ),
             ),
@@ -883,13 +883,13 @@ class _RunsScreenState extends State<RunsScreen> {
         else if (widget.apiClient?.userId != null)
           IconButton(
             icon: const Icon(Icons.cloud_download),
-            tooltip: l10n.runsRefreshTooltip,
+            tooltip: l10n.historyRefreshTooltip,
             onPressed: _fetchRemote,
           )
         else
           IconButton(
             icon: const Icon(Icons.cloud_off),
-            tooltip: l10n.runsOfflineTooltip,
+            tooltip: l10n.historyOfflineTooltip,
             onPressed: null,
           ),
       ],
@@ -902,22 +902,22 @@ class _RunsScreenState extends State<RunsScreen> {
     return AppBar(
       leading: IconButton(
         icon: const Icon(Icons.close),
-        tooltip: l10n.runsCancelTooltip,
+        tooltip: l10n.historyCancelTooltip,
         onPressed: _clearSelection,
       ),
-      title: Text(l10n.runsSelectionTitle(_selected.length)),
+      title: Text(l10n.historySelectionTitle(_selected.length)),
       actions: [
         IconButton(
           icon: Icon(allSelected ? Icons.deselect : Icons.select_all),
           tooltip:
-              allSelected ? l10n.runsClearSelectionTooltip : l10n.runsSelectAllTooltip,
+              allSelected ? l10n.historyClearSelectionTooltip : l10n.historySelectAllTooltip,
           onPressed: allSelected
               ? () => setState(() => _selected.clear())
               : _selectAllVisible,
         ),
         IconButton(
           icon: const Icon(Icons.delete_outline),
-          tooltip: l10n.runsDeleteTooltip,
+          tooltip: l10n.historyDeleteTooltip,
           onPressed: _selected.isEmpty ? null : _deleteSelected,
         ),
       ],
@@ -983,7 +983,7 @@ class _RunsScreenState extends State<RunsScreen> {
                   : OutlinedButton.icon(
                       onPressed: _loadMore,
                       icon: const Icon(Icons.expand_more),
-                      label: Text(l10n.runsLoadMore(_kRunsPageSize)),
+                      label: Text(l10n.historyLoadMore(_kRunsPageSize)),
                     ),
             ),
           );
@@ -1024,7 +1024,7 @@ class _RunsScreenState extends State<RunsScreen> {
                     size: 48, color: theme.colorScheme.outline),
                 const SizedBox(height: 12),
                 Text(
-                  l10n.runsNoMatch,
+                  l10n.historyNoMatch,
                   style: theme.textTheme.bodyLarge,
                 ),
                 const SizedBox(height: 8),
@@ -1041,7 +1041,7 @@ class _RunsScreenState extends State<RunsScreen> {
                     });
                     _persistFilters();
                   },
-                  child: Text(l10n.runsClearFilters),
+                  child: Text(l10n.historyClearFilters),
                 ),
               ],
             ),
@@ -1270,7 +1270,7 @@ class _RunTile extends StatelessWidget {
                   if (isUnsynced) ...[
                     const SizedBox(width: 6),
                     Tooltip(
-                      message: AppLocalizations.of(context).runsQueuedToSync,
+                      message: AppLocalizations.of(context).historyQueuedToSync,
                       child: Icon(
                         Icons.cloud_upload_outlined,
                         size: 16,
@@ -1320,10 +1320,10 @@ class _EmptyRuns extends StatelessWidget {
         children: [
           Icon(Icons.directions_run, size: 64, color: theme.colorScheme.outline),
           const SizedBox(height: 16),
-          Text(l10n.runsEmptyTitle, style: theme.textTheme.headlineSmall),
+          Text(l10n.historyEmptyTitle, style: theme.textTheme.headlineSmall),
           const SizedBox(height: 8),
           Text(
-            l10n.runsEmptyBody,
+            l10n.historyEmptyBody,
             style: theme.textTheme.bodyMedium?.copyWith(
               color: theme.colorScheme.outline,
             ),
@@ -1380,13 +1380,13 @@ class _RunsFilterHeader extends StatelessWidget {
 
   static String _sourceName(RunSource src, AppLocalizations l10n) {
     return switch (src) {
-      RunSource.app => l10n.runsSourceRecorded,
-      RunSource.watch => l10n.runsSourceWatch,
-      RunSource.strava => l10n.runsSourceStrava,
-      RunSource.parkrun => l10n.runsSourceParkrun,
-      RunSource.healthkit => l10n.runsSourceHealthKit,
-      RunSource.healthconnect => l10n.runsSourceHealthConnect,
-      _ => l10n.runsSourceAll,
+      RunSource.app => l10n.historySourceRecorded,
+      RunSource.watch => l10n.historySourceWatch,
+      RunSource.strava => l10n.historySourceStrava,
+      RunSource.parkrun => l10n.historySourceParkrun,
+      RunSource.healthkit => l10n.historySourceHealthKit,
+      RunSource.healthconnect => l10n.historySourceHealthConnect,
+      _ => l10n.historySourceAll,
     };
   }
 
@@ -1402,7 +1402,7 @@ class _RunsFilterHeader extends StatelessWidget {
   }
 
   static String _sourceLabel(RunSource? src, AppLocalizations l10n) {
-    if (src == null) return l10n.runsSourceAll;
+    if (src == null) return l10n.historySourceAll;
     return _sourceName(src, l10n);
   }
 
@@ -1456,7 +1456,7 @@ class _RunsFilterHeader extends StatelessWidget {
             child: Row(
               children: [
                 FilterChip(
-                  label: Text(l10n.runsFilterAll),
+                  label: Text(l10n.historyFilterAll),
                   selected: activityFilter == null,
                   onSelected: (_) => onActivityChanged(null),
                 ),
@@ -1481,14 +1481,14 @@ class _RunsFilterHeader extends StatelessWidget {
         Align(
           alignment: Alignment.centerLeft,
           child: PopupMenuButton<RunSource?>(
-            tooltip: l10n.runsSourceFilterTooltip,
+            tooltip: l10n.historySourceFilterTooltip,
             initialValue: sourceFilter,
             onSelected: onSourceChanged,
             itemBuilder: (_) => [
               CheckedPopupMenuItem(
                 value: null,
                 checked: sourceFilter == null,
-                child: Text(l10n.runsSourceAll),
+                child: Text(l10n.historySourceAll),
               ),
               for (final src in _sourceOrder)
                 CheckedPopupMenuItem(
@@ -1506,7 +1506,7 @@ class _RunsFilterHeader extends StatelessWidget {
                       size: 16, color: theme.colorScheme.outline),
                   const SizedBox(width: 6),
                   Text(
-                    l10n.runsSourceLabel(_sourceLabel(sourceFilter, l10n)),
+                    l10n.historySourceLabel(_sourceLabel(sourceFilter, l10n)),
                     style: theme.textTheme.bodyMedium,
                   ),
                   Icon(Icons.arrow_drop_down,
@@ -1673,12 +1673,12 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
               padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
               child: Row(
                 children: [
-                  Text(l10n.runsRangePickerTitle,
+                  Text(l10n.historyRangePickerTitle,
                       style: theme.textTheme.titleMedium),
                   const Spacer(),
                   IconButton(
                     icon: const Icon(Icons.close),
-                    tooltip: l10n.runsCancelTooltip,
+                    tooltip: l10n.historyCancelTooltip,
                     onPressed: () => Navigator.of(context).pop(),
                   ),
                 ],
@@ -1692,7 +1692,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                 children: [
                   Expanded(
                     child: _EndpointChip(
-                      label: l10n.runsRangeStart,
+                      label: l10n.historyRangeStart,
                       date: _pendingFrom,
                       active: _pendingFrom == null || !_selectingEnd,
                     ),
@@ -1700,7 +1700,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _EndpointChip(
-                      label: l10n.runsRangeEnd,
+                      label: l10n.historyRangeEnd,
                       date: _pendingTo,
                       active: _selectingEnd,
                     ),
@@ -1720,8 +1720,8 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                     child: _NavGroup(
                       onPrev: _atFirstMonth ? null : () => _stepMonth(-1),
                       onNext: _atLastMonth ? null : () => _stepMonth(1),
-                      prevTooltip: l10n.runsPrevMonth,
-                      nextTooltip: l10n.runsNextMonth,
+                      prevTooltip: l10n.historyPrevMonth,
+                      nextTooltip: l10n.historyNextMonth,
                       child: DropdownButton<int>(
                         value: _viewMonth.month,
                         isExpanded: true,
@@ -1751,8 +1751,8 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                       onNext: _viewMonth.year >= _lastMonth.year
                           ? null
                           : () => _stepYear(1),
-                      prevTooltip: l10n.runsPrevYear,
-                      nextTooltip: l10n.runsNextYear,
+                      prevTooltip: l10n.historyPrevYear,
+                      nextTooltip: l10n.historyNextYear,
                       child: DropdownButton<int>(
                         value: _viewMonth.year,
                         isExpanded: true,
@@ -1828,7 +1828,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                   TextButton(
                     onPressed:
                         (_pendingFrom == null && _pendingTo == null) ? null : _clear,
-                    child: Text(l10n.runsRangeClear),
+                    child: Text(l10n.historyRangeClear),
                   ),
                   const Spacer(),
                   FilledButton(
@@ -1840,7 +1840,7 @@ class _RangeCalendarSheetState extends State<_RangeCalendarSheet> {
                               ),
                             )
                         : null,
-                    child: Text(l10n.runsRangeApply),
+                    child: Text(l10n.historyRangeApply),
                   ),
                 ],
               ),
@@ -1950,7 +1950,7 @@ class _EndpointChip extends StatelessWidget {
           const SizedBox(height: 2),
           Text(
             date == null
-                ? AppLocalizations.of(context).runsRangeTapDate
+                ? AppLocalizations.of(context).historyRangeTapDate
                 : _formatChip(date!, localeToTag(Localizations.localeOf(context))),
             style: theme.textTheme.titleMedium?.copyWith(
               color: fg,

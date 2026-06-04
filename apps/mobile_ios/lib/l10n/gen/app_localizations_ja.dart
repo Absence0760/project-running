@@ -989,35 +989,35 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get runsRangeToday => '今日';
+  String get historyRangeToday => '今日';
 
   @override
-  String get runsRangeWeek => '今週';
+  String get historyRangeWeek => '今週';
 
   @override
-  String get runsRangeMonth => '過去30日間';
+  String get historyRangeMonth => '過去30日間';
 
   @override
-  String get runsRangeYear => '今年';
+  String get historyRangeYear => '今年';
 
   @override
-  String get runsRangeAll => '全期間';
+  String get historyRangeAll => '全期間';
 
   @override
-  String get runsRangeCustom => 'カスタム…';
+  String get historyRangeCustom => 'カスタム…';
 
   @override
-  String runsRangeFrom(String date) {
+  String historyRangeFrom(String date) {
     return '$date から';
   }
 
   @override
-  String runsRangeUntil(String date) {
+  String historyRangeUntil(String date) {
     return '$date まで';
   }
 
   @override
-  String runsCount(int count) {
+  String historyCount(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1027,25 +1027,25 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get runsDateRangeTooltip => '期間';
+  String get historyDateRangeTooltip => '期間';
 
   @override
-  String get runsSortTooltip => '並べ替え';
+  String get historySortTooltip => '並べ替え';
 
   @override
-  String get runsSortNewest => '新しい順';
+  String get historySortNewest => '新しい順';
 
   @override
-  String get runsSortOldest => '古い順';
+  String get historySortOldest => '古い順';
 
   @override
-  String get runsSortLongest => '距離が長い順';
+  String get historySortLongest => '距離が長い順';
 
   @override
-  String get runsSortFastest => 'ペースが速い順';
+  String get historySortFastest => 'ペースが速い順';
 
   @override
-  String runsSyncTooltip(int count) {
+  String historySyncTooltip(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1055,115 +1055,115 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get runsRefreshTooltip => 'クラウドから更新';
+  String get historyRefreshTooltip => 'クラウドから更新';
 
   @override
-  String get runsOfflineTooltip => 'オフライン';
+  String get historyOfflineTooltip => 'オフライン';
 
   @override
-  String runsSelectionTitle(int count) {
+  String historySelectionTitle(int count) {
     return '$count 件選択中';
   }
 
   @override
-  String get runsSelectAllTooltip => 'すべて選択';
+  String get historySelectAllTooltip => 'すべて選択';
 
   @override
-  String get runsClearSelectionTooltip => 'クリア';
+  String get historyClearSelectionTooltip => 'クリア';
 
   @override
-  String get runsDeleteTooltip => '削除';
+  String get historyDeleteTooltip => '削除';
 
   @override
-  String get runsCancelTooltip => 'キャンセル';
+  String get historyCancelTooltip => 'キャンセル';
 
   @override
-  String get runsAddRun => 'ランを追加';
+  String get historyAddRun => 'ランを追加';
 
   @override
-  String get runsAddRunTooltip => '手動でランを追加';
+  String get historyAddRunTooltip => '手動でランを追加';
 
   @override
-  String runsLoadMore(int count) {
+  String historyLoadMore(int count) {
     return 'さらに $count 件読み込む';
   }
 
   @override
-  String get runsNoMatch => 'このフィルターに一致するランはありません';
+  String get historyNoMatch => 'このフィルターに一致するランはありません';
 
   @override
-  String get runsClearFilters => 'フィルターをクリア';
+  String get historyClearFilters => 'フィルターをクリア';
 
   @override
-  String get runsEmptyTitle => 'まだランがありません';
+  String get historyEmptyTitle => 'まだランがありません';
 
   @override
-  String get runsEmptyBody => '「ラン」タブをタップして最初のランを始めましょう';
+  String get historyEmptyBody => '「ラン」タブをタップして最初のランを始めましょう';
 
   @override
-  String get runsFilterAll => 'すべて';
+  String get historyFilterAll => 'すべて';
 
   @override
-  String get runsSourceAll => 'すべてのソース';
+  String get historySourceAll => 'すべてのソース';
 
   @override
-  String runsSourceLabel(String source) {
+  String historySourceLabel(String source) {
     return 'ソース: $source';
   }
 
   @override
-  String get runsSourceFilterTooltip => 'ソースで絞り込む';
+  String get historySourceFilterTooltip => 'ソースで絞り込む';
 
   @override
-  String get runsSourceRecorded => '記録';
+  String get historySourceRecorded => '記録';
 
   @override
-  String get runsSourceWatch => 'ウォッチ';
+  String get historySourceWatch => 'ウォッチ';
 
   @override
-  String get runsSourceStrava => 'Strava';
+  String get historySourceStrava => 'Strava';
 
   @override
-  String get runsSourceParkrun => 'parkrun';
+  String get historySourceParkrun => 'parkrun';
 
   @override
-  String get runsSourceHealthKit => 'HealthKit';
+  String get historySourceHealthKit => 'HealthKit';
 
   @override
-  String get runsSourceHealthConnect => 'Health Connect';
+  String get historySourceHealthConnect => 'Health Connect';
 
   @override
-  String get runsRangePickerTitle => '日付を選択';
+  String get historyRangePickerTitle => '日付を選択';
 
   @override
-  String get runsRangeStart => '開始';
+  String get historyRangeStart => '開始';
 
   @override
-  String get runsRangeEnd => '終了';
+  String get historyRangeEnd => '終了';
 
   @override
-  String get runsRangeTapDate => '日付をタップ';
+  String get historyRangeTapDate => '日付をタップ';
 
   @override
-  String get runsRangeApply => '適用';
+  String get historyRangeApply => '適用';
 
   @override
-  String get runsRangeClear => 'クリア';
+  String get historyRangeClear => 'クリア';
 
   @override
-  String get runsPrevMonth => '前の月';
+  String get historyPrevMonth => '前の月';
 
   @override
-  String get runsNextMonth => '次の月';
+  String get historyNextMonth => '次の月';
 
   @override
-  String get runsPrevYear => '前の年';
+  String get historyPrevYear => '前の年';
 
   @override
-  String get runsNextYear => '次の年';
+  String get historyNextYear => '次の年';
 
   @override
-  String runsDeleteConfirmTitle(int count) {
+  String historyDeleteConfirmTitle(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1173,33 +1173,33 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String get runsDeleteConfirmBody => 'この操作は元に戻せません。';
+  String get historyDeleteConfirmBody => 'この操作は元に戻せません。';
 
   @override
-  String get runsCancel => 'キャンセル';
+  String get historyCancel => 'キャンセル';
 
   @override
-  String get runsDelete => '削除';
+  String get historyDelete => '削除';
 
   @override
-  String get runsQueuedToSync => '同期待ち';
+  String get historyQueuedToSync => '同期待ち';
 
   @override
-  String get runsSignInToSync => 'ランを同期するには設定からサインインしてください';
+  String get historySignInToSync => 'ランを同期するには設定からサインインしてください';
 
   @override
-  String get runsRefreshFailed => '更新できませんでした — 接続を確認してください';
+  String get historyRefreshFailed => '更新できませんでした — 接続を確認してください';
 
   @override
-  String get runsLoadMoreFailed => 'これ以上ランを読み込めませんでした';
+  String get historyLoadMoreFailed => 'これ以上ランを読み込めませんでした';
 
   @override
-  String runsSyncPartial(int synced, int total, String error) {
+  String historySyncPartial(int synced, int total, String error) {
     return '$synced/$total を同期しました。エラー: $error';
   }
 
   @override
-  String runsSyncTrackFailed(int count) {
+  String historySyncTrackFailed(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1209,7 +1209,7 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String runsSyncAllDone(int count) {
+  String historySyncAllDone(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,
@@ -1219,12 +1219,12 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
-  String runsDeletePartial(int deleted, int queued) {
+  String historyDeletePartial(int deleted, int queued) {
     return '$deleted 件削除、$queued 件は待機中 — オンライン復帰時に再試行します。';
   }
 
   @override
-  String runsDeleteDone(int count) {
+  String historyDeleteDone(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
       locale: localeName,

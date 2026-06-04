@@ -1025,32 +1025,32 @@
       }
     }
   },
-  "runsRangeToday": "Today",
-  "@runsRangeToday": {
+  "historyRangeToday": "Today",
+  "@historyRangeToday": {
     "description": "History date-range option / header label for runs from today"
   },
-  "runsRangeWeek": "This week",
-  "@runsRangeWeek": {
+  "historyRangeWeek": "This week",
+  "@historyRangeWeek": {
     "description": "History date-range option / header label for runs from the current week"
   },
-  "runsRangeMonth": "Last 30 days",
-  "@runsRangeMonth": {
+  "historyRangeMonth": "Last 30 days",
+  "@historyRangeMonth": {
     "description": "History date-range option / header label for runs from the last 30 days"
   },
-  "runsRangeYear": "This year",
-  "@runsRangeYear": {
+  "historyRangeYear": "This year",
+  "@historyRangeYear": {
     "description": "History date-range option / header label for runs from the current year"
   },
-  "runsRangeAll": "All time",
-  "@runsRangeAll": {
+  "historyRangeAll": "All time",
+  "@historyRangeAll": {
     "description": "History date-range option / header label for all runs ever"
   },
-  "runsRangeCustom": "Custom…",
-  "@runsRangeCustom": {
+  "historyRangeCustom": "Custom…",
+  "@historyRangeCustom": {
     "description": "History date-range option for picking a custom date range"
   },
-  "runsRangeFrom": "From {date}",
-  "@runsRangeFrom": {
+  "historyRangeFrom": "From {date}",
+  "@historyRangeFrom": {
     "description": "History header label for an open-ended custom range with only a start date",
     "placeholders": {
       "date": {
@@ -1058,8 +1058,8 @@
       }
     }
   },
-  "runsRangeUntil": "Until {date}",
-  "@runsRangeUntil": {
+  "historyRangeUntil": "Until {date}",
+  "@historyRangeUntil": {
     "description": "History header label for an open-ended custom range with only an end date",
     "placeholders": {
       "date": {
@@ -1067,8 +1067,8 @@
       }
     }
   },
-  "runsCount": "{count, plural, one{{count} run} other{{count} runs}}",
-  "@runsCount": {
+  "historyCount": "{count, plural, one{{count} run} other{{count} runs}}",
+  "@historyCount": {
     "description": "Run-count chip next to the date-range label in the History AppBar title",
     "placeholders": {
       "count": {
@@ -1076,32 +1076,32 @@
       }
     }
   },
-  "runsDateRangeTooltip": "Date range",
-  "@runsDateRangeTooltip": {
+  "historyDateRangeTooltip": "Date range",
+  "@historyDateRangeTooltip": {
     "description": "Tooltip on the History AppBar date-range picker button"
   },
-  "runsSortTooltip": "Sort",
-  "@runsSortTooltip": {
+  "historySortTooltip": "Sort",
+  "@historySortTooltip": {
     "description": "Tooltip on the History AppBar sort button"
   },
-  "runsSortNewest": "Newest first",
-  "@runsSortNewest": {
+  "historySortNewest": "Newest first",
+  "@historySortNewest": {
     "description": "History sort option: newest runs first"
   },
-  "runsSortOldest": "Oldest first",
-  "@runsSortOldest": {
+  "historySortOldest": "Oldest first",
+  "@historySortOldest": {
     "description": "History sort option: oldest runs first"
   },
-  "runsSortLongest": "Longest distance",
-  "@runsSortLongest": {
+  "historySortLongest": "Longest distance",
+  "@historySortLongest": {
     "description": "History sort option: longest distance first"
   },
-  "runsSortFastest": "Best pace",
-  "@runsSortFastest": {
+  "historySortFastest": "Best pace",
+  "@historySortFastest": {
     "description": "History sort option: fastest pace first"
   },
-  "runsSyncTooltip": "{count, plural, one{Sync {count} run} other{Sync {count} runs}}",
-  "@runsSyncTooltip": {
+  "historySyncTooltip": "{count, plural, one{Sync {count} run} other{Sync {count} runs}}",
+  "@historySyncTooltip": {
     "description": "Tooltip on the History AppBar sync button, showing how many runs are queued",
     "placeholders": {
       "count": {
@@ -1109,16 +1109,16 @@
       }
     }
   },
-  "runsRefreshTooltip": "Refresh from cloud",
-  "@runsRefreshTooltip": {
+  "historyRefreshTooltip": "Refresh from cloud",
+  "@historyRefreshTooltip": {
     "description": "Tooltip on the History AppBar cloud-refresh button"
   },
-  "runsOfflineTooltip": "Offline",
-  "@runsOfflineTooltip": {
+  "historyOfflineTooltip": "Offline",
+  "@historyOfflineTooltip": {
     "description": "Tooltip on the disabled cloud icon when signed out"
   },
-  "runsSelectionTitle": "{count} selected",
-  "@runsSelectionTitle": {
+  "historySelectionTitle": "{count} selected",
+  "@historySelectionTitle": {
     "description": "AppBar title in History multi-select mode, showing how many runs are selected",
     "placeholders": {
       "count": {
@@ -1126,32 +1126,32 @@
       }
     }
   },
-  "runsSelectAllTooltip": "Select all",
-  "@runsSelectAllTooltip": {
+  "historySelectAllTooltip": "Select all",
+  "@historySelectAllTooltip": {
     "description": "Tooltip on the select-all button in History multi-select mode"
   },
-  "runsClearSelectionTooltip": "Clear",
-  "@runsClearSelectionTooltip": {
+  "historyClearSelectionTooltip": "Clear",
+  "@historyClearSelectionTooltip": {
     "description": "Tooltip on the clear-selection button in History multi-select mode"
   },
-  "runsDeleteTooltip": "Delete",
-  "@runsDeleteTooltip": {
+  "historyDeleteTooltip": "Delete",
+  "@historyDeleteTooltip": {
     "description": "Tooltip on the delete button in History multi-select mode"
   },
-  "runsCancelTooltip": "Cancel",
-  "@runsCancelTooltip": {
+  "historyCancelTooltip": "Cancel",
+  "@historyCancelTooltip": {
     "description": "Tooltip on the cancel button that exits History multi-select mode"
   },
-  "runsAddRun": "Add run",
-  "@runsAddRun": {
+  "historyAddRun": "Add run",
+  "@historyAddRun": {
     "description": "Label on the floating action button that opens the manual add-run form"
   },
-  "runsAddRunTooltip": "Add a run manually",
-  "@runsAddRunTooltip": {
+  "historyAddRunTooltip": "Add a run manually",
+  "@historyAddRunTooltip": {
     "description": "Tooltip on the add-run floating action button"
   },
-  "runsLoadMore": "Load {count} more",
-  "@runsLoadMore": {
+  "historyLoadMore": "Load {count} more",
+  "@historyLoadMore": {
     "description": "Button at the bottom of the runs list that reveals the next page of runs",
     "placeholders": {
       "count": {
@@ -1159,32 +1159,32 @@
       }
     }
   },
-  "runsNoMatch": "No runs match these filters",
-  "@runsNoMatch": {
+  "historyNoMatch": "No runs match these filters",
+  "@historyNoMatch": {
     "description": "Empty-state shown when the active filters exclude every run"
   },
-  "runsClearFilters": "Clear filters",
-  "@runsClearFilters": {
+  "historyClearFilters": "Clear filters",
+  "@historyClearFilters": {
     "description": "Button to reset all History filters when none match"
   },
-  "runsEmptyTitle": "No runs yet",
-  "@runsEmptyTitle": {
+  "historyEmptyTitle": "No runs yet",
+  "@historyEmptyTitle": {
     "description": "Empty-state title shown when the store has no runs at all"
   },
-  "runsEmptyBody": "Tap the Run tab to start your first run",
-  "@runsEmptyBody": {
+  "historyEmptyBody": "Tap the Run tab to start your first run",
+  "@historyEmptyBody": {
     "description": "Empty-state body shown when the store has no runs at all"
   },
-  "runsFilterAll": "All",
-  "@runsFilterAll": {
+  "historyFilterAll": "All",
+  "@historyFilterAll": {
     "description": "Activity filter chip that clears the activity filter (shows all activities)"
   },
-  "runsSourceAll": "All sources",
-  "@runsSourceAll": {
+  "historySourceAll": "All sources",
+  "@historySourceAll": {
     "description": "Source-filter option that clears the source filter"
   },
-  "runsSourceLabel": "Source: {source}",
-  "@runsSourceLabel": {
+  "historySourceLabel": "Source: {source}",
+  "@historySourceLabel": {
     "description": "Label on the History source-filter dropdown, showing the active source",
     "placeholders": {
       "source": {
@@ -1192,76 +1192,76 @@
       }
     }
   },
-  "runsSourceFilterTooltip": "Filter by source",
-  "@runsSourceFilterTooltip": {
+  "historySourceFilterTooltip": "Filter by source",
+  "@historySourceFilterTooltip": {
     "description": "Tooltip on the History source-filter dropdown"
   },
-  "runsSourceRecorded": "Recorded",
-  "@runsSourceRecorded": {
+  "historySourceRecorded": "Recorded",
+  "@historySourceRecorded": {
     "description": "Source-filter label for runs recorded in-app"
   },
-  "runsSourceWatch": "Watch",
-  "@runsSourceWatch": {
+  "historySourceWatch": "Watch",
+  "@historySourceWatch": {
     "description": "Source-filter label for runs recorded on a paired watch"
   },
-  "runsSourceStrava": "Strava",
-  "@runsSourceStrava": {
+  "historySourceStrava": "Strava",
+  "@historySourceStrava": {
     "description": "Source-filter label for runs imported from Strava — brand name, not translated"
   },
-  "runsSourceParkrun": "parkrun",
-  "@runsSourceParkrun": {
+  "historySourceParkrun": "parkrun",
+  "@historySourceParkrun": {
     "description": "Source-filter label for parkrun-imported runs — brand name, not translated"
   },
-  "runsSourceHealthKit": "HealthKit",
-  "@runsSourceHealthKit": {
+  "historySourceHealthKit": "HealthKit",
+  "@historySourceHealthKit": {
     "description": "Source-filter label for HealthKit-imported runs — brand name, not translated"
   },
-  "runsSourceHealthConnect": "Health Connect",
-  "@runsSourceHealthConnect": {
+  "historySourceHealthConnect": "Health Connect",
+  "@historySourceHealthConnect": {
     "description": "Source-filter label for Health Connect-imported runs — brand name, not translated"
   },
-  "runsRangePickerTitle": "Select dates",
-  "@runsRangePickerTitle": {
+  "historyRangePickerTitle": "Select dates",
+  "@historyRangePickerTitle": {
     "description": "Title of the custom date-range picker bottom sheet"
   },
-  "runsRangeStart": "Start",
-  "@runsRangeStart": {
+  "historyRangeStart": "Start",
+  "@historyRangeStart": {
     "description": "Label on the start-date chip in the date-range picker"
   },
-  "runsRangeEnd": "End",
-  "@runsRangeEnd": {
+  "historyRangeEnd": "End",
+  "@historyRangeEnd": {
     "description": "Label on the end-date chip in the date-range picker"
   },
-  "runsRangeTapDate": "Tap a date",
-  "@runsRangeTapDate": {
+  "historyRangeTapDate": "Tap a date",
+  "@historyRangeTapDate": {
     "description": "Placeholder on an unset endpoint chip in the date-range picker"
   },
-  "runsRangeApply": "Apply",
-  "@runsRangeApply": {
+  "historyRangeApply": "Apply",
+  "@historyRangeApply": {
     "description": "Apply button in the date-range picker"
   },
-  "runsRangeClear": "Clear",
-  "@runsRangeClear": {
+  "historyRangeClear": "Clear",
+  "@historyRangeClear": {
     "description": "Clear button in the date-range picker"
   },
-  "runsPrevMonth": "Previous month",
-  "@runsPrevMonth": {
+  "historyPrevMonth": "Previous month",
+  "@historyPrevMonth": {
     "description": "Tooltip on the previous-month chevron in the date-range picker"
   },
-  "runsNextMonth": "Next month",
-  "@runsNextMonth": {
+  "historyNextMonth": "Next month",
+  "@historyNextMonth": {
     "description": "Tooltip on the next-month chevron in the date-range picker"
   },
-  "runsPrevYear": "Previous year",
-  "@runsPrevYear": {
+  "historyPrevYear": "Previous year",
+  "@historyPrevYear": {
     "description": "Tooltip on the previous-year chevron in the date-range picker"
   },
-  "runsNextYear": "Next year",
-  "@runsNextYear": {
+  "historyNextYear": "Next year",
+  "@historyNextYear": {
     "description": "Tooltip on the next-year chevron in the date-range picker"
   },
-  "runsDeleteConfirmTitle": "{count, plural, one{Delete {count} run?} other{Delete {count} runs?}}",
-  "@runsDeleteConfirmTitle": {
+  "historyDeleteConfirmTitle": "{count, plural, one{Delete {count} run?} other{Delete {count} runs?}}",
+  "@historyDeleteConfirmTitle": {
     "description": "Title of the bulk-delete confirmation dialog",
     "placeholders": {
       "count": {
@@ -1269,36 +1269,36 @@
       }
     }
   },
-  "runsDeleteConfirmBody": "This cannot be undone.",
-  "@runsDeleteConfirmBody": {
+  "historyDeleteConfirmBody": "This cannot be undone.",
+  "@historyDeleteConfirmBody": {
     "description": "Body of the bulk-delete confirmation dialog"
   },
-  "runsCancel": "Cancel",
-  "@runsCancel": {
+  "historyCancel": "Cancel",
+  "@historyCancel": {
     "description": "Cancel action in the bulk-delete confirmation dialog"
   },
-  "runsDelete": "Delete",
-  "@runsDelete": {
+  "historyDelete": "Delete",
+  "@historyDelete": {
     "description": "Confirm action in the bulk-delete confirmation dialog"
   },
-  "runsQueuedToSync": "Queued to sync",
-  "@runsQueuedToSync": {
+  "historyQueuedToSync": "Queued to sync",
+  "@historyQueuedToSync": {
     "description": "Tooltip on the per-row unsynced icon in the runs list"
   },
-  "runsSignInToSync": "Sign in from Settings to sync runs",
-  "@runsSignInToSync": {
+  "historySignInToSync": "Sign in from Settings to sync runs",
+  "@historySignInToSync": {
     "description": "Banner shown when tapping sync while signed out"
   },
-  "runsRefreshFailed": "Could not refresh — check your connection",
-  "@runsRefreshFailed": {
+  "historyRefreshFailed": "Could not refresh — check your connection",
+  "@historyRefreshFailed": {
     "description": "Banner shown when a cloud refresh of the runs list fails"
   },
-  "runsLoadMoreFailed": "Could not load more runs",
-  "@runsLoadMoreFailed": {
+  "historyLoadMoreFailed": "Could not load more runs",
+  "@historyLoadMoreFailed": {
     "description": "Banner shown when loading the next page of runs fails"
   },
-  "runsSyncPartial": "Synced {synced}/{total}. Error: {error}",
-  "@runsSyncPartial": {
+  "historySyncPartial": "Synced {synced}/{total}. Error: {error}",
+  "@historySyncPartial": {
     "description": "Banner shown after a sync that partially failed",
     "placeholders": {
       "synced": {
@@ -1312,17 +1312,17 @@
       }
     }
   },
-  "runsSyncTrackFailed": "{count, plural, one{{count} run failed to upload its GPS track — the rest were synced. It will retry on the next cycle.} other{{count} runs failed to upload their GPS track — the rest were synced. The failed runs will retry on the next cycle.}}",
-  "@runsSyncTrackFailed": {
-    "description": "Detail message (used as the error in runsSyncPartial) when some runs' track uploads fail during a manual sync",
+  "historySyncTrackFailed": "{count, plural, one{{count} run failed to upload its GPS track — the rest were synced. It will retry on the next cycle.} other{{count} runs failed to upload their GPS track — the rest were synced. The failed runs will retry on the next cycle.}}",
+  "@historySyncTrackFailed": {
+    "description": "Detail message (used as the error in historySyncPartial) when some runs' track uploads fail during a manual sync",
     "placeholders": {
       "count": {
         "type": "int"
       }
     }
   },
-  "runsSyncAllDone": "{count, plural, one{{count} run synced} other{All {count} runs synced}}",
-  "@runsSyncAllDone": {
+  "historySyncAllDone": "{count, plural, one{{count} run synced} other{All {count} runs synced}}",
+  "@historySyncAllDone": {
     "description": "Banner shown after every unsynced run uploads successfully",
     "placeholders": {
       "count": {
@@ -1330,8 +1330,8 @@
       }
     }
   },
-  "runsDeletePartial": "{deleted} deleted; {queued} queued — will retry when back online.",
-  "@runsDeletePartial": {
+  "historyDeletePartial": "{deleted} deleted; {queued} queued — will retry when back online.",
+  "@historyDeletePartial": {
     "description": "Banner shown when some runs deleted but others were queued for retry",
     "placeholders": {
       "deleted": {
@@ -1342,8 +1342,8 @@
       }
     }
   },
-  "runsDeleteDone": "{count, plural, one{Deleted {count} run} other{Deleted {count} runs}}",
-  "@runsDeleteDone": {
+  "historyDeleteDone": "{count, plural, one{Deleted {count} run} other{Deleted {count} runs}}",
+  "@historyDeleteDone": {
     "description": "Banner shown after a successful bulk delete",
     "placeholders": {
       "count": {

@@ -1797,379 +1797,379 @@ abstract class AppLocalizations {
   ///
   /// In en, this message translates to:
   /// **'Today'**
-  String get runsRangeToday;
+  String get historyRangeToday;
 
   /// History date-range option / header label for runs from the current week
   ///
   /// In en, this message translates to:
   /// **'This week'**
-  String get runsRangeWeek;
+  String get historyRangeWeek;
 
   /// History date-range option / header label for runs from the last 30 days
   ///
   /// In en, this message translates to:
   /// **'Last 30 days'**
-  String get runsRangeMonth;
+  String get historyRangeMonth;
 
   /// History date-range option / header label for runs from the current year
   ///
   /// In en, this message translates to:
   /// **'This year'**
-  String get runsRangeYear;
+  String get historyRangeYear;
 
   /// History date-range option / header label for all runs ever
   ///
   /// In en, this message translates to:
   /// **'All time'**
-  String get runsRangeAll;
+  String get historyRangeAll;
 
   /// History date-range option for picking a custom date range
   ///
   /// In en, this message translates to:
   /// **'Custom…'**
-  String get runsRangeCustom;
+  String get historyRangeCustom;
 
   /// History header label for an open-ended custom range with only a start date
   ///
   /// In en, this message translates to:
   /// **'From {date}'**
-  String runsRangeFrom(String date);
+  String historyRangeFrom(String date);
 
   /// History header label for an open-ended custom range with only an end date
   ///
   /// In en, this message translates to:
   /// **'Until {date}'**
-  String runsRangeUntil(String date);
+  String historyRangeUntil(String date);
 
   /// Run-count chip next to the date-range label in the History AppBar title
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{{count} run} other{{count} runs}}'**
-  String runsCount(int count);
+  String historyCount(int count);
 
   /// Tooltip on the History AppBar date-range picker button
   ///
   /// In en, this message translates to:
   /// **'Date range'**
-  String get runsDateRangeTooltip;
+  String get historyDateRangeTooltip;
 
   /// Tooltip on the History AppBar sort button
   ///
   /// In en, this message translates to:
   /// **'Sort'**
-  String get runsSortTooltip;
+  String get historySortTooltip;
 
   /// History sort option: newest runs first
   ///
   /// In en, this message translates to:
   /// **'Newest first'**
-  String get runsSortNewest;
+  String get historySortNewest;
 
   /// History sort option: oldest runs first
   ///
   /// In en, this message translates to:
   /// **'Oldest first'**
-  String get runsSortOldest;
+  String get historySortOldest;
 
   /// History sort option: longest distance first
   ///
   /// In en, this message translates to:
   /// **'Longest distance'**
-  String get runsSortLongest;
+  String get historySortLongest;
 
   /// History sort option: fastest pace first
   ///
   /// In en, this message translates to:
   /// **'Best pace'**
-  String get runsSortFastest;
+  String get historySortFastest;
 
   /// Tooltip on the History AppBar sync button, showing how many runs are queued
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{Sync {count} run} other{Sync {count} runs}}'**
-  String runsSyncTooltip(int count);
+  String historySyncTooltip(int count);
 
   /// Tooltip on the History AppBar cloud-refresh button
   ///
   /// In en, this message translates to:
   /// **'Refresh from cloud'**
-  String get runsRefreshTooltip;
+  String get historyRefreshTooltip;
 
   /// Tooltip on the disabled cloud icon when signed out
   ///
   /// In en, this message translates to:
   /// **'Offline'**
-  String get runsOfflineTooltip;
+  String get historyOfflineTooltip;
 
   /// AppBar title in History multi-select mode, showing how many runs are selected
   ///
   /// In en, this message translates to:
   /// **'{count} selected'**
-  String runsSelectionTitle(int count);
+  String historySelectionTitle(int count);
 
   /// Tooltip on the select-all button in History multi-select mode
   ///
   /// In en, this message translates to:
   /// **'Select all'**
-  String get runsSelectAllTooltip;
+  String get historySelectAllTooltip;
 
   /// Tooltip on the clear-selection button in History multi-select mode
   ///
   /// In en, this message translates to:
   /// **'Clear'**
-  String get runsClearSelectionTooltip;
+  String get historyClearSelectionTooltip;
 
   /// Tooltip on the delete button in History multi-select mode
   ///
   /// In en, this message translates to:
   /// **'Delete'**
-  String get runsDeleteTooltip;
+  String get historyDeleteTooltip;
 
   /// Tooltip on the cancel button that exits History multi-select mode
   ///
   /// In en, this message translates to:
   /// **'Cancel'**
-  String get runsCancelTooltip;
+  String get historyCancelTooltip;
 
   /// Label on the floating action button that opens the manual add-run form
   ///
   /// In en, this message translates to:
   /// **'Add run'**
-  String get runsAddRun;
+  String get historyAddRun;
 
   /// Tooltip on the add-run floating action button
   ///
   /// In en, this message translates to:
   /// **'Add a run manually'**
-  String get runsAddRunTooltip;
+  String get historyAddRunTooltip;
 
   /// Button at the bottom of the runs list that reveals the next page of runs
   ///
   /// In en, this message translates to:
   /// **'Load {count} more'**
-  String runsLoadMore(int count);
+  String historyLoadMore(int count);
 
   /// Empty-state shown when the active filters exclude every run
   ///
   /// In en, this message translates to:
   /// **'No runs match these filters'**
-  String get runsNoMatch;
+  String get historyNoMatch;
 
   /// Button to reset all History filters when none match
   ///
   /// In en, this message translates to:
   /// **'Clear filters'**
-  String get runsClearFilters;
+  String get historyClearFilters;
 
   /// Empty-state title shown when the store has no runs at all
   ///
   /// In en, this message translates to:
   /// **'No runs yet'**
-  String get runsEmptyTitle;
+  String get historyEmptyTitle;
 
   /// Empty-state body shown when the store has no runs at all
   ///
   /// In en, this message translates to:
   /// **'Tap the Run tab to start your first run'**
-  String get runsEmptyBody;
+  String get historyEmptyBody;
 
   /// Activity filter chip that clears the activity filter (shows all activities)
   ///
   /// In en, this message translates to:
   /// **'All'**
-  String get runsFilterAll;
+  String get historyFilterAll;
 
   /// Source-filter option that clears the source filter
   ///
   /// In en, this message translates to:
   /// **'All sources'**
-  String get runsSourceAll;
+  String get historySourceAll;
 
   /// Label on the History source-filter dropdown, showing the active source
   ///
   /// In en, this message translates to:
   /// **'Source: {source}'**
-  String runsSourceLabel(String source);
+  String historySourceLabel(String source);
 
   /// Tooltip on the History source-filter dropdown
   ///
   /// In en, this message translates to:
   /// **'Filter by source'**
-  String get runsSourceFilterTooltip;
+  String get historySourceFilterTooltip;
 
   /// Source-filter label for runs recorded in-app
   ///
   /// In en, this message translates to:
   /// **'Recorded'**
-  String get runsSourceRecorded;
+  String get historySourceRecorded;
 
   /// Source-filter label for runs recorded on a paired watch
   ///
   /// In en, this message translates to:
   /// **'Watch'**
-  String get runsSourceWatch;
+  String get historySourceWatch;
 
   /// Source-filter label for runs imported from Strava — brand name, not translated
   ///
   /// In en, this message translates to:
   /// **'Strava'**
-  String get runsSourceStrava;
+  String get historySourceStrava;
 
   /// Source-filter label for parkrun-imported runs — brand name, not translated
   ///
   /// In en, this message translates to:
   /// **'parkrun'**
-  String get runsSourceParkrun;
+  String get historySourceParkrun;
 
   /// Source-filter label for HealthKit-imported runs — brand name, not translated
   ///
   /// In en, this message translates to:
   /// **'HealthKit'**
-  String get runsSourceHealthKit;
+  String get historySourceHealthKit;
 
   /// Source-filter label for Health Connect-imported runs — brand name, not translated
   ///
   /// In en, this message translates to:
   /// **'Health Connect'**
-  String get runsSourceHealthConnect;
+  String get historySourceHealthConnect;
 
   /// Title of the custom date-range picker bottom sheet
   ///
   /// In en, this message translates to:
   /// **'Select dates'**
-  String get runsRangePickerTitle;
+  String get historyRangePickerTitle;
 
   /// Label on the start-date chip in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Start'**
-  String get runsRangeStart;
+  String get historyRangeStart;
 
   /// Label on the end-date chip in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'End'**
-  String get runsRangeEnd;
+  String get historyRangeEnd;
 
   /// Placeholder on an unset endpoint chip in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Tap a date'**
-  String get runsRangeTapDate;
+  String get historyRangeTapDate;
 
   /// Apply button in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Apply'**
-  String get runsRangeApply;
+  String get historyRangeApply;
 
   /// Clear button in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Clear'**
-  String get runsRangeClear;
+  String get historyRangeClear;
 
   /// Tooltip on the previous-month chevron in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Previous month'**
-  String get runsPrevMonth;
+  String get historyPrevMonth;
 
   /// Tooltip on the next-month chevron in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Next month'**
-  String get runsNextMonth;
+  String get historyNextMonth;
 
   /// Tooltip on the previous-year chevron in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Previous year'**
-  String get runsPrevYear;
+  String get historyPrevYear;
 
   /// Tooltip on the next-year chevron in the date-range picker
   ///
   /// In en, this message translates to:
   /// **'Next year'**
-  String get runsNextYear;
+  String get historyNextYear;
 
   /// Title of the bulk-delete confirmation dialog
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{Delete {count} run?} other{Delete {count} runs?}}'**
-  String runsDeleteConfirmTitle(int count);
+  String historyDeleteConfirmTitle(int count);
 
   /// Body of the bulk-delete confirmation dialog
   ///
   /// In en, this message translates to:
   /// **'This cannot be undone.'**
-  String get runsDeleteConfirmBody;
+  String get historyDeleteConfirmBody;
 
   /// Cancel action in the bulk-delete confirmation dialog
   ///
   /// In en, this message translates to:
   /// **'Cancel'**
-  String get runsCancel;
+  String get historyCancel;
 
   /// Confirm action in the bulk-delete confirmation dialog
   ///
   /// In en, this message translates to:
   /// **'Delete'**
-  String get runsDelete;
+  String get historyDelete;
 
   /// Tooltip on the per-row unsynced icon in the runs list
   ///
   /// In en, this message translates to:
   /// **'Queued to sync'**
-  String get runsQueuedToSync;
+  String get historyQueuedToSync;
 
   /// Banner shown when tapping sync while signed out
   ///
   /// In en, this message translates to:
   /// **'Sign in from Settings to sync runs'**
-  String get runsSignInToSync;
+  String get historySignInToSync;
 
   /// Banner shown when a cloud refresh of the runs list fails
   ///
   /// In en, this message translates to:
   /// **'Could not refresh — check your connection'**
-  String get runsRefreshFailed;
+  String get historyRefreshFailed;
 
   /// Banner shown when loading the next page of runs fails
   ///
   /// In en, this message translates to:
   /// **'Could not load more runs'**
-  String get runsLoadMoreFailed;
+  String get historyLoadMoreFailed;
 
   /// Banner shown after a sync that partially failed
   ///
   /// In en, this message translates to:
   /// **'Synced {synced}/{total}. Error: {error}'**
-  String runsSyncPartial(int synced, int total, String error);
+  String historySyncPartial(int synced, int total, String error);
 
-  /// Detail message (used as the error in runsSyncPartial) when some runs' track uploads fail during a manual sync
+  /// Detail message (used as the error in historySyncPartial) when some runs' track uploads fail during a manual sync
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{{count} run failed to upload its GPS track — the rest were synced. It will retry on the next cycle.} other{{count} runs failed to upload their GPS track — the rest were synced. The failed runs will retry on the next cycle.}}'**
-  String runsSyncTrackFailed(int count);
+  String historySyncTrackFailed(int count);
 
   /// Banner shown after every unsynced run uploads successfully
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{{count} run synced} other{All {count} runs synced}}'**
-  String runsSyncAllDone(int count);
+  String historySyncAllDone(int count);
 
   /// Banner shown when some runs deleted but others were queued for retry
   ///
   /// In en, this message translates to:
   /// **'{deleted} deleted; {queued} queued — will retry when back online.'**
-  String runsDeletePartial(int deleted, int queued);
+  String historyDeletePartial(int deleted, int queued);
 
   /// Banner shown after a successful bulk delete
   ///
   /// In en, this message translates to:
   /// **'{count, plural, one{Deleted {count} run} other{Deleted {count} runs}}'**
-  String runsDeleteDone(int count);
+  String historyDeleteDone(int count);
 
   /// AppBar title for the manual add-run form
   ///

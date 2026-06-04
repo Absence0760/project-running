@@ -61,7 +61,7 @@ String periodTitle(PeriodType period, DateTime anchor, String localeTag,
     case PeriodType.month:
       return '${monthName(anchor.month, localeTag)} ${anchor.year}';
     case PeriodType.all:
-      return _l10nFor(localeTag).runsRangeAll;
+      return _l10nFor(localeTag).historyRangeAll;
   }
 }
 
@@ -80,7 +80,7 @@ String periodLabel(PeriodType period, DateTime anchor, String localeTag,
     case PeriodType.month:
       return '${monthName(start.month, localeTag)} ${start.year}';
     case PeriodType.all:
-      return _l10nFor(localeTag).runsRangeAll;
+      return _l10nFor(localeTag).historyRangeAll;
   }
 }
 
@@ -354,7 +354,7 @@ class _PeriodSummaryScreenState extends State<PeriodSummaryScreen> {
             _buildEmptyState(theme)
           else ...[
             Text(
-              l10n.runsCount(_periodRuns.length),
+              l10n.historyCount(_periodRuns.length),
               style: theme.textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
