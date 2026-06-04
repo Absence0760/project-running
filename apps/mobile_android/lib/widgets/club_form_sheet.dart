@@ -4,40 +4,24 @@ import 'package:supabase_flutter/supabase_flutter.dart' show PostgrestException;
 import '../l10n/gen/app_localizations.dart';
 import '../rate_limit_errors.dart';
 import '../social_service.dart';
+import 'full_screen_form.dart';
 
-/// Show the "New club" form as a full-screen page with a back arrow.
-/// Returns the new slug on success.
+/// Show the "New club" form as a full-screen dialog. Returns the new
+/// slug on success.
 ///
-/// **History:** This used to be a `showModalBottomSheet`. The user
-/// reported three real bugs against that layout:
-///
-///   1. The bottom sheet's content overflowed by ~54 px when the
-///      software keyboard came up + when the inline error banner was
-///      visible — the column couldn't shrink under the keyboard so
-///      the bottom of the form went off-screen with the yellow
-///      RenderFlex "BOTTOM OVERFLOWED" stripe.
-///   2. Create / Cancel buttons sat under the system navigation
-///      gesture bar (Samsung One UI, gesture-nav devices) because the
-///      sheet didn't account for `viewPadding.bottom`.
-///   3. The modal hid the rest of the app behind a dim layer; the
-///      user wanted a proper page with a back button so they could
-///      tap-out the keyboard or back-out without dismissing the
-///      modal accidentally.
-///
-/// Full-screen `MaterialPageRoute` solves all three — `Scaffold`
-/// auto-handles bottom-inset for the keyboard via
-/// `resizeToAvoidBottomInset: true`, `SafeArea` clears the system
-/// nav bar, and the back button matches the rest of the app's
-/// navigation pattern.
+/// Presentation goes through [showFullScreenForm], the shared
+/// create/edit-entity wrapper: the hosting `Scaffold` clears the soft
+/// keyboard via `resizeToAvoidBottomInset`, `SafeArea` clears the system
+/// nav bar, and the body's `SingleChildScrollView` prevents the
+/// "BOTTOM OVERFLOWED" stripe the earlier bottom-sheet layout hit.
 Future<String?> showClubFormSheet(
   BuildContext context, {
   required SocialService social,
 }) {
-  return Navigator.of(context).push<String>(
-    MaterialPageRoute(
-      builder: (_) => _ClubFormScreen(social: social),
-      fullscreenDialog: false,
-    ),
+  return showFullScreenForm<String>(
+    context,
+    title: AppLocalizations.of(context).clubFormTitle,
+    builder: (_) => _ClubFormScreen(social: social),
   );
 }
 
@@ -143,21 +127,9 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
-    return Scaffold(
-      // resizeToAvoidBottomInset=true (the default) means the body
-      // shrinks when the keyboard slides up so the SingleChildScrollView
-      // can scroll its contents — no more 54-px RenderFlex overflow.
-      appBar: AppBar(
-        title: Text(l10n.clubFormTitle),
-      ),
-      body: SafeArea(
-        // Clears the bottom system nav bar so Create / Cancel
-        // aren't covered by Samsung's gesture handle.
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
+    // Heading + Scaffold/SafeArea come from the host showFullScreenForm.
+    return FullScreenFormBody(
+      children: [
               TextField(
                 controller: _name,
                 autofocus: true,
@@ -273,10 +245,7 @@ class _ClubFormScreenState extends State<_ClubFormScreen> {
                 ],
               ),
             ],
-          ),
-        ),
-      ),
-    );
+          );
   }
 }
 

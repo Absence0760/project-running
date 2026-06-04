@@ -722,6 +722,9 @@ class _RunsScreenState extends State<RunsScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
+        // Full-screen dialog (slide-up + close affordance) to match the
+        // app's other create/edit-entity surfaces (gear, club, goal, …).
+        fullscreenDialog: true,
         builder: (_) => AddRunScreen(
           runStore: widget.runStore,
           routeStore: widget.routeStore,

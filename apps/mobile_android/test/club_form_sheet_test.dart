@@ -160,18 +160,18 @@ void main() {
     });
 
     testWidgets(
-      'opens as a full-screen page with an AppBar back button — '
-      'NOT a modal bottom sheet (user-requested layout change)',
+      'opens as a full-screen dialog with an AppBar close button — '
+      'NOT a modal bottom sheet (consistent create/edit-entity surface)',
       (tester) async {
-        // The user surfaced "they also seem to be using the old modal,
-        // and not the page with the back button" — pin the new
-        // MaterialPageRoute shape so a future refactor that reverts
-        // to showModalBottomSheet fails this test loud.
+        // Pin the full-screen-dialog shape (showFullScreenForm) so a
+        // future refactor that reverts to showModalBottomSheet — or to a
+        // plain back-arrow page — fails this test loud.
         await _openSheet(tester);
-        // Full-screen page anchored AppBar.
+        // Full-screen dialog anchored AppBar.
         expect(find.byType(AppBar), findsOneWidget);
-        // Back arrow auto-injected by MaterialPageRoute.
-        expect(find.byTooltip('Back'), findsOneWidget);
+        // fullscreenDialog auto-injects a Close affordance (not a Back arrow).
+        expect(find.byTooltip('Close'), findsOneWidget);
+        expect(find.byTooltip('Back'), findsNothing);
       },
     );
 
