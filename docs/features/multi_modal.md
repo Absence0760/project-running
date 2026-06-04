@@ -231,8 +231,15 @@ becomes an **action button**, not a tab.
 > first-run "log a lift" footer affordance — all gated on `multi_modal_nav`
 > AND data presence, modality coded by the `fitness_center` glyph + label +
 > a distinct accent (never colour alone). A pure runner / flag-off user
-> sees no new card. Nutrition rings land with the nutrition module; the
-> mobile Home reshape is separate work.
+> sees no new card. Nutrition rings land with the nutrition module.
+>
+> **Status (mobile — shipped, G5):** `dashboard_screen.dart` composes a
+> self-hiding today's-lift card (`widgets/gym_summary_card.dart`) + today's
+> nutrition rings card (`widgets/nutrition_rings_card.dart`) after the
+> today's-workout card, each omitted when that modality has no data today,
+> 2-up on phones ≥360 dp (else stacked). The dashboard best-effort hydrates
+> the gym + food caches + the nutrition target on mount so the cards surface
+> on a fresh launch. A recent-lifts trend card is not yet on mobile.
 
 Home is a vertical scroll of cards. The order is **driven by what the
 user logs**, not a fixed grid. The ordering algorithm:
@@ -617,17 +624,17 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 
 | Concern | Mobile files |
 |---|---|
-| Nav + Log sheet | `home_screen.dart` (bottom-nav reshape), `widgets/log_sheet.dart` |
-| Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` (run summary card exists) |
+| Nav + Log sheet | `home_screen.dart` (bottom-nav reshape), `widgets/log_sheet.dart` — **shipped (G5)** |
+| Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` — **shipped (G5)** (run summary already lived on the dashboard) |
 | History | `screens/history_screen.dart` (reads the `activities` view) |
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
-| Body metrics | `body_metrics` table (new migration when nutrition starts) + Settings height/weight entry |
+| Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Web consumer wired**: `web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`, pure + tested) feeds the dashboard load curve |
-| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/runs` + `fetchActivities`). `home_screen` card composition is the pending mobile mirror |
-| Runner protection | Settings toggle: keep Run as the one-tap primary action |
-| Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline; not yet wired into nav/sync — lands with the screens) |
+| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/runs` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart`; the unified mobile History timeline is still the pending mobile mirror |
+| Runner protection | Settings toggle: keep Run as the one-tap primary action — **shipped (G5)** (`Preferences.keepRunPrimary` + the `settings_preferences_screen.dart` switch; tap = one-tap run start, long-press = full Log sheet) |
+| Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline). **Now wired into nav/Home (G5):** the gym/nutrition screens + the dashboard hydrate + drain them; still outside the global `main.dart`/`sync_service` sweep |
 | Data access | `packages/api_client` typed gym + food + `fetchLatestBodyWeightKg` methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); **web food + body-metrics queries shipped** (`fetchFoodLog` / `createFoodEntry` / `updateFoodEntry` / `deleteFoodEntry` / `fetchLatestWeightKg` / `recordWeightKg` / `clearWeightHistory`) |
 
 **Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the `multi_modal_nav`-gated **Gym** sidebar item in `+layout.svelte`. E2e: `tests-e2e/gym/gym.spec.ts`. Weight is entered/shown in kg today; the `weight_unit` (`'kg' \| 'lbs'`) user-pref key is registered (settings.md, F19) but **not yet wired** — storage stays canonical kg (`gym_sets.weight_kg`) and the display/entry converter that reads the key still has to land.
-| DSAR | `gym_workouts` / `gym_sets` (nested) / `food_log` in the export path (**shipped**); `body_metrics` pending its migration |
+| DSAR | `gym_workouts` / `gym_sets` (nested) / `food_log` + `body_metrics` (migration `20261216_001`) all in the export path (**shipped** — see the Body-metrics § above); deletion FK-cascades from `auth.users` |
