@@ -8,13 +8,16 @@ import '../l10n/number_format.dart';
 import '../main.dart' show themeModeNotifier, localeNotifier;
 import '../preferences.dart';
 import '../settings_sync.dart';
+import 'settings_body_metrics_screen.dart';
 
 class SettingsPreferencesScreen extends StatefulWidget {
+  final ApiClient? apiClient;
   final Preferences preferences;
   final SettingsSyncService? settingsSync;
 
   const SettingsPreferencesScreen({
     super.key,
+    this.apiClient,
     required this.preferences,
     required this.settingsSync,
   });
@@ -1002,6 +1005,21 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
                   style: const TextStyle(fontSize: 13, color: Colors.grey),
                 ),
               ),
+            ListTile(
+              title: Text(l10n.bodyMetricsTitle),
+              subtitle: Text(l10n.bodyMetricsTileSubtitle),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => SettingsBodyMetricsScreen(
+                    api: widget.apiClient,
+                    settingsSync: widget.settingsSync,
+                    preferences: widget.preferences,
+                  ),
+                ),
+              ),
+            ),
             ListTile(
               title: Text(l10n.prefsDateOfBirth),
               subtitle: Text(

@@ -297,8 +297,11 @@ class _HomeScreenState extends State<HomeScreen> {
       case LogAction.snack:
         Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (_) =>
-                NutritionScreen(api: widget.apiClient, store: widget.foodStore),
+            builder: (_) => NutritionScreen(
+              api: widget.apiClient,
+              store: widget.foodStore,
+              settingsSync: widget.settingsSync,
+            ),
           ),
         );
     }

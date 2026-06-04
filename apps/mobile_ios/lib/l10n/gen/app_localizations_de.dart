@@ -496,6 +496,71 @@ class AppLocalizationsDe extends AppLocalizations {
       'Mittlere Taste startet einen Lauf; lange drücken für das vollständige Menü';
 
   @override
+  String get bodyMetricsTitle => 'Körperdaten';
+
+  @override
+  String get bodyMetricsTileSubtitle => 'Größe, Gewicht & Nährwertziele';
+
+  @override
+  String get bodyMetricsConsentTitle => 'Gesundheitsdaten speichern';
+
+  @override
+  String get bodyMetricsConsentSubtitle =>
+      'Größe und Gewicht sind besondere Gesundheitsdaten. Zum Löschen ausschalten.';
+
+  @override
+  String get bodyMetricsHeight => 'Größe';
+
+  @override
+  String get bodyMetricsWeight => 'Gewicht';
+
+  @override
+  String get bodyMetricsActivityLevel => 'Aktivitätsniveau';
+
+  @override
+  String get bodyMetricsGoal => 'Ziel';
+
+  @override
+  String get bodyMetricsTargetsHint =>
+      'Dient zur Schätzung deiner täglichen Kalorien- und Makroziele.';
+
+  @override
+  String get bodyMetricsConsentRequired =>
+      'Aktiviere die Speicherung von Gesundheitsdaten, um Größe und Gewicht zu sichern.';
+
+  @override
+  String get bodyMetricsSaved => 'Gespeichert';
+
+  @override
+  String bodyMetricsSaveFailed(String error) {
+    return 'Speichern fehlgeschlagen: $error';
+  }
+
+  @override
+  String get activitySedentary => 'Kaum aktiv';
+
+  @override
+  String get activityLight => 'Leicht aktiv';
+
+  @override
+  String get activityModerate => 'Mäßig aktiv';
+
+  @override
+  String get activityVeryActive => 'Sehr aktiv';
+
+  @override
+  String get activityExtraActive => 'Extrem aktiv';
+
+  @override
+  String get goalLose => 'Abnehmen';
+
+  @override
+  String get goalMaintain => 'Gewicht halten';
+
+  @override
+  String get goalGain => 'Zunehmen';
+
+  @override
   String get settingsSectionProfile => 'Profil';
 
   @override

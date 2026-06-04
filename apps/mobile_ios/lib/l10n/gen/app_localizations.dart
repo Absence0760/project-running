@@ -881,6 +881,126 @@ abstract class AppLocalizations {
   /// **'Tap the centre button to start a run; long-press for the full log menu'**
   String get prefsKeepRunPrimarySubtitle;
 
+  /// Title of the body-metrics settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Body metrics'**
+  String get bodyMetricsTitle;
+
+  /// Settings tile subtitle for the body-metrics entry
+  ///
+  /// In en, this message translates to:
+  /// **'Height, weight & nutrition targets'**
+  String get bodyMetricsTileSubtitle;
+
+  /// Toggle title for the GDPR Art 9 health-data consent gate
+  ///
+  /// In en, this message translates to:
+  /// **'Store health data'**
+  String get bodyMetricsConsentTitle;
+
+  /// Explanation under the health-data consent toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Height and weight are special-category health data. Turn this off to erase them.'**
+  String get bodyMetricsConsentSubtitle;
+
+  /// Label for the height input (centimetres)
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get bodyMetricsHeight;
+
+  /// Label for the weight input (user's weight unit)
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get bodyMetricsWeight;
+
+  /// Label for the nutrition activity-level picker
+  ///
+  /// In en, this message translates to:
+  /// **'Activity level'**
+  String get bodyMetricsActivityLevel;
+
+  /// Label for the nutrition weight-goal picker
+  ///
+  /// In en, this message translates to:
+  /// **'Goal'**
+  String get bodyMetricsGoal;
+
+  /// Helper text explaining what body metrics are used for
+  ///
+  /// In en, this message translates to:
+  /// **'Used to estimate your daily calorie and macro targets.'**
+  String get bodyMetricsTargetsHint;
+
+  /// Error shown when saving body data without consent
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on health-data storage to save height and weight.'**
+  String get bodyMetricsConsentRequired;
+
+  /// Confirmation toast after saving body metrics
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get bodyMetricsSaved;
+
+  /// Error toast when saving body metrics fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String bodyMetricsSaveFailed(String error);
+
+  /// Nutrition activity level: little exercise
+  ///
+  /// In en, this message translates to:
+  /// **'Sedentary'**
+  String get activitySedentary;
+
+  /// Nutrition activity level: 1-3 days/week
+  ///
+  /// In en, this message translates to:
+  /// **'Lightly active'**
+  String get activityLight;
+
+  /// Nutrition activity level: 3-5 days/week
+  ///
+  /// In en, this message translates to:
+  /// **'Moderately active'**
+  String get activityModerate;
+
+  /// Nutrition activity level: 6-7 days/week
+  ///
+  /// In en, this message translates to:
+  /// **'Very active'**
+  String get activityVeryActive;
+
+  /// Nutrition activity level: training twice a day
+  ///
+  /// In en, this message translates to:
+  /// **'Extra active'**
+  String get activityExtraActive;
+
+  /// Nutrition weight goal: calorie deficit
+  ///
+  /// In en, this message translates to:
+  /// **'Lose weight'**
+  String get goalLose;
+
+  /// Nutrition weight goal: maintenance
+  ///
+  /// In en, this message translates to:
+  /// **'Maintain weight'**
+  String get goalMaintain;
+
+  /// Nutrition weight goal: calorie surplus
+  ///
+  /// In en, this message translates to:
+  /// **'Gain weight'**
+  String get goalGain;
+
   /// Settings landing section header grouping Account + Preferences
   ///
   /// In en, this message translates to:
