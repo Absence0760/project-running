@@ -10,6 +10,8 @@ import 'l10n/number_format.dart';
 
 enum DistanceUnit { km, mi }
 
+enum WeightUnit { kg, lbs }
+
 enum ActivityType {
   run,
   walk,
@@ -222,6 +224,11 @@ class Preferences extends ChangeNotifier {
   // 'public' / 'followers' / 'private'. Empty / unknown = 'private'
   // (the conservative default — DB column default is false anyway).
   static const _kPrivacyDefault = 'privacy_default';
+  // Mirrors the universal `weight_unit` settings-bag key. Display +
+  // entry unit for body / lift weights (Phase 4 gym/nutrition).
+  // 'kg' (default) | 'lbs'. Storage stays canonical kg — this only
+  // changes how the number is shown and parsed.
+  static const _kWeightUnit = 'weight_unit';
 
   // GDPR Art 7(3) / Art 21 withdrawal path for Sentry error reporting.
   // When true, main.dart skips Sentry.init at app launch — the SDK
@@ -254,6 +261,7 @@ class Preferences extends ChangeNotifier {
   Locale? _locale;
   double? _bodyWeightKg;
   String _privacyDefault = 'private';
+  WeightUnit _weightUnit = WeightUnit.kg;
   bool _sentryOptOut = false;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
@@ -312,6 +320,11 @@ class Preferences extends ChangeNotifier {
   /// `private` / unknown all return false. Wired into the run-save
   /// path on `run_screen` + `add_run_screen`.
   bool get newRunsArePublic => _privacyDefault == 'public';
+
+  /// Display + entry unit for body / lift weights, mirrored from the
+  /// universal `weight_unit` settings-bag key. Storage stays canonical
+  /// kg — see [WeightFormat]. Defaults to kg.
+  WeightUnit get weightUnit => _weightUnit;
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
@@ -430,6 +443,7 @@ class Preferences extends ChangeNotifier {
     final bw = _prefs.getDouble(_kBodyWeightKg);
     _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
     _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
+    _weightUnit = WeightFormat.unitFromWire(_prefs.getString(_kWeightUnit));
     _sentryOptOut = _prefs.getBool(_kSentryOptOut) ?? false;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);
@@ -546,6 +560,17 @@ class Preferences extends ChangeNotifier {
     if (next == _privacyDefault) return;
     _privacyDefault = next;
     await _prefs.setString(_kPrivacyDefault, next);
+    notifyListeners();
+  }
+
+  /// Update the cached weight_unit. Any value other than `lbs` resolves
+  /// to kg (the canonical default), so a corrupt bag can't produce an
+  /// undefined unit. Driven from `SettingsSyncService._applyUniversal`
+  /// whenever the cloud universal bag's `weight_unit` lands.
+  Future<void> setWeightUnit(WeightUnit unit) async {
+    if (unit == _weightUnit) return;
+    _weightUnit = unit;
+    await _prefs.setString(_kWeightUnit, WeightFormat.label(unit));
     notifyListeners();
   }
 
@@ -670,6 +695,56 @@ class UnitFormat {
   }
 }
 
+/// Weight formatting + parsing helpers that respect the user's
+/// `weight_unit` preference. Storage is always canonical kilograms
+/// (`gym_sets.weight_kg`); these convert only on display + entry — the
+/// same display-only split as [UnitFormat] over `preferred_unit`.
+/// Mirror of the web `weight_unit` converter (parity is behavioural;
+/// keep both sides on the same constant).
+class WeightFormat {
+  /// Exact kg→lbs factor (1 kg = 2.2046226218 lb).
+  static const _lbsPerKg = 2.2046226218;
+
+  static WeightUnit unitFromWire(String? raw) =>
+      raw == 'lbs' ? WeightUnit.lbs : WeightUnit.kg;
+
+  /// Convert a canonical-kg value into the display unit.
+  static double toDisplay(double kg, WeightUnit unit) =>
+      unit == WeightUnit.lbs ? kg * _lbsPerKg : kg;
+
+  /// Convert a display-unit value back into canonical kg for storage.
+  static double toKg(double value, WeightUnit unit) =>
+      unit == WeightUnit.lbs ? value / _lbsPerKg : value;
+
+  /// Format a canonical-kg weight with one decimal + unit suffix, e.g.
+  /// "100.0 kg" / "220.5 lbs" (decimal separator follows the active locale).
+  static String format(double? kg, WeightUnit unit) {
+    if (kg == null) return '—';
+    return '${value(kg, unit)} ${label(unit)}';
+  }
+
+  /// Number-only display (no unit suffix), localised separator.
+  static String value(double kg, WeightUnit unit) =>
+      formatFixed(toDisplay(kg, unit), 1, activeLocaleTag);
+
+  /// Unit label, "kg" or "lbs".
+  static String label(WeightUnit unit) =>
+      unit == WeightUnit.lbs ? 'lbs' : 'kg';
+
+  /// Parse a user-entered display-unit string into canonical kg. Tolerates
+  /// the active locale's decimal comma and a trailing unit suffix. Returns
+  /// null on empty / unparseable input.
+  static double? parseToKg(String raw, WeightUnit unit) {
+    var s = raw.trim().toLowerCase();
+    if (s.isEmpty) return null;
+    s = s.replaceAll('kg', '').replaceAll('lbs', '').replaceAll('lb', '').trim();
+    s = s.replaceAll(',', '.');
+    final v = double.tryParse(s);
+    if (v == null) return null;
+    return toKg(v, unit);
+  }
+}
+
 // ───────────── Global active-preferences accessor ─────────────
 //
 // Screens that take `Preferences` as a constructor dep can reach the
@@ -713,6 +788,13 @@ String formatDistanceForPref(double metres) =>
 /// em-dash.
 String formatElevationForPref(double? metres) =>
     UnitFormat.elevation(metres, activeDistanceUnit);
+
+/// Current user weight-unit pref. Returns kg when no Preferences has
+/// been registered (host-test runner, very early app start). Used by
+/// gym surfaces that don't carry a Preferences dep (the compose sheet,
+/// detail PR chips) so weight renders + parses in the user's unit.
+WeightUnit get activeWeightUnit =>
+    _activePreferences?.weightUnit ?? WeightUnit.kg;
 
 @visibleForTesting
 void resetActivePreferencesForTest() {

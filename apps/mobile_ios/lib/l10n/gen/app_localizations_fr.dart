@@ -4836,6 +4836,15 @@ class AppLocalizationsFr extends AppLocalizations {
   String get prefsPaceFormatMph => 'mph';
 
   @override
+  String get prefsWeightUnit => 'Unité de poids';
+
+  @override
+  String get prefsWeightUnitKg => 'Kilogrammes (kg)';
+
+  @override
+  String get prefsWeightUnitLbs => 'Livres (lbs)';
+
+  @override
   String get prefsNotSet => 'Non défini';
 
   @override

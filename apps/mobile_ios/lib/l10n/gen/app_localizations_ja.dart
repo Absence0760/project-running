@@ -4525,6 +4525,15 @@ class AppLocalizationsJa extends AppLocalizations {
   String get prefsPaceFormatMph => 'mph';
 
   @override
+  String get prefsWeightUnit => '重量単位';
+
+  @override
+  String get prefsWeightUnitKg => 'キログラム (kg)';
+
+  @override
+  String get prefsWeightUnitLbs => 'ポンド (lbs)';
+
+  @override
   String get prefsNotSet => '未設定';
 
   @override

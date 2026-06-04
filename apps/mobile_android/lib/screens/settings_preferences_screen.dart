@@ -448,6 +448,25 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
     }
   }
 
+  Future<void> _editWeightUnit() async {
+    final l10n = AppLocalizations.of(context);
+    const opts = ['kg', 'lbs'];
+    final labels = [l10n.prefsWeightUnitKg, l10n.prefsWeightUnitLbs];
+    final picked = await _pickRadio<String>(
+      title: l10n.prefsWeightUnit,
+      options: opts,
+      labels: labels,
+      current: _bagValue<String>(SettingsKeys.weightUnit) ?? 'kg',
+    );
+    if (picked != null) {
+      await _putUniversal(SettingsKeys.weightUnit, picked);
+      await widget.preferences.setWeightUnit(WeightFormat.unitFromWire(picked));
+    }
+  }
+
+  String _weightUnitLabel(AppLocalizations l10n, String raw) =>
+      raw == 'lbs' ? l10n.prefsWeightUnitLbs : l10n.prefsWeightUnitKg;
+
   Future<void> _editLanguage() async {
     final t = AppLocalizations.of(context);
     // '' is the "follow device locale" sentinel; the rest are canonical tags.
@@ -861,6 +880,16 @@ class _SettingsPreferencesScreenState extends State<SettingsPreferencesScreen> {
               trailing: const Icon(Icons.chevron_right),
               enabled: _bagReady,
               onTap: _editPaceFormat,
+            ),
+            ListTile(
+              title: Text(l10n.prefsWeightUnit),
+              subtitle: Text(_weightUnitLabel(
+                l10n,
+                _bagValue<String>(SettingsKeys.weightUnit) ?? 'kg',
+              )),
+              trailing: const Icon(Icons.chevron_right),
+              enabled: _bagReady,
+              onTap: _editWeightUnit,
             ),
             ListTile(
               title: Text(l10n.prefsMapStyle),

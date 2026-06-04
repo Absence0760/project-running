@@ -7870,6 +7870,24 @@ abstract class AppLocalizations {
   /// **'mph'**
   String get prefsPaceFormatMph;
 
+  /// Tile and picker title for the body/lift weight unit
+  ///
+  /// In en, this message translates to:
+  /// **'Weight unit'**
+  String get prefsWeightUnit;
+
+  /// Weight-unit option: kilograms
+  ///
+  /// In en, this message translates to:
+  /// **'Kilograms (kg)'**
+  String get prefsWeightUnitKg;
+
+  /// Weight-unit option: pounds
+  ///
+  /// In en, this message translates to:
+  /// **'Pounds (lbs)'**
+  String get prefsWeightUnitLbs;
+
   /// Placeholder shown when a setting has no value
   ///
   /// In en, this message translates to:
