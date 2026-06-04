@@ -49,10 +49,27 @@ class LocalRouteStore(private val context: Context) {
 
     suspend fun current(): List<SavedRoute> = routes.first()
 
+    /// Persist the route cache. Two cost guards on the underlying
+    /// Preferences DataStore, which rewrites its ENTIRE backing file on
+    /// every committed change:
+    ///
+    /// 1. **Bounded** to [MAX_ROUTES] (= the server-side `limit=30` the
+    ///    watch's `fetchRoutes` query uses). Both inbound sources — the
+    ///    Supabase fetch and the phone's Data Layer push — are nominally
+    ///    capped at 30, but a phone running an older/looser bridge could
+    ///    push more; capping here keeps the backing file bounded and the
+    ///    1.4-inch picker un-scrollable past what fits.
+    /// 2. **Dedup'd**: skip the rewrite when the encoded list is
+    ///    byte-identical to what's already on disk. The pre-run screen
+    ///    re-saves on every open and the phone re-pushes on every Data
+    ///    Layer event, most of which don't change the set — without this
+    ///    each is a full-file rewrite for no change.
     suspend fun save(list: List<SavedRoute>) {
-        val encoded = json.encodeToString(serializer, list)
+        val encoded = json.encodeToString(serializer, boundRoutes(list))
         context.routeDataStore.edit { prefs ->
-            prefs[KEY_ROUTES_JSON] = encoded
+            if (prefs[KEY_ROUTES_JSON] != encoded) {
+                prefs[KEY_ROUTES_JSON] = encoded
+            }
         }
     }
 
@@ -80,5 +97,21 @@ class LocalRouteStore(private val context: Context) {
         private val KEY_ROUTES_JSON: Preferences.Key<String> = stringPreferencesKey("routes_v1")
         private val KEY_RECENT_IDS: Preferences.Key<String> = stringPreferencesKey("recent_route_ids_v1")
         private const val MAX_RECENTS = 10
+
+        /// Local cap on the persisted route cache. Mirrors the
+        /// `limit=30` on the watch's `fetchRoutes` Supabase query — see
+        /// `RunWatchApp` / `SupabaseClient.fetchRoutes`. Keeps the
+        /// DataStore backing file (rewritten whole on every save)
+        /// bounded regardless of how many routes a source hands us.
+        const val MAX_ROUTES = 30
     }
 }
+
+/// Bound a route list to [LocalRouteStore.MAX_ROUTES], preserving order
+/// (the inbound lists are pre-sorted — Supabase by `updated_at desc`, the
+/// phone push by the user's starred set). File-level `internal` so the
+/// cap is unit-testable without a DataStore-backing `Context`.
+internal fun boundRoutes(
+    list: List<SavedRoute>,
+    max: Int = LocalRouteStore.MAX_ROUTES,
+): List<SavedRoute> = if (list.size <= max) list else list.take(max)
