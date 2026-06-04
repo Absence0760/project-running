@@ -76,11 +76,15 @@ const (
 // has no schema codegen, so docs/backend/metadata.md + this block are
 // the only thing keeping cross-platform writers and readers in sync.
 const (
-	MetaActivityType = "activity_type"
-	MetaTitle        = "title"
-	MetaAvgBPM       = "avg_bpm"
-	MetaSteps        = "steps"
-	MetaElevationM   = "elevation_m"
+	MetaActivityType       = "activity_type"
+	MetaTitle              = "title"
+	MetaAvgBPM             = "avg_bpm"
+	MetaSteps              = "steps"
+	MetaElevationM         = "elevation_m"
+	MetaStravaID           = "strava_id"
+	MetaStravaActivityType = "strava_activity_type"
+	MetaImportedFrom       = "imported_from"
+	MetaImportedAt         = "imported_at"
 )
 
 // PrefsKey is a key inside the `user_settings.prefs` jsonb bag — the

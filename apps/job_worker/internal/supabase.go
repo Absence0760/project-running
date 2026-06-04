@@ -749,20 +749,20 @@ func (c *SupabaseClient) InsertStravaRun(ctx context.Context, userID string, act
 	// readers compare against typeof === 'string'. /audit/strava L3.
 	stravaIDStr := strconv.FormatInt(act.ID, 10)
 	metadata := map[string]any{
-		"strava_id":            stravaIDStr,
-		"activity_type":        activityType,
-		"imported_from":        "strava",
-		"imported_at":          time.Now().UTC().Format(time.RFC3339),
-		"strava_activity_type": act.Type,
+		schema.MetaStravaID:           stravaIDStr,
+		schema.MetaActivityType:       activityType,
+		schema.MetaImportedFrom:       "strava",
+		schema.MetaImportedAt:         time.Now().UTC().Format(time.RFC3339),
+		schema.MetaStravaActivityType: act.Type,
 	}
 	if act.AverageHeartrate > 0 {
-		metadata["avg_bpm"] = int(math.Round(act.AverageHeartrate))
+		metadata[schema.MetaAvgBPM] = int(math.Round(act.AverageHeartrate))
 	}
 	if act.Name != "" {
-		metadata["title"] = act.Name
+		metadata[schema.MetaTitle] = act.Name
 	}
 	if act.TotalElevationGain != 0 {
-		metadata["elevation_m"] = int(math.Round(act.TotalElevationGain))
+		metadata[schema.MetaElevationM] = int(math.Round(act.TotalElevationGain))
 	}
 
 	duration := act.MovingTime
