@@ -278,6 +278,8 @@ class LocalRouteStore extends ChangeNotifier {
         .listSync()
         .whereType<File>()
         .where((f) => f.path.endsWith('.json'))
+        .where((f) => !f.path.endsWith(_syncedIdsFilename))
+        .where((f) => !f.path.endsWith(_offlinePinnedIdsFilename))
         .toList();
 
     // Read all files in parallel — cold-start is bounded by the slowest

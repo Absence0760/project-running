@@ -87,6 +87,29 @@ void main() {
       expect(store.routes, hasLength(1));
       expect(store.routes.first.id, 'route-good');
     });
+
+    test('does not load the synced/pinned sidecars as routes', () async {
+      final s1 = LocalRouteStore();
+      await s1.init(overrideDirectory: tempDir);
+      await s1.save(makeRoute(id: 'r-1'), markSynced: true);
+      await s1.pinOffline('r-1');
+
+      // Both sidecars now exist as {_v, ids:[...]} JSON Maps that match the
+      // `*.json` directory glob. _loadAll must exclude them by filename so
+      // they don't get fed to Route.fromJson.
+      expect(File('${tempDir.path}/synced_route_ids.json').existsSync(), isTrue);
+      expect(
+          File('${tempDir.path}/offline_pinned_route_ids.json').existsSync(),
+          isTrue);
+
+      final s2 = LocalRouteStore();
+      await s2.init(overrideDirectory: tempDir);
+
+      expect(s2.routes, hasLength(1));
+      expect(s2.routes.single.id, 'r-1');
+      expect(s2.unsyncedRoutes, isEmpty);
+      expect(s2.isOfflinePinned('r-1'), isTrue);
+    });
   });
 
   group('save', () {
