@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -97,6 +98,51 @@ void main() {
       await fresh.init(overrideDirectory: dir);
       expect(fresh.rows, hasLength(1));
       expect(fresh.rows.first['name'], 'Trek Domane');
+    });
+  });
+
+  group('last_modified_at clock', () {
+    test('createLocal stamps lastModifiedAt from the same instant as created_at',
+        () async {
+      final stored = await store.createLocal(kind: 'shoe', name: 'Vaporfly');
+      expect(stored.lastModifiedAt, isNotNull);
+      final createdAt =
+          DateTime.parse(stored.row['created_at'] as String).toUtc();
+      expect(stored.lastModifiedAt, createdAt,
+          reason: 'lastModifiedAt and created_at derive from one `now`');
+    });
+
+    test('_markSynced preserves the modification clock (does not bump to now)',
+        () async {
+      // Seed a pendingUpdate row on disk with a known-old clock, then drain
+      // it. After the drain it must be `synced` but keep the old clock — a
+      // bumped clock would later beat the server copy it was just pushed from.
+      const id = 'old-shoe';
+      final old = DateTime.utc(2020, 1, 1);
+      final stored = StoredGear(
+        row: <String, dynamic>{
+          'id': id,
+          'kind': 'shoe',
+          'name': 'Old',
+          'retired_at': null,
+          'total_distance_m': 0,
+          'created_at': old.toIso8601String(),
+        },
+        syncState: GearSyncState.pendingUpdate,
+        lastModifiedAt: old,
+      );
+      File('${dir.path}/$id.json').writeAsStringSync(jsonEncode(stored.toJson()));
+
+      final reloaded = LocalGearStore();
+      await reloaded.init(overrideDirectory: dir);
+      expect(reloaded.debugStored(id)!.syncState, GearSyncState.pendingUpdate);
+
+      await reloaded.syncWithServer(_FakeGearApi());
+
+      final after = reloaded.debugStored(id)!;
+      expect(after.syncState, GearSyncState.synced);
+      expect(after.lastModifiedAt, old,
+          reason: 'syncing must not reset the modification clock');
     });
   });
 

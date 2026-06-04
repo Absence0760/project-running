@@ -2705,6 +2705,8 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **Same trade-offs as §73 carry over:** last-write-wins on a cross-device offline window, no `dropUser` hook (best-effort single-user device until the `created_by_user_id` ownership tag from §67 is added). Don't re-litigate by adding a "sync now" button or a temp-id remap layer — the client-minted UUID is the load-bearing choice.
 
+**Conflict-resolution alignment (2026-06-04).** The three per-row stores were brought into lockstep on the modification clock: gym/food's `replaceFromServer` now applies **newer-wins** for `synced` rows (a server fetch that's *older* than the local copy — read-replica lag — no longer clobbers it; the local synced row's clock is built from the server's `last_modified_at` so successive refreshes compare like-for-like), mirroring `LocalRunStore.saveFromRemote`. Gear has no `last_modified_at` column so it keeps the server-overwrites-synced behaviour, but two clock bugs were fixed: `createLocal` now stamps `lastModifiedAt` from the same `now` as `created_at`, and `_markSynced` preserves the existing clock instead of bumping it to "now" (a bumped clock would make a freshly-drained row beat the very server copy it was pushed from). These are the L-FILE H4 / M2 / L3 findings from the data-architecture audit.
+
 ---
 
 ## 123. Mobile local stores persist through a crash-atomic write helper (`writeJsonAtomic`); `_rewriteAll` writes before it prunes

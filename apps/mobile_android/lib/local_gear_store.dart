@@ -156,6 +156,7 @@ class LocalGearStore extends ChangeNotifier {
     String? notes,
   }) async {
     final id = _newUuid();
+    final now = DateTime.now().toUtc();
     final row = <String, dynamic>{
       'id': id,
       'kind': kind,
@@ -166,11 +167,17 @@ class LocalGearStore extends ChangeNotifier {
       'retired_at': null,
       'target_distance_m': targetDistanceM,
       'notes': notes,
-      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'created_at': now.toIso8601String(),
       'total_distance_m': 0,
     };
-    final stored =
-        StoredGear(row: row, syncState: GearSyncState.pendingCreate);
+    // Stamp the conflict-resolution clock explicitly at create time rather
+    // than relying on the StoredGear default — keeps the value derived from
+    // the same `now` as `created_at` and matches the gym/food stores.
+    final stored = StoredGear(
+      row: row,
+      syncState: GearSyncState.pendingCreate,
+      lastModifiedAt: now,
+    );
     await _persist(stored);
     return stored;
   }
@@ -305,8 +312,15 @@ class LocalGearStore extends ChangeNotifier {
   Future<void> _markSynced(String id) async {
     final existing = _rows[id];
     if (existing == null) return;
-    final stored =
-        StoredGear(row: existing.row, syncState: GearSyncState.synced);
+    // Preserve the modification clock — flipping to synced must NOT bump
+    // lastModifiedAt to "now", or a subsequent newer-wins comparison would
+    // treat a freshly-drained row as newer than the server copy it was just
+    // pushed from. Mirrors the gym/food stores.
+    final stored = StoredGear(
+      row: existing.row,
+      syncState: GearSyncState.synced,
+      lastModifiedAt: existing.lastModifiedAt,
+    );
     await _persist(stored);
   }
 
@@ -372,4 +386,9 @@ class LocalGearStore extends ChangeNotifier {
     _rows.clear();
     notifyListeners();
   }
+
+  /// The full stored entry (including its sync state + modification clock)
+  /// for [id], or null. Test-only — production reads go through [rows].
+  @visibleForTesting
+  StoredGear? debugStored(String id) => _rows[id];
 }

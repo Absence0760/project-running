@@ -264,9 +264,12 @@ class LocalGymStore extends ChangeNotifier {
         serverWorkouts,
   ) async {
     final preserved = <String, StoredGymWorkout>{};
+    final syncedLocal = <String, StoredGymWorkout>{};
     for (final entry in _rows.entries) {
       if (entry.value.syncState != GymSyncState.synced) {
         preserved[entry.key] = entry.value;
+      } else {
+        syncedLocal[entry.key] = entry.value;
       }
     }
     _rows.clear();
@@ -274,19 +277,38 @@ class LocalGymStore extends ChangeNotifier {
       final id = w.workout['id'] as String;
       if (preserved.containsKey(id)) {
         _rows[id] = preserved.remove(id)!;
+        continue;
+      }
+      // Newer-wins: keep the local synced copy when its modification clock
+      // is strictly ahead of the server's, so a stale server fetch can't
+      // clobber a more-recent already-pushed edit. Mirrors
+      // LocalRunStore.saveFromRemote's guard.
+      final local = syncedLocal[id];
+      final serverTs = _parseTs(w.workout['last_modified_at']);
+      if (local != null &&
+          serverTs != null &&
+          local.lastModifiedAt.isAfter(serverTs)) {
+        _rows[id] = local;
       } else {
+        // Build the synced row's clock from the server's last_modified_at
+        // (not wall-clock now) so the next refresh's newer-wins compares
+        // like-for-like.
         _rows[id] = StoredGymWorkout(
           row: w.workout,
-          sets: w.sets
-              .map((s) => Map<String, dynamic>.from(s))
-              .toList(),
+          sets: w.sets.map((s) => Map<String, dynamic>.from(s)).toList(),
           syncState: GymSyncState.synced,
+          lastModifiedAt: serverTs,
         );
       }
     }
     _rows.addAll(preserved);
     await _rewriteAll();
     notifyListeners();
+  }
+
+  static DateTime? _parseTs(dynamic v) {
+    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
+    return null;
   }
 
   /// Push every pending workout to the server. Returns the count of

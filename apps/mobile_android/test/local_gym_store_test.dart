@@ -75,6 +75,7 @@ GymSetInput _set(String name, {int? reps, double? kg, double? rpe}) =>
   String id, {
   String? title,
   DateTime? startedAt,
+  DateTime? lastModifiedAt,
   List<Map<String, dynamic>> sets = const [],
 }) =>
     (
@@ -87,7 +88,8 @@ GymSetInput _set(String name, {int? reps, double? kg, double? rpe}) =>
         'notes': null,
         'is_public': false,
         'external_id': null,
-        'last_modified_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+        'last_modified_at':
+            (lastModifiedAt ?? DateTime.utc(2026, 6, 1)).toIso8601String(),
         'created_at': DateTime.utc(2026, 6, 1).toIso8601String(),
       },
       sets: sets,
@@ -234,6 +236,34 @@ void main() {
         ]),
       ]);
       expect(store.byId('abc-123')!.sets.single['exercise_name'], 'Deadlift');
+    });
+
+    test('newer-wins: a stale server fetch does not clobber a locally-newer '
+        'synced copy', () async {
+      await store.replaceFromServer([
+        _serverWorkout('w1',
+            title: 'Recent', lastModifiedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      // A second fetch returns an OLDER copy (read-replica lag) — must keep
+      // the more-recent local copy.
+      await store.replaceFromServer([
+        _serverWorkout('w1',
+            title: 'Stale', lastModifiedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      expect(store.byId('w1')!.row['title'], 'Recent');
+    });
+
+    test('newer-wins: a newer server fetch overwrites the synced copy',
+        () async {
+      await store.replaceFromServer([
+        _serverWorkout('w1',
+            title: 'Old', lastModifiedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      await store.replaceFromServer([
+        _serverWorkout('w1',
+            title: 'New', lastModifiedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      expect(store.byId('w1')!.row['title'], 'New');
     });
   });
 

@@ -260,9 +260,12 @@ class LocalFoodStore extends ChangeNotifier {
   /// an offline edit isn't clobbered by the server's older copy.
   Future<void> replaceFromServer(List<Map<String, dynamic>> serverRows) async {
     final preserved = <String, StoredFood>{};
+    final syncedLocal = <String, StoredFood>{};
     for (final entry in _rows.entries) {
       if (entry.value.syncState != FoodSyncState.synced) {
         preserved[entry.key] = entry.value;
+      } else {
+        syncedLocal[entry.key] = entry.value;
       }
     }
     _rows.clear();
@@ -270,13 +273,37 @@ class LocalFoodStore extends ChangeNotifier {
       final id = row['id'] as String;
       if (preserved.containsKey(id)) {
         _rows[id] = preserved.remove(id)!;
+        continue;
+      }
+      // Newer-wins: keep the local synced copy when its modification clock
+      // is strictly ahead of the server's, so a stale server fetch can't
+      // clobber a more-recent already-pushed edit. Mirrors
+      // LocalRunStore.saveFromRemote's guard.
+      final local = syncedLocal[id];
+      final serverTs = _parseTs(row['last_modified_at']);
+      if (local != null &&
+          serverTs != null &&
+          local.lastModifiedAt.isAfter(serverTs)) {
+        _rows[id] = local;
       } else {
-        _rows[id] = StoredFood(row: row, syncState: FoodSyncState.synced);
+        // Build the synced row's clock from the server's last_modified_at
+        // (not wall-clock now) so the next refresh's newer-wins compares
+        // like-for-like.
+        _rows[id] = StoredFood(
+          row: row,
+          syncState: FoodSyncState.synced,
+          lastModifiedAt: serverTs,
+        );
       }
     }
     _rows.addAll(preserved);
     await _rewriteAll();
     notifyListeners();
+  }
+
+  static DateTime? _parseTs(dynamic v) {
+    if (v is String && v.isNotEmpty) return DateTime.tryParse(v)?.toUtc();
+    return null;
   }
 
   /// Push every pending entry to the server. Returns the count of entries

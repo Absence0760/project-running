@@ -75,6 +75,7 @@ Map<String, dynamic> _serverRow(
   String id, {
   String? itemName,
   DateTime? loggedAt,
+  DateTime? lastModifiedAt,
 }) =>
     {
       'id': id,
@@ -87,7 +88,8 @@ Map<String, dynamic> _serverRow(
       'fat_g': null,
       'is_public': false,
       'external_id': null,
-      'last_modified_at': DateTime.utc(2026, 6, 1).toIso8601String(),
+      'last_modified_at':
+          (lastModifiedAt ?? DateTime.utc(2026, 6, 1)).toIso8601String(),
       'created_at': DateTime.utc(2026, 6, 1).toIso8601String(),
     };
 
@@ -219,6 +221,32 @@ void main() {
       await store.replaceFromServer([_serverRow('abc-123', itemName: 'Server')]);
       expect(store.rows.first['item_name'], 'My edit',
           reason: 'pendingUpdate edits override the server copy until drained');
+    });
+
+    test('newer-wins: a stale server fetch does not clobber a locally-newer '
+        'synced copy', () async {
+      await store.replaceFromServer([
+        _serverRow('f1',
+            itemName: 'Recent', lastModifiedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      await store.replaceFromServer([
+        _serverRow('f1',
+            itemName: 'Stale', lastModifiedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      expect(store.rows.first['item_name'], 'Recent');
+    });
+
+    test('newer-wins: a newer server fetch overwrites the synced copy',
+        () async {
+      await store.replaceFromServer([
+        _serverRow('f1',
+            itemName: 'Old', lastModifiedAt: DateTime.utc(2026, 6, 1)),
+      ]);
+      await store.replaceFromServer([
+        _serverRow('f1',
+            itemName: 'New', lastModifiedAt: DateTime.utc(2026, 6, 2)),
+      ]);
+      expect(store.rows.first['item_name'], 'New');
     });
   });
 
