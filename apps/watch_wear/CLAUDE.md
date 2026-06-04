@@ -221,12 +221,15 @@ showing placeholder text that would train you to trust an emptyish reading.
 
 ## Dependency versions
 
-All versions are pinned to latest stable as of April 2026. Key points:
+Versions are pinned to latest stable as of April 2026, except where an
+API we need only exists on a pre-stable build (Health Services rc,
+security-crypto alpha — each called out below). Key points:
 
 - **AGP 9.1.0** + **Gradle 9.4.1**. AGP 9 removed the `org.jetbrains.kotlin.android` plugin — it's now built-in — and removed the `kotlinOptions {}` DSL block in favour of `kotlin { compilerOptions { jvmTarget.set(JvmTarget.JVM_17) } }`. Both changes are reflected in the root plugin list + `app/build.gradle.kts`.
 - **Kotlin 2.3.20** (compose + serialization plugins). Kotlin 2.0+ means the Compose Compiler is a Kotlin plugin (`org.jetbrains.kotlin.plugin.compose`), versioned with Kotlin itself.
 - **Compose BOM 2026.03.01** pins core Compose artifacts; **Wear Compose 1.6.1** (material / foundation / navigation) is declared separately because it's not under the core BOM.
 - **Health Services 1.1.0-rc01**. Last stable is 1.0.0 but lacks some of the APIs we rely on; bump to 1.1.0 stable when it ships.
+- **security-crypto 1.1.0-alpha06** (`EncryptedSharedPreferences` for the auth session — see `SessionStore.kt`). Deliberately NOT on the last stable (1.0.0): 1.0.0 predates the `MasterKey.Builder` API and only exposes the deprecated `MasterKeys` helper. The whole `androidx.security.crypto` line has had no release past 1.1.0-alpha06 in a long time, so there's no stable to bump to yet — revisit if/when a 1.1.0 beta/stable ships. This is the one dep NOT on a stable channel by choice rather than necessity.
 - **OkHttp 5.3.2**. OkHttp 5 made `ResponseBody` non-nullable (`response.body.string()` instead of `response.body?.string()`) — one ergonomic break to watch for when adding network code.
 - **compileSdk 36** / **targetSdk 35** / **minSdk 30**. AGP 9.1 requires compileSdk 36; Health Services requires minSdk 30; Wear OS 3 is the realistic deployment floor regardless.
 
@@ -331,6 +334,18 @@ Permissions added in the manifest: `FOREGROUND_SERVICE`,
   (`apps/mobile_android/lib/ble_heart_rate.dart`). Persona samsung #33
   flipped the optical-HR default on; the BLE-on-wrist half stays out of
   scope until there's demand.
+- **Per-user binding of the upload queue (vs. clear-on-sign-out).**
+  `tearDownSession` currently *wipes* the upload queue on sign-out
+  (fail-closed, so user A's queued runs can't upload under user B — see
+  `LocalRunStore.clear` and the "Sign-out lifecycle" note above). The
+  cost is that a run recorded offline and not yet synced is dropped on a
+  deliberate sign-out. The more data-preserving design — stamp each
+  `QueuedRun` with the owning `user_id` at save time, have `drainQueue`
+  upload only runs matching the current session, and *keep* (not clear)
+  the queue across sign-out — is deferred. It needs a `userId` field on
+  `QueuedRun` (forward/back-compat via a kotlinx-serialization default)
+  plus a drain-time filter. Until then, clear-on-sign-out is the
+  intended, documented behaviour, not an oversight.
 - **End-to-end soak test on a real device.** All of the above ships in
   this session as compiles-cleanly code; verifying it actually
   records 60+ minutes without dropping samples requires putting it on a
