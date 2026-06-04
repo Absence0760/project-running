@@ -104,6 +104,20 @@ void main() {
       expect(run.metadata!['activity_type'], 'run');
     });
 
+    test('promotes last_modified_at into metadata', () {
+      final raw = _basePayload()
+        ..['last_modified_at'] = '2026-06-03T10:00:00.000Z';
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata, isNotNull);
+      expect(run.metadata!['last_modified_at'], '2026-06-03T10:00:00.000Z');
+    });
+
+    test('non-string last_modified_at is ignored', () {
+      final raw = _basePayload()..['last_modified_at'] = 1717408800000;
+      final run = runFromWatchPayload(raw);
+      expect(run.metadata, isNull);
+    });
+
     test('omits metadata when neither avg_bpm nor activity_type is present',
         () {
       // Reason: the saveRun pipeline treats null and empty-map metadata
