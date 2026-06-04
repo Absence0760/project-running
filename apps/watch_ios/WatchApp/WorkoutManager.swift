@@ -138,6 +138,10 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func pause() {
         guard state == .recording else { return }
+        // Capture the frozen state once, while still .recording, so a crash
+        // during a long pause recovers the exact pause-boundary values. The
+        // periodic timer then skips writes until resume (see writeCheckpoint).
+        writeCheckpoint()
         pausedAt = Date()
         locationManager.stopUpdatingLocation()
         healthKit.pauseSession()
@@ -297,6 +301,12 @@ class WorkoutManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     }
 
     private func writeCheckpoint() {
+        // While paused nothing in the checkpoint changes — distance and the
+        // active-duration clock are both frozen — so the 15s timer would
+        // re-write (and fsync) identical bytes every tick across a long
+        // pause. The pause boundary is captured once by pause() before the
+        // state flips; skip the no-op churn until recording resumes.
+        guard state == .recording else { return }
         guard let store = checkpointStore,
               let runId = currentRunId,
               let start = startDate else { return }
