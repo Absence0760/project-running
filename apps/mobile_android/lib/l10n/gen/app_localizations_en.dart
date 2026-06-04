@@ -465,6 +465,34 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navSettings => 'Settings';
 
   @override
+  String get navLog => 'Log';
+
+  @override
+  String get logA11yLabel => 'Log an activity';
+
+  @override
+  String get logSheetTitle => 'Log';
+
+  @override
+  String get logStartRun => 'Start run';
+
+  @override
+  String get logStartLift => 'Start lift';
+
+  @override
+  String get logMeal => 'Log meal';
+
+  @override
+  String get logSnack => 'Log snack';
+
+  @override
+  String get prefsKeepRunPrimary => 'Run as primary action';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Tap the centre button to start a run; long-press for the full log menu';
+
+  @override
   String get settingsSectionProfile => 'Profile';
 
   @override

@@ -469,6 +469,34 @@ class AppLocalizationsEs extends AppLocalizations {
   String get navSettings => 'Ajustes';
 
   @override
+  String get navLog => 'Registrar';
+
+  @override
+  String get logA11yLabel => 'Registrar una actividad';
+
+  @override
+  String get logSheetTitle => 'Registrar';
+
+  @override
+  String get logStartRun => 'Iniciar carrera';
+
+  @override
+  String get logStartLift => 'Iniciar pesas';
+
+  @override
+  String get logMeal => 'Registrar comida';
+
+  @override
+  String get logSnack => 'Registrar tentempié';
+
+  @override
+  String get prefsKeepRunPrimary => 'Correr como acción principal';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Toca el botón central para iniciar una carrera; mantén pulsado para el menú completo';
+
+  @override
   String get settingsSectionProfile => 'Perfil';
 
   @override

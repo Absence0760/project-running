@@ -467,6 +467,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get navSettings => 'Config.';
 
   @override
+  String get navLog => 'Registrar';
+
+  @override
+  String get logA11yLabel => 'Registrar uma atividade';
+
+  @override
+  String get logSheetTitle => 'Registrar';
+
+  @override
+  String get logStartRun => 'Iniciar corrida';
+
+  @override
+  String get logStartLift => 'Iniciar musculação';
+
+  @override
+  String get logMeal => 'Registrar refeição';
+
+  @override
+  String get logSnack => 'Registrar lanche';
+
+  @override
+  String get prefsKeepRunPrimary => 'Corrida como ação principal';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Toque no botão central para iniciar uma corrida; mantenha pressionado para o menu completo';
+
+  @override
   String get settingsSectionProfile => 'Perfil';
 
   @override
@@ -7310,6 +7338,34 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get navSettings => 'Config.';
+
+  @override
+  String get navLog => 'Registrar';
+
+  @override
+  String get logA11yLabel => 'Registrar uma atividade';
+
+  @override
+  String get logSheetTitle => 'Registrar';
+
+  @override
+  String get logStartRun => 'Iniciar corrida';
+
+  @override
+  String get logStartLift => 'Iniciar musculação';
+
+  @override
+  String get logMeal => 'Registrar refeição';
+
+  @override
+  String get logSnack => 'Registrar lanche';
+
+  @override
+  String get prefsKeepRunPrimary => 'Corrida como ação principal';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Toque no botão central para iniciar uma corrida; mantenha pressionado para o menu completo';
 
   @override
   String get settingsSectionProfile => 'Perfil';

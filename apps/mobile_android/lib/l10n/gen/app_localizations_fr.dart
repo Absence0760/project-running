@@ -468,6 +468,34 @@ class AppLocalizationsFr extends AppLocalizations {
   String get navSettings => 'Réglages';
 
   @override
+  String get navLog => 'Ajouter';
+
+  @override
+  String get logA11yLabel => 'Enregistrer une activité';
+
+  @override
+  String get logSheetTitle => 'Ajouter';
+
+  @override
+  String get logStartRun => 'Démarrer une course';
+
+  @override
+  String get logStartLift => 'Démarrer la muscu';
+
+  @override
+  String get logMeal => 'Ajouter un repas';
+
+  @override
+  String get logSnack => 'Ajouter une collation';
+
+  @override
+  String get prefsKeepRunPrimary => 'Course comme action principale';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Appuyez sur le bouton central pour démarrer une course ; appui long pour le menu complet';
+
+  @override
   String get settingsSectionProfile => 'Profil';
 
   @override

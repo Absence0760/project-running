@@ -827,6 +827,60 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get navSettings;
 
+  /// Tooltip/label for the centre Log action button in the bottom nav
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get navLog;
+
+  /// Screen-reader label for the centre Log action button
+  ///
+  /// In en, this message translates to:
+  /// **'Log an activity'**
+  String get logA11yLabel;
+
+  /// Title of the Log capture bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get logSheetTitle;
+
+  /// Log sheet item: begin recording a run
+  ///
+  /// In en, this message translates to:
+  /// **'Start run'**
+  String get logStartRun;
+
+  /// Log sheet item: begin logging a gym/lift workout
+  ///
+  /// In en, this message translates to:
+  /// **'Start lift'**
+  String get logStartLift;
+
+  /// Log sheet item: log a meal
+  ///
+  /// In en, this message translates to:
+  /// **'Log meal'**
+  String get logMeal;
+
+  /// Log sheet item: log a snack
+  ///
+  /// In en, this message translates to:
+  /// **'Log snack'**
+  String get logSnack;
+
+  /// Settings toggle: make the centre Log button start a run on a single tap
+  ///
+  /// In en, this message translates to:
+  /// **'Run as primary action'**
+  String get prefsKeepRunPrimary;
+
+  /// Subtitle for the run-as-primary-action settings toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the centre button to start a run; long-press for the full log menu'**
+  String get prefsKeepRunPrimarySubtitle;
+
   /// Settings landing section header grouping Account + Preferences
   ///
   /// In en, this message translates to:

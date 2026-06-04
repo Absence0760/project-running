@@ -266,6 +266,42 @@
   "@navSettings": {
     "description": "Bottom-nav label for the settings tab"
   },
+  "navLog": "Log",
+  "@navLog": {
+    "description": "Tooltip/label for the centre Log action button in the bottom nav"
+  },
+  "logA11yLabel": "Log an activity",
+  "@logA11yLabel": {
+    "description": "Screen-reader label for the centre Log action button"
+  },
+  "logSheetTitle": "Log",
+  "@logSheetTitle": {
+    "description": "Title of the Log capture bottom sheet"
+  },
+  "logStartRun": "Start run",
+  "@logStartRun": {
+    "description": "Log sheet item: begin recording a run"
+  },
+  "logStartLift": "Start lift",
+  "@logStartLift": {
+    "description": "Log sheet item: begin logging a gym/lift workout"
+  },
+  "logMeal": "Log meal",
+  "@logMeal": {
+    "description": "Log sheet item: log a meal"
+  },
+  "logSnack": "Log snack",
+  "@logSnack": {
+    "description": "Log sheet item: log a snack"
+  },
+  "prefsKeepRunPrimary": "Run as primary action",
+  "@prefsKeepRunPrimary": {
+    "description": "Settings toggle: make the centre Log button start a run on a single tap"
+  },
+  "prefsKeepRunPrimarySubtitle": "Tap the centre button to start a run; long-press for the full log menu",
+  "@prefsKeepRunPrimarySubtitle": {
+    "description": "Subtitle for the run-as-primary-action settings toggle"
+  },
   "settingsSectionProfile": "Profile",
   "@settingsSectionProfile": {
     "description": "Settings landing section header grouping Account + Preferences"

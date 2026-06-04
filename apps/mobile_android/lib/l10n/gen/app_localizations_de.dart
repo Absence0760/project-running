@@ -468,6 +468,34 @@ class AppLocalizationsDe extends AppLocalizations {
   String get navSettings => 'Einstellungen';
 
   @override
+  String get navLog => 'Erfassen';
+
+  @override
+  String get logA11yLabel => 'Aktivität erfassen';
+
+  @override
+  String get logSheetTitle => 'Erfassen';
+
+  @override
+  String get logStartRun => 'Lauf starten';
+
+  @override
+  String get logStartLift => 'Training starten';
+
+  @override
+  String get logMeal => 'Mahlzeit erfassen';
+
+  @override
+  String get logSnack => 'Snack erfassen';
+
+  @override
+  String get prefsKeepRunPrimary => 'Lauf als primäre Aktion';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Mittlere Taste startet einen Lauf; lange drücken für das vollständige Menü';
+
+  @override
   String get settingsSectionProfile => 'Profil';
 
   @override

@@ -457,6 +457,33 @@ class AppLocalizationsJa extends AppLocalizations {
   String get navSettings => '設定';
 
   @override
+  String get navLog => '記録';
+
+  @override
+  String get logA11yLabel => 'アクティビティを記録';
+
+  @override
+  String get logSheetTitle => '記録';
+
+  @override
+  String get logStartRun => 'ランを開始';
+
+  @override
+  String get logStartLift => '筋トレを開始';
+
+  @override
+  String get logMeal => '食事を記録';
+
+  @override
+  String get logSnack => '間食を記録';
+
+  @override
+  String get prefsKeepRunPrimary => 'ランを主要操作にする';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle => '中央のボタンでランを開始、長押しで全メニューを表示';
+
+  @override
   String get settingsSectionProfile => 'プロフィール';
 
   @override

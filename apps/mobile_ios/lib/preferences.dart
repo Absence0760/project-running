@@ -229,6 +229,18 @@ class Preferences extends ChangeNotifier {
   // 'kg' (default) | 'lbs'. Storage stays canonical kg — this only
   // changes how the number is shown and parsed.
   static const _kWeightUnit = 'weight_unit';
+  // Phase 4 multi-modal nav (multi_modal.md § "Protect the core runner").
+  // When true, the centre Log button starts a run on a single tap (the
+  // one-tap primary action a pure runner relies on) and long-press opens
+  // the full Log sheet; when false (default) tap opens the sheet and
+  // long-press repeats the last logged modality. Per-device, never synced —
+  // a nav-shape choice, not a roaming account preference.
+  static const _kKeepRunPrimary = 'keep_run_primary';
+  // The capture type the user last logged via the Log button —
+  // 'run' | 'lift' | 'meal' | 'snack'. Drives both the long-press
+  // repeat-last gesture and the Log sheet's most-recent-floats-to-top
+  // ordering. Per-device.
+  static const _kLastLogType = 'last_log_type';
 
   // GDPR Art 7(3) / Art 21 withdrawal path for Sentry error reporting.
   // When true, main.dart skips Sentry.init at app launch — the SDK
@@ -262,6 +274,8 @@ class Preferences extends ChangeNotifier {
   double? _bodyWeightKg;
   String _privacyDefault = 'private';
   WeightUnit _weightUnit = WeightUnit.kg;
+  bool _keepRunPrimary = false;
+  String? _lastLogType;
   bool _sentryOptOut = false;
 
   DistanceUnit get unit => _useMiles ? DistanceUnit.mi : DistanceUnit.km;
@@ -325,6 +339,30 @@ class Preferences extends ChangeNotifier {
   /// universal `weight_unit` settings-bag key. Storage stays canonical
   /// kg — see [WeightFormat]. Defaults to kg.
   WeightUnit get weightUnit => _weightUnit;
+
+  /// Phase 4 multi-modal nav: when true the centre Log button starts a run
+  /// on a single tap (long-press opens the full Log sheet), preserving the
+  /// one-tap run start a pure runner relies on. Defaults to false (tap opens
+  /// the sheet; long-press repeats the last logged modality).
+  bool get keepRunPrimary => _keepRunPrimary;
+
+  Future<void> setKeepRunPrimary(bool v) async {
+    _keepRunPrimary = v;
+    await _prefs.setBool(_kKeepRunPrimary, v);
+    notifyListeners();
+  }
+
+  /// The capture type last logged via the Log button — `run` / `lift` /
+  /// `meal` / `snack`, or null when nothing has been logged yet. Drives the
+  /// long-press repeat-last gesture and the Log sheet's ordering.
+  String? get lastLogType => _lastLogType;
+
+  Future<void> setLastLogType(String type) async {
+    if (type == _lastLogType) return;
+    _lastLogType = type;
+    await _prefs.setString(_kLastLogType, type);
+    notifyListeners();
+  }
 
   /// Stable per-install device identifier. Minted on first launch.
   String get deviceId => _deviceId;
@@ -444,6 +482,8 @@ class Preferences extends ChangeNotifier {
     _bodyWeightKg = (bw != null && bw > 0) ? bw : null;
     _privacyDefault = _prefs.getString(_kPrivacyDefault) ?? 'private';
     _weightUnit = WeightFormat.unitFromWire(_prefs.getString(_kWeightUnit));
+    _keepRunPrimary = _prefs.getBool(_kKeepRunPrimary) ?? false;
+    _lastLogType = _prefs.getString(_kLastLogType);
     _sentryOptOut = _prefs.getBool(_kSentryOptOut) ?? false;
 
     final existingDeviceId = _prefs.getString(_kDeviceId);

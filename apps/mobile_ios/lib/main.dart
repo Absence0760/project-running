@@ -19,7 +19,9 @@ import 'dev_auto_login.dart';
 import 'in_progress_recovery.dart';
 import 'l10n/gen/app_localizations.dart';
 import 'l10n/locale_support.dart';
+import 'local_food_store.dart';
 import 'local_gear_store.dart';
+import 'local_gym_store.dart';
 import 'local_route_store.dart';
 import 'local_run_store.dart';
 import 'preferences.dart';
@@ -133,6 +135,8 @@ void main() async {
   final store = LocalRunStore();
   final routeStore = LocalRouteStore();
   final gearStore = LocalGearStore();
+  final gymStore = LocalGymStore();
+  final foodStore = LocalFoodStore();
   final prefs = Preferences();
   final watchQueue = WatchIngestQueue();
 
@@ -151,6 +155,8 @@ void main() async {
     store.init(),
     routeStore.init(),
     gearStore.init(),
+    gymStore.init(),
+    foodStore.init(),
     prefs.init(),
     watchQueue.init(),
     if (hasSupabase)
@@ -425,6 +431,8 @@ void main() async {
       runStore: store,
       routeStore: routeStore,
       gearStore: gearStore,
+      gymStore: gymStore,
+      foodStore: foodStore,
       preferences: prefs,
       audioCues: audioCues,
       syncService: syncService,
@@ -500,6 +508,8 @@ class RunApp extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final LocalGearStore gearStore;
+  final LocalGymStore gymStore;
+  final LocalFoodStore foodStore;
   final Preferences preferences;
   final AudioCues audioCues;
   final SyncService syncService;
@@ -516,6 +526,8 @@ class RunApp extends StatefulWidget {
     required this.runStore,
     required this.routeStore,
     required this.gearStore,
+    required this.gymStore,
+    required this.foodStore,
     required this.preferences,
     required this.audioCues,
     required this.syncService,
@@ -556,6 +568,8 @@ class _RunAppState extends State<RunApp> {
                   runStore: widget.runStore,
                   routeStore: widget.routeStore,
                   gearStore: widget.gearStore,
+                  gymStore: widget.gymStore,
+                  foodStore: widget.foodStore,
                   preferences: widget.preferences,
                   audioCues: widget.audioCues,
                   social: widget.social,
