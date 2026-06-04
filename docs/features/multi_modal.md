@@ -88,6 +88,96 @@ Tier 2 stays off until logging is reliable (food DB, see below) — never
 auto-mutate a plan from data the user can't be bothered to log
 accurately.
 
+## How the three modalities work together — separation at storage, integration at compute
+
+The data model deliberately keeps three separate tables (`runs`,
+`gym_workouts`/`gym_sets`, `food_log`) with **no foreign keys between activity
+rows** — a run never points at a lift, a meal never points at a run. That
+separation of concerns is not a barrier to cross-modality intelligence; the
+integration happens at a *higher* layer. The mechanism is a shared spine plus
+a shared derived layer, not row-to-row links.
+
+```
+  LAYER 4  SURFACE          Home cards . Log-sheet suggestions . Coach answers
+                            "2x hamstring + glute today, keep it light"
+                                          ^
+  LAYER 3  REASONING        Coach (LLM, advisory)  +  pure recommender helpers
+           "given runs ->   reads Layer 2 signals + recent raw history
+            recommend lift"          ^
+  ------------------------------- data-trust gate (Tier 1 inform / Tier 2 command)
+  LAYER 2  DERIVED SIGNALS  ONE fitness/fatigue/form curve  +  energy/macro balance
+           (the merge point)  run stress  +  lift stress  (source-tagged)
+                              nutrition adequacy
+                                          ^
+  LAYER 1  CORRELATION      every table carries (user_id, started_at)
+           SPINE            cross-modality query = "this user's time window"
+                            the `activities` view is the read-time expression
+                                          ^
+  LAYER 0  STORAGE          runs        gym_workouts/gym_sets       food_log
+           (separation)     |---- no FKs between activity rows ----|
+                            each table owns its own shape + constraints
+```
+
+- **Layer 0–1 — how they coexist while staying separate.** Every activity
+  table carries `(user_id, started_at)`. To ask "what did this user do around
+  Saturday's long run," you query a *time window* across the three tables (or
+  the `activities` view) — correlation by user + time, **not** referential
+  integrity. Separation of concerns therefore costs nothing in the ability to
+  reason across modalities. (`food_log` standardises on `started_at` too — see
+  the timestamp-naming cleanup in `reviews/audit-db-optimization.md` F8/F17.)
+- **Layer 2 — where they actually merge.** This already exists for two of the
+  three: `training_load.ts` ↔ `.dart` reduces a run *and* a lift to a daily
+  training-stress contribution tagged with `source: 'run' | 'lift'`, summed
+  into **one** CTL/ATL/TSB curve (see the Lift training-load spec below).
+  Nutrition reduces to daily energy/macro adequacy. After Layer 2 the data is
+  no longer "runs vs lifts" — it is modality-agnostic signals: *fatigue,
+  readiness, fuelling adequacy.* The `source` tag is what keeps run-only
+  readiness recoverable even if the lift contribution has a bug.
+- **Layer 3 — reasoning reads the merged signals.** The Coach context
+  (`coach/context.ts`, shipped) already pulls recent lifts + a 7-day nutrition
+  rollup alongside the run window. Deterministic recommenders are pure,
+  parity-paired helpers in the same family as `training.ts` / `gym_prs.ts`.
+
+### Worked example: "recommend exercises given previous runs"
+
+This is a **Layer-3, Tier-2 (command)** feature — active prescription, so it is
+gated on the data-trust rule above and ships *after* the Tier-1 inform layer.
+The chain reads the shared signals; it does not need the tables merged or
+denormalised:
+
+```
+  runs (last 7-14d) ──┐
+   - volume, load     ├─► run-derived state:
+   - descent/eccentric│     high mileage, posterior-chain under-trained,
+   - which systems    │     eccentric load from descents, fatigue=high
+                      │
+  gym_workouts ───────┤─► lift-derived state:
+   - what's trained   │     last leg day 6d ago, no hamstring work,
+   - recovery, PRs    │     squat PR stale
+                      │
+  unified curve ──────┤─► readiness: low (banked fatigue from the long run)
+  (Layer 2)           │
+  food_log (opt) ─────┘─► fuelling: adequate / under
+                                          │
+                                          ▼
+                    exercise_recommender.ts  <->  .dart   (pure, parity-paired,
+                                          │         unit-tested like training.ts)
+                                          ▼
+        ranked suggestions + rationale:
+        "50km this week, no posterior-chain work, high fatigue ->
+         2x light hamstring + glute accessory, skip heavy squats today"
+```
+
+Architecturally the recommender is a **pure helper module** — structured
+inputs (the Layer-2 signals + bounded recent history) in, ranked suggestions +
+a plain-language rationale out. No DB coupling, fully testable, a TS↔Dart
+parity pair. It is surfaced as **advisory** (a Home "recommended" card or a
+Log-sheet suggestion); per the Tier-2 gate it never auto-writes a plan, and it
+stays off behind `multi_modal_nav` + the food-DB trust gate until logging is
+reliable. The same shape generalises to the other Tier-2 ideas
+(under-fuelling warnings, "skip the lift, CTL too high") — all of them read
+Layer 2, none of them needs a foreign key between activity rows.
+
 ## Bottom nav — `Home · History · Log · Social · Settings`
 
 The `Run` tab disappears as a top-level destination. The centre slot
