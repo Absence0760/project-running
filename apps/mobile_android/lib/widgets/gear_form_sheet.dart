@@ -3,14 +3,16 @@ import 'package:flutter/material.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_gear_store.dart';
 import '../preferences.dart';
+import 'full_screen_form.dart';
 import 'top_banner.dart';
 
-/// Modal bottom sheet for creating or editing a gear row. Returns
+/// Full-screen dialog for creating or editing a gear row. Returns
 /// a [GearFormResult] carrying the saved row's id + the purchased_at
 /// date the user picked (so the caller can drive a backfill prompt
 /// against past runs); `null` on cancel. Mirrors the web
 /// `+page.svelte` form on /settings/gear — same fields, same
-/// unit-aware retirement-target input.
+/// unit-aware retirement-target input. Presentation goes through
+/// [showFullScreenForm], the shared create/edit-entity wrapper.
 ///
 /// Writes go through [LocalGearStore] so offline edits are persisted
 /// + queued for the next server drain.
@@ -36,10 +38,14 @@ Future<GearFormResult?> showGearFormSheet({
   required String kind,
   Map<String, dynamic>? existing,
 }) {
-  return showModalBottomSheet<GearFormResult>(
-    context: context,
-    isScrollControlled: true,
-    useSafeArea: true,
+  final l10n = AppLocalizations.of(context);
+  return showFullScreenForm<GearFormResult>(
+    context,
+    title: existing != null
+        ? l10n.gearFormTitleEdit
+        : (kind == 'shoe'
+            ? l10n.gearFormTitleAddShoes
+            : l10n.gearFormTitleAddBike),
     builder: (_) => _GearFormSheet(
       store: store,
       preferences: preferences,
@@ -177,35 +183,11 @@ class _GearFormSheetState extends State<_GearFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final l10n = AppLocalizations.of(context);
     final unitLabel = widget.preferences.unit == DistanceUnit.mi ? 'mi' : 'km';
-    // Mirror the goal_editor_sheet pattern: pad by whichever of the
-    // soft-keyboard (viewInsets.bottom, when focused) or the system
-    // gesture / nav bar (viewPadding.bottom, when not) is in play.
-    // Keyboard up hides the gesture bar so they never overlap; pre-fix
-    // the sheet only padded for the keyboard, so the Cancel + Add
-    // buttons sat under Samsung's translucent gesture bar.
-    final mq = MediaQuery.of(context);
-    final bottomInset = mq.viewInsets.bottom > 0
-        ? mq.viewInsets.bottom
-        : mq.viewPadding.bottom;
-    return Padding(
-      padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              widget.existing != null
-                  ? l10n.gearFormTitleEdit
-                  : (widget.kind == 'shoe'
-                      ? l10n.gearFormTitleAddShoes
-                      : l10n.gearFormTitleAddBike),
-              style: theme.textTheme.titleLarge,
-            ),
-            const SizedBox(height: 16),
+    // Heading lives in the host AppBar (showFullScreenForm).
+    return FullScreenFormBody(
+      children: [
             TextField(
               controller: _name,
               decoration: InputDecoration(
@@ -273,7 +255,7 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
                 TextButton(
-                  onPressed: () => Navigator.pop(context, false),
+                  onPressed: () => Navigator.pop(context),
                   child: Text(l10n.gearFormCancel),
                 ),
                 const SizedBox(width: 8),
@@ -288,8 +270,6 @@ class _GearFormSheetState extends State<_GearFormSheet> {
               ],
             ),
           ],
-        ),
-      ),
-    );
+        );
   }
 }
