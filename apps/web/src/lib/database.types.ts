@@ -2327,6 +2327,7 @@ export type Database = {
       activities: {
         Row: {
           id: string | null
+          is_public: boolean | null
           kind: string | null
           started_at: string | null
           summary: Json | null

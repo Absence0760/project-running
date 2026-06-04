@@ -286,8 +286,11 @@ Density rules so it never becomes a wall of cards:
 ## History — one timeline, filter chips, separate detail routes
 
 History becomes a single reverse-chronological timeline backed by the
-`activities` view (one query, `(kind, started_at, summary)`), with filter
-chips at the top.
+`activities` view (one query, projecting `(id, user_id, kind, started_at,
+summary, is_public)`), with filter chips at the top. The view is the
+documented cross-modality contract — its column set and the windowed-read +
+redaction-boundary guarantees are pinned by
+`apps/backend/supabase/tests/activities_view_windowed_test.sql`.
 
 > **Status (web shipped):** `/runs` gains All/Runs/Lifts/Meals chips + a
 > day-grouped unified timeline over `fetchActivities` when `multi_modal_nav`
@@ -436,6 +439,17 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   v1** — broadcasting what you ate is a privacy footgun with little upside;
   `food_log.is_public` stays in the schema (cheap) but no UI surfaces meal
   sharing until there's a clear reason. Defaults are private regardless.
+  > **Redaction boundary (decisions §33).** The `activities` view is
+  > `security_invoker`, so base-table RLS decides cross-user visibility.
+  > `gym_workouts` / `food_log` keep an "owner or public" read policy, so a
+  > non-owner (and anon) sees their public rows *through the view*. `runs`
+  > deliberately has **no** public-read policy — non-owner run reads must go
+  > through the redacted `public_runs` view, so a public **run** is invisible
+  > through `activities` to anyone but its owner. Lift feed cards may read the
+  > view (or `gym_workouts` directly); **run** cards stay on `public_runs`.
+  > Re-adding a runs public-read policy to "symmetrise" the view would leak
+  > unredacted run columns — `activities_view_windowed_test.sql` pins the
+  > asymmetry so that can't happen by accident.
 
 ### Lift training-load spec (the Tier-1 mechanic — get this right or it pollutes run readiness)
 
@@ -547,7 +561,16 @@ The view UNION-ALLs runs (potentially thousands) with per-workout
 subqueries for set count + volume. For the History list:
 
 - Always query it **windowed** (`limit` + `started_at` cursor), never
-  unbounded — the History screen paginates like `/runs` does.
+  unbounded — the History screen paginates like `/runs` does. The web
+  consumer (`fetchActivities`) always caps with `.limit(…)`; the
+  windowed-page-1 + started_at-cursor-page-2 path is pinned in
+  `activities_view_windowed_test.sql` so the contract can't silently
+  regress to an unbounded `select * from activities`.
+- Each base table carries the **shared spine** index `(user_id,
+  started_at desc)` (`runs_user_started_at`, `gym_workouts_user`,
+  `food_log_user`), so the windowed read is a per-branch ordered index
+  scan merged + limited, not a full UNION materialise. The spine is pinned
+  by `activities_spine_indexes_test.sql` (MM3).
 - The per-workout subqueries are fine at individual-user scale (a user
   has tens of workouts, not millions); if a power lifter's history ever
   makes them hot, fold set_count + volume into stored columns on
