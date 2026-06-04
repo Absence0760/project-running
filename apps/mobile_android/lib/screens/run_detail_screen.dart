@@ -2769,10 +2769,12 @@ Map<String, dynamic> applyRunMetadataEdit(
   return next;
 }
 
-/// Mirror the web run-detail DNF toggle: write `is_dnf: true` when [dnf] is
-/// set, delete the key when cleared (the metadata bag stores presence, not
-/// `false`). A DNF run is excluded from personal-record scoring server-side —
-/// the PR trigger drops it on the next refresh. Mutates [metadata] in place.
+/// Mirror the web run-detail DNF toggle. `is_dnf` is a column (migration
+/// 20261207_001) that the Run carries in its metadata bag until saveRun lifts
+/// it; set the key to `true` when [dnf] is set and delete it when cleared, so
+/// saveRun writes the column `false`. A DNF run is excluded from
+/// personal-record scoring server-side — the PR trigger drops it on the next
+/// refresh. Mutates [metadata] in place.
 @visibleForTesting
 void applyDnfFlag(Map<String, dynamic> metadata, bool dnf) {
   if (dnf) {

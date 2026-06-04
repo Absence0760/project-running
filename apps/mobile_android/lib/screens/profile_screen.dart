@@ -549,10 +549,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           // the activity-type icon otherwise. Tap-into-detail routes
           // through `PublicRunScreen` (which takes a `runId`) so this
           // works for non-owner viewers too.
-          final activityName =
-              (r.metadata is Map ? (r.metadata as Map)['activity_type'] : null)
-                  as String?;
-          final activity = ActivityType.fromName(activityName);
+          final activity = ActivityType.fromName(r.activityType);
           final dist = formatDistanceForPref(r.distanceM);
           final paceLine =
               '${_formatDuration(Duration(seconds: r.durationS))} · ${_formatPace(r.distanceM, r.durationS)}';

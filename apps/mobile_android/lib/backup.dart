@@ -716,9 +716,9 @@ class BackupService {
                 orElse: () => cm.RunSource.app,
               ),
               externalId: r['external_id'] as String?,
-              // Older backups (pre-Apr 2026) may lack
-              // metadata.activity_type. The DB CHECK trigger
-              // requires it on insert, so coalesce to 'run' on
+              // Older backups (pre-Apr 2026) may lack activity_type.
+              // It rides in metadata as the Run's carrier (saveRun lifts
+              // it into the column on sync), so coalesce to 'run' on
               // restore. The user can still edit it afterwards.
               metadata: () {
                 final m = r['metadata'] is Map

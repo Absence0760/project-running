@@ -30,15 +30,28 @@ the Go worker (`InsertStravaRun`, `FetchExportRuns`, `FetchPremiumRuns`,
 `isRunlike`, the dataexport CSV/backup), the `activities` + `public_runs`
 views, `auto_tag_default_gear`, `refresh_personal_records_for_user`.
 
-**Client read/write sites STILL on the jsonb keys (Tier-2, deferred to
-Round 4 — these silently read `null` / write a now-ignored bag key until
-switched):**
+**Mobile (Flutter) clients migrated (Round 4, F3 Piece A):** the `Run`
+domain object still carries `activity_type` / `is_dnf` inside its in-memory
+metadata bag (one read path for the dozens of screen readers), but the bag is
+no longer the persisted copy. `ApiClient.saveRun` / `saveRunsBatch` lift the
+two keys into the `activity_type` / `is_dnf` **columns** and strip them from
+the bag before upsert (`_metadataWithoutPromotedColumns`); `_runFromRow`
+surfaces the columns back onto the bag on read (the same convenience stash as
+`track_url`). Raw-`RunRow` consumers that bypass `_runFromRow` read the column
+directly — `profile_screen` (public runs), the following-feed activity filter
+(`fetchFollowingFeed` filters on the `activity_type` column, not
+`metadata->>activity_type`), `fetchRecentRuns`, and `beginLiveBroadcast`
+(writes the column on the stub row). The recorder / importer / `add_run` /
+`applyDnfFlag` write sites set the bag key as before; the lift makes that the
+column write.
+
+**Client read/write sites STILL on the jsonb keys (Tier-2, deferred — these
+silently read `null` / write a now-ignored bag key until switched):**
 - `apps/web/src/routes/runs/[id]/+page.svelte` (reads `metadata.activity_type`; writes `metadata.is_dnf` via the DNF checkbox; renders the DNF chip),
 - `apps/web/src/lib/core/data.ts` (`createManualRun`/`saveRun` write `metadata.activity_type`),
 - `apps/web/src/lib/integrations/strava-zip.ts`, `garmin-zip.ts` (write `metadata.activity_type`),
 - `apps/web/src/lib/backup/backup.ts`, `apps/web/src/lib/training/goals.ts` (read `metadata.activity_type`),
-- `apps/mobile_android/lib/screens/run_screen.dart` (recording), `add_run_screen.dart`, `health_connect_importer.dart`, `strava_importer.dart`, `run_detail_screen.dart` (`applyDnfFlag`) + the byte-identical iOS twin,
-- `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-ingest write to the column is the Round-4 follow-up).
+- `apps/watch_wear/.../WatchRunMetadata.kt`, `apps/watch_ios/.../ContentView.swift` + `SupabaseService.swift` (the watch→phone bridge still carries `activity_type` in its WCSession metadata; the phone-side ingest lifts it into the column via the same `Run`-carrier path).
 
 ### Core run properties
 

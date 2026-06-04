@@ -1165,7 +1165,7 @@ class SocialService extends ChangeNotifier {
     if (uid == null) return const [];
     final rows = await _c
         .from('runs')
-        .select('id, started_at, duration_s, distance_m, metadata')
+        .select('id, started_at, duration_s, distance_m, activity_type')
         .eq('user_id', uid)
         .order('started_at', ascending: false)
         .limit(limit);
@@ -1176,10 +1176,7 @@ class SocialService extends ChangeNotifier {
           startedAt: DateTime.parse(r['started_at'] as String),
           durationS: (r['duration_s'] as num).toInt(),
           distanceM: (r['distance_m'] as num).toDouble(),
-          activityType: (r['metadata'] is Map
-                  ? (r['metadata'] as Map)['activity_type']
-                  : null) as String? ??
-              'run',
+          activityType: (r['activity_type'] as String?) ?? 'run',
         ),
     ];
   }
