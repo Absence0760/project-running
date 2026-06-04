@@ -163,9 +163,9 @@ export async function buildContext(
 		const sevenDaysAgo = new Date(Date.now() - 7 * 86_400_000).toISOString();
 		const { data: foodRows } = await supabase
 			.from(TABLES.food_log)
-			.select('logged_at, calories, protein_g, carbs_g, fat_g')
-			.gte('logged_at', sevenDaysAgo)
-			.order('logged_at', { ascending: false })
+			.select('started_at, calories, protein_g, carbs_g, fat_g')
+			.gte('started_at', sevenDaysAgo)
+			.order('started_at', { ascending: false })
 			.limit(200);
 		nutrition7d = summarizeNutrition((foodRows ?? []) as FoodLogRow[], new Date());
 	}
@@ -268,7 +268,7 @@ export function summarizeRecentLifts(
 }
 
 interface FoodLogRow {
-	logged_at: string;
+	started_at: string;
 	calories: number | null;
 	protein_g: number | null;
 	carbs_g: number | null;
@@ -286,7 +286,7 @@ export function summarizeNutrition(
 ): NutritionSummary | null {
 	const cutoff = now.getTime() - 7 * 86_400_000;
 	const recent = rows.filter((r) => {
-		const t = new Date(r.logged_at).getTime();
+		const t = new Date(r.started_at).getTime();
 		return Number.isFinite(t) && t >= cutoff;
 	});
 	if (recent.length === 0) return null;
@@ -300,7 +300,7 @@ export function summarizeNutrition(
 	let fat = 0;
 	let fatN = 0;
 	for (const r of recent) {
-		days.add(r.logged_at.slice(0, 10));
+		days.add(r.started_at.slice(0, 10));
 		if (r.calories != null) {
 			cal += r.calories;
 			calN++;

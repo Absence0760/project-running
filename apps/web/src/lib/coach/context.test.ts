@@ -95,6 +95,23 @@ test('nutrition_7d is gated on health-data consent', () => {
 	);
 });
 
+test('food_log query uses started_at, never the renamed logged_at column', () => {
+	// Migration 20261208_001 renamed food_log.logged_at -> started_at.
+	// A stray `.gte('logged_at', ...)` / `.order('logged_at', ...)` is a
+	// PostgREST 400 (column does not exist), not a silent null, so pin
+	// the column name in the source.
+	assert.equal(
+		/['"]logged_at['"]/.test(SRC),
+		false,
+		'context.ts must not reference the renamed logged_at column',
+	);
+	assert.match(
+		SRC,
+		/\.gte\(\s*'started_at'/,
+		'the food_log window filter must use started_at',
+	);
+});
+
 // --- summarizeRecentLifts ---------------------------------------------
 
 test('summarizeRecentLifts rolls sets into per-session summaries', () => {
@@ -145,10 +162,10 @@ test('summarizeNutrition averages over days logged within the 7-day window', () 
 	const now = new Date('2026-06-08T12:00:00.000Z');
 	const rows = [
 		// Two items on day A
-		{ logged_at: '2026-06-08T08:00:00.000Z', calories: 400, protein_g: 30, carbs_g: 40, fat_g: 10 },
-		{ logged_at: '2026-06-08T13:00:00.000Z', calories: 600, protein_g: 20, carbs_g: 80, fat_g: 20 },
+		{ started_at: '2026-06-08T08:00:00.000Z', calories: 400, protein_g: 30, carbs_g: 40, fat_g: 10 },
+		{ started_at: '2026-06-08T13:00:00.000Z', calories: 600, protein_g: 20, carbs_g: 80, fat_g: 20 },
 		// One item on day B
-		{ logged_at: '2026-06-06T08:00:00.000Z', calories: 1000, protein_g: 50, carbs_g: 100, fat_g: 30 },
+		{ started_at: '2026-06-06T08:00:00.000Z', calories: 1000, protein_g: 50, carbs_g: 100, fat_g: 30 },
 	];
 	const out = summarizeNutrition(rows, now);
 	assert.ok(out);
@@ -164,7 +181,7 @@ test('summarizeNutrition drops rows outside the window and returns null when emp
 	const now = new Date('2026-06-08T12:00:00.000Z');
 	// 8 days old — outside the 7-day window.
 	const stale = [
-		{ logged_at: '2026-05-31T08:00:00.000Z', calories: 500, protein_g: 20, carbs_g: 50, fat_g: 10 },
+		{ started_at: '2026-05-31T08:00:00.000Z', calories: 500, protein_g: 20, carbs_g: 50, fat_g: 10 },
 	];
 	assert.equal(summarizeNutrition(stale, now), null);
 	assert.equal(summarizeNutrition([], now), null);
@@ -173,7 +190,7 @@ test('summarizeNutrition drops rows outside the window and returns null when emp
 test('summarizeNutrition yields null macro averages when no row carries that macro', () => {
 	const now = new Date('2026-06-08T12:00:00.000Z');
 	const rows = [
-		{ logged_at: '2026-06-08T08:00:00.000Z', calories: 400, protein_g: null, carbs_g: null, fat_g: null },
+		{ started_at: '2026-06-08T08:00:00.000Z', calories: 400, protein_g: null, carbs_g: null, fat_g: null },
 	];
 	const out = summarizeNutrition(rows, now);
 	assert.ok(out);
