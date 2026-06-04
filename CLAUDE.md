@@ -83,6 +83,15 @@ Cheaper than `/safe-edit` (single pass, no review-and-fix loop), advisory only �
 
 The full rule + per-source-type test surface is in [`docs/architecture/conventions.md` § Test hygiene](docs/architecture/conventions.md#test-hygiene--review-then-unit-then-e2e).
 
+## Always recommend the long-term solution
+
+When there's a choice between a quick patch and the durable fix, **lead with the durable one** — the root cause, the reusable abstraction, the consistent pattern, the proper schema change — not the band-aid. This applies to every recommendation: a one-off conversion vs. a shared component, papering over a failing test vs. fixing the bug it caught, a local workaround vs. closing the underlying gap, copy-paste vs. extracting the shared helper.
+
+- **Recommend the long-term solution even when it's more work.** Don't pre-emptively pitch the cheap option to save effort or tokens. State the durable fix as the recommendation.
+- **When you do mention a quicker path, present the long-term one first and name the trade-off** so the user is choosing with eyes open — never silently ship the shortcut.
+- **A short-term fix is only acceptable when the user explicitly chooses it** after seeing the long-term option, or when the durable fix is genuinely out of scope for an urgent hotfix (say so, and note the follow-up).
+- This reinforces the existing discipline rules: fix the root cause (don't inflate timeouts / retries / skips to hide a bug), don't defer on low-priority grounds, and close flagged gaps in the same turn rather than leaving a TODO. The default is **do it right**, not **do it again later**.
+
 ## Branches & PRs
 
 - `main` is the working branch. Commits land directly on `main` when the user has asked for the work; PRs to `main` are still the path for anything that needs review.
