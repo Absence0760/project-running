@@ -31,6 +31,7 @@ export const TABLES = {
 	gym_workouts: 'gym_workouts',
 	gym_sets: 'gym_sets',
 	food_log: 'food_log',
+	body_metrics: 'body_metrics',
 	activities: 'activities',
 	club_members: 'club_members',
 	club_posts: 'club_posts',

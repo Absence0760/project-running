@@ -5455,6 +5455,135 @@ export async function deleteGymWorkout(id: string): Promise<void> {
 	if (error) throw error;
 }
 
+// --- Nutrition: food_log + body_metrics (Phase 4 multi-modal) ---
+//
+// A food_log row is one logged item against an optional meal slot, with
+// per-item macros (migration 20261204_001). last_modified_at is
+// client-stamped (newer-wins sync, no server trigger), mirroring gym/gear.
+// Meals are owner-private in v1 — is_public exists in the schema but no UI
+// surfaces meal sharing (multi_modal.md § Social feed).
+
+export type MealSlot = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface FoodEntry {
+	id: string;
+	user_id: string;
+	started_at: string;
+	item_name: string;
+	meal_slot: MealSlot | null;
+	calories: number | null;
+	protein_g: number | null;
+	carbs_g: number | null;
+	fat_g: number | null;
+	is_public: boolean;
+	external_id: string | null;
+	last_modified_at: string;
+	created_at: string;
+}
+
+export interface FoodEntryInput {
+	item_name: string;
+	meal_slot?: MealSlot | null;
+	calories?: number | null;
+	protein_g?: number | null;
+	carbs_g?: number | null;
+	fat_g?: number | null;
+	started_at?: string;
+	external_id?: string | null;
+}
+
+/// Food entries whose `started_at` falls in the half-open window
+/// [fromIso, toIso). Used for the daily nutrition view + ring totals.
+/// Owner-scoped by RLS.
+export async function fetchFoodLog(fromIso: string, toIso: string): Promise<FoodEntry[]> {
+	const userId = auth.user?.id;
+	if (!userId) return [];
+	const { data, error } = await supabase
+		.from(TABLES.food_log)
+		.select('*')
+		.eq('user_id', userId)
+		.gte('started_at', fromIso)
+		.lt('started_at', toIso)
+		.order('started_at', { ascending: true });
+	if (error) {
+		console.error('fetchFoodLog failed', error);
+		return [];
+	}
+	return (data ?? []) as FoodEntry[];
+}
+
+export async function createFoodEntry(input: FoodEntryInput): Promise<FoodEntry> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('not signed in');
+	const now = new Date().toISOString();
+	const row = {
+		user_id: userId,
+		item_name: input.item_name,
+		meal_slot: input.meal_slot ?? null,
+		calories: input.calories ?? null,
+		protein_g: input.protein_g ?? null,
+		carbs_g: input.carbs_g ?? null,
+		fat_g: input.fat_g ?? null,
+		started_at: input.started_at ?? now,
+		external_id: input.external_id ?? null,
+		last_modified_at: now,
+	};
+	const { data, error } = await supabase
+		.from(TABLES.food_log)
+		.insert(row)
+		.select('*')
+		.single();
+	if (error) throw error;
+	return data as FoodEntry;
+}
+
+export async function updateFoodEntry(
+	id: string,
+	patch: Partial<FoodEntryInput>,
+): Promise<void> {
+	const { error } = await supabase
+		.from(TABLES.food_log)
+		.update({ ...patch, last_modified_at: new Date().toISOString() })
+		.eq('id', id);
+	if (error) throw error;
+}
+
+export async function deleteFoodEntry(id: string): Promise<void> {
+	const { error } = await supabase.from(TABLES.food_log).delete().eq('id', id);
+	if (error) throw error;
+}
+
+/// The user's most recent recorded weight, or null if none. Owner-only
+/// (body_metrics has no public-read policy — special-category health data,
+/// migration 20261216_001).
+export async function fetchLatestWeightKg(): Promise<number | null> {
+	const userId = auth.user?.id;
+	if (!userId) return null;
+	const { data, error } = await supabase
+		.from(TABLES.body_metrics)
+		.select('weight_kg')
+		.eq('user_id', userId)
+		.order('recorded_at', { ascending: false })
+		.limit(1)
+		.maybeSingle();
+	if (error) {
+		console.error('fetchLatestWeightKg failed', error);
+		return null;
+	}
+	return data ? ((data as { weight_kg: number }).weight_kg ?? null) : null;
+}
+
+/// Append a weight measurement to the time-series (one row per recording —
+/// the series is the history). Caller gates on health-data consent.
+export async function recordWeightKg(weightKg: number): Promise<void> {
+	const userId = auth.user?.id;
+	if (!userId) throw new Error('not signed in');
+	const { error } = await supabase
+		.from(TABLES.body_metrics)
+		.insert({ user_id: userId, weight_kg: weightKg });
+	if (error) throw error;
+}
+
 // --- Unified activities timeline (Phase 4 multi-modal History) ---
 
 /// One row of the `activities` UNION view (runs + gym_workouts + food_log)
