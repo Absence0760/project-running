@@ -1845,7 +1845,7 @@ test('accessibility: every top-level page renders an h1 (WCAG 1.3.1 + 2.4.6)', (
 	const en = read('src/lib/i18n/locales/en.ts');
 	for (const [path, key, expectedText] of [
 		['src/routes/dashboard/+page.svelte', 'dash.pageHeading', 'Dashboard'],
-		['src/routes/runs/+page.svelte', 'runs.heading', 'Run history'],
+		['src/routes/history/+page.svelte', 'runs.heading', 'Run history'],
 		['src/routes/coach/+page.svelte', 'coachPage.h1', 'AI Coach'],
 	] as const) {
 		const src = read(path);

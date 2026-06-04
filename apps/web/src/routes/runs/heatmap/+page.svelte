@@ -23,7 +23,7 @@
 			<h1>{m('runsHeatmap.heading')}</h1>
 			<p class="sub">{m('runsHeatmap.subtitle')}</p>
 		</div>
-		<a class="btn btn-outline" href="/runs">{m('runsHeatmap.backToRuns')}</a>
+		<a class="btn btn-outline" href="/history">{m('runsHeatmap.backToRuns')}</a>
 	</header>
 
 	{#if !ready}

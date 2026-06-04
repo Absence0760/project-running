@@ -609,7 +609,7 @@
 							{m('profile.runsEmptySelfText')}
 						</p>
 						<div class="empty-actions">
-							<a href="/runs" class="btn btn-primary">
+							<a href="/history" class="btn btn-primary">
 								<span class="material-symbols" aria-hidden="true">history</span>
 								{m('profile.openRunHistory')}
 							</a>

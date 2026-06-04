@@ -105,7 +105,7 @@ export async function signOut(page: Page) {
 }
 
 /**
- * The /runs page defaults its date filter to "today" (so cold loads
+ * The /history page defaults its date filter to "today" (so cold loads
  * aren't slow on heavy users). For seed-data assertions we always
  * want everything — switch to "All time" via the toolbar select.
  *

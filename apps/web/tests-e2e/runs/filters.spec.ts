@@ -3,13 +3,13 @@ import { expect, test } from '@playwright/test';
 import { USER_A } from '../fixtures/users';
 
 /**
- * /runs filter toolbar — every axis pinned.
+ * /history filter toolbar — every axis pinned.
  *
  * The toolbar exposes four orthogonal filter axes (Source / Activity /
  * Date range / Sort) plus a Custom-date-picker workflow. Existing
  * coverage in `runs/list.spec.ts` hits a handful of these but not
  * every value; this file pins one assertion per filter value PLUS the
- * two bug regressions surfaced in the user-led /runs polish round:
+ * two bug regressions surfaced in the user-led /history polish round:
  *
  *   1. Selecting Custom from the dropdown used to flash the list to
  *      "All time" because rangeBounds('custom') with empty bounds
@@ -31,7 +31,7 @@ import { USER_A } from '../fixtures/users';
  * where the seed guarantees the single-row case (Walk / Hike).
  */
 
-test.describe('/runs — filters', () => {
+test.describe('/history — filters', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test.beforeEach(async ({ page, context }) => {
@@ -50,7 +50,7 @@ test.describe('/runs — filters', () => {
 		await context.addInitScript(() => {
 			localStorage.removeItem('runs_filters_v1');
 		});
-		await page.goto('/runs');
+		await page.goto('/history');
 		// All filter tests need >1 row to be meaningful — start at
 		// "All time" so the date filter isn't masking the source /
 		// activity / sort assertions.
@@ -108,7 +108,7 @@ test.describe('/runs — filters', () => {
 		}) => {
 			// Persona-hunt R5 (casual): the activity filter used to default
 			// to 'run', so a walk-/cycle-/hike-only user's first view of
-			// /runs was the empty "No runs match these filters" dead-end.
+			// /history was the empty "No runs match these filters" dead-end.
 			// The default now matches the source filter — everything shown.
 			// beforeEach cleared runs_filters_v1 and never touched the
 			// activity group, so this reflects the cold-load default.
@@ -373,7 +373,7 @@ test.describe('/runs — filters', () => {
 					})
 				);
 			});
-			await page.goto('/runs');
+			await page.goto('/history');
 			// Hydrated state should be dateRange='today' + a hidden stale
 			// customFrom/To pair. Capture today's count as the baseline.
 			await expect(page.getByLabel('Date range')).toHaveValue('today');
@@ -426,7 +426,7 @@ test.describe('/runs — filters', () => {
 					})
 				);
 			});
-			await page.goto('/runs');
+			await page.goto('/history');
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000
 			});
@@ -693,7 +693,7 @@ test.describe('/runs — filters', () => {
 					})
 				);
 			});
-			await page.goto('/runs');
+			await page.goto('/history');
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000
 			});
@@ -713,9 +713,9 @@ test.describe('/runs — filters', () => {
 			await page.locator('.run-card').nth(10).click();
 			await page.waitForURL(/\/runs\/[a-f0-9-]+$/);
 
-			// Back to /runs.
+			// Back to /history.
 			await page.goBack();
-			await page.waitForURL(/\/runs$/);
+			await page.waitForURL(/\/history$/);
 			// Give the snapshot.restore + scroll-restore a beat to settle.
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000
@@ -734,11 +734,11 @@ test.describe('/runs — filters', () => {
 		}) => {
 			// Companion to the goBack() test above. The browser back button
 			// pops history and naturally fires snapshot.restore. But the
-			// in-page back arrow on /runs/[id] is a plain <a href="/runs">
+			// in-page back arrow on /runs/[id] is a plain <a href="/history">
 			// — clicking it does a SvelteKit goto() which PUSHES a fresh
 			// history entry, so snapshot.restore never fires and the user
 			// lands at the top of an empty list. Fix: intercept the click
-			// when we came from /runs and call history.back() so the
+			// when we came from /history and call history.back() so the
 			// captured snapshot is reused.
 			//
 			// Mirrors the user's exact flow: scroll, Load More, scroll
@@ -756,7 +756,7 @@ test.describe('/runs — filters', () => {
 					})
 				);
 			});
-			await page.goto('/runs');
+			await page.goto('/history');
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000
 			});
@@ -784,7 +784,7 @@ test.describe('/runs — filters', () => {
 			// Click the in-page back arrow (NOT browser back). The link
 			// text is "All runs" with an arrow_back icon.
 			await page.getByRole('link', { name: /All runs/ }).click();
-			await page.waitForURL(/\/runs$/);
+			await page.waitForURL(/\/history$/);
 
 			await expect(page.locator('.run-card').first()).toBeVisible({
 				timeout: 10_000

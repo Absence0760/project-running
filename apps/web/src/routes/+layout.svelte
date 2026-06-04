@@ -131,7 +131,7 @@
 	const navItems: { href: string; labelKey: MessageKey; icon: string; accent: string }[] =
 		$derived([
 			{ href: '/dashboard', labelKey: 'nav.dashboard', icon: 'dashboard', accent: '#F2A07B' },
-			{ href: '/runs', labelKey: 'nav.history', icon: 'directions_run', accent: '#D97A54' },
+			{ href: '/history', labelKey: 'nav.history', icon: 'directions_run', accent: '#D97A54' },
 			...(multiModalNav
 				? [{ href: '/gym', labelKey: 'nav.gym' as MessageKey, icon: 'fitness_center', accent: '#8FBF9F' }]
 				: []),

@@ -5,11 +5,11 @@ import { createSagaUsers, deleteSagaUsers } from '../fixtures/saga-users';
 import { USER_A } from '../fixtures/users';
 
 /**
- * /runs — owner-only run history list.
+ * /history — owner-only run history list.
  *
  * Operations covered: render, manual-run create + delete, activity-
  * type filter, filter-state localStorage persistence. The cross-user
- * isolation case (User B's /runs excludes runner's runs) is in
+ * isolation case (User B's /history excludes runner's runs) is in
  * cross-cutting/auth-walls.spec.ts because it's a security wall.
  *
  * Default filter is "today"; most tests switch to "All time" via the
@@ -19,13 +19,13 @@ import { USER_A } from '../fixtures/users';
 const uniqueText = (prefix: string) =>
 	`${prefix} ${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
 
-test.describe('/runs', () => {
+test.describe('/history', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	test('lists the seeded runs (after switching to All time)', async ({
 		page
 	}) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 
 		// runner has 12 generated runs + 1 pinned ("E2E demo public run")
@@ -43,7 +43,7 @@ test.describe('/runs', () => {
 		// to that single row — proves the activity-type filter both
 		// exists in the UI and queries the right metadata key
 		// (jsonb `metadata->>activity_type`, not a column).
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 
@@ -78,7 +78,7 @@ test.describe('/runs', () => {
 		// "Loading…" followed by a list reset to the default filters.
 		// Pin the round-trip: set a non-default filter, walk into a
 		// run, walk back, assert the filter + the list look the same.
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		// Capture the count we expect to see again after back-nav.
 		await expect(page.locator('.run-card').first()).toBeVisible();
@@ -89,10 +89,10 @@ test.describe('/runs', () => {
 		await page.locator('.run-card').first().click();
 		await page.waitForURL(/\/runs\/[0-9a-f-]+$/, { timeout: 10_000 });
 
-		// Back to /runs. The list should restore without a flash of
+		// Back to /history. The list should restore without a flash of
 		// "Loading…" and the filter UI should still read "All time".
 		await page.goBack();
-		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
+		await page.waitForURL(/\/history$/, { timeout: 10_000 });
 
 		// Filter UI stayed on "All time" (would have reset to "today"
 		// if the snapshot didn't carry dateRange).
@@ -109,13 +109,13 @@ test.describe('/runs', () => {
 	test('filter state survives a reload (localStorage round-trip)', async ({
 		page
 	}) => {
-		// /runs writes the filter set to localStorage (`runs_filters_v1`)
+		// /history writes the filter set to localStorage (`runs_filters_v1`)
 		// inside a `filtersHydrated`-gated $effect. The regression risk
 		// is that the writer fires *before* hydration finishes (saves
 		// stale defaults over the user's choice) or that the reader
 		// crashes silently on a malformed blob and the user's filter is
 		// silently reset every page-load.
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 
@@ -149,7 +149,7 @@ test.describe('/runs', () => {
 		// wall-clock at test time) likely intersects 0 runs, so the
 		// list shrinks. We assert the count drops without pinning a
 		// number — robust to seed dates drifting.
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 		const allCount = await page.locator('.run-card').count();
@@ -170,14 +170,14 @@ test.describe('/runs', () => {
 	test('filtered-empty state offers a one-tap "Show all runs" escape', async ({
 		page
 	}) => {
-		// A sparse user opening /runs on a non-run day lands on the
+		// A sparse user opening /history on a non-run day lands on the
 		// default "today" filter with their (older) runs hidden — the
 		// dead-end the round-5 casual persona hit. The filtered-empty
 		// branch must give a way out, not just "try widening the range".
 		// Seed runs are March-April 2026 so real-wall-clock "today" is
 		// empty; force the default filter first.
 		await page.addInitScript(() => localStorage.removeItem('runs_filters_v1'));
-		await page.goto('/runs');
+		await page.goto('/history');
 
 		const filteredEmpty = page.getByTestId('runs-empty-filtered');
 		await expect(filteredEmpty).toBeVisible({ timeout: 10_000 });
@@ -200,7 +200,7 @@ test.describe('/runs', () => {
 		// is >= 5 and < the unfiltered count. Pins the source-filter
 		// fetch path (separate from the activity-type metadata key
 		// path covered by the Walk-filter test).
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 		const beforeCount = await page.locator('.run-card').count();
@@ -227,7 +227,7 @@ test.describe('/runs', () => {
 		// descending. Catches a regression where the sort comparator
 		// gets inverted or the option value drifts from the $derived
 		// branch.
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 
@@ -264,7 +264,7 @@ test.describe('/runs', () => {
 		// We verify the wiring up to the confirm dialog and then
 		// CANCEL — actually deleting would either need a unique
 		// throwaway row (slow) or break other tests.
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 
@@ -293,7 +293,7 @@ test.describe('/runs', () => {
 		page
 	}) => {
 		// Companion to the cancel-test above. Pin the destructive write
-		// path: plant a throwaway run via service-role, navigate /runs,
+		// path: plant a throwaway run via service-role, navigate /history,
 		// enter select mode, pick the planted card, Delete → Confirm,
 		// row is gone server-side. A regression in deleteRuns or its
 		// optimistic update would fail here.
@@ -312,7 +312,7 @@ test.describe('/runs', () => {
 		});
 
 		try {
-			await page.goto('/runs');
+			await page.goto('/history');
 			await switchRunsToAllTime(page);
 			// Sort by Newest so our just-planted run is the first row.
 			await page.locator('select[aria-label="Sort"]').selectOption('newest');
@@ -352,7 +352,7 @@ test.describe('/runs', () => {
 	test('Select 10 + bulk-delete removes EVERY selected run from the DB (concurrency-safe)', async ({
 		page
 	}) => {
-		// Real bug surfaced during /runs polish: selecting 10 runs and
+		// Real bug surfaced during /history polish: selecting 10 runs and
 		// hitting Delete only actually deleted ~5 of them. Root cause was
 		// the `runs_personal_records_delete` trigger calling
 		// refresh_personal_records_for_user, which DELETEs then INSERTs
@@ -389,7 +389,7 @@ test.describe('/runs', () => {
 		}
 
 		try {
-			await page.goto('/runs');
+			await page.goto('/history');
 			await switchRunsToAllTime(page);
 			await page.locator('select[aria-label="Sort"]').selectOption('newest');
 			await expect(page.locator('.run-card').first()).toBeVisible({
@@ -437,7 +437,7 @@ test.describe('/runs', () => {
 	test('manual run CRUD round-trip via the Add-run modal', async ({ page }) => {
 		const title = uniqueText('e2e-crud');
 
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(page.locator('.run-card').first()).toBeVisible();
 
@@ -460,7 +460,7 @@ test.describe('/runs', () => {
 		const newRunId = page.url().match(/\/runs\/([0-9a-f-]+)$/)![1];
 
 		// ── Verify it landed in the list ──
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await expect(
 			page.locator(`.run-card[href$="${newRunId}"]`)
@@ -475,8 +475,8 @@ test.describe('/runs', () => {
 			.last()
 			.click();
 
-		// After delete the page navigates back to /runs.
-		await page.waitForURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
+		// After delete the page navigates back to /history.
+		await page.waitForURL(/\/history(\?.*)?$/, { timeout: 10_000 });
 
 		// Verify the row is gone from the list.
 		await switchRunsToAllTime(page);
@@ -488,7 +488,7 @@ test.describe('/runs', () => {
 	test('Source filter "Strava" narrows the list to strava-source rows only', async ({
 		page
 	}) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		await page.locator('select[aria-label="Source"]').selectOption('strava');
 		await expect(page.locator('.run-card').first()).toBeVisible({
@@ -505,7 +505,7 @@ test.describe('/runs', () => {
 	test('Sort by Newest puts a recently-planted run at the top', async ({
 		page
 	}) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		// "Sort: Newest" is the default for the sort select. Pin it
 		// after touching the select to make sure the round-trip works.
@@ -519,7 +519,7 @@ test.describe('/runs', () => {
 	test('Activity-button "Run" leaves the seeded run rows visible', async ({
 		page
 	}) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 		await switchRunsToAllTime(page);
 		// Activity is a button group with aria-pressed. The default is
 		// "All" (see filters.spec.ts); clicking Run explicitly proves the
@@ -544,7 +544,7 @@ test.describe('/runs', () => {
 		// composition: every visible card carries the parkrun source
 		// badge, and the count matches Source=parkrun alone (no rows
 		// dropped by the Activity overlay).
-		await page.goto('/runs');
+		await page.goto('/history');
 		await page.getByLabel('Date range').selectOption('all');
 		await expect(page.locator('.run-card').first()).toBeVisible({
 			timeout: 10_000
@@ -572,7 +572,7 @@ test.describe('/runs', () => {
 	test('Select-all visible covers every run-card in the filtered set', async ({
 		page
 	}) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 		// Clear any inherited filter from a previous test (e.g.
 		// activity=run from the test above) so the row count is what
 		// the canonical "All time + Run" view shows.
@@ -606,10 +606,10 @@ test.describe('/runs', () => {
 
 // Persona-hunt finding Casual #2 — zero-run users used to see the
 // filter-empty card ("No runs match these filters") with no Add CTA.
-// A brand-new user landing on /runs would conclude they did something
+// A brand-new user landing on /history would conclude they did something
 // wrong with filters they never set. Pinned via a sub-suite that
 // mints an ephemeral saga user — the seeded users all have runs.
-test.describe('/runs — zero-run empty state (Casual #2)', () => {
+test.describe('/history — zero-run empty state (Casual #2)', () => {
 	test('brand-new user with no runs sees Add-run CTA, not filter copy', async ({
 		browser
 	}) => {
@@ -621,7 +621,7 @@ test.describe('/runs — zero-run empty state (Casual #2)', () => {
 				storageState: user.storageStatePath
 			});
 			const page = await ctx.newPage();
-			await page.goto('/runs');
+			await page.goto('/history');
 
 			// Truly-empty branch carries the runs-empty-no-data testid
 			// (added with the fix). The accusatory filter copy must NOT

@@ -91,7 +91,7 @@ test.describe('i18n language picker (settings → preferences)', () => {
 	test('distance numbers follow the locale decimal separator (W-15)', async ({ page }) => {
 		// Seed run "Tempo on Belle Isle" is 6500 m → 6.50 km / 6,50 km. The
 		// run-detail page is filter-independent (unlike the date-filtered
-		// /runs list), so the distance is deterministically present.
+		// /history list), so the distance is deterministically present.
 		const runUrl = '/runs/a1000001-0000-0000-0000-000000000001';
 		await page.goto(runUrl);
 		await expect(page.getByText('6.50 km').first()).toBeVisible();

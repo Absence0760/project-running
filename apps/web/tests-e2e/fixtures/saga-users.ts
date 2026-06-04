@@ -82,7 +82,7 @@ export async function createSagaUsers(
 					subscription_tier: 'free',
 					// Saga users are programmatically minted, not real
 					// signups — skip the /onboarding wizard so existing
-					// tests that wait for /dashboard or /runs aren't
+					// tests that wait for /dashboard or /history aren't
 					// redirected away. The wizard's own e2e spec mints
 					// a separate saga user with onboarded_at: null to
 					// exercise the gate.

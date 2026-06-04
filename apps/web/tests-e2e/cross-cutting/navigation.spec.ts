@@ -54,10 +54,10 @@ test.describe('sidebar collapse', () => {
 		page
 	}) => {
 		// The layout marks the active sidebar link with `class="active"`.
-		// Pin one route — /runs — so a regression that dropped the
+		// Pin one route — /history — so a regression that dropped the
 		// active wiring (e.g. a refactor that swapped the matcher) is
 		// caught.
-		await page.goto('/runs');
+		await page.goto('/history');
 
 		const navHistory = page.locator('nav.sidebar a', { hasText: 'History' });
 		await expect(navHistory).toBeVisible();
@@ -66,5 +66,24 @@ test.describe('sidebar collapse', () => {
 		// Other nav items do NOT carry the active class.
 		const navDashboard = page.locator('nav.sidebar a', { hasText: 'Dashboard' });
 		await expect(navDashboard).not.toHaveClass(/active/);
+	});
+});
+
+test.describe('legacy /runs route', () => {
+	test.use({ storageState: USER_A.storageStatePath });
+
+	test('/runs redirects to /history (F14 rename, bookmarks keep working)', async ({
+		page
+	}) => {
+		// The run-history list moved from /runs to /history (decision D3,
+		// F14 cosmetic half). /runs is kept as a client-side redirect so
+		// bookmarks + external deep links don't 404 — assert it lands on
+		// the renamed list and that list actually mounts (its visually-
+		// hidden h1 anchors the page).
+		await page.goto('/runs');
+		await page.waitForURL(/\/history$/, { timeout: 10_000 });
+		await expect(
+			page.getByRole('heading', { level: 1, name: 'Run history' })
+		).toBeAttached();
 	});
 });

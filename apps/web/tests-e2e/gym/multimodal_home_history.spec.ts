@@ -9,7 +9,7 @@ import { USER_A } from '../fixtures/users';
  * `multi_modal_nav` per-user flag AND data presence: a pure runner sees
  * today's app unchanged. This spec turns the flag on for USER_A, seeds a
  * gym session, and asserts the gym slice appears on /dashboard (Recent
- * lifts card) and /runs (kind chips + a lift row in the unified timeline).
+ * lifts card) and /history (kind chips + a lift row in the unified timeline).
  *
  * The flag is read from user_settings.prefs.multi_modal_nav; we snapshot
  * the original prefs and restore them afterwards so no other spec inherits
@@ -82,7 +82,7 @@ test.describe('multi-modal Home + History', () => {
 	});
 
 	test('History shows kind chips and a lift row under the Lifts chip', async ({ page }) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 
 		// Chips appear (a second modality now exists).
 		const lifts = page.getByRole('button', { name: 'Lifts', exact: true });

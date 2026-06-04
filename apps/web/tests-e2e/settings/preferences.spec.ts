@@ -10,21 +10,21 @@ import { USER_A } from '../fixtures/users';
  * The theme toggle is the load-bearing test today because it pins
  * BOTH the localStorage round-trip AND the html[data-theme] attribute
  * the layout reads on every mount. Future rounds: distance unit
- * propagates to /runs format, privacy zone picker round-trip, voice
+ * propagates to /history format, privacy zone picker round-trip, voice
  * feedback toggle persists.
  */
 
 test.describe('/settings/preferences', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('distance unit toggle: km → mi propagates to /runs after save', async ({
+	test('distance unit toggle: km → mi propagates to /history after save', async ({
 		page
 	}) => {
 		// Distance unit is stored in user_profiles.preferred_unit (and
 		// mirrored to the user_settings prefs bag for cross-device
 		// sync). The reactive `unit.value` signal in units.svelte.ts
 		// drives `formatDistance(metres)` everywhere. Save → reload
-		// /runs → assert distances render with " mi" suffix instead
+		// /history → assert distances render with " mi" suffix instead
 		// of " km". Catches regressions in the auth store's setUnit
 		// fan-out OR the Save handler dropping preferredUnit.
 		await page.goto('/settings/preferences');
@@ -33,8 +33,8 @@ test.describe('/settings/preferences', () => {
 		await page.getByRole('button', { name: 'Miles', exact: true }).click();
 		await expect(page.getByTestId('save-status')).toContainText('Saved', { timeout: 8_000 });
 
-		// Visit /runs; distances on the cards should now read in mi.
-		await page.goto('/runs');
+		// Visit /history; distances on the cards should now read in mi.
+		await page.goto('/history');
 		await page.getByLabel('Date range').selectOption('all');
 		const firstStat = page.locator('.run-card .run-stat-value').first();
 		await expect(firstStat).toBeVisible({ timeout: 10_000 });
@@ -49,7 +49,7 @@ test.describe('/settings/preferences', () => {
 	test('Distance unit km → mi propagates to dashboard stat cards + run detail + plan week grid + pace suffix', async ({
 		page
 	}) => {
-		// The companion test above pins the /runs (list) propagation
+		// The companion test above pins the /history (list) propagation
 		// path; this one pins the OTHER surfaces that re-render off the
 		// shared `unit.value` signal. Distance / pace are the two
 		// formatters in `units.svelte.ts`, used through ~6 pages —

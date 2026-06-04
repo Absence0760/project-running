@@ -16,7 +16,7 @@ import { USER_A } from '../fixtures/users';
  *      week. This is the easiest user-visible signal that the
  *      restore actually wrote data, since the card aggregates runs
  *      per `started_at` window.
- *   2. /runs — the run list contains a row whose title matches the
+ *   2. /history — the run list contains a row whose title matches the
  *      one we set in `metadata.title`. This confirms the row landed
  *      with a working metadata payload.
  *
@@ -150,7 +150,7 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 			expect(delta).toBeLessThan(importedDistanceM / 1000 + 0.2);
 		});
 
-	test('importing a backup with multiple runs makes them appear on /runs',
+	test('importing a backup with multiple runs makes them appear on /history',
 		async ({ page }) => {
 			const titleA = `e2e-restore-runs-A ${Date.now()}`;
 			const titleB = `e2e-restore-runs-B ${Date.now()}`;
@@ -191,10 +191,10 @@ test.describe('/settings/account — restore-from-backup propagation', () => {
 			// rendered link text is "{date} {source} {distance} ..."
 			// and doesn't include the metadata title.
 			//
-			// /runs's "Date range" filter defaults to "Today" on a fresh
+			// /history's "Date range" filter defaults to "Today" on a fresh
 			// load; flip to "All time" before asserting so the assert doesn't
 			// depend on the local-midnight boundary.
-			await page.goto('/runs');
+			await page.goto('/history');
 			await page.getByRole('combobox', { name: /Date range/i }).selectOption('all');
 			await expect(page.locator(`a[href="/runs/${RESTORE_ID_2}"]`))
 				.toBeVisible({ timeout: 10_000 });

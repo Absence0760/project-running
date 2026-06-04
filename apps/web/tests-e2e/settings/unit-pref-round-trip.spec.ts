@@ -36,7 +36,7 @@ import { USER_A } from '../fixtures/users';
 
 // Two runs with round-number distances in each unit system. 5000 m
 // is 5.00 km / 3.11 mi exactly; 10000 m is 10.00 km / 6.21 mi
-// exactly. The /runs list renders via `formatDistance(metres)` →
+// exactly. The /history list renders via `formatDistance(metres)` →
 // "5.00 km" / "3.11 mi" / "10.00 km" / "6.21 mi".
 const RUN_A_METRES = 5000;
 const RUN_B_METRES = 10000;
@@ -74,14 +74,14 @@ async function setPref(userId: string, value: 'km' | 'mi'): Promise<void> {
 		.eq('id', userId);
 }
 
-test.describe('/runs — unit pref round-trip', () => {
+test.describe('/history — unit pref round-trip', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
 	let runIdA: string;
 	let runIdB: string;
 
 	test.beforeAll(async () => {
-		// Plant two runs spanning the date window that /runs's default
+		// Plant two runs spanning the date window that /history's default
 		// "Date range" filter ("Today") would hide. The spec changes
 		// the filter to "This year" so both surface. Distances chosen
 		// so the formatted strings are deterministic (5.00 / 3.11 /
@@ -114,7 +114,7 @@ test.describe('/runs — unit pref round-trip', () => {
 	}) => {
 		// ── Step 1: pref = km, both runs show km ──────────────────
 		await setPref(USER_A.id, 'km');
-		await page.goto('/runs');
+		await page.goto('/history');
 		await page.getByLabel('Date range').selectOption('year');
 
 		const rowA = page.locator(`a[href="/runs/${runIdA}"]`);
@@ -139,7 +139,7 @@ test.describe('/runs — unit pref round-trip', () => {
 		// display" test — Run A was inserted at km-mode but viewed at
 		// mi-mode must render in mi with the correct converted value.
 		await setPref(USER_A.id, 'mi');
-		await page.goto('/runs');
+		await page.goto('/history');
 		await page.getByLabel('Date range').selectOption('year');
 		await expect(rowA).toBeVisible({ timeout: 10_000 });
 		await expect(rowB).toBeVisible();
@@ -169,7 +169,7 @@ test.describe('/runs — unit pref round-trip', () => {
 		// memoised derived, in a write-time format) — the runs would
 		// stay stuck at mi values.
 		await setPref(USER_A.id, 'km');
-		await page.goto('/runs');
+		await page.goto('/history');
 		await page.getByLabel('Date range').selectOption('year');
 		await expect(rowA).toBeVisible({ timeout: 10_000 });
 

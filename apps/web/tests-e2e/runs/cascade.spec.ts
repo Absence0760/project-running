@@ -17,7 +17,7 @@ import { USER_A, USER_B } from '../fixtures/users';
  * that drops `cascade` on any of them would silently leak rows.
  *
  * pgtap pins the SQL-level rule, but we want a smoke-test that the
- * UI delete (deleteRun in data.ts → goto('/runs')) actually fires the
+ * UI delete (deleteRun in data.ts → goto('/history')) actually fires the
  * cascade against a row that has children. This plants a run with
  * kudos + comment, drives the trash-icon delete from /runs/[id],
  * then asserts via service-role that ZERO child rows remain. Also
@@ -80,7 +80,7 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 		const dialog = page.locator('.modal');
 		await expect(dialog).toBeVisible({ timeout: 5_000 });
 		await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
-		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
+		await page.waitForURL(/\/history$/, { timeout: 10_000 });
 
 		// ── Cascade verification ──
 		// The seven cascading children:
@@ -180,7 +180,7 @@ test.describe('/runs/[id] — delete cascades through every child table', () => 
 			.locator('.modal')
 			.getByRole('button', { name: 'Delete', exact: true })
 			.click();
-		await page.waitForURL(/\/runs$/, { timeout: 10_000 });
+		await page.waitForURL(/\/history$/, { timeout: 10_000 });
 
 		// Row gone via cascade.
 		const { data: photoAfter } = await admin

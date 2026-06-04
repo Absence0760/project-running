@@ -122,7 +122,7 @@ test.describe('/runs/heatmap — signed-in seed user', () => {
 	});
 
 	test('Heatmap link on the runs page navigates here', async ({ page }) => {
-		await page.goto('/runs');
+		await page.goto('/history');
 		await page.getByRole('link', { name: 'Heatmap' }).click();
 		await expect(page).toHaveURL(/\/runs\/heatmap/);
 		await expect(page.getByRole('heading', { name: 'Your heatmap' })).toBeVisible({

@@ -31,8 +31,8 @@ test.describe('surface smoke — authed', () => {
 			.toBeVisible({ timeout: 10_000 });
 	});
 
-	test('/runs mounts with the source-filter dropdown', async ({ page }) => {
-		await page.goto('/runs');
+	test('/history mounts with the source-filter dropdown', async ({ page }) => {
+		await page.goto('/history');
 		await expect(page.locator('select[aria-label="Source"]'))
 			.toBeVisible({ timeout: 10_000 });
 	});

@@ -13,7 +13,7 @@
  */
 
 /** A public run owned by USER_A (runner@test.com). Most-recent so it
- *  sorts to the top of /runs + /feed. Test title: "E2E demo public run". */
+ *  sorts to the top of /history + /feed. Test title: "E2E demo public run". */
 export const RUNNER_PUBLIC_RUN_ID = '11112222-3333-4444-5555-666677778888';
 
 /** A private run owned by USER_B (alex@test.com). Used by the

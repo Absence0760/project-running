@@ -18,10 +18,10 @@ import { USER_A, USER_B } from '../fixtures/users';
 test.describe('detail surface — runs', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
-	test('/runs/[id] back-link navigates to /runs', async ({ page }) => {
+	test('/runs/[id] back-link navigates to /history', async ({ page }) => {
 		await page.goto(`/runs/${RUNNER_PUBLIC_RUN_ID}`);
 		await page.getByRole('link', { name: /All runs/ }).first().click();
-		await page.waitForURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
+		await page.waitForURL(/\/history(\?.*)?$/, { timeout: 10_000 });
 	});
 
 	test('/runs/[id] share button is visible for the owner', async ({ page }) => {
@@ -195,7 +195,7 @@ test.describe('navigation — sidebar links wire up', () => {
 		await page.goto('/dashboard');
 		const sidebar = page.locator('.sidebar');
 		await sidebar.getByRole('link', { name: /History/ }).click();
-		await expect(page).toHaveURL(/\/runs(\?.*)?$/, { timeout: 10_000 });
+		await expect(page).toHaveURL(/\/history(\?.*)?$/, { timeout: 10_000 });
 		await sidebar.getByRole('link', { name: /Routes/ }).click();
 		await expect(page).toHaveURL(/\/routes(\?.*)?$/, { timeout: 10_000 });
 		await sidebar.getByRole('link', { name: /Coach/ }).click();
