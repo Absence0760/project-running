@@ -8,6 +8,7 @@ import '../l10n/locale_support.dart';
 import '../preferences.dart';
 import '../widgets/error_state.dart';
 import '../widgets/live_run_map.dart';
+import '../widgets/run_gear_chips.dart';
 import '../widgets/run_photos.dart';
 import '../widgets/run_segment_efforts.dart';
 import '../widgets/run_social_section.dart';
@@ -215,6 +216,14 @@ class _PublicRunScreenState extends State<PublicRunScreen> {
           runOwnerId: row.userId,
           routeId: row.routeId,
           track: _track,
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: RunGearChips(
+            api: widget.api,
+            runId: row.id,
+            runOwnerId: row.userId,
+          ),
         ),
         if (widget.api.userId != null)
           RunSocialSection(

@@ -115,6 +115,14 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 **Deferred (Tier 2, do not hand off yet):** recommendation engine, plan re-planning from fuelling/lift load, Coach-authored meal/lift plans, unified Whoop-style recovery score — gated on reliable logging per multi_modal.md.
 
+### Web↔mobile multi-modal-nav gating drift (open product decision)
+
+- [ ] **Resolve the gym/nutrition discoverability inconsistency between web and mobile.** The two platforms made opposite choices for surfacing the Phase 4 gym + nutrition features, and they've drifted:
+  - **Mobile (G5):** shipped gym/nutrition **ungated** — always reachable via the centre Log action + data-gated Home cards. The "protect the pure runner" job is done by the `keep_run_primary` toggle, **not** by hiding the features. There is no `multi_modal_nav` gate on mobile.
+  - **Web (decisions §63):** kept them behind `multi_modal_nav` (universal pref, **default `false`, no UI**), so a web runner sees **nothing** in the nav and **can't turn it on without a direct prefs-bag DB edit** (the `/gym` + `/nutrition` routes are reachable by URL, but undiscoverable).
+
+  Net effect: the same product is materially more discoverable on mobile than on web. **A Settings toggle was considered and rejected** (not worth it, and it wouldn't make the platforms consistent — mobile has no such toggle). The durable fix is to **ungate the three web surfaces** (Gym/Nutrition sidebar items in `+layout.svelte`, the `/dashboard` lift cards, the `/history` kind-chips/timeline) so they rely purely on **data-presence** — matching mobile's self-hiding behaviour — and then **retire the `multi_modal_nav` flag** (or keep it as a dormant kill-switch). This is a [decisions.md § 63](../architecture/decisions.md) amendment, needs the parity.md / roadmap.md cells flipped and the existing `multi_modal_nav`-setting Playwright specs (`tests-e2e/gym/multimodal_home_history.spec.ts`, nutrition specs) reworked to assert always-on, so it's flagged as an open decision rather than silently shipped. (Surfaced 2026-06-04.)
+
 ## Testing gaps
 
 - [ ] **Device-instrumented `integration_test` harness** — none today; would cover tile-cache / foreground-service / background-sync on real Android primitives. New infrastructure.
@@ -219,7 +227,7 @@ From `roadmap.md § Competitor-parity backlog`; sizes are rough estimates carrie
 
 - [ ] **Heatmap / popular-route discovery** (#4, ~2 wk) — materialised tile table or a Go tile service; anonymised aggregation. Open decision: opt-in vs opt-out privacy default.
 - [ ] **Trail / offline navigation** (#5, ~3-4 wk) — turn-by-turn on a loaded route + offline tile packs + condition reports. Needs a routing-engine choice (Valhalla vs GraphHopper).
-- [x] **Gear tracking** (#7) — shipped end-to-end (migrations `20260827_001` + `20260901_001`; `/settings/gear` + `RunGearChips` on web, `GearScreen` + twin on mobile, auto-tag-default trigger, `gear_with_distance` mileage view). 2026-06-02 follow-up closed a latent RLS bug: the gear chip never rendered on the **public** run-share page for non-owners — the `run_gear` SELECT policy wrapped `is_run_visible_to` in a base-`runs` subquery that the public-read-policy drop (`20260701_001`) had silently defanged, and the `gear` join is owner-only so a non-owner read NULL anyway. Fixed by `20261126_001` (direct definer call + a `public_run_gear` SECURITY DEFINER RPC that projects only public columns), `RunGearChips` mounted on `RunShareView`, pgtap + anon e2e. **Remaining (mobile parity, small):** mobile `public_run_screen.dart` doesn't surface a gear chip yet — a web-ahead parity gap, not a bug (mobile only shows gear on the owner's own run-detail today).
+- [x] **Gear tracking** (#7) — shipped end-to-end (migrations `20260827_001` + `20260901_001`; `/settings/gear` + `RunGearChips` on web, `GearScreen` + twin on mobile, auto-tag-default trigger, `gear_with_distance` mileage view). 2026-06-02 follow-up closed a latent RLS bug: the gear chip never rendered on the **public** run-share page for non-owners — the `run_gear` SELECT policy wrapped `is_run_visible_to` in a base-`runs` subquery that the public-read-policy drop (`20260701_001`) had silently defanged, and the `gear` join is owner-only so a non-owner read NULL anyway. Fixed by `20261126_001` (direct definer call + a `public_run_gear` SECURITY DEFINER RPC that projects only public columns), `RunGearChips` mounted on `RunShareView`, pgtap + anon e2e. Mobile parity closed 2026-06-04: the `RunGearChips` Flutter widget (already on `run_detail_screen`) now also mounts on `public_run_screen.dart` (+ iOS twin), unconditionally so anon viewers see the read-only chips, reading via the same `public_run_gear` RPC through `ApiClient.fetchRunGear`; the owner-only edit affordance stays gated on viewer == owner. `run_gear_chips_test.dart` widget test pins the non-owner/anon read-only path + the owner edit affordance.
 - [ ] **Audio-coached runs** (#9, ~3-4 wk) — pre-recorded workout library + TTS-narrated pace cues. Audio CDN strategy + voice-talent budget needed.
 - [ ] **Race calendar + results import** (#10, ~2 wk) — event discovery + entry links + auto-match results on record. Gated on the RunSignUp key above.
 - [ ] **Advanced analytics polish** (#11, ~2 wk) — no new tables; richer dashboard breakdowns + race-time predictor over what VDOT / training-load already ship.
@@ -375,17 +383,19 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   unconditional-DOB-column write. Decide whether onboarding's minor-exclusion DOB
   capture counts as implicit consent or needs the explicit toggle too — a legal-flow
   decision, deliberately not bolted on without counsel input.
-- [ ] **Age-grade calculator for non-parkrun races (older, MEDIUM)** — `age_grade`
-  is only surfaced for parkrun imports (scraped value in `metadata.age_grade`).
-  A manual / Strava / FIT race with a known distance, duration, and the runner's DOB
-  gets no age grade. Computing it properly needs the official **WMA road age-factor
-  tables** (per single-year-of-age × distance × sex) plus the open-class road
-  standards — a sizeable, version-specific dataset (WMA 2023/2025). Deliberately NOT
-  shipped as a from-memory approximation: a wrong age-grade % actively misleads the
-  exact masters-runner audience that values the metric. Build as a shared TS↔Dart
-  parity helper (web `age_grade.ts` ↔ mobile `age_grade.dart`) once the authoritative
-  factor tables are sourced, then surface on run-detail when DOB + distance + duration
-  are known and `metadata.age_grade` is absent.
+- [x] **Age-grade calculator for non-parkrun races (older, MEDIUM)** — **done 2026-06-04.**
+  The authoritative **USATF-MLDR 2025** road age-grade tables (Alan Jones + Tom
+  Bernhard, approved 2025-01-10; CC0 1.0; open standards match current world records)
+  are embedded verbatim — **not** approximated from memory — via the raw RunScore
+  files + generator under `scripts/age_grade/` → committed data modules
+  `age_grade_tables.ts` ↔ `.dart` (identical by construction; 22 distances 1 mile…200 km
+  incl. ultras, single-year factors 5–99, M/F). Logic is the shared TS↔Dart parity pair
+  `age_grade.ts` ↔ `age_grade.dart` (12 mirrored tests each): nearest-standard match
+  within ±2 %, age on race day, binary-sex gate, `agePct = openStandard / (duration ×
+  ageFactor) × 100`. Surfaced on run-detail (web key-stat tile + mobile twin) when DOB +
+  sex + a standard distance + duration are known and `metadata.age_grade` is absent;
+  the parkrun scraped value still takes precedence. See [decisions.md § 132](../architecture/decisions.md)
+  + [features/age_grade.md](../features/age_grade.md).
 - [~] **Treadmill / indoor per-point HR → HR-zone chart (garmin)** — **core shipped 2026-06-02.**
   Chose data model (b): a sibling `{user_id}/{run_id}.hr.json.gz` Storage object in the
   `runs` bucket + a `runs.hr_series_url` column (migration `20261127_001`, [decisions.md

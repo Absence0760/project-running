@@ -85,7 +85,7 @@ Shared pieces:
 | **Payment-failed dunning** | `lifecycle_email` (`payment_failed`) | `user_profiles` AFTER UPDATE, `billing_issue_at` null→non-null | ✓ | §121 |
 | **Safety-contact confirm** (opt-in request) | `safety_email` (`confirm`) | `safety_contacts` AFTER INSERT | ✓ | §131 |
 | **Safety-contact finish alert** (any finish, incl. private) | `safety_email` (`finish`) | `runs` AFTER INSERT, per confirmed contact, 24h recency, **no `is_public` gate, no preference gate** | ✓ | §131 |
-| **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §132 |
+| **Web push** (browser system notification, same notification rows) | `web_push` | `notifications` AFTER INSERT, gated on a registered `push_subscription` + the separate `push_notifications` pref | n/a (title/body from the shared catalogue) | §133 |
 | Branded HTML + inbox preview text | — | all email of the above | ✓ | — |
 
 All shipped emails are end-to-end tested against the local Docker Mailpit

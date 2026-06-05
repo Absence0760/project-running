@@ -2843,7 +2843,22 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
-## 132. Web push is a second consumer of the notifications rows, sent by the Go worker on a `web_push` job — stdlib crypto, a separate preference + send-state, and a subscription-gated enqueue
+## 132. Age grade for non-parkrun races uses the embedded USATF-MLDR 2025 factor tables — never a from-memory approximation
+
+**Decided (2026-06-04):** the age-grade % on run-detail was only ever shown for parkrun imports (the scraped `metadata.age_grade` string). A manual / Strava / FIT race with a known distance, duration and the runner's DOB got nothing — a gap precisely for the masters audience that values age grading most. We now compute it client-side for any standard-distance race when that scraped key is absent.
+
+**Why a real dataset, not a formula.** Age grading is a table lookup (an open-class world-standard time per distance/sex × a single-year age factor), not a closed-form curve, and a *wrong* age grade is worse than none — it misleads the exact runners who care. So the factors are taken **verbatim** from the authoritative published tables, not reconstructed from memory. Source: the **USATF Masters Long Distance Running (MLDR) 2025** road tables (Alan Jones + Tom Bernhard, approved 2025-01-10) — the current road-running age-grade standard, distributed **CC0 1.0** at `github.com/AlanLyttonJones/Age-Grade-Tables`. The 2025 edition's open standards match current world records (marathon M 2:00:35 / F 2:09:56), which is the cross-check that they're the real numbers.
+
+**The shape.**
+- The raw RunScore source files + a generator live under `scripts/age_grade/`; the generator emits two committed data modules (`age_grade_tables.ts` / `age_grade_tables.dart`) with **identical numbers by construction**, so there's no hand-transcription and a future WMA edition is a drop-in-and-regenerate. 22 standard distances (1 mile…200 km, **including ultras** — a differentiator vs Strava), single-year factors ages 5–99, M/F.
+- The logic is a TS↔Dart parity pair `age_grade.ts` ↔ `age_grade.dart` (12 mirrored tests each): `agePct = openStandard / (durationSec × ageFactor) × 100`, with **nearest-standard distance match within ±2 %** (absorbs ~1 % GPS over-read on a certified course without grading a 5.4 km jog as a 5 km; the standard distances never collide at that tolerance), **age on race day** (not today), and a **binary-sex gate** — unset / non-binary returns null (the tables have no standard without a male/female reference) rather than guessing.
+- The parkrun scraped value still wins when present; the computed value only fills the absence.
+
+**Trade-off.** We embed ~4k factors on each client (~50 KB) rather than adding a backend RPC — keeping the calc offline + instant on run-detail and avoiding a round-trip, at a small bundle cost. Non-binary runners get no age grade by design (no standard exists); if World Athletics ever publishes one, it's a table swap. Watches stay recording-only (the analysis surface lives on web/mobile). **Don't** approximate the factors, **don't** age-grade a non-standard distance, and **don't** hand-edit the generated `*_tables` modules — re-run the generator.
+
+---
+
+## 133. Web push is a second consumer of the notifications rows, sent by the Go worker on a `web_push` job — stdlib crypto, a separate preference + send-state, and a subscription-gated enqueue
 
 **Decided (2026-06-04):** `§ 117` always framed native FCM/APNs as "another consumer of the same notifications rows." Web push is the credible-now slice of that promise — the browser subscribe path (`apps/web/src/lib/util/push.ts` + `/sw.js`) already shipped and the VAPID key is operator-self-generated (no Firebase/APNs account needed). So we built the server leg: a `web_push` job kind (migration `20261219_001`) that the Go worker drains alongside `notification_email`.
 

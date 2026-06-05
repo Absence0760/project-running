@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../age_grade.dart';
 import '../backend_timeout.dart';
 import '../calories.dart';
 import '../l10n/date_format.dart';
@@ -1380,11 +1381,24 @@ class _RunDetailScreenState extends State<RunDetailScreen>
     return 0;
   }
 
-  /// parkrun age-graded percentage (e.g. "54.23%"), set by the parkrun
-  /// importer into metadata.age_grade. Null when absent. See metadata.md.
+  /// Age grade shown on the secondary-stat tile. Prefers the parkrun importer's
+  /// scraped metadata.age_grade string; otherwise computes it for any standard
+  /// race distance from the runner's DOB + sex + distance + duration via the
+  /// shared age_grade helper (twin of web). Null when neither is available.
+  /// See metadata.md + docs/features/age_grade.md.
   String? get _ageGrade {
     final v = run.metadata?[MetadataKeys.ageGrade];
-    return (v is String && v.trim().isNotEmpty) ? v.trim() : null;
+    if (v is String && v.trim().isNotEmpty) return v.trim();
+    final dob =
+        widget.settingsSync?.service?.effective<String>(SettingsKeys.dateOfBirth);
+    final result = ageGradeForRun(
+      distanceM: run.distanceMetres,
+      durationSec: run.duration.inSeconds.toDouble(),
+      dobIso: dob,
+      runStartIso: run.startedAt.toIso8601String(),
+      sex: _viewerGender,
+    );
+    return result != null ? formatAgeGradePercent(result.percent) : null;
   }
 
   static const _bestEffortDistances = <String, double>{

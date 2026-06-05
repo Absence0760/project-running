@@ -15,7 +15,7 @@ name, `decisions.md § 119`), `safety_email` (safety-contact confirm +
 finish alerts, `decisions.md § 131`), and `web_push` (the browser Web Push
 delivery channel — sibling of `notification_email` over the same
 notifications rows; encrypted RFC 8291 messages signed with a VAPID key,
-`decisions.md § 132` / migration `20261219_001`). Data-export will land as an
+`decisions.md § 133` / migration `20261219_001`). Data-export will land as an
 additional kind in `internal/worker.go`'s dispatch when that Edge
 Function moves per
 [`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §214.

@@ -188,7 +188,7 @@ The most-tested surface in the codebase. The recording state machine + filter ch
 
 | Surface | What to test |
 |---|---|
-| Web `/runs` | List paginates, source + activity-type filters narrow the list, the timeline ordering is descending. |
+| Web `/history` | List paginates, source + activity-type filters narrow the list, the timeline ordering is descending. |
 | Web `/runs/[id]` | Map renders the track (raw or matched — see [§ Map matching](#map-matching-server-side-snap)), elevation profile + splits + segments are populated, edit Title / Notes / Activity type round-trips through `data.ts:updateRun`. |
 | Web run share | Toggle `is_public` → copy link → open in incognito → page loads, track is privacy-clipped (see [§ Privacy zones](#privacy-zones)). |
 | Mobile run detail | Same map + splits + elevation; share-as-GPX produces a valid file; delete confirms then removes the run from the list and Storage. |

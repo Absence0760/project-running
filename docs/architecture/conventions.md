@@ -261,7 +261,7 @@ See [testing.md](../testing/testing.md) for the full reference — patterns, fix
 - **A visible "Load more" footer**, not infinite scroll. Infinite scroll loses scroll position on back-navigation and surprises users on cellular. Reference implementations: `apps/web/src/routes/runs/+page.svelte`, `apps/web/src/routes/feed/+page.svelte`, `apps/mobile_android/lib/screens/runs_screen.dart` (helper: `shouldShowRunsLoadMore`), `apps/mobile_android/lib/screens/feed_screen.dart`.
 - **Reset paging on filter/sort change.** If the user narrows the view, drop back to page 1 — don't carry the previous depth. The pure helper for the visibility decision should take primitives so the boundary cases are unit-testable without mounting the screen.
 - **Two layers when the client has a local store.** The visible window caps how many cached rows render even when the store has more (`_visibleCount` on the runs screen); a separate `_remoteHasMore` flag drives the cloud cursor. Tap Load more → reveal local first, fetch from cloud only when the local cache is exhausted.
-- **Suppress the cloud branch when the active filter has already capped the searchable window.** The cloud cursor walks strictly older than the oldest local row, so when a date-range filter (`today` / `week` / `month` / `year`) has a `from` that the oldest local row already predates, no cloud page can match — hide the button. Reference: `shouldShowRunsLoadMore` in `apps/mobile_android/lib/screens/runs_screen.dart` takes a `filterCutoff` + `oldestLocalStartedAt` for exactly this case. Web's `/runs` sidesteps the issue by switching to full-fetch mode whenever `dateRange !== 'all'` — same outcome, different trade-off.
+- **Suppress the cloud branch when the active filter has already capped the searchable window.** The cloud cursor walks strictly older than the oldest local row, so when a date-range filter (`today` / `week` / `month` / `year`) has a `from` that the oldest local row already predates, no cloud page can match — hide the button. Reference: `shouldShowRunsLoadMore` in `apps/mobile_android/lib/screens/runs_screen.dart` takes a `filterCutoff` + `oldestLocalStartedAt` for exactly this case. Web's `/history` sidesteps the issue by switching to full-fetch mode whenever `dateRange !== 'all'` — same outcome, different trade-off.
 
 Don't paginate when the bound is intrinsic and small (members of a club ≤ a few dozen, segments on a route ≤ tens, comments on a single run ≤ a handful). When in doubt, paginate — the cost of an unused Load-more button is zero, the cost of a 200-row first paint on a flaky cellular link is a frame drop and a power spike.
 
@@ -449,13 +449,13 @@ Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.mod
 {/if}
 ```
 
-**Don't redefine `.modal*` classes in a page or component.** Pages that *host* the modal (e.g. `/clubs`, `/plans`, `/runs`, `/clubs/[slug]`, `/dashboard` for goals, `/settings/devices` for overrides) provide local CSS *only* for body-level layout (e.g. `.goal-editor-body { display: grid; gap: 0.9rem }`) — never the backdrop, card, header, or close button. Components that own their own modal (`WorkoutEditor`, `ImportRoute`, `ConfirmDialog`) follow the same rule.
+**Don't redefine `.modal*` classes in a page or component.** Pages that *host* the modal (e.g. `/clubs`, `/plans`, `/history`, `/clubs/[slug]`, `/dashboard` for goals, `/settings/devices` for overrides) provide local CSS *only* for body-level layout (e.g. `.goal-editor-body { display: grid; gap: 0.9rem }`) — never the backdrop, card, header, or close button. Components that own their own modal (`WorkoutEditor`, `ImportRoute`, `ConfirmDialog`) follow the same rule.
 
 `ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
 
 ## Web list pages — preserve scroll on back-navigation
 
-Any list page that links into a detail page (`/runs`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
+Any list page that links into a detail page (`/history`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
 
 The shape is:
 
