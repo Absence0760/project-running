@@ -6904,6 +6904,10 @@
   "@trainingLoadReadingBalanced": {
     "description": "Training-load reading when form (TSB) is near zero"
   },
+  "trainingLoadIncludesLifts": "Gym sessions included — lifts add to fatigue too.",
+  "@trainingLoadIncludesLifts": {
+    "description": "Hint on the fitness/fatigue/form chart when logged gym sessions contribute to the load curve"
+  },
   "intensityTitle": "TRAINING INTENSITY",
   "@intensityTitle": {
     "description": "Title of the dashboard training-intensity card"

@@ -1475,6 +1475,7 @@
   "trainingLoadReadingLoaded": "Chargé — persévère et récupère quand tu es prêt.",
   "trainingLoadReadingTapered": "Affûté — une grosse séance ne te cassera pas.",
   "trainingLoadReadingBalanced": "Équilibré — jour facile ou jour dur, à toi de choisir.",
+  "trainingLoadIncludesLifts": "Séances de musculation incluses — elles ajoutent aussi de la fatigue.",
   "intensityTitle": "INTENSITÉ D'ENTRAÎNEMENT",
   "intensityWindow": "{days} derniers jours",
   "intensityBasedOn": "D'après {count, plural, one{{count} course avec FC} other{{count} courses avec FC}}",

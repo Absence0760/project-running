@@ -11,10 +11,16 @@ class TrainingLoadChart extends StatelessWidget {
   final List<TrainingLoadPoint> points;
   final bool hasHr;
 
+  /// Honest signal that gym load is folded into these curves — true when any
+  /// day in the window carries lift stress, so the trio reflects more than
+  /// running (multi_modal.md Tier-1 lift→load).
+  final bool includesLifts;
+
   const TrainingLoadChart({
     super.key,
     required this.points,
     required this.hasHr,
+    this.includesLifts = false,
   });
 
   @override
@@ -40,6 +46,15 @@ class TrainingLoadChart extends StatelessWidget {
                 color: theme.colorScheme.onSurfaceVariant,
               ),
             ),
+            if (includesLifts) ...[
+              const SizedBox(height: 4),
+              Text(
+                l10n.trainingLoadIncludesLifts,
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
             const SizedBox(height: 12),
             if (points.isEmpty)
               Padding(

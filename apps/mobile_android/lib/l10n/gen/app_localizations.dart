@@ -8979,6 +8979,12 @@ abstract class AppLocalizations {
   /// **'Balanced — easy day or hard day, your call.'**
   String get trainingLoadReadingBalanced;
 
+  /// Hint on the fitness/fatigue/form chart when logged gym sessions contribute to the load curve
+  ///
+  /// In en, this message translates to:
+  /// **'Gym sessions included — lifts add to fatigue too.'**
+  String get trainingLoadIncludesLifts;
+
   /// Title of the dashboard training-intensity card
   ///
   /// In en, this message translates to:

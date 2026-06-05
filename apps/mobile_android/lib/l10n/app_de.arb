@@ -1475,6 +1475,7 @@
   "trainingLoadReadingLoaded": "Belastet — zieh durch und erhole dich, wenn du bereit bist.",
   "trainingLoadReadingTapered": "Getapert — eine harte Einheit bringt dich nicht um.",
   "trainingLoadReadingBalanced": "Ausgeglichen — ruhiger oder harter Tag, deine Wahl.",
+  "trainingLoadIncludesLifts": "Fitnessstudio-Einheiten enthalten – Krafttraining erhöht auch die Ermüdung.",
   "intensityTitle": "TRAININGSINTENSITÄT",
   "intensityWindow": "letzte {days} Tage",
   "intensityBasedOn": "Basierend auf {count, plural, one{{count} Lauf mit Herzfrequenz} other{{count} Läufen mit Herzfrequenz}}",

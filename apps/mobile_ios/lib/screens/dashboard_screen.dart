@@ -7,10 +7,11 @@ import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../local_food_store.dart';
 import '../local_gym_store.dart';
+import '../lift_load.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../nutrition_targets.dart' show NutritionTargets;
-import '../nutrition_totals.dart' show MacroTotals, sumMacros;
+import '../nutrition_totals.dart' show sumMacros;
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
@@ -288,13 +289,40 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ?.effective<num>(SettingsKeys.maxHrBpm),
       );
 
+  /// Logged gym sessions reduced to the load-model input. Empty for a pure
+  /// runner, so the curve is the unchanged run-only series; the gym store is
+  /// hydrated on mount regardless of flag (mobile ships gym ungated, §63), so
+  /// any logged lift feeds the same CTL/ATL/TSB trio runs do (multi_modal.md
+  /// Tier-1 lift→load).
+  List<LiftForLoad> _liftsForLoad() {
+    final flat = <SetWithWorkoutDate>[];
+    for (final w in widget.gymStore.workouts) {
+      if (w.isTombstone) continue;
+      final at = w.startedAt;
+      if (at == null) continue;
+      final iso = at.toUtc().toIso8601String();
+      for (final s in w.sets) {
+        flat.add(SetWithWorkoutDate(
+          workoutId: w.id,
+          startedAt: iso,
+          reps: s['reps'] as num?,
+          weightKg: s['weight_kg'] as num?,
+          rpe: s['rpe'] as num?,
+        ));
+      }
+    }
+    return liftsFromSetHistory(flat);
+  }
+
   Widget _buildTrainingLoadChart(List<Run> runs, DateTime now) {
     final hrPrefs = _hrPrefs();
-    final series =
-        computeTrainingLoadSeries(runs, prefs: hrPrefs, endDate: now);
+    final lifts = _liftsForLoad();
+    final series = computeTrainingLoadSeries(runs,
+        prefs: hrPrefs, endDate: now, lifts: lifts);
     return TrainingLoadChart(
       points: series,
       hasHr: hasTrimpSignal(runs, hrPrefs),
+      includesLifts: series.any((p) => p.liftStress > 0),
     );
   }
 

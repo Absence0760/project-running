@@ -5459,6 +5459,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ausgeglichen — ruhiger oder harter Tag, deine Wahl.';
 
   @override
+  String get trainingLoadIncludesLifts =>
+      'Fitnessstudio-Einheiten enthalten – Krafttraining erhöht auch die Ermüdung.';
+
+  @override
   String get intensityTitle => 'TRAININGSINTENSITÄT';
 
   @override

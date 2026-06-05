@@ -5446,6 +5446,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Equilibrado — dia leve ou dia difícil, você decide.';
 
   @override
+  String get trainingLoadIncludesLifts =>
+      'Inclui sessões de academia — musculação também soma fadiga.';
+
+  @override
   String get intensityTitle => 'INTENSIDADE DE TREINO';
 
   @override
@@ -12462,6 +12466,10 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   @override
   String get trainingLoadReadingBalanced =>
       'Equilibrado — dia leve ou dia difícil, você decide.';
+
+  @override
+  String get trainingLoadIncludesLifts =>
+      'Inclui sessões de academia — musculação também soma fadiga.';
 
   @override
   String get intensityTitle => 'INTENSIDADE DE TREINO';

@@ -5130,6 +5130,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get trainingLoadReadingBalanced => 'バランス良好 — 楽な日もハードな日もお好みで。';
 
   @override
+  String get trainingLoadIncludesLifts => 'ジムのセッションを含む — 筋力トレーニングも疲労に加算されます。';
+
+  @override
   String get intensityTitle => 'トレーニング強度';
 
   @override

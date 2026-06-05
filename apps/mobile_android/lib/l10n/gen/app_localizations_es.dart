@@ -5451,6 +5451,10 @@ class AppLocalizationsEs extends AppLocalizations {
       'Equilibrado: día suave o día duro, tú decides.';
 
   @override
+  String get trainingLoadIncludesLifts =>
+      'Incluye sesiones de gimnasio: las pesas también suman fatiga.';
+
+  @override
   String get intensityTitle => 'INTENSIDAD DE ENTRENAMIENTO';
 
   @override

@@ -5396,6 +5396,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Balanced — easy day or hard day, your call.';
 
   @override
+  String get trainingLoadIncludesLifts =>
+      'Gym sessions included — lifts add to fatigue too.';
+
+  @override
   String get intensityTitle => 'TRAINING INTENSITY';
 
   @override

@@ -1475,6 +1475,7 @@
   "trainingLoadReadingLoaded": "負荷が高い — 無理なく続けて、準備ができたら回復しよう。",
   "trainingLoadReadingTapered": "調整済み — ハードな練習でも問題なし。",
   "trainingLoadReadingBalanced": "バランス良好 — 楽な日もハードな日もお好みで。",
+  "trainingLoadIncludesLifts": "ジムのセッションを含む — 筋力トレーニングも疲労に加算されます。",
   "intensityTitle": "トレーニング強度",
   "intensityWindow": "直近{days}日",
   "intensityBasedOn": "心拍記録のある{count, plural, other{{count}件のラン}}に基づく",
