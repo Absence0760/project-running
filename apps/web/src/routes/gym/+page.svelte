@@ -56,6 +56,9 @@
 		for (const s of setsByWorkout.get(id) ?? []) names.add(s.exercise_name.trim().toLowerCase());
 		return names.size;
 	}
+	function setCountOf(id: string): number {
+		return (setsByWorkout.get(id) ?? []).length;
+	}
 
 	// Which workouts set at least one PR. Walk oldest→newest accumulating
 	// prior sets so each workout is judged against everything before it.
@@ -93,21 +96,43 @@
 
 <svelte:head><title>{t('gym.title')} · Threkir</title></svelte:head>
 
-<div class="gym-page">
-	<header class="page-head">
-		<h1>{t('gym.title')}</h1>
+<div class="page">
+	<header class="page-header">
+		<div class="head-text">
+			<h1>{t('gym.title')}</h1>
+			{#if !loading && workouts.length > 0}
+				<p class="head-sub">
+					{workouts.length === 1
+						? t('gym.workoutsOne')
+						: t('gym.workoutsMany', { count: workouts.length })}
+				</p>
+			{/if}
+		</div>
 		<button class="btn btn-primary" onclick={() => (showCreate = true)} data-testid="gym-log">
+			<span class="material-symbols-outlined" aria-hidden="true">add</span>
 			{t('gym.log')}
 		</button>
 	</header>
 
 	{#if loading}
-		<p class="muted">{t('shell.loading')}</p>
+		<ul class="workout-list" aria-hidden="true">
+			{#each Array(5) as _, i (i)}
+				<li class="skel-row">
+					<span class="skel skel-line skel-w-40"></span>
+					<span class="skel skel-pill"></span>
+				</li>
+			{/each}
+		</ul>
+		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if workouts.length === 0}
-		<div class="empty">
+		<div class="empty-card">
+			<span class="material-symbols-outlined empty-icon" aria-hidden="true">fitness_center</span>
 			<h2>{t('gym.empty.title')}</h2>
-			<p class="muted">{t('gym.empty.body')}</p>
-			<button class="btn btn-primary" onclick={() => (showCreate = true)}>{t('gym.log')}</button>
+			<p class="empty-text">{t('gym.empty.body')}</p>
+			<button class="btn btn-primary" onclick={() => (showCreate = true)}>
+				<span class="material-symbols-outlined" aria-hidden="true">add</span>
+				{t('gym.log')}
+			</button>
 		</div>
 	{:else}
 		<ul class="workout-list">
@@ -120,13 +145,26 @@
 						</div>
 						<div class="row-stats">
 							{#if prWorkoutIds.has(w.id)}
-								<span class="pr-badge" title={t('gym.pr.badge')}>{t('gym.pr.badge')}</span>
+								<span class="pr-badge" title={t('gym.pr.title')}>
+									<span class="material-symbols-outlined" aria-hidden="true">trophy</span>
+									{t('gym.pr.badge')}
+								</span>
 							{/if}
-							<span class="stat">{t('gym.exercisesShort', { count: exerciseCountOf(w.id) })}</span>
+							<span class="stat">
+								<span class="stat-value">{exerciseCountOf(w.id)}</span>
+								<span class="stat-label section-label">{t('gym.exercisesLabel')}</span>
+							</span>
+							<span class="stat">
+								<span class="stat-value">{setCountOf(w.id)}</span>
+								<span class="stat-label section-label">{t('gym.setsLabel')}</span>
+							</span>
 							{#if volumeOf(w.id) > 0}
-								<span class="stat">{t('gym.volumeShort', { volume: formatWeight(volumeOf(w.id)) })}</span>
+								<span class="stat stat-volume">
+									<span class="stat-value">{formatWeight(volumeOf(w.id))}</span>
+									<span class="stat-label section-label">{t('gym.volumeLabel')}</span>
+								</span>
 							{/if}
-							<span class="material-symbols-outlined chevron">chevron_right</span>
+							<span class="material-symbols-outlined chevron" aria-hidden="true">chevron_right</span>
 						</div>
 					</a>
 				</li>
@@ -140,32 +178,80 @@
 </Modal>
 
 <style>
-	.gym-page {
-		padding: var(--space-xl) var(--space-2xl);
+	.page {
+		padding: var(--page-padding-y) var(--page-padding-x);
 	}
-	.page-head {
+	.page-header {
 		display: flex;
 		justify-content: space-between;
-		align-items: center;
+		align-items: flex-start;
 		margin-bottom: var(--space-xl);
 		gap: var(--space-md);
 	}
-	.page-head h1 {
-		margin: 0;
-	}
-	.muted {
-		color: var(--text-secondary);
-	}
-	.empty {
+	.head-text {
 		display: flex;
 		flex-direction: column;
-		align-items: flex-start;
-		gap: var(--space-sm);
-		max-width: 32rem;
+		gap: 0.15rem;
 	}
-	.empty h2 {
+	.page-header h1 {
 		margin: 0;
 	}
+	.head-sub {
+		margin: 0;
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+	}
+	.page-header .btn {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		flex-shrink: 0;
+	}
+	.page-header .material-symbols-outlined {
+		font-size: 1.1rem;
+	}
+
+	/* Empty-state card — same shape as /routes, /history, /dashboard. */
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-align: center;
+	}
+	.empty-card h2 {
+		margin: 0;
+		font-size: 1.15rem;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.empty-icon {
+		font-size: 2.5rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.85;
+	}
+	.empty-text {
+		max-width: 32rem;
+		margin: 0;
+		padding: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+		line-height: 1.5;
+	}
+	.empty-card .btn {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		margin-top: var(--space-sm);
+	}
+	.empty-card .material-symbols-outlined {
+		font-size: 1.1rem;
+	}
+
 	.workout-list {
 		list-style: none;
 		margin: 0;
@@ -178,16 +264,24 @@
 		display: flex;
 		justify-content: space-between;
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-lg);
 		padding: var(--space-md) var(--space-lg);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
 		text-decoration: none;
 		color: inherit;
-		background: var(--surface);
+		background: var(--color-surface);
+		transition:
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast);
 	}
 	.workout-row:hover {
-		border-color: var(--accent, #d97a54);
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+	}
+	.workout-row:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
 	}
 	.row-main {
 		display: flex;
@@ -197,32 +291,128 @@
 	}
 	.row-title {
 		font-weight: 600;
+		font-size: 1rem;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 	.row-date {
-		font-size: 0.85rem;
-		color: var(--text-secondary);
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
 	}
 	.row-stats {
 		display: flex;
 		align-items: center;
-		gap: var(--space-md);
+		gap: var(--space-lg);
 		flex-shrink: 0;
 	}
 	.stat {
-		font-size: 0.85rem;
-		color: var(--text-secondary);
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		gap: 0.1rem;
 		white-space: nowrap;
 	}
+	.stat-value {
+		font-size: 0.95rem;
+		font-weight: 600;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.stat-label {
+		color: var(--color-text-tertiary);
+	}
 	.pr-badge {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
 		font-size: 0.7rem;
 		font-weight: 700;
 		letter-spacing: 0.04em;
 		color: #fff;
-		background: var(--accent, #d97a54);
-		padding: 2px 6px;
+		background: var(--color-primary);
+		padding: 0.2rem 0.45rem;
 		border-radius: var(--radius-sm);
+		align-self: center;
+	}
+	.pr-badge .material-symbols-outlined {
+		font-size: 0.85rem;
 	}
 	.chevron {
-		color: var(--text-secondary);
+		color: var(--color-text-tertiary);
+		flex-shrink: 0;
+	}
+
+	/* Skeleton — same shimmer language as /routes + /history. */
+	.skel-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-lg);
+		padding: var(--space-md) var(--space-lg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-line {
+		height: 0.95rem;
+	}
+	.skel-w-40 {
+		width: 40%;
+		max-width: 16rem;
+	}
+	.skel-pill {
+		width: 9rem;
+		height: 1.6rem;
+		border-radius: var(--radius-md);
+	}
+	@keyframes skel-shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel {
+			animation: none;
+		}
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	/* On a phone the per-stat stack would crowd the title; drop the
+	   Sets stat label group to keep the row scannable. */
+	@media (max-width: 30rem) {
+		.row-stats {
+			gap: var(--space-md);
+		}
+		.stat-volume {
+			display: none;
+		}
 	}
 </style>

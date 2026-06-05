@@ -13,7 +13,7 @@
 	} from '$lib/core/data';
 	import { workoutPrs, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
 	import { formatDate } from '$lib/format/time';
-	import { formatWeight } from '$lib/format/units.svelte';
+	import { formatWeight, weightUnitLabel } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import GymEditor from '$lib/components/GymEditor.svelte';
 	import ConfirmDialog from '$lib/components/ConfirmDialog.svelte';
@@ -92,6 +92,18 @@
 		return parts.join(' × ');
 	}
 
+	// Header summary stats — total exercises / sets / working volume.
+	const summary = $derived.by(() => {
+		const sets = data?.sets ?? [];
+		const names = new Set<string>();
+		let volume = 0;
+		for (const s of sets) {
+			names.add(s.exercise_name.trim().toLowerCase());
+			if (s.reps != null && s.weight_kg != null) volume += s.reps * s.weight_kg;
+		}
+		return { exercises: names.size, sets: sets.length, volume: Math.round(volume) };
+	});
+
 	function onUpdated() {
 		editing = false;
 		void load();
@@ -118,37 +130,83 @@
 	</a>
 
 	{#if loading}
-		<p class="muted">{t('shell.loading')}</p>
+		<div class="skel-head" aria-hidden="true">
+			<span class="skel skel-line skel-w-50"></span>
+			<span class="skel skel-line skel-w-30"></span>
+		</div>
+		{#each Array(2) as _, i (i)}
+			<div class="skel-block" aria-hidden="true">
+				<span class="skel skel-line skel-w-40"></span>
+				<span class="skel skel-line"></span>
+				<span class="skel skel-line"></span>
+			</div>
+		{/each}
+		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if notFound}
-		<p class="muted">{t('gym.notFound')}</p>
+		<div class="empty-card">
+			<span class="material-symbols-outlined empty-icon" aria-hidden="true">search_off</span>
+			<p class="empty-text">{t('gym.notFound')}</p>
+			<a href="/gym" class="btn btn-outline">{t('gym.back')}</a>
+		</div>
 	{:else if data}
 		<header class="detail-head">
-			<div>
+			<div class="head-text">
 				<h1>{data.workout.title || t('gym.untitled')}</h1>
-				<p class="muted">{formatDate(data.workout.started_at)}</p>
+				<p class="head-date">{formatDate(data.workout.started_at)}</p>
 			</div>
 			{#if isOwner}
 				<div class="head-actions">
-					<button class="btn btn-secondary" onclick={() => (editing = true)}>{t('gym.edit')}</button>
-					<button class="btn btn-danger" onclick={() => (confirmingDelete = true)}>{t('gym.delete')}</button>
+					<button class="btn btn-secondary btn-sm" onclick={() => (editing = true)}>
+						<span class="material-symbols-outlined" aria-hidden="true">edit</span>
+						{t('gym.edit')}
+					</button>
+					<button class="btn btn-danger btn-sm" onclick={() => (confirmingDelete = true)}>
+						<span class="material-symbols-outlined" aria-hidden="true">delete</span>
+						{t('gym.delete')}
+					</button>
 				</div>
 			{/if}
 		</header>
+
+		<div class="summary-grid">
+			<div class="summary-stat">
+				<span class="summary-value">{summary.exercises}</span>
+				<span class="summary-label section-label">{t('gym.exercisesLabel')}</span>
+			</div>
+			<div class="summary-stat">
+				<span class="summary-value">{summary.sets}</span>
+				<span class="summary-label section-label">{t('gym.setsLabel')}</span>
+			</div>
+			{#if summary.volume > 0}
+				<div class="summary-stat">
+					<span class="summary-value">{formatWeight(summary.volume)}</span>
+					<span class="summary-label section-label">{t('gym.volumeLabel')}</span>
+				</div>
+			{/if}
+		</div>
 
 		{#each blocks as block (block.name)}
 			<section class="exercise-block">
 				<div class="block-head">
 					<h2>{block.name}</h2>
 					{#each prByExercise.get(block.name.trim().toLowerCase()) ?? [] as kind (kind)}
-						<span class="pr-chip">{prLabel(kind)}</span>
+						<span class="pr-chip">
+							<span class="material-symbols-outlined" aria-hidden="true">trophy</span>
+							{prLabel(kind)}
+						</span>
 					{/each}
 				</div>
 				<ol class="sets">
+					<li class="sets-head" aria-hidden="true">
+						<span class="set-n"></span>
+						<span class="set-val section-label">{t('gym.reps')} × {t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
+						<span class="rpe section-label">{t('gym.rpe')}</span>
+					</li>
 					{#each block.sets as s (s.id)}
 						<li>
 							<span class="set-n">{t('gym.setN', { n: s.set_index + 1 })}</span>
 							<span class="set-val">{setSummary(s) || '—'}</span>
-							{#if s.rpe != null}<span class="rpe">{t('gym.rpe')} {s.rpe}</span>{/if}
+							<span class="rpe">{s.rpe != null ? s.rpe : '—'}</span>
 						</li>
 					{/each}
 				</ol>
@@ -156,8 +214,8 @@
 		{/each}
 
 		{#if data.workout.notes}
-			<section class="notes">
-				<h2>{t('gym.notes')}</h2>
+			<section class="exercise-block notes">
+				<div class="block-head"><h2>{t('gym.notes')}</h2></div>
 				<p>{data.workout.notes}</p>
 			</section>
 		{/if}
@@ -182,89 +240,280 @@
 
 <style>
 	.detail-page {
-		padding: var(--space-xl) var(--space-2xl);
+		padding: var(--page-padding-y) var(--page-padding-x);
 		max-width: 48rem;
 	}
 	.back {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
-		color: var(--text-secondary);
+		color: var(--color-text-secondary);
 		text-decoration: none;
 		margin-bottom: var(--space-lg);
+		font-size: 0.9rem;
 	}
 	.back:hover {
-		color: var(--text-primary);
+		color: var(--color-text);
 	}
-	.muted {
-		color: var(--text-secondary);
+	.back:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
+		border-radius: var(--radius-sm);
 	}
+
 	.detail-head {
 		display: flex;
 		justify-content: space-between;
 		align-items: flex-start;
 		gap: var(--space-md);
-		margin-bottom: var(--space-xl);
+		margin-bottom: var(--space-lg);
+	}
+	.head-text {
+		min-width: 0;
 	}
 	.detail-head h1 {
 		margin: 0 0 var(--space-2xs);
+		font-size: 1.6rem;
+	}
+	.head-date {
+		margin: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
 	}
 	.head-actions {
 		display: flex;
 		gap: var(--space-sm);
 		flex-shrink: 0;
 	}
-	.exercise-block {
+	.head-actions .btn {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
+	}
+	.head-actions .material-symbols-outlined {
+		font-size: 1.05rem;
+	}
+
+	/* Summary stat strip — same surface-card language as the exercise
+	   cards, sitting above them. */
+	.summary-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+		gap: var(--space-sm);
 		margin-bottom: var(--space-lg);
+	}
+	.summary-stat {
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
 		padding: var(--space-md) var(--space-lg);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+	}
+	.summary-value {
+		font-size: 1.35rem;
+		font-weight: 700;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.1;
+	}
+	.summary-label {
+		color: var(--color-text-tertiary);
+	}
+
+	.exercise-block {
+		margin-bottom: var(--space-md);
+		padding: var(--space-lg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
 	}
 	.block-head {
 		display: flex;
 		align-items: center;
 		gap: var(--space-sm);
-		margin-bottom: var(--space-sm);
+		margin-bottom: var(--space-md);
 		flex-wrap: wrap;
 	}
 	.block-head h2 {
 		margin: 0;
-		font-size: 1.05rem;
+		font-size: 1.1rem;
+		font-weight: 600;
 	}
 	.pr-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.2rem;
 		font-size: 0.7rem;
 		font-weight: 700;
-		color: #fff;
-		background: var(--accent, #d97a54);
-		padding: 2px 6px;
+		letter-spacing: 0.02em;
+		color: var(--color-primary);
+		background: var(--color-primary-light);
+		padding: 0.2rem 0.5rem;
 		border-radius: var(--radius-sm);
 	}
+	.pr-chip .material-symbols-outlined {
+		font-size: 0.85rem;
+	}
+
 	.sets {
 		list-style: none;
 		margin: 0;
 		padding: 0;
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2xs);
 	}
 	.sets li {
-		display: flex;
-		align-items: baseline;
+		display: grid;
+		grid-template-columns: 4rem 1fr 4rem;
+		align-items: center;
 		gap: var(--space-md);
+		padding: var(--space-xs) 0;
+	}
+	.sets li + li:not(.sets-head) {
+		border-top: 1px solid var(--color-border);
+	}
+	.sets-head {
+		padding-bottom: var(--space-2xs);
+	}
+	.sets-head .set-val,
+	.sets-head .rpe {
+		color: var(--color-text-tertiary);
 	}
 	.set-n {
-		font-size: 0.8rem;
-		color: var(--text-secondary);
-		min-width: 3.5rem;
+		font-size: 0.82rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		white-space: nowrap;
 	}
 	.set-val {
 		font-variant-numeric: tabular-nums;
+		font-weight: 500;
+		color: var(--color-text);
 	}
 	.rpe {
-		font-size: 0.8rem;
-		color: var(--text-secondary);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		text-align: end;
+		font-variant-numeric: tabular-nums;
 	}
+
 	.notes p {
+		margin: 0;
 		white-space: pre-wrap;
+		color: var(--color-text);
+		line-height: 1.6;
+	}
+
+	/* Empty / not-found card — house empty-card shape. */
+	.empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-sm);
+		padding: var(--space-2xl) var(--space-lg);
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		text-align: center;
+	}
+	.empty-icon {
+		font-size: 2.5rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.85;
+	}
+	.empty-text {
+		margin: 0;
+		padding: 0;
+		font-size: 0.9rem;
+		color: var(--color-text-secondary);
+	}
+	.empty-card .btn {
+		margin-top: var(--space-xs);
+	}
+
+	/* Skeletons mirror the head + exercise-card heights. */
+	.skel-head {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		margin-bottom: var(--space-lg);
+	}
+	.skel-block {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		padding: var(--space-lg);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+		margin-bottom: var(--space-md);
+	}
+	.skel {
+		display: block;
+		background: var(--color-bg-tertiary);
+		background-image: linear-gradient(
+			90deg,
+			var(--color-bg-tertiary) 0%,
+			var(--color-bg-secondary) 50%,
+			var(--color-bg-tertiary) 100%
+		);
+		background-size: 200% 100%;
+		border-radius: var(--radius-sm);
+		animation: skel-shimmer 1.4s ease-in-out infinite;
+		height: 0.9rem;
+	}
+	.skel-line {
+		width: 100%;
+	}
+	.skel-w-30 {
+		width: 30%;
+	}
+	.skel-w-40 {
+		width: 40%;
+	}
+	.skel-w-50 {
+		width: 50%;
+		height: 1.4rem;
+	}
+	@keyframes skel-shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel {
+			animation: none;
+		}
+	}
+
+	.sr-only {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		padding: 0;
+		margin: -1px;
+		overflow: hidden;
+		clip: rect(0, 0, 0, 0);
+		white-space: nowrap;
+		border: 0;
+	}
+
+	@media (max-width: 40rem) {
+		.detail-head {
+			flex-direction: column;
+			gap: var(--space-sm);
+		}
+		.head-actions {
+			width: 100%;
+		}
+		.head-actions .btn {
+			flex: 1 1 0;
+			justify-content: center;
+		}
 	}
 </style>

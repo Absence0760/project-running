@@ -136,7 +136,7 @@
 
 <div class="gym-editor">
 	<label class="field">
-		<span>{t('gym.editor.titleLabel')}</span>
+		<span class="section-label">{t('gym.editor.titleLabel')}</span>
 		<input type="text" bind:value={title} placeholder={t('gym.editor.titlePlaceholder')} />
 	</label>
 
@@ -166,45 +166,80 @@
 					<span class="material-symbols-outlined">delete</span>
 				</button>
 			</div>
-			{#each ex.sets as _set, si (si)}
-				<div class="set-row">
-					<span class="set-label">{t('gym.setN', { n: si + 1 })}</span>
-					<label>
-						<span class="set-cap">{t('gym.reps')}</span>
-						<input type="number" inputmode="numeric" min="0" bind:value={exercises[ei].sets[si].reps} />
-					</label>
-					<label>
-						<span class="set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
-						<input type="number" inputmode="decimal" min="0" step="0.5" bind:value={exercises[ei].sets[si].weight} />
-					</label>
-					<label>
-						<span class="set-cap">{t('gym.rpe')}</span>
-						<input type="number" inputmode="decimal" min="0" max="10" step="0.5" bind:value={exercises[ei].sets[si].rpe} />
-					</label>
-					<button
-						type="button"
-						class="icon-btn"
-						title={t('gym.editor.removeSet')}
-						aria-label={t('gym.editor.removeSet')}
-						onclick={() => removeSet(ei, si)}
-					>
-						<span class="material-symbols-outlined">close</span>
-					</button>
+			<div class="set-grid">
+				<div class="set-head" aria-hidden="true">
+					<span class="set-label"></span>
+					<span class="set-cap">{t('gym.reps')}</span>
+					<span class="set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
+					<span class="set-cap">{t('gym.rpe')}</span>
+					<span></span>
 				</div>
-			{/each}
+				{#each ex.sets as _set, si (si)}
+					<div class="set-row">
+						<span class="set-label">{t('gym.setN', { n: si + 1 })}</span>
+						<label class="set-field">
+							<span class="set-cap set-cap-inline">{t('gym.reps')}</span>
+							<input
+								type="number"
+								inputmode="numeric"
+								min="0"
+								aria-label={t('gym.reps')}
+								bind:value={exercises[ei].sets[si].reps}
+							/>
+						</label>
+						<label class="set-field">
+							<span class="set-cap set-cap-inline">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
+							<input
+								type="number"
+								inputmode="decimal"
+								min="0"
+								step="0.5"
+								aria-label={t('gym.weightUnit', { unit: weightUnitLabel() })}
+								bind:value={exercises[ei].sets[si].weight}
+							/>
+						</label>
+						<label class="set-field">
+							<span class="set-cap set-cap-inline">{t('gym.rpe')}</span>
+							<input
+								type="number"
+								inputmode="decimal"
+								min="0"
+								max="10"
+								step="0.5"
+								aria-label={t('gym.rpe')}
+								bind:value={exercises[ei].sets[si].rpe}
+							/>
+						</label>
+						<button
+							type="button"
+							class="icon-btn set-remove"
+							title={t('gym.editor.removeSet')}
+							aria-label={t('gym.editor.removeSet')}
+							onclick={() => removeSet(ei, si)}
+						>
+							<span class="material-symbols-outlined">close</span>
+						</button>
+					</div>
+				{/each}
+			</div>
 			<button type="button" class="btn btn-sm btn-outline add-set" onclick={() => addSet(ei)}>
+				<span class="material-symbols-outlined">add</span>
 				{t('gym.editor.addSet')}
 			</button>
 		</div>
 	{/each}
 
 	<button type="button" class="btn btn-outline add-exercise" onclick={addExercise}>
+		<span class="material-symbols-outlined">add</span>
 		{t('gym.editor.addExercise')}
 	</button>
 
 	<label class="share-row">
 		<input type="checkbox" bind:checked={isPublic} />
-		<span>{t('gym.editor.share')}</span>
+		<span class="share-text">
+			<span class="share-title">{t('gym.editor.share')}</span>
+			<span class="share-hint">{t('gym.editor.shareHint')}</span>
+		</span>
 	</label>
 
 	{#if error}
@@ -230,30 +265,41 @@
 	.field {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-2xs);
-	}
-	.field > span {
-		font-size: 0.85rem;
-		color: var(--text-secondary);
+		gap: var(--space-xs);
 	}
 	input[type='text'],
 	input[type='number'] {
-		padding: var(--space-2xs) var(--space-sm);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-		color: var(--text-primary);
+		padding: 0.5rem 0.65rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
 		font: inherit;
+		font-size: 0.9rem;
 		width: 100%;
+		min-width: 0;
+		height: 2.4rem;
+		transition: border-color var(--transition-fast);
 	}
+	input[type='text']:focus,
+	input[type='number']:focus {
+		outline: none;
+		border-color: var(--color-primary);
+		box-shadow: 0 0 0 3px var(--color-primary-light);
+	}
+	input[type='number'] {
+		font-variant-numeric: tabular-nums;
+		text-align: center;
+	}
+
 	.exercise {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-sm);
-		padding: var(--space-md);
-		border: 1px solid var(--border);
-		border-radius: var(--radius-md);
-		background: var(--surface-subtle, var(--surface));
+		gap: var(--space-md);
+		padding: var(--space-md) var(--space-md) var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		background: var(--color-bg-secondary);
 	}
 	.exercise-head {
 		display: flex;
@@ -264,60 +310,117 @@
 		flex: 1;
 		font-weight: 600;
 	}
+
+	.set-grid {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-xs);
+	}
+	/* Shared column template so the header row and every set row align
+	   the reps / weight / RPE inputs into a clean spreadsheet. */
+	.set-head,
 	.set-row {
 		display: grid;
-		grid-template-columns: auto 1fr 1fr 1fr auto;
+		grid-template-columns: 3.5rem repeat(3, 1fr) 2rem;
 		gap: var(--space-sm);
-		align-items: end;
+		align-items: center;
+	}
+	.set-head {
+		padding-inline: 0;
+	}
+	.set-head .set-cap {
+		text-align: center;
 	}
 	.set-label {
 		font-size: 0.8rem;
-		color: var(--text-secondary);
-		padding-bottom: var(--space-2xs);
+		font-weight: 600;
+		color: var(--color-text-secondary);
 		white-space: nowrap;
 	}
-	.set-row label {
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
+	.set-field {
+		display: block;
 		min-width: 0;
 	}
-	.set-cap {
-		font-size: 0.7rem;
-		color: var(--text-secondary);
-		text-transform: uppercase;
-		letter-spacing: 0.02em;
+	/* Inline per-input captions only surface on the narrow single-column
+	   layout, where the shared header row is hidden. */
+	.set-cap-inline {
+		display: none;
 	}
+	.set-cap {
+		font-size: 0.65rem;
+		font-weight: 600;
+		color: var(--color-text-tertiary);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
 	.icon-btn {
 		background: none;
 		border: none;
 		cursor: pointer;
-		color: var(--text-secondary);
+		color: var(--color-text-tertiary);
 		padding: var(--space-2xs);
 		border-radius: var(--radius-sm);
 		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 	}
 	.icon-btn:hover {
-		color: var(--danger, #c0392b);
-		background: var(--surface);
+		color: var(--color-danger);
+		background: var(--color-danger-light);
 	}
-	.add-set {
-		align-self: flex-start;
+	.icon-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 	}
+	.set-remove {
+		justify-self: center;
+	}
+
+	.add-set,
 	.add-exercise {
 		align-self: flex-start;
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2xs);
 	}
+	.add-set .material-symbols-outlined,
+	.add-exercise .material-symbols-outlined {
+		font-size: 1.05rem;
+	}
+
 	.share-row {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: var(--space-sm);
-		font-size: 0.9rem;
+		padding: var(--space-md);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		cursor: pointer;
 	}
 	.share-row input {
 		width: auto;
+		margin-top: 0.15rem;
+		accent-color: var(--color-primary);
 	}
+	.share-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+	}
+	.share-title {
+		font-size: 0.9rem;
+		font-weight: 500;
+		color: var(--color-text);
+	}
+	.share-hint {
+		font-size: 0.78rem;
+		color: var(--color-text-secondary);
+	}
+
 	.error {
-		color: var(--danger, #c0392b);
+		color: var(--color-danger);
 		font-size: 0.9rem;
 		margin: 0;
 	}
@@ -325,13 +428,39 @@
 		display: flex;
 		justify-content: flex-end;
 		gap: var(--space-sm);
+		padding-top: var(--space-xs);
 	}
+
 	@media (max-width: 480px) {
+		/* Stack each set as a labelled 3-up block so inputs stay legible on
+		   a phone — the shared header row is dropped in favour of inline
+		   captions above each input. */
+		.set-head {
+			display: none;
+		}
 		.set-row {
-			grid-template-columns: 1fr 1fr 1fr auto;
+			grid-template-columns: 1fr 1fr 1fr 2rem;
+			align-items: end;
+			row-gap: var(--space-xs);
+			padding: var(--space-sm);
+			border: 1px solid var(--color-border);
+			border-radius: var(--radius-md);
+			background: var(--color-surface);
 		}
 		.set-label {
 			grid-column: 1 / -1;
+		}
+		.set-field {
+			display: flex;
+			flex-direction: column;
+			gap: 0.15rem;
+		}
+		.set-cap-inline {
+			display: block;
+		}
+		.set-remove {
+			align-self: end;
+			margin-bottom: 0.1rem;
 		}
 	}
 </style>

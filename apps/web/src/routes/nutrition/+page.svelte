@@ -131,15 +131,31 @@
 	// Ring geometry — circumference of an r=26 circle.
 	const R = 26;
 	const CIRC = 2 * Math.PI * R;
-	type RingDef = { key: string; label: string; consumed: number; target: number | null; unit: string };
+	type RingDef = {
+		key: string;
+		label: string;
+		consumed: number;
+		target: number | null;
+		unit: string;
+		color: string;
+	};
 	const rings = $derived<RingDef[]>([
-		{ key: 'calories', label: m('nutrition.calories'), consumed: consumed.calories, target: targets?.calories ?? null, unit: 'kcal' },
-		{ key: 'protein', label: m('nutrition.protein'), consumed: consumed.proteinG, target: targets?.proteinG ?? null, unit: 'g' },
-		{ key: 'carbs', label: m('nutrition.carbs'), consumed: consumed.carbsG, target: targets?.carbsG ?? null, unit: 'g' },
-		{ key: 'fat', label: m('nutrition.fat'), consumed: consumed.fatG, target: targets?.fatG ?? null, unit: 'g' },
+		{ key: 'calories', label: m('nutrition.calories'), consumed: consumed.calories, target: targets?.calories ?? null, unit: 'kcal', color: 'var(--color-primary)' },
+		{ key: 'protein', label: m('nutrition.protein'), consumed: consumed.proteinG, target: targets?.proteinG ?? null, unit: 'g', color: 'var(--color-accent-cyan)' },
+		{ key: 'carbs', label: m('nutrition.carbs'), consumed: consumed.carbsG, target: targets?.carbsG ?? null, unit: 'g', color: 'var(--color-secondary)' },
+		{ key: 'fat', label: m('nutrition.fat'), consumed: consumed.fatG, target: targets?.fatG ?? null, unit: 'g', color: 'var(--color-warning)' },
 	]);
 	const maxWeekCalories = $derived(Math.max(1, ...weekDays.map((d) => d.calories)));
+	const hasMeals = $derived(groups.length > 0);
 	const hasAnyData = $derived(entries.length > 0 || weekDays.some((d) => d.calories > 0));
+	// Average daily intake across days that actually have a log — the trend
+	// card's reference line. Excludes empty days so a half-logged week isn't
+	// dragged toward zero.
+	const trendAvg = $derived.by(() => {
+		const logged = weekDays.filter((d) => d.calories > 0);
+		if (logged.length === 0) return 0;
+		return Math.round(logged.reduce((s, d) => s + d.calories, 0) / logged.length);
+	});
 </script>
 
 <svelte:head><title>{m('nutrition.heading')}</title></svelte:head>
@@ -151,89 +167,151 @@
 	</header>
 
 	{#if loading}
-		<p class="muted">{m('nutrition.loading')}</p>
+		<div class="skeleton-stack" aria-hidden="true">
+			<div class="skel skel-rings"></div>
+			<div class="skel skel-row"></div>
+			<div class="skel skel-block"></div>
+		</div>
 	{:else}
 		<section class="card rings-card" data-testid="macro-rings">
-			<div class="rings">
+			{#if targets}
+				<div class="card-head">
+					<span class="section-label">{m('dash.today')}</span>
+					<span class="card-meta">{consumed.calories} / {targets.calories} kcal</span>
+				</div>
+			{/if}
+			<div class="rings" class:rings-untargeted={!targets}>
 				{#each rings as r (r.key)}
 					{@const frac = ringFraction(r.consumed, r.target)}
-					<div class="ring">
-						<svg viewBox="0 0 64 64" width="72" height="72" aria-hidden="true">
-							<circle class="ring-bg" cx="32" cy="32" r={R} stroke-width="6" fill="none" />
-							{#if frac !== null}
-								<circle
-									class="ring-fg"
-									cx="32" cy="32" r={R} stroke-width="6" fill="none"
-									stroke-dasharray={`${frac * CIRC} ${CIRC}`}
-									transform="rotate(-90 32 32)"
-								/>
-							{/if}
-						</svg>
-						<div class="ring-text">
-							<span class="ring-val">{r.consumed}</span>
-							{#if r.target !== null}<span class="ring-target">/ {r.target}</span>{/if}
+					{@const pct = frac !== null ? Math.round(frac * 100) : null}
+					<div
+						class="ring"
+						class:ring-hero={r.key === 'calories'}
+						role="group"
+						aria-label={`${r.label}: ${r.consumed} ${r.unit}${r.target !== null ? ` of ${r.target} ${r.unit} target` : ''}`}
+					>
+						<div class="ring-dial" style={`--ring-color: ${r.color}`}>
+							<svg viewBox="0 0 64 64" aria-hidden="true">
+								<circle class="ring-bg" cx="32" cy="32" r={R} stroke-width="7" fill="none" />
+								{#if frac !== null}
+									<circle
+										class="ring-fg"
+										cx="32" cy="32" r={R} stroke-width="7" fill="none"
+										stroke-dasharray={`${frac * CIRC} ${CIRC}`}
+										transform="rotate(-90 32 32)"
+									/>
+								{/if}
+							</svg>
+							<div class="ring-text">
+								<span class="ring-val">{r.consumed}</span>
+								{#if r.target !== null}<span class="ring-target">/ {r.target}</span>{/if}
+							</div>
 						</div>
 						<span class="ring-label">{r.label}</span>
+						{#if pct !== null}<span class="ring-pct">{pct}%</span>{:else}<span class="ring-pct ring-pct-empty">{r.unit}</span>{/if}
 					</div>
 				{/each}
 			</div>
 			{#if !targets}
-				<p class="section-hint" data-testid="no-targets">{m('nutrition.noTargets')}</p>
+				<p class="section-hint" data-testid="no-targets">
+					<span class="material-symbols hint-icon" aria-hidden="true">info</span>
+					{m('nutrition.noTargets')}
+				</p>
 			{/if}
 		</section>
 
 		<section class="card water-card">
-			<div class="water-head">
-				<span class="water-label">{m('nutrition.water')}</span>
+			<div class="card-head">
+				<span class="section-label">{m('nutrition.water')}</span>
 				<span class="water-amount">{(waterMl / 1000).toFixed(2).replace(/\.?0+$/, '')} L</span>
 			</div>
 			<div class="water-controls">
-				<button class="btn btn-outline btn-sm" type="button" onclick={removeWater} aria-label={m('nutrition.waterRemove')}>−</button>
+				<button class="btn btn-outline btn-sm water-btn" type="button" onclick={removeWater} aria-label={m('nutrition.waterRemove')}>−</button>
+				<div class="water-pips" aria-hidden="true">
+					{#each Array(Math.max(8, Math.round(waterMl / WATER_UNIT_ML))) as _, i (i)}
+						<span class="water-pip" class:filled={i < Math.round(waterMl / WATER_UNIT_ML)}></span>
+					{/each}
+				</div>
 				<span class="water-units">{Math.round(waterMl / WATER_UNIT_ML)} × 250 ml</span>
-				<button class="btn btn-primary btn-sm" type="button" onclick={addWater} data-testid="add-water" aria-label={m('nutrition.waterAdd')}>＋</button>
+				<button class="btn btn-primary btn-sm water-btn" type="button" onclick={addWater} data-testid="add-water" aria-label={m('nutrition.waterAdd')}>＋</button>
 			</div>
 		</section>
 
-		{#if groups.length === 0}
-			<section class="card empty">
-				<p>{m('nutrition.empty')}</p>
+		{#if !hasMeals}
+			<section class="card empty" data-testid="macro-rings-empty">
+				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
+				<h2>{m('nutrition.empty')}</h2>
+				<p class="muted">{m('nutrition.searchPlaceholder')}</p>
 				<a class="btn btn-primary" href="/nutrition/log">{m('nutrition.logFood')}</a>
 			</section>
 		{:else}
-			{#each groups as g (g.slot)}
-				<section class="card meal-group">
-					<div class="meal-head">
-						<h2>{m(`nutrition.slot_${g.slot}`)}</h2>
-						<span class="meal-kcal">{g.calories} kcal</span>
-					</div>
-					<ul class="meal-list">
-						{#each g.entries as e (e.id)}
-							<li>
-								<div class="item-main">
-									<span class="item-name">{e.item_name}</span>
-									<span class="item-macros">
-										{#if e.protein_g}{e.protein_g}g P · {/if}{#if e.carbs_g}{e.carbs_g}g C · {/if}{#if e.fat_g}{e.fat_g}g F{/if}
-									</span>
-								</div>
-								<span class="item-kcal">{e.calories ?? 0}</span>
-								<button class="icon-btn" type="button" onclick={() => removeEntry(e.id)} aria-label={m('nutrition.delete')}>×</button>
-							</li>
-						{/each}
-					</ul>
-				</section>
-			{/each}
+			<section class="card meals-card">
+				<div class="card-head">
+					<span class="section-label">{m('dash.today')}</span>
+					<span class="card-meta">{consumed.calories} kcal</span>
+				</div>
+				<div class="meal-groups">
+					{#each groups as g (g.slot)}
+						<div class="meal-group">
+							<div class="meal-head">
+								<h2>{m(`nutrition.slot_${g.slot}`)}</h2>
+								<span class="meal-kcal">{g.calories} kcal</span>
+							</div>
+							<ul class="meal-list">
+								{#each g.entries as e (e.id)}
+									<li>
+										<div class="item-main">
+											<span class="item-name">{e.item_name}</span>
+											{#if e.protein_g || e.carbs_g || e.fat_g}
+												<span class="item-macros">
+													{#if e.protein_g}<span class="macro-chip macro-p">{e.protein_g}g P</span>{/if}{#if e.carbs_g}<span class="macro-chip macro-c">{e.carbs_g}g C</span>{/if}{#if e.fat_g}<span class="macro-chip macro-f">{e.fat_g}g F</span>{/if}
+												</span>
+											{/if}
+										</div>
+										<span class="item-kcal-wrap"><span class="item-kcal">{e.calories ?? 0}</span><span class="item-kcal-unit">kcal</span></span>
+										<button class="icon-btn" type="button" onclick={() => removeEntry(e.id)} aria-label={`${m('nutrition.delete')} ${e.item_name}`}>
+											<span class="material-symbols" aria-hidden="true">close</span>
+										</button>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/each}
+				</div>
+			</section>
 		{/if}
 
 		{#if hasAnyData}
 			<section class="card trend-card">
-				<h2>{m('nutrition.weeklyTrend')}</h2>
-				<div class="trend-bars">
-					{#each weekDays as d (d.label + d.calories)}
-						<div class="trend-col">
-							<div class="trend-bar" style={`height: ${Math.round((d.calories / maxWeekCalories) * 100)}%`}></div>
-							<span class="trend-day">{d.label}</span>
-						</div>
-					{/each}
+				<div class="card-head">
+					<span class="section-label">{m('nutrition.weeklyTrend')}</span>
+					{#if trendAvg > 0}<span class="card-meta">{trendAvg} kcal avg</span>{/if}
+				</div>
+	<div class="trend-bars">
+					<div class="trend-track">
+						{#if trendAvg > 0}
+							<div
+								class="trend-avg-line"
+								style={`bottom: ${Math.round((trendAvg / maxWeekCalories) * 100)}%`}
+								aria-hidden="true"
+							></div>
+						{/if}
+						{#each weekDays as d, i (d.label + i)}
+							<div class="trend-col" class:trend-today={i === weekDays.length - 1}>
+								<span class="trend-val">{d.calories > 0 ? d.calories : ''}</span>
+								<div
+									class="trend-bar"
+									style={`height: ${Math.round((d.calories / maxWeekCalories) * 100)}%`}
+									title={`${d.label}: ${d.calories} kcal`}
+								></div>
+							</div>
+						{/each}
+					</div>
+					<div class="trend-days">
+						{#each weekDays as d, i (d.label + i)}
+							<span class="trend-day" class:trend-today-day={i === weekDays.length - 1}>{d.label}</span>
+						{/each}
+					</div>
 				</div>
 			</section>
 		{/if}
@@ -241,36 +319,339 @@
 </div>
 
 <style>
-	.page { padding: var(--space-xl) var(--space-2xl); display: flex; flex-direction: column; gap: var(--space-lg); }
-	.page-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-md); }
+	.page {
+		padding: var(--page-padding-y) var(--page-padding-x);
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-lg);
+		max-width: 56rem;
+	}
+	.page-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-md);
+		margin-bottom: var(--space-xs);
+	}
+	.page-head h1 { margin: 0; }
 	.muted { color: var(--color-text-secondary); }
-	.rings { display: flex; gap: var(--space-lg); flex-wrap: wrap; }
-	.ring { display: flex; flex-direction: column; align-items: center; position: relative; min-width: 72px; }
-	.ring svg { display: block; }
-	.ring-bg { stroke: var(--color-border); }
-	.ring-fg { stroke: var(--color-accent, #D97A54); stroke-linecap: round; transition: stroke-dasharray 0.3s; }
-	.ring-text { position: absolute; top: 26px; display: flex; flex-direction: column; align-items: center; line-height: 1; }
-	.ring-val { font-weight: 600; font-size: 0.85rem; }
-	.ring-target { font-size: 0.65rem; color: var(--color-text-secondary); }
-	.ring-label { margin-top: 0.35rem; font-size: 0.75rem; color: var(--color-text-secondary); }
-	.water-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: var(--space-sm); }
-	.water-label { font-weight: 600; }
-	.water-controls { display: flex; align-items: center; gap: var(--space-md); }
-	.water-units { color: var(--color-text-secondary); font-size: 0.9rem; }
-	.meal-head { display: flex; justify-content: space-between; align-items: baseline; }
-	.meal-head h2 { margin: 0; font-size: 1rem; }
-	.meal-kcal { color: var(--color-text-secondary); font-size: 0.9rem; }
-	.meal-list { list-style: none; margin: var(--space-sm) 0 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-xs); }
-	.meal-list li { display: flex; align-items: center; gap: var(--space-md); }
-	.item-main { flex: 1; display: flex; flex-direction: column; }
-	.item-name { font-size: 0.95rem; }
-	.item-macros { font-size: 0.78rem; color: var(--color-text-secondary); }
-	.item-kcal { font-variant-numeric: tabular-nums; }
-	.icon-btn { background: none; border: none; cursor: pointer; font-size: 1.1rem; color: var(--color-text-secondary); padding: 0 0.25rem; }
-	.empty { text-align: center; display: flex; flex-direction: column; gap: var(--space-md); align-items: center; }
-	.trend-bars { display: flex; align-items: flex-end; gap: var(--space-sm); height: 96px; }
-	.trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; gap: 4px; }
-	.trend-bar { width: 60%; min-height: 2px; background: var(--color-accent, #D97A54); border-radius: var(--radius-sm); }
-	.trend-day { font-size: 0.7rem; color: var(--color-text-secondary); }
-	.section-hint { font-size: 0.85rem; color: var(--color-text-secondary); margin-top: var(--space-md); }
+
+	.card {
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		padding: var(--space-lg);
+		box-shadow: var(--shadow-sm);
+		transition: box-shadow var(--transition-base);
+	}
+	.card:hover { box-shadow: var(--shadow-md); }
+
+	.card-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-md);
+		margin-bottom: var(--space-md);
+	}
+	.card-meta {
+		font-size: 0.85rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Macro rings — Calories is the hero (larger dial), the three macros
+	   are secondary. Each ring colours its progress arc independently so
+	   the four read as distinct metrics at a glance. */
+	.rings {
+		display: grid;
+		grid-template-columns: 1.4fr repeat(3, 1fr);
+		gap: var(--space-md);
+		align-items: end;
+	}
+	.rings-untargeted { align-items: start; }
+	.ring {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-2xs);
+	}
+	.ring-dial {
+		position: relative;
+		width: 88px;
+		height: 88px;
+	}
+	.ring-hero .ring-dial { width: 116px; height: 116px; }
+	.ring-dial svg { display: block; width: 100%; height: 100%; }
+	.ring-bg { stroke: color-mix(in srgb, var(--color-text-tertiary) 18%, transparent); }
+	.ring-fg {
+		stroke: var(--ring-color, var(--color-primary));
+		stroke-linecap: round;
+		transition: stroke-dasharray 0.5s ease;
+	}
+	.ring-text {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		line-height: 1.1;
+	}
+	.ring-val {
+		font-weight: 700;
+		font-size: 0.95rem;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.ring-hero .ring-val { font-size: 1.45rem; }
+	.ring-target {
+		font-size: 0.68rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.ring-hero .ring-target { font-size: 0.78rem; }
+	.ring-label {
+		font-size: 0.8rem;
+		font-weight: 600;
+		color: var(--color-text-secondary);
+	}
+	.ring-pct {
+		font-size: 0.72rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+	}
+	.ring-pct-empty { text-transform: lowercase; }
+
+	.section-hint {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		margin: var(--space-md) 0 0;
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+	}
+	.hint-icon { font-size: 1.1rem; color: var(--color-primary); flex-shrink: 0; }
+
+	/* Water tracker — segmented pips give a glanceable fill level the bare
+	   "N × 250 ml" string never conveyed. */
+	.water-amount {
+		font-size: 1.1rem;
+		font-weight: 700;
+		color: var(--color-text);
+		font-variant-numeric: tabular-nums;
+	}
+	.water-controls {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+	}
+	.water-btn {
+		min-width: 2.5rem;
+		min-height: 2.5rem;
+		font-size: 1.1rem;
+		line-height: 1;
+	}
+	.water-pips {
+		flex: 1;
+		display: flex;
+		gap: 4px;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+	.water-pip {
+		flex: 1;
+		min-width: 8px;
+		height: 0.6rem;
+		border-radius: 9999px;
+		background: color-mix(in srgb, var(--color-text-tertiary) 22%, transparent);
+		transition: background var(--transition-fast);
+	}
+	.water-pip.filled { background: var(--color-accent-cyan); }
+	.water-units {
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		white-space: nowrap;
+		font-variant-numeric: tabular-nums;
+	}
+
+	/* Meals — one card with per-slot subsections so the day reads as a
+	   single block rather than four floating fragments. */
+	.meal-groups {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-lg);
+	}
+	.meal-head {
+		display: flex;
+		justify-content: space-between;
+		align-items: baseline;
+		gap: var(--space-md);
+		padding-bottom: var(--space-2xs);
+		border-bottom: 1px solid var(--color-border);
+	}
+	.meal-head h2 {
+		margin: 0;
+		font-size: 0.95rem;
+		font-weight: 700;
+	}
+	.meal-kcal {
+		color: var(--color-text-secondary);
+		font-size: 0.85rem;
+		font-variant-numeric: tabular-nums;
+	}
+	.meal-list {
+		list-style: none;
+		margin: var(--space-sm) 0 0;
+		padding: 0;
+		display: flex;
+		flex-direction: column;
+	}
+	.meal-list li {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		padding: var(--space-sm) 0;
+		border-bottom: 1px solid var(--color-bg-secondary);
+	}
+	.meal-list li:last-child { border-bottom: none; }
+	.item-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-2xs); }
+	.item-name { font-size: 0.95rem; color: var(--color-text); }
+	.item-macros { display: flex; flex-wrap: wrap; gap: var(--space-xs); }
+	.macro-chip {
+		font-size: 0.7rem;
+		font-weight: 600;
+		padding: 1px 6px;
+		border-radius: var(--radius-sm);
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.macro-p { color: var(--color-accent-cyan); background: color-mix(in srgb, var(--color-accent-cyan) 16%, transparent); }
+	.macro-c { color: var(--color-secondary); background: color-mix(in srgb, var(--color-secondary) 16%, transparent); }
+	.macro-f { color: var(--color-warning-strong, var(--color-warning)); background: color-mix(in srgb, var(--color-warning) 18%, transparent); }
+	.item-kcal-wrap {
+		display: inline-flex;
+		align-items: baseline;
+		gap: 3px;
+		white-space: nowrap;
+	}
+	.item-kcal {
+		font-variant-numeric: tabular-nums;
+		font-weight: 600;
+		color: var(--color-text);
+	}
+	.item-kcal-unit { font-weight: 500; font-size: 0.8rem; color: var(--color-text-tertiary); }
+	.icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		flex-shrink: 0;
+		background: none;
+		border: none;
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+		color: var(--color-text-tertiary);
+		transition: background var(--transition-fast), color var(--transition-fast);
+	}
+	.icon-btn .material-symbols { font-size: 1.15rem; }
+	.icon-btn:hover { background: var(--color-danger-light); color: var(--color-danger); }
+
+	.empty {
+		text-align: center;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
+		align-items: center;
+		padding: var(--space-2xl) var(--space-lg);
+	}
+	.empty h2 { margin: 0; font-size: 1.05rem; }
+	.empty .btn { margin-top: var(--space-sm); }
+	.empty-icon {
+		font-size: 2.5rem;
+		color: var(--color-text-tertiary);
+		opacity: 0.7;
+	}
+
+	/* 7-day trend — value labels + a dashed average reference line, today
+	   highlighted in the primary colour. The bar track is its own box so
+	   the avg line positions against the bar area, not the day labels. */
+	.trend-bars { display: flex; flex-direction: column; gap: var(--space-xs); }
+	.trend-track {
+		display: flex;
+		align-items: flex-end;
+		gap: var(--space-sm);
+		height: 9rem;
+		position: relative;
+	}
+	.trend-avg-line {
+		position: absolute;
+		left: 0;
+		right: 0;
+		border-top: 1px dashed var(--color-text-tertiary);
+		opacity: 0.55;
+		pointer-events: none;
+	}
+	.trend-col {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		height: 100%;
+		justify-content: flex-end;
+		gap: var(--space-2xs);
+	}
+	.trend-val {
+		font-size: 0.65rem;
+		color: var(--color-text-tertiary);
+		font-variant-numeric: tabular-nums;
+		min-height: 0.9rem;
+	}
+	.trend-bar {
+		width: 70%;
+		min-height: 3px;
+		/* A flat tint of the primary so past-day bars read on the card
+		   surface in both themes (bg-tertiary == surface in dark, so it
+		   would vanish). */
+		background: color-mix(in srgb, var(--color-primary) 30%, var(--color-surface));
+		border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+		transition: height 0.4s ease;
+	}
+	.trend-today .trend-bar { background: var(--color-primary); }
+	.trend-today .trend-val { color: var(--color-primary); font-weight: 700; }
+	.trend-days { display: flex; gap: var(--space-sm); }
+	.trend-day {
+		flex: 1;
+		text-align: center;
+		font-size: 0.7rem;
+		color: var(--color-text-secondary);
+	}
+	.trend-today-day { color: var(--color-text); font-weight: 700; }
+
+	/* Loading skeleton — matches card heights so data arrival doesn't jump. */
+	.skeleton-stack { display: flex; flex-direction: column; gap: var(--space-lg); }
+	.skel {
+		border-radius: var(--radius-lg);
+		background: linear-gradient(90deg, var(--color-bg-tertiary) 25%, var(--color-bg-secondary) 50%, var(--color-bg-tertiary) 75%);
+		background-size: 200% 100%;
+		animation: shimmer 1.4s ease-in-out infinite;
+	}
+	.skel-rings { height: 12rem; }
+	.skel-row { height: 5.5rem; }
+	.skel-block { height: 16rem; }
+	@keyframes shimmer {
+		0% { background-position: 200% 0; }
+		100% { background-position: -200% 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.skel { animation: none; }
+	}
+
+	@media (max-width: 36rem) {
+		.rings { grid-template-columns: repeat(2, 1fr); align-items: start; }
+		.ring-hero { grid-column: 1 / -1; }
+	}
 </style>
