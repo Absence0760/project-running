@@ -4,14 +4,14 @@
 /// toast) and `notificationclick` (user clicked it — focus or open the
 /// app at the deep-link URL the payload carries).
 ///
-/// Payload contract — what the sender (Edge Function in a follow-up
-/// commit) is expected to POST through Web Push:
+/// Payload contract — what the sender (the Go worker's `web_push` job
+/// handler, apps/job_worker/internal/push_render.go) POSTs through Web Push:
 ///
 ///   { title: string, body?: string, url?: string, tag?: string,
 ///     icon?: string, data?: object }
 ///
-/// Anything else is ignored. Missing `title` falls back to "Better
-/// Runner" so a malformed payload still surfaces something.
+/// Anything else is ignored. Missing `title` falls back to "Threkir"
+/// so a malformed payload still surfaces something.
 
 self.addEventListener('install', (event) => {
 	// Activate as soon as the new SW is installed — don't wait for a

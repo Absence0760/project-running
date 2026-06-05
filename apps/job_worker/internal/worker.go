@@ -9,6 +9,8 @@ import (
 	"math"
 	"strings"
 	"time"
+
+	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
 )
 
 // Backend is the subset of SupabaseClient methods the worker needs.
@@ -84,6 +86,24 @@ type Backend interface {
 	// lifecycle_email_log so a job retry can't re-send a welcome.
 	LifecycleEmailAlreadySent(ctx context.Context, userID, template string) (bool, error)
 	RecordLifecycleEmail(ctx context.Context, userID, template string) error
+	// Web-push path — used by the kind='web_push' handler (migration
+	// 20261219_001), the sibling consumer of the same notifications row the
+	// email handler reads. WebPushSentAt is the per-channel idempotency
+	// guard; subscriptions are the per-device browser registrations on
+	// user_device_settings.prefs.push_subscription; ClearPushSubscription
+	// prunes a dead one when the push service 404/410s it.
+	FetchNotificationForWebPush(ctx context.Context, notificationID string) (*NotificationRow, error)
+	MarkNotificationWebPushed(ctx context.Context, notificationID string) error
+	FetchPushSubscriptions(ctx context.Context, userID string) ([]PushSubscriptionRow, error)
+	ClearPushSubscription(ctx context.Context, userID, deviceID string) error
+}
+
+// WebPushSender is the transport for kind='web_push' jobs. Production wires
+// *webpush.Sender; tests substitute a fake recorder. Returns the push-service
+// HTTP status (so the handler can prune a 404/410, retry a 429/5xx) and a
+// non-nil error only on a transport failure before the request completes.
+type WebPushSender interface {
+	Send(ctx context.Context, sub webpush.Subscription, payload []byte) (int, error)
 }
 
 // StravaRefresher is the upstream OAuth call used by handleTokenRefresh.
@@ -137,6 +157,11 @@ type Worker struct {
 	// leaves the notification rows pending so a later email-enabled
 	// deploy can still send them. Wired in main.go when SMTP_HOST is set.
 	Email EmailSender
+	// WebPush is the transport for kind='web_push' jobs. Nil disables the
+	// send path — the handler finishes those jobs done but leaves the
+	// notification rows pending so a later VAPID-enabled deploy can still
+	// send. Wired in main.go when VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY are set.
+	WebPush WebPushSender
 	// AppBaseURL is the web origin used to build deep links + the
 	// unsubscribe URL in rendered email (APP_BASE_URL). Empty falls back
 	// to relative-looking links; production sets it.
@@ -270,6 +295,8 @@ func (w *Worker) dispatch(ctx context.Context, job *Job) error {
 		return w.handleLifecycleEmail(ctx, job)
 	case "safety_email":
 		return w.handleSafetyEmail(ctx, job)
+	case "web_push":
+		return w.handleWebPush(ctx, job)
 	default:
 		return fmt.Errorf("unknown job kind %q", job.Kind)
 	}

@@ -1114,6 +1114,7 @@ export type Database = {
           read_at: string | null
           run_id: string | null
           user_id: string
+          web_push_sent_at: string | null
         }
         Insert: {
           activity_id?: string | null
@@ -1131,6 +1132,7 @@ export type Database = {
           read_at?: string | null
           run_id?: string | null
           user_id: string
+          web_push_sent_at?: string | null
         }
         Update: {
           activity_id?: string | null
@@ -1148,6 +1150,7 @@ export type Database = {
           read_at?: string | null
           run_id?: string | null
           user_id?: string
+          web_push_sent_at?: string | null
         }
         Relationships: [
           {
@@ -2774,6 +2777,10 @@ export type Database = {
       cleanup_stale_race_pings: { Args: never; Returns: number }
       cleanup_stale_rate_limits: { Args: never; Returns: number }
       cleanup_stale_user_coach_usage: { Args: never; Returns: number }
+      clear_push_subscription: {
+        Args: { p_device_id: string; p_user_id: string }
+        Returns: undefined
+      }
       clip_route_for_viewer: { Args: { p_route_id: string }; Returns: Json }
       clip_track_for_user: {
         Args: { points: Json; target_user_id: string }

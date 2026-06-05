@@ -1254,6 +1254,116 @@ func (c *SupabaseClient) MarkNotificationEmailed(ctx context.Context, notificati
 	return err
 }
 
+// FetchNotificationForWebPush is the web-push sibling of
+// FetchNotificationForEmail — same row, but selects web_push_sent_at (the
+// per-channel guard) instead of email_sent_at. Returns (nil, nil) when the row
+// is gone (inbox cleared before the job drained).
+func (c *SupabaseClient) FetchNotificationForWebPush(ctx context.Context, notificationID string) (*NotificationRow, error) {
+	q := url.Values{}
+	q.Set("id", "eq."+notificationID)
+	q.Set("select", "id,user_id,kind,run_id,event_id,club_id,comment_id,web_push_sent_at")
+	q.Set("limit", "1")
+	u := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []NotificationRow
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	if len(rows) == 0 {
+		return nil, nil
+	}
+	return &rows[0], nil
+}
+
+// MarkNotificationWebPushed stamps web_push_sent_at so the row reaches a
+// terminal state for the push channel — sent OR deliberately skipped (opted
+// out, no subscription). Independent of email_sent_at: a notification can be
+// emailed but not pushed, or vice-versa.
+func (c *SupabaseClient) MarkNotificationWebPushed(ctx context.Context, notificationID string) error {
+	q := url.Values{}
+	q.Set("id", "eq."+notificationID)
+	u := c.BaseURL + "/rest/v1/" + schema.TableNotifications + "?" + q.Encode()
+	payload, err := json.Marshal(map[string]string{
+		"web_push_sent_at": time.Now().UTC().Format(time.RFC3339),
+	})
+	if err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, u, bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Prefer", "return=minimal")
+	_, err = c.do(ctx, req)
+	return err
+}
+
+// FetchPushSubscriptions reads every browser Web Push registration a user has
+// stored on user_device_settings.prefs.push_subscription (one per device). The
+// `prefs->push_subscription=not.is.null` filter keeps the read to rows that
+// actually carry a subscription so a no-push user costs a single empty fetch.
+func (c *SupabaseClient) FetchPushSubscriptions(ctx context.Context, userID string) ([]PushSubscriptionRow, error) {
+	q := url.Values{}
+	q.Set("user_id", "eq."+userID)
+	q.Set("prefs->push_subscription", "not.is.null")
+	q.Set("select", "device_id,sub:prefs->push_subscription")
+	u := c.BaseURL + "/rest/v1/" + schema.TableUserDeviceSettings + "?" + q.Encode()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
+	if err != nil {
+		return nil, err
+	}
+	body, err := c.do(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	var rows []struct {
+		DeviceID string `json:"device_id"`
+		Sub      struct {
+			Endpoint string `json:"endpoint"`
+			Keys     struct {
+				P256dh string `json:"p256dh"`
+				Auth   string `json:"auth"`
+			} `json:"keys"`
+		} `json:"sub"`
+	}
+	if err := json.Unmarshal(body, &rows); err != nil {
+		return nil, err
+	}
+	out := make([]PushSubscriptionRow, 0, len(rows))
+	for _, r := range rows {
+		if r.Sub.Endpoint == "" {
+			continue // malformed registration; skip rather than crash a send
+		}
+		out = append(out, PushSubscriptionRow{
+			DeviceID: r.DeviceID,
+			Endpoint: r.Sub.Endpoint,
+			P256dh:   r.Sub.Keys.P256dh,
+			Auth:     r.Sub.Keys.Auth,
+		})
+	}
+	return out, nil
+}
+
+// ClearPushSubscription removes the push_subscription key from one device's
+// prefs after the push service reports the registration is dead (404/410). Goes
+// through the clear_push_subscription SECURITY DEFINER RPC (migration
+// 20261219_001) so the jsonb `- 'push_subscription'` minus is one atomic
+// statement — PostgREST can't express a jsonb key-delete in a PATCH.
+func (c *SupabaseClient) ClearPushSubscription(ctx context.Context, userID, deviceID string) error {
+	return c.rpc(ctx, "clear_push_subscription", map[string]string{
+		"p_user_id":   userID,
+		"p_device_id": deviceID,
+	}, nil)
+}
+
 // LifecycleEmailAlreadySent reports whether a (user, template) row exists in
 // lifecycle_email_log — the send-once guard for transactional lifecycle mail.
 func (c *SupabaseClient) LifecycleEmailAlreadySent(ctx context.Context, userID, template string) (bool, error) {

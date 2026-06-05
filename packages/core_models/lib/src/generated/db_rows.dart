@@ -1197,6 +1197,7 @@ class NotificationRow {
   static const String colEventInstanceStart = 'event_instance_start';
   static const String colActivityKind = 'activity_kind';
   static const String colActivityId = 'activity_id';
+  static const String colWebPushSentAt = 'web_push_sent_at';
 
   final String id;
   final String userId;
@@ -1213,6 +1214,7 @@ class NotificationRow {
   final DateTime? eventInstanceStart;
   final String? activityKind;
   final String? activityId;
+  final DateTime? webPushSentAt;
 
   const NotificationRow({
     required this.id,
@@ -1230,6 +1232,7 @@ class NotificationRow {
     this.eventInstanceStart,
     this.activityKind,
     this.activityId,
+    this.webPushSentAt,
   });
 
   factory NotificationRow.fromJson(Map<String, dynamic> json) => NotificationRow(
@@ -1248,6 +1251,7 @@ class NotificationRow {
     eventInstanceStart: json['event_instance_start'] == null ? null : DateTime.parse(json['event_instance_start'] as String),
     activityKind: json['activity_kind'] as String?,
     activityId: json['activity_id'] as String?,
+    webPushSentAt: json['web_push_sent_at'] == null ? null : DateTime.parse(json['web_push_sent_at'] as String),
   );
 
   Map<String, dynamic> toJson() => <String, dynamic>{
@@ -1266,6 +1270,7 @@ class NotificationRow {
     colEventInstanceStart: eventInstanceStart?.toIso8601String(),
     colActivityKind: activityKind,
     colActivityId: activityId,
+    colWebPushSentAt: webPushSentAt?.toIso8601String(),
   };
 }
 

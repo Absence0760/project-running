@@ -93,6 +93,14 @@ type fakeBackend struct {
 	recordLifecycleErr error
 	recordedLifecycle  []string // "user_id|template" recorded this run
 
+	// web_push inputs/outputs.
+	pushSubs        map[string][]PushSubscriptionRow // keyed by user_id
+	fetchSubsErr    error
+	markWebPushErr  error
+	clearSubErr     error
+	markedWebPushed []string // notification ids stamped web_push_sent_at
+	clearedSubs     []string // "user_id|device_id" pruned this run
+
 	// Outputs
 	finished []finishCall
 	deferred []deferCall
@@ -336,6 +344,56 @@ func (f *fakeBackend) RecordLifecycleEmail(_ context.Context, userID, template s
 		f.lifecycleSent = map[string]bool{}
 	}
 	f.lifecycleSent[key] = true
+	return nil
+}
+
+func (f *fakeBackend) FetchNotificationForWebPush(_ context.Context, id string) (*NotificationRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchNotifErr != nil {
+		err := f.fetchNotifErr
+		f.fetchNotifErr = nil
+		return nil, err
+	}
+	return f.notifications[id], nil
+}
+
+func (f *fakeBackend) MarkNotificationWebPushed(_ context.Context, id string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.markWebPushErr != nil {
+		err := f.markWebPushErr
+		f.markWebPushErr = nil
+		return err
+	}
+	f.markedWebPushed = append(f.markedWebPushed, id)
+	if n := f.notifications[id]; n != nil {
+		stamped := "2026-01-01T00:00:00Z"
+		n.WebPushSentAt = &stamped
+	}
+	return nil
+}
+
+func (f *fakeBackend) FetchPushSubscriptions(_ context.Context, userID string) ([]PushSubscriptionRow, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.fetchSubsErr != nil {
+		err := f.fetchSubsErr
+		f.fetchSubsErr = nil
+		return nil, err
+	}
+	return f.pushSubs[userID], nil
+}
+
+func (f *fakeBackend) ClearPushSubscription(_ context.Context, userID, deviceID string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.clearSubErr != nil {
+		err := f.clearSubErr
+		f.clearSubErr = nil
+		return err
+	}
+	f.clearedSubs = append(f.clearedSubs, userID+"|"+deviceID)
 	return nil
 }
 
