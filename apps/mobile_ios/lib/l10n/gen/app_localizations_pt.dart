@@ -536,6 +536,83 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get safetyTitle => 'Contatos de segurança';
+
+  @override
+  String get safetyTileSubtitle =>
+      'Envie um e-mail a um contato de confiança ao concluir uma corrida';
+
+  @override
+  String get safetyIntro =>
+      'Um contato de segurança recebe um e-mail quando você conclui uma corrida — mesmo uma privada — para que alguém de confiança saiba que você voltou em segurança.';
+
+  @override
+  String get safetyAddLabel => 'E-mail do contato';
+
+  @override
+  String get safetyAddButton => 'Adicionar contato';
+
+  @override
+  String get safetyAdding => 'Adicionando…';
+
+  @override
+  String get safetyEmpty => 'Nenhum contato de segurança ainda.';
+
+  @override
+  String get safetyStatusPending => 'Pendente — aguardando a confirmação';
+
+  @override
+  String get safetyStatusConfirmed => 'Confirmado';
+
+  @override
+  String get safetyRemove => 'Remover';
+
+  @override
+  String get safetyRemoveConfirm => 'Remover este contato de segurança?';
+
+  @override
+  String safetyAddFailed(String error) {
+    return 'Não foi possível adicionar o contato: $error';
+  }
+
+  @override
+  String get safetyInvalidEmail => 'Digite um e-mail válido.';
+
+  @override
+  String get safetyAddedToast =>
+      'Contato adicionado — enviamos um e-mail de confirmação.';
+
+  @override
+  String get safetyRemovedToast => 'Contato removido.';
+
+  @override
+  String get safetyIncomingTitle => 'Pedidos para você';
+
+  @override
+  String get safetyIncomingIntro =>
+      'Estas pessoas pediram para você ser o contato de segurança delas. Confirme para receber um e-mail quando concluírem uma corrida.';
+
+  @override
+  String safetyIncomingFrom(String name) {
+    return 'De $name';
+  }
+
+  @override
+  String get safetyConfirm => 'Confirmar';
+
+  @override
+  String get safetyDecline => 'Recusar';
+
+  @override
+  String get safetyConfirmedToast => 'Agora você é contato de segurança.';
+
+  @override
+  String get safetyDeclinedToast => 'Pedido recusado.';
+
+  @override
+  String get safetyUnknownRunner => 'Um corredor do Threkir';
+
+  @override
   String get activitySedentary => 'Sedentário';
 
   @override
@@ -7475,6 +7552,83 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String bodyMetricsSaveFailed(String error) {
     return 'Falha ao salvar: $error';
   }
+
+  @override
+  String get safetyTitle => 'Contatos de segurança';
+
+  @override
+  String get safetyTileSubtitle =>
+      'Envie um e-mail a um contato de confiança ao concluir uma corrida';
+
+  @override
+  String get safetyIntro =>
+      'Um contato de segurança recebe um e-mail quando você conclui uma corrida — mesmo uma privada — para que alguém de confiança saiba que você voltou em segurança.';
+
+  @override
+  String get safetyAddLabel => 'E-mail do contato';
+
+  @override
+  String get safetyAddButton => 'Adicionar contato';
+
+  @override
+  String get safetyAdding => 'Adicionando…';
+
+  @override
+  String get safetyEmpty => 'Nenhum contato de segurança ainda.';
+
+  @override
+  String get safetyStatusPending => 'Pendente — aguardando a confirmação';
+
+  @override
+  String get safetyStatusConfirmed => 'Confirmado';
+
+  @override
+  String get safetyRemove => 'Remover';
+
+  @override
+  String get safetyRemoveConfirm => 'Remover este contato de segurança?';
+
+  @override
+  String safetyAddFailed(String error) {
+    return 'Não foi possível adicionar o contato: $error';
+  }
+
+  @override
+  String get safetyInvalidEmail => 'Digite um e-mail válido.';
+
+  @override
+  String get safetyAddedToast =>
+      'Contato adicionado — enviamos um e-mail de confirmação.';
+
+  @override
+  String get safetyRemovedToast => 'Contato removido.';
+
+  @override
+  String get safetyIncomingTitle => 'Pedidos para você';
+
+  @override
+  String get safetyIncomingIntro =>
+      'Estas pessoas pediram para você ser o contato de segurança delas. Confirme para receber um e-mail quando concluírem uma corrida.';
+
+  @override
+  String safetyIncomingFrom(String name) {
+    return 'De $name';
+  }
+
+  @override
+  String get safetyConfirm => 'Confirmar';
+
+  @override
+  String get safetyDecline => 'Recusar';
+
+  @override
+  String get safetyConfirmedToast => 'Agora você é contato de segurança.';
+
+  @override
+  String get safetyDeclinedToast => 'Pedido recusado.';
+
+  @override
+  String get safetyUnknownRunner => 'Um corredor do Threkir';
 
   @override
   String get activitySedentary => 'Sedentário';

@@ -422,6 +422,97 @@ class ApiClient {
     }
   }
 
+  // -- Safety contacts (decisions §131) --
+  //
+  // Mirrors the web `apps/web/src/lib/core/data.ts` safety-contact functions.
+  // A safety contact is emailed when the owner finishes a run — even a private
+  // one — via a double opt-in: the owner adds an email (this never reveals
+  // whether the address is a registered user), and the contact opts in either
+  // by an email link or, when they're an app user, in-app via the pending-
+  // request flow.
+
+  /// The owner's own safety-contact list (RLS scopes to `owner_id = me`).
+  /// Returns an empty list on read failure so the settings screen renders an
+  /// empty state rather than throwing.
+  Future<List<SafetyContact>> fetchMySafetyContacts() async {
+    try {
+      final data = await _client
+          .from(SafetyContactRow.table)
+          .select(
+            'id, contact_email, contact_user_id, confirmed_at, created_at',
+          )
+          .order(SafetyContactRow.colCreatedAt, ascending: false);
+      return (data as List)
+          .map<SafetyContact>(
+              (row) => SafetyContact.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchMySafetyContacts failed: $e');
+      return const [];
+    }
+  }
+
+  /// Add a safety contact by email. The address is stored as-is; the confirm
+  /// email is sent by the AFTER INSERT trigger. `confirmed_at` /
+  /// `contact_user_id` are forced null server-side (the contact must opt in),
+  /// so we never set them here. Throws on RLS / unique / format failure for
+  /// the caller to surface.
+  Future<SafetyContact> addSafetyContact(String email) async {
+    final userId = _client.auth.currentUser?.id;
+    if (userId == null) throw Exception('Not authenticated');
+    final data = await _client
+        .from(SafetyContactRow.table)
+        .insert(<String, dynamic>{
+          SafetyContactRow.colOwnerId: userId,
+          SafetyContactRow.colContactEmail: email,
+        })
+        .select('id, contact_email, contact_user_id, confirmed_at, created_at')
+        .single();
+    return SafetyContact.fromJson(data);
+  }
+
+  /// Remove a safety contact the owner added (RLS gates to `owner_id = me`).
+  Future<void> removeSafetyContact(String id) async {
+    await _client
+        .from(SafetyContactRow.table)
+        .delete()
+        .eq(SafetyContactRow.colId, id);
+  }
+
+  /// Pending requests where the signed-in user is the named contact (matched
+  /// by their account email via the `my_pending_safety_requests` SECURITY
+  /// DEFINER RPC — the pending row isn't directly readable until they link by
+  /// confirming). Fails soft to an empty list.
+  Future<List<PendingSafetyRequest>> fetchPendingSafetyRequests() async {
+    try {
+      final data = await _client.rpc('my_pending_safety_requests');
+      if (data is! List) return const [];
+      return data
+          .map<PendingSafetyRequest>((row) =>
+              PendingSafetyRequest.fromJson(row as Map<String, dynamic>))
+          .toList();
+    } catch (e) {
+      debugPrint('fetchPendingSafetyRequests failed: $e');
+      return const [];
+    }
+  }
+
+  /// Confirm a pending request addressed to my account email (links my
+  /// account). Returns whether a row was confirmed.
+  Future<bool> confirmSafetyRequest(String id) async {
+    final result =
+        await _client.rpc('confirm_safety_contact', params: {'p_id': id});
+    return result == true;
+  }
+
+  /// Decline a pending request / withdraw from a confirmed one. Returns
+  /// whether a row was removed.
+  Future<bool> declineSafetyRequest(String id) async {
+    final result =
+        await _client.rpc('decline_safety_contact', params: {'p_id': id});
+    return result == true;
+  }
+
   /// Save a completed [Run] to the backend.
   ///
   /// The GPS track is uploaded as a gzipped JSON file to the `runs` Storage

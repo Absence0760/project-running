@@ -16,6 +16,7 @@ import 'settings_integrations_screen.dart';
 import 'settings_licenses_screen.dart';
 import 'settings_preferences_screen.dart';
 import 'settings_pro_screen.dart';
+import 'settings_safety_screen.dart';
 import 'sign_in_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -118,6 +119,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     preferences: widget.preferences,
                     settingsSync: widget.settingsSync,
                   )),
+            ),
+            _tab(
+              icon: Icons.health_and_safety_outlined,
+              label: l10n.safetyTitle,
+              subtitle: l10n.safetyTileSubtitle,
+              onTap: () => _openAfterSignIn(
+                  (_) => SettingsSafetyScreen(api: widget.apiClient)),
             ),
             _SectionHeader(l10n.settingsSectionAppsData),
             _tab(

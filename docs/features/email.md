@@ -127,7 +127,10 @@ None of this sends in prod until an operator:
   contacts + the `safety_email` kind).
 - Safety contacts: web Settings → Safety (`apps/web/src/routes/settings/safety/`)
   + the logged-out email-link confirm page (`apps/web/src/routes/safety/confirm/`);
-  schema in `docs/backend/api_database.md`. Mobile UI is deferred (R2-B).
+  mobile Settings → Safety contacts (`apps/mobile_android/lib/screens/settings_safety_screen.dart`,
+  byte-identical iOS twin) add/confirm/remove + incoming-request confirm/decline;
+  schema in `docs/backend/api_database.md`. The email-link confirm page stays
+  web-only (no mobile deep-link route).
 - Clients (locale write): web `apps/web/src/routes/settings/preferences/`,
   mobile `apps/mobile_android/lib/screens/settings_preferences_screen.dart`.
 - ADRs: `decisions.md` §117 (channel), §119 (lifecycle kind), §120 (i18n),

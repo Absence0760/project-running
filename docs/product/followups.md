@@ -255,9 +255,15 @@ real need is a distinct, opt-in feature:
   unauthenticated email-link (`confirm_safety_contact_by_token`). Web Settings →
   Safety (`/settings/safety`) add/confirm/remove + the logged-out
   `/safety/confirm` page. pgtap + Playwright + Go handler tests; owner-scoped
-  RLS with no owner-UPDATE (can't self-confirm). **Remaining:**
-  - **Mobile UI (R2-B)** — a mobile Settings safety surface (the table + email
-    leg are platform-agnostic; only the UI is web-first per `decisions.md § 24`).
+  RLS with no owner-UPDATE (can't self-confirm). **Mobile UI shipped 2026-06-04
+  (R2-B)** — Settings → Safety contacts (`settings_safety_screen.dart`,
+  byte-identical iOS twin) mirrors the web surface: add by email, see
+  pending/confirmed status, remove, and confirm/decline incoming requests.
+  `ApiClient` safety methods (`fetchMySafetyContacts` / `addSafetyContact` /
+  `removeSafetyContact` / `fetchPendingSafetyRequests` / `confirmSafetyRequest` /
+  `declineSafetyRequest`) + `SafetyContact`/`PendingSafetyRequest` DTOs; widget
+  + DTO tests. The email-link `/safety/confirm` page stays web-only (no mobile
+  deep-link route). **Remaining:**
   - **Art 20 DSAR export of `safety_contacts`** — account *deletion* (Art 17) is
     covered by the FK cascades, but the table isn't yet in the data-export path.
     It's owned by the G1/`dataexport` worker file (separate session); the

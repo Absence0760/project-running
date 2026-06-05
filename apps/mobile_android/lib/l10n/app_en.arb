@@ -353,6 +353,104 @@
       "error": { "type": "String" }
     }
   },
+  "safetyTitle": "Safety contacts",
+  "@safetyTitle": {
+    "description": "Title of the safety-contacts settings screen"
+  },
+  "safetyTileSubtitle": "Email a trusted contact when you finish a run",
+  "@safetyTileSubtitle": {
+    "description": "Settings landing: Safety tile subtitle"
+  },
+  "safetyIntro": "A safety contact is emailed when you finish a run — even a private one — so someone you trust knows you got back safely.",
+  "@safetyIntro": {
+    "description": "Intro paragraph on the safety-contacts screen"
+  },
+  "safetyAddLabel": "Contact email",
+  "@safetyAddLabel": {
+    "description": "Label for the add-contact email input"
+  },
+  "safetyAddButton": "Add contact",
+  "@safetyAddButton": {
+    "description": "Button to add a safety contact"
+  },
+  "safetyAdding": "Adding…",
+  "@safetyAdding": {
+    "description": "Add button label while the add request is in flight"
+  },
+  "safetyEmpty": "No safety contacts yet.",
+  "@safetyEmpty": {
+    "description": "Empty-state text when the user has no safety contacts"
+  },
+  "safetyStatusPending": "Pending — waiting for them to confirm",
+  "@safetyStatusPending": {
+    "description": "Status badge for a contact who hasn't opted in yet"
+  },
+  "safetyStatusConfirmed": "Confirmed",
+  "@safetyStatusConfirmed": {
+    "description": "Status badge for a contact who has opted in"
+  },
+  "safetyRemove": "Remove",
+  "@safetyRemove": {
+    "description": "Button to remove a safety contact"
+  },
+  "safetyRemoveConfirm": "Remove this safety contact?",
+  "@safetyRemoveConfirm": {
+    "description": "Confirmation dialog body when removing a safety contact"
+  },
+  "safetyAddFailed": "Could not add contact: {error}",
+  "@safetyAddFailed": {
+    "description": "Error toast when adding a safety contact fails",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "safetyInvalidEmail": "Enter a valid email address.",
+  "@safetyInvalidEmail": {
+    "description": "Inline error when the entered email is not valid"
+  },
+  "safetyAddedToast": "Contact added — we emailed them to confirm.",
+  "@safetyAddedToast": {
+    "description": "Toast after a safety contact is added"
+  },
+  "safetyRemovedToast": "Contact removed.",
+  "@safetyRemovedToast": {
+    "description": "Toast after a safety contact is removed"
+  },
+  "safetyIncomingTitle": "Requests for you",
+  "@safetyIncomingTitle": {
+    "description": "Heading above incoming safety-contact requests"
+  },
+  "safetyIncomingIntro": "These people asked you to be their safety contact. Confirm to get an email when they finish a run.",
+  "@safetyIncomingIntro": {
+    "description": "Intro under the incoming-requests heading"
+  },
+  "safetyIncomingFrom": "From {name}",
+  "@safetyIncomingFrom": {
+    "description": "Label naming the runner who sent an incoming request",
+    "placeholders": {
+      "name": { "type": "String" }
+    }
+  },
+  "safetyConfirm": "Confirm",
+  "@safetyConfirm": {
+    "description": "Button to confirm an incoming safety-contact request"
+  },
+  "safetyDecline": "Decline",
+  "@safetyDecline": {
+    "description": "Button to decline an incoming safety-contact request"
+  },
+  "safetyConfirmedToast": "You're now a safety contact.",
+  "@safetyConfirmedToast": {
+    "description": "Toast after confirming an incoming request"
+  },
+  "safetyDeclinedToast": "Request declined.",
+  "@safetyDeclinedToast": {
+    "description": "Toast after declining an incoming request"
+  },
+  "safetyUnknownRunner": "A Threkir runner",
+  "@safetyUnknownRunner": {
+    "description": "Fallback name when an incoming request's owner has no display name"
+  },
   "activitySedentary": "Sedentary",
   "@activitySedentary": {
     "description": "Nutrition activity level: little exercise"

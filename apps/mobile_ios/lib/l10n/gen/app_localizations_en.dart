@@ -534,6 +534,82 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get safetyTitle => 'Safety contacts';
+
+  @override
+  String get safetyTileSubtitle =>
+      'Email a trusted contact when you finish a run';
+
+  @override
+  String get safetyIntro =>
+      'A safety contact is emailed when you finish a run — even a private one — so someone you trust knows you got back safely.';
+
+  @override
+  String get safetyAddLabel => 'Contact email';
+
+  @override
+  String get safetyAddButton => 'Add contact';
+
+  @override
+  String get safetyAdding => 'Adding…';
+
+  @override
+  String get safetyEmpty => 'No safety contacts yet.';
+
+  @override
+  String get safetyStatusPending => 'Pending — waiting for them to confirm';
+
+  @override
+  String get safetyStatusConfirmed => 'Confirmed';
+
+  @override
+  String get safetyRemove => 'Remove';
+
+  @override
+  String get safetyRemoveConfirm => 'Remove this safety contact?';
+
+  @override
+  String safetyAddFailed(String error) {
+    return 'Could not add contact: $error';
+  }
+
+  @override
+  String get safetyInvalidEmail => 'Enter a valid email address.';
+
+  @override
+  String get safetyAddedToast => 'Contact added — we emailed them to confirm.';
+
+  @override
+  String get safetyRemovedToast => 'Contact removed.';
+
+  @override
+  String get safetyIncomingTitle => 'Requests for you';
+
+  @override
+  String get safetyIncomingIntro =>
+      'These people asked you to be their safety contact. Confirm to get an email when they finish a run.';
+
+  @override
+  String safetyIncomingFrom(String name) {
+    return 'From $name';
+  }
+
+  @override
+  String get safetyConfirm => 'Confirm';
+
+  @override
+  String get safetyDecline => 'Decline';
+
+  @override
+  String get safetyConfirmedToast => 'You\'re now a safety contact.';
+
+  @override
+  String get safetyDeclinedToast => 'Request declined.';
+
+  @override
+  String get safetyUnknownRunner => 'A Threkir runner';
+
+  @override
   String get activitySedentary => 'Sedentary';
 
   @override

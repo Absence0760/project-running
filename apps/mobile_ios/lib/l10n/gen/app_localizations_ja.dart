@@ -522,6 +522,81 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get safetyTitle => '緊急連絡先';
+
+  @override
+  String get safetyTileSubtitle => 'ランを終えたら信頼できる連絡先にメール';
+
+  @override
+  String get safetyIntro =>
+      '緊急連絡先には、あなたがランを終えたとき（非公開のランでも）メールが届きます。信頼できる人が、あなたが無事に戻ったことを知れます。';
+
+  @override
+  String get safetyAddLabel => '連絡先のメール';
+
+  @override
+  String get safetyAddButton => '連絡先を追加';
+
+  @override
+  String get safetyAdding => '追加中…';
+
+  @override
+  String get safetyEmpty => '緊急連絡先はまだありません。';
+
+  @override
+  String get safetyStatusPending => '保留中 — 相手の確認待ち';
+
+  @override
+  String get safetyStatusConfirmed => '確認済み';
+
+  @override
+  String get safetyRemove => '削除';
+
+  @override
+  String get safetyRemoveConfirm => 'この緊急連絡先を削除しますか？';
+
+  @override
+  String safetyAddFailed(String error) {
+    return '連絡先を追加できませんでした：$error';
+  }
+
+  @override
+  String get safetyInvalidEmail => '有効なメールアドレスを入力してください。';
+
+  @override
+  String get safetyAddedToast => '連絡先を追加しました — 確認メールを送りました。';
+
+  @override
+  String get safetyRemovedToast => '連絡先を削除しました。';
+
+  @override
+  String get safetyIncomingTitle => 'あなたへの依頼';
+
+  @override
+  String get safetyIncomingIntro =>
+      'これらの人があなたを緊急連絡先に指定したいそうです。確認すると、その人がランを終えたときにメールが届きます。';
+
+  @override
+  String safetyIncomingFrom(String name) {
+    return '$name さんから';
+  }
+
+  @override
+  String get safetyConfirm => '確認する';
+
+  @override
+  String get safetyDecline => '辞退する';
+
+  @override
+  String get safetyConfirmedToast => '緊急連絡先になりました。';
+
+  @override
+  String get safetyDeclinedToast => '依頼を辞退しました。';
+
+  @override
+  String get safetyUnknownRunner => 'Threkir のランナー';
+
+  @override
   String get activitySedentary => 'ほとんど運動しない';
 
   @override
