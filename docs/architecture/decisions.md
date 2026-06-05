@@ -2843,6 +2843,21 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 ---
 
+## 132. Web push is a second consumer of the notifications rows, sent by the Go worker on a `web_push` job — stdlib crypto, a separate preference + send-state, and a subscription-gated enqueue
+
+**Decided (2026-06-04):** `§ 117` always framed native FCM/APNs as "another consumer of the same notifications rows." Web push is the credible-now slice of that promise — the browser subscribe path (`apps/web/src/lib/util/push.ts` + `/sw.js`) already shipped and the VAPID key is operator-self-generated (no Firebase/APNs account needed). So we built the server leg: a `web_push` job kind (migration `20261219_001`) that the Go worker drains alongside `notification_email`.
+
+**The shape, and why it deliberately diverges from the email channel.**
+- **Same rows, separate everything else.** The web-push handler reads the SAME `notifications` row the bell + email read, but with its own `web_push_sent_at` send-state column (independent of `email_sent_at`: a notification can be emailed but not pushed), its own `push_notifications` preference (independent of `email_notifications` — muting email must not mute push, and vice-versa; same `all|important|off` shape + `important` default + shared `importantKinds` classification), and its own enqueue trigger.
+- **Subscription-gated enqueue.** Unlike the email enqueue (fires for every row, lets the worker resolve the address), the `web_push` enqueue trigger fires ONLY when the recipient has a `push_subscription` on some device. Web-push adoption is a minority of users, so enqueuing a per-notification job for everyone who can't receive it is wasteful at scale; gating in the trigger keeps the queue lean. A user who subscribes *after* a notification was created doesn't retro-receive it — the same (correct) property the email channel has.
+- **Per-device fan-out + prune.** A user can have several browser subscriptions (one per device) on `user_device_settings.prefs.push_subscription`; the handler sends to each. A push service reporting the endpoint dead (404/410) triggers a prune via the `clear_push_subscription` SECURITY DEFINER RPC (PostgREST can't express a jsonb key-delete in a PATCH); a 429/5xx defers the whole job (Tag = `notif-<id>` coalesces the re-send client-side).
+
+**Why a stdlib sender, not a web-push library.** RFC 8291 (aes128gcm message encryption) + RFC 8292 (VAPID JWT) is ~150 lines on Go's `crypto/ecdh` + `crypto/hkdf` + `crypto/aes` plus the worker's existing `golang-jwt`. Vendoring a third-party web-push library for a small, stable spec would add supply-chain surface for no real saving; `internal/webpush/` is round-trip-tested (encrypt → decrypt with the UA private key → assert plaintext) so correctness is pinned without a network.
+
+**Trade-off / scope.** Gated on `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` on the worker; unset → jobs finish done while leaving rows pending (same posture as the email nil-sender). A `push_notifications` category UI toggle (web + mobile, mirroring the email one) is the remaining follow-up — gating works on the `important` default without it. **Don't** fold push gating into `email_notifications`, **don't** reuse `email_sent_at` for the push channel, and **don't** drop the subscription gate in the enqueue trigger (it's what keeps the queue from a job-per-notification-per-user). Native FCM/APNs is the next sibling — copy this shape (its own enqueue gate + `*_sent_at` column + handler).
+
+---
+
 ## How to add an entry
 
 1. Append below, numbered in sequence.

@@ -324,7 +324,7 @@ Variables currently used:
 - `REVENUECAT_SECRET_API_KEY` — RevenueCat REST secret key `delete-account` uses to DELETE the subscriber on erasure. Optional — unset → `revenuecat_delete: 'skipped'`.
 - `FCM_SERVER_KEY` — Firebase Cloud Messaging server key `delete-account` uses to batch-invalidate Android push tokens. Optional — unset → `fcm_remove: 'skipped'`.
 - `DELETION_AUDIT_KEY` — HMAC key for the `deletion_audit_log` pseudonymous user-id hash. Optional but recommended; unset → legacy salted SHA-256.
-- `VAPID_PRIVATE_KEY` — web-push private signing key (public half is `PUBLIC_VAPID_PUBLIC_KEY` in `apps/web/.env.example`). No consuming EF ships yet; the push-send path is planned.
+- `VAPID_PRIVATE_KEY` — web-push private signing key (public half is `PUBLIC_VAPID_PUBLIC_KEY` in `apps/web/.env.example`). **Consumed by the Go worker, not an Edge Function:** the `web_push` job handler (migration `20261219_001`) signs encrypted Web Push messages with it. Set on the **worker** as `VAPID_PRIVATE_KEY` + `VAPID_PUBLIC_KEY` + `VAPID_SUBJECT` (see `apps/job_worker/CLAUDE.md`); unset → `web_push` jobs finish done while leaving the notification rows pending.
 - `SENTRY_DSN`, `APP_RELEASE` — Sentry error reporting (every EF via `_shared/sentry.ts`). Optional in local dev.
 
 ## CLI gotchas I've hit

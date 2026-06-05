@@ -8,10 +8,14 @@ rotation, replaces the `refresh-tokens` Edge Function), `strava_event`
 replaces the `strava-webhook` Edge Function), `photo_process` (EXIF
 strip on uploaded run photos), `notification_email` (the email
 delivery channel for the notifications inbox + event-day reminders —
-roadmap Phase 4b, `decisions.md § 117`), and `lifecycle_email`
+roadmap Phase 4b, `decisions.md § 117`), `lifecycle_email`
 (transactional/relationship mail with no notifications row — the welcome
 on signup today, weekly digest / re-engagement later; keyed by a template
-name, `decisions.md § 119`). Data-export will land as an
+name, `decisions.md § 119`), `safety_email` (safety-contact confirm +
+finish alerts, `decisions.md § 131`), and `web_push` (the browser Web Push
+delivery channel — sibling of `notification_email` over the same
+notifications rows; encrypted RFC 8291 messages signed with a VAPID key,
+`decisions.md § 132` / migration `20261219_001`). Data-export will land as an
 additional kind in `internal/worker.go`'s dispatch when that Edge
 Function moves per
 [`../../docs/product/roadmap.md`](../../docs/product/roadmap.md) §214.
@@ -94,6 +98,19 @@ Function moves per
   once-per-user log (`oncePerUserTemplates` gates it to `welcome`). All
   templates live in `email_i18n.go`, localized across six locales. A future
   digest reuses the kind with a cron enqueue + its own opt-in preference.
+  `web_push` (`handler_web_push.go` + `push_render.go` + `internal/webpush/`)
+  is the worked example for "second transport over the same notifications
+  rows": the SAME notifications AFTER-INSERT fan-out, but a DIFFERENT enqueue
+  trigger (gated on the recipient having a `push_subscription`), a SEPARATE
+  preference (`push_notifications`, independent of the email one), a SEPARATE
+  send-state column (`web_push_sent_at`), and a fan-out over the user's
+  per-device browser subscriptions on `user_device_settings.prefs.push_subscription`.
+  The transport is `internal/webpush/` — a dependency-light RFC 8291 (aes128gcm
+  message encryption) + RFC 8292 (VAPID JWT) sender on stdlib crypto + the
+  existing `golang-jwt`. A dead endpoint (404/410) is pruned via the
+  `clear_push_subscription` RPC; a 429/5xx defers; gated on `VAPID_PUBLIC_KEY` +
+  `VAPID_PRIVATE_KEY` (unset → rows stay pending). When an FCM/APNs leg lands,
+  copy this shape (its own enqueue gate + `*_sent_at` column + handler).
   `strava_event` (per-activity ingest enqueued by the HTTP webhook
   endpoint at `/v1/strava/webhook`) is the worked example for
   "port a webhook Edge Function into HTTP-front + queue-back" — see
@@ -146,6 +163,13 @@ apps/job_worker/
 │   ├── handler_lifecycle_email_test.go # 6 tests on send / dedup / no-address / nil-sender
 │   ├── mailer.go            # EmailSender iface + SMTPSender + pure render/preference logic
 │   ├── mailer_test.go       # 6 tests on emailMode / shouldEmail / render / MIME
+│   ├── handler_safety_email.go # kind='safety_email' confirm + finish alerts (decisions §131)
+│   ├── handler_web_push.go  # kind='web_push' — send-or-skip over the notifications rows; prune dead subs
+│   ├── handler_web_push_test.go # 14 tests on gating / opt-out / no-sub / prune / transient / idempotency
+│   ├── push_render.go       # pushMode / shouldPush (push_notifications pref) + webPushPayload JSON render
+│   ├── webpush/             # dependency-light Web Push sender (RFC 8291 aes128gcm + RFC 8292 VAPID)
+│   │   ├── webpush.go       # Sender.Send: ECDH+HKDF+AES-GCM encrypt + ES256 VAPID JWT + POST
+│   │   └── webpush_test.go  # round-trip decrypt + VAPID-JWT verify + status classification
 │   ├── handler_strava_event.go   # kind='strava_event' fetch + insert + upload
 │   ├── handler_strava_event_test.go # 10 tests on the ingest dispatch
 │   ├── worker_test.go       # table-driven test using a fake Backend; +8 token_refresh tests
@@ -284,6 +308,27 @@ Then insert a notification (e.g. `psql … -c "insert into notifications
 unset the worker drains `notification_email` jobs to done but leaves the
 notification rows unstamped (pending) so a later email-enabled deploy
 can still send them.
+
+### Web-push env (optional)
+
+`web_push` jobs send only when the VAPID keypair is set. Generate one with any
+web-push keygen (`npx web-push generate-vapid-keys`, or `openssl`), put the
+public half in apps/web's `PUBLIC_VAPID_PUBLIC_KEY` (so the browser subscribes),
+and pass all three to the worker:
+
+```bash
+VAPID_PUBLIC_KEY=<base64url-uncompressed-point> \
+  VAPID_PRIVATE_KEY=<base64url-32-byte-scalar> \
+  VAPID_SUBJECT=mailto:ops@threkir.com \
+  APP_BASE_URL=http://localhost:7777
+```
+
+Subscribe a browser (web Settings push toggle → stores the subscription on
+`user_device_settings.prefs.push_subscription`), insert a notification for that
+user, and the system notification appears. `VAPID_SUBJECT` defaults to
+`mailto:ops@threkir.com`; a bad keypair fails the worker at startup (exit 2). With
+the keypair unset the worker drains `web_push` jobs to done but leaves the rows
+unstamped (pending) so a later push-enabled deploy can still send them.
 
 ## Before reporting a task done
 
