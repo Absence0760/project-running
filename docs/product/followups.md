@@ -364,17 +364,19 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   unconditional-DOB-column write. Decide whether onboarding's minor-exclusion DOB
   capture counts as implicit consent or needs the explicit toggle too — a legal-flow
   decision, deliberately not bolted on without counsel input.
-- [ ] **Age-grade calculator for non-parkrun races (older, MEDIUM)** — `age_grade`
-  is only surfaced for parkrun imports (scraped value in `metadata.age_grade`).
-  A manual / Strava / FIT race with a known distance, duration, and the runner's DOB
-  gets no age grade. Computing it properly needs the official **WMA road age-factor
-  tables** (per single-year-of-age × distance × sex) plus the open-class road
-  standards — a sizeable, version-specific dataset (WMA 2023/2025). Deliberately NOT
-  shipped as a from-memory approximation: a wrong age-grade % actively misleads the
-  exact masters-runner audience that values the metric. Build as a shared TS↔Dart
-  parity helper (web `age_grade.ts` ↔ mobile `age_grade.dart`) once the authoritative
-  factor tables are sourced, then surface on run-detail when DOB + distance + duration
-  are known and `metadata.age_grade` is absent.
+- [x] **Age-grade calculator for non-parkrun races (older, MEDIUM)** — **done 2026-06-04.**
+  The authoritative **USATF-MLDR 2025** road age-grade tables (Alan Jones + Tom
+  Bernhard, approved 2025-01-10; CC0 1.0; open standards match current world records)
+  are embedded verbatim — **not** approximated from memory — via the raw RunScore
+  files + generator under `scripts/age_grade/` → committed data modules
+  `age_grade_tables.ts` ↔ `.dart` (identical by construction; 22 distances 1 mile…200 km
+  incl. ultras, single-year factors 5–99, M/F). Logic is the shared TS↔Dart parity pair
+  `age_grade.ts` ↔ `age_grade.dart` (12 mirrored tests each): nearest-standard match
+  within ±2 %, age on race day, binary-sex gate, `agePct = openStandard / (duration ×
+  ageFactor) × 100`. Surfaced on run-detail (web key-stat tile + mobile twin) when DOB +
+  sex + a standard distance + duration are known and `metadata.age_grade` is absent;
+  the parkrun scraped value still takes precedence. See [decisions.md § 132](../architecture/decisions.md)
+  + [features/age_grade.md](../features/age_grade.md).
 - [~] **Treadmill / indoor per-point HR → HR-zone chart (garmin)** — **core shipped 2026-06-02.**
   Chose data model (b): a sibling `{user_id}/{run_id}.hr.json.gz` Storage object in the
   `runs` bucket + a `runs.hr_series_url` column (migration `20261127_001`, [decisions.md

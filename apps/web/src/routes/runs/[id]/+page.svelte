@@ -48,6 +48,7 @@
 		ACTIVITY_KCAL_PER_KG_PER_KM,
 		type CalorieGender,
 	} from '$lib/runs/calories';
+	import { ageGradeForRun, formatAgeGradePercent } from '$lib/runs/age_grade';
 	import { supabase } from '$lib/core/supabase';
 	import { TABLES, METADATA_KEYS } from '$lib/core/schema';
 	import { m } from '$lib/i18n/store.svelte';
@@ -104,6 +105,9 @@
 	// mount. Used only when explicit `hr_zones` is unset (Older #8).
 	let maxHrBpm = $state<number | null>(null);
 	let viewerAgeYears = $state<number | null>(null);
+	/// Raw `date_of_birth` pref (YYYY-MM-DD), kept so the age-grade calc can use
+	/// age on race day (not age today). Set alongside viewerAgeYears on mount.
+	let viewerDobIso = $state<string | null>(null);
 	// Persona-hunt Round 3 finding Woman #5. Read from
 	// user_profiles.gender (same column the segments leaderboards
 	// + training-pace calibration use). Null when unset → calorie
@@ -187,6 +191,7 @@
 				if (typeof mhr === 'number' && mhr > 0) maxHrBpm = mhr;
 				const dob = effective<string>(settings, 'date_of_birth');
 				if (typeof dob === 'string') {
+					viewerDobIso = dob;
 					const born = new Date(dob);
 					if (!Number.isNaN(born.getTime())) {
 						const now = new Date();
@@ -705,11 +710,24 @@
 		return typeof v === 'number' && v > 0 ? Math.round(v) : null;
 	});
 
-	/** parkrun age-graded percentage (e.g. "54.23%"), set by the
-	 *  parkrun importer into metadata.age_grade. See docs/backend/metadata.md. */
+	/** Age grade shown on the key-stat tile. Prefers the parkrun importer's
+	 *  scraped `metadata.age_grade` string; otherwise computes it for any
+	 *  standard-distance race from the runner's DOB + sex + distance + duration
+	 *  via the shared `age_grade` helper (twin of mobile). Null when neither is
+	 *  available. See docs/backend/metadata.md + docs/features/age_grade.md. */
 	let ageGrade = $derived.by(() => {
 		const v = run?.metadata?.[METADATA_KEYS.age_grade];
-		return typeof v === 'string' && v.trim() ? v.trim() : null;
+		if (typeof v === 'string' && v.trim()) return v.trim();
+		if (!run) return null;
+		const sex = viewerGender === 'male' || viewerGender === 'female' ? viewerGender : null;
+		const computed = ageGradeForRun({
+			distanceM: run.distance_m,
+			durationSec: run.duration_s,
+			dobIso: viewerDobIso,
+			runStartIso: run.started_at,
+			sex,
+		});
+		return computed ? formatAgeGradePercent(computed.percent) : null;
 	});
 
 	/// Visible key-stats count + parity. The grid's `auto-fit` columns
