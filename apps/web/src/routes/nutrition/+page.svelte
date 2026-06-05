@@ -173,7 +173,7 @@
 			<div class="skel skel-block"></div>
 		</div>
 	{:else}
-		<section class="card rings-card" data-testid="macro-rings">
+		<section class="card-elevated rings-card" data-testid="macro-rings">
 			{#if targets}
 				<div class="card-head">
 					<span class="section-label">{m('dash.today')}</span>
@@ -220,7 +220,7 @@
 			{/if}
 		</section>
 
-		<section class="card water-card">
+		<section class="card-elevated water-card">
 			<div class="card-head">
 				<span class="section-label">{m('nutrition.water')}</span>
 				<span class="water-amount">{(waterMl / 1000).toFixed(2).replace(/\.?0+$/, '')} L</span>
@@ -238,14 +238,14 @@
 		</section>
 
 		{#if !hasMeals}
-			<section class="card empty" data-testid="macro-rings-empty">
+			<section class="card-elevated empty" data-testid="macro-rings-empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
 				<h2>{m('nutrition.empty')}</h2>
 				<p class="muted">{m('nutrition.searchPlaceholder')}</p>
 				<a class="btn btn-primary" href="/nutrition/log">{m('nutrition.logFood')}</a>
 			</section>
 		{:else}
-			<section class="card meals-card">
+			<section class="card-elevated meals-card">
 				<div class="card-head">
 					<span class="section-label">{m('dash.today')}</span>
 					<span class="card-meta">{consumed.calories} kcal</span>
@@ -282,7 +282,7 @@
 		{/if}
 
 		{#if hasAnyData}
-			<section class="card trend-card">
+			<section class="card-elevated trend-card">
 				<div class="card-head">
 					<span class="section-label">{m('nutrition.weeklyTrend')}</span>
 					{#if trendAvg > 0}<span class="card-meta">{trendAvg} kcal avg</span>{/if}
@@ -336,15 +336,6 @@
 	.page-head h1 { margin: 0; }
 	.muted { color: var(--color-text-secondary); }
 
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-		box-shadow: var(--shadow-sm);
-		transition: box-shadow var(--transition-base);
-	}
-	.card:hover { box-shadow: var(--shadow-md); }
 
 	.card-head {
 		display: flex;

@@ -69,7 +69,7 @@ test.describe('multi-modal Home + History', () => {
 
 	test('Home shows the Recent lifts card', async ({ page }) => {
 		await page.goto('/dashboard');
-		const card = page.locator('section.card', { hasText: 'Recent lifts' });
+		const card = page.locator('section.card-elevated', { hasText: 'Recent lifts' });
 		await expect(card).toBeVisible({ timeout: 15_000 });
 		await expect(card.getByText(liftTitle)).toBeVisible();
 	});

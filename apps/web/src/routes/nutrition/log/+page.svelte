@@ -113,7 +113,7 @@
 		<h1>{m('nutrition.logHeading')}</h1>
 	</header>
 
-	<section class="card search-card">
+	<section class="card-elevated search-card">
 		<div class="search-field">
 			<span class="material-symbols search-icon" aria-hidden="true">search</span>
 			<input
@@ -171,7 +171,7 @@
 		</button>
 
 		{#if manualOpen}
-			<section class="card manual" data-testid="manual-entry">
+			<section class="card-elevated manual" data-testid="manual-entry">
 				<label class="field"><span class="section-label">{m('nutrition.itemName')}</span>
 					<input type="text" bind:value={manualName} data-testid="manual-name" /></label>
 				<div class="macro-grid">
@@ -243,14 +243,6 @@
 	.back-link:hover { color: var(--color-primary); }
 	.back-link .material-symbols { font-size: 1.05rem; }
 	.muted { color: var(--color-text-secondary); }
-
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-		box-shadow: var(--shadow-sm);
-	}
 
 	.search-card {
 		display: flex;

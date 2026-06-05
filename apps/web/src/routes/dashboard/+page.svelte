@@ -885,7 +885,7 @@
 		     Home). Self-hiding: only renders when a gym session was logged
 		     today. A pure runner has none, so never sees it. -->
 		{#if latestTodayLift}
-			<a class="card today-lift-card" href="/gym/{latestTodayLift.id}">
+			<a class="card-elevated today-lift-card" href="/gym/{latestTodayLift.id}">
 				<div class="today-lift-icon">
 					<span class="material-symbols">fitness_center</span>
 				</div>
@@ -1193,7 +1193,7 @@
 		{/if}
 
 		<!-- Mileage chart -->
-		<section class="card">
+		<section class="card-elevated">
 			<div class="chart-header">
 				<h2>{m('dash.mileageTitle')}</h2>
 				<div class="view-toggle">
@@ -1225,7 +1225,7 @@
 		     failure leaves the card in its empty state and never blocks
 		     the rest of the dashboard. Per-point analysis from the
 		     gzipped track is the eventual accuracy upgrade. -->
-		<section class="card intensity-card">
+		<section class="card-elevated intensity-card">
 			<div class="card-head">
 				<h2>{m('dash.trainingIntensityTitle')}</h2>
 				{#if hrZones && intensityBreakdown && intensityBreakdown.total > 0}
@@ -1286,7 +1286,7 @@
 
 		<div class="two-col">
 			<!-- Personal records -->
-			<section class="card">
+			<section class="card-elevated">
 				<h2>{m('dash.personalRecordsTitle')}</h2>
 				{#if visiblePrs.length > 0}
 					{#if isReturningRunner && allPrsStale}
@@ -1355,7 +1355,7 @@
 			</section>
 
 			<!-- Recent runs -->
-			<section class="card">
+			<section class="card-elevated">
 				<h2>{m('dash.recentRunsTitle')}</h2>
 				{#if filteredRuns.length > 0}
 					<div class="run-list">
@@ -1394,7 +1394,7 @@
 		     hides unless the user has logged a session. Mirrors the
 		     "Recent runs" list above it. -->
 		{#if gymWorkouts.length > 0}
-			<section class="card">
+			<section class="card-elevated">
 				<div class="card-head">
 					<h2>{m('dash.recentLiftsTitle')}</h2>
 					<a class="link-btn" href="/gym">{m('dash.viewAllGym')}</a>
@@ -2725,15 +2725,6 @@
 		margin-top: var(--space-2xs);
 	}
 
-	.card {
-		background: var(--color-surface);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-lg);
-		padding: var(--space-lg);
-		box-shadow: var(--shadow-sm);
-		transition: box-shadow var(--transition-base);
-	}
-	.card:hover { box-shadow: var(--shadow-md); }
 
 	/* Generic card header row reused by the intensity card and any
 	   future card that wants a heading + small right-side meta. */

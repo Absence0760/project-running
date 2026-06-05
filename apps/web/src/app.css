@@ -460,6 +460,29 @@ img {
 }
 
 /*
+ * Elevated surface card — the shadowed panel used on /dashboard and
+ * /nutrition (today's-lift, recent-lifts, macro rings, meal log, trend).
+ * Defined globally so those surfaces share one source of truth instead of
+ * each re-declaring an identical local `.card`. This is the *elevated*
+ * flavour (resting shadow + hover lift); the app's many flat panels keep
+ * their own page-scoped `.card` (no shadow) on purpose — do NOT fold those
+ * into this, and don't add a shadow to the bare `.card` name globally (it
+ * would regress every flat-card page). Compose with a page-scoped modifier
+ * for layout: `class="card-elevated rings-card"`.
+ */
+.card-elevated {
+	background: var(--color-surface);
+	border: 1px solid var(--color-border);
+	border-radius: var(--radius-lg);
+	padding: var(--space-lg);
+	box-shadow: var(--shadow-sm);
+	transition: box-shadow var(--transition-base);
+}
+.card-elevated:hover {
+	box-shadow: var(--shadow-md);
+}
+
+/*
  * Canonical modal pattern. Every create / edit dialog in the app
  * should use this shape — backdrop + centered card + header bar with
  * close button + scrollable body. Defined globally so individual
