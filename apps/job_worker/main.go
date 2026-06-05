@@ -18,6 +18,7 @@ import (
 	"github.com/Absence0760/project-running/apps/job_worker/internal/livehub"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/premium"
 	"github.com/Absence0760/project-running/apps/job_worker/internal/stravahook"
+	"github.com/Absence0760/project-running/apps/job_worker/internal/webpush"
 )
 
 // stravaJobEnqueuer adapts SupabaseClient.EnqueueStravaEvent to the
@@ -255,6 +256,36 @@ func main() {
 		appBaseURL = "https://threkir.com"
 	}
 
+	// Web-push sender for kind='web_push' jobs. Optional — when the VAPID
+	// keypair is unset the worker still drains every other kind, and web_push
+	// jobs finish done while leaving the rows pending (so a later push-enabled
+	// deploy can send them). VAPID_PUBLIC_KEY is the same key the browser
+	// subscribed with (apps/web's PUBLIC_VAPID_PUBLIC_KEY); VAPID_PRIVATE_KEY
+	// is the operator-generated private half; VAPID_SUBJECT is the `mailto:` /
+	// origin contact the spec requires (defaults to a mailto on APP_BASE_URL).
+	var webPushSender internal.WebPushSender
+	if vapidPub := os.Getenv("VAPID_PUBLIC_KEY"); vapidPub != "" {
+		if vapidPriv := os.Getenv("VAPID_PRIVATE_KEY"); vapidPriv != "" {
+			subject := os.Getenv("VAPID_SUBJECT")
+			if subject == "" {
+				subject = "mailto:ops@threkir.com"
+			}
+			sender, err := webpush.NewSender(subject, vapidPub, vapidPriv, client.HTTP)
+			if err != nil {
+				// A bad keypair is a deploy misconfiguration — fail loudly
+				// rather than silently dropping every push.
+				logger.Error("web_push: invalid VAPID configuration — refusing to start", "err", err)
+				os.Exit(2)
+			}
+			webPushSender = sender
+			logger.Info("web_push: enabled", "subject", subject)
+		} else {
+			logger.Warn("web_push: DISABLED — VAPID_PUBLIC_KEY set but VAPID_PRIVATE_KEY unset; web_push jobs finish without sending")
+		}
+	} else {
+		logger.Warn("web_push: DISABLED — VAPID_PUBLIC_KEY unset; web_push jobs finish without sending")
+	}
+
 	// `lastClaimAt` is the heartbeat the /health endpoint reads. The
 	// worker's poll loop bumps it on every successful poll
 	// (claim-or-empty), so /health flips to 503 only when the loop
@@ -269,6 +300,7 @@ func main() {
 		Matcher:    matcher,
 		Strava:     strava,
 		Email:      emailSender,
+		WebPush:    webPushSender,
 		AppBaseURL: appBaseURL,
 		Config: internal.Config{
 			WorkerID:       workerID,

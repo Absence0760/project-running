@@ -339,13 +339,32 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   `email_notifications`; (2) **RFC 8058 one-click unsubscribe** (a tiny unauthenticated
   endpoint that flips the relevant pref); (3) **bounce/complaint suppression** so a
   dead address isn't retried. Per `decisions.md § 119`.
+- [x] **Web-push server-side delivery (theme B, web-push leg)** — SHIPPED
+  2026-06-04 (migration `20261219_001`). A `web_push` job kind on the Go worker
+  (`handler_web_push.go` + the dependency-light `internal/webpush/` RFC 8291/8292
+  sender) is the sibling consumer of the `notifications` row the email handler
+  proved: the AFTER INSERT trigger enqueues one `web_push` job per recipient who
+  has a browser subscription, the handler checks the recipient's
+  `push_notifications` preference (separate key from `email_notifications`, same
+  `all|important|off` shape, default `important`), reads their
+  `user_device_settings.prefs.push_subscription` registrations, and POSTs an
+  encrypted Web Push message to each — pruning a dead one on 404/410, deferring on
+  429/5xx. Gated on the operator-generated `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`
+  (self-generated, not credential-blocked); unset → jobs finish done but leave the
+  rows pending. `web_push_sent_at` is the per-channel idempotency guard. The client
+  subscribe path (`apps/web/src/lib/util/push.ts`) + `/sw.js` already shipped, so
+  this closes the loop. Go handler + webpush-crypto round-trip tests, pgtap, schema
+  codegen.
+  - **Remaining (`push_notifications` UI toggle)** — gating works with the default
+    `important` without UI; a Settings → Preferences category toggle (web + mobile,
+    mirroring the `email_notifications` one) is a small follow-up so users can pick
+    `all`/`off` for push independently.
 - [ ] **Native push delivery (theme B, FCM/APNs leg, ~1 wk + ops)** — the remaining
-  leg: native push to a locked phone. The `notifications` row is already the source
-  of truth and the email handler proves the consumer pattern; an FCM/APNs sender is
-  a sibling consumer. Genuinely blocked on operator-supplied Firebase/APNs
-  credentials + mobile client-side token registration (no `firebase_messaging`
-  wiring exists). Web-push server-side delivery is a separate not-blocked slice (the
-  `VAPID_PRIVATE_KEY` is self-generated; the client subscribe path already ships).
+  leg: native push to a locked phone. Same `notifications` source of truth + sibling
+  consumer pattern the web-push leg above now demonstrates end-to-end; an FCM/APNs
+  sender is another sibling. Still genuinely blocked on operator-supplied
+  Firebase/APNs credentials + mobile client-side token registration (no
+  `firebase_messaging` wiring exists).
 - [ ] **Paid event registration (~2-3 wk)** — event creation has no paid-entry /
   ticketing path (event-organizer Critical). Needs a Stripe-backed registration
   flow (capacity cap + waitlist already partially modelled), refunds, and payout

@@ -143,6 +143,33 @@ type NotificationRow struct {
 	ClubID      *string `json:"club_id"`
 	CommentID   *string `json:"comment_id"`
 	EmailSentAt *string `json:"email_sent_at"`
+	// WebPushSentAt is the web-push channel's idempotency guard — the
+	// sibling of EmailSentAt for the kind='web_push' consumer (migration
+	// 20261219_001). Only the FetchNotificationForWebPush projection selects
+	// it; the email projection leaves it nil.
+	WebPushSentAt *string `json:"web_push_sent_at"`
+}
+
+// WebPushPayload is the payload the notifications AFTER INSERT trigger writes
+// for `kind='web_push'` jobs (migration 20261219_001). The web-push handler is
+// the sibling consumer of the same notifications row the email handler reads:
+// it loads the row, checks the recipient's push-channel preference, loads
+// their browser push subscriptions, and sends an encrypted Web Push message to
+// each. Native FCM/APNs delivery stays a separate, operator-credential-blocked
+// leg (docs/product/followups.md).
+type WebPushPayload struct {
+	NotificationID string `json:"notification_id"`
+}
+
+// PushSubscriptionRow is one browser's Web Push registration, read out of
+// user_device_settings.prefs.push_subscription. A user can have several (one
+// per device/browser). DeviceID identifies the row so a 404/410 from the push
+// service can prune exactly the dead registration.
+type PushSubscriptionRow struct {
+	DeviceID string
+	Endpoint string
+	P256dh   string
+	Auth     string
 }
 
 // LifecycleEmailPayload is the payload for `kind='lifecycle_email'` jobs

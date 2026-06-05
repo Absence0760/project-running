@@ -1,4 +1,4 @@
-/// Web push subscription helpers.
+/// Web push subscription helpers (client subscribe/unsubscribe leg).
 ///
 /// Stores the subscription on `user_device_settings.prefs.push_subscription`
 /// keyed by the browser's persistent device id (`getDeviceId()`). That
@@ -6,11 +6,14 @@
 /// no schema change is needed; revoking a device on `/settings/devices`
 /// also wipes its push registration.
 ///
-/// Server-side push delivery (the Edge Function that POSTs payloads
-/// through Web Push) is intentionally out of scope here — it needs
-/// the matching VAPID private key, which only you can generate.
-/// The subscribe path works end-to-end without it; the Edge Function
-/// is a follow-up.
+/// Server-side delivery (the other leg) ships in the Go worker's `web_push`
+/// job handler (apps/job_worker/internal/handler_web_push.go, migration
+/// 20261219_001): the notifications AFTER INSERT trigger enqueues one
+/// `web_push` job per recipient who has a subscription, the handler reads THIS
+/// row's `endpoint` + `keys.{p256dh,auth}`, and POSTs an encrypted Web Push
+/// message (RFC 8291) signed with the operator's VAPID private key (the
+/// private half of `PUBLIC_VAPID_PUBLIC_KEY`). Keep `StoredPushSubscription`
+/// in lockstep with that handler's `FetchPushSubscriptions` projection.
 
 import { env } from '$env/dynamic/public';
 import { supabase } from '../core/supabase';
