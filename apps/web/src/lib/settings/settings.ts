@@ -124,18 +124,28 @@ export async function loadSettings(userId: string): Promise<LoadedSettings> {
 		// Auto-provision empty rows on first access so later UPDATEs
 		// don't race on insert. Only fires when the read succeeded
 		// AND returned no row — i.e. a true first-load, not a network
-		// blip.
+		// blip. Idempotent upsert (ON CONFLICT DO NOTHING via
+		// ignoreDuplicates) rather than a bare insert: concurrent
+		// loadSettings() calls (the layout + the page both load on a
+		// cold paint) otherwise race select→insert and the loser 409s.
+		// ignoreDuplicates preserves the "never overwrite existing prefs"
+		// intent — an existing row is left untouched.
 		if (!universalRes.data) {
-			await supabase.from('user_settings').insert({ user_id: userId, prefs: {} });
+			await supabase
+				.from('user_settings')
+				.upsert({ user_id: userId, prefs: {} }, { onConflict: 'user_id', ignoreDuplicates: true });
 		}
 		if (!deviceRes.data) {
-			await supabase.from('user_device_settings').insert({
-				user_id: userId,
-				device_id: deviceId,
-				platform: detectPlatform(),
-				label: deviceLabel(),
-				prefs: {},
-			});
+			await supabase.from('user_device_settings').upsert(
+				{
+					user_id: userId,
+					device_id: deviceId,
+					platform: detectPlatform(),
+					label: deviceLabel(),
+					prefs: {},
+				},
+				{ onConflict: 'user_id,device_id', ignoreDuplicates: true },
+			);
 		}
 
 		const universal: PrefsBag = (universalRes.data?.prefs as PrefsBag | null) ?? {};
