@@ -11,9 +11,9 @@ import { USER_A } from '../fixtures/users';
  * search path needs the network and is unit-tested in food_search.test.ts):
  * open /nutrition/log, enter a food manually with macros + a meal slot, save,
  * land back on /nutrition, and confirm it renders under its meal-slot group
- * with the right calories. Also exercises the water tracker increment. Routes
- * are reachable by URL regardless of the `multi_modal_nav` sidebar flag (the
- * flag only gates the nav link).
+ * with the right calories. Also exercises the water tracker increment. The
+ * /nutrition routes are always reachable (the Nutrition sidebar item is always
+ * present now — decisions §63 amendment ungated it).
  *
  * A unique item name per run keeps assertions + cleanup from colliding with
  * previous rows in the shared seed DB.

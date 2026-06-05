@@ -91,14 +91,12 @@
 	// they reopen the app.
 	let isReturningRunner = $derived(isReturningFromGap(runs));
 
-	// `multi_modal_nav` (Phase 4, decisions §63) — per-user, default off.
-	// When on, gym sessions feed the SAME fitness/fatigue/form curve as
-	// runs (multi_modal.md Tier-1 lift→load). Off / pure runner: `lifts`
-	// stays [] so the series is byte-for-byte the run-only curve.
-	let multiModalNav = $state(false);
-	// Raw gym data, only fetched when the flag is on. The load curve reads
-	// `lifts` (derived); the Home cards read `gymWorkouts` + a sets-by-
-	// workout map. All three self-hide when the user has logged nothing.
+	// Gym sessions feed the SAME fitness/fatigue/form curve as runs
+	// (multi_modal.md Tier-1 lift→load). A pure runner has logged none, so
+	// `lifts` stays [] and the series is byte-for-byte the run-only curve —
+	// the gym data drives everything purely by presence, no flag (decisions
+	// §63 amendment). The load curve reads `lifts` (derived); the Home cards
+	// read `gymWorkouts` + a sets-by-workout map. All self-hide when empty.
 	let gymWorkouts = $state<GymWorkout[]>([]);
 	let gymHistory = $state<GymSetWithDate[]>([]);
 	let lifts = $derived(liftsFromSetHistory(gymHistory));
@@ -390,26 +388,23 @@
 		} catch (_) {
 			// silent — goal card is additive, not load-blocking
 		}
-		// Multi-modal: fold logged gym sessions into the same load curve
-		// as runs. Only fired when the flag is on, so a pure runner never
-		// pays the extra query. Best-effort — an RLS blip just leaves the
-		// curve run-only (the contract: a lift-load failure can't corrupt
-		// run readiness). multi_modal.md Tier-1 lift→load.
-		if (multiModalNav) {
-			try {
-				[gymWorkouts, gymHistory] = await Promise.all([
-					fetchGymWorkouts(50),
-					fetchGymSetHistory(),
-				]);
-			} catch (_) {
-				/* silent — gym cards + lift-load are additive */
-			}
+		// Multi-modal: fold logged gym sessions into the same load curve as
+		// runs. Best-effort — an RLS blip just leaves the curve run-only (the
+		// contract: a lift-load failure can't corrupt run readiness). A pure
+		// runner's queries return empty, so the cards + curve stay run-only
+		// purely by data presence. multi_modal.md Tier-1 lift→load.
+		try {
+			[gymWorkouts, gymHistory] = await Promise.all([
+				fetchGymWorkouts(50),
+				fetchGymSetHistory(),
+			]);
+		} catch (_) {
+			/* silent — gym cards + lift-load are additive */
 		}
 		loading = false;
 	});
 
 	function applyDashboardSettings(settings: LoadedSettings) {
-		multiModalNav = effective<boolean>(settings, 'multi_modal_nav', false) ?? false;
 		weeklyGoalMetres = effective<number>(settings, 'weekly_mileage_goal_m') ?? null;
 		const hidden = effective<string[]>(settings, 'hidden_prs');
 		hiddenPrs = Array.isArray(hidden) ? hidden : [];
@@ -887,9 +882,9 @@
 		{/if}
 
 		<!-- Today's lift — a "today's modality" card (multi_modal.md §
-		     Home). Self-hiding: only renders when the flag is on AND a
-		     gym session was logged today. A pure runner never sees it. -->
-		{#if multiModalNav && latestTodayLift}
+		     Home). Self-hiding: only renders when a gym session was logged
+		     today. A pure runner has none, so never sees it. -->
+		{#if latestTodayLift}
 			<a class="card today-lift-card" href="/gym/{latestTodayLift.id}">
 				<div class="today-lift-icon">
 					<span class="material-symbols">fitness_center</span>
@@ -1396,9 +1391,9 @@
 		</div>
 
 		<!-- Recent lifts — gym trend card (multi_modal.md § Home). Self-
-		     hides unless the flag is on AND the user has logged a
-		     session. Mirrors the "Recent runs" list above it. -->
-		{#if multiModalNav && gymWorkouts.length > 0}
+		     hides unless the user has logged a session. Mirrors the
+		     "Recent runs" list above it. -->
+		{#if gymWorkouts.length > 0}
 			<section class="card">
 				<div class="card-head">
 					<h2>{m('dash.recentLiftsTitle')}</h2>
@@ -1423,10 +1418,11 @@
 			</section>
 		{/if}
 
-		<!-- First-run gym affordance — one slim line, below the fold, only
-		     for a flagged user who hasn't logged a lift yet. No empty
-		     card / zeroed chart (anti-clutter checklist). -->
-		{#if multiModalNav && !loading && gymWorkouts.length === 0}
+		<!-- First-run gym affordance — one slim line, below the fold, for a
+		     runner who hasn't logged a lift yet (the web equivalent of
+		     mobile's always-present Log sheet — discoverability without an
+		     empty card / zeroed chart, anti-clutter checklist). -->
+		{#if !loading && gymWorkouts.length === 0}
 			<a class="gym-footer-prompt" href="/gym">
 				<span class="material-symbols">fitness_center</span>
 				<span>{m('dash.gymFooterPrompt')}</span>

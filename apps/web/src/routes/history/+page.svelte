@@ -329,19 +329,17 @@
 			.then((settings) => {
 				const wsd = effective<string>(settings, 'week_start_day');
 				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
-				// Multi-modal History: when the flag is on, pull the unified
-				// activities feed so the kind chips + timeline can render. A
-				// pure runner / flag-off user never fetches it and the page
-				// stays the run-only history it is today (multi_modal.md §
-				// History). Best-effort — a failure just hides the chips.
-				multiModalNav = effective<boolean>(settings, 'multi_modal_nav', false) ?? false;
-				if (multiModalNav) {
-					fetchActivities(200)
-						.then((rows) => (activityFeed = rows))
-						.catch(() => {
-							/* silent — chips stay hidden, run history unaffected */
-						});
-				}
+				// Multi-modal History: pull the unified activities feed so the
+				// kind chips + timeline can render once a second modality has
+				// data. A pure runner's feed has only runs, so no chips appear
+				// and the page stays the run-only history (data-gated, no flag
+				// — decisions §63 amendment). Best-effort — a failure just
+				// hides the chips. (multi_modal.md § History.)
+				fetchActivities(200)
+					.then((rows) => (activityFeed = rows))
+					.catch(() => {
+						/* silent — chips stay hidden, run history unaffected */
+					});
 			})
 			.catch(() => {
 				/* leave the monday default — the filter still works */
@@ -349,7 +347,6 @@
 	});
 
 	// --- Unified activities timeline (multi-modal History) ---
-	let multiModalNav = $state(false);
 	let activityFeed = $state<ActivityRow[]>([]);
 	type KindFilter = 'all' | 'run' | 'lift' | 'meal';
 	let kindFilter = $state<KindFilter>('all');
@@ -357,8 +354,8 @@
 	let hasLift = $derived(activityFeed.some((a) => a.kind === 'lift'));
 	let hasMeal = $derived(activityFeed.some((a) => a.kind === 'meal'));
 	// Chips only appear once there's a SECOND modality to switch to — a
-	// flagged user who only runs sees no chips (anti-clutter checklist).
-	let showKindChips = $derived(multiModalNav && (hasLift || hasMeal));
+	// runner who only runs sees no chips (anti-clutter checklist, data-gated).
+	let showKindChips = $derived(hasLift || hasMeal);
 	// Filter chips for empty kinds are hidden, not disabled.
 	let kindChips = $derived.by<{ value: KindFilter; key: MessageKey }[]>(() => {
 		const out: { value: KindFilter; key: MessageKey }[] = [

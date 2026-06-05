@@ -1309,6 +1309,13 @@ The data model gains a shared `kind` abstraction. Existing `runs` rows acquire `
 
 Phased delivery tracked in [roadmap.md § Phase 4](../product/roadmap.md#phase-4--multi-modal-gym--nutrition). The standalone-product-test escape hatch (ship nutrition as a genuinely independent app to validate market fit before merging) is documented there as a deliberate branch off this plan, not as a default.
 
+**Amendment (2026-06-04) — web is ungated to match mobile; the `multi_modal_nav` flag is retired.** During rollout, web gated its three gym/nutrition surfaces behind a per-user `multi_modal_nav` flag (default off, no UI toggle), while mobile shipped them **ungated** — always-reachable surfaces with data-gated, self-hiding cards and a `keep_run_primary` toggle as the "protect the pure runner" mechanism. The net effect was an inconsistency the original §63 plan never intended: the same product was materially more discoverable on mobile than on web, and a web runner couldn't enable gym/nutrition without a direct prefs-bag DB edit. A Settings toggle was considered and rejected (mobile has no such toggle, so it wouldn't make the platforms consistent). The durable fix, now applied: the three web surfaces rely **purely on data presence**, matching mobile's self-hiding behaviour —
+- the **Gym + Nutrition sidebar items** (`+layout.svelte`) are always present (the web analogue of mobile's always-present Log sheet — they are the entry point, so they can't be data-gated without a chicken-and-egg);
+- the **`/dashboard`** today's-lift / recent-lifts cards + the lift→load contribution to the fitness/fatigue/form curve self-hide when the user has logged no gym sessions;
+- the **`/history`** kind chips + unified timeline appear once a second modality has data.
+
+The `multi_modal_nav` pref is **no longer read by any surface** (kept registered in `settings.md` as dormant/deprecated rather than removed, so a kill-switch could be reintroduced without a migration). The pure-runner experience is unchanged on both platforms — a runner who never logs a lift/meal sees no gym/nutrition cards or chips, only the always-present (and ignorable) sidebar items / Log sheet entry points.
+
 ---
 
 ## 64. Offline-pin is a separate local-only flag from star; phone pushes starred routes to Wear OS via DataLayer

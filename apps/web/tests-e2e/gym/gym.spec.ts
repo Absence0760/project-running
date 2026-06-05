@@ -12,9 +12,9 @@ import { USER_A } from '../fixtures/users';
  * (title + exercise + sets), see it on the list with a PR badge (first
  * time an exercise is logged is always a PR — gym_prs.ts), open the
  * detail screen and confirm the per-exercise PR chip + set rows, then
- * delete it. The route is reachable by URL regardless of the
- * `multi_modal_nav` sidebar flag (the flag only gates the nav link), so
- * the test drives it directly.
+ * delete it. The /gym route is always reachable (the Gym sidebar item is
+ * always present now — decisions §63 amendment ungated it), and the test
+ * drives it directly.
  *
  * Each run uses a unique exercise + title so the assertions and cleanup
  * never collide with a previous run's rows in the shared seed DB.

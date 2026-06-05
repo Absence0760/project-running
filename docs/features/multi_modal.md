@@ -6,8 +6,14 @@ spans running + gym + nutrition. The data foundation (migration
 view) is shipped; this doc is the **layout contract** the
 screens get built against. Architecture rationale: [decisions.md § 63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db). Sequencing: [roadmap.md § Phase 4](../product/roadmap.md#phase-4--multi-modal-gym--nutrition).
 
-> **Status:** design only. Everything below ships behind the
-> `multi_modal_nav` per-user feature flag (default off). **Sequencing
+> **Status:** largely shipped on web + mobile. **Gating amendment (2026-06-04,
+> [decisions §63](../architecture/decisions.md#63-single-app-multi-modal-expansion-run--gym--nutrition-under-one-nav-one-db)):** the original plan gated the web surfaces behind a
+> `multi_modal_nav` per-user flag (default off); web has since been **ungated
+> to match mobile** — Gym/Nutrition are always-reachable and the dashboard
+> cards + history chips self-hide purely on **data presence**. The flag is
+> retired (dormant, read by nothing). Mobile never had the flag. **Wherever a
+> status note below still says "behind `multi_modal_nav`" / "flag-off", read
+> it as "data-gated" — the flag no longer gates anything.** **Sequencing
 > (hardened):** finish the Phase 3 training moat → ship **gym** → validate
 > engagement → ship **nutrition (food-DB-backed)** → promote the
 > cross-modality intelligence as each module lands. See *Sequencing,
@@ -228,10 +234,10 @@ becomes an **action button**, not a tab.
 
 > **Status (web — gym slice shipped):** `/dashboard` renders a Today's-lift
 > card (when a session was logged today), a Recent-lifts trend card, and a
-> first-run "log a lift" footer affordance — all gated on `multi_modal_nav`
-> AND data presence, modality coded by the `fitness_center` glyph + label +
-> a distinct accent (never colour alone). A pure runner / flag-off user
-> sees no new card. Nutrition rings land with the nutrition module.
+> first-run "log a lift" footer affordance — all gated on **data presence**
+> (no flag, §63 amendment), modality coded by the `fitness_center` glyph +
+> label + a distinct accent (never colour alone). A pure runner sees no new
+> card. Nutrition rings land with the nutrition module.
 >
 > **Status (mobile — shipped, G5):** `dashboard_screen.dart` composes a
 > self-hiding today's-lift card (`widgets/gym_summary_card.dart`) + today's
@@ -304,13 +310,13 @@ redaction-boundary guarantees are pinned by
 
 > **Status (web shipped):** `/history` (the run-history list; `/runs`
 > redirects to it, F14/D3) gains All/Runs/Lifts/Meals chips + a
-> day-grouped unified timeline over `fetchActivities` when `multi_modal_nav`
-> is on AND a second modality exists (chips for empty kinds hidden). Rows
-> link to their own detail route (`/runs/[id]`, `/gym/[id]`); meals render
-> read-only until the nutrition detail route lands. The **Runs** chip drops
-> back to the full existing run history (all its source / date / sort
-> filters, pagination, bulk-delete); a pure runner / flag-off user sees that
-> unchanged page with no chips.
+> day-grouped unified timeline over `fetchActivities` once a second modality
+> has data (data-gated, no flag — §63 amendment; chips for empty kinds
+> hidden). Rows link to their own detail route (`/runs/[id]`, `/gym/[id]`);
+> meals render read-only until the nutrition detail route lands. The **Runs**
+> chip drops back to the full existing run history (all its source / date /
+> sort filters, pagination, bulk-delete); a pure runner sees that unchanged
+> page with no chips.
 >
 > **Status (mobile shipped):** `runs_screen.dart` (the History tab) gains the
 > same All/Runs/Lifts/Meals chips + a day-grouped unified timeline
@@ -322,9 +328,9 @@ redaction-boundary guarantees are pinned by
 > chip restores the full run list (range / sort / source filters, pagination,
 > bulk-delete). Run rows open run-detail (looked up locally, else
 > `fetchRunById`), lift rows open `GymDetailScreen`, meals are read-only.
-> Because mobile ships gym ungated (§63) the timeline is **not** behind
-> `multi_modal_nav` — the "second modality has data" gate carries the
-> anti-clutter contract instead.
+> Neither platform gates this behind `multi_modal_nav` (retired, §63
+> amendment) — the "second modality has data" gate carries the anti-clutter
+> contract on both.
 
 ```
   History            [ All ] [ Runs ] [ Lifts ] [ Meals ]
@@ -547,11 +553,14 @@ one drag the launch. Corrected order, with explicit gates:
 
 **Protect the core runner.** Moving Run from a tab to a `Log` action is a
 downgrade for the 100%-runner (one tap → two; long-press mitigates but is
-discoverable-only). Therefore: keep `multi_modal_nav` default-off until
-we've measured **run-start friction + retention on the flagged cohort**,
-and ship a Settings toggle that lets a pure runner keep Run as the
-primary one-tap action. The runner who never opts into gym/nutrition must
-never be worse off.
+discoverable-only). The protection that shipped is the **`keep_run_primary`
+Settings toggle** (mobile) that lets a pure runner keep Run as the primary
+one-tap action — *not* the `multi_modal_nav` flag. (The original plan here
+proposed keeping the flag default-off as the protection; that was superseded
+by the 2026-06-04 §63 amendment, which **retired the flag** and ungated web
+to match mobile. The cards/chips self-hide on data presence, so a runner who
+never opts into gym/nutrition is never worse off either way.) The runner who
+never logs a lift/meal must never be worse off.
 
 ## Body metrics & sensitive data (compliance — do before any real user data)
 
@@ -658,5 +667,5 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline). **Now wired into nav/Home (G5):** the gym/nutrition screens + the dashboard hydrate + drain them; still outside the global `main.dart`/`sync_service` sweep |
 | Data access | `packages/api_client` typed gym + food + `fetchLatestBodyWeightKg` + the unified-timeline `fetchActivities` (→ `activities` view) + `fetchRunById` (timeline run-row open) methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); **web food + body-metrics queries shipped** (`fetchFoodLog` / `createFoodEntry` / `updateFoodEntry` / `deleteFoodEntry` / `fetchLatestWeightKg` / `recordWeightKg` / `clearWeightHistory`) |
 
-**Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the `multi_modal_nav`-gated **Gym** sidebar item in `+layout.svelte`. E2e: `tests-e2e/gym/gym.spec.ts`. The `weight_unit` (`'kg' \| 'lbs'`) user-pref is **wired on both platforms** (settings.md, F19): storage stays canonical kg (`gym_sets.weight_kg`); display + entry convert via the pure `format/weight.ts` (`formatWeightKg`/`parseWeightToKg`) ↔ mobile `WeightFormat`, driven by the `weightUnit` signal / `activeWeightUnit` and the Settings → Preferences kg/lbs toggle on each side.
+**Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the always-present **Gym** sidebar item in `+layout.svelte` (ungated, §63 amendment). E2e: `tests-e2e/gym/gym.spec.ts`. The `weight_unit` (`'kg' \| 'lbs'`) user-pref is **wired on both platforms** (settings.md, F19): storage stays canonical kg (`gym_sets.weight_kg`); display + entry convert via the pure `format/weight.ts` (`formatWeightKg`/`parseWeightToKg`) ↔ mobile `WeightFormat`, driven by the `weightUnit` signal / `activeWeightUnit` and the Settings → Preferences kg/lbs toggle on each side.
 | DSAR | `gym_workouts` / `gym_sets` (nested) / `food_log` + `body_metrics` (migration `20261216_001`) all in the export path (**shipped** — see the Body-metrics § above); deletion FK-cascades from `auth.users` |

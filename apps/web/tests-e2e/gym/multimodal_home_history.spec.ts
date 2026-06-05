@@ -5,15 +5,13 @@ import { USER_A } from '../fixtures/users';
 
 /**
  * Multi-modal Home + History (docs/features/multi_modal.md §§ Home,
- * History). Both surfaces self-hide their gym affordances behind the
- * `multi_modal_nav` per-user flag AND data presence: a pure runner sees
- * today's app unchanged. This spec turns the flag on for USER_A, seeds a
- * gym session, and asserts the gym slice appears on /dashboard (Recent
- * lifts card) and /history (kind chips + a lift row in the unified timeline).
- *
- * The flag is read from user_settings.prefs.multi_modal_nav; we snapshot
- * the original prefs and restore them afterwards so no other spec inherits
- * a flipped flag in the shared seed DB.
+ * History). Both surfaces self-hide their gym affordances purely on **data
+ * presence** — there is no `multi_modal_nav` flag any more (decisions §63
+ * amendment: web was ungated to match mobile). A pure runner with no gym
+ * data sees today's app unchanged; logging a session lights up the gym
+ * slice. This spec seeds a gym session and asserts the slice appears on
+ * /dashboard (Recent lifts card) and /history (kind chips + a lift row in
+ * the unified timeline) WITHOUT touching any flag.
  */
 test.describe.configure({ mode: 'serial' });
 
@@ -23,27 +21,13 @@ test.describe('multi-modal Home + History', () => {
 	const stamp = Date.now();
 	const liftTitle = `E2E MM Lift ${stamp}`;
 	let workoutId: string | null = null;
-	let originalPrefs: Record<string, unknown> = {};
 
 	test.beforeAll(async () => {
 		const admin = getAdminClient();
 
-		// Snapshot + flip the flag on.
-		const { data: settings } = await admin
-			.from('user_settings')
-			.select('prefs')
-			.eq('user_id', USER_A.id)
-			.maybeSingle();
-		originalPrefs = (settings?.prefs as Record<string, unknown>) ?? {};
-		await admin
-			.from('user_settings')
-			.upsert(
-				{ user_id: USER_A.id, prefs: { ...originalPrefs, multi_modal_nav: true } },
-				{ onConflict: 'user_id' },
-			);
-
 		// Seed a lift session logged today (so it lands on Today + in the
-		// activities view) with one weighted set.
+		// activities view) with one weighted set. No flag flip — the gym
+		// slice now appears on data presence alone.
 		const { data: w } = await admin
 			.from('gym_workouts')
 			.insert({
@@ -68,10 +52,19 @@ test.describe('multi-modal Home + History', () => {
 	test.afterAll(async () => {
 		const admin = getAdminClient();
 		if (workoutId) await admin.from('gym_workouts').delete().eq('id', workoutId);
-		// Restore the original prefs blob (flag back to its prior state).
-		await admin
-			.from('user_settings')
-			.upsert({ user_id: USER_A.id, prefs: originalPrefs }, { onConflict: 'user_id' });
+	});
+
+	test('sidebar shows Gym + Nutrition items (always present, ungated)', async ({ page }) => {
+		// The core of the §63 amendment: the sidebar entry points are always
+		// present, no flag — a runner can always reach gym/nutrition.
+		await page.goto('/dashboard');
+		// The nav-link's accessible name includes the material-symbols icon
+		// ligature text, so match the visible label span exactly instead.
+		const nav = page.locator('nav.sidebar');
+		await expect(nav.locator('.nav-label', { hasText: /^Gym$/ })).toBeVisible({
+			timeout: 15_000,
+		});
+		await expect(nav.locator('.nav-label', { hasText: /^Nutrition$/ })).toBeVisible();
 	});
 
 	test('Home shows the Recent lifts card', async ({ page }) => {
