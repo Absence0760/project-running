@@ -453,6 +453,15 @@ Canonical modal classes live in `apps/web/src/app.css` (`.modal-backdrop`, `.mod
 
 `ConfirmDialog` is the canonical confirmation surface — pass it `title`, `message`, `confirmLabel`, `danger`, `onconfirm`, `oncancel`. Don't roll a one-off `<Confirm>` shape; extend it instead.
 
+## Web cards — `.card-elevated` is the shared elevated panel
+
+The app has **two** card flavours, and the distinction is load-bearing — don't collapse them:
+
+- **Elevated** (resting shadow + hover lift): the canonical `.card-elevated` lives in `apps/web/src/app.css` (next to `.btn*` / `.modal*`). It is `surface + border + radius-lg + space-lg padding + shadow-sm`, with a `:hover` lift to `shadow-md`. Used by the *dashboard-style* summary surfaces — `/dashboard` (today's-lift, recent-lifts, intensity, etc.), `/nutrition` (rings / water / meal log / trend), and the `/history` unified timeline's day panels. **Use this class for any new elevated panel; don't re-declare an identical local `.card`** (that's exactly the drift that left three copies before the 2026-06-04 consolidation). Compose layout with a page-scoped modifier: `class="card-elevated rings-card"`.
+- **Flat** (no shadow): ~17 pages (settings, plans, coaching, recap, share, onboarding, …) deliberately use a page-scoped, shadowless local `.card`. These are intentionally *not* elevated. **Do not add a `box-shadow` to a bare global `.card` name** — it would cascade a shadow into every one of those flat pages. There is intentionally no global `.card`; the flat look stays page-scoped until someone does a full design-system pass to name it (`.card-flat`) and migrate all the copies.
+
+When you need an elevated panel: `class="card-elevated"` (+ a layout modifier). When you need a flat panel: keep the existing page-scoped `.card`. Never give the global an unqualified `.card` rule.
+
 ## Web list pages — preserve scroll on back-navigation
 
 Any list page that links into a detail page (`/history`, `/routes`, `/plans`, `/clubs`, `/feed`, `/u/[id]`-style surfaces, …) must `export const snapshot` (SvelteKit's [snapshot API](https://svelte.dev/docs/kit/snapshots)) so clicking a row, then `back`, lands the user at the same scroll position they left at. Without this, the page remounts empty, SvelteKit's built-in scroll restoration runs against a 0-height body, and the user is bounced back to the top.
