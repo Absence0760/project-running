@@ -56,10 +56,14 @@ export function formatWeight(kg: number | null | undefined): string {
 	return formatWeightKg(kg, weight.value);
 }
 
-/// Parse a free-text weight the user typed (in their chosen unit) into
-/// canonical kg for storage. Null on empty / non-numeric / negative.
-export function parseWeight(raw: string | null | undefined): number | null {
-	return parseWeightToKg(raw, weight.value);
+/// Parse a weight the user entered (in their chosen unit) into canonical kg
+/// for storage. Null on empty / non-numeric / negative. Accepts a number as
+/// well as a string because Svelte's `bind:value` on `<input type="number">`
+/// yields a `number` (or `null`), not a string — the core `parseWeightToKg`
+/// is string-only, so coerce at this web boundary before delegating.
+export function parseWeight(raw: string | number | null | undefined): number | null {
+	const s = typeof raw === 'number' ? String(raw) : raw;
+	return parseWeightToKg(s, weight.value);
 }
 
 /// Canonical kg -> a display number (no suffix) in the user's unit,

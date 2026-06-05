@@ -62,7 +62,7 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 		const block = page.locator('.exercise-block', { hasText: exercise });
 		await expect(block).toBeVisible({ timeout: 10_000 });
 		await expect(block.locator('.pr-chip').first()).toBeVisible();
-		await expect(block.locator('.sets li').first()).toContainText('60');
+		await expect(block.locator('.sets li:not(.sets-head)').first()).toContainText('60');
 
 		// Delete it via the confirm dialog → back to the list, row gone.
 		await page.getByRole('button', { name: 'Delete', exact: true }).click();
@@ -134,8 +134,8 @@ test.describe('/gym — log, PR badge, detail, delete', () => {
 				await expect(page).toHaveURL(new RegExp(`/gym/${workoutId}`));
 				const block = page.locator('.exercise-block', { hasText: exercise });
 				await expect(block).toBeVisible({ timeout: 10_000 });
-				await expect(block.locator('.sets li').first()).toContainText('135');
-				await expect(block.locator('.sets li').first()).toContainText('lbs');
+				await expect(block.locator('.sets li:not(.sets-head)').first()).toContainText('135');
+				await expect(block.locator('.sets li:not(.sets-head)').first()).toContainText('lbs');
 			} finally {
 				await admin.from('gym_workouts').delete().eq('id', workoutId);
 			}
