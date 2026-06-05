@@ -5211,6 +5211,12 @@ class AppLocalizationsEs extends AppLocalizations {
   String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';
 
   @override
+  String get dashboardSectionRecentLifts => 'Sesiones recientes';
+
+  @override
+  String get dashboardViewAllGym => 'Ver todo';
+
+  @override
   String get dashboardSectionPersonalBests => 'Mejores marcas personales';
 
   @override

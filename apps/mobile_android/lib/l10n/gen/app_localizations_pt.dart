@@ -5206,6 +5206,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';
 
   @override
+  String get dashboardSectionRecentLifts => 'Sessões recentes';
+
+  @override
+  String get dashboardViewAllGym => 'Ver tudo';
+
+  @override
   String get dashboardSectionPersonalBests => 'Recordes pessoais';
 
   @override
@@ -12226,6 +12232,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get dashboardSectionLast20Weeks => 'Últimas 20 semanas';
+
+  @override
+  String get dashboardSectionRecentLifts => 'Sessões recentes';
+
+  @override
+  String get dashboardViewAllGym => 'Ver tudo';
 
   @override
   String get dashboardSectionPersonalBests => 'Recordes pessoais';

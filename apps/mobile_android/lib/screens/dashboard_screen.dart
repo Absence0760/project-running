@@ -26,11 +26,13 @@ import '../widgets/intensity_card.dart';
 import '../widgets/mileage_trend_card.dart';
 import '../widgets/nutrition_rings_card.dart';
 import '../widgets/readiness_card.dart';
+import '../widgets/recent_lifts_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/training_load_chart.dart';
 import 'coach_screen.dart';
 import 'feed_screen.dart';
+import 'gym_detail_screen.dart';
 import 'gym_screen.dart';
 import 'import_screen.dart';
 import 'nutrition_screen.dart';
@@ -176,6 +178,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
     Navigator.of(context).push(MaterialPageRoute<void>(
       builder: (_) =>
           GymScreen(api: widget.apiClient, store: widget.gymStore),
+    ));
+  }
+
+  void _openGymWorkout(String workoutId) {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => GymDetailScreen(
+        api: widget.apiClient,
+        store: widget.gymStore,
+        workoutId: workoutId,
+      ),
     ));
   }
 
@@ -617,6 +629,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   now: now,
                 ),
                 _buildTrainingLoadChart(runs, now),
+                // Recent lifts trend list — self-hides for a pure runner (empty
+                // gym store), mirrors web /dashboard's recent-lifts card.
+                if (widget.gymStore.workouts.isNotEmpty) ...[
+                  _kSectionGap,
+                  RecentLiftsCard(
+                    workouts: widget.gymStore.workouts,
+                    onOpenWorkout: _openGymWorkout,
+                    onViewAll: _openGym,
+                  ),
+                ],
               ],
             ),
       ),

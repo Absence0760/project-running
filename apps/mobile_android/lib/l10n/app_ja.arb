@@ -1412,6 +1412,8 @@
   "dashboardPeriodAllTime": "全期間",
   "dashboardSectionStreak": "連続記録",
   "dashboardSectionLast20Weeks": "直近20週間",
+  "dashboardSectionRecentLifts": "最近の筋トレ",
+  "dashboardViewAllGym": "すべて表示",
   "dashboardSectionPersonalBests": "自己ベスト",
   "dashboardLongestRun": "最長ラン",
   "dashboardFastestDistance": "最速の{distance}",

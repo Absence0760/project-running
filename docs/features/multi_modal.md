@@ -239,7 +239,10 @@ becomes an **action button**, not a tab.
 > today's-workout card, each omitted when that modality has no data today,
 > 2-up on phones ≥360 dp (else stacked). The dashboard best-effort hydrates
 > the gym + food caches + the nutrition target on mount so the cards surface
-> on a fresh launch. A recent-lifts trend card is not yet on mobile.
+> on a fresh launch. A **recent-lifts trend card** (`widgets/recent_lifts_card.dart`,
+> the five most-recent sessions, each tapping into gym detail) sits below the
+> training-load chart, self-hiding when the gym store is empty — mirroring web
+> `/dashboard`'s recent-lifts card.
 
 Home is a vertical scroll of cards. The order is **driven by what the
 user logs**, not a fixed grid. The ordering algorithm:

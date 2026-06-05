@@ -6576,6 +6576,14 @@
   "@dashboardSectionLast20Weeks": {
     "description": "Section header above the 20-week activity heatmap"
   },
+  "dashboardSectionRecentLifts": "Recent lifts",
+  "@dashboardSectionRecentLifts": {
+    "description": "Header of the dashboard recent-lifts trend card"
+  },
+  "dashboardViewAllGym": "View all",
+  "@dashboardViewAllGym": {
+    "description": "Link from the recent-lifts card to the full Gym surface"
+  },
   "dashboardSectionPersonalBests": "Personal Bests",
   "@dashboardSectionPersonalBests": {
     "description": "Section header above the personal-bests card"

@@ -8584,6 +8584,18 @@ abstract class AppLocalizations {
   /// **'Last 20 Weeks'**
   String get dashboardSectionLast20Weeks;
 
+  /// Header of the dashboard recent-lifts trend card
+  ///
+  /// In en, this message translates to:
+  /// **'Recent lifts'**
+  String get dashboardSectionRecentLifts;
+
+  /// Link from the recent-lifts card to the full Gym surface
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get dashboardViewAllGym;
+
   /// Section header above the personal-bests card
   ///
   /// In en, this message translates to:

@@ -1412,6 +1412,8 @@
   "dashboardPeriodAllTime": "Tout",
   "dashboardSectionStreak": "Série",
   "dashboardSectionLast20Weeks": "20 dernières semaines",
+  "dashboardSectionRecentLifts": "Séances récentes",
+  "dashboardViewAllGym": "Tout voir",
   "dashboardSectionPersonalBests": "Records personnels",
   "dashboardLongestRun": "Course la plus longue",
   "dashboardFastestDistance": "Plus rapide sur {distance}",

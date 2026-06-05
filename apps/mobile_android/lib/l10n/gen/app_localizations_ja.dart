@@ -4899,6 +4899,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get dashboardSectionLast20Weeks => '直近20週間';
 
   @override
+  String get dashboardSectionRecentLifts => '最近の筋トレ';
+
+  @override
+  String get dashboardViewAllGym => 'すべて表示';
+
+  @override
   String get dashboardSectionPersonalBests => '自己ベスト';
 
   @override

@@ -5158,6 +5158,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dashboardSectionLast20Weeks => 'Last 20 Weeks';
 
   @override
+  String get dashboardSectionRecentLifts => 'Recent lifts';
+
+  @override
+  String get dashboardViewAllGym => 'View all';
+
+  @override
   String get dashboardSectionPersonalBests => 'Personal Bests';
 
   @override

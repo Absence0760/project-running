@@ -5224,6 +5224,12 @@ class AppLocalizationsFr extends AppLocalizations {
   String get dashboardSectionLast20Weeks => '20 dernières semaines';
 
   @override
+  String get dashboardSectionRecentLifts => 'Séances récentes';
+
+  @override
+  String get dashboardViewAllGym => 'Tout voir';
+
+  @override
   String get dashboardSectionPersonalBests => 'Records personnels';
 
   @override
