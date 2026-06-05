@@ -299,7 +299,8 @@ documented cross-modality contract — its column set and the windowed-read +
 redaction-boundary guarantees are pinned by
 `apps/backend/supabase/tests/activities_view_windowed_test.sql`.
 
-> **Status (web shipped):** `/runs` gains All/Runs/Lifts/Meals chips + a
+> **Status (web shipped):** `/history` (the run-history list; `/runs`
+> redirects to it, F14/D3) gains All/Runs/Lifts/Meals chips + a
 > day-grouped unified timeline over `fetchActivities` when `multi_modal_nav`
 > is on AND a second modality exists (chips for empty kinds hidden). Rows
 > link to their own detail route (`/runs/[id]`, `/gym/[id]`); meals render
@@ -571,7 +572,7 @@ reading the **stored** `set_count` + `volume_kg` columns on
 `20261214_001`). For the History list:
 
 - Always query it **windowed** (`limit` + `started_at` cursor), never
-  unbounded — the History screen paginates like `/runs` does. The web
+  unbounded — the History screen paginates like `/history` does. The web
   consumer (`fetchActivities`) always caps with `.limit(…)`; the
   windowed-page-1 + started_at-cursor-page-2 path is pinned in
   `activities_view_windowed_test.sql` so the contract can't silently
@@ -631,7 +632,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Web consumer wired**: `web/src/lib/gym/lift_load.ts` (`liftsFromSetHistory`, pure + tested) feeds the dashboard load curve |
-| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/runs` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart`; the unified mobile History timeline is still the pending mobile mirror |
+| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart`; the unified mobile History timeline is still the pending mobile mirror |
 | Runner protection | Settings toggle: keep Run as the one-tap primary action — **shipped (G5)** (`Preferences.keepRunPrimary` + the `settings_preferences_screen.dart` switch; tap = one-tap run start, long-press = full Log sheet) |
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline). **Now wired into nav/Home (G5):** the gym/nutrition screens + the dashboard hydrate + drain them; still outside the global `main.dart`/`sync_service` sweep |
 | Data access | `packages/api_client` typed gym + food + `fetchLatestBodyWeightKg` methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); **web food + body-metrics queries shipped** (`fetchFoodLog` / `createFoodEntry` / `updateFoodEntry` / `deleteFoodEntry` / `fetchLatestWeightKg` / `recordWeightKg` / `clearWeightHistory`) |

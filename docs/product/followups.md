@@ -115,6 +115,14 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 
 **Deferred (Tier 2, do not hand off yet):** recommendation engine, plan re-planning from fuelling/lift load, Coach-authored meal/lift plans, unified Whoop-style recovery score — gated on reliable logging per multi_modal.md.
 
+### Web↔mobile multi-modal-nav gating drift (open product decision)
+
+- [ ] **Resolve the gym/nutrition discoverability inconsistency between web and mobile.** The two platforms made opposite choices for surfacing the Phase 4 gym + nutrition features, and they've drifted:
+  - **Mobile (G5):** shipped gym/nutrition **ungated** — always reachable via the centre Log action + data-gated Home cards. The "protect the pure runner" job is done by the `keep_run_primary` toggle, **not** by hiding the features. There is no `multi_modal_nav` gate on mobile.
+  - **Web (decisions §63):** kept them behind `multi_modal_nav` (universal pref, **default `false`, no UI**), so a web runner sees **nothing** in the nav and **can't turn it on without a direct prefs-bag DB edit** (the `/gym` + `/nutrition` routes are reachable by URL, but undiscoverable).
+
+  Net effect: the same product is materially more discoverable on mobile than on web. **A Settings toggle was considered and rejected** (not worth it, and it wouldn't make the platforms consistent — mobile has no such toggle). The durable fix is to **ungate the three web surfaces** (Gym/Nutrition sidebar items in `+layout.svelte`, the `/dashboard` lift cards, the `/history` kind-chips/timeline) so they rely purely on **data-presence** — matching mobile's self-hiding behaviour — and then **retire the `multi_modal_nav` flag** (or keep it as a dormant kill-switch). This is a [decisions.md § 63](../architecture/decisions.md) amendment, needs the parity.md / roadmap.md cells flipped and the existing `multi_modal_nav`-setting Playwright specs (`tests-e2e/gym/multimodal_home_history.spec.ts`, nutrition specs) reworked to assert always-on, so it's flagged as an open decision rather than silently shipped. (Surfaced 2026-06-04.)
+
 ## Testing gaps
 
 - [ ] **Device-instrumented `integration_test` harness** — none today; would cover tile-cache / foreground-service / background-sync on real Android primitives. New infrastructure.
