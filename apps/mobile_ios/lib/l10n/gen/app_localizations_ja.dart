@@ -1259,6 +1259,37 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyNoMatch => 'このフィルターに一致するランはありません';
 
   @override
+  String get historyKindAll => 'すべて';
+
+  @override
+  String get historyKindRuns => 'ラン';
+
+  @override
+  String get historyKindLifts => '筋トレ';
+
+  @override
+  String get historyKindMeals => '食事';
+
+  @override
+  String get historyToday => '今日';
+
+  @override
+  String get historyYesterday => '昨日';
+
+  @override
+  String historySetCount(int n) {
+    return '$nセット';
+  }
+
+  @override
+  String historyKcal(int n) {
+    return '$n kcal';
+  }
+
+  @override
+  String get historyTimelineEmpty => 'このビューにはまだ記録がありません。';
+
+  @override
   String get historyClearFilters => 'フィルターをクリア';
 
   @override

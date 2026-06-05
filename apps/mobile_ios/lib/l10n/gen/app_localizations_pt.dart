@@ -1323,6 +1323,38 @@ class AppLocalizationsPt extends AppLocalizations {
   String get historyNoMatch => 'Nenhuma corrida corresponde a estes filtros';
 
   @override
+  String get historyKindAll => 'Tudo';
+
+  @override
+  String get historyKindRuns => 'Corridas';
+
+  @override
+  String get historyKindLifts => 'Musculação';
+
+  @override
+  String get historyKindMeals => 'Refeições';
+
+  @override
+  String get historyToday => 'Hoje';
+
+  @override
+  String get historyYesterday => 'Ontem';
+
+  @override
+  String historySetCount(int n) {
+    return '$n séries';
+  }
+
+  @override
+  String historyKcal(int n) {
+    return '$n kcal';
+  }
+
+  @override
+  String get historyTimelineEmpty =>
+      'Nada registrado nesta visualização ainda.';
+
+  @override
   String get historyClearFilters => 'Limpar filtros';
 
   @override
@@ -8349,6 +8381,38 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get historyNoMatch => 'Nenhuma corrida corresponde a estes filtros';
+
+  @override
+  String get historyKindAll => 'Tudo';
+
+  @override
+  String get historyKindRuns => 'Corridas';
+
+  @override
+  String get historyKindLifts => 'Musculação';
+
+  @override
+  String get historyKindMeals => 'Refeições';
+
+  @override
+  String get historyToday => 'Hoje';
+
+  @override
+  String get historyYesterday => 'Ontem';
+
+  @override
+  String historySetCount(int n) {
+    return '$n séries';
+  }
+
+  @override
+  String historyKcal(int n) {
+    return '$n kcal';
+  }
+
+  @override
+  String get historyTimelineEmpty =>
+      'Nada registrado nesta visualização ainda.';
 
   @override
   String get historyClearFilters => 'Limpar filtros';

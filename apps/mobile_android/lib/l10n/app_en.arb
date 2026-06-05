@@ -1384,6 +1384,24 @@
   "@historyNoMatch": {
     "description": "Empty-state shown when the active filters exclude every run"
   },
+  "historyKindAll": "All",
+  "@historyKindAll": {"description": "Unified-timeline kind chip: all activity kinds"},
+  "historyKindRuns": "Runs",
+  "@historyKindRuns": {"description": "Unified-timeline kind chip: runs only"},
+  "historyKindLifts": "Lifts",
+  "@historyKindLifts": {"description": "Unified-timeline kind chip: gym sessions only"},
+  "historyKindMeals": "Meals",
+  "@historyKindMeals": {"description": "Unified-timeline kind chip: logged meals only"},
+  "historyToday": "Today",
+  "@historyToday": {"description": "Day-group header for today in the unified timeline"},
+  "historyYesterday": "Yesterday",
+  "@historyYesterday": {"description": "Day-group header for yesterday in the unified timeline"},
+  "historySetCount": "{n} sets",
+  "@historySetCount": {"description": "Lift row secondary: number of sets", "placeholders": {"n": {"type": "int"}}},
+  "historyKcal": "{n} kcal",
+  "@historyKcal": {"description": "Meal row secondary: calories", "placeholders": {"n": {"type": "int"}}},
+  "historyTimelineEmpty": "Nothing logged in this view yet.",
+  "@historyTimelineEmpty": {"description": "Empty state for a unified-timeline kind filter with no rows"},
   "historyClearFilters": "Clear filters",
   "@historyClearFilters": {
     "description": "Button to reset all History filters when none match"

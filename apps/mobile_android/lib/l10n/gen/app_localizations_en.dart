@@ -1316,6 +1316,37 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyNoMatch => 'No runs match these filters';
 
   @override
+  String get historyKindAll => 'All';
+
+  @override
+  String get historyKindRuns => 'Runs';
+
+  @override
+  String get historyKindLifts => 'Lifts';
+
+  @override
+  String get historyKindMeals => 'Meals';
+
+  @override
+  String get historyToday => 'Today';
+
+  @override
+  String get historyYesterday => 'Yesterday';
+
+  @override
+  String historySetCount(int n) {
+    return '$n sets';
+  }
+
+  @override
+  String historyKcal(int n) {
+    return '$n kcal';
+  }
+
+  @override
+  String get historyTimelineEmpty => 'Nothing logged in this view yet.';
+
+  @override
   String get historyClearFilters => 'Clear filters';
 
   @override

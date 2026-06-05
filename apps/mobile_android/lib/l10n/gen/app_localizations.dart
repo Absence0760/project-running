@@ -2273,6 +2273,60 @@ abstract class AppLocalizations {
   /// **'No runs match these filters'**
   String get historyNoMatch;
 
+  /// Unified-timeline kind chip: all activity kinds
+  ///
+  /// In en, this message translates to:
+  /// **'All'**
+  String get historyKindAll;
+
+  /// Unified-timeline kind chip: runs only
+  ///
+  /// In en, this message translates to:
+  /// **'Runs'**
+  String get historyKindRuns;
+
+  /// Unified-timeline kind chip: gym sessions only
+  ///
+  /// In en, this message translates to:
+  /// **'Lifts'**
+  String get historyKindLifts;
+
+  /// Unified-timeline kind chip: logged meals only
+  ///
+  /// In en, this message translates to:
+  /// **'Meals'**
+  String get historyKindMeals;
+
+  /// Day-group header for today in the unified timeline
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get historyToday;
+
+  /// Day-group header for yesterday in the unified timeline
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get historyYesterday;
+
+  /// Lift row secondary: number of sets
+  ///
+  /// In en, this message translates to:
+  /// **'{n} sets'**
+  String historySetCount(int n);
+
+  /// Meal row secondary: calories
+  ///
+  /// In en, this message translates to:
+  /// **'{n} kcal'**
+  String historyKcal(int n);
+
+  /// Empty state for a unified-timeline kind filter with no rows
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing logged in this view yet.'**
+  String get historyTimelineEmpty;
+
   /// Button to reset all History filters when none match
   ///
   /// In en, this message translates to:

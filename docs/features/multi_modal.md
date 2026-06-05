@@ -310,7 +310,21 @@ redaction-boundary guarantees are pinned by
 > read-only until the nutrition detail route lands. The **Runs** chip drops
 > back to the full existing run history (all its source / date / sort
 > filters, pagination, bulk-delete); a pure runner / flag-off user sees that
-> unchanged page with no chips. Mobile History is separate work.
+> unchanged page with no chips.
+>
+> **Status (mobile shipped):** `runs_screen.dart` (the History tab) gains the
+> same All/Runs/Lifts/Meals chips + a day-grouped unified timeline
+> (`widgets/activity_timeline_list.dart` over the pure `activity_timeline.dart`
+> grouper) backed by `ApiClient.fetchActivities` → the `activities` view.
+> Chips appear once the gym store is wired in (multi-modal home shell) AND a
+> second modality has data — empty-kind chips hidden; a gym-/meal-only user
+> still sees their timeline rather than a "no runs" dead-end. The **Runs**
+> chip restores the full run list (range / sort / source filters, pagination,
+> bulk-delete). Run rows open run-detail (looked up locally, else
+> `fetchRunById`), lift rows open `GymDetailScreen`, meals are read-only.
+> Because mobile ships gym ungated (§63) the timeline is **not** behind
+> `multi_modal_nav` — the "second modality has data" gate carries the
+> anti-clutter contract instead.
 
 ```
   History            [ All ] [ Runs ] [ Lifts ] [ Meals ]
@@ -634,15 +648,15 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 |---|---|
 | Nav + Log sheet | `home_screen.dart` (bottom-nav reshape), `widgets/log_sheet.dart` — **shipped (G5)** |
 | Home cards | `widgets/nutrition_rings_card.dart`, `widgets/gym_summary_card.dart` — **shipped (G5)** (run summary already lived on the dashboard) |
-| History | `screens/history_screen.dart` (reads the `activities` view) |
+| History | `screens/runs_screen.dart` (the History tab — hosts the kind chips + unified timeline) + `widgets/activity_timeline_list.dart` + the pure `activity_timeline.dart` day-grouper, over `ApiClient.fetchActivities` → the `activities` view — **shipped** |
 | Gym | `screens/gym_screen.dart`, `widgets/gym_compose_sheet.dart`, `screens/gym_detail_screen.dart`, `gym_prs.dart` (pure, parity-paired) |
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Consumers wired on both platforms**: web `web/src/lib/gym/lift_load.ts` and mobile `mobile_android/lib/lift_load.dart` (`liftsFromSetHistory`, pure + tested parity pair) feed each dashboard's load curve; `TrainingLoadChart` (web + mobile) shows the "gym sessions included" hint when `liftStress > 0` |
-| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart`; the unified mobile History timeline is still the pending mobile mirror |
+| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart` + the recent-lifts trend card (`widgets/recent_lifts_card.dart`); the **unified mobile History timeline is now shipped** (`runs_screen.dart` + `widgets/activity_timeline_list.dart` + `ApiClient.fetchActivities`) |
 | Runner protection | Settings toggle: keep Run as the one-tap primary action — **shipped (G5)** (`Preferences.keepRunPrimary` + the `settings_preferences_screen.dart` switch; tap = one-tap run start, long-press = full Log sheet) |
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline). **Now wired into nav/Home (G5):** the gym/nutrition screens + the dashboard hydrate + drain them; still outside the global `main.dart`/`sync_service` sweep |
-| Data access | `packages/api_client` typed gym + food + `fetchLatestBodyWeightKg` methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); **web food + body-metrics queries shipped** (`fetchFoodLog` / `createFoodEntry` / `updateFoodEntry` / `deleteFoodEntry` / `fetchLatestWeightKg` / `recordWeightKg` / `clearWeightHistory`) |
+| Data access | `packages/api_client` typed gym + food + `fetchLatestBodyWeightKg` + the unified-timeline `fetchActivities` (→ `activities` view) + `fetchRunById` (timeline run-row open) methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); **web food + body-metrics queries shipped** (`fetchFoodLog` / `createFoodEntry` / `updateFoodEntry` / `deleteFoodEntry` / `fetchLatestWeightKg` / `recordWeightKg` / `clearWeightHistory`) |
 
 **Web gym surfaces (shipped).** Mirrors the mobile gym plan above on the canonical web surface: `routes/gym/+page.svelte` (list + PR badges + create modal), `routes/gym/[id]/+page.svelte` (detail + per-exercise PR chips + edit/delete), `components/GymEditor.svelte` (the composer — free-text exercise name with history autocomplete, inline sets, share-to-feed toggle), `gym/gym_prs.ts` (pure PR engine, parity pair), and the `multi_modal_nav`-gated **Gym** sidebar item in `+layout.svelte`. E2e: `tests-e2e/gym/gym.spec.ts`. The `weight_unit` (`'kg' \| 'lbs'`) user-pref is **wired on both platforms** (settings.md, F19): storage stays canonical kg (`gym_sets.weight_kg`); display + entry convert via the pure `format/weight.ts` (`formatWeightKg`/`parseWeightToKg`) ↔ mobile `WeightFormat`, driven by the `weightUnit` signal / `activeWeightUnit` and the Settings → Preferences kg/lbs toggle on each side.
 | DSAR | `gym_workouts` / `gym_sets` (nested) / `food_log` + `body_metrics` (migration `20261216_001`) all in the export path (**shipped** — see the Body-metrics § above); deletion FK-cascades from `auth.users` |

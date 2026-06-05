@@ -10,14 +10,17 @@ import '../goals.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../preferences.dart';
 import '../runs_history_items.dart';
 import '../settings_sync.dart';
+import '../widgets/activity_timeline_list.dart';
 import '../widgets/run_track_preview.dart';
 import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
+import 'gym_detail_screen.dart';
 import 'run_detail_screen.dart';
 import '../widgets/top_banner.dart';
 
@@ -32,6 +35,14 @@ class RunsScreen extends StatefulWidget {
   final LocalRouteStore routeStore;
   final Preferences preferences;
   final SettingsSyncService? settingsSync;
+
+  /// Gym store, present only when History is mounted from the multi-modal
+  /// home shell. When null (or [apiClient] is signed out) the unified
+  /// activities timeline is simply not offered and the screen stays the
+  /// run-only history it has always been — graceful degradation, same shape
+  /// as the api-null fallback elsewhere on this screen.
+  final LocalGymStore? gymStore;
+
   const RunsScreen({
     super.key,
     this.apiClient,
@@ -39,6 +50,7 @@ class RunsScreen extends StatefulWidget {
     required this.routeStore,
     required this.preferences,
     this.settingsSync,
+    this.gymStore,
   });
 
   @override
@@ -48,6 +60,11 @@ class RunsScreen extends StatefulWidget {
 enum _RunsSort { newest, oldest, longest, fastest }
 
 enum _RunsRange { today, week, month, year, all, custom }
+
+/// Kind filter for the unified activities timeline (multi_modal.md § History).
+/// `run` drops back to the full run list (with all its filters); the others
+/// render the cross-modality timeline.
+enum _HistoryKind { all, run, lift, meal }
 
 /// SharedPreferences key for the persisted filter blob (range / sort /
 /// activity / source / custom-from / custom-to). Mirrors the web app's
@@ -142,6 +159,21 @@ class _RunsScreenState extends State<RunsScreen> {
   bool _selecting = false;
   final Set<String> _selected = {};
 
+  /// Unified activities feed (runs + lifts + meals) for the timeline, plus its
+  /// derived modality presence cached alongside it so `build` doesn't rescan
+  /// the (up to 200-row) feed every frame.
+  List<ActivityRow> _activities = const [];
+  bool _hasLift = false;
+  bool _hasMeal = false;
+  _HistoryKind _kind = _HistoryKind.all;
+
+  /// Chips only appear once a SECOND modality has data AND the gym store is
+  /// wired in (multi-modal home shell) — a pure runner, or a run-only test
+  /// mount that passes no gym store, sees no chips (anti-clutter checklist).
+  bool get _showChips => widget.gymStore != null && (_hasLift || _hasMeal);
+
+  bool get _timelineMode => _showChips && _kind != _HistoryKind.run;
+
   /// Snapshot of `runStore.runs` IDs from the previous listener tick.
   /// Used by `_onStoreChanged` to detect freshly-added runs so we can
   /// auto-clear sticky activity / source filters that would otherwise
@@ -166,6 +198,40 @@ class _RunsScreenState extends State<RunsScreen> {
         widget.runStore.runs.map((r) => r.id).toSet();
     _hydrateFilters();
     _fetchRemote();
+    _fetchActivities();
+  }
+
+  /// Best-effort load of the unified activities feed for the timeline. Only
+  /// runs when the gym store is wired in (multi-modal home shell) and the user
+  /// is signed in. A failure leaves `_activities` empty — the chips stay
+  /// hidden and the run-only history is unaffected (layered resilience).
+  Future<void> _fetchActivities() async {
+    final api = widget.apiClient;
+    if (widget.gymStore == null || api == null || api.userId == null) return;
+    try {
+      // Bounded recent-history window, mirroring web's `fetchActivities(200)`:
+      // the timeline is a glanceable cross-modality view, not an exhaustive
+      // archive. The Runs chip drops back to the run list, which carries the
+      // real cursor-paginated "Load more" path (multi_modal.md § activities
+      // view at scale).
+      final rows = await api.fetchActivities(limit: 200);
+      if (mounted) {
+        setState(() {
+          _activities = rows;
+          _hasLift = rows.any((a) => a.kind == 'lift');
+          _hasMeal = rows.any((a) => a.kind == 'meal');
+        });
+      }
+    } catch (e) {
+      debugPrint('fetchActivities failed: $e');
+    }
+  }
+
+  /// Pull-to-refresh for both surfaces — refreshes the run page and, when the
+  /// timeline is in play, the unified activities feed too.
+  Future<void> _refreshAll() async {
+    await _fetchRemote();
+    await _fetchActivities();
   }
 
   @override
@@ -780,22 +846,28 @@ class _RunsScreenState extends State<RunsScreen> {
     // title row composes the range ("This week") with a small
     // count chip ("12 runs") next to it.
     return AppBar(
-      title: Row(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.baseline,
-        textBaseline: TextBaseline.alphabetic,
-        children: [
-          Text(_activeRangeLabel(l10n)),
-          const SizedBox(width: 8),
-          Text(
-            l10n.historyCount(visibleCount),
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.outline,
+      // In timeline mode the range / count title is run-specific noise — show
+      // a neutral History title instead (the run toolbar returns on the Runs
+      // chip).
+      title: _timelineMode
+          ? Text(l10n.navHistory)
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text(_activeRangeLabel(l10n)),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.historyCount(visibleCount),
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(context).colorScheme.outline,
+                      ),
                 ),
-          ),
-        ],
-      ),
+              ],
+            ),
       actions: [
+        if (!_timelineMode)
         PopupMenuButton<_RunsRange>(
           icon: const Icon(Icons.calendar_month_outlined),
           tooltip: l10n.historyDateRangeTooltip,
@@ -822,6 +894,7 @@ class _RunsScreenState extends State<RunsScreen> {
                   ))
               .toList(),
         ),
+        if (!_timelineMode)
         PopupMenuButton<_RunsSort>(
           icon: const Icon(Icons.sort),
           tooltip: l10n.historySortTooltip,
@@ -929,12 +1002,83 @@ class _RunsScreenState extends State<RunsScreen> {
 
   Widget _buildBody(
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit, int totalCount) {
-    if (totalCount == 0) {
+    // A user with no runs but who has logged lifts / meals should still see
+    // their timeline — only fall back to the "no runs" empty state when there
+    // is genuinely nothing across any modality (mirrors web's gym-only fix).
+    if (totalCount == 0 && !_showChips) {
       return _EmptyRuns(theme: theme, l10n: l10n);
     }
-    return RefreshIndicator(
-      onRefresh: _fetchRemote,
-      child: _buildRunList(theme, l10n, unit),
+
+    final Widget content = _timelineMode
+        ? ActivityTimelineList(
+            activities: _kind == _HistoryKind.all
+                ? _activities
+                : _activities
+                    .where((a) => a.kind == _kind.name)
+                    .toList(growable: false),
+            unit: unit,
+            onTapRun: _openActivityRun,
+            onTapLift: _openActivityLift,
+            onRefresh: _refreshAll,
+          )
+        : RefreshIndicator(
+            onRefresh: _refreshAll,
+            child: _buildRunList(theme, l10n, unit),
+          );
+
+    if (!_showChips) return content;
+    return Column(
+      children: [
+        _KindChipRow(
+          kind: _kind,
+          hasLift: _hasLift,
+          hasMeal: _hasMeal,
+          onChanged: (k) => setState(() => _kind = k),
+        ),
+        Expanded(child: content),
+      ],
+    );
+  }
+
+  /// Open a run row from the timeline. The run is usually in the local store
+  /// (same data backs both); for one beyond the cached page, fetch it by id.
+  Future<void> _openActivityRun(ActivityRow row) async {
+    Run? run;
+    for (final r in widget.runStore.runs) {
+      if (r.id == row.id) {
+        run = r;
+        break;
+      }
+    }
+    run ??= await widget.apiClient?.fetchRunById(row.id);
+    if (run == null || !mounted) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RunDetailScreen(
+          run: run!,
+          runStore: widget.runStore,
+          routeStore: widget.routeStore,
+          preferences: widget.preferences,
+          apiClient: widget.apiClient,
+          settingsSync: widget.settingsSync,
+        ),
+      ),
+    );
+  }
+
+  void _openActivityLift(ActivityRow row) {
+    final store = widget.gymStore;
+    if (store == null) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => GymDetailScreen(
+          api: widget.apiClient,
+          store: store,
+          workoutId: row.id,
+        ),
+      ),
     );
   }
 
@@ -1116,6 +1260,53 @@ class _MonthHeaderRow extends StatelessWidget {
           fontWeight: FontWeight.w700,
           letterSpacing: 0.08,
           color: theme.colorScheme.outline,
+        ),
+      ),
+    );
+  }
+}
+
+/// Kind chips above the History body (All / Runs / Lifts / Meals). Only the
+/// kinds that have data render — empty-kind chips are hidden, not disabled
+/// (anti-clutter checklist). Mirrors the web `/history` kind chips.
+class _KindChipRow extends StatelessWidget {
+  final _HistoryKind kind;
+  final bool hasLift;
+  final bool hasMeal;
+  final ValueChanged<_HistoryKind> onChanged;
+
+  const _KindChipRow({
+    required this.kind,
+    required this.hasLift,
+    required this.hasMeal,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
+    final chips = <(_HistoryKind, String)>[
+      (_HistoryKind.all, l10n.historyKindAll),
+      (_HistoryKind.run, l10n.historyKindRuns),
+      if (hasLift) (_HistoryKind.lift, l10n.historyKindLifts),
+      if (hasMeal) (_HistoryKind.meal, l10n.historyKindMeals),
+    ];
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+        child: Row(
+          children: [
+            for (final (k, label) in chips) ...[
+              ChoiceChip(
+                label: Text(label),
+                selected: kind == k,
+                onSelected: (_) => onChanged(k),
+              ),
+              const SizedBox(width: 8),
+            ],
+          ],
         ),
       ),
     );

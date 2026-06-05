@@ -785,6 +785,22 @@ class ApiClient {
     await _client.from(RunRow.table).delete().eq(RunRow.colId, runId);
   }
 
+  /// Fetch a single owned run by id, as a full domain [Run]. RLS scopes the
+  /// `runs` table to the owner, so this only resolves the caller's own runs —
+  /// it backs the unified History timeline opening a run-detail screen for a
+  /// run that may sit beyond the locally-cached page. Null when missing or
+  /// RLS-hidden. (Distinct from [fetchPublicRunById], which reads the redacted
+  /// `public_runs` view for non-owner viewers.)
+  Future<Run?> fetchRunById(String runId) async {
+    final data = await _client
+        .from(RunRow.table)
+        .select()
+        .eq(RunRow.colId, runId)
+        .maybeSingle();
+    if (data == null) return null;
+    return _runFromRow(data);
+  }
+
   /// Delete a route from the backend. Mirrors `apps/web/src/lib/data.ts:
   /// deleteRoute`. RLS gates the delete to the owner; foreign-key
   /// cascades clean up `saved_routes`, `segments`, and `route_reviews`
@@ -4086,6 +4102,29 @@ class ApiClient {
     ];
   }
 
+  /// Windowed, reverse-chronological feed across all logged modalities for
+  /// the unified History timeline. RLS (`security_invoker` on the `activities`
+  /// view) scopes it to the caller. Always bounded — the timeline paginates
+  /// like the run list rather than pulling an unbounded history (multi_modal.md
+  /// § "activities view at scale"). Mirrors web `fetchActivities`
+  /// (core/data.ts).
+  Future<List<ActivityRow>> fetchActivities({int limit = 100}) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return [];
+    final data = await _client
+        .from('activities')
+        .select('id, kind, started_at, summary')
+        .eq('user_id', uid)
+        .order('started_at', ascending: false)
+        .limit(limit);
+    final out = <ActivityRow>[];
+    for (final raw in (data as List).cast<Map<String, dynamic>>()) {
+      final row = ActivityRow.fromRow(raw);
+      if (row != null) out.add(row);
+    }
+    return out;
+  }
+
   /// Insert a workout + its sets. The caller may mint [id] (offline-create
   /// path) — `gym_workouts.id` defaults to gen_random_uuid() but accepts a
   /// client value, so the local id IS the server id (no reconciliation),
@@ -4353,3 +4392,44 @@ typedef GymSetInput = ({
   double? weightKg,
   double? rpe,
 });
+
+/// One row of the `activities` UNION view (runs + gym_workouts + food_log),
+/// projecting (id, kind, started_at, summary). `summary` is a thin per-kind
+/// jsonb the History timeline renders without a second fetch; the detail
+/// screens load the full underlying row. Migration 20261204_001. Mirrors the
+/// web `ActivityRow` (core/data.ts); `kind` stays a raw string ('run' |
+/// 'lift' | 'meal') like the web union.
+class ActivityRow {
+  final String id;
+  final String kind;
+  final DateTime startedAt;
+  final Map<String, dynamic> summary;
+  const ActivityRow({
+    required this.id,
+    required this.kind,
+    required this.startedAt,
+    required this.summary,
+  });
+
+  /// Parse one `activities` view row. Returns null for a row with no id or an
+  /// unparseable `started_at` (a row that can't land on a calendar day can't
+  /// render in the timeline) — mirrors the web `fetchActivities` filter.
+  /// `kind` defaults to 'run', `summary` to an empty map.
+  static ActivityRow? fromRow(Map<String, dynamic> row) {
+    final id = row['id'] as String?;
+    final startedAt = row['started_at'] as String?;
+    if (id == null || id.isEmpty || startedAt == null || startedAt.isEmpty) {
+      return null;
+    }
+    final parsed = DateTime.tryParse(startedAt);
+    if (parsed == null) return null;
+    final rawSummary = row['summary'];
+    return ActivityRow(
+      id: id,
+      kind: (row['kind'] as String?) ?? 'run',
+      startedAt: parsed,
+      summary:
+          rawSummary is Map ? rawSummary.cast<String, dynamic>() : const {},
+    );
+  }
+}

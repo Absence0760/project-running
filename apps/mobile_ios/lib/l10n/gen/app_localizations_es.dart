@@ -1325,6 +1325,38 @@ class AppLocalizationsEs extends AppLocalizations {
   String get historyNoMatch => 'Ninguna carrera coincide con estos filtros';
 
   @override
+  String get historyKindAll => 'Todo';
+
+  @override
+  String get historyKindRuns => 'Carreras';
+
+  @override
+  String get historyKindLifts => 'Pesas';
+
+  @override
+  String get historyKindMeals => 'Comidas';
+
+  @override
+  String get historyToday => 'Hoy';
+
+  @override
+  String get historyYesterday => 'Ayer';
+
+  @override
+  String historySetCount(int n) {
+    return '$n series';
+  }
+
+  @override
+  String historyKcal(int n) {
+    return '$n kcal';
+  }
+
+  @override
+  String get historyTimelineEmpty =>
+      'Aún no hay nada registrado en esta vista.';
+
+  @override
   String get historyClearFilters => 'Limpiar filtros';
 
   @override
