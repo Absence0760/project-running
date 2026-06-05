@@ -67,6 +67,12 @@ variable "share_run_lambda_zip_path" {
   default     = null
 }
 
+variable "share_route_lambda_zip_path" {
+  description = "Optional path to a pre-built share-route Lambda zip (apps/web/lambda/share-route/dist/share-route.zip). Default null → the module reuses the placeholder zip. CI replaces the code on every web@* tag, so this only matters on the very first apply. Web SEO parity with share-run — handles /share/route/* + /og/route/*.png with per-request SSR."
+  type        = string
+  default     = null
+}
+
 variable "public_site_url" {
   description = "Canonical public URL of this env (e.g. 'https://threkir.com' for prod, 'https://preview.threkir.com' for preview). Used by the share-run Lambda to build absolute og:url + og:image URLs in the per-run head tags. Defaults are env-specific; per-env stacks should set this explicitly."
   type        = string

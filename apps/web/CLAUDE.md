@@ -122,6 +122,18 @@ lambda/
                     # bundles via esbuild → dist/coach.zip (Anthropic SDK + supabase-js
                     # inlined, ~537 KB). CI's release-web.yml updates the Lambda code on every
                     # web@* tag. See decisions.md §53.
+  share-run/        # AWS Lambda Function URL handler for /share/run/* + /og/run/*.png in
+                    # production — per-request SSR so a brand-new public run unfurls with the
+                    # right per-run <head> + a rendered og:image (generic branded card at 200
+                    # for private/deleted ids). build.mjs embeds apps/web/build/index.html as
+                    # the SPA shell + copies the arm64 @resvg native binary into the zip. The
+                    # matching SvelteKit page + og endpoint carry prerender=false (dev server
+                    # owns the path locally). See lambda/share-run/README.md.
+  share-route/      # Same shape as share-run for /share/route/* + /og/route/*.png (Web SEO
+                    # parity). Reuses buildRouteShareCanonical / buildRouteJsonLd /
+                    # buildRouteOgSvg via share_route_lookup / share_route_meta /
+                    # share_route_spa_shell / og_route_png. Track is privacy-clipped via
+                    # clip_track_for_user. See lambda/share-route/README.md.
 ```
 
 ## Development

@@ -43,6 +43,19 @@ locals {
       PUBLIC_SITE_URL          = var.public_site_url
     },
   )
+
+  # share-route Lambda env. Same shape + posture as the share-run env
+  # (anon key against the anon-readable public_routes view + the
+  # clip_track_for_user RPC; PUBLIC_SITE_URL for env-specific absolute
+  # og:url / og:image / canonical / JSON-LD URLs). Kept as its own
+  # local so the two share surfaces stay independently owned.
+  share_route_lambda_env = merge(
+    {
+      PUBLIC_SUPABASE_URL      = var.public_supabase_url
+      PUBLIC_SUPABASE_ANON_KEY = var.public_supabase_anon_key
+      PUBLIC_SITE_URL          = var.public_site_url
+    },
+  )
 }
 
 data "aws_caller_identity" "current" {}
@@ -64,8 +77,9 @@ data "archive_file" "placeholder" {
 }
 
 locals {
-  effective_zip_path           = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
-  effective_share_run_zip_path = var.share_run_lambda_zip_path != null ? var.share_run_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_zip_path             = var.lambda_zip_path != null ? var.lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_run_zip_path   = var.share_run_lambda_zip_path != null ? var.share_run_lambda_zip_path : data.archive_file.placeholder.output_path
+  effective_share_route_zip_path = var.share_route_lambda_zip_path != null ? var.share_route_lambda_zip_path : data.archive_file.placeholder.output_path
 }
 
 # ──────────────────────────── KMS key for sops ────────────────────────────
@@ -527,6 +541,132 @@ resource "aws_lambda_permission" "cloudfront_invoke_share_run" {
   }
 }
 
+# ─── Share-route Lambda (Web SEO parity with share-run) ───
+#
+# Per-request SSR handler for /share/route/<id> (HTML + JSON-LD) +
+# /og/route/<id>.png (privacy-clipped track PNG). Pre-fix, both routes
+# were prerendered at build time via adapter-static (entries() from
+# public_routes, capped at 5k); a route made public post-build (or
+# beyond the cap) served the SPA-shell fallback `<head>` and a 404
+# og:image until the next deploy, and a public→private flip stayed on
+# S3 until overwritten. This Lambda fetches the route + clipped track
+# at request time so every URL gets the right OG head AND a rendered
+# image, regardless of build cadence. The PNG path falls back to a
+# generic branded card (HTTP 200) for private / deleted routes so an
+# unfurl never breaks. Symmetric mirror of the share-run Lambda above.
+# See apps/web/lambda/share-route/README.md for the bundle shape +
+# lifecycle.
+#
+# Reuses the existing `aws_iam_role.lambda` execution role + CloudWatch
+# log group naming so the operator surface stays uniform across the
+# three Lambdas — single role, single dashboard, single alarm fan-out.
+
+resource "aws_cloudwatch_log_group" "lambda_share_route" {
+  name              = "/aws/lambda/${local.resource_prefix}-share-route"
+  retention_in_days = 30
+  kms_key_id        = aws_kms_key.secrets.arn
+  tags              = var.tags
+}
+
+resource "aws_lambda_function" "share_route" {
+  function_name = "${local.resource_prefix}-share-route"
+  role          = aws_iam_role.lambda.arn
+  handler       = "index.handler"
+  # Node 24 — same runtime as the coach + share-run Lambdas;
+  # @supabase/realtime-js needs WS support that landed in Node 22+.
+  # Bumping here also requires the esbuild target in
+  # apps/web/lambda/share-route/build.mjs to match.
+  runtime       = "nodejs24.x"
+  architectures = ["arm64"]
+  # 512 MB — the @resvg PNG renderer needs more headroom than a pure
+  # HTML handler, but the static HTML path is the hot one and runs well
+  # under 256 MB. 512 splits the difference cheaply; an alarm on
+  # duration would tell us if PNG cold-starts squeeze. Matches the
+  # share-run Lambda.
+  memory_size                    = 512
+  timeout                        = 15
+  reserved_concurrent_executions = var.lambda_reserved_concurrency
+
+  filename         = local.effective_share_route_zip_path
+  source_code_hash = filebase64sha256(local.effective_share_route_zip_path)
+
+  publish = true
+
+  environment {
+    variables = local.share_route_lambda_env
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  tags = var.tags
+
+  # Same rationale as the coach + share-run Lambdas — CI updates code
+  # on every web@* tag; Terraform owns infra-shape (env, role, etc.).
+  lifecycle {
+    ignore_changes = [
+      filename,
+      source_code_hash,
+      qualified_arn,
+      version,
+    ]
+  }
+
+  depends_on = [aws_cloudwatch_log_group.lambda_share_route]
+}
+
+resource "aws_lambda_alias" "share_route_live" {
+  name             = "live"
+  function_name    = aws_lambda_function.share_route.function_name
+  function_version = aws_lambda_function.share_route.version
+
+  lifecycle {
+    ignore_changes = [function_version]
+  }
+}
+
+resource "aws_lambda_function_url" "share_route" {
+  function_name      = aws_lambda_function.share_route.function_name
+  qualifier          = aws_lambda_alias.share_route_live.name
+  authorization_type = "AWS_IAM"
+  # Buffered (not streaming) — share-route returns a single HTML or PNG
+  # body, no SSE. RESPONSE_STREAM would add latency overhead with no
+  # benefit.
+  invoke_mode = "BUFFERED"
+
+  cors {
+    # Crawlers + first-party viewers are the only callers; restrict to
+    # GET / OPTIONS. No custom headers needed (no JWT — every read is
+    # via the anon key inside the Lambda).
+    allow_origins = ["https://${var.domain_name}"]
+    allow_methods = ["GET"]
+    allow_headers = ["content-type"]
+    max_age       = 3600
+  }
+}
+
+resource "aws_cloudfront_origin_access_control" "lambda_share_route" {
+  name                              = "${local.resource_prefix}-share-route-oac"
+  origin_access_control_origin_type = "lambda"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
+}
+
+resource "aws_lambda_permission" "cloudfront_invoke_share_route" {
+  statement_id           = "AllowCloudFrontInvokeShareRoute"
+  action                 = "lambda:InvokeFunctionUrl"
+  function_name          = aws_lambda_function.share_route.function_name
+  qualifier              = aws_lambda_alias.share_route_live.name
+  principal              = "cloudfront.amazonaws.com"
+  source_arn             = aws_cloudfront_distribution.this.arn
+  function_url_auth_type = "AWS_IAM"
+
+  lifecycle {
+    create_before_destroy = true
+  }
+}
+
 # ──────────────────────────── CloudFront ────────────────────────────
 
 resource "aws_cloudfront_origin_access_control" "site" {
@@ -738,6 +878,46 @@ resource "aws_cloudfront_origin_request_policy" "share_run" {
   }
 }
 
+# Cache + origin-request policies for the share-route Lambda. Same
+# shape + 5-min TTL as the share-run policies (responses are
+# deterministic per URL and visibility flips must propagate fast). Kept
+# as dedicated resources rather than sharing the share-run ones so a
+# future tweak to one share surface can't silently change the other.
+resource "aws_cloudfront_cache_policy" "share_route" {
+  name = "${local.resource_prefix}-share-route"
+  # 5-min TTL — matches the Lambda's `max-age=300, s-maxage=300,
+  # stale-while-revalidate=60` Cache-Control. Both ceilings (CloudFront
+  # max_ttl AND the origin Cache-Control) clamp the stale window, so
+  # they must agree. Caps how long a public→private route flip stays on
+  # the OG unfurl.
+  comment     = "Share-route Lambda — cache per-id HTML/PNG for 5m so visibility flips propagate fast"
+  default_ttl = 300
+  max_ttl     = 300
+  min_ttl     = 0
+  parameters_in_cache_key_and_forwarded_to_origin {
+    enable_accept_encoding_brotli = true
+    enable_accept_encoding_gzip   = true
+    cookies_config { cookie_behavior = "none" }
+    headers_config { header_behavior = "none" }
+    # Path varies per route id; CloudFront already keys on the path
+    # without any query-string contribution. Disable QS-in-key so a
+    # `?foo=bar` doesn't multiply cache entries.
+    query_strings_config { query_string_behavior = "none" }
+  }
+}
+
+resource "aws_cloudfront_origin_request_policy" "share_route" {
+  name = "${local.resource_prefix}-share-route-origin"
+  cookies_config { cookie_behavior = "none" }
+  query_strings_config { query_string_behavior = "none" }
+  headers_config {
+    header_behavior = "whitelist"
+    headers {
+      items = ["accept", "accept-encoding"]
+    }
+  }
+}
+
 # Trivy AWS-0010 (CloudFront access logging) is suppressed in
 # .trivyignore at the repo root. Rationale: real-time CloudWatch
 # metrics + per-Lambda alarms in alarms.tf already cover the
@@ -777,6 +957,19 @@ resource "aws_cloudfront_distribution" "this" {
     origin_id                = "lambda-share-run"
     domain_name              = replace(aws_lambda_function_url.share_run.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
     origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_run.id
+
+    custom_origin_config {
+      http_port              = 80
+      https_port             = 443
+      origin_protocol_policy = "https-only"
+      origin_ssl_protocols   = ["TLSv1.2"]
+    }
+  }
+
+  origin {
+    origin_id                = "lambda-share-route"
+    domain_name              = replace(aws_lambda_function_url.share_route.function_url, "/^https?:\\/\\/([^/]+)\\/?.*$/", "$1")
+    origin_access_control_id = aws_cloudfront_origin_access_control.lambda_share_route.id
 
     custom_origin_config {
       http_port              = 80
@@ -841,6 +1034,41 @@ resource "aws_cloudfront_distribution" "this" {
     compress                   = false
     cache_policy_id            = aws_cloudfront_cache_policy.share_run.id
     origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_run.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Share-route Lambda: per-request SSR for route share-link HTML +
+  # JSON-LD so brand-new (or post-build-public) routes unfurl with the
+  # right per-route head, regardless of build cadence. Web SEO parity
+  # with share-run. See apps/web/lambda/share-route/README.md.
+  ordered_cache_behavior {
+    path_pattern               = "/share/route/*"
+    target_origin_id           = "lambda-share-route"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = true
+    cache_policy_id            = aws_cloudfront_cache_policy.share_route.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_route.id
+    response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
+  }
+
+  # Per-route og:image PNG, same Lambda. Pre-fix this stayed adapter-
+  # static-prerendered on S3 with a 5k cap, so a route made public
+  # after the last build (or beyond the cap) 404'd and its social
+  # unfurl showed a broken image. Routing /og/route/* to the
+  # share-route Lambda renders the card at request time for ANY id
+  # (with a generic branded fallback for private / deleted routes).
+  # compress is off: the body is already-compressed PNG bytes.
+  ordered_cache_behavior {
+    path_pattern               = "/og/route/*"
+    target_origin_id           = "lambda-share-route"
+    viewer_protocol_policy     = "redirect-to-https"
+    allowed_methods            = ["GET", "HEAD", "OPTIONS"]
+    cached_methods             = ["GET", "HEAD"]
+    compress                   = false
+    cache_policy_id            = aws_cloudfront_cache_policy.share_route.id
+    origin_request_policy_id   = aws_cloudfront_origin_request_policy.share_route.id
     response_headers_policy_id = aws_cloudfront_response_headers_policy.security.id
   }
 

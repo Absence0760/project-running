@@ -44,7 +44,7 @@ IAM role  s3:PutObject       on the env's artifacts bucket prefix
           (and nothing else — least-privilege)
 ```
 
-**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, two Lambdas. The Terraform setup uses one shared module (`infra/modules/web-stack`) consumed by per-env root modules (`infra/envs/{prod,preview}`) so the two stacks can't drift.
+**Per-environment stacks**, never one bucket with prefixes — that mistake is too easy to make destructive. Two CloudFront distributions, two S3 buckets, three Lambdas (coach + share-run + share-route). The Terraform setup uses one shared module (`infra/modules/web-stack`) consumed by per-env root modules (`infra/envs/{prod,preview}`) so the two stacks can't drift.
 
 ---
 
@@ -69,7 +69,7 @@ Provisioned via Terraform — matches the workstation toolchain (`/home/jhoward/
 ```
 infra/
 ├── modules/
-│   └── web-stack/         # Reusable: S3 + CloudFront + 2 Lambdas (coach + share-run) +
+│   └── web-stack/         # Reusable: S3 + CloudFront + 3 Lambdas (coach + share-run + share-route) +
 │                          # Function URLs + IAM + per-env KMS key + sops integration
 ├── envs/
 │   ├── prod/              # Root module — calls web-stack module
@@ -186,6 +186,19 @@ The only SSR route in the app, and the only one that costs money to run.
 **Rate limit response.** When the Lambda returns 429, `apps/web/src/routes/coach/+page.svelte` surfaces a "Daily limit reached, upgrade to Pro for higher limits" toast. Verify this on every deploy that touches the coach surface.
 
 **Self-hosted alternative.** Set `COACH_PROVIDER=openai` + `OPENAI_BASE_URL=http://...` in the Lambda env to point at an Ollama instance. We don't run one in production today, but local dev uses this path against a workstation Ollama for fast iteration.
+
+---
+
+## Share Lambdas — per-request SSR for unfurls (`share-run` + `share-route`)
+
+Two near-identical Lambdas render the public share surfaces at request time so a brand-new (or post-build-public) run / route unfurls with the right per-entity `<head>` + a matching og:image, regardless of build cadence:
+
+| Lambda | CloudFront behaviours | Surface |
+|---|---|---|
+| `runonward-web-<env>-share-run` | `/share/run/*`, `/og/run/*` | per-run SPA-shell HTML + og:image PNG ([`lambda/share-run/README.md`](lambda/share-run/README.md)) |
+| `runonward-web-<env>-share-route` | `/share/route/*`, `/og/route/*` | per-route SPA-shell HTML + JSON-LD + privacy-clipped og:image PNG ([`lambda/share-route/README.md`](lambda/share-route/README.md)) |
+
+Both run Node 24 / arm64 / 512 MB (the @resvg PNG rasteriser needs the headroom), hold no secrets (every read is the public anon key against the `public_runs` / `public_routes` views + the `clip_track_for_user` RPC), and cache at the edge for 5 min so a crawler storm costs one invocation per window and a public→private flip propagates fast. The matching SvelteKit page (`+page.ts`) + og endpoint (`+server.ts`) carry `prerender = false` so adapter-static doesn't bake stale per-id HTML/PNG onto S3; the Lambda owns the path in prod, the dev server owns it under `npm run dev`. CI (`release-web.yml`) rebuilds + redeploys both zips on every `web@*` tag — they embed `apps/web/build/index.html`, so they must build *after* `npm run build`. The PNG path always returns HTTP 200 (a generic branded card for private / deleted ids) so an unfurl never breaks with a 404 image.
 
 ---
 

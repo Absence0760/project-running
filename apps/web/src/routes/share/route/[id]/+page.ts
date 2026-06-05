@@ -1,76 +1,42 @@
-import type { EntryGenerator, PageLoad } from './$types';
-import { createClient } from '@supabase/supabase-js';
+import type { PageLoad } from './$types';
 import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from '$env/static/public';
 import { env } from '$env/dynamic/public';
+import { lookupSharedRoute } from '$lib/share/share_route_lookup';
 
 // Canonical host for the absolute <link rel="canonical"> + og:url +
-// JSON-LD URLs baked into the prerendered HTML. Same source +
-// fallback as /sitemap.xml so the host stays consistent across the
-// indexable surface (preview vs prod set PUBLIC_SITE_URL; local
-// prerender falls through to the prod host).
+// JSON-LD URLs. Same source + fallback as /sitemap.xml so the host
+// stays consistent across the indexable surface (preview vs prod set
+// PUBLIC_SITE_URL; local falls through to the prod host).
 const DEFAULT_SITE_URL = 'https://threkir.com';
 
-// Build-time prerender for public routes — mirror of the
-// share/run/[id] shape. `entries()` lists every public route id
-// from the `public_routes` view; `load()` does a thin name + meta
-// fetch so the <title> + og tags bake into the prerendered HTML.
+// Per-request SSR via apps/web/lambda/share-route in production —
+// CloudFront routes /share/route/* to the Lambda Function URL, which
+// fetches the route meta and bakes the per-route <title> + Open Graph
+// + canonical + JSON-LD into the response HTML before crawlers can see
+// it. This PageLoad still runs under the SvelteKit dev server so
+// /share/route/[id] works locally without standing up the Lambda.
+//
+// `prerender = false` opts out of the module-level
+// `prerender: { default: true }` so adapter-static doesn't bake per-id
+// HTML files at build time — those staled the moment a route flipped
+// public/private after the build, or went unbuilt past the 5k cap. The
+// Lambda owns this path in prod.
 //
 // Body rendering still goes through `fetchRouteById` in +page.svelte
-// onMount — that path is owner-aware (full polyline for owners /
-// club members, server-clipped waypoints for anon / non-owner via
-// the `clip-public-track` Edge Function). Lifting that into load()
-// would push the auth-context fetch into prerender, which neither
-// makes sense (no auth at build time) nor would be correct (owner-
-// only polyline would never reach a viewer that's actually the
-// owner). Keep the two paths separate: minimal meta for head,
-// full owner-aware body for the page itself.
-export const prerender = true;
-
-const MAX_ROUTES = 5_000;
-
-export const entries: EntryGenerator = async () => {
-	if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) return [];
-	try {
-		const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-			auth: { persistSession: false },
-		});
-		const { data, error } = await supabase
-			.from('public_routes')
-			.select('id')
-			.order('updated_at', { ascending: false })
-			.limit(MAX_ROUTES);
-		if (error) {
-			console.warn('share/route prerender entries: public_routes fetch failed', error);
-			return [];
-		}
-		return (data ?? []).map((r) => ({ id: r.id }));
-	} catch (err) {
-		console.warn('share/route prerender entries: supabase boot failed', err);
-		return [];
-	}
-};
+// onMount — that path is owner-aware (full polyline for owners / club
+// members, server-clipped waypoints for anon / non-owner). Only the
+// minimal meta needed for the <head> is fetched here; `withTrack:
+// false` skips the clip RPC since the head doesn't render the polyline.
+export const prerender = false;
 
 export const load: PageLoad = async ({ params }) => {
 	const siteUrl = env.PUBLIC_SITE_URL || DEFAULT_SITE_URL;
-	// Native fetch (not SvelteKit's wrapped fetch) — see the parallel
-	// note in share/run/[id]/+page.ts: wrapping rewrites cross-origin
-	// requests during prerender and the supabase call loops back to
-	// the SvelteKit dev server.
-	if (!PUBLIC_SUPABASE_URL || !PUBLIC_SUPABASE_ANON_KEY) {
-		return { id: params.id, route: null, siteUrl };
-	}
-	try {
-		const supabase = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
-			auth: { persistSession: false },
-		});
-		const { data } = await supabase
-			.from('public_routes')
-			.select('id, name, distance_m, surface, elevation_m')
-			.eq('id', params.id)
-			.maybeSingle();
-		return { id: params.id, route: data ?? null, siteUrl };
-	} catch (err) {
-		console.warn('share/route load: fetch failed', err);
-		return { id: params.id, route: null, siteUrl };
-	}
+	const lookup = await lookupSharedRoute(
+		params.id,
+		PUBLIC_SUPABASE_URL && PUBLIC_SUPABASE_ANON_KEY
+			? { supabaseUrl: PUBLIC_SUPABASE_URL, supabaseAnonKey: PUBLIC_SUPABASE_ANON_KEY }
+			: null,
+		{ withTrack: false },
+	);
+	return { id: params.id, route: lookup.route, siteUrl };
 };
