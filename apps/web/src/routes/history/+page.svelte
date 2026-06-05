@@ -14,7 +14,7 @@
 	import RunTrackPreview from '$lib/components/RunTrackPreview.svelte';
 	import DateRangePicker from '$lib/components/DateRangePicker.svelte';
 	import type { Run, RunSource } from '$lib/types';
-	import { formatElevation } from '$lib/format/units.svelte';
+	import { formatElevation, formatWeight } from '$lib/format/units.svelte';
 	import { m } from '$lib/i18n/store.svelte';
 	import type { MessageKey } from '$lib/i18n/messages';
 	import type { Snapshot } from './$types';
@@ -399,7 +399,9 @@
 			const setCount = typeof s.set_count === 'number' ? s.set_count : 0;
 			const vol = typeof s.volume_kg === 'number' ? Math.round(s.volume_kg) : 0;
 			const secondary = [m('history.setCount', { n: setCount })];
-			if (vol > 0) secondary.push(m('gym.volumeShort', { volume: vol.toLocaleString() }));
+			// Show volume in the user's weight unit (kg/lbs), matching the mobile
+			// timeline + the gym surfaces — not a bare unitless number.
+			if (vol > 0) secondary.push(formatWeight(vol));
 			return {
 				primary: (typeof s.title === 'string' && s.title) || m('gym.untitled'),
 				secondary: secondary.join(' · '),
@@ -581,11 +583,11 @@
 		     modality exists; chips for empty kinds are hidden. Type is
 		     coded by glyph + label inside each timeline row, not by the
 		     chip colour, so the chips aren't load-bearing for scanning. -->
-		<div class="kind-chips" role="group" aria-label={m('runs.activityTypeGroup')}>
+		<div class="kind-chips seg-group" role="group" aria-label={m('runs.activityTypeGroup')}>
 			{#each kindChips as c (c.value)}
 				<button
 					type="button"
-					class="kind-chip"
+					class="kind-chip seg-btn"
 					class:active={kindFilter === c.value}
 					aria-pressed={kindFilter === c.value}
 					onclick={() => (kindFilter = c.value)}
@@ -602,52 +604,55 @@
 		     have no detail screen yet (nutrition module pending) so they
 		     render read-only rather than linking to a 404. -->
 		{#if timelineRows.length === 0}
-			<div class="empty">
+			<div class="card-elevated empty">
 				<span class="material-symbols empty-icon" aria-hidden="true">inbox</span>
-				<p class="empty-text">{m('history.emptyTimeline')}</p>
+				<h2 class="empty-text">{m('history.emptyTimeline')}</h2>
 			</div>
 		{:else}
 			<div class="timeline">
 				{#each timelineGroups as g (g.key)}
-					<h2 class="timeline-day">{g.label}</h2>
-					<ul class="timeline-list">
-						{#each g.rows as a (a.id)}
-							{@const sum = activitySummary(a)}
-							{@const href = activityHref(a)}
-							<li>
-								<svelte:element
-									this={href ? 'a' : 'div'}
-									href={href ?? undefined}
-									class="timeline-row"
-									class:timeline-row-link={href != null}
-									data-kind={a.kind}
-								>
-									<span class="timeline-glyph" data-kind={a.kind} aria-hidden="true">
-										<span class="material-symbols">{activityGlyph(a.kind)}</span>
-									</span>
-									<span class="timeline-main">
-										<span class="timeline-primary">{sum.primary}</span>
-										{#if sum.secondary}
-											<span class="timeline-secondary">{sum.secondary}</span>
+					<section class="timeline-group">
+						<h2 class="timeline-day">{g.label}</h2>
+						<ul class="timeline-list card-elevated">
+							{#each g.rows as a (a.id)}
+								{@const sum = activitySummary(a)}
+								{@const href = activityHref(a)}
+								<li class="timeline-item">
+									<svelte:element
+										this={href ? 'a' : 'div'}
+										href={href ?? undefined}
+										class="timeline-row"
+										class:timeline-row-link={href != null}
+										data-kind={a.kind}
+									>
+										<span class="timeline-glyph" data-kind={a.kind} aria-hidden="true">
+											<span class="material-symbols">{activityGlyph(a.kind)}</span>
+										</span>
+										<span class="timeline-main">
+											<span class="timeline-primary">{sum.primary}</span>
+											{#if sum.secondary}
+												<span class="timeline-secondary">{sum.secondary}</span>
+											{/if}
+										</span>
+										{#if href}
+											<span class="material-symbols timeline-arrow" aria-hidden="true">chevron_right</span>
 										{/if}
-									</span>
-									{#if href}
-										<span class="material-symbols timeline-arrow">chevron_right</span>
-									{/if}
-								</svelte:element>
-							</li>
-						{/each}
-					</ul>
+									</svelte:element>
+								</li>
+							{/each}
+						</ul>
+					</section>
 				{/each}
 			</div>
 		{/if}
 	{:else}
 	<header class="page-header">
 		<div class="toolbar">
-			<div class="activity-group" role="group" aria-label={m('runs.activityTypeGroup')}>
+			<div class="toolbar-filters">
+			<div class="activity-group seg-group" role="group" aria-label={m('runs.activityTypeGroup')}>
 				{#each activities as act}
 					<button
-						class="activity-btn"
+						class="activity-btn seg-btn"
 						class:active={activityFilter === act.value}
 						onclick={() => (activityFilter = act.value)}
 						title={act.label}
@@ -703,6 +708,7 @@
 					<option value="fastest">{m('runs.sortFastest')}</option>
 				</select>
 			</div>
+			</div>
 
 			<div class="toolbar-actions">
 				{#if selecting}
@@ -755,6 +761,7 @@
 		<div class="run-list run-list-skel" aria-hidden="true">
 			{#each Array(8) as _, i (i)}
 				<div class="skel-card">
+					<div class="skel skel-map"></div>
 					<div class="skel-card-body">
 						<div class="skel-card-top">
 							<span class="skel skel-line skel-w-40"></span>
@@ -928,26 +935,27 @@
 
 		{#if filteredRuns.length === 0}
 			{#if runs.length === 0}
-				<div class="empty" data-testid="runs-empty-no-data">
+				<div class="card-elevated empty" data-testid="runs-empty-no-data">
 					<span class="material-symbols empty-icon" aria-hidden="true">directions_run</span>
-					<p class="empty-text">{m('runs.emptyNoData')}</p>
+					<h2 class="empty-text">{m('runs.emptyNoData')}</h2>
 					<p class="empty-hint">
 						{m('runs.emptyNoDataHintPrefix')}
 						<a href="/settings/integrations">{m('runs.emptyNoDataHintLink')}</a>{m('runs.emptyNoDataHintSuffix')}
 					</p>
-					<button
-						type="button"
-						class="btn btn-primary"
-						onclick={() => (showRunModal = true)}
-						style="margin-top: var(--space-md);"
-					>
-						{m('runs.addRun')}
-					</button>
+					<div class="empty-actions">
+						<button
+							type="button"
+							class="btn btn-primary"
+							onclick={() => (showRunModal = true)}
+						>
+							{m('runs.addRun')}
+						</button>
+					</div>
 				</div>
 			{:else}
-				<div class="empty" data-testid="runs-empty-filtered">
+				<div class="card-elevated empty" data-testid="runs-empty-filtered">
 					<span class="material-symbols empty-icon" aria-hidden="true">filter_alt_off</span>
-					<p class="empty-text">{m('runs.emptyFiltered')}</p>
+					<h2 class="empty-text">{m('runs.emptyFiltered')}</h2>
 					<p class="empty-hint">
 						{m('runs.emptyFilteredHint')}
 					</p>
@@ -1015,43 +1023,58 @@
 		flex-wrap: wrap;
 	}
 
-	.activity-group {
+	/* The filter cluster (activity segmented control + selects) stays
+	   grouped on the left; toolbar-actions push to the right edge. */
+	.toolbar-filters {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+	}
+
+	/* Shared segmented-control idiom used by both the activity-type
+	   filter (run-list mode) and the kind chips (timeline mode) so the
+	   two History modes read as one family. */
+	.seg-group {
 		display: inline-flex;
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
-		background: var(--color-surface);
+		background: var(--color-bg-secondary);
 		padding: var(--space-2xs);
 		gap: var(--space-2xs);
 	}
 
-	.activity-btn {
+	.seg-btn {
 		display: inline-flex;
 		align-items: center;
+		justify-content: center;
 		gap: var(--space-xs);
-		padding: var(--space-xs) var(--space-sm);
+		padding: var(--space-xs) var(--space-md);
 		border: none;
 		border-radius: var(--radius-sm);
 		background: transparent;
 		font: inherit;
 		font-size: 0.85rem;
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--color-text-secondary);
 		cursor: pointer;
-		transition: background var(--transition-fast), color var(--transition-fast);
+		transition: background var(--transition-fast), color var(--transition-fast),
+			box-shadow var(--transition-fast);
 	}
-	.activity-btn .material-symbols {
+	.seg-btn .material-symbols {
 		font-size: 1.05rem;
 	}
-	.activity-btn:hover {
-		background: var(--color-bg-tertiary);
+	.seg-btn:hover {
 		color: var(--color-text);
 	}
-	.activity-btn.active {
-		background: var(--color-primary);
-		color: var(--color-surface);
+	.seg-btn.active {
+		background: var(--color-surface);
+		color: var(--color-primary);
+		box-shadow: var(--shadow-sm);
 	}
-	.activity-btn.active:hover {
-		background: var(--color-primary-hover);
+	.seg-btn:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 	}
 
 	.select-group {
@@ -1094,6 +1117,9 @@
 	@media (max-width: 50rem) {
 		.activity-label {
 			display: none;
+		}
+		.toolbar-filters {
+			width: 100%;
 		}
 		.toolbar-actions {
 			margin-inline-start: 0;
@@ -1138,6 +1164,7 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		overflow: hidden;
+		box-shadow: var(--shadow-sm);
 		transition: border-color var(--transition-fast), box-shadow var(--transition-fast),
 			transform var(--transition-fast);
 		text-decoration: none;
@@ -1147,6 +1174,11 @@
 	.run-card:hover {
 		border-color: var(--color-primary);
 		box-shadow: var(--shadow-md);
+		transform: translateY(-2px);
+	}
+	.run-card:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
 	}
 
 	.run-map-placeholder {
@@ -1279,14 +1311,27 @@
 		flex-direction: column;
 		align-items: center;
 		gap: var(--space-sm);
+		/* Cap so the card doesn't stretch the full canvas; centred in the
+		   grid cell (run-list empties span 1 / -1) and on the timeline. */
+		max-width: 32rem;
+		margin-inline: auto;
 	}
 	.empty-icon {
-		font-size: 2.25rem;
-		color: var(--color-text-tertiary);
-		opacity: 0.7;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 3.25rem;
+		height: 3.25rem;
+		border-radius: 50%;
+		background: var(--color-bg-tertiary);
+		font-size: 1.75rem;
+		color: var(--color-text-secondary);
+		margin-bottom: var(--space-2xs);
 	}
 	.empty .empty-text {
-		font-size: 0.95rem;
+		margin: 0;
+		font-size: 1.05rem;
+		font-weight: 600;
 		color: var(--color-text);
 		padding: 0;
 	}
@@ -1480,9 +1525,17 @@
 		background: var(--color-surface);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
+		box-shadow: var(--shadow-sm);
 		overflow: hidden;
-		min-height: 7.5rem;
 		pointer-events: none;
+	}
+	/* Mirrors the real card's 8rem map thumbnail so accounts with GPS
+	   tracks don't get a height jump when data swaps in. */
+	.skel-map {
+		width: 100%;
+		height: 8rem;
+		border-radius: 0;
+		border-bottom: 1px solid var(--color-border);
 	}
 	.skel-card-body { padding: var(--space-md) var(--space-lg); }
 	.skel-card-top {
@@ -1552,67 +1605,69 @@
 
 	/* --- Unified activities timeline (multi-modal History) --- */
 	.kind-chips {
-		display: flex;
-		gap: var(--space-2xs);
-		flex-wrap: wrap;
 		margin-bottom: var(--space-lg);
 	}
-	.kind-chip {
-		padding: var(--space-2xs) var(--space-md);
-		border: 1px solid var(--color-border);
-		border-radius: 999px;
-		background: var(--color-surface);
-		color: var(--color-text-secondary);
-		font-size: 0.85rem;
-		cursor: pointer;
-		transition: background var(--transition-fast), border-color var(--transition-fast);
-	}
-	.kind-chip:hover { border-color: var(--color-primary); }
-	.kind-chip.active {
-		background: var(--color-primary);
-		border-color: var(--color-primary);
-		color: var(--color-on-primary, #fff);
-	}
 
+	/* The timeline is a single readable column on wide canvases — a
+	   full-width stretch left the rows using ~40% of the row with a sea
+	   of empty space on the right. */
 	.timeline {
 		display: flex;
 		flex-direction: column;
-		gap: var(--space-lg);
+		gap: var(--space-xl);
+		max-width: 48rem;
+	}
+	.timeline-group {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-sm);
 	}
 	.timeline-day {
-		font-size: 0.8rem;
+		font-size: 0.75rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--color-text-tertiary);
-		margin: 0 0 var(--space-2xs) 0;
+		margin: 0;
+		padding-inline-start: var(--space-2xs);
 	}
+	/* One elevated panel per day; rows are separated by hairline
+	   dividers rather than each being its own bordered box. */
 	.timeline-list {
 		list-style: none;
 		margin: 0;
 		padding: 0;
-		display: flex;
-		flex-direction: column;
-		gap: var(--space-2xs);
+		overflow: hidden;
+	}
+	.timeline-item + .timeline-item {
+		border-top: 1px solid var(--color-border);
 	}
 	.timeline-row {
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
 		padding: var(--space-sm) var(--space-md);
-		border: 1px solid var(--color-border);
-		border-radius: var(--radius-md);
-		background: var(--color-surface);
 		text-decoration: none;
 		color: inherit;
+		transition: background var(--transition-fast);
 	}
-	.timeline-row-link:hover { border-color: var(--color-primary); }
+	.timeline-row-link:hover { background: var(--color-bg-secondary); }
+	.timeline-row-link:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: -2px;
+		border-radius: var(--radius-sm);
+	}
+	/* card-elevated gives the resting shadow + border; zero its default
+	   padding so timeline rows fill edge to edge. */
+	.timeline-list.card-elevated {
+		padding: 0;
+	}
 	.timeline-glyph {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2rem;
-		height: 2rem;
+		width: 2.25rem;
+		height: 2.25rem;
 		border-radius: 50%;
 		flex-shrink: 0;
 		color: var(--color-text-secondary);
@@ -1623,7 +1678,7 @@
 	.timeline-glyph[data-kind='lift'] { color: #4e7c5e; background: color-mix(in srgb, #8fbf9f 18%, transparent); }
 	.timeline-glyph[data-kind='meal'] { color: #9a6b2f; background: color-mix(in srgb, #d9a25a 20%, transparent); }
 	.timeline-glyph[data-kind='run'] { color: var(--color-primary); background: color-mix(in srgb, var(--color-primary) 12%, transparent); }
-	.timeline-glyph .material-symbols { font-size: 1.2rem; }
+	.timeline-glyph .material-symbols { font-size: 1.25rem; }
 	.timeline-main {
 		flex: 1;
 		display: flex;
@@ -1631,7 +1686,20 @@
 		gap: 1px;
 		min-width: 0;
 	}
-	.timeline-primary { font-weight: 600; }
-	.timeline-secondary { font-size: 0.85rem; color: var(--color-text-secondary); }
-	.timeline-arrow { color: var(--color-text-tertiary); }
+	.timeline-primary {
+		font-weight: 600;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.timeline-secondary {
+		font-size: 0.85rem;
+		color: var(--color-text-secondary);
+		font-variant-numeric: tabular-nums;
+	}
+	.timeline-arrow {
+		color: var(--color-text-tertiary);
+		font-size: 1.2rem;
+		flex-shrink: 0;
+	}
 </style>

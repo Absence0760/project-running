@@ -111,7 +111,14 @@ export async function signOut(page: Page) {
  *
  * The select is a native <select bind:value={dateRange}> with
  * aria-label="Date range" and an option `<option value="all">All time</option>`.
+ *
+ * When the account has a second modality (a logged lift/meal), /history
+ * opens on the unified timeline and the run-list toolbar — including the
+ * Date-range select — only renders under the "Runs" kind chip. Drop into
+ * the run list first when that chip is present so the select exists.
  */
 export async function switchRunsToAllTime(page: Page) {
+	const runsChip = page.getByRole('button', { name: 'Runs', exact: true });
+	if (await runsChip.count()) await runsChip.first().click();
 	await page.getByLabel('Date range').selectOption('all');
 }
