@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/local_food_store.dart';
+import '../lib/local_gym_store.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
@@ -111,6 +113,8 @@ Future<void> _pump(
       home: DashboardScreen(
         runStore: runStore,
         routeStore: routeStore,
+        gymStore: LocalGymStore(),
+        foodStore: LocalFoodStore(),
         preferences: prefs,
       ),
     ),
@@ -269,6 +273,8 @@ void main() {
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
                 preferences: prefs,
               ),
             ),
@@ -324,6 +330,8 @@ void main() {
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
                 preferences: prefs,
               ),
             ),
@@ -371,6 +379,8 @@ void main() {
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
                 preferences: prefs,
                 training: _FakeTraining(_overviewWithTodayWorkout()),
               ),
@@ -419,6 +429,8 @@ void main() {
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
                 preferences: prefs,
                 training: _FakeTraining(null),
               ),
@@ -460,6 +472,8 @@ void main() {
               home: DashboardScreen(
                 runStore: runStore,
                 routeStore: LocalRouteStore(),
+                gymStore: LocalGymStore(),
+                foodStore: LocalFoodStore(),
                 preferences: prefs,
               ),
             ),

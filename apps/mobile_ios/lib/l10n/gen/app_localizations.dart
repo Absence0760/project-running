@@ -827,6 +827,186 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get navSettings;
 
+  /// Tooltip/label for the centre Log action button in the bottom nav
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get navLog;
+
+  /// Screen-reader label for the centre Log action button
+  ///
+  /// In en, this message translates to:
+  /// **'Log an activity'**
+  String get logA11yLabel;
+
+  /// Title of the Log capture bottom sheet
+  ///
+  /// In en, this message translates to:
+  /// **'Log'**
+  String get logSheetTitle;
+
+  /// Log sheet item: begin recording a run
+  ///
+  /// In en, this message translates to:
+  /// **'Start run'**
+  String get logStartRun;
+
+  /// Log sheet item: begin logging a gym/lift workout
+  ///
+  /// In en, this message translates to:
+  /// **'Start lift'**
+  String get logStartLift;
+
+  /// Log sheet item: log a meal
+  ///
+  /// In en, this message translates to:
+  /// **'Log meal'**
+  String get logMeal;
+
+  /// Log sheet item: log a snack
+  ///
+  /// In en, this message translates to:
+  /// **'Log snack'**
+  String get logSnack;
+
+  /// Settings toggle: make the centre Log button start a run on a single tap
+  ///
+  /// In en, this message translates to:
+  /// **'Run as primary action'**
+  String get prefsKeepRunPrimary;
+
+  /// Subtitle for the run-as-primary-action settings toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the centre button to start a run; long-press for the full log menu'**
+  String get prefsKeepRunPrimarySubtitle;
+
+  /// Title of the body-metrics settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Body metrics'**
+  String get bodyMetricsTitle;
+
+  /// Settings tile subtitle for the body-metrics entry
+  ///
+  /// In en, this message translates to:
+  /// **'Height, weight & nutrition targets'**
+  String get bodyMetricsTileSubtitle;
+
+  /// Toggle title for the GDPR Art 9 health-data consent gate
+  ///
+  /// In en, this message translates to:
+  /// **'Store health data'**
+  String get bodyMetricsConsentTitle;
+
+  /// Explanation under the health-data consent toggle
+  ///
+  /// In en, this message translates to:
+  /// **'Height and weight are special-category health data. Turn this off to erase them.'**
+  String get bodyMetricsConsentSubtitle;
+
+  /// Label for the height input (centimetres)
+  ///
+  /// In en, this message translates to:
+  /// **'Height'**
+  String get bodyMetricsHeight;
+
+  /// Label for the weight input (user's weight unit)
+  ///
+  /// In en, this message translates to:
+  /// **'Weight'**
+  String get bodyMetricsWeight;
+
+  /// Label for the nutrition activity-level picker
+  ///
+  /// In en, this message translates to:
+  /// **'Activity level'**
+  String get bodyMetricsActivityLevel;
+
+  /// Label for the nutrition weight-goal picker
+  ///
+  /// In en, this message translates to:
+  /// **'Goal'**
+  String get bodyMetricsGoal;
+
+  /// Helper text explaining what body metrics are used for
+  ///
+  /// In en, this message translates to:
+  /// **'Used to estimate your daily calorie and macro targets.'**
+  String get bodyMetricsTargetsHint;
+
+  /// Error shown when saving body data without consent
+  ///
+  /// In en, this message translates to:
+  /// **'Turn on health-data storage to save height and weight.'**
+  String get bodyMetricsConsentRequired;
+
+  /// Confirmation toast after saving body metrics
+  ///
+  /// In en, this message translates to:
+  /// **'Saved'**
+  String get bodyMetricsSaved;
+
+  /// Error toast when saving body metrics fails
+  ///
+  /// In en, this message translates to:
+  /// **'Save failed: {error}'**
+  String bodyMetricsSaveFailed(String error);
+
+  /// Nutrition activity level: little exercise
+  ///
+  /// In en, this message translates to:
+  /// **'Sedentary'**
+  String get activitySedentary;
+
+  /// Nutrition activity level: 1-3 days/week
+  ///
+  /// In en, this message translates to:
+  /// **'Lightly active'**
+  String get activityLight;
+
+  /// Nutrition activity level: 3-5 days/week
+  ///
+  /// In en, this message translates to:
+  /// **'Moderately active'**
+  String get activityModerate;
+
+  /// Nutrition activity level: 6-7 days/week
+  ///
+  /// In en, this message translates to:
+  /// **'Very active'**
+  String get activityVeryActive;
+
+  /// Nutrition activity level: training twice a day
+  ///
+  /// In en, this message translates to:
+  /// **'Extra active'**
+  String get activityExtraActive;
+
+  /// Nutrition weight goal: calorie deficit
+  ///
+  /// In en, this message translates to:
+  /// **'Lose weight'**
+  String get goalLose;
+
+  /// Nutrition weight goal: maintenance
+  ///
+  /// In en, this message translates to:
+  /// **'Maintain weight'**
+  String get goalMaintain;
+
+  /// Nutrition weight goal: calorie surplus
+  ///
+  /// In en, this message translates to:
+  /// **'Gain weight'**
+  String get goalGain;
+
+  /// Home card header above today's logged gym workout
+  ///
+  /// In en, this message translates to:
+  /// **'Today\'s lift'**
+  String get homeTodaysLift;
+
   /// Settings landing section header grouping Account + Preferences
   ///
   /// In en, this message translates to:

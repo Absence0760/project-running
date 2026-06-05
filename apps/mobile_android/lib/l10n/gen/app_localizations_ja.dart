@@ -457,6 +457,98 @@ class AppLocalizationsJa extends AppLocalizations {
   String get navSettings => '設定';
 
   @override
+  String get navLog => '記録';
+
+  @override
+  String get logA11yLabel => 'アクティビティを記録';
+
+  @override
+  String get logSheetTitle => '記録';
+
+  @override
+  String get logStartRun => 'ランを開始';
+
+  @override
+  String get logStartLift => '筋トレを開始';
+
+  @override
+  String get logMeal => '食事を記録';
+
+  @override
+  String get logSnack => '間食を記録';
+
+  @override
+  String get prefsKeepRunPrimary => 'ランを主要操作にする';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle => '中央のボタンでランを開始、長押しで全メニューを表示';
+
+  @override
+  String get bodyMetricsTitle => '身体データ';
+
+  @override
+  String get bodyMetricsTileSubtitle => '身長・体重・栄養目標';
+
+  @override
+  String get bodyMetricsConsentTitle => '健康データを保存';
+
+  @override
+  String get bodyMetricsConsentSubtitle => '身長と体重は特別な健康データです。オフにすると削除されます。';
+
+  @override
+  String get bodyMetricsHeight => '身長';
+
+  @override
+  String get bodyMetricsWeight => '体重';
+
+  @override
+  String get bodyMetricsActivityLevel => '活動レベル';
+
+  @override
+  String get bodyMetricsGoal => '目標';
+
+  @override
+  String get bodyMetricsTargetsHint => '1日のカロリーとマクロ目標の推定に使用します。';
+
+  @override
+  String get bodyMetricsConsentRequired => '健康データの保存をオンにすると身長と体重を保存できます。';
+
+  @override
+  String get bodyMetricsSaved => '保存しました';
+
+  @override
+  String bodyMetricsSaveFailed(String error) {
+    return '保存に失敗しました: $error';
+  }
+
+  @override
+  String get activitySedentary => 'ほとんど運動しない';
+
+  @override
+  String get activityLight => '軽い運動';
+
+  @override
+  String get activityModerate => '中程度の運動';
+
+  @override
+  String get activityVeryActive => '活発';
+
+  @override
+  String get activityExtraActive => '非常に活発';
+
+  @override
+  String get goalLose => '減量';
+
+  @override
+  String get goalMaintain => '体重を維持';
+
+  @override
+  String get goalGain => '増量';
+
+  @override
+  String get homeTodaysLift => '今日の筋トレ';
+
+  @override
   String get settingsSectionProfile => 'プロフィール';
 
   @override

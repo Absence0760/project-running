@@ -266,6 +266,129 @@
   "@navSettings": {
     "description": "Bottom-nav label for the settings tab"
   },
+  "navLog": "Log",
+  "@navLog": {
+    "description": "Tooltip/label for the centre Log action button in the bottom nav"
+  },
+  "logA11yLabel": "Log an activity",
+  "@logA11yLabel": {
+    "description": "Screen-reader label for the centre Log action button"
+  },
+  "logSheetTitle": "Log",
+  "@logSheetTitle": {
+    "description": "Title of the Log capture bottom sheet"
+  },
+  "logStartRun": "Start run",
+  "@logStartRun": {
+    "description": "Log sheet item: begin recording a run"
+  },
+  "logStartLift": "Start lift",
+  "@logStartLift": {
+    "description": "Log sheet item: begin logging a gym/lift workout"
+  },
+  "logMeal": "Log meal",
+  "@logMeal": {
+    "description": "Log sheet item: log a meal"
+  },
+  "logSnack": "Log snack",
+  "@logSnack": {
+    "description": "Log sheet item: log a snack"
+  },
+  "prefsKeepRunPrimary": "Run as primary action",
+  "@prefsKeepRunPrimary": {
+    "description": "Settings toggle: make the centre Log button start a run on a single tap"
+  },
+  "prefsKeepRunPrimarySubtitle": "Tap the centre button to start a run; long-press for the full log menu",
+  "@prefsKeepRunPrimarySubtitle": {
+    "description": "Subtitle for the run-as-primary-action settings toggle"
+  },
+  "bodyMetricsTitle": "Body metrics",
+  "@bodyMetricsTitle": {
+    "description": "Title of the body-metrics settings screen"
+  },
+  "bodyMetricsTileSubtitle": "Height, weight & nutrition targets",
+  "@bodyMetricsTileSubtitle": {
+    "description": "Settings tile subtitle for the body-metrics entry"
+  },
+  "bodyMetricsConsentTitle": "Store health data",
+  "@bodyMetricsConsentTitle": {
+    "description": "Toggle title for the GDPR Art 9 health-data consent gate"
+  },
+  "bodyMetricsConsentSubtitle": "Height and weight are special-category health data. Turn this off to erase them.",
+  "@bodyMetricsConsentSubtitle": {
+    "description": "Explanation under the health-data consent toggle"
+  },
+  "bodyMetricsHeight": "Height",
+  "@bodyMetricsHeight": {
+    "description": "Label for the height input (centimetres)"
+  },
+  "bodyMetricsWeight": "Weight",
+  "@bodyMetricsWeight": {
+    "description": "Label for the weight input (user's weight unit)"
+  },
+  "bodyMetricsActivityLevel": "Activity level",
+  "@bodyMetricsActivityLevel": {
+    "description": "Label for the nutrition activity-level picker"
+  },
+  "bodyMetricsGoal": "Goal",
+  "@bodyMetricsGoal": {
+    "description": "Label for the nutrition weight-goal picker"
+  },
+  "bodyMetricsTargetsHint": "Used to estimate your daily calorie and macro targets.",
+  "@bodyMetricsTargetsHint": {
+    "description": "Helper text explaining what body metrics are used for"
+  },
+  "bodyMetricsConsentRequired": "Turn on health-data storage to save height and weight.",
+  "@bodyMetricsConsentRequired": {
+    "description": "Error shown when saving body data without consent"
+  },
+  "bodyMetricsSaved": "Saved",
+  "@bodyMetricsSaved": {
+    "description": "Confirmation toast after saving body metrics"
+  },
+  "bodyMetricsSaveFailed": "Save failed: {error}",
+  "@bodyMetricsSaveFailed": {
+    "description": "Error toast when saving body metrics fails",
+    "placeholders": {
+      "error": { "type": "String" }
+    }
+  },
+  "activitySedentary": "Sedentary",
+  "@activitySedentary": {
+    "description": "Nutrition activity level: little exercise"
+  },
+  "activityLight": "Lightly active",
+  "@activityLight": {
+    "description": "Nutrition activity level: 1-3 days/week"
+  },
+  "activityModerate": "Moderately active",
+  "@activityModerate": {
+    "description": "Nutrition activity level: 3-5 days/week"
+  },
+  "activityVeryActive": "Very active",
+  "@activityVeryActive": {
+    "description": "Nutrition activity level: 6-7 days/week"
+  },
+  "activityExtraActive": "Extra active",
+  "@activityExtraActive": {
+    "description": "Nutrition activity level: training twice a day"
+  },
+  "goalLose": "Lose weight",
+  "@goalLose": {
+    "description": "Nutrition weight goal: calorie deficit"
+  },
+  "goalMaintain": "Maintain weight",
+  "@goalMaintain": {
+    "description": "Nutrition weight goal: maintenance"
+  },
+  "goalGain": "Gain weight",
+  "@goalGain": {
+    "description": "Nutrition weight goal: calorie surplus"
+  },
+  "homeTodaysLift": "Today's lift",
+  "@homeTodaysLift": {
+    "description": "Home card header above today's logged gym workout"
+  },
   "settingsSectionProfile": "Profile",
   "@settingsSectionProfile": {
     "description": "Settings landing section header grouping Account + Preferences"

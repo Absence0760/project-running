@@ -5,7 +5,9 @@ import 'package:core_models/core_models.dart' as cm;
 import '../audio_cues.dart';
 import '../ble_heart_rate.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../local_food_store.dart';
 import '../local_gear_store.dart';
+import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
 import '../main.dart' show pendingStartWorkout;
@@ -15,8 +17,11 @@ import '../settings_sync.dart';
 import '../social_service.dart';
 import '../training_service.dart';
 import '../widgets/billing_issue_banner.dart';
+import '../widgets/log_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
+import 'gym_screen.dart';
+import 'nutrition_screen.dart';
 import 'runs_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
@@ -27,6 +32,8 @@ class HomeScreen extends StatefulWidget {
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
   final LocalGearStore gearStore;
+  final LocalGymStore gymStore;
+  final LocalFoodStore foodStore;
   final Preferences preferences;
   final AudioCues audioCues;
   final SocialService social;
@@ -49,6 +56,8 @@ class HomeScreen extends StatefulWidget {
     required this.runStore,
     required this.routeStore,
     required this.gearStore,
+    required this.gymStore,
+    required this.foodStore,
     required this.preferences,
     required this.audioCues,
     required this.social,
@@ -65,11 +74,21 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  static const _initialIndex = 1;
+  // PageView page indices. The bottom nav exposes four destinations
+  // (Home / History / Social / Settings) plus a centre Log action; the
+  // Run page has no nav destination but stays a keep-alive PageView page so
+  // an in-progress recording survives navigating away (multi_modal.md §
+  // Bottom nav: "the Run tab disappears as a top-level destination").
+  static const _pageHome = 0;
+  static const _pageHistory = 1;
+  static const _pageRun = 2;
+  static const _pageSocial = 3;
+  static const _pageSettings = 4;
+  static const _initialIndex = _pageHome;
 
-  /// Current tab index. A `ValueNotifier` instead of a `setState` int so
-  /// page changes during a swipe only rebuild the NavigationBar — not the
-  /// entire 5-tab subtree. The PageView's children are built once in
+  /// Current page index. A `ValueNotifier` instead of a `setState` int so
+  /// page changes during a swipe only rebuild the bottom bar — not the
+  /// entire 5-page subtree. The PageView's children are built once in
   /// `initState` and never re-created.
   final _currentIndex = ValueNotifier<int>(_initialIndex);
 
@@ -113,9 +132,9 @@ class _HomeScreenState extends State<HomeScreen> {
   void _onPendingStartWorkout() {
     if (pendingStartWorkout.value == null) return;
     if (!mounted) return;
-    if (_currentIndex.value != 1) {
-      _currentIndex.value = 1;
-      _pageController.jumpToPage(1);
+    if (_currentIndex.value != _pageRun) {
+      _currentIndex.value = _pageRun;
+      _pageController.jumpToPage(_pageRun);
     }
   }
 
@@ -134,6 +153,18 @@ class _HomeScreenState extends State<HomeScreen> {
           training: widget.training,
           runStore: widget.runStore,
           routeStore: widget.routeStore,
+          gymStore: widget.gymStore,
+          foodStore: widget.foodStore,
+          preferences: widget.preferences,
+          settingsSync: widget.settingsSync,
+        ),
+      ),
+      _LazyKeepAliveTab(
+        builder: () => RunsScreen(
+          key: const PageStorageKey('runs'),
+          apiClient: widget.apiClient,
+          runStore: widget.runStore,
+          routeStore: widget.routeStore,
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
         ),
@@ -145,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
         // and the next build calls the RunScreen builder with the
         // freshly-set `initialRoute`. Without this, a user who
         // tapped "Start Run" from a route detail jumped to the
-        // Run tab but the route stayed unselected.
+        // Run page but the route stayed unselected.
         rebuildKey: _preselectedRoute?.id,
         builder: () => RunScreen(
           key: const PageStorageKey('run'),
@@ -160,16 +191,6 @@ class _HomeScreenState extends State<HomeScreen> {
           training: widget.training,
           heartRate: widget.heartRate,
           initialRoute: _preselectedRoute,
-        ),
-      ),
-      _LazyKeepAliveTab(
-        builder: () => RunsScreen(
-          key: const PageStorageKey('runs'),
-          apiClient: widget.apiClient,
-          runStore: widget.runStore,
-          routeStore: widget.routeStore,
-          preferences: widget.preferences,
-          settingsSync: widget.settingsSync,
         ),
       ),
       _LazyKeepAliveTab(
@@ -207,26 +228,85 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _startRunWithRoute(cm.Route route) {
-    // The Run tab takes a preselected route via constructor; changing it
+    // The Run page takes a preselected route via constructor; changing it
     // means rebuilding that page. Cheap — only called from the Routes tab's
     // "start with this route" flow, not during a swipe.
     _preselectedRoute = route;
     setState(_rebuildPages);
-    _currentIndex.value = 1;
-    _pageController.jumpToPage(1);
+    _currentIndex.value = _pageRun;
+    _pageController.jumpToPage(_pageRun);
   }
 
-  void _onNavTapped(int index) {
+  void _goToPage(int index) {
     if (index == _currentIndex.value) return;
     _currentIndex.value = index;
-    // Jump instead of animate — sweeping across three pages from Home to
-    // Routes would be slow and distracting. Tabs are destinations, not a
-    // sequence.
+    // Jump instead of animate — sweeping across several pages would be slow
+    // and distracting. Destinations, not a sequence.
     _pageController.jumpToPage(index);
   }
 
   void _onPageChanged(int index) {
     _currentIndex.value = index;
+  }
+
+  // --- Centre Log button (multi_modal.md § Bottom nav) ---
+
+  /// Tap on the centre Log button. When the user has opted to keep Run as
+  /// the one-tap primary action, this starts a run directly; otherwise it
+  /// opens the Log capture sheet.
+  void _onLogTap() {
+    if (widget.preferences.keepRunPrimary) {
+      _performLogAction(LogAction.run);
+    } else {
+      _openLogSheet();
+    }
+  }
+
+  /// Long-press on the centre Log button. In runner-primary mode this opens
+  /// the full sheet (so gym / nutrition stay reachable); otherwise it
+  /// repeats the last logged modality — preserving the one-gesture "start a
+  /// run" muscle memory for a pure runner.
+  void _onLogLongPress() {
+    if (widget.preferences.keepRunPrimary) {
+      _openLogSheet();
+    } else {
+      _performLogAction(
+          logActionFromWire(widget.preferences.lastLogType) ?? LogAction.run);
+    }
+  }
+
+  Future<void> _openLogSheet() async {
+    final picked = await showLogSheet(
+      context: context,
+      recent: logActionFromWire(widget.preferences.lastLogType),
+    );
+    if (picked != null) _performLogAction(picked);
+  }
+
+  void _performLogAction(LogAction action) {
+    widget.preferences.setLastLogType(action.wire);
+    switch (action) {
+      case LogAction.run:
+        _goToPage(_pageRun);
+      case LogAction.lift:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) =>
+                GymScreen(api: widget.apiClient, store: widget.gymStore),
+          ),
+        );
+      case LogAction.meal:
+      case LogAction.snack:
+        Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => NutritionScreen(
+              api: widget.apiClient,
+              store: widget.foodStore,
+              settingsSync: widget.settingsSync,
+            ),
+          ),
+        );
+    }
   }
 
   @override
@@ -258,31 +338,117 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
+      // The raised centre "+" is the Log action (multi_modal.md § Bottom
+      // nav). FloatingActionButton has no long-press, so the GestureDetector
+      // wrapper claims that gesture while the button keeps the tap; the
+      // Semantics label makes the action explicit for screen readers, and
+      // the 56 dp FAB clears the >=48 dp target.
+      floatingActionButton: Builder(
+        builder: (context) {
+          final l10n = AppLocalizations.of(context);
+          return GestureDetector(
+            onLongPress: _onLogLongPress,
+            child: Semantics(
+              button: true,
+              label: l10n.logA11yLabel,
+              child: FloatingActionButton(
+                onPressed: _onLogTap,
+                tooltip: l10n.navLog,
+                child: const Icon(Icons.add),
+              ),
+            ),
+          );
+        },
+      ),
+      floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
       bottomNavigationBar: ValueListenableBuilder<int>(
         valueListenable: _currentIndex,
-        builder: (context, index, _) => NavigationBar(
-          selectedIndex: index,
-          onDestinationSelected: _onNavTapped,
-          destinations: [
-            // Routes lives as a sub-tab of Social on mobile — bottom nav
-            // can't carry six items without crowding the labels. The web
-            // side keeps Routes as a sidebar peer; mobile compresses.
-            NavigationDestination(
-                icon: const Icon(Icons.dashboard),
-                label: AppLocalizations.of(context).navHome),
-            NavigationDestination(
-                icon: const Icon(Icons.play_arrow),
-                label: AppLocalizations.of(context).navRun),
-            NavigationDestination(
-                icon: const Icon(Icons.history),
-                label: AppLocalizations.of(context).navHistory),
-            NavigationDestination(
-                icon: const Icon(Icons.public),
-                label: AppLocalizations.of(context).navSocial),
-            NavigationDestination(
-                icon: const Icon(Icons.settings),
-                label: AppLocalizations.of(context).navSettings),
-          ],
+        builder: (context, index, _) {
+          final l10n = AppLocalizations.of(context);
+          return BottomAppBar(
+            height: 64,
+            padding: EdgeInsets.zero,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _BottomNavItem(
+                  icon: Icons.dashboard,
+                  label: l10n.navHome,
+                  selected: index == _pageHome,
+                  onTap: () => _goToPage(_pageHome),
+                ),
+                _BottomNavItem(
+                  icon: Icons.history,
+                  label: l10n.navHistory,
+                  selected: index == _pageHistory,
+                  onTap: () => _goToPage(_pageHistory),
+                ),
+                // Gap under the docked Log FAB.
+                const SizedBox(width: 56),
+                _BottomNavItem(
+                  icon: Icons.public,
+                  label: l10n.navSocial,
+                  selected: index == _pageSocial,
+                  onTap: () => _goToPage(_pageSocial),
+                ),
+                _BottomNavItem(
+                  icon: Icons.settings,
+                  label: l10n.navSettings,
+                  selected: index == _pageSettings,
+                  onTap: () => _goToPage(_pageSettings),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// One destination in the [BottomAppBar] — icon over label, tinted when
+/// selected. A real button for accessibility (role + selected state), with
+/// a >=48 dp tap target.
+class _BottomNavItem extends StatelessWidget {
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _BottomNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final color =
+        selected ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant;
+    return Expanded(
+      child: Semantics(
+        button: true,
+        selected: selected,
+        label: label,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            height: 64,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(icon, color: color, size: 24),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(color: color),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

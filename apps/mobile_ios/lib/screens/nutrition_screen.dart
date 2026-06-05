@@ -11,7 +11,39 @@ import '../l10n/locale_support.dart';
 import '../local_food_store.dart';
 import '../nutrition_targets.dart';
 import '../nutrition_totals.dart';
+import '../settings_sync.dart';
 import '../widgets/nutrition_log_sheet.dart';
+
+/// Daily calorie + macro targets for the signed-in user, or null when a
+/// required body metric is missing. Shared by [NutritionScreen] and the
+/// Home nutrition card so the BMR inputs are resolved one way: height +
+/// sex from `user_profiles`, latest weight from `body_metrics`, age from
+/// the date-of-birth pref, and the activity-level + goal nutrition prefs.
+/// Replaces the former hard-coded `moderate` / `maintain` defaults.
+Future<NutritionTargets?> loadNutritionTargets(
+  ApiClient api,
+  SettingsService? settings,
+) async {
+  try {
+    final profile = await api.fetchMyProfile();
+    final weightKg = await api.fetchLatestBodyWeightKg();
+    final dobIso = settings?.effective<String>(SettingsKeys.dateOfBirth) ??
+        profile?.dateOfBirth?.toIso8601String();
+    return computeNutritionTargets(BodyMetricsInput(
+      weightKg: weightKg,
+      heightCm: profile?.heightCm,
+      ageYears: ageFromDob(dobIso, DateTime.now().millisecondsSinceEpoch),
+      sex: profile?.gender,
+      activityLevel:
+          settings?.effective<String>(SettingsKeys.nutritionActivityLevel) ??
+              'moderate',
+      goal: settings?.effective<String>(SettingsKeys.nutritionGoal) ??
+          'maintain',
+    ));
+  } catch (_) {
+    return null;
+  }
+}
 
 /// Phase 4 multi-modal Nutrition (decisions §63, multi_modal.md § Nutrition).
 /// Mirrors web `/nutrition`: Mifflin-St Jeor macro rings vs targets (hidden
@@ -23,7 +55,16 @@ class NutritionScreen extends StatefulWidget {
   final ApiClient? api;
   final LocalFoodStore store;
 
-  const NutritionScreen({super.key, required this.api, required this.store});
+  /// Supplies the activity-level / goal / date-of-birth that feed the BMR
+  /// target. Null in tests / signed-out — the rings then hide (anti-clutter).
+  final SettingsSyncService? settingsSync;
+
+  const NutritionScreen({
+    super.key,
+    required this.api,
+    required this.store,
+    this.settingsSync,
+  });
 
   @override
   State<NutritionScreen> createState() => _NutritionScreenState();
@@ -95,33 +136,13 @@ class _NutritionScreenState extends State<NutritionScreen> {
       final fresh = await api.fetchFoodLog(from: weekStart, to: _tomorrow);
       await widget.store.replaceFromServer([for (final r in fresh) r.toJson()]);
       if (widget.store.hasPending) await widget.store.syncWithServer(api);
-      _targets = await _computeTargets(api);
+      _targets = await loadNutritionTargets(api, widget.settingsSync?.service);
       _isOnline = true;
     } catch (e) {
       _isOnline = false;
       debugPrint('nutrition_screen: refresh failed, using cache: $e');
     } finally {
       if (mounted) setState(() => _refreshing = false);
-    }
-  }
-
-  Future<NutritionTargets?> _computeTargets(ApiClient api) async {
-    try {
-      final profile = await api.fetchMyProfile();
-      final weightKg = await api.fetchLatestBodyWeightKg();
-      // Activity level + goal default until the mobile Settings entry lands;
-      // body metrics (height / DOB / sex) come from the profile.
-      return computeNutritionTargets(BodyMetricsInput(
-        weightKg: weightKg,
-        heightCm: profile?.heightCm,
-        ageYears: ageFromDob(
-            profile?.dateOfBirth?.toIso8601String(), DateTime.now().millisecondsSinceEpoch),
-        sex: profile?.gender,
-        activityLevel: 'moderate',
-        goal: 'maintain',
-      ));
-    } catch (_) {
-      return null;
     }
   }
 

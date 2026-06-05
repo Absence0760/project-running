@@ -469,6 +469,102 @@ class AppLocalizationsEs extends AppLocalizations {
   String get navSettings => 'Ajustes';
 
   @override
+  String get navLog => 'Registrar';
+
+  @override
+  String get logA11yLabel => 'Registrar una actividad';
+
+  @override
+  String get logSheetTitle => 'Registrar';
+
+  @override
+  String get logStartRun => 'Iniciar carrera';
+
+  @override
+  String get logStartLift => 'Iniciar pesas';
+
+  @override
+  String get logMeal => 'Registrar comida';
+
+  @override
+  String get logSnack => 'Registrar tentempié';
+
+  @override
+  String get prefsKeepRunPrimary => 'Correr como acción principal';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Toca el botón central para iniciar una carrera; mantén pulsado para el menú completo';
+
+  @override
+  String get bodyMetricsTitle => 'Datos corporales';
+
+  @override
+  String get bodyMetricsTileSubtitle => 'Altura, peso y objetivos de nutrición';
+
+  @override
+  String get bodyMetricsConsentTitle => 'Almacenar datos de salud';
+
+  @override
+  String get bodyMetricsConsentSubtitle =>
+      'La altura y el peso son datos de salud sensibles. Desactiva para borrarlos.';
+
+  @override
+  String get bodyMetricsHeight => 'Altura';
+
+  @override
+  String get bodyMetricsWeight => 'Peso';
+
+  @override
+  String get bodyMetricsActivityLevel => 'Nivel de actividad';
+
+  @override
+  String get bodyMetricsGoal => 'Objetivo';
+
+  @override
+  String get bodyMetricsTargetsHint =>
+      'Se usa para estimar tus objetivos diarios de calorías y macros.';
+
+  @override
+  String get bodyMetricsConsentRequired =>
+      'Activa el almacenamiento de datos de salud para guardar altura y peso.';
+
+  @override
+  String get bodyMetricsSaved => 'Guardado';
+
+  @override
+  String bodyMetricsSaveFailed(String error) {
+    return 'Error al guardar: $error';
+  }
+
+  @override
+  String get activitySedentary => 'Sedentario';
+
+  @override
+  String get activityLight => 'Poco activo';
+
+  @override
+  String get activityModerate => 'Moderadamente activo';
+
+  @override
+  String get activityVeryActive => 'Muy activo';
+
+  @override
+  String get activityExtraActive => 'Extremadamente activo';
+
+  @override
+  String get goalLose => 'Perder peso';
+
+  @override
+  String get goalMaintain => 'Mantener peso';
+
+  @override
+  String get goalGain => 'Ganar peso';
+
+  @override
+  String get homeTodaysLift => 'Pesas de hoy';
+
+  @override
   String get settingsSectionProfile => 'Perfil';
 
   @override

@@ -465,6 +465,102 @@ class AppLocalizationsEn extends AppLocalizations {
   String get navSettings => 'Settings';
 
   @override
+  String get navLog => 'Log';
+
+  @override
+  String get logA11yLabel => 'Log an activity';
+
+  @override
+  String get logSheetTitle => 'Log';
+
+  @override
+  String get logStartRun => 'Start run';
+
+  @override
+  String get logStartLift => 'Start lift';
+
+  @override
+  String get logMeal => 'Log meal';
+
+  @override
+  String get logSnack => 'Log snack';
+
+  @override
+  String get prefsKeepRunPrimary => 'Run as primary action';
+
+  @override
+  String get prefsKeepRunPrimarySubtitle =>
+      'Tap the centre button to start a run; long-press for the full log menu';
+
+  @override
+  String get bodyMetricsTitle => 'Body metrics';
+
+  @override
+  String get bodyMetricsTileSubtitle => 'Height, weight & nutrition targets';
+
+  @override
+  String get bodyMetricsConsentTitle => 'Store health data';
+
+  @override
+  String get bodyMetricsConsentSubtitle =>
+      'Height and weight are special-category health data. Turn this off to erase them.';
+
+  @override
+  String get bodyMetricsHeight => 'Height';
+
+  @override
+  String get bodyMetricsWeight => 'Weight';
+
+  @override
+  String get bodyMetricsActivityLevel => 'Activity level';
+
+  @override
+  String get bodyMetricsGoal => 'Goal';
+
+  @override
+  String get bodyMetricsTargetsHint =>
+      'Used to estimate your daily calorie and macro targets.';
+
+  @override
+  String get bodyMetricsConsentRequired =>
+      'Turn on health-data storage to save height and weight.';
+
+  @override
+  String get bodyMetricsSaved => 'Saved';
+
+  @override
+  String bodyMetricsSaveFailed(String error) {
+    return 'Save failed: $error';
+  }
+
+  @override
+  String get activitySedentary => 'Sedentary';
+
+  @override
+  String get activityLight => 'Lightly active';
+
+  @override
+  String get activityModerate => 'Moderately active';
+
+  @override
+  String get activityVeryActive => 'Very active';
+
+  @override
+  String get activityExtraActive => 'Extra active';
+
+  @override
+  String get goalLose => 'Lose weight';
+
+  @override
+  String get goalMaintain => 'Maintain weight';
+
+  @override
+  String get goalGain => 'Gain weight';
+
+  @override
+  String get homeTodaysLift => 'Today\'s lift';
+
+  @override
   String get settingsSectionProfile => 'Profile';
 
   @override

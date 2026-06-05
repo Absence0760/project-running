@@ -5,8 +5,12 @@ import 'package:flutter/semantics.dart';
 
 import '../goals.dart';
 import '../l10n/gen/app_localizations.dart';
+import '../local_food_store.dart';
+import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
+import '../nutrition_targets.dart' show NutritionTargets;
+import '../nutrition_totals.dart' show MacroTotals, sumMacros;
 import '../preferences.dart';
 import '../run_stats.dart';
 import '../settings_sync.dart';
@@ -14,17 +18,21 @@ import '../streaks.dart';
 import '../training_load.dart';
 import '../training_service.dart';
 import '../widgets/fitness_card.dart';
+import '../widgets/gym_summary_card.dart';
 import '../widgets/notification_bell.dart';
 import '../run_intensity.dart';
 import '../widgets/intensity_card.dart';
 import '../widgets/mileage_trend_card.dart';
+import '../widgets/nutrition_rings_card.dart';
 import '../widgets/readiness_card.dart';
 import '../widgets/goal_editor_sheet.dart';
 import '../widgets/todays_workout_card.dart';
 import '../widgets/training_load_chart.dart';
 import 'coach_screen.dart';
 import 'feed_screen.dart';
+import 'gym_screen.dart';
 import 'import_screen.dart';
+import 'nutrition_screen.dart';
 import 'period_summary_screen.dart';
 import 'plan_detail_screen.dart';
 import 'profile_screen.dart';
@@ -39,6 +47,8 @@ class DashboardScreen extends StatefulWidget {
   final TrainingService? training;
   final LocalRunStore runStore;
   final LocalRouteStore routeStore;
+  final LocalGymStore gymStore;
+  final LocalFoodStore foodStore;
   final Preferences preferences;
   final SettingsSyncService? settingsSync;
 
@@ -48,6 +58,8 @@ class DashboardScreen extends StatefulWidget {
     this.training,
     required this.runStore,
     required this.routeStore,
+    required this.gymStore,
+    required this.foodStore,
     required this.preferences,
     this.settingsSync,
   });
@@ -72,19 +84,29 @@ class _DashboardScreenState extends State<DashboardScreen> {
   /// done, switches plans).
   ActivePlanOverview? _planOverview;
 
+  /// Daily nutrition targets, resolved once on mount, so the Home nutrition
+  /// rings can show fill vs target. Null until resolved / when body metrics
+  /// are absent (the rings then render unfilled — anti-clutter).
+  NutritionTargets? _nutritionTargets;
+
   @override
   void initState() {
     super.initState();
     widget.runStore.addListener(_onRunStoreChanged);
     widget.preferences.addListener(_onChange);
+    widget.gymStore.addListener(_onChange);
+    widget.foodStore.addListener(_onChange);
     widget.training?.addListener(_refreshPlanOverview);
     _refreshPlanOverview();
+    _hydrateModalities();
   }
 
   @override
   void dispose() {
     widget.runStore.removeListener(_onRunStoreChanged);
     widget.preferences.removeListener(_onChange);
+    widget.gymStore.removeListener(_onChange);
+    widget.foodStore.removeListener(_onChange);
     widget.training?.removeListener(_refreshPlanOverview);
     super.dispose();
   }
@@ -92,6 +114,78 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void _onRunStoreChanged() {
     _bestEffortCache.clear();
     if (mounted) setState(() {});
+  }
+
+  /// Best-effort hydrate of the gym + food caches (so today's logged
+  /// modalities surface on Home even on a fresh launch, before the user
+  /// visits the Gym / Nutrition screens) plus the nutrition target. Each
+  /// hop is wrapped independently (layered resilience): a gym fetch failure
+  /// must not block the food fetch, and neither can break the dashboard.
+  Future<void> _hydrateModalities() async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      final fresh = await api.fetchGymWorkoutsWithSets(limit: 100);
+      await widget.gymStore.replaceFromServer(fresh);
+    } catch (e) {
+      debugPrint('dashboard gym hydrate failed: $e');
+    }
+    try {
+      final now = DateTime.now();
+      final todayStart = DateTime(now.year, now.month, now.day);
+      final weekStart = todayStart.subtract(const Duration(days: 6));
+      final tomorrow = DateTime(now.year, now.month, now.day + 1);
+      final fresh = await api.fetchFoodLog(from: weekStart, to: tomorrow);
+      await widget.foodStore
+          .replaceFromServer([for (final r in fresh) r.toJson()]);
+    } catch (e) {
+      debugPrint('dashboard food hydrate failed: $e');
+    }
+    try {
+      final t = await loadNutritionTargets(api, widget.settingsSync?.service);
+      if (mounted) setState(() => _nutritionTargets = t);
+    } catch (e) {
+      debugPrint('dashboard nutrition targets failed: $e');
+    }
+  }
+
+  /// Today's most-recent gym workout, or null when none was logged today.
+  StoredGymWorkout? get _todaysLift {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    for (final w in widget.gymStore.workouts) {
+      final at = w.startedAt?.toLocal();
+      if (at != null && !at.isBefore(start)) return w;
+    }
+    return null;
+  }
+
+  /// Today's logged food entries (for the nutrition rings), oldest first.
+  List<FoodEntry> get _todaysFood {
+    final now = DateTime.now();
+    final start = DateTime(now.year, now.month, now.day);
+    final end = DateTime(now.year, now.month, now.day + 1);
+    return [
+      for (final r in widget.foodStore.entriesForRange(start, end))
+        FoodEntry.fromRow(r),
+    ];
+  }
+
+  void _openGym() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) =>
+          GymScreen(api: widget.apiClient, store: widget.gymStore),
+    ));
+  }
+
+  void _openNutrition() {
+    Navigator.of(context).push(MaterialPageRoute<void>(
+      builder: (_) => NutritionScreen(
+        api: widget.apiClient,
+        store: widget.foodStore,
+        settingsSync: widget.settingsSync,
+      ),
+    ));
   }
 
   void _onChange() {
@@ -385,6 +479,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   _kSectionGap,
                 ],
+                // Today's logged non-run modalities (gym + nutrition).
+                // Self-hiding: each card only renders when that modality was
+                // logged today, so a pure runner sees nothing new here
+                // (multi_modal.md § Home, anti-clutter checklist).
+                ..._todayModalitySection(),
                 _goalsSection(theme, unit, runs, goals, now),
                 _kSectionGap,
                 // Compact 3-column stat strip — replaced the previous
@@ -494,6 +593,53 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ),
       ),
     );
+  }
+
+  /// The "today's logged modalities" block — gym + nutrition cards, each
+  /// self-hiding when that modality has no data today. Renders the two
+  /// 2-up on phones wide enough (multi_modal.md § Home density rules) when
+  /// both are present, full-width otherwise. Empty list when neither logged.
+  List<Widget> _todayModalitySection() {
+    final lift = _todaysLift;
+    final food = _todaysFood;
+    final hasFood = food.isNotEmpty;
+    if (lift == null && !hasFood) return const [];
+
+    final gymCard = lift == null
+        ? null
+        : GymSummaryCard(workout: lift, onTap: _openGym);
+    final nutritionCard = !hasFood
+        ? null
+        : NutritionRingsCard(
+            consumed: sumMacros(food),
+            targets: _nutritionTargets,
+            onTap: _openNutrition,
+          );
+
+    final wideEnough = MediaQuery.of(context).size.width >= 360;
+    final Widget body;
+    if (gymCard != null && nutritionCard != null && wideEnough) {
+      body = IntrinsicHeight(
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: nutritionCard),
+            const SizedBox(width: 8),
+            Expanded(child: gymCard),
+          ],
+        ),
+      );
+    } else {
+      body = Column(
+        children: [
+          if (nutritionCard != null) nutritionCard,
+          if (nutritionCard != null && gymCard != null)
+            const SizedBox(height: 8),
+          if (gymCard != null) gymCard,
+        ],
+      );
+    }
+    return [body, _kSectionGap];
   }
 
   Widget _goalsSection(

@@ -4186,6 +4186,72 @@ class ApiClient {
     if (data == null) return null;
     return (data[BodyMetricRow.colWeightKg] as num?)?.toDouble();
   }
+
+  /// Record the GDPR Art 9(2)(a) health-data consent for the signed-in user
+  /// via the `grant_health_data_consent()` SECURITY DEFINER RPC — the only
+  /// sanctioned writer of `health_data_consent_at` (first-stamp-wins,
+  /// server `now()`; direct end-user writes setting it to a non-null value
+  /// are blocked by the `lock_consent_columns` trigger, migration
+  /// 20261118_001). Gate any height / weight write behind this. Returns the
+  /// effective (original-if-already-set) timestamp.
+  Future<DateTime?> grantHealthDataConsent() async {
+    if (_client.auth.currentUser?.id == null) return null;
+    final res = await _client.rpc('grant_health_data_consent');
+    if (res is! String) return null;
+    return DateTime.tryParse(res);
+  }
+
+  /// Withdraw health-data consent (GDPR Art 7(3)): nulls
+  /// `health_data_consent_at` and the special-category `height_cm` on the
+  /// user's profile in one write. A NULL write to the consent column is the
+  /// only direct end-user write the lock trigger permits. The weight
+  /// time-series is cleared separately via [clearBodyWeightHistory]. The
+  /// inverse of [grantHealthDataConsent] + [setMyHeightCm].
+  Future<void> withdrawHealthDataConsent() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return;
+    await _client.from('user_profiles').update({
+      UserProfileRow.colHealthDataConsentAt: null,
+      UserProfileRow.colHeightCm: null,
+    }).eq(UserProfileRow.colId, uid);
+  }
+
+  /// Set (or clear, when null) the signed-in user's height in centimetres
+  /// on `user_profiles`. Special-category health data — the caller must have
+  /// recorded consent via [grantHealthDataConsent] first. Feeds the
+  /// nutrition BMR target ([fetchMyProfile] reads it back).
+  Future<void> setMyHeightCm(double? heightCm) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return;
+    await _client
+        .from('user_profiles')
+        .update({UserProfileRow.colHeightCm: heightCm}).eq(
+            UserProfileRow.colId, uid);
+  }
+
+  /// Append a weight measurement (kg) to the `body_metrics` time-series —
+  /// one row per recording, so the series is the history. Owner-only
+  /// (no public-read policy). The caller gates on health-data consent.
+  Future<void> recordBodyWeightKg(double weightKg) async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) throw StateError('not signed in');
+    await _client.from(BodyMetricRow.table).insert({
+      BodyMetricRow.colUserId: uid,
+      BodyMetricRow.colWeightKg: weightKg,
+    });
+  }
+
+  /// Erase the whole weight history. Called when the user withdraws
+  /// health-data consent (GDPR Art 7(3)) so the special-category series is
+  /// cleared alongside height / gender / DOB.
+  Future<void> clearBodyWeightHistory() async {
+    final uid = _client.auth.currentUser?.id;
+    if (uid == null) return;
+    await _client
+        .from(BodyMetricRow.table)
+        .delete()
+        .eq(BodyMetricRow.colUserId, uid);
+  }
 }
 
 /// One set in a [ApiClient.createGymWorkout] / `updateGymWorkout` call,

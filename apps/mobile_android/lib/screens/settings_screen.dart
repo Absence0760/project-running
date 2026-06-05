@@ -114,6 +114,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               label: l10n.prefsTitle,
               subtitle: l10n.settingsTabPreferencesSubtitle,
               onTap: () => _open((_) => SettingsPreferencesScreen(
+                    apiClient: widget.apiClient,
                     preferences: widget.preferences,
                     settingsSync: widget.settingsSync,
                   )),
