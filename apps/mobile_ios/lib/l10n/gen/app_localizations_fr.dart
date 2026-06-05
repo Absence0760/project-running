@@ -538,6 +538,84 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get safetyTitle => 'Contacts de sécurité';
+
+  @override
+  String get safetyTileSubtitle =>
+      'Envoyez un e-mail à une personne de confiance à la fin d\'une course';
+
+  @override
+  String get safetyIntro =>
+      'Un contact de sécurité reçoit un e-mail lorsque vous terminez une course — même privée — pour qu\'une personne de confiance sache que vous êtes bien rentré.';
+
+  @override
+  String get safetyAddLabel => 'E-mail du contact';
+
+  @override
+  String get safetyAddButton => 'Ajouter un contact';
+
+  @override
+  String get safetyAdding => 'Ajout…';
+
+  @override
+  String get safetyEmpty => 'Aucun contact de sécurité pour le moment.';
+
+  @override
+  String get safetyStatusPending => 'En attente — confirmation requise';
+
+  @override
+  String get safetyStatusConfirmed => 'Confirmé';
+
+  @override
+  String get safetyRemove => 'Supprimer';
+
+  @override
+  String get safetyRemoveConfirm => 'Supprimer ce contact de sécurité ?';
+
+  @override
+  String safetyAddFailed(String error) {
+    return 'Impossible d\'ajouter le contact : $error';
+  }
+
+  @override
+  String get safetyInvalidEmail => 'Saisissez une adresse e-mail valide.';
+
+  @override
+  String get safetyAddedToast =>
+      'Contact ajouté — nous lui avons envoyé un e-mail de confirmation.';
+
+  @override
+  String get safetyRemovedToast => 'Contact supprimé.';
+
+  @override
+  String get safetyIncomingTitle => 'Demandes pour vous';
+
+  @override
+  String get safetyIncomingIntro =>
+      'Ces personnes vous ont demandé d\'être leur contact de sécurité. Confirmez pour recevoir un e-mail lorsqu\'elles terminent une course.';
+
+  @override
+  String safetyIncomingFrom(String name) {
+    return 'De $name';
+  }
+
+  @override
+  String get safetyConfirm => 'Confirmer';
+
+  @override
+  String get safetyDecline => 'Refuser';
+
+  @override
+  String get safetyConfirmedToast =>
+      'Vous êtes maintenant contact de sécurité.';
+
+  @override
+  String get safetyDeclinedToast => 'Demande refusée.';
+
+  @override
+  String get safetyUnknownRunner => 'Un coureur Threkir';
+
+  @override
   String get activitySedentary => 'Sédentaire';
 
   @override

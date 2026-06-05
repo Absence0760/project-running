@@ -237,3 +237,60 @@ class ClubPin {
     required this.lng,
   });
 }
+
+/// A safety contact the owner added (decisions §131). Mobile mirror of the
+/// web `SafetyContact` interface. Carries only the owner-readable columns the
+/// settings list shows — never `confirm_token` (the email-link capability) or
+/// `owner_id`. `confirmedAt == null` means pending (the contact hasn't opted
+/// in yet, so no finish alerts are sent).
+class SafetyContact {
+  final String id;
+  final String contactEmail;
+  final String? contactUserId;
+  final DateTime? confirmedAt;
+  final DateTime createdAt;
+
+  const SafetyContact({
+    required this.id,
+    required this.contactEmail,
+    this.contactUserId,
+    this.confirmedAt,
+    required this.createdAt,
+  });
+
+  bool get isConfirmed => confirmedAt != null;
+
+  factory SafetyContact.fromJson(Map<String, dynamic> json) => SafetyContact(
+        id: json['id'] as String,
+        contactEmail: json['contact_email'] as String,
+        contactUserId: json['contact_user_id'] as String?,
+        confirmedAt: json['confirmed_at'] == null
+            ? null
+            : DateTime.parse(json['confirmed_at'] as String),
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}
+
+/// A pending safety-contact request addressed to the signed-in user's account
+/// email (decisions §131). Mobile mirror of the web `PendingSafetyRequest`
+/// interface. Returned by the `my_pending_safety_requests` SECURITY DEFINER
+/// RPC, which only ever surfaces rows whose `contact_email` equals the
+/// caller's own email — so it leaks nothing about other users.
+class PendingSafetyRequest {
+  final String id;
+  final String ownerName;
+  final DateTime createdAt;
+
+  const PendingSafetyRequest({
+    required this.id,
+    required this.ownerName,
+    required this.createdAt,
+  });
+
+  factory PendingSafetyRequest.fromJson(Map<String, dynamic> json) =>
+      PendingSafetyRequest(
+        id: json['id'] as String,
+        ownerName: (json['owner_name'] as String?) ?? '',
+        createdAt: DateTime.parse(json['created_at'] as String),
+      );
+}

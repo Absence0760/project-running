@@ -953,6 +953,144 @@ abstract class AppLocalizations {
   /// **'Save failed: {error}'**
   String bodyMetricsSaveFailed(String error);
 
+  /// Title of the safety-contacts settings screen
+  ///
+  /// In en, this message translates to:
+  /// **'Safety contacts'**
+  String get safetyTitle;
+
+  /// Settings landing: Safety tile subtitle
+  ///
+  /// In en, this message translates to:
+  /// **'Email a trusted contact when you finish a run'**
+  String get safetyTileSubtitle;
+
+  /// Intro paragraph on the safety-contacts screen
+  ///
+  /// In en, this message translates to:
+  /// **'A safety contact is emailed when you finish a run — even a private one — so someone you trust knows you got back safely.'**
+  String get safetyIntro;
+
+  /// Label for the add-contact email input
+  ///
+  /// In en, this message translates to:
+  /// **'Contact email'**
+  String get safetyAddLabel;
+
+  /// Button to add a safety contact
+  ///
+  /// In en, this message translates to:
+  /// **'Add contact'**
+  String get safetyAddButton;
+
+  /// Add button label while the add request is in flight
+  ///
+  /// In en, this message translates to:
+  /// **'Adding…'**
+  String get safetyAdding;
+
+  /// Empty-state text when the user has no safety contacts
+  ///
+  /// In en, this message translates to:
+  /// **'No safety contacts yet.'**
+  String get safetyEmpty;
+
+  /// Status badge for a contact who hasn't opted in yet
+  ///
+  /// In en, this message translates to:
+  /// **'Pending — waiting for them to confirm'**
+  String get safetyStatusPending;
+
+  /// Status badge for a contact who has opted in
+  ///
+  /// In en, this message translates to:
+  /// **'Confirmed'**
+  String get safetyStatusConfirmed;
+
+  /// Button to remove a safety contact
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get safetyRemove;
+
+  /// Confirmation dialog body when removing a safety contact
+  ///
+  /// In en, this message translates to:
+  /// **'Remove this safety contact?'**
+  String get safetyRemoveConfirm;
+
+  /// Error toast when adding a safety contact fails
+  ///
+  /// In en, this message translates to:
+  /// **'Could not add contact: {error}'**
+  String safetyAddFailed(String error);
+
+  /// Inline error when the entered email is not valid
+  ///
+  /// In en, this message translates to:
+  /// **'Enter a valid email address.'**
+  String get safetyInvalidEmail;
+
+  /// Toast after a safety contact is added
+  ///
+  /// In en, this message translates to:
+  /// **'Contact added — we emailed them to confirm.'**
+  String get safetyAddedToast;
+
+  /// Toast after a safety contact is removed
+  ///
+  /// In en, this message translates to:
+  /// **'Contact removed.'**
+  String get safetyRemovedToast;
+
+  /// Heading above incoming safety-contact requests
+  ///
+  /// In en, this message translates to:
+  /// **'Requests for you'**
+  String get safetyIncomingTitle;
+
+  /// Intro under the incoming-requests heading
+  ///
+  /// In en, this message translates to:
+  /// **'These people asked you to be their safety contact. Confirm to get an email when they finish a run.'**
+  String get safetyIncomingIntro;
+
+  /// Label naming the runner who sent an incoming request
+  ///
+  /// In en, this message translates to:
+  /// **'From {name}'**
+  String safetyIncomingFrom(String name);
+
+  /// Button to confirm an incoming safety-contact request
+  ///
+  /// In en, this message translates to:
+  /// **'Confirm'**
+  String get safetyConfirm;
+
+  /// Button to decline an incoming safety-contact request
+  ///
+  /// In en, this message translates to:
+  /// **'Decline'**
+  String get safetyDecline;
+
+  /// Toast after confirming an incoming request
+  ///
+  /// In en, this message translates to:
+  /// **'You\'re now a safety contact.'**
+  String get safetyConfirmedToast;
+
+  /// Toast after declining an incoming request
+  ///
+  /// In en, this message translates to:
+  /// **'Request declined.'**
+  String get safetyDeclinedToast;
+
+  /// Fallback name when an incoming request's owner has no display name
+  ///
+  /// In en, this message translates to:
+  /// **'A Threkir runner'**
+  String get safetyUnknownRunner;
+
   /// Nutrition activity level: little exercise
   ///
   /// In en, this message translates to:
