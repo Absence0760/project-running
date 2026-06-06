@@ -163,22 +163,22 @@
 					aria-label={t('gym.editor.removeExercise')}
 					onclick={() => removeExercise(ei)}
 				>
-					<span class="material-symbols-outlined">delete</span>
+					<span class="material-symbols">delete</span>
 				</button>
 			</div>
 			<div class="set-grid">
 				<div class="set-head" aria-hidden="true">
 					<span class="set-label"></span>
-					<span class="set-cap">{t('gym.reps')}</span>
-					<span class="set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
-					<span class="set-cap">{t('gym.rpe')}</span>
+					<span class="section-label set-cap">{t('gym.reps')}</span>
+					<span class="section-label set-cap">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
+					<span class="section-label set-cap">{t('gym.rpe')}</span>
 					<span></span>
 				</div>
 				{#each ex.sets as _set, si (si)}
 					<div class="set-row">
 						<span class="set-label">{t('gym.setN', { n: si + 1 })}</span>
 						<label class="set-field">
-							<span class="set-cap set-cap-inline">{t('gym.reps')}</span>
+							<span class="section-label set-cap-inline">{t('gym.reps')}</span>
 							<input
 								type="number"
 								inputmode="numeric"
@@ -188,7 +188,7 @@
 							/>
 						</label>
 						<label class="set-field">
-							<span class="set-cap set-cap-inline">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
+							<span class="section-label set-cap-inline">{t('gym.weightUnit', { unit: weightUnitLabel() })}</span>
 							<input
 								type="number"
 								inputmode="decimal"
@@ -199,7 +199,7 @@
 							/>
 						</label>
 						<label class="set-field">
-							<span class="set-cap set-cap-inline">{t('gym.rpe')}</span>
+							<span class="section-label set-cap-inline">{t('gym.rpe')}</span>
 							<input
 								type="number"
 								inputmode="decimal"
@@ -217,20 +217,20 @@
 							aria-label={t('gym.editor.removeSet')}
 							onclick={() => removeSet(ei, si)}
 						>
-							<span class="material-symbols-outlined">close</span>
+							<span class="material-symbols">close</span>
 						</button>
 					</div>
 				{/each}
 			</div>
 			<button type="button" class="btn btn-sm btn-outline add-set" onclick={() => addSet(ei)}>
-				<span class="material-symbols-outlined">add</span>
+				<span class="material-symbols">add</span>
 				{t('gym.editor.addSet')}
 			</button>
 		</div>
 	{/each}
 
 	<button type="button" class="btn btn-outline add-exercise" onclick={addExercise}>
-		<span class="material-symbols-outlined">add</span>
+		<span class="material-symbols">add</span>
 		{t('gym.editor.addExercise')}
 	</button>
 
@@ -269,7 +269,7 @@
 	}
 	input[type='text'],
 	input[type='number'] {
-		padding: 0.5rem 0.65rem;
+		padding: var(--space-sm);
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-md);
 		background: var(--color-surface);
@@ -346,13 +346,6 @@
 	.set-cap-inline {
 		display: none;
 	}
-	.set-cap {
-		font-size: 0.65rem;
-		font-weight: 600;
-		color: var(--color-text-tertiary);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-	}
 
 	.icon-btn {
 		background: none;
@@ -384,8 +377,8 @@
 		align-items: center;
 		gap: var(--space-2xs);
 	}
-	.add-set .material-symbols-outlined,
-	.add-exercise .material-symbols-outlined {
+	.add-set .material-symbols,
+	.add-exercise .material-symbols {
 		font-size: 1.05rem;
 	}
 
@@ -407,7 +400,7 @@
 	.share-text {
 		display: flex;
 		flex-direction: column;
-		gap: 0.1rem;
+		gap: var(--space-2xs);
 	}
 	.share-title {
 		font-size: 0.9rem;
@@ -415,13 +408,13 @@
 		color: var(--color-text);
 	}
 	.share-hint {
-		font-size: 0.78rem;
+		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 	}
 
 	.error {
 		color: var(--color-danger);
-		font-size: 0.9rem;
+		font-size: 0.85rem;
 		margin: 0;
 	}
 	.actions {
@@ -453,7 +446,7 @@
 		.set-field {
 			display: flex;
 			flex-direction: column;
-			gap: 0.15rem;
+			gap: var(--space-2xs);
 		}
 		.set-cap-inline {
 			display: block;

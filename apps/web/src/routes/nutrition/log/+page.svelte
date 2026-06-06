@@ -105,7 +105,7 @@
 <svelte:head><title>{m('nutrition.logHeading')}</title></svelte:head>
 
 <div class="page">
-	<header class="page-head">
+	<header class="page-header">
 		<a class="back-link" href="/nutrition">
 			<span class="material-symbols" aria-hidden="true">arrow_back</span>
 			{m('nutrition.heading')}
@@ -160,7 +160,7 @@
 	{:else if searched}
 		<div class="results-state empty" data-testid="no-results">
 			<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>
-			<p class="muted">{m('nutrition.noResults')}</p>
+			<p class="empty-text">{m('nutrition.noResults')}</p>
 		</div>
 	{/if}
 
@@ -228,8 +228,8 @@
 		gap: var(--space-lg);
 		max-width: 44rem;
 	}
-	.page-head { display: flex; flex-direction: column; gap: var(--space-xs); }
-	.page-head h1 { margin: 0; }
+	.page-header { display: flex; flex-direction: column; gap: var(--space-xs); }
+	.page-header h1 { margin: 0; }
 	.back-link {
 		display: inline-flex;
 		align-items: center;
@@ -242,7 +242,6 @@
 	}
 	.back-link:hover { color: var(--color-primary); }
 	.back-link .material-symbols { font-size: 1.05rem; }
-	.muted { color: var(--color-text-secondary); }
 
 	.search-card {
 		display: flex;
@@ -271,9 +270,9 @@
 		color: var(--color-text);
 	}
 	.search-field input:focus-visible {
-		outline: none;
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
 		background: var(--color-surface);
 	}
 	.slot-select {
@@ -281,6 +280,29 @@
 		flex-direction: column;
 		gap: var(--space-xs);
 		max-width: 16rem;
+	}
+	.toolbar-select {
+		padding: var(--space-xs) calc(var(--space-md) + var(--space-md)) var(--space-xs) var(--space-sm);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		background: var(--color-surface);
+		color: var(--color-text);
+		font-size: 0.85rem;
+		font-weight: 500;
+		appearance: none;
+		background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+		background-repeat: no-repeat;
+		background-position: right var(--space-sm) center;
+		background-size: 0.75rem;
+		cursor: pointer;
+		transition: border-color var(--transition-fast);
+	}
+	.toolbar-select:hover {
+		border-color: var(--color-primary);
+	}
+	.toolbar-select:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 	}
 	.slot-select .toolbar-select { font-size: 0.95rem; padding: var(--space-sm) calc(var(--space-md) + var(--space-lg)) var(--space-sm) var(--space-md); }
 
@@ -312,7 +334,7 @@
 		white-space: nowrap;
 		font-variant-numeric: tabular-nums;
 	}
-	.result-kcal-unit { font-size: 0.75rem; font-weight: 500; color: var(--color-text-tertiary); margin-inline-start: 3px; }
+	.result-kcal-unit { font-size: 0.75rem; font-weight: 500; color: var(--color-text-tertiary); margin-inline-start: var(--space-2xs); }
 	.result-chevron { color: var(--color-text-tertiary); flex-shrink: 0; }
 
 	.results-state {
@@ -367,9 +389,9 @@
 		font-size: 0.95rem;
 	}
 	.field input:focus-visible {
-		outline: none;
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
 		border-color: var(--color-primary);
-		box-shadow: 0 0 0 3px var(--color-primary-light);
 		background: var(--color-surface);
 	}
 	.manual-save { align-self: flex-start; }
