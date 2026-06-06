@@ -450,6 +450,17 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
 - **Weekly trends** reuse the `mileage_trend_card` pattern (same
   bucketing, same unit-aware rendering) on a second tab/section.
 
+> **Status (web shipped):** capture is a **modal** opened from `/nutrition`
+> (`NutritionLogEditor` hosted in the shared `Modal`), honouring the §210
+> "Log → a sheet, not a new screen" contract and matching the gym surface
+> (`GymEditor`). The standalone `/nutrition/log` route is kept as a thin
+> wrapper around the same editor (deep links + browser back), per the
+> create-flow modal pattern in `apps/web/CLAUDE.md`. The portion-confirm
+> step is an inline view inside the editor (no nested modal). The
+> `/nutrition/log/[id]` meal-detail route is unaffected. Mobile already
+> matched this — `showNutritionLogSheet` is a fullscreen dialog, never a
+> nav push.
+
 ## Cross-modality touches (Tier 1 — ship with Phase 4; this is the headline)
 
 - **Home** composes all three modalities per the ordering above. *(Web gym

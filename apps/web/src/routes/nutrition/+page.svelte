@@ -25,12 +25,15 @@
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import NutritionLogEditor from '$lib/components/NutritionLogEditor.svelte';
 
 	let loading = $state(true);
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
 	let weekDays = $state<{ label: string; calories: number }[]>([]);
 	let waterMl = $state(0);
+	let showLog = $state(false);
 
 	const WATER_UNIT_ML = 250;
 
@@ -50,14 +53,9 @@
 		return `water_ml_${todayKey()}`;
 	}
 
-	onMount(async () => {
-		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
-			await new Promise((r) => setTimeout(r, 50));
-		}
-		if (!auth.user) {
-			loading = false;
-			return;
-		}
+	async function load() {
+		const user = auth.user;
+		if (!user) return;
 		try {
 			const now = new Date();
 			const todayStart = dayStartIso(now);
@@ -66,7 +64,7 @@
 
 			// Targets: assemble body metrics + activity/goal prefs.
 			const [settings, weightKg, profileRes] = await Promise.all([
-				loadSettings(auth.user.id),
+				loadSettings(user.id),
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
 			]);
@@ -108,7 +106,23 @@
 			console.warn('nutrition load failed', e);
 		}
 		loading = false;
+	}
+
+	onMount(async () => {
+		for (let i = 0; i < 20 && (auth.loading || !auth.user); i++) {
+			await new Promise((r) => setTimeout(r, 50));
+		}
+		if (!auth.user) {
+			loading = false;
+			return;
+		}
+		await load();
 	});
+
+	function onLogged() {
+		showLog = false;
+		void load();
+	}
 
 	function addWater() {
 		waterMl += WATER_UNIT_ML;
@@ -163,7 +177,7 @@
 <div class="page">
 	<header class="page-header">
 		<h1>{m('nutrition.heading')}</h1>
-		<a class="btn btn-primary" href="/nutrition/log" data-testid="log-food">{m('nutrition.logFood')}</a>
+		<button class="btn btn-primary" type="button" onclick={() => (showLog = true)} data-testid="log-food">{m('nutrition.logFood')}</button>
 	</header>
 
 	{#if loading}
@@ -242,7 +256,7 @@
 				<span class="material-symbols empty-icon" aria-hidden="true">restaurant</span>
 				<h2>{m('nutrition.empty')}</h2>
 				<p class="empty-text">{m('nutrition.searchPlaceholder')}</p>
-				<a class="btn btn-primary" href="/nutrition/log">{m('nutrition.logFood')}</a>
+				<button class="btn btn-primary" type="button" onclick={() => (showLog = true)}>{m('nutrition.logFood')}</button>
 			</section>
 		{:else}
 			<section class="card-elevated meals-card">
@@ -317,6 +331,10 @@
 		{/if}
 	{/if}
 </div>
+
+<Modal open={showLog} title={m('nutrition.logHeading')} onclose={() => (showLog = false)}>
+	<NutritionLogEditor oncreated={onLogged} oncancel={() => (showLog = false)} />
+</Modal>
 
 <style>
 	.page {
