@@ -428,3 +428,18 @@ keys/product sign-off, so none were half-built. Sized for the roadmap:
   per-segment global-min aggregation across all users would be needed — heavier than a
   recap card warrants, and segment leaderboards are a secondary surface here. Personal
   records stand in as the achievement metric.
+
+## iOS runtime bring-up (deferred app; first simulator launch 2026-06-06)
+
+- [ ] **Background sync doesn't execute on an iOS device (BGAppRefreshTask vs `fetch`)** —
+  `background_sync.dart`'s `Workmanager().registerPeriodicTask` maps to a
+  `BGAppRefreshTaskRequest` on iOS, which requires the `fetch` `UIBackgroundMode`. The
+  Info.plist only declares `processing` (a deliberate 2026-05-30 choice aimed at a
+  `BGProcessingTask` the Dart side never actually schedules). `AppDelegate.swift` now
+  registers the identifier with `BGTaskScheduler` so launch no longer crashes (was a
+  `SIGABRT`), but on a real device the app-refresh submit is rejected (`BGTaskSchedulerError`,
+  caught + logged) so background sync never runs in the background. Fix: either add `fetch`
+  to `UIBackgroundModes` and keep app-refresh, or switch the Dart side to a `BGProcessingTask`
+  (`Workmanager().registerProcessingTask`) registered via `WorkmanagerPlugin.registerBGProcessingTask`.
+  Needs on-device testing. iOS-only — Android uses `WorkManager` and is unaffected. See
+  `apps/mobile_ios/CLAUDE.md § Catch-up status`.
