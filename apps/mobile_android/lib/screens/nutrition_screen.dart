@@ -292,7 +292,7 @@ class _NutritionScreenState extends State<NutritionScreen> {
         ),
         const SizedBox(height: 4),
         Text(
-          r.target != null ? '${r.label} / ${r.target}' : r.label,
+          r.target != null ? '${r.label} / ${r.target} ${r.unit}' : r.label,
           style:
               theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline),
         ),
