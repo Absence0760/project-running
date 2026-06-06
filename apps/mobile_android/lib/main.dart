@@ -280,7 +280,11 @@ void main() async {
 
   final social = SocialService();
   final raceController = RaceController(social);
-  unawaited(raceController.start());
+  // start() -> _refresh() reads Supabase.instance.client, which throws until
+  // init resolves; the unawaited call would otherwise abort the isolate.
+  if (hasSupabase && api != null) {
+    unawaited(raceController.start());
+  }
   final training = TrainingService();
   final heartRate = BleHeartRate();
   // Kick off auto-reconnect in the background. If the user has paired a
