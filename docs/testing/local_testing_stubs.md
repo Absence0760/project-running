@@ -84,19 +84,35 @@ Any future expiry; any 3-digit CVC; any 5-digit ZIP.
 
 ### 5. Deliver the RevenueCat webhook to your local backend
 
-Two options:
+**(a) Scripted (preferred): `pnpm dev:payments`.** One command boots the Supabase stack, re-serves the Edge Functions with `.env.local` loaded (so `REVENUECAT_WEBHOOK_SECRET` is set — `supabase start`'s auto edge-runtime ignores it and would 503), and starts `stripe listen` forwarding to the local handler. Wraps `bin/payments-dev.sh`.
 
-**(a) Stripe CLI listen (preferred).** The Stripe CLI forwards real test-mode events to your local URL. RevenueCat re-emits Stripe events on its own webhook channel, so you'll trigger one Stripe event and watch RevenueCat fire its own POST a moment later.
+```bash
+pnpm dev:payments            # supabase + functions serve (.env.local) + stripe listen
+pnpm dev:payments:status     # what's running / configured
+pnpm dev:payments:stop       # stop functions serve (DB stays up)
+```
+
+To actually exercise the happy path (tier flip), use the signed replay — it POSTs a RevenueCat-shaped event with a correct `x-revenuecat-hmac`, fresh timestamp, and the seed user's id:
+
+```bash
+pnpm dev:payments:replay                    # seed user -> pro (INITIAL_PURCHASE / pro_monthly)
+pnpm dev:payments:replay -- RENEWAL         # renewal (clears the billing-issue flag)
+pnpm dev:payments:replay -- EXPIRATION      # downgrade -> free
+pnpm dev:payments:replay -- INITIAL_PURCHASE pro_lifetime   # -> lifetime
+```
+
+A `200` means the handler validated the HMAC, deduped via `webhook_events`, and flipped `user_profiles.subscription_tier`. (`503` = secret unset · `401` = signature/secret mismatch · `400` = stale/invalid event.)
+
+**(b) Raw `stripe listen` (manual).** The same forwarder the wrapper runs, by hand:
 
 ```bash
 stripe listen --forward-to http://127.0.0.1:54321/functions/v1/revenuecat-webhook
-# In a second terminal:
-stripe trigger checkout.session.completed
+stripe trigger checkout.session.completed     # in a second terminal
 ```
 
-RevenueCat receives the Stripe event, classifies it, and POSTs an `INITIAL_PURCHASE` to your local webhook handler. The handler validates the HMAC against `REVENUECAT_WEBHOOK_SECRET`, dedupes via `webhook_events`, flips `user_profiles.subscription_tier` to `pro`. The dashboard refreshes within a tick because `auth.fetchUser()` is called in the success path.
+Caveat: this forwards **raw Stripe** events straight to our handler, which requires the RevenueCat `x-revenuecat-hmac` header — so forwarded Stripe events return `401 missing_signature` (expected, not a bug). It confirms the endpoint is reachable and lets you watch real events, but it does **not** flip the tier. The genuine Stripe → RevenueCat → our-handler loop needs RevenueCat (cloud) to reach your localhost: configure a public tunnel (ngrok / cloudflared) as the RC sandbox webhook URL, then a real test purchase round-trips. For day-to-day local dev, the signed `replay` above is the shortcut.
 
-**(b) Curl replay.** Capture a payload from the RevenueCat dashboard "Test webhook" feature, sign it with the secret, replay.
+**(c) Curl replay (manual).** Capture a payload from the RevenueCat dashboard "Test webhook" feature, sign it with the secret, replay. `pnpm dev:payments:replay` automates exactly this.
 
 ### 6. Verify
 
