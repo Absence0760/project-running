@@ -24,6 +24,7 @@ Invoke from a Claude Code session as `/audit/<name>`.
 | Command | What it checks |
 |---|---|
 | [/audit/privacy-zones](privacy-zones.md) | Every non-owner surface routes through `clipTrackForUser` (decisions §33) |
+| [/audit/pii-in-logs](pii-in-logs.md) | PII / location / health / secrets leaking into server logs, error bodies, or an external sink (SOC 2 / GovRAMP) |
 
 ### Invariants
 
@@ -35,12 +36,15 @@ Invoke from a Claude Code session as `/audit/<name>`.
 | [/audit/architecture-guards](architecture-guards.md) | Run every architecture-guard test suite + summarize failures |
 | [/audit/layered-resilience](layered-resilience.md) | L0–L4 try/catch contract on the run-recording stack |
 | [/audit/db-design](db-design.md) | Professional data-architecture standards across **all three persistence layers** — Postgres relational design + mobile JSON file-stores + watch local storage. Scope arg: `backend` / `mobile` / `watch` / `all` |
+| [/audit/db-performance](db-performance.md) | Postgres indexing + query shapes — missing / redundant / unused indexes, composite ordering, N+1, seq-scan-at-scale (query-perf lens, complements db-design) |
+| [/audit/migration-locks](migration-locks.md) | Online-DDL safety — which migrations take a blocking lock / rewrite a table and would cause downtime on `supabase db push` to populated prod |
 
 ### Health
 
 | Command | What it checks |
 |---|---|
 | [/audit/deps](deps.md) | Cross-toolchain dependency CVEs (npm, flutter pub, Deno, Actions) |
+| [/audit/licenses](licenses.md) | Dependency-license inventory across every toolchain — copyleft / unknown / attribution-missing legal risk for a shipped proprietary app (SOC 2 / GovRAMP) |
 | [/audit/infra](infra.md) | AWS Terraform stacks under `infra/` — IAM least-privilege, encryption, drift hygiene, cost + DR guardrails |
 | [/audit/cost-controls](cost-controls.md) | Per-user + global spend ceilings across coach, AWS, Supabase, Anthropic; no single failure can produce a runaway bill |
 
@@ -76,10 +80,10 @@ Invoke from a Claude Code session as `/audit/<name>`.
 | Audit area | Agent it delegates to |
 |---|---|
 | Security + Privacy (rls, storage, edge-functions, xss, secrets, public-rows, paywall, privacy-zones) | `repo-security-auditor` |
-| Compliance (gdpr, data-export-completeness, account-deletion-completeness, third-party-data-flows, cookie-consent, regional-availability, accessibility) | `compliance-auditor` |
+| Compliance (gdpr, data-export-completeness, account-deletion-completeness, third-party-data-flows, cookie-consent, regional-availability, accessibility, pii-in-logs, licenses) | `compliance-auditor` |
 | App-store disclosure (app-store-privacy) | `app-store-privacy-auditor` |
 | i18n (i18n-readiness) | `i18n-readiness-auditor` |
-| Data-architecture design (db-design) | `data-architecture-auditor` |
+| Data-architecture design + query perf + migration locks (db-design, db-performance, migration-locks) | `data-architecture-auditor` |
 | Legal-doc review (when drafting `/privacy`, `/terms`, etc.) | `intl-legal-doc-reviewer` (non-US), `us-legal-doc-reviewer` (US — global agent) |
 
 Each auditor has the relevant trust boundaries + project conventions baked in so a `/audit/<name>` invocation runs without re-reading them. `/audit/all` spawns one auditor instance per area in parallel.
@@ -107,10 +111,12 @@ it's spent or stale. Full lifecycle in [`reviews/README.md`](../../../reviews/RE
 - **Before opening signup to a new country / region** — `/audit/all compliance` once; fix every Critical / High before publishing the country expansion.
 - **After a sweeping refactor** — at minimum `/audit/architecture-guards` + `/audit/twin-parity` + `/audit/schema-drift`.
 - **After adding a new Edge Function or SvelteKit server route** — `/audit/auth` + `/audit/edge-functions`.
-- **After a new migration** — `/audit/rls` + `/audit/schema-drift` + `/audit/public-rows`.
+- **After a new migration** — `/audit/rls` + `/audit/schema-drift` + `/audit/public-rows` + `/audit/migration-locks` (before `supabase db push` to prod).
   - Plus `/audit/data-export-completeness` + `/audit/account-deletion-completeness` if the migration touches personal data.
+  - Plus `/audit/db-performance` if it adds an index or a hot query path.
 - **After adding a new third-party SDK / API call** — `/audit/third-party-data-flows` + `/audit/cookie-consent` + `/audit/secrets`.
-- **After bumping a dependency major** — `/audit/deps` + `/audit/secrets`.
+- **After adding a new Edge Function / server route / job handler, or new logging** — `/audit/pii-in-logs` (no PII / token / coordinate in logs or the Sentry sink).
+- **After bumping a dependency major or adding a new dependency** — `/audit/deps` + `/audit/secrets` + `/audit/licenses`.
 - **After editing anything under `infra/`** — `/audit/infra` before `terraform apply`.
 - **Before submitting a binary to App Store / Play** — `/audit/app-store-privacy`.
 - **When drafting or revising legal pages** — `intl-legal-doc-reviewer` (non-US) and / or the global `us-legal-doc-reviewer` (US).
