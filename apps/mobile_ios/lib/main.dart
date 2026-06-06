@@ -122,7 +122,15 @@ void main() async {
   );
   if (kDebugMode) {
     try {
-      await dotenv.load(fileName: '.env.local', mergeWith: dotenv.env);
+      // flutter_dotenv's load() calls clean() (clearing its env map) before it
+      // applies mergeWith, so passing the live `dotenv.env` would self-wipe the
+      // dart-define values loaded just above. Snapshot them first.
+      final defineEnv = Map<String, String>.from(dotenv.env);
+      await dotenv.load(
+        fileName: '.env.local',
+        mergeWith: defineEnv,
+        isOptional: true,
+      );
     } catch (e) {
       debugPrint('main: optional .env.local load failed: $e');
     }
