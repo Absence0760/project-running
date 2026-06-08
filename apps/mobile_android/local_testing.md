@@ -84,6 +84,23 @@ Get your Supabase anon key from `supabase status`. Get a free MapTiler key at [m
 
 > **Important:** Use `10.0.2.2` instead of `localhost`. The Android emulator's `localhost` refers to the emulator itself, not your host machine. `10.0.2.2` is a special alias that routes to the host's loopback address.
 
+### Running on a physical device (not the emulator)
+
+`10.0.2.2` is an **emulator-only** alias — on a real phone it routes to nothing, so the app silently can't reach the local stack. The symptom is subtle: locally-cached data (e.g. previously-synced runs in History) still renders, but anything that needs a fresh server fetch never loads — the History **Lifts / Meals chips stay hidden** because `LocalGymStore` / `LocalFoodStore` were never hydrated, daily nutrition shows nothing, the feed is empty, etc. The fetch failures are swallowed by each surface's best-effort try/catch (layered resilience), so there's no error — just missing data.
+
+Two ways to point a physical device at the local stack:
+
+- **`adb reverse` (recommended).** Forwards the device's own loopback to your host, so `127.0.0.1` works on the phone exactly as on the host:
+
+  ```bash
+  adb reverse tcp:54321 tcp:54321   # Supabase REST/Auth/Storage/Functions
+  adb reverse tcp:54322 tcp:54322   # Postgres, only if you hit the DB directly
+  ```
+
+  Then set `SUPABASE_URL=http://127.0.0.1:54321` in `.env.local`. This also works on the emulator, so it's the one setting that's correct for both. Re-run `adb reverse` after a reconnect/reboot (the forwards don't persist).
+
+- **Host LAN IP.** Set `SUPABASE_URL=http://<your-workstation-LAN-IP>:54321` (find it with `ip route get 1.1.1.1`) and make sure local Supabase binds beyond loopback + your firewall allows the port. No `adb` needed, but more setup than `adb reverse`.
+
 ## Google Sign-In (optional)
 
 Email/password sign-in works out of the box against any Supabase instance with no extra setup. Google Sign-In requires a one-time Google Cloud Console + Supabase dashboard configuration because Supabase validates the Google ID token against a specific OAuth client.
