@@ -482,10 +482,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get logStartLift => 'Iniciar musculação';
 
   @override
-  String get logMeal => 'Registrar refeição';
-
-  @override
-  String get logSnack => 'Registrar lanche';
+  String get logFood => 'Registrar comida';
 
   @override
   String get prefsKeepRunPrimary => 'Corrida como ação principal';
@@ -7548,10 +7545,7 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
   String get logStartLift => 'Iniciar musculação';
 
   @override
-  String get logMeal => 'Registrar refeição';
-
-  @override
-  String get logSnack => 'Registrar lanche';
+  String get logFood => 'Registrar comida';
 
   @override
   String get prefsKeepRunPrimary => 'Corrida como ação principal';

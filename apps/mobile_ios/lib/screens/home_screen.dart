@@ -296,8 +296,7 @@ class _HomeScreenState extends State<HomeScreen> {
                 GymScreen(api: widget.apiClient, store: widget.gymStore),
           ),
         );
-      case LogAction.meal:
-      case LogAction.snack:
+      case LogAction.food:
         Navigator.of(context).push(
           MaterialPageRoute<void>(
             builder: (_) => NutritionScreen(

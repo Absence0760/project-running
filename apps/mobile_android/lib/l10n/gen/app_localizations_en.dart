@@ -480,10 +480,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get logStartLift => 'Start lift';
 
   @override
-  String get logMeal => 'Log meal';
-
-  @override
-  String get logSnack => 'Log snack';
+  String get logFood => 'Log food';
 
   @override
   String get prefsKeepRunPrimary => 'Run as primary action';

@@ -472,10 +472,7 @@ class AppLocalizationsJa extends AppLocalizations {
   String get logStartLift => '筋トレを開始';
 
   @override
-  String get logMeal => '食事を記録';
-
-  @override
-  String get logSnack => '間食を記録';
+  String get logFood => '食事を記録';
 
   @override
   String get prefsKeepRunPrimary => 'ランを主要操作にする';

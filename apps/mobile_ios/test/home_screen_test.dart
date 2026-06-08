@@ -159,8 +159,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
       expect(find.text('Start run'), findsOneWidget);
       expect(find.text('Start lift'), findsOneWidget);
-      expect(find.text('Log meal'), findsOneWidget);
-      expect(find.text('Log snack'), findsOneWidget);
+      expect(find.text('Log food'), findsOneWidget);
     });
 
     testWidgets('keepRunPrimary: tapping the Log FAB starts a run, no sheet',

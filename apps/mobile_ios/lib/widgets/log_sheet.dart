@@ -2,18 +2,19 @@ import 'package:flutter/material.dart';
 
 import '../l10n/gen/app_localizations.dart';
 
-/// The four capture types the centre Log button can start (multi_modal.md
-/// § Bottom nav). Persisted as a wire string in `Preferences.lastLogType`.
-enum LogAction { run, lift, meal, snack }
+/// The three capture types the centre Log button can start (multi_modal.md
+/// § Bottom nav) — one per modality, mirroring web's surfaces. Food is a
+/// single entry (the meal slot is picked in the log composer, as on web's
+/// `/nutrition/log`), not split into meal/snack. Persisted as a wire string
+/// in `Preferences.lastLogType`.
+enum LogAction { run, lift, food }
 
-/// Wire name for [Preferences.lastLogType] persistence + the `food_log`
-/// meal slot for the snack path.
+/// Wire name for [Preferences.lastLogType] persistence.
 extension LogActionWire on LogAction {
   String get wire => switch (this) {
         LogAction.run => 'run',
         LogAction.lift => 'lift',
-        LogAction.meal => 'meal',
-        LogAction.snack => 'snack',
+        LogAction.food => 'food',
       };
 }
 
@@ -22,8 +23,7 @@ extension LogActionWire on LogAction {
 LogAction? logActionFromWire(String? wire) => switch (wire) {
       'run' => LogAction.run,
       'lift' => LogAction.lift,
-      'meal' => LogAction.meal,
-      'snack' => LogAction.snack,
+      'food' => LogAction.food,
       _ => null,
     };
 
@@ -32,12 +32,12 @@ LogAction? logActionFromWire(String? wire) => switch (wire) {
 /// 'Start lift' first"). Stable for the remaining items. Pure so it can be
 /// unit-tested without pumping the sheet.
 List<LogAction> orderedLogActions(LogAction? recent) {
-  const base = [LogAction.run, LogAction.lift, LogAction.meal, LogAction.snack];
+  const base = [LogAction.run, LogAction.lift, LogAction.food];
   if (recent == null) return base;
   return [recent, ...base.where((a) => a != recent)];
 }
 
-/// The Log bottom sheet — Start run / Start lift / Log meal / Log snack.
+/// The Log bottom sheet — Start run / Start lift / Log food.
 /// Resolves to the picked [LogAction], or null on dismiss. The caller
 /// (HomeScreen) performs the navigation so the sheet stays free of store /
 /// api dependencies.
@@ -89,8 +89,7 @@ class _LogSheet extends StatelessWidget {
     final (icon, label) = switch (a) {
       LogAction.run => (Icons.directions_run, l10n.logStartRun),
       LogAction.lift => (Icons.fitness_center, l10n.logStartLift),
-      LogAction.meal => (Icons.restaurant, l10n.logMeal),
-      LogAction.snack => (Icons.bakery_dining, l10n.logSnack),
+      LogAction.food => (Icons.restaurant, l10n.logFood),
     };
     return ListTile(
       leading: Icon(icon),

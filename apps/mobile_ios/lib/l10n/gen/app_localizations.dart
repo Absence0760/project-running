@@ -857,17 +857,11 @@ abstract class AppLocalizations {
   /// **'Start lift'**
   String get logStartLift;
 
-  /// Log sheet item: log a meal
+  /// Log sheet item: log food (meal slot chosen in the composer)
   ///
   /// In en, this message translates to:
-  /// **'Log meal'**
-  String get logMeal;
-
-  /// Log sheet item: log a snack
-  ///
-  /// In en, this message translates to:
-  /// **'Log snack'**
-  String get logSnack;
+  /// **'Log food'**
+  String get logFood;
 
   /// Settings toggle: make the centre Log button start a run on a single tap
   ///

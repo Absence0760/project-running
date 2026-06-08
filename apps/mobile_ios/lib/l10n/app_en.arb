@@ -286,13 +286,9 @@
   "@logStartLift": {
     "description": "Log sheet item: begin logging a gym/lift workout"
   },
-  "logMeal": "Log meal",
-  "@logMeal": {
-    "description": "Log sheet item: log a meal"
-  },
-  "logSnack": "Log snack",
-  "@logSnack": {
-    "description": "Log sheet item: log a snack"
+  "logFood": "Log food",
+  "@logFood": {
+    "description": "Log sheet item: log food (meal slot chosen in the composer)"
   },
   "prefsKeepRunPrimary": "Run as primary action",
   "@prefsKeepRunPrimary": {

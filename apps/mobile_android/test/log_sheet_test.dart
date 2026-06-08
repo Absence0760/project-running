@@ -10,8 +10,7 @@ void main() {
       expect(orderedLogActions(null), [
         LogAction.run,
         LogAction.lift,
-        LogAction.meal,
-        LogAction.snack,
+        LogAction.food,
       ]);
     });
 
@@ -19,14 +18,12 @@ void main() {
       expect(orderedLogActions(LogAction.lift), [
         LogAction.lift,
         LogAction.run,
-        LogAction.meal,
-        LogAction.snack,
+        LogAction.food,
       ]);
-      expect(orderedLogActions(LogAction.snack), [
-        LogAction.snack,
+      expect(orderedLogActions(LogAction.food), [
+        LogAction.food,
         LogAction.run,
         LogAction.lift,
-        LogAction.meal,
       ]);
     });
 
@@ -46,9 +43,8 @@ void main() {
       }
     });
 
-    test('snack wire is the food_log snack slot', () {
-      expect(LogAction.snack.wire, 'snack');
-      expect(LogAction.meal.wire, 'meal');
+    test('food is a single capture wire', () {
+      expect(LogAction.food.wire, 'food');
     });
 
     test('unknown / null → null', () {
@@ -59,7 +55,7 @@ void main() {
   });
 
   group('showLogSheet', () {
-    testWidgets('renders the four capture options and pops the picked one',
+    testWidgets('renders the three capture options and pops the picked one',
         (tester) async {
       LogAction? result;
       await tester.pumpWidget(
@@ -85,8 +81,7 @@ void main() {
 
       expect(find.text('Start run'), findsOneWidget);
       expect(find.text('Start lift'), findsOneWidget);
-      expect(find.text('Log meal'), findsOneWidget);
-      expect(find.text('Log snack'), findsOneWidget);
+      expect(find.text('Log food'), findsOneWidget);
 
       await tester.tap(find.text('Start lift'));
       await tester.pumpAndSettle();
@@ -104,7 +99,7 @@ void main() {
               builder: (context) => Center(
                 child: ElevatedButton(
                   onPressed: () =>
-                      showLogSheet(context: context, recent: LogAction.meal),
+                      showLogSheet(context: context, recent: LogAction.food),
                   child: const Text('open'),
                 ),
               ),
@@ -115,10 +110,10 @@ void main() {
       await tester.tap(find.text('open'));
       await tester.pumpAndSettle();
 
-      // The meal tile renders above the run tile.
-      final mealTop = tester.getTopLeft(find.text('Log meal')).dy;
+      // The food tile renders above the run tile.
+      final foodTop = tester.getTopLeft(find.text('Log food')).dy;
       final runTop = tester.getTopLeft(find.text('Start run')).dy;
-      expect(mealTop, lessThan(runTop));
+      expect(foodTop, lessThan(runTop));
     });
   });
 }

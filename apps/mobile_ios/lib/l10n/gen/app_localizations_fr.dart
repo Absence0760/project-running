@@ -483,10 +483,7 @@ class AppLocalizationsFr extends AppLocalizations {
   String get logStartLift => 'Démarrer la muscu';
 
   @override
-  String get logMeal => 'Ajouter un repas';
-
-  @override
-  String get logSnack => 'Ajouter une collation';
+  String get logFood => 'Enregistrer un aliment';
 
   @override
   String get prefsKeepRunPrimary => 'Course comme action principale';
