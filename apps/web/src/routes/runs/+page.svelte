@@ -857,20 +857,34 @@
 		margin-bottom: var(--space-xl);
 	}
 
+	/* The toolbar itself does NOT wrap: the filter cluster grows to fill and
+	   wraps its OWN rows, while the action cluster stays pinned to the right
+	   edge. Without this, a wide filter cluster shoved the whole action block
+	   (Heatmap / Select / Add run) onto its own line. align-items: flex-start
+	   keeps the actions top-aligned when the filters wrap to a second row. */
 	.toolbar {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: var(--space-md);
-		flex-wrap: wrap;
+		/* Make the toolbar a query container so the activity-button labels can
+		   hide based on the toolbar's OWN width (sidebar-independent), not the
+		   viewport — a viewport breakpoint mis-fires once the sidebar eats
+		   ~16rem of the row. */
+		container-type: inline-size;
 	}
 
-	/* The filter cluster (activity segmented control + selects) stays
-	   grouped on the left; toolbar-actions push to the right edge. */
+	/* The filter cluster (activity segmented control + selects) grows to fill
+	   the row and wraps the selects below the segmented control before the
+	   actions are pushed. It is allowed to grow + shrink, but never below its
+	   own content (the segmented control), so the buttons can't overrun the
+	   action cluster — when the row gets tight the labels drop out (container
+	   query below) to shrink it instead. */
 	.toolbar-filters {
 		display: flex;
 		align-items: center;
 		gap: var(--space-md);
 		flex-wrap: wrap;
+		flex: 1 1 auto;
 	}
 
 	/* Shared segmented-control idiom, matching the kind chips on /history
@@ -952,18 +966,29 @@
 		align-items: center;
 		gap: var(--space-sm);
 		margin-inline-start: auto;
+		flex-shrink: 0;
 	}
 
-	@media (max-width: 50rem) {
+	/* Drop the activity-button text labels (icons + aria-label remain) once the
+	   toolbar is too narrow to show the labelled segmented control AND the
+	   action cluster on one row. ~54rem is just above their combined width, so
+	   the labels vanish a touch before they'd collide with the actions. */
+	@container (max-width: 54rem) {
 		.activity-label {
 			display: none;
 		}
-		.toolbar-filters {
-			width: 100%;
+	}
+
+	@media (max-width: 50rem) {
+		/* Narrow viewport: stack the filter cluster above the actions instead of
+		   sharing a row. Column direction (not width:100% on a wrapping row)
+		   so the no-wrap toolbar still collapses cleanly. */
+		.toolbar {
+			flex-direction: column;
+			align-items: stretch;
 		}
 		.toolbar-actions {
 			margin-inline-start: 0;
-			width: 100%;
 			justify-content: flex-end;
 		}
 	}
