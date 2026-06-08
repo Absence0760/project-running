@@ -1903,7 +1903,7 @@
 
 	.chip-maybe {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text));
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		padding: 0.2rem 0.6rem;
 		border-radius: var(--radius-sm);
 		font-size: 0.8rem;
@@ -1998,7 +1998,7 @@
 	.role-badge.role-event_organiser,
 	.role-badge.role-race_director {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text));
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 	}
 
 	/* Canonical empty-card pattern (mirrors /clubs, /routes, /runs, /plans).

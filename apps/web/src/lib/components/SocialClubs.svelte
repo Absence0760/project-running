@@ -446,7 +446,7 @@
 	}
 	.chip-pending {
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
-		color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text));
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		padding: 0.15rem 0.55rem;
 		border-radius: var(--radius-sm);
 		font-size: 0.75rem;

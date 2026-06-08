@@ -1996,11 +1996,11 @@
 	.rsvp-maybe.active {
 		background: color-mix(in srgb, var(--color-warning) 16%, transparent);
 		border-color: var(--color-warning);
-		color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 	}
 	.rsvp-maybe.active .material-symbols,
 	.rsvp-maybe.active .rsvp-count {
-		color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text));
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		background: color-mix(in srgb, var(--color-warning) 22%, transparent);
 	}
 	.rsvp-declined.active {

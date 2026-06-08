@@ -137,20 +137,22 @@ for (const { label, marker } of THEMES) {
 // the source tree so the antipattern can't come back unnoticed.
 test('no source file uses a "-strong" status token as a text colour', () => {
 	const srcRoot = resolve(__dirname, '..');
-	// color: ... var(--color-{success|danger|warning}-strong ...)  (text use)
-	const offender = /color:\s*var\(\s*--color-(?:success|danger|warning)-strong/;
+	const selfPath = resolve(__dirname, 'contrast_guard.test.ts');
+	// `color:` (the text property — the leading boundary rejects
+	// `background-color:`) set to a `-strong` status token.
+	const offender = /(?<![a-z-])color:\s*var\(\s*--color-(?:success|danger|warning)-strong/;
 	const SKIP_DIRS = new Set(['node_modules', '.svelte-kit', 'build', 'dist']);
 	const hits: string[] = [];
 
 	function walk(dir: string): void {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			const path = join(dir, entry.name);
 			if (entry.isDirectory()) {
-				if (!SKIP_DIRS.has(entry.name)) walk(join(dir, entry.name));
+				if (!SKIP_DIRS.has(entry.name)) walk(path);
 				continue;
 			}
 			if (!/\.(svelte|css|ts)$/.test(entry.name)) continue;
-			if (entry.name === 'contrast_guard.test.ts') continue; // this file
-			const path = join(dir, entry.name);
+			if (path === selfPath) continue; // this guard's own doc/string mentions
 			readFileSync(path, 'utf-8')
 				.split('\n')
 				.forEach((line, i) => {
