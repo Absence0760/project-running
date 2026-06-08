@@ -137,6 +137,79 @@ test.describe('multi-modal Home + History', () => {
 		await expect(page.getByRole('button', { name: 'Log', exact: true })).toHaveCount(0);
 	});
 
+	test('single-modality tabs link "View all" to their dedicated page', async ({ page }) => {
+		await page.goto('/history');
+		// Lifts → /gym.
+		await page.getByRole('button', { name: 'Lifts', exact: true }).click();
+		await expect(page.getByRole('link', { name: /View all/ })).toHaveAttribute('href', '/gym');
+		// Meals → /nutrition (the seed user carries food-log entries, so the
+		// Meals chip exists). Clicking actually navigates.
+		await page.getByRole('button', { name: 'Meals', exact: true }).click();
+		const mealsViewAll = page.getByRole('link', { name: /View all/ });
+		await expect(mealsViewAll).toHaveAttribute('href', '/nutrition');
+		await mealsViewAll.click();
+		await expect(page).toHaveURL(/\/nutrition$/);
+	});
+
+	test('All-view Log menu is keyboard-navigable (arrow keys + Escape)', async ({ page }) => {
+		await page.goto('/history');
+		// Default chip is All → the Log menu button.
+		const trigger = page.getByRole('button', { name: 'Log', exact: true });
+		await expect(trigger).toBeVisible({ timeout: 15_000 });
+		// Opening moves focus into the menu (first item).
+		await trigger.click();
+		await expect(page.getByRole('menuitem', { name: 'Log run' })).toBeFocused();
+		// Arrow keys rove focus among the items; Home/End jump.
+		await page.keyboard.press('ArrowDown');
+		await expect(page.getByRole('menuitem', { name: 'Log workout' })).toBeFocused();
+		await page.keyboard.press('ArrowUp');
+		await expect(page.getByRole('menuitem', { name: 'Log run' })).toBeFocused();
+		await page.keyboard.press('End');
+		await expect(page.getByRole('menuitem', { name: 'Log food' })).toBeFocused();
+		// Escape closes the menu and returns focus to the trigger.
+		await page.keyboard.press('Escape');
+		await expect(page.getByRole('menuitem', { name: 'Log run' })).toHaveCount(0);
+		await expect(trigger).toBeFocused();
+	});
+
+	test('History back-nav restores the feed from the snapshot, not a refetch (race guard)', async ({
+		page,
+	}) => {
+		// Regression guard for the restore race: tapping a row then `back` must
+		// repaint the SAME feed from the snapshot rather than depend on a fresh
+		// fetchActivities (which used to overwrite it once auth settled — a
+		// flash + scroll reset). We can't forbid a redundant background fetch
+		// (the effect may fire before restore; its result is discarded by the
+		// fetch-generation guard, same as /runs). Instead, GATE the activities
+		// endpoint after navigating away: if the page truly relied on a refetch
+		// to repaint, the gated endpoint would leave it on a skeleton; with the
+		// snapshot it paints immediately.
+		await page.goto('/history');
+		await page.getByRole('button', { name: 'Lifts', exact: true }).click();
+		const row = page.locator('.timeline-row', { hasText: liftTitle });
+		await expect(row).toBeVisible({ timeout: 15_000 });
+		await row.click();
+		await expect(page).toHaveURL(new RegExp(`/gym/${workoutId}`));
+
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		await page.route('**/rest/v1/activities*', async (route) => {
+			if (route.request().method() !== 'GET') return route.continue();
+			await gate; // any restore-time refetch hangs here
+			return route.continue();
+		});
+
+		await page.goBack();
+		// Restored immediately despite the gated endpoint: chips + the exact
+		// lift row are present, the Lifts tab is kept, and no skeleton flashes.
+		await expect(page.getByRole('button', { name: 'Lifts', exact: true })).toBeVisible({
+			timeout: 10_000,
+		});
+		await expect(page.locator('.timeline-row', { hasText: liftTitle })).toBeVisible();
+		await expect(page.locator('.timeline-skel')).toHaveCount(0);
+		release();
+	});
+
 	test('History holds a skeleton until activities resolve — no chip flash', async ({
 		page,
 	}) => {

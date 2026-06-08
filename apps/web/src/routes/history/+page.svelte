@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, tick } from 'svelte';
 	import { formatDistance } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
 	import { fetchActivities, fetchGymSetHistory, type ActivityRow } from '$lib/core/data';
@@ -113,20 +113,35 @@
 	}
 
 	let activitiesLoadedFor = $state<string | null>(null);
+	/// Set by snapshot.restore on back-nav so the mount-time fetch effect
+	/// doesn't refetch and clobber the restored feed (+ scroll position).
+	/// restore() runs before auth has settled, so we can't gate on the
+	/// user id alone — `activitiesLoadedFor` would be null at that point and
+	/// the effect would re-fire the moment auth.user lands.
+	let restoredFeed = $state(false);
+	/// Monotonic counter: a late-resolving fetch whose generation was bumped
+	/// (by restore or a newer fetch) discards its result instead of
+	/// overwriting the current feed.
+	let fetchGen = $state(0);
 	$effect(() => {
 		const uid = auth.user?.id;
-		if (!uid || activitiesLoadedFor === uid) return;
+		if (!uid || restoredFeed || activitiesLoadedFor === uid) return;
 		activitiesLoadedFor = uid;
 		// Pull the unified activities feed (windowed to the most recent 200).
 		// The full per-modality history lives on /runs, /gym, /nutrition; the
 		// "View all" link on each single-modality tab points there. Best-effort
 		// — a failure just leaves an empty timeline. (multi_modal.md § History.)
+		const gen = ++fetchGen;
 		fetchActivities(200)
-			.then((rows) => (activityFeed = rows))
+			.then((rows) => {
+				if (gen === fetchGen) activityFeed = rows;
+			})
 			.catch(() => {
 				/* silent — empty timeline */
 			})
-			.finally(() => (activitiesLoaded = true));
+			.finally(() => {
+				if (gen === fetchGen) activitiesLoaded = true;
+			});
 	});
 
 	// --- Modality-aware logging ---
@@ -189,9 +204,13 @@
 
 	/// Refetch the unified feed after an in-place log so the new row appears
 	/// without a full navigation. Best-effort: a failure leaves the feed as-is.
+	/// Bumps the fetch generation so it wins over (and isn't clobbered by) any
+	/// in-flight mount-time fetch.
 	async function reloadActivities() {
+		const gen = ++fetchGen;
 		try {
-			activityFeed = await fetchActivities(200);
+			const rows = await fetchActivities(200);
+			if (gen === fetchGen) activityFeed = rows;
 		} catch (_) {
 			/* silent — keep the current feed */
 		}
@@ -236,6 +255,47 @@
 		};
 	});
 
+	// --- Log menu keyboard support (ARIA menu-button pattern) ---
+	function logMenuItems(): HTMLButtonElement[] {
+		return logMenuPanel
+			? Array.from(logMenuPanel.querySelectorAll<HTMLButtonElement>('[role="menuitem"]'))
+			: [];
+	}
+	function focusLogItem(i: number) {
+		const items = logMenuItems();
+		if (items.length === 0) return;
+		items[(i + items.length) % items.length]?.focus();
+	}
+	async function toggleLogMenu() {
+		logMenuOpen = !logMenuOpen;
+		if (logMenuOpen) {
+			// Move focus into the menu so arrow keys + Escape work immediately.
+			await tick();
+			focusLogItem(0);
+		}
+	}
+	/// Roving focus among the three menu items. Items stay tabbable too (Tab
+	/// still works); this just adds the arrow/Home/End navigation the menu
+	/// role implies. Escape is handled by the document listener above.
+	function onLogMenuKeydown(e: KeyboardEvent) {
+		const items = logMenuItems();
+		if (items.length === 0) return;
+		const cur = items.indexOf(document.activeElement as HTMLButtonElement);
+		if (e.key === 'ArrowDown') {
+			e.preventDefault();
+			focusLogItem(cur + 1);
+		} else if (e.key === 'ArrowUp') {
+			e.preventDefault();
+			focusLogItem(cur - 1);
+		} else if (e.key === 'Home') {
+			e.preventDefault();
+			focusLogItem(0);
+		} else if (e.key === 'End') {
+			e.preventDefault();
+			focusLogItem(items.length - 1);
+		}
+	}
+
 	/// Preserve the loaded feed + active tab + scroll position across in-app
 	/// navigation so tapping a row then `back` lands where the user was,
 	/// instead of a skeleton flash and a jump to the top.
@@ -252,11 +312,17 @@
 			scrollY: typeof window === 'undefined' ? 0 : window.scrollY,
 		}),
 		restore: (s) => {
+			// Invalidate any in-flight mount-time fetch the fresh instance may
+			// have kicked off before restore ran, then mark the feed restored so
+			// the fetch effect stays out — gating on the user id alone is unsafe
+			// because auth hasn't settled yet at restore time (auth.user is null,
+			// so activitiesLoadedFor would be null and the effect would re-fire
+			// the moment auth lands, clobbering the restored feed + scroll).
+			fetchGen++;
+			restoredFeed = true;
 			activityFeed = s.activityFeed;
 			activitiesLoaded = s.activitiesLoaded;
 			kindFilter = s.kindFilter;
-			// Mark the feed as already loaded for this user so the mount-time
-			// effect doesn't refetch and clobber the restored feed.
 			activitiesLoadedFor = auth.user?.id ?? null;
 			if (typeof window !== 'undefined' && s.scrollY > 0) {
 				queueMicrotask(() => {
@@ -344,14 +410,20 @@
 							class="add-btn"
 							aria-haspopup="menu"
 							aria-expanded={logMenuOpen}
-							onclick={() => (logMenuOpen = !logMenuOpen)}
+							onclick={toggleLogMenu}
+							onkeydown={(e) => {
+								if (!logMenuOpen && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+									e.preventDefault();
+									void toggleLogMenu();
+								}
+							}}
 						>
 							<span class="material-symbols" aria-hidden="true">add</span>
 							{m('history.logAction')}
 							<span class="material-symbols caret" class:open={logMenuOpen} aria-hidden="true">expand_more</span>
 						</button>
 						{#if logMenuOpen}
-							<div bind:this={logMenuPanel} class="log-menu-panel" role="menu">
+							<div bind:this={logMenuPanel} class="log-menu-panel" role="menu" tabindex="-1" onkeydown={onLogMenuKeydown}>
 								<button type="button" class="log-menu-item" role="menuitem" onclick={() => openLog('run')}>
 									<span class="material-symbols" aria-hidden="true">directions_run</span>{m('history.logRun')}
 								</button>

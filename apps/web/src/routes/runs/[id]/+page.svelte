@@ -71,7 +71,11 @@
 	let cameFromRuns = $state(false);
 	afterNavigate(({ from }) => {
 		const p = from?.url.pathname;
-		if ((p === '/runs' || p === '/history') && !cameFromRuns) {
+		// startsWith (not exact) so query-string variants (/history?tab=…) and
+		// sibling run details count too — history.back() always lands on the
+		// previous page regardless; the static /runs fallback is only for
+		// arrivals from elsewhere. Mirrors the heuristic in /runs/new.
+		if ((p?.startsWith('/runs') || p?.startsWith('/history')) && !cameFromRuns) {
 			cameFromRuns = true;
 		}
 	});

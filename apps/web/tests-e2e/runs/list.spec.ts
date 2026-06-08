@@ -22,6 +22,34 @@ const uniqueText = (prefix: string) =>
 test.describe('/runs', () => {
 	test.use({ storageState: USER_A.storageStatePath });
 
+	test('toolbar actions stay on the filter row, pinned right (not wrapped below)', async ({
+		page
+	}) => {
+		// Regression guard: the toolbar used to wrap as a whole, so a wide
+		// filter cluster shoved the Heatmap / Select / Add run actions onto
+		// their own line. The actions must now sit on the same row as the
+		// segmented control (top-aligned), pinned to the toolbar's right edge,
+		// with the selects wrapping BELOW them — never the actions wrapping.
+		await page.setViewportSize({ width: 1400, height: 900 });
+		await page.goto('/runs');
+		await expect(page.getByRole('heading', { level: 1, name: 'Run history' })).toBeAttached();
+		const actions = page.locator('.toolbar-actions');
+		const activity = page.locator('.activity-group');
+		const selects = page.locator('.select-group');
+		const toolbar = page.locator('.toolbar');
+		await expect(actions).toBeVisible();
+		const a = (await actions.boundingBox())!;
+		const f = (await activity.boundingBox())!;
+		const s = (await selects.boundingBox())!;
+		const t = (await toolbar.boundingBox())!;
+		// Same row as the segmented control (tops within one row height).
+		expect(Math.abs(a.y - f.y)).toBeLessThan(a.height);
+		// Pinned to the right edge of the toolbar (within a few px).
+		expect(t.x + t.width - (a.x + a.width)).toBeLessThan(6);
+		// The selects wrapped BELOW the actions row — the actions did not.
+		expect(s.y).toBeGreaterThan(a.y + a.height / 2);
+	});
+
 	test('lists the seeded runs (after switching to All time)', async ({
 		page
 	}) => {
