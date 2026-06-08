@@ -33,6 +33,31 @@ class _FakeApi extends ApiClient {
       const [];
 }
 
+/// Records whether History asked the server to hydrate the gym store on mount.
+/// `fetchGymWorkoutsWithSets` throws after counting so no `replaceFromServer`
+/// write fires — a store write would deadlock the fake-async test zone.
+class _HydrationProbeApi extends ApiClient {
+  int gymFetches = 0;
+
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<List<Run>> getRuns({
+    int limit = 50,
+    DateTime? before,
+    DateTime? updatedSince,
+  }) async =>
+      const [];
+
+  @override
+  Future<List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})>>
+      fetchGymWorkoutsWithSets({int limit = 50}) async {
+    gymFetches++;
+    throw StateError('probe: server unavailable');
+  }
+}
+
 void main() {
   setUpAll(() => initializeDateFormatting());
 
@@ -87,6 +112,7 @@ void main() {
     List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})> lifts = const [],
     List<Map<String, dynamic>> meals = const [],
     bool withGym = true,
+    ApiClient? api,
   }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = Preferences();
@@ -113,7 +139,7 @@ void main() {
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: RunsScreen(
-        apiClient: _FakeApi(),
+        apiClient: api ?? _FakeApi(),
         runStore: runStore,
         routeStore: LocalRouteStore(),
         preferences: prefs,
@@ -188,5 +214,17 @@ void main() {
     await pump(tester, runs: [runRow('r1')], withGym: false);
     expect(find.text('Lifts'), findsNothing);
     expect(find.byType(ActivityTimelineList), findsNothing);
+  });
+
+  testWidgets('History hydrates the gym store on mount (regression: no Lifts tab)',
+      (tester) async {
+    // Regression guard: History is now a first-class consumer of the local
+    // gym/food stores, so it must hydrate them itself rather than assume the
+    // dashboard / gym screen did. Without this the Lifts tab never appeared
+    // when History was the entry point. Assert it pulls the gym store fresh.
+    final api = _HydrationProbeApi();
+    await pump(tester, withGym: true, api: api);
+    expect(api.gymFetches, greaterThan(0),
+        reason: 'History should hydrate the gym store on mount');
   });
 }

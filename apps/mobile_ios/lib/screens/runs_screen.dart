@@ -223,6 +223,38 @@ class _RunsScreenState extends State<RunsScreen> {
         widget.runStore.runs.map((r) => r.id).toSet();
     _hydrateFilters();
     _fetchRemote();
+    _hydrateModalities();
+  }
+
+  /// Pull the gym + food local stores fresh from the server so the unified
+  /// timeline shows lifts / meals even when History is the entry point. The
+  /// dashboard + gym / nutrition screens hydrate these too, but History is a
+  /// first-class consumer now and can't assume it was reached through one of
+  /// them (that assumption was the bug behind "no Lifts tab"). Each hop is
+  /// wrapped independently (layered resilience); on success `replaceFromServer`
+  /// notifies, which repaints the timeline + reveals the chips. Skipped on the
+  /// run-only / pushed run-list mount (no gym store) and when signed out.
+  Future<void> _hydrateModalities() async {
+    final api = widget.apiClient;
+    final gymStore = widget.gymStore;
+    if (api == null || api.userId == null || gymStore == null) return;
+    try {
+      final fresh = await api.fetchGymWorkoutsWithSets(limit: 100);
+      await gymStore.replaceFromServer(fresh);
+    } catch (e) {
+      debugPrint('History gym hydrate failed: $e');
+    }
+    final foodStore = widget.foodStore;
+    if (foodStore == null) return;
+    try {
+      final now = DateTime.now();
+      final weekStart = DateTime(now.year, now.month, now.day - 6);
+      final tomorrow = DateTime(now.year, now.month, now.day + 1);
+      final fresh = await api.fetchFoodLog(from: weekStart, to: tomorrow);
+      await foodStore.replaceFromServer([for (final r in fresh) r.toJson()]);
+    } catch (e) {
+      debugPrint('History food hydrate failed: $e');
+    }
   }
 
   /// Rebuild the unified timeline from the local stores — synchronous, no
