@@ -338,7 +338,9 @@ class AdherencePill extends StatelessWidget {
     final theme = Theme.of(context);
     final (bg, fg) = switch (adherence) {
       'completed' => (Colors.green.shade100, Colors.green.shade900),
-      'partial' => (Colors.amber.shade100, Colors.amber.shade900),
+      // amber.900 text on amber.100 is only 2.4:1 — fails WCAG AA. #6D4C00 on
+      // amber.100 is 6.7:1. Pinned by contrast_guard_test.dart.
+      'partial' => (Colors.amber.shade100, const Color(0xFF6D4C00)),
       'abandoned' =>
         (theme.colorScheme.errorContainer, theme.colorScheme.onErrorContainer),
       _ => (

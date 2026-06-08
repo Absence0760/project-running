@@ -374,16 +374,17 @@ class _GearScreenState extends State<GearScreen> {
     );
   }
 
-  /// Wear badge mirroring web's gear card: a tinted pill with an icon for
-  /// "due" (amber) / "worn" (error). Returns null for ok / untracked so the
-  /// caller omits it. Colour pairs follow the AdherencePill convention so the
-  /// text stays legible in both themes.
+  // Returns null for ok / untracked — callers use `?wearBadge` to omit it.
   Widget? _wearBadge(GearWear wear, ThemeData theme, AppLocalizations l10n) {
+    final dark = theme.brightness == Brightness.dark;
     final (Color bg, Color fg, IconData icon, String label) = switch (
         wear.status) {
+      // Soft amber pill, AA-verified both themes (light: #6D4C00 on amber.100
+      // = 6.7:1; dark: amber.200 on #3E2D00 = 10.3:1). amber.900 text on
+      // amber.100 is only 2.4:1 — don't "simplify" to it.
       GearWearStatus.due => (
-          Colors.amber.shade100,
-          Colors.amber.shade900,
+          dark ? const Color(0xFF3E2D00) : Colors.amber.shade100,
+          dark ? Colors.amber.shade200 : const Color(0xFF6D4C00),
           Icons.schedule,
           l10n.gearWearDue,
         ),
