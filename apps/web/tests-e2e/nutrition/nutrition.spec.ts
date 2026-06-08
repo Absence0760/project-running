@@ -101,6 +101,34 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await admin.from('food_log').delete().eq('id', created![0].id);
 	});
 
+	test('water tracker shows a daily goal + remaining, and flips to reached', async ({ page }) => {
+		await page.goto('/nutrition');
+
+		// The water card now shows "consumed / target L" and a remaining chip
+		// (the seed user has body metrics so the goal is bodyweight-derived;
+		// even without them a flat 2 L baseline target renders).
+		const amount = page.locator('.water-amount');
+		await expect(amount).toBeVisible({ timeout: 10_000 });
+		await expect(amount).toContainText(/\/\s*[\d.]+ L/);
+
+		const chip = page.getByTestId('water-budget');
+		await expect(chip).toBeVisible();
+		await expect(chip).toContainText(/ml left/);
+		const beforeText = await chip.innerText();
+		const beforeRemaining = parseInt(beforeText.replace(/\D/g, ''), 10);
+
+		// One 250 ml add reduces the remaining by exactly one unit.
+		await page.getByTestId('add-water').click();
+		await expect(chip).toContainText(`${beforeRemaining - 250} ml left`);
+
+		// Reset the per-day localStorage counter so the shared seed user starts
+		// clean on the next run (the tracker is client-only, not a DB row).
+		await page.evaluate(() => {
+			const d = new Date();
+			localStorage.removeItem(`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`);
+		});
+	});
+
 	test('eating past the calorie target shows an over-budget signal', async ({ page }) => {
 		const admin = getAdminClient();
 		// One enormous entry today guarantees the day is over any reasonable

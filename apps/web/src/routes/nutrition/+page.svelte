@@ -26,6 +26,7 @@
 		type MealSlotGroup,
 	} from '$lib/nutrition/nutrition_totals';
 	import { computeDayBudget, type MacroKind } from '$lib/nutrition/nutrition_budget';
+	import { hydrationTargetMl, hydrationBudget } from '$lib/nutrition/hydration';
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -39,6 +40,8 @@
 	let exerciseKcal = $state(0);
 	let weekDays = $state<{ label: string; calories: number }[]>([]);
 	let waterMl = $state(0);
+	let weightKg = $state<number | null>(null);
+	let exerciseMinutes = $state(0);
 
 	const WATER_UNIT_ML = 250;
 
@@ -56,6 +59,10 @@
 
 	function waterStorageKey(): string {
 		return `water_ml_${todayKey()}`;
+	}
+
+	function litres(ml: number): string {
+		return (ml / 1000).toFixed(2).replace(/\.?0+$/, '');
 	}
 
 	onMount(async () => {
@@ -79,24 +86,29 @@
 
 			// Targets: assemble body metrics + activity/goal prefs, plus today's
 			// runs + gym sessions for the dynamic-TDEE "base + exercise" goal.
-			const [settings, weightKg, profileRes, recentRuns, recentGym] = await Promise.all([
+			const [settings, weight, profileRes, recentRuns, recentGym] = await Promise.all([
 				loadSettings(auth.user.id),
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
 				fetchRuns({ limit: 50 }),
 				fetchGymWorkouts(50),
 			]);
+			weightKg = weight;
 			const tomorrowIso = tomorrow.toISOString();
 			const isToday = (iso: string) => iso >= todayStart && iso < tomorrowIso;
+			const todayRuns = recentRuns.filter((r) => isToday(r.started_at));
+			const todayGym = recentGym.filter((w) => isToday(w.started_at));
 			exerciseKcal = exerciseCaloriesForDay({
-				runs: recentRuns
-					.filter((r) => isToday(r.started_at))
-					.map((r) => ({ distanceM: r.distance_m })),
-				gymSessions: recentGym
-					.filter((w) => isToday(w.started_at))
-					.map((w) => ({ durationS: w.duration_s })),
-				weightKg,
+				runs: todayRuns.map((r) => ({ distanceM: r.distance_m })),
+				gymSessions: todayGym.map((w) => ({ durationS: w.duration_s })),
+				weightKg: weight,
 			});
+			// Active minutes today = run + gym duration, for the hydration goal's
+			// sweat-replacement add (runs without a duration contribute nothing).
+			const activeSeconds =
+				todayRuns.reduce((s, r) => s + (r.duration_s ?? 0), 0) +
+				todayGym.reduce((s, w) => s + (w.duration_s ?? 0), 0);
+			exerciseMinutes = Math.round(activeSeconds / 60);
 			const prof = profileRes.data as
 				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
 				| null;
@@ -181,6 +193,8 @@
 	const dayBudget = $derived(computeDayBudget(consumed, targets));
 	// The arc clamps at full, so an over day is invisible without this.
 	const calorieBudget = $derived(dayBudget?.calories ?? null);
+	const waterTargetMl = $derived(hydrationTargetMl(weightKg, exerciseMinutes));
+	const waterBudget = $derived(hydrationBudget(waterMl, waterTargetMl));
 	const maxWeekCalories = $derived(Math.max(1, ...weekDays.map((d) => d.calories)));
 	const hasMeals = $derived(groups.length > 0);
 	const hasAnyData = $derived(entries.length > 0 || weekDays.some((d) => d.calories > 0));
@@ -285,19 +299,28 @@
 			{/if}
 		</section>
 
+		{@const drunkPips = Math.round(waterMl / WATER_UNIT_ML)}
+		{@const pipCount = Math.max(8, Math.round(waterTargetMl / WATER_UNIT_ML), drunkPips)}
 		<section class="card-elevated water-card">
 			<div class="card-head">
 				<span class="section-label">{m('nutrition.water')}</span>
-				<span class="water-amount">{(waterMl / 1000).toFixed(2).replace(/\.?0+$/, '')} L</span>
+				<div class="budget-head">
+					<span class="water-amount">{litres(waterMl)} / {litres(waterTargetMl)} L</span>
+					{#if waterBudget.reached}
+						<span class="budget-chip budget-on" data-testid="water-budget">{m('nutrition.waterGoalReached')}</span>
+					{:else}
+						<span class="budget-chip budget-left" data-testid="water-budget">{m('nutrition.waterRemaining', { n: waterBudget.remainingMl })}</span>
+					{/if}
+				</div>
 			</div>
 			<div class="water-controls">
 				<button class="btn btn-outline btn-sm water-btn" type="button" onclick={removeWater} aria-label={m('nutrition.waterRemove')}>−</button>
-				<div class="water-pips" aria-hidden="true">
-					{#each Array(Math.max(8, Math.round(waterMl / WATER_UNIT_ML))) as _, i (i)}
-						<span class="water-pip" class:filled={i < Math.round(waterMl / WATER_UNIT_ML)}></span>
+				<div class="water-pips" class:water-pips-reached={waterBudget.reached} aria-hidden="true">
+					{#each Array(pipCount) as _, i (i)}
+						<span class="water-pip" class:filled={i < drunkPips}></span>
 					{/each}
 				</div>
-				<span class="water-units">{Math.round(waterMl / WATER_UNIT_ML)} × 250 ml</span>
+				<span class="water-units">{drunkPips} × 250 ml</span>
 				<button class="btn btn-primary btn-sm water-btn" type="button" onclick={addWater} data-testid="add-water" aria-label={m('nutrition.waterAdd')}>＋</button>
 			</div>
 		</section>
@@ -591,6 +614,7 @@
 		transition: background var(--transition-fast);
 	}
 	.water-pip.filled { background: var(--color-accent-cyan); }
+	.water-pips-reached .water-pip.filled { background: var(--color-success); }
 	.water-units {
 		color: var(--color-text-secondary);
 		font-size: 0.85rem;
