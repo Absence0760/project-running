@@ -147,8 +147,11 @@ class _ImportScreenState extends State<ImportScreen> {
     // an HC import of the same Garmin activity should skip rather
     // than double-count. Same logic in reverse for a Strava-after-HC
     // sequence. Snapshot once before the loop so each fuzzy check
-    // runs against a consistent baseline.
-    final existing = List<Run>.of(widget.runStore.runs);
+    // runs against a consistent baseline. Reads the full-history index, not the
+    // resident window, so a re-import still collides with a run from years ago;
+    // isCrossSourceDuplicate only reads source / startedAt / distanceMetres,
+    // all carried by the summary.
+    final existing = widget.runStore.summaryRuns;
     var skippedCrossSource = 0;
 
     for (var i = 0; i < runs.length; i++) {

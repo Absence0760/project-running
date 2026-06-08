@@ -63,7 +63,10 @@ class _RecapScreenState extends State<RecapScreen> {
     final l10n = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final unit = widget.preferences.unit;
-    final recap = buildYearInRunningRecap(widget.runStore.runs, _year);
+    // Reads the full-history index (distance / duration / elevation_m /
+    // activity_type) — no track, so the lightweight summaries are exact and
+    // stay correct once `runs` becomes a resident window.
+    final recap = buildYearInRunningRecap(widget.runStore.summaryRuns, _year);
     final earliestPossible = _year < 2000 || _year > DateTime.now().year + 1;
 
     return Scaffold(

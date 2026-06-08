@@ -156,7 +156,10 @@ class _GearScreenState extends State<GearScreen> {
     final candidates = gearBackfillCandidates(
       gearKind: result.kind,
       since: purchased,
-      runs: runStore.runs,
+      // Backfill scans from the gear's purchase date — potentially years back —
+      // so it reads the full-history index (activity_type + startedAt), not the
+      // resident window. Only ids flow on from here (addGearToRuns).
+      runs: runStore.summaryRuns,
     );
     if (candidates.isEmpty) return;
     if (!mounted) return;
