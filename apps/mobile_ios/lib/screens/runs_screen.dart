@@ -167,6 +167,19 @@ class _RunsScreenState extends State<RunsScreen> {
   bool _hasMeal = false;
   _HistoryKind _kind = _HistoryKind.all;
 
+  /// True once the unified-activities feed has resolved (or errored, or been
+  /// skipped). Until then a known multi-modal account holds a loading state
+  /// rather than painting the run list and flipping to the timeline once the
+  /// feed lands.
+  bool _activitiesLoaded = false;
+
+  /// Whether the LAST feed load (persisted across sessions) found a second
+  /// modality. Read synchronously at mount so the first paint can hold a
+  /// loading state for a known multi-modal account; a pure runner reads false
+  /// and gets the run list immediately, with no gate.
+  late final bool _cachedMultiModal =
+      widget.preferences.historyMultiModal;
+
   /// Chips only appear once a SECOND modality has data AND the gym store is
   /// wired in (multi-modal home shell) — a pure runner, or a run-only test
   /// mount that passes no gym store, sees no chips (anti-clutter checklist).
@@ -207,7 +220,12 @@ class _RunsScreenState extends State<RunsScreen> {
   /// hidden and the run-only history is unaffected (layered resilience).
   Future<void> _fetchActivities() async {
     final api = widget.apiClient;
-    if (widget.gymStore == null || api == null || api.userId == null) return;
+    if (widget.gymStore == null || api == null || api.userId == null) {
+      // No feed to load — release the first-paint gate so a cached
+      // multi-modal account doesn't sit on the loading state forever.
+      if (mounted) setState(() => _activitiesLoaded = true);
+      return;
+    }
     try {
       // Bounded recent-history window, mirroring web's `fetchActivities(200)`:
       // the timeline is a glanceable cross-modality view, not an exhaustive
@@ -215,15 +233,22 @@ class _RunsScreenState extends State<RunsScreen> {
       // real cursor-paginated "Load more" path (multi_modal.md § activities
       // view at scale).
       final rows = await api.fetchActivities(limit: 200);
+      final hasLift = rows.any((a) => a.kind == 'lift');
+      final hasMeal = rows.any((a) => a.kind == 'meal');
       if (mounted) {
         setState(() {
           _activities = rows;
-          _hasLift = rows.any((a) => a.kind == 'lift');
-          _hasMeal = rows.any((a) => a.kind == 'meal');
+          _hasLift = hasLift;
+          _hasMeal = hasMeal;
+          _activitiesLoaded = true;
         });
       }
+      // Remember the modality so the next mount can pick the timeline layout
+      // on first paint instead of flipping into it once this feed resolves.
+      await widget.preferences.setHistoryMultiModal(hasLift || hasMeal);
     } catch (e) {
       debugPrint('fetchActivities failed: $e');
+      if (mounted) setState(() => _activitiesLoaded = true);
     }
   }
 
@@ -1002,6 +1027,16 @@ class _RunsScreenState extends State<RunsScreen> {
 
   Widget _buildBody(
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit, int totalCount) {
+    // A known multi-modal account (cached from the last feed load) defaults to
+    // the unified timeline, whose rows come from the still-loading feed. Hold a
+    // loading state until it resolves rather than painting the run list and
+    // flipping to the timeline once the feed lands. A pure runner reads
+    // `_cachedMultiModal == false` and skips this entirely — the run list
+    // renders immediately, exactly as before.
+    if (_cachedMultiModal && !_activitiesLoaded && widget.gymStore != null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     // A user with no runs but who has logged lifts / meals should still see
     // their timeline — only fall back to the "no runs" empty state when there
     // is genuinely nothing across any modality (mirrors web's gym-only fix).

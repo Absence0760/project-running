@@ -200,6 +200,8 @@ class Preferences extends ChangeNotifier {
   static const _kBatteryOptHintShown = 'battery_opt_hint_shown';
 
   static const _kNotifDeniedHintShown = 'notif_denied_hint_shown';
+
+  static const _kHistoryMultiModal = 'history_multi_modal_v1';
   // Stable per-install identifier used to scope `user_device_settings`
   // rows. Minted on first launch and never rotated — rotating would
   // orphan the device's row and lose per-device preferences.
@@ -452,6 +454,19 @@ class Preferences extends ChangeNotifier {
 
   Future<void> setNotifDeniedHintShown() async {
     await _prefs.setBool(_kNotifDeniedHintShown, true);
+  }
+
+  /// Whether the last unified-activities feed load found a second modality
+  /// (a lift or a meal). Persisted so the History tab can pick the unified
+  /// timeline layout on first paint instead of painting the run list and
+  /// flipping to the timeline once the async feed resolves. Best-effort hint
+  /// (the real feed governs once it lands); a pure runner stays false and
+  /// sees the run list immediately, with no loading gate.
+  bool get historyMultiModal =>
+      _prefs.getBool(_kHistoryMultiModal) ?? false;
+
+  Future<void> setHistoryMultiModal(bool value) async {
+    await _prefs.setBool(_kHistoryMultiModal, value);
   }
 
   /// Target pace in seconds per km (0 means no target). Audio cue triggers

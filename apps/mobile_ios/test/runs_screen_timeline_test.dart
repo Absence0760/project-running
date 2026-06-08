@@ -1,4 +1,5 @@
 // ignore_for_file: avoid_relative_lib_imports
+import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -28,6 +29,27 @@ class _FakeApi extends ApiClient {
   @override
   Future<List<ActivityRow>> fetchActivities({int limit = 100}) async =>
       activities;
+
+  @override
+  Future<List<Run>> getRuns({
+    int limit = 50,
+    DateTime? before,
+    DateTime? updatedSince,
+  }) async =>
+      const [];
+}
+
+/// Fake whose activities feed resolves only when [feed] completes, so a test
+/// can observe the History tab's pre-resolve paint (the loading gate).
+class _DelayedApi extends ApiClient {
+  final Future<List<ActivityRow>> feed;
+  _DelayedApi(this.feed);
+
+  @override
+  String? get userId => 'u1';
+
+  @override
+  Future<List<ActivityRow>> fetchActivities({int limit = 100}) => feed;
 
   @override
   Future<List<Run>> getRuns({
@@ -134,5 +156,85 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text('Lifts'), findsNothing);
+  });
+
+  testWidgets(
+      'cached multi-modal account holds a loading gate until the feed resolves',
+      (tester) async {
+    // Regression guard for the run-list → timeline flip: a known multi-modal
+    // account must NOT paint the run list (or its empty state) and then flip
+    // to the timeline once the feed lands. With the modality cached, the body
+    // holds a spinner until the feed resolves, then paints the timeline once.
+    SharedPreferences.setMockInitialValues({'history_multi_modal_v1': true});
+    final prefs = Preferences();
+    await prefs.init();
+    dir = Directory.systemTemp.createTempSync('runs_timeline_gate_');
+    final runStore = LocalRunStore();
+    await runStore.init(overrideDirectory: dir);
+    final gymStore = LocalGymStore();
+    await gymStore.init(
+        overrideDirectory: Directory.systemTemp.createTempSync('gym_gate_'));
+    final completer = Completer<List<ActivityRow>>();
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: RunsScreen(
+        apiClient: _DelayedApi(completer.future),
+        runStore: runStore,
+        routeStore: LocalRouteStore(),
+        preferences: prefs,
+        gymStore: gymStore,
+      ),
+    ));
+    // Feed still pending: the body is the loading gate, not run-list content
+    // (the empty-runs state) or timeline rows.
+    await tester.pump();
+    expect(find.byType(CircularProgressIndicator), findsWidgets);
+    expect(find.text('No runs yet'), findsNothing);
+    expect(find.text('Push day'), findsNothing);
+
+    // Resolve the feed → the unified timeline paints with no run-list flash.
+    completer.complete([
+      row('l1', 'lift',
+          {'title': 'Push day', 'set_count': 5, 'volume_kg': 12000}),
+    ]);
+    await tester.pumpAndSettle();
+    expect(find.text('Push day'), findsOneWidget);
+  });
+
+  testWidgets('a non-cached account is not gated — run UI shows before the feed',
+      (tester) async {
+    // Pure runner (no cached modality): the run list / empty state renders
+    // immediately even while the activities feed is still in flight — the gate
+    // is only for accounts already known to be multi-modal.
+    SharedPreferences.setMockInitialValues({});
+    final prefs = Preferences();
+    await prefs.init();
+    dir = Directory.systemTemp.createTempSync('runs_timeline_nogate_');
+    final runStore = LocalRunStore();
+    await runStore.init(overrideDirectory: dir);
+    final gymStore = LocalGymStore();
+    await gymStore.init(
+        overrideDirectory: Directory.systemTemp.createTempSync('gym_nogate_'));
+    final completer = Completer<List<ActivityRow>>();
+
+    await tester.pumpWidget(MaterialApp(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      home: RunsScreen(
+        apiClient: _DelayedApi(completer.future),
+        runStore: runStore,
+        routeStore: LocalRouteStore(),
+        preferences: prefs,
+        gymStore: gymStore,
+      ),
+    ));
+    await tester.pump();
+    // No gate — the run-only empty state is shown despite the pending feed.
+    expect(find.text('No runs yet'), findsOneWidget);
+
+    completer.complete(const []);
+    await tester.pumpAndSettle();
   });
 }
