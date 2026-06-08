@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { exerciseProgress } from './exercise_history';
+import { exerciseProgress, previousExerciseSession } from './exercise_history';
 import type { DatedGymSet } from './exercise_records';
 
 function s(over: Partial<DatedGymSet>): DatedGymSet {
@@ -117,4 +117,39 @@ test('a weighted session with no reps carries a top weight but no e1rm/volume', 
 	assert.equal(p.sessions[0].volumeKg, 0);
 	assert.equal(p.est1RmDeltaKg, null);
 	assert.equal(p.bestEst1RmKg, null);
+});
+
+test('previousExerciseSession returns the latest qualifying session before the cutoff', () => {
+	const sets = [
+		s({ workout_id: 'w1', started_at: '2026-06-01T08:00:00Z', reps: 5, weight_kg: 100 }),
+		s({ workout_id: 'w2', started_at: '2026-06-05T08:00:00Z', reps: 5, weight_kg: 105 }),
+		s({ workout_id: 'w3', started_at: '2026-06-09T08:00:00Z', reps: 5, weight_kg: 110 }),
+	];
+	// Cutoff = w3's started_at: the previous session is w2 (105), not w3 itself.
+	const prev = previousExerciseSession(sets, 'Bench Press', '2026-06-09T08:00:00Z');
+	assert.ok(prev);
+	assert.equal(prev.workoutId, 'w2');
+	assert.equal(prev.topWeightKg, 105);
+});
+
+test('previousExerciseSession is null when nothing precedes the cutoff', () => {
+	const sets = [s({ workout_id: 'w1', started_at: '2026-06-05T08:00:00Z', weight_kg: 100 })];
+	// Cutoff equals the only session's date — strict `<` excludes it.
+	assert.equal(previousExerciseSession(sets, 'Bench Press', '2026-06-05T08:00:00Z'), null);
+	// Cutoff before everything.
+	assert.equal(previousExerciseSession(sets, 'Bench Press', '2026-06-01T00:00:00Z'), null);
+});
+
+test('previousExerciseSession ignores other exercises and bodyweight-only sessions', () => {
+	const sets = [
+		s({ workout_id: 'w1', started_at: '2026-06-01T08:00:00Z', exercise_name: 'Squat', weight_kg: 140 }),
+		s({ workout_id: 'w2', started_at: '2026-06-03T08:00:00Z', exercise_name: 'Bench Press', reps: 10, weight_kg: null }),
+		s({ workout_id: 'w3', started_at: '2026-06-05T08:00:00Z', exercise_name: 'Bench Press', reps: 5, weight_kg: 100 }),
+	];
+	// Looking back from w4's date for Bench Press: w2 is bodyweight-only (skipped),
+	// w1 is a different exercise (skipped) → w3 is the previous Bench session.
+	const prev = previousExerciseSession(sets, 'Bench Press', '2026-06-09T08:00:00Z');
+	assert.ok(prev);
+	assert.equal(prev.workoutId, 'w3');
+	assert.equal(prev.topWeightKg, 100);
 });

@@ -163,6 +163,27 @@ export function exerciseProgress(
 	};
 }
 
+/// The most recent qualifying (weighted) session of an exercise strictly
+/// before `beforeStartedAt` — the "last time" a workout's detail screen
+/// compares against for a progressive-overload hint. Returns null when there
+/// is no earlier session. Because sessions sharing the compared workout's
+/// `started_at` are excluded by the strict `<`, passing that workout's own
+/// started_at naturally drops its own session from the lookup.
+export function previousExerciseSession(
+	sets: DatedGymSet[],
+	exerciseName: string,
+	beforeStartedAt: string,
+): ExerciseSession | null {
+	const prog = exerciseProgress(sets, exerciseName);
+	if (!prog) return null;
+	let prev: ExerciseSession | null = null;
+	for (const s of prog.sessions) {
+		if (s.startedAt < beforeStartedAt) prev = s;
+		else break; // sessions are chronological — nothing later qualifies
+	}
+	return prev;
+}
+
 /// Resolve the display spelling the same way the records + badge surfaces do —
 /// via the PR engine (first set, in input order, that maps to the key) — so the
 /// drill-down title matches the card the user clicked. Falls back to the
