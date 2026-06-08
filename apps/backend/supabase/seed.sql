@@ -461,6 +461,16 @@ FROM generate_series(1, 15) AS n;
 UPDATE runs SET is_public = true
   WHERE user_id = 'a1b2c3d4-e5f6-7890-abcd-ef1234567890';
 
+-- The activity_type column was promoted out of the metadata bag (migration
+-- 20261207_001), but these INSERTs still carry the type in metadata only, so
+-- the real column defaults to 'run' for every row. Backfill it from metadata
+-- where they differ — otherwise the walk + hike seed rows read as plain runs
+-- and the History / runs activity-type filters (Walk / Hike / …) match nothing.
+UPDATE runs SET activity_type = metadata->>'activity_type'
+  WHERE metadata ? 'activity_type'
+    AND metadata->>'activity_type' <> activity_type
+    AND metadata->>'activity_type' IN ('run', 'walk', 'hike', 'cycle', 'stroller');
+
 -- 5. Integrations
 INSERT INTO integrations (user_id, provider, last_sync_at) VALUES
 ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'parkrun', '2026-04-01T10:00:00Z'),
