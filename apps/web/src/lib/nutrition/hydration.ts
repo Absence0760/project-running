@@ -1,24 +1,14 @@
 /**
- * Hydration target — a daily water goal the water tracker can count toward,
- * instead of an open-ended cup counter with no finish line.
+ * Hydration target — a daily water goal the water tracker counts toward.
  *
- * Heuristics, deliberately simple + conservative — a default nudge, not a
- * clinical prescription, in the same spirit as `exercise_calories.ts`:
+ * Heuristic constants (~35 ml/kg/day, +8 ml/min of exercise) are a
+ * conservative nudge, in the spirit of `exercise_calories.ts`. The one
+ * non-obvious choice: unlike the macro rings, this always returns a target
+ * (flat 2 L when bodyweight is unknown), because a water tracker should work
+ * for everyone. Water is a floor to reach, so the budget reports only
+ * remaining-to-goal + a `reached` flag, never an over-budget warning.
  *
- * - **Baseline:** ~35 ml per kg of bodyweight per day (the common 30–40
- *   ml/kg range). Falls back to a flat 2 L when bodyweight is unknown, so a
- *   target always exists — the water card is a simple tracker that should
- *   work for everyone, unlike the macro rings which hide without metrics.
- * - **Exercise add:** ~480 ml per hour of logged activity (8 ml/min) for
- *   sweat replacement, so a hard training day raises the goal — the same
- *   "base + exercise" idea the calorie goal uses (decisions §134).
- *
- * The target rounds to a tidy 50 ml. Water is a *floor* to reach (over is
- * fine), so the budget only ever reports remaining-to-goal and a `reached`
- * flag, never an over-budget warning.
- *
- * Web-only for now; the mobile water tracker (same per-day localStorage
- * counter) does not have a target yet — mirror tracked in followups.md.
+ * Web-only for now; the mobile mirror is tracked in followups.md.
  */
 
 /// Baseline daily water, ml per kg of bodyweight.

@@ -2870,7 +2870,6 @@ export const en = {
 	"nutrition.waterRemove": "Remove water",
 	"nutrition.waterRemaining": "{n} ml left",
 	"nutrition.waterGoalReached": "Goal reached",
-	"nutrition.waterTarget": "Goal {n} ml",
 	"nutrition.empty": "No food logged today yet.",
 	"nutrition.slot_breakfast": "Breakfast",
 	"nutrition.slot_lunch": "Lunch",

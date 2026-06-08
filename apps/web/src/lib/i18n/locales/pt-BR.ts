@@ -2861,7 +2861,6 @@ export const messages = {
 	"nutrition.waterRemove": "Remover água",
 	"nutrition.waterRemaining": "{n} ml restantes",
 	"nutrition.waterGoalReached": "Meta atingida",
-	"nutrition.waterTarget": "Meta {n} ml",
 	"nutrition.empty": "Nada registrado hoje ainda.",
 	"nutrition.slot_breakfast": "Café da manhã",
 	"nutrition.slot_lunch": "Almoço",

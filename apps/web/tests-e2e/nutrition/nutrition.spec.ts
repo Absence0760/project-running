@@ -121,6 +121,21 @@ test.describe('/nutrition — manual log, render, water', () => {
 		await page.getByTestId('add-water').click();
 		await expect(chip).toContainText(`${beforeRemaining - 250} ml left`);
 
+		// Drive the chip across the goal: seed the per-day counter to one unit
+		// below the target (parsed from the "X / Y L" readout), reload, and the
+		// final add must flip the chip + pips to the reached state.
+		const targetL = parseFloat((await amount.innerText()).split('/')[1].replace(/[^\d.]/g, ''));
+		const targetMl = Math.round(targetL * 1000);
+		await page.evaluate((ml) => {
+			const d = new Date();
+			localStorage.setItem(`water_ml_${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`, String(ml));
+		}, targetMl - 250);
+		await page.reload();
+		await expect(chip).toContainText(/ml left/);
+		await page.getByTestId('add-water').click();
+		await expect(chip).toContainText('Goal reached');
+		await expect(page.locator('.water-pips')).toHaveClass(/water-pips-reached/);
+
 		// Reset the per-day localStorage counter so the shared seed user starts
 		// clean on the next run (the tracker is client-only, not a DB row).
 		await page.evaluate(() => {

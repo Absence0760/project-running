@@ -304,7 +304,7 @@
 		<section class="card-elevated water-card">
 			<div class="card-head">
 				<span class="section-label">{m('nutrition.water')}</span>
-				<div class="budget-head">
+				<div class="budget-head" aria-live="polite">
 					<span class="water-amount">{litres(waterMl)} / {litres(waterTargetMl)} L</span>
 					{#if waterBudget.reached}
 						<span class="budget-chip budget-on" data-testid="water-budget">{m('nutrition.waterGoalReached')}</span>
