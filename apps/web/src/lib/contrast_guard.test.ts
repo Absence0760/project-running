@@ -174,24 +174,36 @@ test('no source file uses a "-strong" status token as a text colour', () => {
 	);
 });
 
-// The other status-text pattern, `color: color-mix(--color-warning N%,
-// var(--color-text))`, only stays AA when warning is the MINORITY of the mix:
-// at 80% it's #be8e5e on the chip tint = 2.59:1 in light mode (audit
-// 2026-06-08, found in 6 places). A 45% mix is >=5.12:1 light / >=7.16:1 dark
-// across the 14-22% tints in use; the contrast falls off as the warning share
-// rises, so cap it. (Computed with the contrastRatio helper above; see the
-// commit that introduced this guard for the table.)
-const WARNING_TEXT_MIX_MAX = 55;
-test(`warning text-on-tint keeps the --color-warning share <=${WARNING_TEXT_MIX_MAX}% (AA in both themes)`, () => {
-	const re = /(?<![a-z-])color:\s*color-mix\([^;]*var\(--color-warning\)\s*(\d+)%[^;]*var\(--color-text\)/;
-	const hits = scanSource((line) => {
-		const m = line.match(re);
-		return m != null && Number(m[1]) > WARNING_TEXT_MIX_MAX;
-	});
+// Status text on a same-status tint uses `color: color-mix(<status> N%,
+// var(--color-text))` (theme-aware via --color-text, which flips per theme).
+// AA holds only while the status stays a minority-enough share of the mix; past
+// that the text washes out on the chip tint in light mode (a warning at 80% is
+// #be8e5e on the tint = 2.59:1; a solid status as text — 0% text — fails the
+// same way: success 2.78:1, danger 3.79:1, audit 2026-06-08). The caps below
+// are the AA-verified ceilings (computed with contrastRatio above against the
+// 14-22% tints in use; both themes >=4.5:1, contrast falls as the share rises):
+//   warning 45% -> 5.25 light / 7.82 dark   (55% was 4.23:1, the regression this caught)
+//   success 50% -> 6.06 light / 7.80 dark
+//   danger  65% -> 6.05 light / 6.27 dark
+const STATUS_TEXT_MIX_MAX: Record<string, number> = { warning: 45, success: 50, danger: 65 };
+test('status text-on-tint keeps each --color-<status> mix share AA-safe in both themes', () => {
+	const offenders: string[] = [];
+	for (const [status, max] of Object.entries(STATUS_TEXT_MIX_MAX)) {
+		const re = new RegExp(
+			`(?<![a-z-])color:\\s*color-mix\\([^;]*var\\(--color-${status}\\)\\s*(\\d+)%[^;]*var\\(--color-text\\)`,
+		);
+		offenders.push(
+			...scanSource((line) => {
+				const m = line.match(re);
+				return m != null && Number(m[1]) > max;
+			}).map((h) => `[${status} cap ${max}%] ${h}`),
+		);
+	}
 	assert.equal(
-		hits.length,
+		offenders.length,
 		0,
-		`A warning text colour mixes >${WARNING_TEXT_MIX_MAX}% --color-warning with --color-text, ` +
-			`which fails WCAG AA on the warning tint in light mode. Lower the warning share to ~45%:\n${hits.join('\n')}`,
+		`A status text colour mixes more of its --color-<status> than the AA-safe cap with ` +
+			`--color-text, failing WCAG AA on the chip tint in light mode. Lower the share to the cap:\n` +
+			offenders.join('\n'),
 	);
 });

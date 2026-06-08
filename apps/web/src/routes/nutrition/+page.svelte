@@ -539,7 +539,7 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 1px;
-		color: var(--color-success);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 		font-weight: 600;
 	}
 	.ring-pct-reached .material-symbols { font-size: 0.85rem; }
@@ -566,11 +566,11 @@
 		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
 	}
 	.budget-on {
-		color: var(--color-success);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 		background: color-mix(in srgb, var(--color-success) 16%, transparent);
 	}
 	.budget-over {
-		color: var(--color-danger);
+		color: color-mix(in srgb, var(--color-danger) 65%, var(--color-text));
 		background: color-mix(in srgb, var(--color-danger) 14%, transparent);
 	}
 
@@ -791,11 +791,11 @@
 		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
 	}
 	.week-delta-on {
-		color: var(--color-success);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 		background: color-mix(in srgb, var(--color-success) 16%, transparent);
 	}
 	.week-delta-over {
-		color: color-mix(in srgb, var(--color-warning) 55%, var(--color-text));
+		color: color-mix(in srgb, var(--color-warning) 45%, var(--color-text));
 		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 	}
 	.trend-col {
