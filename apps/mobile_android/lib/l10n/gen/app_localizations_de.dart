@@ -1315,6 +1315,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get historyAddRunTooltip => 'Lauf manuell hinzufügen';
 
   @override
+  String get historyLogTooltip => 'Lauf, Training oder Mahlzeit erfassen';
+
+  @override
   String historyLoadMore(int count) {
     return '$count weitere laden';
   }

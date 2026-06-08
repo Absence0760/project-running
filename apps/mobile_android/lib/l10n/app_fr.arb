@@ -358,6 +358,7 @@
   "historyCancelTooltip": "Annuler",
   "historyAddRun": "Ajouter une course",
   "historyAddRunTooltip": "Ajouter une course manuellement",
+  "historyLogTooltip": "Enregistrer une course, une séance ou un repas",
   "historyLoadMore": "Charger {count} de plus",
   "historyNoMatch": "Aucune course ne correspond à ces filtres",
   "historyKindAll": "Tout",

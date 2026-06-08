@@ -1248,6 +1248,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyAddRunTooltip => '手動でランを追加';
 
   @override
+  String get historyLogTooltip => 'ラン・筋トレ・食事を記録';
+
+  @override
   String historyLoadMore(int count) {
     return 'さらに $count 件読み込む';
   }

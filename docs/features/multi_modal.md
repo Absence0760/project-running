@@ -353,7 +353,13 @@ redaction-boundary guarantees are pinned by
 > `gymStore` = the offline-first run list with range / sort / source filters,
 > pagination, bulk-delete; Lifts → `GymScreen`; Meals → `NutritionScreen`). Run
 > rows open run-detail (looked up locally, else `fetchRunById`), lift rows open
-> `GymDetailScreen`, meals are read-only. Neither platform gates this behind
+> `GymDetailScreen`, meals are read-only. The History add FAB mirrors web's
+> per-tab Log action: in the cross-modal **All** view it opens the run / lift /
+> meal picker (the same `showLogSheet` the home Log FAB uses) and routes the
+> pick to that modality's one-shot composer (`AddRunScreen` /
+> `showGymComposeSheet` / `showNutritionLogSheet`); a single-modality tab adds
+> straight into that modality (Add run / Log lift / Log food). A run-only mount
+> (no chips) keeps the plain Add-run FAB. Neither platform gates this behind
 > `multi_modal_nav` (retired, §63 amendment) — the "second modality has data"
 > gate carries the anti-clutter contract on both.
 >

@@ -1314,6 +1314,9 @@ class AppLocalizationsEs extends AppLocalizations {
   String get historyAddRunTooltip => 'Añadir una carrera manualmente';
 
   @override
+  String get historyLogTooltip => 'Registrar una carrera, entreno o comida';
+
+  @override
   String historyLoadMore(int count) {
     return 'Cargar $count más';
   }

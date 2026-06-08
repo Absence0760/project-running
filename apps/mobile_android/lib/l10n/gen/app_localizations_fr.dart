@@ -1318,6 +1318,10 @@ class AppLocalizationsFr extends AppLocalizations {
   String get historyAddRunTooltip => 'Ajouter une course manuellement';
 
   @override
+  String get historyLogTooltip =>
+      'Enregistrer une course, une séance ou un repas';
+
+  @override
   String historyLoadMore(int count) {
     return 'Charger $count de plus';
   }

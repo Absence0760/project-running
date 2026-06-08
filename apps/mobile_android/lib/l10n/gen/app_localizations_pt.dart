@@ -1312,6 +1312,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get historyAddRunTooltip => 'Adicionar uma corrida manualmente';
 
   @override
+  String get historyLogTooltip => 'Registrar corrida, treino ou refeição';
+
+  @override
   String historyLoadMore(int count) {
     return 'Carregar mais $count';
   }
@@ -8376,6 +8379,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get historyAddRunTooltip => 'Adicionar uma corrida manualmente';
+
+  @override
+  String get historyLogTooltip => 'Registrar corrida, treino ou refeição';
 
   @override
   String historyLoadMore(int count) {

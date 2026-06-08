@@ -207,6 +207,58 @@ void main() {
     }
   });
 
+  testWidgets('add FAB follows the active chip: All picker, then per-modality',
+      (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await pump(tester,
+        runs: [runRow('r1')],
+        lifts: [liftRow('l1', 'Leg day')],
+        meals: [mealRow('m1', 'Rice bowl')]);
+
+    // All view → a generic "Log" FAB (mirrors web's run/lift/meal picker).
+    final fab = find.byType(FloatingActionButton);
+    expect(find.descendant(of: fab, matching: find.text(l10n.logSheetTitle)),
+        findsOneWidget);
+
+    // Tapping it opens the run/lift/meal picker sheet.
+    await tester.tap(fab);
+    await tester.pumpAndSettle();
+    expect(find.text(l10n.logRun), findsOneWidget);
+    expect(find.text(l10n.logLift), findsOneWidget);
+    expect(find.text(l10n.logFood), findsOneWidget);
+    // Dismiss the sheet without picking.
+    await tester.tapAt(const Offset(20, 20));
+    await tester.pumpAndSettle();
+
+    // Runs chip → the manual Add-run FAB.
+    await tester.tap(find.text('Runs'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: fab, matching: find.text(l10n.historyAddRun)),
+        findsOneWidget);
+
+    // Lifts chip → adds a lift straight away.
+    await tester.tap(find.text('Lifts'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: fab, matching: find.text(l10n.logLift)),
+        findsOneWidget);
+
+    // Meals chip → logs food.
+    await tester.tap(find.text('Meals'));
+    await tester.pumpAndSettle();
+    expect(find.descendant(of: fab, matching: find.text(l10n.logFood)),
+        findsOneWidget);
+  });
+
+  testWidgets('run-only history keeps the plain Add-run FAB', (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await pump(tester, runs: [runRow('r1')], withGym: false);
+    expect(
+        find.descendant(
+            of: find.byType(FloatingActionButton),
+            matching: find.text(l10n.historyAddRun)),
+        findsOneWidget);
+  });
+
   testWidgets('no chips when gym store is absent (run-only history)',
       (tester) async {
     // gymStore omitted → the screen stays the run-only inline history (the

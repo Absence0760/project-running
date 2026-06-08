@@ -358,6 +358,7 @@
   "historyCancelTooltip": "キャンセル",
   "historyAddRun": "ランを追加",
   "historyAddRunTooltip": "手動でランを追加",
+  "historyLogTooltip": "ラン・筋トレ・食事を記録",
   "historyLoadMore": "さらに {count} 件読み込む",
   "historyNoMatch": "このフィルターに一致するランはありません",
   "historyKindAll": "すべて",

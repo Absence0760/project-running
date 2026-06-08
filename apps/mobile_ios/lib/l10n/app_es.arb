@@ -358,6 +358,7 @@
   "historyCancelTooltip": "Cancelar",
   "historyAddRun": "Añadir carrera",
   "historyAddRunTooltip": "Añadir una carrera manualmente",
+  "historyLogTooltip": "Registrar una carrera, entreno o comida",
   "historyLoadMore": "Cargar {count} más",
   "historyNoMatch": "Ninguna carrera coincide con estos filtros",
   "historyKindAll": "Todo",

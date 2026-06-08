@@ -1305,6 +1305,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get historyAddRunTooltip => 'Add a run manually';
 
   @override
+  String get historyLogTooltip => 'Log a run, lift or meal';
+
+  @override
   String historyLoadMore(int count) {
     return 'Load $count more';
   }

@@ -19,6 +19,9 @@ import '../preferences.dart';
 import '../runs_history_items.dart';
 import '../settings_sync.dart';
 import '../widgets/activity_timeline_list.dart';
+import '../widgets/gym_compose_sheet.dart';
+import '../widgets/log_sheet.dart';
+import '../widgets/nutrition_log_sheet.dart';
 import '../widgets/run_track_preview.dart';
 import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
@@ -834,17 +837,83 @@ class _RunsScreenState extends State<RunsScreen> {
       child: Scaffold(
         appBar: _selecting ? _selectionAppBar(l10n) : _normalAppBar(l10n),
         body: _buildBody(theme, l10n, unit, totalCount),
-        floatingActionButton: _selecting
-            ? null
-            : FloatingActionButton.extended(
-                heroTag: 'history_add_run_fab',
-                onPressed: _openAddRun,
-                icon: const Icon(Icons.add),
-                label: Text(l10n.historyAddRun),
-                tooltip: l10n.historyAddRunTooltip,
-              ),
+        floatingActionButton: _selecting ? null : _buildAddFab(l10n),
       ),
     );
+  }
+
+  /// The add affordance follows the active timeline chip, mirroring web
+  /// `/history`: the cross-modal All view opens a run / lift / meal picker; a
+  /// single-modality tab adds straight into that modality beside its "View
+  /// all" link. A run-only mount (no gym store, so no chips) keeps the plain
+  /// Add-run FAB it has always had.
+  Widget _buildAddFab(AppLocalizations l10n) {
+    final kind = _timelineMode ? _kind : _HistoryKind.run;
+    final (String label, String tooltip, VoidCallback onPressed) = switch (kind) {
+      _HistoryKind.all => (l10n.logSheetTitle, l10n.historyLogTooltip, _openLogPicker),
+      _HistoryKind.run => (l10n.historyAddRun, l10n.historyAddRunTooltip, _openAddRun),
+      _HistoryKind.lift => (l10n.logLift, l10n.historyLogTooltip, _openAddLift),
+      _HistoryKind.meal => (l10n.logFood, l10n.historyLogTooltip, _openAddMeal),
+    };
+    return FloatingActionButton.extended(
+      heroTag: 'history_add_fab',
+      onPressed: onPressed,
+      icon: const Icon(Icons.add),
+      label: Text(label),
+      tooltip: tooltip,
+    );
+  }
+
+  /// All-view add: a run / lift / meal picker (the same sheet the home Log FAB
+  /// uses), then route into that modality's one-shot composer. Reuses the
+  /// most-recently-logged ordering and records the pick so the MRU stays
+  /// honest across both entry points.
+  Future<void> _openLogPicker() async {
+    final action = await showLogSheet(
+      context: context,
+      recent: logActionFromWire(widget.preferences.lastLogType),
+    );
+    if (action == null || !mounted) return;
+    await widget.preferences.setLastLogType(action.wire);
+    switch (action) {
+      case LogAction.run:
+        _openAddRun();
+      case LogAction.lift:
+        await _openAddLift();
+      case LogAction.food:
+        await _openAddMeal();
+    }
+  }
+
+  Future<void> _openAddLift() async {
+    final store = widget.gymStore;
+    if (store == null) return;
+    final saved = await showGymComposeSheet(
+      context: context,
+      store: store,
+      suggestions: gymExerciseSuggestions(store.workouts),
+    );
+    if (saved == true) await _drainModalitySync(store.syncWithServer);
+  }
+
+  Future<void> _openAddMeal() async {
+    final store = widget.foodStore;
+    if (store == null) return;
+    final saved = await showNutritionLogSheet(context: context, store: store);
+    if (saved == true) await _drainModalitySync(store.syncWithServer);
+  }
+
+  /// Best-effort drain of a just-logged lift / meal to the server (the local
+  /// store already notified, so the timeline updated regardless). Layered
+  /// resilience: a failure leaves the row pending for the next sync trigger.
+  Future<void> _drainModalitySync(Future<void> Function(ApiClient) sync) async {
+    final api = widget.apiClient;
+    if (api == null || api.userId == null) return;
+    try {
+      await sync(api);
+    } catch (e) {
+      debugPrint('History log sync failed: $e');
+    }
   }
 
   void _openAddRun() {

@@ -2255,6 +2255,12 @@ abstract class AppLocalizations {
   /// **'Add a run manually'**
   String get historyAddRunTooltip;
 
+  /// Tooltip on the History add button when it logs a lift, a meal, or opens the run/lift/meal picker
+  ///
+  /// In en, this message translates to:
+  /// **'Log a run, lift or meal'**
+  String get historyLogTooltip;
+
   /// Button at the bottom of the runs list that reveals the next page of runs
   ///
   /// In en, this message translates to:

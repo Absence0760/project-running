@@ -358,6 +358,7 @@
   "historyCancelTooltip": "Abbrechen",
   "historyAddRun": "Lauf hinzufügen",
   "historyAddRunTooltip": "Lauf manuell hinzufügen",
+  "historyLogTooltip": "Lauf, Training oder Mahlzeit erfassen",
   "historyLoadMore": "{count} weitere laden",
   "historyNoMatch": "Keine Läufe entsprechen diesen Filtern",
   "historyKindAll": "Alle",

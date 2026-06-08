@@ -1367,6 +1367,10 @@
   "@historyAddRunTooltip": {
     "description": "Tooltip on the add-run floating action button"
   },
+  "historyLogTooltip": "Log a run, lift or meal",
+  "@historyLogTooltip": {
+    "description": "Tooltip on the History add button when it logs a lift, a meal, or opens the run/lift/meal picker"
+  },
   "historyLoadMore": "Load {count} more",
   "@historyLoadMore": {
     "description": "Button at the bottom of the runs list that reveals the next page of runs",
