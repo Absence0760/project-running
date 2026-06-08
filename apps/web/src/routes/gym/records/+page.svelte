@@ -69,7 +69,8 @@
 	{:else}
 		<ul class="record-grid">
 			{#each records as r (r.exerciseName)}
-				<li class="record-card">
+				<li>
+					<a class="record-card" href="/gym/exercise?name={encodeURIComponent(r.exerciseName)}">
 					<h2 class="ex-name">{r.exerciseName}</h2>
 					<dl class="metrics">
 						{#if r.bestEst1RmKg != null}
@@ -96,6 +97,7 @@
 						{/if}
 						<span>{sessionsLine(r)}</span>
 					</p>
+					</a>
 				</li>
 			{/each}
 		</ul>
@@ -151,6 +153,20 @@
 		border: 1px solid var(--color-border);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface);
+		text-decoration: none;
+		color: inherit;
+		height: 100%;
+		transition:
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast);
+	}
+	.record-card:hover {
+		border-color: var(--color-primary);
+		box-shadow: var(--shadow-md);
+	}
+	.record-card:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 2px;
 	}
 	.ex-name {
 		margin: 0;
