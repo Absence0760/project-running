@@ -163,7 +163,7 @@
 					aria-label={t('gym.editor.removeExercise')}
 					onclick={() => removeExercise(ei)}
 				>
-					<span class="material-symbols-outlined">delete</span>
+					<span class="material-symbols">delete</span>
 				</button>
 			</div>
 			<div class="set-grid">
@@ -217,20 +217,20 @@
 							aria-label={t('gym.editor.removeSet')}
 							onclick={() => removeSet(ei, si)}
 						>
-							<span class="material-symbols-outlined">close</span>
+							<span class="material-symbols">close</span>
 						</button>
 					</div>
 				{/each}
 			</div>
 			<button type="button" class="btn btn-sm btn-outline add-set" onclick={() => addSet(ei)}>
-				<span class="material-symbols-outlined">add</span>
+				<span class="material-symbols">add</span>
 				{t('gym.editor.addSet')}
 			</button>
 		</div>
 	{/each}
 
 	<button type="button" class="btn btn-outline add-exercise" onclick={addExercise}>
-		<span class="material-symbols-outlined">add</span>
+		<span class="material-symbols">add</span>
 		{t('gym.editor.addExercise')}
 	</button>
 
@@ -384,8 +384,8 @@
 		align-items: center;
 		gap: var(--space-2xs);
 	}
-	.add-set .material-symbols-outlined,
-	.add-exercise .material-symbols-outlined {
+	.add-set .material-symbols,
+	.add-exercise .material-symbols {
 		font-size: 1.05rem;
 	}
 

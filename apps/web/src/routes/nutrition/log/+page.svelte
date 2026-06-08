@@ -102,7 +102,7 @@
 	}
 </script>
 
-<svelte:head><title>{m('nutrition.logHeading')}</title></svelte:head>
+<svelte:head><title>{m('nutrition.logHeading')} — Threkir</title></svelte:head>
 
 <div class="page">
 	<header class="page-head">

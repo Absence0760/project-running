@@ -389,6 +389,8 @@ The sidebar is collapsible — there's a `menu` / `menu_open` icon button in `.s
 
 The web app loads Material Symbols Outlined as a webfont and renders icons via **font ligatures** — `<span class="material-symbols">close</span>`, `<span class="material-symbols">menu_open</span>`, etc. Ligatures only form when the icon name is the only text node inside the span, **with no surrounding whitespace**. That means `<span class="material-symbols">{cond ? 'menu' : 'menu_open'}</span>` works, but breaking the expression onto its own line — leaving newlines and indentation between the tags — makes the browser render the literal text `"menu_open"`. Keep dynamic icon names on the same line as their tags.
 
+The class is always **`material-symbols`** — the one styled in `app.css` with the fixed sizing box and FOUC-clipping (`overflow: hidden`). Don't use `material-symbols-outlined`: that's the bare class the `material-symbols` npm package ships, so icons still render with it, but they skip the app's sizing/clip treatment and fall out of step with every other page. (The gym pages once drifted onto it — see git history.)
+
 ## Mobile in-app notifications — `showTopBanner`
 
 On the Flutter apps (`apps/mobile_android`, `apps/mobile_ios`), the canonical transient notification primitive is `showTopBanner(context, message, ...)` from `lib/widgets/top_banner.dart`. It renders a top-anchored pill via `Overlay`, auto-positions below an `AppBar` when one is present, and coalesces to a single banner at a time.

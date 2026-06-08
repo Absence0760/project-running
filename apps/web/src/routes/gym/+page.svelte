@@ -94,7 +94,7 @@
 	}
 </script>
 
-<svelte:head><title>{t('gym.title')} · Threkir</title></svelte:head>
+<svelte:head><title>{t('gym.title')} — Threkir</title></svelte:head>
 
 <div class="page">
 	<header class="page-header">
@@ -109,7 +109,7 @@
 			{/if}
 		</div>
 		<button class="btn btn-primary" onclick={() => (showCreate = true)} data-testid="gym-log">
-			<span class="material-symbols-outlined" aria-hidden="true">add</span>
+			<span class="material-symbols" aria-hidden="true">add</span>
 			{t('gym.log')}
 		</button>
 	</header>
@@ -126,11 +126,11 @@
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if workouts.length === 0}
 		<div class="empty-card">
-			<span class="material-symbols-outlined empty-icon" aria-hidden="true">fitness_center</span>
+			<span class="material-symbols empty-icon" aria-hidden="true">fitness_center</span>
 			<h2>{t('gym.empty.title')}</h2>
 			<p class="empty-text">{t('gym.empty.body')}</p>
 			<button class="btn btn-primary" onclick={() => (showCreate = true)}>
-				<span class="material-symbols-outlined" aria-hidden="true">add</span>
+				<span class="material-symbols" aria-hidden="true">add</span>
 				{t('gym.log')}
 			</button>
 		</div>
@@ -146,7 +146,7 @@
 						<div class="row-stats">
 							{#if prWorkoutIds.has(w.id)}
 								<span class="pr-badge" title={t('gym.pr.title')}>
-									<span class="material-symbols-outlined" aria-hidden="true">trophy</span>
+									<span class="material-symbols" aria-hidden="true">trophy</span>
 									{t('gym.pr.badge')}
 								</span>
 							{/if}
@@ -164,7 +164,7 @@
 									<span class="stat-label section-label">{t('gym.volumeLabel')}</span>
 								</span>
 							{/if}
-							<span class="material-symbols-outlined chevron" aria-hidden="true">chevron_right</span>
+							<span class="material-symbols chevron" aria-hidden="true">chevron_right</span>
 						</div>
 					</a>
 				</li>
@@ -207,7 +207,7 @@
 		gap: var(--space-2xs);
 		flex-shrink: 0;
 	}
-	.page-header .material-symbols-outlined {
+	.page-header .material-symbols {
 		font-size: 1.1rem;
 	}
 
@@ -248,7 +248,7 @@
 		gap: var(--space-2xs);
 		margin-top: var(--space-sm);
 	}
-	.empty-card .material-symbols-outlined {
+	.empty-card .material-symbols {
 		font-size: 1.1rem;
 	}
 
@@ -335,7 +335,7 @@
 		border-radius: var(--radius-sm);
 		align-self: center;
 	}
-	.pr-badge .material-symbols-outlined {
+	.pr-badge .material-symbols {
 		font-size: 0.85rem;
 	}
 	.chevron {

@@ -122,11 +122,11 @@
 	}
 </script>
 
-<svelte:head><title>{data?.workout.title || t('gym.title')} · Threkir</title></svelte:head>
+<svelte:head><title>{data?.workout.title || t('gym.title')} — Threkir</title></svelte:head>
 
 <div class="detail-page">
 	<a class="back" href="/gym">
-		<span class="material-symbols-outlined">arrow_back</span>{t('gym.back')}
+		<span class="material-symbols">arrow_back</span>{t('gym.back')}
 	</a>
 
 	{#if loading}
@@ -144,7 +144,7 @@
 		<p class="sr-only" role="status">{t('shell.loading')}</p>
 	{:else if notFound}
 		<div class="empty-card">
-			<span class="material-symbols-outlined empty-icon" aria-hidden="true">search_off</span>
+			<span class="material-symbols empty-icon" aria-hidden="true">search_off</span>
 			<p class="empty-text">{t('gym.notFound')}</p>
 			<a href="/gym" class="btn btn-outline">{t('gym.back')}</a>
 		</div>
@@ -157,11 +157,11 @@
 			{#if isOwner}
 				<div class="head-actions">
 					<button class="btn btn-secondary btn-sm" onclick={() => (editing = true)}>
-						<span class="material-symbols-outlined" aria-hidden="true">edit</span>
+						<span class="material-symbols" aria-hidden="true">edit</span>
 						{t('gym.edit')}
 					</button>
 					<button class="btn btn-danger btn-sm" onclick={() => (confirmingDelete = true)}>
-						<span class="material-symbols-outlined" aria-hidden="true">delete</span>
+						<span class="material-symbols" aria-hidden="true">delete</span>
 						{t('gym.delete')}
 					</button>
 				</div>
@@ -191,7 +191,7 @@
 					<h2>{block.name}</h2>
 					{#each prByExercise.get(block.name.trim().toLowerCase()) ?? [] as kind (kind)}
 						<span class="pr-chip">
-							<span class="material-symbols-outlined" aria-hidden="true">trophy</span>
+							<span class="material-symbols" aria-hidden="true">trophy</span>
 							{prLabel(kind)}
 						</span>
 					{/each}
@@ -253,7 +253,7 @@
 		font-size: 0.9rem;
 	}
 	.back:hover {
-		color: var(--color-text);
+		color: var(--color-primary);
 	}
 	.back:focus-visible {
 		outline: 2px solid var(--color-primary);
@@ -290,7 +290,7 @@
 		align-items: center;
 		gap: var(--space-2xs);
 	}
-	.head-actions .material-symbols-outlined {
+	.head-actions .material-symbols {
 		font-size: 1.05rem;
 	}
 
@@ -353,7 +353,7 @@
 		padding: 0.2rem 0.5rem;
 		border-radius: var(--radius-sm);
 	}
-	.pr-chip .material-symbols-outlined {
+	.pr-chip .material-symbols {
 		font-size: 0.85rem;
 	}
 
