@@ -2913,6 +2913,7 @@ export const messages = {
 	"gym.exercise.sinceFirstUp": "初回から+{delta}",
 	"gym.exercise.sinceFirstDown": "初回から−{delta}",
 	"gym.exercise.sinceFirstFlat": "初回から変化なし",
+	"gym.detail.lastTime": "前回 {date}",
 	"gym.empty.title": "まだジムのワークアウトがありません",
 	"gym.empty.body": "トレーニングを記録すると、ここに表示され、トレーニング負荷に反映されます。",
 	"gym.created": "ワークアウトを記録しました",

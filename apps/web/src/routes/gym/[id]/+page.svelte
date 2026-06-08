@@ -12,6 +12,7 @@
 		type GymSetWithDate,
 	} from '$lib/core/data';
 	import { workoutPrs, type GymSetLike, type PrKind } from '$lib/gym/gym_prs';
+	import { previousExerciseSession, type ExerciseSession } from '$lib/gym/exercise_history';
 	import { formatDate } from '$lib/format/time';
 	import { formatWeight, weightUnitLabel } from '$lib/format/units.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -77,6 +78,38 @@
 		}
 		return out;
 	});
+
+	// "vs last time" per exercise: the previous weighted session of this
+	// exercise (before this workout) + how this session's heaviest set compares
+	// to it. The progressive-overload cue the all-time PR chips can't give.
+	const prevByExercise = $derived.by(() => {
+		const out = new Map<string, { prev: ExerciseSession; deltaKg: number | null }>();
+		if (!data || !isOwner) return out;
+		const startedAt = data.workout.started_at;
+		for (const b of blocks) {
+			const key = b.name.trim().toLowerCase();
+			if (out.has(key)) continue;
+			const prev = previousExerciseSession(history, b.name, startedAt);
+			if (!prev) continue;
+			let thisTop: number | null = null;
+			for (const st of b.sets) {
+				if (st.weight_kg != null && st.weight_kg > 0 && (thisTop == null || st.weight_kg > thisTop)) {
+					thisTop = st.weight_kg;
+				}
+			}
+			const deltaKg = thisTop != null ? Math.round((thisTop - prev.topWeightKg) * 10) / 10 : null;
+			out.set(key, { prev, deltaKg });
+		}
+		return out;
+	});
+
+	function prevSetLine(prev: ExerciseSession): string {
+		const w = formatWeight(prev.topWeightKg);
+		return prev.topWeightReps != null ? `${w} × ${prev.topWeightReps}` : w;
+	}
+	function deltaText(deltaKg: number): string {
+		return `${deltaKg > 0 ? '+' : '−'}${formatWeight(Math.abs(deltaKg))}`;
+	}
 
 	function prLabel(kind: PrKind): string {
 		return kind === 'weight'
@@ -186,6 +219,7 @@
 		</div>
 
 		{#each blocks as block (block.name)}
+			{@const lt = prevByExercise.get(block.name.trim().toLowerCase())}
 			<section class="exercise-block">
 				<div class="block-head">
 					<h2>{block.name}</h2>
@@ -196,6 +230,22 @@
 						</span>
 					{/each}
 				</div>
+				{#if lt}
+					<a class="last-time" href="/gym/exercise?name={encodeURIComponent(block.name)}">
+						<span class="lt-text">
+							{t('gym.detail.lastTime', { date: formatDate(lt.prev.startedAt) })}: {prevSetLine(lt.prev)}
+						</span>
+						{#if lt.deltaKg != null && lt.deltaKg !== 0}
+							<span class="lt-delta lt-{lt.deltaKg > 0 ? 'up' : 'down'}">
+								<span class="material-symbols" aria-hidden="true">
+									{lt.deltaKg > 0 ? 'trending_up' : 'trending_down'}
+								</span>
+								{deltaText(lt.deltaKg)}
+							</span>
+						{/if}
+						<span class="material-symbols lt-chevron" aria-hidden="true">chevron_right</span>
+					</a>
+				{/if}
 				<ol class="sets">
 					<li class="sets-head" aria-hidden="true">
 						<span class="set-n"></span>
@@ -355,6 +405,52 @@
 	}
 	.pr-chip .material-symbols {
 		font-size: 0.85rem;
+	}
+
+	/* "vs last time" hint — links to the exercise's full progression. */
+	.last-time {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		margin: calc(-1 * var(--space-2xs)) 0 var(--space-md);
+		padding: var(--space-2xs) var(--space-sm);
+		border-radius: var(--radius-sm);
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+		text-decoration: none;
+		transition: background var(--transition-fast);
+	}
+	.last-time:hover {
+		background: var(--color-bg-secondary);
+		color: var(--color-text);
+	}
+	.last-time:focus-visible {
+		outline: 2px solid var(--color-primary);
+		outline-offset: 1px;
+	}
+	.lt-text {
+		font-variant-numeric: tabular-nums;
+	}
+	.lt-delta {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.1rem;
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+	}
+	.lt-delta .material-symbols {
+		font-size: 0.95rem;
+	}
+	.lt-up {
+		color: var(--color-success-strong);
+	}
+	.lt-down {
+		color: var(--color-text-secondary);
+	}
+	.lt-chevron {
+		margin-left: auto;
+		font-size: 1.05rem;
+		color: var(--color-text-tertiary);
 	}
 
 	.sets {

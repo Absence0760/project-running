@@ -2925,6 +2925,7 @@ export const en = {
 	"gym.exercise.sinceFirstUp": "up {delta} since first session",
 	"gym.exercise.sinceFirstDown": "down {delta} since first session",
 	"gym.exercise.sinceFirstFlat": "no change since first session",
+	"gym.detail.lastTime": "Last time {date}",
 	"gym.empty.title": "No gym workouts yet",
 	"gym.empty.body": "Log a lift to track it here and feed your training load.",
 	"gym.created": "Workout logged",

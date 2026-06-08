@@ -2917,6 +2917,7 @@ export const messages = {
 	"gym.exercise.sinceFirstUp": "+{delta} desde la primera sesión",
 	"gym.exercise.sinceFirstDown": "−{delta} desde la primera sesión",
 	"gym.exercise.sinceFirstFlat": "sin cambios desde la primera sesión",
+	"gym.detail.lastTime": "Última vez {date}",
 	"gym.empty.title": "Aún no hay entrenos de gym",
 	"gym.empty.body": "Registra una sesión para verla aquí y alimentar tu carga de entrenamiento.",
 	"gym.created": "Entreno registrado",
