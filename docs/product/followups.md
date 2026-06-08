@@ -113,6 +113,13 @@ The remaining [`docs/features/multi_modal.md`](../features/multi_modal.md) work,
 >   same per-day `water_ml_<date>` counter) is still goal-less. Mirror by
 >   porting `hydration.ts` to Dart (new parity pair) and adding the target
 >   readout + remaining chip to the mobile water card.
+> - **Mobile weekly-goal-trend mirror** — web shipped `nutrition_week.ts`
+>   (pure: logged-day average + signed delta vs the daily calorie goal) and
+>   gave the `/nutrition` 7-day trend a `daily goal` reference line plus a
+>   "X under/over goal/day" summary chip. The mobile trend
+>   (`nutrition_screen.dart`) shows bars only. Mirror by porting
+>   `nutrition_week.ts` to Dart (new parity pair) and adding the goal line +
+>   delta chip to the mobile trend.
 
 - [ ] **G6 · Nutrition foundation (pure + schema)** — `nutrition_targets` parity pair (Mifflin-St Jeor BMR × activity-level); `body_metrics` migration (height on `user_profiles` + `body_metrics` weight time-series, owner RLS, cascade-delete); Settings height/weight entry; privacy-disclosure updates (iOS label / Play Data Safety / Open Food Facts sub-processor). **Feeds G1** (add `body_metrics` to export). Owns: `nutrition_targets.ts`/`.dart`, the new migration, Settings body-metrics entry.
   ```
