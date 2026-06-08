@@ -215,8 +215,7 @@ becomes an **action button**, not a tab.
         ├─────────────────────────────────┤
         │  ▷  Start run                     │
         │  ☰  Start lift                    │
-        │  🍴 Log meal                      │
-        │  ＋ Log snack                     │
+        │  🍴 Log food                      │
         └─────────────────────────────────┘
               ↑ last-used floats to top
 ```
@@ -355,10 +354,26 @@ redaction-boundary guarantees are pinned by
 - **Date grouping** ("Today / Yesterday / Mon 2 Jun") reuses the existing
   `period_summary` date helpers; locale-aware via the gen-l10n
   `DateFormat` layer.
+- **Wide-canvas layout (web).** Day groups flow into a responsive
+  multi-column grid (`repeat(auto-fill, minmax(30rem, 1fr))`) so the
+  timeline fills the page instead of stranding the right ~40% as dead space;
+  it collapses to a single column below ~64rem and on mobile (the Flutter
+  timeline is a single-column `ListView` — phones don't have the
+  wide-canvas problem).
 - Filter chips are **client-side** filters over the already-fetched
   window — no round-trip per chip. The `All` chip is default.
 - A pure runner with no lifts/meals sees only run rows and the chips for
   the empty kinds are **hidden**, not disabled.
+- **First paint is gated on the feed, so the layout never flips.** Because
+  the run-list-vs-timeline decision depends on whether a second modality
+  exists, the page holds a neutral skeleton until the `activities` feed
+  resolves, then paints the correct layout once — it never renders the run
+  list and then swap to the timeline. Web gates on an `activitiesLoaded`
+  flag (skeleton until ready); mobile gates a known-multi-modal account on a
+  persisted `Preferences.historyMultiModal` hint (a brief spinner until the
+  feed lands) so a pure runner still gets the run list instantly with no
+  gate. Back-nav (web snapshot) restores the timeline state directly so the
+  layout is stable on return too.
 
 ## Gym — lightweight tier surfaces (mirror web `/gym`)
 
