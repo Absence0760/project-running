@@ -9,7 +9,6 @@ function s(over: Partial<DatedGymSet>): DatedGymSet {
 		exercise_name: 'Bench Press',
 		reps: 5,
 		weight_kg: 100,
-		rpe: null,
 		...over,
 	};
 }

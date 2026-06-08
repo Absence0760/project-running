@@ -76,6 +76,12 @@
 		return ids;
 	});
 
+	// Whether any logged set carries a positive weight — gates the Records
+	// link, since /gym/records only surfaces weighted exercises.
+	const hasWeightedRecords = $derived(
+		history.some((s) => s.weight_kg != null && s.weight_kg > 0),
+	);
+
 	// Distinct exercise names from history, most-used first — the composer
 	// autocomplete source.
 	const suggestions = $derived.by(() => {
@@ -108,10 +114,18 @@
 				</p>
 			{/if}
 		</div>
-		<button class="btn btn-primary" onclick={() => (showCreate = true)} data-testid="gym-log">
-			<span class="material-symbols" aria-hidden="true">add</span>
-			{t('gym.log')}
-		</button>
+		<div class="head-actions">
+			{#if !loading && hasWeightedRecords}
+				<a class="btn btn-secondary" href="/gym/records" data-testid="gym-records-link">
+					<span class="material-symbols" aria-hidden="true">trophy</span>
+					{t('gym.records.link')}
+				</a>
+			{/if}
+			<button class="btn btn-primary" onclick={() => (showCreate = true)} data-testid="gym-log">
+				<span class="material-symbols" aria-hidden="true">add</span>
+				{t('gym.log')}
+			</button>
+		</div>
 	</header>
 
 	{#if loading}
@@ -201,11 +215,17 @@
 		font-size: 0.85rem;
 		color: var(--color-text-secondary);
 	}
+	.head-actions {
+		display: flex;
+		gap: var(--space-sm);
+		flex-shrink: 0;
+	}
 	.page-header .btn {
 		display: inline-flex;
 		align-items: center;
 		gap: var(--space-2xs);
 		flex-shrink: 0;
+		text-decoration: none;
 	}
 	.page-header .material-symbols {
 		font-size: 1.1rem;
