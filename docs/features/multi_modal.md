@@ -341,13 +341,21 @@ redaction-boundary guarantees are pinned by
 > amendment) — the "second modality has data" gate carries the anti-clutter
 > contract on both.
 >
-> **Web/mobile divergence (intentional):** web split the run-list management
-> onto a dedicated `/runs` page and made `/history` a pure timeline (Runs tab =
-> timeline rows + a "View all" link to `/runs`). Mobile keeps the full run list
-> **inline under the Runs chip** in `runs_screen.dart` — it has no `/runs`
-> analog because the bottom nav is capped at five slots and runs are reached via
-> the centre Log FAB + the History tab (decisions §63). Both are correct for
-> their platform per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
+> **Web/mobile parity (converged 2026-06-08):** both platforms now make every
+> History tab — including Runs — a unified timeline, with a per-tab `View all`
+> link to that modality's full surface. Web links to dedicated pages (`/runs`,
+> `/gym`, `/nutrition`); mobile's `runs_screen.dart` pushes the same screens —
+> Runs → `RunsScreen` mounted **without** a `gymStore` (which renders the
+> dedicated, offline-first run list: filters / sort / pagination / bulk-delete,
+> the mobile analogue of `/runs`), Lifts → `GymScreen`, Meals → `NutritionScreen`.
+> Mobile uses a pushed route rather than a nav tab because its bottom nav is
+> capped at five slots (decisions §63). The one residual, deliberate difference:
+> mobile's **no-chips path** (offline / signed-out / pure runner with no second
+> modality) still shows the run list inline on the History tab, because the
+> activities timeline is server-backed (`fetchActivities`) while the run list is
+> offline-first (`LocalRunStore`) — falling back to the inline list keeps runs
+> viewable offline. Web has no offline mode, so its pure-runner History is
+> always the timeline. Both correct per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
 
 ```
   History            [ All ] [ Runs ] [ Lifts ] [ Meals ]

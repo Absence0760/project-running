@@ -364,6 +364,7 @@
   "historyKindRuns": "Courses",
   "historyKindLifts": "Muscu",
   "historyKindMeals": "Repas",
+  "historyViewAll": "Tout voir",
   "historyToday": "Aujourd'hui",
   "historyYesterday": "Hier",
   "historySetCount": "{n} séries",

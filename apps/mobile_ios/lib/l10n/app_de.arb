@@ -364,6 +364,7 @@
   "historyKindRuns": "Läufe",
   "historyKindLifts": "Kraft",
   "historyKindMeals": "Mahlzeiten",
+  "historyViewAll": "Alle ansehen",
   "historyToday": "Heute",
   "historyYesterday": "Gestern",
   "historySetCount": "{n} Sätze",

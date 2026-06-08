@@ -2291,6 +2291,12 @@ abstract class AppLocalizations {
   /// **'Meals'**
   String get historyKindMeals;
 
+  /// Link from a single-modality History tab to that modality's full page (runs list / gym / nutrition)
+  ///
+  /// In en, this message translates to:
+  /// **'View all'**
+  String get historyViewAll;
+
   /// Day-group header for today in the unified timeline
   ///
   /// In en, this message translates to:

@@ -1338,6 +1338,9 @@ class AppLocalizationsFr extends AppLocalizations {
   String get historyKindMeals => 'Repas';
 
   @override
+  String get historyViewAll => 'Tout voir';
+
+  @override
   String get historyToday => 'Aujourd\'hui';
 
   @override

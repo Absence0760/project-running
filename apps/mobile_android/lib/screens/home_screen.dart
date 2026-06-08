@@ -168,6 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
           preferences: widget.preferences,
           settingsSync: widget.settingsSync,
           gymStore: widget.gymStore,
+          foodStore: widget.foodStore,
         ),
       ),
       _LazyKeepAliveTab(

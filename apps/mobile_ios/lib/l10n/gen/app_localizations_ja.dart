@@ -1268,6 +1268,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get historyKindMeals => '食事';
 
   @override
+  String get historyViewAll => 'すべて表示';
+
+  @override
   String get historyToday => '今日';
 
   @override

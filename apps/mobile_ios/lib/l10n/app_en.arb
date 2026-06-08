@@ -1388,6 +1388,8 @@
   "@historyKindLifts": {"description": "Unified-timeline kind chip: gym sessions only"},
   "historyKindMeals": "Meals",
   "@historyKindMeals": {"description": "Unified-timeline kind chip: logged meals only"},
+  "historyViewAll": "View all",
+  "@historyViewAll": {"description": "Link from a single-modality History tab to that modality's full page (runs list / gym / nutrition)"},
   "historyToday": "Today",
   "@historyToday": {"description": "Day-group header for today in the unified timeline"},
   "historyYesterday": "Yesterday",

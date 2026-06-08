@@ -1332,6 +1332,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get historyKindMeals => 'Refeições';
 
   @override
+  String get historyViewAll => 'Ver tudo';
+
+  @override
   String get historyToday => 'Hoje';
 
   @override
@@ -8393,6 +8396,9 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
 
   @override
   String get historyKindMeals => 'Refeições';
+
+  @override
+  String get historyViewAll => 'Ver tudo';
 
   @override
   String get historyToday => 'Hoje';

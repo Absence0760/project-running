@@ -364,6 +364,7 @@
   "historyKindRuns": "Carreras",
   "historyKindLifts": "Pesas",
   "historyKindMeals": "Comidas",
+  "historyViewAll": "Ver todo",
   "historyToday": "Hoy",
   "historyYesterday": "Ayer",
   "historySetCount": "{n} series",

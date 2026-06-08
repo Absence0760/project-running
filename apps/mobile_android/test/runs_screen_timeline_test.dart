@@ -10,11 +10,13 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../lib/l10n/gen/app_localizations.dart';
+import '../lib/local_food_store.dart';
 import '../lib/local_gym_store.dart';
 import '../lib/local_route_store.dart';
 import '../lib/local_run_store.dart';
 import '../lib/preferences.dart';
 import '../lib/screens/runs_screen.dart';
+import '../lib/widgets/activity_timeline_list.dart';
 
 /// Fake client: serves a canned activities feed, no runs, signed in. Every
 /// network method RunsScreen touches on mount is overridden so nothing hits
@@ -79,6 +81,9 @@ void main() {
     final gymStore = LocalGymStore();
     await gymStore.init(
         overrideDirectory: Directory.systemTemp.createTempSync('gym_tl_'));
+    final foodStore = LocalFoodStore();
+    await foodStore.init(
+        overrideDirectory: Directory.systemTemp.createTempSync('food_tl_'));
 
     await tester.pumpWidget(MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -89,6 +94,7 @@ void main() {
         routeStore: LocalRouteStore(),
         preferences: prefs,
         gymStore: gymStore,
+        foodStore: foodStore,
       ),
     ));
     await tester.pumpAndSettle();
@@ -109,19 +115,26 @@ void main() {
     expect(find.text('Push day'), findsOneWidget);
   });
 
-  testWidgets('tapping Runs leaves the timeline; tapping Lifts filters to lifts',
+  testWidgets('every chip stays on the unified timeline, filtered by kind',
       (tester) async {
+    // The Runs chip is now a timeline filtered to runs (mirroring web), NOT
+    // the inline run list — so the ActivityTimelineList stays mounted on every
+    // chip, and each chip shows only its kind.
     await pump(tester, [
+      row('r1', 'run', {'distance_m': 5000, 'duration_s': 1500}),
       row('l1', 'lift', {'title': 'Leg day', 'set_count': 4, 'volume_kg': 9000}),
       row('m1', 'meal', {'item_name': 'Rice bowl', 'calories': 500}),
     ]);
-    // Default All view shows both a lift and a meal.
+    // Default All view shows all three kinds on the timeline.
+    expect(find.byType(ActivityTimelineList), findsOneWidget);
     expect(find.text('Leg day'), findsOneWidget);
     expect(find.text('Rice bowl'), findsOneWidget);
 
-    // Tap Runs → the run list takes over, the timeline rows disappear.
+    // Tap Runs → STILL the timeline (not the run list), filtered to runs:
+    // the lift + meal rows drop out.
     await tester.tap(find.text('Runs'));
     await tester.pumpAndSettle();
+    expect(find.byType(ActivityTimelineList), findsOneWidget);
     expect(find.text('Leg day'), findsNothing);
     expect(find.text('Rice bowl'), findsNothing);
 
@@ -130,6 +143,25 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Leg day'), findsOneWidget);
     expect(find.text('Rice bowl'), findsNothing);
+  });
+
+  testWidgets('a single-modality tab shows a "View all" link; All does not',
+      (tester) async {
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    await pump(tester, [
+      row('r1', 'run', {'distance_m': 5000, 'duration_s': 1500}),
+      row('l1', 'lift', {'title': 'Leg day', 'set_count': 4, 'volume_kg': 9000}),
+      row('m1', 'meal', {'item_name': 'Rice bowl', 'calories': 500}),
+    ]);
+    // All view is cross-modal — no single destination, so no View-all link.
+    expect(find.text(l10n.historyViewAll), findsNothing);
+    // Each single-modality tab surfaces the View-all link (→ its full page).
+    for (final chip in ['Runs', 'Lifts', 'Meals']) {
+      await tester.tap(find.text(chip));
+      await tester.pumpAndSettle();
+      expect(find.text(l10n.historyViewAll), findsOneWidget,
+          reason: 'View all should show under the $chip tab');
+    }
   });
 
   testWidgets('no chips when gym store is absent (run-only history)',

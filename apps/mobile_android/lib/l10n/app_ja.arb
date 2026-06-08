@@ -364,6 +364,7 @@
   "historyKindRuns": "ラン",
   "historyKindLifts": "筋トレ",
   "historyKindMeals": "食事",
+  "historyViewAll": "すべて表示",
   "historyToday": "今日",
   "historyYesterday": "昨日",
   "historySetCount": "{n}セット",

@@ -1335,6 +1335,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get historyKindMeals => 'Mahlzeiten';
 
   @override
+  String get historyViewAll => 'Alle ansehen';
+
+  @override
   String get historyToday => 'Heute';
 
   @override

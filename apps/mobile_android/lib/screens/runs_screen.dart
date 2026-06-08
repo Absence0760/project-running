@@ -10,6 +10,7 @@ import '../goals.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../local_food_store.dart';
 import '../local_gym_store.dart';
 import '../local_route_store.dart';
 import '../local_run_store.dart';
@@ -21,6 +22,8 @@ import '../widgets/run_track_preview.dart';
 import '../widgets/track_preview.dart';
 import 'add_run_screen.dart';
 import 'gym_detail_screen.dart';
+import 'gym_screen.dart';
+import 'nutrition_screen.dart';
 import 'run_detail_screen.dart';
 import '../widgets/top_banner.dart';
 
@@ -40,8 +43,15 @@ class RunsScreen extends StatefulWidget {
   /// home shell. When null (or [apiClient] is signed out) the unified
   /// activities timeline is simply not offered and the screen stays the
   /// run-only history it has always been — graceful degradation, same shape
-  /// as the api-null fallback elsewhere on this screen.
+  /// as the api-null fallback elsewhere on this screen. Pushing this screen
+  /// WITHOUT a gymStore (e.g. the "View all runs" link from the timeline) is
+  /// how we get the dedicated, offline-first run-list surface — the mobile
+  /// analogue of web's /runs page (decisions §63 amendment).
   final LocalGymStore? gymStore;
+
+  /// Food store, only needed so the Meals tab's "View all" can open
+  /// NutritionScreen. Null on the run-only + run-list-only mounts.
+  final LocalFoodStore? foodStore;
 
   const RunsScreen({
     super.key,
@@ -51,6 +61,7 @@ class RunsScreen extends StatefulWidget {
     required this.preferences,
     this.settingsSync,
     this.gymStore,
+    this.foodStore,
   });
 
   @override
@@ -185,7 +196,12 @@ class _RunsScreenState extends State<RunsScreen> {
   /// mount that passes no gym store, sees no chips (anti-clutter checklist).
   bool get _showChips => widget.gymStore != null && (_hasLift || _hasMeal);
 
-  bool get _timelineMode => _showChips && _kind != _HistoryKind.run;
+  /// Whenever the chips are shown, EVERY tab — including Runs — renders the
+  /// unified timeline (matching web: the Runs tab is timeline rows + a
+  /// "View all" link to the full run list, not the inline run toolbar). The
+  /// inline run list still backs the no-chips path (offline / pure runner /
+  /// the pushed run-list-only mount), which stays fully offline-first.
+  bool get _timelineMode => _showChips;
 
   /// Snapshot of `runStore.runs` IDs from the previous listener tick.
   /// Used by `_onStoreChanged` to detect freshly-added runs so we can
@@ -1064,15 +1080,79 @@ class _RunsScreenState extends State<RunsScreen> {
     if (!_showChips) return content;
     return Column(
       children: [
-        _KindChipRow(
-          kind: _kind,
-          hasLift: _hasLift,
-          hasMeal: _hasMeal,
-          onChanged: (k) => setState(() => _kind = k),
+        Row(
+          children: [
+            Expanded(
+              child: _KindChipRow(
+                kind: _kind,
+                hasLift: _hasLift,
+                hasMeal: _hasMeal,
+                onChanged: (k) => setState(() => _kind = k),
+              ),
+            ),
+            // Each single-modality tab links to that modality's full page,
+            // mirroring web's per-tab "View all" header: Runs → the dedicated
+            // offline-first run list, Lifts → Gym, Meals → Nutrition. The All
+            // tab is cross-modal and has no single destination.
+            if (_kind != _HistoryKind.all)
+              Padding(
+                padding: const EdgeInsetsDirectional.only(end: 8),
+                child: TextButton(
+                  onPressed: _openViewAll,
+                  child: Text(l10n.historyViewAll),
+                ),
+              ),
+          ],
         ),
         Expanded(child: content),
       ],
     );
+  }
+
+  /// "View all" from a single-modality timeline tab → that modality's full
+  /// surface. Runs opens this same screen WITHOUT a gym store, which renders
+  /// the dedicated, offline-first run list (filters / sort / pagination /
+  /// bulk-delete) — the mobile analogue of web's /runs page.
+  void _openViewAll() {
+    switch (_kind) {
+      case _HistoryKind.run:
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => RunsScreen(
+              apiClient: widget.apiClient,
+              runStore: widget.runStore,
+              routeStore: widget.routeStore,
+              preferences: widget.preferences,
+              settingsSync: widget.settingsSync,
+            ),
+          ),
+        );
+      case _HistoryKind.lift:
+        final store = widget.gymStore;
+        if (store == null) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => GymScreen(api: widget.apiClient, store: store),
+          ),
+        );
+      case _HistoryKind.meal:
+        final store = widget.foodStore;
+        if (store == null) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute<void>(
+            builder: (_) => NutritionScreen(
+              api: widget.apiClient,
+              store: store,
+              settingsSync: widget.settingsSync,
+            ),
+          ),
+        );
+      case _HistoryKind.all:
+        break;
+    }
   }
 
   /// Open a run row from the timeline. The run is usually in the local store
