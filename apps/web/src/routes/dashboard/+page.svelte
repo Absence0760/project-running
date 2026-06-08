@@ -100,10 +100,23 @@
 	let gymWorkouts = $state<GymWorkout[]>([]);
 	let gymHistory = $state<GymSetWithDate[]>([]);
 	let lifts = $derived(liftsFromSetHistory(gymHistory));
+	// Opt-out: a runner who wants a pure run-only readiness curve can exclude
+	// gym load (Settings → Preferences). When set, the readiness series sees
+	// no lifts — the run-only curve is byte-for-byte recoverable (the same
+	// separability the model already guarantees). The gym cards below are
+	// unaffected; only the fatigue/form math drops lifts.
+	let excludeGymFromReadiness = $state(false);
+	let readinessLifts = $derived(excludeGymFromReadiness ? [] : lifts);
+	// True when a gym session lands inside the ~fatigue-relevant window, so the
+	// "factored in" note only shows when gym is actually moving the curve.
+	let hasRecentLift = $derived.by(() => {
+		const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+		return lifts.some((l) => new Date(l.started_at).getTime() >= cutoff);
+	});
 	// HR prefs feed both the TRIMP-eligible flag and the stress score.
 	let trimpPrefs = $state<{ resting_hr_bpm?: number | null; max_hr_bpm?: number | null }>({});
 	let trainingLoadSeries = $derived(
-		computeTrainingLoadSeries(runs, trimpPrefs, 90, new Date(), lifts),
+		computeTrainingLoadSeries(runs, trimpPrefs, 90, new Date(), readinessLifts),
 	);
 
 	// Sets grouped by workout id — drives the per-session volume +
@@ -419,6 +432,7 @@
 			resting_hr_bpm: effective<number>(settings, 'resting_hr_bpm') ?? null,
 			max_hr_bpm: effective<number>(settings, 'max_hr_bpm') ?? null,
 		};
+		excludeGymFromReadiness = effective<boolean>(settings, 'exclude_gym_from_readiness') === true;
 		try {
 			// Layered resilience: a bad shape in the jsonb bag must
 			// not crash the dashboard. If the read or the validation
@@ -1170,6 +1184,17 @@
 				{#if daysToHard != null}
 					<p class="fitness-next-hard">
 						Next hard session in ~{daysToHard} day{daysToHard === 1 ? '' : 's'} of easy running.
+					</p>
+				{/if}
+				{#if excludeGymFromReadiness && lifts.length > 0}
+					<p class="fitness-gym-note" data-testid="gym-readiness-note">
+						<span class="material-symbols" aria-hidden="true">fitness_center</span>
+						{m('dash.gymReadinessExcluded')}
+					</p>
+				{:else if !excludeGymFromReadiness && hasRecentLift}
+					<p class="fitness-gym-note" data-testid="gym-readiness-note">
+						<span class="material-symbols" aria-hidden="true">fitness_center</span>
+						{m('dash.gymReadinessIncluded')}
 					</p>
 				{/if}
 				{#if trendPath}
@@ -2389,6 +2414,17 @@
 		font-size: 0.82rem;
 		font-weight: 600;
 		color: var(--color-primary);
+	}
+	.fitness-gym-note {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2xs);
+		margin: var(--space-xs) 0 0;
+		font-size: 0.78rem;
+		color: var(--color-text-tertiary);
+	}
+	.fitness-gym-note .material-symbols {
+		font-size: 0.95rem;
 	}
 	.trend {
 		width: 100%;

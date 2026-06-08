@@ -66,6 +66,9 @@
 	// actively opt out via this toggle. The `search_user_profiles`
 	// RPC reads the same key.
 	let discoverableInSearch = $state(true);
+	// Opt-out: drop gym load from the run fitness/fatigue/form curve so the
+	// dashboard readiness stays run-only. Default off (gym counts).
+	let excludeGymFromReadiness = $state(false);
 
 	// Theme — persisted to localStorage, not the cross-device settings
 	// bag. Intentionally per-browser: a dark laptop + a light iPad is a
@@ -270,6 +273,7 @@
 				effective<number>(settings, 'voice_feedback_interval_km', 1.0) ?? 1.0
 			).toString();
 			discoverableInSearch = effective(settings, 'discoverable_in_search', true) ?? true;
+			excludeGymFromReadiness = effective<boolean>(settings, 'exclude_gym_from_readiness', false) === true;
 
 			restingHr = (effective<number>(settings, 'resting_hr_bpm') ?? '')?.toString() ?? '';
 			maxHr = (effective<number>(settings, 'max_hr_bpm') ?? '')?.toString() ?? '';
@@ -634,6 +638,13 @@
 				<label><span class="label-text">{m('prefs.zone4Threshold')}</span><input type="number" bind:value={z4} placeholder="175" onblur={saveHrZones} /></label>
 				<label><span class="label-text">{m('prefs.zone5Max')}</span><input type="number" bind:value={z5} placeholder="195" onblur={saveHrZones} /></label>
 			</div>
+			<label class="checkbox-row">
+				<input type="checkbox" bind:checked={excludeGymFromReadiness} onchange={() => autoSave({ exclude_gym_from_readiness: excludeGymFromReadiness })} />
+				<span>
+					{m('prefs.excludeGymFromReadiness')}
+					<span class="hint">{m('prefs.excludeGymFromReadinessHint')}</span>
+				</span>
+			</label>
 		</section>
 
 		<!-- Privacy & Sharing -->
