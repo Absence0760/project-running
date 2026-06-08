@@ -11,7 +11,7 @@ apps/backend/
 ├── .env.local                # real values (gitignored)
 └── supabase/
     ├── config.toml           # local-stack config — ports, auth, email
-    ├── seed.sql              # test user + 12 runs + 5 routes + integrations
+    ├── seed.sql              # test user + 12 runs + 5 routes + integrations + gym/nutrition
     ├── migrations/                # ~50 files; full list at `ls supabase/migrations/`.
     │   │                          # Apr 2026 batch laid the schema foundation
     │   │                          # (initial_schema → funding); May 2026 added the
@@ -61,6 +61,7 @@ Confirm it's running with `supabase status`. The gotcha I keep hitting: `supabas
 - Password: `testtest`
 - 12 runs across `app`, `strava`, `parkrun`, `healthkit` sources
 - 5 routes, 2 connected integrations, a profile with `preferred_unit = 'km'`
+- Phase 4 multi-modal data: 3 gym workouts (23 sets, progressive overload so PR badges fire), 17 food-log entries spanning today + the prior 6 days, a 4-point body-metrics weight series, and `height_cm` / `date_of_birth` / `gender` + `nutrition_activity_level` / `nutrition_goal` prefs so `/nutrition` macro targets compute. These rows are `now()`-relative (unlike the fixed-date runs) so `/gym` + `/nutrition` stay populated on any reset.
 
 Use it for any manual testing that needs authenticated data. The web app auto-fills the email on the login page in dev mode (see `apps/web/src/routes/login/+page.svelte`).
 

@@ -61,10 +61,15 @@ INSERT INTO auth.identities (
 -- onboarded_at=null + get caught by the layout-level routing gate
 -- — every Playwright spec using the seeded user would then be
 -- redirected to /onboarding instead of its actual route).
+-- `height_cm`, `date_of_birth`, `gender` feed the Mifflin-St Jeor BMR on
+-- /nutrition (get_my_profile() returns the whole row). Without them the macro
+-- rings render in their untargeted "set your body metrics" state.
 INSERT INTO user_profiles (id, display_name, parkrun_number, preferred_unit, subscription_tier,
-                           age_confirmed_at, terms_accepted_at, onboarded_at)
+                           age_confirmed_at, terms_accepted_at, onboarded_at,
+                           height_cm, date_of_birth, gender)
 VALUES ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', 'Jared Howard', 'A123456', 'km', 'free',
-        now(), now(), now())
+        now(), now(), now(),
+        178.0, '1992-09-12', 'male')
 ON CONFLICT (id) DO NOTHING;
 
 -- 2a. User settings — runner_context for the AI Coach. Without these the
@@ -81,7 +86,11 @@ INSERT INTO user_settings (user_id, prefs) VALUES (
     'coach_personality', 'supportive',
     'auto_pause_enabled', true,
     'preferred_unit', 'km',
-    'week_start_day', 'monday'
+    'week_start_day', 'monday',
+    -- Activity / goal drive the /nutrition macro targets (TDEE multiplier
+    -- + lose/maintain/gain calorie delta).
+    'nutrition_activity_level', 'active',
+    'nutrition_goal', 'maintain'
   )
 ) ON CONFLICT (user_id) DO UPDATE SET prefs = EXCLUDED.prefs;
 
@@ -2455,3 +2464,93 @@ BEGIN
   DELETE FROM auth.users WHERE id = other_user;
   PERFORM set_config('request.jwt.claim.role', '', true);
 END $$;
+
+-- ---------------------------------------------------------------------------
+-- Phase 4 multi-modal seed: gym + nutrition for runner@test.com
+--
+-- Dates are now()-relative (not the fixed May 2026 dates the run history
+-- uses) because /nutrition keys off "today" + the last 7 days and /gym is a
+-- recency list — fixed dates would leave both surfaces empty on any reset
+-- run after that day. The e2e suites seed their own uniquely-named rows
+-- (tests-e2e/gym, tests-e2e/nutrition) so these static rows don't collide.
+-- ---------------------------------------------------------------------------
+
+-- Body-metrics weight series (latest row feeds the nutrition BMR + the
+-- dashboard weight trend). A gentle downward drift over three weeks.
+INSERT INTO body_metrics (user_id, recorded_at, weight_kg) VALUES
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '21 days', 75.4),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '14 days', 74.8),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '7 days',  74.2),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '1 day',   73.9);
+
+-- Gym workouts — three sessions, oldest first. The set_count / volume_kg
+-- columns are trigger-maintained (migration 20261214_001), so we insert the
+-- workout shells then the sets; the trigger recomputes totals. Progressive
+-- overload across the two Push days earns weight/volume/e1RM PR badges on
+-- /gym + per-exercise PR chips on the latest /gym/[id].
+INSERT INTO gym_workouts (id, user_id, title, started_at, duration_s, notes) VALUES
+  ('a2000001-0000-0000-0000-000000000001', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'Push day', now() - interval '16 days', 3600, 'Felt strong, bumped the bench next time.'),
+  ('a2000001-0000-0000-0000-000000000002', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'Lower body', now() - interval '9 days', 4200, NULL),
+  ('a2000001-0000-0000-0000-000000000003', 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+    'Push day', now() - interval '2 days', 3900, 'New bench top set. Overhead press up too.');
+
+INSERT INTO gym_sets (workout_id, set_index, exercise_name, reps, weight_kg, rpe) VALUES
+  -- Push day (16 days ago) — baseline
+  ('a2000001-0000-0000-0000-000000000001', 0, 'Bench press', 5, 60.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000001', 1, 'Bench press', 5, 60.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000001', 2, 'Bench press', 5, 60.0, 8.5),
+  ('a2000001-0000-0000-0000-000000000001', 3, 'Overhead press', 8, 35.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000001', 4, 'Overhead press', 8, 35.0, 8.5),
+  ('a2000001-0000-0000-0000-000000000001', 5, 'Overhead press', 7, 35.0, 9.0),
+  ('a2000001-0000-0000-0000-000000000001', 6, 'Pull-up', 8, NULL, 8.0),
+  ('a2000001-0000-0000-0000-000000000001', 7, 'Pull-up', 7, NULL, 8.5),
+  -- Lower body (9 days ago) — first time on these lifts
+  ('a2000001-0000-0000-0000-000000000002', 0, 'Back squat', 5, 90.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000002', 1, 'Back squat', 5, 90.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000002', 2, 'Back squat', 5, 90.0, 8.5),
+  ('a2000001-0000-0000-0000-000000000002', 3, 'Romanian deadlift', 8, 70.0, 7.5),
+  ('a2000001-0000-0000-0000-000000000002', 4, 'Romanian deadlift', 8, 70.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000002', 5, 'Leg press', 12, 140.0, 8.0),
+  ('a2000001-0000-0000-0000-000000000002', 6, 'Leg press', 12, 140.0, 8.5),
+  -- Push day (2 days ago) — beats the first Push day
+  ('a2000001-0000-0000-0000-000000000003', 0, 'Bench press', 5, 65.0, 8.5),
+  ('a2000001-0000-0000-0000-000000000003', 1, 'Bench press', 5, 65.0, 9.0),
+  ('a2000001-0000-0000-0000-000000000003', 2, 'Bench press', 4, 65.0, 9.0),
+  ('a2000001-0000-0000-0000-000000000003', 3, 'Overhead press', 6, 37.5, 8.5),
+  ('a2000001-0000-0000-0000-000000000003', 4, 'Overhead press', 6, 37.5, 9.0),
+  ('a2000001-0000-0000-0000-000000000003', 5, 'Overhead press', 6, 37.5, 9.0),
+  ('a2000001-0000-0000-0000-000000000003', 6, 'Pull-up', 9, NULL, 8.0),
+  ('a2000001-0000-0000-0000-000000000003', 7, 'Pull-up', 8, NULL, 8.5);
+
+-- Food log — today's four meal slots (full macros so the rings + meal chips
+-- fill) plus six prior days of lunch+dinner pairs so the 7-day calorie trend
+-- has variation.
+INSERT INTO food_log (user_id, started_at, item_name, meal_slot, calories, protein_g, carbs_g, fat_g) VALUES
+  -- Today
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '8 hours', 'Oatmeal with banana & peanut butter', 'breakfast', 420, 14, 62, 12),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '5 hours', 'Greek yogurt & berries', 'snack', 180, 17, 20, 3),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '4 hours', 'Grilled chicken, rice & vegetables', 'lunch', 650, 48, 72, 16),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '1 hour',  'Salmon, sweet potato & broccoli', 'dinner', 720, 45, 55, 32),
+  -- Prior days (lunch + dinner)
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '1 day' - interval '6 hours', 'Turkey & avocado wrap', 'lunch', 560, 34, 48, 24),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '1 day' - interval '2 hours', 'Beef stir-fry with noodles', 'dinner', 780, 42, 80, 26),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '2 days' - interval '6 hours', 'Lentil soup & sourdough', 'lunch', 480, 22, 68, 10),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '2 days' - interval '2 hours', 'Margherita pizza (half)', 'dinner', 720, 28, 88, 26),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '3 days' - interval '6 hours', 'Chicken caesar salad', 'lunch', 520, 40, 18, 32),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '3 days' - interval '2 hours', 'Spaghetti bolognese', 'dinner', 850, 46, 92, 28),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '4 days' - interval '6 hours', 'Tuna poke bowl', 'lunch', 610, 38, 66, 20),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '4 days' - interval '2 hours', 'Chicken curry & rice', 'dinner', 740, 44, 78, 24),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '5 days' - interval '6 hours', 'Egg & spinach omelette', 'lunch', 430, 30, 8, 30),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '5 days' - interval '2 hours', 'Veggie burrito bowl', 'dinner', 690, 26, 84, 24),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '6 days' - interval '6 hours', 'Ham & cheese sandwich', 'lunch', 540, 28, 52, 22),
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '6 days' - interval '2 hours', 'Roast chicken & potatoes', 'dinner', 760, 50, 62, 28);
+
+-- One run earlier today so the dynamic-TDEE "base + exercise" breakdown is
+-- visible on /nutrition out of the box (and today's effort feeds the dashboard
+-- readiness curve). now()-relative for the same reason as the rows above. No
+-- track/route — the estimator only needs distance_m.
+INSERT INTO runs (user_id, started_at, duration_s, distance_m, source, is_public, metadata) VALUES
+  ('a1b2c3d4-e5f6-7890-abcd-ef1234567890', now() - interval '3 hours', 1980, 8000.0, 'app', false,
+    '{"activity_type":"run","title":"Morning easy 8K","avg_bpm":148,"steps":9800}'::jsonb);
