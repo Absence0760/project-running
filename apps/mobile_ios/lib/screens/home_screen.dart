@@ -20,8 +20,8 @@ import '../widgets/billing_issue_banner.dart';
 import '../widgets/log_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
-import 'gym_screen.dart';
-import 'nutrition_screen.dart';
+import '../widgets/gym_compose_sheet.dart';
+import '../widgets/nutrition_log_sheet.dart';
 import 'runs_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
@@ -288,25 +288,19 @@ class _HomeScreenState extends State<HomeScreen> {
   void _performLogAction(LogAction action) {
     widget.preferences.setLastLogType(action.wire);
     switch (action) {
+      // Each Log action opens that modality's capture surface in one tap, so
+      // the three behave consistently (decisions §63). Run is a live recording
+      // session, so it stays the keep-alive page; lift + food are quick entries
+      // that open their composer sheet directly (NOT the gym list / nutrition
+      // day view, which forced a second tap before). A logged lift/meal flows
+      // into LocalGymStore / LocalFoodStore, which the History timeline watches,
+      // so it appears there without an explicit refresh.
       case LogAction.run:
         _goToPage(_pageRun);
       case LogAction.lift:
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) =>
-                GymScreen(api: widget.apiClient, store: widget.gymStore),
-          ),
-        );
+        showGymComposeSheet(context: context, store: widget.gymStore);
       case LogAction.food:
-        Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (_) => NutritionScreen(
-              api: widget.apiClient,
-              store: widget.foodStore,
-              settingsSync: widget.settingsSync,
-            ),
-          ),
-        );
+        showNutritionLogSheet(context: context, store: widget.foodStore);
     }
   }
 
