@@ -2853,6 +2853,7 @@ export const en = {
 	"nutrition.carbs": "Carbs",
 	"nutrition.fat": "Fat",
 	"nutrition.noTargets": "Add your height, weight, age and sex in Settings to see calorie + macro targets.",
+	"nutrition.goalBreakdown": "Goal {base} + {exercise} kcal burned today",
 	"nutrition.water": "Water",
 	"nutrition.waterAdd": "Add water",
 	"nutrition.waterRemove": "Remove water",

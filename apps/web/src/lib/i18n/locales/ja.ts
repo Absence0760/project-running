@@ -2841,6 +2841,7 @@ export const messages = {
 	"nutrition.carbs": "炭水化物",
 	"nutrition.fat": "脂質",
 	"nutrition.noTargets": "カロリー・マクロの目標を表示するには、設定で身長・体重・年齢・性別を入力してください。",
+	"nutrition.goalBreakdown": "目標 {base} + 本日消費 {exercise} kcal",
 	"nutrition.water": "水分",
 	"nutrition.waterAdd": "水分を追加",
 	"nutrition.waterRemove": "水分を減らす",

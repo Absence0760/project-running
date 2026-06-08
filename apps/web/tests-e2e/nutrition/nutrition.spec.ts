@@ -59,4 +59,38 @@ test.describe('/nutrition — manual log, render, water', () => {
 		// Cleanup.
 		await admin.from('food_log').delete().eq('id', created![0].id);
 	});
+
+	test("today's run raises the calorie goal (dynamic TDEE base + exercise)", async ({
+		page,
+	}) => {
+		const admin = getAdminClient();
+
+		// Seed a run earlier today so the page computes exercise calories. The
+		// seed user has body metrics, so targets are non-null and the breakdown
+		// line renders.
+		const startedAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+		const { data: run } = await admin
+			.from('runs')
+			.insert({
+				user_id: USER_A.id,
+				started_at: startedAt,
+				distance_m: 10000,
+				duration_s: 3000,
+				source: 'app',
+				is_public: false,
+				metadata: { activity_type: 'run' },
+			})
+			.select('id')
+			.single();
+
+		try {
+			await page.goto('/nutrition');
+			const breakdown = page.getByTestId('goal-breakdown');
+			await expect(breakdown).toBeVisible({ timeout: 10_000 });
+			// "Goal <base> + <exercise> kcal burned today" — exercise must be > 0.
+			await expect(breakdown).toContainText(/\+\s*\d+\s*kcal burned today/);
+		} finally {
+			await admin.from('runs').delete().eq('id', run!.id);
+		}
+	});
 });

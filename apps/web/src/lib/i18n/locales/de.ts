@@ -2845,6 +2845,7 @@ export const messages = {
 	"nutrition.carbs": "Kohlenhydrate",
 	"nutrition.fat": "Fett",
 	"nutrition.noTargets": "Gib in den Einstellungen Größe, Gewicht, Alter und Geschlecht an, um Kalorien- und Makro-Ziele zu sehen.",
+	"nutrition.goalBreakdown": "Ziel {base} + {exercise} kcal heute verbrannt",
 	"nutrition.water": "Wasser",
 	"nutrition.waterAdd": "Wasser hinzufügen",
 	"nutrition.waterRemove": "Wasser entfernen",

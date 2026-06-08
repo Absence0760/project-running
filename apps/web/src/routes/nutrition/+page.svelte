@@ -5,6 +5,8 @@
 	import {
 		fetchFoodLog,
 		fetchLatestWeightKg,
+		fetchRuns,
+		fetchGymWorkouts,
 		deleteFoodEntry,
 		type FoodEntry,
 	} from '$lib/core/data';
@@ -16,6 +18,7 @@
 		type WeightGoal,
 		type NutritionTargets,
 	} from '$lib/nutrition/nutrition_targets';
+	import { exerciseCaloriesForDay } from '$lib/nutrition/exercise_calories';
 	import {
 		sumMacros,
 		groupByMealSlot,
@@ -29,6 +32,7 @@
 	let loading = $state(true);
 	let entries = $state<FoodEntry[]>([]);
 	let targets = $state<NutritionTargets | null>(null);
+	let exerciseKcal = $state(0);
 	let weekDays = $state<{ label: string; calories: number }[]>([]);
 	let waterMl = $state(0);
 
@@ -64,12 +68,26 @@
 			const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 			entries = await fetchFoodLog(todayStart, tomorrow.toISOString());
 
-			// Targets: assemble body metrics + activity/goal prefs.
-			const [settings, weightKg, profileRes] = await Promise.all([
+			// Targets: assemble body metrics + activity/goal prefs, plus today's
+			// runs + gym sessions for the dynamic-TDEE "base + exercise" goal.
+			const [settings, weightKg, profileRes, recentRuns, recentGym] = await Promise.all([
 				loadSettings(auth.user.id),
 				fetchLatestWeightKg(),
 				supabase.rpc('get_my_profile'),
+				fetchRuns({ limit: 50 }),
+				fetchGymWorkouts(50),
 			]);
+			const tomorrowIso = tomorrow.toISOString();
+			const isToday = (iso: string) => iso >= todayStart && iso < tomorrowIso;
+			exerciseKcal = exerciseCaloriesForDay({
+				runs: recentRuns
+					.filter((r) => isToday(r.started_at))
+					.map((r) => ({ distanceM: r.distance_m })),
+				gymSessions: recentGym
+					.filter((w) => isToday(w.started_at))
+					.map((w) => ({ durationS: w.duration_s })),
+				weightKg,
+			});
 			const prof = profileRes.data as
 				| { height_cm: number | null; date_of_birth: string | null; gender: string | null }
 				| null;
@@ -80,6 +98,7 @@
 				sex: prof?.gender ?? null,
 				activityLevel: effective<ActivityLevel>(settings, 'nutrition_activity_level', 'moderate') ?? 'moderate',
 				goal: effective<WeightGoal>(settings, 'nutrition_goal', 'maintain') ?? 'maintain',
+				exerciseKcal,
 			});
 
 			// Weekly calorie trend (last 7 days incl. today).
@@ -158,7 +177,7 @@
 	});
 </script>
 
-<svelte:head><title>{m('nutrition.heading')}</title></svelte:head>
+<svelte:head><title>{m('nutrition.heading')} — Threkir</title></svelte:head>
 
 <div class="page">
 	<header class="page-head">
@@ -212,6 +231,15 @@
 					</div>
 				{/each}
 			</div>
+			{#if targets && targets.exerciseKcal > 0}
+				<p class="goal-breakdown" data-testid="goal-breakdown">
+					<span class="material-symbols breakdown-icon" aria-hidden="true">local_fire_department</span>
+					{m('nutrition.goalBreakdown', {
+						base: targets.baseCalories,
+						exercise: targets.exerciseKcal,
+					})}
+				</p>
+			{/if}
 			{#if !targets}
 				<p class="section-hint" data-testid="no-targets">
 					<span class="material-symbols hint-icon" aria-hidden="true">info</span>
@@ -324,7 +352,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: var(--space-lg);
-		max-width: 56rem;
 	}
 	.page-head {
 		display: flex;
@@ -359,6 +386,9 @@
 		grid-template-columns: 1.4fr repeat(3, 1fr);
 		gap: var(--space-md);
 		align-items: end;
+		/* Card fills the page width like its siblings, but the four
+		   fixed-size dials stay grouped rather than drifting apart. */
+		max-width: 40rem;
 	}
 	.rings-untargeted { align-items: start; }
 	.ring {
@@ -425,6 +455,20 @@
 		border-top: 1px solid var(--color-border);
 	}
 	.hint-icon { font-size: 1.1rem; color: var(--color-primary); flex-shrink: 0; }
+
+	/* Dynamic-TDEE breakdown — shown on a day with logged workouts so the
+	   raised goal is legible ("base + exercise"), not a mystery jump. */
+	.goal-breakdown {
+		display: flex;
+		align-items: center;
+		gap: var(--space-xs);
+		font-size: 0.82rem;
+		color: var(--color-text-secondary);
+		margin: var(--space-md) 0 0;
+		padding-top: var(--space-md);
+		border-top: 1px solid var(--color-border);
+	}
+	.breakdown-icon { font-size: 1.05rem; color: var(--color-warning); flex-shrink: 0; }
 
 	/* Water tracker — segmented pips give a glanceable fill level the bare
 	   "N × 250 ml" string never conveyed. */

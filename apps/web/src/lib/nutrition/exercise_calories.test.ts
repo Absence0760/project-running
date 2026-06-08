@@ -7,7 +7,7 @@ import {
 	exerciseCaloriesForDay,
 	KCAL_PER_KG_PER_KM,
 	GYM_MET,
-} from './exercise_calories.ts';
+} from './exercise_calories';
 
 test('runCalories: 70 kg over 10 km ≈ 1.036·70·10', () => {
 	assert.ok(Math.abs(runCalories(10000, 70) - KCAL_PER_KG_PER_KM * 70 * 10) < 1e-9);

@@ -2845,6 +2845,7 @@ export const messages = {
 	"nutrition.carbs": "Glucides",
 	"nutrition.fat": "Lipides",
 	"nutrition.noTargets": "Renseigne ta taille, ton poids, ton âge et ton sexe dans les réglages pour voir les objectifs de calories et de macros.",
+	"nutrition.goalBreakdown": "Objectif {base} + {exercise} kcal brûlées aujourd'hui",
 	"nutrition.water": "Eau",
 	"nutrition.waterAdd": "Ajouter de l'eau",
 	"nutrition.waterRemove": "Retirer de l'eau",
