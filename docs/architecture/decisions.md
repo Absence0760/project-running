@@ -1286,7 +1286,7 @@ Pinned by `apps/web/tests-e2e/clubs/event-rsvp.spec.ts` (anon visitor test — p
 
 The product expands from single-modality (running) to multi-modality (running + gym + nutrition) inside **one app per platform** and **one Supabase project**, not three sibling apps that happen to share a backend.
 
-Mobile navigation reorganises around the *action* (`Log`) rather than the *modality* (`Run`). The current `Run` bottom-nav tab disappears; a centre `Log` action button presents a sheet (Start run / Start lift / Log food — one entry per modality, mirroring web; the meal slot is picked in the food-log composer, not split into meal/snack) with long-press = repeat last activity to preserve one-tap muscle memory for runners. Home becomes the cross-modality dashboard (today's run, today's lift, daily nutrition rings); History becomes a unified timeline with type filter chips. Web — less constrained by a tab ceiling — gets `Run` / `Gym` / `Nutrition` as explicit sidebar siblings.
+Mobile navigation reorganises around the *action* (`Log`) rather than the *modality* (`Run`). The current `Run` bottom-nav tab disappears; a centre `Log` action button presents a sheet (Log run / Log lift / Log food — one entry per modality, one consistent verb, mirroring web; the meal slot is picked in the food-log composer, not split into meal/snack) with long-press = repeat last activity to preserve one-tap muscle memory for runners. Home becomes the cross-modality dashboard (today's run, today's lift, daily nutrition rings); History becomes a unified timeline with type filter chips. Web — less constrained by a tab ceiling — gets `Run` / `Gym` / `Nutrition` as explicit sidebar siblings.
 
 The data model gains a shared `kind` abstraction. Existing `runs` rows acquire `kind = 'run'`; new tables for gym sessions and logged food items sit beside it. Cross-modality views (recovery score, weekly composite, AI Coach context) read from all of them through a typed adapter.
 
@@ -1296,7 +1296,7 @@ The data model gains a shared `kind` abstraction. Existing `runs` rows acquire `
 
 **Trade-offs accepted:**
 
-- Tapping "Run" from anywhere is one tap today, becomes two (`Log` → Start run). Mitigated by long-press = last activity.
+- Tapping "Run" from anywhere is one tap today, becomes two (`Log` → Log run). Mitigated by long-press = last activity.
 - Bundle size grows. Nutrition wants camera; gym is mostly silent; running wants always-on GPS. Permission asks consolidate per Apple / Google rules (we ask for what the feature needs when the user invokes it, not all of them at install).
 - Home gets denser. The redesign has to be deliberate or it becomes a wall of cards. Cards self-hide when the modality has no data so a runner who doesn't log meals sees the same Home they see today.
 - The web-canonical rule (§24) still holds. Each new modality builds on web first; mobile and watches mirror.
