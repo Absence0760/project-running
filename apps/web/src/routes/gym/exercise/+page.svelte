@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth } from '$lib/stores/auth.svelte';
 	import { fetchGymSetHistory } from '$lib/core/data';
@@ -30,8 +30,10 @@
 		await load();
 	});
 
-	// Re-load when the ?name= changes (navigating between exercises).
-	let lastName = $state('');
+	// Re-load when the ?name= changes (navigating between exercises). Seed
+	// lastName to the mount-time name so this only fires on a *subsequent*
+	// change — onMount owns the first load, so the effect must not double it.
+	let lastName = $state(untrack(() => name));
 	$effect(() => {
 		if (name !== lastName) {
 			lastName = name;
