@@ -415,6 +415,14 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   the fast path on top of the same Open Food Facts lookup; it's a v1.1
   add, not a blocker, but the data layer is shared with search.
 - Manual macro entry remains as the **fallback**, not the primary path.
+- **Dynamic TDEE ("base + exercise").** The daily calorie goal is the
+  Mifflin-St Jeor base (activity level treated as your *non-exercise*
+  baseline) **plus** the calories burned by today's logged runs + gym
+  sessions (`exercise_calories.ts`/`.dart` parity pair). `/nutrition` shows
+  the `Goal <base> + <exercise> kcal` breakdown on workout days, so a long-run
+  day's goal rises instead of leaving you under-fuelled. Avoids the
+  double-count the old activity-multiplier-only target would create
+  (decisions §134). *(Web shipped; mobile mirror is a follow-up.)*
 
 ```
   Nutrition                              Wed 4 Jun
@@ -464,7 +472,16 @@ composer is a modal sheet, matching `gear_form_sheet` / `goal_editor_sheet`.
   nutrition gated on Art 9 health consent.)*
 - **Training-load** factors lift sessions as additional stress — see the
   lift-load spec below. A `training_load` parity-pair change. *(Shipped +
-  wired into web `/dashboard`.)*
+  wired into web `/dashboard`.)* The web Fitness card now **discloses** this:
+  a transparent note when recent lifts are in the fatigue, and an
+  `exclude_gym_from_readiness` pref (Settings → Preferences) that drops lifts
+  from the readiness/recovery curve for a pure run-only signal — display-side
+  only, the run-only curve stays recoverable (decisions §134). *(Web shipped;
+  mobile mirror is a follow-up.)*
+- **Nutrition → run guidance is NOT deterministic, by design.** Under-eating
+  does not move the readiness ring (auxiliary inputs are kept from corrupting
+  run readiness); fuelling adequacy is the AI Coach's soft-reasoning job via
+  the 7-day rollup above, not a formula (decisions §134).
 - **Social feed** extends to **lift** cards gated on `is_public`, reusing
   the existing follower/feed plumbing. **Meals are NOT feed-shareable in
   v1** — broadcasting what you ate is a privacy footgun with little upside;

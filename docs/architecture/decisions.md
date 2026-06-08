@@ -2878,6 +2878,16 @@ This is **web-only for now**: the mobile twin already avoids the mis-click trap 
 
 **Trade-off / scope.** Gated on `VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`/`VAPID_SUBJECT` on the worker; unset → jobs finish done while leaving rows pending (same posture as the email nil-sender). A `push_notifications` category UI toggle (web + mobile, mirroring the email one) is the remaining follow-up — gating works on the `important` default without it. **Don't** fold push gating into `email_notifications`, **don't** reuse `email_sent_at` for the push channel, and **don't** drop the subscription gate in the enqueue trigger (it's what keeps the queue from a job-per-notification-per-user). Native FCM/APNs is the next sibling — copy this shape (its own enqueue gate + `*_sent_at` column + handler).
 
+## 134. Cross-modality is two-directional but asymmetric: gym → run readiness is deterministic, nutrition → run guidance is not — and the nutrition goal goes dynamic (base + exercise)
+
+**Decided (2026-06-08):** with gym + nutrition shipped beside running, the question was how far to wire the three together. The answer is "interconnect, but keep the deterministic readiness math run-recoverable."
+
+- **Gym → run readiness (deterministic, already true; now visible + opt-out).** Lifts feed the same CTL/ATL/TSB curve as runs (`§ 63` lift→load), so a heavy session raises fatigue and lowers form. That was silent; the dashboard Fitness card now shows a transparent note when recent lifts are factored in, and a `exclude_gym_from_readiness` universal pref drops lifts from the readiness/recovery curve for runners who want a pure run signal. The run-only curve is recoverable by construction (`training_load.ts` separable provenance), so the toggle is display-side, not a data change.
+- **Nutrition goal goes dynamic — "base + exercise."** `computeNutritionTargets` previously read a single activity-multiplier TDEE that ignored what you actually did today. It now treats the activity-level pref as a **non-exercise baseline** and adds **measured workout calories** (`exercise_calories.ts`/`.dart` — a new parity pair: ~1.036 kcal/kg/km for runs, a 5.0-MET model for gym) on top. `/nutrition` shows the `base + exercise` breakdown on workout days. This avoids the double-count the old multiplier would create once real workouts are added, and matches how MyFitnessPal/Garmin behave.
+- **Nutrition → run readiness stays OUT of the deterministic curve — on purpose.** Under-eating's effect on readiness is real but hard to model reliably, and `training_load.ts` deliberately keeps run readiness from being corrupted by auxiliary inputs ("well-rested, train hard" on bad data is dangerous advice). So fuelling adequacy stays the **AI Coach's** soft-reasoning job (the coach context already carries a 7-day nutrition rollup, `§ coach context`), not a number that moves the readiness ring.
+
+**Scope / follow-up.** Both surfaces are web-first (canonical, `§ 24`); the `exercise_calories` math has a Dart twin but the mobile *surfaces* (dynamic-TDEE on `nutrition_screen`, the readiness note + exclude toggle on the mobile dashboard) are a tracked mobile-mirror follow-up. Calorie burn is gross (not net of resting metabolism) — a conservative simplification documented in `exercise_calories.ts`.
+
 ---
 
 ## How to add an entry
