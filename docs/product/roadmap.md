@@ -724,6 +724,21 @@ Then **#3** when the first two catch enough to prove their value but leave resid
 
 ---
 
+## Future — Windowed / paged local stores for very large activity history
+
+The offline-first mobile stores (`LocalRunStore`, `LocalGymStore`, `LocalFoodStore`) load **every** row into memory on init — they're the source of truth for offline render + sync. The read/compute paths over them are already bounded: the History timeline build caps each newest-first source at `limit` before merging (`buildLocalActivities` is O(limit log limit) per rebuild regardless of total history), the web History feed is `fetchActivities(200)` (SQL `.limit(200)`), the mobile timeline renders through a lazy `ListView.builder`, and the run-list / gym / nutrition surfaces are paginated or date-windowed. The remaining unbounded piece is **in-memory store size**: a few thousand rows is a few MB and fine; tens of thousands (years of multi-modal logging) becomes a real memory footprint plus a slow cold-load.
+
+Deferred until that scale is plausible — premature at today's volumes. The durable fix is a windowed / paged on-disk store: keep a recent working set in memory and page older rows from disk on demand, rather than materialising the whole history.
+
+- [ ] Profile cold-load time + memory at 10k / 25k / 50k rows to find the real threshold
+- [ ] Windowed read API on the local stores (recent N in memory; older paged from disk)
+- [ ] Keep `buildLocalActivities` + the run-list pagination working against the windowed API
+- [ ] Sync path streams batches instead of holding the full set in memory
+
+Not worth building before a real user hits that volume; the bounded read/compute paths above already keep the app responsive at the scales we see today.
+
+---
+
 ## Future — Hardware: ultra-marathon-optimized watch
 
 **Status: research only. Tier 2+ not committed.** See [decisions.md § 71](../architecture/decisions.md#71-own-hardware-an-ultra-marathon-watch-stays-research-only-watch-development-is-deferred-indefinitely) for the original deferral and its 2026-05-28 amendment (which permits tier-1 owner-personal bench-prototype work but binds tier 2+ to the original gates).
