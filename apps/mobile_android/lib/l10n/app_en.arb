@@ -6127,6 +6127,14 @@
       }
     }
   },
+  "gearWearDue": "Replace soon",
+  "@gearWearDue": {
+    "description": "Badge on a gear tile when accrued distance is in the last ~15% of its replacement target"
+  },
+  "gearWearWorn": "Past replacement distance",
+  "@gearWearWorn": {
+    "description": "Badge on a gear tile when accrued distance has reached or exceeded its replacement target"
+  },
   "gearRetire": "Retire",
   "@gearRetire": {
     "description": "Popup-menu item to retire gear"

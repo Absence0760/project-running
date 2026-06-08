@@ -1317,6 +1317,8 @@
   "gearEmptyBikes": "Aucun vélo pour l'instant",
   "gearEmptySubtitle": "Ajoute une paire pour suivre le kilométrage et recevoir des rappels de remplacement.",
   "gearRunCount": "{count, plural, one{{count} course} other{{count} courses}}",
+  "gearWearDue": "À remplacer bientôt",
+  "gearWearWorn": "Distance de remplacement dépassée",
   "gearRetire": "Mettre à la retraite",
   "gearRestore": "Réactiver",
   "privacyZonesTitle": "Zones de confidentialité",

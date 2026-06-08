@@ -1317,6 +1317,8 @@
   "gearEmptyBikes": "まだバイクがありません",
   "gearEmptySubtitle": "1足追加すると走行距離を記録し、交換のリマインダーを受け取れます。",
   "gearRunCount": "{count, plural, other{{count} ラン}}",
+  "gearWearDue": "そろそろ交換",
+  "gearWearWorn": "交換距離を超過",
   "gearRetire": "引退させる",
   "gearRestore": "復帰させる",
   "privacyZonesTitle": "プライバシーゾーン",

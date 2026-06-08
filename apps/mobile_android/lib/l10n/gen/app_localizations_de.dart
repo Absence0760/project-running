@@ -4901,6 +4901,12 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String get gearWearDue => 'Bald ersetzen';
+
+  @override
+  String get gearWearWorn => 'Ersatzdistanz überschritten';
+
+  @override
   String get gearRetire => 'Ausmustern';
 
   @override

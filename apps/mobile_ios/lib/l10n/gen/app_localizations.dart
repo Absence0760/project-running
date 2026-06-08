@@ -8014,6 +8014,18 @@ abstract class AppLocalizations {
   /// **'{count, plural, one{{count} run} other{{count} runs}}'**
   String gearRunCount(int count);
 
+  /// Badge on a gear tile when accrued distance is in the last ~15% of its replacement target
+  ///
+  /// In en, this message translates to:
+  /// **'Replace soon'**
+  String get gearWearDue;
+
+  /// Badge on a gear tile when accrued distance has reached or exceeded its replacement target
+  ///
+  /// In en, this message translates to:
+  /// **'Past replacement distance'**
+  String get gearWearWorn;
+
   /// Popup-menu item to retire gear
   ///
   /// In en, this message translates to:

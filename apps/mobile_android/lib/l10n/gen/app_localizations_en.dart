@@ -4844,6 +4844,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get gearWearDue => 'Replace soon';
+
+  @override
+  String get gearWearWorn => 'Past replacement distance';
+
+  @override
   String get gearRetire => 'Retire';
 
   @override

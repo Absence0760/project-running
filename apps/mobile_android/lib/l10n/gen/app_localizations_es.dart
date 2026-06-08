@@ -4893,6 +4893,12 @@ class AppLocalizationsEs extends AppLocalizations {
   }
 
   @override
+  String get gearWearDue => 'Reemplazar pronto';
+
+  @override
+  String get gearWearWorn => 'Distancia de reemplazo superada';
+
+  @override
   String get gearRetire => 'Retirar';
 
   @override

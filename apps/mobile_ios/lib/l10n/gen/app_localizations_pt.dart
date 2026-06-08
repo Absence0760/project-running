@@ -4891,6 +4891,12 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get gearWearDue => 'Substituir em breve';
+
+  @override
+  String get gearWearWorn => 'Distância de troca ultrapassada';
+
+  @override
   String get gearRetire => 'Aposentar';
 
   @override
@@ -11949,6 +11955,12 @@ class AppLocalizationsPtBr extends AppLocalizationsPt {
     );
     return '$_temp0';
   }
+
+  @override
+  String get gearWearDue => 'Substituir em breve';
+
+  @override
+  String get gearWearWorn => 'Distância de troca ultrapassada';
 
   @override
   String get gearRetire => 'Aposentar';

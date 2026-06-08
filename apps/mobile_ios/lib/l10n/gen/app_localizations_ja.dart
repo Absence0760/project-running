@@ -4591,6 +4591,12 @@ class AppLocalizationsJa extends AppLocalizations {
   }
 
   @override
+  String get gearWearDue => 'そろそろ交換';
+
+  @override
+  String get gearWearWorn => '交換距離を超過';
+
+  @override
   String get gearRetire => '引退させる';
 
   @override

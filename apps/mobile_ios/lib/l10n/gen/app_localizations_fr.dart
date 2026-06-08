@@ -4908,6 +4908,12 @@ class AppLocalizationsFr extends AppLocalizations {
   }
 
   @override
+  String get gearWearDue => 'À remplacer bientôt';
+
+  @override
+  String get gearWearWorn => 'Distance de remplacement dépassée';
+
+  @override
   String get gearRetire => 'Mettre à la retraite';
 
   @override

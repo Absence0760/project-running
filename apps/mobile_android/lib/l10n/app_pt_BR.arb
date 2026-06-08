@@ -1317,6 +1317,8 @@
   "gearEmptyBikes": "Ainda não há bicicletas",
   "gearEmptySubtitle": "Adicione um par para acompanhar a quilometragem e receber lembretes de aposentadoria.",
   "gearRunCount": "{count, plural, one{{count} corrida} other{{count} corridas}}",
+  "gearWearDue": "Substituir em breve",
+  "gearWearWorn": "Distância de troca ultrapassada",
   "gearRetire": "Aposentar",
   "gearRestore": "Restaurar",
   "privacyZonesTitle": "Zonas de privacidade",

@@ -1317,6 +1317,8 @@
   "gearEmptyBikes": "Noch keine Fahrräder",
   "gearEmptySubtitle": "Füge ein Paar hinzu, um die Kilometer zu verfolgen und Erinnerungen zum Ausmustern zu erhalten.",
   "gearRunCount": "{count, plural, one{{count} Lauf} other{{count} Läufe}}",
+  "gearWearDue": "Bald ersetzen",
+  "gearWearWorn": "Ersatzdistanz überschritten",
   "gearRetire": "Ausmustern",
   "gearRestore": "Wiederherstellen",
   "privacyZonesTitle": "Datenschutzzonen",

@@ -90,6 +90,118 @@ void main() {
     });
   });
 
+  group('GearScreen — wear badge', () {
+    Map<String, dynamic> gearRow({
+      required String id,
+      required String name,
+      required num totalM,
+      num? targetM,
+      String? retiredAt,
+    }) =>
+        {
+          'id': id,
+          'kind': 'shoe',
+          'name': name,
+          'brand': null,
+          'model': null,
+          'purchased_at': null,
+          'retired_at': retiredAt,
+          'notes': null,
+          'target_distance_m': targetM,
+          'total_distance_m': totalM,
+          'run_count': 3,
+        };
+
+    testWidgets('worn shoe shows the past-replacement badge; an ok shoe does not',
+        (tester) async {
+      final f = await _makeFixtures();
+      try {
+        // total > target → worn; total well under → ok.
+        await tester.runAsync(() => f.store.replaceFromServer([
+              gearRow(id: 'a', name: 'Old Trainers', totalM: 850000, targetM: 800000),
+              gearRow(id: 'b', name: 'New Trainers', totalM: 100000, targetM: 800000),
+            ]));
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GearScreen(
+            api: null,
+            preferences: f.prefs,
+            store: f.store,
+          ),
+        ));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(find.text('Old Trainers'), findsOneWidget);
+        expect(find.text('New Trainers'), findsOneWidget);
+        // Exactly one tile (the worn one) carries the badge.
+        expect(find.text('Past replacement distance'), findsOneWidget);
+        expect(find.text('Replace soon'), findsNothing);
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+
+    testWidgets('a due shoe shows the replace-soon badge', (tester) async {
+      final f = await _makeFixtures();
+      try {
+        // 88% of target → due (>= 0.85, < 1.0).
+        await tester.runAsync(() => f.store.replaceFromServer([
+              gearRow(id: 'a', name: 'Worn-in Trainers', totalM: 704000, targetM: 800000),
+            ]));
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GearScreen(
+            api: null,
+            preferences: f.prefs,
+            store: f.store,
+          ),
+        ));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(find.text('Replace soon'), findsOneWidget);
+        expect(find.text('Past replacement distance'), findsNothing);
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+
+    testWidgets('a retired worn shoe shows no wear badge', (tester) async {
+      final f = await _makeFixtures();
+      try {
+        await tester.runAsync(() => f.store.replaceFromServer([
+              gearRow(
+                id: 'a',
+                name: 'Retired Trainers',
+                totalM: 900000,
+                targetM: 800000,
+                retiredAt: '2026-01-01',
+              ),
+            ]));
+        await tester.pumpWidget(MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: GearScreen(
+            api: null,
+            preferences: f.prefs,
+            store: f.store,
+          ),
+        ));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 50));
+
+        expect(find.text('Retired Trainers'), findsOneWidget);
+        expect(find.text('Past replacement distance'), findsNothing);
+        expect(find.text('Replace soon'), findsNothing);
+      } finally {
+        f.dir.deleteSync(recursive: true);
+      }
+    });
+  });
+
   group('gear_form_sheet — system gesture-bar padding', () {
     testWidgets(
         'bottom padding clears MediaQuery.viewPadding.bottom when keyboard is down',

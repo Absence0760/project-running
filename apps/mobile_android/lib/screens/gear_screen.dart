@@ -2,6 +2,7 @@ import 'package:api_client/api_client.dart';
 import 'package:flutter/material.dart';
 
 import '../gear_backfill.dart';
+import '../gear_wear.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
 import '../l10n/number_format.dart';
@@ -373,6 +374,51 @@ class _GearScreenState extends State<GearScreen> {
     );
   }
 
+  /// Wear badge mirroring web's gear card: a tinted pill with an icon for
+  /// "due" (amber) / "worn" (error). Returns null for ok / untracked so the
+  /// caller omits it. Colour pairs follow the AdherencePill convention so the
+  /// text stays legible in both themes.
+  Widget? _wearBadge(GearWear wear, ThemeData theme, AppLocalizations l10n) {
+    final (Color bg, Color fg, IconData icon, String label) = switch (
+        wear.status) {
+      GearWearStatus.due => (
+          Colors.amber.shade100,
+          Colors.amber.shade900,
+          Icons.schedule,
+          l10n.gearWearDue,
+        ),
+      GearWearStatus.worn => (
+          theme.colorScheme.errorContainer,
+          theme.colorScheme.onErrorContainer,
+          Icons.change_circle,
+          l10n.gearWearWorn,
+        ),
+      _ => (Colors.transparent, Colors.transparent, Icons.circle, ''),
+    };
+    if (label.isEmpty) return null;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: fg),
+          const SizedBox(width: 3),
+          Text(
+            label,
+            style: theme.textTheme.labelSmall?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _gearTile(Map<String, dynamic> row, ThemeData theme) {
     final l10n = AppLocalizations.of(context);
     final prog = _progress(row);
@@ -381,6 +427,13 @@ class _GearScreenState extends State<GearScreen> {
     final model = row['model'] as String?;
     final runCount = (row['run_count'] as num?)?.toInt() ?? 0;
     final hasTarget = (row['target_distance_m'] as num?) != null;
+    // Retired gear shows no wear warning — it's off the rotation, so "replace
+    // soon" is moot. Mirrors web, which only classifies the active list.
+    final wear = row['retired_at'] != null
+        ? const GearWear(GearWearStatus.untracked, null)
+        : gearWear(
+            row['total_distance_m'] as num?, row['target_distance_m'] as num?);
+    final wearBadge = _wearBadge(wear, theme, l10n);
     final brandModel =
         [brand, model].where((s) => s != null && s.isNotEmpty).join(' ');
     return Card(
@@ -395,7 +448,15 @@ class _GearScreenState extends State<GearScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(name, style: theme.textTheme.titleSmall),
+                    Wrap(
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        Text(name, style: theme.textTheme.titleSmall),
+                        ?wearBadge,
+                      ],
+                    ),
                     if (brandModel.isNotEmpty)
                       Text(brandModel,
                           style: theme.textTheme.bodySmall?.copyWith(
@@ -407,6 +468,11 @@ class _GearScreenState extends State<GearScreen> {
                         child: LinearProgressIndicator(
                           value: prog.pct,
                           minHeight: 6,
+                          color: switch (wear.status) {
+                            GearWearStatus.due => Colors.amber,
+                            GearWearStatus.worn => theme.colorScheme.error,
+                            _ => null,
+                          },
                         ),
                       ),
                     const SizedBox(height: 4),
