@@ -97,4 +97,23 @@ void main() {
     expect(out.first.id, 'r0'); // r0 is the newest (base)
     expect(out.last.id, 'r199');
   });
+
+  test('per-source cap keeps the global newest across all three modalities', () {
+    // Each source is longer than `limit` and interleaved in time, so the
+    // bounded-build optimisation (cap each newest-first source at `limit`
+    // before merging) must still surface the true global newest — a newer run
+    // can't be dropped just because another source also has `limit` entries.
+    final base = DateTime(2026, 6, 8, 12);
+    DateTime t(int min) => base.subtract(Duration(minutes: min));
+    final runs = [for (var i = 0; i < 6; i++) run('r$i', t(i * 6))]; // 0,6,12,...
+    final workouts = [for (var i = 0; i < 6; i++) lift('l$i', t(i * 6 + 2))]; // 2,8,...
+    final foods = [for (var i = 0; i < 6; i++) meal('m$i', t(i * 6 + 4))]; // 4,10,...
+
+    final out = buildLocalActivities(
+        runs: runs, workouts: workouts, foods: foods, limit: 4);
+    expect(out.length, 4);
+    // Newest four by time: r0(0) < l0(2) < m0(4) < r1(6).
+    expect(out.map((a) => a.id).toList(), ['r0', 'l0', 'm0', 'r1']);
+    expect(out.map((a) => a.kind).toList(), ['run', 'lift', 'meal', 'run']);
+  });
 }

@@ -15,6 +15,16 @@ import 'local_gym_store.dart';
 /// `id` / `started_at` / `item_name` / `calories`. The `summary` maps mirror
 /// the keys `widgets/activity_timeline_list.dart` reads, which in turn mirror
 /// the server `activities` view they replace.
+///
+/// **Precondition: each source list is sorted newest-first by `started_at`** —
+/// which is exactly what `LocalRunStore.runs` / `LocalGymStore.workouts` /
+/// `LocalFoodStore.rows` all guarantee. That lets us cap each source at `limit`
+/// *before* building rows: the global newest `limit` can draw at most `limit`
+/// from any one source, so anything past a source's first `limit` entries is
+/// provably out of the result. Without the cap a user with thousands of runs /
+/// lifts / meals would allocate an `ActivityRow` for every row and sort the
+/// whole merged list on every store-change rebuild, only to throw all but 200
+/// away. Capped, a rebuild is O(limit log limit) regardless of total history.
 List<ActivityRow> buildLocalActivities({
   required List<Run> runs,
   required List<StoredGymWorkout> workouts,
@@ -22,6 +32,12 @@ List<ActivityRow> buildLocalActivities({
   int limit = 200,
 }) {
   final out = <ActivityRow>[];
+
+  List<T> capped<T>(List<T> xs) =>
+      xs.length > limit ? xs.sublist(0, limit) : xs;
+  runs = capped(runs);
+  workouts = capped(workouts);
+  foods = capped(foods);
 
   for (final r in runs) {
     out.add(ActivityRow(
