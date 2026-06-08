@@ -12,5 +12,6 @@ export 'src/route_match_candidate.dart';
 export 'src/run.dart';
 export 'src/run_match_info.dart';
 export 'src/run_source.dart';
+export 'src/run_summary.dart';
 export 'src/social.dart';
 export 'src/waypoint.dart';
