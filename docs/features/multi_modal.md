@@ -315,7 +315,16 @@ redaction-boundary guarantees are pinned by
 > meals render read-only until the nutrition detail route lands. The **Runs**
 > chip drops back to the full existing run history (all its source / date /
 > sort filters, pagination, bulk-delete); a pure runner sees that unchanged
-> page with no chips.
+> page with no chips. A **modality-aware Log action** sits opposite the chips
+> (mirroring the /gym + /nutrition headers): the **All** view shows a `Log`
+> menu (Log run / Log workout / Log food), a single-modality chip (**Lifts** /
+> **Meals**) shows just the one matching action, and the **Runs** chip hides
+> it (the run-list view below owns its own Add-run button). Each opens the
+> shared editor in an in-place modal (`RunEditor` / `GymEditor` /
+> `FoodLogEditor`) and refreshes the timeline on save — no navigation. This
+> replaces the old run-only `Add run` + `Heatmap` actions that read as page
+> chrome once gym/nutrition got dedicated pages; `Heatmap` stays scoped to the
+> Runs chip's run-list toolbar.
 >
 > **Status (mobile shipped):** `runs_screen.dart` (the History tab) gains the
 > same All/Runs/Lifts/Meals chips + a day-grouped unified timeline

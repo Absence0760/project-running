@@ -2,11 +2,13 @@
 	import { onMount } from 'svelte';
 	import { formatPace, formatDistance, sourceLabel, sourceColor } from '$lib/core/mock-data';
 	import { formatDate, formatDuration } from '$lib/format/time';
-	import { fetchRuns, deleteRuns, fetchActivities, type ActivityRow } from '$lib/core/data';
+	import { fetchRuns, deleteRuns, fetchActivities, fetchGymSetHistory, type ActivityRow } from '$lib/core/data';
 	import { loadSettings, effective } from '$lib/settings/settings';
 	import { periodStart } from '$lib/training/goals';
 	import { auth } from '$lib/stores/auth.svelte';
 	import RunEditor from '$lib/components/RunEditor.svelte';
+	import GymEditor from '$lib/components/GymEditor.svelte';
+	import FoodLogEditor from '$lib/components/FoodLogEditor.svelte';
 	import Modal from '$lib/components/Modal.svelte';
 	import { goto } from '$app/navigation';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -555,6 +557,95 @@
 	let showRunModal = $state(false);
 	let showRangePicker = $state(false);
 
+	// Modality-aware logging from the unified timeline. The "All" view
+	// surfaces a Log menu (run / workout / meal); a single-modality view
+	// (Lifts / Meals chip) shows the one matching action directly. The
+	// run-list view keeps its own Add-run button — this cluster is hidden
+	// there to avoid a duplicate.
+	let showWorkoutModal = $state(false);
+	let showFoodModal = $state(false);
+	let logMenuOpen = $state(false);
+	let logMenuTrigger = $state<HTMLButtonElement | null>(null);
+	let logMenuPanel = $state<HTMLDivElement | null>(null);
+
+	/// Exercise-name autocomplete for the gym editor, lazily fetched the
+	/// first time the workout modal is opened so a workout logged from
+	/// History gets the same suggestions as one logged from /gym. Best-
+	/// effort — an empty list just means no datalist hints.
+	let gymSuggestions = $state<string[]>([]);
+	let gymSuggestionsLoaded = $state(false);
+	async function ensureGymSuggestions() {
+		if (gymSuggestionsLoaded) return;
+		gymSuggestionsLoaded = true;
+		try {
+			const hist = await fetchGymSetHistory();
+			const counts = new Map<string, number>();
+			for (const s of hist) {
+				const name = s.exercise_name.trim();
+				if (name === '') continue;
+				counts.set(name, (counts.get(name) ?? 0) + 1);
+			}
+			gymSuggestions = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([n]) => n);
+		} catch (_) {
+			/* leave empty — datalist hints are optional */
+		}
+	}
+
+	function openLog(kind: 'run' | 'workout' | 'meal') {
+		logMenuOpen = false;
+		if (kind === 'run') {
+			showRunModal = true;
+		} else if (kind === 'workout') {
+			void ensureGymSuggestions();
+			showWorkoutModal = true;
+		} else {
+			showFoodModal = true;
+		}
+	}
+
+	/// Refetch the unified feed after an in-place log so the new lift/meal
+	/// row appears without a full navigation. Best-effort: a failure leaves
+	/// the existing feed untouched.
+	async function reloadActivities() {
+		try {
+			activityFeed = await fetchActivities(200);
+		} catch (_) {
+			/* silent — keep the current feed */
+		}
+	}
+
+	function onWorkoutCreated() {
+		showWorkoutModal = false;
+		void reloadActivities();
+	}
+
+	function onFoodLogged() {
+		showFoodModal = false;
+		void reloadActivities();
+	}
+
+	onMount(() => {
+		function onDocClick(e: MouseEvent) {
+			if (!logMenuOpen) return;
+			const target = e.target as Node | null;
+			if (logMenuPanel?.contains(target ?? null)) return;
+			if (logMenuTrigger?.contains(target ?? null)) return;
+			logMenuOpen = false;
+		}
+		function onKeydown(e: KeyboardEvent) {
+			if (logMenuOpen && e.key === 'Escape') {
+				logMenuOpen = false;
+				logMenuTrigger?.focus();
+			}
+		}
+		document.addEventListener('mousedown', onDocClick);
+		document.addEventListener('keydown', onKeydown);
+		return () => {
+			document.removeEventListener('mousedown', onDocClick);
+			document.removeEventListener('keydown', onKeydown);
+		};
+	});
+
 	function handleRangePickerClose(): void {
 		showRangePicker = false;
 		if (dateRange === 'custom' && !customFrom && !customTo) {
@@ -647,19 +738,65 @@
 		     view (multi_modal.md § History). Only shown once a second
 		     modality exists; chips for empty kinds are hidden. Type is
 		     coded by glyph + label inside each timeline row, not by the
-		     chip colour, so the chips aren't load-bearing for scanning. -->
-		<div class="kind-chips seg-group" role="group" aria-label={m('runs.activityTypeGroup')}>
-			{#each kindChips as c (c.value)}
-				<button
-					type="button"
-					class="kind-chip seg-btn"
-					class:active={kindFilter === c.value}
-					aria-pressed={kindFilter === c.value}
-					onclick={() => (kindFilter = c.value)}
-				>
-					{m(c.key)}
+		     chip colour, so the chips aren't load-bearing for scanning.
+		     The modality-aware Log cluster sits opposite the chips: a menu
+		     in the All view, the single matching action under a Lifts/Meals
+		     chip. Hidden under the Runs chip — the run-list view below owns
+		     its own Add-run button, so showing it here too would duplicate. -->
+		<div class="timeline-header">
+			<div class="kind-chips seg-group" role="group" aria-label={m('runs.activityTypeGroup')}>
+				{#each kindChips as c (c.value)}
+					<button
+						type="button"
+						class="kind-chip seg-btn"
+						class:active={kindFilter === c.value}
+						aria-pressed={kindFilter === c.value}
+						onclick={() => (kindFilter = c.value)}
+					>
+						{m(c.key)}
+					</button>
+				{/each}
+			</div>
+
+			{#if kindFilter === 'all'}
+				<div class="log-menu">
+					<button
+						bind:this={logMenuTrigger}
+						type="button"
+						class="add-btn"
+						aria-haspopup="menu"
+						aria-expanded={logMenuOpen}
+						onclick={() => (logMenuOpen = !logMenuOpen)}
+					>
+						<span class="material-symbols" aria-hidden="true">add</span>
+						{m('history.logAction')}
+						<span class="material-symbols caret" class:open={logMenuOpen} aria-hidden="true">expand_more</span>
+					</button>
+					{#if logMenuOpen}
+						<div bind:this={logMenuPanel} class="log-menu-panel" role="menu">
+							<button type="button" class="log-menu-item" role="menuitem" onclick={() => openLog('run')}>
+								<span class="material-symbols" aria-hidden="true">directions_run</span>{m('history.logRun')}
+							</button>
+							<button type="button" class="log-menu-item" role="menuitem" onclick={() => openLog('workout')}>
+								<span class="material-symbols" aria-hidden="true">fitness_center</span>{m('history.logWorkout')}
+							</button>
+							<button type="button" class="log-menu-item" role="menuitem" onclick={() => openLog('meal')}>
+								<span class="material-symbols" aria-hidden="true">restaurant</span>{m('history.logFood')}
+							</button>
+						</div>
+					{/if}
+				</div>
+			{:else if kindFilter === 'lift'}
+				<button type="button" class="add-btn" onclick={() => openLog('workout')}>
+					<span class="material-symbols" aria-hidden="true">add</span>
+					{m('history.logWorkout')}
 				</button>
-			{/each}
+			{:else if kindFilter === 'meal'}
+				<button type="button" class="add-btn" onclick={() => openLog('meal')}>
+					<span class="material-symbols" aria-hidden="true">add</span>
+					{m('history.logFood')}
+				</button>
+			{/if}
 		</div>
 	{/if}
 
@@ -1028,6 +1165,27 @@
 	onclose={() => (showRunModal = false)}
 >
 	<RunEditor oncreated={handleRunCreated} oncancel={() => (showRunModal = false)} />
+</Modal>
+
+<Modal
+	open={showWorkoutModal}
+	title={m('gym.editor.newTitle')}
+	onclose={() => (showWorkoutModal = false)}
+>
+	<GymEditor
+		suggestions={gymSuggestions}
+		oncreated={onWorkoutCreated}
+		oncancel={() => (showWorkoutModal = false)}
+	/>
+</Modal>
+
+<Modal
+	open={showFoodModal}
+	title={m('nutrition.logHeading')}
+	narrow
+	onclose={() => (showFoodModal = false)}
+>
+	<FoodLogEditor oncreated={onFoodLogged} />
 </Modal>
 
 <DateRangePicker
@@ -1643,8 +1801,89 @@
 	/* .modal-* classes live in app.css. */
 
 	/* --- Unified activities timeline (multi-modal History) --- */
+	/* Chips on the leading edge, the modality-aware Log action on the
+	   trailing edge — mirrors the /gym and /nutrition headers so the three
+	   modalities read as one family. */
+	.timeline-header {
+		display: flex;
+		align-items: center;
+		gap: var(--space-md);
+		flex-wrap: wrap;
+		margin-bottom: var(--space-lg);
+	}
+	.timeline-header .kind-chips {
+		margin-bottom: 0;
+	}
+	.timeline-header .log-menu,
+	.timeline-header > .add-btn {
+		margin-inline-start: auto;
+	}
 	.kind-chips {
 		margin-bottom: var(--space-lg);
+	}
+
+	.add-btn .caret {
+		font-size: 1.05rem;
+		transition: transform var(--transition-fast);
+	}
+	.add-btn .caret.open {
+		transform: rotate(180deg);
+	}
+
+	/* Action menu for the All-view Log button. Purpose-fit menu (not the
+	   listbox ChipDropdown) — each item launches a create modal rather
+	   than selecting a persistent value. */
+	.log-menu {
+		position: relative;
+		display: inline-flex;
+	}
+	.log-menu-panel {
+		position: absolute;
+		top: calc(100% + 0.3rem);
+		inset-inline-end: 0;
+		z-index: 60;
+		min-width: 12rem;
+		background: var(--color-surface);
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-md);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+		padding: 0.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.05rem;
+	}
+	.log-menu-item {
+		display: flex;
+		align-items: center;
+		gap: var(--space-sm);
+		text-align: start;
+		background: transparent;
+		border: none;
+		font: inherit;
+		font-size: 0.9rem;
+		color: var(--color-text);
+		padding: var(--space-sm) var(--space-sm);
+		border-radius: var(--radius-sm);
+		cursor: pointer;
+	}
+	.log-menu-item:hover,
+	.log-menu-item:focus-visible {
+		background: var(--color-bg-secondary);
+		outline: none;
+	}
+	.log-menu-item .material-symbols {
+		font-size: 1.15rem;
+		color: var(--color-text-secondary);
+	}
+
+	@media (max-width: 30rem) {
+		.timeline-header .log-menu,
+		.timeline-header > .add-btn {
+			margin-inline-start: 0;
+		}
+		.timeline-header {
+			justify-content: space-between;
+		}
 	}
 
 	/* Day groups flow into a responsive multi-column grid on wide canvases

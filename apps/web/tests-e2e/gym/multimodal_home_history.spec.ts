@@ -91,6 +91,36 @@ test.describe('multi-modal Home + History', () => {
 		await expect(page).toHaveURL(new RegExp(`/gym/${workoutId}`));
 	});
 
+	test('History All view exposes a modality-aware Log menu', async ({ page }) => {
+		await page.goto('/history');
+		// Default chip is All once a second modality exists. The Log button
+		// opens a menu offering all three create flows — runs no longer own a
+		// standalone Add-run button on the unified timeline.
+		const logBtn = page.getByRole('button', { name: 'Log', exact: true });
+		await expect(logBtn).toBeVisible({ timeout: 15_000 });
+		await logBtn.click();
+		await expect(page.getByRole('menuitem', { name: 'Log run' })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Log workout' })).toBeVisible();
+		await expect(page.getByRole('menuitem', { name: 'Log food' })).toBeVisible();
+
+		// Picking Workout launches the gym editor modal in place — no navigation
+		// away from /history.
+		await page.getByRole('menuitem', { name: 'Log workout' }).click();
+		await expect(page.getByRole('dialog', { name: 'New workout' })).toBeVisible();
+		await expect(page).toHaveURL(/\/history$/);
+	});
+
+	test('Lifts chip surfaces the single Log workout action directly', async ({ page }) => {
+		await page.goto('/history');
+		await page.getByRole('button', { name: 'Lifts', exact: true }).click();
+		// Under a single-modality chip the one matching action shows directly,
+		// not behind the All-view menu — and that menu trigger is gone.
+		await expect(page.getByRole('button', { name: 'Log workout', exact: true })).toBeVisible({
+			timeout: 10_000,
+		});
+		await expect(page.getByRole('button', { name: 'Log', exact: true })).toHaveCount(0);
+	});
+
 	test('History holds a skeleton until activities resolve — no run-list flash', async ({
 		page,
 	}) => {
