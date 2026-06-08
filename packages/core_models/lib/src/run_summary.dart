@@ -13,10 +13,12 @@ import 'run_source.dart';
 ///
 /// The carried set is fixed by the real readers: distance/duration (list +
 /// pace), `source` + `activityType` (filter chips), `externalId` (import
-/// dedup), `avgBpm` (HR cards), `lastModifiedAt` (newer-wins clock),
-/// `createdByUserId` (owner tag, decisions §67), `synced` (unsynced badge +
-/// sync drain). Excluded — recovered on demand via the store's `runById`:
-/// `track`, `routeId`, `createdAt`, every other metadata key.
+/// dedup), `avgBpm` (HR cards / training load), `elevationM` (year-in-running
+/// recap), `indoor` (fitness excludes indoor runs from the VDOT pool),
+/// `lastModifiedAt` (newer-wins clock), `createdByUserId` (owner tag,
+/// decisions §67), `synced` (unsynced badge + sync drain). Excluded — recovered
+/// on demand via the store's `runById`: `track`, `routeId`, `createdAt`, every
+/// other metadata key (`title`, `notes`, `laps`, `workout_step_results`, …).
 class RunSummary {
   final String id;
   final DateTime startedAt;
@@ -26,6 +28,8 @@ class RunSummary {
   final String? activityType;
   final String? externalId;
   final double? avgBpm;
+  final double? elevationM;
+  final bool indoor;
   final String? lastModifiedAt;
   final String? createdByUserId;
   final bool synced;
@@ -39,6 +43,8 @@ class RunSummary {
     this.activityType,
     this.externalId,
     this.avgBpm,
+    this.elevationM,
+    this.indoor = false,
     this.lastModifiedAt,
     this.createdByUserId,
     this.synced = false,
@@ -57,6 +63,8 @@ class RunSummary {
       activityType: meta?[MetadataKeys.activityType] as String?,
       externalId: run.externalId,
       avgBpm: (meta?[MetadataKeys.avgBpm] as num?)?.toDouble(),
+      elevationM: (meta?[MetadataKeys.elevationM] as num?)?.toDouble(),
+      indoor: meta?[MetadataKeys.indoor] == true,
       lastModifiedAt: meta?[MetadataKeys.lastModifiedAt] as String?,
       createdByUserId: meta?[MetadataKeys.createdByUserId] as String?,
       synced: synced,
@@ -74,6 +82,8 @@ class RunSummary {
         activityType: activityType,
         externalId: externalId,
         avgBpm: avgBpm,
+        elevationM: elevationM,
+        indoor: indoor,
         lastModifiedAt: lastModifiedAt,
         createdByUserId: createdByUserId,
         synced: value,
@@ -90,6 +100,10 @@ class RunSummary {
     final metadata = <String, dynamic>{
       if (activityType != null) MetadataKeys.activityType: activityType,
       if (avgBpm != null) MetadataKeys.avgBpm: avgBpm,
+      if (elevationM != null) MetadataKeys.elevationM: elevationM,
+      // Only carry `indoor` when true — real runs omit the key when outdoor, and
+      // consumers test `metadata['indoor'] != true`.
+      if (indoor) MetadataKeys.indoor: true,
       if (lastModifiedAt != null) MetadataKeys.lastModifiedAt: lastModifiedAt,
       if (createdByUserId != null) MetadataKeys.createdByUserId: createdByUserId,
     };
@@ -116,6 +130,8 @@ class RunSummary {
         'activity_type': activityType,
         'external_id': externalId,
         'avg_bpm': avgBpm,
+        'elevation_m': elevationM,
+        'indoor': indoor,
         'last_modified_at': lastModifiedAt,
         'created_by_user_id': createdByUserId,
         'synced': synced,
@@ -130,6 +146,8 @@ class RunSummary {
         activityType: j['activity_type'] as String?,
         externalId: j['external_id'] as String?,
         avgBpm: (j['avg_bpm'] as num?)?.toDouble(),
+        elevationM: (j['elevation_m'] as num?)?.toDouble(),
+        indoor: j['indoor'] == true,
         lastModifiedAt: j['last_modified_at'] as String?,
         createdByUserId: j['created_by_user_id'] as String?,
         synced: j['synced'] == true,
