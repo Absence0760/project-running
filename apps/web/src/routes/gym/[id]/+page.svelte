@@ -442,7 +442,7 @@
 		font-size: 0.95rem;
 	}
 	.lt-up {
-		color: var(--color-success-strong);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.lt-down {
 		color: var(--color-text-secondary);

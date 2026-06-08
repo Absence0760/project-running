@@ -209,7 +209,7 @@
 		font-size: 1rem;
 	}
 	.delta-up {
-		color: var(--color-success-strong);
+		color: color-mix(in srgb, var(--color-success) 50%, var(--color-text));
 	}
 	.delta-down,
 	.delta-flat {
