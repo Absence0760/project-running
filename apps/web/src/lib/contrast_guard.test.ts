@@ -10,8 +10,8 @@
 
 import { test } from 'node:test';
 import { strict as assert } from 'node:assert';
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { readFileSync, readdirSync } from 'node:fs';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -125,3 +125,46 @@ for (const { label, marker } of THEMES) {
 		}
 	});
 }
+
+// The "-strong" status tokens are theme-INDEPENDENT dark fills, AA-checked
+// only with WHITE text (the test above pins white-on-strong + forbids a
+// dark-mode override). Using one as a `color:` (text) is therefore a bug:
+// it renders dark text that goes near-invisible on a dark surface in dark
+// mode. Both the gym/gear wear badge and the nutrition macro-F chip hit this
+// (audit 2026-06-08). For warning/danger text on a tint, the codebase
+// pattern is `color-mix(<status> N%, var(--color-text))` (theme-aware via
+// --color-text) or a solid -strong fill with `color: #fff`. This guard scans
+// the source tree so the antipattern can't come back unnoticed.
+test('no source file uses a "-strong" status token as a text colour', () => {
+	const srcRoot = resolve(__dirname, '..');
+	// color: ... var(--color-{success|danger|warning}-strong ...)  (text use)
+	const offender = /color:\s*var\(\s*--color-(?:success|danger|warning)-strong/;
+	const SKIP_DIRS = new Set(['node_modules', '.svelte-kit', 'build', 'dist']);
+	const hits: string[] = [];
+
+	function walk(dir: string): void {
+		for (const entry of readdirSync(dir, { withFileTypes: true })) {
+			if (entry.isDirectory()) {
+				if (!SKIP_DIRS.has(entry.name)) walk(join(dir, entry.name));
+				continue;
+			}
+			if (!/\.(svelte|css|ts)$/.test(entry.name)) continue;
+			if (entry.name === 'contrast_guard.test.ts') continue; // this file
+			const path = join(dir, entry.name);
+			readFileSync(path, 'utf-8')
+				.split('\n')
+				.forEach((line, i) => {
+					if (offender.test(line)) hits.push(`${path}:${i + 1}  ${line.trim()}`);
+				});
+		}
+	}
+	walk(srcRoot);
+
+	assert.equal(
+		hits.length,
+		0,
+		`A "-strong" status token is used as text (it is a white-on-fill background colour, ` +
+			`invisible in dark mode as text). Use color-mix(<status> N%, var(--color-text)) ` +
+			`or a solid -strong fill with white text instead:\n${hits.join('\n')}`,
+	);
+});

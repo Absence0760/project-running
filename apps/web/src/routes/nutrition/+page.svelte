@@ -565,7 +565,7 @@
 	}
 	.macro-p { color: var(--color-accent-cyan); background: color-mix(in srgb, var(--color-accent-cyan) 16%, transparent); }
 	.macro-c { color: var(--color-secondary); background: color-mix(in srgb, var(--color-secondary) 16%, transparent); }
-	.macro-f { color: var(--color-warning-strong, var(--color-warning)); background: color-mix(in srgb, var(--color-warning) 18%, transparent); }
+	.macro-f { color: color-mix(in srgb, var(--color-warning) 80%, var(--color-text)); background: color-mix(in srgb, var(--color-warning) 18%, transparent); }
 	.item-kcal-wrap {
 		display: inline-flex;
 		align-items: baseline;
