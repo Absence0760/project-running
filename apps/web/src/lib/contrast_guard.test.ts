@@ -126,25 +126,13 @@ for (const { label, marker } of THEMES) {
 	});
 }
 
-// The "-strong" status tokens are theme-INDEPENDENT dark fills, AA-checked
-// only with WHITE text (the test above pins white-on-strong + forbids a
-// dark-mode override). Using one as a `color:` (text) is therefore a bug:
-// it renders dark text that goes near-invisible on a dark surface in dark
-// mode. Both the gym/gear wear badge and the nutrition macro-F chip hit this
-// (audit 2026-06-08). For warning/danger text on a tint, the codebase
-// pattern is `color-mix(<status> N%, var(--color-text))` (theme-aware via
-// --color-text) or a solid -strong fill with `color: #fff`. This guard scans
-// the source tree so the antipattern can't come back unnoticed.
-test('no source file uses a "-strong" status token as a text colour', () => {
+// Walk src/ and return `path:line  text` for every line the predicate flags.
+function scanSource(flag: (line: string) => boolean): string[] {
 	const srcRoot = resolve(__dirname, '..');
 	const selfPath = resolve(__dirname, 'contrast_guard.test.ts');
-	// `color:` (the text property — the leading boundary rejects
-	// `background-color:`) set to a `-strong` status token.
-	const offender = /(?<![a-z-])color:\s*var\(\s*--color-(?:success|danger|warning)-strong/;
 	const SKIP_DIRS = new Set(['node_modules', '.svelte-kit', 'build', 'dist']);
 	const hits: string[] = [];
-
-	function walk(dir: string): void {
+	(function walk(dir: string): void {
 		for (const entry of readdirSync(dir, { withFileTypes: true })) {
 			const path = join(dir, entry.name);
 			if (entry.isDirectory()) {
@@ -156,17 +144,54 @@ test('no source file uses a "-strong" status token as a text colour', () => {
 			readFileSync(path, 'utf-8')
 				.split('\n')
 				.forEach((line, i) => {
-					if (offender.test(line)) hits.push(`${path}:${i + 1}  ${line.trim()}`);
+					if (flag(line)) hits.push(`${path}:${i + 1}  ${line.trim()}`);
 				});
 		}
-	}
-	walk(srcRoot);
+	})(srcRoot);
+	return hits;
+}
 
+// The "-strong" status tokens are theme-INDEPENDENT dark fills, AA-checked
+// only with WHITE text (the test above pins white-on-strong + forbids a
+// dark-mode override). Using one as a `color:` (text) is therefore a bug:
+// it renders dark text that goes near-invisible on a dark surface in dark
+// mode. Both the gym/gear wear badge and the nutrition macro-F chip hit this
+// (audit 2026-06-08). For warning/danger text on a tint, the codebase
+// pattern is `color-mix(<status> N%, var(--color-text))` (theme-aware via
+// --color-text) or a solid -strong fill with `color: #fff`. This guard scans
+// the source tree so the antipattern can't come back unnoticed.
+test('no source file uses a "-strong" status token as a text colour', () => {
+	// `color:` (the text property — the leading boundary rejects
+	// `background-color:`) set to a `-strong` status token.
+	const offender = /(?<![a-z-])color:\s*var\(\s*--color-(?:success|danger|warning)-strong/;
+	const hits = scanSource((line) => offender.test(line));
 	assert.equal(
 		hits.length,
 		0,
 		`A "-strong" status token is used as text (it is a white-on-fill background colour, ` +
 			`invisible in dark mode as text). Use color-mix(<status> N%, var(--color-text)) ` +
 			`or a solid -strong fill with white text instead:\n${hits.join('\n')}`,
+	);
+});
+
+// The other status-text pattern, `color: color-mix(--color-warning N%,
+// var(--color-text))`, only stays AA when warning is the MINORITY of the mix:
+// at 80% it's #be8e5e on the chip tint = 2.59:1 in light mode (audit
+// 2026-06-08, found in 6 places). A 45% mix is >=5.12:1 light / >=7.16:1 dark
+// across the 14-22% tints in use; the contrast falls off as the warning share
+// rises, so cap it. (Computed with the contrastRatio helper above; see the
+// commit that introduced this guard for the table.)
+const WARNING_TEXT_MIX_MAX = 55;
+test(`warning text-on-tint keeps the --color-warning share <=${WARNING_TEXT_MIX_MAX}% (AA in both themes)`, () => {
+	const re = /(?<![a-z-])color:\s*color-mix\([^;]*var\(--color-warning\)\s*(\d+)%[^;]*var\(--color-text\)/;
+	const hits = scanSource((line) => {
+		const m = line.match(re);
+		return m != null && Number(m[1]) > WARNING_TEXT_MIX_MAX;
+	});
+	assert.equal(
+		hits.length,
+		0,
+		`A warning text colour mixes >${WARNING_TEXT_MIX_MAX}% --color-warning with --color-text, ` +
+			`which fails WCAG AA on the warning tint in light mode. Lower the warning share to ~45%:\n${hits.join('\n')}`,
 	);
 });
