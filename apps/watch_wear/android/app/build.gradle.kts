@@ -210,7 +210,7 @@ dependencies {
     // bearer credentials — they live in EncryptedSharedPreferences, not
     // plaintext DataStore). 1.1.0-alpha06 is the build the MasterKey.Builder
     // API ships in; security-crypto has no newer stable than 1.0.0.
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("androidx.security:security-crypto:1.1.0")
 
     // Serialization + coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
