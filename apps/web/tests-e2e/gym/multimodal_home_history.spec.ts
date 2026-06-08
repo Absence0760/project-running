@@ -90,4 +90,98 @@ test.describe('multi-modal Home + History', () => {
 		await row.click();
 		await expect(page).toHaveURL(new RegExp(`/gym/${workoutId}`));
 	});
+
+	test('History holds a skeleton until activities resolve — no run-list flash', async ({
+		page,
+	}) => {
+		// Regression guard for the run-list → timeline flip: a multi-modal
+		// account used to land on the run list, then have the whole page swap
+		// to the unified timeline the instant the activities feed resolved.
+		// The page now holds a neutral skeleton until the feed lands and paints
+		// the correct layout once. Gate the feed so the pre-resolve paint is
+		// observable.
+		let release!: () => void;
+		const gate = new Promise<void>((r) => (release = r));
+		await page.route('**/rest/v1/activities*', async (route) => {
+			if (route.request().method() !== 'GET') return route.continue();
+			await gate;
+			return route.continue();
+		});
+
+		await page.goto('/history');
+
+		// While the feed is pending: the loading skeleton is shown and the
+		// run-list toolbar (the segmented activity filter + selects) must NOT
+		// have been painted — that toolbar only renders in run-list mode.
+		await expect(page.locator('.run-list-skel')).toBeVisible({ timeout: 15_000 });
+		await expect(page.locator('.toolbar')).toHaveCount(0);
+
+		// Release the feed → the unified timeline takes over (a second modality
+		// exists). The run-list toolbar is still never shown.
+		release();
+		await expect(page.getByRole('button', { name: 'Lifts', exact: true })).toBeVisible({
+			timeout: 15_000,
+		});
+		await expect(page.locator('.timeline')).toBeVisible();
+		await expect(page.locator('.toolbar')).toHaveCount(0);
+	});
+
+	test('timeline flows day groups into multiple columns on a wide canvas', async ({ page }) => {
+		// The unified timeline lays each day group into a responsive grid
+		// (repeat(auto-fill, minmax(30rem, 1fr))) so a wide canvas isn't left
+		// with ~40% dead space on the right; it collapses to one column when
+		// narrow. Seed a second day so there are deterministically >=2 day
+		// groups to place side by side, and clean it up afterward.
+		const admin = getAdminClient();
+		const yStamp = Date.now();
+		const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+		const { data: yw } = await admin
+			.from('gym_workouts')
+			.insert({
+				user_id: USER_A.id,
+				title: `E2E MM Yesterday ${yStamp}`,
+				started_at: yesterday,
+				last_modified_at: yesterday,
+			})
+			.select('id')
+			.single();
+		const yId = (yw?.id as string) ?? null;
+		expect(yId).not.toBeNull();
+		await admin.from('gym_sets').insert({
+			workout_id: yId,
+			exercise_name: `E2E Row ${yStamp}`,
+			set_index: 0,
+			reps: 5,
+			weight_kg: 40,
+		});
+
+		try {
+			await page.setViewportSize({ width: 1600, height: 1000 });
+			await page.goto('/history');
+			const groups = page.locator('.timeline-group');
+			await expect(groups.first()).toBeVisible({ timeout: 15_000 });
+			expect(await groups.count()).toBeGreaterThanOrEqual(2);
+
+			// Wide: the first two day groups share a row (overlapping vertical
+			// spans) with the second to the right of the first — a real
+			// multi-column grid, not a single stranded column.
+			const a = (await groups.nth(0).boundingBox())!;
+			const b = (await groups.nth(1).boundingBox())!;
+			expect(b.x).toBeGreaterThan(a.x + a.width / 2);
+			expect(b.y).toBeLessThan(a.y + a.height);
+
+			// Narrow: the grid collapses to one column — the second group
+			// stacks below the first.
+			await page.setViewportSize({ width: 720, height: 1000 });
+			await expect
+				.poll(async () => {
+					const c = (await groups.nth(0).boundingBox())!;
+					const d = (await groups.nth(1).boundingBox())!;
+					return d.y >= c.y + c.height - 4;
+				})
+				.toBe(true);
+		} finally {
+			await admin.from('gym_workouts').delete().eq('id', yId);
+		}
+	});
 });

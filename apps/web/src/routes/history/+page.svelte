@@ -329,25 +329,35 @@
 			.then((settings) => {
 				const wsd = effective<string>(settings, 'week_start_day');
 				if (wsd === 'sunday' || wsd === 'monday') weekStartDay = wsd;
-				// Multi-modal History: pull the unified activities feed so the
-				// kind chips + timeline can render once a second modality has
-				// data. A pure runner's feed has only runs, so no chips appear
-				// and the page stays the run-only history (data-gated, no flag
-				// — decisions §63 amendment). Best-effort — a failure just
-				// hides the chips. (multi_modal.md § History.)
-				fetchActivities(200)
-					.then((rows) => (activityFeed = rows))
-					.catch(() => {
-						/* silent — chips stay hidden, run history unaffected */
-					});
 			})
 			.catch(() => {
 				/* leave the monday default — the filter still works */
 			});
+		// Multi-modal History: pull the unified activities feed so the kind
+		// chips + timeline can render once a second modality has data. Loaded
+		// INDEPENDENTLY of settings (not chained behind loadSettings) and
+		// gated by `activitiesLoaded` so the layout decision is made before
+		// first content paint. Without the gate the page paints the run list,
+		// then flips to the timeline the moment this feed resolves for a
+		// multi-modal account. A pure runner's feed has only runs, so no chips
+		// appear and the page stays the run-only history (data-gated, no flag
+		// — decisions §63 amendment). Best-effort — a failure just hides the
+		// chips. (multi_modal.md § History.)
+		fetchActivities(200)
+			.then((rows) => (activityFeed = rows))
+			.catch(() => {
+				/* silent — chips stay hidden, run history unaffected */
+			})
+			.finally(() => (activitiesLoaded = true));
 	});
 
 	// --- Unified activities timeline (multi-modal History) ---
 	let activityFeed = $state<ActivityRow[]>([]);
+	/// True once the activities feed has resolved (or errored) for the
+	/// signed-in user. The layout decision — run list vs unified timeline —
+	/// is gated on this so the page doesn't paint the run list and then flip
+	/// to the timeline once the feed lands for a multi-modal account.
+	let activitiesLoaded = $state(false);
 	type KindFilter = 'all' | 'run' | 'lift' | 'meal';
 	let kindFilter = $state<KindFilter>('all');
 
@@ -356,6 +366,11 @@
 	// Chips only appear once there's a SECOND modality to switch to — a
 	// runner who only runs sees no chips (anti-clutter checklist, data-gated).
 	let showKindChips = $derived(hasLift || hasMeal);
+	/// First-paint gate: we can commit to a layout once the activities feed
+	/// has resolved (so we know whether a second modality exists), or once
+	/// auth has settled with no signed-in user (nothing to load — render the
+	/// run list directly). Until then the page holds a neutral skeleton.
+	let activitiesReady = $derived(activitiesLoaded || (!auth.loading && !auth.user));
 	// Filter chips for empty kinds are hidden, not disabled.
 	let kindChips = $derived.by<{ value: KindFilter; key: MessageKey }[]>(() => {
 		const out: { value: KindFilter; key: MessageKey }[] = [
@@ -482,6 +497,9 @@
 		dateRange: DateRange;
 		customFrom: string;
 		customTo: string;
+		activityFeed: ActivityRow[];
+		activitiesLoaded: boolean;
+		kindFilter: KindFilter;
 		scrollY: number;
 	}> = {
 		capture: () => ({
@@ -494,6 +512,9 @@
 			dateRange,
 			customFrom,
 			customTo,
+			activityFeed,
+			activitiesLoaded,
+			kindFilter,
 			scrollY: typeof window === 'undefined' ? 0 : window.scrollY,
 		}),
 		restore: (s) => {
@@ -511,6 +532,12 @@
 			dateRange = s.dateRange;
 			customFrom = s.customFrom;
 			customTo = s.customTo;
+			// Restore the unified-timeline state too so back-nav repaints the
+			// same layout (timeline vs run list) without flashing a skeleton
+			// or re-flipping while the activities feed refetches.
+			activityFeed = s.activityFeed;
+			activitiesLoaded = s.activitiesLoaded;
+			kindFilter = s.kindFilter;
 			filtersHydrated = true;
 			loading = false;
 			// SvelteKit's auto scroll-restoration runs before our list
@@ -577,6 +604,44 @@
 	-->
 	<h1 class="visually-hidden">{m('history.heading')}</h1>
 
+	{#snippet listSkeleton()}
+		<div class="run-list run-list-skel" aria-hidden="true">
+			{#each Array(8) as _, i (i)}
+				<div class="skel-card">
+					<div class="skel skel-map"></div>
+					<div class="skel-card-body">
+						<div class="skel-card-top">
+							<span class="skel skel-line skel-w-40"></span>
+							<span class="skel skel-pill"></span>
+						</div>
+						<div class="skel-card-stats">
+							<div class="skel-card-stat">
+								<span class="skel skel-line skel-w-60"></span>
+								<span class="skel skel-line skel-w-30"></span>
+							</div>
+							<div class="skel-card-stat">
+								<span class="skel skel-line skel-w-50"></span>
+								<span class="skel skel-line skel-w-30"></span>
+							</div>
+							<div class="skel-card-stat">
+								<span class="skel skel-line skel-w-50"></span>
+								<span class="skel skel-line skel-w-30"></span>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<p class="sr-only" role="status">{m('runs.loadingRuns')}</p>
+	{/snippet}
+
+	{#if !activitiesReady}
+		<!-- Hold a neutral skeleton until the activities feed resolves so the
+		     page commits to the right layout (run list vs unified timeline) on
+		     first content paint instead of painting the run list and flipping
+		     to the timeline once the feed lands for a multi-modal account. -->
+		{@render listSkeleton()}
+	{:else}
 	{#if showKindChips}
 		<!-- Kind chips — client-side filter over the unified activities
 		     view (multi_modal.md § History). Only shown once a second
@@ -758,34 +823,7 @@
 	</header>
 
 	{#if loading}
-		<div class="run-list run-list-skel" aria-hidden="true">
-			{#each Array(8) as _, i (i)}
-				<div class="skel-card">
-					<div class="skel skel-map"></div>
-					<div class="skel-card-body">
-						<div class="skel-card-top">
-							<span class="skel skel-line skel-w-40"></span>
-							<span class="skel skel-pill"></span>
-						</div>
-						<div class="skel-card-stats">
-							<div class="skel-card-stat">
-								<span class="skel skel-line skel-w-60"></span>
-								<span class="skel skel-line skel-w-30"></span>
-							</div>
-							<div class="skel-card-stat">
-								<span class="skel skel-line skel-w-50"></span>
-								<span class="skel skel-line skel-w-30"></span>
-							</div>
-							<div class="skel-card-stat">
-								<span class="skel skel-line skel-w-50"></span>
-								<span class="skel skel-line skel-w-30"></span>
-							</div>
-						</div>
-					</div>
-				</div>
-			{/each}
-		</div>
-		<p class="sr-only" role="status">{m('runs.loadingRuns')}</p>
+		{@render listSkeleton()}
 	{:else}
 		<div class="run-list">
 			{#each filteredRuns as run}
@@ -979,6 +1017,7 @@
 				</div>
 			{/if}
 		{/if}
+	{/if}
 	{/if}
 	{/if}
 </div>
@@ -1608,14 +1647,18 @@
 		margin-bottom: var(--space-lg);
 	}
 
-	/* The timeline is a single readable column on wide canvases — a
-	   full-width stretch left the rows using ~40% of the row with a sea
-	   of empty space on the right. */
+	/* Day groups flow into a responsive multi-column grid on wide canvases
+	   so the timeline fills the page instead of stranding the right ~40% as
+	   dead space, while each day card keeps a readable row width. A single
+	   full-width column was the original shape but left rows ~40% used; a
+	   day-per-cell grid keeps rows dense AND uses the width. Collapses to one
+	   column below ~64rem (and on mobile). Most-recent day is top-left;
+	   cells read left-to-right, top-to-bottom. */
 	.timeline {
-		display: flex;
-		flex-direction: column;
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(30rem, 1fr));
 		gap: var(--space-xl);
-		max-width: 48rem;
+		align-items: start;
 	}
 	.timeline-group {
 		display: flex;
