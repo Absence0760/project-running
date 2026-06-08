@@ -27,6 +27,7 @@
 	} from '$lib/nutrition/nutrition_totals';
 	import { computeDayBudget, type MacroKind } from '$lib/nutrition/nutrition_budget';
 	import { hydrationTargetMl, hydrationBudget } from '$lib/nutrition/hydration';
+	import { weeklyIntakeSummary } from '$lib/nutrition/nutrition_week';
 	import type { FoodMacros } from '$lib/nutrition/food_search';
 	import { m } from '$lib/i18n/store.svelte';
 	import { showToast } from '$lib/stores/toast.svelte';
@@ -195,17 +196,17 @@
 	const calorieBudget = $derived(dayBudget?.calories ?? null);
 	const waterTargetMl = $derived(hydrationTargetMl(weightKg, exerciseMinutes));
 	const waterBudget = $derived(hydrationBudget(waterMl, waterTargetMl));
-	const maxWeekCalories = $derived(Math.max(1, ...weekDays.map((d) => d.calories)));
 	const hasMeals = $derived(groups.length > 0);
 	const hasAnyData = $derived(entries.length > 0 || weekDays.some((d) => d.calories > 0));
-	// Average daily intake across days that actually have a log — the trend
-	// card's reference line. Excludes empty days so a half-logged week isn't
-	// dragged toward zero.
-	const trendAvg = $derived.by(() => {
-		const logged = weekDays.filter((d) => d.calories > 0);
-		if (logged.length === 0) return 0;
-		return Math.round(logged.reduce((s, d) => s + d.calories, 0) / logged.length);
-	});
+	const weekSummary = $derived(
+		weeklyIntakeSummary(weekDays.map((d) => d.calories), targets?.calories ?? null),
+	);
+	const trendAvg = $derived(weekSummary.avgCalories);
+	// Bars + the avg/goal reference lines share one scale; include the goal so
+	// its line stays on-chart even when no logged day reaches it.
+	const trendMax = $derived(
+		Math.max(1, ...weekDays.map((d) => d.calories), targets?.calories ?? 0),
+	);
 </script>
 
 <svelte:head><title>{m('nutrition.heading')} — Threkir</title></svelte:head>
@@ -373,14 +374,34 @@
 			<section class="card-elevated trend-card">
 				<div class="card-head">
 					<span class="section-label">{m('nutrition.weeklyTrend')}</span>
-					{#if trendAvg > 0}<span class="card-meta">{trendAvg} kcal avg</span>{/if}
+					<div class="trend-meta">
+						{#if trendAvg > 0}<span class="card-meta">{trendAvg} kcal avg</span>{/if}
+						{#if weekSummary.deltaPerDay !== null}
+							{@const delta = weekSummary.deltaPerDay}
+							{#if delta === 0}
+								<span class="week-delta week-delta-on" data-testid="week-delta">{m('nutrition.weekOnGoal')}</span>
+							{:else if delta < 0}
+								<span class="week-delta week-delta-under" data-testid="week-delta">{m('nutrition.weekUnderGoal', { n: -delta })}</span>
+							{:else}
+								<span class="week-delta week-delta-over" data-testid="week-delta">{m('nutrition.weekOverGoal', { n: delta })}</span>
+							{/if}
+						{/if}
+					</div>
 				</div>
 	<div class="trend-bars">
 					<div class="trend-track">
 						{#if trendAvg > 0}
 							<div
 								class="trend-avg-line"
-								style={`bottom: ${Math.round((trendAvg / maxWeekCalories) * 100)}%`}
+								style={`bottom: ${Math.round((trendAvg / trendMax) * 100)}%`}
+								aria-hidden="true"
+							></div>
+						{/if}
+						{#if targets}
+							<div
+								class="trend-goal-line"
+								style={`bottom: ${Math.round((targets.calories / trendMax) * 100)}%`}
+								title={`${m('nutrition.goalLine')}: ${targets.calories} kcal`}
 								aria-hidden="true"
 							></div>
 						{/if}
@@ -389,7 +410,7 @@
 								<span class="trend-val">{d.calories > 0 ? d.calories : ''}</span>
 								<div
 									class="trend-bar"
-									style={`height: ${Math.round((d.calories / maxWeekCalories) * 100)}%`}
+									style={`height: ${Math.round((d.calories / trendMax) * 100)}%`}
 									title={`${d.label}: ${d.calories} kcal`}
 								></div>
 							</div>
@@ -739,6 +760,43 @@
 		border-top: 1px dashed var(--color-text-tertiary);
 		opacity: 0.55;
 		pointer-events: none;
+	}
+	/* The calorie goal — a coloured dashed line distinct from the subtle grey
+	   avg line, so "where I am" vs "where I'm aiming" read apart at a glance. */
+	.trend-goal-line {
+		position: absolute;
+		left: 0;
+		right: 0;
+		border-top: 1.5px dashed var(--color-primary);
+		opacity: 0.7;
+		pointer-events: none;
+	}
+	.trend-meta {
+		display: flex;
+		align-items: baseline;
+		gap: var(--space-sm);
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+	.week-delta {
+		font-size: 0.78rem;
+		font-weight: 700;
+		padding: 2px 9px;
+		border-radius: 9999px;
+		font-variant-numeric: tabular-nums;
+		white-space: nowrap;
+	}
+	.week-delta-under {
+		color: var(--color-primary);
+		background: color-mix(in srgb, var(--color-primary) 14%, transparent);
+	}
+	.week-delta-on {
+		color: var(--color-success);
+		background: color-mix(in srgb, var(--color-success) 16%, transparent);
+	}
+	.week-delta-over {
+		color: color-mix(in srgb, var(--color-warning) 55%, var(--color-text));
+		background: color-mix(in srgb, var(--color-warning) 18%, transparent);
 	}
 	.trend-col {
 		flex: 1;

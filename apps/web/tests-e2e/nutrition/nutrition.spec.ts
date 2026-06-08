@@ -175,6 +175,14 @@ test.describe('/nutrition — manual log, render, water', () => {
 			const heroRing = page.locator('.ring-hero');
 			await expect(heroRing).toHaveClass(/ring-over/);
 			await expect(heroRing.locator('.ring-pct-over')).toBeVisible();
+
+			// The 7-day trend now compares the logged-day average to the goal.
+			// Exact direction depends on the seed user's week of history, so
+			// assert the chip renders wired (the math is unit-tested precisely);
+			// it must show one of the three goal-comparison states.
+			const weekDelta = page.getByTestId('week-delta');
+			await expect(weekDelta).toBeVisible();
+			await expect(weekDelta).toContainText(/goal/);
 		} finally {
 			await admin.from('food_log').delete().eq('id', created!.id);
 		}
