@@ -207,7 +207,7 @@ becomes an **action button**, not a tab.
   `Nutrition` tab is 7 slots. Collapsing the three *capture* entry points
   into one action button keeps the nav at five and groups them by the
   verb the user actually has in mind ("I want to log something").
-- **Tap `Log` →** a bottom sheet, not a new screen:
+- **Tap `Log` →** a bottom sheet to pick the modality:
 
 ```
         ┌─────────────────────────────────┐
@@ -220,6 +220,16 @@ becomes an **action button**, not a tab.
               ↑ last-used floats to top
 ```
 
+- **Picking a modality navigates to its dwell-in capture page**, not a
+  one-shot modal. All three behave the same way: `Log run` → the recorder
+  page, `Log lift` → the Gym page, `Log food` → the Nutrition page — each an
+  in-shell keep-alive `PageView` page (bottom nav stays visible) you operate
+  in for as long as the session lasts (record the run, build a workout over
+  several sets, log the day's meals), with that page's own composer one tap
+  away. The keep-alive guarantee means an in-progress recording, a half-built
+  workout, or the day's food log survives swiping to Home and back. (A run is
+  *necessarily* a page — a foreground-service GPS session can't collapse into
+  a modal — so Gym + Nutrition match it rather than the reverse.)
 - **Long-press `Log` = repeat last activity.** Preserves the one-tap
   "start a run" muscle memory the current `Run` tab gives. A runner who
   only ever runs effectively still has a one-gesture start.

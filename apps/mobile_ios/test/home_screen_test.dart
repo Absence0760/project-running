@@ -173,5 +173,35 @@ void main() {
       // No capture sheet — the tap jumped straight to the Run page.
       expect(find.text('Log lift'), findsNothing);
     });
+
+    testWidgets('picking Log lift lands on the Gym dwell-in page', (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('Log lift'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      // Not a modal composer — the Log action navigates the PageView to the
+      // in-shell Gym page (same model as the run recorder), so the bottom nav
+      // stays visible alongside the page's own "Gym" AppBar title.
+      expect(find.text('Gym'), findsOneWidget);
+      expect(find.byType(BottomAppBar), findsOneWidget);
+    });
+
+    testWidgets('picking Log food lands on the Nutrition dwell-in page',
+        (tester) async {
+      final s = await _makeStores();
+      await _pump(tester, s);
+      await tester.tap(find.byType(FloatingActionButton));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      await tester.tap(find.text('Log food'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 400));
+      expect(find.text('Nutrition'), findsOneWidget);
+      expect(find.byType(BottomAppBar), findsOneWidget);
+    });
   });
 }

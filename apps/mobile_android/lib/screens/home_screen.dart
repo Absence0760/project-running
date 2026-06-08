@@ -20,8 +20,8 @@ import '../widgets/billing_issue_banner.dart';
 import '../widgets/log_sheet.dart';
 import '../widgets/top_banner.dart';
 import 'dashboard_screen.dart';
-import '../widgets/gym_compose_sheet.dart';
-import '../widgets/nutrition_log_sheet.dart';
+import 'gym_screen.dart';
+import 'nutrition_screen.dart';
 import 'runs_screen.dart';
 import 'run_screen.dart';
 import 'settings_screen.dart';
@@ -81,9 +81,18 @@ class _HomeScreenState extends State<HomeScreen> {
   // Bottom nav: "the Run tab disappears as a top-level destination").
   static const _pageHome = 0;
   static const _pageHistory = 1;
+  // Run / Gym / Nutrition have no bottom-nav destination — they're the
+  // dwell-in capture surfaces reached via the centre Log action, each a
+  // keep-alive page so an in-progress session (a live recording, a
+  // half-built workout, the day's food log) survives swiping to Home and
+  // back. Run can't be anything else (a foreground-service GPS session
+  // can't collapse into a modal); Gym + Nutrition match it so all three
+  // Log actions behave the same way.
   static const _pageRun = 2;
-  static const _pageSocial = 3;
-  static const _pageSettings = 4;
+  static const _pageGym = 3;
+  static const _pageFood = 4;
+  static const _pageSocial = 5;
+  static const _pageSettings = 6;
   static const _initialIndex = _pageHome;
 
   /// Current page index. A `ValueNotifier` instead of a `setState` int so
@@ -196,6 +205,21 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       ),
       _LazyKeepAliveTab(
+        builder: () => GymScreen(
+          key: const PageStorageKey('gym'),
+          api: widget.apiClient,
+          store: widget.gymStore,
+        ),
+      ),
+      _LazyKeepAliveTab(
+        builder: () => NutritionScreen(
+          key: const PageStorageKey('nutrition'),
+          api: widget.apiClient,
+          store: widget.foodStore,
+          settingsSync: widget.settingsSync,
+        ),
+      ),
+      _LazyKeepAliveTab(
         builder: () => SocialScreen(
           key: const PageStorageKey('social'),
           api: widget.apiClient ?? ApiClient(),
@@ -287,20 +311,19 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _performLogAction(LogAction action) {
     widget.preferences.setLastLogType(action.wire);
+    // Each Log action lands on that modality's dwell-in capture page (decisions
+    // §63) — the same in-shell keep-alive page model the live recorder uses, so
+    // all three behave identically: you arrive on a workspace you can operate in
+    // for as long as the session lasts (record the run, build the workout over
+    // several sets, log the day's meals) rather than a one-shot modal that
+    // closes after a single entry. Each page surfaces its composer one tap away.
     switch (action) {
-      // Each Log action opens that modality's capture surface in one tap, so
-      // the three behave consistently (decisions §63). Run is a live recording
-      // session, so it stays the keep-alive page; lift + food are quick entries
-      // that open their composer sheet directly (NOT the gym list / nutrition
-      // day view, which forced a second tap before). A logged lift/meal flows
-      // into LocalGymStore / LocalFoodStore, which the History timeline watches,
-      // so it appears there without an explicit refresh.
       case LogAction.run:
         _goToPage(_pageRun);
       case LogAction.lift:
-        showGymComposeSheet(context: context, store: widget.gymStore);
+        _goToPage(_pageGym);
       case LogAction.food:
-        showNutritionLogSheet(context: context, store: widget.foodStore);
+        _goToPage(_pageFood);
     }
   }
 
