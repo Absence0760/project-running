@@ -1,5 +1,4 @@
 // ignore_for_file: avoid_relative_lib_imports
-import 'dart:async';
 import 'dart:io';
 
 import 'package:api_client/api_client.dart';
@@ -18,40 +17,12 @@ import '../lib/preferences.dart';
 import '../lib/screens/runs_screen.dart';
 import '../lib/widgets/activity_timeline_list.dart';
 
-/// Fake client: serves a canned activities feed, no runs, signed in. Every
-/// network method RunsScreen touches on mount is overridden so nothing hits
-/// Supabase.
+/// Fake client: signed in, no remote runs. The History timeline is now built
+/// from the LOCAL stores (not `fetchActivities`), so the test seeds those
+/// directly; the fake just keeps `_fetchRemote` from hitting the network.
 class _FakeApi extends ApiClient {
-  final List<ActivityRow> activities;
-  _FakeApi(this.activities);
-
   @override
   String? get userId => 'u1';
-
-  @override
-  Future<List<ActivityRow>> fetchActivities({int limit = 100}) async =>
-      activities;
-
-  @override
-  Future<List<Run>> getRuns({
-    int limit = 50,
-    DateTime? before,
-    DateTime? updatedSince,
-  }) async =>
-      const [];
-}
-
-/// Fake whose activities feed resolves only when [feed] completes, so a test
-/// can observe the History tab's pre-resolve paint (the loading gate).
-class _DelayedApi extends ApiClient {
-  final Future<List<ActivityRow>> feed;
-  _DelayedApi(this.feed);
-
-  @override
-  String? get userId => 'u1';
-
-  @override
-  Future<List<ActivityRow>> fetchActivities({int limit = 100}) => feed;
 
   @override
   Future<List<Run>> getRuns({
@@ -65,31 +36,84 @@ class _DelayedApi extends ApiClient {
 void main() {
   setUpAll(() => initializeDateFormatting());
 
-  Directory? dir;
+  final tmpDirs = <Directory>[];
   tearDown(() {
-    if (dir != null && dir!.existsSync()) dir!.deleteSync(recursive: true);
-    dir = null;
+    for (final d in tmpDirs) {
+      if (d.existsSync()) d.deleteSync(recursive: true);
+    }
+    tmpDirs.clear();
   });
 
-  Future<void> pump(WidgetTester tester, List<ActivityRow> activities) async {
+  Directory tmp(String prefix) {
+    final d = Directory.systemTemp.createTempSync(prefix);
+    tmpDirs.add(d);
+    return d;
+  }
+
+  Run runRow(String id, {double dist = 5000, int dur = 1500}) => Run(
+        id: id,
+        startedAt: DateTime.now(),
+        duration: Duration(seconds: dur),
+        distanceMetres: dist,
+        source: RunSource.app,
+      );
+
+  ({Map<String, dynamic> workout, List<Map<String, dynamic>> sets}) liftRow(
+    String id,
+    String title, {
+    int sets = 1,
+  }) =>
+      (
+        workout: {'id': id, 'title': title, 'started_at': DateTime.now().toUtc().toIso8601String()},
+        sets: [
+          for (var i = 0; i < sets; i++)
+            {'exercise_name': 'Squat', 'set_index': i, 'reps': 5, 'weight_kg': 100},
+        ],
+      );
+
+  Map<String, dynamic> mealRow(String id, String name, {num cal = 500}) => {
+        'id': id,
+        'started_at': DateTime.now().toUtc().toIso8601String(),
+        'item_name': name,
+        'calories': cal,
+      };
+
+  /// Mount RunsScreen as the History tab, seeding the local stores (the
+  /// timeline's data source). `withGym: false` mounts it run-only (no gym/food
+  /// store) — the graceful-degradation path that stays the inline run list.
+  Future<void> pump(
+    WidgetTester tester, {
+    List<Run> runs = const [],
+    List<({Map<String, dynamic> workout, List<Map<String, dynamic>> sets})> lifts = const [],
+    List<Map<String, dynamic>> meals = const [],
+    bool withGym = true,
+  }) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = Preferences();
     await prefs.init();
-    dir = Directory.systemTemp.createTempSync('runs_timeline_test_');
     final runStore = LocalRunStore();
-    await runStore.init(overrideDirectory: dir);
-    final gymStore = LocalGymStore();
-    await gymStore.init(
-        overrideDirectory: Directory.systemTemp.createTempSync('gym_tl_'));
-    final foodStore = LocalFoodStore();
-    await foodStore.init(
-        overrideDirectory: Directory.systemTemp.createTempSync('food_tl_'));
+    await runStore.init(overrideDirectory: tmp('runs_tl_'));
+    LocalGymStore? gymStore;
+    LocalFoodStore? foodStore;
+    if (withGym) {
+      gymStore = LocalGymStore();
+      await gymStore.init(overrideDirectory: tmp('gym_tl_'));
+      foodStore = LocalFoodStore();
+      await foodStore.init(overrideDirectory: tmp('food_tl_'));
+    }
+    // Store writes do real async file I/O that deadlocks the fake-async test
+    // zone — seed inside runAsync (see CLAUDE.md gotcha).
+    await tester.runAsync(() async {
+      if (runs.isNotEmpty) await runStore.saveManyFromRemote(runs);
+      if (lifts.isNotEmpty) await gymStore!.replaceFromServer(lifts);
+      if (meals.isNotEmpty) await foodStore!.replaceFromServer(meals);
+    });
 
     await tester.pumpWidget(MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       home: RunsScreen(
-        apiClient: _FakeApi(activities),
+        apiClient: _FakeApi(),
         runStore: runStore,
         routeStore: LocalRouteStore(),
         preferences: prefs,
@@ -100,45 +124,39 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  ActivityRow row(String id, String kind, Map<String, dynamic> summary) =>
-      ActivityRow(id: id, kind: kind, startedAt: DateTime.now(), summary: summary);
-
-  testWidgets('chips appear once a second modality has data + gym store wired',
+  testWidgets('chips appear once a second modality has data (from local stores)',
       (tester) async {
-    await pump(tester, [
-      row('l1', 'lift', {'title': 'Push day', 'set_count': 5, 'volume_kg': 12000}),
-      row('m1', 'meal', {'item_name': 'Oats', 'calories': 300}),
+    await pump(tester, runs: [runRow('r1')], lifts: [liftRow('l1', 'Push day')], meals: [
+      mealRow('m1', 'Oats'),
     ]);
-    // All / Runs / Lifts / Meals chips render; the lift row shows in All view.
     expect(find.text('Lifts'), findsOneWidget);
     expect(find.text('Meals'), findsOneWidget);
+    // The lift shows on the timeline in the default All view.
     expect(find.text('Push day'), findsOneWidget);
   });
 
   testWidgets('every chip stays on the unified timeline, filtered by kind',
       (tester) async {
-    // The Runs chip is now a timeline filtered to runs (mirroring web), NOT
-    // the inline run list — so the ActivityTimelineList stays mounted on every
-    // chip, and each chip shows only its kind.
-    await pump(tester, [
-      row('r1', 'run', {'distance_m': 5000, 'duration_s': 1500}),
-      row('l1', 'lift', {'title': 'Leg day', 'set_count': 4, 'volume_kg': 9000}),
-      row('m1', 'meal', {'item_name': 'Rice bowl', 'calories': 500}),
-    ]);
-    // Default All view shows all three kinds on the timeline.
+    // The Runs chip is a timeline filtered to runs (mirroring web), NOT the
+    // inline run list — so the ActivityTimelineList stays mounted on every
+    // chip and each chip shows only its kind.
+    await pump(tester,
+        runs: [runRow('r1')],
+        lifts: [liftRow('l1', 'Leg day')],
+        meals: [mealRow('m1', 'Rice bowl')]);
+    // Default All view shows all three kinds.
     expect(find.byType(ActivityTimelineList), findsOneWidget);
     expect(find.text('Leg day'), findsOneWidget);
     expect(find.text('Rice bowl'), findsOneWidget);
 
-    // Tap Runs → STILL the timeline (not the run list), filtered to runs:
-    // the lift + meal rows drop out.
+    // Tap Runs → STILL the timeline, filtered to runs (lift + meal drop out).
     await tester.tap(find.text('Runs'));
     await tester.pumpAndSettle();
     expect(find.byType(ActivityTimelineList), findsOneWidget);
     expect(find.text('Leg day'), findsNothing);
     expect(find.text('Rice bowl'), findsNothing);
 
-    // Tap Lifts → only the lift shows, the meal is filtered out.
+    // Tap Lifts → only the lift shows.
     await tester.tap(find.text('Lifts'));
     await tester.pumpAndSettle();
     expect(find.text('Leg day'), findsOneWidget);
@@ -148,11 +166,10 @@ void main() {
   testWidgets('a single-modality tab shows a "View all" link; All does not',
       (tester) async {
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-    await pump(tester, [
-      row('r1', 'run', {'distance_m': 5000, 'duration_s': 1500}),
-      row('l1', 'lift', {'title': 'Leg day', 'set_count': 4, 'volume_kg': 9000}),
-      row('m1', 'meal', {'item_name': 'Rice bowl', 'calories': 500}),
-    ]);
+    await pump(tester,
+        runs: [runRow('r1')],
+        lifts: [liftRow('l1', 'Leg day')],
+        meals: [mealRow('m1', 'Rice bowl')]);
     // All view is cross-modal — no single destination, so no View-all link.
     expect(find.text(l10n.historyViewAll), findsNothing);
     // Each single-modality tab surfaces the View-all link (→ its full page).
@@ -166,107 +183,10 @@ void main() {
 
   testWidgets('no chips when gym store is absent (run-only history)',
       (tester) async {
-    // gymStore omitted → even with a lift in the feed, the screen stays the
-    // run-only history (graceful degradation for non-multi-modal mounts).
-    SharedPreferences.setMockInitialValues({});
-    final prefs = Preferences();
-    await prefs.init();
-    dir = Directory.systemTemp.createTempSync('runs_timeline_nochips_');
-    final runStore = LocalRunStore();
-    await runStore.init(overrideDirectory: dir);
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: RunsScreen(
-        apiClient: _FakeApi([
-          row('l1', 'lift', {'title': 'X', 'set_count': 1, 'volume_kg': 100}),
-        ]),
-        runStore: runStore,
-        routeStore: LocalRouteStore(),
-        preferences: prefs,
-      ),
-    ));
-    await tester.pumpAndSettle();
+    // gymStore omitted → the screen stays the run-only inline history (the
+    // offline-first / non-multi-modal graceful-degradation path).
+    await pump(tester, runs: [runRow('r1')], withGym: false);
     expect(find.text('Lifts'), findsNothing);
-  });
-
-  testWidgets(
-      'cached multi-modal account holds a loading gate until the feed resolves',
-      (tester) async {
-    // Regression guard for the run-list → timeline flip: a known multi-modal
-    // account must NOT paint the run list (or its empty state) and then flip
-    // to the timeline once the feed lands. With the modality cached, the body
-    // holds a spinner until the feed resolves, then paints the timeline once.
-    SharedPreferences.setMockInitialValues({'history_multi_modal_v1': true});
-    final prefs = Preferences();
-    await prefs.init();
-    dir = Directory.systemTemp.createTempSync('runs_timeline_gate_');
-    final runStore = LocalRunStore();
-    await runStore.init(overrideDirectory: dir);
-    final gymStore = LocalGymStore();
-    await gymStore.init(
-        overrideDirectory: Directory.systemTemp.createTempSync('gym_gate_'));
-    final completer = Completer<List<ActivityRow>>();
-
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: RunsScreen(
-        apiClient: _DelayedApi(completer.future),
-        runStore: runStore,
-        routeStore: LocalRouteStore(),
-        preferences: prefs,
-        gymStore: gymStore,
-      ),
-    ));
-    // Feed still pending: the body is the loading gate, not run-list content
-    // (the empty-runs state) or timeline rows.
-    await tester.pump();
-    expect(find.byType(CircularProgressIndicator), findsWidgets);
-    expect(find.text('No runs yet'), findsNothing);
-    expect(find.text('Push day'), findsNothing);
-
-    // Resolve the feed → the unified timeline paints with no run-list flash.
-    completer.complete([
-      row('l1', 'lift',
-          {'title': 'Push day', 'set_count': 5, 'volume_kg': 12000}),
-    ]);
-    await tester.pumpAndSettle();
-    expect(find.text('Push day'), findsOneWidget);
-  });
-
-  testWidgets('a non-cached account is not gated — run UI shows before the feed',
-      (tester) async {
-    // Pure runner (no cached modality): the run list / empty state renders
-    // immediately even while the activities feed is still in flight — the gate
-    // is only for accounts already known to be multi-modal.
-    SharedPreferences.setMockInitialValues({});
-    final prefs = Preferences();
-    await prefs.init();
-    dir = Directory.systemTemp.createTempSync('runs_timeline_nogate_');
-    final runStore = LocalRunStore();
-    await runStore.init(overrideDirectory: dir);
-    final gymStore = LocalGymStore();
-    await gymStore.init(
-        overrideDirectory: Directory.systemTemp.createTempSync('gym_nogate_'));
-    final completer = Completer<List<ActivityRow>>();
-
-    await tester.pumpWidget(MaterialApp(
-      localizationsDelegates: AppLocalizations.localizationsDelegates,
-      supportedLocales: AppLocalizations.supportedLocales,
-      home: RunsScreen(
-        apiClient: _DelayedApi(completer.future),
-        runStore: runStore,
-        routeStore: LocalRouteStore(),
-        preferences: prefs,
-        gymStore: gymStore,
-      ),
-    ));
-    await tester.pump();
-    // No gate — the run-only empty state is shown despite the pending feed.
-    expect(find.text('No runs yet'), findsOneWidget);
-
-    completer.complete(const []);
-    await tester.pumpAndSettle();
+    expect(find.byType(ActivityTimelineList), findsNothing);
   });
 }

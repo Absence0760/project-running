@@ -349,13 +349,17 @@ redaction-boundary guarantees are pinned by
 > dedicated, offline-first run list: filters / sort / pagination / bulk-delete,
 > the mobile analogue of `/runs`), Lifts → `GymScreen`, Meals → `NutritionScreen`.
 > Mobile uses a pushed route rather than a nav tab because its bottom nav is
-> capped at five slots (decisions §63). The one residual, deliberate difference:
-> mobile's **no-chips path** (offline / signed-out / pure runner with no second
-> modality) still shows the run list inline on the History tab, because the
-> activities timeline is server-backed (`fetchActivities`) while the run list is
-> offline-first (`LocalRunStore`) — falling back to the inline list keeps runs
-> viewable offline. Web has no offline mode, so its pure-runner History is
-> always the timeline. Both correct per [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
+> capped at five slots (decisions §63). **Mobile's timeline is built from the
+> three LOCAL stores** (`buildLocalActivities` over `LocalRunStore` +
+> `LocalGymStore` + `LocalFoodStore`), not the server `activities` view — so it
+> works fully offline, always reflects every modality the device has, and
+> updates live when a run/lift/meal is logged (the Log FAB writes to those
+> stores). The only place the inline run list still shows on the History tab is
+> a genuine **pure runner** (no lift/meal logged at all — nothing else to put on
+> a timeline) or a run-only mount with no gym store; that's not an offline
+> fallback, just "there is only one modality." Web, having no offline concern
+> and a sidebar, shows the timeline even for a pure runner. Both correct per
+> [§ 24](../architecture/decisions.md#24-web-is-the-canonical-feature-surface-mobile-and-watches-are-platform-additive).
 
 ```
   History            [ All ] [ Runs ] [ Lifts ] [ Meals ]
@@ -720,7 +724,7 @@ tier where mobile leads). Byte-identical iOS twin per [decisions.md § 39](../ar
 | Nutrition | `screens/nutrition_screen.dart`, `widgets/nutrition_log_sheet.dart`, `nutrition_targets.dart` (pure, parity-paired), `food_search.dart` (Open Food Facts client, pluggable-fetcher seam like `routing.dart`) |
 | Body metrics | `body_metrics` table (migration `20261216_001`) + Settings height/weight entry (**mobile shipped (G5)** — `settings_body_metrics_screen.dart`, Art 9 consent-gated height/weight + activity/goal; api_client `grantHealthDataConsent`/`withdrawHealthDataConsent`/`setMyHeightCm`/`recordBodyWeightKg`/`clearBodyWeightHistory`) |
 | Lift load | `training_load.ts` / `.dart` gain `liftStress` + `source`-tagged daily contributions (**shipped** — `computeLiftStress` + `aggregateDailyLiftStress` + the `lifts` arg to `computeTrainingLoadSeries`). **Consumers wired on both platforms**: web `web/src/lib/gym/lift_load.ts` and mobile `mobile_android/lib/lift_load.dart` (`liftsFromSetHistory`, pure + tested parity pair) feed each dashboard's load curve; `TrainingLoadChart` (web + mobile) shows the "gym sessions included" hint when `liftStress > 0` |
-| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart` + the recent-lifts trend card (`widgets/recent_lifts_card.dart`); the **unified mobile History timeline is now shipped** (`runs_screen.dart` + `widgets/activity_timeline_list.dart` + `ApiClient.fetchActivities`) |
+| Cross-modality | `coach/context.ts` (**web shipped** — bounded `recent_lifts` + 7-day `nutrition_7d` summary, pure `summarizeRecentLifts`/`summarizeNutrition` + tests); web Home gym cards (`/dashboard`); web History timeline (`/history` + `fetchActivities`). **Mobile Home card composition shipped (G5)** — `dashboard_screen.dart` + `widgets/gym_summary_card.dart` + `widgets/nutrition_rings_card.dart` + the recent-lifts trend card (`widgets/recent_lifts_card.dart`); the **unified mobile History timeline is now shipped** (`runs_screen.dart` + `widgets/activity_timeline_list.dart`, assembled from the LOCAL stores via `lib/local_activities.dart` — offline-first, all modalities, not `fetchActivities`) |
 | Runner protection | Settings toggle: keep Run as the one-tap primary action — **shipped (G5)** (`Preferences.keepRunPrimary` + the `settings_preferences_screen.dart` switch; tap = one-tap run start, long-press = full Log sheet) |
 | Local stores | `local_gym_store.dart`, `local_food_store.dart` (shipped — mirror `LocalGearStore`, §73 / §122; gym stores sets inline). **Now wired into nav/Home (G5):** the gym/nutrition screens + the dashboard hydrate + drain them; still outside the global `main.dart`/`sync_service` sweep |
 | Data access | `packages/api_client` typed gym + food + `fetchLatestBodyWeightKg` + the unified-timeline `fetchActivities` (→ `activities` view) + `fetchRunById` (timeline run-row open) methods (shipped); web gym queries in `core/data.ts` (**shipped** — `fetchGymWorkouts` / `fetchGymWorkoutWithSets` / `fetchGymSetHistory` / `createGymWorkout` / `updateGymWorkout` / `deleteGymWorkout`); **web food + body-metrics queries shipped** (`fetchFoodLog` / `createFoodEntry` / `updateFoodEntry` / `deleteFoodEntry` / `fetchLatestWeightKg` / `recordWeightKg` / `clearWeightHistory`) |

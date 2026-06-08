@@ -10,6 +10,7 @@ import '../goals.dart';
 import '../l10n/date_format.dart';
 import '../l10n/gen/app_localizations.dart';
 import '../l10n/locale_support.dart';
+import '../local_activities.dart';
 import '../local_food_store.dart';
 import '../local_gym_store.dart';
 import '../local_route_store.dart';
@@ -170,30 +171,20 @@ class _RunsScreenState extends State<RunsScreen> {
   bool _selecting = false;
   final Set<String> _selected = {};
 
-  /// Unified activities feed (runs + lifts + meals) for the timeline, plus its
-  /// derived modality presence cached alongside it so `build` doesn't rescan
-  /// the (up to 200-row) feed every frame.
+  /// Unified activities timeline (runs + lifts + meals), assembled from the
+  /// three offline-first LOCAL stores (not the server feed) so History always
+  /// reflects every modality the device has, works offline, and updates live
+  /// the moment a run / lift / meal is logged. Rebuilt synchronously on any
+  /// store change; `_hasLift` / `_hasMeal` are derived alongside so `build`
+  /// doesn't rescan the list every frame.
   List<ActivityRow> _activities = const [];
   bool _hasLift = false;
   bool _hasMeal = false;
   _HistoryKind _kind = _HistoryKind.all;
 
-  /// True once the unified-activities feed has resolved (or errored, or been
-  /// skipped). Until then a known multi-modal account holds a loading state
-  /// rather than painting the run list and flipping to the timeline once the
-  /// feed lands.
-  bool _activitiesLoaded = false;
-
-  /// Whether the LAST feed load (persisted across sessions) found a second
-  /// modality. Read synchronously at mount so the first paint can hold a
-  /// loading state for a known multi-modal account; a pure runner reads false
-  /// and gets the run list immediately, with no gate.
-  late final bool _cachedMultiModal =
-      widget.preferences.historyMultiModal;
-
   /// Chips only appear once a SECOND modality has data AND the gym store is
-  /// wired in (multi-modal home shell) — a pure runner, or a run-only test
-  /// mount that passes no gym store, sees no chips (anti-clutter checklist).
+  /// wired in (multi-modal home shell) — a pure runner, or a run-only / pushed
+  /// run-list mount that passes no gym store, sees no chips (anti-clutter).
   bool get _showChips => widget.gymStore != null && (_hasLift || _hasMeal);
 
   /// Whenever the chips are shown, EVERY tab — including Runs — renders the
@@ -218,7 +209,12 @@ class _RunsScreenState extends State<RunsScreen> {
     super.initState();
     widget.runStore.addListener(_onStoreChanged);
     widget.preferences.addListener(_onStoreChanged);
+    // The timeline is assembled from the local stores, so it must rebuild when
+    // a lift / meal is logged (or synced in) just as it does for runs.
+    widget.gymStore?.addListener(_onActivitySourceChanged);
+    widget.foodStore?.addListener(_onActivitySourceChanged);
     _recompute();
+    _rebuildActivities();
     // Seed the "previously seen ids" set with whatever the store
     // already holds at mount. Without this seed, the very first
     // listener tick would treat every existing run as "newly added"
@@ -227,58 +223,50 @@ class _RunsScreenState extends State<RunsScreen> {
         widget.runStore.runs.map((r) => r.id).toSet();
     _hydrateFilters();
     _fetchRemote();
-    _fetchActivities();
   }
 
-  /// Best-effort load of the unified activities feed for the timeline. Only
-  /// runs when the gym store is wired in (multi-modal home shell) and the user
-  /// is signed in. A failure leaves `_activities` empty — the chips stay
-  /// hidden and the run-only history is unaffected (layered resilience).
-  Future<void> _fetchActivities() async {
-    final api = widget.apiClient;
-    if (widget.gymStore == null || api == null || api.userId == null) {
-      // No feed to load — release the first-paint gate so a cached
-      // multi-modal account doesn't sit on the loading state forever.
-      if (mounted) setState(() => _activitiesLoaded = true);
+  /// Rebuild the unified timeline from the local stores — synchronous, no
+  /// network. The data is whatever the offline-first stores hold; recording a
+  /// run or logging a lift / meal lands in those stores and shows here at once
+  /// (the store listeners call this). A run-only / pushed run-list mount (no
+  /// gym store) offers no timeline. Mutates state in place; callers wrap it in
+  /// setState (or run it inside initState).
+  void _rebuildActivities() {
+    final gym = widget.gymStore;
+    if (gym == null) {
+      _activities = const [];
+      _hasLift = false;
+      _hasMeal = false;
       return;
     }
-    try {
-      // Bounded recent-history window, mirroring web's `fetchActivities(200)`:
-      // the timeline is a glanceable cross-modality view, not an exhaustive
-      // archive. The Runs chip drops back to the run list, which carries the
-      // real cursor-paginated "Load more" path (multi_modal.md § activities
-      // view at scale).
-      final rows = await api.fetchActivities(limit: 200);
-      final hasLift = rows.any((a) => a.kind == 'lift');
-      final hasMeal = rows.any((a) => a.kind == 'meal');
-      if (mounted) {
-        setState(() {
-          _activities = rows;
-          _hasLift = hasLift;
-          _hasMeal = hasMeal;
-          _activitiesLoaded = true;
-        });
-      }
-      // Remember the modality so the next mount can pick the timeline layout
-      // on first paint instead of flipping into it once this feed resolves.
-      await widget.preferences.setHistoryMultiModal(hasLift || hasMeal);
-    } catch (e) {
-      debugPrint('fetchActivities failed: $e');
-      if (mounted) setState(() => _activitiesLoaded = true);
-    }
+    _activities = buildLocalActivities(
+      runs: widget.runStore.runs,
+      workouts: gym.workouts,
+      foods: widget.foodStore?.rows ?? const <Map<String, dynamic>>[],
+    );
+    _hasLift = _activities.any((a) => a.kind == 'lift');
+    _hasMeal = _activities.any((a) => a.kind == 'meal');
   }
 
-  /// Pull-to-refresh for both surfaces — refreshes the run page and, when the
-  /// timeline is in play, the unified activities feed too.
+  /// Gym / food store changed → re-assemble the timeline.
+  void _onActivitySourceChanged() {
+    if (!mounted) return;
+    setState(_rebuildActivities);
+  }
+
+  /// Pull-to-refresh: refresh the run page from the cloud. The run-store update
+  /// fans out through `_onStoreChanged`, which re-assembles the timeline; the
+  /// gym / food stores are refreshed by their own surfaces.
   Future<void> _refreshAll() async {
     await _fetchRemote();
-    await _fetchActivities();
   }
 
   @override
   void dispose() {
     widget.runStore.removeListener(_onStoreChanged);
     widget.preferences.removeListener(_onStoreChanged);
+    widget.gymStore?.removeListener(_onActivitySourceChanged);
+    widget.foodStore?.removeListener(_onActivitySourceChanged);
     super.dispose();
   }
 
@@ -289,6 +277,8 @@ class _RunsScreenState extends State<RunsScreen> {
     final added = existing.difference(_previousRunIds);
     setState(() {
       _recompute();
+      // Runs feed the timeline too — keep it in step with the run store.
+      _rebuildActivities();
       _selected.removeWhere((id) => !existing.contains(id));
       if (_selected.isEmpty) _selecting = false;
       // If runs were added but none of them survive the current
@@ -1043,16 +1033,6 @@ class _RunsScreenState extends State<RunsScreen> {
 
   Widget _buildBody(
       ThemeData theme, AppLocalizations l10n, DistanceUnit unit, int totalCount) {
-    // A known multi-modal account (cached from the last feed load) defaults to
-    // the unified timeline, whose rows come from the still-loading feed. Hold a
-    // loading state until it resolves rather than painting the run list and
-    // flipping to the timeline once the feed lands. A pure runner reads
-    // `_cachedMultiModal == false` and skips this entirely — the run list
-    // renders immediately, exactly as before.
-    if (_cachedMultiModal && !_activitiesLoaded && widget.gymStore != null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-
     // A user with no runs but who has logged lifts / meals should still see
     // their timeline — only fall back to the "no runs" empty state when there
     // is genuinely nothing across any modality (mirrors web's gym-only fix).
