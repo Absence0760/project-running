@@ -876,4 +876,135 @@ void main() {
       expect(store.runs.single.distanceMetres, 2222);
     });
   });
+
+  group('summary index', () {
+    test('save writes the run summary to index.json (one per row)', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'r-idx', distance: 4321));
+
+      final onDisk = await store.debugReadIndex();
+      expect(onDisk, isNotNull);
+      expect(onDisk!.map((s) => s.id), ['r-idx']);
+      expect(onDisk.single.distanceMetres, 4321);
+      expect(onDisk.single.synced, isFalse);
+      // In-memory projections agree with disk.
+      expect(store.summaries.map((s) => s.id), ['r-idx']);
+      expect(store.summaryRuns.single.id, 'r-idx');
+    });
+
+    test('index.json is excluded from the run-file glob', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'r-only'));
+
+      // index.json now exists alongside r-only.json; a reload must not treat it
+      // as a run.
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.runs.map((r) => r.id), ['r-only']);
+    });
+
+    test('index carries every row newest-first after multiple saves', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'old')); // pinned startedAt 2026-04-10
+      await store.saveFromRemote(Run(
+        id: 'newer',
+        startedAt: DateTime(2026, 5, 1, 8),
+        duration: const Duration(minutes: 20),
+        distanceMetres: 3000,
+        source: RunSource.app,
+      ));
+
+      final onDisk = await store.debugReadIndex();
+      expect(onDisk!.map((s) => s.id), ['newer', 'old']);
+      expect(store.summaries.map((s) => s.id), ['newer', 'old']);
+    });
+
+    test('delete drops the summary from the index', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'a'));
+      await store.saveFromRemote(Run(
+        id: 'b',
+        startedAt: DateTime(2026, 5, 1),
+        duration: const Duration(minutes: 10),
+        distanceMetres: 1000,
+        source: RunSource.app,
+      ));
+      await store.delete('a');
+
+      final onDisk = await store.debugReadIndex();
+      expect(onDisk!.map((s) => s.id), ['b']);
+      expect(store.summaries.map((s) => s.id), ['b']);
+    });
+
+    test('deleteMany drops every summary in the batch', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      for (final id in ['a', 'b', 'c']) {
+        await store.save(makeRun(id: id));
+      }
+      await store.deleteMany(['a', 'c']);
+      expect(store.summaries.map((s) => s.id).toSet(), {'b'});
+      expect((await store.debugReadIndex())!.map((s) => s.id), ['b']);
+    });
+
+    test('markSynced flips the index synced flag without rewriting index.json',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(id: 'sy'));
+      expect(store.summaries.single.synced, isFalse);
+
+      // markSynced must NOT rewrite index.json (the synced_ids sidecar is
+      // authoritative); the on-disk flag reconciles on the next cold-load.
+      final indexFile = File('${tempDir.path}/index.json');
+      final before = indexFile.statSync().modified;
+      await store.markSynced('sy');
+
+      expect(store.summaries.single.synced, isTrue,
+          reason: 'in-memory flag flips immediately');
+      expect(indexFile.statSync().modified, before,
+          reason: 'markSynced does not rewrite index.json');
+
+      final reloaded = LocalRunStore();
+      await reloaded.init(overrideDirectory: tempDir);
+      expect(reloaded.summaries.single.synced, isTrue);
+    });
+
+    test('summaryRuns rebuilds track-less Runs from the carried scalars',
+        () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      await store.save(makeRun(
+        id: 'r-meta',
+        metadata: {MetadataKeys.activityType: 'trail', MetadataKeys.avgBpm: 150},
+        track: const [Waypoint(lat: 1, lng: 2)],
+      ));
+      final run = store.summaryRuns.single;
+      expect(run.id, 'r-meta');
+      expect(run.track, isEmpty);
+      expect(run.metadata?[MetadataKeys.activityType], 'trail');
+      expect(run.metadata?[MetadataKeys.avgBpm], 150.0);
+    });
+
+    test('readIndex tolerates a structurally invalid index file', () async {
+      final store = LocalRunStore();
+      await store.init(overrideDirectory: tempDir);
+      final indexFile = File('${tempDir.path}/index.json');
+      // summaries is null → structurally invalid → null, not a throw.
+      indexFile.writeAsStringSync(jsonEncode(
+          {kLocalStoreVersionKey: kLocalStoreSchemaVersion, 'summaries': null}));
+      expect(await store.debugReadIndex(), isNull);
+      // Missing summaries key entirely.
+      indexFile.writeAsStringSync(
+          jsonEncode({kLocalStoreVersionKey: kLocalStoreSchemaVersion}));
+      expect(await store.debugReadIndex(), isNull);
+      // Not even JSON.
+      indexFile.writeAsStringSync('{not json');
+      expect(await store.debugReadIndex(), isNull);
+    });
+  });
 }

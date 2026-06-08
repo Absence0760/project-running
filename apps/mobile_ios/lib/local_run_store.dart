@@ -16,6 +16,15 @@ import 'package:path_provider/path_provider.dart';
 class LocalRunStore extends ChangeNotifier {
   late Directory _dir;
   List<Run> _runs = [];
+  // The authoritative full-history projection — one lightweight RunSummary per
+  // run on disk, newest-first, kept in lockstep with the per-run files. Unlike
+  // `_runs` (which becomes a resident window) `_summaries` always holds every
+  // row, so cold-load reads ONE index file instead of N, all-time consumers
+  // see the whole history via `summaryRuns`, and the windowing of `_runs` never
+  // shrinks the set the sync drain / filters work over. Persisted to
+  // `index.json` (batched, atomic) as a cache of the per-run files — never the
+  // sole source of truth (a missing / drifted index self-heals from the files).
+  List<RunSummary> _summaries = [];
   final Set<String> _syncedIds = {};
   // Run ids whose cloud-side delete failed on the first attempt, mapped
   // to the user_id who queued the delete. The local copy was kept so the
@@ -57,11 +66,15 @@ class LocalRunStore extends ChangeNotifier {
   // written once per markSynced call (or once per batch).
   static const _syncedIdsFilename = 'synced_ids.json';
   static const _pendingRemoteDeletesFilename = 'pending_remote_deletes.json';
+  // Compact on-disk projection of every run (one RunSummary each). Read first
+  // on cold-load so a large history doesn't pay N file decodes up front.
+  static const _indexFilename = 'index.json';
 
   File get _inProgressFile => File('${_dir.path}/$_inProgressFilename');
   File get _syncedIdsFile => File('${_dir.path}/$_syncedIdsFilename');
   File get _pendingRemoteDeletesFile =>
       File('${_dir.path}/$_pendingRemoteDeletesFilename');
+  File get _indexFile => File('${_dir.path}/$_indexFilename');
 
   // Per-active-run waypoint cursor — how many waypoints of the
   // current in-progress run we've already persisted. Lets
@@ -76,6 +89,23 @@ class LocalRunStore extends ChangeNotifier {
 
   List<Run> get runs => List.unmodifiable(_runs);
 
+  /// The full-history lightweight index (every row, newest-first). Filters /
+  /// sorts that need the whole set read this instead of [runs] (which becomes a
+  /// resident window). Carries scalars only — no track.
+  List<RunSummary> get summaries => List.unmodifiable(_summaries);
+
+  /// Full history as track-less [Run]s rebuilt from [summaries]. The seam every
+  /// all-time consumer (fitness, mileage, goals, gear backfill, period summary,
+  /// recap, intensity) reads so it keeps whole-history correctness without the
+  /// store holding every full [Run] resident. Anything needing a track must
+  /// hydrate the real run via [runById].
+  List<Run> get summaryRuns => [for (final s in _summaries) s.toRun()];
+
+  // Unsynced runs are ALWAYS resident in `_runs` (the residency invariant:
+  // window ∪ unsynced), and they carry their GPS track — which the sync drain
+  // uploads — so this reads the full Runs from `_runs`, never the track-less
+  // summaries. Correctness after windowing rests on that invariant; the
+  // architecture guards pin it.
   List<Run> get unsyncedRuns =>
       _runs.where((r) => !_syncedIds.contains(r.id)).toList();
 
@@ -135,6 +165,10 @@ class LocalRunStore extends ChangeNotifier {
     if (synced) {
       _syncedIds.addAll(_runs.map((r) => r.id));
     }
+    _summaries = [
+      for (final r in _runs)
+        RunSummary.fromRun(r, synced: _syncedIds.contains(r.id)),
+    ];
     notifyListeners();
   }
 
@@ -176,6 +210,8 @@ class LocalRunStore extends ChangeNotifier {
     await writeJsonAtomic(file, data);
     _runs.removeWhere((r) => r.id == stamped.id);
     _runs.insert(0, stamped);
+    _upsertSummary(stamped, synced: false, atFront: true);
+    await _persistIndex();
     notifyListeners();
   }
 
@@ -250,6 +286,9 @@ class LocalRunStore extends ChangeNotifier {
     _runs.insert(0, merged);
     _syncedIds.add(merged.id);
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    _upsertSummary(merged, synced: true);
+    _sortSummaries();
+    await _persistIndex();
     notifyListeners();
   }
 
@@ -301,8 +340,11 @@ class LocalRunStore extends ChangeNotifier {
       _runs.removeWhere((r) => r.id == merged.id);
       _runs.insert(0, merged);
       _syncedIds.add(merged.id);
+      _upsertSummary(merged, synced: true);
     }
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    _sortSummaries();
+    await _persistIndex();
     notifyListeners();
   }
 
@@ -326,6 +368,8 @@ class LocalRunStore extends ChangeNotifier {
     final idx = _runs.indexWhere((r) => r.id == stamped.id);
     if (idx >= 0) _runs[idx] = stamped;
     _syncedIds.remove(stamped.id);
+    _upsertSummary(stamped, synced: false);
+    await _persistIndex();
     notifyListeners();
   }
 
@@ -370,7 +414,9 @@ class LocalRunStore extends ChangeNotifier {
       await file.delete();
     }
     _runs.removeWhere((r) => r.id == runId);
+    _summaries.removeWhere((s) => s.id == runId);
     _syncedIds.remove(runId);
+    await _persistIndex();
     notifyListeners();
   }
 
@@ -390,7 +436,9 @@ class LocalRunStore extends ChangeNotifier {
       }
     }
     _runs.removeWhere((r) => ids.contains(r.id));
+    _summaries.removeWhere((s) => ids.contains(s.id));
     _syncedIds.removeAll(ids);
+    await _persistIndex();
     notifyListeners();
   }
 
@@ -502,6 +550,7 @@ class LocalRunStore extends ChangeNotifier {
   /// prefer [markManySynced] which writes the sidecar once per batch.
   Future<void> markSynced(String runId) async {
     _syncedIds.add(runId);
+    _markSummariesSynced({runId});
     await _persistSyncedIds();
     notifyListeners();
   }
@@ -511,7 +560,9 @@ class LocalRunStore extends ChangeNotifier {
   /// sidecar write instead of N.
   Future<void> markManySynced(Iterable<String> runIds) async {
     if (runIds.isEmpty) return;
-    _syncedIds.addAll(runIds);
+    final ids = runIds.toSet();
+    _syncedIds.addAll(ids);
+    _markSummariesSynced(ids);
     await _persistSyncedIds();
     notifyListeners();
   }
@@ -537,6 +588,84 @@ class LocalRunStore extends ChangeNotifier {
       debugPrint('Failed to persist synced ids sidecar: $e');
     }
   }
+
+  /// Insert or replace [run]'s summary, keeping `_summaries` in lockstep with
+  /// the per-run files. [atFront] mirrors `_runs.insert(0, …)` for a freshly
+  /// recorded run; otherwise the caller re-sorts via [_sortSummaries].
+  void _upsertSummary(Run run, {required bool synced, bool atFront = false}) {
+    _summaries.removeWhere((s) => s.id == run.id);
+    final summary = RunSummary.fromRun(run, synced: synced);
+    if (atFront) {
+      _summaries.insert(0, summary);
+    } else {
+      _summaries.add(summary);
+    }
+  }
+
+  void _sortSummaries() =>
+      _summaries.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+
+  /// Flip the in-memory `synced` flag on the matching summaries. Does NOT
+  /// persist the index — `markSynced` already writes the authoritative
+  /// `synced_ids` sidecar, and cold-load reconciles the index's flag against
+  /// it, so writing the index here would be a redundant second disk write on
+  /// the hot sync-drain path (the index's `synced` is a cache of a cache).
+  void _markSummariesSynced(Set<String> ids) {
+    for (var i = 0; i < _summaries.length; i++) {
+      final s = _summaries[i];
+      if (ids.contains(s.id) && !s.synced) _summaries[i] = s.withSynced(true);
+    }
+  }
+
+  /// Serialise `_summaries` (with `synced` refreshed from the authoritative
+  /// sidecar) to `index.json` atomically. Batched — every mutation method calls
+  /// this once at its end, never per-row. Non-fatal on failure: the in-memory
+  /// set stays correct and cold-load self-heals the disk copy from the per-run
+  /// files next launch.
+  Future<void> _persistIndex() async {
+    try {
+      await writeJsonAtomic(_indexFile, {
+        kLocalStoreVersionKey: kLocalStoreSchemaVersion,
+        'summaries': [
+          for (final s in _summaries)
+            s.withSynced(_syncedIds.contains(s.id)).toIndexJson(),
+        ],
+      });
+    } catch (e) {
+      debugPrint('local_run_store: failed to persist index: $e');
+    }
+  }
+
+  /// Read `index.json` into `RunSummary`s, or null when the file is absent,
+  /// unparseable, or structurally invalid (missing / non-list `summaries`).
+  /// Never throws — a bad index is a cache miss that triggers a full-walk
+  /// rebuild, never a cold-load crash.
+  Future<List<RunSummary>?> _readIndex() async {
+    final file = _indexFile;
+    if (!file.existsSync()) return null;
+    try {
+      final data = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final version = localStoreRecordVersion(data);
+      if (version > kLocalStoreSchemaVersion) {
+        debugPrint(
+            'local_run_store: index _v=$version (> $kLocalStoreSchemaVersion); reading known fields only');
+      }
+      final list = data['summaries'];
+      if (list is! List) return null;
+      return [
+        for (final e in list)
+          if (e is Map<String, dynamic>) RunSummary.fromIndexJson(e),
+      ];
+    } catch (e) {
+      debugPrint('local_run_store: failed to read index: $e');
+      return null;
+    }
+  }
+
+  /// Test-only: read the on-disk index back so a test can assert it was
+  /// maintained without depending on the cold-load fast path.
+  @visibleForTesting
+  Future<List<RunSummary>?> debugReadIndex() => _readIndex();
 
   /// Record that a run's remote-side delete failed and should be retried
   /// by the SyncService on the next sync trigger. Idempotent — repeated
@@ -665,6 +794,7 @@ class LocalRunStore extends ChangeNotifier {
         .where((f) => !f.path.endsWith(_inProgressFilename))
         .where((f) => !f.path.endsWith(_syncedIdsFilename))
         .where((f) => !f.path.endsWith(_pendingRemoteDeletesFilename))
+        .where((f) => !f.path.endsWith(_indexFilename))
         .toList();
 
     // Read the sidecar first. If present, it's the authoritative source
@@ -699,6 +829,13 @@ class LocalRunStore extends ChangeNotifier {
 
     // Sort newest first
     _runs.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+    _summaries = [
+      for (final r in _runs)
+        RunSummary.fromRun(r, synced: _syncedIds.contains(r.id)),
+    ];
+    // Seed / refresh the index so the next cold-start can take the index-first
+    // fast path instead of walking + decoding every per-run file.
+    await _persistIndex();
     notifyListeners();
   }
 
